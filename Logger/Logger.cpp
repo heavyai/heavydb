@@ -502,6 +502,13 @@ using Clock = std::chrono::steady_clock;
 
 class DurationTree;
 
+struct DebugTimerParams {
+  Severity severity_;
+  char const* file_;
+  int line_;
+  char const* name_;
+};
+
 class Duration {
   DurationTree* const duration_tree_;
   Clock::time_point const start_;
@@ -509,24 +516,15 @@ class Duration {
 
  public:
   int const depth_;
-  Severity const severity_;
-  char const* const file_;
-  int const line_;
-  char const* const name_;
+  DebugTimerParams const debug_timer_params_;
 
-  Duration(DurationTree* duration_tree,
-           int depth,
-           Severity severity,
-           char const* file,
-           int line,
-           char const* name)
+  Duration(DurationTree* const duration_tree,
+           int const depth,
+           DebugTimerParams const debug_timer_params)
       : duration_tree_(duration_tree)
       , start_(Clock::now())
       , depth_(depth)
-      , severity_(severity)
-      , file_(file)
-      , line_(line)
-      , name_(name) {}
+      , debug_timer_params_(debug_timer_params) {}
   bool stop();
   // Start time relative to parent DurationTree::start_.
   template <typename Units = std::chrono::milliseconds>
@@ -534,6 +532,7 @@ class Duration {
   // Duration value = stop_ - start_.
   template <typename Units = std::chrono::milliseconds>
   typename Units::rep value() const;
+  DebugTimerParams const* operator->() const { return &debug_timer_params_; }
 };
 
 using DurationTreeNode = boost::variant<Duration, DurationTree&>;
@@ -563,9 +562,8 @@ class DurationTree {
   int currentDepth() const { return current_depth_; }
   void decrementDepth() { --current_depth_; }
   DurationTreeNodes const& durations() const { return durations_; }
-  template <typename... Ts>
-  Duration* newDuration(Ts&&... args) {
-    durations_.emplace_back(Duration(this, current_depth_++, std::forward<Ts>(args)...));
+  Duration* newDuration(DebugTimerParams const debug_timer_params) {
+    durations_.emplace_back(Duration(this, current_depth_++, debug_timer_params));
     return boost::get<Duration>(&durations_.back());
   }
 };
@@ -598,24 +596,29 @@ using DurationTreeMap = std::unordered_map<ThreadId, std::unique_ptr<DurationTre
 std::mutex g_duration_tree_map_mutex;
 DurationTreeMap g_duration_tree_map;
 
-template <typename... Ts>
-Duration* newDuration(Severity severity, Ts&&... args) {
+Duration* newDuration(DebugTimerParams const debug_timer_params) {
   if (g_enable_debug_timer) {
-    std::lock_guard<std::mutex> lock_guard(g_duration_tree_map_mutex);
-    auto& duration_tree_ptr = g_duration_tree_map[g_thread_local_ids.thread_id_];
-    if (!duration_tree_ptr) {
-      duration_tree_ptr =
-          std::make_unique<DurationTree>(g_thread_local_ids.thread_id_, 0);
+    if (g_thread_local_ids.thread_id_) {
+      std::lock_guard<std::mutex> lock_guard(g_duration_tree_map_mutex);
+      auto& duration_tree_ptr = g_duration_tree_map[g_thread_local_ids.thread_id_];
+      if (!duration_tree_ptr) {
+        duration_tree_ptr =
+            std::make_unique<DurationTree>(g_thread_local_ids.thread_id_, 0);
+      }
+      return duration_tree_ptr->newDuration(debug_timer_params);
     }
-    return duration_tree_ptr->newDuration(severity, std::forward<Ts>(args)...);
+    LOG(ERROR) << "DEBUG_TIMER(" << debug_timer_params.name_
+               << ") must not be called from the root thread(0) at "
+               << debug_timer_params.file_ << ':' << debug_timer_params.line_
+               << ". New threads require DEBUG_TIMER_NEW_THREAD() to be called first.";
   }
   return nullptr;  // Inactive - don't measure or report timing.
 }
 
 std::ostream& operator<<(std::ostream& os, Duration const& duration) {
   return os << std::setw(2 * duration.depth_) << ' ' << duration.value() << "ms start("
-            << duration.relative_start_time() << "ms) " << duration.name_ << ' '
-            << filename(duration.file_) << ':' << duration.line_;
+            << duration.relative_start_time() << "ms) " << duration->name_ << ' '
+            << filename(duration->file_) << ':' << duration->line_;
 }
 
 std::ostream& operator<<(std::ostream& os, DurationTree const& duration_tree) {
@@ -636,7 +639,7 @@ boost::log::record_ostream& operator<<(boost::log::record_ostream& os,
   auto const end = kv_pair.second->durations().cend();
   auto const& root_duration = boost::get<Duration>(*itr);
   os << "DEBUG_TIMER thread_id(" << kv_pair.first << ")\n"
-     << root_duration.value() << "ms total duration for " << root_duration.name_;
+     << root_duration.value() << "ms total duration for " << root_duration->name_;
   for (++itr; itr != end; ++itr) {
     os << '\n' << *itr;
   }
@@ -671,9 +674,9 @@ class JsonEncoder : boost::static_visitor<rapidjson::Value> {
     retval.AddMember("duration_ms", rapidjson::Value(duration.value()), alloc_);
     retval.AddMember(
         "start_ms", rapidjson::Value(duration.relative_start_time()), alloc_);
-    retval.AddMember("name", rapidjson::StringRef(duration.name_), alloc_);
-    retval.AddMember("file", filename(duration.file_), alloc_);
-    retval.AddMember("line", rapidjson::Value(duration.line_), alloc_);
+    retval.AddMember("name", rapidjson::StringRef(duration->name_), alloc_);
+    retval.AddMember("file", filename(duration->file_), alloc_);
+    retval.AddMember("line", rapidjson::Value(duration->line_), alloc_);
     retval.AddMember("children", childNodes(duration.depth_), alloc_);
     return retval;
   }
@@ -713,7 +716,7 @@ class JsonEncoder : boost::static_visitor<rapidjson::Value> {
       retval.AddMember("thread_id", std::to_string(kv_pair.first), alloc_);
       retval.AddMember(
           "total_duration_ms", rapidjson::Value(root_duration.value()), alloc_);
-      retval.AddMember("name", rapidjson::StringRef(root_duration.name_), alloc_);
+      retval.AddMember("name", rapidjson::StringRef(root_duration->name_), alloc_);
       retval.AddMember("children", childNodes(0), alloc_);
     }
     return retval;
@@ -751,8 +754,8 @@ void logAndEraseDurationTree(std::string* json_str) {
       g_duration_tree_map.find(g_thread_local_ids.thread_id_);
   CHECK(itr != g_duration_tree_map.cend());
   auto const& root_duration = itr->second->rootDuration();
-  if (auto log = Logger(root_duration.severity_)) {
-    log.stream(root_duration.file_, root_duration.line_) << *itr;
+  if (auto log = Logger(root_duration->severity_)) {
+    log.stream(root_duration->file_, root_duration->line_) << *itr;
   }
   if (json_str) {
     JsonEncoder json_encoder;
@@ -763,7 +766,7 @@ void logAndEraseDurationTree(std::string* json_str) {
 }
 
 DebugTimer::DebugTimer(Severity severity, char const* file, int line, char const* name)
-    : duration_(newDuration(severity, file, line, name)) {
+    : duration_(newDuration({severity, file, line, name})) {
   nvtx_helpers::omnisci_range_push(nvtx_helpers::Category::kDebugTimer, name, file);
 }
 
