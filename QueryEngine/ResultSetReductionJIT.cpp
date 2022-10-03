@@ -1259,6 +1259,12 @@ void ResultSetReductionJIT::finalizeReductionCode(
     const CodeCacheKey& key) const {
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
+  VLOG(3) << "Reduction Loop:\n"
+          << serialize_llvm_object(reduction_code.llvm_reduce_loop);
+  VLOG(3) << "Reduction Is Empty Func:\n" << serialize_llvm_object(ir_is_empty);
+  VLOG(3) << "Reduction One Entry Func:\n" << serialize_llvm_object(ir_reduce_one_entry);
+  VLOG(3) << "Reduction One Entry Idx Func:\n"
+          << serialize_llvm_object(ir_reduce_one_entry_idx);
 #ifdef NDEBUG
   LOG(IR) << "Reduction Loop:\n"
           << serialize_llvm_object(reduction_code.llvm_reduce_loop);
