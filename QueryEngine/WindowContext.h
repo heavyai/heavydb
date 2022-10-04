@@ -73,6 +73,7 @@ struct AggregateTreeForWindowFraming {
   std::vector<double*> aggregate_tree_for_double_type_;
   std::vector<SumAndCountPair<int64_t>*> derived_aggregate_tree_for_integer_type_;
   std::vector<SumAndCountPair<double>*> derived_aggregate_tree_for_double_type_;
+  size_t* aggregate_trees_depth_;
 
   void resizeStorageForWindowFraming(size_t partition_count) {
     aggregate_tree_for_integer_type_.resize(partition_count);
@@ -157,7 +158,9 @@ class WindowFunctionContext {
   void compute(
       std::unordered_map<QueryPlanHash, size_t>& sorted_partition_key_ref_count_map,
       std::unordered_map<QueryPlanHash, std::shared_ptr<std::vector<int64_t>>>&
-          sorted_partition_cache);
+          sorted_partition_cache,
+      std::unordered_map<QueryPlanHash, AggregateTreeForWindowFraming>&
+          aggregate_tree_map);
 
   // Returns a pointer to the window function associated with this context.
   const Analyzer::WindowFunction* getWindowFunction() const;
@@ -260,7 +263,9 @@ class WindowFunctionContext {
 
   void fillPartitionEnd();
 
-  void resizeStorageForWindowFraming();
+  void resizeStorageForWindowFraming(bool const for_reuse = false);
+
+  const QueryPlanHash computeAggregateTreeCacheKey() const;
 
   const Analyzer::WindowFunction* window_func_;
   QueryPlanHash partition_cache_key_;
