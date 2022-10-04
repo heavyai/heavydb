@@ -70,6 +70,12 @@ struct RowFunctionManager {
     return proxy->getOrAddTransient(str);
   }
 
+  inline int8_t* getStringDictionaryProxy(int32_t dict_id) {
+    auto* proxy = executor_->getStringDictionaryProxy(
+        dict_id, executor_->getRowSetMemoryOwner(), true);
+    return reinterpret_cast<int8_t*>(proxy);
+  }
+
   // Executor
   const Executor* executor_;
   const RelAlgExecutionUnit& ra_exe_unit_;
