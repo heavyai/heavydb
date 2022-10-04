@@ -359,7 +359,6 @@ size_t get_target_idx_for_first_or_last_value_func(
 // output_for_partition_buff, reusing it as an output buffer.
 void apply_permutation_to_partition(int64_t* output_for_partition_buff,
                                     const int32_t* original_indices,
-
                                     const size_t partition_size) {
   std::vector<int64_t> new_output_for_partition_buff(partition_size);
   for (size_t i = 0; i < partition_size; ++i) {
@@ -550,7 +549,8 @@ bool window_function_requires_peer_handling(const Analyzer::WindowFunction* wind
 void WindowFunctionContext::compute(
     std::unordered_map<QueryPlanHash, size_t>& sorted_partition_key_ref_count_map,
     std::unordered_map<QueryPlanHash, std::shared_ptr<std::vector<int64_t>>>&
-        sorted_partition_cache) {
+        sorted_partition_cache,
+    std::unordered_map<size_t, AggregateTreeForWindowFraming>& aggregate_tree_map) {
   auto timer = DEBUG_TIMER(__func__);
   CHECK(!output_);
   if (elem_count_ == 0) {
@@ -608,11 +608,13 @@ void WindowFunctionContext::compute(
     if (should_parallelize) {
       auto sorted_partition_copy_timer =
           DEBUG_TIMER("Window Function Partition Sorting Parallelized");
-      threading::task_group thread_pool;
-      for (auto interval : makeIntervals<size_t>(0, partitionCount(), cpu_threads())) {
-        thread_pool.run([=] { sort_partitions(interval.begin, interval.end); });
-      }
-      thread_pool.wait();
+      tbb::parallel_for(tbb::blocked_range<int64_t>(0, partitionCount()),
+                        [&, parent_thread_local_ids = logger::thread_local_ids()](
+                            const tbb::blocked_range<int64_t>& r) {
+                          logger::LocalIdsScopeGuard lisg =
+                              parent_thread_local_ids.setNewThreadId();
+                          sort_partitions(r.begin(), r.end());
+                        });
     } else {
       auto sorted_partition_copy_timer =
           DEBUG_TIMER("Window Function  Partition Sorting Non-Parallelized");
@@ -656,52 +658,66 @@ void WindowFunctionContext::compute(
     if (should_parallelize) {
       auto partition_compuation_timer =
           DEBUG_TIMER("Window Function Ordered-Partition Null-Range Compute");
-      threading::task_group thread_pool;
-      for (auto interval : makeIntervals<size_t>(0, partitionCount(), cpu_threads())) {
-        thread_pool.run(
-            [=] { compute_ordered_partition_null_range(interval.begin, interval.end); });
-      }
-      thread_pool.wait();
+      tbb::parallel_for(tbb::blocked_range<int64_t>(0, partitionCount()),
+                        [&, parent_thread_local_ids = logger::thread_local_ids()](
+                            const tbb::blocked_range<int64_t>& r) {
+                          logger::LocalIdsScopeGuard lisg =
+                              parent_thread_local_ids.setNewThreadId();
+                          compute_ordered_partition_null_range(r.begin(), r.end());
+                        });
     } else {
       auto partition_compuation_timer = DEBUG_TIMER(
           "Window Function Non-Parallelized Ordered-Partition Null-Range Compute");
       compute_ordered_partition_null_range(0, partitionCount());
     }
-
-    if (needsToBuildAggregateTree()) {
-      const auto build_aggregation_tree_for_partitions = [=](const size_t start,
-                                                             const size_t end) {
-        for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
-          // build a segment tree for the partition
-          // todo (yoonmin) : support generic window function expression
-          // i.e., when window_func_expr_columns_.size() > 1
-          SQLTypeInfo const input_col_ti =
-              window_func_->getArgs().front()->get_type_info();
-          const auto partition_size = counts()[partition_idx];
-          buildAggregationTreeForPartition(window_func_->getKind(),
-                                           partition_idx,
-                                           partition_size,
-                                           payload() + offsets()[partition_idx],
-                                           intermediate_output_buffer,
-                                           input_col_ti);
+    auto const cache_key = computeAggregateTreeCacheKey();
+    auto const c_it = aggregate_tree_map.find(cache_key);
+    if (c_it != aggregate_tree_map.cend()) {
+      VLOG(1) << "Reuse aggregate tree for window function framing";
+      resizeStorageForWindowFraming(true);
+      aggregate_trees_ = c_it->second;
+      memcpy(aggregate_trees_depth_,
+             aggregate_trees_.aggregate_trees_depth_,
+             sizeof(size_t) * partition_count);
+    } else {
+      if (needsToBuildAggregateTree()) {
+        const auto build_aggregation_tree_for_partitions = [=](const size_t start,
+                                                               const size_t end) {
+          for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
+            // build a segment tree for the partition
+            // todo (yoonmin) : support generic window function expression
+            // i.e., when window_func_expr_columns_.size() > 1
+            SQLTypeInfo const input_col_ti =
+                window_func_->getArgs().front()->get_type_info();
+            const auto partition_size = counts()[partition_idx];
+            buildAggregationTreeForPartition(window_func_->getKind(),
+                                             partition_idx,
+                                             partition_size,
+                                             payload() + offsets()[partition_idx],
+                                             intermediate_output_buffer,
+                                             input_col_ti);
+          }
+        };
+        resizeStorageForWindowFraming();
+        if (should_parallelize) {
+          auto partition_compuation_timer = DEBUG_TIMER(
+              "Window Function Parallelized Segment Tree Construction for Partitions");
+          tbb::parallel_for(tbb::blocked_range<int64_t>(0, partitionCount()),
+                            [=, parent_thread_local_ids = logger::thread_local_ids()](
+                                const tbb::blocked_range<int64_t>& r) {
+                              logger::LocalIdsScopeGuard lisg =
+                                  parent_thread_local_ids.setNewThreadId();
+                              build_aggregation_tree_for_partitions(r.begin(), r.end());
+                            });
+        } else {
+          auto partition_compuation_timer = DEBUG_TIMER(
+              "Window Function Non-Parallelized Segment Tree Construction for "
+              "Partitions");
+          build_aggregation_tree_for_partitions(0, partition_count);
         }
-      };
-      resizeStorageForWindowFraming();
-      if (should_parallelize) {
-        auto partition_compuation_timer =
-            DEBUG_TIMER("Window Function Build Segment Tree for Partitions");
-        threading::task_group thread_pool;
-        for (auto interval : makeIntervals<size_t>(0, partition_count, cpu_threads())) {
-          thread_pool.run([=] {
-            build_aggregation_tree_for_partitions(interval.begin, interval.end);
-          });
-        }
-        thread_pool.wait();
-      } else {
-        auto partition_compuation_timer =
-            DEBUG_TIMER("Window Function Build Segment Tree for Partitions");
-        build_aggregation_tree_for_partitions(0, partition_count);
       }
+      CHECK(aggregate_tree_map.emplace(cache_key, aggregate_trees_).second);
+      VLOG(2) << "Put aggregate tree for the window framing";
     }
   }
 
@@ -715,11 +731,13 @@ void WindowFunctionContext::compute(
 
   if (should_parallelize) {
     auto partition_compuation_timer = DEBUG_TIMER("Window Function Partition Compute");
-    threading::task_group thread_pool;
-    for (auto interval : makeIntervals<size_t>(0, partitionCount(), cpu_threads())) {
-      thread_pool.run([=] { compute_partitions(interval.begin, interval.end); });
-    }
-    thread_pool.wait();
+    tbb::parallel_for(tbb::blocked_range<int64_t>(0, partitionCount()),
+                      [&, parent_thread_local_ids = logger::thread_local_ids()](
+                          const tbb::blocked_range<int64_t>& r) {
+                        logger::LocalIdsScopeGuard lisg =
+                            parent_thread_local_ids.setNewThreadId();
+                        compute_partitions(r.begin(), r.end());
+                      });
   } else {
     auto partition_compuation_timer =
         DEBUG_TIMER("Window Function Non-Parallelized Partition Compute");
@@ -741,16 +759,13 @@ void WindowFunctionContext::compute(
   if (should_parallelize) {
     auto payload_copy_timer =
         DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Parallelized");
-    threading::task_group thread_pool;
-    for (auto interval : makeIntervals<size_t>(
-             0,
-             elem_count_,
-             std::min(static_cast<size_t>(cpu_threads()),
-                      (elem_count_ + g_parallel_window_partition_compute_threshold - 1) /
-                          g_parallel_window_partition_compute_threshold))) {
-      thread_pool.run([=] { payload_copy(interval.begin, interval.end); });
-    }
-    thread_pool.wait();
+    tbb::parallel_for(tbb::blocked_range<int64_t>(0, elem_count_),
+                      [&, parent_thread_local_ids = logger::thread_local_ids()](
+                          const tbb::blocked_range<int64_t>& r) {
+                        logger::LocalIdsScopeGuard lisg =
+                            parent_thread_local_ids.setNewThreadId();
+                        payload_copy(r.begin(), r.end());
+                      });
   } else {
     auto payload_copy_timer =
         DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Non-Parallelized");
@@ -1290,10 +1305,12 @@ void WindowFunctionContext::computePartitionBuffer(
   }
 }
 
-void WindowFunctionContext::resizeStorageForWindowFraming() {
+void WindowFunctionContext::resizeStorageForWindowFraming(bool for_reuse) {
   auto const partition_count = partitionCount();
   aggregate_trees_.resizeStorageForWindowFraming(partition_count);
-  segment_trees_owned_.resize(partition_count);
+  if (!for_reuse) {
+    segment_trees_owned_.resize(partition_count);
+  }
 }
 
 void WindowFunctionContext::buildAggregationTreeForPartition(
@@ -1326,10 +1343,6 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
                                    ordered_partition_null_end_pos_[partition_idx]};
     const int64_t* ordered_rowid_buf_for_partition =
         ordered_rowid_buf + offsets()[partition_idx];
-    VLOG(2) << "Build Aggregation Tree For Partition-" << ::toString(partition_idx)
-            << " (# elems: " << ::toString(partition_size)
-            << ", null_range: " << order_col_null_range.first << " ~ "
-            << order_col_null_range.second << ")";
     switch (type) {
       case kBOOLEAN:
       case kTINYINT: {
@@ -1483,6 +1496,7 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
       }
     }
   }
+  aggregate_trees_.aggregate_trees_depth_ = aggregate_trees_depth_;
 }
 
 int64_t** WindowFunctionContext::getAggregationTreesForIntegerTypeWindowExpr() const {
@@ -1635,6 +1649,22 @@ size_t WindowFunctionContext::partitionCount() const {
 const bool WindowFunctionContext::needsToBuildAggregateTree() const {
   return window_func_->hasFraming() &&
          window_func_->hasAggregateTreeRequiredWindowFunc() && elem_count_ > 0;
+}
+
+QueryPlanHash const WindowFunctionContext::computeAggregateTreeCacheKey() const {
+  // aggregate tree is constructed per window aggregate function kind, input expression,
+  // partition key(s) and ordering key
+  //  this means when two window definitions have the same condition listed above but
+  //  differ in frame bound declaration,
+  // they can share the same aggregate tree
+  auto cache_key = boost::hash_value(::toString(window_func_->getKind()));
+  boost::hash_combine(cache_key, ::toString(window_func_->getArgs()));
+  boost::hash_combine(cache_key, ::toString(window_func_->getPartitionKeys()));
+  boost::hash_combine(cache_key, ::toString(window_func_->getOrderKeys()));
+  for (auto& order_entry : window_func_->getCollation()) {
+    boost::hash_combine(cache_key, order_entry.toString());
+  }
+  return cache_key;
 }
 
 void WindowProjectNodeContext::addWindowFunctionContext(

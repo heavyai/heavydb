@@ -2525,6 +2525,7 @@ void RelAlgExecutor::computeWindow(const WorkUnit& work_unit,
   std::unordered_map<QueryPlanHash, size_t> sorted_partition_key_ref_count_map;
   std::unordered_map<size_t, std::unique_ptr<WindowFunctionContext>>
       window_function_context_map;
+  std::unordered_map<QueryPlanHash, AggregateTreeForWindowFraming> aggregate_tree_map;
   for (size_t target_index = 0; target_index < work_unit.exe_unit.target_exprs.size();
        ++target_index) {
     const auto& target_expr = work_unit.exe_unit.target_exprs[target_index];
@@ -2565,7 +2566,8 @@ void RelAlgExecutor::computeWindow(const WorkUnit& work_unit,
   }
 
   for (auto& kv : window_function_context_map) {
-    kv.second->compute(sorted_partition_key_ref_count_map, sorted_partition_cache);
+    kv.second->compute(
+        sorted_partition_key_ref_count_map, sorted_partition_cache, aggregate_tree_map);
     window_project_node_context->addWindowFunctionContext(std::move(kv.second), kv.first);
   }
 }
