@@ -1,4 +1,4 @@
-.. OmniSciDB Glossary
+.. HeavyDB Glossary
 
 =================
 Glossary of Terms

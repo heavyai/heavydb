@@ -1,10 +1,10 @@
-.. OmniSciDB Query Execution
+.. HeavyDB Query Execution
 
 ==================
 Execution Kernels
 ==================
 
-Each query step is executed in parallel. The smallest unit of parallelism in OmniSciDB is a fragment. The :cpp:class:`QueryFragmentDescriptor` determines fragments required for computation and assigns them to an :cpp:class:`ExecutionKernel`, which is then launched asynchronously using a thread pool. Once execution is finished, device results are stored in a :cpp:class:`ResultSet`. After all devices have finished, the ``ResultSet`` objects are reduced to a single ``ResultSet`` which is returned to the caller. 
+Each query step is executed in parallel. The smallest unit of parallelism in HeavyDB is a fragment. The :cpp:class:`QueryFragmentDescriptor` determines fragments required for computation and assigns them to an :cpp:class:`ExecutionKernel`, which is then launched asynchronously using a thread pool. Once execution is finished, device results are stored in a :cpp:class:`ResultSet`. After all devices have finished, the ``ResultSet`` objects are reduced to a single ``ResultSet`` which is returned to the caller. 
 
 Each device (GPU or CPU thread) has a dedicated CPU thread. All devices initialize state and execute queries in parallel. On CPU, this means the execution within a single device is not parallel. On GPU, execution within a device also occurs in parallel. 
 
@@ -40,7 +40,7 @@ Per-kernel execution is managed by the :cpp:class:`ExecutionKernel` class with s
 Query Fragment Descriptor
 ----------------------------------
 
-The basic unit of work in OmniSciDB is a fragment. The :cpp:class:`QueryFragmentDescriptor` class maintains useful information about fragments that are involved with execution of a particular work unit; most importantly, the fragment descriptor partitions fragments among all available devices based on the execution mode (described below). 
+The basic unit of work in HeavyDB is a fragment. The :cpp:class:`QueryFragmentDescriptor` class maintains useful information about fragments that are involved with execution of a particular work unit; most importantly, the fragment descriptor partitions fragments among all available devices based on the execution mode (described below). 
 
 Execution Modes:
 ^^^^^^^^^^^^^^^^

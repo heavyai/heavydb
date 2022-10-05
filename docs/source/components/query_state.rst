@@ -20,7 +20,7 @@ Classes
    variable.
 :QueryState: Manages the lifetime of a single query. Attributes/methods (e.g. ``bool just_explain``) may be
    moved/added directly to this class as needed to model the state of SQL queries. As such, the development
-   of this class can be considered ongoing, as a reflection of the ongoing development of the OmniSciDB itself.
+   of this class can be considered ongoing, as a reflection of the ongoing development of the HeavyDB itself.
    Timing of code blocks (i.e. function calls) are stored in a list of ``Event``\ s.
 :Event: Records start and stop times for the lifetime of a corresponding ``Timer`` object. ``Event``\ s can have
    parent/child relationships to model call-stack nesting.

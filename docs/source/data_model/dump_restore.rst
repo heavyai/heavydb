@@ -1,4 +1,4 @@
-.. OmniSciDB Data Model
+.. HeavyDB Data Model
 
 ========================================
 DUMP TABLE and RESTORE TABLE Statements
@@ -21,13 +21,13 @@ Note: When table *table* does not exist in current database, RESTORE TABLE creat
 File Format
 ==================
 
-Inside the tar archive, **native** Omnisci file formats are reused instead of inventing new ones for dumping table data and dictionary files. The native formats are proven simple and solid and so is existing code that accesses files of the formats.
+Inside the tar archive, **native** HEAVY.AI file formats are reused instead of inventing new ones for dumping table data and dictionary files. The native formats are proven simple and solid and so is existing code that accesses files of the formats.
 
-Files in native OmniSci formats are easy to accommodate onto target database where they are to be restored or migrated. In rare cases when rows archived in files need to be refragmented or redistributed (e.g, need to be resharded) on target database, there is no problem on accessing the rows belonging to individual fragments stored in data files, thanks to the existing code mentioned above.
+Files in native HEAVY.AI formats are easy to accommodate onto target database where they are to be restored or migrated. In rare cases when rows archived in files need to be refragmented or redistributed (e.g, need to be resharded) on target database, there is no problem on accessing the rows belonging to individual fragments stored in data files, thanks to the existing code mentioned above.
 
 Note:
 
-- Using native Omnisci file formats means that DUMP TABLE archives metadata and data pages of **all versions** by default. Archives may consume more disk storage space than necessary for latest pages. To minimize storage usage and speed up later table restore, if a table has experienced a signficant number of UPDATE/DELETE/ INSERT of small batches of data thus leaving excessive amount of old pages in data files, it is recommended to optimize the table (in place) beforehand, for example by running **OPTIMIZE TABLE** statement with (VACUUM='**PAGES**') option to trim old pages in the data files (when the option becomes available). Methods that trim pages not insitu would require extra storage to buffer pages before they are archived.
+- Using native HEAVY.AI file formats means that DUMP TABLE archives metadata and data pages of **all versions** by default. Archives may consume more disk storage space than necessary for latest pages. To minimize storage usage and speed up later table restore, if a table has experienced a signficant number of UPDATE/DELETE/ INSERT of small batches of data thus leaving excessive amount of old pages in data files, it is recommended to optimize the table (in place) beforehand, for example by running **OPTIMIZE TABLE** statement with (VACUUM='**PAGES**') option to trim old pages in the data files (when the option becomes available). Methods that trim pages not insitu would require extra storage to buffer pages before they are archived.
 - Currently there is no support of resharding or refragmentization, for example on migrating a 3-shard table to become 4-shard. It is doable in next releases if necessary.
 
 
@@ -89,13 +89,13 @@ creates the tar file **/tmp/Orz.tgz** consisting of the following files::
 RESTORE TABLE
 ==================
 
-On executing a **RESTORE TABLE** statement, OmniSci core will accommodate those data and dict files archived in the input tar file to base directory of current database. 
+On executing a **RESTORE TABLE** statement, HEAVY.AI core will accommodate those data and dict files archived in the input tar file to base directory of current database. 
 
 When restoring a table (ie. the table exists in current database) data and dict files in input tar file directly replace the counterparts in base directory of current database. No adjustment to the files are necessary.
 
 **Note:** To facilitate rollback in case of any exception during the course of processing the statement, existing data and dict files are backed up to a temporary directory and are restored when any exception happens.
 
-Omnisci core processing **table migration** (ie. the table doesn't exists) in current database, handling is similar to the way it processes table recovery, except that the numbering (ie. table id) of data and dict files in current database can differ from that of those files in the tar file, and except in the case when schema of the table had been altered through any **ALTER TABLE ADD/DELETE COLUMN** statement before it was archived, and hence column IDs can differ between source and target or destination tables. 
+HeavyDB core processing **table migration** (ie. the table doesn't exists) in current database, handling is similar to the way it processes table recovery, except that the numbering (ie. table id) of data and dict files in current database can differ from that of those files in the tar file, and except in the case when schema of the table had been altered through any **ALTER TABLE ADD/DELETE COLUMN** statement before it was archived, and hence column IDs can differ between source and target or destination tables. 
 
 For the former exception above, core renames input data and dict files accordingly. For the latter, core will scan all data files of the table and adjust column ids in related chunk headers.
 

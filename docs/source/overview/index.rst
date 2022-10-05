@@ -1,10 +1,10 @@
-.. OmniSciDB System Overview
+.. HeavyDB System Overview
 
 #########################
-OmniSciDB at 30,000 Feet
+HeavyDB at 30,000 Feet
 #########################
 
-OmniSciDB is made up of several high level components. A diagram illustrating most of the components of the system is displayed below, with a short description of each major section of the documentation following.
+HeavyDB is made up of several high level components. A diagram illustrating most of the components of the system is displayed below, with a short description of each major section of the documentation following.
 
 High Level Diagram
 ==================
@@ -37,7 +37,7 @@ The major components in the above diagram and their respective reference pages a
 Data Model
 ===========
 
-The :doc:`../data_model/index` section provides an overview of the data formats and data types supported by OmniSciDB. A brief overview of various storage layer components is also included.
+The :doc:`../data_model/index` section provides an overview of the data formats and data types supported by HeavyDB. A brief overview of various storage layer components is also included.
 
 Data Flow
 =========
@@ -47,13 +47,13 @@ The :doc:`../flow/data` section ties together the :doc:`../data_model/index` and
 Query Execution
 ==========================
 The :doc:`../execution/index` section provides an overview
-of how a query is executed inside OmniSciDB.
+of how a query is executed inside HeavyDB.
 
 At a high-level, all SQL queries made to the server pass through the
 Thrift_ `sql_execute` endpoint. The query string is passed to Apache Calcite_ 
 for parsing and cost-based optimization, yielding an optimized relational 
-algebra tree. This relational algebra tree is then passed through OmniSci-specific 
-optimization passes and translated into an OmniSCi-specific abstract syntax tree (AST). 
+algebra tree. This relational algebra tree is then passed through HEAVY.AI-specific 
+optimization passes and translated into an HEAVY.AI-specific abstract syntax tree (AST). 
 The AST provides all the information necessary to generate native machine code for 
 query execution on the target device. Execution then occurs in parallel on the target 
 device, with device results being aggregated and reduced into a final `ResultSet`

@@ -197,7 +197,7 @@ class AutomaticIRMetadataGuard {
 
   inline static std::unordered_map<CgenState*, OurInstructions> instructions_;
 
-  inline static const std::string detailed_footnote_prefix_{"Omnisci Debugging Info: "};
+  inline static const std::string detailed_footnote_prefix_{"HEAVY.AI Debugging Info: "};
 
   inline static std::mutex instructions_mutex_;
 };

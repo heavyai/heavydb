@@ -1,4 +1,4 @@
-.. OmniSciDB Data Model
+.. HeavyDB Data Model
 
 ========
 Catalog

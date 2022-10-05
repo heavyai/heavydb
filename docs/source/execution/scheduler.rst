@@ -1,4 +1,4 @@
-.. OmniSciDB Query Execution
+.. HeavyDB Query Execution
 
 ===========================
 DAG Execution / Translation
@@ -27,9 +27,9 @@ with the following Calcite plan:
 
   LogicalProject(x=[$0])
     LogicalJoin(condition=[=($0, $3)], joinType=[inner])
-      EnumerableTableScan(table=[[mapd, dead_cols_test]])
+      EnumerableTableScan(table=[[heavyai, dead_cols_test]])
       LogicalProject(x=[$0], y=[$1], rowid=[$2])
-        EnumerableTableScan(table=[[mapd, dead_cols_test]])
+        EnumerableTableScan(table=[[heavyai, dead_cols_test]])
 
 The DAG for this query is as follows:
 

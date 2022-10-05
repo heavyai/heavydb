@@ -1,6 +1,6 @@
-.. OmniSciDB Quickstart
+.. HeavyDB Quickstart
 
-Build OmniSciDB
+Build HeavyDB
 ===============
 
 .. note::
@@ -8,7 +8,7 @@ Build OmniSciDB
     Before you begin building, install the appropriate :doc:``./deps``.
 
 
-OmniSciDB uses `CMake <https://cmake.org/>`_ for its build system. The following commands will build a simple, ``CUDA`` enabled build using 4 CPU threads:
+HeavyDB uses `CMake <https://cmake.org/>`_ for its build system. The following commands will build a simple, ``CUDA`` enabled build using 4 CPU threads:
 
 .. code-block:: shell
 

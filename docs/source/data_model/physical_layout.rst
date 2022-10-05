@@ -1,9 +1,9 @@
-.. OmniSciDB Data Model
+.. HeavyDB Data Model
 
 ==================================
 Physical Data Layout
 ==================================
-OmniSciDB includes a full-featured storage layer to manage the persistence and modification of table data stored on disk.
+HeavyDB includes a full-featured storage layer to manage the persistence and modification of table data stored on disk.
 
 Data on disk is organized into metadata pages and data multipages. The `BufferMgr` class manages data in each level of the memory hierarchy, with data on disk considered the "lowest" level. Specifically, the `FileMgr` mananges loading data from disk and flushing data back to disk during inserts, updates, and deletes. Initially, a single `GlobalFileMgr` is created to serve as the entry point for all file management. In turn, the `GlobalFileMgr` has a child file manager for each table in the current database (see diagram :ref:`file-manager-structure`).
 
@@ -16,7 +16,7 @@ Data on disk is organized into metadata pages and data multipages. The `BufferMg
 Directory Structure
 ===================
 
-The OmniSciDB data directory contains a `data` folder which stores the physical data pages for each table. Everytime a table is created, a new folder is created in `data` identified with the **table_id** and **database_id** uniquely representing each table in the system. The directory name takes the following form:
+The HeavyDB data directory contains a `data` folder which stores the physical data pages for each table. Everytime a table is created, a new folder is created in `data` identified with the **table_id** and **database_id** uniquely representing each table in the system. The directory name takes the following form:
 
 ``data/table_<db_id>_<table_id>``
 
@@ -29,7 +29,7 @@ Within the data directory, data is stored in multipage files which vary in numbe
 Epoch
 -----
 
-OmniSciDB implements recovery and rollback via an `epoch`. The `epoch` is a monotonically incrementing integer starting from 0. As changes are made to a table, the epoch is incremented. Each change creates a new data page. The header for each data page contains to the `epoch` for that change. `Epoch` values are incremented at the start of any job which modifies data on disk (i.e. adds data pages). Sometimes, multiple pages will be written for the same `epoch` value (e.g. with bulk inserts). Once the work is considered complete, the incremented `epoch` is committed and flushed to the `epoch` file in the data directory via calling `checkpoint` in the storage layer. If a job fails before checkpointing, the previous `epoch` value is used and pages with `epoch` values higher than the last committed value are ignored and overwritten. 
+HeavyDB implements recovery and rollback via an `epoch`. The `epoch` is a monotonically incrementing integer starting from 0. As changes are made to a table, the epoch is incremented. Each change creates a new data page. The header for each data page contains to the `epoch` for that change. `Epoch` values are incremented at the start of any job which modifies data on disk (i.e. adds data pages). Sometimes, multiple pages will be written for the same `epoch` value (e.g. with bulk inserts). Once the work is considered complete, the incremented `epoch` is committed and flushed to the `epoch` file in the data directory via calling `checkpoint` in the storage layer. If a job fails before checkpointing, the previous `epoch` value is used and pages with `epoch` values higher than the last committed value are ignored and overwritten. 
 
 Data Multipages
 ================

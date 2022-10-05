@@ -1,4 +1,4 @@
-``SysCatalog`` is a singleton class responsible for managing top-level OmniSciDB server metadata, including:
+``SysCatalog`` is a singleton class responsible for managing top-level HeavyDB server metadata, including:
 
 - Users
 - Roles
@@ -17,7 +17,7 @@ Below is a UML representation of the schema of the SQLite database backing the s
 Users
 ****************************************
 
-User accounts in OmniSciDB are global (that is, one user account can have access to multiple databases). The users login information is stored in the ``mapd_users`` system catalog table. When a user is authenticated, a ``UserMetadata`` struct is created to provide an in-memory representation of the user.
+User accounts in HeavyDB are global (that is, one user account can have access to multiple databases). The users login information is stored in the ``mapd_users`` system catalog table. When a user is authenticated, a ``UserMetadata`` struct is created to provide an in-memory representation of the user.
 
 ****************************************
 Roles
@@ -35,7 +35,7 @@ The ``mapd_databases`` table functions as a lookup table for mapping a database 
 Permissions
 ****************************************
 
-All system-level object privilege grants are stored and accessed from the ``mapd_object_permissions`` table. An object permission can be assigned to a role, and specifies what level of access a role has to various parts of the system. See `DB Object Privileges <https://docs.omnisci.com/latest/5_roles.html#ddl-roles-and-privileges>`_ for more information about interfacing with OmniSciDB's security model.
+All system-level object privilege grants are stored and accessed from the ``mapd_object_permissions`` table. An object permission can be assigned to a role, and specifies what level of access a role has to various parts of the system. See `DB Object Privileges <https://docs.heavy.ai/latest/5_roles.html#ddl-roles-and-privileges>`_ for more information about interfacing with HeavyDB's security model.
 
 The ``granteeMap_`` in the ``SysCatalog`` class stores ``Grantee`` objects, representing object level permissions grants. The ``granteeMap_`` is built at startup.
 

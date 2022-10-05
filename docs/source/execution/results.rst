@@ -1,4 +1,4 @@
-.. OmniSciDB Query Execution
+.. HeavyDB Query Execution
 
 ==================================
 Query Results
@@ -53,7 +53,7 @@ The following table contains one possible output buffer layout, described using 
 +-------------+--------------+--------------+
 
 .. note:: 
-    OmniSciDB will attempt to allocate the most compact output buffer possible. In the above example, the 8 byte slots required for ``AVG`` are forcing 8 byte physical size for all outputs. 
+    HeavyDB will attempt to allocate the most compact output buffer possible. In the above example, the 8 byte slots required for ``AVG`` are forcing 8 byte physical size for all outputs. 
 
 The ``x`` and ``COUNT`` targets each require one slot in the output buffer and a physical size greater than our equal to their logical size. The ``AVG`` target requires two slots; one to compute the count, and one to compute a running sum. This allows ``AVG`` to be computed in parallel and reduced across multiple outputs. 
 
@@ -64,7 +64,7 @@ Other target types may also require multiple slots. For example. variable length
 Storage Memory Layouts
 ^^^^^^^^^^^^^^^^^^^^^^
 
-OmniSciDB is a columnar database, meaning all inputs to the system are columns. However, output results can be stored in either `columnar` or `row-wise` order. The figure below depicts a simplified schematic representation of these two memory layouts using a hypothetical 
+HeavyDB is a columnar database, meaning all inputs to the system are columns. However, output results can be stored in either `columnar` or `row-wise` order. The figure below depicts a simplified schematic representation of these two memory layouts using a hypothetical 
 group by query with `n` group keys and `m` aggregates.
 
 * In the **row-wise layout**, all physical slots belonging to the same row are consecutive in the memory.
@@ -78,7 +78,7 @@ For example, for projection queries we store the offset of the current row withi
 Group by Queries
 ^^^^^^^^^^^^^^^^^
 
-OmniSciDB supports two hash table layouts for group by queries: the **baseline** hash layout and the **perfect** hash layout. For perfect hash, the whole storage buffer is divided into indexed portions such that each portion can be accessed by one and only one set of keys. For a set of keys in a group by query, all possible indices can be upperbounded by the cross-product of each key's range (i.e., maximum subtracted by minimum). More specifically, for a set of grouped keys :math:`k_0, \dots, k_n`, each with maximum values of :math:`M_0, \dots, M_n` and minimum values of :math:`m_0, \dots, m_n` respectively, 
+HeavyDB supports two hash table layouts for group by queries: the **baseline** hash layout and the **perfect** hash layout. For perfect hash, the whole storage buffer is divided into indexed portions such that each portion can be accessed by one and only one set of keys. For a set of keys in a group by query, all possible indices can be upperbounded by the cross-product of each key's range (i.e., maximum subtracted by minimum). More specifically, for a set of grouped keys :math:`k_0, \dots, k_n`, each with maximum values of :math:`M_0, \dots, M_n` and minimum values of :math:`m_0, \dots, m_n` respectively, 
 we can compute the unique index as: :math:`(k_0 - m_0) + (M_0 - m_0)(k_1 - m_1) + \dots + (M_0 - m_0) \dots (M_{n-1}-m_{n-1})(k_n - m_n)` 
 
 

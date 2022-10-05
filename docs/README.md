@@ -1,12 +1,12 @@
-# OmniSciDB Developer Documentation
+# HeavyDB Developer Documentation
 
 Documentation is available at:
 
-https://www.mapd.com/docs/
+https://docs.heavy.ai
 
 ## Sphinx docs
 
-[Sphinx](http://www.sphinx-doc.org) is a python-based tool to generate documentation. Here it will be used to generate HTML pages with the OmniSciDB Developer Documentation.
+[Sphinx](http://www.sphinx-doc.org) is a python-based tool to generate documentation. Here it will be used to generate HTML pages with the HeavyDB Developer Documentation.
 
 ## Building docs
 
