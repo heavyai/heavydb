@@ -1,4 +1,4 @@
-The :cpp:class:`Catalog_Namespace::Catalog` is the top-level container for schemas associated with an individual database. When the OmniSciDB data directory is initialized, an initial "default" database is created. OmniSciDB always has at least one catalog at startup. The ``Catalog`` maintains the following objects:
+The :cpp:class:`Catalog_Namespace::Catalog` is the top-level container for schemas associated with an individual database. When the HeavyDB data directory is initialized, an initial "default" database is created. HeavyDB always has at least one catalog at startup. The ``Catalog`` maintains the following objects:
 
 - Tables
 - Columns
@@ -35,26 +35,26 @@ Columns of type `dictionary encoded string` require a separate string dictionary
 Sharded Tables
 ****************************************
 
-OmniSciDB supports `sharded tables` -- that is, a table partitioned by a predefined column (called the `shard key`) into a pre-determined number of `physical tables`, more commonly referred to as `shards`. Sharding is used for increasing performance (by grouping like data on like devices) and for support complex queries in distributed mode (Enterprise Edition only). Internally, a sharded table is represented as a top-level `logical` table and several underlying `physical` tables (with the number of physical tables corresponding to the total shard count). This mapping is stored in the ``mapd_logical_to_physical`` *SQLite* table. 
+HeavyDB supports `sharded tables` -- that is, a table partitioned by a predefined column (called the `shard key`) into a pre-determined number of `physical tables`, more commonly referred to as `shards`. Sharding is used for increasing performance (by grouping like data on like devices) and for support complex queries in distributed mode (Enterprise Edition only). Internally, a sharded table is represented as a top-level `logical` table and several underlying `physical` tables (with the number of physical tables corresponding to the total shard count). This mapping is stored in the ``mapd_logical_to_physical`` *SQLite* table. 
 
 ****************************************
 Views
 ****************************************
 
-Views in OmniSciDB are currently not materialized during creation. Instead, the definition for the view is stored in the ``mapd_views`` *SQLite* table, and the view is materialized lazily when the view is queried. By using lazy materialization, OmniSciDB fuse the query on the view with the underlying table(s) backing the view, reducing the number of intermediate projections required and/or the amount of data that must be loaded and processed. Views are represented by a :cpp:class:`TableDescriptor` object with the `isView` boolean member set to `true`.
+Views in HeavyDB are currently not materialized during creation. Instead, the definition for the view is stored in the ``mapd_views`` *SQLite* table, and the view is materialized lazily when the view is queried. By using lazy materialization, HeavyDB fuse the query on the view with the underlying table(s) backing the view, reducing the number of intermediate projections required and/or the amount of data that must be loaded and processed. Views are represented by a :cpp:class:`TableDescriptor` object with the `isView` boolean member set to `true`.
 
 ****************************************
 Temporary Tables
 ****************************************
 
-OmniSciDB supports temporary tables. Temporary tables can be created using ``CREATE TEMPORARY TABLE``. All types (except geospatial types) are supported in temporary tables. Temporary tables store their data in CPU memory and persist until the server is restarted. 
+HeavyDB supports temporary tables. Temporary tables can be created using ``CREATE TEMPORARY TABLE``. All types (except geospatial types) are supported in temporary tables. Temporary tables store their data in CPU memory and persist until the server is restarted. 
 
 Temporary tables are identified by checking the ``persistenceLevel`` property of the :cpp:class:`TableDescriptor`. A free function, ``table_is_temporary``, is available for convenience.
 
-Note that :ref:`calcite_parser` relies on reading the sqlite catalog files directly for unit testing. To test temporary tables, a separate JSON file is created in the catalog directory for each database containing temporary table metadata. See :ref:`calcite_omniscidb_comms` for more details.
+Note that :ref:`calcite_parser` relies on reading the sqlite catalog files directly for unit testing. To test temporary tables, a separate JSON file is created in the catalog directory for each database containing temporary table metadata. See :ref:`calcite_heavydb_comms` for more details.
 
 ****************************************
 Dashboards
 ****************************************
 
-OmniSciDB holds the dashboard state for OmniSci Immerse (Enterprise Edition only), our web-based data exploration tool. Dashboards are serialized and stored in the ``mapd_dashboards`` table. Because dashboards are built over a database and typically contain many database objects, they are considered a top-level object in the OmniSciDB catalog and object permissions model.
+HeavyDB holds the dashboard state for Heavy Immerse (Enterprise Edition only), our web-based data exploration tool. Dashboards are serialized and stored in the ``mapd_dashboards`` table. Because dashboards are built over a database and typically contain many database objects, they are considered a top-level object in the HeavyDB catalog and object permissions model.

@@ -1,4 +1,4 @@
-.. OmniSciDB Data Model
+.. HeavyDB Data Model
 
 ==================================
 Columnar Data Organization
@@ -6,7 +6,7 @@ Columnar Data Organization
 
 Columns
 ==================
-OmniSciDB is a columnar database. Columns in OmniSciDB are organized into fragments (striping across rows) and chunks (the intersection of a column and a fragment). The following sections describe fragment and chunk organization and layout in depth. 
+HeavyDB is a columnar database. Columns in HeavyDB are organized into fragments (striping across rows) and chunks (the intersection of a column and a fragment). The following sections describe fragment and chunk organization and layout in depth. 
 
 Fragments
 ==================

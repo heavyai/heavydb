@@ -2,7 +2,7 @@
 Hash Joins
 ==========
 
-A hash join is a technique used by OmniSciDB to accelerate a SQL join query.
+A hash join is a technique used by HeavyDB to accelerate a SQL join query.
 
 ============
 Introduction
@@ -13,7 +13,7 @@ A SQL join is a part of a query that combines rows from two tables. A join claus
 Loop Joins
 ----------
 
-A simple way for the OmniSciDB backend to execute a join, but also a slow way, is to use two nested loops. The outer loop scans the first of the two tables in the JOIN clause, while the inner loop scans the second of the two tables, and each inner loop iteration checks the join qualifier for the two rows currently being scanned.
+A simple way for the HeavyDB backend to execute a join, but also a slow way, is to use two nested loops. The outer loop scans the first of the two tables in the JOIN clause, while the inner loop scans the second of the two tables, and each inner loop iteration checks the join qualifier for the two rows currently being scanned.
 
 A join can produce up to MxN combined rows where M and N are the sizes of the two tables. With a loop join, the join qualifier must be checked MxN times using this technique, and the inner table must be rescanned many times, one full scan for each row in the outer table. (Complexity is O(n^2), quadratic).
 
@@ -30,7 +30,7 @@ A failed hash join can sometimes automatically fall back to a loop join, such as
 Hash Join Buffers
 =================
 
-OmniSciDB can choose between different kinds of hash tables (described later) when executing a SQL join query, but each hash join clause will have a single buffer allocated in memory, except that multiple buffers will sometimes be coalesced into a single buffer. (Coalescing is described later.)
+HeavyDB can choose between different kinds of hash tables (described later) when executing a SQL join query, but each hash join clause will have a single buffer allocated in memory, except that multiple buffers will sometimes be coalesced into a single buffer. (Coalescing is described later.)
 
 A hash join buffer can have up to four sections which are located consecutively in memory:
 
@@ -77,7 +77,7 @@ The location of each Payloads subarray is stored in the Offsets section. The len
 Kinds of Hash Joins
 ===================
 
-An OmniSciDB hash join buffer can have either a one-to-one layout or a one-to-many layout.
+An HeavyDB hash join buffer can have either a one-to-one layout or a one-to-many layout.
 
 A one-to-one layout is the least-complicated and fastest kind of hash join buffer. The Offsets and Counts sections are not required for a one-to-one layout because there is always exactly one payload row ID stored per key.
 
@@ -85,7 +85,7 @@ A one-to-many hash join buffer will have at least the Offsets, Counts, and Paylo
 
 In some cases the Keys section can be omitted from the hash join buffer giving perfect hashing, where integer keys are directly mapped to locations in the other sections.
 
-OmniSciDB automatically selects from one of three C++ classes when building a hash join buffer:
+HeavyDB automatically selects from one of three C++ classes when building a hash join buffer:
 
 ============================ ============================= ========================
 C++ Class Name               Layouts                       Selected For
@@ -99,14 +99,14 @@ OverlapsJoinHashTable        only One-To-Many              Geospatial hashing
 Inspecting a Hash Join Buffer
 =============================
 
-For learning about and/or for debugging a hash join buffer, OmniSciDB provides a toString() function for decoding the buffer into a human-readable string.
+For learning about and/or for debugging a hash join buffer, HeavyDB provides a toString() function for decoding the buffer into a human-readable string.
 
 Be aware that a hash join buffer often may be built using multiple threads, possibly causing the exact layout of a buffer to vary for the same SQL across different builds. (See later section about comparing buffers for more info.)
 
 One-To-One JoinHashTable Example
 --------------------------------
 
-This SQL causes OmniSciDB to use one-to-one perfect hashing shown by the very simple hash join buffer containing only a small Payloads section. The second table is selected for hashing because it has the lowest cardinality and because it has no duplicate records.
+This SQL causes HeavyDB to use one-to-one perfect hashing shown by the very simple hash join buffer containing only a small Payloads section. The second table is selected for hashing because it has the lowest cardinality and because it has no duplicate records.
 
     SQL:
       create table table1 (a integer);

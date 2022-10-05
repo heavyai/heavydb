@@ -1,4 +1,4 @@
-.. OmniSciDB Quickstart
+.. HeavyDB Quickstart
 
 ###########################
 Start and Load Sample Data
@@ -7,13 +7,13 @@ Start and Load Sample Data
 Starting the Server
 ===================
 
-The `startheavy` wrapper script may be used to start OmniSciDB in a testing environment. This script performs the following tasks:
+The `startheavy` wrapper script may be used to start HeavyDB in a testing environment. This script performs the following tasks:
 
 * initializes the server `data` directory via ``initheavy``, if required
-* starts the OmniSciDB server, ``heavydb``
+* starts the HeavyDB server, ``heavydb``
 * offers to download and import a sample dataset using the `insert_sample_data` script if flag ``--sample-data`` is provided
 
-Assuming you are in the `build` directory, and it is a subdirectory of the `omniscidb` repository, `startheavy` may be run by:
+Assuming you are in the `build` directory, and it is a subdirectory of the `heavydb` repository, `startheavy` may be run by:
 
 .. code-block::shell
 
@@ -30,7 +30,7 @@ Initialize the `data` storage directory. This command only needs to be run once.
 
     mkdir data && ./bin/initheavy data
 
-Start the OmniSciDB server:
+Start the HeavyDB server:
 
 .. code-block:: shell
 
@@ -53,12 +53,12 @@ Users can always insert a sample dataset by running the included `insert_sample_
 
     ../insert_sample_data
 
-OmniSciDB also provides a variety of utilities for loading data into a table:
+HeavyDB also provides a variety of utilities for loading data into a table:
 
-* `COPY FROM <https://www.omnisci.com/docs/latest/6_loading_data.html#copy-from>`_
-* `SQLImporter <https://www.omnisci.com/docs/latest/6_loading_data.html#sqlimporter>`_
-* `StreamInsert <https://www.omnisci.com/docs/latest/6_loading_data.html#streaminsert>`_
-* `Importing AWS S3 Files <https://www.omnisci.com/docs/latest/6_loading_data.html#importing-aws-s3-files>`_
-* `KafkaImporter <https://www.omnisci.com/docs/latest/6_loading_data.html#kafkaimporter>`_
-* `StreamImporter <https://www.omnisci.com/docs/latest/6_loading_data.html#streamimporter>`_
-* `HDFS with Sqoop <https://www.omnisci.com/docs/latest/6_loading_data.html#hdfs>`_
+* `COPY FROM <https://www.heavy.ai/docs/latest/6_loading_data.html#copy-from>`_
+* `SQLImporter <https://www.heavy.ai/docs/latest/6_loading_data.html#sqlimporter>`_
+* `StreamInsert <https://www.heavy.ai/docs/latest/6_loading_data.html#streaminsert>`_
+* `Importing AWS S3 Files <https://www.heavy.ai/docs/latest/6_loading_data.html#importing-aws-s3-files>`_
+* `KafkaImporter <https://www.heavy.ai/docs/latest/6_loading_data.html#kafkaimporter>`_
+* `StreamImporter <https://www.heavy.ai/docs/latest/6_loading_data.html#streamimporter>`_
+* `HDFS with Sqoop <https://www.heavy.ai/docs/latest/6_loading_data.html#hdfs>`_

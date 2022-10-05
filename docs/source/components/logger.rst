@@ -4,7 +4,7 @@ Logger
 
 ``#include "Logger/Logger.h"``
 
-The OmniSci Logger is based on `Boost.Log`_ with a design goal of being largely, though not completely, backward
+The HEAVY.AI Logger is based on `Boost.Log`_ with a design goal of being largely, though not completely, backward
 compatible with `glog`_ in usage, but with additional control over the logging format and other features.
 
 .. _Boost.Log: https://www.boost.org/libs/log/doc/html/index.html
@@ -58,7 +58,7 @@ Program Options
                                           log files are started.
 
 The class ``logger::LogOptions`` manages the above values, and integrates into the `Boost.Program_options`_
-classes used by the OmniSciDB to process program options, from both the command line and/or a config file.
+classes used by the HeavyDB to process program options, from both the command line and/or a config file.
 
 .. _Boost.Program_options: https://www.boost.org/doc/html/program_options.html
 
@@ -165,7 +165,7 @@ The general format of a log entry is::
 
 Example::
 
-    2019-09-18T16:25:25.659248 I 26481 5 DBHandler.cpp:181 OmniSci Server 4.9.0dev-20190918-bd97353685
+    2019-09-18T16:25:25.659248 I 26481 5 DBHandler.cpp:181 HEAVY.AI Server 4.9.0dev-20190918-bd97353685
 
 Field descriptions:
 

@@ -1,4 +1,4 @@
-.. OmniSciDB Query Execution
+.. HeavyDB Query Execution
 
 ==================================
 Data Flow

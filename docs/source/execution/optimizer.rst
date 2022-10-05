@@ -1,10 +1,10 @@
-.. OmniSciDB Query Execution
+.. HeavyDB Query Execution
 
 ==================================
 DAG Builder / Optimizer
 ==================================
 
-The :cpp:class:`RelAlgDagBuilder` and ``RelAlgOptimizer`` are responsible for deserializing the relational algebra tree returned from Calcite (see :doc:`../calcite/calcite_parser`) and building a relational algebra DAG (Directed Acyclic Graph) using OmniSciDB specific data structures. The OmniSciDB RA DAG then passes through several optimization passes. The process of building the OmniSciDB DAG and a description of the optimization passes currently employed follows. 
+The :cpp:class:`RelAlgDagBuilder` and ``RelAlgOptimizer`` are responsible for deserializing the relational algebra tree returned from Calcite (see :doc:`../calcite/calcite_parser`) and building a relational algebra DAG (Directed Acyclic Graph) using HeavyDB specific data structures. The HeavyDB RA DAG then passes through several optimization passes. The process of building the HeavyDB DAG and a description of the optimization passes currently employed follows. 
 
 DAG Builder
 ===========
@@ -70,10 +70,10 @@ RexRef                Synthetic expression node allowing a column in a group by 
                       be referenced directly by the projection.
 ===================   ==============================================================
 
-OmniSciDB Specific Query Optimization
+HeavyDB Specific Query Optimization
 =====================================
 
-Once all node objects have been built, the OmniSciDB relational algebra tree passes through several optimization phases. Each optimization is described below. 
+Once all node objects have been built, the HeavyDB relational algebra tree passes through several optimization phases. Each optimization is described below. 
 
 Mark Noops
 ----------
@@ -92,7 +92,7 @@ Calcite generates the following RA tree.
   LogicalAggregate(group=[{0}])
     LogicalAggregate(group=[{0}])
       LogicalProject(first_name=[$0])
-        EnumerableTableScan(table=[[mapd, Users]])
+        EnumerableTableScan(table=[[heavyai, Users]])
   
 The second aggregate node is clearly a duplicate of the first. Therefore, the second aggregate node is marked as a `noop` and the result from the first node (after the project) is forwarded.
 
@@ -126,15 +126,15 @@ The generated RA from Calcite is:
       LogicalProject(str=[$10], x=[$35], y=[$1])
         LogicalFilter(condition=[=($0, $35)])
           LogicalJoin(condition=[true], joinType=[inner])
-            EnumerableTableScan(table=[[omnisci, test]])
-            EnumerableTableScan(table=[[omnisci, join_test]])
+            EnumerableTableScan(table=[[heavyai, test]])
+            EnumerableTableScan(table=[[heavyai, join_test]])
 
 The project node on line 4 can be removed, with its projected targets pushed to the project node on line 2 (see `eliminate identical copies`). Once the project node on line 4 is removed, the filters on lines 3 and 5 can be folded. 
 
 Eliminate Dead Columns
 ----------------------
 
-Intermediate projection nodes may sometimes load more inputs than are actually required by subsequent nodes. In OmniSciDB, each projection node input is loaded into memory and projected through as an output :term:`target`. The dead columns elimination step ensures that only columns that are be used in subsequent projections are loaded into memory. As an example, consider the following table and query:
+Intermediate projection nodes may sometimes load more inputs than are actually required by subsequent nodes. In HeavyDB, each projection node input is loaded into memory and projected through as an output :term:`target`. The dead columns elimination step ensures that only columns that are be used in subsequent projections are loaded into memory. As an example, consider the following table and query:
 
 .. code-block:: sql
 
@@ -149,16 +149,16 @@ The Calcite generated plan is:
 
   LogicalProject(x=[$0])
     LogicalJoin(condition=[=($0, $3)], joinType=[inner])
-      EnumerableTableScan(table=[[mapd, dead_cols_test]])
+      EnumerableTableScan(table=[[heavyai, dead_cols_test]])
       LogicalProject(x=[$0], y=[$1], rowid=[$2])
-        EnumerableTableScan(table=[[mapd, dead_cols_test]])
+        EnumerableTableScan(table=[[heavyai, dead_cols_test]])
 
 Note that the projection on line 4 is projecting the `y` column (as part of the `select *` expansion in the right hand side join condition). But, `y` is not used in a subsequent projection; therefore, we can eliminate `y` and avoid loading the column for `y` into the memory hierarchy. 
 
 Separate Window Function Expressions
 ------------------------------------
 
-OmniSciDB currently requires window function expressions to be top-level expressions on their corresponding RA node. To ensure window function expressions can be embedded in other expressions, we detect the presence of embedded window function expressions and "split" the expression, pushing the top-level expression up to a new projection node, replacing the window function expression in the top-level expression with an input expression, and finally replacing the existing top-level expression in the current projection node with the window function expression. 
+HeavyDB currently requires window function expressions to be top-level expressions on their corresponding RA node. To ensure window function expressions can be embedded in other expressions, we detect the presence of embedded window function expressions and "split" the expression, pushing the top-level expression up to a new projection node, replacing the window function expression in the top-level expression with an input expression, and finally replacing the existing top-level expression in the current projection node with the window function expression. 
 
 For example, consider the simple expression `LAG() - 1`. The top level expression is a ``BinaryOperator`` (with the op type of `-`, left hand side `LAG()`, and right hand side `1`). We detect the presence of the embedded window function expression, make a copy of the binary operator expression, forward it to a new projection node, and replace the window function expression with an input. Now we have ``BinaryOperator`` with the op type `-`, the left hand side an input target from the previous projection, and the right hand side `1` as before. Finally, we replace the existing binary operator with the top-level window function expression on the existing project node.
 
@@ -197,8 +197,8 @@ Calcite generates the following RA tree:
     LogicalProject($f0=[0])
       LogicalJoin(condition=[=($2, $4)], joinType=[inner])
         LogicalJoin(condition=[=($0, $2)], joinType=[inner])
-          EnumerableTableScan(table=[[omnisci, a]])
-          EnumerableTableScan(table=[[omnisci, b]])
-        EnumerableTableScan(table=[[omnisci, c]])
+          EnumerableTableScan(table=[[heavyai, a]])
+          EnumerableTableScan(table=[[heavyai, b]])
+        EnumerableTableScan(table=[[heavyai, c]])
 
 The join nodes on lines 3 and 4 can be coalesced into a single join node, as long as the join condition on line 4 is checked before line 3. The ``RelLeftDeepJoin`` node coalesces multiple join conditions into a single node, and dictates the ordering of the join conditions during code generation.
