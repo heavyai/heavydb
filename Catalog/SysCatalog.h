@@ -364,6 +364,8 @@ class SysCatalog : private CommonFileOperations {
   void check_for_session_encryption(const std::string& pki_cert, std::string& session);
   std::vector<Catalog*> getCatalogsForAllDbs();
 
+  std::shared_ptr<Catalog> getDummyCatalog() { return dummyCatalog_; }
+
   std::shared_ptr<Catalog> getCatalog(const std::string& dbName);
   std::shared_ptr<Catalog> getCatalog(const int32_t db_id);
   std::shared_ptr<Catalog> getCatalog(const DBMetadata& curDB, bool is_new_db);

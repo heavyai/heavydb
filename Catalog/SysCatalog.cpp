@@ -294,7 +294,8 @@ SysCatalog::SysCatalog()
     , sqliteMutex_{}
     , sharedMutex_{}
     , thread_holding_sqlite_lock{std::thread::id()}
-    , thread_holding_write_lock{std::thread::id()} {}
+    , thread_holding_write_lock{std::thread::id()}
+    , dummyCatalog_{std::make_shared<Catalog>()} {}
 
 SysCatalog::~SysCatalog() {
   // TODO(sy): Need to lock here to wait for other threads to complete before pulling out
