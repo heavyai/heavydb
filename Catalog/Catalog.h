@@ -147,6 +147,12 @@ class Catalog final {
           bool is_new_db);
 
   /**
+   * @brief Constructor builds a hollow catalog
+   * used during constructor of other catalogs
+   */
+  Catalog();
+
+  /**
    * @brief Destructor - deletes all
    * ColumnDescriptor and TableDescriptor structures
    * which were allocated on the heap and writes
@@ -770,6 +776,7 @@ class Catalog final {
   foreign_storage::ForeignTable* getForeignTableUnlocked(
       const std::string& tableName) const;
 
+  const Catalog* getObjForLock();
   void removeChunks(const int table_id) const;
 
   void buildCustomExpressionsMapUnlocked();
