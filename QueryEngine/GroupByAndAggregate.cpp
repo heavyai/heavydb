@@ -1716,7 +1716,7 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
             chosen_bytes == 8);
       CHECK(output_buffer_byte_stream);
       CHECK(out_row_idx);
-      uint32_t col_off = query_mem_desc.getColOffInBytes(agg_out_off);
+      size_t col_off = query_mem_desc.getColOffInBytes(agg_out_off);
       // multiplying by chosen_bytes, i.e., << log2(chosen_bytes)
       auto out_per_col_byte_idx =
 #ifdef _WIN32
