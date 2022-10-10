@@ -49,6 +49,14 @@ class ResultSetRecyclerHolder {
     }
   }
 
+  static ResultSetRecycler* getResultSetRecycler() {
+    return query_resultset_cache_.get();
+  }
+
+  static ChunkMetadataRecycler* getChunkMetadataRecycler() {
+    return chunk_metadata_cache_.get();
+  }
+
   const ResultSetPtr getCachedQueryResultSet(const size_t key);
 
   std::optional<std::vector<TargetMetaInfo>> getOutputMetaInfo(QueryPlanHash key);
@@ -67,12 +75,6 @@ class ResultSetRecyclerHolder {
   void putChunkMetadataToCache(const size_t key,
                                const std::unordered_set<size_t>& input_table_keys,
                                const ChunkMetadataMap& chunk_metadata);
-
-  ResultSetRecycler* getResultSetRecycler() { return query_resultset_cache_.get(); }
-
-  ChunkMetadataRecycler* getChunkMetadataRecycler() {
-    return chunk_metadata_cache_.get();
-  }
 
   std::vector<std::shared_ptr<Analyzer::Expr>>& getTargetExprs(QueryPlanHash key) const;
 

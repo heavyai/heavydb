@@ -164,6 +164,13 @@ void ResultSetRecycler::putItemToCache(QueryPlanHash key,
 
   if (!has_cached_resultset) {
     auto& metric_tracker = getMetricTracker(item_type);
+    if (metric_tracker.getTotalCacheSize() != g_query_resultset_cache_total_bytes) {
+      metric_tracker.setTotalCacheSize(g_query_resultset_cache_total_bytes);
+    }
+    if (metric_tracker.getMaxCacheItemSize() !=
+        g_max_cacheable_query_resultset_size_bytes) {
+      metric_tracker.setMaxCacheItemSize(g_max_cacheable_query_resultset_size_bytes);
+    }
     auto cache_status = metric_tracker.canAddItem(device_identifier, item_size);
     if (cache_status == CacheAvailability::UNAVAILABLE) {
       LOG(INFO) << "Failed to keep a query resultset: the size of the resultset ("
