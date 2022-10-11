@@ -321,11 +321,10 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
       }
     } else if (arg_ti.is_bytes()) {
       CHECK_EQ(size_t(3), arg_lvs.size());
-      /* arg_lvs contains:
-         c = string_decode(&col_buf0, pos)
-         ptr = extract_str_ptr(c)
-         sz = extract_str_len(c)
-      */
+      // arg_lvs contains:
+      // arg_lvs[0] StringView struct { i8*, i64 }
+      // arg_lvs[1] i8* pointer
+      // arg_lvs[2] i32 string length (truncated from i64)
       for (size_t j = 0; j < arg_lvs.size(); j++) {
         orig_arg_lvs.push_back(arg_lvs[j]);
       }
@@ -1761,4 +1760,14 @@ llvm::Value* CodeGenerator::castArrayPointer(llvm::Value* ptr,
       CHECK(false);
   }
   return nullptr;
+}
+
+// Reflects struct StringView defined in Shared/Datum.h
+llvm::StructType* CodeGenerator::createStringViewStructType() {
+  auto* const string_view_type =
+      llvm::StructType::get(cgen_state_->context_,
+                            {llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                             llvm::Type::getInt64Ty(cgen_state_->context_)});
+  string_view_type->setName("StringView");
+  return string_view_type;
 }

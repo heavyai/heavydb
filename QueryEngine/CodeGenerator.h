@@ -612,6 +612,8 @@ class CodeGenerator {
       const std::unordered_map<llvm::Value*, llvm::Value*>&,
       const CompilationOptions&);
 
+  llvm::StructType* createStringViewStructType();
+
   // Return LLVM intrinsic providing fast arithmetic with overflow check
   // for the given binary operation.
   llvm::Function* getArithWithOverflowIntrinsic(const Analyzer::BinOper* bin_oper,

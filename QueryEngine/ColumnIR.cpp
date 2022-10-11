@@ -367,14 +367,13 @@ std::vector<llvm::Value*> CodeGenerator::codegenVariableLengthStringColVar(
     llvm::Value* pos_arg) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   // real (not dictionary-encoded) strings; store the pointer to the payload
-  auto ptr_and_len =
-      cgen_state_->emitExternalCall("string_decode",
-                                    get_int_type(64, cgen_state_->context_),
-                                    {col_byte_stream, pos_arg});
-  // Unpack the pointer + length, see string_decode function.
-  auto str_lv = cgen_state_->emitCall("extract_str_ptr", {ptr_and_len});
-  auto len_lv = cgen_state_->emitCall("extract_str_len", {ptr_and_len});
-  return {ptr_and_len, str_lv, len_lv};
+  auto* const string_view = cgen_state_->emitExternalCall(
+      "string_decode", createStringViewStructType(), {col_byte_stream, pos_arg});
+  auto* str_lv = cgen_state_->ir_builder_.CreateExtractValue(string_view, 0);
+  auto* len_lv = cgen_state_->ir_builder_.CreateExtractValue(string_view, 1);
+  len_lv = cgen_state_->ir_builder_.CreateTrunc(
+      len_lv, llvm::Type::getInt32Ty(cgen_state_->context_));
+  return {string_view, str_lv, len_lv};
 }
 
 llvm::Value* CodeGenerator::codegenRowId(const Analyzer::ColumnVar* col_var,

@@ -80,14 +80,11 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
     auto* byte_array_type = get_int_array_type(8, ti.get_size(), cgen_state_->context_);
     return cgen_state_->ir_builder_.CreatePointerCast(operand_lv,
                                                       byte_array_type->getPointerTo());
-  }
-  if (!operand_ti.is_string() && ti.is_text_encoding_dict()) {
+  } else if (!operand_ti.is_string() && ti.is_text_encoding_dict()) {
     return codegenCastNonStringToString(operand_lv, operand_ti, ti, operand_is_const, co);
-  }
-  if (operand_lv->getType()->isIntegerTy()) {
-    if (operand_ti.is_string()) {
-      return codegenCastFromString(operand_lv, operand_ti, ti, operand_is_const, co);
-    }
+  } else if (operand_ti.is_string()) {
+    return codegenCastFromString(operand_lv, operand_ti, ti, operand_is_const, co);
+  } else if (operand_lv->getType()->isIntegerTy()) {
     CHECK(operand_ti.is_integer() || operand_ti.is_decimal() || operand_ti.is_time() ||
           operand_ti.is_boolean());
 
@@ -308,7 +305,7 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
     }
     CHECK_EQ(kENCODING_NONE, operand_ti.get_compression());
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
-    CHECK(operand_lv->getType()->isIntegerTy(64));
+    CHECK(operand_lv->getType()->isStructTy());  // StringView
     if (co.device_type == ExecutorDeviceType::GPU) {
       throw QueryMustRunOnCpu();
     }
@@ -340,7 +337,7 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
                   operand_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
     return cgen_state_->emitExternalCall(
         "string_decompress",
-        get_int_type(64, cgen_state_->context_),
+        createStringViewStructType(),
         {operand_lv, cgen_state_->llInt(string_dictionary_ptr)});
   }
   CHECK(operand_is_const);

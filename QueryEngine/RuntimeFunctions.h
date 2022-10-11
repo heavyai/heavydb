@@ -323,10 +323,6 @@ extern "C" DEVICE NEVER_INLINE int64_t
                                              const int32_t null_val,
                                              const int64_t ret_null_val);
 
-extern "C" RUNTIME_EXPORT int8_t* extract_str_ptr_noinline(const uint64_t str_and_len);
-
-extern "C" RUNTIME_EXPORT int32_t extract_str_len_noinline(const uint64_t str_and_len);
-
 template <typename T = int64_t>
 inline T get_empty_key() {
   static_assert(std::is_same<T, int64_t>::value,

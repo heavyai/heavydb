@@ -19,11 +19,10 @@
 #endif  // __CUDACC__
 
 #include "RuntimeFunctions.h"
-#include "../Shared/Datum.h"
-#include "../Shared/funcannotations.h"
 #include "BufferCompaction.h"
 #include "HyperLogLogRank.h"
 #include "MurmurHash.h"
+#include "Shared/Datum.h"
 #include "Shared/quantile.h"
 #include "TypePunning.h"
 #include "Utils/SegmentTreeUtils.h"
@@ -2039,30 +2038,9 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t* get_group_value_fast_keyless_se
   return groups_buffer + row_size_quad * (warp_size * (key - min_key) + thread_warp_idx);
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t* extract_str_ptr(
-    const uint64_t str_and_len) {
-  return reinterpret_cast<int8_t*>(str_and_len & 0xffffffffffff);
-}
-
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
-extract_str_len(const uint64_t str_and_len) {
-  return static_cast<int64_t>(str_and_len) >> 48;
-}
-
-extern "C" RUNTIME_EXPORT NEVER_INLINE int8_t* extract_str_ptr_noinline(
-    const uint64_t str_and_len) {
-  return extract_str_ptr(str_and_len);
-}
-
-extern "C" RUNTIME_EXPORT NEVER_INLINE int32_t
-extract_str_len_noinline(const uint64_t str_and_len) {
-  return extract_str_len(str_and_len);
-}
-
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t string_pack(const int8_t* ptr,
-                                                             const int32_t len) {
-  return (reinterpret_cast<const uint64_t>(ptr) & 0xffffffffffff) |
-         (static_cast<const uint64_t>(len) << 48);
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE StringView string_pack(const int8_t* ptr,
+                                                               const int32_t len) {
+  return {reinterpret_cast<char const*>(ptr), static_cast<uint64_t>(len)};
 }
 
 #ifdef __clang__

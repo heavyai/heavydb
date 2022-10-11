@@ -480,13 +480,17 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
         // unpack pointer + length if necessary
         if (lhs_lvs.size() != 3) {
           CHECK_EQ(size_t(1), lhs_lvs.size());
-          lhs_lvs.push_back(cgen_state_->emitCall("extract_str_ptr", {lhs_lvs.front()}));
-          lhs_lvs.push_back(cgen_state_->emitCall("extract_str_len", {lhs_lvs.front()}));
+          lhs_lvs.push_back(cgen_state_->ir_builder_.CreateExtractValue(lhs_lvs[0], 0));
+          lhs_lvs.push_back(cgen_state_->ir_builder_.CreateExtractValue(lhs_lvs[0], 1));
+          lhs_lvs.back() = cgen_state_->ir_builder_.CreateTrunc(
+              lhs_lvs.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
         }
         if (rhs_lvs.size() != 3) {
           CHECK_EQ(size_t(1), rhs_lvs.size());
-          rhs_lvs.push_back(cgen_state_->emitCall("extract_str_ptr", {rhs_lvs.front()}));
-          rhs_lvs.push_back(cgen_state_->emitCall("extract_str_len", {rhs_lvs.front()}));
+          rhs_lvs.push_back(cgen_state_->ir_builder_.CreateExtractValue(rhs_lvs[0], 0));
+          rhs_lvs.push_back(cgen_state_->ir_builder_.CreateExtractValue(rhs_lvs[0], 1));
+          rhs_lvs.back() = cgen_state_->ir_builder_.CreateTrunc(
+              rhs_lvs.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
         }
         std::vector<llvm::Value*> str_cmp_args{
             lhs_lvs[1], lhs_lvs[2], rhs_lvs[1], rhs_lvs[2]};

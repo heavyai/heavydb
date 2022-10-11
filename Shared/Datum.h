@@ -26,8 +26,28 @@
 #include "funcannotations.h"
 
 #ifndef __CUDACC__
-#include <string>
+#include <string_view>
 #endif
+
+#ifndef __CUDACC__
+static_assert(!std::is_trivial<std::string_view>::value);
+#endif
+
+// Since std::string_view is not a Trivial class, we use StringView instead,
+// which is both Trivial and has Standard-layout (aka POD).
+// This is like std::string_view but can be used in the context of cuda and llvm.
+struct StringView {
+  char const* ptr_;
+  uint64_t len_;
+
+#ifndef __CUDACC__
+  std::string_view stringView() const { return {ptr_, len_}; }
+#endif
+};
+
+static_assert(sizeof(char) == sizeof(int8_t));
+static_assert(std::is_standard_layout<StringView>::value);
+static_assert(std::is_trivial<StringView>::value);
 
 struct VarlenDatum {
   size_t length;
@@ -40,6 +60,9 @@ struct VarlenDatum {
   VarlenDatum(const size_t l, int8_t* p, const bool n)
       : length(l), pointer(p), is_null(n) {}
 };
+
+static_assert(!std::is_standard_layout<VarlenDatum>::value);
+static_assert(!std::is_trivial<VarlenDatum>::value);
 
 union Datum {
   int8_t boolval;
