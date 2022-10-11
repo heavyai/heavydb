@@ -393,7 +393,7 @@ llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
   if (ti.get_notnull()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
-  const auto operand_lv = codegen(operand, true, co).front();
+  llvm::Value* operand_lv = codegen(operand, true, co).front();
   // NULL-check array or geo's coords array
   if (ti.is_array() || ti.is_geometry()) {
     // POINT [un]compressed coord check requires custom checker and chunk iterator
@@ -402,6 +402,9 @@ llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
         (ti.get_type() == kPOINT) ? "point_coord_array_is_null" : "array_is_null";
     return cgen_state_->emitExternalCall(
         fname, get_int_type(1, cgen_state_->context_), {operand_lv, posArg(operand)});
+  } else if (ti.is_none_encoded_string()) {
+    operand_lv = cgen_state_->ir_builder_.CreateExtractValue(operand_lv, 0);
+    operand_lv = cgen_state_->castToTypeIn(operand_lv, sizeof(int64_t) * 8);
   }
   return codegenIsNullNumber(operand_lv, ti);
 }

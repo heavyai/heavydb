@@ -41,6 +41,7 @@
 #include <cmath>
 #include <cstdio>
 #include <random>
+#include <sstream>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -5115,7 +5116,25 @@ TEST(Select, DictionaryStringEquality) {
   }
 }
 
+void prepare_inserts_test_table() {
+  // Test using a string of length 100,000 chars.
+  // Each number is represented as 1 space ' ' + 9 zero-padded integers
+  // from 0 to 9,999.
+  // 10k numbers x strings of length 10 -> string of length 100k.
+  std::ostringstream oss;
+  for (int i = 0; i < 10000; ++i) {
+    oss << ' ' << std::setfill('0') << std::setw(9) << i;
+  }
+  std::string const long_string = oss.str();
+  CHECK_EQ(100000u, long_string.size());
+  recreate_inserts_test_table();
+  run_multiple_agg(
+      "INSERT INTO inserts_test_table VALUES(0, '" + long_string + "', False);",
+      ExecutorDeviceType::CPU);
+}
+
 TEST(Select, StringsNoneEncoding) {
+  prepare_inserts_test_table();
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -5181,6 +5200,21 @@ TEST(Select, StringsNoneEncoding) {
     EXPECT_THROW(run_multiple_agg(
                      "SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(real_str, str);", dt),
                  std::runtime_error);
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+        100000,
+        v<int64_t>(run_simple_agg("SELECT LENGTH(t) FROM inserts_test_table;", dt))));
+    SKIP_ON_AGGREGATOR(
+        ASSERT_EQ(1,
+                  v<int64_t>(run_simple_agg(
+                      "SELECT ' 000000000'=LEFT(t, 10) FROM inserts_test_table;", dt))));
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT ' 000005000'=SUBSTR(t, 50001, 10) FROM inserts_test_table;", dt))));
+    SKIP_ON_AGGREGATOR(
+        ASSERT_EQ(1,
+                  v<int64_t>(run_simple_agg(
+                      "SELECT ' 000009999'=RIGHT(t, 10) FROM inserts_test_table;", dt))));
   }
 }
 

@@ -74,7 +74,8 @@ class StringDictionaryProxy {
   */
 
   std::vector<int32_t> getTransientBulk(const std::vector<std::string>& strings) const;
-  int32_t getOrAddTransient(const std::string& str);
+  int32_t getOrAddTransient(const std::string&);
+  int32_t getOrAddTransient(const std::string_view);
   // Not currently used
   std::vector<int32_t> getOrAddTransientBulk(const std::vector<std::string>& strings);
   int32_t getIdOfString(const std::string& str) const;
@@ -268,6 +269,8 @@ class StringDictionaryProxy {
   size_t transientEntryCountUnlocked() const;
   size_t entryCountUnlocked() const;
   size_t persistedC() const;
+  template <typename String>
+  int32_t getOrAddTransientImpl(String);
   template <typename String>
   int32_t lookupTransientStringUnlocked(const String& lookup_string) const;
   size_t getTransientBulkImpl(const std::vector<std::string>& strings,

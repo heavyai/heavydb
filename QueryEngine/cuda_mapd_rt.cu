@@ -1279,15 +1279,15 @@ extern "C" __device__ bool slotEmptyKeyCAS_int8(int8_t* slot,
 #include "../Utils/Regexp.cpp"
 #include "../Utils/StringLike.cpp"
 
-extern "C" __device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
+extern "C" __device__ StringView string_decode(int8_t* chunk_iter_, int64_t pos) {
   // TODO(alex): de-dup, the x64 version is basically identical
-  ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
+  auto chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   VarlenDatum vd;
   bool is_end;
   ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
-  return vd.is_null ? 0
-                    : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) |
-                          (static_cast<uint64_t>(vd.length) << 48);
+  // CHECK(!is_end); <--- this is the difference (re: above comment)
+  return vd.is_null ? StringView{nullptr, 0u}
+                    : StringView{reinterpret_cast<char const*>(vd.pointer), vd.length};
 }
 
 extern "C" __device__ void linear_probabilistic_count(uint8_t* bitmap,

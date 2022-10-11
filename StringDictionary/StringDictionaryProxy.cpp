@@ -98,13 +98,22 @@ int32_t StringDictionaryProxy::getOrAddTransientUnlocked(String const& str) {
   return transient_id;
 }
 
-int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) {
+template <typename String>
+int32_t StringDictionaryProxy::getOrAddTransientImpl(String str) {
   auto const string_id = getIdOfStringFromClient(str);
   if (string_id != StringDictionary::INVALID_STR_ID) {
     return string_id;
   }
   std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
   return getOrAddTransientUnlocked(str);
+}
+
+int32_t StringDictionaryProxy::getOrAddTransient(std::string const& str) {
+  return getOrAddTransientImpl<std::string const&>(str);
+}
+
+int32_t StringDictionaryProxy::getOrAddTransient(std::string_view const sv) {
+  return getOrAddTransientImpl<std::string_view const>(sv);
 }
 
 int32_t StringDictionaryProxy::getIdOfString(const std::string& str) const {

@@ -35,7 +35,7 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::CaseExpr* case_
           get_int_type(8 * case_ti.get_logical_size(), cgen_state_->context_);
     } else {
       is_real_str = true;
-      case_llvm_type = get_int_type(64, cgen_state_->context_);
+      case_llvm_type = createStringViewStructType();
     }
   } else if (case_ti.is_boolean()) {
     case_llvm_type = get_int_type(8 * case_ti.get_logical_size(), cgen_state_->context_);
@@ -46,8 +46,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::CaseExpr* case_
   llvm::Value* case_val = codegenCase(case_expr, case_llvm_type, is_real_str, co);
   std::vector<llvm::Value*> ret_vals{case_val};
   if (is_real_str) {
-    ret_vals.push_back(cgen_state_->emitCall("extract_str_ptr", {case_val}));
-    ret_vals.push_back(cgen_state_->emitCall("extract_str_len", {case_val}));
+    ret_vals.push_back(cgen_state_->ir_builder_.CreateExtractValue(case_val, 0));
+    ret_vals.push_back(cgen_state_->ir_builder_.CreateExtractValue(case_val, 1));
+    ret_vals.back() = cgen_state_->ir_builder_.CreateTrunc(
+        ret_vals.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
   }
   return ret_vals;
 }

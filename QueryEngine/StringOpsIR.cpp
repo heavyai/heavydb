@@ -25,39 +25,36 @@
 
 #include <boost/locale/conversion.hpp>
 
-extern "C" RUNTIME_EXPORT uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
+extern "C" RUNTIME_EXPORT StringView string_decode(int8_t* chunk_iter_, int64_t pos) {
   auto chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   VarlenDatum vd;
   bool is_end;
   ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
   CHECK(!is_end);
-  return vd.is_null ? 0
-                    : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) |
-                          (static_cast<uint64_t>(vd.length) << 48);
+  return vd.is_null ? StringView{nullptr, 0u}
+                    : StringView{reinterpret_cast<char const*>(vd.pointer), vd.length};
 }
 
-extern "C" RUNTIME_EXPORT uint64_t string_decompress(const int32_t string_id,
-                                                     const int64_t string_dict_handle) {
+extern "C" RUNTIME_EXPORT StringView string_decompress(const int32_t string_id,
+                                                       const int64_t string_dict_handle) {
   if (string_id == NULL_INT) {
-    return 0;
+    return {nullptr, 0};
   }
   auto string_dict_proxy =
       reinterpret_cast<const StringDictionaryProxy*>(string_dict_handle);
   auto string_bytes = string_dict_proxy->getStringBytes(string_id);
   CHECK(string_bytes.first);
-  return (reinterpret_cast<uint64_t>(string_bytes.first) & 0xffffffffffff) |
-         (static_cast<uint64_t>(string_bytes.second) << 48);
+  return {string_bytes.first, string_bytes.second};
 }
 
-extern "C" RUNTIME_EXPORT int32_t string_compress(const int64_t ptr_and_len,
+extern "C" RUNTIME_EXPORT int32_t string_compress(const StringView string_view,
                                                   const int64_t string_dict_handle) {
-  std::string raw_str(reinterpret_cast<char*>(extract_str_ptr_noinline(ptr_and_len)),
-                      extract_str_len_noinline(ptr_and_len));
-  if (raw_str.empty()) {
+  std::string_view const sv = string_view.stringView();
+  if (sv.empty()) {
     return inline_int_null_value<int32_t>();
   }
   auto string_dict_proxy = reinterpret_cast<StringDictionaryProxy*>(string_dict_handle);
-  return string_dict_proxy->getOrAddTransient(raw_str);
+  return string_dict_proxy->getOrAddTransient(sv);
 }
 
 extern "C" RUNTIME_EXPORT int32_t
@@ -225,8 +222,10 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
   auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
-    str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
-    str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
+    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 0));
+    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 1));
+    str_lv.back() = cgen_state_->ir_builder_.CreateTrunc(
+        str_lv.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
     if (co.device_type == ExecutorDeviceType::GPU) {
       throw QueryMustRunOnCpu();
     }
@@ -307,15 +306,14 @@ CodeGenerator::codegenStringFetchAndEncode(const Analyzer::StringOper* expr,
     }
     const auto sdp_ptr = reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
         arg_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
-    const auto decompressed_str_lv =
+    const auto string_view =
         cgen_state_->emitExternalCall("string_decompress",
-                                      get_int_type(64, cgen_state_->context_),
+                                      createStringViewStructType(),
                                       {primary_str_lv[0], cgen_state_->llInt(sdp_ptr)});
-
-    primary_str_lv.push_back(
-        cgen_state_->emitCall("extract_str_ptr", {decompressed_str_lv}));
-    primary_str_lv.push_back(
-        cgen_state_->emitCall("extract_str_len", {decompressed_str_lv}));
+    primary_str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(string_view, 0));
+    primary_str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(string_view, 1));
+    primary_str_lv.back() = cgen_state_->ir_builder_.CreateTrunc(
+        primary_str_lv.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
   }
   CHECK_EQ(size_t(3), primary_str_lv.size());
   return std::make_pair(primary_str_lv, std::move(nullcheck_codegen));
@@ -579,8 +577,10 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
   auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
-    str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
-    str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
+    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 0));
+    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 1));
+    str_lv.back() = cgen_state_->ir_builder_.CreateTrunc(
+        str_lv.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
     if (co.device_type == ExecutorDeviceType::GPU) {
       throw QueryMustRunOnCpu();
     }
@@ -832,8 +832,10 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::RegexpExpr* expr,
   auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
-    str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
-    str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
+    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 0));
+    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 1));
+    str_lv.back() = cgen_state_->ir_builder_.CreateTrunc(
+        str_lv.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
   }
   auto regexp_expr_arg_lvs = codegen(expr->get_pattern_expr(), true, co);
   CHECK_EQ(size_t(3), regexp_expr_arg_lvs.size());

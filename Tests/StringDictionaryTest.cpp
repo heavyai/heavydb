@@ -814,6 +814,8 @@ TEST_F(StringDictionaryProxyTest, BuildUnionTranslationMapToPartialOverlapProxy)
 }
 
 TEST_F(StringDictionaryTest, TransientUnion) {
+  using namespace std::literals;  // for sv suffix
+
   std::string const sd_lhs_path = std::string(BASE_PATH) + "/sd_lhs";
   std::string const sd_rhs_path = std::string(BASE_PATH) + "/sd_rhs";
 #ifdef _WIN32
@@ -848,11 +850,11 @@ TEST_F(StringDictionaryTest, TransientUnion) {
     // TODO cleanup redundancy of setting SD id here.
     StringDictionaryProxy sdp_lhs(
         sd_lhs, dict_ref_lhs.dictId, sd_lhs->storageEntryCount());
-    sdp_lhs.getOrAddTransient("t0");  // id = -2
+    sdp_lhs.getOrAddTransient("t0"sv);  // id = -2
     StringDictionaryProxy sdp_rhs(
         sd_rhs, dict_ref_rhs.dictId, sd_rhs->storageEntryCount());
-    sdp_rhs.getOrAddTransient("t0");  // id = -2
-    sdp_rhs.getOrAddTransient("t1");  // id = -3
+    sdp_rhs.getOrAddTransient("t0"sv);  // id = -2
+    sdp_rhs.getOrAddTransient("t1"sv);  // id = -3
     auto const id_map = sdp_lhs.transientUnion(sdp_rhs);
     // Expected output:
     // source_domain_min_ = -3 = -1 - number of transients in sdp_rhs
@@ -886,11 +888,11 @@ TEST_F(StringDictionaryTest, TransientUnion) {
   {  // Swap sd_lhs <-> sd_rhs
     StringDictionaryProxy sdp_lhs(
         sd_rhs, dict_ref_lhs.dictId, sd_rhs->storageEntryCount());
-    sdp_lhs.getOrAddTransient("t0");
+    sdp_lhs.getOrAddTransient("t0"sv);
     StringDictionaryProxy sdp_rhs(
         sd_lhs, dict_ref_rhs.dictId, sd_lhs->storageEntryCount());
-    sdp_rhs.getOrAddTransient("t0");
-    sdp_rhs.getOrAddTransient("t1");
+    sdp_rhs.getOrAddTransient("t0"sv);
+    sdp_rhs.getOrAddTransient("t1"sv);
     auto const id_map = sdp_lhs.transientUnion(sdp_rhs);
     // Expected output:
     // source_domain_min_ = -3 = -1 - number of transients in sdp_rhs
