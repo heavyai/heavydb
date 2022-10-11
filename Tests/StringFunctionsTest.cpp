@@ -235,9 +235,10 @@ void compare_array_columns(
  * @brief Class used for setting up and tearing down tables and records that are required
  * by the string function test cases
  */
-class StringFunctionTest : public testing::Test {
+class StringFunctionTest : public TestHelpers::TsanTbbPrivateServerKiller {
  protected:
   void SetUp() override {
+    TestHelpers::TsanTbbPrivateServerKiller::SetUp();
     if (!reuse_test_data || !StringFunctionTest::test_data_loaded) {
       ASSERT_NO_THROW(multi_sql(R"(
           drop table if exists string_function_test_people;
@@ -269,6 +270,7 @@ class StringFunctionTest : public testing::Test {
   }
 
   void TearDown() override {
+    ScopeGuard finalize = [this] { TestHelpers::TsanTbbPrivateServerKiller::TearDown(); };
     if (!reuse_test_data) {
       ASSERT_NO_THROW(multi_sql(R"(
           drop table string_function_test_people;
@@ -3720,9 +3722,10 @@ const char* postgres_osm_names = R"(
 // with leading or trailing spaces (i.e. the 'name_substring_from_3_for_8
 // column), our importer automatically drops the spaces, and there seems
 // no easy way in Postgres to force quoting everything.
-class PostgresStringFunctionTest : public testing::Test {
+class PostgresStringFunctionTest : public TestHelpers::TsanTbbPrivateServerKiller {
  protected:
   void SetUp() override {
+    TestHelpers::TsanTbbPrivateServerKiller::SetUp();
     if (!reuse_test_data || !PostgresStringFunctionTest::test_data_loaded) {
       ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS postgres_osm_names;"));
       ASSERT_NO_THROW(run_ddl_statement(postgres_osm_names));
@@ -3740,6 +3743,7 @@ class PostgresStringFunctionTest : public testing::Test {
     }
   }
   void TearDown() override {
+    ScopeGuard finalize = [this] { TestHelpers::TsanTbbPrivateServerKiller::TearDown(); };
     if (!reuse_test_data) {
       ASSERT_NO_THROW(run_ddl_statement("DROP TABLE postgres_osm_names;"));
     }
