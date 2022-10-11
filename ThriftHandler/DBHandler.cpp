@@ -6433,6 +6433,10 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     //    DmlUpdate DmlDelete
     //    anything else that failed to match
 
+    if (pw.getDMLType() != ParserWrapper::DMLType::NotDML) {
+      check_read_only("modify");
+    }
+
     executeReadLock =
         heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
             *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(

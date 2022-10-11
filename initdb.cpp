@@ -34,9 +34,9 @@
 static const std::array<std::string, 3> SampleGeoFileNames{"us-states.json",
                                                            "us-counties.json",
                                                            "countries.json"};
-static const std::array<std::string, 3> SampleGeoTableNames{"omnisci_states",
-                                                            "omnisci_counties",
-                                                            "omnisci_countries"};
+static const std::array<std::string, 3> SampleGeoTableNames{"heavyai_us_states",
+                                                            "heavyai_us_counties",
+                                                            "heavyai_countries"};
 
 bool g_enable_thrift_logs{false};
 

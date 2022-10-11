@@ -444,6 +444,13 @@ endif()
 
 ##########
 
+add_executable(ReadOnlyTest ReadOnlyTest.cpp)
+target_link_libraries(ReadOnlyTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(ReadOnlyTest ReadOnlyTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS ReadOnlyTest)
+
+##########
+
 add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp ResultSetTestUtils.cpp)
 target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS})
 add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_ARGS})
