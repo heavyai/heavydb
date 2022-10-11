@@ -44,6 +44,7 @@ namespace po = boost::program_options;
 extern size_t g_leaf_count;
 extern bool g_cluster;
 extern bool g_enable_system_tables;
+extern bool g_read_only;
 
 namespace {
 using ColumnPair = std::pair<std::string, std::string>;
@@ -406,7 +407,6 @@ class DBHandlerTestFixture : public testing::Test {
       const bool allow_multifrag{true};
       const bool jit_debug{false};
       const bool intel_jit_profile{false};
-      const bool read_only{false};
       const bool allow_loop_joins{false};
       const bool enable_rendering{false};
       const bool renderer_use_ppll_polys{false};
@@ -428,13 +428,9 @@ class DBHandlerTestFixture : public testing::Test {
       system_parameters_.omnisci_server_port = -1;
       system_parameters_.calcite_port = 3280;
 
-      File_Namespace::DiskCacheLevel cache_level{File_Namespace::DiskCacheLevel::fsi};
-      if (use_disk_cache_) {
-        cache_level = File_Namespace::DiskCacheLevel::all;
-      }
       File_Namespace::DiskCacheConfig disk_cache_config{
           File_Namespace::DiskCacheConfig::getDefaultPath(std::string(BASE_PATH)),
-          cache_level};
+          disk_cache_level_};
 
       db_handler_ = std::make_unique<DBHandler>(db_leaves_,
                                                 string_leaves_,
@@ -442,7 +438,7 @@ class DBHandlerTestFixture : public testing::Test {
                                                 allow_multifrag,
                                                 jit_debug,
                                                 intel_jit_profile,
-                                                read_only,
+                                                g_read_only,
                                                 allow_loop_joins,
                                                 enable_rendering,
                                                 renderer_use_ppll_polys,
@@ -802,7 +798,7 @@ class DBHandlerTestFixture : public testing::Test {
 
  public:
   static std::string cluster_config_file_path_;
-  static bool use_disk_cache_;
+  static File_Namespace::DiskCacheLevel disk_cache_level_;
 };
 
 // https://google.github.io/googletest/advanced.html#global-set-up-and-tear-down
@@ -837,4 +833,5 @@ std::string DBHandlerTestFixture::cluster_config_file_path_{};
 #ifdef ENABLE_GEOS
 std::string DBHandlerTestFixture::libgeos_so_filename_{};
 #endif
-bool DBHandlerTestFixture::use_disk_cache_{false};
+File_Namespace::DiskCacheLevel DBHandlerTestFixture::disk_cache_level_{
+    File_Namespace::DiskCacheLevel::fsi};
