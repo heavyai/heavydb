@@ -3557,6 +3557,20 @@ TEST_F(StringFunctionTest, StrtokToArrayTextEncodingDict) {
   }
 }
 
+TEST_F(StringFunctionTest, DISABLED_CardinalityStrtokToArrayTextEncodingDict) {
+  // this test is disabled because array functions don't work well with
+  // runtime function outputs
+  for (auto dt : {ExecutorDeviceType::CPU, /* ExecutorDeviceType::GPU */}) {
+    SKIP_NO_GPU();
+
+    const auto result_set =
+        sql("select cardinality(strtok_to_array(code, '> <')) from text_enc_test;", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+        {int64_t(2)}, {int64_t(2)}, {int64_t(2)}, {int64_t(2)}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
 TEST_F(StringFunctionTest, AlterTable_RuntimeFunction) {
   for (auto dt : {ExecutorDeviceType::CPU, /* ExecutorDeviceType::GPU */}) {
     SKIP_NO_GPU();
@@ -3652,6 +3666,19 @@ TEST_F(StringFunctionTest, TextEncodingDictConcatUDF) {
           {"short name: Canada"},
           {"short name: UK"},
           {"short name: Germany"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set =
+          sql("select text_encoding_dict_concat3(short_name, "
+              "text_encoding_dict_copy(code)) from "
+              "text_enc_test;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"USA copy: >>US USA<<"},
+          {"Canada copy: >>CA CAN<<"},
+          {"UK copy: >>GB GBR<<"},
+          {"Germany copy: >>DE DEN<<"}};
       compare_result_set(expected_result_set, result_set);
     }
   }

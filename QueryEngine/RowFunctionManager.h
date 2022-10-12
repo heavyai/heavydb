@@ -18,6 +18,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include "QueryEngine/Execute.h"
+#include "Shared/toString.h"
 
 // copied from TableFunctionsFactory.cpp
 namespace {
@@ -29,6 +30,26 @@ std::string drop_suffix_impl(const std::string& str) {
   }
   CHECK_GT(idx, std::string::size_type(0));
   return str.substr(0, idx);
+}
+
+std::list<const Analyzer::Expr*> find_function_oper(
+    const Analyzer::Expr* expr,
+    const std::string& func_name_wo_suffix) {
+  auto is_func_oper = [&func_name_wo_suffix](const Analyzer::Expr* e) -> bool {
+    auto function_oper = dynamic_cast<const Analyzer::FunctionOper*>(e);
+
+    if (function_oper) {
+      std::string func_oper_name = drop_suffix_impl(function_oper->getName());
+      boost::algorithm::to_lower(func_oper_name);
+      if (func_name_wo_suffix == func_oper_name) {
+        return true;
+      }
+    }
+    return false;
+  };
+  std::list<const Analyzer::Expr*> funcoper_list;
+  expr->find_expr(is_func_oper, funcoper_list);
+  return funcoper_list;
 }
 
 }  // namespace
@@ -48,16 +69,13 @@ struct RowFunctionManager {
         boost::algorithm::to_lower_copy(drop_suffix_impl(func_name));
 
     for (const auto& expr : ra_exe_unit_.target_exprs) {
-      if (const Analyzer::FunctionOper* function_oper =
-              dynamic_cast<Analyzer::FunctionOper*>(expr)) {
-        std::string func_oper_name = drop_suffix_impl(function_oper->getName());
-        boost::algorithm::to_lower(func_oper_name);
-        if (func_name_wo_suffix == func_oper_name) {
-          CHECK_LT(arg_idx, function_oper->getArity());
-          const SQLTypeInfo typ = function_oper->getArg(arg_idx)->get_type_info();
-          CHECK(typ.is_text_encoding_dict() || typ.is_text_encoding_dict_array());
-          return typ.get_comp_param();
-        }
+      for (const auto* op : find_function_oper(expr, func_name_wo_suffix)) {
+        const Analyzer::FunctionOper* function_oper =
+            dynamic_cast<const Analyzer::FunctionOper*>(op);
+        CHECK_LT(arg_idx, function_oper->getArity());
+        const SQLTypeInfo typ = function_oper->getArg(arg_idx)->get_type_info();
+        CHECK(typ.is_text_encoding_dict() || typ.is_text_encoding_dict_array());
+        return typ.get_comp_param();
       }
     }
     UNREACHABLE();
