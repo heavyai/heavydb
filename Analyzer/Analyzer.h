@@ -163,7 +163,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
    * Duplicate Expr's are not added the list.
    * Cannot use std::set because we don't have an ordering function.
    */
-  virtual void find_expr(bool (*f)(const Expr*),
+  virtual void find_expr(std::function<bool(const Expr*)> f,
                          std::list<const Expr*>& expr_list) const {
     if (f(this)) {
       add_unique(expr_list);
@@ -410,7 +410,7 @@ class UOper : public Expr {
   }
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
   std::shared_ptr<Analyzer::Expr> add_cast(const SQLTypeInfo& new_type_info) override;
 
@@ -511,7 +511,7 @@ class BinOper : public Expr {
   }
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
   static bool simple_predicate_has_simple_cast(
       const std::shared_ptr<Analyzer::Expr> cast_operand,
@@ -618,7 +618,7 @@ class Subquery : public Expr {
     return false;
   }
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override {
     CHECK(false);
   }
@@ -662,7 +662,7 @@ class InValues : public Expr {
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override;
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -740,7 +740,7 @@ class CharLengthExpr : public Expr {
   }
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -786,7 +786,7 @@ class KeyForStringExpr : public Expr {
   }
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -831,7 +831,7 @@ class SampleRatioExpr : public Expr {
   }
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -876,7 +876,7 @@ class CardinalityExpr : public Expr {
   }
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -946,7 +946,7 @@ class LikeExpr : public Expr {
   }
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -1010,7 +1010,7 @@ class RegexpExpr : public Expr {
   }
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -1111,7 +1111,7 @@ class WidthBucketExpr : public Expr {
   }
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
   bool can_skip_out_of_bound_check() const { return skip_out_of_bound_check_; }
   void skip_out_of_bound_check() const { skip_out_of_bound_check_ = true; }
@@ -1168,7 +1168,7 @@ class LikelihoodExpr : public Expr {
   }
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -1229,7 +1229,7 @@ class AggExpr : public Expr {
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override;
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -1277,7 +1277,7 @@ class CaseExpr : public Expr {
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override;
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
   std::shared_ptr<Analyzer::Expr> add_cast(const SQLTypeInfo& new_type_info) override;
   void get_domain(DomainSet& domain_set) const override;
@@ -1323,7 +1323,7 @@ class ExtractExpr : public Expr {
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override;
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -1370,7 +1370,7 @@ class DateaddExpr : public Expr {
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override;
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -1416,7 +1416,7 @@ class DatediffExpr : public Expr {
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override;
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -1458,7 +1458,7 @@ class DatetruncExpr : public Expr {
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override;
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
  private:
@@ -1658,7 +1658,7 @@ class StringOper : public Expr {
 
   std::string toString() const override;
 
-  void find_expr(bool (*f)(const Expr*),
+  void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
 
   virtual size_t getMinArgs() const {
@@ -2418,6 +2418,8 @@ class FunctionOper : public Expr {
       std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
           colvar_set,
       bool include_agg) const override;
+  void find_expr(std::function<bool(const Expr*)> f,
+                 std::list<const Expr*>& expr_list) const override;
 
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;

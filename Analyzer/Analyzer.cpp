@@ -3108,7 +3108,8 @@ void Expr::add_unique(std::list<const Expr*>& expr_list) const {
   expr_list.push_back(this);
 }
 
-void BinOper::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const {
+void BinOper::find_expr(std::function<bool(const Expr*)> f,
+                        std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
     return;
@@ -3117,7 +3118,8 @@ void BinOper::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_lis
   right_operand->find_expr(f, expr_list);
 }
 
-void UOper::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const {
+void UOper::find_expr(std::function<bool(const Expr*)> f,
+                      std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
     return;
@@ -3125,7 +3127,7 @@ void UOper::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list)
   operand->find_expr(f, expr_list);
 }
 
-void InValues::find_expr(bool (*f)(const Expr*),
+void InValues::find_expr(std::function<bool(const Expr*)> f,
                          std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3137,7 +3139,7 @@ void InValues::find_expr(bool (*f)(const Expr*),
   }
 }
 
-void CharLengthExpr::find_expr(bool (*f)(const Expr*),
+void CharLengthExpr::find_expr(std::function<bool(const Expr*)> f,
                                std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3146,7 +3148,7 @@ void CharLengthExpr::find_expr(bool (*f)(const Expr*),
   arg->find_expr(f, expr_list);
 }
 
-void KeyForStringExpr::find_expr(bool (*f)(const Expr*),
+void KeyForStringExpr::find_expr(std::function<bool(const Expr*)> f,
                                  std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3155,7 +3157,7 @@ void KeyForStringExpr::find_expr(bool (*f)(const Expr*),
   arg->find_expr(f, expr_list);
 }
 
-void SampleRatioExpr::find_expr(bool (*f)(const Expr*),
+void SampleRatioExpr::find_expr(std::function<bool(const Expr*)> f,
                                 std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3164,7 +3166,7 @@ void SampleRatioExpr::find_expr(bool (*f)(const Expr*),
   arg->find_expr(f, expr_list);
 }
 
-void StringOper::find_expr(bool (*f)(const Expr*),
+void StringOper::find_expr(std::function<bool(const Expr*)> f,
                            std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3175,7 +3177,7 @@ void StringOper::find_expr(bool (*f)(const Expr*),
   }
 }
 
-void CardinalityExpr::find_expr(bool (*f)(const Expr*),
+void CardinalityExpr::find_expr(std::function<bool(const Expr*)> f,
                                 std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3184,7 +3186,7 @@ void CardinalityExpr::find_expr(bool (*f)(const Expr*),
   arg->find_expr(f, expr_list);
 }
 
-void LikeExpr::find_expr(bool (*f)(const Expr*),
+void LikeExpr::find_expr(std::function<bool(const Expr*)> f,
                          std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3197,7 +3199,7 @@ void LikeExpr::find_expr(bool (*f)(const Expr*),
   }
 }
 
-void RegexpExpr::find_expr(bool (*f)(const Expr*),
+void RegexpExpr::find_expr(std::function<bool(const Expr*)> f,
                            std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3210,7 +3212,7 @@ void RegexpExpr::find_expr(bool (*f)(const Expr*),
   }
 }
 
-void WidthBucketExpr::find_expr(bool (*f)(const Expr*),
+void WidthBucketExpr::find_expr(std::function<bool(const Expr*)> f,
                                 std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3222,7 +3224,7 @@ void WidthBucketExpr::find_expr(bool (*f)(const Expr*),
   partition_count_->find_expr(f, expr_list);
 }
 
-void LikelihoodExpr::find_expr(bool (*f)(const Expr*),
+void LikelihoodExpr::find_expr(std::function<bool(const Expr*)> f,
                                std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3231,7 +3233,8 @@ void LikelihoodExpr::find_expr(bool (*f)(const Expr*),
   arg->find_expr(f, expr_list);
 }
 
-void AggExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const {
+void AggExpr::find_expr(std::function<bool(const Expr*)> f,
+                        std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
     return;
@@ -3241,7 +3244,7 @@ void AggExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_lis
   }
 }
 
-void CaseExpr::find_expr(bool (*f)(const Expr*),
+void CaseExpr::find_expr(std::function<bool(const Expr*)> f,
                          std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3256,7 +3259,7 @@ void CaseExpr::find_expr(bool (*f)(const Expr*),
   }
 }
 
-void ExtractExpr::find_expr(bool (*f)(const Expr*),
+void ExtractExpr::find_expr(std::function<bool(const Expr*)> f,
                             std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3265,7 +3268,7 @@ void ExtractExpr::find_expr(bool (*f)(const Expr*),
   from_expr_->find_expr(f, expr_list);
 }
 
-void DateaddExpr::find_expr(bool (*f)(const Expr*),
+void DateaddExpr::find_expr(std::function<bool(const Expr*)> f,
                             std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3275,7 +3278,7 @@ void DateaddExpr::find_expr(bool (*f)(const Expr*),
   datetime_->find_expr(f, expr_list);
 }
 
-void DatediffExpr::find_expr(bool (*f)(const Expr*),
+void DatediffExpr::find_expr(std::function<bool(const Expr*)> f,
                              std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -3285,13 +3288,24 @@ void DatediffExpr::find_expr(bool (*f)(const Expr*),
   end_->find_expr(f, expr_list);
 }
 
-void DatetruncExpr::find_expr(bool (*f)(const Expr*),
+void DatetruncExpr::find_expr(std::function<bool(const Expr*)> f,
                               std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
     return;
   }
   from_expr_->find_expr(f, expr_list);
+}
+
+void FunctionOper::find_expr(std::function<bool(const Expr*)> f,
+                             std::list<const Expr*>& expr_list) const {
+  if (f(this)) {
+    add_unique(expr_list);
+    return;
+  }
+  for (const auto& arg : args_) {
+    arg->find_expr(f, expr_list);
+  }
 }
 
 void CaseExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {

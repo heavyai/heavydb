@@ -60,6 +60,15 @@ TextEncodingDict text_encoding_dict_concat2(RowFunctionManager& mgr,
 }
 
 EXTENSION_NOINLINE
+TextEncodingDict text_encoding_dict_concat3(RowFunctionManager& mgr,
+                                            const TextEncodingDict t1,
+                                            const TextEncodingDict t2) {
+  std::string s1 = mgr.getString(GET_DICT_ID(mgr, 0), t1);
+  std::string s2 = mgr.getString(GET_DICT_ID(mgr, 1), t2);
+  return mgr.getOrAddTransient(TRANSIENT_DICT_ID, s1 + ' ' + s2);
+}
+
+EXTENSION_NOINLINE
 TextEncodingDict text_encoding_dict_copy(RowFunctionManager& mgr,
                                          const TextEncodingDict t) {
   int32_t dict_id = GET_DICT_ID(mgr, 0);
