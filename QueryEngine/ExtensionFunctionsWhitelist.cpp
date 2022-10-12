@@ -583,6 +583,14 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
   return "";
 }
 
+bool ExtensionFunction::usesManager() const {
+  auto func_annotations = annotations_.back();
+  auto mgr_annotation = func_annotations.find("uses_manager");
+  bool uses_manager = mgr_annotation != func_annotations.end() &&
+                      boost::algorithm::to_lower_copy(mgr_annotation->second) == "true";
+  return uses_manager;
+}
+
 const std::string ExtensionFunction::getName(bool keep_suffix) const {
   return (keep_suffix ? name_ : drop_suffix(name_));
 }
@@ -904,9 +912,25 @@ void ExtensionFunctionsWhitelist::addCommon(SignatureMap& signatures,
          ++args_serialized_it) {
       args.push_back(deserialize_type(json_str(*args_serialized_it)));
     }
-    const auto uses_manager = json_bool(field(*func_sigs_it, "usesManager"));
+
+    std::vector<std::map<std::string, std::string>> annotations;
+    const auto& anns = field(*func_sigs_it, "annotations");
+    CHECK(anns.IsArray());
+    static const std::map<std::string, std::string> map_empty = {};
+    for (auto obj = anns.Begin(); obj != anns.End(); ++obj) {
+      CHECK(obj->IsObject());
+      if (obj->ObjectEmpty()) {
+        annotations.push_back(map_empty);
+      } else {
+        std::map<std::string, std::string> m;
+        for (auto kv = obj->MemberBegin(); kv != obj->MemberEnd(); ++kv) {
+          m[kv->name.GetString()] = kv->value.GetString();
+        }
+        annotations.push_back(m);
+      }
+    }
     signatures[to_upper(drop_suffix(name))].emplace_back(
-        name, args, ret, uses_manager, is_runtime);
+        name, args, ret, annotations, is_runtime);
   }
 }
 

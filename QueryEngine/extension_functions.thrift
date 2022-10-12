@@ -91,7 +91,7 @@ struct TUserDefinedFunction {
   1: string name,
   2: list<TExtArgumentType> argTypes,
   3: TExtArgumentType retType,
-  4: bool usesManager,
+  4: list<map<string, string>> annotations
 }
 
 struct TUserDefinedTableFunction {
