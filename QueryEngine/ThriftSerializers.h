@@ -735,7 +735,7 @@ inline TUserDefinedFunction to_thrift(const ExtensionFunction& udf) {
   tfunc.name = udf.getName(/* keep_suffix */ true);
   tfunc.argTypes = to_thrift(udf.getInputArgs());
   tfunc.retType = to_thrift(udf.getRet());
-  tfunc.usesManager = udf.usesManager();
+  tfunc.annotations = udf.getAnnotations();
   return tfunc;
 }
 

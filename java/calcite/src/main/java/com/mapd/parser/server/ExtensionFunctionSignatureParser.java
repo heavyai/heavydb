@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -130,11 +131,13 @@ class ExtensionFunctionSignatureParser {
     String[] params = cs_param_list.split(",");
     List<ExtensionFunction.ExtArgumentType> args =
             new ArrayList<ExtensionFunction.ExtArgumentType>();
-    boolean usesManager = false;
+    String uses_manager = "false";
+    List<Map<String, String>> annotations = new ArrayList<Map<String, String>>();
     for (final String param : params) {
       ExtensionFunction.ExtArgumentType arg_type;
       if (param.contains("RowFunctionManager")) {
-        usesManager = true;
+        uses_manager = "true";
+        continue;
       }
       if (has_variable_name) {
         String[] full_param = param.trim().split("\\s+");
@@ -151,12 +154,14 @@ class ExtensionFunctionSignatureParser {
       } else {
         arg_type = deserializeType(param.trim());
       }
+      annotations.add(Collections.EMPTY_MAP);
       if (arg_type != ExtensionFunction.ExtArgumentType.Void) {
         args.add(arg_type);
       }
     }
     assert is_row_func;
-    return new ExtensionFunction(args, deserializeType(ret), usesManager);
+    annotations.add(Collections.singletonMap("uses_manager", uses_manager));
+    return new ExtensionFunction(args, deserializeType(ret), annotations);
   }
   private static ExtensionFunction.ExtArgumentType deserializeType(
           final String type_name) {
