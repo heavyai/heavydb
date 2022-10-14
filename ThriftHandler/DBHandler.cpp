@@ -6843,6 +6843,7 @@ void DBHandler::execute_query_step(TStepResult& _return,
                                    const TPendingQuery& pending_query,
                                    const TSubqueryId subquery_id,
                                    const std::string& start_time_str) {
+  SET_REQUEST_ID(0);  // No SessionID is available
   if (!leaf_handler_) {
     THROW_DB_EXCEPTION("Distributed support is disabled.");
   }

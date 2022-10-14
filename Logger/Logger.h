@@ -149,7 +149,10 @@ static_assert(std::is_trivial<ThreadLocalIds>::value);
 // May be needed by thread managers that recycle threads, such as TBB.
 class [[nodiscard]] LocalIdsScopeGuard {
   ThreadLocalIds prev_local_ids_;
+#ifndef NDEBUG
+  // To verify g_thread_local_ids is unchanged during LocalIdsScopeGuard's lifetime.
   ThreadLocalIds thread_local_ids_;
+#endif
   bool enabled_;  // Reset g_thread_local_ids iff enabled_.
 
   // Used by move constructor + assignment operator.
@@ -158,11 +161,16 @@ class [[nodiscard]] LocalIdsScopeGuard {
   LocalIdsScopeGuard& operator=(LocalIdsScopeGuard const&) = default;
 
  public:
+#ifndef NDEBUG
   LocalIdsScopeGuard(ThreadLocalIds const prev_local_ids,
                      ThreadLocalIds const thread_local_ids)
       : prev_local_ids_(prev_local_ids)
       , thread_local_ids_(thread_local_ids)
       , enabled_(true) {}
+#else
+  LocalIdsScopeGuard(ThreadLocalIds const prev_local_ids, ThreadLocalIds)
+      : prev_local_ids_(prev_local_ids), enabled_(true) {}
+#endif
   // clang-format off
   LocalIdsScopeGuard(LocalIdsScopeGuard&& rhs) : LocalIdsScopeGuard(rhs) {
     // clang-format on
