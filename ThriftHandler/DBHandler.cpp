@@ -130,9 +130,8 @@ using Catalog_Namespace::SysCatalog;
 #define SET_REQUEST_ID(parent_request_id)                         \
   if (g_uniform_request_ids_per_thrift_call && parent_request_id) \
     logger::set_request_id(parent_request_id);                    \
-  else if (logger::set_new_request_id(); true)                    \
-  LOG_IF(INFO, parent_request_id)                                 \
-      << "This request has parent request_id(" << parent_request_id << ')'
+  else if (logger::set_new_request_id(); parent_request_id)       \
+  LOG(INFO) << "This request has parent request_id(" << parent_request_id << ')'
 
 #define THROW_DB_EXCEPTION(errstr) \
   {                                \

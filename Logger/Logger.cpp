@@ -60,6 +60,7 @@ BOOST_LOG_GLOBAL_LOGGER(gSeverityLogger, SeverityLogger)
 
 namespace attr = boost::log::attributes;
 namespace expr = boost::log::expressions;
+namespace fs = boost::filesystem;
 namespace keywords = boost::log::keywords;
 namespace sinks = boost::log::sinks;
 namespace sources = boost::log::sources;
@@ -82,11 +83,11 @@ BOOST_LOG_GLOBAL_LOGGER_DEFAULT(gSeverityLogger, SeverityLogger)
 
 // Return last component of path
 std::string filename(char const* path) {
-  return boost::filesystem::path(path).filename().string();
+  return fs::path(path).filename().string();
 }
 
 LogOptions::LogOptions(char const* argv0)
-    : log_dir_(std::make_unique<boost::filesystem::path>(shared::kDefaultLogDirName)) {
+    : log_dir_(std::make_unique<fs::path>(shared::kDefaultLogDirName)) {
   // Log file base_name matches name of program.
   std::string const base_name =
       argv0 == nullptr ? std::string("heavydb") : filename(argv0);
@@ -98,7 +99,7 @@ LogOptions::LogOptions(char const* argv0)
 // Needed to allow forward declarations within std::unique_ptr.
 LogOptions::~LogOptions() {}
 
-boost::filesystem::path LogOptions::full_log_dir() const {
+fs::path LogOptions::full_log_dir() const {
   return log_dir_->has_root_directory() ? *log_dir_ : base_path_ / *log_dir_;
 }
 
@@ -137,7 +138,7 @@ void LogOptions::set_options() {
   }
   options_->add_options()(
       "log-directory",
-      po::value<boost::filesystem::path>(&*log_dir_)->default_value(*log_dir_),
+      po::value<fs::path>(&*log_dir_)->default_value(*log_dir_),
       "Logging directory. May be relative to data directory, or absolute.");
   options_->add_options()(
       "log-file-name",
@@ -179,7 +180,7 @@ template <typename TAG>
 std::string replace_braces(std::string const& str, TAG const tag) {
   constexpr std::regex::flag_type flags = std::regex::ECMAScript | std::regex::optimize;
   static std::regex const regex(R"(\{SEVERITY\})", flags);
-  if /*constexpr*/ (std::is_same<TAG, Channel>::value) {
+  if constexpr (std::is_same<TAG, Channel>::value) {
     return std::regex_replace(str, regex, ChannelNames[tag]);
   } else {
     return std::regex_replace(str, regex, SeverityNames[tag]);
@@ -197,7 +198,6 @@ template <typename SINK>
 sinks::text_file_backend::open_handler_type create_or_replace_symlink(
     boost::weak_ptr<SINK> weak_ptr,
     std::string&& symlink) {
-  namespace fs = boost::filesystem;
   return [weak_ptr,
           symlink = std::move(symlink)](sinks::text_file_backend::stream_type& stream) {
     if (boost::shared_ptr<SINK> sink = weak_ptr.lock()) {
@@ -216,6 +216,59 @@ sinks::text_file_backend::open_handler_type create_or_replace_symlink(
   };
 }
 
+// Remove symlink if referent file does not exist.
+struct RemoveDeadLink {
+  void operator()(fs::path const& symlink_path) const {
+    boost::system::error_code ec;
+    bool const exists = fs::exists(symlink_path, ec);
+    // If the symlink or referent file doesn't exist, ec.message() = "No such file or
+    // directory" even though it's not really an error, so we don't bother checking it.
+    if (!exists) {
+      fs::remove(symlink_path, ec);
+      if (ec) {
+        std::cerr << "Error removing " << symlink_path << ": " << ec.message()
+                  << std::endl;
+      }
+    }
+  }
+};
+
+// Custom file collector that also deletes invalid symlinks.
+class Collector : public sinks::file::collector {
+  boost::shared_ptr<sinks::file::collector> collector_;
+  std::vector<fs::path> symlink_paths_;
+
+ public:
+  Collector(fs::path const& full_log_dir, LogOptions const& log_opts)
+      : collector_(sinks::file::make_collector(
+            keywords::target = full_log_dir,
+            keywords::max_files = log_opts.max_files_,
+            keywords::min_free_space = log_opts.min_free_space_)) {}
+  // Remove dead symlinks after rotated files are deleted.
+  void store_file(fs::path const& path) override {
+    collector_->store_file(path);  // Deletes files that exceed rotation limits.
+    std::for_each(symlink_paths_.begin(), symlink_paths_.end(), RemoveDeadLink{});
+  }
+#if 107900 <= BOOST_VERSION
+  bool is_in_storage(fs::path const& path) const override {
+    return collector_->is_in_storage(path);
+  }
+  sinks::file::scan_result scan_for_files(sinks::file::scan_method method,
+                                          fs::path const& path = fs::path()) override {
+    return collector_->scan_for_files(method, path);
+  }
+#else
+  uintmax_t scan_for_files(sinks::file::scan_method method,
+                           fs::path const& path = fs::path(),
+                           unsigned* counter = nullptr) override {
+    return collector_->scan_for_files(method, path, counter);
+  }
+#endif
+  void track_symlink(fs::path symlink_path) {
+    symlink_paths_.emplace_back(std::move(symlink_path));
+  }
+};
+
 boost::log::formatting_ostream& operator<<(
     boost::log::formatting_ostream& strm,
     boost::log::to_log_manip<Channel, tag::channel> const& manip) {
@@ -230,7 +283,7 @@ boost::log::formatting_ostream& operator<<(
 
 template <typename TAG, typename SINK>
 void set_formatter(SINK& sink) {
-  if /*constexpr*/ (std::is_same<TAG, Channel>::value) {
+  if constexpr (std::is_same<TAG, Channel>::value) {
     sink->set_formatter(
         expr::stream << expr::format_date_time<boost::posix_time::ptime>(
                             "TimeStamp", "%Y-%m-%dT%H:%M:%S.%f")
@@ -248,15 +301,16 @@ void set_formatter(SINK& sink) {
 }
 
 template <typename FILE_SINK, typename TAG>
-boost::shared_ptr<FILE_SINK> make_sink(LogOptions const& log_opts,
-                                       boost::filesystem::path const& full_log_dir,
+boost::shared_ptr<FILE_SINK> make_sink(boost::shared_ptr<Collector>& collector,
+                                       LogOptions const& log_opts,
+                                       fs::path const& full_log_dir,
                                        TAG const tag) {
   auto sink = boost::make_shared<FILE_SINK>(
       keywords::file_name =
           full_log_dir / replace_braces(log_opts.file_name_pattern_, tag),
       keywords::auto_flush = log_opts.auto_flush_,
       keywords::rotation_size = log_opts.rotation_size_);
-  if /*constexpr*/ (std::is_same<TAG, Channel>::value) {
+  if constexpr (std::is_same<TAG, Channel>::value) {
     sink->set_filter(channel == static_cast<Channel>(tag));
     set_formatter<Channel>(sink);
   } else {
@@ -271,10 +325,8 @@ boost::shared_ptr<FILE_SINK> make_sink(LogOptions const& log_opts,
   if (log_opts.rotate_daily_) {
     backend->set_time_based_rotation(sinks::file::rotation_at_time_point(0, 0, 0));
   }
-  backend->set_file_collector(
-      sinks::file::make_collector(keywords::target = full_log_dir,
-                                  keywords::max_files = log_opts.max_files_,
-                                  keywords::min_free_space = log_opts.min_free_space_));
+  collector->track_symlink(full_log_dir / replace_braces(log_opts.symlink_, tag));
+  backend->set_file_collector(collector);
   backend->set_open_handler(create_or_replace_symlink(
       boost::weak_ptr<FILE_SINK>(sink), replace_braces(log_opts.symlink_, tag)));
   backend->scan_for_files();
@@ -303,7 +355,7 @@ boost::shared_ptr<CONSOLE_SINK> make_sink(LogOptions const& log_opts) {
 bool g_any_active_channels{false};
 Severity g_min_active_severity{Severity::FATAL};
 
-static boost::filesystem::path g_log_dir_path;
+static fs::path g_log_dir_path;
 
 void init(LogOptions const& log_opts) {
   boost::shared_ptr<boost::log::core> core = boost::log::core::get();
@@ -311,20 +363,21 @@ void init(LogOptions const& log_opts) {
   core->add_global_attribute("TimeStamp", attr::local_clock());
   core->add_global_attribute("ProcessID", attr::current_process_id());
   if (0 < log_opts.max_files_) {
-    boost::filesystem::path const full_log_dir = log_opts.full_log_dir();
-    bool const log_dir_was_created = boost::filesystem::create_directory(full_log_dir);
+    fs::path const full_log_dir = log_opts.full_log_dir();
+    auto collector = boost::make_shared<Collector>(full_log_dir, log_opts);
+    bool const log_dir_was_created = fs::create_directory(full_log_dir);
     // Don't create separate log sinks for anything less than Severity::INFO.
     Severity const min_sink_level = std::max(Severity::INFO, log_opts.severity_);
     for (int i = min_sink_level; i < Severity::_NSEVERITIES; ++i) {
       Severity const level = static_cast<Severity>(i);
-      core->add_sink(make_sink<FileSync>(log_opts, full_log_dir, level));
+      core->add_sink(make_sink<FileSync>(collector, log_opts, full_log_dir, level));
     }
     g_min_active_severity = std::min(g_min_active_severity, log_opts.severity_);
     if (log_dir_was_created) {
       LOG(INFO) << "Log directory(" << full_log_dir.native() << ") created.";
     }
     for (auto const channel : log_opts.channels_) {
-      core->add_sink(make_sink<FileSync>(log_opts, full_log_dir, channel));
+      core->add_sink(make_sink<FileSync>(collector, log_opts, full_log_dir, channel));
     }
     g_any_active_channels = !log_opts.channels_.empty();
   }
@@ -841,8 +894,8 @@ void set_request_id(RequestId const request_id) {
   g_thread_local_ids.request_id_ = request_id;
 }
 
-boost::filesystem::path get_log_dir_path() {
-  return boost::filesystem::canonical(g_log_dir_path);
+fs::path get_log_dir_path() {
+  return fs::canonical(g_log_dir_path);
 }
 }  // namespace logger
 
