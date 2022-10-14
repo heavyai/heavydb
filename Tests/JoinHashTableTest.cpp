@@ -50,7 +50,7 @@ namespace {
 ExecutorDeviceType g_device_type;
 }
 
-class MultiFragmentTest : public TestHelpers::TsanTbbPrivateServerKiller {};
+class MultiFragmentTest : public TestHelpers::TbbPrivateServerKiller {};
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA

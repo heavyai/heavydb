@@ -40,8 +40,8 @@
 
 extern bool g_cache_string_hash;
 
-class StringDictionaryTest : public TestHelpers::TsanTbbPrivateServerKiller {};
-class StringDictionaryProxyTest : public TestHelpers::TsanTbbPrivateServerKiller {};
+class StringDictionaryTest : public TestHelpers::TbbPrivateServerKiller {};
+class StringDictionaryProxyTest : public TestHelpers::TbbPrivateServerKiller {};
 
 TEST_F(StringDictionaryTest, AddAndGet) {
   const DictRef dict_ref(-1, 1);
