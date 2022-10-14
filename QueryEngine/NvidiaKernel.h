@@ -122,5 +122,7 @@ inline std::string ourCudaErrorStringHelper(CUresult error) {
   return text;
 }
 
-#define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS) << ourCudaErrorStringHelper(err)
+#define checkCudaErrors(ARG)                                                \
+  if (CUresult const err = static_cast<CUresult>(ARG); err != CUDA_SUCCESS) \
+  CHECK_EQ(err, CUDA_SUCCESS) << ourCudaErrorStringHelper(err)
 #endif  // HAVE_CUDA
