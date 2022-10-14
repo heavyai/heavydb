@@ -37,7 +37,7 @@
 
 namespace TestHelpers {
 
-class TsanTbbPrivateServerKiller : public ::testing::Test {
+class TbbPrivateServerKiller : public ::testing::Test {
 #ifdef TBB_PREVIEW_WAITING_FOR_WORKERS  // set when ENABLE_TSAN
  protected:
 #if PRINT_TBB_TASK_SCHEDULER_HANDLE_DIAGNOSTICS
