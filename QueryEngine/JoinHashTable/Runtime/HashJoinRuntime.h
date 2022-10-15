@@ -223,7 +223,8 @@ void fill_one_to_many_hash_table(int32_t* buff,
                                  const JoinColumnTypeInfo& type_info,
                                  const int32_t* sd_inner_to_outer_translation_map,
                                  const int32_t min_inner_elem,
-                                 const unsigned cpu_thread_count);
+                                 const unsigned cpu_thread_count,
+                                 const bool for_window_framing);
 
 void fill_one_to_many_hash_table_bucketized(
     int32_t* buff,
@@ -248,7 +249,8 @@ void fill_one_to_many_hash_table_sharded_bucketized(
 void fill_one_to_many_hash_table_on_device(int32_t* buff,
                                            const BucketizedHashEntryInfo hash_entry_info,
                                            const JoinColumn& join_column,
-                                           const JoinColumnTypeInfo& type_info);
+                                           const JoinColumnTypeInfo& type_info,
+                                           const bool for_window_framing);
 
 void fill_one_to_many_hash_table_on_device_bucketized(
     int32_t* buff,
@@ -376,7 +378,8 @@ void fill_one_to_many_baseline_hash_table_32(
     const std::vector<int32_t>& sd_min_inner_elems,
     const int32_t cpu_thread_count,
     const bool is_range_join = false,
-    const bool is_geo_compressed = false);
+    const bool is_geo_compressed = false,
+    const bool for_window_framing = false);
 
 void fill_one_to_many_baseline_hash_table_64(
     int32_t* buff,
@@ -390,7 +393,8 @@ void fill_one_to_many_baseline_hash_table_64(
     const std::vector<int32_t>& sd_min_inner_elems,
     const int32_t cpu_thread_count,
     const bool is_range_join = false,
-    const bool is_geo_compressed = false);
+    const bool is_geo_compressed = false,
+    const bool for_window_framing = false);
 
 void fill_one_to_many_baseline_hash_table_on_device_32(
     int32_t* buff,
@@ -398,14 +402,16 @@ void fill_one_to_many_baseline_hash_table_on_device_32(
     const int64_t hash_entry_count,
     const size_t key_component_count,
     const GenericKeyHandler* key_handler,
-    const int64_t num_elems);
+    const int64_t num_elems,
+    const bool for_window_framing);
 
 void fill_one_to_many_baseline_hash_table_on_device_64(
     int32_t* buff,
     const int64_t* composite_key_dict,
     const int64_t hash_entry_count,
     const GenericKeyHandler* key_handler,
-    const int64_t num_elems);
+    const int64_t num_elems,
+    const bool for_window_framing);
 
 void overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
     int32_t* buff,

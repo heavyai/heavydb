@@ -2600,11 +2600,14 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
               << partition_cache_key << ", partition condition: " << partition_cond_str
               << ")";
     } else {
+      JoinType window_partition_type = window_func->isFrameNavigateWindowFunction()
+                                           ? JoinType::WINDOW_FUNCTION_FRAMING
+                                           : JoinType::WINDOW_FUNCTION;
       const auto hash_table_or_err = executor_->buildHashTableForQualifier(
           partition_key_cond,
           query_infos,
           memory_level,
-          JoinType::INVALID,  // for window function
+          window_partition_type,
           HashType::OneToMany,
           column_cache_map,
           work_unit.exe_unit.hash_table_build_plan_dag,

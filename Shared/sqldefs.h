@@ -161,7 +161,15 @@ enum StorageOption { kDISK = 0, kGPU = 1, kCPU = 2 };
 
 enum ViewRefreshOption { kMANUAL = 0, kAUTO = 1, kIMMEDIATE = 2 };
 
-enum class JoinType { INNER, LEFT, SEMI, ANTI, INVALID };
+enum class JoinType {
+  INNER,
+  LEFT,
+  SEMI,
+  ANTI,
+  WINDOW_FUNCTION,
+  WINDOW_FUNCTION_FRAMING,
+  INVALID
+};
 
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
 
@@ -179,6 +187,10 @@ inline std::string toString(const JoinType& join_type) {
       return "SEMI";
     case JoinType::ANTI:
       return "ANTI";
+    case JoinType::WINDOW_FUNCTION:
+      return "WINDOW_FUNCTION";
+    case JoinType::WINDOW_FUNCTION_FRAMING:
+      return "WINDOW_FUNCTION_FRAMING";
     default:
       return "INVALID";
   }

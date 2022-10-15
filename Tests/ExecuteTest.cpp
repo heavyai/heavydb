@@ -10836,6 +10836,42 @@ void import_test_frame_nav() {
   }
 }
 
+void import_window_frame_navigation_table_with_dup_val() {
+  std::string drop_table_ddl{"DROP TABLE IF EXISTS test_frame_nav_dup;"};
+  run_ddl_statement(drop_table_ddl);
+  g_sqlite_comparator.query(drop_table_ddl);
+  run_ddl_statement(
+      "CREATE TABLE test_frame_nav_dup (id INT, p INT, o INT) WITH (fragment_size=3);");
+  g_sqlite_comparator.query("CREATE TABLE test_frame_nav_dup (id INT, p INT, o INT);");
+
+  std::vector<std::string> rows{
+      "INSERT INTO test_frame_nav_dup VALUES (1,  1, NULL);",
+      "INSERT INTO test_frame_nav_dup VALUES (2,  1, 1);",
+      "INSERT INTO test_frame_nav_dup VALUES (3,  1, NULL);",
+      "INSERT INTO test_frame_nav_dup VALUES (4,  1, 1);",
+      "INSERT INTO test_frame_nav_dup VALUES (5,  1, 2);",
+      "INSERT INTO test_frame_nav_dup VALUES (6,  1, NULL);",
+      "INSERT INTO test_frame_nav_dup VALUES (7,  1, 3);",
+      "INSERT INTO test_frame_nav_dup VALUES (8,  1, 4);",
+      "INSERT INTO test_frame_nav_dup VALUES (9,  2, 6);",
+      "INSERT INTO test_frame_nav_dup VALUES (10, 2, 9);",
+      "INSERT INTO test_frame_nav_dup VALUES (11, 2, 5);",
+      "INSERT INTO test_frame_nav_dup VALUES (12, 2, 9);",
+      "INSERT INTO test_frame_nav_dup VALUES (13, 2, NULL);",
+      "INSERT INTO test_frame_nav_dup VALUES (14, 2, 8);",
+      "INSERT INTO test_frame_nav_dup VALUES (15, 2, 7);",
+      "INSERT INTO test_frame_nav_dup VALUES (16, 2, 7);",
+      "INSERT INTO test_frame_nav_dup VALUES (17, 3, 10);",
+      "INSERT INTO test_frame_nav_dup VALUES (18, 3, 11);",
+      "INSERT INTO test_frame_nav_dup VALUES (19, 3, 12);",
+      "INSERT INTO test_frame_nav_dup VALUES (20, 3, 13);",
+  };
+  for (const auto& insert_row_ddl : rows) {
+    run_multiple_agg(insert_row_ddl, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_row_ddl);
+  }
+}
+
 }  // namespace
 
 TEST_F(Select, ArrayUnnest) {
@@ -23630,7 +23666,7 @@ TEST_F(Select, WindowFunctionFraming) {
     eo.just_validate = true;
     QR::get()->runSelectQuery(
         "SELECT AVG(AVG(i)) OVER (ORDER BY oc ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING), "
-        "oc FROM test_window_framing GROUP BY oc",
+        "oc FROM test_window_framing GROUP BY oc;",
         CompilationOptions::defaults(dt),
         eo);
   }
@@ -23641,7 +23677,7 @@ TEST_F(Select, WindowFunctionFraming) {
         std::string query = "SELECT " + agg_op + "(" + col_name +
                             ") OVER (PARTITION BY x ORDER BY x RANGE BETWEEN 1 PRECEDING "
                             "AND CURRENT ROW) FROM test GROUP BY x, " +
-                            col_name + " ORDER BY x, " + col_name + " ASC";
+                            col_name + " ORDER BY x, " + col_name + " ASC;";
         c(query, query, dt);
       }
     }
@@ -23650,7 +23686,7 @@ TEST_F(Select, WindowFunctionFraming) {
     for (std::string col_name : {"f", "d", "fn", "dn"}) {
       std::string query =
           "SELECT SUM(x) OVER (PARTITION BY t ORDER BY " + col_name +
-          " RANGE BETWEEN 1 PRECEDING AND 3 FOLLOWING) res FROM test ORDER BY res ASC";
+          " RANGE BETWEEN 1 PRECEDING AND 3 FOLLOWING) res FROM test ORDER BY res ASC;";
       c(query, query, dt);
     }
   }
@@ -23676,7 +23712,7 @@ TEST_F(Select, WindowFunctionFraming) {
     std::string import_data_ddl{
         "COPY agg_tree_build_test FROM "
         "'../../Tests/Import/datafiles/agg_tree_build_test.csv' WITH "
-        "(header='false')"};
+        "(header='false');"};
     run_ddl_statement(import_data_ddl);
     EXPECT_NO_THROW(run_multiple_agg(
         "SELECT MAX(v1) OVER (PARTITION BY v2 ORDER BY v3 RANGE BETWEEN 23 PRECEDING "
@@ -23693,12 +23729,22 @@ TEST_F(Select, WindowFunctionFraming) {
 
   // handle COUNT(*) and COUNT(1)
   c("SELECT COUNT(*) OVER (PARTITION BY pc ORDER BY rid RANGE BETWEEN 2 PRECEDING AND 2 "
-    "FOLLOWING) res FROM test_frame_nav WHERE pc = 1 ORDER BY res NULLS LAST",
+    "FOLLOWING) res FROM test_frame_nav WHERE pc = 1 ORDER BY res NULLS LAST;",
     dt);
 
   c("SELECT COUNT(1) OVER (PARTITION BY pc ORDER BY rid RANGE BETWEEN 2 PRECEDING AND 2 "
-    "FOLLOWING) res FROM test_frame_nav WHERE pc = 1 ORDER BY res NULLS LAST",
+    "FOLLOWING) res FROM test_frame_nav WHERE pc = 1 ORDER BY res NULLS LAST;",
     dt);
+
+  // check whether we are okay with an empty input table
+  run_ddl_statement("DROP TABLE IF EXISTS test_frame_empty;");
+  run_ddl_statement("CREATE TABLE test_frame_empty (id int, o int, p int);");
+  auto res = QR::get()->runSQL(
+      "SELECT COUNT(1) OVER (PARTITION BY p ORDER BY o RANGE BETWEEN 2 PRECEDING AND 2 "
+      "FOLLOWING) FROM test_frame_empty;",
+      dt);
+  CHECK_EQ(res->rowCount(), (size_t)0);
+  run_ddl_statement("DROP TABLE test_frame_empty;");
 }
 
 TEST_F(Select, WindowFunctionFramingWithDateAndTimeColumn) {
@@ -23903,9 +23949,9 @@ TEST_F(Select, WindowFunctionFramingWithDateAndTimeColumn) {
       const std::string query =
           "SELECT " + op + "(" + col_name +
           ") OVER (PARTITION BY pc ORDER BY rid ROWS BETWEEN 12 PRECEDING AND 12 "
-          "FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1";
+          "FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1;";
       const std::string alternative_query =
-          "SELECT " + op + "(" + col_name + ") FROM TD_RANGE_NULL WHERE pc = 1";
+          "SELECT " + op + "(" + col_name + ") FROM TD_RANGE_NULL WHERE pc = 1;";
       const auto res = v<int64_t>(run_simple_agg(query, dt));
       const auto ans = v<int64_t>(run_simple_agg(alternative_query, dt));
       EXPECT_EQ(res, ans);
@@ -23915,27 +23961,27 @@ TEST_F(Select, WindowFunctionFramingWithDateAndTimeColumn) {
   // test 4. exceptions
   EXPECT_ANY_THROW(
       run_simple_agg("SELECT SUM(rid) OVER (ORDER BY tm3 RANGE BETWEEN INTERVAL -3 "
-                     "MILLISECOND PRECEDING AND CURRENT ROW) FROM TD_RANGE",
+                     "MILLISECOND PRECEDING AND CURRENT ROW) FROM TD_RANGE;",
                      dt));
   EXPECT_ANY_THROW(
       run_simple_agg("SELECT SUM(rid) OVER (ORDER BY tm3 RANGE BETWEEN INTERVAL 3.3 "
-                     "MILLISECOND PRECEDING AND CURRENT ROW) FROM TD_RANGE",
+                     "MILLISECOND PRECEDING AND CURRENT ROW) FROM TD_RANGE;",
                      dt));
   EXPECT_ANY_THROW(run_simple_agg(
       "SELECT AVG(ti) OVER (PARTITION BY pc ORDER BY rid ROWS BETWEEN 12 PRECEDING AND "
-      "12 FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1",
+      "12 FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1;",
       dt));
   EXPECT_ANY_THROW(run_simple_agg(
       "SELECT SUM(ti) OVER (PARTITION BY pc ORDER BY rid ROWS BETWEEN 12 PRECEDING AND "
-      "12 FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1",
+      "12 FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1;",
       dt));
   EXPECT_ANY_THROW(run_simple_agg(
       "SELECT AVG(d16) OVER (PARTITION BY pc ORDER BY rid ROWS BETWEEN 12 PRECEDING AND "
-      "12 FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1",
+      "12 FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1;",
       dt));
   EXPECT_ANY_THROW(run_simple_agg(
       "SELECT AVG(tm0) OVER (PARTITION BY pc ORDER BY rid ROWS BETWEEN 12 PRECEDING AND "
-      "12 FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1",
+      "12 FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1;",
       dt));
 }
 
@@ -23945,8 +23991,6 @@ TEST_F(Select, WindowFunctionFrameNavigationFunctions) {
                                      "bi8",  "bi16", "bi32", "f",    "d",    "dc5", "dc9",
                                      "dc15", "str",  "dt",   "dt16", "dt32", "tm",  "tme",
                                      "t0",   "t0e",  "t3",   "t6",   "t9"};
-  std::vector<std::string> test_col2{
-      "str", "dt", "dt16", "dt32", "tm", "tme", "t0", "t0e", "t3", "t6", "t9"};
   for (const auto& col_name : test_col1) {
     for (auto is_lead_test : {true, false}) {
       std::string func_name_on_frame = is_lead_test ? "LEAD_IN_FRAME" : "LAG_IN_FRAME";
@@ -23954,44 +23998,20 @@ TEST_F(Select, WindowFunctionFrameNavigationFunctions) {
       for (int offset = 1; offset <= 2; offset++) {
         std::ostringstream non_frame_query;
         non_frame_query
-            << "SELECT rid, " << func_name_on_partition << "(" << col_name << ", "
+            << "SELECT pc, oc, rid, " << func_name_on_partition << "(" << col_name << ", "
             << offset
             << ") OVER (PARTITION BY pc ORDER BY oc ASC NULLS LAST) AS res FROM "
-               "test_frame_nav WHERE pc = 2 ORDER BY rid";
+               "test_frame_nav ORDER BY 1,2,3;";
         const auto sqlite_query = non_frame_query.str();
         for (auto is_row_mode : {true, false}) {
           std::ostringstream frame_query;
           std::string frame_mode = is_row_mode ? "ROWS" : "RANGE";
-          frame_query << "SELECT rid, " << func_name_on_frame << "(" << col_name << ", "
-                      << offset << ") OVER (PARTITION BY pc ORDER BY oc " << frame_mode
-                      << " BETWEEN " << offset << " PRECEDING AND " << offset
+          frame_query << "SELECT pc, oc, rid, " << func_name_on_frame << "(" << col_name
+                      << ", " << offset << ") OVER (PARTITION BY pc ORDER BY oc "
+                      << frame_mode << " BETWEEN " << offset << " PRECEDING AND "
+                      << offset
                       << " FOLLOWING) AS res FROM "
-                         "test_frame_nav WHERE pc = 2 ORDER BY rid";
-          c(frame_query.str(), sqlite_query, dt);
-        }
-      }
-    }
-  }
-  for (const auto& col_name : test_col2) {
-    for (auto is_lead_test : {true, false}) {
-      std::string func_name_on_frame = is_lead_test ? "LEAD_IN_FRAME" : "LAG_IN_FRAME";
-      std::string func_name_on_partition = is_lead_test ? "LEAD" : "LAG";
-      for (int offset = 1; offset <= 2; offset++) {
-        std::ostringstream non_frame_query;
-        non_frame_query
-            << "SELECT rid, " << func_name_on_partition << "(" << col_name << ", "
-            << offset
-            << ") OVER (PARTITION BY pc ORDER BY oc ASC NULLS LAST) AS res FROM "
-               "test_frame_nav WHERE pc = 2 ORDER BY rid";
-        const auto sqlite_query = non_frame_query.str();
-        for (auto is_row_mode : {true, false}) {
-          std::ostringstream frame_query;
-          std::string frame_mode = is_row_mode ? "ROWS" : "RANGE";
-          frame_query
-              << "SELECT rid, " << func_name_on_frame << "(" << col_name << ", " << offset
-              << ") OVER (PARTITION BY pc ORDER BY oc " << frame_mode
-              << " BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS res FROM "
-                 "test_frame_nav WHERE pc = 2 ORDER BY rid";
+                         "test_frame_nav ORDER BY 1,2,3;";
           c(frame_query.str(), sqlite_query, dt);
         }
       }
@@ -24001,14 +24021,63 @@ TEST_F(Select, WindowFunctionFrameNavigationFunctions) {
     std::string func_name_on_frame = is_lead_test ? "LEAD_IN_FRAME" : "LAG_IN_FRAME";
     const auto query1 = "SELECT oc, " + func_name_on_frame +
                         "(ti, 1) OVER (PARTITION BY pc ROWS BETWEEN 1 PRECEDING AND 1 "
-                        "FOLLOWING) FROM test_frame_nav";
+                        "FOLLOWING) FROM test_frame_nav;";
     const auto query2 = "SELECT oc, " + func_name_on_frame +
                         "(ti, 1) OVER (PARTITION BY pc RANGE BETWEEN 1 PRECEDING AND 1 "
-                        "FOLLOWING) FROM test_frame_nav";
+                        "FOLLOWING) FROM test_frame_nav;";
     const auto query3 = "SELECT oc, " + func_name_on_frame +
-                        "(ti, 1) OVER (ORDER BY pc) FROM test_frame_nav";
+                        "(ti, 1) OVER (ORDER BY pc) FROM test_frame_nav;";
     EXPECT_ANY_THROW(run_multiple_agg(query1, dt));
+    EXPECT_ANY_THROW(run_multiple_agg(query2, dt));
+    EXPECT_ANY_THROW(run_multiple_agg(query3, dt));
   }
+
+  // tables having duplicated values in the frame test_frame_nav_dup
+  std::string case1{" BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING"};
+  auto query_gen = [](const std::string& frame_mode,
+                      const std::string& offset,
+                      const std::string& func,
+                      const std::string& frame_def,
+                      const std::string& table_name,
+                      const std::string ord0,
+                      const std::string nulls0,
+                      bool for_heavy) {
+    std::string w_def{") OVER (PARTITION BY p ORDER BY o " + ord0 + " NULLS " + nulls0 +
+                      ' '};
+    std::string func_name = func;
+    if (for_heavy) {
+      func_name += "_IN_FRAME";
+    }
+    func_name += "(o, ";
+    func_name += offset;
+    std::string rest_q_def = for_heavy ? frame_mode + frame_def : "";
+    return "SELECT o, " + func_name + w_def + rest_q_def + ") FROM " + table_name +
+           " ORDER BY 1 NULLS LAST, 2 NULLS LAST;";
+  };
+  for (std::string frame_mode : {"ROWS", "RANGE"}) {
+    for (std::string offset : {"0", "1", "2"}) {
+      for (std::string func : {"LEAD", "LAG"}) {
+        for (char const* ord : {"ASC", "DESC"}) {
+          for (char const* nulls : {"FIRST", "LAST"}) {
+            auto const q_heavy = query_gen(
+                frame_mode, offset, func, case1, "test_frame_nav_dup", ord, nulls, true);
+            auto const q_comp = query_gen(
+                frame_mode, offset, func, "", "test_frame_nav_dup", ord, nulls, false);
+            c(q_heavy, q_comp, dt);
+          }
+        }
+      }
+    }
+  }
+
+  // check whether we are okay with an empty input table
+  run_ddl_statement("DROP TABLE IF EXISTS test_frame_nav_empty;");
+  run_ddl_statement("CREATE TABLE test_frame_nav_empty (id int, o int, p int);");
+  auto res = QR::get()->runSQL(
+      query_gen("ROWS", "0", "LEAD", case1, "test_frame_nav_empty", "DESC", "LAST", true),
+      dt);
+  CHECK_EQ(res->rowCount(), (size_t)0);
+  run_ddl_statement("DROP TABLE test_frame_nav_empty;");
 }
 
 TEST_F(Select, ConditionalWindowFunction) {
@@ -27162,6 +27231,11 @@ int create_and_populate_tables(const bool use_temporary_tables,
     LOG(ERROR) << "Failed to (re-)create table 'test_frame_nav'";
   }
   try {
+    import_window_frame_navigation_table_with_dup_val();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_frame_nav_dup'";
+  }
+  try {
     import_window_function_framing_test();
   } catch (std::exception const& e) {
     LOG(ERROR) << "Unknown error in import_window_function_framing_tests():" << e.what();
@@ -27478,6 +27552,9 @@ void drop_tables() {
   const std::string drop_test_frame_nav{"DROP TABLE IF EXISTS test_frame_nav;"};
   run_ddl_statement(drop_test_frame_nav);
   g_sqlite_comparator.query(drop_test_frame_nav);
+  const std::string drop_test_frame_nav_dup{"DROP TABLE IF EXISTS test_frame_nav_dup;"};
+  run_ddl_statement(drop_test_frame_nav_dup);
+  g_sqlite_comparator.query(drop_test_frame_nav_dup);
 }
 
 void drop_views() {

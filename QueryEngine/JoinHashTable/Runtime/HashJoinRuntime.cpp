@@ -902,7 +902,8 @@ template <typename SLOT_SELECTOR>
 DEVICE void fill_row_ids_impl(int32_t* buff,
                               const int64_t hash_entry_count,
                               const JoinColumn join_column,
-                              const JoinColumnTypeInfo type_info
+                              const JoinColumnTypeInfo type_info,
+                              const bool for_window_framing
 #ifndef __CUDACC__
                               ,
                               const int32_t* sd_inner_to_outer_translation_map,
@@ -915,6 +916,8 @@ DEVICE void fill_row_ids_impl(int32_t* buff,
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   int32_t* id_buff = count_buff + hash_entry_count;
+  int32_t* reversed_id_buff =
+      for_window_framing ? id_buff + join_column.num_elems : nullptr;
 
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
@@ -952,13 +955,17 @@ DEVICE void fill_row_ids_impl(int32_t* buff,
     const auto bin_idx = pos_ptr - pos_buff;
     const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
     id_buff[id_buff_idx] = static_cast<int32_t>(index);
+    if (for_window_framing) {
+      reversed_id_buff[index] = id_buff_idx;
+    }
   }
 }
 
 GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
                                  const int64_t hash_entry_count,
                                  const JoinColumn join_column,
-                                 const JoinColumnTypeInfo type_info
+                                 const JoinColumnTypeInfo type_info,
+                                 const bool for_window_framing
 #ifndef __CUDACC__
                                  ,
                                  const int32_t* sd_inner_to_outer_translation_map,
@@ -974,7 +981,8 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
   fill_row_ids_impl(buff,
                     hash_entry_count,
                     join_column,
-                    type_info
+                    type_info,
+                    for_window_framing
 #ifndef __CUDACC__
                     ,
                     sd_inner_to_outer_translation_map,
@@ -1010,7 +1018,8 @@ GLOBAL void SUFFIX(fill_row_ids_bucketized)(
   fill_row_ids_impl(buff,
                     hash_entry_count,
                     join_column,
-                    type_info
+                    type_info,
+                    false
 #ifndef __CUDACC__
                     ,
                     sd_inner_to_outer_translation_map,
@@ -1106,7 +1115,8 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
   fill_row_ids_impl(buff,
                     hash_entry_count,
                     join_column,
-                    type_info
+                    type_info,
+                    false
 #ifndef __CUDACC__
                     ,
                     sd_inner_to_outer_translation_map,
@@ -1149,7 +1159,8 @@ GLOBAL void SUFFIX(fill_row_ids_sharded_bucketized)(
   fill_row_ids_impl(buff,
                     hash_entry_count,
                     join_column,
-                    type_info
+                    type_info,
+                    false
 #ifndef __CUDACC__
                     ,
                     sd_inner_to_outer_translation_map,
@@ -1166,7 +1177,8 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
                                           const T* composite_key_dict,
                                           const int64_t hash_entry_count,
                                           const KEY_HANDLER* f,
-                                          const int64_t num_elems
+                                          const int64_t num_elems,
+                                          const bool for_window_framing
 #ifndef __CUDACC__
                                           ,
                                           const int32_t cpu_thread_idx,
@@ -1176,6 +1188,7 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   int32_t* id_buff = count_buff + hash_entry_count;
+  int32_t* reversed_id_buff = for_window_framing ? id_buff + num_elems : nullptr;
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -1194,9 +1207,11 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
                            pos_buff,
                            count_buff,
                            id_buff,
-                           key_size_in_bytes](const int64_t row_index,
-                                              const T* key_scratch_buff,
-                                              const size_t key_component_count) {
+                           reversed_id_buff,
+                           key_size_in_bytes,
+                           for_window_framing](const int64_t row_index,
+                                               const T* key_scratch_buff,
+                                               const size_t key_component_count) {
     const T* matching_group =
         SUFFIX(get_matching_baseline_hash_slot_readonly)(key_scratch_buff,
                                                          key_component_count,
@@ -1208,6 +1223,9 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
     const auto bin_idx = pos_ptr - pos_buff;
     const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
     id_buff[id_buff_idx] = static_cast<int32_t>(row_index);
+    if (for_window_framing) {
+      reversed_id_buff[row_index] = id_buff_idx;
+    }
     return 0;
   };
 
@@ -1414,6 +1432,7 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
                                       const int32_t* sd_inner_to_outer_translation_map,
                                       const int32_t min_inner_elem,
                                       const unsigned cpu_thread_count,
+                                      const bool for_window_framing,
                                       COUNT_MATCHES_LAUNCH_FUNCTOR count_matches_func,
                                       FILL_ROW_IDS_LAUNCH_FUNCTOR fill_row_ids_func) {
   auto timer = DEBUG_TIMER(__func__);
@@ -1474,7 +1493,8 @@ void fill_one_to_many_hash_table(int32_t* buff,
                                  const JoinColumnTypeInfo& type_info,
                                  const int32_t* sd_inner_to_outer_translation_map,
                                  const int32_t min_inner_elem,
-                                 const unsigned cpu_thread_count) {
+                                 const unsigned cpu_thread_count,
+                                 const bool for_window_framing) {
   auto timer = DEBUG_TIMER(__func__);
   auto launch_count_matches =
       [count_buff = buff + hash_entry_info.bucketized_hash_entry_count,
@@ -1497,12 +1517,14 @@ void fill_one_to_many_hash_table(int32_t* buff,
        &join_column,
        &type_info,
        sd_inner_to_outer_translation_map,
-       min_inner_elem](auto cpu_thread_idx, auto cpu_thread_count) {
+       min_inner_elem,
+       for_window_framing](auto cpu_thread_idx, auto cpu_thread_count) {
         SUFFIX(fill_row_ids)
         (buff,
          hash_entry_count,
          join_column,
          type_info,
+         for_window_framing,
          sd_inner_to_outer_translation_map,
          min_inner_elem,
          cpu_thread_idx,
@@ -1516,6 +1538,7 @@ void fill_one_to_many_hash_table(int32_t* buff,
                                    sd_inner_to_outer_translation_map,
                                    min_inner_elem,
                                    cpu_thread_count,
+                                   for_window_framing,
                                    launch_count_matches,
                                    launch_fill_row_ids);
 }
@@ -1575,6 +1598,7 @@ void fill_one_to_many_hash_table_bucketized(
                                    sd_inner_to_outer_translation_map,
                                    min_inner_elem,
                                    cpu_thread_count,
+                                   false,
                                    launch_count_matches,
                                    launch_fill_row_ids);
 }
@@ -1909,7 +1933,8 @@ void fill_one_to_many_baseline_hash_table(
     const std::vector<int32_t>& sd_min_inner_elems,
     const size_t cpu_thread_count,
     const bool is_range_join,
-    const bool is_geo_compressed) {
+    const bool is_geo_compressed,
+    const bool for_window_framing) {
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
@@ -2043,6 +2068,7 @@ void fill_one_to_many_baseline_hash_table(
              hash_entry_count,
              &key_handler,
              join_column_per_key[0].num_elems,
+             false,
              cpu_thread_idx,
              cpu_thread_count);
           }));
@@ -2054,6 +2080,7 @@ void fill_one_to_many_baseline_hash_table(
            hash_entry_count,
            &join_column_per_key,
            &join_buckets_per_key,
+           for_window_framing,
            cpu_thread_idx,
            cpu_thread_count] {
             const auto key_handler = OverlapsKeyHandler(
@@ -2066,6 +2093,7 @@ void fill_one_to_many_baseline_hash_table(
              hash_entry_count,
              &key_handler,
              join_column_per_key[0].num_elems,
+             for_window_framing,
              cpu_thread_idx,
              cpu_thread_count);
           }));
@@ -2079,6 +2107,7 @@ void fill_one_to_many_baseline_hash_table(
                                           &type_info_per_key,
                                           &sd_inner_to_outer_translation_maps,
                                           &sd_min_inner_elems,
+                                          for_window_framing,
                                           cpu_thread_idx,
                                           cpu_thread_count] {
                                            const auto key_handler = GenericKeyHandler(
@@ -2094,6 +2123,7 @@ void fill_one_to_many_baseline_hash_table(
                                             hash_entry_count,
                                             &key_handler,
                                             join_column_per_key[0].num_elems,
+                                            for_window_framing,
                                             cpu_thread_idx,
                                             cpu_thread_count);
                                          }));
@@ -2117,7 +2147,8 @@ void fill_one_to_many_baseline_hash_table_32(
     const std::vector<int32_t>& sd_min_inner_elems,
     const int32_t cpu_thread_count,
     const bool is_range_join,
-    const bool is_geo_compressed) {
+    const bool is_geo_compressed,
+    const bool for_window_framing) {
   fill_one_to_many_baseline_hash_table<int32_t>(buff,
                                                 composite_key_dict,
                                                 hash_entry_count,
@@ -2129,7 +2160,8 @@ void fill_one_to_many_baseline_hash_table_32(
                                                 sd_min_inner_elems,
                                                 cpu_thread_count,
                                                 is_range_join,
-                                                is_geo_compressed);
+                                                is_geo_compressed,
+                                                for_window_framing);
 }
 
 void fill_one_to_many_baseline_hash_table_64(
@@ -2144,7 +2176,8 @@ void fill_one_to_many_baseline_hash_table_64(
     const std::vector<int32_t>& sd_min_inner_elems,
     const int32_t cpu_thread_count,
     const bool is_range_join,
-    const bool is_geo_compressed) {
+    const bool is_geo_compressed,
+    const bool for_window_framing) {
   fill_one_to_many_baseline_hash_table<int64_t>(buff,
                                                 composite_key_dict,
                                                 hash_entry_count,
@@ -2156,7 +2189,8 @@ void fill_one_to_many_baseline_hash_table_64(
                                                 sd_min_inner_elems,
                                                 cpu_thread_count,
                                                 is_range_join,
-                                                is_geo_compressed);
+                                                is_geo_compressed,
+                                                for_window_framing);
 }
 
 void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,
