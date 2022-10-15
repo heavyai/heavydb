@@ -175,7 +175,8 @@ class PerfectJoinHashTableBuilder {
               reinterpret_cast<int32_t*>(gpu_hash_table_buff),
               hash_entry_info,
               join_column,
-              type_info);
+              type_info,
+              join_type == JoinType::WINDOW_FUNCTION_FRAMING);
         }
       }
     }
@@ -306,6 +307,7 @@ class PerfectJoinHashTableBuilder {
       const bool is_bitwise_eq,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
       const StringDictionaryProxy::IdMap* str_proxy_translation_map,
+      const JoinType join_type,
       const BucketizedHashEntryInfo hash_entry_info,
       const int32_t hash_join_invalid_val,
       const Executor* executor) {
@@ -314,12 +316,13 @@ class PerfectJoinHashTableBuilder {
     CHECK(inner_col);
     const auto& ti = inner_col->get_type_info();
     CHECK(!hash_table_);
-    hash_table_ =
-        std::make_unique<PerfectHashTable>(executor->getDataMgr(),
-                                           HashType::OneToMany,
-                                           ExecutorDeviceType::CPU,
-                                           hash_entry_info.getNormalizedHashEntryCount(),
-                                           join_column.num_elems);
+    hash_table_ = std::make_unique<PerfectHashTable>(
+        executor->getDataMgr(),
+        HashType::OneToMany,
+        ExecutorDeviceType::CPU,
+        hash_entry_info.getNormalizedHashEntryCount(),
+        join_column.num_elems,
+        join_type == JoinType::WINDOW_FUNCTION_FRAMING);
     auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
 
     int thread_count = cpu_threads();
@@ -388,7 +391,8 @@ class PerfectJoinHashTableBuilder {
             str_proxy_translation_map ? str_proxy_translation_map->data() : nullptr,
             str_proxy_translation_map ? str_proxy_translation_map->domainStart()
                                       : 0 /*dummy*/,
-            thread_count);
+            thread_count,
+            join_type == JoinType::WINDOW_FUNCTION_FRAMING);
       }
     }
   }

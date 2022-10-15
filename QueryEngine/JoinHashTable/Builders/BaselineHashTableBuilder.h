@@ -210,7 +210,8 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const size_t hash_entry_count,
                                                     const size_t key_component_count,
                                                     const KEY_HANDLER* key_handler,
-                                                    const size_t num_elems) {
+                                                    const size_t num_elems,
+                                                    const bool for_window_framing) {
   auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_one_to_many_baseline_hash_table_on_device_32(buff,
@@ -218,7 +219,8 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                       hash_entry_count,
                                                       key_component_count,
                                                       key_handler,
-                                                      num_elems);
+                                                      num_elems,
+                                                      for_window_framing);
   } else {
     static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value ||
                       std::is_same<KEY_HANDLER, RangeKeyHandler>::value,
@@ -235,11 +237,16 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const size_t hash_entry_count,
                                                     const size_t key_component_count,
                                                     const KEY_HANDLER* key_handler,
-                                                    const size_t num_elems) {
+                                                    const size_t num_elems,
+                                                    const bool for_window_framing) {
   auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
-    fill_one_to_many_baseline_hash_table_on_device_64(
-        buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
+    fill_one_to_many_baseline_hash_table_on_device_64(buff,
+                                                      composite_key_dict,
+                                                      hash_entry_count,
+                                                      key_handler,
+                                                      num_elems,
+                                                      for_window_framing);
   } else if constexpr (std::is_same<KEY_HANDLER, RangeKeyHandler>::value) {
     range_fill_one_to_many_baseline_hash_table_on_device_64(
         buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
@@ -270,14 +277,15 @@ class BaselineJoinHashTableBuilder {
                          const size_t key_component_count,
                          const RegisteredQueryHint& query_hint) {
     auto timer = DEBUG_TIMER(__func__);
-    const auto entry_size =
-        (key_component_count + (layout == HashType::OneToOne ? 1 : 0)) *
-        key_component_width;
-    const size_t one_to_many_hash_entries =
+    auto const entry_cnt = (key_component_count + (layout == HashType::OneToOne ? 1 : 0));
+    auto const entry_size = entry_cnt * key_component_width;
+    size_t const one_to_many_hash_entries =
         HashJoin::layoutRequiresAdditionalBuffers(layout)
-            ? 2 * keyspace_entry_count + keys_for_all_rows
+            ? 2 * keyspace_entry_count +
+                  (keys_for_all_rows *
+                   (1 + (join_type == JoinType::WINDOW_FUNCTION_FRAMING)))
             : 0;
-    const size_t hash_table_size =
+    size_t const hash_table_size =
         entry_size * keyspace_entry_count + one_to_many_hash_entries * sizeof(int32_t);
 
     if (query_hint.isHintRegistered(QueryHint::kMaxJoinHashTableSize) &&
@@ -295,13 +303,15 @@ class BaselineJoinHashTableBuilder {
         (join_type == JoinType::SEMI || join_type == JoinType::ANTI) &&
         layout == HashType::OneToOne;
 
-    VLOG(1) << "Initializing CPU Join Hash Table with " << keyspace_entry_count
-            << " hash entries and " << one_to_many_hash_entries
-            << " entries in the one to many buffer";
-    VLOG(1) << "Total hash table size: " << hash_table_size << " Bytes";
-
     hash_table_ = std::make_unique<BaselineHashTable>(
         layout, keyspace_entry_count, keys_for_all_rows, hash_table_size);
+    VLOG(1) << "Initialize a CPU baseline hash table for join type "
+            << HashJoin::getHashTypeString(layout)
+            << ", hash table size: " << hash_table_size << " Bytes"
+            << ", # hash entries: " << entry_cnt << ", entry_size: " << entry_size
+            << ", # entries in the payload buffer: " << one_to_many_hash_entries
+            << " (# non-null hash entries: " << keyspace_entry_count
+            << ", # entries stored in the payload buffer: " << keys_for_all_rows << ")";
     auto cpu_hash_table_ptr = hash_table_->getCpuBuffer();
     int thread_count = cpu_threads();
     std::vector<std::future<void>> init_cpu_buff_threads;
@@ -446,7 +456,6 @@ class BaselineJoinHashTableBuilder {
         }
       }
       setHashLayout(layout);
-
       switch (key_component_width) {
         case 4: {
           const auto composite_key_dict = reinterpret_cast<int32_t*>(cpu_hash_table_ptr);
@@ -462,7 +471,8 @@ class BaselineJoinHashTableBuilder {
               str_proxy_translation_maps_ptrs_and_offsets.second,
               thread_count,
               std::is_same_v<KEY_HANDLER, RangeKeyHandler>,
-              is_geo_compressed);
+              is_geo_compressed,
+              join_type == JoinType::WINDOW_FUNCTION_FRAMING);
           break;
         }
         case 8: {
@@ -479,7 +489,8 @@ class BaselineJoinHashTableBuilder {
               str_proxy_translation_maps_ptrs_and_offsets.second,
               thread_count,
               std::is_same_v<KEY_HANDLER, RangeKeyHandler>,
-              is_geo_compressed);
+              is_geo_compressed,
+              join_type == JoinType::WINDOW_FUNCTION_FRAMING);
           break;
         }
         default:
@@ -498,9 +509,9 @@ class BaselineJoinHashTableBuilder {
                             const Executor* executor,
                             const RegisteredQueryHint& query_hint) {
 #ifdef HAVE_CUDA
-    const auto entry_size =
-        (key_component_count + (layout == HashType::OneToOne ? 1 : 0)) *
-        key_component_width;
+    const auto num_hash_entries =
+        (key_component_count + (layout == HashType::OneToOne ? 1 : 0));
+    const auto entry_size = num_hash_entries * key_component_width;
     const size_t one_to_many_hash_entries =
         HashJoin::layoutRequiresAdditionalBuffers(layout)
             ? 2 * keyspace_entry_count + emitted_keys_count
@@ -520,10 +531,13 @@ class BaselineJoinHashTableBuilder {
           "yet");
     }
 
-    VLOG(1) << "Initializing GPU Hash Table for device " << device_id << " with "
-            << keyspace_entry_count << " hash entries and " << one_to_many_hash_entries
-            << " entries in the " << HashJoin::getHashTypeString(layout) << " buffer";
-    VLOG(1) << "Total hash table size: " << hash_table_size << " Bytes";
+    VLOG(1) << "Initialize a GPU baseline hash table for device " << device_id
+            << " with join type " << HashJoin::getHashTypeString(layout)
+            << ", hash table size: " << hash_table_size << " Bytes"
+            << ", # hash entries: " << num_hash_entries << ", entry_size: " << entry_size
+            << ", # entries in the payload buffer: " << one_to_many_hash_entries
+            << " (# non-null hash entries: " << key_component_count
+            << ", # entries stored in the payload buffer: " << emitted_keys_count << ")";
 
     hash_table_ = std::make_unique<BaselineHashTable>(executor->getDataMgr(),
                                                       layout,
@@ -645,7 +659,8 @@ class BaselineJoinHashTableBuilder {
               keyspace_entry_count,
               key_component_count,
               key_handler_gpu,
-              join_columns.front().num_elems);
+              join_columns.front().num_elems,
+              join_type == JoinType::WINDOW_FUNCTION_FRAMING);
 
           break;
         }
@@ -657,7 +672,8 @@ class BaselineJoinHashTableBuilder {
               keyspace_entry_count,
               key_component_count,
               key_handler_gpu,
-              join_columns.front().num_elems);
+              join_columns.front().num_elems,
+              join_type == JoinType::WINDOW_FUNCTION_FRAMING);
 
           break;
         }

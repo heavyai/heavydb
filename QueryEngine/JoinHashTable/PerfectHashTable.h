@@ -29,17 +29,25 @@ class PerfectHashTable : public HashTable {
                    const HashType layout,
                    const ExecutorDeviceType device_type,
                    const size_t entry_count,
-                   const size_t emitted_keys_count)
+                   const size_t emitted_keys_count,
+                   const bool for_window_framing = false)
       : data_mgr_(data_mgr)
       , layout_(layout)
       , entry_count_(entry_count)
       , emitted_keys_count_(emitted_keys_count) {
+    std::string device_str = "GPU";
     if (device_type == ExecutorDeviceType::CPU) {
-      cpu_hash_table_buff_size_ = layout_ == HashType::OneToOne
-                                      ? entry_count_
-                                      : 2 * entry_count_ + emitted_keys_count_;
+      device_str = "CPU";
+      cpu_hash_table_buff_size_ =
+          layout_ == HashType::OneToOne
+              ? entry_count_
+              : 2 * entry_count_ + ((1 + for_window_framing) * emitted_keys_count_);
       cpu_hash_table_buff_.reset(new int32_t[cpu_hash_table_buff_size_]);
     }
+    VLOG(1) << "Initialize a " << device_str << " perfect hash table for join type "
+            << ::toString(layout) << " # hash entries: " << entry_count
+            << ", # entries stored in the payload buffer: " << emitted_keys_count
+            << ", hash table size : " << cpu_hash_table_buff_size_ * 4 << " Bytes";
   }
 
   ~PerfectHashTable() override {

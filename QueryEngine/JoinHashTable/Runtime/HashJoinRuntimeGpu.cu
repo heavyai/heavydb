@@ -247,7 +247,8 @@ void fill_one_to_many_hash_table_on_device_impl(int32_t* buff,
 void fill_one_to_many_hash_table_on_device(int32_t* buff,
                                            const BucketizedHashEntryInfo hash_entry_info,
                                            const JoinColumn& join_column,
-                                           const JoinColumnTypeInfo& type_info) {
+                                           const JoinColumnTypeInfo& type_info,
+                                           const bool for_window_framing) {
   auto hash_entry_count = hash_entry_info.bucketized_hash_entry_count;
   auto count_matches_func = [count_buff = buff + hash_entry_count,
                              join_column,
@@ -255,10 +256,15 @@ void fill_one_to_many_hash_table_on_device(int32_t* buff,
     cuda_kernel_launch_wrapper(SUFFIX(count_matches), count_buff, join_column, type_info);
   };
 
-  auto fill_row_ids_func = [buff, hash_entry_count, join_column, type_info] {
-    cuda_kernel_launch_wrapper(
-        SUFFIX(fill_row_ids), buff, hash_entry_count, join_column, type_info);
-  };
+  auto fill_row_ids_func =
+      [buff, hash_entry_count, join_column, type_info, for_window_framing] {
+        cuda_kernel_launch_wrapper(SUFFIX(fill_row_ids),
+                                   buff,
+                                   hash_entry_count,
+                                   join_column,
+                                   type_info,
+                                   for_window_framing);
+      };
 
   fill_one_to_many_hash_table_on_device_impl(buff,
                                              hash_entry_count,
@@ -346,7 +352,8 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const T* composite_key_dict,
                                                     const int64_t hash_entry_count,
                                                     const KEY_HANDLER* key_handler,
-                                                    const size_t num_elems) {
+                                                    const size_t num_elems,
+                                                    const bool for_window_framing) {
   auto pos_buff = buff;
   auto count_buff = buff + hash_entry_count;
   auto qe_cuda_stream = getQueryEngineCudaStream();
@@ -375,7 +382,8 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                              composite_key_dict,
                              hash_entry_count,
                              key_handler,
-                             num_elems);
+                             num_elems,
+                             for_window_framing);
 }
 
 template <typename T>
@@ -535,9 +543,14 @@ void fill_one_to_many_baseline_hash_table_on_device_32(
     const int64_t hash_entry_count,
     const size_t key_component_count,
     const GenericKeyHandler* key_handler,
-    const int64_t num_elems) {
-  fill_one_to_many_baseline_hash_table_on_device<int32_t>(
-      buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
+    const int64_t num_elems,
+    const bool for_window_framing) {
+  fill_one_to_many_baseline_hash_table_on_device<int32_t>(buff,
+                                                          composite_key_dict,
+                                                          hash_entry_count,
+                                                          key_handler,
+                                                          num_elems,
+                                                          for_window_framing);
 }
 
 void fill_one_to_many_baseline_hash_table_on_device_64(
@@ -545,9 +558,14 @@ void fill_one_to_many_baseline_hash_table_on_device_64(
     const int64_t* composite_key_dict,
     const int64_t hash_entry_count,
     const GenericKeyHandler* key_handler,
-    const int64_t num_elems) {
-  fill_one_to_many_baseline_hash_table_on_device<int64_t>(
-      buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
+    const int64_t num_elems,
+    const bool for_window_framing) {
+  fill_one_to_many_baseline_hash_table_on_device<int64_t>(buff,
+                                                          composite_key_dict,
+                                                          hash_entry_count,
+                                                          key_handler,
+                                                          num_elems,
+                                                          for_window_framing);
 }
 
 void overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
@@ -557,7 +575,7 @@ void overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
     const OverlapsKeyHandler* key_handler,
     const int64_t num_elems) {
   fill_one_to_many_baseline_hash_table_on_device<int64_t>(
-      buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
+      buff, composite_key_dict, hash_entry_count, key_handler, num_elems, false);
 }
 
 void range_fill_one_to_many_baseline_hash_table_on_device_64(
@@ -567,7 +585,7 @@ void range_fill_one_to_many_baseline_hash_table_on_device_64(
     const RangeKeyHandler* key_handler,
     const size_t num_elems) {
   fill_one_to_many_baseline_hash_table_on_device<int64_t>(
-      buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
+      buff, composite_key_dict, hash_entry_count, key_handler, num_elems, false);
 }
 
 void approximate_distinct_tuples_on_device_overlaps(uint8_t* hll_buffer,

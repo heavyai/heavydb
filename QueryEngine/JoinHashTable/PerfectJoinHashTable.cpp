@@ -805,6 +805,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                             isBitwiseEq(),
                                             cols,
                                             str_proxy_translation_map_,
+                                            join_type_,
                                             hash_entry_info_,
                                             hash_join_invalid_val,
                                             executor_);

@@ -288,6 +288,10 @@ std::string toString(const T& v) {
         return "SEMI";
       case JoinType::ANTI:
         return "ANTI";
+      case JoinType::WINDOW_FUNCTION:
+        return "WINDOW_FUNCTION";
+      case JoinType::WINDOW_FUNCTION_FRAMING:
+        return "WINDOW_FUNCTION_FRAMING";
       case JoinType::INVALID:
         return "INVALID";
     }

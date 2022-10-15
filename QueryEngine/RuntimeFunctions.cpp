@@ -27,12 +27,11 @@
 #include "TypePunning.h"
 #include "Utils/SegmentTreeUtils.h"
 
-#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#include <cstdio>
 #include <cstring>
+#include <functional>
 #include <thread>
 #include <tuple>
 
@@ -448,15 +447,17 @@ get_valid_buf_end_pos(const int64_t num_elems,
   return null_end_pos == num_elems ? null_start_pos : num_elems;
 }
 
-template <typename T>
+template <typename T, typename Comparator>
 inline int64_t compute_current_row_idx_in_frame(const int64_t num_elems,
                                                 const int64_t cur_row_idx,
                                                 const T* col_buf,
                                                 const int32_t* partition_rowid_buf,
                                                 const int64_t* ordered_index_buf,
                                                 const T null_val,
+                                                const bool nulls_first,
                                                 const int64_t null_start_pos,
-                                                const int64_t null_end_pos) {
+                                                const int64_t null_end_pos,
+                                                Comparator cmp) {
   const auto target_value = col_buf[cur_row_idx];
   if (target_value == null_val) {
     for (int64_t target_offset = null_start_pos; target_offset < null_end_pos;
@@ -467,49 +468,65 @@ inline int64_t compute_current_row_idx_in_frame(const int64_t num_elems,
       }
     }
   }
-  int64_t l = get_valid_buf_start_pos(null_start_pos, null_end_pos);
-  int64_t h = get_valid_buf_end_pos(num_elems, null_start_pos, null_end_pos);
-  while (l <= h) {
+  auto const modified_null_end_pos = nulls_first ? null_end_pos - 1 : null_end_pos;
+  int64_t l = get_valid_buf_start_pos(null_start_pos, modified_null_end_pos);
+  int64_t h = get_valid_buf_end_pos(num_elems, null_start_pos, modified_null_end_pos);
+  while (l < h) {
     int64_t mid = l + (h - l) / 2;
-    auto row_idx_in_frame = partition_rowid_buf[ordered_index_buf[mid]];
-    auto cur_value = col_buf[row_idx_in_frame];
-    if (cur_value == target_value) {
-      return mid;
-    } else if (cur_value < target_value) {
-      l = mid + 1;
+    auto const target_row_idx = partition_rowid_buf[ordered_index_buf[mid]];
+    auto const cur_value = col_buf[target_row_idx];
+    if (cmp(target_value, cur_value)) {
+      h = mid;
     } else {
-      h = mid - 1;
+      l = mid + 1;
     }
+  }
+  int64_t target_offset = l;
+  int64_t candidate_row_idx = partition_rowid_buf[ordered_index_buf[target_offset]];
+  while (col_buf[candidate_row_idx] == target_value) {
+    if (candidate_row_idx == cur_row_idx) {
+      return target_offset;
+    }
+    candidate_row_idx = partition_rowid_buf[ordered_index_buf[++target_offset]];
   }
   return -1;
 }
 
-#define DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(value_type)                     \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                            \
-      compute_##value_type##_current_row_idx_in_frame(                       \
-          const int64_t num_elems,                                           \
-          const int64_t cur_row_idx,                                         \
-          const value_type* col_buf,                                         \
-          const int32_t* partition_rowid_buf,                                \
-          const int64_t* ordered_index_buf,                                  \
-          const value_type null_val,                                         \
-          const int64_t null_start_pos,                                      \
-          const int64_t null_end_pos) {                                      \
-    return compute_current_row_idx_in_frame<value_type>(num_elems,           \
-                                                        cur_row_idx,         \
-                                                        col_buf,             \
-                                                        partition_rowid_buf, \
-                                                        ordered_index_buf,   \
-                                                        null_val,            \
-                                                        null_start_pos,      \
-                                                        null_end_pos);       \
+#define DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(value_type, oper_name)                    \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                      \
+      compute_##value_type##_##oper_name##_current_row_idx_in_frame(                   \
+          const int64_t num_elems,                                                     \
+          const int64_t cur_row_idx,                                                   \
+          const value_type* col_buf,                                                   \
+          const int32_t* partition_rowid_buf,                                          \
+          const int64_t* ordered_index_buf,                                            \
+          const value_type null_val,                                                   \
+          const bool nulls_first,                                                      \
+          const int64_t null_start_pos,                                                \
+          const int64_t null_end_pos) {                                                \
+    return compute_current_row_idx_in_frame<value_type>(num_elems,                     \
+                                                        cur_row_idx,                   \
+                                                        col_buf,                       \
+                                                        partition_rowid_buf,           \
+                                                        ordered_index_buf,             \
+                                                        null_val,                      \
+                                                        nulls_first,                   \
+                                                        null_start_pos,                \
+                                                        null_end_pos,                  \
+                                                        std::oper_name<value_type>{}); \
   }
-DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int8_t)
-DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int16_t)
-DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int32_t)
-DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int64_t)
-DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(float)
-DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(double)
+#define DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME_ALL_TYPES(oper_name) \
+  DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int8_t, oper_name)         \
+  DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int16_t, oper_name)        \
+  DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int32_t, oper_name)        \
+  DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int64_t, oper_name)        \
+  DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(float, oper_name)          \
+  DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(double, oper_name)
+
+DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME_ALL_TYPES(greater_equal)
+DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME_ALL_TYPES(less_equal)
+
+#undef DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME_ALL_TYPES
 #undef DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME
 
 template <typename TARGET_VAL_TYPE, typename COL_TYPE, typename NULL_TYPE>
@@ -520,13 +537,15 @@ inline int64_t compute_lower_bound_from_ordered_partition_index(
     const int32_t* partition_rowid_buf,
     const int64_t* ordered_index_buf,
     const NULL_TYPE null_val,
+    const bool nulls_first,
     const int64_t null_start_offset,
     const int64_t null_end_offset) {
   if (target_val == null_val) {
     return null_start_offset;
   }
-  int64_t l = get_valid_buf_start_pos(null_start_offset, null_end_offset);
-  int64_t h = get_valid_buf_end_pos(num_elems, null_start_offset, null_end_offset);
+  auto const modified_null_end_pos = nulls_first ? null_end_offset - 1 : null_end_offset;
+  int64_t l = get_valid_buf_start_pos(null_start_offset, modified_null_end_pos);
+  int64_t h = get_valid_buf_end_pos(num_elems, null_start_offset, modified_null_end_pos);
   while (l < h) {
     int64_t mid = l + (h - l) / 2;
     if (target_val <= col_buf[partition_rowid_buf[ordered_index_buf[mid]]]) {
@@ -549,6 +568,7 @@ inline int64_t compute_lower_bound_from_ordered_partition_index(
           const int64_t* ordered_index_buf,                                                   \
           const int64_t frame_bound_val,                                                      \
           const null_type null_val,                                                           \
+          const bool nulls_first,                                                             \
           const int64_t null_start_pos,                                                       \
           const int64_t null_end_pos) {                                                       \
     if (target_value == null_val) {                                                           \
@@ -564,6 +584,7 @@ inline int64_t compute_lower_bound_from_ordered_partition_index(
         partition_rowid_buf,                                                                  \
         ordered_index_buf,                                                                    \
         null_val,                                                                             \
+        nulls_first,                                                                          \
         null_start_pos,                                                                       \
         null_end_pos);                                                                        \
   }
@@ -597,13 +618,15 @@ inline int64_t compute_upper_bound_from_ordered_partition_index(
     const int32_t* partition_rowid_buf,
     const int64_t* ordered_index_buf,
     const NULL_TYPE null_val,
+    const bool nulls_first,
     const int64_t null_start_offset,
     const int64_t null_end_offset) {
   if (target_val == null_val) {
     return null_end_offset;
   }
-  int64_t l = get_valid_buf_start_pos(null_start_offset, null_end_offset);
-  int64_t h = get_valid_buf_end_pos(num_elems, null_start_offset, null_end_offset);
+  auto const modified_null_end_pos = nulls_first ? null_end_offset - 1 : null_end_offset;
+  int64_t l = get_valid_buf_start_pos(null_start_offset, modified_null_end_pos);
+  int64_t h = get_valid_buf_end_pos(num_elems, null_start_offset, modified_null_end_pos);
   while (l < h) {
     int64_t mid = l + (h - l) / 2;
     if (target_val >= col_buf[partition_rowid_buf[ordered_index_buf[mid]]]) {
@@ -626,6 +649,7 @@ inline int64_t compute_upper_bound_from_ordered_partition_index(
           const int64_t* ordered_index_buf,                                                   \
           const int64_t frame_bound_val,                                                      \
           const null_type null_val,                                                           \
+          const bool nulls_first,                                                             \
           const int64_t null_start_pos,                                                       \
           const int64_t null_end_pos) {                                                       \
     if (target_value == null_val) {                                                           \
@@ -641,6 +665,7 @@ inline int64_t compute_upper_bound_from_ordered_partition_index(
         partition_rowid_buf,                                                                  \
         ordered_index_buf,                                                                    \
         null_val,                                                                             \
+        nulls_first,                                                                          \
         null_start_pos,                                                                       \
         null_end_pos);                                                                        \
   }
@@ -676,7 +701,7 @@ inline LOGICAL_TYPE get_value_in_window_frame(const int64_t target_row_idx_in_fr
                                               const LOGICAL_TYPE logical_null_val,
                                               const LOGICAL_TYPE col_null_val) {
   if (target_row_idx_in_frame < frame_start_offset ||
-      target_row_idx_in_frame >= frame_end_offset) {
+      target_row_idx_in_frame > frame_end_offset) {
     return logical_null_val;
   }
   const auto target_offset =

@@ -90,11 +90,13 @@ struct WindowFrameBoundFuncArgs {
   llvm::Value* current_col_value_lv;
   llvm::Value* current_partition_start_offset_lv;
   llvm::Value* int64_t_zero_val_lv;
+  llvm::Value* int64_t_one_val_lv;
   llvm::Value* num_elem_current_partition_lv;
   llvm::Value* order_key_buf_ptr_lv;
   std::string order_type_col_name;
   llvm::Value* target_partition_rowid_ptr_lv;
   llvm::Value* target_partition_sorted_rowid_ptr_lv;
+  llvm::Value* nulls_first_lv;
   llvm::Value* null_start_pos_lv;
   llvm::Value* null_end_pos_lv;
 };
@@ -237,6 +239,7 @@ class WindowFunctionContext {
   static Comparator makeComparator(const Analyzer::ColumnVar* col_var,
                                    const int8_t* partition_values,
                                    const int32_t* partition_indices,
+                                   const bool asc_ordering,
                                    const bool nulls_first);
 
   void computePartitionBuffer(const size_t partition_idx,

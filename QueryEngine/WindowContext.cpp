@@ -775,7 +775,6 @@ void WindowFunctionContext::compute(
 
 namespace {
 struct FindNullRange {
-  Analyzer::OrderEntry collation;
   int32_t const* original_col_idx_buf;
   int64_t const* ordered_col_idx_buf;
   int32_t const partition_size;
@@ -787,8 +786,7 @@ struct FindNullRange {
                          std::numeric_limits<int64_t>::min()};
     auto const null_val = inline_int_null_value<T>();
     auto const casted_order_col_buf = reinterpret_cast<T const*>(order_col_buf);
-    if (collation.nulls_first &&
-        casted_order_col_buf[original_col_idx_buf[ordered_col_idx_buf[0]]] == null_val) {
+    if (casted_order_col_buf[original_col_idx_buf[ordered_col_idx_buf[0]]] == null_val) {
       int64_t null_range_max = 1;
       while (null_range_max < partition_size &&
              casted_order_col_buf
@@ -798,10 +796,9 @@ struct FindNullRange {
       }
       null_range.first = 0;
       null_range.second = null_range_max - 1;
-    } else if (!collation.nulls_first &&
-               casted_order_col_buf
-                       [original_col_idx_buf[ordered_col_idx_buf[partition_size - 1]]] ==
-                   null_val) {
+    } else if (casted_order_col_buf
+                   [original_col_idx_buf[ordered_col_idx_buf[partition_size - 1]]] ==
+               null_val) {
       int64_t null_range_min = partition_size - 2;
       while (null_range_min >= 0 &&
              casted_order_col_buf
@@ -828,14 +825,14 @@ struct FindNullRange {
                                    [original_col_idx_buf[ordered_col_idx_buf[idx]]])) ==
              null_bit_pattern;
     };
-    if (collation.nulls_first && check_null_val(0)) {
+    if (check_null_val(0)) {
       int64_t null_range_max = 1;
       while (null_range_max < partition_size && check_null_val(null_range_max)) {
         null_range_max++;
       }
       null_range.first = 0;
       null_range.second = null_range_max - 1;
-    } else if (!collation.nulls_first && check_null_val(partition_size - 1)) {
+    } else if (check_null_val(partition_size - 1)) {
       int64_t null_range_min = partition_size - 2;
       while (null_range_min >= 0 && check_null_val(null_range_min)) {
         null_range_min--;
@@ -854,13 +851,12 @@ void WindowFunctionContext::computeNullRangeOfSortedPartition(
     const int32_t* original_col_idx_buf,
     const int64_t* ordered_col_idx_buf) {
   IndexPair null_range;
-  const auto& collation = window_func_->getCollation().front();
   const auto partition_size = counts()[partition_idx];
   if (partition_size > 0) {
     if (order_col_ti.is_integer() || order_col_ti.is_decimal() ||
         order_col_ti.is_time_or_date() || order_col_ti.is_boolean()) {
       FindNullRange const null_range_info{
-          collation, original_col_idx_buf, ordered_col_idx_buf, partition_size};
+          original_col_idx_buf, ordered_col_idx_buf, partition_size};
       switch (order_col_ti.get_size()) {
         case 8:
           null_range =
@@ -884,11 +880,8 @@ void WindowFunctionContext::computeNullRangeOfSortedPartition(
     } else if (order_col_ti.is_fp()) {
       const auto null_bit_pattern =
           null_val_bit_pattern(order_col_ti, order_col_ti.get_type() == kFLOAT);
-      FindNullRange const null_range_info{collation,
-                                          original_col_idx_buf,
-                                          ordered_col_idx_buf,
-                                          partition_size,
-                                          null_bit_pattern};
+      FindNullRange const null_range_info{
+          original_col_idx_buf, ordered_col_idx_buf, partition_size, null_bit_pattern};
       switch (order_col_ti.get_type()) {
         case kFLOAT:
           null_range = null_range_info.find_null_range_fp<float>(order_columns_.front());
@@ -921,14 +914,14 @@ std::vector<WindowFunctionContext::Comparator> WindowFunctionContext::createComp
         dynamic_cast<const Analyzer::ColumnVar*>(order_keys[order_column_idx].get());
     CHECK(order_col);
     const auto& order_col_collation = collation[order_column_idx];
-    const auto asc_comparator = makeComparator(order_col,
-                                               order_column_buffer,
-                                               payload() + offsets()[partition_idx],
-                                               order_col_collation.nulls_first);
-    auto comparator = asc_comparator;
+    auto comparator = makeComparator(order_col,
+                                     order_column_buffer,
+                                     payload() + offsets()[partition_idx],
+                                     !order_col_collation.is_desc,
+                                     order_col_collation.nulls_first);
     if (order_col_collation.is_desc) {
-      comparator = [asc_comparator](const int64_t lhs, const int64_t rhs) {
-        return asc_comparator(rhs, lhs);
+      comparator = [comparator](const int64_t lhs, const int64_t rhs) {
+        return comparator(rhs, lhs);
       };
     }
     partition_comparator.push_back(comparator);
@@ -1036,12 +1029,13 @@ size_t WindowFunctionContext::elementCount() const {
 namespace {
 
 template <class T>
-WindowFunctionContext::WindowComparatorResult integer_comparator(
+WindowFunctionContext::WindowComparatorResult integer_comparator_asc(
     const int8_t* order_column_buffer,
     const SQLTypeInfo& ti,
     const int32_t* partition_indices,
     const int64_t lhs,
     const int64_t rhs,
+    const bool asc_ordering,
     const bool nulls_first) {
   const auto values = reinterpret_cast<const T*>(order_column_buffer);
   const auto lhs_val = values[partition_indices[lhs]];
@@ -1067,13 +1061,47 @@ WindowFunctionContext::WindowComparatorResult integer_comparator(
   return WindowFunctionContext::WindowComparatorResult::EQ;
 }
 
-template <class T, class NullPatternType>
-WindowFunctionContext::WindowComparatorResult fp_comparator(
+template <class T>
+WindowFunctionContext::WindowComparatorResult integer_comparator_desc(
     const int8_t* order_column_buffer,
     const SQLTypeInfo& ti,
     const int32_t* partition_indices,
     const int64_t lhs,
     const int64_t rhs,
+    const bool asc_ordering,
+    const bool nulls_first) {
+  const auto values = reinterpret_cast<const T*>(order_column_buffer);
+  const auto lhs_val = values[partition_indices[lhs]];
+  const auto rhs_val = values[partition_indices[rhs]];
+  const auto null_val = inline_fixed_encoding_null_val(ti);
+  if (lhs_val == null_val && rhs_val == null_val) {
+    return WindowFunctionContext::WindowComparatorResult::EQ;
+  }
+  if (lhs_val == null_val && rhs_val != null_val) {
+    return !nulls_first ? WindowFunctionContext::WindowComparatorResult::LT
+                        : WindowFunctionContext::WindowComparatorResult::GT;
+  }
+  if (rhs_val == null_val && lhs_val != null_val) {
+    return nulls_first ? WindowFunctionContext::WindowComparatorResult::LT
+                       : WindowFunctionContext::WindowComparatorResult::GT;
+  }
+  if (lhs_val < rhs_val) {
+    return WindowFunctionContext::WindowComparatorResult::LT;
+  }
+  if (lhs_val > rhs_val) {
+    return WindowFunctionContext::WindowComparatorResult::GT;
+  }
+  return WindowFunctionContext::WindowComparatorResult::EQ;
+}
+
+template <class T, class NullPatternType>
+WindowFunctionContext::WindowComparatorResult fp_comparator_asc(
+    const int8_t* order_column_buffer,
+    const SQLTypeInfo& ti,
+    const int32_t* partition_indices,
+    const int64_t lhs,
+    const int64_t rhs,
+    const bool asc_ordering,
     const bool nulls_first) {
   const auto values = reinterpret_cast<const T*>(order_column_buffer);
   const auto lhs_val = values[partition_indices[lhs]];
@@ -1103,42 +1131,128 @@ WindowFunctionContext::WindowComparatorResult fp_comparator(
   return WindowFunctionContext::WindowComparatorResult::EQ;
 }
 
+template <class T, class NullPatternType>
+WindowFunctionContext::WindowComparatorResult fp_comparator_desc(
+    const int8_t* order_column_buffer,
+    const SQLTypeInfo& ti,
+    const int32_t* partition_indices,
+    const int64_t lhs,
+    const int64_t rhs,
+    const bool asc_ordering,
+    const bool nulls_first) {
+  const auto values = reinterpret_cast<const T*>(order_column_buffer);
+  const auto lhs_val = values[partition_indices[lhs]];
+  const auto rhs_val = values[partition_indices[rhs]];
+  const auto null_bit_pattern = null_val_bit_pattern(ti, ti.get_type() == kFLOAT);
+  const auto lhs_bit_pattern =
+      *reinterpret_cast<const NullPatternType*>(may_alias_ptr(&lhs_val));
+  const auto rhs_bit_pattern =
+      *reinterpret_cast<const NullPatternType*>(may_alias_ptr(&rhs_val));
+  if (lhs_bit_pattern == null_bit_pattern && rhs_bit_pattern == null_bit_pattern) {
+    return WindowFunctionContext::WindowComparatorResult::EQ;
+  }
+  if (lhs_bit_pattern == null_bit_pattern && rhs_bit_pattern != null_bit_pattern) {
+    return !nulls_first ? WindowFunctionContext::WindowComparatorResult::LT
+                        : WindowFunctionContext::WindowComparatorResult::GT;
+  }
+  if (rhs_bit_pattern == null_bit_pattern && lhs_bit_pattern != null_bit_pattern) {
+    return nulls_first ? WindowFunctionContext::WindowComparatorResult::LT
+                       : WindowFunctionContext::WindowComparatorResult::GT;
+  }
+  if (lhs_val < rhs_val) {
+    return WindowFunctionContext::WindowComparatorResult::LT;
+  }
+  if (lhs_val > rhs_val) {
+    return WindowFunctionContext::WindowComparatorResult::GT;
+  }
+  return WindowFunctionContext::WindowComparatorResult::EQ;
+}
+
 }  // namespace
 
 WindowFunctionContext::Comparator WindowFunctionContext::makeComparator(
     const Analyzer::ColumnVar* col_var,
     const int8_t* order_column_buffer,
     const int32_t* partition_indices,
+    const bool asc_ordering,
     const bool nulls_first) {
   const auto& ti = col_var->get_type_info();
   if (ti.is_integer() || ti.is_decimal() || ti.is_time() || ti.is_boolean()) {
     switch (ti.get_size()) {
       case 8: {
-        return [order_column_buffer, nulls_first, partition_indices, &ti](
+        return [order_column_buffer, nulls_first, partition_indices, asc_ordering, &ti](
                    const int64_t lhs, const int64_t rhs) {
-          return integer_comparator<int64_t>(
-              order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+          return asc_ordering ? integer_comparator_asc<int64_t>(order_column_buffer,
+                                                                ti,
+                                                                partition_indices,
+                                                                lhs,
+                                                                rhs,
+                                                                asc_ordering,
+                                                                nulls_first)
+                              : integer_comparator_desc<int64_t>(order_column_buffer,
+                                                                 ti,
+                                                                 partition_indices,
+                                                                 lhs,
+                                                                 rhs,
+                                                                 asc_ordering,
+                                                                 nulls_first);
         };
       }
       case 4: {
-        return [order_column_buffer, nulls_first, partition_indices, &ti](
+        return [order_column_buffer, nulls_first, partition_indices, asc_ordering, &ti](
                    const int64_t lhs, const int64_t rhs) {
-          return integer_comparator<int32_t>(
-              order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+          return asc_ordering ? integer_comparator_asc<int32_t>(order_column_buffer,
+                                                                ti,
+                                                                partition_indices,
+                                                                lhs,
+                                                                rhs,
+                                                                asc_ordering,
+                                                                nulls_first)
+                              : integer_comparator_desc<int32_t>(order_column_buffer,
+                                                                 ti,
+                                                                 partition_indices,
+                                                                 lhs,
+                                                                 rhs,
+                                                                 asc_ordering,
+                                                                 nulls_first);
         };
       }
       case 2: {
-        return [order_column_buffer, nulls_first, partition_indices, &ti](
+        return [order_column_buffer, nulls_first, partition_indices, asc_ordering, &ti](
                    const int64_t lhs, const int64_t rhs) {
-          return integer_comparator<int16_t>(
-              order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+          return asc_ordering ? integer_comparator_asc<int16_t>(order_column_buffer,
+                                                                ti,
+                                                                partition_indices,
+                                                                lhs,
+                                                                rhs,
+                                                                asc_ordering,
+                                                                nulls_first)
+                              : integer_comparator_desc<int16_t>(order_column_buffer,
+                                                                 ti,
+                                                                 partition_indices,
+                                                                 lhs,
+                                                                 rhs,
+                                                                 asc_ordering,
+                                                                 nulls_first);
         };
       }
       case 1: {
-        return [order_column_buffer, nulls_first, partition_indices, &ti](
+        return [order_column_buffer, nulls_first, partition_indices, asc_ordering, &ti](
                    const int64_t lhs, const int64_t rhs) {
-          return integer_comparator<int8_t>(
-              order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+          return asc_ordering ? integer_comparator_asc<int8_t>(order_column_buffer,
+                                                               ti,
+                                                               partition_indices,
+                                                               lhs,
+                                                               rhs,
+                                                               asc_ordering,
+                                                               nulls_first)
+                              : integer_comparator_desc<int8_t>(order_column_buffer,
+                                                                ti,
+                                                                partition_indices,
+                                                                lhs,
+                                                                rhs,
+                                                                asc_ordering,
+                                                                nulls_first);
         };
       }
       default: {
@@ -1149,17 +1263,41 @@ WindowFunctionContext::Comparator WindowFunctionContext::makeComparator(
   if (ti.is_fp()) {
     switch (ti.get_type()) {
       case kFLOAT: {
-        return [order_column_buffer, nulls_first, partition_indices, &ti](
+        return [order_column_buffer, nulls_first, partition_indices, asc_ordering, &ti](
                    const int64_t lhs, const int64_t rhs) {
-          return fp_comparator<float, int32_t>(
-              order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+          return asc_ordering ? fp_comparator_asc<float, int32_t>(order_column_buffer,
+                                                                  ti,
+                                                                  partition_indices,
+                                                                  lhs,
+                                                                  rhs,
+                                                                  asc_ordering,
+                                                                  nulls_first)
+                              : fp_comparator_desc<float, int32_t>(order_column_buffer,
+                                                                   ti,
+                                                                   partition_indices,
+                                                                   lhs,
+                                                                   rhs,
+                                                                   asc_ordering,
+                                                                   nulls_first);
         };
       }
       case kDOUBLE: {
-        return [order_column_buffer, nulls_first, partition_indices, &ti](
+        return [order_column_buffer, nulls_first, partition_indices, asc_ordering, &ti](
                    const int64_t lhs, const int64_t rhs) {
-          return fp_comparator<double, int64_t>(
-              order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+          return asc_ordering ? fp_comparator_asc<double, int64_t>(order_column_buffer,
+                                                                   ti,
+                                                                   partition_indices,
+                                                                   lhs,
+                                                                   rhs,
+                                                                   asc_ordering,
+                                                                   nulls_first)
+                              : fp_comparator_desc<double, int64_t>(order_column_buffer,
+                                                                    ti,
+                                                                    partition_indices,
+                                                                    lhs,
+                                                                    rhs,
+                                                                    asc_ordering,
+                                                                    nulls_first);
         };
       }
       default: {

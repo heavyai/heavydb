@@ -673,8 +673,8 @@ class Executor {
   llvm::Value* codegenWindowFunctionAggregateCalls(llvm::Value* aggregate_state,
                                                    const CompilationOptions& co);
 
-  // Generate code for computing window function on frame
-  llvm::Value* codegenWindowFunctionOnFrame(const CompilationOptions& co);
+  // Generate code for computing window navigation function on frame
+  llvm::Value* codegenWindowNavigationFunctionOnFrame(const CompilationOptions& co);
 
   // Generate code for computing current partition index from a given row_pos
   llvm::Value* codegenCurrentPartitionIndex(
@@ -690,6 +690,7 @@ class Executor {
   // Generate code for a given frame bound
   llvm::Value* codegenFrameBound(bool for_start_bound,
                                  bool for_range_mode,
+                                 bool for_window_frame_naviation,
                                  const Analyzer::WindowFrame* frame_bound,
                                  bool is_timestamp_type_frame,
                                  llvm::Value* order_key_null_val,
@@ -738,8 +739,7 @@ class Executor {
   llvm::Value* codegenLoadCurrentValueFromColBuf(
       WindowFunctionContext* window_func_context,
       CodeGenerator& code_generator,
-      llvm::Value* cur_row_pos_lv,
-      llvm::Value* order_key_buf_ptr_lv) const;
+      WindowFrameBoundFuncArgs& args) const;
   size_t getOrderKeySize(WindowFunctionContext* window_func_context) const;
   const SQLTypeInfo getFirstOrderColTypeInfo(
       WindowFunctionContext* window_func_context) const;
