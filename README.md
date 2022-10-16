@@ -143,15 +143,15 @@ The last command generates a `.tar.gz` package. The `TGZ` can be replaced with, 
 
 # Using
 
-The [`startomnisci`](startomnisci) wrapper script may be used to start HeavyDB in a testing environment. This script performs the following tasks:
+The [`startheavy`](startheavy) wrapper script may be used to start HeavyDB in a testing environment. This script performs the following tasks:
 
-- initializes the `data` storage directory via `initdb`, if required
-- starts the main HeavyDB server, `omnisci_server`
+- initializes the `data` storage directory via `initheavy`, if required
+- starts the main HeavyDB server, `heavydb`
 - offers to download and import a sample dataset, using the `insert_sample_data` script
 
-Assuming you are in the `build` directory, and it is a subdirectory of the `heavydb` repository, `startomnisci` may be run by:
+Assuming you are in the `build` directory, and it is a subdirectory of the `heavydb` repository, `startheavy` may be run by:
 
-    ../startomnisci
+    ../startheavy
 
 ## Starting Manually
 
@@ -159,19 +159,19 @@ It is assumed that the following commands are run from inside the `build` direct
 
 Initialize the `data` storage directory. This command only needs to be run once.
 
-    mkdir data && ./bin/initdb data
+    mkdir data && ./bin/initheavy data
 
 Start the HeavyDB server:
 
-    ./bin/omnisci_server
+    ./bin/heavydb --data data
 
 If desired, insert a sample dataset by running the `insert_sample_data` script in a new terminal:
 
-    ../insert_sample_data
+    ../insert_sample_data --data data
 
 You can now start using the database. The `omnisql` utility may be used to interact with the database from the command line:
 
-    ./bin/omnisql -p HyperInteractive
+    ./bin/heavysql -p HyperInteractive
 
 where `HyperInteractive` is the default password. The default user `admin` is assumed if not provided.
 
