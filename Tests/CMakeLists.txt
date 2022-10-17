@@ -21,7 +21,11 @@ if(ENABLE_CUDA)
 endif()
 
 find_package(fmt REQUIRED)
-set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+#set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+# If ENABLE_AWS_S3=off AwsS3_CURL_SUPPORT will be empty
+set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES}
+  ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${AwsS3_CURL_SUPPORT})
+
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
 
 #parse s3 credentials
@@ -122,14 +126,14 @@ list(APPEND SANITY_TEST_PROGRAMS CatalogMigrationTest)
 ##########
 
 add_executable(CodeGeneratorTest CodeGeneratorTest.cpp)
-target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS} ${LibAwsS3_LIBRARIES})
 add_test(CodeGeneratorTest CodeGeneratorTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS CodeGeneratorTest)
 
 ##########
 
 add_executable(ColumnarResultsTest ColumnarResultsTest.cpp ResultSetTestUtils.cpp)
-target_link_libraries(ColumnarResultsTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ColumnarResultsTest ${EXECUTE_TEST_LIBS} ${LibAwsS3_LIBRARIES})
 add_test(ColumnarResultsTest ColumnarResultsTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ColumnarResultsTest)
 
@@ -286,7 +290,7 @@ list(APPEND SANITY_TEST_PROGRAMS ForeignServerDdlTest)
 ##########
 
 add_executable(ForeignStorageCacheTest ForeignStorageCacheTest.cpp)
-target_link_libraries(ForeignStorageCacheTest gtest ${MAPD_LIBRARIES})
+target_link_libraries(ForeignStorageCacheTest gtest ${MAPD_LIBRARIES} ${AwsS3_CURL_SUPPORT})
 add_test(ForeignStorageCacheTest ForeignStorageCacheTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ForeignStorageCacheTest)
 
@@ -300,7 +304,7 @@ list(APPEND SANITY_TEST_PROGRAMS ForeignTableDmlTest)
 ##########
 
 add_executable(FromTableReorderingTest FromTableReorderingTest.cpp)
-target_link_libraries(FromTableReorderingTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(FromTableReorderingTest ${EXECUTE_TEST_LIBS} ${LibAwsS3_LIBRARIES})
 add_test(FromTableReorderingTest FromTableReorderingTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS FromTableReorderingTest)
 
@@ -315,7 +319,7 @@ list(APPEND SANITY_TEST_PROGRAMS GeospatialTest)
 
 if(NOT MSVC)
   add_executable(GeoTypesTest Geospatial/GeoTypesTest.cpp)
-  target_link_libraries(GeoTypesTest gtest Logger Shared Geospatial ${CMAKE_DL_LIBS})
+  target_link_libraries(GeoTypesTest gtest Logger Shared Geospatial ${CMAKE_DL_LIBS} ${LibAwsS3_LIBRARIES})
   add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS GeoTypesTest)
 endif()
@@ -429,7 +433,7 @@ list(APPEND SANITY_TEST_PROGRAMS ParallelExecutorsTest)
 ##########
 
 add_executable(PersistentStorageTest PersistentStorageTest.cpp)
-target_link_libraries(PersistentStorageTest gtest ${MAPD_LIBRARIES})
+target_link_libraries(PersistentStorageTest gtest ${MAPD_LIBRARIES} ${CURL_LIBRARY})
 add_test(PersistentStorageTest PersistentStorageTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS PersistentStorageTest)
 
@@ -452,7 +456,8 @@ list(APPEND SANITY_TEST_PROGRAMS ReadOnlyTest)
 ##########
 
 add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp ResultSetTestUtils.cpp)
-target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS} ${LibAwsS3_LIBRARIES})
+#target_link_libraries(ResultSetBaselineRadixSortTest gtest ${MAPD_LIBRARIES} ${AwsS3_CURL_SUPPORT})
 add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ResultSetBaselineRadixSortTest)
 
@@ -522,9 +527,16 @@ list(APPEND SANITY_TEST_PROGRAMS StorageTest)
 
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 if(ENABLE_FOLLY)
-  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${CMAKE_DL_LIBS} ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary
+    StringOps Logger Utils
+    $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
+    ${CMAKE_DL_LIBS} ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES}
+    ${AwsS3_CURL_SUPPORT})
 else()
-  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary
+    StringOps Logger Utils
+    $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
+    ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${AwsS3_CURL_SUPPORT})
 endif()
 add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS StringDictionaryTest)
@@ -557,7 +569,7 @@ list(APPEND SANITY_TEST_PROGRAMS TableFunctionsTest)
 ##########
 
 add_executable(ThreadingTest Shared/ThreadingTest.cpp)
-target_link_libraries(ThreadingTest gtest Logger Shared ${LLVM_LINKER_FLAGS} ${TBB_LIBRARIES} ${CMAKE_DL_LIBS})
+target_link_libraries(ThreadingTest dl gtest Logger Shared ${LLVM_LINKER_FLAGS} ${TBB_LIBRARIES})
 add_test(ThreadingTest ThreadingTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ThreadingTest)
 
@@ -618,7 +630,8 @@ endif()
 ##########
 
 add_executable(SessionsStoreTest SessionsStoreTest.cpp)
-target_link_libraries(SessionsStoreTest gtest Catalog ${Boost_LIBRARIES} ${MAPD_LIBRARIES} ${CUDA_LIBRARIES})
+target_link_libraries(SessionsStoreTest gtest Catalog ${Boost_LIBRARIES}
+  ${MAPD_LIBRARIES} ${CUDA_LIBRARIES} ${AwsS3_CURL_SUPPORT})
 add_test(SessionsStoreTest SessionsStoreTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS SessionsStoreTest)
 

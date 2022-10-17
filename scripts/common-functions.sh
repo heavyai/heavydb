@@ -127,7 +127,8 @@ function install_snappy() {
   popd
 }
 
-AWSCPP_VERSION=1.7.301
+#AWSCPP_VERSION=1.7.301
+AWSCPP_VERSION=1.9.335
 
 function install_awscpp() {
     # default c++ standard support
@@ -141,6 +142,7 @@ function install_awscpp() {
     download https://github.com/aws/aws-sdk-cpp/archive/${AWSCPP_VERSION}.tar.gz
     tar xvfz ${AWSCPP_VERSION}.tar.gz
     pushd aws-sdk-cpp-${AWSCPP_VERSION}
+    ./prefetch_crt_dependency.sh
     mkdir build
     cd build
     cmake \

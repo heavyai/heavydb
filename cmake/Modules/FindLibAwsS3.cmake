@@ -33,7 +33,7 @@
 #      target_link_libraries(<YourTarget> ${LibAwsS3_LIBRARIES})
 #    endif()
 
-# kept here just in case mind is changed to use brew 'aws-sdk-cpp' pkg instead of self-build
+# Kept here just in case mind is changed to use brew 'aws-sdk-cpp' pkg instead of self-build
 execute_process(COMMAND brew --prefix aws-sdk-cpp OUTPUT_VARIABLE PREFIX_LIBAWSS3)
 string(STRIP "${PREFIX_LIBAWSS3}" PREFIX_LIBAWSS3)
 
@@ -129,22 +129,132 @@ find_library(LibAwsCI_LIBRARY
   /usr/local/lib
   /usr/local/homebrew/lib
   /opt/local/lib)
+#
+# Moving to the new aws-sdk-cpp, the supplied cmake files
+# added an -fPIC to the global compiler options, causing
+# an issue with our inline macros.
+# Keeping our original .cmake files and finding specific files
+# get around this. However for the  newer version extra aws
+# libraries are required
+#
+get_filename_component(Aws_LIBRARY_DIR ${LibAwsCI_LIBRARY} DIRECTORY)
+include(${Aws_LIBRARY_DIR}/cmake/AWSSDK/AWSSDKConfigVersion.cmake)
+message(STATUS "AWSSDK version ${PACKAGE_VERSION}")
+#
+# Extra  libraries needed for linking version 1.9.335
+#
 
-find_library(LibCurl_LIBRARY
-  NAMES curl
-  HINTS ENV LD_LIBRARY_PATH
-  HINTS ENV DYLD_LIBRARY_PATH
-  PATHS
-  /usr/lib
-  /usr/local/lib
-  /usr/local/homebrew/lib
-  /opt/local/lib)
+if("${PACKAGE_VERSION}" VERSION_EQUAL "1.9.335")
+  find_library(libAwsCrt_LIBRARY
+    NAMES aws-crt-cpp
+    HINTS ENV LD_LIBRARY_PATH
+    HINTS ENV DYLD_LIBRARY_PATH
+    HINTS ${PREFIX_LIBAWSS3}/lib
+    PATHS
+    /usr/lib
+    /usr/local/lib
+    /usr/local/homebrew/lib
+    /opt/local/lib)
 
-find_package(OpenSSL REQUIRED)
+  find_library(libAwsCIo_LIBRARY
+    NAMES aws-c-io
+    HINTS ENV LD_LIBRARY_PATH
+    HINTS ENV DYLD_LIBRARY_PATH
+    HINTS ${PREFIX_LIBAWSS3}/lib
+    PATHS
+    /usr/lib
+    /usr/local/lib
+    /usr/local/homebrew/lib
+    /opt/local/lib)
 
-#message("libAwsCore_LIBRARY = ${libAwsCore_LIBRARY}")
-#message("LibAwsS3_LIBRARY = ${LibAwsS3_LIBRARY}")
-#message("LibCurl_LIBRARY = ${LibCurl_LIBRARY}")
+  find_library(libAwsCAuth_LIBRARY
+    NAMES aws-c-auth
+    HINTS ENV LD_LIBRARY_PATH
+    HINTS ENV DYLD_LIBRARY_PATH
+    HINTS ${PREFIX_LIBAWSS3}/lib
+    PATHS
+    /usr/lib
+    /usr/local/lib
+    /usr/local/homebrew/lib
+    /opt/local/lib)
+
+  find_library(libAwsCHttp
+    NAMES aws-c-http
+    HINTS ENV LD_LIBRARY_PATH
+    HINTS ENV DYLD_LIBRARY_PATH
+    HINTS ${PREFIX_LIBAWSS3}/lib
+    PATHS
+    /usr/lib
+    /usr/local/lib
+    /usr/local/homebrew/lib
+    /opt/local/lib)
+
+  find_library(libAwsCSdkUtils
+    NAMES aws-c-sdkutils
+    HINTS ENV LD_LIBRARY_PATH
+    HINTS ENV DYLD_LIBRARY_PATH
+    HINTS ${PREFIX_LIBAWSS3}/lib
+    PATHS
+    /usr/lib
+    /usr/local/lib
+    /usr/local/homebrew/lib
+    /opt/local/lib)
+
+  find_library(libAwsCCal
+    NAMES aws-c-cal
+    HINTS ENV LD_LIBRARY_PATH
+    HINTS ENV DYLD_LIBRARY_PATH
+    HINTS ${PREFIX_LIBAWSS3}/lib
+    PATHS
+    /usr/lib
+    /usr/local/lib
+    /usr/local/homebrew/lib
+    /opt/local/lib)
+
+  find_library(LibS2N_LIBRARY
+    NAMES s2n
+    HINTS ENV LD_LIBRARY_PATH
+    HINTS ENV DYLD_LIBRARY_PATH
+    HINTS ${PREFIX_LIBAWSS3}/lib
+    PATHS
+    /usr/lib
+    /usr/local/lib
+    /usr/local/homebrew/lib
+    /opt/local/lib)
+
+  find_library(libAwsCompression
+    NAMES aws-c-compression
+    HINTS ENV LD_LIBRARY_PATH
+    HINTS ENV DYLD_LIBRARY_PATH
+    HINTS ${PREFIX_LIBAWSS3}/lib
+    PATHS
+    /usr/lib
+    /usr/local/lib
+    /usr/local/homebrew/lib
+    /opt/local/lib)
+
+  find_library(libAwsCMqtt
+    NAMES aws-c-mqtt
+    HINTS ENV LD_LIBRARY_PATH
+    HINTS ENV DYLD_LIBRARY_PATH
+    HINTS ${PREFIX_LIBAWSS3}/lib
+    PATHS
+    /usr/lib
+    /usr/local/lib
+    /usr/local/homebrew/lib
+    /opt/local/lib)
+
+  find_library(libAwsCS3
+    NAMES aws-c-s3
+    HINTS ENV LD_LIBRARY_PATH
+    HINTS ENV DYLD_LIBRARY_PATH
+    HINTS ${PREFIX_LIBAWSS3}/lib
+    PATHS
+    /usr/lib
+    /usr/local/lib
+    /usr/local/homebrew/lib
+    /opt/local/lib)
+endif()
 
 get_filename_component(LibAwsS3_LIBRARY_DIR ${LibAwsS3_LIBRARY} DIRECTORY)
 find_path(LibAwsS3_INCLUDE_DIR
@@ -159,12 +269,9 @@ find_path(LibAwsS3_INCLUDE_DIR
   /usr/local/opt/libarchive/include
   /opt/local/include
   )
-#message("LibAwsS3_LIBRARY_DIR= ${LibAwsS3_LIBRARY_DIR}")
-#message("LibAwsS3_INCLUDE_DIR= ${LibAwsS3_INCLUDE_DIR}")
-
 # Set standard CMake FindPackage variables if found.
-set(LibAwsS3_SUPPORT_LIBRARIES ${LibCurl_LIBRARY} ${OPENSSL_LIBRARIES})
-set(LibAwsS3_LIBRARIES ${LibAwsS3_LIBRARIES} ${LibAwsS3_LIBRARY} ${LibAwsIM_LIBRARY} ${LibAwsCI_LIBRARY} ${libAwsCore_LIBRARY} ${libAwsCEventStream_LIBRARY} ${libAwsCCommon_LIBRARY} ${libAwsChecksums_LIBRARY} ${LibAwsSTS_LIBRARY} ${LibAwsS3_SUPPORT_LIBRARIES})
+
+set(LibAwsS3_LIBRARIES ${LibAwsS3_LIBRARIES} ${LibAwsS3_LIBRARY} ${LibAwsIM_LIBRARY} ${LibAwsCI_LIBRARY} ${libAwsCore_LIBRARY} ${libAwsCEventStream_LIBRARY} ${libAwsCCommon_LIBRARY} ${libAwsChecksums_LIBRARY} ${LibAwsSTS_LIBRARY} ${libAwsCrt_LIBRARY} ${libAwsCAuth_LIBRARY} ${libAwsCIo_LIBRARY} ${LibS2N_LIBRARY} ${libAwsCSdkUtils} ${libAwsCCal} ${libAwsCHttp} ${libAwsCMqtt} ${libAwsCS3} ${libAwsCompression})
 set(LibAwsS3_INCLUDE_DIRS ${LibAwsS3_INCLUDE_DIR})
 set(LibAwsS3_LIBRARY_DIRS ${LibAwsS3_LIBRARY_DIR})
 
@@ -176,6 +283,7 @@ include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(LibAwsS3 REQUIRED_VARS
   LibAwsS3_INCLUDE_DIR
   LibAwsS3_LIBRARY
+  LibAwsS3_LIBRARIES
   LibAwsSTS_LIBRARY
   LibAwsIM_LIBRARY
   LibAwsCI_LIBRARY
@@ -183,6 +291,4 @@ find_package_handle_standard_args(LibAwsS3 REQUIRED_VARS
   libAwsCCommon_LIBRARY
   libAwsCEventStream_LIBRARY
   libAwsChecksums_LIBRARY
-  OPENSSL_LIBRARIES
-  LibCurl_LIBRARY
   )
