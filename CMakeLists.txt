@@ -710,16 +710,21 @@ endif()
 add_subdirectory(ThirdParty/googlebenchmark)
 
 # aws-sdk
+find_package(CURL REQUIRED QUIET)
+list(APPEND CURL_LIBRARIES ${OPENSSL_LIBRARIES})
 option(ENABLE_AWS_S3 "Enable AWS S3 support" ON)
 if(ENABLE_AWS_S3)
   find_package(LibAwsS3)
   if(NOT LibAwsS3_FOUND)
+    # Note for a build with static arrow libs (centos)
+    # aws-sdk-cpp must be included.
     set(ENABLE_AWS_S3 OFF CACHE BOOL "Enable AWS S3 support" FORCE)
   else()
     add_definitions("-DHAVE_AWS_S3")
+    set(AwsS3_CURL_SUPPORT ${CURL_LIBRARIES})
+    list (APPEND LibAwsS3_LIBRARIES ${AwsS3_CURL_SUPPORT})
   endif()
 endif()
-
 # Arrow
 find_package(Arrow REQUIRED)
 add_definitions("-DARROW_NO_DEPRECATED_API")
