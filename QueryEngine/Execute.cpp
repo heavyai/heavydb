@@ -2190,8 +2190,9 @@ void Executor::addTransientStringLiterals(
     if (!target_type.is_string() || target_type.get_compression() == kENCODING_DICT) {
       const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
       if (agg_expr) {
-        if (agg_expr->get_aggtype() == kSINGLE_VALUE ||
-            agg_expr->get_aggtype() == kSAMPLE) {
+        // The following agg types require taking into account transient string values
+        if (agg_expr->get_is_distinct() || agg_expr->get_aggtype() == kSINGLE_VALUE ||
+            agg_expr->get_aggtype() == kSAMPLE || agg_expr->get_aggtype() == kMODE) {
           visit_expr(agg_expr->get_arg());
         }
       } else {
