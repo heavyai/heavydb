@@ -42,15 +42,15 @@
 
 #include "tbb/concurrent_hash_map.h"
 
-#include "Grantee.h"
-#include "ObjectRoleDescriptor.h"
-#include "PkiServer.h"
 
 #include "Calcite/Calcite.h"
+#include "Grantee.h"
 #include "DataMgr/DataMgr.h"
 #include "LeafHostInfo.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "OSDependent/heavyai_locks.h"
+#include "ObjectRoleDescriptor.h"
+#include "PkiServer.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/heavyai_shared_mutex.h"
 #include "SqliteConnector/SqliteConnector.h"
