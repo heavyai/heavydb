@@ -4591,6 +4591,18 @@ TEST_F(Select, CaseSubQuery) {
   }
 }
 
+TEST_F(Select, CaseCountDistinct) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(DISTINCT(CASE WHEN str = 'foo' THEN 'boo' ELSE str END)) FROM test;",
+      dt);
+    EXPECT_EQ(int64_t(3),
+              v<int64_t>(run_simple_agg("SELECT APPROX_COUNT_DISTINCT(CASE WHEN str = "
+                                        "'foo' THEN 'boo' ELSE str END) FROM test;",
+                                        dt)));
+  }
+}
+
 TEST_F(Select, Strings) {
   const auto watchdog_state = g_enable_watchdog;
   const auto watchdog_none_encoded_translation_limit_state =
