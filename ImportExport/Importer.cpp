@@ -5053,15 +5053,24 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsGeo(
     cd.columnType = ti;
     cds.push_back(cd);
   }
-  // get geo column, if any
-  OGRGeometry* poGeometry = poFeature->GetGeometryRef();
-  if (poGeometry) {
+  // try getting the geo column type from the layer
+  auto ogr_type = wkbFlatten(layer.GetGeomType());
+  if (ogr_type == wkbUnknown) {
+    // layer geo type unknown, so try reading from the first feature
+    Geospatial::GDAL::FeatureUqPtr first_feature(layer.GetNextFeature());
+    CHECK(first_feature);
+    auto const* ogr_geometry = first_feature->GetGeometryRef();
+    if (ogr_geometry) {
+      ogr_type = wkbFlatten(ogr_geometry->getGeometryType());
+    } else {
+      ogr_type = wkbNone;
+    }
+  }
+  // do we have a geo column?
+  if (ogr_type != wkbNone) {
     ColumnDescriptor cd;
     cd.columnName = geo_column_name;
     cd.sourceName = geo_column_name;
-
-    // get GDAL type
-    auto ogr_type = wkbFlatten(poGeometry->getGeometryType());
 
     // if exploding, override any collection type to child type
     if (copy_params.geo_explode_collections) {
@@ -5075,6 +5084,7 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsGeo(
     }
 
     // convert to internal type
+    // this will throw if the type is unsupported
     SQLTypes geoType = ogr_to_type(ogr_type);
 
     // for now, we promote POLYGON to MULTIPOLYGON (unless exploding)
@@ -5272,32 +5282,37 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
     poLayer->ResetReading();
     // skip layer if empty
     if (poLayer->GetFeatureCount() > 0) {
-      // get first feature
-      Geospatial::GDAL::FeatureUqPtr first_feature(poLayer->GetNextFeature());
-      CHECK(first_feature);
-      // check feature for geometry
-      const OGRGeometry* geometry = first_feature->GetGeometryRef();
-      if (!geometry) {
-        // layer has no geometry
-        contents = GeoFileLayerContents::NON_GEO;
-      } else {
-        // check the geometry type
-        const OGRwkbGeometryType geometry_type = geometry->getGeometryType();
-        switch (wkbFlatten(geometry_type)) {
-          case wkbPoint:
-          case wkbMultiPoint:
-          case wkbLineString:
-          case wkbMultiLineString:
-          case wkbPolygon:
-          case wkbMultiPolygon:
-            // layer has supported geo
-            contents = GeoFileLayerContents::GEO;
-            break;
-          default:
-            // layer has unsupported geometry
-            contents = GeoFileLayerContents::UNSUPPORTED_GEO;
-            break;
+      // first read layer geo type
+      auto ogr_type = wkbFlatten(poLayer->GetGeomType());
+      if (ogr_type == wkbUnknown) {
+        // layer geo type unknown, so try reading from the first feature
+        Geospatial::GDAL::FeatureUqPtr first_feature(poLayer->GetNextFeature());
+        CHECK(first_feature);
+        auto const* ogr_geometry = first_feature->GetGeometryRef();
+        if (ogr_geometry) {
+          ogr_type = wkbFlatten(ogr_geometry->getGeometryType());
+        } else {
+          ogr_type = wkbNone;
         }
+      }
+      switch (ogr_type) {
+        case wkbNone:
+          // no geo
+          contents = GeoFileLayerContents::NON_GEO;
+          break;
+        case wkbPoint:
+        case wkbMultiPoint:
+        case wkbLineString:
+        case wkbMultiLineString:
+        case wkbPolygon:
+        case wkbMultiPolygon:
+          // layer has supported geo
+          contents = GeoFileLayerContents::GEO;
+          break;
+        default:
+          // layer has unsupported geometry
+          contents = GeoFileLayerContents::UNSUPPORTED_GEO;
+          break;
       }
     }
     // store info for this layer
