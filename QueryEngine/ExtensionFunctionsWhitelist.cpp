@@ -584,11 +584,17 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
 }
 
 bool ExtensionFunction::usesManager() const {
-  auto func_annotations = annotations_.back();
-  auto mgr_annotation = func_annotations.find("uses_manager");
-  bool uses_manager = mgr_annotation != func_annotations.end() &&
-                      boost::algorithm::to_lower_copy(mgr_annotation->second) == "true";
-  return uses_manager;
+  // if-else exists to keep compatibility with older versions of RBC
+  if (annotations_.empty()) {
+    return false;
+  } else {
+    auto func_annotations = annotations_.back();
+    auto mgr_annotation = func_annotations.find("uses_manager");
+    if (mgr_annotation != func_annotations.end()) {
+      return boost::algorithm::to_lower_copy(mgr_annotation->second) == "true";
+    }
+    return false;
+  }
 }
 
 const std::string ExtensionFunction::getName(bool keep_suffix) const {
