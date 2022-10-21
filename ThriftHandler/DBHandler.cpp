@@ -7086,6 +7086,9 @@ void DBHandler::start_render_query(TPendingRenderQuery& _return,
 void DBHandler::execute_next_render_step(TRenderStepResult& _return,
                                          const TPendingRenderQuery& pending_render,
                                          const TRenderAggDataMap& merged_data) {
+  // No SessionID is available
+  SET_REQUEST_ID(0);
+
   if (!render_handler_) {
     THROW_DB_EXCEPTION("Backend rendering is disabled.");
   }
