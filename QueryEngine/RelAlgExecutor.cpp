@@ -1915,7 +1915,8 @@ std::vector<Analyzer::Expr*> translate_targets(
         const auto groupby_expr = *std::next(groupby_exprs.begin(), ref_idx - 1);
         target_expr = var_ref(groupby_expr.get(), Analyzer::Var::kGROUPBY, ref_idx);
       } else {
-        target_expr = translator.translate(target_rex_scalar);
+        target_expr =
+            rewrite_array_elements(translator.translate(target_rex_scalar).get());
         auto rewritten_expr = rewrite_expr(target_expr.get());
         target_expr = fold_expr(rewritten_expr.get());
         if (executor_type == ExecutorType::Native) {
