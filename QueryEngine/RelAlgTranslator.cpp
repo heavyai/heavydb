@@ -1599,8 +1599,16 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
           std::find_if(translated_function_args.begin(),
                        translated_function_args.end(),
                        [first_element_logical_type](const auto expr) {
-                         return first_element_logical_type !=
-                                get_nullable_logical_type_info(expr->get_type_info());
+                         const auto element_logical_type =
+                             get_nullable_logical_type_info(expr->get_type_info());
+                         if (first_element_logical_type != element_logical_type) {
+                           if (first_element_logical_type.is_none_encoded_string() &&
+                               element_logical_type.is_none_encoded_string()) {
+                             return false;
+                           }
+                           return true;
+                         }
+                         return false;
                        });
       if (diff_elem_itr != translated_function_args.end()) {
         throw std::runtime_error(
@@ -1613,13 +1621,19 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
             "\nArray type: " + first_element_logical_type.to_string());
       }
 
-      if (first_element_logical_type.is_string() &&
-          !first_element_logical_type.is_dict_encoded_string()) {
-        sql_type.set_subtype(first_element_logical_type.get_type());
-        sql_type.set_compression(kENCODING_FIXED);
+      if (first_element_logical_type.is_string()) {
+        sql_type.set_subtype(kTEXT);
+        sql_type.set_compression(kENCODING_DICT);
+        if (first_element_logical_type.is_none_encoded_string()) {
+          sql_type.set_comp_param(TRANSIENT_DICT_ID);
+        } else {
+          CHECK(first_element_logical_type.is_dict_encoded_string());
+          sql_type.set_comp_param(first_element_logical_type.get_comp_param());
+        }
       } else if (first_element_logical_type.is_dict_encoded_string()) {
-        sql_type.set_subtype(first_element_logical_type.get_type());
-        sql_type.set_comp_param(TRANSIENT_DICT_ID);
+        sql_type.set_subtype(kTEXT);
+        sql_type.set_compression(kENCODING_DICT);
+        sql_type.set_comp_param(first_element_logical_type.get_comp_param());
       } else {
         sql_type.set_subtype(first_element_logical_type.get_type());
         sql_type.set_scale(first_element_logical_type.get_scale());
