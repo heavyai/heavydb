@@ -2379,6 +2379,28 @@ TEST_F(Select, Arrays) {
                        "array_test a WHERE x = 8 limit 31337;",
                        dt),
         std::vector<int64_t>({40, 60, 80})));
+    // Test literal string array projection
+    SKIP_ON_AGGREGATOR(compare_array(
+        run_simple_agg(
+            "SELECT ARRAY['hi','hello','hi'] from array_test WHERE x = 8 limit 8675309;",
+            dt),
+        std::vector<std::string>({"hi", "hello", "hi"})));
+    // Test string column array projection
+    SKIP_ON_AGGREGATOR(compare_array(
+        run_simple_agg("SELECT ARRAY[str, str] FROM test WHERE rowid = 1;", dt),
+        std::vector<std::string>({"foo", "foo"})));
+    // Currently projecting strings from different dictionary-encoded columns throws with
+    // an error
+    EXPECT_ANY_THROW(
+        run_simple_agg("SELECT ARRAY[str, null_str] FROM test WHERE rowid = 1;", dt));
+    // Currently projecting strings from none-encoded columns throws with an error
+    // (without use of ENCODE_TEXT)
+    EXPECT_ANY_THROW(
+        run_simple_agg("SELECT ARRAY[real_str] FROM test WHERE rowid = 1;", dt));
+    SKIP_ON_AGGREGATOR(compare_array(
+        run_simple_agg("SELECT ARRAY[ENCODE_TEXT(real_str)] FROM test WHERE rowid = 1;",
+                       dt),
+        std::vector<std::string>({"real_foo"})));
 
     // Simple non-lazy projection
     compare_array(
