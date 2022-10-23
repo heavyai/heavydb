@@ -8666,6 +8666,20 @@ TEST_F(Select, LogicalValues) {
     c("SELECT * FROM (VALUES(1, NULL, 3));", dt);
     c("SELECT * FROM (VALUES(1, 2), (3, NULL));", dt);
     c("SELECT * FROM (SELECT * FROM (VALUES (1,2) , (3,4)) t1) t0 LIMIT 5;", dt);
+    c("SELECT * FROM (VALUES(1, 'test'));", dt);
+    c("SELECT x, COUNT(*) AS n FROM (VALUES('foo', 'bar'), ('bar', 'foo'), ('foo', "
+      "'baz')) AS t(x, y) GROUP BY x ORDER BY x;",
+      "SELECT column1, COUNT(*) AS n "
+      "FROM (VALUES('foo', 'bar'), ('bar', 'foo'), ('foo', 'baz')) GROUP BY column1 "
+      "ORDER BY column1;",
+      dt);
+    c("SELECT COALESCE(x, 'null') AS x1, COUNT(*) AS n FROM (VALUES('foo', 'bar'), "
+      "(NULL, 'foo'), ('foo', "
+      "'baz')) AS t(x, y) GROUP BY x1 ORDER BY x1;",
+      "SELECT COALESCE(column1, 'null') AS column1, COUNT(*) AS n "
+      "FROM (VALUES('foo', 'bar'), (NULL, 'foo'), ('foo', 'baz')) GROUP BY column1 "
+      "ORDER BY column1;",
+      dt);
 
     {
       auto rows = run_multiple_agg("SELECT * FROM (VALUES(1, 2, 3)) as t(x, y, z);", dt);
@@ -8737,8 +8751,6 @@ TEST_F(Select, LogicalValues) {
       ASSERT_NEAR(3.5, v<double>(row[1]), double(0.01));
       EXPECT_EQ(3, v<int64_t>(row[2]));
     }
-    EXPECT_ANY_THROW(run_simple_agg("SELECT * FROM (VALUES(1, 'test'));", dt));
-
     EXPECT_ANY_THROW(run_simple_agg("SELECT (1,2);", dt));
 
     SKIP_ON_AGGREGATOR({
