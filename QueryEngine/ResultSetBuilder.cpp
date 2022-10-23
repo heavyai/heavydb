@@ -121,18 +121,32 @@ ResultSet* ResultSetLogicalValuesBuilder::build() {
           const auto datum = constant->get_constval();
 
           if (ti.is_string()) {
-            // get string from datum and push to vector
-            separate_varlen_storage.push_back(*(datum.stringval));
-
-            // store the index/offset in ResultSet's storage
-            //   (the # of the string in the varlen_storage, not strLen)
-            *reinterpret_cast<int64_t*>(ptr) =
-                static_cast<int64_t>(separate_varlen_storage.size() - 1);
-
+            CHECK(ti.is_none_encoded_string());
+            if (targets[j].sql_type.is_dict_encoded_string()) {
+              // Translate none-encoded string literal to entry in transient string
+              // dictionary. All proper DML queries go down this path
+              CHECK_EQ(targets[j].sql_type.get_comp_param(), TRANSIENT_DICT_ID);
+              CHECK_EQ(targets[j].sql_type.get_size(), 4);
+              const auto sdp = executor->getStringDictionaryProxy(
+                  TRANSIENT_DICT_ID, executor->getRowSetMemoryOwner(), true);
+              const auto string_id = sdp->getOrAddTransient(*datum.stringval);
+              // Initialize the entire 8-byte slot
+              std::memset(ptr, 0, 8);
+              std::memcpy(ptr, &string_id, 4);
+            } else {
+              // Project none-encoded string - used for various psuedo-query
+              // outputs like SHOW TABLE, SHOW TABLE DETAILS, etc
+              CHECK(targets[j].sql_type.is_none_encoded_string());
+              // get string from datum and push to vector
+              separate_varlen_storage.push_back(*(datum.stringval));
+              // store the index/offset in ResultSet's storage
+              //   (the # of the string in the varlen_storage, not strLen)
+              *reinterpret_cast<int64_t*>(ptr) =
+                  static_cast<int64_t>(separate_varlen_storage.size() - 1);
+            }
           } else {
             // Initialize the entire 8-byte slot
             std::memset(ptr, 0, 8);
-
             const auto sz = ti.get_size();
             CHECK_GE(sz, int(0));
             std::memcpy(ptr, &datum, sz);

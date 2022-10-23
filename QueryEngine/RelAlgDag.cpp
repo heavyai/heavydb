@@ -3048,8 +3048,13 @@ class RelAlgDispatcher {
     for (auto tuple_type_arr_it = tuple_type_arr.Begin();
          tuple_type_arr_it != tuple_type_arr.End();
          ++tuple_type_arr_it) {
-      const auto component_type = parse_type(*tuple_type_arr_it);
+      auto component_type = parse_type(*tuple_type_arr_it);
       const auto component_name = json_str(field(*tuple_type_arr_it, "name"));
+      if (component_type.is_none_encoded_string()) {
+        component_type.set_compression(kENCODING_DICT);
+        component_type.set_comp_param(TRANSIENT_DICT_ID);
+        component_type.set_size(4);
+      }
       tuple_type.emplace_back(component_name, component_type);
     }
     const auto& inputs_arr = field(logical_values_ra, "inputs");
