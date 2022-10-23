@@ -985,7 +985,9 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
           : cgen_state_->castToTypeIn(cgen_state_->inlineIntNull(window_func_ti), 64);
   if (window_func_context->elementCount() == 0) {
     // we do not need to generate a code for an empty input table
-    return window_func_null_val;
+    return window_func->getKind() == SqlWindowFunctionKind::AVG
+               ? cgen_state_->inlineFpNull(SQLTypeInfo(SQLTypes::kDOUBLE))
+               : window_func_null_val;
   }
   const auto& args = window_func->getArgs();
   CodeGenerator code_generator(this);
