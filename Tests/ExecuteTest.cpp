@@ -23095,6 +23095,19 @@ TEST_F(Select, WindowFunctionAggregate) {
   c("SELECT dt32, MIN(dt32) OVER (PARTITION BY dt32) res FROM test_frame_nav GROUP BY "
     "dt32 ORDER BY dt32 ASC NULLS LAST, res ASC NULLS LAST",
     dt);
+
+  run_ddl_statement("DROP TABLE IF EXISTS empty_tbl;");
+  run_ddl_statement(
+      "CREATE TABLE empty_tbl (i8 TINYINT, i16 SMALLINT, i32 INTEGER, i64 BIGINT, f "
+      "FLOAT, d DOUBLE);");
+  for (std::string col : {"i8", "i16", "i32", "i64", "f", "d"}) {
+    for (std::string op : {"AVG", "MIN", "SUM"}) {
+      auto res = run_multiple_agg(
+          "SELECT " + op + "(" + col + ") OVER (PARTITION BY i8) FROM empty_tbl;", dt);
+      EXPECT_EQ(res->rowCount(), (size_t)0);
+    }
+  }
+  run_ddl_statement("DROP TABLE IF EXISTS empty_tbl;");
 }
 
 TEST_F(Select, WindowFunctionAggregateNoOrder) {
