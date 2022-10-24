@@ -21,6 +21,14 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/SessionInfo.h"
 
+struct TableArchiverS3Options {
+  std::string s3_access_key;
+  std::string s3_secret_key;
+  std::string s3_session_token;
+  std::string s3_region;
+  std::string s3_endpoint;
+};
+
 class TableArchiver {
  public:
   TableArchiver(Catalog_Namespace::Catalog* cat) : cat_(cat){};
@@ -30,15 +38,16 @@ class TableArchiver {
                  const std::string& compression);
 
   void restoreTable(const Catalog_Namespace::SessionInfo& session,
+                    const std::string& table_name,
+                    const std::string& archive_path,
+                    const std::string& compression,
+                    const TableArchiverS3Options& s3_options);
+
+ private:
+  void restoreTable(const Catalog_Namespace::SessionInfo& session,
                     const TableDescriptor* td,
                     const std::string& archive_path,
                     const std::string& compression);
 
-  void restoreTable(const Catalog_Namespace::SessionInfo& session,
-                    const std::string& table_name,
-                    const std::string& archive_path,
-                    const std::string& compression);
-
- private:
   Catalog_Namespace::Catalog* cat_;
 };

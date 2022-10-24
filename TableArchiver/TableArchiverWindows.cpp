@@ -33,6 +33,7 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
 void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
                                  const std::string& table_name,
                                  const std::string& archive_path,
-                                 const std::string& compression) {
+                                 const std::string& compression,
+                                 const TableArchiverS3Options& s3_options) {
   throw std::runtime_error("Dump/restore table not yet supported on Windows.");
 }

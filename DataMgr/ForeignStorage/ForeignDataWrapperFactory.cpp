@@ -30,6 +30,7 @@
 #include "Catalog/os/UserMapping.h"
 #include "RegexParserDataWrapper.h"
 #include "Shared/SysDefinitions.h"
+#include "Shared/file_path_util.h"
 #include "Shared/misc.h"
 #include "Shared/thread_count.h"
 
@@ -52,11 +53,6 @@ std::string get_data_wrapper_type(const import_export::CopyParams& copy_params) 
 }  // namespace
 
 namespace foreign_storage {
-bool is_s3_uri(const std::string& file_path) {
-  const std::string s3_prefix = "s3://";
-  return file_path.find(s3_prefix) != std::string::npos;
-}
-
 std::tuple<std::unique_ptr<foreign_storage::ForeignServer>,
            std::unique_ptr<foreign_storage::UserMapping>,
            std::unique_ptr<foreign_storage::ForeignTable>>
@@ -209,7 +205,7 @@ std::unique_ptr<ForeignServer> ForeignDataWrapperFactory::createForeignServerPro
 
   if (copy_params.source_type == import_export::SourceType::kOdbc) {
     throw std::runtime_error("ODBC storage not supported");
-  } else if (is_s3_uri(file_path)) {
+  } else if (shared::is_s3_uri(file_path)) {
     throw std::runtime_error("AWS storage not supported");
   } else {
     foreign_server->options[AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY] =
@@ -289,7 +285,7 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
   // setup data source options based on various criteria
   if (copy_params.source_type == import_export::SourceType::kOdbc) {
     throw std::runtime_error("ODBC storage not supported");
-  } else if (is_s3_uri(copy_from_source)) {
+  } else if (shared::is_s3_uri(copy_from_source)) {
     throw std::runtime_error("AWS storage not supported");
   } else {
     foreign_table->options["FILE_PATH"] = copy_from_source;

@@ -197,4 +197,9 @@ std::set<std::string> check_for_rolled_off_file_paths(
   }
   return rolled_off_file_paths;
 }
+
+bool is_s3_uri(const std::string& file_path) {
+  const std::string s3_prefix = "s3://";
+  return file_path.find(s3_prefix) != std::string::npos;
+}
 }  // namespace shared
