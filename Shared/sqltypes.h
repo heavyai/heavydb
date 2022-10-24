@@ -1387,6 +1387,11 @@ Collection types
 inline auto generate_column_type(const SQLTypeInfo& elem_ti) {
   SQLTypes elem_type = elem_ti.get_type();
   if (elem_type == kCOLUMN) {
+    if (elem_ti.get_subtype() == kVARCHAR) {
+      auto new_elem_ti = elem_ti;
+      new_elem_ti.set_subtype(kTEXT);
+      return new_elem_ti;
+    }
     return elem_ti;
   }
   auto c = elem_ti.get_compression();
@@ -1405,6 +1410,8 @@ inline auto generate_column_type(const SQLTypeInfo& elem_ti) {
                 // for extension functions
       }
     case kTEXT:
+    case kVARCHAR:
+      elem_type = kTEXT;
       if (c == kENCODING_DICT) {
         break;
       }
