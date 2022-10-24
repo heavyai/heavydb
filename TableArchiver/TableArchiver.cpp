@@ -34,6 +34,7 @@
 #include <sstream>
 #include <system_error>
 
+#include "Archive/S3Archive.h"
 #include "DataMgr/FileMgr/FileInfo.h"
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
@@ -42,12 +43,15 @@
 #include "Parser/ParserNode.h"
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/ThreadController.h"
+#include "Shared/file_path_util.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
 #include "Shared/thread_count.h"
 
 extern bool g_cluster;
+extern std::string g_base_path;
 bool g_test_rollback_dump_restore{false};
 
 constexpr static char const* table_schema_filename = "_table.sql";
@@ -625,14 +629,64 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
       cat_->getCurrentDB().dbId, td->tableId, boost::lexical_cast<int>(epoch));
 }
 
+#ifdef HAVE_AWS_S3
+namespace {
+std::string get_restore_dir_path() {
+  auto uuid = boost::uuids::to_string(boost::uuids::random_generator()());
+  auto restore_dir_path = std::filesystem::canonical(g_base_path) /
+                          shared::kDefaultImportDirName / ("s3-restore-" + uuid);
+  return restore_dir_path;
+}
+
+std::string download_s3_file(const std::string& s3_archive_path,
+                             const TableArchiverS3Options& s3_options,
+                             const std::string& restore_dir_path) {
+  S3Archive s3_archive{s3_archive_path,
+                       s3_options.s3_access_key,
+                       s3_options.s3_secret_key,
+                       s3_options.s3_session_token,
+                       s3_options.s3_region,
+                       s3_options.s3_endpoint,
+                       false,
+                       std::optional<std::string>{},
+                       std::optional<std::string>{},
+                       std::optional<std::string>{},
+                       restore_dir_path};
+  s3_archive.init_for_read();
+  const auto& object_key = s3_archive.get_objkeys();
+  if (object_key.size() > 1) {
+    throw std::runtime_error(
+        "S3 URI references multiple files. Only one file can be restored at a time.");
+  }
+  CHECK_EQ(object_key.size(), size_t(1));
+  std::exception_ptr eptr;
+  return s3_archive.land(object_key[0], eptr, false, false, false);
+}
+}  // namespace
+#endif
+
 // Migrate a table, which doesn't exist in current db, from a tar ball to the db.
 // This actually creates the table and restores data/dict files from the tar ball.
 void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
                                  const std::string& table_name,
                                  const std::string& archive_path,
-                                 const std::string& compression) {
+                                 const std::string& compression,
+                                 const TableArchiverS3Options& s3_options) {
+  auto local_archive_path = archive_path;
+#ifdef HAVE_AWS_S3
+  const auto restore_dir_path = get_restore_dir_path();
+  ScopeGuard archive_cleanup_guard = [&archive_path, &restore_dir_path] {
+    if (shared::is_s3_uri(archive_path) && std::filesystem::exists(restore_dir_path)) {
+      std::filesystem::remove_all(restore_dir_path);
+    }
+  };
+  if (shared::is_s3_uri(archive_path)) {
+    local_archive_path = download_s3_file(archive_path, s3_options, restore_dir_path);
+  }
+#endif
+
   // replace table name and drop foreign dict references
-  const auto schema_str = get_table_schema(archive_path, table_name, compression);
+  const auto schema_str = get_table_schema(local_archive_path, table_name, compression);
   std::unique_ptr<Parser::Stmt> stmt = Parser::create_stmt_for_query(schema_str, session);
   const auto create_table_stmt = dynamic_cast<Parser::CreateTableStmt*>(stmt.get());
   CHECK(create_table_stmt);
@@ -640,7 +694,7 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
 
   try {
     restoreTable(
-        session, cat_->getMetadataForTable(table_name), archive_path, compression);
+        session, cat_->getMetadataForTable(table_name), local_archive_path, compression);
   } catch (...) {
     const auto schema_str = "DROP TABLE IF EXISTS " + table_name + ";";
     std::unique_ptr<Parser::Stmt> stmt =

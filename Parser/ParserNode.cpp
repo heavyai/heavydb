@@ -6759,6 +6759,22 @@ const std::string sUNLZ4 = "unlz4";
 const std::string sNONE = "none";
 }  // namespace Compress
 
+namespace {
+std::optional<std::string> get_string_option(const NameValueAssign* option,
+                                             const std::string& option_name) {
+  CHECK(option);
+  if (boost::iequals(*option->get_name(), option_name)) {
+    if (const auto str_literal =
+            dynamic_cast<const StringLiteral*>(option->get_value())) {
+      return *str_literal->get_stringval();
+    } else {
+      throw std::runtime_error("\"" + option_name + "\" option must be a string.");
+    }
+  }
+  return {};
+}
+}  // namespace
+
 DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& payload,
                                                    const bool is_restore) {
   CHECK(payload.HasMember("tableName"));
@@ -6773,11 +6789,30 @@ DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& paylo
   parse_options(payload, options);
 
   if (!options.empty()) {
-    for (auto& p : options) {
-      if (boost::iequals(*p->get_name(), "compression")) {
-        checkStringLiteral("compression", p);
-        const auto str_literal = static_cast<const StringLiteral*>(p->get_value());
-        compression_ = validateCompression(*str_literal->get_stringval(), is_restore);
+    for (const auto& option : options) {
+      if (auto compression = get_string_option(option.get(), "compression");
+          compression.has_value()) {
+        compression_ = validateCompression(compression.value(), is_restore);
+#ifdef HAVE_AWS_S3
+      } else if (auto s3_access_key = get_string_option(option.get(), "s3_access_key");
+                 s3_access_key.has_value()) {
+        s3_options_.s3_access_key = s3_access_key.value();
+      } else if (auto s3_secret_key = get_string_option(option.get(), "s3_secret_key");
+                 s3_secret_key.has_value()) {
+        s3_options_.s3_secret_key = s3_secret_key.value();
+      } else if (auto s3_session_token =
+                     get_string_option(option.get(), "s3_session_token");
+                 s3_session_token.has_value()) {
+        s3_options_.s3_session_token = s3_session_token.value();
+      } else if (auto s3_region = get_string_option(option.get(), "s3_region");
+                 s3_region.has_value()) {
+        s3_options_.s3_region = s3_region.value();
+      } else if (auto s3_endpoint = get_string_option(option.get(), "s3_endpoint");
+                 s3_endpoint.has_value()) {
+        s3_options_.s3_endpoint = s3_endpoint.value();
+#endif
+      } else {
+        throw std::runtime_error("Invalid WITH option: " + *option->get_name());
       }
     }
   }
@@ -6907,7 +6942,7 @@ void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
     }
     TableArchiver table_archiver(&catalog);
     table_archiver.restoreTable(
-        session, *table_, *path_, tarCompressionStr(compression_, true));
+        session, *table_, *path_, tarCompressionStr(compression_, true), s3_options_);
   }
 }
 

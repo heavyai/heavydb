@@ -28,6 +28,7 @@
 #include "Importer.h"
 #include "Parser/ParserNode.h"
 #include "Shared/enable_assign_render_groups.h"
+#include "Shared/file_path_util.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
@@ -602,7 +603,7 @@ void ForeignDataImporter::setDefaultImportPath(const std::string& base_path) {
 
 ImportStatus ForeignDataImporter::importGeneralS3(
     const Catalog_Namespace::SessionInfo* session_info) {
-  CHECK(foreign_storage::is_s3_uri(copy_from_source_));
+  CHECK(shared::is_s3_uri(copy_from_source_));
 
   if (!(copy_params_.source_type == SourceType::kDelimitedFile ||
 #if ENABLE_IMPORT_PARQUET
@@ -936,7 +937,7 @@ ImportStatus ForeignDataImporter::importParquet(
 
 ImportStatus ForeignDataImporter::import(
     const Catalog_Namespace::SessionInfo* session_info) {
-  if (foreign_storage::is_s3_uri(copy_from_source_)) {
+  if (shared::is_s3_uri(copy_from_source_)) {
     return importGeneralS3(session_info);
   }
   return importGeneral(session_info);
