@@ -27,6 +27,10 @@
 #include <boost/variant.hpp>
 #include <boost/variant/get.hpp>
 
+#ifdef HAVE_AWS_S3
+#include "AwsHelpers.h"
+#include "DataMgr/OmniSciAwsSdk.h"
+#endif
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
 #include "TestHelpers.h"
@@ -39,6 +43,7 @@ using namespace TestHelpers;
 
 extern size_t g_leaf_count;
 extern bool g_test_rollback_dump_restore;
+extern bool g_allow_s3_server_privileges;
 
 const static std::string tar_ball_path = "/tmp/_Orz__";
 
@@ -575,6 +580,164 @@ TEST_F(DumpAndRestoreTest, DumpAlteredTable) {
   run_ddl_statement("RESTORE TABLE test_table FROM '" + tar_ball_path + "';");
   sqlAndCompareResult("SELECT * FROM test_table;", std::vector<int64_t>{1});
 }
+
+#ifdef HAVE_AWS_S3
+class S3RestoreTest : public DumpAndRestoreTest {
+ protected:
+  static void SetUpTestSuite() { omnisci_aws_sdk::init_sdk(); }
+
+  static void TearDownTestSuite() { omnisci_aws_sdk::shutdown_sdk(); }
+
+  void SetUp() override {
+    g_allow_s3_server_privileges = false;
+    run_ddl_statement("DROP TABLE IF EXISTS test_table;");
+  }
+
+  void TearDown() override {
+    g_allow_s3_server_privileges = false;
+    run_ddl_statement("DROP TABLE IF EXISTS test_table;");
+  }
+
+  bool insufficientPrivateCredentials() const {
+    return !is_valid_aws_key(get_aws_keys_from_env());
+  }
+
+  void queryAndAssertException(const std::string& query,
+                               const std::string& error_message) {
+    try {
+      run_ddl_statement(query);
+      FAIL() << "An exception should have been thrown for this test case";
+    } catch (const std::exception& e) {
+      ASSERT_STREQ(error_message.c_str(), e.what());
+    }
+  }
+
+  void queryAndAssertPartialException(const std::string& query,
+                                      const std::string& error_message) {
+    try {
+      run_ddl_statement(query);
+      FAIL() << "An exception should have been thrown for this test case";
+    } catch (const std::exception& e) {
+      std::string exception_message{e.what()};
+      ASSERT_TRUE(exception_message.find(error_message) != std::string::npos)
+          << "Exception message: " << exception_message
+          << ", expected partial error message: " << error_message;
+    }
+  }
+
+  std::string getRestoreQuery(const std::string& object_key,
+                              const std::string& region = aws_region_,
+                              const std::string& access_key = {},
+                              const std::string& secret_key = {},
+                              const std::string& session_token = {},
+                              const std::string& endpoint = {}) {
+    std::string query{"RESTORE TABLE test_table FROM 's3://" + object_key +
+                      "' "
+                      "WITH (compression = 'gzip'"};
+    if (!region.empty()) {
+      query += ", s3_region = '" + region + "'";
+    }
+    if (!access_key.empty()) {
+      query += ", s3_access_key = '" + access_key + "'";
+    }
+    if (!secret_key.empty()) {
+      query += ", s3_secret_key = '" + secret_key + "'";
+    }
+    if (!session_token.empty()) {
+      query += ", s3_session_token = '" + session_token + "'";
+    }
+    if (!endpoint.empty()) {
+      query += ", s3_endpoint = '" + endpoint + "'";
+    }
+    query += ");";
+    return query;
+  }
+
+  static inline const std::string aws_region_{"us-west-1"};
+  static inline const std::string dump_file_name_{"test_table_dump.gz"};
+  static inline const std::string public_bucket_{"heavydb-dump-restore-test-public"};
+  static inline const std::string public_object_key_{
+      "heavydb-dump-restore-test-public/test_table_dump.gz"};
+  static inline const std::string private_object_key_{
+      "heavydb-dump-restore-test/test_table_dump.gz"};
+  static inline const std::string gcs_object_key_{
+      "omnisci-importtest-data/dump-restore-test-data/test_table_dump.gz"};
+};
+
+TEST_F(S3RestoreTest, PublicBucket) {
+  run_ddl_statement(getRestoreQuery(public_object_key_));
+  sqlAndCompareResult("SELECT * FROM test_table ORDER BY i;", {1, 2, 3});
+}
+
+TEST_F(S3RestoreTest, PrivateBucket) {
+  if (insufficientPrivateCredentials()) {
+    GTEST_SKIP() << "Insufficient private credentials to run test";
+  }
+  const auto [access_key, secret_key] = get_aws_keys_from_env();
+  run_ddl_statement(
+      getRestoreQuery(private_object_key_, aws_region_, access_key, secret_key));
+  sqlAndCompareResult("SELECT * FROM test_table ORDER BY i;", {1, 2, 3});
+}
+
+TEST_F(S3RestoreTest, PrivateBucketUsingSessionToken) {
+  if (insufficientPrivateCredentials()) {
+    GTEST_SKIP() << "Insufficient private credentials to run test";
+  }
+  const auto aws_keys = get_aws_keys_from_env();
+  Aws::Client::ClientConfiguration client_config;
+  client_config.region = aws_region_;
+  const auto sts_credentials = generate_sts_credentials(aws_keys, client_config);
+
+  run_ddl_statement(getRestoreQuery(private_object_key_,
+                                    aws_region_,
+                                    sts_credentials.GetAccessKeyId(),
+                                    sts_credentials.GetSecretAccessKey(),
+                                    sts_credentials.GetSessionToken()));
+  sqlAndCompareResult("SELECT * FROM test_table ORDER BY i;", {1, 2, 3});
+}
+
+TEST_F(S3RestoreTest, PrivateBucketWithServerPrivileges) {
+  if (insufficientPrivateCredentials()) {
+    GTEST_SKIP() << "Insufficient private credentials to run test";
+  }
+  g_allow_s3_server_privileges = true;
+  run_ddl_statement(getRestoreQuery(private_object_key_));
+  sqlAndCompareResult("SELECT * FROM test_table ORDER BY i;", {1, 2, 3});
+}
+
+TEST_F(S3RestoreTest, CustomS3Endpoint) {
+  run_ddl_statement(getRestoreQuery(
+      gcs_object_key_, aws_region_, {}, {}, {}, "storage.googleapis.com"));
+  sqlAndCompareResult("SELECT * FROM test_table ORDER BY i;", {1, 2, 3});
+}
+
+TEST_F(S3RestoreTest, PrivateBucketNoAccess) {
+  queryAndAssertPartialException(
+      getRestoreQuery(
+          private_object_key_, aws_region_, "invalid_access_key", "invalid_secret_key"),
+      "failed to get object '" + dump_file_name_ + "' of s3 url 's3://" +
+          private_object_key_ + "': InvalidAccessKeyId");
+}
+
+TEST_F(S3RestoreTest, WrongOptionType) {
+  queryAndAssertException("RESTORE TABLE test_table FROM 's3://" + public_object_key_ +
+                              "' "
+                              "WITH (compression = 'gzip', s3_region = 10);",
+                          "\"s3_region\" option must be a string.");
+}
+
+TEST_F(S3RestoreTest, MissingRegion) {
+  queryAndAssertException(getRestoreQuery(public_object_key_, {}),
+                          "Required parameter \"s3_region\" not set. Please specify the "
+                          "\"s3_region\" configuration parameter.");
+}
+
+TEST_F(S3RestoreTest, S3BucketWithMultipleFiles) {
+  queryAndAssertException(
+      getRestoreQuery(public_bucket_),
+      "S3 URI references multiple files. Only one file can be restored at a time.");
+}
+#endif
 
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);

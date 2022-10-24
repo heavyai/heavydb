@@ -63,6 +63,29 @@ std::pair<std::string, std::string> get_aws_keys_from_env() {
   return {user_key, secret_key};
 }
 
+Aws::STS::Model::Credentials generate_sts_credentials(
+    const std::pair<std::string, std::string>& aws_keys,
+    const Aws::Client::ClientConfiguration& client_config,
+    int32_t session_token_duration_seconds = 900) {
+  const auto credentials =
+      Aws::Auth::SimpleAWSCredentialsProvider(aws_keys.first, aws_keys.second)
+          .GetAWSCredentials();
+  CHECK(!credentials.IsExpiredOrEmpty())
+      << "Failed to get AWSCredentials which are expired or empty";
+
+  /* Session Tokens created by IAM users range from 900s to 129,600s.
+   * Session Tokens created by AWS account owners range from 900s to 3,600s
+   * If the duration_seconds is > 3600s for an AWS account owner, then
+   * duration_seconds is defaulted to 3,600s */
+  Aws::STS::Model::GetSessionTokenRequest session_token_request;
+  session_token_request.SetDurationSeconds(
+      std::min(129600, std::max(900, session_token_duration_seconds)));
+  return Aws::STS::STSClient(credentials, client_config)
+      .GetSessionToken(session_token_request)
+      .GetResult()
+      .GetCredentials();
+}
+
 namespace {
 const std::set<std::string> AWS_ENV_KEYS_AND_PROFILE = {"AWS_ACCESS_KEY_ID",
                                                         "AWS_SECRET_ACCESS_KEY",

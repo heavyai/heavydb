@@ -258,4 +258,6 @@ bool file_or_glob_path_exists(const std::string& path);
 std::set<std::string> check_for_rolled_off_file_paths(
     const std::vector<std::string>& all_file_paths,
     std::vector<std::string>& processed_file_paths);
+
+bool is_s3_uri(const std::string& file_path);
 }  // namespace shared

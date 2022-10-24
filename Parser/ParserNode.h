@@ -31,15 +31,15 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/process/search_path.hpp>
 
-#include "../Analyzer/Analyzer.h"
-#include "../Catalog/Catalog.h"
-#include "../Distributed/AggregatedResult.h"
-#include "../Shared/sqldefs.h"
-#include "../Shared/sqltypes.h"
+#include "Analyzer/Analyzer.h"
+#include "Catalog/Catalog.h"
+#include "Distributed/AggregatedResult.h"
+#include "Fragmenter/InsertDataLoader.h"
+#include "Shared/sqldefs.h"
+#include "Shared/sqltypes.h"
+#include "TableArchiver/TableArchiver.h"
 #include "ThriftHandler/QueryState.h"
 #include "Utils/DdlUtils.h"
-
-#include "../Fragmenter/InsertDataLoader.h"
 
 #include <ImportExport/Importer.h>
 #include <ImportExport/QueryExporter.h>
@@ -1423,45 +1423,6 @@ class AlterTableParamStmt : public DDLStmt {
  */
 class DumpRestoreTableStmtBase : public DDLStmt {
  public:
-  DumpRestoreTableStmtBase(std::string* tab,
-                           std::string* path,
-                           std::list<NameValueAssign*>* options,
-                           const bool is_restore)
-      : table_(tab), path_(path) {
-    for (const auto& program : {"tar", "rm", "mkdir", "mv", "cat"}) {
-      if (boost::process::search_path(program).empty()) {
-        throw std::runtime_error{"Required program \"" + std::string{program} +
-                                 "\" was not found."};
-      }
-    }
-    auto options_deleter = [](std::list<NameValueAssign*>* options) {
-      for (auto option : *options) {
-        delete option;
-      }
-      delete options;
-    };
-
-    compression_ = defaultCompression(is_restore);
-
-    std::unique_ptr<std::list<NameValueAssign*>, decltype(options_deleter)> options_ptr(
-        options, options_deleter);
-    // specialize decompressor or break on osx bsdtar...
-    if (options) {
-      for (const auto option : *options) {
-        if (boost::iequals(*option->get_name(), "compression")) {
-          if (const auto str_literal =
-                  dynamic_cast<const StringLiteral*>(option->get_value())) {
-            compression_ = validateCompression(*str_literal->get_stringval(), is_restore);
-          } else {
-            throw std::runtime_error("Compression option must be a string.");
-          }
-        } else {
-          throw std::runtime_error("Invalid WITH option: " + *option->get_name());
-        }
-      }
-    }
-  }
-
   DumpRestoreTableStmtBase(const rapidjson::Value& payload, const bool is_restore);
 
   enum class CompressionType { kGZIP, kLZ4, kNONE };
@@ -1484,12 +1445,11 @@ class DumpRestoreTableStmtBase : public DDLStmt {
   std::unique_ptr<std::string> table_;
   std::unique_ptr<std::string> path_;  // dump TO file path
   CompressionType compression_;
+  TableArchiverS3Options s3_options_;
 };
 
 class DumpTableStmt : public DumpRestoreTableStmtBase {
  public:
-  DumpTableStmt(std::string* tab, std::string* path, std::list<NameValueAssign*>* options)
-      : DumpRestoreTableStmtBase(tab, path, options, false) {}
   DumpTableStmt(const rapidjson::Value& payload);
   void execute(const Catalog_Namespace::SessionInfo& session,
                bool read_only_mode) override;
@@ -1501,10 +1461,6 @@ class DumpTableStmt : public DumpRestoreTableStmtBase {
  */
 class RestoreTableStmt : public DumpRestoreTableStmtBase {
  public:
-  RestoreTableStmt(std::string* tab,
-                   std::string* path,
-                   std::list<NameValueAssign*>* options)
-      : DumpRestoreTableStmtBase(tab, path, options, true) {}
   RestoreTableStmt(const rapidjson::Value& payload);
   void execute(const Catalog_Namespace::SessionInfo& session,
                bool read_only_mode) override;
