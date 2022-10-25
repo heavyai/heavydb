@@ -32,6 +32,35 @@ SqlNodeList DropColumnNodeList() :
     )*
     { return new SqlNodeList(list, SqlParserPos.ZERO); }
 }
+void AlterTableColumElement(List<SqlNode> list) :
+{
+    SqlIdentifier id;
+}
+{
+    <ALTER>
+    [<COLUMN>]
+    id = SimpleIdentifier()
+    [<SET> <DATA>]
+    <TYPE>
+    TableColumn(id,list)
+}
+
+SqlNodeList RepeatedAlterColumnList() :
+{
+    final Span s;
+    final List<SqlNode> list = new ArrayList<SqlNode>();
+}
+{
+    { s = span(); }
+    AlterTableColumElement(list)
+    (
+        <COMMA>
+        AlterTableColumElement(list)
+    )*
+    {
+        return new SqlNodeList(list, s.end(this));
+    }
+}
 
 // TableElementList without parens
 SqlNodeList NoParenTableElementList() :
@@ -419,32 +448,48 @@ void TableElement(List<SqlNode> list) :
     |
         (
             id = SimpleIdentifier()
-            (
-                type = HeavyDBDataType()
-                nullable = NullableOptDefaultTrue()
-                (
-                    <DEFAULT_> defval = Expression(ExprContext.ACCEPT_SUB_QUERY) {
-                        strategy = ColumnStrategy.DEFAULT;
-                    }
-                |
-                    {
-                        defval = null;
-                        strategy = nullable ? ColumnStrategy.NULLABLE
-                            : ColumnStrategy.NOT_NULLABLE;
-                    }
-                )
-                [ encoding = HeavyDBEncodingOpt() ]
-                {
-                    list.add(
-                        SqlDdlNodes.column(s.add(id).end(this), id,
-                            type.withEncoding(encoding).withNullable(nullable),
-                            defval, strategy));
-                }
-            |
-                { list.add(id); }
-            )
+            TableColumn(id,list)
         )
     )
+}
+
+void TableColumn(SqlIdentifier id, List<SqlNode> list) :
+{
+    final HeavyDBSqlDataTypeSpec type;
+    final boolean nullable;
+    Pair<HeavyDBEncoding, Integer> encoding = null;
+    final SqlNode defval;
+    final SqlNode constraint;
+    SqlIdentifier name = null;
+    final Span s = Span.of();
+    final ColumnStrategy strategy;
+}
+{
+    (
+        type = HeavyDBDataType()
+        nullable = NullableOptDefaultTrue()
+        (
+            <DEFAULT_> defval = Expression(ExprContext.ACCEPT_SUB_QUERY) {
+                strategy = ColumnStrategy.DEFAULT;
+            }
+        |
+            {
+                defval = null;
+                strategy = nullable ? ColumnStrategy.NULLABLE
+                    : ColumnStrategy.NOT_NULLABLE;
+            }
+        )
+        [ encoding = HeavyDBEncodingOpt() ]
+        {
+            list.add(
+                SqlDdlNodes.column(s.add(id).end(this), id,
+                    type.withEncoding(encoding).withNullable(nullable),
+                    defval, strategy));
+        }
+    |
+        { list.add(id); }
+    )
+
 }
 
 /*
@@ -696,6 +741,11 @@ SqlDdl SqlAlterTable(Span s) :
         )
         {
             sqlAlterTableBuilder.addColumnList(columnList);
+        }
+    |
+        columnList = RepeatedAlterColumnList()
+        {
+            sqlAlterTableBuilder.addAlterColumnList(columnList);
         }
     |
         <SET>

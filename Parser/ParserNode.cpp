@@ -4497,6 +4497,10 @@ std::unique_ptr<DDLStmt> AlterTableStmt::delegate(const rapidjson::Value& payloa
                                      new std::string(columnName),
                                      new std::string(newColumnName)));
 
+  } else if (type == "ALTER_COLUMN") {
+    CHECK(payload.HasMember("alterData"));
+    CHECK(payload["alterData"].IsArray());
+    throw std::runtime_error("ALTER TABLE ALTER COLUMN is not implemented.");
   } else if (type == "ADD_COLUMN") {
     CHECK(payload.HasMember("columnData"));
     CHECK(payload["columnData"].IsArray());
