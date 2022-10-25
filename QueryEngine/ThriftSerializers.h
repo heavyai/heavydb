@@ -126,7 +126,9 @@ inline AggregatedColRange column_ranges_from_thrift(
     const std::vector<TColumnRange>& thrift_column_ranges) {
   AggregatedColRange column_ranges;
   for (const auto& thrift_column_range : thrift_column_ranges) {
-    PhysicalInput phys_input{thrift_column_range.col_id, thrift_column_range.table_id};
+    PhysicalInput phys_input{thrift_column_range.col_id,
+                             thrift_column_range.table_id,
+                             thrift_column_range.db_id};
     switch (thrift_column_range.type) {
       case TExpressionRangeType::INTEGER:
         column_ranges.setColRange(
@@ -166,7 +168,8 @@ inline StringDictionaryGenerations string_dictionary_generations_from_thrift(
   for (const auto& thrift_string_dictionary_generation :
        thrift_string_dictionary_generations) {
     string_dictionary_generations.setGeneration(
-        thrift_string_dictionary_generation.dict_id,
+        {thrift_string_dictionary_generation.db_id,
+         thrift_string_dictionary_generation.dict_id},
         thrift_string_dictionary_generation.entry_count);
   }
   return string_dictionary_generations;
@@ -187,6 +190,14 @@ inline TTypeInfo type_info_to_thrift(const SQLTypeInfo& ti) {
   thrift_ti.scale = ti.get_scale();
   thrift_ti.comp_param = ti.get_comp_param();
   thrift_ti.size = ti.get_size();
+
+  if (ti.get_compression() == kENCODING_DICT) {
+    const auto& dict_key = ti.getStringDictKey();
+    TStringDictKey t_dict_key;
+    t_dict_key.db_id = dict_key.db_id;
+    t_dict_key.dict_id = dict_key.dict_id;
+    thrift_ti.__set_dict_key(t_dict_key);
+  }
   return thrift_ti;
 }
 
@@ -237,6 +248,14 @@ inline TColumnType target_meta_info_to_thrift(const TargetMetaInfo& target,
       (target_ti.is_date_in_days() && target_ti.get_comp_param() == 0)
           ? 32
           : target_ti.get_comp_param();
+
+  if (target_ti.get_compression() == kENCODING_DICT) {
+    const auto& dict_key = target_ti.getStringDictKey();
+    TStringDictKey t_dict_key;
+    t_dict_key.db_id = dict_key.db_id;
+    t_dict_key.dict_id = dict_key.dict_id;
+    proj_info.col_type.__set_dict_key(t_dict_key);
+  }
   return proj_info;
 }
 

@@ -19,7 +19,7 @@
 
 std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* constant,
                                                  const EncodingType enc_type,
-                                                 const int dict_id,
+                                                 const shared::StringDictKey& dict_id,
                                                  const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (co.hoist_literals) {
@@ -142,7 +142,7 @@ bool g_allow_invalid_literal_buffer_reads{false};
 std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
     const SQLTypeInfo& type_info,
     const EncodingType enc_type,
-    const int dict_id,
+    const shared::StringDictKey& dict_id,
     const int16_t lit_off,
     const size_t lit_bytes) {
   AUTOMATIC_IR_METADATA(cgen_state_);
@@ -373,7 +373,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
 std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstants(
     const std::vector<const Analyzer::Constant*>& constants,
     const EncodingType enc_type,
-    const int dict_id) {
+    const shared::StringDictKey& dict_id) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(!constants.empty());
   const auto& type_info = constants.front()->get_type_info();

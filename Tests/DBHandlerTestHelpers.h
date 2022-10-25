@@ -386,13 +386,6 @@ class DBHandlerTestFixture : public testing::Test {
     ASSERT_EQ(expected_err, actual_err);
   }
 
- protected:
-  friend class DBHandlerTestEnvironment;
-
-  void SetUp() override { switchToAdmin(); }
-
-  void TearDown() override {}
-
   static void SetUpTestSuite() {}
 
   static void TearDownTestSuite() {}
@@ -474,6 +467,13 @@ class DBHandlerTestFixture : public testing::Test {
 
   static void destroyDBHandler() { db_handler_.reset(); }
 
+ protected:
+  friend class DBHandlerTestEnvironment;
+
+  void SetUp() override { switchToAdmin(); }
+
+  void TearDown() override {}
+
   static void sql(const std::string& query) {
     TQueryResult result;
     sql(result, query);
@@ -545,6 +545,8 @@ class DBHandlerTestFixture : public testing::Test {
       db_handler_->internal_connect(result_id, user, db);
     }
   }
+
+  static void setSessionId(const std::string& session_id) { session_id_ = session_id; }
 
   static std::string createSchemaString(const std::string& schema,
                                         const std::string& dbms_type = "") {

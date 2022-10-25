@@ -17,22 +17,24 @@
 #include "TableGenerations.h"
 #include "Logger/Logger.h"
 
-void TableGenerations::setGeneration(const uint32_t id,
+void TableGenerations::setGeneration(const shared::TableKey& table_key,
                                      const TableGeneration& generation) {
-  const auto it_ok = id_to_generation_.emplace(id, generation);
+  const auto it_ok = table_key_to_generation_.emplace(table_key, generation);
   CHECK(it_ok.second);
 }
 
-const TableGeneration& TableGenerations::getGeneration(const uint32_t id) const {
-  const auto it = id_to_generation_.find(id);
-  CHECK(it != id_to_generation_.end());
+const TableGeneration& TableGenerations::getGeneration(
+    const shared::TableKey& table_key) const {
+  const auto it = table_key_to_generation_.find(table_key);
+  CHECK(it != table_key_to_generation_.end());
   return it->second;
 }
 
-const std::unordered_map<uint32_t, TableGeneration>& TableGenerations::asMap() const {
-  return id_to_generation_;
+const std::unordered_map<shared::TableKey, TableGeneration>& TableGenerations::asMap()
+    const {
+  return table_key_to_generation_;
 }
 
 void TableGenerations::clear() {
-  decltype(id_to_generation_)().swap(id_to_generation_);
+  decltype(table_key_to_generation_)().swap(table_key_to_generation_);
 }

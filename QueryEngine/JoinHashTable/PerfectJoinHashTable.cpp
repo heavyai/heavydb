@@ -40,11 +40,10 @@ std::unique_ptr<HashingSchemeRecycler> PerfectJoinHashTable::hash_table_layout_c
 namespace {
 std::pair<InnerOuter, InnerOuterStringOpInfos> get_cols(
     const Analyzer::BinOper* qual_bin_oper,
-    const Catalog_Namespace::Catalog& cat,
     const TemporaryTables* temporary_tables) {
   const auto lhs = qual_bin_oper->get_left_operand();
   const auto rhs = qual_bin_oper->get_right_operand();
-  return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables);
+  return HashJoin::normalizeColumnPair(lhs, rhs, temporary_tables);
 }
 
 BucketizedHashEntryInfo get_bucketized_hash_entry_info(SQLTypeInfo const& context_ti,
@@ -91,9 +90,9 @@ size_t get_hash_entry_count(const ExpressionRange& col_range, const bool is_bw_e
 
 namespace {
 
-bool shard_count_less_or_equal_device_count(const int inner_table_id,
+bool shard_count_less_or_equal_device_count(const shared::TableKey& inner_table_key,
                                             const Executor* executor) {
-  const auto inner_table_info = executor->getTableInfo(inner_table_id);
+  const auto inner_table_info = executor->getTableInfo(inner_table_key);
   std::unordered_set<int> device_holding_fragments;
   auto cuda_mgr = executor->getDataMgr()->getCudaMgr();
   const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 1;
@@ -115,7 +114,8 @@ size_t get_shard_count(
     const Executor* executor) {
   const auto inner_col = equi_pair.first;
   const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(equi_pair.second);
-  if (!outer_col || inner_col->get_table_id() < 0 || outer_col->get_table_id() < 0) {
+  if (!outer_col || inner_col->getColumnKey().table_id < 0 ||
+      outer_col->getColumnKey().table_id < 0) {
     return 0;
   }
   if (outer_col->get_rte_idx()) {
@@ -124,23 +124,25 @@ size_t get_shard_count(
   if (inner_col->get_type_info() != outer_col->get_type_info()) {
     return 0;
   }
-  const auto catalog = executor->getCatalog();
-  const auto inner_td = catalog->getMetadataForTable(inner_col->get_table_id());
+
+  const auto inner_td =
+      Catalog_Namespace::get_metadata_for_table(inner_col->getTableKey());
   CHECK(inner_td);
-  const auto outer_td = catalog->getMetadataForTable(outer_col->get_table_id());
+  const auto outer_td =
+      Catalog_Namespace::get_metadata_for_table(outer_col->getTableKey());
   CHECK(outer_td);
   if (inner_td->shardedColumnId == 0 || outer_td->shardedColumnId == 0 ||
       inner_td->nShards != outer_td->nShards) {
     return 0;
   }
-  if (!shard_count_less_or_equal_device_count(inner_td->tableId, executor)) {
+  if (!shard_count_less_or_equal_device_count(inner_col->getTableKey(), executor)) {
     return 0;
   }
   // The two columns involved must be the ones on which the tables have been sharded on.
-  return (inner_td->shardedColumnId == inner_col->get_column_id() &&
-          outer_td->shardedColumnId == outer_col->get_column_id()) ||
-                 (outer_td->shardedColumnId == inner_col->get_column_id() &&
-                  inner_td->shardedColumnId == inner_col->get_column_id())
+  return (inner_td->shardedColumnId == inner_col->getColumnKey().column_id &&
+          outer_td->shardedColumnId == outer_col->getColumnKey().column_id) ||
+                 (outer_td->shardedColumnId == inner_col->getColumnKey().column_id &&
+                  inner_td->shardedColumnId == inner_col->getColumnKey().column_id)
              ? inner_td->nShards
              : 0;
 }
@@ -160,7 +162,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     const TableIdToNodeMap& table_id_to_node_map) {
   CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
   const auto cols_and_string_op_infos =
-      get_cols(qual_bin_oper.get(), *executor->getCatalog(), executor->temporary_tables_);
+      get_cols(qual_bin_oper.get(), executor->temporary_tables_);
   const auto& cols = cols_and_string_op_infos.first;
   const auto& inner_outer_string_op_infos = cols_and_string_op_infos.second;
   const auto inner_col = cols.first;
@@ -280,12 +282,10 @@ bool needs_dictionary_translation(
   }
   auto inner_col = inner_outer_col_pair.first;
   auto outer_col_expr = inner_outer_col_pair.second;
-  const auto catalog = executor->getCatalog();
-  CHECK(catalog);
-  const auto inner_cd = get_column_descriptor_maybe(
-      inner_col->get_column_id(), inner_col->get_table_id(), *catalog);
-  const auto& inner_ti = get_column_type(inner_col->get_column_id(),
-                                         inner_col->get_table_id(),
+  const auto inner_cd = get_column_descriptor_maybe(inner_col->getColumnKey());
+  const auto& inner_col_key = inner_col->getColumnKey();
+  const auto& inner_ti = get_column_type(inner_col_key.column_id,
+                                         inner_col_key.table_id,
                                          inner_cd,
                                          executor->getTemporaryTables());
   // Only strings may need dictionary translation.
@@ -294,26 +294,26 @@ bool needs_dictionary_translation(
   }
   const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(outer_col_expr);
   CHECK(outer_col);
-  const auto outer_cd = get_column_descriptor_maybe(
-      outer_col->get_column_id(), outer_col->get_table_id(), *catalog);
+  const auto outer_cd = get_column_descriptor_maybe(outer_col->getColumnKey());
   // Don't want to deal with temporary tables for now, require translation.
   if (!inner_cd || !outer_cd) {
     return true;
   }
-  const auto& outer_ti = get_column_type(outer_col->get_column_id(),
-                                         outer_col->get_table_id(),
+  const auto& outer_col_key = outer_col->getColumnKey();
+  const auto& outer_ti = get_column_type(outer_col_key.column_id,
+                                         outer_col_key.table_id,
                                          outer_cd,
                                          executor->getTemporaryTables());
   CHECK_EQ(inner_ti.is_string(), outer_ti.is_string());
   // If the two columns don't share the dictionary, translation is needed.
-  if (outer_ti.get_comp_param() != inner_ti.get_comp_param()) {
+  if (outer_ti.getStringDictKey() != inner_ti.getStringDictKey()) {
     return true;
   }
   const auto inner_str_dict_proxy =
-      executor->getStringDictionaryProxy(inner_col->get_comp_param(), true);
+      executor->getStringDictionaryProxy(inner_ti.getStringDictKey(), true);
   CHECK(inner_str_dict_proxy);
   const auto outer_str_dict_proxy =
-      executor->getStringDictionaryProxy(inner_col->get_comp_param(), true);
+      executor->getStringDictionaryProxy(outer_ti.getStringDictKey(), true);
   CHECK(outer_str_dict_proxy);
 
   return *inner_str_dict_proxy != *outer_str_dict_proxy;
@@ -359,12 +359,10 @@ bool PerfectJoinHashTable::isOneToOneHashPossible(
 void PerfectJoinHashTable::reify() {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
-  auto catalog = const_cast<Catalog_Namespace::Catalog*>(executor_->getCatalog());
-  const auto cols =
-      get_cols(qual_bin_oper_.get(), *catalog, executor_->temporary_tables_).first;
+  const auto cols = get_cols(qual_bin_oper_.get(), executor_->temporary_tables_).first;
   const auto inner_col = cols.first;
   HashJoin::checkHashJoinReplicationConstraint(
-      inner_col->get_table_id(),
+      inner_col->getTableKey(),
       get_shard_count(qual_bin_oper_.get(), executor_),
       executor_);
   const auto& query_info = getInnerQueryInfo(inner_col).info;
@@ -440,15 +438,14 @@ void PerfectJoinHashTable::reify() {
   if (table_keys_.empty()) {
     // the actual chunks fetched per device can be different but they constitute the same
     // table in the same db, so we can exploit this to create an alternative table key
-    table_keys_ = DataRecyclerUtil::getAlternativeTableKeys(
-        chunk_key_per_device,
-        executor_->getCatalog()->getDatabaseId(),
-        getInnerTableId());
+    const auto& inner_table_key = getInnerTableId();
+    table_keys_ =
+        DataRecyclerUtil::getAlternativeTableKeys(chunk_key_per_device, inner_table_key);
   }
   CHECK(!table_keys_.empty());
 
   if (HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_) &&
-      getInnerTableId() > 0) {
+      getInnerTableId().table_id > 0) {
     // sometimes we cannot retrieve query plan dag, so try to recycler cache
     // with the old-fashioned cache key if we deal with hashtable of non-temporary table
     for (int device_id = 0; device_id < device_count_; ++device_id) {
@@ -537,7 +534,7 @@ void PerfectJoinHashTable::reify() {
       HashtableRecycler::isSafeToCacheHashtable(table_id_to_node_map_,
                                                 needs_dict_translation_,
                                                 {inner_outer_string_op_infos_},
-                                                inner_col->get_table_id());
+                                                inner_col->getTableKey());
   bool has_invalid_cached_hash_table = false;
   if (effective_memory_level == Data_Namespace::CPU_LEVEL &&
       HashJoin::canAccessHashTable(
@@ -585,8 +582,7 @@ void PerfectJoinHashTable::reify() {
                               device_id,
                               memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
                                   ? dev_buff_owners[device_id].get()
-                                  : nullptr,
-                              *catalog));
+                                  : nullptr));
   }
 
   try {
@@ -655,8 +651,7 @@ Data_Namespace::MemoryLevel PerfectJoinHashTable::getEffectiveMemoryLevel(
 ColumnsForDevice PerfectJoinHashTable::fetchColumnsForDevice(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
-    DeviceAllocator* dev_buff_owner,
-    const Catalog_Namespace::Catalog& catalog) {
+    DeviceAllocator* dev_buff_owner) {
   std::vector<JoinColumn> join_columns;
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<JoinColumnTypeInfo> join_column_types;
@@ -666,8 +661,7 @@ ColumnsForDevice PerfectJoinHashTable::fetchColumnsForDevice(
       get_effective_memory_level(memory_level_, needs_dict_translation_);
   for (const auto& inner_outer_pair : inner_outer_pairs_) {
     const auto inner_col = inner_outer_pair.first;
-    const auto inner_cd = get_column_descriptor_maybe(
-        inner_col->get_column_id(), inner_col->get_table_id(), catalog);
+    const auto inner_cd = get_column_descriptor_maybe(inner_col->getColumnKey());
     if (inner_cd && inner_cd->isVirtualCol) {
       throw FailedToJoinOnVirtualColumn();
     }
@@ -758,7 +752,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
       HashtableRecycler::isSafeToCacheHashtable(table_id_to_node_map_,
                                                 needs_dict_translation_,
                                                 {inner_outer_string_op_infos_},
-                                                inner_col->get_table_id());
+                                                inner_col->getTableKey());
   if (allow_hashtable_recycling) {
     auto cached_hashtable_layout_type = hash_table_layout_cache_->getItemFromCache(
         hashtable_cache_key_[device_id],
@@ -896,9 +890,8 @@ ChunkKey PerfectJoinHashTable::genChunkKey(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Analyzer::Expr* outer_col_expr,
     const Analyzer::ColumnVar* inner_col) const {
-  ChunkKey chunk_key{executor_->getCatalog()->getCurrentDB().dbId,
-                     inner_col->get_table_id(),
-                     inner_col->get_column_id()};
+  const auto& column_key = inner_col->getColumnKey();
+  ChunkKey chunk_key{column_key.db_id, column_key.table_id, column_key.column_id};
   const auto& ti = inner_col->get_type_info();
   std::for_each(fragments.cbegin(), fragments.cend(), [&chunk_key](const auto& fragment) {
     // collect all frag ids to correctly generated cache key for a cached hash table
@@ -1024,10 +1017,7 @@ std::vector<llvm::Value*> PerfectJoinHashTable::getHashJoinArgs(
 HashJoinMatchingSet PerfectJoinHashTable::codegenMatchingSet(const CompilationOptions& co,
                                                              const size_t index) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
-  const auto cols =
-      get_cols(
-          qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_)
-          .first;
+  const auto cols = get_cols(qual_bin_oper_.get(), executor_->temporary_tables_).first;
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;
@@ -1209,8 +1199,8 @@ llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,
   using namespace std::string_literals;
 
   CHECK(getHashType() == HashType::OneToOne);
-  const auto cols_and_string_op_infos = get_cols(
-      qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
+  const auto cols_and_string_op_infos =
+      get_cols(qual_bin_oper_.get(), executor_->temporary_tables_);
   const auto& cols = cols_and_string_op_infos.first;
   const auto& inner_outer_string_op_infos = cols_and_string_op_infos.second;
   auto key_col = cols.second;
@@ -1261,15 +1251,15 @@ llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,
 
 const InputTableInfo& PerfectJoinHashTable::getInnerQueryInfo(
     const Analyzer::ColumnVar* inner_col) const {
-  return get_inner_query_info(inner_col->get_table_id(), query_infos_);
+  return get_inner_query_info(inner_col->getTableKey(), query_infos_);
 }
 
 const InputTableInfo& get_inner_query_info(
-    const int inner_table_id,
+    const shared::TableKey& inner_table_key,
     const std::vector<InputTableInfo>& query_infos) {
   std::optional<size_t> ti_idx;
   for (size_t i = 0; i < query_infos.size(); ++i) {
-    if (inner_table_id == query_infos[i].table_id) {
+    if (inner_table_key == query_infos[i].table_key) {
       ti_idx = i;
       break;
     }

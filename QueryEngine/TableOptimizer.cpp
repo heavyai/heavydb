@@ -28,7 +28,7 @@ float g_vacuum_min_selectivity{0.1};
 
 TableOptimizer::TableOptimizer(const TableDescriptor* td,
                                Executor* executor,
-                               Catalog_Namespace::Catalog& cat)
+                               const Catalog_Namespace::Catalog& cat)
     : td_(td), executor_(executor), cat_(cat) {
   CHECK(td);
 }
@@ -157,7 +157,6 @@ void TableOptimizer::recomputeMetadata() const {
     ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
     executor_->row_set_mem_owner_ =
         std::make_shared<RowSetMemoryOwner>(ROW_SET_SIZE, /*num_threads=*/1);
-    executor_->catalog_ = &cat_;
     const auto table_id = td->tableId;
     auto stats = recomputeDeletedColumnMetadata(td);
 
@@ -230,10 +229,10 @@ DeletedColumnStats TableOptimizer::getDeletedColumnStats(
   auto cd = cat_.getDeletedColumn(td);
   const auto column_id = cd->columnId;
 
-  const auto input_col_desc =
-      std::make_shared<const InputColDescriptor>(column_id, td->tableId, 0);
-  const auto col_expr =
-      makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, column_id, 0);
+  const auto input_col_desc = std::make_shared<const InputColDescriptor>(
+      column_id, td->tableId, cat_.getDatabaseId(), 0);
+  const auto col_expr = makeExpr<Analyzer::ColumnVar>(
+      cd->columnType, shared::ColumnKey{cat_.getDatabaseId(), td->tableId, column_id}, 0);
   const auto count_expr =
       makeExpr<Analyzer::AggExpr>(cd->columnType, kCOUNT, col_expr, false, nullptr);
 
@@ -333,10 +332,10 @@ void TableOptimizer::recomputeColumnMetadata(
   }
 
   const auto column_id = cd->columnId;
-  const auto input_col_desc =
-      std::make_shared<const InputColDescriptor>(column_id, td->tableId, 0);
-  const auto col_expr =
-      makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, column_id, 0);
+  const auto input_col_desc = std::make_shared<const InputColDescriptor>(
+      column_id, td->tableId, cat_.getDatabaseId(), 0);
+  const auto col_expr = makeExpr<Analyzer::ColumnVar>(
+      cd->columnType, shared::ColumnKey{cat_.getDatabaseId(), td->tableId, column_id}, 0);
   auto max_expr =
       makeExpr<Analyzer::AggExpr>(cd->columnType, kMAX, col_expr, false, nullptr);
   auto min_expr =

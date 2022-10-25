@@ -2201,7 +2201,7 @@ class ValidateDefaultValuesTest : public testing::Test,
 };
 
 TEST_P(ValidateDefaultValuesTest, InvalidLiteralTest) {
-  ColumnDescriptor cd(0, 1, "c", GetParam().type);
+  ColumnDescriptor cd(0, 1, "c", GetParam().type, 0);
   try {
     const std::string* value = GetParam().is_null ? nullptr : &GetParam().value;
     ddl_utils::validate_and_set_default_value(cd, value, GetParam().type.get_notnull());

@@ -76,7 +76,6 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, "", "", SystemParameters());
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
-  executor->setCatalog(cat);
 
   auto td = cat->getMetadataForTable("high_cardinality_str");
   CHECK(td);
@@ -85,29 +84,32 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   auto filter_cd = cat->getMetadataForColumn(td->tableId, "x");
   CHECK(filter_cd);
 
-  PhysicalInput group_phys_input{cd->columnId, td->tableId};
-  PhysicalInput filter_phys_input{filter_cd->columnId, td->tableId};
+  auto db_id = cat->getDatabaseId();
+  PhysicalInput group_phys_input{cd->columnId, td->tableId, db_id};
+  PhysicalInput filter_phys_input{filter_cd->columnId, td->tableId, db_id};
 
   std::unordered_set<PhysicalInput> phys_inputs{group_phys_input, filter_phys_input};
-  std::unordered_set<int> phys_table_ids;
-  phys_table_ids.insert(group_phys_input.table_id);
+  std::unordered_set<shared::TableKey> phys_table_ids;
+  phys_table_ids.insert({cat->getDatabaseId(), group_phys_input.table_id});
   executor->setupCaching(phys_inputs, phys_table_ids);
 
-  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
+  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(db_id, td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(cd->columnId, td->tableId, 0));
+      std::make_shared<InputColDescriptor>(cd->columnId, td->tableId, db_id, 0));
   input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(filter_cd->columnId, td->tableId, 0));
+      std::make_shared<InputColDescriptor>(filter_cd->columnId, td->tableId, db_id, 0));
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
   auto count_expr = makeExpr<Analyzer::AggExpr>(
       SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false, nullptr);
-  auto group_expr =
-      makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
+  auto group_expr = makeExpr<Analyzer::ColumnVar>(
+      cd->columnType, shared::ColumnKey{db_id, td->tableId, cd->columnId}, 0);
   auto filter_col_expr = makeExpr<Analyzer::ColumnVar>(
-      filter_cd->columnType, td->tableId, filter_cd->columnId, 0);
+      filter_cd->columnType,
+      shared::ColumnKey{db_id, td->tableId, filter_cd->columnId},
+      0);
   Datum d{int64_t(1)};
   auto filter_val_expr = makeExpr<Analyzer::Constant>(SQLTypeInfo(kINT, false), false, d);
   auto simple_filter_expr = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false),
@@ -138,7 +140,6 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
                                 ra_exe_unit,
                                 CompilationOptions::defaults(ExecutorDeviceType::CPU),
                                 ExecutionOptions::defaults(),
-                                *cat,
                                 nullptr,
                                 /*has_cardinality_estimation=*/false,
                                 column_cache);
@@ -155,8 +156,9 @@ std::unordered_set<PhysicalInput> setup_str_col_caching(PhysicalInput& group_phy
                                                         PhysicalInput& filter_phys_input,
                                                         Executor* executor) {
   std::unordered_set<PhysicalInput> phys_inputs{group_phys_input, filter_phys_input};
-  std::unordered_set<int> phys_table_ids;
-  phys_table_ids.insert(group_phys_input.table_id);
+  std::unordered_set<shared::TableKey> phys_table_ids;
+  auto db_id = QR::get()->getCatalog()->getDatabaseId();
+  phys_table_ids.insert({db_id, group_phys_input.table_id});
   executor->setupCaching(phys_inputs, phys_table_ids);
   auto filter_col_range = executor->getColRange(filter_phys_input);
   // reset the col range to trigger the optimization
@@ -174,7 +176,6 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, "", "", SystemParameters());
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
-  executor->setCatalog(cat);
 
   auto td = cat->getMetadataForTable("high_cardinality_str");
   CHECK(td);
@@ -183,28 +184,31 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
   auto filter_cd = cat->getMetadataForColumn(td->tableId, "x");
   CHECK(filter_cd);
 
-  PhysicalInput group_phys_input{cd->columnId, td->tableId};
-  PhysicalInput filter_phys_input{filter_cd->columnId, td->tableId};
+  auto db_id = cat->getDatabaseId();
+  PhysicalInput group_phys_input{cd->columnId, td->tableId, db_id};
+  PhysicalInput filter_phys_input{filter_cd->columnId, td->tableId, db_id};
 
   // 134217728 is 1 additional value over the max buffer size
   auto phys_inputs = setup_str_col_caching(
       group_phys_input, /*min=*/0, /*max=*/134217728, filter_phys_input, executor.get());
 
-  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
+  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(db_id, td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(cd->columnId, td->tableId, 0));
+      std::make_shared<InputColDescriptor>(cd->columnId, td->tableId, db_id, 0));
   input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(filter_cd->columnId, td->tableId, 0));
+      std::make_shared<InputColDescriptor>(filter_cd->columnId, td->tableId, db_id, 0));
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
   auto count_expr = makeExpr<Analyzer::AggExpr>(
       SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false, nullptr);
-  auto group_expr =
-      makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
+  auto group_expr = makeExpr<Analyzer::ColumnVar>(
+      cd->columnType, shared::ColumnKey{db_id, td->tableId, cd->columnId}, 0);
   auto filter_col_expr = makeExpr<Analyzer::ColumnVar>(
-      filter_cd->columnType, td->tableId, filter_cd->columnId, 0);
+      filter_cd->columnType,
+      shared::ColumnKey{db_id, td->tableId, filter_cd->columnId},
+      0);
   Datum d{int64_t(1)};
   auto filter_val_expr = makeExpr<Analyzer::Constant>(SQLTypeInfo(kINT, false), false, d);
   auto simple_filter_expr = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false),
@@ -235,7 +239,6 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                 ra_exe_unit,
                                 CompilationOptions::defaults(ExecutorDeviceType::CPU),
                                 ExecutionOptions::defaults(),
-                                *cat,
                                 nullptr,
                                 /*has_cardinality_estimation=*/false,
                                 column_cache),
@@ -248,7 +251,6 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                 ra_exe_unit,
                                 CompilationOptions::defaults(ExecutorDeviceType::CPU),
                                 ExecutionOptions::defaults(),
-                                *cat,
                                 nullptr,
                                 /*has_cardinality_estimation=*/true,
                                 column_cache);
@@ -265,7 +267,6 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, "", "", SystemParameters());
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
-  executor->setCatalog(cat);
 
   auto td = cat->getMetadataForTable("high_cardinality_str");
   CHECK(td);
@@ -274,26 +275,27 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
   auto filter_cd = cat->getMetadataForColumn(td->tableId, "x");
   CHECK(filter_cd);
 
-  PhysicalInput group_phys_input{cd->columnId, td->tableId};
-  PhysicalInput filter_phys_input{filter_cd->columnId, td->tableId};
+  auto db_id = cat->getDatabaseId();
+  PhysicalInput group_phys_input{cd->columnId, td->tableId, db_id};
+  PhysicalInput filter_phys_input{filter_cd->columnId, td->tableId, db_id};
 
   // 134217728 is 1 additional value over the max buffer size
   auto phys_inputs = setup_str_col_caching(
       group_phys_input, /*min=*/0, /*max=*/134217728, filter_phys_input, executor.get());
 
-  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
+  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(db_id, td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(cd->columnId, td->tableId, 0));
+      std::make_shared<InputColDescriptor>(cd->columnId, td->tableId, db_id, 0));
   input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(filter_cd->columnId, td->tableId, 0));
+      std::make_shared<InputColDescriptor>(filter_cd->columnId, td->tableId, db_id, 0));
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
   auto count_expr = makeExpr<Analyzer::AggExpr>(
       SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false, nullptr);
-  auto group_expr =
-      makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
+  auto group_expr = makeExpr<Analyzer::ColumnVar>(
+      cd->columnType, shared::ColumnKey{db_id, td->tableId, cd->columnId}, 0);
 
   RelAlgExecutionUnit ra_exe_unit{input_descs,
                                   input_col_descs,
@@ -317,7 +319,6 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
                                 ra_exe_unit,
                                 CompilationOptions::defaults(ExecutorDeviceType::CPU),
                                 ExecutionOptions::defaults(),
-                                *cat,
                                 nullptr,
                                 /*has_cardinality_estimation=*/false,
                                 column_cache);

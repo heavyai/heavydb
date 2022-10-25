@@ -33,7 +33,6 @@ ResultSet* ResultSetBuilder::makeResultSet(
                        device_type,
                        query_mem_desc,
                        row_set_mem_owner,
-                       executor ? executor->getCatalog() : nullptr,
                        executor ? executor->blockSize() : 0,
                        executor ? executor->gridSize() : 0);
 }
@@ -128,7 +127,9 @@ ResultSet* ResultSetLogicalValuesBuilder::build() {
               CHECK_EQ(targets[j].sql_type.get_comp_param(), TRANSIENT_DICT_ID);
               CHECK_EQ(targets[j].sql_type.get_size(), 4);
               const auto sdp = executor->getStringDictionaryProxy(
-                  TRANSIENT_DICT_ID, executor->getRowSetMemoryOwner(), true);
+                  {TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID},
+                  executor->getRowSetMemoryOwner(),
+                  true);
               const auto string_id = sdp->getOrAddTransient(*datum.stringval);
               // Initialize the entire 8-byte slot
               std::memset(ptr, 0, 8);

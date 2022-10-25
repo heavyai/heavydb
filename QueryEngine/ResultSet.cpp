@@ -65,7 +65,6 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const ExecutorDeviceType device_type,
                      const QueryMemoryDescriptor& query_mem_desc,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                     const Catalog_Namespace::Catalog* catalog,
                      const unsigned block_size,
                      const unsigned grid_size)
     : targets_(targets)
@@ -77,7 +76,6 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , drop_first_(0)
     , keep_first_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , catalog_(catalog)
     , block_size_(block_size)
     , grid_size_(grid_size)
     , data_mgr_(nullptr)
@@ -100,7 +98,6 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const int device_id,
                      const QueryMemoryDescriptor& query_mem_desc,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                     const Catalog_Namespace::Catalog* catalog,
                      const unsigned block_size,
                      const unsigned grid_size)
     : targets_(targets)
@@ -112,7 +109,6 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , drop_first_(0)
     , keep_first_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , catalog_(catalog)
     , block_size_(block_size)
     , grid_size_(grid_size)
     , lazy_fetch_info_(lazy_fetch_info)
@@ -340,7 +336,6 @@ ResultSetPtr ResultSet::copy() {
                                                        device_type_,
                                                        query_mem_desc_,
                                                        row_set_mem_owner_,
-                                                       executor->getCatalog(),
                                                        executor->blockSize(),
                                                        executor->gridSize());
 
@@ -425,11 +420,12 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
                                             : targets_[col_idx].sql_type;
 }
 
-StringDictionaryProxy* ResultSet::getStringDictionaryProxy(int const dict_id) const {
+StringDictionaryProxy* ResultSet::getStringDictionaryProxy(
+    const shared::StringDictKey& dict_key) const {
   constexpr bool with_generation = true;
-  return catalog_ ? row_set_mem_owner_->getOrAddStringDictProxy(
-                        dict_id, with_generation, catalog_)
-                  : row_set_mem_owner_->getStringDictProxy(dict_id);
+  return (dict_key.db_id > 0 || dict_key.dict_id == DictRef::literalsDictId)
+             ? row_set_mem_owner_->getOrAddStringDictProxy(dict_key, with_generation)
+             : row_set_mem_owner_->getStringDictProxy(dict_key);
 }
 
 class ResultSet::CellCallback {
@@ -465,16 +461,18 @@ void ResultSet::translateDictEncodedColumns(std::vector<TargetInfo> const& targe
         auto& type_rhs =
             const_cast<SQLTypeInfo&>(storage_->targets_[target_idx].sql_type);
         CHECK(type_rhs.is_dict_encoded_string());
-        if (type_lhs.get_comp_param() != type_rhs.get_comp_param()) {
-          auto* const sdp_lhs = getStringDictionaryProxy(type_lhs.get_comp_param());
+        if (type_lhs.getStringDictKey() != type_rhs.getStringDictKey()) {
+          auto* const sdp_lhs = getStringDictionaryProxy(type_lhs.getStringDictKey());
           CHECK(sdp_lhs);
-          auto const* const sdp_rhs = getStringDictionaryProxy(type_rhs.get_comp_param());
+          auto const* const sdp_rhs =
+              getStringDictionaryProxy(type_rhs.getStringDictKey());
           CHECK(sdp_rhs);
           state.cur_target_idx_ = target_idx;
           CellCallback const translate_string_ids(sdp_lhs->transientUnion(*sdp_rhs),
                                                   inline_int_null_val(type_rhs));
           eachCellInColumn(state, translate_string_ids);
           type_rhs.set_comp_param(type_lhs.get_comp_param());
+          type_rhs.setStringDictKey(type_lhs.getStringDictKey());
         }
       }
     }
@@ -1246,9 +1244,9 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
         CHECK_EQ(4, lhs_entry_ti.get_logical_size());
         CHECK(executor_);
         const auto lhs_string_dict_proxy = executor_->getStringDictionaryProxy(
-            lhs_entry_ti.get_comp_param(), result_set_->row_set_mem_owner_, false);
+            lhs_entry_ti.getStringDictKey(), result_set_->row_set_mem_owner_, false);
         const auto rhs_string_dict_proxy = executor_->getStringDictionaryProxy(
-            rhs_entry_ti.get_comp_param(), result_set_->row_set_mem_owner_, false);
+            rhs_entry_ti.getStringDictKey(), result_set_->row_set_mem_owner_, false);
         const auto lhs_str = lhs_string_dict_proxy->getString(lhs_v.i1);
         const auto rhs_str = rhs_string_dict_proxy->getString(rhs_v.i1);
         if (lhs_str == rhs_str) {
@@ -1319,7 +1317,7 @@ PermutationView ResultSet::topPermutation(PermutationView permutation,
 void ResultSet::radixSortOnGpu(
     const std::list<Analyzer::OrderEntry>& order_entries) const {
   auto timer = DEBUG_TIMER(__func__);
-  auto data_mgr = &catalog_->getDataMgr();
+  auto data_mgr = &Catalog_Namespace::SysCatalog::instance().getDataMgr();
   const int device_id{0};
   auto allocator = std::make_unique<CudaAllocator>(
       data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
@@ -1401,9 +1399,9 @@ size_t ResultSet::getLimit() const {
 }
 
 const std::vector<std::string> ResultSet::getStringDictionaryPayloadCopy(
-    const int dict_id) const {
-  const auto sdp = row_set_mem_owner_->getOrAddStringDictProxy(
-      dict_id, /*with_generation=*/true, catalog_);
+    const shared::StringDictKey& dict_key) const {
+  const auto sdp =
+      row_set_mem_owner_->getOrAddStringDictProxy(dict_key, /*with_generation=*/true);
   CHECK(sdp);
   return sdp->getDictionary()->copyStrings();
 }
@@ -1450,9 +1448,8 @@ ResultSet::getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const {
     unique_string_ids[string_idx++] = unique_string_id;
   }
 
-  const int32_t dict_id = col_type_info.get_comp_param();
   const auto sdp = row_set_mem_owner_->getOrAddStringDictProxy(
-      dict_id, /*with_generation=*/true, catalog_);
+      col_type_info.getStringDictKey(), /*with_generation=*/true);
   CHECK(sdp);
 
   return std::make_pair(unique_string_ids, sdp->getStrings(unique_string_ids));

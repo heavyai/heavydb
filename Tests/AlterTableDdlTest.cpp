@@ -541,6 +541,11 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
+  // Initialize DBHandler in order to ensure that QueryRunner uses the same SysCatalog
+  // instance.
+  DBHandlerTestFixture::createDBHandler();
+
+  // TODO: Replace use of QueryRunner with DBHandlerTestFixture
   QR::init(BASE_PATH);
 
   int err{0};

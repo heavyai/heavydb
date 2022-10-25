@@ -34,11 +34,7 @@ std::string Serializer::serializeRelAlgDag(const RelAlgDag& rel_alg_dag) {
 }
 
 std::unique_ptr<RelAlgDag> Serializer::deserializeRelAlgDag(
-    const Catalog_Namespace::Catalog& cat,
     const std::string& serialized_dag_str) {
-  auto deserialization_context_scope_guard =
-      RelAlgDagSerializer::createContextScopeGuard(cat);
-
   auto rel_alg_dag = std::make_unique<RelAlgDag>();
   std::stringstream ss(serialized_dag_str);
   // read data from archive

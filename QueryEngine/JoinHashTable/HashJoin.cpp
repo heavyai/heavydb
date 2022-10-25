@@ -392,17 +392,18 @@ HashJoin::getStrDictProxies(const InnerOuter& cols,
   std::pair<const StringDictionaryProxy*, StringDictionaryProxy*>
       inner_outer_str_dict_proxies{nullptr, nullptr};
   if (inner_ti.is_string() && outer_col) {
-    CHECK(outer_col->get_type_info().is_string());
+    const auto& outer_ti = outer_col->get_type_info();
+    CHECK(outer_ti.is_string());
     inner_outer_str_dict_proxies.first =
-        executor->getStringDictionaryProxy(inner_col->get_comp_param(), true);
+        executor->getStringDictionaryProxy(inner_ti.getStringDictKey(), true);
     CHECK(inner_outer_str_dict_proxies.first);
     inner_outer_str_dict_proxies.second =
-        executor->getStringDictionaryProxy(outer_col->get_comp_param(), true);
+        executor->getStringDictionaryProxy(outer_ti.getStringDictKey(), true);
     CHECK(inner_outer_str_dict_proxies.second);
     if (!has_string_ops &&
         *inner_outer_str_dict_proxies.first == *inner_outer_str_dict_proxies.second) {
       // Dictionaries are the same - don't need to translate
-      CHECK(inner_col->get_comp_param() == outer_col->get_comp_param());
+      CHECK_EQ(inner_ti.getStringDictKey(), outer_ti.getStringDictKey());
       inner_outer_str_dict_proxies.first = nullptr;
       inner_outer_str_dict_proxies.second = nullptr;
     }
@@ -422,8 +423,8 @@ const StringDictionaryProxy::IdMap* HashJoin::translateInnerToOuterStrDictProxie
   const bool translate_dictionary =
       inner_outer_proxies.first && inner_outer_proxies.second;
   if (translate_dictionary) {
-    const auto inner_dict_id = inner_outer_proxies.first->getDictId();
-    const auto outer_dict_id = inner_outer_proxies.second->getDictId();
+    const auto& inner_dict_id = inner_outer_proxies.first->getDictKey();
+    const auto& outer_dict_id = inner_outer_proxies.second->getDictKey();
     CHECK(has_string_ops || inner_dict_id != outer_dict_id);
     const auto id_map = executor->getJoinIntersectionStringProxyTranslationMap(
         inner_outer_proxies.first,
@@ -465,7 +466,6 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
   std::vector<const void*> sd_inner_proxy_per_key;
   std::vector<void*> sd_outer_proxy_per_key;
   std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
-  const auto db_id = executor->getCatalog()->getCurrentDB().dbId;
   const bool has_string_op_infos = inner_outer_string_op_infos_pairs.size();
   if (has_string_op_infos) {
     CHECK_EQ(inner_outer_pairs.size(), inner_outer_string_op_infos_pairs.size());
@@ -476,8 +476,9 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
     const auto outer_col = inner_outer_pair.second;
     const auto& inner_ti = inner_col->get_type_info();
     const auto& outer_ti = outer_col->get_type_info();
+    const auto& inner_column_key = inner_col->getColumnKey();
     ChunkKey cache_key_chunks_for_column{
-        db_id, inner_col->get_table_id(), inner_col->get_column_id()};
+        inner_column_key.db_id, inner_column_key.table_id, inner_column_key.column_id};
     if (inner_ti.is_string() &&
         (!(inner_ti.get_comp_param() == outer_ti.get_comp_param()) ||
          (has_string_op_infos &&
@@ -487,9 +488,9 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
       CHECK(inner_ti.get_compression() == kENCODING_DICT &&
             outer_ti.get_compression() == kENCODING_DICT);
       const auto sd_inner_proxy = executor->getStringDictionaryProxy(
-          inner_ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
+          inner_ti.getStringDictKey(), executor->getRowSetMemoryOwner(), true);
       auto sd_outer_proxy = executor->getStringDictionaryProxy(
-          outer_ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
+          outer_ti.getStringDictKey(), executor->getRowSetMemoryOwner(), true);
       CHECK(sd_inner_proxy && sd_outer_proxy);
       sd_inner_proxy_per_key.push_back(sd_inner_proxy);
       sd_outer_proxy_per_key.push_back(sd_outer_proxy);
@@ -526,7 +527,7 @@ HashJoin::translateCompositeStrDictProxies(
       CHECK(inner_proxy);
       CHECK(outer_proxy);
 
-      CHECK_NE(inner_proxy->getDictId(), outer_proxy->getDictId());
+      CHECK_NE(inner_proxy->getDictKey(), outer_proxy->getDictKey());
       proxy_translation_maps.emplace_back(
           executor->getJoinIntersectionStringProxyTranslationMap(
               inner_proxy,
@@ -557,17 +558,15 @@ llvm::Value* HashJoin::codegenColOrStringOper(
   return code_generator.codegen(col_or_string_oper, true, co)[0];
 }
 
-std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view table,
-                                                           std::string_view column,
-                                                           int rte_idx,
-                                                           Executor* executor) {
-  auto catalog = executor->getCatalog();
-  CHECK(catalog);
-
-  auto tmeta = catalog->getMetadataForTable(std::string(table));
+std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(
+    std::string_view table,
+    std::string_view column,
+    int rte_idx,
+    const Catalog_Namespace::Catalog& catalog) {
+  auto tmeta = catalog.getMetadataForTable(std::string(table));
   CHECK(tmeta);
 
-  auto cmeta = catalog->getMetadataForColumn(tmeta->tableId, std::string(column));
+  auto cmeta = catalog.getMetadataForColumn(tmeta->tableId, std::string(column));
   CHECK(cmeta);
 
   auto ti = cmeta->columnType;
@@ -590,13 +589,15 @@ std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view tabl
       default:
         CHECK(false);
     }
-    cmeta = catalog->getMetadataForColumn(tmeta->tableId, geoColumnId);
+    cmeta = catalog.getMetadataForColumn(tmeta->tableId, geoColumnId);
     CHECK(cmeta);
     ti = cmeta->columnType;
   }
 
-  auto cv =
-      std::make_shared<Analyzer::ColumnVar>(ti, tmeta->tableId, cmeta->columnId, rte_idx);
+  auto cv = std::make_shared<Analyzer::ColumnVar>(
+      ti,
+      shared::ColumnKey{catalog.getDatabaseId(), tmeta->tableId, cmeta->columnId},
+      rte_idx);
   return cv;
 }
 
@@ -629,14 +630,16 @@ class AllColumnVarsVisitor
 };
 
 void setupSyntheticCaching(std::set<const Analyzer::ColumnVar*> cvs, Executor* executor) {
-  std::unordered_set<int> phys_table_ids;
+  std::unordered_set<shared::TableKey> phys_table_ids;
   for (auto cv : cvs) {
-    phys_table_ids.insert(cv->get_table_id());
+    phys_table_ids.insert(cv->getTableKey());
   }
 
   std::unordered_set<PhysicalInput> phys_inputs;
   for (auto cv : cvs) {
-    phys_inputs.emplace(PhysicalInput{cv->get_column_id(), cv->get_table_id()});
+    const auto& column_key = cv->getColumnKey();
+    phys_inputs.emplace(
+        PhysicalInput{column_key.column_id, column_key.table_id, column_key.db_id});
   }
 
   executor->setupCaching(phys_inputs, phys_table_ids);
@@ -645,23 +648,21 @@ void setupSyntheticCaching(std::set<const Analyzer::ColumnVar*> cvs, Executor* e
 std::vector<InputTableInfo> getSyntheticInputTableInfo(
     std::set<const Analyzer::ColumnVar*> cvs,
     Executor* executor) {
-  auto catalog = executor->getCatalog();
-  CHECK(catalog);
-
-  std::unordered_set<int> phys_table_ids;
+  std::unordered_set<shared::TableKey> phys_table_ids;
   for (auto cv : cvs) {
-    phys_table_ids.insert(cv->get_table_id());
+    phys_table_ids.insert(cv->getTableKey());
   }
 
   // NOTE(sy): This vector ordering seems to work for now, but maybe we need to
   // review how rte_idx is assigned for ColumnVars. See for example Analyzer.h
   // and RelAlgExecutor.cpp and rte_idx there.
-  std::vector<InputTableInfo> query_infos(phys_table_ids.size());
+  std::vector<InputTableInfo> query_infos;
+  query_infos.reserve(phys_table_ids.size());
   size_t i = 0;
-  for (auto id : phys_table_ids) {
-    auto tmeta = catalog->getMetadataForTable(id);
-    query_infos[i].table_id = id;
-    query_infos[i].info = tmeta->fragmenter->getFragmentsForQuery();
+  for (const auto& table_key : phys_table_ids) {
+    auto td = Catalog_Namespace::get_metadata_for_table(table_key);
+    CHECK(td);
+    query_infos.push_back({table_key, td->fragmenter->getFragmentsForQuery()});
     ++i;
   }
 
@@ -672,15 +673,17 @@ std::vector<InputTableInfo> getSyntheticInputTableInfo(
 std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
     std::string_view table1,
     std::string_view column1,
+    const Catalog_Namespace::Catalog& catalog1,
     std::string_view table2,
     std::string_view column2,
+    const Catalog_Namespace::Catalog& catalog2,
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
     ColumnCacheMap& column_cache,
     Executor* executor) {
-  auto a1 = getSyntheticColumnVar(table1, column1, 0, executor);
-  auto a2 = getSyntheticColumnVar(table2, column2, 1, executor);
+  auto a1 = getSyntheticColumnVar(table1, column1, 0, catalog1);
+  auto a2 = getSyntheticColumnVar(table2, column2, 1, catalog2);
 
   auto qual_bin_oper = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, a1, a2);
 
@@ -773,15 +776,15 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
   return std::make_pair(error_msg, hash_table);
 }
 
-void HashJoin::checkHashJoinReplicationConstraint(const int table_id,
+void HashJoin::checkHashJoinReplicationConstraint(const shared::TableKey& table_key,
                                                   const size_t shard_count,
                                                   const Executor* executor) {
   if (!g_cluster) {
     return;
   }
-  if (table_id >= 0) {
+  if (table_key.table_id >= 0) {
     CHECK(executor);
-    const auto inner_td = executor->getCatalog()->getMetadataForTable(table_id);
+    const auto inner_td = Catalog_Namespace::get_metadata_for_table(table_key);
     CHECK(inner_td);
     if (!shard_count && !table_is_replicated(inner_td)) {
       throw TableMustBeReplicated(inner_td->tableName);
@@ -802,7 +805,6 @@ const T* HashJoin::getHashJoinColumn(const Analyzer::Expr* expr) {
 std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
     const Analyzer::Expr* lhs,
     const Analyzer::Expr* rhs,
-    const Catalog_Namespace::Catalog& cat,
     const TemporaryTables* temporary_tables,
     const bool is_overlaps_join) {
   SQLTypeInfo lhs_ti = lhs->get_type_info();
@@ -933,12 +935,10 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
   }
   // We need to fetch the actual type information from the catalog since Analyzer
   // always reports nullable as true for inner table columns in left joins.
-  const auto inner_col_cd = get_column_descriptor_maybe(
-      inner_col->get_column_id(), inner_col->get_table_id(), cat);
-  const auto inner_col_real_ti = get_column_type(inner_col->get_column_id(),
-                                                 inner_col->get_table_id(),
-                                                 inner_col_cd,
-                                                 temporary_tables);
+  const auto& column_key = inner_col->getColumnKey();
+  const auto inner_col_cd = get_column_descriptor_maybe(column_key);
+  const auto inner_col_real_ti = get_column_type(
+      column_key.column_id, column_key.table_id, inner_col_cd, temporary_tables);
   const auto& outer_col_ti =
       !(dynamic_cast<const Analyzer::FunctionOper*>(lhs)) && outer_col
           ? outer_col->get_type_info()
@@ -994,7 +994,6 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
 
 std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>>
 HashJoin::normalizeColumnPairs(const Analyzer::BinOper* condition,
-                               const Catalog_Namespace::Catalog& cat,
                                const TemporaryTables* temporary_tables) {
   std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>> result;
   const auto lhs_tuple_expr =
@@ -1010,7 +1009,6 @@ HashJoin::normalizeColumnPairs(const Analyzer::BinOper* condition,
     for (size_t i = 0; i < lhs_tuple.size(); ++i) {
       const auto col_pair = normalizeColumnPair(lhs_tuple[i].get(),
                                                 rhs_tuple[i].get(),
-                                                cat,
                                                 temporary_tables,
                                                 condition->is_overlaps_oper());
       result.first.emplace_back(col_pair.first);
@@ -1020,7 +1018,6 @@ HashJoin::normalizeColumnPairs(const Analyzer::BinOper* condition,
     CHECK(!lhs_tuple_expr && !rhs_tuple_expr);
     const auto col_pair = normalizeColumnPair(condition->get_left_operand(),
                                               condition->get_right_operand(),
-                                              cat,
                                               temporary_tables,
                                               condition->is_overlaps_oper());
     result.first.emplace_back(col_pair.first);
@@ -1040,11 +1037,10 @@ bool HashJoin::canAccessHashTable(bool allow_hash_table_recycling,
 namespace {
 
 InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
-                    const Catalog_Namespace::Catalog& cat,
                     const TemporaryTables* temporary_tables) {
   const auto lhs = qual_bin_oper->get_left_operand();
   const auto rhs = qual_bin_oper->get_right_operand();
-  return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables).first;
+  return HashJoin::normalizeColumnPair(lhs, rhs, temporary_tables).first;
 }
 
 }  // namespace
@@ -1056,7 +1052,7 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
   std::shared_ptr<Analyzer::BinOper> redirected_bin_oper;
   try {
     std::tie(inner_col, outer_col) =
-        get_cols(join_condition, *executor->getCatalog(), executor->getTemporaryTables());
+        get_cols(join_condition, executor->getTemporaryTables());
   } catch (...) {
     return 0;
   }

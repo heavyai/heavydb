@@ -15,6 +15,7 @@
  */
 
 #include "GeospatialFunctionFinder.h"
+
 #include <regex>
 
 const std::vector<const Analyzer::ColumnVar*>& GeospatialFunctionFinder::getGeoArgCvs()
@@ -22,29 +23,31 @@ const std::vector<const Analyzer::ColumnVar*>& GeospatialFunctionFinder::getGeoA
   return geo_arg_cvs_;
 }
 
-const std::pair<int, int> GeospatialFunctionFinder::getTableIdsOfGeoExpr() const {
+const std::pair<shared::TableKey, shared::TableKey>
+GeospatialFunctionFinder::getTableIdsOfGeoExpr() const {
   // we assume we do not use self geo join and n-ary geo join
   if (!geo_arg_cvs_.empty()) {
-    std::unordered_set<int> tableIds;
+    std::unordered_set<shared::TableKey> table_keys;
     std::for_each(geo_arg_cvs_.cbegin(),
                   geo_arg_cvs_.cend(),
-                  [&tableIds](const Analyzer::ColumnVar* cv) {
-                    tableIds.emplace(cv->get_table_id());
+                  [&table_keys](const Analyzer::ColumnVar* cv) {
+                    table_keys.emplace(cv->getTableKey());
                   });
-    if (tableIds.size() == 2) {
-      const int inner_table_id = geo_arg_cvs_.front()->get_table_id();
-      int outer_table_id = -1;
-      std::for_each(tableIds.cbegin(),
-                    tableIds.cend(),
-                    [&inner_table_id, &outer_table_id](const int table_id) {
-                      if (table_id != inner_table_id) {
-                        outer_table_id = table_id;
-                      }
-                    });
-      return std::make_pair(inner_table_id, outer_table_id);
+    if (table_keys.size() == 2) {
+      const auto inner_table_key = geo_arg_cvs_.front()->getTableKey();
+      shared::TableKey outer_table_key{-1, -1};
+      std::for_each(
+          table_keys.cbegin(),
+          table_keys.cend(),
+          [&inner_table_key, &outer_table_key](const shared::TableKey& table_key) {
+            if (table_key != inner_table_key) {
+              outer_table_key = table_key;
+            }
+          });
+      return std::make_pair(inner_table_key, outer_table_key);
     }
   }
-  return std::make_pair(-1, -1);
+  return std::make_pair(shared::TableKey{-1, -1}, shared::TableKey{-1, -1});
 }
 
 const std::string& GeospatialFunctionFinder::getGeoFunctionName() const {

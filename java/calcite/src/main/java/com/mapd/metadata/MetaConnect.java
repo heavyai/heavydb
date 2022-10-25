@@ -161,7 +161,8 @@ public class MetaConnect {
       HEAVYDBLOGGER.error(err);
       throw new RuntimeException(err);
     }
-    String connectURL = "jdbc:sqlite:" + dataDir + "/" + CATALOG_DIR_NAME + "/" + catalog;
+    String connectURL = "jdbc:sqlite:" + dataDir + "/" + CATALOG_DIR_NAME + "/"
+            + getCatalogFileName(catalog);
     try {
       catConn = DriverManager.getConnection(connectURL);
     } catch (SQLException ex) {
@@ -171,6 +172,20 @@ public class MetaConnect {
       throw new RuntimeException(err);
     }
     HEAVYDBLOGGER.debug("Opened database successfully");
+  }
+
+  String getCatalogFileName(String catalog) {
+    String path = dataDir + "/" + CATALOG_DIR_NAME;
+    File directory = new File(path);
+    if (!directory.isDirectory()) {
+      throw new RuntimeException("Catalog directory not found at: " + path);
+    }
+    for (File file : directory.listFiles()) {
+      if (file.getName().equalsIgnoreCase(catalog)) {
+        return file.getName();
+      }
+    }
+    throw new RuntimeException("Database file not found for: " + catalog);
   }
 
   private void disconnectFromCatalog() {
@@ -847,7 +862,7 @@ public class MetaConnect {
       disconnectFromCatalog();
       for (String dbName : dbNames) {
         Set<String> ts = new HashSet<String>();
-        DATABASE_TO_TABLES.putIfAbsent(dbName, ts);
+        DATABASE_TO_TABLES.putIfAbsent(dbName.toUpperCase(), ts);
       }
       return;
     }
@@ -864,7 +879,7 @@ public class MetaConnect {
       List<TDBInfo> dbList = client.get_databases(currentUser.getSession());
       for (TDBInfo dbInfo : dbList) {
         Set<String> ts = new HashSet<String>();
-        DATABASE_TO_TABLES.putIfAbsent(dbInfo.db_name, ts);
+        DATABASE_TO_TABLES.putIfAbsent(dbInfo.db_name.toUpperCase(), ts);
       }
       transport.close();
 
@@ -909,8 +924,7 @@ public class MetaConnect {
 
   public void updateMetaData(String schema, String table) {
     // Check if table is specified, if not we are dropping an entire DB so need to
-    // remove all
-    // tables for that DB
+    // remove all tables for that DB
     if (table.equals("")) {
       // Drop db and all tables
       // iterate through all and remove matching schema
@@ -943,8 +957,13 @@ public class MetaConnect {
     // Could be a removal or an add request for a DB
     Set<String> mSet = DATABASE_TO_TABLES.get(schema.toUpperCase());
     if (mSet != null) {
-      HEAVYDBLOGGER.debug("removing schema " + schema.toUpperCase());
-      DATABASE_TO_TABLES.remove(schema.toUpperCase());
+      if (table.isEmpty()) {
+        // If table is not specified, then we are dropping an entire DB.
+        HEAVYDBLOGGER.debug("removing schema " + schema.toUpperCase());
+        DATABASE_TO_TABLES.remove(schema.toUpperCase());
+      } else {
+        mSet.clear();
+      }
     } else {
       // add a empty database descriptor for new DB, it will be lazily populated when
       // required

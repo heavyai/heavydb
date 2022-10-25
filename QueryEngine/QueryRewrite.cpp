@@ -292,7 +292,7 @@ bool check_string_id_overflow(const int32_t string_id, const SQLTypeInfo& ti) {
  */
 RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
     const RelAlgExecutionUnit& ra_exe_unit_in,
-    std::shared_ptr<Analyzer::Expr> column_to_update) const {
+    std::shared_ptr<Analyzer::ColumnVar> column_to_update) const {
   CHECK_EQ(ra_exe_unit_in.target_exprs.size(), size_t(2));
   CHECK(ra_exe_unit_in.groupby_exprs.size() == 1 &&
         !ra_exe_unit_in.groupby_exprs.front());
@@ -305,9 +305,9 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
   const auto& new_column_ti = new_column_value->get_type_info();
   if (column_to_update->get_type_info().is_dict_encoded_string()) {
     CHECK(new_column_ti.is_dict_encoded_string());
-    if (new_column_ti.get_comp_param() > 0 &&
-        new_column_ti.get_comp_param() !=
-            column_to_update->get_type_info().get_comp_param()) {
+    if (new_column_ti.getStringDictKey().dict_id > 0 &&
+        new_column_ti.getStringDictKey() !=
+            column_to_update->get_type_info().getStringDictKey()) {
       throw std::runtime_error(
           "Updating a dictionary encoded string using another dictionary encoded string "
           "column is not yet supported, unless both columns share dictionaries.");
@@ -321,13 +321,14 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
         CHECK(original_constant_expr->get_type_info().is_string());
         // extract the string, insert it into the dict for the table we are updating,
         // and place the dictionary ID in the oper
-        auto cat = executor_->getCatalog();
-        CHECK(cat);
 
         CHECK(column_to_update->get_type_info().is_dict_encoded_string());
-        const auto dict_id = column_to_update->get_type_info().get_comp_param();
+        const auto& dict_key = column_to_update->get_type_info().getStringDictKey();
         std::map<int, StringDictionary*> string_dicts;
-        const auto dd = cat->getMetadataForDict(dict_id, /*load_dict=*/true);
+        const auto catalog =
+            Catalog_Namespace::SysCatalog::instance().getCatalog(dict_key.db_id);
+        CHECK(catalog);
+        const auto dd = catalog->getMetadataForDict(dict_key.dict_id, /*load_dict=*/true);
         CHECK(dd);
         auto string_dict = dd->stringDict;
         CHECK(string_dict);
@@ -338,7 +339,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
           throw std::runtime_error(
               "Ran out of space in dictionary, cannot update column with dictionary "
               "encoded string value. Dictionary ID: " +
-              std::to_string(dict_id));
+              std::to_string(dict_key.dict_id));
         }
         if (string_id == inline_int_null_value<int32_t>()) {
           string_id = inline_fixed_encoding_null_val(column_to_update->get_type_info());
@@ -361,13 +362,13 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
         auto row_set_mem_owner = executor_->getRowSetMemoryOwner();
         CHECK(row_set_mem_owner);
         auto& str_dict_generations = row_set_mem_owner->getStringDictionaryGenerations();
-        if (str_dict_generations.getGeneration(dict_id) > -1) {
-          str_dict_generations.updateGeneration(dict_id,
+        if (str_dict_generations.getGeneration(dict_key) > -1) {
+          str_dict_generations.updateGeneration(dict_key,
                                                 string_dict->storageEntryCount());
         } else {
           // Simple update with no filters does not use a CASE, and therefore does not add
           // a valid generation
-          str_dict_generations.setGeneration(dict_id, string_dict->storageEntryCount());
+          str_dict_generations.setGeneration(dict_key, string_dict->storageEntryCount());
         }
       }
     }
@@ -410,9 +411,11 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
     auto col_to_update_var =
         std::dynamic_pointer_cast<Analyzer::ColumnVar>(column_to_update);
     CHECK(col_to_update_var);
+    const auto& column_key = col_to_update_var->getColumnKey();
     auto col_to_update_desc =
-        std::make_shared<const InputColDescriptor>(col_to_update_var->get_column_id(),
-                                                   col_to_update_var->get_table_id(),
+        std::make_shared<const InputColDescriptor>(column_key.column_id,
+                                                   column_key.table_id,
+                                                   column_key.db_id,
                                                    col_to_update_var->get_rte_idx());
     auto existing_col_desc_it = std::find_if(
         input_col_descs.begin(),
@@ -515,20 +518,24 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
         input_col_descs.begin(),
         input_col_descs.end(),
         [&delete_column](const std::shared_ptr<const InputColDescriptor>& in) {
-          return in->getColId() == delete_column->get_column_id();
+          return in->getColId() == delete_column->getColumnKey().column_id;
         });
     CHECK(delete_col_desc_it == input_col_descs.end());
+    const auto& column_key = delete_column->getColumnKey();
     auto delete_col_desc =
-        std::make_shared<const InputColDescriptor>(delete_column->get_column_id(),
-                                                   delete_column->get_table_id(),
+        std::make_shared<const InputColDescriptor>(column_key.column_id,
+                                                   column_key.table_id,
+                                                   column_key.db_id,
                                                    delete_column->get_rte_idx());
     input_col_descs.push_back(delete_col_desc);
     target_exprs_owned_.emplace_back(case_expr);
   } else {
     // no filters, simply project the deleted=true column value for all rows
+    const auto& column_key = delete_column->getColumnKey();
     auto delete_col_desc =
-        std::make_shared<const InputColDescriptor>(delete_column->get_column_id(),
-                                                   delete_column->get_table_id(),
+        std::make_shared<const InputColDescriptor>(column_key.column_id,
+                                                   column_key.table_id,
+                                                   column_key.db_id,
                                                    delete_column->get_rte_idx());
     input_col_descs.push_back(delete_col_desc);
     target_exprs_owned_.emplace_back(deleted_constant);

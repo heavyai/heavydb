@@ -68,8 +68,8 @@ class DataMgrTest : public testing::Test {
   std::shared_ptr<Chunk_NS::Chunk> writeChunkForKey(const ChunkKey& key) {
     auto disk_buf = data_mgr_->createChunkBuffer(key, MemoryLevel::DISK_LEVEL);
     disk_buf->append(std::vector<int8_t>{1, 2, 3, 4}.data(), 4U);
-    auto cd =
-        std::make_unique<ColumnDescriptor>(key[1], key[2], "temp", SQLTypeInfo{kTINYINT});
+    auto cd = std::make_unique<ColumnDescriptor>(
+        key[1], key[2], "temp", SQLTypeInfo{kTINYINT}, key[0]);
     return Chunk_NS::Chunk::getChunk(
         cd.get(), data_mgr_.get(), key, MemoryLevel::CPU_LEVEL, 0, 4, 4);
   }

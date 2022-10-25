@@ -2066,15 +2066,14 @@ NEVER_INLINE HOST int32_t sum_along_row__cpu_template(const Column<Array<T>>& in
     } else {
       if constexpr (std::is_same<T, TextEncodingDict>::value) {
         auto* mgr = TableFunctionManager::get_singleton();
-        int32_t input_dict_id = input.getDictId();
-        int32_t output_dict_id = output.getDictId();
         std::string acc = "";
         for (auto j = 0; j < arr.getSize(); j++) {
           if (!arr.isNull(j)) {
-            acc += mgr->getString(input_dict_id, arr[j]);
+            acc += mgr->getString(input.getDictDbId(), input.getDictId(), arr[j]);
           }
         }
-        int32_t out_string_id = mgr->getOrAddTransient(output_dict_id, acc);
+        int32_t out_string_id =
+            mgr->getOrAddTransient(output.getDictDbId(), output.getDictId(), acc);
         output[i] = out_string_id;
       } else {
         T acc{0};
@@ -2163,9 +2162,8 @@ NEVER_INLINE HOST int32_t array_concat__cpu_template(TableFunctionManager& mgr,
       Column<Array<T>> col = inputs[j];
       Array<T> arr = col[i];
       if constexpr (std::is_same<T, TextEncodingDict>::value) {
-        auto input_dict_id = col.getDictId();
-        auto output_dict_id = output.getDictId();
-        if (input_dict_id == output_dict_id) {
+        if (col.getDictDbId() == output.getDictDbId() &&
+            col.getDictId() == output.getDictId()) {
           output.concatItem(i, arr);
         } else {
           throw std::runtime_error(
@@ -2202,15 +2200,15 @@ NEVER_INLINE HOST int32_t array_asarray__cpu_template(TableFunctionManager& mgr,
   mgr.set_output_row_size(size);
 
   if constexpr (std::is_same<T, TextEncodingDict>::value) {
-    int32_t input_dict_id = input.getDictId();
-    int32_t output_dict_id = mgr.getNewDictId();
     for (int i = 0; i < size; i++) {
       if (input.isNull(i)) {
         output.setNull(i);
       } else {
         Array<T> arr = output.getItem(i, 1);
-        arr[0] =
-            mgr.getOrAddTransient(output_dict_id, mgr.getString(input_dict_id, input[i]));
+        arr[0] = mgr.getOrAddTransient(
+            mgr.getNewDictDbId(),
+            mgr.getNewDictId(),
+            mgr.getString(input.getDictDbId(), input.getDictId(), input[i]));
       }
     }
   } else {

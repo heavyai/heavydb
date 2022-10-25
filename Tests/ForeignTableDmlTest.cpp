@@ -250,48 +250,6 @@ std::string get_data_wrapper_name(const std::string& data_wrapper_type) {
   return data_wrapper;
 }
 
-foreign_storage::OptionsMap add_missing_options_for_wrapper(
-    const foreign_storage::OptionsMap& options,
-    const std::string& data_wrapper_type,
-    const std::vector<NameTypePair>& column_pairs,
-    const std::string& table_name,
-    const std::string& src_path,
-    const int32_t order_by_column_index = 0) {
-  foreign_storage::OptionsMap new_options = options;
-  if (data_wrapper_type == "regex_parser") {
-    if (options.find("LINE_REGEX") == options.end()) {
-      new_options["LINE_REGEX"] = get_line_regex(column_pairs.size());
-    }
-    if (options.find("HEADER") == options.end()) {
-      new_options["HEADER"] = "TRUE";
-    }
-  }
-
-  if (DBHandlerTestFixture::isOdbc(data_wrapper_type)) {
-    auto odbc_table_name =
-        DBHandlerTestFixture::getOdbcTableName(table_name, data_wrapper_type);
-    if (options.find("SQL_SELECT") == options.end()) {
-      std::stringstream ss;
-      ss << "select ";
-      size_t i = 0;
-      for (auto [name, type] : column_pairs) {
-        ss << name << ((++i < column_pairs.size()) ? ", " : " from " + odbc_table_name);
-      }
-      new_options["SQL_SELECT"] = ss.str();
-    }
-    if (options.find("SQL_ORDER_BY") == options.end()) {
-      CHECK_LT(static_cast<size_t>(order_by_column_index), column_pairs.size());
-      std::stringstream ss;
-      ss << column_pairs[order_by_column_index].first;
-      new_options["SQL_ORDER_BY"] = ss.str();
-    }
-  } else {
-    if (options.find("FILE_PATH") == options.end()) {
-      new_options["FILE_PATH"] = src_path;
-    }
-  }
-  return new_options;
-}
 }  // namespace
 
 /**
@@ -3972,6 +3930,15 @@ TEST_P(StringDictAppendTest, AppendStringDictJoin) {
 class DataWrapperAppendRefreshTest
     : public AppendRefreshBase,
       public ::testing::WithParamInterface<std::tuple<WrapperType, RecoverCacheFlag>> {
+ public:
+  static std::string testParamsToString(
+      const std::tuple<WrapperType, RecoverCacheFlag>& params) {
+    std::stringstream ss;
+    ss << "DataWrapper_" << std::get<0>(params)
+       << (std::get<1>(params) ? "_RecoverCache" : "");
+    return ss.str();
+  }
+
  protected:
   void SetUp() override {
     std::tie(wrapper_type_, recover_cache_) = GetParam();
@@ -4011,10 +3978,8 @@ INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTests,
                          ::testing::Combine(::testing::ValuesIn(local_wrappers),
                                             ::testing::Values(true, false)),
                          [](const auto& info) {
-                           std::stringstream ss;
-                           ss << "DataWrapper_" << std::get<0>(info.param)
-                              << (std::get<1>(info.param) ? "_RecoverCache" : "");
-                           return ss.str();
+                           return DataWrapperAppendRefreshTest::testParamsToString(
+                               info.param);
                          });
 
 TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
@@ -4308,37 +4273,102 @@ TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileAndRollOff) {
   sqlAndCompareResult(select_query, {{i(2)}, {i(3)}, {i(4)}});
 }
 
-TEST_P(DataWrapperAppendRefreshTest, FileRollOffWithEvictionOnOneLeafNode) {
-  if (!isDistributedMode()) {
-    GTEST_SKIP() << "This test case only applies to distributed mode.";
-  }
-  if (isOdbc(wrapper_type_)) {
-    GTEST_SKIP() << "This test case is not relevant to ODBC.";
+class DistributedCacheConsistencyTest : public DataWrapperAppendRefreshTest {
+ protected:
+  void SetUp() override {
+    if (!isDistributedMode()) {
+      GTEST_SKIP() << "This test case only applies to distributed mode.";
+    }
+    DataWrapperAppendRefreshTest::SetUp();
+    file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
+    fragment_size_ = 2;
+    switchToAdmin();
   }
 
-  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
-  fragment_size_ = 2;
+  void TearDown() override {
+    if (!isDistributedMode()) {
+      GTEST_SKIP() << "This test case only applies to distributed mode.";
+    }
+    switchToAdmin();
+    sql("DROP DATABASE IF EXISTS test_db;");
+    DataWrapperAppendRefreshTest::TearDown();
+  }
+
+  void rollOffFileAndRefresh() {
+    overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+    renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_only");
+    sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  }
+
+  void forceFirstNodeTableEviction() {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    Catalog_Namespace::SessionInfo session_info{
+        nullptr, {}, ExecutorDeviceType::CPU, session_id};
+    db_handler->leaf_aggregator_.forwardQueryToLeaf(
+        session_info,
+        "REFRESH FOREIGN TABLES " + table_name_ + " WITH (evict = 'true');",
+        0);
+  }
+
+  void switchToTestDb() {
+    if (test_db_session_.empty()) {
+      login(
+          shared::kRootUsername, shared::kDefaultRootPasswd, "test_db", test_db_session_);
+    }
+    ASSERT_FALSE(test_db_session_.empty());
+    setSessionId(test_db_session_);
+  }
+
+  void switchToDefaultDb() { switchToAdmin(); }
+
+  std::string test_db_session_{};
+};
+
+TEST_P(DistributedCacheConsistencyTest, FileRollOffWithEvictionOnOneLeafNode) {
   sqlCreateTestTableWithRollOffOption();
-
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
 
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
-  renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_only");
-
-  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  rollOffFileAndRefresh();
   sqlAndCompareResult(select_query, {{i(3)}, {i(4)}});
 
-  // Force table eviction on the first node.
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  Catalog_Namespace::SessionInfo session_info{
-      nullptr, {}, ExecutorDeviceType::CPU, session_id};
-  db_handler->leaf_aggregator_.forwardQueryToLeaf(
-      session_info,
-      "REFRESH FOREIGN TABLES " + table_name_ + " WITH (evict = 'true');",
-      0);
-
+  forceFirstNodeTableEviction();
   sqlAndCompareResult(select_query, {{i(3)}, {i(4)}});
 }
+
+TEST_P(DistributedCacheConsistencyTest, FileRollOffWithEvictionOnOneLeafNodeCrossDb) {
+  sql("CREATE DATABASE test_db;");
+  switchToTestDb();
+  sqlCreateTestTableWithRollOffOption();
+
+  static const std::string cross_db_select_query =
+      "SELECT * FROM test_db." + table_name_ + " ORDER BY i;";
+  switchToDefaultDb();
+  sqlAndCompareResult(cross_db_select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
+
+  switchToTestDb();
+  rollOffFileAndRefresh();
+
+  switchToDefaultDb();
+  sqlAndCompareResult(cross_db_select_query, {{i(3)}, {i(4)}});
+
+  switchToTestDb();
+  forceFirstNodeTableEviction();
+
+  switchToDefaultDb();
+  queryAndAssertException(
+      cross_db_select_query,
+      "Table data inconsistently cached for table: refresh_tmp in catalog: test_db. "
+      "Please refresh table with the cache eviction option set.");
+}
+
+INSTANTIATE_TEST_SUITE_P(FileDataWrappers,
+                         DistributedCacheConsistencyTest,
+                         ::testing::Combine(::testing::ValuesIn(file_wrappers),
+                                            ::testing::Values(true, false)),
+                         [](const auto& info) {
+                           return DataWrapperAppendRefreshTest::testParamsToString(
+                               info.param);
+                         });
 
 INSTANTIATE_TEST_SUITE_P(
     DataTypeFragmentSizeAndDataWrapperCsvTests,

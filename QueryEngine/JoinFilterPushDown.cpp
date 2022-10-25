@@ -24,7 +24,7 @@ class BindFilterToOutermostVisitor : public DeepCopyVisitor {
   std::shared_ptr<Analyzer::Expr> visitColumnVar(
       const Analyzer::ColumnVar* col_var) const override {
     return makeExpr<Analyzer::ColumnVar>(
-        col_var->get_type_info(), col_var->get_table_id(), col_var->get_column_id(), 0);
+        col_var->get_type_info(), col_var->getColumnKey(), 0);
   }
 };
 
@@ -32,7 +32,9 @@ class CollectInputColumnsVisitor
     : public ScalarExprVisitor<std::unordered_set<InputColDescriptor>> {
   std::unordered_set<InputColDescriptor> visitColumnVar(
       const Analyzer::ColumnVar* col_var) const override {
-    return {InputColDescriptor(col_var->get_column_id(), col_var->get_table_id(), 0)};
+    const auto& column_key = col_var->getColumnKey();
+    return {InputColDescriptor(
+        column_key.column_id, column_key.table_id, column_key.db_id, 0)};
   }
 
  public:
@@ -102,7 +104,7 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
   try {
     ColumnCacheMap column_cache;
     filtered_result = executor_->executeWorkUnit(
-        one, true, table_infos, ra_exe_unit, co, eo, cat_, nullptr, false, column_cache);
+        one, true, table_infos, ra_exe_unit, co, eo, nullptr, false, column_cache);
   } catch (...) {
     return {false, 1.0, 0};
   }
@@ -165,7 +167,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
     // Dispatch the subqueries first
     for (auto subquery : subqueries) {
       // Execute the subquery and cache the result.
-      RelAlgExecutor ra_executor(executor_, cat_);
+      RelAlgExecutor ra_executor(executor_);
       const auto subquery_ra = subquery->getRelAlg();
       CHECK(subquery_ra);
       RaExecutionSequence subquery_seq(subquery_ra, executor_);
@@ -190,10 +192,10 @@ bool to_gather_info_for_filter_selectivity(
   }
   // we currently do not support filter push down when there is a self-join involved:
   // TODO(Saman): prevent Calcite from optimizing self-joins to remove this exclusion
-  std::unordered_set<int> table_ids;
+  std::unordered_set<shared::TableKey> table_keys;
   for (auto ti : table_infos) {
-    if (table_ids.find(ti.table_id) == table_ids.end()) {
-      table_ids.insert(ti.table_id);
+    if (table_keys.find(ti.table_key) == table_keys.end()) {
+      table_keys.insert(ti.table_key);
     } else {
       // a self-join is involved
       return false;

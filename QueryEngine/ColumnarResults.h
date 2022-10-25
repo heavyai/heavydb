@@ -209,7 +209,7 @@ class ColumnarResults {
 };
 
 using ColumnCacheMap =
-    std::unordered_map<int,
+    std::unordered_map<shared::TableKey,
                        std::unordered_map<int, std::shared_ptr<const ColumnarResults>>>;
 
 #endif  // COLUMNAR_RESULTS_H

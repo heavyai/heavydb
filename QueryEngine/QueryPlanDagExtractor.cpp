@@ -15,10 +15,12 @@
  */
 
 #include "QueryPlanDagExtractor.h"
-#include "RexVisitor.h"
-#include "Visitors/QueryPlanDagChecker.h"
 
 #include <boost/algorithm/cxx11/any_of.hpp>
+
+#include "RexVisitor.h"
+#include "Shared/DbObjectKeys.h"
+#include "Visitors/QueryPlanDagChecker.h"
 
 extern bool g_is_test_env;
 
@@ -47,12 +49,10 @@ std::vector<InnerOuterOrLoopQual> QueryPlanDagExtractor::normalizeColumnsPair(
                                            const Analyzer::Expr* rhs,
                                            const TemporaryTables* temporary_table) {
     try {
-      auto inner_outer_pair = HashJoin::normalizeColumnPair(lhs,
-                                                            rhs,
-                                                            *executor_->getCatalog(),
-                                                            temporary_table,
-                                                            condition->is_overlaps_oper())
-                                  .first;
+      auto inner_outer_pair =
+          HashJoin::normalizeColumnPair(
+              lhs, rhs, temporary_table, condition->is_overlaps_oper())
+              .first;
       InnerOuterOrLoopQual valid_qual{
           std::make_pair(inner_outer_pair.first, inner_outer_pair.second), false};
       result.push_back(valid_qual);
@@ -322,7 +322,7 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
       fill_node_ids_to_dag_vec(rhs_node->getQueryPlanDag());
     }
     after_rhs_visited = getExtractedQueryPlanDagStr();
-    addTableIdToNodeLink(rhs_node->getId(), rhs_node);
+    addTableIdToNodeLink({0, int32_t(rhs_node->getId())}, rhs_node);
     rhs_input_keys = ScanNodeTableKeyCollector::getScanNodeTableKey(rhs_node);
   }
   auto lhs_node = rel_trans_join->getLHS();
@@ -333,7 +333,7 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
       fill_node_ids_to_dag_vec(lhs_node->getQueryPlanDag());
     }
     after_lhs_visited = getExtractedQueryPlanDagStr();
-    addTableIdToNodeLink(lhs_node->getId(), lhs_node);
+    addTableIdToNodeLink({0, int32_t(lhs_node->getId())}, lhs_node);
     lhs_input_keys = ScanNodeTableKeyCollector::getScanNodeTableKey(lhs_node);
   }
   if (isEmptyQueryPlanDag(after_lhs_visited) || isEmptyQueryPlanDag(after_rhs_visited)) {
@@ -393,13 +393,19 @@ struct OpInfo {
 
 // Return the input index whose tableId matches the given tbl_id.
 // If none then return -1.
-int get_input_idx(const RelLeftDeepInnerJoin* rel_left_deep_join, int const tbl_id) {
+int get_input_idx(const RelLeftDeepInnerJoin* rel_left_deep_join,
+                  const shared::TableKey& table_key) {
   for (size_t input_idx = 0; input_idx < rel_left_deep_join->inputCount(); ++input_idx) {
     auto const input_node = rel_left_deep_join->getInput(input_idx);
     auto const scan_node = dynamic_cast<const RelScan*>(input_node);
-    int const target_table_id = scan_node ? scan_node->getTableDescriptor()->tableId
-                                          : -1 * input_node->getId();  // temporary table
-    if (target_table_id == tbl_id) {
+    shared::TableKey target_table_key{0, 0};
+    if (scan_node) {
+      target_table_key.db_id = scan_node->getCatalog().getDatabaseId();
+      target_table_key.table_id = scan_node->getTableDescriptor()->tableId;
+    } else {
+      target_table_key.table_id = -1 * input_node->getId();  // temporary table
+    }
+    if (target_table_key == table_key) {
       return input_idx;
     }
   }
@@ -520,11 +526,11 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
                 found_valid_col_vars = true;
                 if (inner_input_idx == -1) {
                   inner_input_idx =
-                      get_input_idx(rel_left_deep_join, lhs_cvs.front()->get_table_id());
+                      get_input_idx(rel_left_deep_join, lhs_cvs.front()->getTableKey());
                 }
                 if (outer_input_idx == -1) {
                   outer_input_idx =
-                      get_input_idx(rel_left_deep_join, rhs_cvs.front()->get_table_id());
+                      get_input_idx(rel_left_deep_join, rhs_cvs.front()->getTableKey());
                 }
                 std::copy(
                     lhs_cvs.begin(), lhs_cvs.end(), std::back_inserter(inner_join_cols));

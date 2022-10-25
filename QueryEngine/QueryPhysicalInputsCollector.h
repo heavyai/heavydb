@@ -29,18 +29,13 @@
 class RelAlgNode;
 
 struct PhysicalInput {
-  int col_id;
-  int table_id;
+  int32_t col_id;
+  int32_t table_id;
+  int32_t db_id;
 
-  size_t hash() const {
-    static_assert(sizeof(table_id) + sizeof(col_id) <= sizeof(size_t));
-    return static_cast<size_t>(table_id) << 8 * sizeof(col_id) |
-           static_cast<size_t>(col_id);
-  }
+  size_t hash() const;
 
-  bool operator==(const PhysicalInput& that) const {
-    return col_id == that.col_id && table_id == that.table_id;
-  }
+  bool operator==(const PhysicalInput& that) const;
 };
 
 std::ostream& operator<<(std::ostream&, PhysicalInput const&);
@@ -55,6 +50,6 @@ struct hash<PhysicalInput> {
 }  // namespace std
 
 std::unordered_set<PhysicalInput> get_physical_inputs(const RelAlgNode*);
-std::unordered_set<int> get_physical_table_inputs(const RelAlgNode*);
+std::unordered_set<shared::TableKey> get_physical_table_inputs(const RelAlgNode*);
 
 #endif  // QUERYENGINE_QUERYPHYSICALINPUTSCOLLECTOR_H

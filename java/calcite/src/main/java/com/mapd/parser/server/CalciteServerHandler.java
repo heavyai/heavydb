@@ -305,6 +305,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     server = s;
   }
 
+  // TODO: Add update type parameter to API.
   @Override
   public void updateMetadata(String catalog, String table) throws TException {
     HEAVYDBLOGGER.debug(

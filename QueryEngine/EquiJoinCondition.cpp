@@ -64,7 +64,7 @@ bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
       crt_outer_rte_set != prev_outer_rte_set) {
     return false;
   }
-  if (crt_inner_col_var->get_table_id() != prev_inner_col_var->get_table_id() ||
+  if (crt_inner_col_var->getTableKey() != prev_inner_col_var->getTableKey() ||
       crt_inner_col_var->get_rte_idx() != prev_inner_col_var->get_rte_idx()) {
     return false;
   }

@@ -25,15 +25,14 @@ bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) const {
   if (!do_not_fetch_column || dynamic_cast<const Analyzer::Var*>(do_not_fetch_column)) {
     return false;
   }
-  if (do_not_fetch_column->get_table_id() > 0) {
-    auto cd = get_column_descriptor(do_not_fetch_column->get_column_id(),
-                                    do_not_fetch_column->get_table_id(),
-                                    *executor_->getCatalog());
+  const auto& column_key = do_not_fetch_column->getColumnKey();
+  if (column_key.table_id > 0) {
+    const auto cd = get_column_descriptor(column_key);
     if (cd->isVirtualCol) {
       return false;
     }
   }
-  std::set<std::pair<int, int>> intersect;
+  std::set<shared::ColumnKey> intersect;
   std::set_intersection(columns_to_fetch_.begin(),
                         columns_to_fetch_.end(),
                         columns_to_not_fetch_.begin(),
@@ -42,9 +41,7 @@ bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) const {
   if (!intersect.empty()) {
     throw CompilationRetryNoLazyFetch();
   }
-  return columns_to_fetch_.find(std::make_pair(do_not_fetch_column->get_table_id(),
-                                               do_not_fetch_column->get_column_id())) ==
-         columns_to_fetch_.end();
+  return columns_to_fetch_.find(column_key) == columns_to_fetch_.end();
 }
 
 void PlanState::allocateLocalColumnIds(
@@ -62,14 +59,14 @@ void PlanState::allocateLocalColumnIds(
 int PlanState::getLocalColumnId(const Analyzer::ColumnVar* col_var,
                                 const bool fetch_column) {
   CHECK(col_var);
-  const int table_id = col_var->get_table_id();
-  int global_col_id = col_var->get_column_id();
+  const auto& global_col_key = col_var->getColumnKey();
   const int scan_idx = col_var->get_rte_idx();
-  InputColDescriptor scan_col_desc(global_col_id, table_id, scan_idx);
+  InputColDescriptor scan_col_desc(
+      global_col_key.column_id, global_col_key.table_id, global_col_key.db_id, scan_idx);
   const auto it = global_to_local_col_ids_.find(scan_col_desc);
   CHECK(it != global_to_local_col_ids_.end()) << "Expected to find " << scan_col_desc;
   if (fetch_column) {
-    columns_to_fetch_.insert(std::make_pair(table_id, global_col_id));
+    columns_to_fetch_.insert(global_col_key);
   }
   return it->second;
 }

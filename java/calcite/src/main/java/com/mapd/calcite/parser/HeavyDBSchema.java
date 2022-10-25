@@ -55,14 +55,6 @@ public class HeavyDBSchema implements Schema {
     metaConnect = new MetaConnect(dbPort, dataDir, dbUser, dbParser, skT, db);
   }
 
-  public HeavyDBSchema(String dataDir,
-          HeavyDBParser dbParser,
-          int dbPort,
-          HeavyDBUser dbUser,
-          SockTransportProperties skT) {
-    this(dataDir, dbParser, dbPort, dbUser, skT, null);
-  }
-
   @Override
   public Table getTable(String string) {
     Table table = metaConnect.getTable(string);

@@ -6005,7 +6005,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
       jit_debug_ ? "mapdquery" : "",
       system_parameters_);
   RelAlgExecutor ra_executor(
-      executor.get(), cat, query_ra, query_state_proxy->shared_from_this());
+      executor.get(), query_ra, query_state_proxy->shared_from_this());
   CompilationOptions co = {executor_device_type,
                            /*hoist_literals=*/true,
                            ExecutorOptLevel::Default,
@@ -6625,6 +6625,45 @@ void DBHandler::execute_distributed_copy_statement(
     Parser::CopyTableStmt* copy_stmt,
     const Catalog_Namespace::SessionInfo& session_info) {}
 
+namespace {
+bool check_and_reset_in_memory_system_table(const Catalog& catalog,
+                                            const TableDescriptor& td) {
+  if (td.is_in_memory_system_table) {
+    if (g_enable_system_tables) {
+      // Reset system table fragmenter in order to force chunk metadata refetch.
+      auto table_schema_lock =
+          lockmgr::TableSchemaLockMgr::getWriteLockForTable(catalog, td.tableName);
+      auto table_data_lock =
+          lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, td.tableName);
+      catalog.removeFragmenterForTable(td.tableId);
+      catalog.getMetadataForTable(td.tableId, true);
+      return true;
+    } else {
+      throw std::runtime_error(
+          "Query cannot be executed because use of system tables is currently "
+          "disabled.");
+    }
+  }
+  return false;
+}
+
+void check_in_memory_system_table_query(
+    const std::vector<std::vector<std::string>>& selected_tables) {
+  const auto info_schema_catalog =
+      Catalog_Namespace::SysCatalog::instance().getCatalog(shared::kInfoSchemaDbName);
+  if (info_schema_catalog) {
+    for (const auto& table : selected_tables) {
+      if (table[1] == shared::kInfoSchemaDbName) {
+        auto td = info_schema_catalog->getMetadataForTable(table[0], false);
+        CHECK(td);
+        check_and_reset_in_memory_system_table(*info_schema_catalog, *td);
+      }
+    }
+  }
+}
+}  // namespace
+
+
 TPlanResult DBHandler::processCalciteRequest(
     QueryStateProxy query_state_proxy,
     const std::shared_ptr<Catalog_Namespace::Catalog>& cat,
@@ -6682,26 +6721,8 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
                                    filter_push_down_info,
                                    system_parameters,
                                    check_privileges);
-
-    for (const auto& table_name : result.resolved_accessed_objects.tables_selected_from) {
-      auto td = cat->getMetadataForTable(table_name[0], false);
-      CHECK(td);
-      if (td->is_in_memory_system_table) {
-        if (g_enable_system_tables) {
-          // Reset system table fragmenter in order to force chunk metadata refetch.
-          auto table_schema_lock =
-              lockmgr::TableSchemaLockMgr::getWriteLockForTable(*cat, td->tableName);
-          auto table_data_lock =
-              lockmgr::TableDataLockMgr::getWriteLockForTable(*cat, td->tableName);
-          cat->removeFragmenterForTable(td->tableId);
-          cat->getMetadataForTable(td->tableId, true);
-        } else {
-          throw std::runtime_error(
-              "Query cannot be executed because use of system tables is currently "
-              "disabled.");
-        }
-      }
-    }
+    check_in_memory_system_table_query(
+        result.resolved_accessed_objects.tables_selected_from);
 
     if (acquire_locks) {
       std::set<std::vector<std::string>> write_only_tables;
@@ -6729,24 +6750,31 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
       // avoid deadlocks by enforcing a deterministic locking sequence
       // first, obtain table schema locks
       // then, obtain table data locks
-      // force sort into tableid order in case of name change to guarantee fixed order of
-      // mutex access
-      std::sort(
-          tables.begin(),
-          tables.end(),
-          [&cat](const std::vector<std::string>& a, const std::vector<std::string>& b) {
-            return cat->getMetadataForTable(a[0], false)->tableId <
-                   cat->getMetadataForTable(b[0], false)->tableId;
-          });
+      // force sort by database id and table id order in case of name change to
+      // guarantee fixed order of mutex access
+      std::sort(tables.begin(),
+                tables.end(),
+                [](const std::vector<std::string>& a, const std::vector<std::string>& b) {
+                  if (a[1] != b[1]) {
+                    const auto cat_a = SysCatalog::instance().getCatalog(a[1]);
+                    const auto cat_b = SysCatalog::instance().getCatalog(b[1]);
+                    return cat_a->getDatabaseId() < cat_b->getDatabaseId();
+                  }
+                  const auto cat = SysCatalog::instance().getCatalog(a[1]);
+                  return cat->getMetadataForTable(a[0], false)->tableId <
+                         cat->getMetadataForTable(b[0], false)->tableId;
+                });
 
       // In the case of self-join and possibly other cases, we will
       // have duplicate tables. Ensure we only take one for locking below.
       tables.erase(unique(tables.begin(), tables.end()), tables.end());
       for (const auto& table : tables) {
+        const auto cat = SysCatalog::instance().getCatalog(table[1]);
+        CHECK(cat);
         locks.emplace_back(
             std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
                 lockmgr::TableSchemaLockContainer<
-                    lockmgr::ReadLock>::acquireTableDescriptor(*cat.get(), table[0])));
+                    lockmgr::ReadLock>::acquireTableDescriptor(*cat, table[0])));
         if (write_only_tables.count(table)) {
           // Aquire an insert data lock for updates/deletes, consistent w/ insert. The
           // table data lock will be aquired in the fragmenter during checkpoint.
@@ -7928,4 +7956,23 @@ void DBHandler::executeDdl(
 
 void DBHandler::resizeDispatchQueue(size_t queue_size) {
   dispatch_queue_ = std::make_unique<QueryDispatchQueue>(queue_size);
+}
+
+bool DBHandler::checkInMemorySystemTableQuery(
+    const std::unordered_set<shared::TableKey>& selected_table_keys) const {
+  bool is_in_memory_system_table_query{false};
+  const auto info_schema_catalog =
+      Catalog_Namespace::SysCatalog::instance().getCatalog(shared::kInfoSchemaDbName);
+  if (info_schema_catalog) {
+    for (const auto& table_key : selected_table_keys) {
+      if (table_key.db_id == info_schema_catalog->getDatabaseId()) {
+        auto td = info_schema_catalog->getMetadataForTable(table_key.table_id, false);
+        CHECK(td);
+        if (check_and_reset_in_memory_system_table(*info_schema_catalog, *td)) {
+          is_in_memory_system_table_query = true;
+        }
+      }
+    }
+  }
+  return is_in_memory_system_table_query;
 }

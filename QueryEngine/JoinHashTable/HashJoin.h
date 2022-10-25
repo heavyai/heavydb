@@ -30,6 +30,7 @@
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinHashTable/HashTable.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
+#include "Shared/DbObjectKeys.h"
 #include "StringOps/StringOpInfo.h"
 
 class CodeGenerator;
@@ -151,7 +152,7 @@ class HashJoin {
   virtual HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,
                                                  const size_t) = 0;
 
-  virtual int getInnerTableId() const noexcept = 0;
+  virtual shared::TableKey getInnerTableId() const noexcept = 0;
 
   virtual int getInnerTableRteIdx() const noexcept = 0;
 
@@ -220,8 +221,10 @@ class HashJoin {
   static std::shared_ptr<HashJoin> getSyntheticInstance(
       std::string_view table1,
       std::string_view column1,
+      const Catalog_Namespace::Catalog& catalog1,
       std::string_view table2,
       std::string_view column2,
+      const Catalog_Namespace::Catalog& catalog2,
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
       const int device_count,
@@ -245,17 +248,18 @@ class HashJoin {
       ColumnCacheMap& column_cache,
       Executor* executor);
 
-  static int getInnerTableId(const std::vector<InnerOuter>& inner_outer_pairs) {
+  static shared::TableKey getInnerTableId(
+      const std::vector<InnerOuter>& inner_outer_pairs) {
     CHECK(!inner_outer_pairs.empty());
     const auto first_inner_col = inner_outer_pairs.front().first;
-    return first_inner_col->get_table_id();
+    return first_inner_col->getTableKey();
   }
 
   static bool canAccessHashTable(bool allow_hash_table_recycling,
                                  bool invalid_cache_key,
                                  JoinType join_type);
 
-  static void checkHashJoinReplicationConstraint(const int table_id,
+  static void checkHashJoinReplicationConstraint(const shared::TableKey& table_key,
                                                  const size_t shard_count,
                                                  const Executor* executor);
 
@@ -263,7 +267,6 @@ class HashJoin {
   static std::pair<InnerOuter, InnerOuterStringOpInfos> normalizeColumnPair(
       const Analyzer::Expr* lhs,
       const Analyzer::Expr* rhs,
-      const Catalog_Namespace::Catalog& cat,
       const TemporaryTables* temporary_tables,
       const bool is_overlaps_join = false);
 
@@ -273,7 +276,6 @@ class HashJoin {
   // Normalize each expression tuple
   static std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>>
   normalizeColumnPairs(const Analyzer::BinOper* condition,
-                       const Catalog_Namespace::Catalog& cat,
                        const TemporaryTables* temporary_tables);
 
   HashTable* getHashTableForDevice(const size_t device_id) const {
@@ -376,10 +378,11 @@ std::string toString(const InnerOuterStringOpInfos& inner_outer_string_op_infos)
 std::string toString(
     const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs);
 
-std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view table,
-                                                           std::string_view column,
-                                                           int rte_idx,
-                                                           Executor* executor);
+std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(
+    std::string_view table,
+    std::string_view column,
+    int rte_idx,
+    const Catalog_Namespace::Catalog& catalog);
 
 size_t get_shard_count(const Analyzer::BinOper* join_condition, const Executor* executor);
 

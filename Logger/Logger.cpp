@@ -518,6 +518,7 @@ Logger::~Logger() {
       // Exceptions thrown by (*fatal_func)() are propagated here.
       std::call_once(g_fatal_func_flag, *fatal_func);
     }
+
     abort();
   }
 }

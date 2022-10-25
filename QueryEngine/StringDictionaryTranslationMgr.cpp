@@ -49,8 +49,8 @@ bool one_or_more_string_ops_is_null(
 }
 
 StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
-    const int32_t source_string_dict_id,
-    const int32_t dest_string_dict_id,
+    const shared::StringDictKey& source_string_dict_key,
+    const shared::StringDictKey& dest_string_dict_key,
     const bool translate_intersection_only,
     const SQLTypeInfo& output_ti,
     const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
@@ -59,8 +59,8 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     Executor* executor,
     Data_Namespace::DataMgr* data_mgr,
     const bool delay_translation)
-    : source_string_dict_id_(source_string_dict_id)
-    , dest_string_dict_id_(dest_string_dict_id)
+    : source_string_dict_key_(source_string_dict_key)
+    , dest_string_dict_key_(dest_string_dict_key)
     , translate_intersection_only_(translate_intersection_only)
     , output_ti_(output_ti)
     , string_op_infos_(string_op_infos)
@@ -83,7 +83,7 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
 }
 
 StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
-    const int32_t source_string_dict_id,
+    const shared::StringDictKey& source_string_dict_key,
     const SQLTypeInfo& output_ti,
     const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
     const Data_Namespace::MemoryLevel memory_level,
@@ -91,8 +91,8 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     Executor* executor,
     Data_Namespace::DataMgr* data_mgr,
     const bool delay_translation)
-    : source_string_dict_id_(source_string_dict_id)
-    , dest_string_dict_id_(-1)
+    : source_string_dict_key_(source_string_dict_key)
+    , dest_string_dict_key_({-1, -1})
     , translate_intersection_only_(true)
     , output_ti_(output_ti)
     , string_op_infos_(string_op_infos)
@@ -126,8 +126,8 @@ StringDictionaryTranslationMgr::~StringDictionaryTranslationMgr() {
 void StringDictionaryTranslationMgr::buildTranslationMap() {
   if (dest_type_is_string_) {
     host_translation_map_ = executor_->getStringProxyTranslationMap(
-        source_string_dict_id_,
-        dest_string_dict_id_,
+        source_string_dict_key_,
+        dest_string_dict_key_,
         translate_intersection_only_
             ? RowSetMemoryOwner::StringTranslationType::SOURCE_INTERSECTION
             : RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
@@ -136,7 +136,7 @@ void StringDictionaryTranslationMgr::buildTranslationMap() {
         true);
   } else {
     host_numeric_translation_map_ =
-        executor_->getStringProxyNumericTranslationMap(source_string_dict_id_,
+        executor_->getStringProxyNumericTranslationMap(source_string_dict_key_,
                                                        string_op_infos_,
                                                        executor_->getRowSetMemoryOwner(),
                                                        true);
@@ -241,7 +241,7 @@ llvm::Value* StringDictionaryTranslationMgr::codegen(llvm::Value* input_str_id_l
 
   const auto translation_map_handle_lvs =
       co.hoist_literals
-          ? code_generator.codegenHoistedConstants(constants, kENCODING_NONE, 0)
+          ? code_generator.codegenHoistedConstants(constants, kENCODING_NONE, {})
           : code_generator.codegen(constants[0], false, co);
   CHECK_EQ(size_t(1), translation_map_handle_lvs.size());
 

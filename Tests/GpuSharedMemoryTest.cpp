@@ -209,13 +209,8 @@ std::vector<std::unique_ptr<ResultSet>> create_and_fill_input_result_sets(
     const std::vector<size_t>& steps) {
   std::vector<std::unique_ptr<ResultSet>> result_sets;
   for (size_t i = 0; i < num_input_buffers; i++) {
-    result_sets.push_back(std::make_unique<ResultSet>(target_infos,
-                                                      ExecutorDeviceType::CPU,
-                                                      query_mem_desc,
-                                                      row_set_mem_owner,
-                                                      nullptr,
-                                                      0,
-                                                      0));
+    result_sets.push_back(std::make_unique<ResultSet>(
+        target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0));
     const auto storage = result_sets.back()->allocateStorage();
     fill_storage_buffer(storage->getUnderlyingBuffer(),
                         target_infos,
@@ -231,25 +226,15 @@ create_and_init_output_result_sets(std::shared_ptr<RowSetMemoryOwner> row_set_me
                                    const QueryMemoryDescriptor& query_mem_desc,
                                    const std::vector<TargetInfo>& target_infos) {
   // CPU result set, will eventually host CPU reduciton results for validations
-  auto cpu_result_set = std::make_unique<ResultSet>(target_infos,
-                                                    ExecutorDeviceType::CPU,
-                                                    query_mem_desc,
-                                                    row_set_mem_owner,
-                                                    nullptr,
-                                                    0,
-                                                    0);
+  auto cpu_result_set = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   auto cpu_storage_result = cpu_result_set->allocateStorage();
   init_storage_buffer(
       cpu_storage_result->getUnderlyingBuffer(), target_infos, query_mem_desc);
 
   // GPU result set, will eventually host GPU reduction results
-  auto gpu_result_set = std::make_unique<ResultSet>(target_infos,
-                                                    ExecutorDeviceType::GPU,
-                                                    query_mem_desc,
-                                                    row_set_mem_owner,
-                                                    nullptr,
-                                                    0,
-                                                    0);
+  auto gpu_result_set = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::GPU, query_mem_desc, row_set_mem_owner, 0, 0);
   auto gpu_storage_result = gpu_result_set->allocateStorage();
   init_storage_buffer(
       gpu_storage_result->getUnderlyingBuffer(), target_infos, query_mem_desc);

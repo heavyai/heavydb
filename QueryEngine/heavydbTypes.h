@@ -38,8 +38,8 @@
 
 #ifndef __CUDACC__
 #ifndef UDF_COMPILED
-#include "../Shared/toString.h"
-#include "../StringDictionary/StringDictionaryProxy.h"
+#include "Shared/toString.h"
+#include "StringDictionary/StringDictionaryProxy.h"
 #endif  // #ifndef UDF_COMPILED
 #endif  // #ifndef __CUDACC__
 
@@ -95,14 +95,22 @@ EXTENSION_NOINLINE_HOST void TableFunctionManager_get_metadata(
     size_t& num_bytes,
     TableFunctionMetadataType& value_type);
 
+EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getNewDictDbId(int8_t* mgr_ptr);
+
 EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getNewDictId(int8_t* mgr_ptr);
+
 std::string TableFunctionManager_getString(int8_t* mgr_ptr,
+                                           int32_t db_id,
                                            int32_t dict_id,
                                            int32_t string_id);
+
 EXTENSION_NOINLINE_HOST const char* TableFunctionManager_getCString(int8_t* mgr_ptr,
+                                                                    int32_t db_id,
                                                                     int32_t dict_id,
                                                                     int32_t string_id);
+
 EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getOrAddTransient(int8_t* mgr_ptr,
+                                                                       int32_t db_id,
                                                                        int32_t dict_id,
                                                                        std::string str);
 
@@ -110,14 +118,26 @@ EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getOrAddTransient(int8_t* m
   Row function management functions and macros:
  */
 
+#define GET_DICT_DB_ID(mgr, arg_idx) (mgr.getDictDbId(__func__, arg_idx))
+
 #define GET_DICT_ID(mgr, arg_idx) (mgr.getDictId(__func__, arg_idx))
 
-RUNTIME_EXPORT NEVER_INLINE HOST std::string
-RowFunctionManager_getString(int8_t* mgr_ptr, int32_t dict_id, int32_t string_id);
+RUNTIME_EXPORT NEVER_INLINE HOST std::string RowFunctionManager_getString(
+    int8_t* mgr_ptr,
+    int32_t db_id,
+    int32_t dict_id,
+    int32_t string_id);
+
+EXTENSION_NOINLINE_HOST int32_t RowFunctionManager_getDictDbId(int8_t* mgr_ptr,
+                                                               const char* func_name,
+                                                               size_t arg_idx);
+
 EXTENSION_NOINLINE_HOST int32_t RowFunctionManager_getDictId(int8_t* mgr_ptr,
                                                              const char* func_name,
                                                              size_t arg_idx);
+
 EXTENSION_NOINLINE_HOST int32_t RowFunctionManager_getOrAddTransient(int8_t* mgr_ptr,
+                                                                     int32_t db_id,
                                                                      int32_t dict_id,
                                                                      std::string str);
 
@@ -870,6 +890,11 @@ struct Column<Array<T>> {
     }
   }
 
+  DEVICE inline int32_t getDictDbId() const {
+    FlatBufferManager m{flatbuffer_};
+    return m.getDTypeMetadataDictDbId();
+  }
+
   DEVICE inline int32_t getDictId() const {
     FlatBufferManager m{flatbuffer_};
     return m.getDTypeMetadataDictId();
@@ -922,7 +947,12 @@ struct Column<TextEncodingDict> {
 
 #ifndef __CUDACC__
 #ifndef UDF_COMPILED
-  DEVICE inline int32_t getDictId() const { return string_dict_proxy_->getDictId(); }
+  DEVICE inline int32_t getDictDbId() const {
+    return string_dict_proxy_->getDictKey().db_id;
+  }
+  DEVICE inline int32_t getDictId() const {
+    return string_dict_proxy_->getDictKey().dict_id;
+  }
   DEVICE inline const std::string getString(int64_t index) const {
     return isNull(index) ? "" : string_dict_proxy_->getString(ptr_[index].value);
   }
@@ -1120,9 +1150,14 @@ struct ColumnList<TextEncodingDict> {
 
 #ifndef __CUDACC__
 struct RowFunctionManager {
-  std::string getString(int32_t dict_id, int32_t string_id) {
+  std::string getString(int32_t db_id, int32_t dict_id, int32_t string_id) {
     return RowFunctionManager_getString(
-        reinterpret_cast<int8_t*>(this), dict_id, string_id);
+        reinterpret_cast<int8_t*>(this), db_id, dict_id, string_id);
+  }
+
+  int32_t getDictDbId(const char* func_name, size_t arg_idx) {
+    return RowFunctionManager_getDictDbId(
+        reinterpret_cast<int8_t*>(this), func_name, arg_idx);
   }
 
   int32_t getDictId(const char* func_name, size_t arg_idx) {
@@ -1130,9 +1165,9 @@ struct RowFunctionManager {
         reinterpret_cast<int8_t*>(this), func_name, arg_idx);
   }
 
-  int32_t getOrAddTransient(int32_t dict_id, std::string str) {
+  int32_t getOrAddTransient(int32_t db_id, int32_t dict_id, std::string str) {
     return RowFunctionManager_getOrAddTransient(
-        reinterpret_cast<int8_t*>(this), dict_id, str);
+        reinterpret_cast<int8_t*>(this), db_id, dict_id, str);
   }
 };
 #endif
@@ -1216,20 +1251,23 @@ struct TableFunctionManager {
     }
     std::memcpy(&value, raw_data, num_bytes);
   }
+  int32_t getNewDictDbId() {
+    return TableFunctionManager_getNewDictDbId(reinterpret_cast<int8_t*>(this));
+  }
   int32_t getNewDictId() {
     return TableFunctionManager_getNewDictId(reinterpret_cast<int8_t*>(this));
   }
-  std::string getString(int32_t dict_id, int32_t string_id) {
+  std::string getString(int32_t db_id, int32_t dict_id, int32_t string_id) {
     return TableFunctionManager_getString(
-        reinterpret_cast<int8_t*>(this), dict_id, string_id);
+        reinterpret_cast<int8_t*>(this), db_id, dict_id, string_id);
   }
-  const char* getCString(int32_t dict_id, int32_t string_id) {
+  const char* getCString(int32_t db_id, int32_t dict_id, int32_t string_id) {
     return TableFunctionManager_getCString(
-        reinterpret_cast<int8_t*>(this), dict_id, string_id);
+        reinterpret_cast<int8_t*>(this), db_id, dict_id, string_id);
   }
-  int32_t getOrAddTransient(int32_t dict_id, std::string str) {
+  int32_t getOrAddTransient(int32_t db_id, int32_t dict_id, std::string str) {
     return TableFunctionManager_getOrAddTransient(
-        reinterpret_cast<int8_t*>(this), dict_id, str);
+        reinterpret_cast<int8_t*>(this), db_id, dict_id, str);
   }
 
 #ifdef HAVE_TOSTRING

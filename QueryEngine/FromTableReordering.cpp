@@ -48,16 +48,17 @@ std::tuple<cost_t, cost_t, InnerQualDecision> get_join_qual_cost(
   if (executor) {
     GeospatialFunctionFinder geo_func_finder;
     geo_func_finder.visit(qual);
-    int inner_table_id = -1;
-    int outer_table_id = -1;
-    std::tie(inner_table_id, outer_table_id) = geo_func_finder.getTableIdsOfGeoExpr();
-    if (inner_table_id != -1 && outer_table_id != -1) {
+    shared::TableKey inner_table_key{-1, -1};
+    shared::TableKey outer_table_key{-1, -1};
+    std::tie(inner_table_key, outer_table_key) = geo_func_finder.getTableIdsOfGeoExpr();
+    if (inner_table_key.table_id != -1 && outer_table_key.table_id != -1) {
       // try to find a chance to swap tables in the binary join
       // note that self-join does not need to be swapped
-      CHECK_NE(outer_table_id, inner_table_id);
-      const auto cat = executor->getCatalog();
-      const auto inner_table_metadata = cat->getMetadataForTable(inner_table_id);
-      const auto outer_table_metadata = cat->getMetadataForTable(outer_table_id);
+      CHECK_NE(outer_table_key, inner_table_key);
+      const auto inner_table_metadata =
+          Catalog_Namespace::get_metadata_for_table(inner_table_key);
+      const auto outer_table_metadata =
+          Catalog_Namespace::get_metadata_for_table(outer_table_key);
       const auto& target_geo_func_name = geo_func_finder.getGeoFunctionName();
       if (inner_table_metadata->fragmenter && outer_table_metadata->fragmenter) {
         const auto inner_table_cardinality =
@@ -76,15 +77,15 @@ std::tuple<cost_t, cost_t, InnerQualDecision> get_join_qual_cost(
         const auto inner_cv_it =
             std::find_if(geo_args.begin(),
                          geo_args.end(),
-                         [inner_table_id](const Analyzer::ColumnVar* cv) {
-                           return cv->get_table_id() == inner_table_id;
+                         [&inner_table_key](const Analyzer::ColumnVar* cv) {
+                           return cv->getTableKey() == inner_table_key;
                          });
         CHECK(inner_cv_it != geo_args.end());
         const auto outer_cv_it =
             std::find_if(geo_args.begin(),
                          geo_args.end(),
-                         [outer_table_id](const Analyzer::ColumnVar* cv) {
-                           return cv->get_table_id() == outer_table_id;
+                         [outer_table_key](const Analyzer::ColumnVar* cv) {
+                           return cv->getTableKey() == outer_table_key;
                          });
         CHECK(outer_cv_it != geo_args.end());
         const auto inner_cv = *inner_cv_it;
@@ -134,10 +135,12 @@ std::tuple<cost_t, cost_t, InnerQualDecision> get_join_qual_cost(
         // followings: ST_OVERLAPS_sv and is_poly_mpoly_rewrite_target_func we can use
         // overlaps hash join for those functions regardless of table ordering see
         // rewrite_overlaps_conjunction function in ExpressionRewrite.cpp
-        VLOG(2) << "Detect geo join operator, initial_inner_table(table_id: "
-                << inner_table_id << ", cardinality: " << inner_table_cardinality
-                << "), initial_outer_table(table_id: " << outer_table_id
-                << ", cardinality: " << outer_table_cardinality
+        VLOG(2) << "Detect geo join operator, initial_inner_table(db_id: "
+                << inner_table_key.db_id << ", table_id: " << inner_table_key.table_id
+                << "), cardinality: " << inner_table_cardinality
+                << "), initial_outer_table(db_id: " << outer_table_key.db_id
+                << ", table_id: " << outer_table_key.table_id
+                << "), cardinality: " << outer_table_cardinality
                 << "), inner_qual_decision: " << inner_qual_decision;
         return {200, 200, inner_qual_decision};
       }
@@ -174,8 +177,8 @@ std::tuple<cost_t, cost_t, InnerQualDecision> get_join_qual_cost(
   InnerQualDecision inner_qual_decision = InnerQualDecision::UNKNOWN;
   if (executor) {
     try {
-      const auto normalized_bin_oper = HashJoin::normalizeColumnPairs(
-          bin_oper, *executor->getCatalog(), executor->getTemporaryTables());
+      const auto normalized_bin_oper =
+          HashJoin::normalizeColumnPairs(bin_oper, executor->getTemporaryTables());
       const auto& inner_outer = normalized_bin_oper.first;
       // normalization success, so we need to figure out which cv becomes an inner
       auto lhs = bin_oper->get_left_operand();

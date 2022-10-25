@@ -153,6 +153,13 @@ extern "C" DEVICE RUNTIME_EXPORT void TableFunctionManager_get_metadata(
 }
 
 extern "C" DEVICE RUNTIME_EXPORT int32_t
+TableFunctionManager_getNewDictDbId(int8_t* mgr_ptr) {
+  auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
+  CHECK(mgr);
+  return mgr->getNewDictDbId();
+}
+
+extern "C" DEVICE RUNTIME_EXPORT int32_t
 TableFunctionManager_getNewDictId(int8_t* mgr_ptr) {
   auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
   CHECK(mgr);
@@ -160,27 +167,32 @@ TableFunctionManager_getNewDictId(int8_t* mgr_ptr) {
 }
 
 DEVICE RUNTIME_EXPORT std::string TableFunctionManager_getString(int8_t* mgr_ptr,
+                                                                 int32_t db_id,
                                                                  int32_t dict_id,
                                                                  int32_t string_id) {
   auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
   CHECK(mgr);
-  return mgr->getString(dict_id, string_id);
+  return mgr->getString(db_id, dict_id, string_id);
 }
 
-extern "C" DEVICE RUNTIME_EXPORT const char*
-TableFunctionManager_getCString(int8_t* mgr_ptr, int32_t dict_id, int32_t string_id) {
+extern "C" DEVICE RUNTIME_EXPORT const char* TableFunctionManager_getCString(
+    int8_t* mgr_ptr,
+    int32_t db_id,
+    int32_t dict_id,
+    int32_t string_id) {
   auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
   CHECK(mgr);
-  return mgr->getString(dict_id, string_id).c_str();
+  return mgr->getString(db_id, dict_id, string_id).c_str();
 }
 
 extern "C" DEVICE RUNTIME_EXPORT int32_t
 TableFunctionManager_getOrAddTransient(int8_t* mgr_ptr,
+                                       int32_t db_id,
                                        int32_t dict_id,
                                        std::string str) {
   auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
   CHECK(mgr);
-  return mgr->getOrAddTransient(dict_id, str);
+  return mgr->getOrAddTransient(db_id, dict_id, str);
 }
 
 #endif  // EXECUTE_INCLUDE

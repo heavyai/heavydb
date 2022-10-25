@@ -53,17 +53,15 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoColumnVar(
     const Analyzer::GeoColumnVar* geo_col_var,
     const bool fetch_columns,
     const CompilationOptions& co) {
-  const auto catalog = executor()->getCatalog();
-  CHECK(catalog);
+  auto generate_column_lvs = [this, geo_col_var, &co](const int column_id) {
+    auto column_key = geo_col_var->getColumnKey();
+    column_key.column_id = column_id;
 
-  auto generate_column_lvs = [this, catalog, geo_col_var, &co](const int column_id) {
-    auto cd = get_column_descriptor(column_id, geo_col_var->get_table_id(), *catalog);
+    auto cd = get_column_descriptor(column_key);
     CHECK(cd);
 
-    const auto col_var = Analyzer::ColumnVar(cd->columnType,
-                                             geo_col_var->get_table_id(),
-                                             column_id,
-                                             geo_col_var->get_rte_idx());
+    const auto col_var =
+        Analyzer::ColumnVar(cd->columnType, column_key, geo_col_var->get_rte_idx());
     const auto lv_vec = codegen(&col_var, /*fetch_columns=*/true, co);
     CHECK_EQ(lv_vec.size(), size_t(1));  // ptr
     return lv_vec;
@@ -79,7 +77,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoColumnVar(
       std::vector<llvm::Value*> geo_lvs;
       // iterate over physical columns
       for (int i = 0; i < ti.get_physical_coord_cols(); i++) {
-        const auto column_id = geo_col_var->get_column_id() + 1 + i;
+        const auto column_id = geo_col_var->getColumnKey().column_id + 1 + i;
         const auto lvs = generate_column_lvs(column_id);
         CHECK_EQ(lvs.size(), size_t(1));  // expecting ptr for each column
         geo_lvs.insert(geo_lvs.end(), lvs.begin(), lvs.end());
@@ -142,10 +140,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoOperator(
     }
   }
 
-  const auto catalog = executor()->getCatalog();
-  CHECK(catalog);
-
-  auto op_codegen = spatial_type::Codegen::init(geo_operator, catalog);
+  auto op_codegen = spatial_type::Codegen::init(geo_operator);
   CHECK(op_codegen);
 
   std::vector<llvm::Value*> load_lvs;

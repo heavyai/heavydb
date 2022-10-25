@@ -67,7 +67,6 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
                                    estimator_exe_unit,
                                    co,
                                    eo,
-                                   cat_,
                                    nullptr,
                                    false,
                                    column_cache);

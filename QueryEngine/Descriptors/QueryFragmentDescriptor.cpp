@@ -33,10 +33,9 @@ QueryFragmentDescriptor::QueryFragmentDescriptor(
   const size_t input_desc_count{ra_exe_unit.input_descs.size()};
   CHECK_EQ(query_infos.size(), input_desc_count);
   for (size_t table_idx = 0; table_idx < input_desc_count; ++table_idx) {
-    const auto table_id = ra_exe_unit.input_descs[table_idx].getTableId();
-    if (!selected_tables_fragments_.count(table_id)) {
-      selected_tables_fragments_[ra_exe_unit.input_descs[table_idx].getTableId()] =
-          &query_infos[table_idx].info.fragments;
+    const auto& table_key = ra_exe_unit.input_descs[table_idx].getTableKey();
+    if (!selected_tables_fragments_.count(table_key)) {
+      selected_tables_fragments_[table_key] = &query_infos[table_idx].info.fragments;
     }
   }
 
@@ -48,15 +47,15 @@ QueryFragmentDescriptor::QueryFragmentDescriptor(
 }
 
 void QueryFragmentDescriptor::computeAllTablesFragments(
-    std::map<int, const TableFragments*>& all_tables_fragments,
+    std::map<shared::TableKey, const TableFragments*>& all_tables_fragments,
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos) {
   for (size_t tab_idx = 0; tab_idx < ra_exe_unit.input_descs.size(); ++tab_idx) {
-    int table_id = ra_exe_unit.input_descs[tab_idx].getTableId();
-    CHECK_EQ(query_infos[tab_idx].table_id, table_id);
+    const auto& table_key = ra_exe_unit.input_descs[tab_idx].getTableKey();
+    CHECK_EQ(query_infos[tab_idx].table_key, table_key);
     const auto& fragments = query_infos[tab_idx].info.fragments;
-    if (!all_tables_fragments.count(table_id)) {
-      all_tables_fragments.insert(std::make_pair(table_id, &fragments));
+    if (!all_tables_fragments.count(table_key)) {
+      all_tables_fragments.insert(std::make_pair(table_key, &fragments));
     }
   }
 }
@@ -71,14 +70,14 @@ void QueryFragmentDescriptor::buildFragmentKernelMap(
     Executor* executor) {
   // For joins, only consider the cardinality of the LHS
   // columns in the bytes per row count.
-  std::set<int> lhs_table_ids;
+  std::set<shared::TableKey> lhs_table_keys;
   for (const auto& input_desc : ra_exe_unit.input_descs) {
     if (input_desc.getNestLevel() == 0) {
-      lhs_table_ids.insert(input_desc.getTableId());
+      lhs_table_keys.insert(input_desc.getTableKey());
     }
   }
 
-  const auto num_bytes_for_row = executor->getNumBytesForFetchedRow(lhs_table_ids);
+  const auto num_bytes_for_row = executor->getNumBytesForFetchedRow(lhs_table_keys);
 
   if (ra_exe_unit.union_all) {
     buildFragmentPerKernelMapForUnion(ra_exe_unit,
@@ -182,8 +181,9 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
                                             i,
                                             selected_tables_fragments_,
                                             executor->getInnerTabIdToJoinCond());
-      const auto table_id = ra_exe_unit.input_descs[*table_desc_offset].getTableId();
-      execution_kernel_desc.fragments.emplace_back(FragmentsPerTable{table_id, frag_ids});
+      const auto& table_key = ra_exe_unit.input_descs[*table_desc_offset].getTableKey();
+      execution_kernel_desc.fragments.emplace_back(
+          FragmentsPerTable{table_key, frag_ids});
 
     } else {
       for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
@@ -194,12 +194,12 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
                                               i,
                                               selected_tables_fragments_,
                                               executor->getInnerTabIdToJoinCond());
-        const auto table_id = ra_exe_unit.input_descs[j].getTableId();
-        auto table_frags_it = selected_tables_fragments_.find(table_id);
+        const auto& table_key = ra_exe_unit.input_descs[j].getTableKey();
+        auto table_frags_it = selected_tables_fragments_.find(table_key);
         CHECK(table_frags_it != selected_tables_fragments_.end());
 
         execution_kernel_desc.fragments.emplace_back(
-            FragmentsPerTable{table_id, frag_ids});
+            FragmentsPerTable{table_key, frag_ids});
       }
     }
 
@@ -222,20 +222,19 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
     const size_t num_bytes_for_row,
     const ExecutorDeviceType& device_type,
     Executor* executor) {
-  const auto& catalog = executor->getCatalog();
-
   for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
     auto const& table_desc = ra_exe_unit.input_descs[j];
-    int const table_id = table_desc.getTableId();
-    TableFragments const* fragments = selected_tables_fragments_.at(table_id);
+    const auto& table_key = table_desc.getTableKey();
+    TableFragments const* fragments = selected_tables_fragments_.at(table_key);
 
     auto data_mgr = executor->getDataMgr();
     ChunkMetadataVector deleted_chunk_metadata_vec;
 
     bool is_temporary_table = false;
-    if (table_id > 0) {
+    if (table_key.table_id > 0) {
       // Temporary tables will not have a table descriptor and not have deleted rows.
-      const auto td = catalog->getMetadataForTable(table_id);
+      CHECK_GT(table_key.db_id, 0);
+      const auto td = Catalog_Namespace::get_metadata_for_table(table_key);
       CHECK(td);
       if (table_is_temporary(td)) {
         // for temporary tables, we won't have delete column metadata available. However,
@@ -243,10 +242,10 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
         // lower layers that we can disregard the early out select * optimization
         is_temporary_table = true;
       } else {
-        const auto deleted_cd = executor->plan_state_->getDeletedColForTable(table_id);
+        const auto deleted_cd = executor->plan_state_->getDeletedColForTable(table_key);
         if (deleted_cd) {
           ChunkKey chunk_key_prefix = {
-              catalog->getCurrentDB().dbId, table_id, deleted_cd->columnId};
+              table_key.db_id, table_key.table_id, deleted_cd->columnId};
           data_mgr->getChunkMetadataVecForKeyPrefix(deleted_chunk_metadata_vec,
                                                     chunk_key_prefix);
         }
@@ -270,7 +269,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
                         execution_kernels_per_device_[0].end(),
                         std::vector<int>(),
                         [](auto&& vec, auto& exe_kern) {
-                          vec.push_back(exe_kern.fragments[0].table_id);
+                          vec.push_back(exe_kern.fragments[0].table_key.table_id);
                           return vec;
                         });
     VLOG(1) << "execution_kernels_per_device_.size()="
@@ -288,20 +287,22 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
     const ExecutorDeviceType& device_type,
     Executor* executor) {
   const auto& outer_table_desc = ra_exe_unit.input_descs.front();
-  const int outer_table_id = outer_table_desc.getTableId();
-  auto it = selected_tables_fragments_.find(outer_table_id);
+  const auto& outer_table_key = outer_table_desc.getTableKey();
+  auto it = selected_tables_fragments_.find(outer_table_key);
   CHECK(it != selected_tables_fragments_.end());
   const auto outer_fragments = it->second;
   outer_fragments_size_ = outer_fragments->size();
 
-  const auto& catalog = executor->getCatalog();
-
   ChunkMetadataVector deleted_chunk_metadata_vec;
 
   bool is_temporary_table = false;
-  if (outer_table_id > 0) {
+  if (outer_table_key.table_id > 0) {
+    CHECK_GT(outer_table_key.db_id, 0);
+    const auto catalog =
+        Catalog_Namespace::SysCatalog::instance().getCatalog(outer_table_key.db_id);
+    CHECK(catalog);
     // Temporary tables will not have a table descriptor and not have deleted rows.
-    const auto td = catalog->getMetadataForTable(outer_table_id);
+    const auto td = catalog->getMetadataForTable(outer_table_key.table_id);
     CHECK(td);
     if (table_is_temporary(td)) {
       // for temporary tables, we won't have delete column metadata available. However, we
@@ -320,8 +321,8 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
               frag.getChunkMetadataMapPhysical().find(deleted_cd->columnId);
           if (chunk_meta_it != frag.getChunkMetadataMapPhysical().end()) {
             const auto& chunk_meta = chunk_meta_it->second;
-            ChunkKey chunk_key_prefix = {catalog->getCurrentDB().dbId,
-                                         outer_table_id,
+            ChunkKey chunk_key_prefix = {outer_table_key.db_id,
+                                         outer_table_key.table_id,
                                          deleted_cd->columnId,
                                          frag.fragmentId};
             deleted_chunk_metadata_vec.emplace_back(
@@ -358,8 +359,8 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
   // query (the first table in a join) and we need to broadcast the fragments
   // in the inner table to each device. Sharding will change this model.
   const auto& outer_table_desc = ra_exe_unit.input_descs.front();
-  const int outer_table_id = outer_table_desc.getTableId();
-  auto it = selected_tables_fragments_.find(outer_table_id);
+  const auto& outer_table_key = outer_table_desc.getTableKey();
+  auto it = selected_tables_fragments_.find(outer_table_key);
   CHECK(it != selected_tables_fragments_.end());
   const auto outer_fragments = it->second;
   outer_fragments_size_ = outer_fragments->size();
@@ -398,8 +399,8 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
       checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
     }
     for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
-      const auto table_id = ra_exe_unit.input_descs[j].getTableId();
-      auto table_frags_it = selected_tables_fragments_.find(table_id);
+      const auto& table_key = ra_exe_unit.input_descs[j].getTableKey();
+      auto table_frags_it = selected_tables_fragments_.find(table_key);
       CHECK(table_frags_it != selected_tables_fragments_.end());
       const auto frag_ids =
           executor->getTableFragmentIndices(ra_exe_unit,
@@ -425,9 +426,9 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
 
       auto& kernel_frag_list = execution_kernel.fragments;
       if (kernel_frag_list.size() < j + 1) {
-        kernel_frag_list.emplace_back(FragmentsPerTable{table_id, frag_ids});
+        kernel_frag_list.emplace_back(FragmentsPerTable{table_key, frag_ids});
       } else {
-        CHECK_EQ(kernel_frag_list[j].table_id, table_id);
+        CHECK_EQ(kernel_frag_list[j].table_key, table_key);
         auto& curr_frag_ids = kernel_frag_list[j].fragment_ids;
         for (const int frag_id : frag_ids) {
           if (std::find(curr_frag_ids.begin(), curr_frag_ids.end(), frag_id) ==
@@ -497,7 +498,7 @@ void QueryFragmentDescriptor::checkDeviceMemoryUsage(
 }
 
 std::ostream& operator<<(std::ostream& os, FragmentsPerTable const& fragments_per_table) {
-  os << "table_id(" << fragments_per_table.table_id << ") fragment_ids";
+  os << fragments_per_table.table_key << ", fragment_ids";
   for (size_t i = 0; i < fragments_per_table.fragment_ids.size(); ++i) {
     os << (i ? ' ' : '(') << fragments_per_table.fragment_ids[i];
   }

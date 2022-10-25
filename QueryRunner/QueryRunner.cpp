@@ -206,26 +206,29 @@ QueryRunner::QueryRunner(const char* db_path,
   mapd_params.gpu_buffer_mem_bytes = max_gpu_mem;
   mapd_params.aggregator = !leaf_servers.empty();
 
-  data_mgr_.reset(new Data_Namespace::DataMgr(data_dir.string(),
-                                              mapd_params,
-                                              std::move(cuda_mgr),
-                                              uses_gpus,
-                                              reserved_gpu_mem,
-                                              0,
-                                              disk_cache_config));
-
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 
   g_base_path = base_path.string();
-  sys_cat.init(g_base_path,
-               data_mgr_,
-               {},
-               g_calcite,
-               false,
-               mapd_params.aggregator,
-               string_servers);
 
-  query_engine_ = QueryEngine::createInstance(data_mgr_->getCudaMgr(), !uses_gpus);
+  if (!sys_cat.isInitialized()) {
+    auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(),
+                                                              mapd_params,
+                                                              std::move(cuda_mgr),
+                                                              uses_gpus,
+                                                              reserved_gpu_mem,
+                                                              0,
+                                                              disk_cache_config);
+    sys_cat.init(g_base_path,
+                 data_mgr,
+                 {},
+                 g_calcite,
+                 false,
+                 mapd_params.aggregator,
+                 string_servers);
+  }
+
+  query_engine_ =
+      QueryEngine::createInstance(sys_cat.getDataMgr().getCudaMgr(), !uses_gpus);
 
   if (create_user) {
     if (!sys_cat.getMetadataForUser(user_name, user)) {
@@ -355,7 +358,7 @@ RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
+  auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
   auto query_hints =
       ra_executor.getParsedQueryHint(ra_executor.getRootRelAlgNodeShPtr().get());
   return query_hints ? *query_hints : RegisteredQueryHint::defaults();
@@ -380,7 +383,7 @@ std::shared_ptr<const RelAlgNode> QueryRunner::getRootNodeFromParsedQuery(
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
+  auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
   return ra_executor.getRootRelAlgNodeShPtr();
 }
 
@@ -403,7 +406,7 @@ QueryRunner::getParsedQueryHints(const std::string& query_str) {
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
+  auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
   return ra_executor.getParsedQueryHints();
 }
 
@@ -425,7 +428,7 @@ std::optional<RegisteredQueryHint> QueryRunner::getParsedGlobalQueryHints(
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
+  auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
   return ra_executor.getGlobalQueryHint();
 }
 
@@ -446,7 +449,7 @@ RaExecutionSequence QueryRunner::getRaExecutionSequence(const std::string& query
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
+  auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
   return ra_executor.getRaExecutionSequence(ra_executor.getRootRelAlgNodeShPtr().get(),
                                             executor.get());
 }
@@ -494,8 +497,7 @@ std::shared_ptr<RelAlgTranslator> QueryRunner::getRelAlgTranslator(
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  executor->setCatalog(&cat);
-  auto ra_executor = RelAlgExecutor(executor, cat, query_ra);
+  auto ra_executor = RelAlgExecutor(executor, query_ra);
   auto root_node_shared_ptr = ra_executor.getRootRelAlgNodeShPtr();
   return ra_executor.getRelAlgTranslator(root_node_shared_ptr.get());
 }
@@ -518,8 +520,7 @@ QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  executor->setCatalog(&cat);
-  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+  auto ra_executor = RelAlgExecutor(executor.get(), query_ra);
   // note that we assume the test for data recycler that needs to have join_info
   // does not contain any ORDER BY clause; this is necessary to create work_unit
   // without actually performing the query
@@ -730,7 +731,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
                                    calciteOptimizationOption)
                          .plan_result;
         }
-        auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
+        auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
         result = std::make_shared<ExecutionResult>(
             ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
       });
@@ -816,7 +817,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+  auto ra_executor = RelAlgExecutor(executor.get(), query_ra);
   auto result = std::make_shared<ExecutionResult>(
       ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
   const auto& filter_push_down_requests = result->getPushedDownFilterInfo();
@@ -839,7 +840,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
     auto eo_modified = eo;
     eo_modified.find_push_down_candidates = false;
     eo_modified.just_calcite_explain = false;
-    auto new_ra_executor = RelAlgExecutor(executor.get(), cat, new_query_ra);
+    auto new_ra_executor = RelAlgExecutor(executor.get(), new_query_ra);
     return std::make_shared<ExecutionResult>(
         new_ra_executor.executeRelAlgQuery(co, eo_modified, false, nullptr));
   } else {
@@ -938,7 +939,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
                                             calciteQueryParsingOption,
                                             calciteOptimizationOption)
                                   .plan_result;
-        auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+        auto ra_executor = RelAlgExecutor(executor.get(), query_ra);
         result = std::make_shared<ExecutionResult>(
             ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
       });
@@ -999,7 +1000,7 @@ std::unique_ptr<RelAlgDag> QueryRunner::getRelAlgDag(const std::string& query_st
                                             calciteQueryParsingOption,
                                             calciteOptimizationOption)
                                   .plan_result;
-        auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+        auto ra_executor = RelAlgExecutor(executor.get(), query_ra);
         rel_alg_dag = ra_executor.getOwnedRelAlgDag();
       });
   CHECK(dispatch_queue_);

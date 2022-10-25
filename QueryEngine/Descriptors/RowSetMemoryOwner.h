@@ -32,6 +32,7 @@
 #include "QueryEngine/CountDistinct.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "QueryEngine/TableFunctionMetadataType.h"
+#include "Shared/DbObjectKeys.h"
 #include "Shared/quantile.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 #include "StringOps/StringOps.h"
@@ -123,10 +124,10 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   }
 
   StringDictionaryProxy* addStringDict(std::shared_ptr<StringDictionary> str_dict,
-                                       const int dict_id,
+                                       const shared::StringDictKey& dict_key,
                                        const int64_t generation) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    auto it = str_dict_proxy_owned_.find(dict_id);
+    auto it = str_dict_proxy_owned_.find(dict_key);
     if (it != str_dict_proxy_owned_.end()) {
       CHECK_EQ(it->second->getDictionary(), str_dict.get());
       it->second->updateGeneration(generation);
@@ -134,28 +135,29 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     }
     it = str_dict_proxy_owned_
              .emplace(
-                 dict_id,
-                 std::make_shared<StringDictionaryProxy>(str_dict, dict_id, generation))
+                 dict_key,
+                 std::make_shared<StringDictionaryProxy>(str_dict, dict_key, generation))
              .first;
     return it->second.get();
   }
 
   std::string generate_translation_map_key(
-      const int32_t source_proxy_id,
+      const shared::StringDictKey& source_proxy_dict_key,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
     std::ostringstream oss;
-    oss << "{source_dict_id: " << source_proxy_id << " StringOps: " << string_op_infos
-        << "}";
+    oss << "{source_dict_key: " << source_proxy_dict_key
+        << " StringOps: " << string_op_infos << "}";
     return oss.str();
   }
 
   std::string generate_translation_map_key(
-      const int32_t source_proxy_id,
-      const int32_t dest_proxy_id,
+      const shared::StringDictKey& source_proxy_dict_key,
+      const shared::StringDictKey& dest_proxy_dict_key,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
     std::ostringstream oss;
-    oss << "{source_dict_id: " << source_proxy_id << ", dest_dict_id: " << dest_proxy_id
-        << " StringOps: " << string_op_infos << "}";
+    oss << "{source_dict_key: " << source_proxy_dict_key
+        << ", dest_dict_key: " << dest_proxy_dict_key << " StringOps: " << string_op_infos
+        << "}";
     return oss.str();
   }
 
@@ -165,8 +167,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     const auto map_key =
-        generate_translation_map_key(source_proxy->getDictionary()->getDictId(),
-                                     dest_proxy->getDictionary()->getDictId(),
+        generate_translation_map_key(source_proxy->getDictionary()->getDictKey(),
+                                     dest_proxy->getDictionary()->getDictKey(),
                                      string_op_infos);
     auto it = str_proxy_intersection_translation_maps_owned_.find(map_key);
     if (it == str_proxy_intersection_translation_maps_owned_.end()) {
@@ -183,7 +185,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       const StringDictionaryProxy* source_proxy,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
     const auto map_key = generate_translation_map_key(
-        source_proxy->getDictionary()->getDictId(), string_op_infos);
+        source_proxy->getDictionary()->getDictKey(), string_op_infos);
     auto it = str_proxy_numeric_translation_maps_owned_.lower_bound(map_key);
     if (it->first != map_key) {
       it = str_proxy_numeric_translation_maps_owned_.emplace_hint(
@@ -198,8 +200,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     const auto map_key =
-        generate_translation_map_key(source_proxy->getDictionary()->getDictId(),
-                                     dest_proxy->getDictionary()->getDictId(),
+        generate_translation_map_key(source_proxy->getDictionary()->getDictKey(),
+                                     dest_proxy->getDictionary()->getDictKey(),
                                      string_op_infos);
     auto it = str_proxy_union_translation_maps_owned_.find(map_key);
     if (it == str_proxy_union_translation_maps_owned_.end()) {
@@ -215,7 +217,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   const StringOps_Namespace::StringOps* getStringOps(
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    const auto map_key = generate_translation_map_key(0, 0, string_op_infos);
+    const auto map_key = generate_translation_map_key({}, {}, string_op_infos);
     auto it = string_ops_owned_.find(map_key);
     if (it == string_ops_owned_.end()) {
       it = string_ops_owned_
@@ -226,17 +228,15 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return it->second.get();
   }
 
-  StringDictionaryProxy* getStringDictProxy(const int dict_id) const {
+  StringDictionaryProxy* getStringDictProxy(const shared::StringDictKey& dict_key) const {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    auto it = str_dict_proxy_owned_.find(dict_id);
+    auto it = str_dict_proxy_owned_.find(dict_key);
     CHECK(it != str_dict_proxy_owned_.end());
     return it->second.get();
   }
 
-  StringDictionaryProxy* getOrAddStringDictProxy(
-      const int dict_id_in,
-      const bool with_generation,
-      const Catalog_Namespace::Catalog* catalog);
+  StringDictionaryProxy* getOrAddStringDictProxy(const shared::StringDictKey& dict_key,
+                                                 const bool with_generation);
 
   void addLiteralStringDictProxy(
       std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy) {
@@ -250,19 +250,17 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   }
 
   const StringDictionaryProxy::IdMap* getOrAddStringProxyTranslationMap(
-      const int source_dict_id_in,
-      const int dest_dict_id_in,
+      const shared::StringDictKey& source_dict_id_in,
+      const shared::StringDictKey& dest_dict_id_in,
       const bool with_generation,
       const StringTranslationType translation_map_type,
-      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
-      const Catalog_Namespace::Catalog* catalog);
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos);
 
   const StringDictionaryProxy::TranslationMap<Datum>*
   getOrAddStringProxyNumericTranslationMap(
-      const int source_dict_id_in,
+      const shared::StringDictKey& source_dict_id_in,
       const bool with_generation,
-      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
-      const Catalog_Namespace::Catalog* catalog);
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos);
 
   void addColBuffer(const void* col_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
@@ -352,7 +350,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   std::vector<void*> varlen_buffers_;
   std::list<std::string> strings_;
   std::list<std::vector<int64_t>> arrays_;
-  std::unordered_map<int, std::shared_ptr<StringDictionaryProxy>> str_dict_proxy_owned_;
+  std::unordered_map<shared::StringDictKey, std::shared_ptr<StringDictionaryProxy>>
+      str_dict_proxy_owned_;
   std::map<std::string, StringDictionaryProxy::IdMap>
       str_proxy_intersection_translation_maps_owned_;
   std::map<std::string, StringDictionaryProxy::IdMap>

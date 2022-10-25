@@ -67,6 +67,7 @@
 
 #include "DataMgr/Chunk/Chunk.h"
 #include "Logger/Logger.h"
+#include "Shared/DbObjectKeys.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/funcannotations.h"
 #include "Shared/heavyai_shared_mutex.h"
@@ -189,11 +190,10 @@ inline uint32_t log2_bytes(const uint32_t bytes) {
 }
 
 inline const ColumnDescriptor* get_column_descriptor(
-    const int col_id,
-    const int table_id,
-    const Catalog_Namespace::Catalog& cat) {
-  CHECK_GT(table_id, 0);
-  const auto col_desc = cat.getMetadataForColumn(table_id, col_id);
+    const shared::ColumnKey& column_key) {
+  CHECK_GT(column_key.db_id, 0);
+  CHECK_GT(column_key.table_id, 0);
+  const auto col_desc = Catalog_Namespace::get_metadata_for_column(column_key);
   CHECK(col_desc);
   return col_desc;
 }
@@ -218,11 +218,8 @@ inline std::string numeric_type_name(const SQLTypeInfo& ti) {
 }
 
 inline const ColumnDescriptor* get_column_descriptor_maybe(
-    const int col_id,
-    const int table_id,
-    const Catalog_Namespace::Catalog& cat) {
-  CHECK(table_id);
-  return table_id > 0 ? get_column_descriptor(col_id, table_id, cat) : nullptr;
+    const shared::ColumnKey& column_key) {
+  return column_key.table_id > 0 ? get_column_descriptor(column_key) : nullptr;
 }
 
 inline const ResultSetPtr& get_temporary_table(const TemporaryTables* temporary_tables,
@@ -526,20 +523,20 @@ class Executor {
   /**
    * Returns a string dictionary proxy using the currently active row set memory owner.
    */
-  StringDictionaryProxy* getStringDictionaryProxy(const int dict_id,
+  StringDictionaryProxy* getStringDictionaryProxy(const shared::StringDictKey& dict_key,
                                                   const bool with_generation) const {
     CHECK(row_set_mem_owner_);
-    return getStringDictionaryProxy(dict_id, row_set_mem_owner_, with_generation);
+    return getStringDictionaryProxy(dict_key, row_set_mem_owner_, with_generation);
   }
 
   StringDictionaryProxy* getStringDictionaryProxy(
-      const int dictId,
+      const shared::StringDictKey& dict_key,
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const bool with_generation) const;
 
   const StringDictionaryProxy::IdMap* getStringProxyTranslationMap(
-      const int source_dict_id,
-      const int dest_dict_id,
+      const shared::StringDictKey& source_dict_key,
+      const shared::StringDictKey& dest_dict_key,
       const RowSetMemoryOwner::StringTranslationType translation_type,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -553,7 +550,7 @@ class Executor {
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const;
 
   const StringDictionaryProxy::TranslationMap<Datum>* getStringProxyNumericTranslationMap(
-      const int source_dict_id,
+      const shared::StringDictKey& source_dict_key,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const bool with_generation) const;
@@ -571,9 +568,6 @@ class Executor {
   const ColumnDescriptor* getPhysicalColumnDescriptor(const Analyzer::ColumnVar*,
                                                       int) const;
 
-  const Catalog_Namespace::Catalog* getCatalog() const;
-  void setCatalog(const Catalog_Namespace::Catalog* catalog);
-
   Data_Namespace::DataMgr* getDataMgr() const {
     CHECK(data_mgr_);
     return data_mgr_;
@@ -583,13 +577,14 @@ class Executor {
 
   const TemporaryTables* getTemporaryTables() const;
 
-  Fragmenter_Namespace::TableInfo getTableInfo(const int table_id) const;
+  Fragmenter_Namespace::TableInfo getTableInfo(const shared::TableKey& table_key) const;
 
-  const TableGeneration& getTableGeneration(const int table_id) const;
+  const TableGeneration& getTableGeneration(const shared::TableKey& table_key) const;
 
   ExpressionRange getColRange(const PhysicalInput&) const;
 
-  size_t getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetch) const;
+  size_t getNumBytesForFetchedRow(
+      const std::set<shared::TableKey>& table_keys_to_fetch) const;
 
   bool hasLazyFetchColumns(const std::vector<Analyzer::Expr*>& target_exprs) const;
   std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
@@ -623,7 +618,6 @@ class Executor {
                                const RelAlgExecutionUnit&,
                                const CompilationOptions&,
                                const ExecutionOptions& options,
-                               const Catalog_Namespace::Catalog&,
                                RenderInfo* render_info,
                                const bool has_cardinality_estimation,
                                ColumnCacheMap& column_cache);
@@ -633,7 +627,7 @@ class Executor {
                                     const TableDescriptor* updated_table_desc,
                                     const CompilationOptions& co,
                                     const ExecutionOptions& eo,
-                                    Catalog_Namespace::Catalog& cat,
+                                    const Catalog_Namespace::Catalog& cat,
                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                     const UpdateLogForFragment::Callback& cb,
                                     const bool is_agg);
@@ -807,8 +801,7 @@ class Executor {
   ResultSetPtr executeTableFunction(const TableFunctionExecutionUnit exe_unit,
                                     const std::vector<InputTableInfo>& table_infos,
                                     const CompilationOptions& co,
-                                    const ExecutionOptions& eo,
-                                    const Catalog_Namespace::Catalog& cat);
+                                    const ExecutionOptions& eo);
 
   ExecutorDeviceType getDeviceTypeForTargets(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -825,7 +818,8 @@ class Executor {
       SharedKernelContext& shared_context,
       const RelAlgExecutionUnit& ra_exe_unit) const;
 
-  std::unordered_map<int, const Analyzer::BinOper*> getInnerTabIdToJoinCond() const;
+  std::unordered_map<shared::TableKey, const Analyzer::BinOper*> getInnerTabIdToJoinCond()
+      const;
 
   /**
    * Determines execution dispatch mode and required fragments for a given query step,
@@ -859,25 +853,25 @@ class Executor {
       const ExecutorDeviceType device_type,
       const size_t table_idx,
       const size_t outer_frag_idx,
-      std::map<int, const TableFragments*>& selected_tables_fragments,
-      const std::unordered_map<int, const Analyzer::BinOper*>&
+      std::map<shared::TableKey, const TableFragments*>& selected_tables_fragments,
+      const std::unordered_map<shared::TableKey, const Analyzer::BinOper*>&
           inner_table_id_to_join_condition);
 
-  bool skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
-                        const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
-                        const int inner_table_id,
-                        const std::unordered_map<int, const Analyzer::BinOper*>&
-                            inner_table_id_to_join_condition,
-                        const RelAlgExecutionUnit& ra_exe_unit,
-                        const ExecutorDeviceType device_type);
+  bool skipFragmentPair(
+      const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
+      const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
+      const int inner_table_id,
+      const std::unordered_map<shared::TableKey, const Analyzer::BinOper*>&
+          inner_table_id_to_join_condition,
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const ExecutorDeviceType device_type);
 
   FetchResult fetchChunks(const ColumnFetcher&,
                           const RelAlgExecutionUnit& ra_exe_unit,
                           const int device_id,
                           const Data_Namespace::MemoryLevel,
-                          const std::map<int, const TableFragments*>&,
+                          const std::map<shared::TableKey, const TableFragments*>&,
                           const FragmentsList& selected_fragments,
-                          const Catalog_Namespace::Catalog&,
                           std::list<ChunkIter>&,
                           std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
                           DeviceAllocator* device_allocator,
@@ -888,9 +882,8 @@ class Executor {
                                const RelAlgExecutionUnit& ra_exe_unit,
                                const int device_id,
                                const Data_Namespace::MemoryLevel,
-                               const std::map<int, const TableFragments*>&,
+                               const std::map<shared::TableKey, const TableFragments*>&,
                                const FragmentsList& selected_fragments,
-                               const Catalog_Namespace::Catalog&,
                                std::list<ChunkIter>&,
                                std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
                                DeviceAllocator* device_allocator,
@@ -902,7 +895,7 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
       const std::vector<InputDescriptor>& input_descs,
-      const std::map<int, const TableFragments*>& all_tables_fragments);
+      const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments);
 
   void buildSelectedFragsMapping(
       std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
@@ -933,7 +926,7 @@ class Executor {
                                  const std::vector<std::vector<uint64_t>>& frag_offsets,
                                  Data_Namespace::DataMgr*,
                                  const int device_id,
-                                 const int outer_table_id,
+                                 const shared::TableKey& outer_table_key,
                                  const int64_t limit,
                                  const uint32_t start_rowid,
                                  const uint32_t num_tables,
@@ -999,7 +992,6 @@ class Executor {
                                    const RelAlgExecutionUnit&,
                                    const CompilationOptions&,
                                    const ExecutionOptions& options,
-                                   const Catalog_Namespace::Catalog&,
                                    std::shared_ptr<RowSetMemoryOwner>,
                                    RenderInfo* render_info,
                                    const bool has_cardinality_estimation,
@@ -1038,7 +1030,7 @@ class Executor {
   JoinLoop::HoistedFiltersCallback buildHoistLeftHandSideFiltersCb(
       const RelAlgExecutionUnit& ra_exe_unit,
       const size_t level_idx,
-      const int inner_table_id,
+      const shared::TableKey& inner_table_key,
       const CompilationOptions& co);
   // Create a callback which generates code which returns true iff the row on the given
   // level is deleted.
@@ -1148,7 +1140,7 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const CompilationOptions& co);
 
-  bool isFragmentFullyDeleted(const int table_id,
+  bool isFragmentFullyDeleted(const InputDescriptor& table_desc,
                               const Fragmenter_Namespace::FragmentInfo& fragment);
 
   FragmentSkipStatus canSkipFragmentForFpQual(
@@ -1175,11 +1167,12 @@ class Executor {
       const std::unordered_set<PhysicalInput>& phys_inputs);
   StringDictionaryGenerations computeStringDictionaryGenerations(
       const std::unordered_set<PhysicalInput>& phys_inputs);
-  TableGenerations computeTableGenerations(std::unordered_set<int> phys_table_ids);
+  TableGenerations computeTableGenerations(
+      const std::unordered_set<shared::TableKey>& phys_table_keys);
 
  public:
   void setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
-                    const std::unordered_set<int>& phys_table_ids);
+                    const std::unordered_set<shared::TableKey>& phys_table_keys);
   void setColRangeCache(const AggregatedColRange& aggregated_col_range) {
     agg_col_range_cache_ = aggregated_col_range;
   }
@@ -1376,7 +1369,6 @@ class Executor {
   const std::string debug_dir_;
   const std::string debug_file_;
 
-  const Catalog_Namespace::Catalog* catalog_;
   Data_Namespace::DataMgr* data_mgr_;
   const TemporaryTables* temporary_tables_;
   TableIdToNodeMap table_id_to_node_map_;
@@ -1556,9 +1548,7 @@ inline std::string toString(const Executor::ExtModuleKinds& kind) {
 }
 
 namespace foreign_storage {
-void populate_string_dictionary(const int32_t table_id,
-                                const int32_t col_id,
-                                const Catalog_Namespace::Catalog& cat);
+void populate_string_dictionary(int32_t table_id, int32_t col_id, int32_t db_id);
 }
 
 #endif  // QUERYENGINE_EXECUTE_H

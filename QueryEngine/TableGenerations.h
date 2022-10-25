@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_TABLEGENERATIONS_H
-#define QUERYENGINE_TABLEGENERATIONS_H
+#pragma once
 
 #include <cstdint>
 #include <unordered_map>
+
+#include "Shared/DbObjectKeys.h"
 
 struct TableGeneration {
   int64_t tuple_count;
@@ -27,16 +28,15 @@ struct TableGeneration {
 
 class TableGenerations {
  public:
-  void setGeneration(const uint32_t id, const TableGeneration& generation);
+  void setGeneration(const shared::TableKey& table_key,
+                     const TableGeneration& generation);
 
-  const TableGeneration& getGeneration(const uint32_t id) const;
+  const TableGeneration& getGeneration(const shared::TableKey& table_key) const;
 
-  const std::unordered_map<uint32_t, TableGeneration>& asMap() const;
+  const std::unordered_map<shared::TableKey, TableGeneration>& asMap() const;
 
   void clear();
 
  private:
-  std::unordered_map<uint32_t, TableGeneration> id_to_generation_;
+  std::unordered_map<shared::TableKey, TableGeneration> table_key_to_generation_;
 };
-
-#endif  // QUERYENGINE_TABLEGENERATIONS_H

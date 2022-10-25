@@ -233,7 +233,12 @@ void SysCatalog::init(const std::string& basePath,
     }
   }
   buildMaps(is_new_db);
+  is_initialized_ = true;
 }
+
+bool SysCatalog::isInitialized() const {
+  return is_initialized_;
+};
 
 void SysCatalog::buildMaps(bool is_new_db) {
   sys_write_lock write_lock(this);
@@ -3181,4 +3186,16 @@ void SysCatalog::rebuildObjectMapsUnlocked() {
   buildObjectDescriptorMapUnlocked();
 }
 
+const TableDescriptor* get_metadata_for_table(const ::shared::TableKey& table_key,
+                                              bool populate_fragmenter) {
+  const auto catalog = SysCatalog::instance().getCatalog(table_key.db_id);
+  CHECK(catalog);
+  return catalog->getMetadataForTable(table_key.table_id, populate_fragmenter);
+}
+
+const ColumnDescriptor* get_metadata_for_column(const ::shared::ColumnKey& column_key) {
+  const auto catalog = SysCatalog::instance().getCatalog(column_key.db_id);
+  CHECK(catalog);
+  return catalog->getMetadataForColumn(column_key.table_id, column_key.column_id);
+}
 }  // namespace Catalog_Namespace
