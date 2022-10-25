@@ -44,6 +44,11 @@ enum TEncodingType {
   ARRAY_DICT
 }
 
+struct TStringDictKey {
+  1: i32 db_id;
+  2: i32 dict_id;
+}
+
 struct TTypeInfo {
   1: TDatumType type;
   4: TEncodingType encoding;
@@ -53,5 +58,6 @@ struct TTypeInfo {
   6: i32 scale;
   7: i32 comp_param;
   8: optional i32 size=-1;
+  9: optional TStringDictKey dict_key;
 }
 

@@ -793,10 +793,9 @@ TargetValue build_array_target_value(
 TargetValue build_string_array_target_value(
     const int32_t* buff,
     const size_t buff_sz,
-    const int dict_id,
+    const shared::StringDictKey& dict_key,
     const bool translate_strings,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const Catalog_Namespace::Catalog* catalog) {
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
   std::vector<ScalarTargetValue> values;
   CHECK_EQ(size_t(0), buff_sz % sizeof(int32_t));
   const size_t num_elems = buff_sz / sizeof(int32_t);
@@ -807,13 +806,13 @@ TargetValue build_string_array_target_value(
       if (string_id == NULL_INT) {
         values.emplace_back(NullableString(nullptr));
       } else {
-        if (dict_id == 0) {
+        if (dict_key.dict_id == 0) {
           StringDictionaryProxy* sdp = row_set_mem_owner->getLiteralStringDictProxy();
           values.emplace_back(sdp->getString(string_id));
         } else {
           values.emplace_back(NullableString(
               row_set_mem_owner
-                  ->getOrAddStringDictProxy(dict_id, /*with_generation=*/false, catalog)
+                  ->getOrAddStringDictProxy(dict_key, /*with_generation=*/false)
                   ->getString(string_id)));
         }
       }
@@ -826,21 +825,20 @@ TargetValue build_string_array_target_value(
   return ArrayTargetValue(values);
 }
 
-TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
-                                     const int8_t* buff,
-                                     const size_t buff_sz,
-                                     const bool translate_strings,
-                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                     const Catalog_Namespace::Catalog* catalog) {
+TargetValue build_array_target_value(
+    const SQLTypeInfo& array_ti,
+    const int8_t* buff,
+    const size_t buff_sz,
+    const bool translate_strings,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
   CHECK(array_ti.is_array());
   const auto& elem_ti = array_ti.get_elem_type();
   if (elem_ti.is_string()) {
     return build_string_array_target_value(reinterpret_cast<const int32_t*>(buff),
                                            buff_sz,
-                                           elem_ti.get_comp_param(),
+                                           elem_ti.getStringDictKey(),
                                            translate_strings,
-                                           row_set_mem_owner,
-                                           catalog);
+                                           row_set_mem_owner);
   }
   switch (elem_ti.get_size()) {
     case 1:
@@ -1392,8 +1390,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
           reinterpret_cast<const int8_t*>(varlen_buffer[varlen_ptr].data()),
           varlen_buffer[varlen_ptr].size(),
           translate_strings,
-          row_set_mem_owner_,
-          catalog_);
+          row_set_mem_owner_);
     } else {
       CHECK(false);
     }
@@ -1441,8 +1438,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                                         ad.pointer,
                                         ad.length,
                                         translate_strings,
-                                        row_set_mem_owner_,
-                                        catalog_);
+                                        row_set_mem_owner_);
       }
     }
   }
@@ -1475,8 +1471,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                                     reinterpret_cast<const int8_t*>(varlen_ptr),
                                     length,
                                     translate_strings,
-                                    row_set_mem_owner_,
-                                    catalog_);
+                                    row_set_mem_owner_);
   }
   return std::string(reinterpret_cast<char*>(varlen_ptr), length);
 }
@@ -1870,13 +1865,14 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
 }
 
 std::string ResultSet::getString(SQLTypeInfo const& ti, int64_t const ival) const {
+  const auto& dict_key = ti.getStringDictKey();
   StringDictionaryProxy* sdp;
-  if (ti.get_comp_param()) {
+  if (dict_key.dict_id) {
     constexpr bool with_generation = false;
-    sdp = catalog_ ? row_set_mem_owner_->getOrAddStringDictProxy(
-                         ti.get_comp_param(), with_generation, catalog_)
-                   : row_set_mem_owner_->getStringDictProxy(
-                         ti.get_comp_param());  // unit tests bypass the catalog
+    sdp = dict_key.db_id > 0
+              ? row_set_mem_owner_->getOrAddStringDictProxy(dict_key, with_generation)
+              : row_set_mem_owner_->getStringDictProxy(
+                    dict_key);  // unit tests bypass the catalog
   } else {
     sdp = row_set_mem_owner_->getLiteralStringDictProxy();
   }
@@ -1929,7 +1925,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
 
   // String dictionary keys are read as 32-bit values regardless of encoding
   if (type_info.is_string() && type_info.get_compression() == kENCODING_DICT &&
-      type_info.get_comp_param()) {
+      type_info.getStringDictKey().dict_id) {
     actual_compact_sz = sizeof(int32_t);
   }
 

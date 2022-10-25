@@ -140,15 +140,17 @@ EXTENSION_NOINLINE Array<TextEncodingDict> tarray_append(
     if (in_arr.isNull(i)) {
       out_arr[i] = in_arr[i];
     } else {
-      std::string str = mgr.getString(GET_DICT_ID(mgr, 0), in_arr[i]);
-      out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_ID, str);
+      std::string str =
+          mgr.getString(GET_DICT_DB_ID(mgr, 0), GET_DICT_ID(mgr, 0), in_arr[i]);
+      out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, str);
     }
   }
   if (val.isNull()) {
     out_arr[in_arr.getSize()] = val;
   } else {
-    std::string str = mgr.getString(GET_DICT_ID(mgr, 1), val);
-    out_arr[in_arr.getSize()] = mgr.getOrAddTransient(TRANSIENT_DICT_ID, str);
+    std::string str = mgr.getString(GET_DICT_DB_ID(mgr, 1), GET_DICT_ID(mgr, 1), val);
+    out_arr[in_arr.getSize()] =
+        mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, str);
   }
   return out_arr;
 }
@@ -307,8 +309,9 @@ Array<TextEncodingDict> array_first_half__t32(RowFunctionManager& mgr,
   Array<TextEncodingDict> out_arr = array_first_half_impl(in_arr);
   for (int64_t i = 0; i < out_arr.getSize(); i++) {
     if (!out_arr.isNull(i)) {
-      std::string str = mgr.getString(GET_DICT_ID(mgr, 0), out_arr[i]);
-      out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_ID, str);
+      std::string str =
+          mgr.getString(GET_DICT_DB_ID(mgr, 0), GET_DICT_ID(mgr, 0), out_arr[i]);
+      out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, str);
     }
   }
   return out_arr;
@@ -320,8 +323,9 @@ Array<TextEncodingDict> array_second_half__t32(RowFunctionManager& mgr,
   Array<TextEncodingDict> out_arr = array_second_half_impl(in_arr);
   for (int64_t i = 0; i < out_arr.getSize(); i++) {
     if (!out_arr.isNull(i)) {
-      std::string str = mgr.getString(GET_DICT_ID(mgr, 0), out_arr[i]);
-      out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_ID, str);
+      std::string str =
+          mgr.getString(GET_DICT_DB_ID(mgr, 0), GET_DICT_ID(mgr, 0), out_arr[i]);
+      out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, str);
     }
   }
   return out_arr;

@@ -14,12 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef STRINGDICTIONARY_STRINGDICTIONARY_H
-#define STRINGDICTIONARY_STRINGDICTIONARY_H
-
-#include "DictRef.h"
-#include "DictionaryCache.hpp"
-#include "StringOps/StringOpInfo.h"
+#pragma once
 
 #include <functional>
 #include <future>
@@ -29,6 +24,11 @@
 #include <string_view>
 #include <tuple>
 #include <vector>
+
+#include "DictRef.h"
+#include "DictionaryCache.hpp"
+#include "Shared/DbObjectKeys.h"
+#include "StringOps/StringOpInfo.h"
 
 extern bool g_enable_stringdict_parallel;
 
@@ -53,17 +53,16 @@ using StringLookupCallback = std::function<bool(std::string_view, int32_t string
 
 class StringDictionary {
  public:
-  StringDictionary(const DictRef& dict_ref,
+  StringDictionary(const shared::StringDictKey& dict_key,
                    const std::string& folder,
                    const bool isTemp,
                    const bool recover,
                    const bool materializeHashes = false,
                    size_t initial_capacity = 256);
-  StringDictionary(const LeafHostInfo& host, const DictRef dict_ref);
+  StringDictionary(const LeafHostInfo& host, const shared::StringDictKey& dict_key);
   ~StringDictionary() noexcept;
 
-  int32_t getDbId() const noexcept;
-  int32_t getDictId() const noexcept;
+  const shared::StringDictKey& getDictKey() const noexcept;
 
   class StringCallback {
    public:
@@ -262,7 +261,7 @@ class StringDictionary {
   void mergeSortedCache(std::vector<int32_t>& temp_sorted_cache);
   compare_cache_value_t* binary_search_cache(const std::string& pattern) const;
 
-  const DictRef dict_ref_;
+  const shared::StringDictKey dict_key_;
   const std::string folder_;
   size_t str_count_;
   size_t collisions_;
@@ -297,9 +296,7 @@ int32_t truncate_to_generation(const int32_t id, const size_t generation);
 
 void translate_string_ids(std::vector<int32_t>& dest_ids,
                           const LeafHostInfo& dict_server_host,
-                          const DictRef dest_dict_ref,
+                          const shared::StringDictKey& dest_dict_key,
                           const std::vector<int32_t>& source_ids,
-                          const DictRef source_dict_ref,
+                          const shared::StringDictKey& source_dict_key,
                           const int32_t dest_generation);
-
-#endif  // STRINGDICTIONARY_STRINGDICTIONARY_H

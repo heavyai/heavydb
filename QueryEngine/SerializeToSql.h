@@ -22,8 +22,7 @@
 
 class ScalarExprToSql : public ScalarExprVisitor<std::string> {
  public:
-  ScalarExprToSql(const RelAlgExecutionUnit* ra_exe_unit,
-                  const Catalog_Namespace::Catalog* catalog);
+  ScalarExprToSql(const RelAlgExecutionUnit* ra_exe_unit);
 
   std::string visitVar(const Analyzer::Var*) const override;
 
@@ -65,7 +64,6 @@ class ScalarExprToSql : public ScalarExprVisitor<std::string> {
   static std::string binOpTypeToString(const SQLOps op_type);
 
   const RelAlgExecutionUnit* ra_exe_unit_;
-  const Catalog_Namespace::Catalog* catalog_;
 };
 
 std::string serialize_table_ref(const int table_id,
@@ -80,5 +78,4 @@ struct ExecutionUnitSql {
   std::string from_table;
 };
 
-ExecutionUnitSql serialize_to_sql(const RelAlgExecutionUnit* ra_exe_unit,
-                                  const Catalog_Namespace::Catalog* catalog);
+ExecutionUnitSql serialize_to_sql(const RelAlgExecutionUnit* ra_exe_unit);

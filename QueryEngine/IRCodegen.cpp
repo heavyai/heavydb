@@ -66,10 +66,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
     if (ti.get_compression() == kENCODING_DICT) {
       // The dictionary encoding case should be handled by the parent expression
       // (cast, for now), here is too late to know the dictionary id if not already set
-      CHECK_NE(ti.get_comp_param(), 0);
-      return {codegen(constant, ti.get_compression(), ti.get_comp_param(), co)};
+      CHECK_NE(ti.getStringDictKey().dict_id, 0);
+      return {codegen(constant, ti.get_compression(), ti.getStringDictKey(), co)};
     }
-    return {codegen(constant, ti.get_compression(), 0, co)};
+    return {codegen(constant, ti.get_compression(), {}, co)};
   }
   auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
   if (case_expr) {
@@ -750,32 +750,35 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
 
 namespace {
 
-class ExprTableIdVisitor : public ScalarExprVisitor<std::set<int>> {
+class ExprTableIdVisitor : public ScalarExprVisitor<std::set<shared::TableKey>> {
  protected:
-  std::set<int> visitColumnVar(const Analyzer::ColumnVar* col_expr) const final {
-    return {col_expr->get_table_id()};
+  std::set<shared::TableKey> visitColumnVar(
+      const Analyzer::ColumnVar* col_expr) const final {
+    return {col_expr->getTableKey()};
   }
 
-  std::set<int> visitFunctionOper(const Analyzer::FunctionOper* func_expr) const final {
-    std::set<int> ret;
+  std::set<shared::TableKey> visitFunctionOper(
+      const Analyzer::FunctionOper* func_expr) const final {
+    std::set<shared::TableKey> ret;
     for (size_t i = 0; i < func_expr->getArity(); i++) {
       ret = aggregateResult(ret, visit(func_expr->getArg(i)));
     }
     return ret;
   }
 
-  std::set<int> visitBinOper(const Analyzer::BinOper* bin_oper) const final {
-    std::set<int> ret;
+  std::set<shared::TableKey> visitBinOper(const Analyzer::BinOper* bin_oper) const final {
+    std::set<shared::TableKey> ret;
     ret = aggregateResult(ret, visit(bin_oper->get_left_operand()));
     return aggregateResult(ret, visit(bin_oper->get_right_operand()));
   }
 
-  std::set<int> visitUOper(const Analyzer::UOper* u_oper) const final {
+  std::set<shared::TableKey> visitUOper(const Analyzer::UOper* u_oper) const final {
     return visit(u_oper->get_operand());
   }
 
-  std::set<int> aggregateResult(const std::set<int>& aggregate,
-                                const std::set<int>& next_result) const final {
+  std::set<shared::TableKey> aggregateResult(
+      const std::set<shared::TableKey>& aggregate,
+      const std::set<shared::TableKey>& next_result) const final {
     auto ret = aggregate;  // copy
     for (const auto& el : next_result) {
       ret.insert(el);
@@ -789,7 +792,7 @@ class ExprTableIdVisitor : public ScalarExprVisitor<std::set<int>> {
 JoinLoop::HoistedFiltersCallback Executor::buildHoistLeftHandSideFiltersCb(
     const RelAlgExecutionUnit& ra_exe_unit,
     const size_t level_idx,
-    const int inner_table_id,
+    const shared::TableKey& inner_table_id,
     const CompilationOptions& co) {
   if (!g_enable_left_join_filter_hoisting) {
     return nullptr;
@@ -804,33 +807,34 @@ JoinLoop::HoistedFiltersCallback Executor::buildHoistLeftHandSideFiltersCb(
         dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_right_operand());
     const auto lhs =
         dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand());
-    if (lhs && rhs && lhs->get_table_id() != rhs->get_table_id()) {
+    if (lhs && rhs && lhs->getTableKey() != rhs->getTableKey()) {
       const Analyzer::ColumnVar* selected_lhs{nullptr};
       // grab the left hand side column -- this is somewhat similar to normalize column
       // pair, and a better solution may be to hoist that function out of the join
       // framework and normalize columns at the top of build join loops
-      if (lhs->get_table_id() == inner_table_id) {
+      if (lhs->getTableKey() == inner_table_id) {
         selected_lhs = rhs;
-      } else if (rhs->get_table_id() == inner_table_id) {
+      } else if (rhs->getTableKey() == inner_table_id) {
         selected_lhs = lhs;
       }
       if (selected_lhs) {
         std::list<std::shared_ptr<Analyzer::Expr>> hoisted_quals;
         // get all LHS-only filters
-        auto should_hoist_qual = [&hoisted_quals](const auto& qual, const int table_id) {
+        auto should_hoist_qual = [&hoisted_quals](const auto& qual,
+                                                  const shared::TableKey& table_key) {
           CHECK(qual);
 
           ExprTableIdVisitor visitor;
-          const auto table_ids = visitor.visit(qual.get());
-          if (table_ids.size() == 1 && table_ids.find(table_id) != table_ids.end()) {
+          const auto table_keys = visitor.visit(qual.get());
+          if (table_keys.size() == 1 && table_keys.find(table_key) != table_keys.end()) {
             hoisted_quals.push_back(qual);
           }
         };
         for (const auto& qual : ra_exe_unit.simple_quals) {
-          should_hoist_qual(qual, selected_lhs->get_table_id());
+          should_hoist_qual(qual, selected_lhs->getTableKey());
         }
         for (const auto& qual : ra_exe_unit.quals) {
-          should_hoist_qual(qual, selected_lhs->get_table_id());
+          should_hoist_qual(qual, selected_lhs->getTableKey());
         }
 
         // build the filters callback and return it
@@ -907,15 +911,15 @@ Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
     return nullptr;
   }
 
-  const auto deleted_cd = plan_state_->getDeletedColForTable(input_desc.getTableId());
+  const auto deleted_cd = plan_state_->getDeletedColForTable(input_desc.getTableKey());
   if (!deleted_cd) {
     return nullptr;
   }
   CHECK(deleted_cd->columnType.is_boolean());
-  const auto deleted_expr = makeExpr<Analyzer::ColumnVar>(deleted_cd->columnType,
-                                                          input_desc.getTableId(),
-                                                          deleted_cd->columnId,
-                                                          input_desc.getNestLevel());
+  const auto deleted_expr = makeExpr<Analyzer::ColumnVar>(
+      deleted_cd->columnType,
+      shared::ColumnKey{input_desc.getTableKey(), deleted_cd->columnId},
+      input_desc.getNestLevel());
   return [this, deleted_expr, level_idx, &co](const std::vector<llvm::Value*>& prev_iters,
                                               llvm::Value* have_more_inner_rows) {
     const auto matching_row_index = addJoinLoopIterator(prev_iters, level_idx + 1);

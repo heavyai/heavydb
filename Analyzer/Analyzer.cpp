@@ -64,7 +64,7 @@ size_t Expr::get_num_column_vars(const bool include_agg) const {
 }
 
 std::shared_ptr<Analyzer::Expr> ColumnVar::deep_copy() const {
-  return makeExpr<ColumnVar>(type_info, table_id, column_id, rte_idx);
+  return makeExpr<ColumnVar>(type_info, column_key_, rte_idx_);
 }
 
 void ExpressionTuple::collect_rte_idx(std::set<int>& rte_idx_set) const {
@@ -85,7 +85,7 @@ std::shared_ptr<Analyzer::Expr> ExpressionTuple::deep_copy() const {
 }
 
 std::shared_ptr<Analyzer::Expr> Var::deep_copy() const {
-  return makeExpr<Var>(type_info, table_id, column_id, rte_idx, which_row, varno);
+  return makeExpr<Var>(type_info, column_key_, rte_idx_, which_row, varno);
 }
 
 std::shared_ptr<Analyzer::Expr> Constant::deep_copy() const {
@@ -422,43 +422,61 @@ SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
   return result_type;
 }
 
+namespace {
+bool has_same_dict(const SQLTypeInfo& type1, const SQLTypeInfo& type2) {
+  const auto& type1_dict_key = type1.getStringDictKey();
+  const auto& type2_dict_key = type2.getStringDictKey();
+  return (type1_dict_key == type2_dict_key ||
+          (type1_dict_key.db_id == type2_dict_key.db_id &&
+           type1_dict_key.dict_id == TRANSIENT_DICT(type2_dict_key.dict_id)));
+}
+}  // namespace
+
 SQLTypeInfo BinOper::common_string_type(const SQLTypeInfo& type1,
                                         const SQLTypeInfo& type2) {
   SQLTypeInfo common_type;
   EncodingType comp = kENCODING_NONE;
-  int comp_param = 0;
+  shared::StringDictKey dict_key;
   CHECK(type1.is_string() && type2.is_string());
   // if type1 and type2 have the same DICT encoding then keep it
   // otherwise, they must be decompressed
   if (type1.get_compression() == kENCODING_DICT &&
       type2.get_compression() == kENCODING_DICT) {
-    if (type1.get_comp_param() == type2.get_comp_param() ||
-        type1.get_comp_param() == TRANSIENT_DICT(type2.get_comp_param())) {
+    if (has_same_dict(type1, type2)) {
       comp = kENCODING_DICT;
-      comp_param = std::min(type1.get_comp_param(), type2.get_comp_param());
+      if (type1.getStringDictKey().dict_id < type2.getStringDictKey().dict_id) {
+        dict_key = type1.getStringDictKey();
+      } else {
+        dict_key = type2.getStringDictKey();
+      }
     }
   } else if (type1.get_compression() == kENCODING_DICT &&
              type2.get_compression() == kENCODING_NONE) {
-    comp_param = type1.get_comp_param();
+    dict_key = type1.getStringDictKey();
   } else if (type1.get_compression() == kENCODING_NONE &&
              type2.get_compression() == kENCODING_DICT) {
-    comp_param = type2.get_comp_param();
+    dict_key = type2.getStringDictKey();
   } else {
-    comp_param = std::max(type1.get_comp_param(),
-                          type2.get_comp_param());  // preserve previous comp_param if set
+    dict_key.dict_id =
+        std::max(type1.get_comp_param(),
+                 type2.get_comp_param());  // preserve previous comp_param if set
   }
   const bool notnull = type1.get_notnull() && type2.get_notnull();
   if (type1.get_type() == kTEXT || type2.get_type() == kTEXT) {
-    common_type = SQLTypeInfo(kTEXT, 0, 0, notnull, comp, comp_param, kNULLT);
-    return common_type;
+    common_type = SQLTypeInfo(kTEXT, 0, 0, notnull, comp, dict_key.dict_id, kNULLT);
+  } else {
+    common_type = SQLTypeInfo(kVARCHAR,
+                              std::max(type1.get_dimension(), type2.get_dimension()),
+                              0,
+                              notnull,
+                              comp,
+                              dict_key.dict_id,
+                              kNULLT);
   }
-  common_type = SQLTypeInfo(kVARCHAR,
-                            std::max(type1.get_dimension(), type2.get_dimension()),
-                            0,
-                            notnull,
-                            comp,
-                            comp_param,
-                            kNULLT);
+
+  if (common_type.is_dict_encoded_string()) {
+    common_type.setStringDictKey(dict_key);
+  }
   return common_type;
 }
 
@@ -732,8 +750,7 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
   if (new_type_info.is_string() && type_info.is_string() &&
       new_type_info.get_compression() == kENCODING_DICT &&
       type_info.get_compression() == kENCODING_DICT &&
-      (new_type_info.get_comp_param() == type_info.get_comp_param() ||
-       new_type_info.get_comp_param() == TRANSIENT_DICT(type_info.get_comp_param()))) {
+      has_same_dict(new_type_info, type_info)) {
     return shared_from_this();
   }
   if (!type_info.is_castable(new_type_info)) {
@@ -749,7 +766,7 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
   const bool has_non_literal_operands = get_num_column_vars(true) > 0UL;
   if (has_non_literal_operands && new_type_info.is_string() &&
       new_type_info.get_compression() == kENCODING_DICT &&
-      new_type_info.get_comp_param() <= TRANSIENT_DICT_ID) {
+      new_type_info.getStringDictKey().dict_id <= TRANSIENT_DICT_ID) {
     if (type_info.is_string() && type_info.get_compression() != kENCODING_DICT) {
       throw std::runtime_error(
           "Implict casts of TEXT ENCODING NONE to TEXT ENCODED DICT are not allowed "
@@ -1407,8 +1424,7 @@ std::shared_ptr<Analyzer::Expr> UOper::add_cast(const SQLTypeInfo& new_type_info
       type_info.get_compression() == kENCODING_NONE) {
     const SQLTypeInfo oti = operand->get_type_info();
     if (oti.is_string() && oti.get_compression() == kENCODING_DICT &&
-        (oti.get_comp_param() == new_type_info.get_comp_param() ||
-         oti.get_comp_param() == TRANSIENT_DICT(new_type_info.get_comp_param()))) {
+        has_same_dict(oti, new_type_info)) {
       auto result = operand;
       operand = nullptr;
       return result;
@@ -1420,9 +1436,9 @@ std::shared_ptr<Analyzer::Expr> UOper::add_cast(const SQLTypeInfo& new_type_info
 std::shared_ptr<Analyzer::Expr> CaseExpr::add_cast(const SQLTypeInfo& new_type_info) {
   SQLTypeInfo ti = new_type_info;
   if (new_type_info.is_string() && new_type_info.get_compression() == kENCODING_DICT &&
-      new_type_info.get_comp_param() == TRANSIENT_DICT_ID && type_info.is_string() &&
+      new_type_info.getStringDictKey().isTransientDict() && type_info.is_string() &&
       type_info.get_compression() == kENCODING_NONE &&
-      type_info.get_comp_param() > TRANSIENT_DICT_ID) {
+      type_info.getStringDictKey().dict_id > TRANSIENT_DICT_ID) {
     ti.set_comp_param(TRANSIENT_DICT(type_info.get_comp_param()));
   }
 
@@ -1469,7 +1485,7 @@ void ColumnVar::check_group_by(
   if (!groupby.empty()) {
     for (auto e : groupby) {
       auto c = std::dynamic_pointer_cast<ColumnVar>(e);
-      if (c && table_id == c->get_table_id() && column_id == c->get_column_id()) {
+      if (c && column_key_ == c->getColumnKey()) {
         return;
       }
     }
@@ -1891,7 +1907,7 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_targetlist(
     const Expr* e = tle->get_expr();
     const ColumnVar* colvar = dynamic_cast<const ColumnVar*>(e);
     if (colvar != nullptr) {
-      if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id()) {
+      if (column_key_ == colvar->getColumnKey()) {
         return colvar->deep_copy();
       }
     }
@@ -1910,10 +1926,9 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_child_targetlist(
           "Internal Error: targetlist in rewrite_with_child_targetlist is not all "
           "columns.");
     }
-    if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id()) {
+    if (column_key_ == colvar->getColumnKey()) {
       return makeExpr<Var>(colvar->get_type_info(),
-                           colvar->get_table_id(),
-                           colvar->get_column_id(),
+                           colvar->getColumnKey(),
                            colvar->get_rte_idx(),
                            Var::kINPUT_OUTER,
                            varno);
@@ -1935,10 +1950,9 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_agg_to_var(
             "Internal Error: targetlist in rewrite_agg_to_var is not all columns and "
             "aggregates.");
       }
-      if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id()) {
+      if (column_key_ == colvar->getColumnKey()) {
         return makeExpr<Var>(colvar->get_type_info(),
-                             colvar->get_table_id(),
-                             colvar->get_column_id(),
+                             colvar->getColumnKey(),
                              colvar->get_rte_idx(),
                              Var::kINPUT_OUTER,
                              varno);
@@ -2191,9 +2205,8 @@ bool ColumnVar::operator==(const Expr& rhs) const {
     return false;
   }
   const ColumnVar& rhs_cv = dynamic_cast<const ColumnVar&>(rhs);
-  if (rte_idx != -1) {
-    return (table_id == rhs_cv.get_table_id()) && (column_id == rhs_cv.get_column_id()) &&
-           (rte_idx == rhs_cv.get_rte_idx());
+  if (rte_idx_ != -1) {
+    return (column_key_ == rhs_cv.getColumnKey()) && (rte_idx_ == rhs_cv.get_rte_idx());
   }
   const Var* v = dynamic_cast<const Var*>(this);
   if (v == nullptr) {
@@ -2599,9 +2612,10 @@ bool GeoBinOper::operator==(const Expr& rhs) const {
 }
 
 std::string ColumnVar::toString() const {
-  return "(ColumnVar table: " + std::to_string(table_id) +
-         " column: " + std::to_string(column_id) + " rte: " + std::to_string(rte_idx) +
-         " " + get_type_info().get_type_name() + ") ";
+  std::stringstream ss;
+  ss << "(ColumnVar " << column_key_ << ", rte: " << std::to_string(rte_idx_) << " "
+     << get_type_info().get_type_name() << ") ";
+  return ss.str();
 }
 
 std::string ExpressionTuple::toString() const {
@@ -2614,10 +2628,11 @@ std::string ExpressionTuple::toString() const {
 }
 
 std::string Var::toString() const {
-  return "(Var table: " + std::to_string(table_id) +
-         " column: " + std::to_string(column_id) + " rte: " + std::to_string(rte_idx) +
-         " which_row: " + std::to_string(which_row) + " varno: " + std::to_string(varno) +
-         ") ";
+  std::stringstream ss;
+  ss << "(Var " << column_key_ << ", rte: " << std::to_string(rte_idx_)
+     << ", which_row: " << std::to_string(which_row)
+     << ", varno: " << std::to_string(varno) + ") ";
+  return ss.str();
 }
 
 std::string Constant::toString() const {
@@ -4096,7 +4111,7 @@ SQLTypeInfo StringOper::get_return_type(
     } else if (arg_ti.is_none_encoded_string()) {
       return SQLTypeInfo(kTEXT, kENCODING_DICT, 0, kNULLT);
     } else if (arg_ti.is_dict_encoded_string()) {
-      if (arg_ti.get_comp_param() == TRANSIENT_DICT_ID) {
+      if (arg_ti.getStringDictKey().isTransientDict()) {
         return SQLTypeInfo(kTEXT, kENCODING_DICT, 0, kNULLT);
       } else {
         num_var_string_inputs++;
@@ -4306,7 +4321,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> PositionStringOper::normalize_opera
   }
   return normalized_operands;
 }
-
 }  // namespace Analyzer
 
 bool expr_list_match(const std::vector<std::shared_ptr<Analyzer::Expr>>& lhs,

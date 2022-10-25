@@ -120,9 +120,11 @@ class StorageIOFacility {
 
   class TransactionParameters {
    public:
-    TransactionParameters(const TableDescriptorType* table_descriptor)
+    TransactionParameters(const TableDescriptorType* table_descriptor,
+                          const Catalog_Namespace::Catalog& catalog)
         : table_descriptor_(table_descriptor)
-        , table_is_temporary_(table_is_temporary(table_descriptor)) {}
+        , table_is_temporary_(table_is_temporary(table_descriptor))
+        , catalog_(catalog) {}
 
     virtual ~TransactionParameters() = default;
 
@@ -143,6 +145,8 @@ class StorageIOFacility {
 
     auto const* getTableDescriptor() const { return table_descriptor_; }
 
+    const Catalog_Namespace::Catalog& getCatalog() const { return catalog_; }
+
     const RelAlgNode* getInputSourceNode() const { return input_source_node_; }
 
     void setInputSourceNode(const RelAlgNode* input_source_node) {
@@ -153,13 +157,15 @@ class StorageIOFacility {
     typename StorageIOFacility::TransactionLog transaction_tracker_;
     TableDescriptorType const* table_descriptor_;
     bool table_is_temporary_;
+    const Catalog_Namespace::Catalog& catalog_;
     const RelAlgNode* input_source_node_;
   };
 
   struct DeleteTransactionParameters : public TransactionParameters {
    public:
-    DeleteTransactionParameters(const TableDescriptorType* table_descriptor)
-        : TransactionParameters(table_descriptor) {}
+    DeleteTransactionParameters(const TableDescriptorType* table_descriptor,
+                                const Catalog_Namespace::Catalog& catalog)
+        : TransactionParameters(table_descriptor, catalog) {}
 
    private:
     DeleteTransactionParameters(DeleteTransactionParameters const& other) = delete;
@@ -170,10 +176,11 @@ class StorageIOFacility {
   class UpdateTransactionParameters : public TransactionParameters {
    public:
     UpdateTransactionParameters(TableDescriptorType const* table_descriptor,
+                                const Catalog_Namespace::Catalog& catalog,
                                 UpdateTargetColumnNamesList const& update_column_names,
                                 UpdateTargetTypeList const& target_types,
                                 bool varlen_update_required)
-        : TransactionParameters(table_descriptor)
+        : TransactionParameters(table_descriptor, catalog)
         , update_column_names_(update_column_names)
         , targets_meta_(target_types)
         , varlen_update_required_(varlen_update_required) {}
@@ -194,8 +201,7 @@ class StorageIOFacility {
     bool varlen_update_required_ = false;
   };
 
-  StorageIOFacility(Executor* executor, Catalog_Namespace::Catalog const& catalog)
-      : executor_(executor), catalog_(catalog) {}
+  StorageIOFacility(Executor* executor) : executor_(executor) {}
 
   StorageIOFacility::UpdateCallback yieldUpdateCallback(
       UpdateTransactionParameters& update_parameters) {
@@ -210,21 +216,22 @@ class StorageIOFacility {
         std::vector<const ColumnDescriptor*> columnDescriptors;
         std::vector<TargetMetaInfo> sourceMetaInfos;
 
+        const auto& catalog = update_parameters.getCatalog();
         for (size_t idx = 0; idx < update_parameters.getUpdateColumnNames().size();
              idx++) {
           auto& column_name = update_parameters.getUpdateColumnNames()[idx];
           auto target_column =
-              catalog_.getMetadataForColumn(update_log.getPhysicalTableId(), column_name);
+              catalog.getMetadataForColumn(update_log.getPhysicalTableId(), column_name);
           columnDescriptors.push_back(target_column);
           sourceMetaInfos.push_back(update_parameters.getTargetsMetaInfo()[idx]);
         }
 
-        auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+        auto td = catalog.getMetadataForTable(update_log.getPhysicalTableId());
         auto* fragmenter = td->fragmenter.get();
         CHECK(fragmenter);
 
         fragmenter->updateColumns(
-            &catalog_,
+            &catalog,
             td,
             update_log.getFragmentId(),
             sourceMetaInfos,
@@ -239,8 +246,8 @@ class StorageIOFacility {
       };
       return callback;
     } else if (update_parameters.tableIsTemporary()) {
-      auto callback = [this, &update_parameters](UpdateLogForFragment const& update_log,
-                                                 TableUpdateMetadata&) -> void {
+      auto callback = [&update_parameters](UpdateLogForFragment const& update_log,
+                                           TableUpdateMetadata&) -> void {
         auto rs = update_log.getResultSet();
         CHECK(rs->didOutputColumnar());
         CHECK(rs->isDirectColumnarConversionPossible());
@@ -250,26 +257,27 @@ class StorageIOFacility {
         // Temporary table updates require the full projected column
         CHECK_EQ(rs->rowCount(), update_log.getRowCount());
 
-        ChunkKey chunk_key_prefix{catalog_.getCurrentDB().dbId,
+        const auto& catalog = update_parameters.getCatalog();
+        ChunkKey chunk_key_prefix{catalog.getCurrentDB().dbId,
                                   update_parameters.getTableDescriptor()->tableId};
         const auto table_lock =
             lockmgr::TableDataLockMgr::getWriteLockForTable(chunk_key_prefix);
 
         auto& fragment_info = update_log.getFragmentInfo();
-        const auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+        const auto td = catalog.getMetadataForTable(update_log.getPhysicalTableId());
         CHECK(td);
-        const auto cd = catalog_.getMetadataForColumn(
+        const auto cd = catalog.getMetadataForColumn(
             td->tableId, update_parameters.getUpdateColumnNames().front());
         CHECK(cd);
         auto chunk_metadata =
             fragment_info.getChunkMetadataMapPhysical().find(cd->columnId);
         CHECK(chunk_metadata != fragment_info.getChunkMetadataMapPhysical().end());
-        ChunkKey chunk_key{catalog_.getCurrentDB().dbId,
+        ChunkKey chunk_key{catalog.getCurrentDB().dbId,
                            td->tableId,
                            cd->columnId,
                            fragment_info.fragmentId};
         auto chunk = Chunk_NS::Chunk::getChunk(cd,
-                                               &catalog_.getDataMgr(),
+                                               &catalog.getDataMgr(),
                                                chunk_key,
                                                Data_Namespace::MemoryLevel::CPU_LEVEL,
                                                0,
@@ -304,7 +312,7 @@ class StorageIOFacility {
         fragment->shadowChunkMetadataMap =
             fragment->getChunkMetadataMapPhysicalCopy();  // TODO(adb): needed?
 
-        auto& data_mgr = catalog_.getDataMgr();
+        auto& data_mgr = catalog.getDataMgr();
         if (data_mgr.gpusPresent()) {
           // flush any GPU copies of the updated chunk
           data_mgr.deleteChunksWithPrefix(chunk_key,
@@ -374,8 +382,9 @@ class StorageIOFacility {
           return (thread_index * complete_entry_block_size);
         };
 
+        const auto& catalog = update_parameters.getCatalog();
         auto const* table_descriptor =
-            catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+            catalog.getMetadataForTable(update_log.getPhysicalTableId());
         auto fragment_id = update_log.getFragmentId();
         auto table_id = update_log.getPhysicalTableId();
         if (!table_descriptor) {
@@ -384,7 +393,7 @@ class StorageIOFacility {
             if (proj_node->hasPushedDownWindowExpr() ||
                 proj_node->hasWindowFunctionExpr()) {
               table_id = proj_node->getModifiedTableDescriptor()->tableId;
-              table_descriptor = catalog_.getMetadataForTable(table_id);
+              table_descriptor = catalog.getMetadataForTable(table_id);
             }
           }
         }
@@ -435,10 +444,11 @@ class StorageIOFacility {
           CHECK(row_idx == rows_per_column);
           const auto fragmenter = table_descriptor->fragmenter;
           CHECK(fragmenter);
-          auto const* target_column = catalog_.getMetadataForColumn(
+          auto const* target_column = catalog.getMetadataForColumn(
               table_id, update_parameters.getUpdateColumnNames()[column_index]);
+          CHECK(target_column);
           auto update_stats =
-              fragmenter->updateColumn(&catalog_,
+              fragmenter->updateColumn(&catalog,
                                        table_descriptor,
                                        target_column,
                                        fragment_id,
@@ -463,8 +473,9 @@ class StorageIOFacility {
 
     if (delete_parameters.tableIsTemporary()) {
       auto logical_table_id = delete_parameters.getTableDescriptor()->tableId;
-      auto callback = [this, logical_table_id](UpdateLogForFragment const& update_log,
-                                               TableUpdateMetadata&) -> void {
+      const auto& catalog = delete_parameters.getCatalog();
+      auto callback = [logical_table_id, &catalog](UpdateLogForFragment const& update_log,
+                                                   TableUpdateMetadata&) -> void {
         auto rs = update_log.getResultSet();
         CHECK(rs->didOutputColumnar());
         CHECK(rs->isDirectColumnarConversionPossible());
@@ -473,25 +484,25 @@ class StorageIOFacility {
         // Temporary table updates require the full projected column
         CHECK_EQ(rs->rowCount(), update_log.getRowCount());
 
-        const ChunkKey lock_chunk_key{catalog_.getCurrentDB().dbId, logical_table_id};
+        const ChunkKey lock_chunk_key{catalog.getCurrentDB().dbId, logical_table_id};
         const auto table_lock =
             lockmgr::TableDataLockMgr::getWriteLockForTable(lock_chunk_key);
 
         auto& fragment_info = update_log.getFragmentInfo();
-        const auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+        const auto td = catalog.getMetadataForTable(update_log.getPhysicalTableId());
         CHECK(td);
-        const auto cd = catalog_.getDeletedColumn(td);
+        const auto cd = catalog.getDeletedColumn(td);
         CHECK(cd);
         CHECK(cd->columnType.get_type() == kBOOLEAN);
         auto chunk_metadata =
             fragment_info.getChunkMetadataMapPhysical().find(cd->columnId);
         CHECK(chunk_metadata != fragment_info.getChunkMetadataMapPhysical().end());
-        ChunkKey chunk_key{catalog_.getCurrentDB().dbId,
+        ChunkKey chunk_key{catalog.getCurrentDB().dbId,
                            td->tableId,
                            cd->columnId,
                            fragment_info.fragmentId};
         auto chunk = Chunk_NS::Chunk::getChunk(cd,
-                                               &catalog_.getDataMgr(),
+                                               &catalog.getDataMgr(),
                                                chunk_key,
                                                Data_Namespace::MemoryLevel::CPU_LEVEL,
                                                0,
@@ -525,7 +536,7 @@ class StorageIOFacility {
         fragment->shadowChunkMetadataMap =
             fragment->getChunkMetadataMapPhysicalCopy();  // TODO(adb): needed?
 
-        auto& data_mgr = catalog_.getDataMgr();
+        auto& data_mgr = catalog.getDataMgr();
         if (data_mgr.gpusPresent()) {
           // flush any GPU copies of the updated chunk
           data_mgr.deleteChunksWithPrefix(chunk_key,
@@ -612,15 +623,17 @@ class StorageIOFacility {
           rows_processed += t.get();
         }
 
+        const auto& catalog = delete_parameters.getCatalog();
         auto const* table_descriptor =
-            catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+            catalog.getMetadataForTable(update_log.getPhysicalTableId());
+        CHECK(table_descriptor);
         CHECK(!table_is_temporary(table_descriptor));
         auto* fragmenter = table_descriptor->fragmenter.get();
         CHECK(fragmenter);
 
-        auto const* deleted_column_desc = catalog_.getDeletedColumn(table_descriptor);
+        auto const* deleted_column_desc = catalog.getDeletedColumn(table_descriptor);
         CHECK(deleted_column_desc);
-        fragmenter->updateColumn(&catalog_,
+        fragmenter->updateColumn(&catalog,
                                  table_descriptor,
                                  deleted_column_desc,
                                  update_log.getFragmentId(),
@@ -681,5 +694,4 @@ class StorageIOFacility {
   }
 
   Executor* executor_;
-  Catalog_Namespace::Catalog const& catalog_;
 };

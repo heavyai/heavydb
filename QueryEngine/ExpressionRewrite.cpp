@@ -796,24 +796,24 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
     const std::vector<InputDescriptor>& input_table_info,
     const OverlapsJoinRewriteType rewrite_type,
     const Executor* executor) {
-  auto collect_table_cardinality = [](const Analyzer::Expr* lhs,
-                                      const Analyzer::Expr* rhs,
-                                      const Executor* executor) {
-    const auto lhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
-    const auto rhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(rhs);
-    if (lhs_cv && rhs_cv) {
-      const auto cat = executor->getCatalog();
-      const auto inner_table_metadata = cat->getMetadataForTable(lhs_cv->get_table_id());
-      const auto outer_table_metadata = cat->getMetadataForTable(rhs_cv->get_table_id());
-      if (inner_table_metadata->fragmenter && outer_table_metadata->fragmenter) {
-        return std::make_pair<int64_t, int64_t>(
-            inner_table_metadata->fragmenter->getNumRows(),
-            outer_table_metadata->fragmenter->getNumRows());
-      }
-    }
-    // otherwise, return an invalid table cardinality
-    return std::make_pair<int64_t, int64_t>(-1, -1);
-  };
+  auto collect_table_cardinality =
+      [](const Analyzer::Expr* lhs, const Analyzer::Expr* rhs, const Executor* executor) {
+        const auto lhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
+        const auto rhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(rhs);
+        if (lhs_cv && rhs_cv) {
+          const auto inner_table_metadata = Catalog_Namespace::get_metadata_for_table(
+              {lhs_cv->getColumnKey().db_id, lhs_cv->getColumnKey().table_id});
+          const auto outer_table_metadata = Catalog_Namespace::get_metadata_for_table(
+              {rhs_cv->getColumnKey().db_id, rhs_cv->getColumnKey().table_id});
+          if (inner_table_metadata->fragmenter && outer_table_metadata->fragmenter) {
+            return std::make_pair<int64_t, int64_t>(
+                inner_table_metadata->fragmenter->getNumRows(),
+                outer_table_metadata->fragmenter->getNumRows());
+          }
+        }
+        // otherwise, return an invalid table cardinality
+        return std::make_pair<int64_t, int64_t>(-1, -1);
+      };
 
   auto has_invalid_join_col_order = [](const Analyzer::Expr* lhs,
                                        const Analyzer::Expr* rhs) {
@@ -1209,7 +1209,7 @@ std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr* expr) {
 bool self_join_not_covered_by_left_deep_tree(const Analyzer::ColumnVar* key_side,
                                              const Analyzer::ColumnVar* val_side,
                                              const int max_rte_covered) {
-  if (key_side->get_table_id() == val_side->get_table_id() &&
+  if (key_side->getTableKey() == val_side->getTableKey() &&
       key_side->get_rte_idx() == val_side->get_rte_idx() &&
       key_side->get_rte_idx() > max_rte_covered) {
     return true;

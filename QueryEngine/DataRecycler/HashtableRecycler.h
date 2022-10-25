@@ -110,7 +110,7 @@ class HashtableRecycler
       const TableIdToNodeMap& table_id_to_node_map,
       bool need_dict_translation,
       const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_info_pairs,
-      const int table_id);
+      const shared::TableKey& table_key);
 
   static bool isInvalidHashTableCacheKey(const std::vector<QueryPlanHash>& cache_keys);
 

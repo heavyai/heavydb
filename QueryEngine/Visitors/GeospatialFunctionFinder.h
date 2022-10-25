@@ -19,12 +19,14 @@
 #pragma once
 
 #include <vector>
-#include "../Analyzer/Analyzer.h"
+
+#include "Analyzer/Analyzer.h"
+#include "Shared/DbObjectKeys.h"
 
 class GeospatialFunctionFinder : public ScalarExprVisitor<void*> {
  public:
   const std::vector<const Analyzer::ColumnVar*>& getGeoArgCvs() const;
-  const std::pair<int, int> getTableIdsOfGeoExpr() const;
+  const std::pair<shared::TableKey, shared::TableKey> getTableIdsOfGeoExpr() const;
   const std::string& getGeoFunctionName() const;
 
  protected:

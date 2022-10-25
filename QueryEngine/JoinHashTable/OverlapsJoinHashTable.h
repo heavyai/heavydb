@@ -243,7 +243,7 @@ class OverlapsJoinHashTable : public HashJoin {
   Data_Namespace::MemoryLevel getEffectiveMemoryLevel(
       const std::vector<InnerOuter>& inner_outer_pairs) const;
 
-  int getInnerTableId() const noexcept override;
+  shared::TableKey getInnerTableId() const noexcept override;
 
   int getInnerTableRteIdx() const noexcept override {
     CHECK(!inner_outer_pairs_.empty());

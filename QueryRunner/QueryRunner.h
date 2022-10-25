@@ -329,7 +329,6 @@ class QueryRunner {
   Catalog_Namespace::DBMetadata db_metadata_;
   std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;
   std::unique_ptr<QueryDispatchQueue> dispatch_queue_;
-  std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
   std::shared_ptr<QueryEngine> query_engine_;
 };
 

@@ -178,7 +178,7 @@ bool is_temporary_column(const Analyzer::Expr* expr) {
   if (!col_expr) {
     return false;
   }
-  return col_expr->get_table_id() < 0;
+  return col_expr->getColumnKey().table_id < 0;
 }
 
 }  // namespace

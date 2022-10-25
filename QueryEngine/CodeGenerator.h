@@ -20,6 +20,7 @@
 
 #include "../Analyzer/Analyzer.h"
 #include "Execute.h"
+#include "Shared/DbObjectKeys.h"
 
 // Code generation utility to be used for queries and scalar expressions.
 class CodeGenerator {
@@ -51,7 +52,7 @@ class CodeGenerator {
   std::vector<llvm::Value*> codegenHoistedConstants(
       const std::vector<const Analyzer::Constant*>& constants,
       const EncodingType enc_type,
-      const int dict_id);
+      const shared::StringDictKey& dict_id);
 
   static llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant,
                                             CgenState* cgen_state);
@@ -161,7 +162,7 @@ class CodeGenerator {
  private:
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
                                     const EncodingType enc_type,
-                                    const int dict_id,
+                                    const shared::StringDictKey& dict_id,
                                     const CompilationOptions&);
 
   virtual std::vector<llvm::Value*> codegenColumn(const Analyzer::ColumnVar*,
@@ -283,11 +284,12 @@ class CodeGenerator {
 
   llvm::Value* codegen(const Analyzer::UOper*, const CompilationOptions&);
 
-  std::vector<llvm::Value*> codegenHoistedConstantsLoads(const SQLTypeInfo& type_info,
-                                                         const EncodingType enc_type,
-                                                         const int dict_id,
-                                                         const int16_t lit_off,
-                                                         const size_t lit_bytes);
+  std::vector<llvm::Value*> codegenHoistedConstantsLoads(
+      const SQLTypeInfo& type_info,
+      const EncodingType enc_type,
+      const shared::StringDictKey& dict_id,
+      const int16_t lit_off,
+      const size_t lit_bytes);
 
   std::vector<llvm::Value*> codegenHoistedConstantsPlaceholders(
       const SQLTypeInfo& type_info,

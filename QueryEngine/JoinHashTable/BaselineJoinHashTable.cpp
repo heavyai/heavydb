@@ -57,8 +57,8 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
             << " for qual: " << condition->toString();
     ts1 = std::chrono::steady_clock::now();
   }
-  auto inner_outer_pairs = HashJoin::normalizeColumnPairs(
-      condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
+  auto inner_outer_pairs =
+      HashJoin::normalizeColumnPairs(condition.get(), executor->getTemporaryTables());
   const auto& inner_outer_cols = inner_outer_pairs.first;
   const auto& col_pairs_string_op_infos = inner_outer_pairs.second;
   auto join_hash_table = std::shared_ptr<BaselineJoinHashTable>(
@@ -132,7 +132,6 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , column_cache_(column_cache)
     , inner_outer_pairs_(inner_outer_pairs)
     , inner_outer_string_op_infos_pairs_(col_pairs_string_op_infos)
-    , catalog_(executor->getCatalog())
     , device_count_(device_count)
     , query_hints_(query_hints)
     , needs_dict_translation_(false)
@@ -168,9 +167,9 @@ std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
-    auto& data_mgr = catalog_->getDataMgr();
+    auto data_mgr = executor_->getDataMgr();
     auto device_allocator = std::make_unique<CudaAllocator>(
-        &data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : buffer;
@@ -207,9 +206,9 @@ std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::toSet(
   std::unique_ptr<int8_t[]> buffer_copy;
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
-    auto& data_mgr = catalog_->getDataMgr();
+    auto data_mgr = executor_->getDataMgr();
     auto device_allocator = std::make_unique<CudaAllocator>(
-        &data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : buffer;
@@ -342,8 +341,8 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
   }
 
   // prepare per-device cache key
-  auto inner_outer_pairs = HashJoin::normalizeColumnPairs(
-      condition_.get(), *executor_->getCatalog(), executor_->getTemporaryTables());
+  auto inner_outer_pairs =
+      HashJoin::normalizeColumnPairs(condition_.get(), executor_->getTemporaryTables());
   const auto& inner_outer_cols = inner_outer_pairs.first;
   const auto& col_pairs_string_op_infos = inner_outer_pairs.second;
   auto hashtable_access_path_info =
@@ -363,15 +362,14 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
   // the actual chunks fetched per device can be different but they constitute the same
   // table in the same db, so we can exploit this to create an alternative table key
   if (table_keys_.empty()) {
-    table_keys_ = DataRecyclerUtil::getAlternativeTableKeys(
-        chunk_key_per_device,
-        executor_->getCatalog()->getDatabaseId(),
-        getInnerTableId());
+    const auto& inner_table_key = getInnerTableId();
+    table_keys_ =
+        DataRecyclerUtil::getAlternativeTableKeys(chunk_key_per_device, inner_table_key);
   }
   CHECK(!table_keys_.empty());
 
   if (HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_) &&
-      getInnerTableId() > 0) {
+      getInnerTableId().table_id > 0) {
     // sometimes we cannot retrieve query plan dag, so try to recycler cache
     // with the old-passioned cache key if we deal with hashtable of non-temporary table
     for (int device_id = 0; device_id < device_count_; ++device_id) {
@@ -632,8 +630,7 @@ ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDevice(
   std::vector<std::shared_ptr<void>> malloc_owner;
   for (const auto& inner_outer_pair : inner_outer_pairs_) {
     const auto inner_col = inner_outer_pair.first;
-    const auto inner_cd = get_column_descriptor_maybe(
-        inner_col->get_column_id(), inner_col->get_table_id(), *catalog_);
+    const auto inner_cd = get_column_descriptor_maybe(inner_col->getColumnKey());
     if (inner_cd && inner_cd->isVirtualCol) {
       throw FailedToJoinOnVirtualColumn();
     }
@@ -1079,13 +1076,13 @@ llvm::Value* BaselineJoinHashTable::hashPtr(const size_t index) {
 #undef LL_BUILDER
 #undef LL_CONTEXT
 
-int BaselineJoinHashTable::getInnerTableId() const noexcept {
+shared::TableKey BaselineJoinHashTable::getInnerTableId() const noexcept {
   try {
     return getInnerTableId(inner_outer_pairs_);
   } catch (...) {
     CHECK(false);
   }
-  return 0;
+  return {0, 0};
 }
 
 int BaselineJoinHashTable::getInnerTableRteIdx() const noexcept {
@@ -1104,11 +1101,11 @@ HashType BaselineJoinHashTable::getHashType() const noexcept {
   }
 }
 
-int BaselineJoinHashTable::getInnerTableId(
+shared::TableKey BaselineJoinHashTable::getInnerTableId(
     const std::vector<InnerOuter>& inner_outer_pairs) {
   CHECK(!inner_outer_pairs.empty());
   const auto first_inner_col = inner_outer_pairs.front().first;
-  return first_inner_col->get_table_id();
+  return first_inner_col->getTableKey();
 }
 
 std::shared_ptr<HashTable> BaselineJoinHashTable::initHashTableOnCpuFromCache(

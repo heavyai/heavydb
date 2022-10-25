@@ -153,10 +153,10 @@ ResultSetPtr TableFunctionExecutionContext::execute(
       CHECK_EQ(col_index, -1);
     }
     if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
-      auto table_id = col_var->get_table_id();
+      const auto& table_key = col_var->getTableKey();
       auto table_info_it = std::find_if(
-          table_infos.begin(), table_infos.end(), [&table_id](const auto& table_info) {
-            return table_info.table_id == table_id;
+          table_infos.begin(), table_infos.end(), [&table_key](const auto& table_info) {
+            return table_info.table_key == table_key;
           });
       CHECK(table_info_it != table_infos.end());
       auto [col_buf, buf_elem_count] = ColumnFetcher::getOneColumnFragment(
@@ -179,7 +179,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
       int8_t* input_str_dict_proxy_ptr = nullptr;
       if (ti.is_subtype_dict_encoded_string()) {
         const auto input_string_dictionary_proxy = executor->getStringDictionaryProxy(
-            ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
+            ti.getStringDictKey(), executor->getRowSetMemoryOwner(), true);
         input_str_dict_proxy_ptr =
             reinterpret_cast<int8_t*>(input_string_dictionary_proxy);
       }
@@ -299,7 +299,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
     auto ti = output_expr->get_type_info();
     if (ti.is_dict_encoded_string()) {
       const auto output_string_dictionary_proxy = executor->getStringDictionaryProxy(
-          ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
+          ti.getStringDictKey(), executor->getRowSetMemoryOwner(), true);
       output_str_dict_proxy_ptr =
           reinterpret_cast<int8_t*>(output_string_dictionary_proxy);
     }
@@ -609,8 +609,10 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
       src = align_to_int64(src + allocated_column_size);
       dst = align_to_int64(dst + actual_column_size);
       if (ti.is_text_encoding_dict_array()) {
+        CHECK_EQ(m.getDTypeMetadataDictDbId(),
+                 ti.getStringDictKey().db_id);  // ensure that db_id is preserved
         CHECK_EQ(m.getDTypeMetadataDictId(),
-                 ti.get_comp_param());  // ensure that dict_id is preserved
+                 ti.getStringDictKey().dict_id);  // ensure that dict_id is preserved
       }
     } else {
       const size_t target_width = ti.get_size();

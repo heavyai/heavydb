@@ -16,21 +16,24 @@
 
 #pragma once
 
-#include <cstdint>
 #include <unordered_map>
+
+#include "Shared/DbObjectKeys.h"
 
 class StringDictionaryGenerations {
  public:
-  void setGeneration(const uint32_t id, const uint64_t generation);
+  StringDictionaryGenerations(){};
 
-  void updateGeneration(const uint32_t id, const uint64_t generation);
+  void setGeneration(const shared::StringDictKey& dict_key, const uint64_t generation);
 
-  int64_t getGeneration(const uint32_t id) const;
+  void updateGeneration(const shared::StringDictKey& dict_key, const uint64_t generation);
 
-  const std::unordered_map<uint32_t, uint64_t>& asMap() const;
+  int64_t getGeneration(const shared::StringDictKey& dict_key) const;
+
+  const std::unordered_map<shared::StringDictKey, uint64_t>& asMap() const;
 
   void clear();
 
  private:
-  std::unordered_map<uint32_t, uint64_t> id_to_generation_;
+  std::unordered_map<shared::StringDictKey, uint64_t> dict_key_to_generation_;
 };

@@ -239,7 +239,7 @@ int vt_column(sqlite3_vtab_cursor* cur, sqlite3_context* ctx, int col_idx) {
       if (col_ti.get_compression() == kENCODING_DICT) {
         const auto executor = external_query_table.executor;
         const auto sdp = executor->getStringDictionaryProxy(
-            col_ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
+            col_ti.getStringDictKey(), executor->getRowSetMemoryOwner(), true);
         CHECK(sdp);
         DecodedString decoded_string;
         switch (col_ti.get_size()) {
@@ -347,24 +347,27 @@ sqlite3_module omnisci_module = {
 
 std::vector<TargetMetaInfo> create_table_schema(const PlanState* plan_state) {
   std::map<size_t, TargetMetaInfo> schema_map;
-  const auto catalog = plan_state->executor_->getCatalog();
   for (const auto& kv : plan_state->global_to_local_col_ids_) {
-    const int table_id = kv.first.getScanDesc().getTableId();
+    const auto& table_key = kv.first.getScanDesc().getTableKey();
+    const auto catalog =
+        Catalog_Namespace::SysCatalog::instance().getCatalog(table_key.db_id);
     const int column_id = kv.first.getColId();
     SQLTypeInfo column_type;
-    if (table_id < 0) {
-      const auto result_set =
-          get_temporary_table(plan_state->executor_->getTemporaryTables(), table_id);
+    if (table_key.table_id < 0) {
+      const auto result_set = get_temporary_table(
+          plan_state->executor_->getTemporaryTables(), table_key.table_id);
       column_type = result_set->getColType(column_id);
     } else {
-      const auto cd = catalog->getMetadataForColumn(table_id, column_id);
+      CHECK(catalog);
+      const auto cd = catalog->getMetadataForColumn(table_key.table_id, column_id);
       column_type = cd->columnType;
     }
     if (!is_supported_type_for_extern_execution(column_type)) {
       throw std::runtime_error("Type not supported yet for extern execution: " +
                                column_type.get_type_name());
     }
-    const auto column_ref = serialize_column_ref(table_id, column_id, catalog);
+    const auto column_ref =
+        serialize_column_ref(table_key.table_id, column_id, catalog.get());
     const auto it_ok =
         schema_map.emplace(kv.second, TargetMetaInfo(column_ref, column_type));
     CHECK(it_ok.second);
@@ -425,7 +428,6 @@ std::unique_ptr<ResultSet> SqliteMemDatabase::runSelect(
                                         ExecutorDeviceType::CPU,
                                         query_mem_desc,
                                         output_spec.executor->getRowSetMemoryOwner(),
-                                        nullptr,
                                         0,
                                         0);
   const auto storage = rs->allocateStorage();

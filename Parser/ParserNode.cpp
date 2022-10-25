@@ -63,6 +63,7 @@
 #include "QueryEngine/RelAlgExecutor.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "ReservedKeywords.h"
+#include "Shared/DbObjectKeys.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/enable_assign_render_groups.h"
@@ -327,19 +328,19 @@ SQLTypeInfo const& get_str_dict_cast_type(const SQLTypeInfo& lhs_type_info,
   CHECK(lhs_type_info.get_compression() == kENCODING_DICT);
   CHECK(rhs_type_info.is_string());
   CHECK(rhs_type_info.get_compression() == kENCODING_DICT);
-  const auto lhs_comp_param = lhs_type_info.get_comp_param();
-  const auto rhs_comp_param = rhs_type_info.get_comp_param();
-  CHECK_NE(lhs_comp_param, rhs_comp_param);
-  if (lhs_type_info.get_comp_param() == TRANSIENT_DICT_ID) {
+  const auto& lhs_dict_key = lhs_type_info.getStringDictKey();
+  const auto& rhs_dict_key = rhs_type_info.getStringDictKey();
+  CHECK_NE(lhs_dict_key, rhs_dict_key);
+  if (lhs_dict_key.isTransientDict()) {
     return rhs_type_info;
   }
-  if (rhs_type_info.get_comp_param() == TRANSIENT_DICT_ID) {
+  if (rhs_dict_key.isTransientDict()) {
     return lhs_type_info;
   }
   // If here then neither lhs or rhs type was transient, we should see which
   // type has the largest dictionary and make that the destination type
-  const auto lhs_sdp = executor->getStringDictionaryProxy(lhs_comp_param, true);
-  const auto rhs_sdp = executor->getStringDictionaryProxy(rhs_comp_param, true);
+  const auto lhs_sdp = executor->getStringDictionaryProxy(lhs_dict_key, true);
+  const auto rhs_sdp = executor->getStringDictionaryProxy(rhs_dict_key, true);
   return lhs_sdp->entryCount() >= rhs_sdp->entryCount() ? lhs_type_info : rhs_type_info;
 }
 
@@ -348,12 +349,13 @@ SQLTypeInfo common_string_type(const SQLTypeInfo& lhs_type_info,
                                const Executor* executor) {
   CHECK(lhs_type_info.is_string());
   CHECK(rhs_type_info.is_string());
-  const auto lhs_comp_param = lhs_type_info.get_comp_param();
-  const auto rhs_comp_param = rhs_type_info.get_comp_param();
   if (lhs_type_info.is_dict_encoded_string() && rhs_type_info.is_dict_encoded_string()) {
-    if (lhs_comp_param == rhs_comp_param ||
-        lhs_comp_param == TRANSIENT_DICT(rhs_comp_param)) {
-      return lhs_comp_param <= rhs_comp_param ? lhs_type_info : rhs_type_info;
+    const auto& lhs_dict_key = lhs_type_info.getStringDictKey();
+    const auto& rhs_dict_key = rhs_type_info.getStringDictKey();
+    if (lhs_dict_key == rhs_dict_key ||
+        (lhs_dict_key.db_id == rhs_dict_key.db_id &&
+         lhs_dict_key.dict_id == TRANSIENT_DICT(rhs_dict_key.dict_id))) {
+      return lhs_dict_key.dict_id <= rhs_dict_key.dict_id ? lhs_type_info : rhs_type_info;
     }
     return get_str_dict_cast_type(lhs_type_info, rhs_type_info, executor);
   }
@@ -420,7 +422,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
 
     if (new_left_type.get_compression() == kENCODING_DICT &&
         new_right_type.get_compression() == kENCODING_DICT) {
-      if (new_left_type.get_comp_param() != new_right_type.get_comp_param()) {
+      if (new_left_type.getStringDictKey() != new_right_type.getStringDictKey()) {
         if (optype == kEQ || optype == kNE) {
           // Join framework does its own string dictionary translation
           // (at least partly since the rhs table projection does not use
@@ -470,6 +472,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
       SQLTypeInfo ti(new_right_type);
       ti.set_compression(new_left_type.get_compression());
       ti.set_comp_param(new_left_type.get_comp_param());
+      ti.setStringDictKey(new_left_type.getStringDictKey());
       ti.set_fixed_size();
       right_expr = right_expr->add_cast(ti);
     } else if (new_right_type.get_compression() == kENCODING_DICT &&
@@ -477,6 +480,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
       SQLTypeInfo ti(new_left_type);
       ti.set_compression(new_right_type.get_compression());
       ti.set_comp_param(new_right_type.get_comp_param());
+      ti.setStringDictKey(new_right_type.getStringDictKey());
       ti.set_fixed_size();
       left_expr = left_expr->add_cast(ti);
     } else {
@@ -946,7 +950,10 @@ std::shared_ptr<Analyzer::Expr> ColumnRef::analyze(
       throw std::runtime_error("Column name " + *column_ + " does not exist.");
     }
   }
-  return makeExpr<Analyzer::ColumnVar>(cd->columnType, table_id, cd->columnId, rte_idx);
+  return makeExpr<Analyzer::ColumnVar>(
+      cd->columnType,
+      shared::ColumnKey{catalog.getDatabaseId(), table_id, cd->columnId},
+      rte_idx);
 }
 
 std::shared_ptr<Analyzer::Expr> FunctionRef::analyze(
@@ -1652,8 +1659,8 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
       has_agg = true;
     }
     const auto& e2_ti = e2->get_type_info();
-    if (e2_ti.is_string() && !e2_ti.is_dict_encoded_string() &&
-        !std::dynamic_pointer_cast<const Analyzer::ColumnVar>(e2)) {
+    const auto col_var = std::dynamic_pointer_cast<const Analyzer::ColumnVar>(e2);
+    if (e2_ti.is_string() && !e2_ti.is_dict_encoded_string() && !col_var) {
       CHECK(e2_ti.is_none_encoded_string());
       none_encoded_literal_ti =
           none_encoded_literal_ti.get_type() == kNULLT
@@ -1684,11 +1691,11 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
   auto else_e = else_e_in;
   const auto& else_ti = else_e->get_type_info();
   if (else_e) {
+    const auto col_var = std::dynamic_pointer_cast<const Analyzer::ColumnVar>(else_e);
     if (else_e->get_contains_agg()) {
       has_agg = true;
     }
-    if (else_ti.is_string() && !else_ti.is_dict_encoded_string() &&
-        !std::dynamic_pointer_cast<const Analyzer::ColumnVar>(else_e)) {
+    if (else_ti.is_string() && !else_ti.is_dict_encoded_string() && !col_var) {
       CHECK(else_ti.is_none_encoded_string());
       none_encoded_literal_ti =
           none_encoded_literal_ti.get_type() == kNULLT
@@ -1906,8 +1913,9 @@ void QuerySpec::analyze_select_clause(const Catalog_Namespace::Catalog& catalog,
         } else if (std::dynamic_pointer_cast<Analyzer::ColumnVar>(e) &&
                    !std::dynamic_pointer_cast<Analyzer::Var>(e)) {
           auto colvar = std::static_pointer_cast<Analyzer::ColumnVar>(e);
-          const ColumnDescriptor* col_desc = catalog.getMetadataForColumn(
-              colvar->get_table_id(), colvar->get_column_id());
+          const auto& column_key = colvar->getColumnKey();
+          const ColumnDescriptor* col_desc =
+              catalog.getMetadataForColumn(column_key.table_id, column_key.column_id);
           resname = col_desc->columnName;
         }
         if (e->get_type_info().get_type() == kNULLT) {
@@ -2707,7 +2715,7 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session,
   foreign_storage::validate_non_foreign_table_write(td);
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-  RelAlgExecutor ra_executor(executor.get(), catalog);
+  RelAlgExecutor ra_executor(executor.get());
 
   if (!leafs_connector_) {
     leafs_connector_ = std::make_unique<Fragmenter_Namespace::LocalInsertConnector>();
@@ -3423,7 +3431,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                       calciteOptimizationOption)
                             .plan_result;
   RelAlgExecutor ra_executor(
-      executor.get(), catalog, query_ra, query_state_proxy->shared_from_this());
+      executor.get(), query_ra, query_state_proxy->shared_from_this());
   CompilationOptions co = CompilationOptions::defaults(device_type);
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
@@ -3451,7 +3459,6 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
-                                                     nullptr,
                                                      nullptr,
                                                      0,
                                                      0),
@@ -3490,7 +3497,7 @@ size_t LocalQueryConnector::getOuterFragmentCount(QueryStateProxy query_state_pr
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
+  RelAlgExecutor ra_executor(executor.get(), query_ra);
   CompilationOptions co = {device_type, true, ExecutorOptLevel::Default, false};
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
@@ -4015,16 +4022,16 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             auto sourceDataMetaInfo = res.targets_meta[colNum++];
             ConverterCreateParameter param{
                 num_rows_this_itr,
-                catalog,
                 sourceDataMetaInfo,
                 targetDescriptor,
+                catalog,
                 targetDescriptor->columnType,
                 !targetDescriptor->columnType.get_notnull(),
                 result_rows->getRowSetMemOwner()->getLiteralStringDictProxy(),
                 g_enable_string_functions &&
                         sourceDataMetaInfo.get_type_info().is_dict_encoded_string()
                     ? executor->getStringDictionaryProxy(
-                          sourceDataMetaInfo.get_type_info().get_comp_param(),
+                          sourceDataMetaInfo.get_type_info().getStringDictKey(),
                           result_rows->getRowSetMemOwner(),
                           true)
                     : nullptr,
@@ -4125,57 +4132,65 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 }
 
 namespace {
-int32_t get_table_id(const Catalog_Namespace::Catalog& catalog,
-                     const std::string& table_name) {
-  auto table_id = catalog.getTableId(table_name);
+shared::TableKey get_table_key(const std::vector<std::string>& table) {
+  const auto catalog = SysCatalog::instance().getCatalog(table[1]);
+  CHECK(catalog);
+  const auto table_id = catalog->getTableId(table[0]);
   if (!table_id.has_value()) {
-    throw std::runtime_error{"Table \"" + table_name + "\" does not exist."};
+    throw std::runtime_error{"Table \"" + table[0] +
+                             "\" does not exist in catalog: " + table[1] + "."};
   }
-  return table_id.value();
+  return {catalog->getDatabaseId(), table_id.value()};
 }
 
 lockmgr::LockedTableDescriptors acquire_query_table_locks(
-    Catalog_Namespace::Catalog& catalog,
+    const std::string& insert_table_db_name,
     const std::string& query_str,
     const QueryStateProxy& query_state_proxy,
     const std::optional<std::string>& insert_table_name = {}) {
-  auto calcite_mgr = catalog.getCalciteMgr();
+  auto& sys_catalog = SysCatalog::instance();
+  auto& calcite_mgr = sys_catalog.getCalciteMgr();
   const auto calciteQueryParsingOption =
-      calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-      false, g_enable_watchdog, {}, SysCatalog::instance().isAggregator());
-  const auto result = calcite_mgr->process(query_state_proxy,
-                                           pg_shim(query_str),
-                                           calciteQueryParsingOption,
-                                           calciteOptimizationOption);
+      calcite_mgr.getCalciteQueryParsingOption(true, false, true);
+  const auto calciteOptimizationOption = calcite_mgr.getCalciteOptimizationOption(
+      false, g_enable_watchdog, {}, sys_catalog.isAggregator());
+  const auto result = calcite_mgr.process(query_state_proxy,
+                                          pg_shim(query_str),
+                                          calciteQueryParsingOption,
+                                          calciteOptimizationOption);
   // force sort into tableid order in case of name change to guarantee fixed order of
   // mutex access
-  auto comparator = [&catalog](const std::string& table_1, const std::string& table_2) {
-    return get_table_id(catalog, table_1) < get_table_id(catalog, table_2);
+  auto comparator = [](const std::vector<std::string>& table_1,
+                       const std::vector<std::string>& table_2) {
+    return get_table_key(table_1) < get_table_key(table_2);
   };
-  std::set<std::string, decltype(comparator)> tables(comparator);
+  std::set<std::vector<std::string>, decltype(comparator)> tables(comparator);
   for (auto& tab : result.resolved_accessed_objects.tables_selected_from) {
-    tables.emplace(tab[0]);
+    tables.emplace(tab);
   }
   if (insert_table_name.has_value()) {
-    tables.emplace(insert_table_name.value());
+    tables.emplace(
+        std::vector<std::string>{insert_table_name.value(), insert_table_db_name});
   }
   lockmgr::LockedTableDescriptors locks;
   for (const auto& table : tables) {
+    const auto catalog = sys_catalog.getCatalog(table[1]);
+    CHECK(catalog);
     locks.emplace_back(
         std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
             lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-                catalog, table)));
-    if (insert_table_name.has_value() && table == insert_table_name.value()) {
+                *catalog, table[0])));
+    if (insert_table_name.has_value() && table[0] == insert_table_name.value() &&
+        table[1] == insert_table_db_name) {
       locks.emplace_back(
           std::make_unique<lockmgr::TableInsertLockContainer<lockmgr::WriteLock>>(
               lockmgr::TableInsertLockContainer<lockmgr::WriteLock>::acquire(
-                  catalog.getDatabaseId(), (*locks.back())())));
+                  catalog->getDatabaseId(), (*locks.back())())));
     } else {
       locks.emplace_back(
           std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
               lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
-                  catalog.getDatabaseId(), (*locks.back())())));
+                  catalog->getDatabaseId(), (*locks.back())())));
     }
   }
   return locks;
@@ -4204,7 +4219,7 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
   }
 
   auto locks = acquire_query_table_locks(
-      catalog, select_query_, query_state->createQueryStateProxy(), table_name_);
+      catalog.name(), select_query_, query_state->createQueryStateProxy(), table_name_);
   const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
 
   Executor::clearExternalCaches(true, td, catalog.getCurrentDB().dbId);
@@ -4394,7 +4409,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
               legacylockmgr::ExecutorOuterLock, true));
 
   auto locks = acquire_query_table_locks(
-      catalog, select_query_, query_state->createQueryStateProxy(), table_name_);
+      catalog.name(), select_query_, query_state->createQueryStateProxy(), table_name_);
   const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
   try {
     populateData(query_state->createQueryStateProxy(), td, false, true);
@@ -6186,7 +6201,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session,
           *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
               legacylockmgr::ExecutorOuterLock, true));
   auto locks = acquire_query_table_locks(
-      session_ptr->getCatalog(), *select_stmt_, query_state_proxy);
+      session_ptr->getCatalog().name(), *select_stmt_, query_state_proxy);
 
   // get column info
   LocalQueryConnector local_connector;

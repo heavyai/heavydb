@@ -324,16 +324,16 @@ void InsertOrderFragmenter::updateColumns(
 
       ConverterCreateParameter param{
           num_rows,
-          *catalog,
           sourceDataMetaInfo,
           targetDescriptor,
+          *catalog,
           targetDescriptor->columnType,
           !targetDescriptor->columnType.get_notnull(),
           sourceDataProvider.getLiteralDictionary(),
           g_enable_string_functions &&
                   sourceDataMetaInfo.get_type_info().is_dict_encoded_string()
               ? executor->getStringDictionaryProxy(
-                    sourceDataMetaInfo.get_type_info().get_comp_param(),
+                    sourceDataMetaInfo.get_type_info().getStringDictKey(),
                     executor->getRowSetMemoryOwner(),
                     true)
               : nullptr,

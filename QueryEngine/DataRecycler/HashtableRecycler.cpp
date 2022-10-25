@@ -362,14 +362,15 @@ bool HashtableRecycler::isSafeToCacheHashtable(
     const TableIdToNodeMap& table_id_to_node_map,
     bool need_dict_translation,
     const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_info_pairs,
-    const int table_id) {
+    const shared::TableKey& table_key) {
   // if hashtable is built from subquery's resultset we need to check
   // 1) whether resulset rows can have inconsistency, e.g., rows can randomly be
   // permutated per execution and 2) whether it needs dictionary translation for hashtable
   // building to recycle the hashtable safely
   auto getNodeByTableId =
-      [&table_id_to_node_map](const int table_id) -> const RelAlgNode* {
-    auto it = table_id_to_node_map.find(table_id);
+      [&table_id_to_node_map](
+          const shared::TableKey& table_key_param) -> const RelAlgNode* {
+    auto it = table_id_to_node_map.find(table_key_param);
     if (it != table_id_to_node_map.end()) {
       return it->second;
     }
@@ -377,9 +378,9 @@ bool HashtableRecycler::isSafeToCacheHashtable(
   };
   bool found_sort_node = false;
   bool found_project_node = false;
-  if (table_id < 0) {
-    auto origin_table_id = table_id * -1;
-    auto inner_node = getNodeByTableId(origin_table_id);
+  if (table_key.table_id < 0) {
+    const auto origin_table_id = table_key.table_id * -1;
+    const auto inner_node = getNodeByTableId({table_key.db_id, origin_table_id});
     if (!inner_node) {
       // we have to keep the node info of temporary resultset
       // so in this case we are not safe to recycle the hashtable

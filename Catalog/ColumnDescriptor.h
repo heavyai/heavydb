@@ -43,12 +43,14 @@ struct ColumnDescriptor {
   bool isDeletedCol;
   bool isGeoPhyCol{false};
   std::optional<std::string> default_value;
+  int32_t db_id;
 
   ColumnDescriptor() : isSystemCol(false), isVirtualCol(false), isDeletedCol(false) {}
   ColumnDescriptor(const int tableId,
                    const int columnId,
                    const std::string& columnName,
-                   const SQLTypeInfo columnType)
+                   const SQLTypeInfo columnType,
+                   int32_t db_id)
       : tableId(tableId)
       , columnId(columnId)
       , columnName(columnName)
@@ -56,7 +58,8 @@ struct ColumnDescriptor {
       , columnType(columnType)
       , isSystemCol(false)
       , isVirtualCol(false)
-      , isDeletedCol(false) {}
+      , isDeletedCol(false)
+      , db_id(db_id) {}
   ColumnDescriptor(const bool isGeoPhyCol) : ColumnDescriptor() {
     this->isGeoPhyCol = isGeoPhyCol;
   }
@@ -66,7 +69,8 @@ struct ColumnDescriptor {
            ", columnId=" + ::toString(columnId) +
            ", columnName=" + ::toString(columnName) +
            ", columnType=" + ::toString(columnType) +
-           ", defaultValue=" + ::toString(default_value) + ")";
+           ", defaultValue=" + ::toString(default_value) +
+           ", db_id=" + ::toString(db_id) + ")";
   }
 
   std::string getDefaultValueLiteral() const {

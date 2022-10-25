@@ -225,13 +225,8 @@ void SortBaselineIntegersTestImpl(const bool desc) {
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
   const int64_t upper_bound = 200;
   const int64_t lower_bound = 1;
-  std::unique_ptr<ResultSet> rs(new ResultSet(target_infos,
-                                              ExecutorDeviceType::CPU,
-                                              query_mem_desc,
-                                              row_set_mem_owner,
-                                              nullptr,
-                                              0,
-                                              0));
+  std::unique_ptr<ResultSet> rs(new ResultSet(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0));
   auto storage = rs->allocateStorage();
   fill_storage_buffer_baseline_sort_int<K>(storage->getUnderlyingBuffer(),
                                            target_infos,
@@ -271,7 +266,6 @@ TEST(SortBaseline, Floats) {
                                                   ExecutorDeviceType::CPU,
                                                   query_mem_desc,
                                                   row_set_mem_owner,
-                                                  nullptr,
                                                   0,
                                                   0));
       auto storage = rs->allocateStorage();
@@ -301,7 +295,6 @@ TEST(SortBaseline, FloatsNotNull) {
                                                   ExecutorDeviceType::CPU,
                                                   query_mem_desc,
                                                   row_set_mem_owner,
-                                                  nullptr,
                                                   0,
                                                   0));
       auto storage = rs->allocateStorage();

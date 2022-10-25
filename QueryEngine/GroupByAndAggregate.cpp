@@ -122,13 +122,12 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
   return agg_count;
 }
 
-bool expr_is_rowid(const Analyzer::Expr* expr, const Catalog_Namespace::Catalog& cat) {
+bool expr_is_rowid(const Analyzer::Expr* expr) {
   const auto col = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (!col) {
     return false;
   }
-  const auto cd =
-      get_column_descriptor_maybe(col->get_column_id(), col->get_table_id(), cat);
+  const auto cd = get_column_descriptor_maybe(col->getColumnKey());
   if (!cd || !cd->isVirtualCol) {
     return false;
   }
@@ -320,8 +319,7 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
                 col_range_info.has_nulls};
       }
     }
-  } else if ((!expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(),
-                             *executor_->catalog_)) &&
+  } else if ((!expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get())) &&
              is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count) &&
              !col_range_info.bucket) {
     return {QueryDescriptionType::GroupByBaselineHash,
@@ -750,7 +748,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
                   std::find_if(query_infos.begin(),
                                query_infos.end(),
                                [&](const auto& input_table_info) {
-                                 return input_table_info.table_id == cv->get_table_id();
+                                 return input_table_info.table_key == cv->getTableKey();
                                });
               int64_t cur_table_cardinality =
                   it != query_infos.end()
@@ -834,10 +832,9 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     const int8_t crt_min_byte_width,
     RenderInfo* render_info,
     const bool output_columnar_hint) {
-  const auto shard_count =
-      device_type_ == ExecutorDeviceType::GPU
-          ? shard_count_for_top_groups(ra_exe_unit_, *executor_->getCatalog())
-          : 0;
+  const auto shard_count = device_type_ == ExecutorDeviceType::GPU
+                               ? shard_count_for_top_groups(ra_exe_unit_)
+                               : 0;
   bool sort_on_gpu_hint =
       device_type_ == ExecutorDeviceType::GPU && allow_multifrag &&
       !ra_exe_unit_.sort_info.order_entries.empty() &&
@@ -882,10 +879,9 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
 
   auto col_range_info_nosharding = getColRangeInfo();
 
-  const auto shard_count =
-      device_type_ == ExecutorDeviceType::GPU
-          ? shard_count_for_top_groups(ra_exe_unit_, *executor_->getCatalog())
-          : 0;
+  const auto shard_count = device_type_ == ExecutorDeviceType::GPU
+                               ? shard_count_for_top_groups(ra_exe_unit_)
+                               : 0;
 
   const auto col_range_info =
       ColRangeInfo{col_range_info_nosharding.hash_type_,
@@ -2200,8 +2196,7 @@ void GroupByAndAggregate::checkErrorCode(llvm::Value* retCode) {
 #undef LL_CONTEXT
 
 size_t GroupByAndAggregate::shard_count_for_top_groups(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const Catalog_Namespace::Catalog& catalog) {
+    const RelAlgExecutionUnit& ra_exe_unit) {
   if (ra_exe_unit.sort_info.order_entries.size() != 1 || !ra_exe_unit.sort_info.limit) {
     return 0;
   }
@@ -2211,11 +2206,13 @@ size_t GroupByAndAggregate::shard_count_for_top_groups(
     if (!grouped_col_expr) {
       continue;
     }
-    if (grouped_col_expr->get_table_id() <= 0) {
+    const auto& column_key = grouped_col_expr->getColumnKey();
+    if (column_key.table_id <= 0) {
       return 0;
     }
-    const auto td = catalog.getMetadataForTable(grouped_col_expr->get_table_id());
-    if (td->shardedColumnId == grouped_col_expr->get_column_id()) {
+    const auto td = Catalog_Namespace::get_metadata_for_table(
+        {column_key.db_id, column_key.table_id});
+    if (td->shardedColumnId == column_key.column_id) {
       return td->nShards;
     }
   }

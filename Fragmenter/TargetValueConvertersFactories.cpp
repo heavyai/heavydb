@@ -119,9 +119,9 @@ struct DictionaryConverterFactory {
     }
 
     return std::make_unique<DictionaryValueConverter<TARGET_TYPE>>(
-        param.cat,
-        param.source.get_type_info().get_comp_param(),
+        param.source.get_type_info().getStringDictKey(),
         param.target,
+        param.target_cat,
         param.num_rows,
         target_null_value,
         NULL_INT,
@@ -140,12 +140,14 @@ struct TextConverterFactory {
     if (param.target->columnType.get_compression() == kENCODING_NONE) {
       bool dictEncodedSource =
           param.source.get_type_info().get_compression() == kENCODING_DICT;
-      auto sourceDictId = param.source.get_type_info().get_comp_param();
-      return std::make_unique<StringValueConverter>(param.cat,
-                                                    param.target,
+      shared::StringDictKey source_dict_key;
+      if (dictEncodedSource) {
+        source_dict_key = param.source.get_type_info().getStringDictKey();
+      }
+      return std::make_unique<StringValueConverter>(param.target,
                                                     param.num_rows,
                                                     dictEncodedSource,
-                                                    sourceDictId,
+                                                    source_dict_key,
                                                     param.literals_dictionary);
     } else if (param.target->columnType.get_compression() == kENCODING_DICT) {
       auto size = param.target->columnType.get_size();
@@ -173,9 +175,9 @@ struct ArrayConverterFactory {
       ConverterCreateParameter param) {
     auto elem_type = param.target->columnType.get_elem_type();
     ConverterCreateParameter elementConverterFactoryParam{0,
-                                                          param.cat,
                                                           param.source,
                                                           param.target,
+                                                          param.target_cat,
                                                           elem_type,
                                                           true,
                                                           param.literals_dictionary};
@@ -242,7 +244,7 @@ struct ArraysConverterFactory {
 template <typename CONVERTER, class Enable = void>
 struct GeoConverterFactory {
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
-    return std::make_unique<CONVERTER>(param.cat, param.num_rows, param.target);
+    return std::make_unique<CONVERTER>(param.target_cat, param.num_rows, param.target);
   }
 };
 
@@ -253,7 +255,7 @@ struct GeoConverterFactory<
                               std::is_same_v<GeoMultiPolygonValueConverter, CONVERTER>>> {
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
     return std::make_unique<CONVERTER>(
-        param.cat, param.num_rows, param.target, param.render_group_analyzer_map);
+        param.target_cat, param.num_rows, param.target, param.render_group_analyzer_map);
   }
 };
 

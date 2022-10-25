@@ -103,7 +103,6 @@ class RaExecutionDesc {
                                             ExecutorDeviceType::CPU,
                                             QueryMemoryDescriptor(),
                                             nullptr,
-                                            nullptr,
                                             0,
                                             0),
                 {}) {}

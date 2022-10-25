@@ -66,7 +66,6 @@ TEST(Construct, Allocate) {
                        ExecutorDeviceType::CPU,
                        query_mem_desc,
                        std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize()),
-                       nullptr,
                        0,
                        0);
   result_set.allocateStorage();
@@ -884,14 +883,9 @@ void test_iterate(const std::vector<TargetInfo>& target_infos,
   auto row_set_mem_owner =
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
   StringDictionaryProxy* sdp =
-      row_set_mem_owner->addStringDict(g_sd, 1, g_sd->storageEntryCount());
-  ResultSet result_set(target_infos,
-                       ExecutorDeviceType::CPU,
-                       query_mem_desc,
-                       row_set_mem_owner,
-                       nullptr,
-                       0,
-                       0);
+      row_set_mem_owner->addStringDict(g_sd, {0, 1}, g_sd->storageEntryCount());
+  ResultSet result_set(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   for (size_t i = 0; i < query_mem_desc.getEntryCount(); ++i) {
     sdp->getOrAddTransient(std::to_string(i));
   }
@@ -949,6 +943,7 @@ std::vector<TargetInfo> generate_test_target_infos() {
     SQLTypeInfo dict_string_ti(kTEXT, false);
     dict_string_ti.set_compression(kENCODING_DICT);
     dict_string_ti.set_comp_param(1);
+    dict_string_ti.setStringDictKey({0, 1});
     target_infos.push_back(TargetInfo{false, kMIN, dict_string_ti, null_ti, true, false});
   }
   return target_infos;
@@ -1005,24 +1000,14 @@ void run_reduction(const std::vector<TargetInfo>& target_infos,
   const ResultSetStorage* storage2{nullptr};
   const auto row_set_mem_owner =
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
-  row_set_mem_owner->addStringDict(g_sd, 1, g_sd->storageEntryCount());
-  const auto rs1 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  row_set_mem_owner->addStringDict(g_sd, {1, 1}, g_sd->storageEntryCount());
+  const auto rs1 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   storage1 = rs1->allocateStorage();
   fill_storage_buffer(
       storage1->getUnderlyingBuffer(), target_infos, query_mem_desc, generator1, step);
-  const auto rs2 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  const auto rs2 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   storage2 = rs2->allocateStorage();
   fill_storage_buffer(
       storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
@@ -1041,24 +1026,14 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
   const ResultSetStorage* storage2{nullptr};
   const auto row_set_mem_owner =
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
-  row_set_mem_owner->addStringDict(g_sd, 1, g_sd->storageEntryCount());
-  const auto rs1 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  row_set_mem_owner->addStringDict(g_sd, {1, 1}, g_sd->storageEntryCount());
+  const auto rs1 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   storage1 = rs1->allocateStorage();
   fill_storage_buffer(
       storage1->getUnderlyingBuffer(), target_infos, query_mem_desc, generator1, step);
-  const auto rs2 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  const auto rs2 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   storage2 = rs2->allocateStorage();
   fill_storage_buffer(
       storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
@@ -1150,7 +1125,6 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                               ExecutorDeviceType::CPU,
                               query_mem_desc,
                               row_set_mem_owner,
-                              nullptr,
                               0,
                               0));
       storage1 = rs1->allocateStorage();
@@ -1158,7 +1132,6 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                               ExecutorDeviceType::CPU,
                               query_mem_desc,
                               row_set_mem_owner,
-                              nullptr,
                               0,
                               0));
       storage2 = rs2->allocateStorage();
@@ -1169,7 +1142,6 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                               ExecutorDeviceType::CPU,
                               query_mem_desc,
                               row_set_mem_owner,
-                              nullptr,
                               0,
                               0));
       storage1 = rs1->allocateStorage();
@@ -1177,7 +1149,6 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                               ExecutorDeviceType::CPU,
                               query_mem_desc,
                               row_set_mem_owner,
-                              nullptr,
                               0,
                               0));
       storage2 = rs2->allocateStorage();
@@ -1894,21 +1865,11 @@ TEST(MoreReduce, MissingValues) {
   query_mem_desc.setHasKeylessHash(false);
   const auto row_set_mem_owner =
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
-  const auto rs1 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  const auto rs1 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage1 = rs1->allocateStorage();
-  const auto rs2 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  const auto rs2 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage2 = rs2->allocateStorage();
   {
     auto buff1 = reinterpret_cast<int64_t*>(storage1->getUnderlyingBuffer());
@@ -1968,21 +1929,11 @@ TEST(MoreReduce, MissingValuesKeyless) {
   query_mem_desc.setHasKeylessHash(true);
   const auto row_set_mem_owner =
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
-  const auto rs1 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  const auto rs1 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage1 = rs1->allocateStorage();
-  const auto rs2 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  const auto rs2 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage2 = rs2->allocateStorage();
   {
     auto buff1 = reinterpret_cast<int64_t*>(storage1->getUnderlyingBuffer());
@@ -2038,21 +1989,11 @@ TEST(MoreReduce, OffsetRewrite) {
   query_mem_desc.setHasKeylessHash(false);
   const auto row_set_mem_owner =
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
-  const auto rs1 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  const auto rs1 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage1 = rs1->allocateStorage();
-  const auto rs2 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  const auto rs2 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage2 = rs2->allocateStorage();
   std::vector<std::string> serialized_varlen_buffer{"foo", "bar", "hello"};
 
@@ -2143,21 +2084,11 @@ TEST(MoreReduce, OffsetRewriteGeo) {
   query_mem_desc.setHasKeylessHash(false);
   const auto row_set_mem_owner =
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
-  const auto rs1 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  const auto rs1 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage1 = rs1->allocateStorage();
-  const auto rs2 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  const auto rs2 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage2 = rs2->allocateStorage();
   std::vector<std::string> serialized_varlen_buffer{
       arr_to_byte_string(std::vector<double>{1, 1, 2, 2, 3, 3, 4, 4}),
@@ -2256,21 +2187,11 @@ TEST(MoreReduce, OffsetRewriteGeoKeyless) {
   query_mem_desc.setTargetIdxForKey(0);
   const auto row_set_mem_owner =
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
-  const auto rs1 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  const auto rs1 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage1 = rs1->allocateStorage();
-  const auto rs2 = std::make_unique<ResultSet>(target_infos,
-                                               ExecutorDeviceType::CPU,
-                                               query_mem_desc,
-                                               row_set_mem_owner,
-                                               nullptr,
-                                               0,
-                                               0);
+  const auto rs2 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage2 = rs2->allocateStorage();
   std::vector<std::string> serialized_varlen_buffer{
       arr_to_byte_string(std::vector<double>{1, 1, 2, 2, 3, 3, 4, 4}),

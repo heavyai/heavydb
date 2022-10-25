@@ -25,12 +25,9 @@ namespace spatial_type {
 
 class Codegen {
  public:
-  Codegen(const Analyzer::GeoOperator* geo_operator,
-          const Catalog_Namespace::Catalog* catalog)
-      : operator_(geo_operator), cat_(catalog) {}
+  Codegen(const Analyzer::GeoOperator* geo_operator) : operator_(geo_operator) {}
 
-  static std::unique_ptr<Codegen> init(const Analyzer::GeoOperator* geo_operator,
-                                       const Catalog_Namespace::Catalog* catalog);
+  static std::unique_ptr<Codegen> init(const Analyzer::GeoOperator* geo_operator);
 
   auto isNullable() const { return is_nullable_; }
 
@@ -68,7 +65,6 @@ class Codegen {
 
  protected:
   const Analyzer::GeoOperator* operator_;
-  const Catalog_Namespace::Catalog* cat_;
   bool is_nullable_{true};
 };
 

@@ -35,6 +35,8 @@
 #include <type_traits>
 #include <vector>
 
+#include "Shared/DbObjectKeys.h"
+
 namespace sql_constants {
 /*
 The largest precision an SQL type is allowed to specify is currently 18 digits,
@@ -307,7 +309,6 @@ inline std::string toString(const EncodingType& type) {
 
 #include "InlineNullValues.h"
 
-#define TRANSIENT_DICT_ID 0
 #define TRANSIENT_DICT(ID) (-(ID))
 #define REGULAR_DICT(TRANSIENTID) (-(TRANSIENTID))
 
@@ -386,6 +387,8 @@ class SQLTypeInfo {
   HOST DEVICE inline int get_output_srid() const { return scale; }
   HOST DEVICE inline bool get_notnull() const { return notnull; }
   HOST DEVICE inline EncodingType get_compression() const { return compression; }
+  // TODO: Remove ambiguous `comp_param` attribute and replace with a comp_size enum.
+  // dict_key should be used uniformly for dictionary ID.
   HOST DEVICE inline int get_comp_param() const { return comp_param; }
   HOST DEVICE inline int get_size() const { return size; }
 
@@ -549,7 +552,8 @@ class SQLTypeInfo {
         << ", compression_name=" << get_compression_name()
         << ", comp_param=" << get_comp_param()
         << ", subtype=" << type_name[static_cast<int>(subtype)] << ", size=" << get_size()
-        << ", element_size=" << get_elem_type().get_size() << ")";
+        << ", element_size=" << get_elem_type().get_size() << ", dict_key=" << dict_key_
+        << ")";
     return oss.str();
   }
 
@@ -660,7 +664,7 @@ class SQLTypeInfo {
            compression != rhs.get_compression() ||
            (compression != kENCODING_NONE && comp_param != rhs.get_comp_param() &&
             comp_param != TRANSIENT_DICT(rhs.get_comp_param())) ||
-           notnull != rhs.get_notnull();
+           notnull != rhs.get_notnull() || dict_key_ != rhs.dict_key_;
   }
   HOST DEVICE inline bool operator==(const SQLTypeInfo& rhs) const {
     return type == rhs.get_type() && subtype == rhs.get_subtype() &&
@@ -668,7 +672,7 @@ class SQLTypeInfo {
            compression == rhs.get_compression() &&
            (compression == kENCODING_NONE || comp_param == rhs.get_comp_param() ||
             comp_param == TRANSIENT_DICT(rhs.get_comp_param())) &&
-           notnull == rhs.get_notnull();
+           notnull == rhs.get_notnull() && dict_key_ == rhs.dict_key_;
   }
 
   inline int get_array_context_logical_size() const {
@@ -691,6 +695,7 @@ class SQLTypeInfo {
     compression = rhs.get_compression();
     comp_param = rhs.get_comp_param();
     size = rhs.get_size();
+    dict_key_ = rhs.dict_key_;
   }
 
   inline bool is_castable(const SQLTypeInfo& new_type_info) const {
@@ -954,21 +959,30 @@ class SQLTypeInfo {
     }
     return false;
   }
+
   inline SQLTypeInfo get_elem_type() const {
+    SQLTypeInfo type_info = *this;
     if ((type == kCOLUMN || type == kCOLUMN_LIST) && compression == kENCODING_ARRAY) {
-      return SQLTypeInfo(
-          kARRAY, dimension, scale, notnull, kENCODING_NONE, comp_param, subtype);
+      type_info.set_type(kARRAY);
+      type_info.set_compression(kENCODING_NONE);
+    } else if ((type == kCOLUMN || type == kCOLUMN_LIST) &&
+               compression == kENCODING_ARRAY_DICT) {
+      type_info.set_type(kARRAY);
+      type_info.set_compression(kENCODING_DICT);
+    } else {
+      type_info.set_type(subtype);
+      type_info.set_subtype(kNULLT);
     }
-    if ((type == kCOLUMN || type == kCOLUMN_LIST) &&
-        compression == kENCODING_ARRAY_DICT) {
-      return SQLTypeInfo(
-          kARRAY, dimension, scale, notnull, kENCODING_DICT, comp_param, subtype);
-    }
-    return SQLTypeInfo(
-        subtype, dimension, scale, notnull, compression, comp_param, kNULLT);
+    type_info.setStorageSize();
+    return type_info;
   }
+
   inline SQLTypeInfo get_array_type() const {
-    return SQLTypeInfo(kARRAY, dimension, scale, notnull, compression, comp_param, type);
+    SQLTypeInfo type_info = *this;
+    type_info.set_type(kARRAY);
+    type_info.set_subtype(type);
+    type_info.setStorageSize();
+    return type_info;
   }
 
   inline bool is_date_in_days() const {
@@ -1002,6 +1016,20 @@ class SQLTypeInfo {
     return is_timestamp() && compression == kENCODING_FIXED;
   }
 
+  void setStorageSize() { size = get_storage_size(); }
+
+  const shared::StringDictKey& getStringDictKey() const {
+    // If comp_param is set, it should equal dict_id.
+    CHECK(dict_key_.dict_id == comp_param || comp_param == 0);
+    return dict_key_;
+  }
+
+  void setStringDictKey(const shared::StringDictKey& dict_key) {
+    dict_key_ = dict_key;
+    // If comp_param is set, it should equal dict_id.
+    CHECK(dict_key_.dict_id == comp_param || comp_param == 0);
+  }
+
  private:
   SQLTypes type;     // type id
   SQLTypes subtype;  // element type of arrays or columns
@@ -1017,6 +1045,7 @@ class SQLTypeInfo {
   static std::string type_name[kSQLTYPE_LAST];
   static std::string comp_name[kENCODING_LAST];
 #endif
+  shared::StringDictKey dict_key_;
   HOST DEVICE inline int get_storage_size() const {
     switch (type) {
       case kBOOLEAN:
@@ -1209,13 +1238,10 @@ inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
       (encoding == kENCODING_FIXED && type_info.get_type() != kARRAY)) {
     encoding = kENCODING_NONE;
   }
-  return SQLTypeInfo(type_info.get_type(),
-                     type_info.get_dimension(),
-                     type_info.get_scale(),
-                     type_info.get_notnull(),
-                     encoding,
-                     type_info.get_comp_param(),
-                     type_info.get_subtype());
+  auto type_info_copy = type_info;
+  type_info_copy.set_compression(encoding);
+  type_info_copy.setStorageSize();
+  return type_info_copy;
 }
 
 inline SQLTypeInfo get_nullable_type_info(const SQLTypeInfo& type_info) {
@@ -1403,6 +1429,9 @@ inline auto generate_column_type(const SQLTypeInfo& elem_ti) {
   }
   auto ti = SQLTypeInfo(kCOLUMN, c, p, elem_type);
   ti.set_dimension(d);
+  if (c == kENCODING_DICT) {
+    ti.setStringDictKey(elem_ti.getStringDictKey());
+  }
   return ti;
 }
 
@@ -1453,7 +1482,8 @@ inline void initializeVarlenArray(FlatBufferManager& m,
                             max_nof_values,
                             array_item_size,
                             FlatBufferManager::DTypeMetadataKind::SIZE_DICTID);
-    m.setDTypeMetadataDictId(ti.get_comp_param());
+    const auto& dict_key = ti.getStringDictKey();
+    m.setDTypeMetadataDictKey(dict_key.db_id, dict_key.dict_id);
   } else {
     m.initializeVarlenArray(items_count,
                             max_nof_values,

@@ -29,6 +29,8 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/Transforms/Utils/ValueMapper.h>
 
+#include "Shared/DbObjectKeys.h"
+
 struct ArrayLoadCodegen {
   llvm::Value* buffer;
   llvm::Value* size;
@@ -45,7 +47,7 @@ struct CgenState {
 
   std::tuple<size_t, size_t> getOrAddLiteral(const Analyzer::Constant* constant,
                                              const EncodingType enc_type,
-                                             const int dict_id,
+                                             const shared::StringDictKey& dict_id,
                                              const int device_id) {
     const auto& ti = constant->get_type_info();
     const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
@@ -174,7 +176,7 @@ struct CgenState {
                                       int64_t,
                                       float,
                                       double,
-                                      std::pair<std::string, int>,
+                                      std::pair<std::string, shared::StringDictKey>,
                                       std::string,
                                       std::vector<double>,
                                       std::vector<int32_t>,

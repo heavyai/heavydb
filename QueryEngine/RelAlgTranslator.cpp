@@ -490,8 +490,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
     // the name and type information come directly from the catalog.
     CHECK(in_metainfo.empty());
     const auto table_desc = scan_source->getTableDescriptor();
+    const auto& catalog = scan_source->getCatalog();
     const auto cd =
-        cat_.getMetadataForColumnBySpi(table_desc->tableId, rex_input->getIndex() + 1);
+        catalog.getMetadataForColumnBySpi(table_desc->tableId, rex_input->getIndex() + 1);
     CHECK(cd);
     auto col_ti = cd->columnType;
     if (col_ti.is_string()) {
@@ -508,12 +509,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
       col_ti.set_notnull(false);
     }
     return std::make_shared<Analyzer::ColumnVar>(
-        col_ti, table_desc->tableId, cd->columnId, rte_idx);
+        col_ti,
+        shared::ColumnKey{catalog.getDatabaseId(), table_desc->tableId, cd->columnId},
+        rte_idx);
   }
   CHECK(!in_metainfo.empty()) << "for "
                               << source->toString(RelRexToStringConfig::defaults());
   CHECK_GE(rte_idx, 0);
-  const size_t col_id = rex_input->getIndex();
+  const int32_t col_id = rex_input->getIndex();
   CHECK_LT(col_id, in_metainfo.size());
   auto col_ti = in_metainfo[col_id].get_type_info();
 
@@ -524,7 +527,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
     }
   }
 
-  return std::make_shared<Analyzer::ColumnVar>(col_ti, -source->getId(), col_id, rte_idx);
+  return std::make_shared<Analyzer::ColumnVar>(
+      col_ti, shared::ColumnKey{0, int32_t(-source->getId()), col_id}, rte_idx);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
@@ -922,16 +926,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
     const auto end_entry = std::min(start_entry + stride, entry_count);
     if (arg_type.is_string()) {
       CHECK_EQ(kENCODING_DICT, arg_type.get_compression());
-      // const int32_t dest_dict_id = arg_type.get_comp_param();
-      // const int32_t source_dict_id = col_type.get_comp_param();
-      const DictRef dest_dict_ref(arg_type.get_comp_param(), cat_.getDatabaseId());
-      const DictRef source_dict_ref(col_type.get_comp_param(), cat_.getDatabaseId());
+      auto col_expr = dynamic_cast<const Analyzer::ColumnVar*>(arg.get());
+      CHECK(col_expr);
+      const auto& dest_dict_key = arg_type.getStringDictKey();
+      const auto& source_dict_key = col_type.getStringDictKey();
       const auto dd = executor_->getStringDictionaryProxy(
-          arg_type.get_comp_param(), val_set.getRowSetMemOwner(), true);
+          arg_type.getStringDictKey(), val_set.getRowSetMemOwner(), true);
       const auto sd = executor_->getStringDictionaryProxy(
-          col_type.get_comp_param(), val_set.getRowSetMemOwner(), true);
+          col_type.getStringDictKey(), val_set.getRowSetMemOwner(), true);
       CHECK(sd);
       const auto needle_null_val = inline_int_null_val(arg_type);
+      const auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(
+          col_expr->getColumnKey().db_id);
+      CHECK(catalog);
       fetcher_threads.push_back(std::async(
           std::launch::async,
           [this,
@@ -939,21 +946,22 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
            &total_in_vals_count,
            sd,
            dd,
-           source_dict_ref,
-           dest_dict_ref,
-           needle_null_val](
-              std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
+           &source_dict_key,
+           &dest_dict_key,
+           needle_null_val,
+           catalog](std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
             if (g_cluster) {
               CHECK_GE(dd->getGeneration(), 0);
-              fill_dictionary_encoded_in_vals(in_vals,
-                                              total_in_vals_count,
-                                              &val_set,
-                                              {start, end},
-                                              cat_.getStringDictionaryHosts(),
-                                              source_dict_ref,
-                                              dest_dict_ref,
-                                              dd->getGeneration(),
-                                              needle_null_val);
+              fill_dictionary_encoded_in_vals(
+                  in_vals,
+                  total_in_vals_count,
+                  &val_set,
+                  {start, end},
+                  catalog->getStringDictionaryHosts(),
+                  {source_dict_key.db_id, source_dict_key.dict_id},
+                  {dest_dict_key.db_id, dest_dict_key.dict_id},
+                  dd->getGeneration(),
+                  needle_null_val);
             } else {
               fill_dictionary_encoded_in_vals(in_vals,
                                               total_in_vals_count,
@@ -1626,14 +1634,17 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
         sql_type.set_compression(kENCODING_DICT);
         if (first_element_logical_type.is_none_encoded_string()) {
           sql_type.set_comp_param(TRANSIENT_DICT_ID);
+          sql_type.setStringDictKey({TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID});
         } else {
           CHECK(first_element_logical_type.is_dict_encoded_string());
           sql_type.set_comp_param(first_element_logical_type.get_comp_param());
+          sql_type.setStringDictKey(first_element_logical_type.getStringDictKey());
         }
       } else if (first_element_logical_type.is_dict_encoded_string()) {
         sql_type.set_subtype(kTEXT);
         sql_type.set_compression(kENCODING_DICT);
         sql_type.set_comp_param(first_element_logical_type.get_comp_param());
+        sql_type.setStringDictKey(first_element_logical_type.getStringDictKey());
       } else {
         sql_type.set_subtype(first_element_logical_type.get_type());
         sql_type.set_scale(first_element_logical_type.get_scale());
@@ -2290,7 +2301,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
         // Calcite does not represent a window function having dictionary encoded text
         // type as its output properly, so we need to set its output type manually
         ti.set_compression(kENCODING_DICT);
-        ti.set_comp_param(target_expr_cv->get_comp_param());
+        ti.set_comp_param(target_expr_cv->get_type_info().get_comp_param());
+        ti.setStringDictKey(target_expr_cv->get_type_info().getStringDictKey());
         ti.set_fixed_size();
       }
       const auto target_offset_cv =

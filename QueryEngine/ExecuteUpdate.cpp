@@ -68,7 +68,7 @@ TableUpdateMetadata Executor::executeUpdate(
     const TableDescriptor* table_desc_for_update,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
-    Catalog_Namespace::Catalog& cat,
+    const Catalog_Namespace::Catalog& cat,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const UpdateLogForFragment::Callback& cb,
     const bool is_agg) {
@@ -82,15 +82,15 @@ TableUpdateMetadata Executor::executeUpdate(
 
   ColumnFetcher column_fetcher(this, column_cache);
   CHECK_GT(ra_exe_unit.input_descs.size(), size_t(0));
-  const auto table_id = ra_exe_unit.input_descs[0].getTableId();
+  const auto& table_key = ra_exe_unit.input_descs[0].getTableKey();
   const auto& outer_fragments = table_infos.front().info.fragments;
 
-  std::vector<FragmentsPerTable> fragments = {{0, {0}}};
+  std::vector<FragmentsPerTable> fragments = {{{0, 0}, {0}}};
   for (size_t tab_idx = 1; tab_idx < ra_exe_unit.input_descs.size(); tab_idx++) {
-    int table_id = ra_exe_unit.input_descs[tab_idx].getTableId();
-    CHECK_EQ(table_infos[tab_idx].table_id, table_id);
+    const auto& table_key = ra_exe_unit.input_descs[tab_idx].getTableKey();
+    CHECK_EQ(table_infos[tab_idx].table_key, table_key);
     const auto& fragmentsPerTable = table_infos[tab_idx].info.fragments;
-    FragmentsPerTable entry = {table_id, {}};
+    FragmentsPerTable entry = {table_key, {}};
     for (size_t innerFragId = 0; innerFragId < fragmentsPerTable.size(); innerFragId++) {
       entry.fragment_ids.push_back(innerFragId);
     }
@@ -152,7 +152,7 @@ TableUpdateMetadata Executor::executeUpdate(
               << ", fragment id: " << fragment_index;
       continue;
     }
-    fragments[0] = {table_id, {fragment_index}};
+    fragments[0] = {table_key, {fragment_index}};
 
     {
       ExecutionKernel current_fragment_kernel(ra_exe_unit,

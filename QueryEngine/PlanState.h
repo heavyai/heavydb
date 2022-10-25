@@ -21,6 +21,7 @@
 #include "Analyzer/Analyzer.h"
 #include "QueryEngine/Descriptors/InputDescriptors.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
+#include "Shared/DbObjectKeys.h"
 
 class Executor;
 
@@ -39,9 +40,7 @@ struct JoinInfo {
 };
 
 struct PlanState {
-  using TableId = int;
-  using ColumnId = int;
-  using DeletedColumnsMap = std::unordered_map<TableId, const ColumnDescriptor*>;
+  using DeletedColumnsMap = std::unordered_map<shared::TableKey, const ColumnDescriptor*>;
   using HoistedFiltersSet = std::unordered_set<std::shared_ptr<Analyzer::Expr>>;
 
   PlanState(const bool allow_lazy_fetch,
@@ -58,8 +57,8 @@ struct PlanState {
   std::vector<Analyzer::Expr*> target_exprs_;
   HoistedFiltersSet hoisted_filters_;
   std::unordered_map<InputColDescriptor, size_t> global_to_local_col_ids_;
-  std::set<std::pair<TableId, ColumnId>> columns_to_fetch_;
-  std::set<std::pair<TableId, ColumnId>> columns_to_not_fetch_;
+  std::set<shared::ColumnKey> columns_to_fetch_;
+  std::set<shared::ColumnKey> columns_to_not_fetch_;
   std::unordered_map<size_t, std::vector<std::shared_ptr<Analyzer::Expr>>>
       left_join_non_hashtable_quals_;
   bool allow_lazy_fetch_;
@@ -77,15 +76,15 @@ struct PlanState {
   bool isLazyFetchColumn(const Analyzer::Expr* target_expr) const;
 
   bool isLazyFetchColumn(const InputColDescriptor& col_desc) {
-    Analyzer::ColumnVar column(SQLTypeInfo(),
-                               col_desc.getScanDesc().getTableId(),
-                               col_desc.getColId(),
-                               col_desc.getScanDesc().getNestLevel());
+    Analyzer::ColumnVar column(
+        SQLTypeInfo(),
+        {col_desc.getScanDesc().getTableKey(), col_desc.getColId()},
+        col_desc.getScanDesc().getNestLevel());
     return isLazyFetchColumn(&column);
   }
 
-  const ColumnDescriptor* getDeletedColForTable(const TableId table_id) {
-    auto deleted_cols_it = deleted_columns_.find(table_id);
+  const ColumnDescriptor* getDeletedColForTable(const shared::TableKey& table_key) {
+    auto deleted_cols_it = deleted_columns_.find(table_key);
     if (deleted_cols_it != deleted_columns_.end()) {
       return deleted_cols_it->second;
     }

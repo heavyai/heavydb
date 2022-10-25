@@ -167,6 +167,13 @@ list(APPEND SANITY_TEST_PROGRAMS CreateAndDropTableDdlTest)
 
 ##########
 
+add_executable(CrossDatabaseQueryTest CrossDatabaseQueryTest.cpp)
+target_link_libraries(CrossDatabaseQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(CrossDatabaseQueryTest CrossDatabaseQueryTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS CrossDatabaseQueryTest)
+
+##########
+
 if(NOT MSVC)
   add_executable(CtasUpdateTest CtasUpdateTest.cpp)
   target_link_libraries(CtasUpdateTest ${THRIFT_HANDLER_TEST_LIBRARIES})

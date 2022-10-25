@@ -84,6 +84,7 @@ class CatalogTest : public DBHandlerTestFixture {
   std::unique_ptr<Catalog_Namespace::Catalog> initCatalog() {
     Catalog_Namespace::DBMetadata db_metadata;
     db_metadata.dbName = shared::kDefaultDbName;
+    db_metadata.dbId = 1;
     std::vector<LeafHostInfo> leaves{};
     return std::make_unique<Catalog_Namespace::Catalog>(
         BASE_PATH, db_metadata, nullptr, leaves, nullptr, false);

@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-#include "ScalarExprVisitor.h"
+#include "InputDescriptors.h"
 
-#include <unordered_set>
+#include <boost/functional/hash.hpp>
 
-class UsedColumnsVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
- protected:
-  std::unordered_set<int> visitColumnVar(
-      const Analyzer::ColumnVar* column) const override {
-    return {column->getColumnKey().column_id};
-  }
+InputSourceType InputDescriptor::getSourceType() const {
+  return table_key_.table_id > 0 ? InputSourceType::TABLE : InputSourceType::RESULT;
+}
 
-  std::unordered_set<int> aggregateResult(
-      const std::unordered_set<int>& aggregate,
-      const std::unordered_set<int>& next_result) const override {
-    auto result = aggregate;
-    result.insert(next_result.begin(), next_result.end());
-    return result;
-  }
-};
+size_t InputDescriptor::hash() const {
+  auto hash = table_key_.hash();
+  boost::hash_combine(hash, nest_level_);
+  return hash;
+}
+
+std::string InputDescriptor::toString() const {
+  return ::typeName(this) + "(db_id=" + std::to_string(table_key_.db_id) +
+         ", table_id=" + std::to_string(table_key_.table_id) +
+         ", nest_level=" + std::to_string(nest_level_) + ")";
+}

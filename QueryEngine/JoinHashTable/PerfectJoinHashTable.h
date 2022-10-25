@@ -75,8 +75,8 @@ class PerfectJoinHashTable : public HashJoin {
   HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,
                                          const size_t) override;
 
-  int getInnerTableId() const noexcept override {
-    return col_var_.get()->get_table_id();
+  shared::TableKey getInnerTableId() const noexcept override {
+    return col_var_->getTableKey();
   };
 
   int getInnerTableRteIdx() const noexcept override {
@@ -152,8 +152,7 @@ class PerfectJoinHashTable : public HashJoin {
   ColumnsForDevice fetchColumnsForDevice(
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,
-      DeviceAllocator* dev_buff_owner,
-      const Catalog_Namespace::Catalog& catalog);
+      DeviceAllocator* dev_buff_owner);
 
   void reifyForDevice(const ChunkKey& hash_table_key,
                       const ColumnsForDevice& columns_for_device,
@@ -323,7 +322,7 @@ std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
     const int device_count);
 
 const InputTableInfo& get_inner_query_info(
-    const int inner_table_id,
+    const shared::TableKey& inner_table_key,
     const std::vector<InputTableInfo>& query_infos);
 
 size_t get_entries_per_device(const size_t total_entries,

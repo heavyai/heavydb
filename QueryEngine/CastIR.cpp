@@ -30,7 +30,7 @@ llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
   llvm::Value* operand_lv{nullptr};
   if (operand_as_const) {
     const auto operand_lvs =
-        codegen(operand_as_const, ti.get_compression(), ti.get_comp_param(), co);
+        codegen(operand_as_const, ti.get_compression(), ti.getStringDictKey(), co);
     if (operand_lvs.size() == 3) {
       operand_lv = cgen_state_->emitCall("string_pack", {operand_lvs[1], operand_lvs[2]});
     } else {
@@ -244,21 +244,21 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
   }
   if (ti.get_compression() == kENCODING_DICT &&
       operand_ti.get_compression() == kENCODING_DICT) {
-    if (ti.get_comp_param() == operand_ti.get_comp_param()) {
+    if (ti.getStringDictKey() == operand_ti.getStringDictKey()) {
       return operand_lv;
     }
-    if (operand_ti.get_comp_param() == DictRef::literalsDictId) {
+    if (operand_ti.getStringDictKey().dict_id == DictRef::literalsDictId) {
       // Anything being casted from a literal dictionary is not materialized at this point
       // Should already have been kicked to CPU if it was originally a GPU query
 
       CHECK(co.device_type == ExecutorDeviceType::CPU);
       const int64_t source_string_proxy_handle =
           reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
-              operand_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
+              operand_ti.getStringDictKey(), executor()->getRowSetMemoryOwner(), true));
 
       const int64_t dest_string_proxy_handle =
           reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
-              ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
+              ti.getStringDictKey(), executor()->getRowSetMemoryOwner(), true));
 
       auto source_string_proxy_handle_lv = cgen_state_->llInt(source_string_proxy_handle);
       auto dest_string_proxy_handle_lv = cgen_state_->llInt(dest_string_proxy_handle);
@@ -280,8 +280,8 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
     const std::vector<StringOps_Namespace::StringOpInfo> string_op_infos;
     auto string_dictionary_translation_mgr =
         std::make_unique<StringDictionaryTranslationMgr>(
-            operand_ti.get_comp_param(),
-            ti.get_comp_param(),
+            operand_ti.getStringDictKey(),
+            ti.getStringDictKey(),
             ti.is_dict_intersection(),
             ti,
             string_op_infos,
@@ -289,7 +289,7 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
                                                       : Data_Namespace::CPU_LEVEL,
             executor()->deviceCount(co.device_type),
             executor(),
-            &executor()->getCatalog()->getDataMgr(),
+            executor()->getDataMgr(),
             false /* delay_translation */);
 
     return cgen_state_
@@ -314,7 +314,7 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
         get_int_type(32, cgen_state_->context_),
         {operand_lv,
          cgen_state_->llInt(int64_t(executor()->getStringDictionaryProxy(
-             ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true)))});
+             ti.getStringDictKey(), executor()->getRowSetMemoryOwner(), true)))});
   }
   CHECK(operand_lv->getType()->isIntegerTy(32));
   if (ti.get_compression() == kENCODING_NONE) {
@@ -330,11 +330,13 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
       throw QueryMustRunOnCpu();
     }
     const int64_t string_dictionary_ptr =
-        operand_ti.get_comp_param() == 0
+        operand_ti.getStringDictKey().dict_id == 0
             ? reinterpret_cast<int64_t>(
                   executor()->getRowSetMemoryOwner()->getLiteralStringDictProxy())
-            : reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
-                  operand_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
+            : reinterpret_cast<int64_t>(
+                  executor()->getStringDictionaryProxy(operand_ti.getStringDictKey(),
+                                                       executor()->getRowSetMemoryOwner(),
+                                                       true));
     return cgen_state_->emitExternalCall(
         "string_decompress",
         createStringViewStructType(),
@@ -402,7 +404,7 @@ llvm::Value* CodeGenerator::codegenCastNonStringToString(llvm::Value* operand_lv
   }
   operand_lvs.emplace_back(
       cgen_state_->llInt(int64_t(executor()->getStringDictionaryProxy(
-          ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true))));
+          ti.getStringDictKey(), executor()->getRowSetMemoryOwner(), true))));
 
   auto ret = cgen_state_->emitExternalCall(
       fn_call, get_int_type(32, cgen_state_->context_), operand_lvs);

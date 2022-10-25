@@ -19,11 +19,11 @@
  * @brief   Defines data structures for the semantic analysis phase of query processing
  */
 
-#ifndef ANALYZER_H
-#define ANALYZER_H
+#pragma once
 
 #include "Geospatial/Types.h"
 #include "Logger/Logger.h"
+#include "Shared/DbObjectKeys.h"
 #include "Shared/sqldefs.h"
 #include "Shared/sqltypes.h"
 
@@ -45,10 +45,6 @@ extern bool g_enable_string_functions;
 
 namespace Analyzer {
 class Expr;
-}
-
-namespace Catalog_Namespace {
-class Catalog;
 }
 
 template <typename Tp, typename... Args>
@@ -197,27 +193,31 @@ using ExpressionPtrVector = std::vector<ExpressionPtr>;
  */
 class ColumnVar : public Expr {
  public:
-  ColumnVar(const SQLTypeInfo& ti, int r, int c, int i)
-      : Expr(ti), table_id(r), column_id(c), rte_idx(i) {}
-  int get_table_id() const { return table_id; }
-  int get_column_id() const { return column_id; }
-  int get_rte_idx() const { return rte_idx; }
-  void set_rte_idx(int new_rte_idx) { rte_idx = new_rte_idx; }
+  ColumnVar(const SQLTypeInfo& ti, const shared::ColumnKey& column_key, int32_t rte_idx)
+      : Expr(ti), column_key_(column_key), rte_idx_(rte_idx) {}
+  const shared::ColumnKey& getColumnKey() const { return column_key_; }
+  shared::TableKey getTableKey() const {
+    return {column_key_.db_id, column_key_.table_id};
+  }
+  int32_t get_rte_idx() const { return rte_idx_; }
+  void set_rte_idx(int32_t new_rte_idx) { rte_idx_ = new_rte_idx; }
   EncodingType get_compression() const { return type_info.get_compression(); }
-  int get_comp_param() const { return type_info.get_comp_param(); }
+
   void check_group_by(
       const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const override;
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
   void group_predicates(std::list<const Expr*>& scan_predicates,
                         std::list<const Expr*>& join_predicates,
                         std::list<const Expr*>& const_predicates) const override;
-  void collect_rte_idx(std::set<int>& rte_idx_set) const override {
-    rte_idx_set.insert(rte_idx);
+  void collect_rte_idx(std::set<int32_t>& rte_idx_set) const override {
+    rte_idx_set.insert(rte_idx_);
   }
   static bool colvar_comp(const ColumnVar* l, const ColumnVar* r) {
-    return l->get_table_id() < r->get_table_id() ||
-           (l->get_table_id() == r->get_table_id() &&
-            l->get_column_id() < r->get_column_id());
+    CHECK(l);
+    const auto& l_column_key = l->column_key_;
+    CHECK(r);
+    const auto& r_column_key = r->column_key_;
+    return l_column_key < r_column_key;
   }
   void collect_column_var(
       std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
@@ -225,6 +225,7 @@ class ColumnVar : public Expr {
       bool include_agg) const override {
     colvar_set.insert(this);
   }
+
   std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override;
   std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
@@ -235,9 +236,8 @@ class ColumnVar : public Expr {
   std::string toString() const override;
 
  protected:
-  int table_id;   // the global table id
-  int column_id;  // the column id
-  int rte_idx;    // 0-based range table index, used for table ordering in multi-joins
+  shared::ColumnKey column_key_;
+  int32_t rte_idx_;  // 0-based range table index, used for table ordering in multi-joins
 };
 
 /*
@@ -275,19 +275,23 @@ class ExpressionTuple : public Expr {
 class Var : public ColumnVar {
  public:
   enum WhichRow { kINPUT_OUTER, kINPUT_INNER, kOUTPUT, kGROUPBY };
-  Var(const SQLTypeInfo& ti, int r, int c, int i, WhichRow o, int v)
-      : ColumnVar(ti, r, c, i), which_row(o), varno(v) {}
-  Var(const SQLTypeInfo& ti, WhichRow o, int v)
-      : ColumnVar(ti, 0, 0, -1), which_row(o), varno(v) {}
+  Var(const SQLTypeInfo& ti,
+      const shared::ColumnKey& column_key,
+      int32_t rte_idx,
+      WhichRow o,
+      int32_t v)
+      : ColumnVar(ti, column_key, rte_idx), which_row(o), varno(v) {}
+  Var(const SQLTypeInfo& ti, WhichRow o, int32_t v)
+      : ColumnVar(ti, {0, 0, 0}, -1), which_row(o), varno(v) {}
   WhichRow get_which_row() const { return which_row; }
   void set_which_row(WhichRow r) { which_row = r; }
-  int get_varno() const { return varno; }
-  void set_varno(int n) { varno = n; }
+  int32_t get_varno() const { return varno; }
+  void set_varno(int32_t n) { varno = n; }
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
   std::string toString() const override;
   void check_group_by(
       const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const override;
-  void collect_rte_idx(std::set<int>& rte_idx_set) const override {
+  void collect_rte_idx(std::set<int32_t>& rte_idx_set) const override {
     rte_idx_set.insert(-1);
   }
   std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
@@ -305,7 +309,7 @@ class Var : public ColumnVar {
   WhichRow which_row;  // indicate which row this Var should project from.  It can be from
                        // the outer input plan or the inner input plan (for joins) or the
                        // output row in the current plan.
-  int varno;           // the column number in the row.  1-based
+  int32_t varno;       // the column number in the row.  1-based
 };
 
 /*
@@ -1575,7 +1579,7 @@ class StringOper : public Expr {
     const auto& return_ti = get_type_info();
     if (return_ti.is_none_encoded_string() ||
         (return_ti.is_dict_encoded_string() &&
-         return_ti.get_comp_param() == TRANSIENT_DICT_ID)) {
+         return_ti.getStringDictKey().isTransientDict())) {
       return true;
     }
 
@@ -1595,7 +1599,7 @@ class StringOper : public Expr {
       const auto& arg_ti = arg->get_type_info();
       if (arg_ti.is_none_encoded_string() ||
           (arg_ti.is_dict_encoded_string() &&
-           arg_ti.get_comp_param() == TRANSIENT_DICT_ID)) {
+           arg_ti.getStringDictKey().isTransientDict())) {
         return true;
       }
       num_var_str_args++;
@@ -1622,7 +1626,7 @@ class StringOper : public Expr {
       return true;
     }
     CHECK(arg0_ti.is_dict_encoded_string());
-    return arg0_ti.get_comp_param() == TRANSIENT_DICT_ID;
+    return arg0_ti.getStringDictKey().isTransientDict();
   }
 
   /**
@@ -2868,12 +2872,11 @@ class GeoExpr : public Expr {
 class GeoColumnVar : public ColumnVar {
  public:
   GeoColumnVar(const SQLTypeInfo& ti,
-               const int table_id,
-               const int column_id,
-               const int range_table_index,
+               const shared::ColumnKey& column_key,
+               const int32_t range_table_index,
                const bool with_bounds,
                const bool with_render_group)
-      : ColumnVar(ti, table_id, column_id, range_table_index)
+      : ColumnVar(ti, column_key, range_table_index)
       , with_bounds_(with_bounds)
       , with_render_group_(with_render_group) {}
 
@@ -2881,8 +2884,7 @@ class GeoColumnVar : public ColumnVar {
                const bool with_bounds,
                const bool with_render_group)
       : ColumnVar(column_var->get_type_info(),
-                  column_var->get_table_id(),
-                  column_var->get_column_id(),
+                  column_var->getColumnKey(),
                   column_var->get_rte_idx())
       , with_bounds_(with_bounds)
       , with_render_group_(with_render_group) {}
@@ -2990,18 +2992,17 @@ class GeoTransformOperator : public GeoOperator {
   const int32_t input_srid_;
   const int32_t output_srid_;
 };
-
 }  // namespace Analyzer
 
 inline std::shared_ptr<Analyzer::Var> var_ref(const Analyzer::Expr* expr,
                                               const Analyzer::Var::WhichRow which_row,
                                               const int varno) {
   const auto col_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr);
-  const int table_id = col_expr ? col_expr->get_table_id() : 0;
-  const int column_id = col_expr ? col_expr->get_column_id() : 0;
+  const shared::ColumnKey& column_key =
+      col_expr ? col_expr->getColumnKey() : shared::ColumnKey{0, 0, 0};
   const int rte_idx = col_expr ? col_expr->get_rte_idx() : -1;
   return makeExpr<Analyzer::Var>(
-      expr->get_type_info(), table_id, column_id, rte_idx, which_row, varno);
+      expr->get_type_info(), column_key, rte_idx, which_row, varno);
 }
 
 // Returns true iff the two expression lists are equal (same size and each element are
@@ -3012,5 +3013,3 @@ bool expr_list_match(const std::vector<std::shared_ptr<Analyzer::Expr>>& lhs,
 // Remove a cast operator if present.
 std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr>& expr);
 const Analyzer::Expr* remove_cast(const Analyzer::Expr* expr);
-
-#endif  // ANALYZER_H

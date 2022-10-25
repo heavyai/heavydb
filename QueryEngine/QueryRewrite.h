@@ -33,7 +33,7 @@ class QueryRewriter {
 
   RelAlgExecutionUnit rewriteColumnarUpdate(
       const RelAlgExecutionUnit& ra_exe_unit_in,
-      std::shared_ptr<Analyzer::Expr> column_to_update) const;
+      std::shared_ptr<Analyzer::ColumnVar> column_to_update) const;
 
   RelAlgExecutionUnit rewriteColumnarDelete(
       const RelAlgExecutionUnit& ra_exe_unit_in,

@@ -21,12 +21,12 @@
  *
  */
 
-#ifndef QUERYENGINE_RELALGEXECUTIONUNIT_H
-#define QUERYENGINE_RELALGEXECUTIONUNIT_H
+#pragma once
 
 #include "Descriptors/InputDescriptors.h"
 #include "QueryHint.h"
 #include "RelAlgDag.h"
+#include "Shared/DbObjectKeys.h"
 #include "Shared/sqldefs.h"
 #include "Shared/toString.h"
 #include "TableFunctions/TableFunctionOutputBufferSizeType.h"
@@ -91,7 +91,7 @@ using HashTableBuildDagMap = std::unordered_map<size_t, HashTableBuildDag>;
 // note that disabling DAG extraction when we find sort node from join's input
 // is too restrict when a query becomes complex (and so have multiple joins)
 // since it eliminates a change of data recycling
-using TableIdToNodeMap = std::unordered_map<int, const RelAlgNode*>;
+using TableIdToNodeMap = std::unordered_map<shared::TableKey, const RelAlgNode*>;
 
 enum JoinColumnSide {
   kInner,
@@ -181,5 +181,3 @@ struct TableFunctionExecutionUnit {
 
 class ResultSet;
 using ResultSetPtr = std::shared_ptr<ResultSet>;
-
-#endif  // QUERYENGINE_RELALGEXECUTIONUNIT_H

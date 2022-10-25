@@ -19,6 +19,7 @@
 #include "RelAlgDag.h"
 #include "RelAlgVisitor.h"
 #include "RexVisitor.h"
+#include "Shared/misc.h"
 #include "Visitors/RelRexDagVisitor.h"
 
 namespace {
@@ -58,7 +59,8 @@ class RexPhysicalInputsVisitor : public RexVisitor<PhysicalInputSet> {
     const int col_id = input->getIndex() + 1;
     const int table_id = scan_td->tableId;
     CHECK_GT(table_id, 0);
-    return {{col_id, table_id}};
+    auto db_id = scan_ra->getCatalog().getDatabaseId();
+    return {{col_id, table_id, db_id}};
   }
 
   PhysicalInputSet visitSubQuery(const RexSubQuery* subquery) const override {
@@ -188,19 +190,20 @@ PhysicalInputSet RelAlgPhysicalInputsVisitor::aggregateResult(
 class RelAlgPhysicalTableInputsVisitor : public RelRexDagVisitor {
  public:
   using RelRexDagVisitor::visit;
-  using TableIds = std::unordered_set<int>;
+  using TableKeys = std::unordered_set<shared::TableKey>;
 
-  static TableIds getTableIds(RelAlgNode const* node) {
+  static TableKeys getTableIds(RelAlgNode const* node) {
     RelAlgPhysicalTableInputsVisitor visitor;
     visitor.visit(node);
     return std::move(visitor.table_ids_);
   }
 
  private:
-  TableIds table_ids_;
+  TableKeys table_ids_;
 
   void visit(RelScan const* scan) override {
-    table_ids_.insert(scan->getTableDescriptor()->tableId);
+    table_ids_.insert(
+        {scan->getCatalog().getDatabaseId(), scan->getTableDescriptor()->tableId});
   }
 
   // Only RelScan nodes have physical table ids, so we may prune any nodes that can never
@@ -215,10 +218,21 @@ std::unordered_set<PhysicalInput> get_physical_inputs(const RelAlgNode* ra) {
   return phys_inputs_visitor.visit(ra);
 }
 
-std::unordered_set<int> get_physical_table_inputs(const RelAlgNode* ra) {
+std::unordered_set<shared::TableKey> get_physical_table_inputs(const RelAlgNode* ra) {
   return RelAlgPhysicalTableInputsVisitor::getTableIds(ra);
 }
 
 std::ostream& operator<<(std::ostream& os, PhysicalInput const& physical_input) {
-  return os << '(' << physical_input.col_id << ',' << physical_input.table_id << ')';
+  return os << '(' << physical_input.col_id << ',' << physical_input.table_id << ','
+            << physical_input.db_id << ')';
+}
+
+size_t PhysicalInput::hash() const {
+  auto hash_value = shared::compute_hash(col_id, table_id);
+  boost::hash_combine(hash_value, db_id);
+  return hash_value;
+}
+
+bool PhysicalInput::operator==(const PhysicalInput& that) const {
+  return col_id == that.col_id && table_id == that.table_id && db_id == that.db_id;
 }

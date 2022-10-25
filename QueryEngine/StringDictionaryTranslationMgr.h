@@ -23,6 +23,7 @@
 #pragma once
 
 #include "DataMgr/MemoryLevel.h"
+#include "Shared/DbObjectKeys.h"
 #include "StringOps/StringOpInfo.h"
 
 #include <vector>
@@ -47,8 +48,8 @@ enum StringFunctorType : unsigned int;
 class StringDictionaryTranslationMgr {
  public:
   StringDictionaryTranslationMgr(
-      const int32_t source_string_dict_id,
-      const int32_t dest_string_dict_id,
+      const shared::StringDictKey& source_string_dict_key,
+      const shared::StringDictKey& dest_string_dict_key,
       const bool translate_intersection_only,
       const SQLTypeInfo& output_ti,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
@@ -59,7 +60,7 @@ class StringDictionaryTranslationMgr {
       const bool delay_translation);
 
   StringDictionaryTranslationMgr(
-      const int32_t source_string_dict_id,
+      const shared::StringDictKey& source_string_dict_key,
       const SQLTypeInfo& output_ti,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
       const Data_Namespace::MemoryLevel memory_level,
@@ -82,8 +83,8 @@ class StringDictionaryTranslationMgr {
   size_t mapSize() const;
 
  private:
-  const int32_t source_string_dict_id_;
-  const int32_t dest_string_dict_id_;
+  const shared::StringDictKey source_string_dict_key_;
+  const shared::StringDictKey dest_string_dict_key_;
   const bool translate_intersection_only_;
   const SQLTypeInfo output_ti_;
   const std::vector<StringOps_Namespace::StringOpInfo> string_op_infos_;

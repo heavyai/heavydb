@@ -29,14 +29,9 @@ struct Serializer {
   /**
    * Deserializes a RelAlgDag, completing a full rebuild of the Dag. This is only
    * supported before query execution.
-   * @param cat The Catalog used to initialize components of the DAG that have a
-   * dependence on catalog items, such as table/column descriptors. Such items need to be
-   * re-linked during deserialization as there is no guarantee that the deserialization
-   * happns on the same server node as serialization.
    * @param serialized_dag_str The RelAlgDag serialization string, output from the about
    * serializeRelAlgDag() method.
    */
   static std::unique_ptr<RelAlgDag> deserializeRelAlgDag(
-      const Catalog_Namespace::Catalog& cat,
       const std::string& serialized_dag_str);
 };

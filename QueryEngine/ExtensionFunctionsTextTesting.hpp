@@ -45,35 +45,34 @@ EXTENSION_NOINLINE
 TextEncodingDict text_encoding_dict_concat(RowFunctionManager& mgr,
                                            const TextEncodingDict t_dict,
                                            const TextEncodingNone& t_none) {
-  int32_t dict_id = GET_DICT_ID(mgr, 0);
-  std::string str = mgr.getString(dict_id, t_dict);
-  return mgr.getOrAddTransient(TRANSIENT_DICT_ID, str + t_none.getString());
+  std::string str = mgr.getString(GET_DICT_DB_ID(mgr, 0), GET_DICT_ID(mgr, 0), t_dict);
+  return mgr.getOrAddTransient(
+      TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, str + t_none.getString());
 }
 
 EXTENSION_NOINLINE
 TextEncodingDict text_encoding_dict_concat2(RowFunctionManager& mgr,
                                             const TextEncodingNone& t_none,
                                             const TextEncodingDict t_dict) {
-  int32_t dict_id = GET_DICT_ID(mgr, 1);
-  std::string str = mgr.getString(dict_id, t_dict);
-  return mgr.getOrAddTransient(TRANSIENT_DICT_ID, t_none.getString() + str);
+  std::string str = mgr.getString(GET_DICT_DB_ID(mgr, 1), GET_DICT_ID(mgr, 1), t_dict);
+  return mgr.getOrAddTransient(
+      TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, t_none.getString() + str);
 }
 
 EXTENSION_NOINLINE
 TextEncodingDict text_encoding_dict_concat3(RowFunctionManager& mgr,
                                             const TextEncodingDict t1,
                                             const TextEncodingDict t2) {
-  std::string s1 = mgr.getString(GET_DICT_ID(mgr, 0), t1);
-  std::string s2 = mgr.getString(GET_DICT_ID(mgr, 1), t2);
-  return mgr.getOrAddTransient(TRANSIENT_DICT_ID, s1 + ' ' + s2);
+  std::string s1 = mgr.getString(GET_DICT_DB_ID(mgr, 0), GET_DICT_ID(mgr, 0), t1);
+  std::string s2 = mgr.getString(GET_DICT_DB_ID(mgr, 1), GET_DICT_ID(mgr, 1), t2);
+  return mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, s1 + ' ' + s2);
 }
 
 EXTENSION_NOINLINE
 TextEncodingDict text_encoding_dict_copy(RowFunctionManager& mgr,
                                          const TextEncodingDict t) {
-  int32_t dict_id = GET_DICT_ID(mgr, 0);
-  std::string str = mgr.getString(dict_id, t);
-  return mgr.getOrAddTransient(TRANSIENT_DICT_ID, "copy: " + str);
+  std::string str = mgr.getString(GET_DICT_DB_ID(mgr, 0), GET_DICT_ID(mgr, 0), t);
+  return mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, "copy: " + str);
 }
 
 EXTENSION_NOINLINE
@@ -83,12 +82,10 @@ TextEncodingDict text_encoding_dict_copy_from(RowFunctionManager& mgr,
                                               const int32_t select) {
   std::string str;
   if (select == 1) {
-    int32_t dict_id = GET_DICT_ID(mgr, 0);
-    str = mgr.getString(dict_id, t1);
+    str = mgr.getString(GET_DICT_DB_ID(mgr, 0), GET_DICT_ID(mgr, 0), t1);
   } else {
-    int32_t dict_id = GET_DICT_ID(mgr, 1);
-    str = mgr.getString(dict_id, t1);
+    str = mgr.getString(GET_DICT_DB_ID(mgr, 1), GET_DICT_ID(mgr, 1), t1);
   }
-  return mgr.getOrAddTransient(TRANSIENT_DICT_ID, "copy: " + str);
+  return mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, "copy: " + str);
 }
 #endif

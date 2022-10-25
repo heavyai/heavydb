@@ -37,7 +37,7 @@ QueryExecutionContext::QueryExecutionContext(
     const ExecutorDeviceType device_type,
     const ExecutorDispatchMode dispatch_mode,
     const int device_id,
-    const int outer_table_id,
+    const shared::TableKey& outer_table_key,
     const int64_t num_rows,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
@@ -69,7 +69,7 @@ QueryExecutionContext::QueryExecutionContext(
                                                             dispatch_mode,
                                                             output_columnar,
                                                             sort_on_gpu,
-                                                            outer_table_id,
+                                                            outer_table_key,
                                                             num_rows,
                                                             col_buffers,
                                                             frag_offsets,
@@ -100,7 +100,6 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
                                   -1,
                                   deinterleaved_query_mem_desc,
                                   row_set_mem_owner_,
-                                  executor_->getCatalog(),
                                   executor_->blockSize(),
                                   executor_->gridSize());
   auto deinterleaved_storage =

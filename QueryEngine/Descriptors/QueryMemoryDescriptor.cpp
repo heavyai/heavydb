@@ -60,8 +60,7 @@ std::vector<int64_t> target_expr_group_by_indices(
   return indices;
 }
 
-std::vector<int64_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_unit,
-                                              const Catalog_Namespace::Catalog& cat) {
+std::vector<int64_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_unit) {
   if (ra_exe_unit.input_descs.size() > 1 ||
       !ra_exe_unit.sort_info.order_entries.empty()) {
     return {};
@@ -80,8 +79,7 @@ std::vector<int64_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_
   for (const auto& target : ra_exe_unit.target_exprs) {
     const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target);
     if (col_var) {
-      const auto cd = get_column_descriptor_maybe(
-          col_var->get_column_id(), col_var->get_table_id(), cat);
+      const auto cd = get_column_descriptor_maybe(col_var->getColumnKey());
       if (!cd || !cd->isVirtualCol) {
         continue;
       }
@@ -103,7 +101,7 @@ std::vector<int64_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_
       continue;
     }
     if (!ti.is_varlen() &&
-        used_columns.find(col_var->get_column_id()) == used_columns.end()) {
+        used_columns.find(col_var->getColumnKey().column_id) == used_columns.end()) {
       // setting target index to be zero so that later it can be decoded properly (in lazy
       // fetch, the zeroth target index indicates the corresponding rowid column for the
       // projected entry)
@@ -402,10 +400,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         }
       }
 
-      const auto catalog = executor->getCatalog();
-      CHECK(catalog);
       target_groupby_indices = executor->plan_state_->allow_lazy_fetch_
-                                   ? target_expr_proj_indices(ra_exe_unit, *catalog)
+                                   ? target_expr_proj_indices(ra_exe_unit)
                                    : std::vector<int64_t>{};
 
       col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
@@ -684,7 +680,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const ExecutorDeviceType device_type,
     const ExecutorDispatchMode dispatch_mode,
     const int device_id,
-    const int outer_table_id,
+    const shared::TableKey& outer_table_key,
     const int64_t num_rows,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
@@ -704,7 +700,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
                                 device_type,
                                 dispatch_mode,
                                 device_id,
-                                outer_table_id,
+                                outer_table_key,
                                 num_rows,
                                 col_buffers,
                                 frag_offsets,

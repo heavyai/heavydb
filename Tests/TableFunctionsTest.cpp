@@ -2714,9 +2714,9 @@ void assert_equal(const ResultSetPtr rows1, const ResultSetPtr rows2) {
       const auto ti1 = rows1->getColType(c);
       const auto ti2 = rows2->getColType(c);
       if ((ti1.is_text_encoding_dict() && ti2.is_text_encoding_dict()) &&
-          ti1.get_comp_param() != ti2.get_comp_param()) {
-        auto proxy1 = rows1->getStringDictionaryProxy(ti1.get_comp_param());
-        auto proxy2 = rows2->getStringDictionaryProxy(ti2.get_comp_param());
+          ti1.getStringDictKey() != ti2.getStringDictKey()) {
+        auto proxy1 = rows1->getStringDictionaryProxy(ti1.getStringDictKey());
+        auto proxy2 = rows2->getStringDictionaryProxy(ti2.getStringDictKey());
         const TargetValue val1 = row1[c];
         const TargetValue val2 = row2[c];
         const auto scalar_col_val1 = boost::get<ScalarTargetValue>(&val1);
@@ -2727,9 +2727,9 @@ void assert_equal(const ResultSetPtr rows1, const ResultSetPtr rows2) {
         std::string s2 = proxy2->getString(static_cast<int32_t>(*p2));
         ASSERT_EQ(s1, s2);
       } else if (ti1.is_text_encoding_dict_array() && ti2.is_text_encoding_dict_array() &&
-                 ti1.get_comp_param() != ti2.get_comp_param()) {
-        auto proxy1 = rows1->getStringDictionaryProxy(ti1.get_comp_param());
-        auto proxy2 = rows2->getStringDictionaryProxy(ti2.get_comp_param());
+                 ti1.getStringDictKey() != ti2.getStringDictKey()) {
+        auto proxy1 = rows1->getStringDictionaryProxy(ti1.getStringDictKey());
+        auto proxy2 = rows2->getStringDictionaryProxy(ti2.getStringDictKey());
         const TargetValue val1 = row1[c];
         const TargetValue val2 = row2[c];
         const auto array_col_val1 = boost::get<ArrayTargetValue>(&val1);

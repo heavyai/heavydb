@@ -119,9 +119,10 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
     return nullptr;
   }
   const auto sdp =
-      ti.is_string() ? executor()->getStringDictionaryProxy(
-                           ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true)
-                     : nullptr;
+      ti.is_string()
+          ? executor()->getStringDictionaryProxy(
+                ti.getStringDictKey(), executor()->getRowSetMemoryOwner(), true)
+          : nullptr;
   if (val_count > 3) {
     using ListIterator = decltype(value_list.begin());
     std::vector<int64_t> values;

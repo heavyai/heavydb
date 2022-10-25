@@ -198,7 +198,7 @@ GraphTraversalResults<N, D> graph_shortest_path_impl(
   if constexpr (std::is_same_v<N, TextEncodingDict>) {
     const auto node1_sdp = node1.string_dict_proxy_;
     const auto node2_sdp = node2.string_dict_proxy_;
-    if (node1_sdp->getDictId() != node2_sdp->getDictId()) {
+    if (node1_sdp->getDictKey() != node2_sdp->getDictKey()) {
       auto translation_timer = DEBUG_TIMER("Dictionary Translation");
       const auto translation_map =
           node2_sdp->buildUnionTranslationMapToOtherProxy(node1_sdp, {});

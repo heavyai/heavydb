@@ -41,10 +41,10 @@ class StringDictionaryProxy {
   StringDictionaryProxy(StringDictionaryProxy const&) = delete;
   StringDictionaryProxy const& operator=(StringDictionaryProxy const&) = delete;
   StringDictionaryProxy(std::shared_ptr<StringDictionary> sd,
-                        const int32_t string_dict_id,
+                        const shared::StringDictKey& string_dict_key,
                         const int64_t generation);
 
-  int32_t getDictId() const noexcept { return string_dict_id_; };
+  const shared::StringDictKey& getDictKey() const noexcept { return string_dict_key_; };
 
   bool operator==(StringDictionaryProxy const&) const;
   bool operator!=(StringDictionaryProxy const&) const;
@@ -292,7 +292,7 @@ class StringDictionaryProxy {
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
 
   std::shared_ptr<StringDictionary> string_dict_;
-  const int32_t string_dict_id_;
+  const shared::StringDictKey string_dict_key_;
   TransientMap transient_str_to_int_;
   // Holds pointers into transient_str_to_int_
   std::vector<std::string const*> transient_string_vec_;

@@ -59,19 +59,20 @@ Fragmenter_Namespace::TableInfo build_table_info(
   return table_info_all_shards;
 }
 
-Fragmenter_Namespace::TableInfo InputTableInfoCache::getTableInfo(const int table_id) {
-  const auto it = cache_.find(table_id);
+Fragmenter_Namespace::TableInfo InputTableInfoCache::getTableInfo(
+    const shared::TableKey& table_key) {
+  const auto it = cache_.find(table_key);
   if (it != cache_.end()) {
     const auto& table_info = it->second;
     return copy_table_info(table_info);
   }
-  const auto cat = executor_->getCatalog();
+  const auto cat = Catalog_Namespace::SysCatalog::instance().getCatalog(table_key.db_id);
   CHECK(cat);
-  const auto td = cat->getMetadataForTable(table_id);
+  const auto td = cat->getMetadataForTable(table_key.table_id);
   CHECK(td);
   const auto shard_tables = cat->getPhysicalTablesDescriptors(td);
   auto table_info = build_table_info(shard_tables);
-  auto it_ok = cache_.emplace(table_id, copy_table_info(table_info));
+  auto it_ok = cache_.emplace(table_key, copy_table_info(table_info));
   CHECK(it_ok.second);
   return copy_table_info(table_info);
 }
@@ -107,31 +108,31 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
                          const std::vector<InputDescriptor>& input_descs,
                          Executor* executor) {
   const auto temporary_tables = executor->getTemporaryTables();
-  const auto cat = executor->getCatalog();
-  CHECK(cat);
-  std::unordered_map<int, size_t> info_cache;
+  std::unordered_map<shared::TableKey, size_t> info_cache;
   for (const auto& input_desc : input_descs) {
-    const auto table_id = input_desc.getTableId();
-    const auto cached_index_it = info_cache.find(table_id);
+    const auto& table_key = input_desc.getTableKey();
+    const auto cached_index_it = info_cache.find(table_key);
     if (cached_index_it != info_cache.end()) {
       CHECK_LT(cached_index_it->second, table_infos.size());
       table_infos.push_back(
-          {table_id, copy_table_info(table_infos[cached_index_it->second].info)});
+          {table_key, copy_table_info(table_infos[cached_index_it->second].info)});
       continue;
     }
+
     if (input_desc.getSourceType() == InputSourceType::RESULT) {
+      auto table_id = table_key.table_id;
       CHECK_LT(table_id, 0);
       CHECK(temporary_tables);
       const auto it = temporary_tables->find(table_id);
       LOG_IF(FATAL, it == temporary_tables->end())
           << "Failed to find previous query result for node " << -table_id;
-      table_infos.push_back({table_id, synthesize_table_info(it->second)});
+      table_infos.push_back({{0, table_id}, synthesize_table_info(it->second)});
     } else {
       CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
-      table_infos.push_back({table_id, executor->getTableInfo(table_id)});
+      table_infos.push_back({table_key, executor->getTableInfo(table_key)});
     }
     CHECK(!table_infos.empty());
-    info_cache.insert(std::make_pair(table_id, table_infos.size() - 1));
+    info_cache.insert(std::make_pair(table_key, table_infos.size() - 1));
   }
 }
 
@@ -452,15 +453,15 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
   return metadata_map;
 }
 
-size_t get_frag_count_of_table(const int table_id, Executor* executor) {
+size_t get_frag_count_of_table(const shared::TableKey& table_key, Executor* executor) {
   const auto temporary_tables = executor->getTemporaryTables();
   CHECK(temporary_tables);
-  auto it = temporary_tables->find(table_id);
+  auto it = temporary_tables->find(table_key.table_id);
   if (it != temporary_tables->end()) {
-    CHECK_GE(int(0), table_id);
+    CHECK_GE(int(0), table_key.table_id);
     return size_t(1);
   } else {
-    const auto table_info = executor->getTableInfo(table_id);
+    const auto table_info = executor->getTableInfo(table_key);
     return table_info.fragments.size();
   }
 }

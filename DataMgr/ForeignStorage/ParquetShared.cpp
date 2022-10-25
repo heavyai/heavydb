@@ -80,7 +80,7 @@ std::unique_ptr<ColumnDescriptor> get_sub_type_column_descriptor(
     column_type.set_size(4);  // override default size of -1
   }
   return std::make_unique<ColumnDescriptor>(
-      column->tableId, column->columnId, column->columnName, column_type);
+      column->tableId, column->columnId, column->columnName, column_type, column->db_id);
 }
 
 std::shared_ptr<parquet::Statistics> validate_and_get_column_metadata_statistics(

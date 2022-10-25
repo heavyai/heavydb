@@ -76,7 +76,7 @@ Array<TextEncodingDict> strtok_to_array(RowFunctionManager& mgr,
   const auto& vec = __strtok_to_array(text.getString(), delimiters.getString());
   Array<TextEncodingDict> out_arr(vec.size());
   for (size_t i = 0; i < vec.size(); ++i) {
-    out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_ID, vec[i]);
+    out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, vec[i]);
   }
   return out_arr;
 }
@@ -89,11 +89,11 @@ Array<TextEncodingDict> strtok_to_array__1(RowFunctionManager& mgr,
     return Array<TextEncodingDict>(0, true);
   }
 
-  std::string str = mgr.getString(GET_DICT_ID(mgr, 0), text);
+  std::string str = mgr.getString(GET_DICT_DB_ID(mgr, 0), GET_DICT_ID(mgr, 0), text);
   const auto& vec = __strtok_to_array(str, delimiters.getString());
   Array<TextEncodingDict> out_arr(vec.size());
   for (size_t i = 0; i < vec.size(); ++i) {
-    out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_ID, vec[i]);
+    out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, vec[i]);
   }
   return out_arr;
 }

@@ -307,15 +307,16 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
     CHECK(lhs_col);
 
     // Get the actual point data column descriptor
-    const auto coords_cd = executor()->getCatalog()->getMetadataForColumn(
-        lhs_col->get_table_id(), lhs_col->get_column_id() + 1);
+    auto lhs_column_key = lhs_col->getColumnKey();
+    lhs_column_key.column_id = lhs_column_key.column_id + 1;
+    const auto coords_cd = Catalog_Namespace::get_metadata_for_column(lhs_column_key);
     CHECK(coords_cd);
 
     std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
-    geoargs.push_back(makeExpr<Analyzer::ColumnVar>(coords_cd->columnType,
-                                                    coords_cd->tableId,
-                                                    coords_cd->columnId,
-                                                    lhs_col->get_rte_idx()));
+    geoargs.push_back(makeExpr<Analyzer::ColumnVar>(
+        coords_cd->columnType,
+        shared::ColumnKey{lhs_col->getTableKey(), coords_cd->columnId},
+        lhs_col->get_rte_idx()));
 
     Datum input_compression;
     input_compression.intval =
@@ -340,15 +341,17 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
     const auto rhs_col = dynamic_cast<Analyzer::ColumnVar*>(rhs.get());
     CHECK(rhs_col);
 
-    const auto poly_bounds_cd = executor()->getCatalog()->getMetadataForColumn(
-        rhs_col->get_table_id(),
-        rhs_col->get_column_id() + rhs_ti.get_physical_coord_cols() + 1);
+    auto rhs_column_key = rhs_col->getColumnKey();
+    rhs_column_key.column_id =
+        rhs_column_key.column_id + rhs_ti.get_physical_coord_cols() + 1;
+    const auto poly_bounds_cd =
+        Catalog_Namespace::get_metadata_for_column(rhs_column_key);
     CHECK(poly_bounds_cd);
 
-    auto bbox_col_var = makeExpr<Analyzer::ColumnVar>(poly_bounds_cd->columnType,
-                                                      poly_bounds_cd->tableId,
-                                                      poly_bounds_cd->columnId,
-                                                      rhs_col->get_rte_idx());
+    auto bbox_col_var = makeExpr<Analyzer::ColumnVar>(
+        poly_bounds_cd->columnType,
+        shared::ColumnKey{rhs_col->getTableKey(), poly_bounds_cd->columnId},
+        rhs_col->get_rte_idx());
 
     const auto bbox_contains_func_oper =
         makeExpr<Analyzer::FunctionOper>(SQLTypeInfo(kBOOLEAN, false),
@@ -378,7 +381,7 @@ llvm::Value* CodeGenerator::codegenStrCmp(const SQLOps optype,
   const auto null_check_suffix = get_null_check_suffix(lhs_ti, rhs_ti);
   if (lhs_ti.get_compression() == kENCODING_DICT &&
       rhs_ti.get_compression() == kENCODING_DICT) {
-    if (lhs_ti.get_comp_param() == rhs_ti.get_comp_param()) {
+    if (lhs_ti.getStringDictKey() == rhs_ti.getStringDictKey()) {
       // Both operands share a dictionary
 
       // check if query is trying to compare a columnt against literal
@@ -605,7 +608,7 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
          lhs_lvs[1],
          lhs_lvs[2],
          cgen_state_->llInt(int64_t(executor()->getStringDictionaryProxy(
-             elem_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true))),
+             elem_ti.getStringDictKey(), executor()->getRowSetMemoryOwner(), true))),
          cgen_state_->inlineIntNull(elem_ti)});
   }
   if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string() ||

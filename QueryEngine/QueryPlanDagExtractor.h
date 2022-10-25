@@ -101,7 +101,7 @@ class QueryPlanDagExtractor {
 
   TableIdToNodeMap getTableIdToNodeMap() { return table_id_to_node_map_; }
 
-  void addTableIdToNodeLink(const int table_id, const RelAlgNode* node) {
+  void addTableIdToNodeLink(const shared::TableKey& table_id, const RelAlgNode* node) {
     auto it = table_id_to_node_map_.find(table_id);
     if (it == table_id_to_node_map_.end()) {
       table_id_to_node_map_.emplace(table_id, node);

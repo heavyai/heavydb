@@ -18,6 +18,7 @@
 
 #include "Logger/Logger.h"
 #include "QueryEngine/ScalarExprVisitor.h"
+#include "Shared/DbObjectKeys.h"
 #include "StringOps/StringOps.h"
 
 class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
@@ -52,7 +53,7 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
     if (!(uoper->get_optype() == kCAST && uoper_ti.is_dict_encoded_string())) {
       return defaultResult();
     }
-    const bool outputs_target_sdp = uoper_ti.get_comp_param() == sdp_->getDictId();
+    const bool outputs_target_sdp = uoper_ti.getStringDictKey() == sdp_->getDictKey();
 
     if (!parent_feeds_sdp_ && !outputs_target_sdp) {
       // If we are not casting to our dictionary (sdp_)
@@ -73,10 +74,10 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
     }
 
     if (operand_ti.is_dict_encoded_string() &&
-        uoper_ti.get_comp_param() != operand_ti.get_comp_param()) {
+        uoper_ti.getStringDictKey() != operand_ti.getStringDictKey()) {
       executor_->getStringProxyTranslationMap(
-          operand_ti.get_comp_param(),
-          uoper_ti.get_comp_param(),
+          operand_ti.getStringDictKey(),
+          uoper_ti.getStringDictKey(),
           RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
           {},
           executor_->getRowSetMemoryOwner(),
@@ -98,7 +99,8 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
       return defaultResult();
     }
     const bool parent_feeds_sdp_already_set = parent_feeds_sdp_;
-    const bool outputs_target_sdp = string_oper_ti.get_comp_param() == sdp_->getDictId();
+    const bool outputs_target_sdp =
+        string_oper_ti.getStringDictKey() == sdp_->getDictKey();
     if (string_oper_ti.is_dict_encoded_string() &&
         str_operand_ti.is_dict_encoded_string() &&
         (parent_feeds_sdp_ || outputs_target_sdp)) {
@@ -125,8 +127,8 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
       }
 
       executor_->getStringProxyTranslationMap(
-          str_operand_ti.get_comp_param(),
-          string_oper_ti.get_comp_param(),
+          str_operand_ti.getStringDictKey(),
+          string_oper_ti.getStringDictKey(),
           RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
           string_op_infos,
           executor_->getRowSetMemoryOwner(),
@@ -162,33 +164,35 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
   mutable bool parent_feeds_sdp_{false};
 };
 
-class TransientDictIdVisitor : public ScalarExprVisitor<int> {
+class TransientDictIdVisitor : public ScalarExprVisitor<shared::StringDictKey> {
  public:
-  int visitUOper(const Analyzer::UOper* uoper) const override {
+  shared::StringDictKey visitUOper(const Analyzer::UOper* uoper) const override {
     const auto& expr_ti = uoper->get_type_info();
     if (uoper->get_optype() == kCAST && expr_ti.is_string() &&
         expr_ti.get_compression() == kENCODING_DICT) {
-      return expr_ti.get_comp_param();
+      return expr_ti.getStringDictKey();
     }
     return defaultResult();
   }
 
-  int visitCaseExpr(const Analyzer::CaseExpr* case_expr) const override {
+  shared::StringDictKey visitCaseExpr(
+      const Analyzer::CaseExpr* case_expr) const override {
     const auto& expr_ti = case_expr->get_type_info();
     if (expr_ti.is_string() && expr_ti.get_compression() == kENCODING_DICT) {
-      return expr_ti.get_comp_param();
+      return expr_ti.getStringDictKey();
     }
     return defaultResult();
   }
 
-  int visitStringOper(const Analyzer::StringOper* string_oper) const override {
+  shared::StringDictKey visitStringOper(
+      const Analyzer::StringOper* string_oper) const override {
     const auto& expr_ti = string_oper->get_type_info();
     if (expr_ti.is_string() && expr_ti.get_compression() == kENCODING_DICT) {
-      return expr_ti.get_comp_param();
+      return expr_ti.getStringDictKey();
     }
     return defaultResult();
   }
 
  protected:
-  int defaultResult() const override { return -1; }
+  shared::StringDictKey defaultResult() const override { return {}; }
 };

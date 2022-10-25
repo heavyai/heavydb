@@ -62,10 +62,11 @@ public class SqlIdentifierCapturer {
 
   private Stack<Set<ImmutableList<String>>> currentList = new Stack<>();
 
-  public final Set<ImmutableList<String>> selects = new HashSet<>();
-  public final Set<ImmutableList<String>> inserts = new HashSet<>();
-  public final Set<ImmutableList<String>> updates = new HashSet<>();
-  public final Set<ImmutableList<String>> deletes = new HashSet<>();
+  // TODO: Update below sets to use a "FullyQualifiedTableName" class.
+  public Set<ImmutableList<String>> selects = new HashSet<>();
+  public Set<ImmutableList<String>> inserts = new HashSet<>();
+  public Set<ImmutableList<String>> updates = new HashSet<>();
+  public Set<ImmutableList<String>> deletes = new HashSet<>();
 
   private final Set<ImmutableList<String>> ignore = new HashSet<>();
 
