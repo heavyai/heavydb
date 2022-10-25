@@ -862,21 +862,30 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
       }
     }
   }
-  QueryStepExecutionResult result{
-      executeRelAlgSubSeq(seq,
-                          std::make_pair(step_idx, step_idx + 1),
-                          co,
-                          eo,
-                          render_info,
-                          queue_time_ms_),
-      merge_type(exe_desc_ptr->getBody()),
-      exe_desc_ptr->getBody()->getId(),
-      false};
+  QueryStepExecutionResult query_step_result{ExecutionResult{},
+                                             merge_type(exe_desc_ptr->getBody()),
+                                             exe_desc_ptr->getBody()->getId(),
+                                             false};
+  try {
+    query_step_result.result = executeRelAlgSubSeq(
+        seq, std::make_pair(step_idx, step_idx + 1), co, eo, render_info, queue_time_ms_);
+  } catch (QueryMustRunOnCpu const& e) {
+    CHECK_EQ(co.device_type, ExecutorDeviceType::GPU);
+    auto copied_co = co;
+    copied_co.device_type = ExecutorDeviceType::CPU;
+    LOG(INFO) << "Retry the query via CPU mode";
+    query_step_result.result = executeRelAlgSubSeq(seq,
+                                                   std::make_pair(step_idx, step_idx + 1),
+                                                   copied_co,
+                                                   eo,
+                                                   render_info,
+                                                   queue_time_ms_);
+  }
   if (post_execution_callback_) {
     VLOG(1) << "Running post execution callback.";
     (*post_execution_callback_)();
   }
-  return result;
+  return query_step_result;
 }
 
 void RelAlgExecutor::prepareLeafExecution(

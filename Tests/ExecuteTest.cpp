@@ -3583,6 +3583,14 @@ TEST_F(Select, ApproxCountDistinct) {
     EXPECT_THROW(run_multiple_agg("SELECT APPROX_COUNT_DISTINCT(x, 0) FROM test;", dt),
                  std::runtime_error);
   }
+  // check whether we can run this query w/o CPU mode exception in both single and dist
+  // modes
+  EXPECT_NO_THROW(
+      run_multiple_agg("SELECT col_big_1 AS key0, AVG(lon) AS x, AVG(lat) AS y, "
+                       "APPROX_COUNT_DISTINCT(col_dict_text2) AS color FROM "
+                       "data_types_basic3 GROUP BY key0;",
+                       ExecutorDeviceType::CPU,
+                       false));
 }
 
 // Additional unit tests for APPROX_MEDIAN are in Quantile/.
