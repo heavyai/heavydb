@@ -1,0 +1,31 @@
+{
+  "payload": {
+    "command": "ALTER_TABLE",
+    "tableName": "test",
+    "alterType": "ALTER_COLUMN",
+    "alterData": [
+      {
+        "type": "SQL_COLUMN_DECLARATION",
+        "name": "a",
+        "default": null,
+        "nullable": true,
+        "encodingType": null,
+        "encodingSize": null,
+        "precision": 5,
+        "scale": 2,
+        "sqltype": "DECIMAL"
+      },
+      {
+        "type": "SQL_COLUMN_DECLARATION",
+        "name": "b",
+        "default": null,
+        "nullable": false,
+        "encodingType": "DICT",
+        "encodingSize": 32,
+        "precision": -1,
+        "scale": -1,
+        "sqltype": "TEXT"
+      }
+    ]
+  }
+}

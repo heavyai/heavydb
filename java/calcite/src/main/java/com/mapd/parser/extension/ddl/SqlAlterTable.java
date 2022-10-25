@@ -20,7 +20,9 @@ package com.mapd.parser.extension.ddl;
 import com.google.gson.annotations.Expose;
 
 import org.apache.calcite.runtime.CalciteException;
+import org.apache.calcite.sql.SqlBasicTypeNameSpec;
 import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlDataTypeSpec;
 import org.apache.calcite.sql.SqlDdl;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
@@ -30,6 +32,8 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.SqlWriter;
 import org.apache.calcite.sql.parser.SqlParserPos;
+import org.apache.calcite.sql.util.SqlBasicVisitor;
+import org.apache.calcite.sql.util.SqlVisitor;
 import org.apache.calcite.util.EscapedStringJsonBuilder;
 import org.apache.calcite.util.JsonBuilder;
 
@@ -61,12 +65,17 @@ public class SqlAlterTable extends SqlDdl {
    *    ALTER TABLE <table> ADD (<column> <type> DEFAULT <value>);
    * DROP COLUMN:
    *    ALTER TABLE <table> DROP COLUMN <column_1>[, <column_2>, ...];
+   * ALTER COLUMN:
+   *    ALTER TABLE <table>
+   *          ALTER [COLUMN] <column> [SET DATA] TYPE <type> [NOT NULL] [ENCODING
+   * <encodingSpec>]
    */
 
   public enum AlterType {
     RENAME_TABLE,
     RENAME_COLUMN,
     ADD_COLUMN,
+    ALTER_COLUMN,
     DROP_COLUMN,
     ALTER_OPTIONS
   }
@@ -106,6 +115,11 @@ public class SqlAlterTable extends SqlDdl {
 
     public void addColumnList(final SqlNodeList columnList) {
       this.alterType = AlterType.ADD_COLUMN;
+      this.columnList = columnList;
+    }
+
+    public void addAlterColumnList(final SqlNodeList columnList) {
+      this.alterType = AlterType.ALTER_COLUMN;
       this.columnList = columnList;
     }
 
@@ -213,6 +227,43 @@ public class SqlAlterTable extends SqlDdl {
           map.put("columnData", elements_list);
         }
 
+        break;
+      case ALTER_COLUMN:
+        map.put("alterType", "ALTER_COLUMN");
+        if (this.columnList != null) {
+          List<Object> elements_list = jsonBuilder.list();
+          for (SqlNode elementNode : this.columnList) {
+            if (!(elementNode instanceof SqlCall)) {
+              throw new CalciteException("Column definition " + this.tableName.toString()
+                              + " is invalid: " + elementNode.toString(),
+                      null);
+            }
+
+            SqlVisitor<Object> sqlVisitor = new SqlBasicVisitor<Object>() {
+              @Override
+              public Object visit(SqlIdentifier id) {
+                column_name = id.toString();
+                return null;
+              }
+              @Override
+              public Object visit(SqlDataTypeSpec spec) {
+                if (!(spec.getTypeNameSpec() instanceof SqlBasicTypeNameSpec)) {
+                  throw new CalciteException("Type definition for column "
+                                  + column_name.toString()
+                                  + " is invalid: " + spec.toString(),
+                          null);
+                }
+                return null;
+              }
+
+              String column_name = "<UNSET>";
+            };
+            elementNode.accept(sqlVisitor);
+
+            elements_list.add(elementNode);
+          }
+          map.put("alterData", elements_list);
+        }
         break;
       case DROP_COLUMN:
         map.put("alterType", "DROP_COLUMN");
