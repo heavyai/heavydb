@@ -429,6 +429,35 @@ TEST(AlterColumnTest5, Drop_table_by_unauthorized_user) {
 
 }  // namespace
 
+class AlterTableAlterColumnTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("drop table if exists test_table;");
+  }
+
+  void TearDown() override {
+    sql("drop table if exists test_table;");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+// TODO: remove this test once alter column is implemented
+TEST_F(AlterTableAlterColumnTest, Unimplemented) {
+  sql("create table test_table (a integer, b float);");
+  queryAndAssertException(
+      "ALTER TABLE test_table ALTER COLUMN a TYPE decimal(5,2) NULL, ALTER COLUMN b SET "
+      "DATA TYPE TEXT NOT NULL ENCODING DICT(32);",
+      "ALTER TABLE ALTER COLUMN is not implemented.");
+}
+
+TEST_F(AlterTableAlterColumnTest, InvalidType) {
+  sql("create table test_table (a integer, b float);");
+  queryAndAssertException(
+      "ALTER TABLE test_table ALTER COLUMN a TYPE invalid_type NOT NULL;",
+      "Type definition for column a is invalid: `invalid_type`");
+}
+
 class AlterTableSetMaxRowsTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
