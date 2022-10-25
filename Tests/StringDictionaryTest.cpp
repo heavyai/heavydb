@@ -312,6 +312,9 @@ TEST_F(StringDictionaryTest, BuildTranslationMap) {
   }
 }
 
+static shared::StringDictKey test_source_dict_key{1, 1};
+static shared::StringDictKey test_dest_dict_key{1, 2};
+
 TEST_F(StringDictionaryProxyTest, GetOrAddTransient) {
   const DictRef dict_ref(-1, 1);
   std::shared_ptr<StringDictionary> string_dict = std::make_shared<StringDictionary>(
@@ -333,7 +336,7 @@ TEST_F(StringDictionaryProxyTest, GetOrAddTransient) {
   // Now make proxy from dictionary
 
   StringDictionaryProxy string_dict_proxy(
-      string_dict, 1 /* string_dict_id */, string_dict->storageEntryCount());
+      string_dict, test_source_dict_key, string_dict->storageEntryCount());
 
   {
     // First iteration is identical to first of the StringDictionary GetOrAddBulk test,
@@ -395,7 +398,7 @@ TEST_F(StringDictionaryProxyTest, GetOrAddTransientBulk) {
   std::shared_ptr<StringDictionary> string_dict = std::make_shared<StringDictionary>(
       dict_ref, BASE_PATH1, false, true, g_cache_string_hash);
   StringDictionaryProxy string_dict_proxy(
-      string_dict, 1 /* string_dict_id */, string_dict->storageEntryCount());
+      string_dict, test_source_dict_key, string_dict->storageEntryCount());
   {
     // First iteration is identical to first of the StringDictionary GetOrAddBulk test,
     // and results should be the same
@@ -450,7 +453,7 @@ TEST_F(StringDictionaryProxyTest, GetTransientBulk) {
   std::shared_ptr<StringDictionary> string_dict = std::make_shared<StringDictionary>(
       dict_ref, BASE_PATH1, false, true, g_cache_string_hash);
   StringDictionaryProxy string_dict_proxy(
-      string_dict, 1 /* string_dict_id */, string_dict->storageEntryCount());
+      string_dict, test_source_dict_key, string_dict->storageEntryCount());
   {
     // First iteration is identical to first of the StryingDictionaryProxy
     // GetOrAddTransientBulk test, and results should be the same
@@ -522,12 +525,11 @@ TEST_F(StringDictionaryProxyTest, BuildIntersectionTranslationMapToOtherProxy) {
     // Should get back all INVALID_STR_IDs
     std::shared_ptr<StringDictionaryProxy> source_string_dict_proxy =
         std::make_shared<StringDictionaryProxy>(source_string_dict,
-                                                1 /* string_dict_id */,
+                                                test_source_dict_key,
                                                 source_string_dict->storageEntryCount());
     std::shared_ptr<StringDictionaryProxy> dest_string_dict_proxy =
-        std::make_shared<StringDictionaryProxy>(dest_string_dict,
-                                                2 /* string_dict_id */,
-                                                dest_string_dict->storageEntryCount());
+        std::make_shared<StringDictionaryProxy>(
+            dest_string_dict, test_dest_dict_key, dest_string_dict->storageEntryCount());
     const auto str_proxy_translation_map =
         source_string_dict_proxy->buildIntersectionTranslationMapToOtherProxy(
             dest_string_dict_proxy.get(), {});
@@ -555,12 +557,11 @@ TEST_F(StringDictionaryProxyTest, BuildIntersectionTranslationMapToOtherProxy) {
 
     std::shared_ptr<StringDictionaryProxy> source_string_dict_proxy =
         std::make_shared<StringDictionaryProxy>(source_string_dict,
-                                                1 /* string_dict_id */,
+                                                test_source_dict_key,
                                                 source_string_dict->storageEntryCount());
     std::shared_ptr<StringDictionaryProxy> dest_string_dict_proxy =
-        std::make_shared<StringDictionaryProxy>(dest_string_dict,
-                                                2 /* string_dict_id */,
-                                                dest_string_dict->storageEntryCount());
+        std::make_shared<StringDictionaryProxy>(
+            dest_string_dict, test_dest_dict_key, dest_string_dict->storageEntryCount());
 
     constexpr int32_t num_source_proxy_transient_ids{64};
     constexpr int32_t num_dest_proxy_transient_ids{32};
@@ -637,12 +638,11 @@ TEST_F(StringDictionaryProxyTest, BuildUnionTranslationMapToEmptyProxy) {
     // destination proxy
     std::shared_ptr<StringDictionaryProxy> source_string_dict_proxy =
         std::make_shared<StringDictionaryProxy>(source_string_dict,
-                                                1 /* string_dict_id */,
+                                                test_source_dict_key,
                                                 source_string_dict->storageEntryCount());
     std::shared_ptr<StringDictionaryProxy> dest_string_dict_proxy =
-        std::make_shared<StringDictionaryProxy>(dest_string_dict,
-                                                2 /* string_dict_id */,
-                                                dest_string_dict->storageEntryCount());
+        std::make_shared<StringDictionaryProxy>(
+            dest_string_dict, test_dest_dict_key, dest_string_dict->storageEntryCount());
     const auto str_proxy_translation_map =
         source_string_dict_proxy->buildUnionTranslationMapToOtherProxy(
             dest_string_dict_proxy.get(), {});
@@ -771,18 +771,18 @@ TEST_F(StringDictionaryProxyTest, BuildUnionTranslationMapToPartialOverlapProxy)
   ASSERT_EQ(dest_sd->storageEntryCount(), num_dest_persisted_entries);
 
   StringDictionaryProxy source_sdp(
-      source_sd, 1 /* string_dict_id */, source_sd->storageEntryCount());
+      source_sd, test_source_dict_key, source_sd->storageEntryCount());
   StringDictionaryProxy dest_sdp(
-      dest_sd, 2 /* string_dict_id */, dest_sd->storageEntryCount());
+      dest_sd, test_dest_dict_key, dest_sd->storageEntryCount());
   const auto transient_source_strings = add_strings_numeric_range(
       source_sdp, num_source_transient_entries, source_transient_start_val);
-  ASSERT_EQ(source_sdp.getDictId(), 1);
+  ASSERT_EQ(source_sdp.getDictKey(), test_source_dict_key);
   ASSERT_EQ(source_sdp.storageEntryCount(), num_source_persisted_entries);
   ASSERT_EQ(source_sdp.transientEntryCount(), num_source_transient_entries);
 
   const auto transient_dest_strings = add_strings_numeric_range(
       dest_sdp, num_dest_transient_entries, dest_transient_start_val);
-  ASSERT_EQ(dest_sdp.getDictId(), 2);
+  ASSERT_EQ(dest_sdp.getDictKey(), test_dest_dict_key);
   ASSERT_EQ(dest_sdp.storageEntryCount(), num_dest_persisted_entries);
   ASSERT_EQ(dest_sdp.transientEntryCount(), num_dest_transient_entries);
 
@@ -849,10 +849,10 @@ TEST_F(StringDictionaryTest, TransientUnion) {
   {
     // TODO cleanup redundancy of setting SD id here.
     StringDictionaryProxy sdp_lhs(
-        sd_lhs, dict_ref_lhs.dictId, sd_lhs->storageEntryCount());
+        sd_lhs, {dict_ref_lhs.dbId, dict_ref_lhs.dictId}, sd_lhs->storageEntryCount());
     sdp_lhs.getOrAddTransient("t0"sv);  // id = -2
     StringDictionaryProxy sdp_rhs(
-        sd_rhs, dict_ref_rhs.dictId, sd_rhs->storageEntryCount());
+        sd_rhs, {dict_ref_rhs.dbId, dict_ref_rhs.dictId}, sd_rhs->storageEntryCount());
     sdp_rhs.getOrAddTransient("t0"sv);  // id = -2
     sdp_rhs.getOrAddTransient("t1"sv);  // id = -3
     auto const id_map = sdp_lhs.transientUnion(sdp_rhs);
@@ -887,10 +887,10 @@ TEST_F(StringDictionaryTest, TransientUnion) {
 
   {  // Swap sd_lhs <-> sd_rhs
     StringDictionaryProxy sdp_lhs(
-        sd_rhs, dict_ref_lhs.dictId, sd_rhs->storageEntryCount());
+        sd_rhs, {dict_ref_lhs.dbId, dict_ref_lhs.dictId}, sd_rhs->storageEntryCount());
     sdp_lhs.getOrAddTransient("t0"sv);
     StringDictionaryProxy sdp_rhs(
-        sd_lhs, dict_ref_rhs.dictId, sd_lhs->storageEntryCount());
+        sd_lhs, {dict_ref_rhs.dbId, dict_ref_rhs.dictId}, sd_lhs->storageEntryCount());
     sdp_rhs.getOrAddTransient("t0"sv);
     sdp_rhs.getOrAddTransient("t1"sv);
     auto const id_map = sdp_lhs.transientUnion(sdp_rhs);

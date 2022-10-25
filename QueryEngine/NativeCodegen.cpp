@@ -2816,11 +2816,11 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
           gby_expr->collect_column_var(colvar_set, true);
           for (const auto cv : colvar_set) {
             if (cv->get_type_info().is_varlen()) {
-              const auto tbl_id = cv->get_table_id();
+              const auto tbl_key = cv->getTableKey();
               std::for_each(query_infos.begin(),
                             query_infos.end(),
-                            [tbl_id](const InputTableInfo& input_table_info) {
-                              if (input_table_info.table_id == tbl_id &&
+                            [&tbl_key](const InputTableInfo& input_table_info) {
+                              if (input_table_info.table_key == tbl_key &&
                                   input_table_info.info.fragments.size() > 1) {
                                 throw QueryMustRunOnCpu();
                               }
@@ -3227,16 +3227,15 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
   if (outer_input_desc.getSourceType() != InputSourceType::TABLE) {
     return nullptr;
   }
-  const auto deleted_cd =
-      plan_state_->getDeletedColForTable(outer_input_desc.getTableId());
+  const auto& table_key = outer_input_desc.getTableKey();
+  const auto deleted_cd = plan_state_->getDeletedColForTable(table_key);
   if (!deleted_cd) {
     return nullptr;
   }
   CHECK(deleted_cd->columnType.is_boolean());
   const auto deleted_expr =
       makeExpr<Analyzer::ColumnVar>(deleted_cd->columnType,
-                                    outer_input_desc.getTableId(),
-                                    deleted_cd->columnId,
+                                    shared::ColumnKey{table_key, deleted_cd->columnId},
                                     outer_input_desc.getNestLevel());
   CodeGenerator code_generator(this);
   const auto is_deleted =

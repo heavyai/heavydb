@@ -305,7 +305,7 @@ CodeGenerator::codegenStringFetchAndEncode(const Analyzer::StringOper* expr,
           "transient_dict_per_row_nullcheck");
     }
     const auto sdp_ptr = reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
-        arg_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
+        arg_ti.getStringDictKey(), executor()->getRowSetMemoryOwner(), true));
     const auto string_view =
         cgen_state_->emitExternalCall("string_decompress",
                                       createStringViewStructType(),
@@ -394,7 +394,7 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
   CHECK(return_ti.is_dict_encoded_string());
   const int64_t dest_string_proxy_handle =
       reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
-          return_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
+          return_ti.getStringDictKey(), executor()->getRowSetMemoryOwner(), true));
   auto dest_string_proxy_handle_lv = cgen_state_->llInt(dest_string_proxy_handle);
   if (non_literals_arity == 1UL) {
     std::vector<llvm::Value*> string_oper_lvs{primary_str_lv[1],
@@ -450,7 +450,7 @@ std::unique_ptr<StringDictionaryTranslationMgr> translate_dict_strings(
     Executor* executor) {
   const auto& expr_ti = expr->get_type_info();
   const auto& primary_input_expr_ti = expr->getArg(0)->get_type_info();
-  const auto dict_id = primary_input_expr_ti.get_comp_param();
+  const auto& dict_id = primary_input_expr_ti.getStringDictKey();
   const auto string_op_infos = getStringOpInfos(expr);
   CHECK(string_op_infos.size());
 
@@ -467,7 +467,7 @@ std::unique_ptr<StringDictionaryTranslationMgr> translate_dict_strings(
                                                    : Data_Namespace::CPU_LEVEL,
             executor->deviceCount(device_type),
             executor,
-            &executor->getCatalog()->getDataMgr(),
+            executor->getDataMgr(),
             false /* delay_translation */);
     return string_dictionary_translation_mgr;
   } else {
@@ -481,7 +481,7 @@ std::unique_ptr<StringDictionaryTranslationMgr> translate_dict_strings(
                                                    : Data_Namespace::CPU_LEVEL,
             executor->deviceCount(device_type),
             executor,
-            &executor->getCatalog()->getDataMgr(),
+            executor->getDataMgr(),
             false /* delay_translation */);
     return string_dictionary_translation_mgr;
   }
@@ -517,7 +517,7 @@ llvm::Value* CodeGenerator::codegenPseudoStringOper(
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto& expr_ti = expr->get_type_info();
-  const auto dict_id = expr_ti.get_comp_param();
+  const auto& dict_id = expr_ti.getStringDictKey();
 
   auto string_dictionary_translation_mgr =
       std::make_unique<StringDictionaryTranslationMgr>(
@@ -530,7 +530,7 @@ llvm::Value* CodeGenerator::codegenPseudoStringOper(
                                                     : Data_Namespace::CPU_LEVEL,
           executor()->deviceCount(co.device_type),
           executor(),
-          &executor()->getCatalog()->getDataMgr(),
+          executor()->getDataMgr(),
           false /* delay_translation */);
 
   auto str_id_lv = codegen(expr, true /* fetch_column */, co);
@@ -619,7 +619,7 @@ void pre_translate_string_ops(const Analyzer::StringOper* string_oper,
   CHECK_GT(string_oper->getArity(), 0UL);
   const auto& string_oper_primary_arg_ti = string_oper->getArg(0)->get_type_info();
   CHECK(string_oper_primary_arg_ti.is_dict_encoded_string());
-  CHECK_NE(string_oper_primary_arg_ti.get_comp_param(), TRANSIENT_DICT_ID);
+  CHECK_NE(string_oper_primary_arg_ti.getStringDictKey().dict_id, TRANSIENT_DICT_ID);
   // Note the actual translation below will be cached by RowSetMemOwner
   translate_dict_strings(string_oper, ExecutorDeviceType::CPU, executor);
 }
@@ -647,11 +647,11 @@ llvm::Value* CodeGenerator::codegenDictLike(
   }
   CHECK_EQ(kENCODING_DICT, dict_like_arg_ti.get_compression());
   const auto sdp = executor()->getStringDictionaryProxy(
-      dict_like_arg_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true);
+      dict_like_arg_ti.getStringDictKey(), executor()->getRowSetMemoryOwner(), true);
   if (sdp->storageEntryCount() > 200000000) {
     return nullptr;
   }
-  if (sdp->getDictId() == TRANSIENT_DICT_ID) {
+  if (sdp->getDictKey().isTransientDict()) {
     // If we have a literal dictionary it was a product
     // of string ops applied to none-encoded strings, and
     // will not be populated at codegen-time, so we
@@ -726,8 +726,8 @@ llvm::Value* CodeGenerator::codegenDictStrCmp(const std::shared_ptr<Analyzer::Ex
   std::shared_ptr<const Analyzer::ColumnVar> col_var;
   auto compare_opr = compare_operator;
   if (lhs_col_var && rhs_col_var) {
-    if (lhs_col_var->get_type_info().get_comp_param() ==
-        rhs_col_var->get_type_info().get_comp_param()) {
+    if (lhs_col_var->get_type_info().getStringDictKey() ==
+        rhs_col_var->get_type_info().getStringDictKey()) {
       if (compare_operator == kEQ || compare_operator == kNE) {
         // TODO (vraj): implement compare between two dictionary encoded columns which
         // share a dictionary
@@ -777,7 +777,7 @@ llvm::Value* CodeGenerator::codegenDictStrCmp(const std::shared_ptr<Analyzer::Ex
   CHECK(col_ti.is_string());
   CHECK_EQ(kENCODING_DICT, col_ti.get_compression());
   const auto sdp = executor()->getStringDictionaryProxy(
-      col_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true);
+      col_ti.getStringDictKey(), executor()->getRowSetMemoryOwner(), true);
 
   if (sdp->storageEntryCount() > 200000000) {
     std::runtime_error("Cardinality for string dictionary is too high");
@@ -870,13 +870,13 @@ llvm::Value* CodeGenerator::codegenDictRegexp(
   const auto& dict_regexp_arg_ti = dict_regexp_arg->get_type_info();
   CHECK(dict_regexp_arg_ti.is_string());
   CHECK_EQ(kENCODING_DICT, dict_regexp_arg_ti.get_compression());
-  const auto comp_param = dict_regexp_arg_ti.get_comp_param();
+  const auto& dict_key = dict_regexp_arg_ti.getStringDictKey();
   const auto sdp = executor()->getStringDictionaryProxy(
-      comp_param, executor()->getRowSetMemoryOwner(), true);
+      dict_key, executor()->getRowSetMemoryOwner(), true);
   if (sdp->storageEntryCount() > 15000000) {
     return nullptr;
   }
-  if (sdp->getDictId() == TRANSIENT_DICT_ID) {
+  if (sdp->getDictKey().isTransientDict()) {
     // If we have a literal dictionary it was a product
     // of string ops applied to none-encoded strings, and
     // will not be populated at codegen-time, so we

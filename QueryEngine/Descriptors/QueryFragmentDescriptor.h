@@ -35,6 +35,7 @@
 #include "DataMgr/ChunkMetadata.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
+#include "Shared/DbObjectKeys.h"
 
 namespace Fragmenter_Namespace {
 class FragmentInfo;
@@ -50,7 +51,7 @@ struct InputTableInfo;
 struct RelAlgExecutionUnit;
 
 struct FragmentsPerTable {
-  int table_id;
+  shared::TableKey table_key;
   std::vector<size_t> fragment_ids;
 };
 
@@ -73,7 +74,7 @@ class QueryFragmentDescriptor {
                           const std::vector<size_t> allowed_outer_fragment_indices);
 
   static void computeAllTablesFragments(
-      std::map<int, const TableFragments*>& all_tables_fragments,
+      std::map<shared::TableKey, const TableFragments*>& all_tables_fragments,
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::vector<InputTableInfo>& query_infos);
 
@@ -147,7 +148,7 @@ class QueryFragmentDescriptor {
   size_t outer_fragments_size_ = 0;
   int64_t rowid_lookup_key_ = -1;
 
-  std::map<int, const TableFragments*> selected_tables_fragments_;
+  std::map<shared::TableKey, const TableFragments*> selected_tables_fragments_;
 
   std::map<int, std::vector<ExecutionKernelDescriptor>> execution_kernels_per_device_;
 

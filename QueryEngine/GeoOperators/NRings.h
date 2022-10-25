@@ -22,9 +22,7 @@ namespace spatial_type {
 
 class NRings : public Codegen {
  public:
-  NRings(const Analyzer::GeoOperator* geo_operator,
-         const Catalog_Namespace::Catalog* catalog)
-      : Codegen(geo_operator, catalog) {}
+  NRings(const Analyzer::GeoOperator* geo_operator) : Codegen(geo_operator) {}
 
   size_t size() const final { return 1; }
 
@@ -45,15 +43,13 @@ class NRings : public Codegen {
     is_nullable_ = !geo_ti.get_notnull();
 
     // create a new operand which is just the ring sizes and codegen it
-    const auto ring_sizes_column_id = col_var->get_column_id() + 2;  // + 2 for ring sizes
-    auto ring_sizes_cd =
-        get_column_descriptor(ring_sizes_column_id, col_var->get_table_id(), *cat_);
+    auto column_key = col_var->getColumnKey();
+    column_key.column_id = column_key.column_id + 2;  // + 2 for ring sizes
+    const auto ring_sizes_cd = get_column_descriptor(column_key);
     CHECK(ring_sizes_cd);
 
-    operand_owned_ = std::make_unique<Analyzer::ColumnVar>(ring_sizes_cd->columnType,
-                                                           col_var->get_table_id(),
-                                                           ring_sizes_column_id,
-                                                           col_var->get_rte_idx());
+    operand_owned_ = std::make_unique<Analyzer::ColumnVar>(
+        ring_sizes_cd->columnType, column_key, col_var->get_rte_idx());
     return operand_owned_.get();
   }
 

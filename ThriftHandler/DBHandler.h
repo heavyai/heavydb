@@ -621,6 +621,9 @@ class DBHandler : public HeavyIf {
 
   bool isAggregator() const;
 
+  bool checkInMemorySystemTableQuery(
+      const std::unordered_set<shared::TableKey>& tables_selected_from) const;
+
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
 
   LeafAggregator leaf_aggregator_;

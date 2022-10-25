@@ -107,27 +107,6 @@ inline constexpr bool all_serializable_rel_alg_classes_v =
  * access and provide a serialization specialization below.
  */
 struct RelAlgDagSerializer {
-  // forward-declaring a deserialize context and thread-local storage for it in order
-  // to access a Catalog_Namespace::Catalog instance that will be used to populate
-  // RelAlgDag components that are dependent on catalog items, such as table/column
-  // descriptors.
-  class RelAlgDagDeserializeContext;
-  static thread_local std::unique_ptr<RelAlgDagDeserializeContext>
-      rel_alg_dag_deserialize_context;
-
-  /**
-   * Creates a ScopeGuard to be used deserialization-scope only. Creates a deserialization
-   * context, initialized by a Catalog_Namespace::Catalog instance.
-   * @param cat The current db catalog
-   */
-  static ScopeGuard createContextScopeGuard(const Catalog_Namespace::Catalog& cat);
-
-  /**
-   * Gets the current thread-local db catalog. This is only called during deserialization
-   * by RelAlgDag-related classes that have a Catalog dependence.
-   */
-  static const Catalog_Namespace::Catalog& getCatalog();
-
   /**
    * Primary serialization method for Rex/RexScalar-related classes.
    * If you create a new class that inherits from the Rex/RexScalar base class that
@@ -431,6 +410,15 @@ struct is_catalog_rel_alg_node
 template <class T>
 inline constexpr bool is_catalog_rel_alg_node_v = is_catalog_rel_alg_node<T>::value;
 
+template <class T>
+struct is_modify_target_rel_alg_node
+    : std::bool_constant<std::is_same_v<RelProject, typename std::remove_cv_t<T>> ||
+                         std::is_same_v<RelCompound, typename std::remove_cv_t<T>>> {};
+
+template <class T>
+inline constexpr bool is_modify_target_rel_alg_node_v =
+    is_modify_target_rel_alg_node<T>::value;
+
 /**
  * Saves constructor data for TableDescriptor-dependent classes by saving out the table
  * descriptor name. The table name seems like the best choice for a
@@ -447,6 +435,19 @@ template <class RelAlgNodeType,
 inline void save_construct_data(boost::archive::text_oarchive& ar,
                                 const RelAlgNodeType* node,
                                 const unsigned int version) {
+  const Catalog_Namespace::Catalog* catalog{nullptr};
+  if constexpr (is_modify_target_rel_alg_node_v<RelAlgNodeType>) {
+    catalog = node->getModifiedTableCatalog();
+  } else {
+    catalog = &node->getCatalog();
+  }
+
+  if (catalog) {
+    ar << catalog->name();
+  } else {
+    ar << std::string();
+  }
+
   auto* td = node->getTableDescriptor();
   if (td) {
     CHECK(!td->tableName.empty());
@@ -466,9 +467,9 @@ inline void save_construct_data(boost::archive::text_oarchive& ar,
  */
 template <class RelAlgNodeType>
 inline void construct_catalog_rel_alg_node(RelAlgNodeType* node,
-                                           const Catalog_Namespace::Catalog& cat,
+                                           const Catalog_Namespace::Catalog* cat,
                                            const TableDescriptor* td) {
-  ::new (node) RelAlgNodeType(td);
+  ::new (node) RelAlgNodeType(td, cat);
 }
 
 /**
@@ -478,6 +479,15 @@ inline void construct_catalog_rel_alg_node(RelModify* node,
                                            const Catalog_Namespace::Catalog& cat,
                                            const TableDescriptor* td) {
   ::new (node) RelModify(cat, td);
+}
+
+/**
+ * RelScan construction specialization, which requires a catalog reference
+ */
+inline void construct_catalog_rel_alg_node(RelScan* node,
+                                           const Catalog_Namespace::Catalog& cat,
+                                           const TableDescriptor* td) {
+  ::new (node) RelScan(td, cat);
 }
 
 /**
@@ -496,16 +506,30 @@ template <
 inline void load_construct_data(boost::archive::text_iarchive& ar,
                                 RelAlgNodeType* node,
                                 const unsigned int version) {
+  std::string db_name;
+  ar >> db_name;
+  const Catalog_Namespace::Catalog* cat{nullptr};
+  const TableDescriptor* td{nullptr};
+  if (!db_name.empty()) {
+    cat = Catalog_Namespace::SysCatalog::instance().getCatalog(db_name).get();
+    CHECK(cat) << "Catalog not found for database: " << db_name;
+  }
+
   std::string table_name;
   ar >> table_name;
-  auto& cat = RelAlgDagSerializer::getCatalog();
-  const TableDescriptor* td{nullptr};
   if (!table_name.empty()) {
-    td = cat.getMetadataForTable(table_name, false);
+    CHECK(cat);
+    td = cat->getMetadataForTable(table_name, false);
     CHECK(td) << "Table metadata not found for table: " << table_name
-              << " in catalog: " << cat.name();
+              << " in catalog: " << cat->name();
   }
-  construct_catalog_rel_alg_node(node, cat, td);
+
+  if constexpr (is_modify_target_rel_alg_node_v<RelAlgNodeType>) {
+    construct_catalog_rel_alg_node(node, cat, td);
+  } else {
+    CHECK(cat);
+    construct_catalog_rel_alg_node(node, *cat, td);
+  }
 }
 
 }  // namespace serialization

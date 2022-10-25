@@ -330,6 +330,7 @@ inline unsigned ceil_div(unsigned const dividend, unsigned const divisor) {
   return (dividend + (divisor - 1)) / divisor;
 }
 
+size_t compute_hash(int32_t item_1, int32_t item_2);
 }  // namespace shared
 
 ////////// std::endian //////////

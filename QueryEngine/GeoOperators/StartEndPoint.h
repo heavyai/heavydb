@@ -22,9 +22,7 @@ namespace spatial_type {
 
 class StartEndPoint : public Codegen {
  public:
-  StartEndPoint(const Analyzer::GeoOperator* geo_operator,
-                const Catalog_Namespace::Catalog* catalog)
-      : Codegen(geo_operator, catalog) {
+  StartEndPoint(const Analyzer::GeoOperator* geo_operator) : Codegen(geo_operator) {
     CHECK_EQ(operator_->size(), size_t(1));
     // nulls not supported yet
     this->is_nullable_ = false;

@@ -27,9 +27,9 @@ using RenderGroupAnalyzerMap = std::map<int, import_export::RenderGroupAnalyzer>
 
 struct ConverterCreateParameter {
   size_t num_rows;
-  const Catalog_Namespace::Catalog& cat;
   const TargetMetaInfo source;
   const ColumnDescriptor* target;
+  const Catalog_Namespace::Catalog& target_cat;
   const SQLTypeInfo& type;
   bool can_be_null;
   StringDictionaryProxy* literals_dictionary;

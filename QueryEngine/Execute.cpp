@@ -186,10 +186,9 @@ extern std::unique_ptr<llvm::Module> read_llvm_module_from_ir_string(
 namespace {
 // This function is notably different from that in RelAlgExecutor because it already
 // expects SPI values and therefore needs to avoid that transformation.
-void prepare_string_dictionaries(const std::unordered_set<PhysicalInput>& phys_inputs,
-                                 const Catalog_Namespace::Catalog& catalog) {
-  for (const auto [col_id, table_id] : phys_inputs) {
-    foreign_storage::populate_string_dictionary(table_id, col_id, catalog);
+void prepare_string_dictionaries(const std::unordered_set<PhysicalInput>& phys_inputs) {
+  for (const auto [col_id, table_id, db_id] : phys_inputs) {
+    foreign_storage::populate_string_dictionary(table_id, col_id, db_id);
   }
 }
 
@@ -203,12 +202,12 @@ bool is_empty_table(Fragmenter_Namespace::AbstractFragmenter* fragmenter) {
 namespace foreign_storage {
 // Foreign tables skip the population of dictionaries during metadata scan.  This function
 // will populate a dictionary's missing entries by fetching any unpopulated chunks.
-void populate_string_dictionary(const int32_t table_id,
-                                const int32_t col_id,
-                                const Catalog_Namespace::Catalog& catalog) {
+void populate_string_dictionary(int32_t table_id, int32_t col_id, int32_t db_id) {
+  const auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
   if (const auto foreign_table = dynamic_cast<const ForeignTable*>(
-          catalog.getMetadataForTable(table_id, false))) {
-    const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
+          catalog->getMetadataForTable(table_id, false))) {
+    const auto col_desc = catalog->getMetadataForColumn(table_id, col_id);
     if (col_desc->columnType.is_dict_encoded_type()) {
       auto& fragmenter = foreign_table->fragmenter;
       CHECK(fragmenter != nullptr);
@@ -216,7 +215,7 @@ void populate_string_dictionary(const int32_t table_id,
         return;
       }
       for (const auto& frag : fragmenter->getFragmentsForQuery().fragments) {
-        ChunkKey chunk_key = {catalog.getDatabaseId(), table_id, col_id, frag.fragmentId};
+        ChunkKey chunk_key = {db_id, table_id, col_id, frag.fragmentId};
         // If the key is sharded across leaves, only populate fragments that are sharded
         // to this leaf.
         if (key_does_not_shard_to_leaf(chunk_key)) {
@@ -229,7 +228,7 @@ void populate_string_dictionary(const int32_t table_id,
           // When this goes out of scope it will stay in CPU cache but become
           // evictable
           auto chunk = Chunk_NS::Chunk::getChunk(col_desc,
-                                                 &(catalog.getDataMgr()),
+                                                 &(catalog->getDataMgr()),
                                                  chunk_key,
                                                  Data_Namespace::CPU_LEVEL,
                                                  0,
@@ -257,7 +256,6 @@ Executor::Executor(const ExecutorId executor_id,
     , max_gpu_slab_size_(max_gpu_slab_size)
     , debug_dir_(debug_dir)
     , debug_file_(debug_file)
-    , catalog_(nullptr)
     , data_mgr_(data_mgr)
     , temporary_tables_(nullptr)
     , input_table_info_cache_(this) {
@@ -527,44 +525,48 @@ size_t Executor::getArenaBlockSize() {
 }
 
 StringDictionaryProxy* Executor::getStringDictionaryProxy(
-    const int dict_id_in,
+    const shared::StringDictKey& dict_id_in,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool with_generation) const {
   CHECK(row_set_mem_owner);
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
-  return row_set_mem_owner->getOrAddStringDictProxy(
-      dict_id_in, with_generation, catalog_);
+  return row_set_mem_owner->getOrAddStringDictProxy(dict_id_in, with_generation);
 }
 
 StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
-    const int dict_id_in,
-    const bool with_generation,
-    const Catalog_Namespace::Catalog* catalog) {
-  const int dict_id{dict_id_in < 0 ? REGULAR_DICT(dict_id_in) : dict_id_in};
-  CHECK(catalog);
-  const auto dd = catalog->getMetadataForDict(dict_id);
-  if (dd) {
-    CHECK(dd->stringDict);
-    CHECK_LE(dd->dictNBits, 32);
-    const int64_t generation =
-        with_generation ? string_dictionary_generations_.getGeneration(dict_id) : -1;
-    return addStringDict(dd->stringDict, dict_id, generation);
+    const shared::StringDictKey& dict_key_in,
+    const bool with_generation) {
+  const int dict_id{dict_key_in.dict_id < 0 ? REGULAR_DICT(dict_key_in.dict_id)
+                                            : dict_key_in.dict_id};
+  const auto catalog =
+      Catalog_Namespace::SysCatalog::instance().getCatalog(dict_key_in.db_id);
+  if (catalog) {
+    const auto dd = catalog->getMetadataForDict(dict_id);
+    if (dd) {
+      auto dict_key = dict_key_in;
+      dict_key.dict_id = dict_id;
+      CHECK(dd->stringDict);
+      CHECK_LE(dd->dictNBits, 32);
+      const int64_t generation =
+          with_generation ? string_dictionary_generations_.getGeneration(dict_key) : -1;
+      return addStringDict(dd->stringDict, dict_key, generation);
+    }
   }
   CHECK_EQ(dict_id, DictRef::literalsDictId);
   if (!lit_str_dict_proxy_) {
-    DictRef literal_dict_ref(catalog->getDatabaseId(), DictRef::literalsDictId);
+    DictRef literal_dict_ref(dict_key_in.db_id, DictRef::literalsDictId);
     std::shared_ptr<StringDictionary> tsd = std::make_shared<StringDictionary>(
         literal_dict_ref, "", false, true, g_cache_string_hash);
-    lit_str_dict_proxy_ =
-        std::make_shared<StringDictionaryProxy>(tsd, literal_dict_ref.dictId, 0);
+    lit_str_dict_proxy_ = std::make_shared<StringDictionaryProxy>(
+        tsd, shared::StringDictKey{literal_dict_ref.dbId, literal_dict_ref.dictId}, 0);
   }
   return lit_str_dict_proxy_.get();
 }
 
 const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
-    const int source_dict_id,
-    const int dest_dict_id,
+    const shared::StringDictKey& source_dict_key,
+    const shared::StringDictKey& dest_dict_key,
     const RowSetMemoryOwner::StringTranslationType translation_type,
     const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -572,12 +574,8 @@ const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
   CHECK(row_set_mem_owner);
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
-  return row_set_mem_owner->getOrAddStringProxyTranslationMap(source_dict_id,
-                                                              dest_dict_id,
-                                                              with_generation,
-                                                              translation_type,
-                                                              string_op_infos,
-                                                              catalog_);
+  return row_set_mem_owner->getOrAddStringProxyTranslationMap(
+      source_dict_key, dest_dict_key, with_generation, translation_type, string_op_infos);
 }
 
 const StringDictionaryProxy::IdMap*
@@ -601,7 +599,7 @@ Executor::getJoinIntersectionStringProxyTranslationMap(
 
 const StringDictionaryProxy::TranslationMap<Datum>*
 Executor::getStringProxyNumericTranslationMap(
-    const int source_dict_id,
+    const shared::StringDictKey& source_dict_key,
     const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool with_generation) const {
@@ -609,19 +607,17 @@ Executor::getStringProxyNumericTranslationMap(
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
   return row_set_mem_owner->getOrAddStringProxyNumericTranslationMap(
-      source_dict_id, with_generation, string_op_infos, catalog_);
+      source_dict_key, with_generation, string_op_infos);
 }
 
 const StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
-    const int source_dict_id_in,
-    const int dest_dict_id_in,
+    const shared::StringDictKey& source_dict_key_in,
+    const shared::StringDictKey& dest_dict_key_in,
     const bool with_generation,
     const RowSetMemoryOwner::StringTranslationType translation_type,
-    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
-    const Catalog_Namespace::Catalog* catalog) {
-  const auto source_proxy =
-      getOrAddStringDictProxy(source_dict_id_in, with_generation, catalog);
-  auto dest_proxy = getOrAddStringDictProxy(dest_dict_id_in, with_generation, catalog);
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
+  const auto source_proxy = getOrAddStringDictProxy(source_dict_key_in, with_generation);
+  const auto dest_proxy = getOrAddStringDictProxy(dest_dict_key_in, with_generation);
   if (translation_type == RowSetMemoryOwner::StringTranslationType::SOURCE_INTERSECTION) {
     return addStringProxyIntersectionTranslationMap(
         source_proxy, dest_proxy, string_op_infos);
@@ -632,12 +628,10 @@ const StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTransl
 
 const StringDictionaryProxy::TranslationMap<Datum>*
 RowSetMemoryOwner::getOrAddStringProxyNumericTranslationMap(
-    const int source_dict_id_in,
+    const shared::StringDictKey& source_dict_key_in,
     const bool with_generation,
-    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
-    const Catalog_Namespace::Catalog* catalog) {
-  const auto source_proxy =
-      getOrAddStringDictProxy(source_dict_id_in, with_generation, catalog);
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
+  const auto source_proxy = getOrAddStringDictProxy(source_dict_key_in, with_generation);
   return addStringProxyNumericTranslationMap(source_proxy, string_op_infos);
 }
 
@@ -656,8 +650,7 @@ bool Executor::isCPUOnly() const {
 
 const ColumnDescriptor* Executor::getColumnDescriptor(
     const Analyzer::ColumnVar* col_var) const {
-  return get_column_descriptor_maybe(
-      col_var->get_column_id(), col_var->get_table_id(), *catalog_);
+  return get_column_descriptor_maybe(col_var->getColumnKey());
 }
 
 const ColumnDescriptor* Executor::getPhysicalColumnDescriptor(
@@ -667,16 +660,9 @@ const ColumnDescriptor* Executor::getPhysicalColumnDescriptor(
   if (!cd || n > cd->columnType.get_physical_cols()) {
     return nullptr;
   }
-  return get_column_descriptor_maybe(
-      col_var->get_column_id() + n, col_var->get_table_id(), *catalog_);
-}
-
-const Catalog_Namespace::Catalog* Executor::getCatalog() const {
-  return catalog_;
-}
-
-void Executor::setCatalog(const Catalog_Namespace::Catalog* catalog) {
-  catalog_ = catalog;
+  auto column_key = col_var->getColumnKey();
+  column_key.column_id += n;
+  return get_column_descriptor_maybe(column_key);
 }
 
 const std::shared_ptr<RowSetMemoryOwner> Executor::getRowSetMemoryOwner() const {
@@ -687,33 +673,36 @@ const TemporaryTables* Executor::getTemporaryTables() const {
   return temporary_tables_;
 }
 
-Fragmenter_Namespace::TableInfo Executor::getTableInfo(const int table_id) const {
-  return input_table_info_cache_.getTableInfo(table_id);
+Fragmenter_Namespace::TableInfo Executor::getTableInfo(
+    const shared::TableKey& table_key) const {
+  return input_table_info_cache_.getTableInfo(table_key);
 }
 
-const TableGeneration& Executor::getTableGeneration(const int table_id) const {
-  return table_generations_.getGeneration(table_id);
+const TableGeneration& Executor::getTableGeneration(
+    const shared::TableKey& table_key) const {
+  return table_generations_.getGeneration(table_key);
 }
 
 ExpressionRange Executor::getColRange(const PhysicalInput& phys_input) const {
   return agg_col_range_cache_.getColRange(phys_input);
 }
 
-size_t Executor::getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetch) const {
+size_t Executor::getNumBytesForFetchedRow(
+    const std::set<shared::TableKey>& table_ids_to_fetch) const {
   size_t num_bytes = 0;
   if (!plan_state_) {
     return 0;
   }
-  for (const auto& fetched_col_pair : plan_state_->columns_to_fetch_) {
-    if (table_ids_to_fetch.count(fetched_col_pair.first) == 0) {
+  for (const auto& fetched_col : plan_state_->columns_to_fetch_) {
+    if (table_ids_to_fetch.count({fetched_col.db_id, fetched_col.table_id}) == 0) {
       continue;
     }
 
-    if (fetched_col_pair.first < 0) {
+    if (fetched_col.table_id < 0) {
       num_bytes += 8;
     } else {
-      const auto cd =
-          catalog_->getMetadataForColumn(fetched_col_pair.first, fetched_col_pair.second);
+      const auto cd = Catalog_Namespace::get_metadata_for_column(
+          {fetched_col.db_id, fetched_col.table_id, fetched_col.column_id});
       const auto& ti = cd->columnType;
       const auto sz = ti.get_size();
       if (sz < 0) {
@@ -745,7 +734,6 @@ bool Executor::hasLazyFetchColumns(
 std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
     const std::vector<Analyzer::Expr*>& target_exprs) const {
   CHECK(plan_state_);
-  CHECK(catalog_);
   std::vector<ColumnLazyFetchInfo> col_lazy_fetch_info;
   for (const auto target_expr : target_exprs) {
     if (!plan_state_->isLazyFetchColumn(target_expr)) {
@@ -754,22 +742,19 @@ std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
     } else {
       const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
       CHECK(col_var);
-      auto col_id = col_var->get_column_id();
       auto rte_idx = (col_var->get_rte_idx() == -1) ? 0 : col_var->get_rte_idx();
-      auto cd = (col_var->get_table_id() > 0)
-                    ? get_column_descriptor(col_id, col_var->get_table_id(), *catalog_)
-                    : nullptr;
+      const auto cd = get_column_descriptor_maybe(col_var->getColumnKey());
       if (cd && IS_GEO(cd->columnType.get_type())) {
         // Geo coords cols will be processed in sequence. So we only need to track the
         // first coords col in lazy fetch info.
         {
-          auto cd0 =
-              get_column_descriptor(col_id + 1, col_var->get_table_id(), *catalog_);
-          auto col0_ti = cd0->columnType;
+          auto col_key = col_var->getColumnKey();
+          col_key.column_id += 1;
+          const auto cd0 = get_column_descriptor(col_key);
+          const auto col0_ti = cd0->columnType;
           CHECK(!cd0->isVirtualCol);
-          auto col0_var = makeExpr<Analyzer::ColumnVar>(
-              col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
-          auto local_col0_id = plan_state_->getLocalColumnId(col0_var.get(), false);
+          const auto col0_var = makeExpr<Analyzer::ColumnVar>(col0_ti, col_key, rte_idx);
+          const auto local_col0_id = plan_state_->getLocalColumnId(col0_var.get(), false);
           col_lazy_fetch_info.emplace_back(
               ColumnLazyFetchInfo{true, local_col0_id, col0_ti});
         }
@@ -934,7 +919,7 @@ std::vector<int8_t> Executor::serializeLiterals(
         break;
       }
       case 6: {
-        const auto p = boost::get<std::pair<std::string, int>>(&lit);
+        const auto p = boost::get<std::pair<std::string, shared::StringDictKey>>(&lit);
         CHECK(p);
         const auto str_id =
             g_enable_string_functions
@@ -1303,7 +1288,6 @@ ResultSetPtr Executor::resultsUnion(SharedKernelContext& shared_context,
                                        ExecutorDeviceType::CPU,
                                        QueryMemoryDescriptor(),
                                        row_set_mem_owner_,
-                                       catalog_,
                                        blockSize(),
                                        gridSize());
   }
@@ -1336,7 +1320,6 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
                                        ExecutorDeviceType::CPU,
                                        QueryMemoryDescriptor(),
                                        nullptr,
-                                       catalog_,
                                        blockSize(),
                                        gridSize());
   }
@@ -1393,7 +1376,6 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
                                                   ExecutorDeviceType::CPU,
                                                   query_mem_desc,
                                                   row_set_mem_owner,
-                                                  catalog_,
                                                   blockSize(),
                                                   gridSize());
     auto result_storage = reduced_results->allocateStorage(plan_state_->init_agg_vals_);
@@ -1510,15 +1492,16 @@ size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos
   }
 }
 
-std::string get_table_name(const InputDescriptor& input_desc,
-                           const Catalog_Namespace::Catalog& cat) {
+std::string get_table_name(const InputDescriptor& input_desc) {
   const auto source_type = input_desc.getSourceType();
   if (source_type == InputSourceType::TABLE) {
-    const auto td = cat.getMetadataForTable(input_desc.getTableId());
+    const auto& table_key = input_desc.getTableKey();
+    CHECK_GT(table_key.table_id, 0);
+    const auto td = Catalog_Namespace::get_metadata_for_table(table_key);
     CHECK(td);
     return td->tableName;
   } else {
-    return "$TEMPORARY_TABLE" + std::to_string(-input_desc.getTableId());
+    return "$TEMPORARY_TABLE" + std::to_string(-input_desc.getTableKey().table_id);
   }
 }
 
@@ -1532,7 +1515,6 @@ inline size_t getDeviceBasedScanLimit(const ExecutorDeviceType device_type,
 
 void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
                            const std::vector<InputTableInfo>& table_infos,
-                           const Catalog_Namespace::Catalog& cat,
                            const ExecutorDeviceType device_type,
                            const int device_count) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
@@ -1557,7 +1539,7 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
     std::vector<std::string> table_names;
     const auto& input_descs = ra_exe_unit.input_descs;
     for (const auto& input_desc : input_descs) {
-      table_names.push_back(get_table_name(input_desc, cat));
+      table_names.push_back(get_table_name(input_desc));
     }
     if (!ra_exe_unit.scan_limit) {
       throw WatchdogException(
@@ -1578,11 +1560,11 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
 
 size_t get_loop_join_size(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit) {
-  const auto inner_table_id = ra_exe_unit.input_descs.back().getTableId();
+  const auto inner_table_key = ra_exe_unit.input_descs.back().getTableKey();
 
   std::optional<size_t> inner_table_idx;
   for (size_t i = 0; i < query_infos.size(); ++i) {
-    if (query_infos[i].table_id == inner_table_id) {
+    if (query_infos[i].table_key == inner_table_key) {
       inner_table_idx = i;
       break;
     }
@@ -1637,7 +1619,7 @@ std::string ra_exec_unit_desc_for_caching(const RelAlgExecutionUnit& ra_exe_unit
   std::ostringstream os;
   for (const auto& input_col_desc : ra_exe_unit.input_col_descs) {
     const auto& scan_desc = input_col_desc->getScanDesc();
-    os << scan_desc.getTableId() << "," << input_col_desc->getColId() << ","
+    os << scan_desc.getTableKey() << "," << input_col_desc->getColId() << ","
        << scan_desc.getNestLevel();
   }
   if (!ra_exe_unit.simple_quals.empty()) {
@@ -1687,7 +1669,7 @@ std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_uni
   os << "\n\tTable/Col/Levels: ";
   for (const auto& input_col_desc : ra_exe_unit.input_col_descs) {
     const auto& scan_desc = input_col_desc->getScanDesc();
-    os << "(" << scan_desc.getTableId() << ", " << input_col_desc->getColId() << ", "
+    os << "(" << scan_desc.getTableKey() << ", " << input_col_desc->getColId() << ", "
        << scan_desc.getNestLevel() << ") ";
   }
   if (!ra_exe_unit.simple_quals.empty()) {
@@ -1762,7 +1744,6 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                        const RelAlgExecutionUnit& ra_exe_unit_in,
                                        const CompilationOptions& co,
                                        const ExecutionOptions& eo,
-                                       const Catalog_Namespace::Catalog& cat,
                                        RenderInfo* render_info,
                                        const bool has_cardinality_estimation,
                                        ColumnCacheMap& column_cache) {
@@ -1786,7 +1767,6 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                       ra_exe_unit_in,
                                       co,
                                       eo,
-                                      cat,
                                       row_set_mem_owner_,
                                       render_info,
                                       has_cardinality_estimation,
@@ -1808,7 +1788,6 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                             replace_scan_limit(ra_exe_unit_in, e.new_scan_limit_),
                             co,
                             eo,
-                            cat,
                             row_set_mem_owner_,
                             render_info,
                             has_cardinality_estimation,
@@ -1832,7 +1811,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     const RelAlgExecutionUnit& ra_exe_unit_in,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
-    const Catalog_Namespace::Catalog& cat,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     RenderInfo* render_info,
     const bool has_cardinality_estimation,
@@ -1987,7 +1965,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      ExecutorDeviceType::CPU,
                                      QueryMemoryDescriptor(),
                                      nullptr,
-                                     catalog_,
                                      blockSize(),
                                      gridSize());
 }
@@ -2025,7 +2002,7 @@ void Executor::executeWorkUnitPerFragment(
   }
   CHECK(query_mem_desc_owned);
   CHECK_EQ(size_t(1), ra_exe_unit.input_descs.size());
-  const auto table_id = ra_exe_unit.input_descs[0].getTableId();
+  const auto table_key = ra_exe_unit.input_descs[0].getTableKey();
   const auto& outer_fragments = table_info.info.fragments;
 
   std::set<size_t> fragment_indexes;
@@ -2048,7 +2025,7 @@ void Executor::executeWorkUnitPerFragment(
     for (auto fragment_index : fragment_indexes) {
       // We may want to consider in the future allowing this to execute on devices other
       // than CPU
-      FragmentsList fragments_list{{table_id, {fragment_index}}};
+      FragmentsList fragments_list{{table_key, {fragment_index}}};
       ExecutionKernel kernel(ra_exe_unit,
                              co.device_type,
                              /*device_id=*/0,
@@ -2076,8 +2053,7 @@ ResultSetPtr Executor::executeTableFunction(
     const TableFunctionExecutionUnit exe_unit,
     const std::vector<InputTableInfo>& table_infos,
     const CompilationOptions& co,
-    const ExecutionOptions& eo,
-    const Catalog_Namespace::Catalog& cat) {
+    const ExecutionOptions& eo) {
   INJECT_TIMER(Exec_executeTableFunction);
   if (eo.just_validate) {
     QueryMemoryDescriptor query_mem_desc(this,
@@ -2090,7 +2066,6 @@ ResultSetPtr Executor::executeTableFunction(
         co.device_type,
         ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
         this->getRowSetMemoryOwner(),
-        this->getCatalog(),
         this->blockSize(),
         this->gridSize());
   }
@@ -2164,9 +2139,9 @@ void Executor::addTransientStringLiterals(
         if (!expr) {
           return;
         }
-        const auto dict_id = dict_id_visitor.visit(expr);
-        if (dict_id >= 0) {
-          auto sdp = getStringDictionaryProxy(dict_id, row_set_mem_owner, true);
+        const auto& dict_key = dict_id_visitor.visit(expr);
+        if (dict_key.dict_id >= 0) {
+          auto sdp = getStringDictionaryProxy(dict_key, row_set_mem_owner, true);
           CHECK(sdp);
           TransientStringLiteralsVisitor visitor(sdp, this);
           visitor.visit(expr);
@@ -2330,7 +2305,6 @@ ResultSetPtr build_row_for_empty_input(
                                         device_type,
                                         query_mem_desc,
                                         row_set_mem_owner,
-                                        executor->getCatalog(),
                                         executor->blockSize(),
                                         executor->gridSize());
   rs->allocateStorage();
@@ -2363,7 +2337,7 @@ ResultSetPtr Executor::collectAllDeviceResults(
   }
   const auto shard_count =
       device_type == ExecutorDeviceType::GPU
-          ? GroupByAndAggregate::shard_count_for_top_groups(ra_exe_unit, *catalog_)
+          ? GroupByAndAggregate::shard_count_for_top_groups(ra_exe_unit)
           : 0;
 
   if (shard_count && !result_per_device.empty()) {
@@ -2476,7 +2450,6 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
                                                     first_result_set->getDeviceType(),
                                                     top_query_mem_desc,
                                                     first_result_set->getRowSetMemOwner(),
-                                                    catalog_,
                                                     blockSize(),
                                                     gridSize());
   auto top_storage = top_result_set->allocateStorage();
@@ -2505,15 +2478,15 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
   return top_result_set;
 }
 
-std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinCond()
-    const {
-  std::unordered_map<int, const Analyzer::BinOper*> id_to_cond;
+std::unordered_map<shared::TableKey, const Analyzer::BinOper*>
+Executor::getInnerTabIdToJoinCond() const {
+  std::unordered_map<shared::TableKey, const Analyzer::BinOper*> id_to_cond;
   const auto& join_info = plan_state_->join_info_;
   CHECK_EQ(join_info.equi_join_tautologies_.size(), join_info.join_hash_tables_.size());
   for (size_t i = 0; i < join_info.join_hash_tables_.size(); ++i) {
-    int inner_table_id = join_info.join_hash_tables_[i]->getInnerTableId();
+    const auto& inner_table_key = join_info.join_hash_tables_[i]->getInnerTableId();
     id_to_cond.insert(
-        std::make_pair(inner_table_id, join_info.equi_join_tautologies_[i].get()));
+        std::make_pair(inner_table_key, join_info.equi_join_tautologies_[i].get()));
   }
   return id_to_cond;
 }
@@ -2574,7 +2547,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                              g_inner_join_fragment_skipping,
                                              this);
   if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
-    checkWorkUnitWatchdog(ra_exe_unit, table_infos, *catalog_, device_type, device_count);
+    checkWorkUnitWatchdog(ra_exe_unit, table_infos, device_type, device_count);
   }
 
   if (use_multifrag_kernel) {
@@ -2615,7 +2588,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
 
     if (!ra_exe_unit.use_bump_allocator && allow_single_frag_table_opt &&
         (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) &&
-        table_infos.size() == 1 && table_infos.front().table_id > 0) {
+        table_infos.size() == 1 && table_infos.front().table_key.table_id > 0) {
       const auto max_frag_size =
           table_infos.front().info.getFragmentNumTuplesUpperBound();
       if (max_frag_size < query_mem_desc.getEntryCount()) {
@@ -2723,15 +2696,15 @@ std::vector<size_t> Executor::getTableFragmentIndices(
     const ExecutorDeviceType device_type,
     const size_t table_idx,
     const size_t outer_frag_idx,
-    std::map<int, const TableFragments*>& selected_tables_fragments,
-    const std::unordered_map<int, const Analyzer::BinOper*>&
+    std::map<shared::TableKey, const TableFragments*>& selected_tables_fragments,
+    const std::unordered_map<shared::TableKey, const Analyzer::BinOper*>&
         inner_table_id_to_join_condition) {
-  const int table_id = ra_exe_unit.input_descs[table_idx].getTableId();
-  auto table_frags_it = selected_tables_fragments.find(table_id);
+  const auto& table_key = ra_exe_unit.input_descs[table_idx].getTableKey();
+  auto table_frags_it = selected_tables_fragments.find(table_key);
   CHECK(table_frags_it != selected_tables_fragments.end());
   const auto& outer_input_desc = ra_exe_unit.input_descs[0];
   const auto outer_table_fragments_it =
-      selected_tables_fragments.find(outer_input_desc.getTableId());
+      selected_tables_fragments.find(outer_input_desc.getTableKey());
   const auto outer_table_fragments = outer_table_fragments_it->second;
   CHECK(outer_table_fragments_it != selected_tables_fragments.end());
   CHECK_LT(outer_frag_idx, outer_table_fragments->size());
@@ -2764,7 +2737,7 @@ bool Executor::skipFragmentPair(
     const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
     const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
     const int table_idx,
-    const std::unordered_map<int, const Analyzer::BinOper*>&
+    const std::unordered_map<shared::TableKey, const Analyzer::BinOper*>&
         inner_table_id_to_join_condition,
     const RelAlgExecutionUnit& ra_exe_unit,
     const ExecutorDeviceType device_type) {
@@ -2773,7 +2746,7 @@ bool Executor::skipFragmentPair(
   }
   CHECK(table_idx >= 0 &&
         static_cast<size_t>(table_idx) < ra_exe_unit.input_descs.size());
-  const int inner_table_id = ra_exe_unit.input_descs[table_idx].getTableId();
+  const auto& inner_table_key = ra_exe_unit.input_descs[table_idx].getTableKey();
   // Both tables need to be sharded the same way.
   if (outer_fragment_info.shard == -1 || inner_fragment_info.shard == -1 ||
       outer_fragment_info.shard == inner_fragment_info.shard) {
@@ -2782,7 +2755,7 @@ bool Executor::skipFragmentPair(
   const Analyzer::BinOper* join_condition{nullptr};
   if (ra_exe_unit.join_quals.empty()) {
     CHECK(!inner_table_id_to_join_condition.empty());
-    auto condition_it = inner_table_id_to_join_condition.find(inner_table_id);
+    auto condition_it = inner_table_id_to_join_condition.find(inner_table_key);
     CHECK(condition_it != inner_table_id_to_join_condition.end());
     join_condition = condition_it->second;
     CHECK(join_condition);
@@ -2807,9 +2780,8 @@ bool Executor::skipFragmentPair(
   size_t shard_count{0};
   if (dynamic_cast<const Analyzer::ExpressionTuple*>(
           join_condition->get_left_operand())) {
-    auto inner_outer_pairs = HashJoin::normalizeColumnPairs(
-                                 join_condition, *getCatalog(), getTemporaryTables())
-                                 .first;
+    auto inner_outer_pairs =
+        HashJoin::normalizeColumnPairs(join_condition, getTemporaryTables()).first;
     shard_count = BaselineJoinHashTable::getShardCountForCondition(
         join_condition, this, inner_outer_pairs);
   } else {
@@ -2823,21 +2795,20 @@ bool Executor::skipFragmentPair(
 
 namespace {
 
-const ColumnDescriptor* try_get_column_descriptor(const InputColDescriptor* col_desc,
-                                                  const Catalog_Namespace::Catalog& cat) {
-  const int table_id = col_desc->getScanDesc().getTableId();
-  const int col_id = col_desc->getColId();
-  return get_column_descriptor_maybe(col_id, table_id, cat);
+const ColumnDescriptor* try_get_column_descriptor(const InputColDescriptor* col_desc) {
+  const auto& table_key = col_desc->getScanDesc().getTableKey();
+  const auto col_id = col_desc->getColId();
+  return get_column_descriptor_maybe({table_key, col_id});
 }
 
 }  // namespace
 
-std::map<size_t, std::vector<uint64_t>> get_table_id_to_frag_offsets(
+std::map<shared::TableKey, std::vector<uint64_t>> get_table_id_to_frag_offsets(
     const std::vector<InputDescriptor>& input_descs,
-    const std::map<int, const TableFragments*>& all_tables_fragments) {
-  std::map<size_t, std::vector<uint64_t>> tab_id_to_frag_offsets;
+    const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments) {
+  std::map<shared::TableKey, std::vector<uint64_t>> tab_id_to_frag_offsets;
   for (auto& desc : input_descs) {
-    const auto fragments_it = all_tables_fragments.find(desc.getTableId());
+    const auto fragments_it = all_tables_fragments.find(desc.getTableKey());
     CHECK(fragments_it != all_tables_fragments.end());
     const auto& fragments = *fragments_it->second;
     std::vector<uint64_t> frag_offsets(fragments.size(), 0);
@@ -2845,7 +2816,7 @@ std::map<size_t, std::vector<uint64_t>> get_table_id_to_frag_offsets(
       frag_offsets[i] = off;
       off += fragments[i].getNumTuples();
     }
-    tab_id_to_frag_offsets.insert(std::make_pair(desc.getTableId(), frag_offsets));
+    tab_id_to_frag_offsets.insert(std::make_pair(desc.getTableKey(), frag_offsets));
   }
   return tab_id_to_frag_offsets;
 }
@@ -2855,7 +2826,7 @@ Executor::getRowCountAndOffsetForAllFrags(
     const RelAlgExecutionUnit& ra_exe_unit,
     const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
     const std::vector<InputDescriptor>& input_descs,
-    const std::map<int, const TableFragments*>& all_tables_fragments) {
+    const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments) {
   std::vector<std::vector<int64_t>> all_num_rows;
   std::vector<std::vector<uint64_t>> all_frag_offsets;
   const auto tab_id_to_frag_offsets =
@@ -2870,7 +2841,7 @@ Executor::getRowCountAndOffsetForAllFrags(
     for (size_t tab_idx = 0; tab_idx < input_descs.size(); ++tab_idx) {
       const auto frag_id = ra_exe_unit.union_all ? 0 : selected_frag_ids[tab_idx];
       const auto fragments_it =
-          all_tables_fragments.find(input_descs[tab_idx].getTableId());
+          all_tables_fragments.find(input_descs[tab_idx].getTableKey());
       CHECK(fragments_it != all_tables_fragments.end());
       const auto& fragments = *fragments_it->second;
       if (ra_exe_unit.join_quals.empty() || tab_idx == 0 ||
@@ -2885,7 +2856,7 @@ Executor::getRowCountAndOffsetForAllFrags(
         num_rows.push_back(total_row_count);
       }
       const auto frag_offsets_it =
-          tab_id_to_frag_offsets.find(input_descs[tab_idx].getTableId());
+          tab_id_to_frag_offsets.find(input_descs[tab_idx].getTableKey());
       CHECK(frag_offsets_it != tab_id_to_frag_offsets.end());
       const auto& offsets = frag_offsets_it->second;
       CHECK_LT(frag_id, offsets.size());
@@ -2912,9 +2883,9 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
        plan_state_->isLazyFetchColumn(inner_col_desc))) {
     return false;
   }
-  const int table_id = inner_col_desc.getScanDesc().getTableId();
+  const auto& table_key = inner_col_desc.getScanDesc().getTableKey();
   CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
-  CHECK_EQ(table_id, selected_fragments[nest_level].table_id);
+  CHECK_EQ(table_key, selected_fragments[nest_level].table_key);
   const auto& fragments = selected_fragments[nest_level].fragment_ids;
   return fragments.size() > 1;
 }
@@ -2926,14 +2897,14 @@ bool Executor::needLinearizeAllFragments(
     const FragmentsList& selected_fragments,
     const Data_Namespace::MemoryLevel memory_level) const {
   const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
-  const int table_id = inner_col_desc.getScanDesc().getTableId();
+  const auto& table_key = inner_col_desc.getScanDesc().getTableKey();
   CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
-  CHECK_EQ(table_id, selected_fragments[nest_level].table_id);
+  CHECK_EQ(table_key, selected_fragments[nest_level].table_key);
   const auto& fragments = selected_fragments[nest_level].fragment_ids;
   auto need_linearize =
       cd->columnType.is_array() ||
       (cd->columnType.is_string() && !cd->columnType.is_dict_encoded_type());
-  return table_id > 0 && need_linearize && fragments.size() > 1;
+  return table_key.table_id > 0 && need_linearize && fragments.size() > 1;
 }
 
 std::ostream& operator<<(std::ostream& os, FetchResult const& fetch_result) {
@@ -2947,9 +2918,8 @@ FetchResult Executor::fetchChunks(
     const RelAlgExecutionUnit& ra_exe_unit,
     const int device_id,
     const Data_Namespace::MemoryLevel memory_level,
-    const std::map<int, const TableFragments*>& all_tables_fragments,
+    const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments,
     const FragmentsList& selected_fragments,
-    const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks,
     DeviceAllocator* device_allocator,
@@ -2992,13 +2962,13 @@ FetchResult Executor::fetchChunks(
         throw QueryExecutionError(ERR_INTERRUPTED);
       }
       CHECK(col_id);
-      const int table_id = col_id->getScanDesc().getTableId();
-      const auto cd = try_get_column_descriptor(col_id.get(), cat);
+      const auto cd = try_get_column_descriptor(col_id.get());
       if (cd && cd->isVirtualCol) {
         CHECK_EQ("rowid", cd->columnName);
         continue;
       }
-      const auto fragments_it = all_tables_fragments.find(table_id);
+      const auto& table_key = col_id->getScanDesc().getTableKey();
+      const auto fragments_it = all_tables_fragments.find(table_key);
       CHECK(fragments_it != all_tables_fragments.end());
       const auto fragments = fragments_it->second;
       auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
@@ -3011,9 +2981,9 @@ FetchResult Executor::fetchChunks(
       }
       CHECK_LT(frag_id, fragments->size());
       auto memory_level_for_column = memory_level;
-      auto tbl_col_ids =
-          std::make_pair(col_id->getScanDesc().getTableId(), col_id->getColId());
-      if (plan_state_->columns_to_fetch_.find(tbl_col_ids) ==
+      const shared::ColumnKey tbl_col_key{col_id->getScanDesc().getTableKey(),
+                                          col_id->getColId()};
+      if (plan_state_->columns_to_fetch_.find(tbl_col_key) ==
           plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
@@ -3033,14 +3003,14 @@ FetchResult Executor::fetchChunks(
           if (needLinearizeAllFragments(
                   cd, *col_id, ra_exe_unit, selected_fragments, memory_level)) {
             bool for_lazy_fetch = false;
-            if (plan_state_->columns_to_not_fetch_.find(tbl_col_ids) !=
+            if (plan_state_->columns_to_not_fetch_.find(tbl_col_key) !=
                 plan_state_->columns_to_not_fetch_.end()) {
               for_lazy_fetch = true;
               VLOG(2) << "Try to linearize lazy fetch column (col_id: " << cd->columnId
                       << ", col_name: " << cd->columnName << ")";
             }
             frag_col_buffers[it->second] = column_fetcher.linearizeColumnFragments(
-                table_id,
+                col_id->getScanDesc().getTableKey(),
                 col_id->getColId(),
                 all_tables_fragments,
                 chunks,
@@ -3050,26 +3020,26 @@ FetchResult Executor::fetchChunks(
                 device_allocator,
                 thread_idx);
           } else {
-            frag_col_buffers[it->second] =
-                column_fetcher.getAllTableColumnFragments(table_id,
-                                                          col_id->getColId(),
-                                                          all_tables_fragments,
-                                                          memory_level_for_column,
-                                                          device_id,
-                                                          device_allocator,
-                                                          thread_idx);
+            frag_col_buffers[it->second] = column_fetcher.getAllTableColumnFragments(
+                col_id->getScanDesc().getTableKey(),
+                col_id->getColId(),
+                all_tables_fragments,
+                memory_level_for_column,
+                device_id,
+                device_allocator,
+                thread_idx);
           }
         } else {
-          frag_col_buffers[it->second] =
-              column_fetcher.getOneTableColumnFragment(table_id,
-                                                       frag_id,
-                                                       col_id->getColId(),
-                                                       all_tables_fragments,
-                                                       chunks,
-                                                       chunk_iterators,
-                                                       memory_level_for_column,
-                                                       device_id,
-                                                       device_allocator);
+          frag_col_buffers[it->second] = column_fetcher.getOneTableColumnFragment(
+              col_id->getScanDesc().getTableKey(),
+              frag_id,
+              col_id->getColId(),
+              all_tables_fragments,
+              chunks,
+              chunk_iterators,
+              memory_level_for_column,
+              device_id,
+              device_allocator);
         }
       }
     }
@@ -3081,32 +3051,32 @@ FetchResult Executor::fetchChunks(
 }
 
 namespace {
-size_t get_selected_input_descs_index(int const table_id,
+size_t get_selected_input_descs_index(const shared::TableKey& table_key,
                                       std::vector<InputDescriptor> const& input_descs) {
-  auto const has_table_id = [table_id](InputDescriptor const& input_desc) {
-    return table_id == input_desc.getTableId();
+  auto const has_table_key = [&table_key](InputDescriptor const& input_desc) {
+    return table_key == input_desc.getTableKey();
   };
-  return std::find_if(input_descs.begin(), input_descs.end(), has_table_id) -
+  return std::find_if(input_descs.begin(), input_descs.end(), has_table_key) -
          input_descs.begin();
 }
 
 size_t get_selected_input_col_descs_index(
-    int const table_id,
+    const shared::TableKey& table_key,
     std::list<std::shared_ptr<InputColDescriptor const>> const& input_col_descs) {
-  auto const has_table_id = [table_id](auto const& input_desc) {
-    return table_id == input_desc->getScanDesc().getTableId();
+  auto const has_table_key = [&table_key](auto const& input_desc) {
+    return table_key == input_desc->getScanDesc().getTableKey();
   };
   return std::distance(
       input_col_descs.begin(),
-      std::find_if(input_col_descs.begin(), input_col_descs.end(), has_table_id));
+      std::find_if(input_col_descs.begin(), input_col_descs.end(), has_table_key));
 }
 
 std::list<std::shared_ptr<const InputColDescriptor>> get_selected_input_col_descs(
-    int const table_id,
+    const shared::TableKey& table_key,
     std::list<std::shared_ptr<InputColDescriptor const>> const& input_col_descs) {
   std::list<std::shared_ptr<const InputColDescriptor>> selected;
   for (auto const& input_col_desc : input_col_descs) {
-    if (table_id == input_col_desc->getScanDesc().getTableId()) {
+    if (table_key == input_col_desc->getScanDesc().getTableKey()) {
       selected.push_back(input_col_desc);
     }
   }
@@ -3134,9 +3104,8 @@ FetchResult Executor::fetchUnionChunks(
     const RelAlgExecutionUnit& ra_exe_unit,
     const int device_id,
     const Data_Namespace::MemoryLevel memory_level,
-    const std::map<int, const TableFragments*>& all_tables_fragments,
+    const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments,
     const FragmentsList& selected_fragments,
-    const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks,
     DeviceAllocator* device_allocator,
@@ -3149,15 +3118,14 @@ FetchResult Executor::fetchUnionChunks(
   CHECK_LE(2u, ra_exe_unit.input_descs.size());
   CHECK_LE(2u, ra_exe_unit.input_col_descs.size());
   auto const& input_descs = ra_exe_unit.input_descs;
-  using TableId = int;
-  TableId const selected_table_id = selected_fragments.front().table_id;
+  const auto& selected_table_key = selected_fragments.front().table_key;
   size_t const input_descs_index =
-      get_selected_input_descs_index(selected_table_id, input_descs);
+      get_selected_input_descs_index(selected_table_key, input_descs);
   CHECK_LT(input_descs_index, input_descs.size());
   size_t const input_col_descs_index =
-      get_selected_input_col_descs_index(selected_table_id, ra_exe_unit.input_col_descs);
+      get_selected_input_col_descs_index(selected_table_key, ra_exe_unit.input_col_descs);
   CHECK_LT(input_col_descs_index, ra_exe_unit.input_col_descs.size());
-  VLOG(2) << "selected_table_id=" << selected_table_id
+  VLOG(2) << "selected_table_key=" << selected_table_key
           << " input_descs_index=" << input_descs_index
           << " input_col_descs_index=" << input_col_descs_index
           << " input_descs=" << shared::printContainer(input_descs)
@@ -3165,7 +3133,7 @@ FetchResult Executor::fetchUnionChunks(
           << shared::printContainer(ra_exe_unit.input_col_descs);
 
   std::list<std::shared_ptr<const InputColDescriptor>> selected_input_col_descs =
-      get_selected_input_col_descs(selected_table_id, ra_exe_unit.input_col_descs);
+      get_selected_input_col_descs(selected_table_key, ra_exe_unit.input_col_descs);
   std::vector<std::vector<size_t>> selected_fragments_crossjoin;
 
   buildSelectedFragsMappingForUnion(
@@ -3190,12 +3158,12 @@ FetchResult Executor::fetchUnionChunks(
       plan_state_->global_to_local_col_ids_.size());
   for (const auto& col_id : selected_input_col_descs) {
     CHECK(col_id);
-    const auto cd = try_get_column_descriptor(col_id.get(), cat);
+    const auto cd = try_get_column_descriptor(col_id.get());
     if (cd && cd->isVirtualCol) {
       CHECK_EQ("rowid", cd->columnName);
       continue;
     }
-    const auto fragments_it = all_tables_fragments.find(selected_table_id);
+    const auto fragments_it = all_tables_fragments.find(selected_table_key);
     CHECK(fragments_it != all_tables_fragments.end());
     const auto fragments = fragments_it->second;
     auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
@@ -3207,7 +3175,7 @@ FetchResult Executor::fetchUnionChunks(
       return {};
     }
     MemoryLevel const memory_level_for_column =
-        plan_state_->columns_to_fetch_.count({selected_table_id, col_id->getColId()})
+        plan_state_->columns_to_fetch_.count({selected_table_key, col_id->getColId()})
             ? memory_level
             : Data_Namespace::CPU_LEVEL;
     int8_t const* ptr;
@@ -3215,7 +3183,7 @@ FetchResult Executor::fetchUnionChunks(
       ptr = column_fetcher.getResultSetColumn(
           col_id.get(), memory_level_for_column, device_id, device_allocator, thread_idx);
     } else if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
-      ptr = column_fetcher.getAllTableColumnFragments(selected_table_id,
+      ptr = column_fetcher.getAllTableColumnFragments(selected_table_key,
                                                       col_id->getColId(),
                                                       all_tables_fragments,
                                                       memory_level_for_column,
@@ -3223,7 +3191,7 @@ FetchResult Executor::fetchUnionChunks(
                                                       device_allocator,
                                                       thread_idx);
     } else {
-      ptr = column_fetcher.getOneTableColumnFragment(selected_table_id,
+      ptr = column_fetcher.getOneTableColumnFragment(selected_table_key,
                                                      frag_id,
                                                      col_id->getColId(),
                                                      all_tables_fragments,
@@ -3273,14 +3241,14 @@ void Executor::buildSelectedFragsMapping(
   size_t frag_pos{0};
   const auto& input_descs = ra_exe_unit.input_descs;
   for (size_t scan_idx = 0; scan_idx < input_descs.size(); ++scan_idx) {
-    const int table_id = input_descs[scan_idx].getTableId();
-    CHECK_EQ(selected_fragments[scan_idx].table_id, table_id);
+    const auto& table_key = input_descs[scan_idx].getTableKey();
+    CHECK_EQ(selected_fragments[scan_idx].table_key, table_key);
     selected_fragments_crossjoin.push_back(
         getFragmentCount(selected_fragments, scan_idx, ra_exe_unit));
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
       const auto& input_desc = col_id->getScanDesc();
-      if (input_desc.getTableId() != table_id ||
+      if (input_desc.getTableKey() != table_key ||
           input_desc.getNestLevel() != static_cast<int>(scan_idx)) {
         continue;
       }
@@ -3301,7 +3269,7 @@ void Executor::buildSelectedFragsMappingForUnion(
   const auto& input_descs = ra_exe_unit.input_descs;
   for (size_t scan_idx = 0; scan_idx < input_descs.size(); ++scan_idx) {
     // selected_fragments is set in assignFragsToKernelDispatch execution_kernel.fragments
-    if (selected_fragments[0].table_id == input_descs[scan_idx].getTableId()) {
+    if (selected_fragments[0].table_key == input_descs[scan_idx].getTableKey()) {
       selected_fragments_crossjoin.push_back({size_t(1)});
     }
   }
@@ -3561,7 +3529,7 @@ int32_t Executor::executePlanWithGroupBy(
     const std::vector<std::vector<uint64_t>>& frag_offsets,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id,
-    const int outer_table_id,
+    const shared::TableKey& outer_table_key,
     const int64_t scan_limit,
     const uint32_t start_rowid,
     const uint32_t num_tables,
@@ -3617,7 +3585,7 @@ int32_t Executor::executePlanWithGroupBy(
           << query_exe_context->query_buffers_->num_rows_
           << " query_exe_context->query_mem_desc_.getEntryCount()="
           << query_exe_context->query_mem_desc_.getEntryCount()
-          << " device_id=" << device_id << " outer_table_id=" << outer_table_id
+          << " device_id=" << device_id << " outer_table_key=" << outer_table_key
           << " scan_limit=" << scan_limit << " start_rowid=" << start_rowid
           << " num_tables=" << num_tables;
 
@@ -3628,18 +3596,18 @@ int32_t Executor::executePlanWithGroupBy(
     // Sort outer_table_id first, then pop the rest off of ra_exe_unit_copy.input_descs.
     std::stable_sort(ra_exe_unit_copy.input_descs.begin(),
                      ra_exe_unit_copy.input_descs.end(),
-                     [outer_table_id](auto const& a, auto const& b) {
-                       return a.getTableId() == outer_table_id &&
-                              b.getTableId() != outer_table_id;
+                     [outer_table_key](auto const& a, auto const& b) {
+                       return a.getTableKey() == outer_table_key &&
+                              b.getTableKey() != outer_table_key;
                      });
     while (!ra_exe_unit_copy.input_descs.empty() &&
-           ra_exe_unit_copy.input_descs.back().getTableId() != outer_table_id) {
+           ra_exe_unit_copy.input_descs.back().getTableKey() != outer_table_key) {
       ra_exe_unit_copy.input_descs.pop_back();
     }
     // Filter ra_exe_unit_copy.input_col_descs.
     ra_exe_unit_copy.input_col_descs.remove_if(
-        [outer_table_id](auto const& input_col_desc) {
-          return input_col_desc->getScanDesc().getTableId() != outer_table_id;
+        [outer_table_key](auto const& input_col_desc) {
+          return input_col_desc->getScanDesc().getTableKey() != outer_table_key;
         });
     query_exe_context->query_mem_desc_.setEntryCount(ra_exe_unit_copy.scan_limit);
   }
@@ -3948,11 +3916,11 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 
 namespace {
 void add_deleted_col_to_map(PlanState::DeletedColumnsMap& deleted_cols_map,
-                            const ColumnDescriptor* deleted_cd) {
-  auto deleted_cols_it = deleted_cols_map.find(deleted_cd->tableId);
+                            const ColumnDescriptor* deleted_cd,
+                            const shared::TableKey& table_key) {
+  auto deleted_cols_it = deleted_cols_map.find(table_key);
   if (deleted_cols_it == deleted_cols_map.end()) {
-    CHECK(
-        deleted_cols_map.insert(std::make_pair(deleted_cd->tableId, deleted_cd)).second);
+    CHECK(deleted_cols_map.insert(std::make_pair(table_key, deleted_cd)).second);
   } else {
     CHECK_EQ(deleted_cd, deleted_cols_it->second);
   }
@@ -3971,9 +3939,13 @@ std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDelet
     if (input_table.getSourceType() != InputSourceType::TABLE) {
       continue;
     }
-    const auto td = catalog_->getMetadataForTable(input_table.getTableId());
+    const auto& table_key = input_table.getTableKey();
+    const auto catalog =
+        Catalog_Namespace::SysCatalog::instance().getCatalog(table_key.db_id);
+    CHECK(catalog);
+    const auto td = catalog->getMetadataForTable(table_key.table_id);
     CHECK(td);
-    const auto deleted_cd = catalog_->getDeletedColumnIfRowsDeleted(td);
+    const auto deleted_cd = catalog->getDeletedColumnIfRowsDeleted(td);
     if (!deleted_cd) {
       continue;
     }
@@ -3982,18 +3954,21 @@ std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDelet
     bool found = false;
     for (const auto& input_col : ra_exe_unit_with_deleted.input_col_descs) {
       if (input_col.get()->getColId() == deleted_cd->columnId &&
-          input_col.get()->getScanDesc().getTableId() == deleted_cd->tableId &&
+          input_col.get()->getScanDesc().getTableKey() == table_key &&
           input_col.get()->getScanDesc().getNestLevel() == input_table.getNestLevel()) {
         found = true;
-        add_deleted_col_to_map(deleted_cols_map, deleted_cd);
+        add_deleted_col_to_map(deleted_cols_map, deleted_cd, table_key);
         break;
       }
     }
     if (!found) {
       // add deleted column
-      ra_exe_unit_with_deleted.input_col_descs.emplace_back(new InputColDescriptor(
-          deleted_cd->columnId, deleted_cd->tableId, input_table.getNestLevel()));
-      add_deleted_col_to_map(deleted_cols_map, deleted_cd);
+      ra_exe_unit_with_deleted.input_col_descs.emplace_back(
+          new InputColDescriptor(deleted_cd->columnId,
+                                 deleted_cd->tableId,
+                                 table_key.db_id,
+                                 input_table.getNestLevel()));
+      add_deleted_col_to_map(deleted_cols_map, deleted_cd, table_key);
     }
   }
   return std::make_tuple(ra_exe_unit_with_deleted, deleted_cols_map);
@@ -4039,16 +4014,20 @@ std::tuple<bool, int64_t, int64_t> get_hpt_overflow_underflow_safe_scaled_values
 }  // namespace
 
 bool Executor::isFragmentFullyDeleted(
-    const int table_id,
+    const InputDescriptor& table_desc,
     const Fragmenter_Namespace::FragmentInfo& fragment) {
   // Skip temporary tables
-  if (table_id < 0) {
+  const auto& table_key = table_desc.getTableKey();
+  if (table_key.table_id < 0) {
     return false;
   }
 
-  const auto td = catalog_->getMetadataForTable(fragment.physicalTableId);
+  const auto catalog =
+      Catalog_Namespace::SysCatalog::instance().getCatalog(table_key.db_id);
+  CHECK(catalog);
+  const auto td = catalog->getMetadataForTable(fragment.physicalTableId);
   CHECK(td);
-  const auto deleted_cd = catalog_->getDeletedColumnIfRowsDeleted(td);
+  const auto deleted_cd = catalog->getDeletedColumnIfRowsDeleted(td);
   if (!deleted_cd) {
     return false;
   }
@@ -4076,7 +4055,7 @@ FragmentSkipStatus Executor::canSkipFragmentForFpQual(
     const Analyzer::ColumnVar* lhs_col,
     const Fragmenter_Namespace::FragmentInfo& fragment,
     const Analyzer::Constant* rhs_const) const {
-  const int col_id = lhs_col->get_column_id();
+  auto col_id = lhs_col->getColumnKey().column_id;
   auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
   if (chunk_meta_it == fragment.getChunkMetadataMap().end()) {
     return FragmentSkipStatus::NOT_SKIPPABLE;
@@ -4137,10 +4116,8 @@ std::pair<bool, int64_t> Executor::skipFragment(
     const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
     const std::vector<uint64_t>& frag_offsets,
     const size_t frag_idx) {
-  const int table_id = table_desc.getTableId();
-
   // First check to see if all of fragment is deleted, in which case we know we can skip
-  if (isFragmentFullyDeleted(table_id, fragment)) {
+  if (isFragmentFullyDeleted(table_desc, fragment)) {
     VLOG(2) << "Skipping deleted fragment with table id: " << fragment.physicalTableId
             << ", fragment id: " << frag_idx;
     return {true, -1};
@@ -4155,14 +4132,14 @@ std::pair<bool, int64_t> Executor::skipFragment(
     }
     const auto lhs = comp_expr->get_left_operand();
     auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
-    if (!lhs_col || !lhs_col->get_table_id() || lhs_col->get_rte_idx()) {
+    if (!lhs_col || !lhs_col->getColumnKey().table_id || lhs_col->get_rte_idx()) {
       // See if lhs is a simple cast that was allowed through normalize_simple_predicate
       auto lhs_uexpr = dynamic_cast<const Analyzer::UOper*>(lhs);
       if (lhs_uexpr) {
         CHECK(lhs_uexpr->get_optype() ==
               kCAST);  // We should have only been passed a cast expression
         lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs_uexpr->get_operand());
-        if (!lhs_col || !lhs_col->get_table_id() || lhs_col->get_rte_idx()) {
+        if (!lhs_col || !lhs_col->getColumnKey().table_id || lhs_col->get_rte_idx()) {
           continue;
         }
       } else {
@@ -4205,17 +4182,18 @@ std::pair<bool, int64_t> Executor::skipFragment(
       continue;
     }
 
-    const int col_id = lhs_col->get_column_id();
+    const int col_id = lhs_col->getColumnKey().column_id;
     auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
     int64_t chunk_min{0};
     int64_t chunk_max{0};
     bool is_rowid{false};
     size_t start_rowid{0};
+    const auto& table_key = table_desc.getTableKey();
     if (chunk_meta_it == fragment.getChunkMetadataMap().end()) {
-      auto cd = get_column_descriptor(col_id, table_id, *catalog_);
+      auto cd = get_column_descriptor({table_key, col_id});
       if (cd->isVirtualCol) {
         CHECK(cd->columnName == "rowid");
-        const auto& table_generation = getTableGeneration(table_id);
+        const auto& table_generation = getTableGeneration(table_key);
         start_rowid = table_generation.start_rowid;
         chunk_min = frag_offsets[frag_idx] + start_rowid;
         chunk_max = frag_offsets[frag_idx + 1] - 1 + start_rowid;
@@ -4371,22 +4349,24 @@ std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(
 AggregatedColRange Executor::computeColRangesCache(
     const std::unordered_set<PhysicalInput>& phys_inputs) {
   AggregatedColRange agg_col_range_cache;
-  CHECK(catalog_);
-  std::unordered_set<int> phys_table_ids;
+  std::unordered_set<shared::TableKey> phys_table_keys;
   for (const auto& phys_input : phys_inputs) {
-    phys_table_ids.insert(phys_input.table_id);
+    phys_table_keys.emplace(phys_input.db_id, phys_input.table_id);
   }
   std::vector<InputTableInfo> query_infos;
-  for (const int table_id : phys_table_ids) {
-    query_infos.emplace_back(InputTableInfo{table_id, getTableInfo(table_id)});
+  for (const auto& table_key : phys_table_keys) {
+    query_infos.emplace_back(InputTableInfo{table_key, getTableInfo(table_key)});
   }
   for (const auto& phys_input : phys_inputs) {
+    auto db_id = phys_input.db_id;
+    auto table_id = phys_input.table_id;
+    auto column_id = phys_input.col_id;
     const auto cd =
-        catalog_->getMetadataForColumn(phys_input.table_id, phys_input.col_id);
+        Catalog_Namespace::get_metadata_for_column({db_id, table_id, column_id});
     CHECK(cd);
     if (ExpressionRange::typeSupportsRange(cd->columnType)) {
-      const auto col_var = boost::make_unique<Analyzer::ColumnVar>(
-          cd->columnType, phys_input.table_id, phys_input.col_id, 0);
+      const auto col_var = std::make_unique<Analyzer::ColumnVar>(
+          cd->columnType, shared::ColumnKey{db_id, table_id, column_id}, 0);
       const auto col_range = getLeafColumnRange(col_var.get(), query_infos, this, false);
       agg_col_range_cache.setColRange(phys_input, col_range);
     }
@@ -4397,22 +4377,23 @@ AggregatedColRange Executor::computeColRangesCache(
 StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
     const std::unordered_set<PhysicalInput>& phys_inputs) {
   StringDictionaryGenerations string_dictionary_generations;
-  CHECK(catalog_);
   // Foreign tables may have not populated dictionaries for encoded columns.  If this is
   // the case then we need to populate them here to make sure that the generations are set
   // correctly.
-  prepare_string_dictionaries(phys_inputs, *catalog_);
+  prepare_string_dictionaries(phys_inputs);
   for (const auto& phys_input : phys_inputs) {
-    const auto cd =
-        catalog_->getMetadataForColumn(phys_input.table_id, phys_input.col_id);
+    const auto catalog =
+        Catalog_Namespace::SysCatalog::instance().getCatalog(phys_input.db_id);
+    CHECK(catalog);
+    const auto cd = catalog->getMetadataForColumn(phys_input.table_id, phys_input.col_id);
     CHECK(cd);
     const auto& col_ti =
         cd->columnType.is_array() ? cd->columnType.get_elem_type() : cd->columnType;
     if (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) {
-      const int dict_id = col_ti.get_comp_param();
-      const auto dd = catalog_->getMetadataForDict(dict_id);
+      const auto& dict_key = col_ti.getStringDictKey();
+      const auto dd = catalog->getMetadataForDict(dict_key.dict_id);
       CHECK(dd && dd->stringDict);
-      string_dictionary_generations.setGeneration(dict_id,
+      string_dictionary_generations.setGeneration(dict_key,
                                                   dd->stringDict->storageEntryCount());
     }
   }
@@ -4420,20 +4401,19 @@ StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
 }
 
 TableGenerations Executor::computeTableGenerations(
-    std::unordered_set<int> phys_table_ids) {
+    const std::unordered_set<shared::TableKey>& phys_table_keys) {
   TableGenerations table_generations;
-  for (const int table_id : phys_table_ids) {
-    const auto table_info = getTableInfo(table_id);
+  for (const auto& table_key : phys_table_keys) {
+    const auto table_info = getTableInfo(table_key);
     table_generations.setGeneration(
-        table_id,
+        table_key,
         TableGeneration{static_cast<int64_t>(table_info.getPhysicalNumTuples()), 0});
   }
   return table_generations;
 }
 
 void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
-                            const std::unordered_set<int>& phys_table_ids) {
-  CHECK(catalog_);
+                            const std::unordered_set<shared::TableKey>& phys_table_ids) {
   row_set_mem_owner_ =
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), cpu_threads());
   row_set_mem_owner_->setDictionaryGenerations(
@@ -4875,11 +4855,11 @@ std::string Executor::dumpCache() const {
   }
   ss << "stringDictGenerations: ";
   for (auto& [key, val] : row_set_mem_owner_->getStringDictionaryGenerations().asMap()) {
-    ss << "{" << key << "} = " << val << ", ";
+    ss << key << " = " << val << ", ";
   }
   ss << "tableGenerations: ";
   for (auto& [key, val] : table_generations_.asMap()) {
-    ss << "{" << key << "} = {" << val.tuple_count << ", " << val.start_rowid << "}, ";
+    ss << key << " = {" << val.tuple_count << ", " << val.start_rowid << "}, ";
   }
   ss << "\n";
   return ss.str();

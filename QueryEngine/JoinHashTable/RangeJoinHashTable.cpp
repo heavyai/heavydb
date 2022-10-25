@@ -88,19 +88,16 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
     throw HashJoinFail("Could not build hash tables for range join | " +
                        range_expr->toString());
   }
-  auto cat = executor->getCatalog();
-  CHECK(cat);
+
   CHECK(range_expr_col_var->get_type_info().is_geometry());
 
-  auto coords_cd = cat->getMetadataForColumn(range_expr_col_var->get_table_id(),
-                                             range_expr_col_var->get_column_id() + 1);
+  auto coords_column_key = range_expr_col_var->getColumnKey();
+  coords_column_key.column_id = coords_column_key.column_id + 1;
+  const auto coords_cd = Catalog_Namespace::get_metadata_for_column(coords_column_key);
   CHECK(coords_cd);
 
-  auto range_join_inner_col_expr =
-      makeExpr<Analyzer::ColumnVar>(coords_cd->columnType,
-                                    coords_cd->tableId,
-                                    coords_cd->columnId,
-                                    range_expr_col_var->get_rte_idx());
+  auto range_join_inner_col_expr = makeExpr<Analyzer::ColumnVar>(
+      coords_cd->columnType, coords_column_key, range_expr_col_var->get_rte_idx());
 
   std::vector<InnerOuter> inner_outer_pairs;
   inner_outer_pairs.emplace_back(
@@ -167,14 +164,12 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
     return;
   }
 
-  VLOG(1) << "Reify with layout " << getHashTypeString(layout)
-          << "for table_id: " << getInnerTableId();
+  const auto& table_key = getInnerTableId();
+  VLOG(1) << "Reify with layout " << getHashTypeString(layout) << "for " << table_key;
 
   std::vector<ColumnsForDevice> columns_per_device;
-  const auto catalog = executor_->getCatalog();
-  CHECK(catalog);
 
-  auto& data_mgr = catalog->getDataMgr();
+  auto data_mgr = executor_->getDataMgr();
   std::vector<std::vector<Fragmenter_Namespace::FragmentInfo>> fragments_per_device;
   std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
   const auto shard_count = shardCount();
@@ -185,7 +180,7 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
             : query_info.fragments);
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
       dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(
-          &data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
+          data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
     }
     // for overlaps join, we need to fetch columns regardless of the availability of
     // cached hash table to calculate various params, i.e., bucket size info todo
@@ -239,15 +234,15 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
   hashtable_cache_key_ = hashtable_access_path_info.hashed_query_plan_dag;
   table_keys_ = hashtable_access_path_info.table_keys;
 
-  auto get_inner_table_id = [&inner_outer_pairs_for_cache_lookup]() {
-    return inner_outer_pairs_for_cache_lookup.front().first->get_table_id();
+  auto get_inner_table_key = [&inner_outer_pairs_for_cache_lookup]() {
+    auto col_var = inner_outer_pairs_for_cache_lookup.front().first;
+    return col_var->getTableKey();
   };
 
   if (table_keys_.empty()) {
+    const auto& inner_table_key = get_inner_table_key();
     table_keys_ = DataRecyclerUtil::getAlternativeTableKeys(
-        composite_key_info_.cache_key_chunks,
-        executor_->getCatalog()->getDatabaseId(),
-        get_inner_table_id());
+        composite_key_info_.cache_key_chunks, inner_table_key);
   }
   CHECK(!table_keys_.empty());
 
@@ -260,7 +255,7 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
                    device_count_);
 
   if (HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_) &&
-      get_inner_table_id() > 0) {
+      get_inner_table_key().table_id > 0) {
     std::vector<size_t> per_device_chunk_key;
     for (int device_id = 0; device_id < device_count_; ++device_id) {
       auto chunk_key_hash = boost::hash_value(composite_key_info_.cache_key_chunks);
@@ -607,7 +602,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
                           num_keys_for_row.size() > 0 ? num_keys_for_row.back() : 0);
   }
 #ifdef HAVE_CUDA
-  auto& data_mgr = executor_->getCatalog()->getDataMgr();
+  auto& data_mgr = *executor_->getDataMgr();
   std::vector<std::vector<uint8_t>> host_hll_buffers(device_count_);
   for (auto& host_hll_buffer : host_hll_buffers) {
     host_hll_buffer.resize(count_distinct_desc.bitmapPaddedSizeBytes());
@@ -749,8 +744,9 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
     if (auto outer_col_var = dynamic_cast<const Analyzer::ColumnVar*>(outer_col)) {
       const auto col_lvs = code_generator.codegen(outer_col, true, co);
       CHECK_EQ(col_lvs.size(), size_t(1));
-      const auto coords_cd = executor_->getCatalog()->getMetadataForColumn(
-          outer_col_var->get_table_id(), outer_col_var->get_column_id() + 1);
+      auto column_key = outer_col_var->getColumnKey();
+      column_key.column_id = column_key.column_id + 1;
+      const auto coords_cd = Catalog_Namespace::get_metadata_for_column(column_key);
       CHECK(coords_cd);
       const auto coords_ti = coords_cd->columnType;
 

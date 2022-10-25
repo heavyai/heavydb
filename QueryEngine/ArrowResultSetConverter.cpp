@@ -1267,7 +1267,7 @@ void ArrowResultSetConverter::initializeColumnBuilder(
       column_builder.builder.reset(new arrow::StringDictionary32Builder());
     }
     // add values to the builder
-    const int dict_id = col_type.get_comp_param();
+    const auto& dict_key = col_type.getStringDictKey();
 
     // ResultSet::rowCount(), unlike ResultSet::entryCount(), will return
     // the actual number of rows in the result set, taking into account
@@ -1276,7 +1276,7 @@ void ArrowResultSetConverter::initializeColumnBuilder(
     // result_set_rows guaranteed > 0 by parent
     CHECK_GT(result_set_rows, 0UL);
 
-    auto sdp = results_->getStringDictionaryProxy(dict_id);
+    const auto sdp = results_->getStringDictionaryProxy(dict_key);
     const size_t dictionary_proxy_entries = sdp->entryCount();
     const double dictionary_to_result_size_ratio =
         static_cast<double>(dictionary_proxy_entries) / result_set_rows;
@@ -1309,7 +1309,7 @@ void ArrowResultSetConverter::initializeColumnBuilder(
               << " for a result set with " << result_set_rows << " rows.";
       column_builder.string_remap_mode =
           ArrowStringRemapMode::ONLY_TRANSIENT_STRINGS_REMAPPED;
-      auto str_list = results_->getStringDictionaryPayloadCopy(dict_id);
+      const auto str_list = results_->getStringDictionaryPayloadCopy(dict_key);
       ARROW_THROW_NOT_OK(str_array_builder.AppendValues(str_list));
 
       // When we fetch the bulk dictionary, we need to also fetch

@@ -17,9 +17,8 @@
 #include "SerializeToSql.h"
 #include "ExternalExecutor.h"
 
-ScalarExprToSql::ScalarExprToSql(const RelAlgExecutionUnit* ra_exe_unit,
-                                 const Catalog_Namespace::Catalog* catalog)
-    : ra_exe_unit_(ra_exe_unit), catalog_(catalog) {}
+ScalarExprToSql::ScalarExprToSql(const RelAlgExecutionUnit* ra_exe_unit)
+    : ra_exe_unit_(ra_exe_unit) {}
 
 std::string ScalarExprToSql::visitVar(const Analyzer::Var* var) const {
   auto it = ra_exe_unit_->groupby_exprs.begin();
@@ -28,9 +27,11 @@ std::string ScalarExprToSql::visitVar(const Analyzer::Var* var) const {
 }
 
 std::string ScalarExprToSql::visitColumnVar(const Analyzer::ColumnVar* col_var) const {
-  return serialize_table_ref(col_var->get_table_id(), catalog_) + "." +
-         serialize_column_ref(
-             col_var->get_table_id(), col_var->get_column_id(), catalog_);
+  const auto& column_key = col_var->getColumnKey();
+  const auto catalog =
+      Catalog_Namespace::SysCatalog::instance().getCatalog(column_key.db_id);
+  return serialize_table_ref(column_key.table_id, catalog.get()) + "." +
+         serialize_column_ref(column_key.table_id, column_key.column_id, catalog.get());
 }
 
 std::string ScalarExprToSql::visitConstant(const Analyzer::Constant* constant) const {
@@ -117,9 +118,8 @@ std::string ScalarExprToSql::visitCaseExpr(const Analyzer::CaseExpr* case_) cons
 namespace {
 
 std::string agg_to_string(const Analyzer::AggExpr* agg_expr,
-                          const RelAlgExecutionUnit* ra_exe_unit,
-                          const Catalog_Namespace::Catalog* catalog) {
-  ScalarExprToSql scalar_expr_to_sql(ra_exe_unit, catalog);
+                          const RelAlgExecutionUnit* ra_exe_unit) {
+  ScalarExprToSql scalar_expr_to_sql(ra_exe_unit);
   const auto agg_type = ::toString(agg_expr->get_aggtype());
   const auto arg =
       agg_expr->get_arg() ? scalar_expr_to_sql.visit(agg_expr->get_arg()) : "*";
@@ -180,7 +180,7 @@ std::string ScalarExprToSql::visitWindowFunction(
 }
 
 std::string ScalarExprToSql::visitAggExpr(const Analyzer::AggExpr* agg) const {
-  return agg_to_string(agg, ra_exe_unit_, catalog_);
+  return agg_to_string(agg, ra_exe_unit_);
 }
 
 std::string ScalarExprToSql::binOpTypeToString(const SQLOps op_type) {
@@ -232,9 +232,8 @@ std::vector<std::string> ScalarExprToSql::visitList(const List& expressions) con
 
 namespace {
 
-std::string where_to_string(const RelAlgExecutionUnit* ra_exe_unit,
-                            const Catalog_Namespace::Catalog* catalog) {
-  ScalarExprToSql scalar_expr_to_sql(ra_exe_unit, catalog);
+std::string where_to_string(const RelAlgExecutionUnit* ra_exe_unit) {
+  ScalarExprToSql scalar_expr_to_sql(ra_exe_unit);
   auto qual_strings = scalar_expr_to_sql.visitList(ra_exe_unit->quals);
   const auto simple_qual_strings =
       scalar_expr_to_sql.visitList(ra_exe_unit->simple_quals);
@@ -243,9 +242,8 @@ std::string where_to_string(const RelAlgExecutionUnit* ra_exe_unit,
   return boost::algorithm::join(qual_strings, " AND ");
 }
 
-std::string join_condition_to_string(const RelAlgExecutionUnit* ra_exe_unit,
-                                     const Catalog_Namespace::Catalog* catalog) {
-  ScalarExprToSql scalar_expr_to_sql(ra_exe_unit, catalog);
+std::string join_condition_to_string(const RelAlgExecutionUnit* ra_exe_unit) {
+  ScalarExprToSql scalar_expr_to_sql(ra_exe_unit);
   std::vector<std::string> qual_strings;
   for (const auto& join_level_quals : ra_exe_unit->join_quals) {
     const auto level_qual_strings = scalar_expr_to_sql.visitList(join_level_quals.quals);
@@ -255,9 +253,8 @@ std::string join_condition_to_string(const RelAlgExecutionUnit* ra_exe_unit,
   return boost::algorithm::join(qual_strings, " AND ");
 }
 
-std::string targets_to_string(const RelAlgExecutionUnit* ra_exe_unit,
-                              const Catalog_Namespace::Catalog* catalog) {
-  ScalarExprToSql scalar_expr_to_sql(ra_exe_unit, catalog);
+std::string targets_to_string(const RelAlgExecutionUnit* ra_exe_unit) {
+  ScalarExprToSql scalar_expr_to_sql(ra_exe_unit);
   std::vector<std::string> target_strings;
   for (const auto target : ra_exe_unit->target_exprs) {
     target_strings.push_back(scalar_expr_to_sql.visit(target));
@@ -265,21 +262,22 @@ std::string targets_to_string(const RelAlgExecutionUnit* ra_exe_unit,
   return boost::algorithm::join(target_strings, ", ");
 }
 
-std::string group_by_to_string(const RelAlgExecutionUnit* ra_exe_unit,
-                               const Catalog_Namespace::Catalog* catalog) {
+std::string group_by_to_string(const RelAlgExecutionUnit* ra_exe_unit) {
   if (ra_exe_unit->groupby_exprs.size() == 1 || !ra_exe_unit->groupby_exprs.front()) {
     return "";
   }
-  ScalarExprToSql scalar_expr_to_sql(ra_exe_unit, catalog);
+  ScalarExprToSql scalar_expr_to_sql(ra_exe_unit);
   const auto group_by_strings = scalar_expr_to_sql.visitList(ra_exe_unit->groupby_exprs);
   return boost::algorithm::join(group_by_strings, ", ");
 }
 
-std::string from_to_string(const RelAlgExecutionUnit* ra_exe_unit,
-                           const Catalog_Namespace::Catalog* catalog) {
+std::string from_to_string(const RelAlgExecutionUnit* ra_exe_unit) {
   std::vector<std::string> from_strings;
   for (const auto& input_desc : ra_exe_unit->input_descs) {
-    const auto table_ref = serialize_table_ref(input_desc.getTableId(), catalog);
+    const auto& table_key = input_desc.getTableKey();
+    const auto catalog =
+        Catalog_Namespace::SysCatalog::instance().getCatalog(table_key.db_id);
+    const auto table_ref = serialize_table_ref(table_key.table_id, catalog.get());
     from_strings.push_back(table_ref);
   }
   return boost::algorithm::join(from_strings, ", ");
@@ -294,6 +292,7 @@ std::string maybe(const std::string& prefix, const std::string& clause) {
 std::string serialize_table_ref(const int table_id,
                                 const Catalog_Namespace::Catalog* catalog) {
   if (table_id >= 0) {
+    CHECK(catalog);
     const auto td = catalog->getMetadataForTable(table_id);
     CHECK(td);
     return td->tableName;
@@ -305,6 +304,7 @@ std::string serialize_column_ref(const int table_id,
                                  const int column_id,
                                  const Catalog_Namespace::Catalog* catalog) {
   if (table_id >= 0) {
+    CHECK(catalog);
     const auto cd = catalog->getMetadataForColumn(table_id, column_id);
     CHECK(cd);
     return cd->columnName;
@@ -312,13 +312,12 @@ std::string serialize_column_ref(const int table_id,
   return "col" + std::to_string(column_id);
 }
 
-ExecutionUnitSql serialize_to_sql(const RelAlgExecutionUnit* ra_exe_unit,
-                                  const Catalog_Namespace::Catalog* catalog) {
-  const auto targets = targets_to_string(ra_exe_unit, catalog);
-  const auto from = from_to_string(ra_exe_unit, catalog);
-  const auto join_on = join_condition_to_string(ra_exe_unit, catalog);
-  const auto where = where_to_string(ra_exe_unit, catalog);
-  const auto group = group_by_to_string(ra_exe_unit, catalog);
+ExecutionUnitSql serialize_to_sql(const RelAlgExecutionUnit* ra_exe_unit) {
+  const auto targets = targets_to_string(ra_exe_unit);
+  const auto from = from_to_string(ra_exe_unit);
+  const auto join_on = join_condition_to_string(ra_exe_unit);
+  const auto where = where_to_string(ra_exe_unit);
+  const auto group = group_by_to_string(ra_exe_unit);
   return {"SELECT " + targets + " FROM " + from + maybe("ON", join_on) +
               maybe("WHERE", where) + maybe("GROUP BY", group),
           from};

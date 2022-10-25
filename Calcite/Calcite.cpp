@@ -419,23 +419,41 @@ void Calcite::updateMetadata(std::string catalog, std::string table) {
   }
 }
 
+namespace {
+void check_db_access(const Catalog_Namespace::SessionInfo& session_info,
+                     const Catalog_Namespace::Catalog& accessed_catalog) {
+  const auto db_name = accessed_catalog.name();
+  DBObject db_object(db_name, DatabaseDBObjectType);
+  db_object.loadKey(accessed_catalog);
+  db_object.setPrivileges(AccessPrivileges::ACCESS);
+
+  const auto& user = session_info.get_currentUser();
+  if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(user, {db_object})) {
+    throw std::runtime_error("Unauthorized Access: user " + user.userLoggable() +
+                             " is not allowed to access database " + db_name + ".");
+  }
+}
+
 void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info,
                               std::vector<std::vector<std::string>> tableOrViewNames,
                               AccessPrivileges tablePrivs,
                               AccessPrivileges viewPrivs) {
-  // TODO MAT this needs to be able to check privileges from other catalogs
-  Catalog_Namespace::Catalog& catalog = session_info.getCatalog();
-
   for (auto tableOrViewName : tableOrViewNames) {
+    // Calcite returns table names in the form of a {table_name, database_name} vector.
+    const auto catalog =
+        Catalog_Namespace::SysCatalog::instance().getCatalog(tableOrViewName[1]);
+    CHECK(catalog);
+    check_db_access(session_info, *catalog);
+
     const TableDescriptor* tableMeta =
-        catalog.getMetadataForTable(tableOrViewName[0], false);
+        catalog->getMetadataForTable(tableOrViewName[0], false);
 
     if (!tableMeta) {
       throw std::runtime_error("unknown table of view: " + tableOrViewName[0]);
     }
 
     DBObjectKey key;
-    key.dbId = catalog.getCurrentDB().dbId;
+    key.dbId = catalog->getCurrentDB().dbId;
     key.permissionType = tableMeta->isView ? DBObjectType::ViewDBObjectType
                                            : DBObjectType::TableDBObjectType;
     key.objectId = tableMeta->tableId;
@@ -457,6 +475,7 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
     }
   }
 }
+}  // namespace
 
 TPlanResult Calcite::process(query_state::QueryStateProxy query_state_proxy,
                              std::string sql_string,
@@ -480,6 +499,7 @@ void Calcite::checkAccessedObjectsPrivileges(
   AccessPrivileges NOOP;
   // check the individual tables
   auto const session_ptr = query_state_proxy->getConstSessionInfo();
+  // TODO: Replace resolved tables vector with a `FullyQualifiedTableName` struct.
   checkPermissionForTables(*session_ptr,
                            plan.primary_accessed_objects.tables_selected_from,
                            AccessPrivileges::SELECT_FROM_TABLE,

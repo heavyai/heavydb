@@ -222,7 +222,7 @@ class TableLockMgrImpl {
     return ret;
   }
 
-  static WriteLock getWriteLockForTable(Catalog_Namespace::Catalog& cat,
+  static WriteLock getWriteLockForTable(const Catalog_Namespace::Catalog& cat,
                                         const std::string& table_name) {
     auto lock = WriteLock(getMutexTracker(cat, table_name));
     // Ensure table still exists after lock is acquired.
@@ -355,7 +355,7 @@ class TableLockMgrImpl {
   std::map<ChunkKey, std::unique_ptr<MutexTracker>> table_mutex_map_;
 
  private:
-  static MutexTracker* getMutexTracker(Catalog_Namespace::Catalog& catalog,
+  static MutexTracker* getMutexTracker(const Catalog_Namespace::Catalog& catalog,
                                        const std::string& table_name) {
     ChunkKey chunk_key{catalog.getDatabaseId(),
                        validateAndGetExistingTableId(catalog, table_name)};
@@ -365,12 +365,12 @@ class TableLockMgrImpl {
     return tracker;
   }
 
-  static void validateExistingTable(Catalog_Namespace::Catalog& catalog,
+  static void validateExistingTable(const Catalog_Namespace::Catalog& catalog,
                                     const std::string& table_name) {
     validateAndGetExistingTableId(catalog, table_name);
   }
 
-  static int32_t validateAndGetExistingTableId(Catalog_Namespace::Catalog& catalog,
+  static int32_t validateAndGetExistingTableId(const Catalog_Namespace::Catalog& catalog,
                                                const std::string& table_name) {
     auto table_id = catalog.getTableId(table_name);
     if (!table_id.has_value()) {

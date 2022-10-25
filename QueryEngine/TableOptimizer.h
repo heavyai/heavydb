@@ -39,7 +39,7 @@ class TableOptimizer {
  public:
   TableOptimizer(const TableDescriptor* td,
                  Executor* executor,
-                 Catalog_Namespace::Catalog& cat);
+                 const Catalog_Namespace::Catalog& cat);
 
   /**
    * @brief Recomputes per-chunk metadata for each fragment in the table.
@@ -95,7 +95,7 @@ class TableOptimizer {
 
   const TableDescriptor* td_;
   Executor* executor_;
-  Catalog_Namespace::Catalog& cat_;
+  const Catalog_Namespace::Catalog& cat_;
 
   // We can use a smaller block size here, since we won't be running projection queries
   static constexpr size_t ROW_SET_SIZE{1000000000};

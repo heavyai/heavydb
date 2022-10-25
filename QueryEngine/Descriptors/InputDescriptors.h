@@ -19,6 +19,8 @@
 
 #include "../Catalog/TableDescriptor.h"
 #include "Logger/Logger.h"
+#include "Shared/DbObjectKeys.h"
+#include "Shared/misc.h"
 #include "Shared/toString.h"
 
 #include <memory>
@@ -27,46 +29,37 @@ enum class InputSourceType { TABLE, RESULT };
 
 class InputDescriptor {
  public:
-  InputDescriptor(const int table_id, const int nest_level)
-      : table_id_(table_id), nest_level_(nest_level) {}
+  InputDescriptor(int32_t db_id, int32_t table_id, int32_t nest_level)
+      : table_key_(db_id, table_id), nest_level_(nest_level) {}
 
   bool operator==(const InputDescriptor& that) const {
-    return table_id_ == that.table_id_ && nest_level_ == that.nest_level_;
+    return table_key_ == that.table_key_ && nest_level_ == that.nest_level_;
   }
 
-  int getTableId() const { return table_id_; }
+  const shared::TableKey& getTableKey() const { return table_key_; }
 
-  int getNestLevel() const { return nest_level_; }
+  int32_t getNestLevel() const { return nest_level_; }
 
-  InputSourceType getSourceType() const {
-    return table_id_ > 0 ? InputSourceType::TABLE : InputSourceType::RESULT;
-  }
+  InputSourceType getSourceType() const;
 
-  size_t hash() const {
-    static_assert(sizeof(table_id_) + sizeof(nest_level_) <= sizeof(size_t));
-    return static_cast<size_t>(table_id_) << 8 * sizeof(nest_level_) |
-           static_cast<size_t>(nest_level_);
-  }
+  size_t hash() const;
 
-  std::string toString() const {
-    return ::typeName(this) + "(table_id=" + std::to_string(table_id_) +
-           ", nest_level=" + std::to_string(nest_level_) + ")";
-  }
+  std::string toString() const;
 
  private:
-  int table_id_;
-  int nest_level_;
+  shared::TableKey table_key_;
+  int32_t nest_level_;
 };
 
 inline std::ostream& operator<<(std::ostream& os, InputDescriptor const& id) {
-  return os << "InputDescriptor(table_id(" << id.getTableId() << "),nest_level("
-            << id.getNestLevel() << "))";
+  return os << "InputDescriptor(db_id(" << id.getTableKey().db_id << "), table_id("
+            << id.getTableKey().table_id << "),nest_level(" << id.getNestLevel() << "))";
 }
 
 class InputColDescriptor final {
  public:
-  InputColDescriptor(const int col_id, const int table_id, const int nest_level)
-      : col_id_(col_id), input_desc_(table_id, nest_level) {}
+  InputColDescriptor(int32_t col_id, int32_t table_id, int32_t db_id, int32_t nest_level)
+      : col_id_(col_id), input_desc_(db_id, table_id, nest_level) {}
 
   bool operator==(const InputColDescriptor& that) const {
     return col_id_ == that.col_id_ && input_desc_ == that.input_desc_;

@@ -64,14 +64,15 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
       }
       return std::make_shared<FixedWidthInt>(ti.get_size());
     case kENCODING_FIXED: {
-      const auto bit_width = col_var->get_comp_param();
+      const auto bit_width = col_var->get_type_info().get_comp_param();
       CHECK_EQ(0, bit_width % 8);
       return std::make_shared<FixedWidthInt>(bit_width / 8);
     }
     case kENCODING_DATE_IN_DAYS: {
       CHECK(ti.is_date_in_days());
-      return col_var->get_comp_param() == 16 ? std::make_shared<FixedWidthSmallDate>(2)
-                                             : std::make_shared<FixedWidthSmallDate>(4);
+      return col_var->get_type_info().get_comp_param() == 16
+                 ? std::make_shared<FixedWidthSmallDate>(2)
+                 : std::make_shared<FixedWidthSmallDate>(4);
     }
     default:
       abort();
@@ -107,40 +108,38 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
                                                        const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const bool hoist_literals = co.hoist_literals;
-  auto col_id = col_var->get_column_id();
   const int rte_idx = adjusted_range_table_index(col_var);
   CHECK_LT(static_cast<size_t>(rte_idx), cgen_state_->frag_offsets_.size());
-  const auto catalog = executor()->getCatalog();
-  CHECK(catalog);
-  if (col_var->get_table_id() > 0) {
-    auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog);
+  const auto& column_key = col_var->getColumnKey();
+  if (column_key.table_id > 0) {
+    const auto cd = get_column_descriptor(column_key);
     if (cd->isVirtualCol) {
       CHECK(cd->columnName == "rowid");
       return {codegenRowId(col_var, co)};
     }
-    auto col_ti = cd->columnType;
+    const auto col_ti = cd->columnType;
     if (col_ti.get_physical_coord_cols() > 0) {
       std::vector<llvm::Value*> cols;
+      const auto col_id = column_key.column_id;
+      auto temp_column_key = column_key;
       for (auto i = 0; i < col_ti.get_physical_coord_cols(); i++) {
-        auto cd0 =
-            get_column_descriptor(col_id + i + 1, col_var->get_table_id(), *catalog);
-        auto col0_ti = cd0->columnType;
+        temp_column_key.column_id = col_id + i + 1;
+        const auto cd0 = get_column_descriptor(temp_column_key);
+        CHECK(cd0);
+        const auto col0_ti = cd0->columnType;
         CHECK(!cd0->isVirtualCol);
-        auto col0_var = makeExpr<Analyzer::ColumnVar>(
-            col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
-        auto col = codegenColVar(col0_var.get(), fetch_column, false, co);
+        const auto col0_var =
+            makeExpr<Analyzer::ColumnVar>(col0_ti, temp_column_key, rte_idx);
+        const auto col = codegenColVar(col0_var.get(), fetch_column, false, co);
         cols.insert(cols.end(), col.begin(), col.end());
         if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
-          plan_state_->columns_to_not_fetch_.insert(
-              std::make_pair(col_var->get_table_id(), col0_var->get_column_id()));
+          plan_state_->columns_to_not_fetch_.insert(temp_column_key);
         }
       }
       if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
-        plan_state_->columns_to_not_fetch_.insert(
-            std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+        plan_state_->columns_to_not_fetch_.insert(column_key);
       } else {
-        plan_state_->columns_to_fetch_.insert(
-            std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+        plan_state_->columns_to_fetch_.insert(column_key);
       }
       return cols;
     }
@@ -177,8 +176,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   // Currently, types can only be different because of different underlying dictionaries.
   if (hash_join_lhs && hash_join_lhs->get_type_info() == col_var->get_type_info()) {
     if (plan_state_->isLazyFetchColumn(col_var)) {
-      plan_state_->columns_to_fetch_.insert(
-          std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+      plan_state_->columns_to_fetch_.insert(col_var->getColumnKey());
     }
     return codegen(hash_join_lhs.get(), fetch_column, co);
   }
@@ -189,8 +187,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
   if (plan_state_->isLazyFetchColumn(col_var)) {
     if (update_query_plan) {
-      plan_state_->columns_to_not_fetch_.insert(
-          std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+      plan_state_->columns_to_not_fetch_.insert(col_var->getColumnKey());
     }
     if (rte_idx > 0) {
       const auto offset = cgen_state_->frag_offsets_[rte_idx];
@@ -381,14 +378,14 @@ llvm::Value* CodeGenerator::codegenRowId(const Analyzer::ColumnVar* col_var,
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto offset_lv = cgen_state_->frag_offsets_[adjusted_range_table_index(col_var)];
   llvm::Value* start_rowid_lv{nullptr};
-  const auto& table_generation = executor()->getTableGeneration(col_var->get_table_id());
+  const auto& table_generation = executor()->getTableGeneration(col_var->getTableKey());
   if (table_generation.start_rowid > 0) {
     // Handle the multi-node case: each leaf receives a start rowid used
     // to offset the local rowid and generate a cluster-wide unique rowid.
     Datum d;
     d.bigintval = table_generation.start_rowid;
     const auto start_rowid = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
-    const auto start_rowid_lvs = codegen(start_rowid.get(), kENCODING_NONE, -1, co);
+    const auto start_rowid_lvs = codegen(start_rowid.get(), kENCODING_NONE, {}, co);
     CHECK_EQ(size_t(1), start_rowid_lvs.size());
     start_rowid_lv = start_rowid_lvs.front();
   }
@@ -546,18 +543,19 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
 
 llvm::Value* CodeGenerator::resolveGroupedColumnReference(
     const Analyzer::ColumnVar* col_var) {
-  auto col_id = col_var->get_column_id();
   if (col_var->get_rte_idx() >= 0) {
     return nullptr;
   }
-  CHECK((col_id == 0) || (col_var->get_rte_idx() >= 0 && col_var->get_table_id() > 0));
+  const auto& column_key = col_var->getColumnKey();
+  CHECK((column_key.column_id == 0) ||
+        (col_var->get_rte_idx() >= 0 && column_key.table_id > 0));
   const auto var = dynamic_cast<const Analyzer::Var*>(col_var);
   CHECK(var);
-  col_id = var->get_varno();
-  CHECK_GE(col_id, 1);
+  const auto var_no = var->get_varno();
+  CHECK_GE(var_no, 1);
   if (var->get_which_row() == Analyzer::Var::kGROUPBY) {
-    CHECK_LE(static_cast<size_t>(col_id), cgen_state_->group_by_expr_cache_.size());
-    return cgen_state_->group_by_expr_cache_[col_id - 1];
+    CHECK_LE(static_cast<size_t>(var_no), cgen_state_->group_by_expr_cache_.size());
+    return cgen_state_->group_by_expr_cache_[var_no - 1];
   }
   return nullptr;
 }

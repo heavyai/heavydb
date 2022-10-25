@@ -42,15 +42,15 @@
 
 #include "tbb/concurrent_hash_map.h"
 
-
 #include "Calcite/Calcite.h"
-#include "Grantee.h"
 #include "DataMgr/DataMgr.h"
+#include "Grantee.h"
 #include "LeafHostInfo.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "OSDependent/heavyai_locks.h"
 #include "ObjectRoleDescriptor.h"
 #include "PkiServer.h"
+#include "Shared/DbObjectKeys.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/heavyai_shared_mutex.h"
 #include "SqliteConnector/SqliteConnector.h"
@@ -172,6 +172,8 @@ class SysCatalog : private CommonFileOperations {
             bool is_new_db,
             bool aggregator,
             const std::vector<LeafHostInfo>& string_dict_hosts);
+
+  bool isInitialized() const;
 
   /**
    * logins (connects) a user against a database.
@@ -522,6 +524,11 @@ class SysCatalog : private CommonFileOperations {
   static std::mutex instance_mutex_;
   static std::unique_ptr<SysCatalog> instance_;
 
+  // Flag used to indicate whether this SysCatalog instance has been initialized. This is
+  // currently used in tests to ensure that QueryRunner and DBHandlerTestFixture are not
+  // re-initializing SysCatalog.
+  bool is_initialized_{false};
+
  public:
   mutable std::unique_ptr<heavyai::DistributedSharedMutex> dcatalogMutex_;
   mutable std::unique_ptr<heavyai::DistributedSharedMutex> dsqliteMutex_;
@@ -537,6 +544,10 @@ class SysCatalog : private CommonFileOperations {
   int32_t next_temporary_user_id_{shared::kTempUserIdRange};
 };
 
+const TableDescriptor* get_metadata_for_table(const ::shared::TableKey& table_key,
+                                              bool populate_fragmenter = true);
+
+const ColumnDescriptor* get_metadata_for_column(const ::shared::ColumnKey& column_key);
 }  // namespace Catalog_Namespace
 
 #endif  // SYS_CATALOG_H

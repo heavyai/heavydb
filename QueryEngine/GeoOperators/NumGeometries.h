@@ -22,9 +22,7 @@ namespace spatial_type {
 
 class NumGeometries : public Codegen {
  public:
-  NumGeometries(const Analyzer::GeoOperator* geo_operator,
-                const Catalog_Namespace::Catalog* catalog)
-      : Codegen(geo_operator, catalog) {}
+  NumGeometries(const Analyzer::GeoOperator* geo_operator) : Codegen(geo_operator) {}
 
   size_t size() const final { return 1; }
 
@@ -83,12 +81,13 @@ class NumGeometries : public Codegen {
     }
 
     // create a new operand which is just the column to count, and codegen it
-    const auto column_id = col_var->get_column_id() + column_offset;
-    auto cd = get_column_descriptor(column_id, col_var->get_table_id(), *cat_);
+    const auto column_id = col_var->getColumnKey().column_id + column_offset;
+    shared::ColumnKey column_key{col_var->getTableKey(), column_id};
+    const auto cd = get_column_descriptor(column_key);
     CHECK(cd);
 
     operand_owned_ = std::make_unique<Analyzer::ColumnVar>(
-        cd->columnType, col_var->get_table_id(), column_id, col_var->get_rte_idx());
+        cd->columnType, column_key, col_var->get_rte_idx());
     return operand_owned_.get();
   }
 

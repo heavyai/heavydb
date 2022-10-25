@@ -405,22 +405,26 @@ struct TColumnRange {
   7: i64 bucket;
   8: double fp_min;
   9: double fp_max;
+  10: i32 db_id;
 }
 
 struct TDictionaryGeneration {
   1: i32 dict_id;
   2: i64 entry_count;
+  3: i32 db_id;
 }
 
 struct TTableGeneration {
   1: i32 table_id;
   2: i64 tuple_count;
   3: i64 start_rowid;
+  4: i32 db_id;
 }
 
 struct TTableCacheStatus {
   1: i32 table_id;
-  4: bool is_cached_on_disk;
+  2: i32 db_id;
+  3: bool is_cached_on_disk;
 }
 
 struct TPendingQuery {

@@ -24,8 +24,11 @@ class UsedColumnExpressions : public ScalarExprVisitor<ScalarCodeGenerator::Colu
   ScalarCodeGenerator::ColumnMap visitColumnVar(
       const Analyzer::ColumnVar* column) const override {
     ScalarCodeGenerator::ColumnMap m;
-    InputColDescriptor input_desc(
-        column->get_column_id(), column->get_table_id(), column->get_rte_idx());
+    const auto& column_key = column->getColumnKey();
+    InputColDescriptor input_desc(column_key.column_id,
+                                  column_key.table_id,
+                                  column_key.db_id,
+                                  column->get_rte_idx());
     m.emplace(input_desc,
               std::static_pointer_cast<Analyzer::ColumnVar>(column->deep_copy()));
     return m;
@@ -61,9 +64,11 @@ ScalarCodeGenerator::ColumnMap ScalarCodeGenerator::prepare(const Analyzer::Expr
   const auto used_columns = visitor.visit(expr);
   std::list<std::shared_ptr<const InputColDescriptor>> global_col_ids;
   for (const auto& used_column : used_columns) {
+    const auto& table_key = used_column.first.getScanDesc().getTableKey();
     global_col_ids.push_back(std::make_shared<InputColDescriptor>(
         used_column.first.getColId(),
-        used_column.first.getScanDesc().getTableId(),
+        table_key.table_id,
+        table_key.db_id,
         used_column.first.getScanDesc().getNestLevel()));
   }
   plan_state_->allocateLocalColumnIds(global_col_ids);

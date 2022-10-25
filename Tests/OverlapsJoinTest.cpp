@@ -737,7 +737,6 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
             column_cache,
             executor,
             HashJoin::normalizeColumnPairs(condition.get(),
-                                           *executor->getCatalog(),
                                            executor->getTemporaryTables())
                 .first,
             device_count,
@@ -841,9 +840,10 @@ class BucketSizeTest : public ::testing::Test {
     CHECK(pts_td);
     const auto pts_cd = catalog->getMetadataForColumn(pts_td->tableId, "pt");
     CHECK(pts_cd);
+    shared::TableKey pt_table_key{catalog->getDatabaseId(), pts_td->tableId};
     auto pt_col_var = std::make_shared<Analyzer::ColumnVar>(
-        pts_cd->columnType, pts_cd->tableId, pts_cd->columnId, 0);
-    query_infos.emplace_back(InputTableInfo{pts_td->tableId, build_table_info({pts_td})});
+        pts_cd->columnType, shared::ColumnKey{pt_table_key, pts_cd->columnId}, 0);
+    query_infos.emplace_back(InputTableInfo{pt_table_key, build_table_info({pts_td})});
 
     const auto poly_td = catalog->getMetadataForTable("bucket_size_poly");
     CHECK(poly_td);
@@ -852,10 +852,10 @@ class BucketSizeTest : public ::testing::Test {
     const auto bounds_cd =
         catalog->getMetadataForColumn(poly_td->tableId, poly_cd->columnId + 4);
     CHECK(bounds_cd && bounds_cd->columnType.is_array());
+    shared::TableKey poly_table_key{catalog->getDatabaseId(), poly_td->tableId};
     auto poly_col_var = std::make_shared<Analyzer::ColumnVar>(
-        bounds_cd->columnType, poly_cd->tableId, bounds_cd->columnId, 1);
-    query_infos.emplace_back(
-        InputTableInfo{poly_td->tableId, build_table_info({poly_td})});
+        bounds_cd->columnType, shared::ColumnKey{poly_table_key, bounds_cd->columnId}, 1);
+    query_infos.emplace_back(InputTableInfo{poly_table_key, build_table_info({poly_td})});
 
     auto condition = std::make_shared<Analyzer::BinOper>(
         kBOOLEAN, kOVERLAPS, kANY, pt_col_var, poly_col_var);
@@ -868,7 +868,6 @@ TEST_F(BucketSizeTest, OverlapsTunerEarlyOut) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
   auto executor = QR::get()->getExecutor();
-  executor->setCatalog(catalog.get());
 
   auto [condition, query_infos] = BucketSizeTest::getOverlapsBuildInfo();
 
@@ -897,7 +896,6 @@ TEST_F(BucketSizeTest, OverlapsTooBig) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
   auto executor = QR::get()->getExecutor();
-  executor->setCatalog(catalog.get());
 
   auto [condition, query_infos] = BucketSizeTest::getOverlapsBuildInfo();
 

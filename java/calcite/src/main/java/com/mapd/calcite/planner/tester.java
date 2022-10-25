@@ -51,7 +51,7 @@ public class tester {
 
     HeavyDBUser mdu = new HeavyDBUser("admin", "passwd", "omnisci", -1, null);
     HeavyDBSchema dbSchema =
-            new HeavyDBSchema("<<PATH_TO_DATA_DIR>>", null, -1, mdu, null);
+            new HeavyDBSchema("<<PATH_TO_DATA_DIR>>", null, -1, mdu, null, null);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()

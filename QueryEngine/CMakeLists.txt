@@ -34,6 +34,7 @@ set(query_engine_source_files
     DateTimeTranslator.cpp
     DateTruncate.cpp
     Descriptors/ColSlotContext.cpp
+    Descriptors/InputDescriptors.cpp
     Descriptors/QueryCompilationDescriptor.cpp
     Descriptors/QueryFragmentDescriptor.cpp
     Descriptors/QueryMemoryDescriptor.cpp
@@ -89,7 +90,6 @@ set(query_engine_source_files
     QueryMemoryInitializer.cpp
     RelAlgDag.cpp
     RelAlgDagSerializer/Serializer.cpp
-    RelAlgDagSerializer/serialization/RelAlgDagSerializer.cpp
     RelLeftDeepInnerJoin.cpp
     RelAlgExecutor.cpp
     RelAlgTranslator.cpp

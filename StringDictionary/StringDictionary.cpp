@@ -115,13 +115,13 @@ constexpr int32_t StringDictionary::INVALID_STR_ID;
 constexpr size_t StringDictionary::MAX_STRLEN;
 constexpr size_t StringDictionary::MAX_STRCOUNT;
 
-StringDictionary::StringDictionary(const DictRef& dict_ref,
+StringDictionary::StringDictionary(const shared::StringDictKey& dict_key,
                                    const std::string& folder,
                                    const bool isTemp,
                                    const bool recover,
                                    const bool materializeHashes,
                                    size_t initial_capacity)
-    : dict_ref_(dict_ref)
+    : dict_key_(dict_key)
     , folder_(folder)
     , str_count_(0)
     , string_id_string_dict_hash_table_(initial_capacity, INVALID_STR_ID)
@@ -309,12 +309,8 @@ void StringDictionary::processDictionaryFutures(
   dictionary_futures.clear();
 }
 
-int32_t StringDictionary::getDbId() const noexcept {
-  return dict_ref_.dbId;
-}
-
-int32_t StringDictionary::getDictId() const noexcept {
-  return dict_ref_.dictId;
+const shared::StringDictKey& StringDictionary::getDictKey() const noexcept {
+  return dict_key_;
 }
 
 /**
@@ -347,13 +343,15 @@ size_t StringDictionary::getNumStringsFromStorage(const size_t storage_slots) co
   return guess + (min_bound > guess ? 1 : 0);
 }
 
-StringDictionary::StringDictionary(const LeafHostInfo& host, const DictRef dict_ref)
-    : dict_ref_(dict_ref)
-    , folder_("DB_" + std::to_string(dict_ref.dbId) + "_DICT_" +
-              std::to_string(dict_ref.dictId))
+StringDictionary::StringDictionary(const LeafHostInfo& host,
+                                   const shared::StringDictKey& dict_key)
+    : dict_key_(dict_key)
+    , folder_("DB_" + std::to_string(dict_key.db_id) + "_DICT_" +
+              std::to_string(dict_key.dict_id))
     , strings_cache_(nullptr)
-    , client_(new StringDictionaryClient(host, dict_ref, true))
-    , client_no_timeout_(new StringDictionaryClient(host, dict_ref, false)) {}
+    , client_(new StringDictionaryClient(host, {dict_key.db_id, dict_key.dict_id}, true))
+    , client_no_timeout_(
+          new StringDictionaryClient(host, {dict_key.db_id, dict_key.dict_id}, false)) {}
 
 StringDictionary::~StringDictionary() noexcept {
   free(CANARY_BUFFER);
@@ -392,9 +390,9 @@ int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
 namespace {
 
 template <class T>
-void throw_encoding_error(std::string_view str, const DictRef& dict_ref) {
+void throw_encoding_error(std::string_view str, const shared::StringDictKey& dict_key) {
   std::ostringstream oss;
-  oss << "The text encoded column using dictionary " << dict_ref.toString()
+  oss << "The text encoded column using dictionary " << dict_key
       << " has exceeded it's limit of " << sizeof(T) * 8 << " bits ("
       << static_cast<size_t>(max_valid_int_value<T>() + 1) << " unique values) "
       << "while attempting to add the new string '" << str << "'. ";
@@ -424,10 +422,11 @@ void throw_encoding_error(std::string_view str, const DictRef& dict_ref) {
   throw std::runtime_error(oss.str());
 }
 
-void throw_string_too_long_error(std::string_view str, const DictRef& dict_ref) {
+void throw_string_too_long_error(std::string_view str,
+                                 const shared::StringDictKey& dict_key) {
   std::ostringstream oss;
   oss << "The string '" << str << " could not be inserted into the dictionary "
-      << dict_ref.toString() << " because it exceeded the maximum allowable "
+      << dict_key << " because it exceeded the maximum allowable "
       << "length of " << StringDictionary::MAX_STRLEN << " characters (string was "
       << str.size() << " characters).";
   LOG(ERROR) << oss.str();
@@ -549,7 +548,7 @@ size_t StringDictionary::getBulk(const std::vector<String>& string_vec,
               continue;
             }
             if (input_string.size() > StringDictionary::MAX_STRLEN) {
-              throw_string_too_long_error(input_string, dict_ref_);
+              throw_string_too_long_error(input_string, dict_key_);
             }
             const string_dict_hash_t input_string_hash = hash_string(input_string);
             uint32_t hash_bucket = computeBucket(
@@ -616,7 +615,7 @@ void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
     // need to add record to dictionary
     // check there is room
     if (str_count_ > static_cast<size_t>(max_valid_int_value<T>())) {
-      throw_encoding_error<T>(input_string, dict_ref_);
+      throw_encoding_error<T>(input_string, dict_key_);
     }
     CHECK_LT(str_count_, MAX_STRCOUNT)
         << "Maximum number (" << str_count_
@@ -700,7 +699,7 @@ void StringDictionary::getOrAddBulkParallel(const std::vector<String>& input_str
     // Did not find string, so need to add record to dictionary
     // First check there is room
     if (shadow_str_count > static_cast<size_t>(max_valid_int_value<T>())) {
-      throw_encoding_error<T>(input_string, dict_ref_);
+      throw_encoding_error<T>(input_string, dict_key_);
     }
     CHECK_LT(shadow_str_count, MAX_STRCOUNT)
         << "Maximum number (" << shadow_str_count
@@ -1791,17 +1790,12 @@ std::vector<int32_t> StringDictionary::buildDictionaryTranslationMap(
   return translated_ids;
 }
 
-void order_translation_locks(const int32_t source_db_id,
-                             const int32_t source_dict_id,
-                             const int32_t dest_db_id,
-                             const int32_t dest_dict_id,
+void order_translation_locks(const shared::StringDictKey& source_dict_key,
+                             const shared::StringDictKey& dest_dict_key,
                              std::shared_lock<std::shared_mutex>& source_read_lock,
                              std::shared_lock<std::shared_mutex>& dest_read_lock) {
-  const bool dicts_are_same =
-      source_db_id == dest_db_id && source_dict_id == dest_dict_id;
-  const bool source_dict_is_locked_first =
-      source_db_id < dest_db_id ||
-      (source_db_id == dest_db_id && source_dict_id < dest_dict_id);
+  const bool dicts_are_same = (source_dict_key == dest_dict_key);
+  const bool source_dict_is_locked_first = (source_dict_key < dest_dict_key);
   if (dicts_are_same) {
     // dictionaries are same, only take one write lock
     dest_read_lock.lock();
@@ -1847,12 +1841,8 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   std::shared_lock<std::shared_mutex> source_read_lock(rw_mutex_, std::defer_lock);
   std::shared_lock<std::shared_mutex> dest_read_lock(dest_dict->rw_mutex_,
                                                      std::defer_lock);
-  order_translation_locks(getDbId(),
-                          getDictId(),
-                          dest_dict->getDbId(),
-                          dest_dict->getDictId(),
-                          source_read_lock,
-                          dest_read_lock);
+  order_translation_locks(
+      getDictKey(), dest_dict->getDictKey(), source_read_lock, dest_read_lock);
 
   // For both source and destination dictionaries we cap the max
   // entries to be translated/translated to at the supplied
@@ -2033,12 +2023,16 @@ void StringDictionary::buildDictionaryNumericTranslationMap(
 
 void translate_string_ids(std::vector<int32_t>& dest_ids,
                           const LeafHostInfo& dict_server_host,
-                          const DictRef dest_dict_ref,
+                          const shared::StringDictKey& dest_dict_key,
                           const std::vector<int32_t>& source_ids,
-                          const DictRef source_dict_ref,
+                          const shared::StringDictKey& source_dict_key,
                           const int32_t dest_generation) {
-  DictRef temp_dict_ref(-1, -1);
-  StringDictionaryClient string_client(dict_server_host, temp_dict_ref, false);
-  string_client.translate_string_ids(
-      dest_ids, dest_dict_ref, source_ids, source_dict_ref, dest_generation);
+  shared::StringDictKey temp_dict_key(-1, -1);
+  StringDictionaryClient string_client(
+      dict_server_host, {temp_dict_key.db_id, temp_dict_key.dict_id}, false);
+  string_client.translate_string_ids(dest_ids,
+                                     {dest_dict_key.db_id, dest_dict_key.dict_id},
+                                     source_ids,
+                                     {source_dict_key.db_id, source_dict_key.dict_id},
+                                     dest_generation);
 }

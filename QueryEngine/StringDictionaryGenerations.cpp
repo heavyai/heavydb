@@ -18,23 +18,24 @@
 
 #include "Logger/Logger.h"
 
-void StringDictionaryGenerations::setGeneration(const uint32_t id,
+void StringDictionaryGenerations::setGeneration(const shared::StringDictKey& dict_key,
                                                 const uint64_t generation) {
-  id_to_generation_.emplace(id, generation);
+  dict_key_to_generation_.emplace(dict_key, generation);
 }
 
-void StringDictionaryGenerations::updateGeneration(const uint32_t id,
+void StringDictionaryGenerations::updateGeneration(const shared::StringDictKey& dict_key,
                                                    const uint64_t generation) {
-  CHECK(id_to_generation_.count(id));
-  id_to_generation_[id] = generation;
+  CHECK(dict_key_to_generation_.count(dict_key));
+  dict_key_to_generation_[dict_key] = generation;
 }
 
-int64_t StringDictionaryGenerations::getGeneration(const uint32_t id) const {
-  const auto it = id_to_generation_.find(id);
-  if (it != id_to_generation_.end()) {
+int64_t StringDictionaryGenerations::getGeneration(
+    const shared::StringDictKey& id) const {
+  const auto it = dict_key_to_generation_.find(id);
+  if (it != dict_key_to_generation_.end()) {
     return it->second;
   }
-  if (id == TRANSIENT_DICT_ID) {
+  if (id.isTransientDict()) {
     return 0;
   }
   // This happens when the query didn't need to do any translation from string
@@ -47,10 +48,11 @@ int64_t StringDictionaryGenerations::getGeneration(const uint32_t id) const {
   return -1;
 }
 
-const std::unordered_map<uint32_t, uint64_t>& StringDictionaryGenerations::asMap() const {
-  return id_to_generation_;
+const std::unordered_map<shared::StringDictKey, uint64_t>&
+StringDictionaryGenerations::asMap() const {
+  return dict_key_to_generation_;
 }
 
 void StringDictionaryGenerations::clear() {
-  decltype(id_to_generation_)().swap(id_to_generation_);
+  decltype(dict_key_to_generation_)().swap(dict_key_to_generation_);
 }

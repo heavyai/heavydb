@@ -38,8 +38,10 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
   const int rte_idx = it_rte_idx->second;
   const auto& in_metainfo = source->getOutputMetainfo();
 
+  int32_t db_id{0};
   int32_t table_id{0};
   int column_id{-1};
+  const Catalog_Namespace::Catalog* catalog{nullptr};
   const auto scan_source = dynamic_cast<const RelScan*>(source);
   if (scan_source) {
     // We're at leaf (scan) level and not supposed to have input metadata,
@@ -49,7 +51,10 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
     const auto td = scan_source->getTableDescriptor();
     table_id = td->tableId;
 
-    const auto gcd = cat_.getMetadataForColumnBySpi(table_id, rex_input->getIndex() + 1);
+    catalog = &scan_source->getCatalog();
+    db_id = catalog->getDatabaseId();
+    const auto gcd =
+        catalog->getMetadataForColumnBySpi(table_id, rex_input->getIndex() + 1);
     CHECK(gcd);
     ti = gcd->columnType;
     column_id = gcd->columnId;
@@ -86,33 +91,38 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
   // physical columns as required. Bounds column will be added if present and requested.
   if (expand_geo_col) {
     for (auto i = 0; i < ti.get_physical_coord_cols(); i++) {
-      const auto pcd = cat_.getMetadataForColumnBySpi(
+      CHECK(catalog);
+      const auto pcd = catalog->getMetadataForColumnBySpi(
           table_id, SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(), i + 1));
       auto pcol_ti = pcd->columnType;
       args.push_back(std::make_shared<Analyzer::ColumnVar>(
-          pcol_ti, table_id, pcd->columnId, rte_idx));
+          pcol_ti, shared::ColumnKey{db_id, table_id, pcd->columnId}, rte_idx));
     }
   } else {
-    args.push_back(
-        std::make_shared<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx));
+    args.push_back(std::make_shared<Analyzer::ColumnVar>(
+        ti, shared::ColumnKey{db_id, table_id, column_id}, rte_idx));
   }
   if (with_bounds && ti.has_bounds()) {
-    const auto bounds_cd = cat_.getMetadataForColumnBySpi(
+    CHECK(catalog);
+    const auto bounds_cd = catalog->getMetadataForColumnBySpi(
         table_id,
         SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(),
                                   ti.get_physical_coord_cols() + 1));
     auto bounds_ti = bounds_cd->columnType;
     args.push_back(std::make_shared<Analyzer::ColumnVar>(
-        bounds_ti, table_id, bounds_cd->columnId, rte_idx));
+        bounds_ti, shared::ColumnKey{db_id, table_id, bounds_cd->columnId}, rte_idx));
   }
   if (with_render_group && ti.has_render_group()) {
-    const auto render_group_cd = cat_.getMetadataForColumnBySpi(
+    CHECK(catalog);
+    const auto render_group_cd = catalog->getMetadataForColumnBySpi(
         table_id,
         SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(),
                                   ti.get_physical_coord_cols() + 2));
     auto render_group_ti = render_group_cd->columnType;
     args.push_back(std::make_shared<Analyzer::ColumnVar>(
-        render_group_ti, table_id, render_group_cd->columnId, rte_idx));
+        render_group_ti,
+        shared::ColumnKey{db_id, table_id, render_group_cd->columnId},
+        rte_idx));
   }
   return args;
 }

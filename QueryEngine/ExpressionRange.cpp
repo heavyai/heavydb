@@ -169,8 +169,7 @@ ExpressionRange apply_simple_quals(
         continue;
       }
     }
-    if (qual_col->get_table_id() != col_expr->get_table_id() ||
-        qual_col->get_column_id() != col_expr->get_column_id()) {
+    if (qual_col->getColumnKey() != col_expr->getColumnKey()) {
       continue;
     }
     const Analyzer::Expr* right_operand = qual_bin_oper->get_right_operand();
@@ -524,7 +523,7 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
                                    const Executor* executor,
                                    const bool is_outer_join_proj) {
   bool has_nulls = is_outer_join_proj;
-  int col_id = col_expr->get_column_id();
+  int col_id = col_expr->getColumnKey().column_id;
   const auto& col_phys_ti = col_expr->get_type_info().is_array()
                                 ? col_expr->get_type_info().get_elem_type()
                                 : col_expr->get_type_info();
@@ -548,7 +547,7 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
     case kDOUBLE: {
       std::optional<size_t> ti_idx;
       for (size_t i = 0; i < query_infos.size(); ++i) {
-        if (col_expr->get_table_id() == query_infos[i].table_id) {
+        if (col_expr->getTableKey() == query_infos[i].table_key) {
           ti_idx = i;
           break;
         }
@@ -641,9 +640,10 @@ ExpressionRange getExpressionRange(
   CHECK_GE(rte_idx, 0);
   CHECK_LT(static_cast<size_t>(rte_idx), query_infos.size());
   bool is_outer_join_proj = rte_idx > 0 && executor->containsLeftDeepOuterJoin();
-  if (col_expr->get_table_id() > 0) {
+  const auto& column_key = col_expr->getColumnKey();
+  if (column_key.table_id > 0) {
     auto col_range = executor->getColRange(
-        PhysicalInput{col_expr->get_column_id(), col_expr->get_table_id()});
+        PhysicalInput{column_key.column_id, column_key.table_id, column_key.db_id});
     if (is_outer_join_proj) {
       col_range.setHasNulls();
     }
@@ -678,11 +678,12 @@ ExpressionRange getExpressionRange(const Analyzer::StringOper* string_oper_expr,
     // means the output type is a dictionary-encoded text col and is not transient, as
     // transient dictionaries are used as targets for on-the-fly translation
     CHECK(expr_ti.is_dict_encoded_string());
-    const auto dict_id = expr_ti.get_comp_param();
-    CHECK_NE(dict_id, TRANSIENT_DICT_ID);
+
+    const auto& dict_key = expr_ti.getStringDictKey();
+    CHECK_NE(dict_key.dict_id, TRANSIENT_DICT_ID);
     const auto translation_map = executor->getStringProxyTranslationMap(
-        dict_id,
-        dict_id,
+        dict_key,
+        dict_key,
         RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
         string_op_infos,
         executor->getRowSetMemoryOwner(),
@@ -829,20 +830,20 @@ ExpressionRange getExpressionRange(
   const auto& ti = u_expr->get_type_info();
   if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
     const auto sdp = executor->getStringDictionaryProxy(
-        ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
+        ti.getStringDictKey(), executor->getRowSetMemoryOwner(), true);
     CHECK(sdp);
     const auto colvar_operand =
         dynamic_cast<const Analyzer::ColumnVar*>(u_expr->get_operand());
     if (colvar_operand) {
       const auto& colvar_ti = colvar_operand->get_type_info();
       if (!(colvar_ti.is_none_encoded_string() &&
-            ti.get_comp_param() == TRANSIENT_DICT_ID)) {
+            ti.getStringDictKey().isTransientDict())) {
         VLOG(1)
             << "Unable to determine expression range for dictionary encoded expression "
             << u_expr->get_operand()->toString() << ", proceeding with invalid range.";
         return ExpressionRange::makeInvalidRange();
       }
-      CHECK_EQ(ti.get_comp_param(), TRANSIENT_DICT_ID);
+      CHECK_EQ(ti.getStringDictKey().dict_id, TRANSIENT_DICT_ID);
       CHECK_EQ(sdp->storageEntryCount(), 0UL);
       const int64_t transient_entries = static_cast<int64_t>(sdp->transientEntryCount());
       int64_t const tuples_upper_bound = static_cast<int64_t>(

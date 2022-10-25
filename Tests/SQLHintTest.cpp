@@ -108,8 +108,7 @@ bool check_serialized_rel_alg_dag(const std::string& query_str,
   CHECK(rel_alg_dag);
   CHECK(is_all_hints_are_registered(rel_alg_dag.get(), expected_hints));
   const auto serialized_dag = Serializer::serializeRelAlgDag(*rel_alg_dag);
-  auto restored_rel_alg_dag =
-      Serializer::deserializeRelAlgDag(*QR::get()->getCatalog(), serialized_dag);
+  auto restored_rel_alg_dag = Serializer::deserializeRelAlgDag(serialized_dag);
   CHECK(restored_rel_alg_dag);
   return is_all_hints_are_registered(restored_rel_alg_dag.get(), expected_hints);
 }

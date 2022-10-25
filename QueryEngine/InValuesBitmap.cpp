@@ -146,7 +146,7 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) co
   }
   CodeGenerator code_generator(executor);
   const auto bitset_handle_lvs =
-      code_generator.codegenHoistedConstants(constants, kENCODING_NONE, 0);
+      code_generator.codegenHoistedConstants(constants, kENCODING_NONE, {});
   CHECK_EQ(size_t(1), bitset_handle_lvs.size());
   return executor->cgen_state_->emitCall(
       "bit_is_set",

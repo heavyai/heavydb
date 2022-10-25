@@ -28,6 +28,7 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/IRCodegenUtils.h"
 #include "QueryEngine/LLVMGlobalContext.h"
+#include "Shared/DbObjectKeys.h"
 #include "TestHelpers.h"
 
 TEST(CodeGeneratorTest, IntegerConstant) {
@@ -88,10 +89,9 @@ TEST(CodeGeneratorTest, IntegerColumn) {
   co.hoist_literals = false;
 
   SQLTypeInfo ti(kINT, false);
-  int table_id = 1;
-  int column_id = 5;
-  int rte_idx = 0;
-  auto col = makeExpr<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx);
+  shared::ColumnKey column_key{1, 1, 5};
+  int32_t rte_idx = 0;
+  auto col = makeExpr<Analyzer::ColumnVar>(ti, column_key, rte_idx);
   const auto compiled_expr = code_generator.compile(col.get(), true, co);
   verify_function_ir(compiled_expr.func);
   ASSERT_EQ(compiled_expr.inputs.size(), size_t(1));
@@ -115,10 +115,9 @@ TEST(CodeGeneratorTest, IntegerExpr) {
   co.hoist_literals = false;
 
   SQLTypeInfo ti(kINT, false);
-  int table_id = 1;
-  int column_id = 5;
+  shared::ColumnKey column_key{1, 1, 5};
   int rte_idx = 0;
-  auto lhs = makeExpr<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx);
+  auto lhs = makeExpr<Analyzer::ColumnVar>(ti, column_key, rte_idx);
   Datum d;
   d.intval = 42;
   auto rhs = makeExpr<Analyzer::Constant>(kINT, false, d);
@@ -250,10 +249,9 @@ TEST(CodeGeneratorTest, IntegerColumnGPU) {
   co.hoist_literals = false;
 
   SQLTypeInfo ti(kINT, false);
-  int table_id = 1;
-  int column_id = 5;
+  shared::ColumnKey column_key{1, 1, 5};
   int rte_idx = 0;
-  auto col = makeExpr<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx);
+  auto col = makeExpr<Analyzer::ColumnVar>(ti, column_key, rte_idx);
   const auto compiled_expr = code_generator.compile(col.get(), true, co);
   verify_function_ir(compiled_expr.func);
   ASSERT_EQ(compiled_expr.inputs.size(), size_t(1));
@@ -308,10 +306,9 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
   co.hoist_literals = false;
 
   SQLTypeInfo ti(kINT, false);
-  int table_id = 1;
-  int column_id = 5;
+  shared::ColumnKey column_key{1, 1, 5};
   int rte_idx = 0;
-  auto lhs = makeExpr<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx);
+  auto lhs = makeExpr<Analyzer::ColumnVar>(ti, column_key, rte_idx);
   Datum d;
   d.intval = 42;
   auto rhs = makeExpr<Analyzer::Constant>(kINT, false, d);

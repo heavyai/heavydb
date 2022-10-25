@@ -22,9 +22,7 @@ namespace spatial_type {
 
 class NPoints : public Codegen {
  public:
-  NPoints(const Analyzer::GeoOperator* geo_operator,
-          const Catalog_Namespace::Catalog* catalog)
-      : Codegen(geo_operator, catalog) {}
+  NPoints(const Analyzer::GeoOperator* geo_operator) : Codegen(geo_operator) {}
 
   size_t size() const final { return 1; }
 
@@ -45,15 +43,13 @@ class NPoints : public Codegen {
     is_nullable_ = !geo_ti_.get_notnull();
 
     // create a new operand which is just the coords and codegen it
-    const auto coords_column_id = col_var->get_column_id() + 1;  // + 1 for coords
-    auto coords_cd =
-        get_column_descriptor(coords_column_id, col_var->get_table_id(), *cat_);
+    auto column_key = col_var->getColumnKey();
+    column_key.column_id = column_key.column_id + 1;  // + 1 for coords
+    const auto coords_cd = get_column_descriptor(column_key);
     CHECK(coords_cd);
 
-    operand_owned_ = std::make_unique<Analyzer::ColumnVar>(coords_cd->columnType,
-                                                           col_var->get_table_id(),
-                                                           coords_column_id,
-                                                           col_var->get_rte_idx());
+    operand_owned_ = std::make_unique<Analyzer::ColumnVar>(
+        coords_cd->columnType, column_key, col_var->get_rte_idx());
     return operand_owned_.get();
   }
 

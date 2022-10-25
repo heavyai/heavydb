@@ -64,8 +64,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                            table_id_to_node_map);
   } else {
     inner_outer_pairs =
-        HashJoin::normalizeColumnPairs(
-            condition.get(), *executor->getCatalog(), executor->getTemporaryTables())
+        HashJoin::normalizeColumnPairs(condition.get(), executor->getTemporaryTables())
             .first;
   }
   CHECK(!inner_outer_pairs.empty());
@@ -97,8 +96,8 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
   const auto qi_0 = query_infos[0].info.getNumTuplesUpperBound();
   const auto qi_1 = query_infos[1].info.getNumTuplesUpperBound();
 
-  VLOG(1) << "table_id = " << query_infos[0].table_id << " has " << qi_0 << " tuples.";
-  VLOG(1) << "table_id = " << query_infos[1].table_id << " has " << qi_1 << " tuples.";
+  VLOG(1) << "table_key = " << query_infos[0].table_key << " has " << qi_0 << " tuples.";
+  VLOG(1) << "table_key = " << query_infos[1].table_key << " has " << qi_1 << " tuples.";
 
   const auto& query_info =
       get_inner_query_info(HashJoin::getInnerTableId(inner_outer_pairs), query_infos)
@@ -538,8 +537,9 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
   const auto& query_info =
       get_inner_query_info(HashJoin::getInnerTableId(inner_outer_pairs_), query_infos_)
           .info;
-  VLOG(1) << "Reify with layout " << getHashTypeString(layout)
-          << "for table_id: " << HashJoin::getInnerTableId(inner_outer_pairs_);
+  auto [db_id, table_id] = HashJoin::getInnerTableId(inner_outer_pairs_);
+  VLOG(1) << "Reify with layout " << getHashTypeString(layout) << "for db_id: " << db_id
+          << ", table_id: " << table_id;
   if (query_info.fragments.empty()) {
     return;
   }
@@ -653,15 +653,15 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
   hashtable_cache_meta_info_ = hashtable_access_path_info.meta_info;
   table_keys_ = hashtable_access_path_info.table_keys;
 
-  auto get_inner_table_id = [this]() {
-    return inner_outer_pairs_.front().first->get_table_id();
+  auto get_inner_table_key = [this]() {
+    auto col_var = inner_outer_pairs_.front().first;
+    return col_var->getTableKey();
   };
 
   if (table_keys_.empty()) {
+    const auto& table_key = get_inner_table_key();
     table_keys_ = DataRecyclerUtil::getAlternativeTableKeys(
-        composite_key_info_.cache_key_chunks,
-        executor_->getCatalog()->getDatabaseId(),
-        get_inner_table_id());
+        composite_key_info_.cache_key_chunks, table_key);
   }
   CHECK(!table_keys_.empty());
 
@@ -710,7 +710,7 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
                      device_count_);
     std::vector<size_t> per_device_chunk_key;
     if (HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_) &&
-        get_inner_table_id() > 0) {
+        get_inner_table_key().table_id > 0) {
       for (int device_id = 0; device_id < device_count_; ++device_id) {
         auto chunk_key_hash = boost::hash_value(composite_key_info_.cache_key_chunks);
         boost::hash_combine(
@@ -923,7 +923,6 @@ ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDevice(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
     DeviceAllocator* dev_buff_owner) {
-  const auto& catalog = *executor_->getCatalog();
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
 
   std::vector<JoinColumn> join_columns;
@@ -932,8 +931,7 @@ ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDevice(
   std::vector<std::shared_ptr<void>> malloc_owner;
   for (const auto& inner_outer_pair : inner_outer_pairs_) {
     const auto inner_col = inner_outer_pair.first;
-    const auto inner_cd = get_column_descriptor_maybe(
-        inner_col->get_column_id(), inner_col->get_table_id(), catalog);
+    const auto inner_cd = get_column_descriptor_maybe(inner_col->getColumnKey());
     if (inner_cd && inner_cd->isVirtualCol) {
       throw FailedToJoinOnVirtualColumn();
     }
@@ -1503,8 +1501,9 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
     if (const auto outer_geo_col = dynamic_cast<const Analyzer::ColumnVar*>(outer_geo)) {
       const auto outer_geo_col_lvs = code_generator.codegen(outer_geo_col, true, co);
       CHECK_EQ(outer_geo_col_lvs.size(), size_t(1));
-      const auto coords_cd = executor_->getCatalog()->getMetadataForColumn(
-          outer_geo_col->get_table_id(), outer_geo_col->get_column_id() + 1);
+      auto column_key = outer_geo_col->getColumnKey();
+      column_key.column_id = column_key.column_id + 1;
+      const auto coords_cd = Catalog_Namespace::get_metadata_for_column(column_key);
       CHECK(coords_cd);
 
       const auto array_ptr = executor_->cgen_state_->emitExternalCall(
@@ -1599,8 +1598,8 @@ std::vector<llvm::Value*> OverlapsJoinHashTable::codegenManyKey(
 
   const auto outer_col_var = dynamic_cast<const Analyzer::ColumnVar*>(outer_col);
   CHECK(outer_col_var);
-  const auto coords_cd = executor_->getCatalog()->getMetadataForColumn(
-      outer_col_var->get_table_id(), outer_col_var->get_column_id());
+  const auto coords_cd =
+      Catalog_Namespace::get_metadata_for_column(outer_col_var->getColumnKey());
   CHECK(coords_cd);
 
   const auto array_ptr = executor_->cgen_state_->emitExternalCall(
@@ -1829,13 +1828,13 @@ Data_Namespace::MemoryLevel OverlapsJoinHashTable::getEffectiveMemoryLevel(
   return Data_Namespace::MemoryLevel::CPU_LEVEL;
 }
 
-int OverlapsJoinHashTable::getInnerTableId() const noexcept {
+shared::TableKey OverlapsJoinHashTable::getInnerTableId() const noexcept {
   try {
     return HashJoin::getInnerTableId(inner_outer_pairs_);
   } catch (...) {
     CHECK(false);
   }
-  return 0;
+  return {};
 }
 
 std::shared_ptr<HashTable> OverlapsJoinHashTable::initHashTableOnCpuFromCache(

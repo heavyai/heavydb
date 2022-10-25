@@ -91,7 +91,6 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CHECK(executor);
-  executor->setCatalog(catalog.get());
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -103,8 +102,10 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
 
   return HashJoin::getSyntheticInstance(table1,
                                         column1,
+                                        *catalog,
                                         table2,
                                         column2,
+                                        *catalog,
                                         memory_level,
                                         HashType::OneToOne,
                                         device_count,
@@ -118,7 +119,6 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
-  executor->setCatalog(catalog.get());
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -139,7 +139,6 @@ std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
-  executor->setCatalog(catalog.get());
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -363,7 +362,6 @@ TEST(Build, detectProperJoinQual) {
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId).get();
   CHECK(executor);
-  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -407,30 +405,30 @@ TEST(Build, detectProperJoinQual) {
     // case 2: 1 = t12 AND t11 = t21
     // case 3: t22 = 1 AND t11 = t21
     // case 4: 1 = t22 AND t11 = t21
-    auto t11 = getSyntheticColumnVar("table1", "t11", 0, executor);
-    auto t21 = getSyntheticColumnVar("table2", "t21", 1, executor);
+    auto t11 = getSyntheticColumnVar("table1", "t11", 0, *catalog);
+    auto t21 = getSyntheticColumnVar("table2", "t21", 1, *catalog);
     auto qual2 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, t11, t21);
-    auto create_join_qual = [&c, &executor](int case_num) {
+    auto create_join_qual = [&c, catalog](int case_num) {
       std::shared_ptr<Analyzer::ColumnVar> q1_lhs;
       std::shared_ptr<Analyzer::BinOper> qual1;
       switch (case_num) {
         case 1: {
-          q1_lhs = getSyntheticColumnVar("table1", "t12", 0, executor);
+          q1_lhs = getSyntheticColumnVar("table1", "t12", 0, *catalog);
           qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, c, q1_lhs);
           break;
         }
         case 2: {
-          q1_lhs = getSyntheticColumnVar("table1", "t12", 0, executor);
+          q1_lhs = getSyntheticColumnVar("table1", "t12", 0, *catalog);
           qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, q1_lhs, c);
           break;
         }
         case 3: {
-          q1_lhs = getSyntheticColumnVar("table2", "t22", 1, executor);
+          q1_lhs = getSyntheticColumnVar("table2", "t22", 1, *catalog);
           qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, c, q1_lhs);
           break;
         }
         case 4: {
-          q1_lhs = getSyntheticColumnVar("table2", "t22", 1, executor);
+          q1_lhs = getSyntheticColumnVar("table2", "t22", 1, *catalog);
           qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, q1_lhs, c);
           break;
         }
@@ -465,7 +463,6 @@ TEST(Build, KeyedOneToOne) {
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
-  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -493,9 +490,9 @@ TEST(Build, KeyedOneToOne) {
       insert into table2 values (3);
     )");
 
-    auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
-    auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
-    auto b = getSyntheticColumnVar("table2", "b", 1, executor.get());
+    auto a1 = getSyntheticColumnVar("table1", "a1", 0, *catalog);
+    auto a2 = getSyntheticColumnVar("table1", "a2", 0, *catalog);
+    auto b = getSyntheticColumnVar("table2", "b", 1, *catalog);
 
     using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
     auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
@@ -524,7 +521,6 @@ TEST(Build, KeyedOneToMany) {
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
-  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -554,9 +550,9 @@ TEST(Build, KeyedOneToMany) {
       insert into table2 values (3);
     )");
 
-    auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
-    auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
-    auto b = getSyntheticColumnVar("table2", "b", 1, executor.get());
+    auto a1 = getSyntheticColumnVar("table1", "a1", 0, *catalog);
+    auto a2 = getSyntheticColumnVar("table1", "a2", 0, *catalog);
+    auto b = getSyntheticColumnVar("table2", "b", 1, *catalog);
 
     using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
     auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
@@ -585,7 +581,6 @@ TEST(Build, GeoOneToMany1) {
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
-  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -622,8 +617,8 @@ TEST(Build, GeoOneToMany1) {
       insert into my_grid values ('multipolygon(((1 1,2 1,2 2,1 2,1 1)))');
     )");
 
-    auto a1 = getSyntheticColumnVar("my_points", "locations", 0, executor.get());
-    auto a2 = getSyntheticColumnVar("my_grid", "cells", 1, executor.get());
+    auto a1 = getSyntheticColumnVar("my_points", "locations", 0, *catalog);
+    auto a2 = getSyntheticColumnVar("my_grid", "cells", 1, *catalog);
 
     auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kOVERLAPS, kONE, a1, a2);
 
@@ -661,7 +656,6 @@ TEST(Build, GeoOneToMany2) {
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
-  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -690,8 +684,8 @@ TEST(Build, GeoOneToMany2) {
       insert into my_grid values ('multipolygon(((100 0,110 0,110 10,100 10,100 0)))');
     )");
 
-    auto a1 = getSyntheticColumnVar("my_points", "locations", 0, executor.get());
-    auto a2 = getSyntheticColumnVar("my_grid", "cells", 1, executor.get());
+    auto a1 = getSyntheticColumnVar("my_points", "locations", 0, *catalog);
+    auto a2 = getSyntheticColumnVar("my_grid", "cells", 1, *catalog);
 
     auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kOVERLAPS, kONE, a1, a2);
 
@@ -874,7 +868,6 @@ TEST_F(MultiFragmentTest, KeyedOneToOne) {
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
-  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -899,9 +892,9 @@ TEST_F(MultiFragmentTest, KeyedOneToOne) {
       insert into table2 values (3);
     )");
 
-    auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
-    auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
-    auto b = getSyntheticColumnVar("table2", "b", 1, executor.get());
+    auto a1 = getSyntheticColumnVar("table1", "a1", 0, *catalog);
+    auto a2 = getSyntheticColumnVar("table1", "a2", 0, *catalog);
+    auto b = getSyntheticColumnVar("table2", "b", 1, *catalog);
 
     using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
     auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
@@ -931,9 +924,9 @@ TEST_F(MultiFragmentTest, KeyedOneToOne) {
       insert into table4 values (3);
     )");
 
-    a1 = getSyntheticColumnVar("table3", "a1", 0, executor.get());
-    a2 = getSyntheticColumnVar("table3", "a2", 0, executor.get());
-    b = getSyntheticColumnVar("table4", "b", 1, executor.get());
+    a1 = getSyntheticColumnVar("table3", "a1", 0, *catalog);
+    a2 = getSyntheticColumnVar("table3", "a2", 0, *catalog);
+    b = getSyntheticColumnVar("table4", "b", 1, *catalog);
 
     et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
     et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
@@ -963,7 +956,6 @@ TEST_F(MultiFragmentTest, KeyedOneToMany) {
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
-  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -989,9 +981,9 @@ TEST_F(MultiFragmentTest, KeyedOneToMany) {
       insert into table2 values (3);
     )");
 
-    auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
-    auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
-    auto b = getSyntheticColumnVar("table2", "b", 1, executor.get());
+    auto a1 = getSyntheticColumnVar("table1", "a1", 0, *catalog);
+    auto a2 = getSyntheticColumnVar("table1", "a2", 0, *catalog);
+    auto b = getSyntheticColumnVar("table2", "b", 1, *catalog);
 
     using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
     auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
@@ -1020,9 +1012,9 @@ TEST_F(MultiFragmentTest, KeyedOneToMany) {
       insert into table4 values (3);
     )");
 
-    a1 = getSyntheticColumnVar("table3", "a1", 0, executor.get());
-    a2 = getSyntheticColumnVar("table3", "a2", 0, executor.get());
-    b = getSyntheticColumnVar("table4", "b", 1, executor.get());
+    a1 = getSyntheticColumnVar("table3", "a1", 0, *catalog);
+    a2 = getSyntheticColumnVar("table3", "a2", 0, *catalog);
+    b = getSyntheticColumnVar("table4", "b", 1, *catalog);
 
     using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
     et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});

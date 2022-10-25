@@ -207,7 +207,6 @@ class DBEngineImpl : public DBEngine {
                                                        ExecutorDeviceType::CPU,
                                                        QueryMemoryDescriptor(),
                                                        nullptr,
-                                                       nullptr,
                                                        0,
                                                        0),
                            {}};

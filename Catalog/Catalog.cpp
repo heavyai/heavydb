@@ -1053,6 +1053,15 @@ std::string get_user_name_from_id(
   // a user could be deleted and a dashboard still exist?
   return "Unknown";
 }
+
+void set_dict_key(ColumnDescriptor& cd) {
+  CHECK_GT(cd.db_id, 0);
+  auto& column_type = cd.columnType;
+  if (column_type.is_dict_encoded_string() ||
+      column_type.is_subtype_dict_encoded_string()) {
+    column_type.setStringDictKey({cd.db_id, column_type.get_comp_param()});
+  }
+}
 }  // namespace
 
 void Catalog::buildDictionaryMapUnlocked() {
@@ -1238,6 +1247,8 @@ void Catalog::reloadTableMetadataUnlocked(int table_id) {
       cd->default_value = std::make_optional(sqliteConnector_.getData<string>(r, 16));
     }
     cd->isGeoPhyCol = skip_physical_cols-- > 0;
+    cd->db_id = getDatabaseId();
+    set_dict_key(*cd);
     cds.push_back(cd);
   }
 
@@ -1449,6 +1460,8 @@ void Catalog::buildColumnsMapUnlocked() {
       cd->default_value = std::make_optional(sqliteConnector_.getData<string>(r, 16));
     }
     cd->isGeoPhyCol = skip_physical_cols > 0;
+    cd->db_id = getDatabaseId();
+    set_dict_key(*cd);
     addToColumnMap(cd);
 
     if (skip_physical_cols <= 0) {
@@ -2405,6 +2418,7 @@ void Catalog::getDictionary(const ColumnDescriptor& cd,
 void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
   // caller must handle sqlite/chunk transaction TOGETHER
   cd.tableId = td.tableId;
+  cd.db_id = getDatabaseId();
   if (td.nShards > 0 && td.shard < 0) {
     for (const auto shard : getPhysicalTablesDescriptors(&td)) {
       auto shard_cd = cd;
@@ -2783,6 +2797,10 @@ void Catalog::createTable(
     columns.push_back(cd_del);
   }
 
+  for (auto& column : columns) {
+    column.db_id = getDatabaseId();
+  }
+
   td.nColumns = columns.size();
   // TODO(sy): don't take disk locks or touch sqlite connector for temporary tables
   cat_sqlite_lock sqlite_lock(getObjForLock());
@@ -2920,6 +2938,7 @@ void Catalog::createTable(
             cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
           }
           cd.columnType.set_comp_param(dict_ref.dictId);
+          set_dict_key(cd);
         }
       }
       if (toplevel_column_names.count(cd.columnName)) {
@@ -3883,6 +3902,7 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
     cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
   }
   cd.columnType.set_comp_param(dictId);
+  set_dict_key(cd);
 }
 
 void Catalog::createShardedTable(

@@ -192,8 +192,8 @@ void check_arrow_dictionaries(
       continue;
     }
     const auto omnisci_col_type = omnisci_results->getColType(col_idx);
-    const auto dict_id = omnisci_col_type.get_comp_param();
-    const auto str_dict_proxy = omnisci_results->getStringDictionaryProxy(dict_id);
+    const auto& dict_key = omnisci_col_type.getStringDictKey();
+    const auto str_dict_proxy = omnisci_results->getStringDictionaryProxy(dict_key);
     const size_t omnisci_dict_proxy_size = str_dict_proxy->entryCount();
 
     const auto col_dictionary_size = per_column_dictionary_sets[col_idx].size();
@@ -25861,7 +25861,7 @@ class ValuesTest : public ::testing::Test {
         ASSERT_EQ(omnisci_type, kINT);
 
         const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
-        CHECK_NE(omnisci_as_int_p, nullptr);
+        CHECK(omnisci_as_int_p != nullptr);
         const auto omnisci_val = *omnisci_as_int_p;
         values2[row_idx].push_back(omnisci_val);
       }

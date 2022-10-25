@@ -76,10 +76,10 @@ class ColumnFetcher {
       ColumnCacheMap& column_cache);
 
   const int8_t* getOneTableColumnFragment(
-      const int table_id,
+      const shared::TableKey& table_key,
       const int frag_id,
       const int col_id,
-      const std::map<int, const TableFragments*>& all_tables_fragments,
+      const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
       std::list<ChunkIter>& chunk_iter_holder,
       const Data_Namespace::MemoryLevel memory_level,
@@ -87,9 +87,9 @@ class ColumnFetcher {
       DeviceAllocator* device_allocator) const;
 
   const int8_t* getAllTableColumnFragments(
-      const int table_id,
+      const shared::TableKey& table_key,
       const int col_id,
-      const std::map<int, const TableFragments*>& all_tables_fragments,
+      const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments,
       const Data_Namespace::MemoryLevel memory_level,
       const int device_id,
       DeviceAllocator* device_allocator,
@@ -102,9 +102,9 @@ class ColumnFetcher {
                                    const size_t thread_idx) const;
 
   const int8_t* linearizeColumnFragments(
-      const int table_id,
+      const shared::TableKey& table_key,
       const int col_id,
-      const std::map<int, const TableFragments*>& all_tables_fragments,
+      const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
       std::list<ChunkIter>& chunk_iter_holder,
       const Data_Namespace::MemoryLevel memory_level,
@@ -125,7 +125,7 @@ class ColumnFetcher {
       DeviceAllocator* device_allocator);
 
   MergedChunk linearizeVarLenArrayColFrags(
-      const Catalog_Namespace::Catalog& cat,
+      int32_t db_id,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
       std::list<ChunkIter>& chunk_iter_holder,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& local_chunk_holder,
@@ -141,7 +141,7 @@ class ColumnFetcher {
       const size_t thread_idx) const;
 
   MergedChunk linearizeFixedLenArrayColFrags(
-      const Catalog_Namespace::Catalog& cat,
+      int32_t db_id,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
       std::list<ChunkIter>& chunk_iter_holder,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& local_chunk_holder,
@@ -170,7 +170,7 @@ class ColumnFetcher {
                              const size_t total_num_tuples) const;
 
   const int8_t* getResultSetColumn(const ResultSetPtr& buffer,
-                                   const int table_id,
+                                   const shared::TableKey& table_key,
                                    const int col_id,
                                    const Data_Namespace::MemoryLevel memory_level,
                                    const int device_id,

@@ -582,7 +582,7 @@ SqlCreate SqlCreateTable(Span s, boolean replace) :
     [<TEMPORARY> {temporary = true; }]
     <TABLE> 
     ifNotExists = IfNotExistsOpt() 
-    id = CompoundIdentifier()
+    id = SimpleIdentifier()
     ( 
         tableElementList = TableElementList()
     |

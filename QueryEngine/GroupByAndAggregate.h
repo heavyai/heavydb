@@ -75,8 +75,7 @@ class GroupByAndAggregate {
                const CompilationOptions& co,
                const GpuSharedMemoryContext& gpu_smem_context);
 
-  static size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit,
-                                           const Catalog_Namespace::Catalog& catalog);
+  static size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit);
 
  private:
   bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);

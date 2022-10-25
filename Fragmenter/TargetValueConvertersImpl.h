@@ -179,9 +179,9 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
   std::unordered_map<int32_t, int32_t> literals_lookup_;
   bool use_literals_;
 
-  DictionaryValueConverter(const Catalog_Namespace::Catalog& cat,
-                           int32_t sourceDictId,
+  DictionaryValueConverter(const shared::StringDictKey& source_dict_key,
                            const ColumnDescriptor* targetDescriptor,
+                           const Catalog_Namespace::Catalog& target_cat,
                            size_t num_rows,
                            TARGET_TYPE nullValue,
                            int64_t nullCheckValue,
@@ -194,15 +194,20 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
                                                     nullCheckValue,
                                                     doNullCheck) {
     literals_dict_ = literals_dict;
-    target_dict_desc_ =
-        cat.getMetadataForDict(targetDescriptor->columnType.get_comp_param(), true);
+    const auto& target_dict_key = targetDescriptor->columnType.getStringDictKey();
+    CHECK_EQ(target_dict_key.db_id, target_cat.getDatabaseId());
+    target_dict_desc_ = target_cat.getMetadataForDict(target_dict_key.dict_id, true);
 
     source_dict_desc_ = nullptr;
     source_dict_proxy_ = source_dict_proxy;
 
-    use_literals_ = 0 == sourceDictId;
+    use_literals_ = 0 == source_dict_key.dict_id;
     if (!use_literals_) {
-      source_dict_desc_ = cat.getMetadataForDict(std::abs(sourceDictId), true);
+      const auto source_cat =
+          Catalog_Namespace::SysCatalog::instance().getCatalog(source_dict_key.db_id);
+      CHECK(source_cat);
+      source_dict_desc_ =
+          source_cat->getMetadataForDict(std::abs(source_dict_key.dict_id), true);
       CHECK(source_dict_desc_);
     } else {
       if (literals_dict) {
@@ -419,19 +424,22 @@ struct StringValueConverter : public TargetValueConverter {
   StringDictionaryProxy* literals_source_dict_;
   bool dict_encoded_;
 
-  StringValueConverter(const Catalog_Namespace::Catalog& cat,
-                       const ColumnDescriptor* cd,
+  StringValueConverter(const ColumnDescriptor* cd,
                        size_t num_rows,
                        bool dictEncoded,
-                       int32_t sourceDictId,
+                       const shared::StringDictKey& source_dict_key,
                        StringDictionaryProxy* literals_dict)
       : TargetValueConverter(cd) {
     source_dict_ = nullptr;
     literals_source_dict_ = nullptr;
     dict_encoded_ = dictEncoded;
     if (dictEncoded) {
-      if (0 != sourceDictId) {
-        auto source_dict_desc = cat.getMetadataForDict(std::abs(sourceDictId), true);
+      if (0 != source_dict_key.dict_id) {
+        const auto source_cat =
+            Catalog_Namespace::SysCatalog::instance().getCatalog(source_dict_key.db_id);
+        CHECK(source_cat);
+        const auto source_dict_desc =
+            source_cat->getMetadataForDict(std::abs(source_dict_key.dict_id), true);
         CHECK(source_dict_desc);
         source_dict_ = source_dict_desc->stringDict.get();
         CHECK(source_dict_);

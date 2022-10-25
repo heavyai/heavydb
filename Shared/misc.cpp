@@ -138,4 +138,10 @@ std::string convert_temporal_to_iso_format(const SQLTypeInfo& type_info,
   return iso_str;
 }
 
+size_t compute_hash(int32_t item_1, int32_t item_2) {
+  static_assert(sizeof(item_1) + sizeof(item_2) <= sizeof(size_t));
+  return (static_cast<size_t>(item_1) << (8 * sizeof(item_2))) |
+         (static_cast<size_t>(item_2));
+}
+
 }  // namespace shared

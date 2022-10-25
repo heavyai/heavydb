@@ -17,6 +17,7 @@
 #pragma once
 
 #include <boost/algorithm/string/predicate.hpp>
+
 #include "QueryEngine/Execute.h"
 #include "Shared/toString.h"
 
@@ -58,10 +59,28 @@ struct RowFunctionManager {
   RowFunctionManager(const Executor* executor, const RelAlgExecutionUnit& ra_exe_unit)
       : executor_(executor), ra_exe_unit_(ra_exe_unit) {}
 
-  inline std::string getString(int32_t dict_id, int32_t string_id) {
+  inline std::string getString(int32_t db_id, int32_t dict_id, int32_t string_id) {
     const auto proxy = executor_->getStringDictionaryProxy(
-        dict_id, executor_->getRowSetMemoryOwner(), true);
+        {db_id, dict_id}, executor_->getRowSetMemoryOwner(), true);
     return proxy->getString(string_id);
+  }
+
+  inline int32_t getDictDbId(const std::string& func_name, size_t arg_idx) {
+    std::string func_name_wo_suffix =
+        boost::algorithm::to_lower_copy(drop_suffix_impl(func_name));
+
+    for (const auto& expr : ra_exe_unit_.target_exprs) {
+      for (const auto* op : find_function_oper(expr, func_name_wo_suffix)) {
+        const Analyzer::FunctionOper* function_oper =
+            dynamic_cast<const Analyzer::FunctionOper*>(op);
+        CHECK_LT(arg_idx, function_oper->getArity());
+        const SQLTypeInfo typ = function_oper->getArg(arg_idx)->get_type_info();
+        CHECK(typ.is_text_encoding_dict() || typ.is_text_encoding_dict_array());
+        return typ.getStringDictKey().db_id;
+      }
+    }
+    UNREACHABLE();
+    return 0;
   }
 
   inline int32_t getDictId(const std::string& func_name, size_t arg_idx) {
@@ -75,22 +94,22 @@ struct RowFunctionManager {
         CHECK_LT(arg_idx, function_oper->getArity());
         const SQLTypeInfo typ = function_oper->getArg(arg_idx)->get_type_info();
         CHECK(typ.is_text_encoding_dict() || typ.is_text_encoding_dict_array());
-        return typ.get_comp_param();
+        return typ.getStringDictKey().dict_id;
       }
     }
     UNREACHABLE();
     return 0;
   }
 
-  inline int32_t getOrAddTransient(int32_t dict_id, std::string str) {
+  inline int32_t getOrAddTransient(int32_t db_id, int32_t dict_id, std::string str) {
     const auto proxy = executor_->getStringDictionaryProxy(
-        dict_id, executor_->getRowSetMemoryOwner(), true);
+        {db_id, dict_id}, executor_->getRowSetMemoryOwner(), true);
     return proxy->getOrAddTransient(str);
   }
 
-  inline int8_t* getStringDictionaryProxy(int32_t dict_id) {
+  inline int8_t* getStringDictionaryProxy(int32_t db_id, int32_t dict_id) {
     auto* proxy = executor_->getStringDictionaryProxy(
-        dict_id, executor_->getRowSetMemoryOwner(), true);
+        {db_id, dict_id}, executor_->getRowSetMemoryOwner(), true);
     return reinterpret_cast<int8_t*>(proxy);
   }
 

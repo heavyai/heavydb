@@ -174,10 +174,7 @@ bool ResultSet::canUseFastBaselineSort(
 }
 
 Data_Namespace::DataMgr* ResultSet::getDataManager() const {
-  if (catalog_) {
-    return &catalog_->getDataMgr();
-  }
-  return nullptr;
+  return &Catalog_Namespace::SysCatalog::instance().getDataMgr();
 }
 
 int ResultSet::getGpuCount() const {

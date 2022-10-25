@@ -253,9 +253,9 @@ int64_t tf_feature_similarity__cpu_template(
   std::vector<std::vector<int32_t>> translated_col_ids(num_feature_cols);
   for (int64_t col_idx = 0; col_idx < num_feature_cols; ++col_idx) {
     const auto primary_sdp = pivot_features.string_dict_proxies_[col_idx];
-    const auto primary_sdp_string_dict_id = primary_sdp->getDictId();
+    const auto& primary_sdp_string_dict_id = primary_sdp->getDictKey();
     const auto comparison_sdp = comparison_pivot_features.string_dict_proxies_[col_idx];
-    const auto comparison_string_dict_id = comparison_sdp->getDictId();
+    const auto& comparison_string_dict_id = comparison_sdp->getDictKey();
     if (primary_sdp_string_dict_id != comparison_string_dict_id) {
       const auto translation_map =
           comparison_sdp->buildIntersectionTranslationMapToOtherProxy(primary_sdp, {});

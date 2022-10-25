@@ -37,9 +37,9 @@
 #include <thread>
 
 StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd,
-                                             const int32_t string_dict_id,
+                                             const shared::StringDictKey& string_dict_key,
                                              const int64_t generation)
-    : string_dict_(sd), string_dict_id_(string_dict_id), generation_(generation) {}
+    : string_dict_(sd), string_dict_key_(string_dict_key), generation_(generation) {}
 
 int32_t truncate_to_generation(const int32_t id, const size_t generation) {
   if (id == StringDictionary::INVALID_STR_ID) {
@@ -353,25 +353,23 @@ StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxyUnlocked(
       100.0 * static_cast<float>(num_entries_translated) / num_total_entries;
   VLOG(1) << std::fixed << std::setprecision(2) << match_pct << "% ("
           << num_entries_translated << " entries) from dictionary ("
-          << string_dict_->getDbId() << ", " << string_dict_->getDictId() << ") with "
-          << num_total_entries << " total entries ( " << num_transient_entries
-          << " literals)"
-          << " translated to dictionary (" << dest_proxy->string_dict_->getDbId() << ", "
-          << dest_proxy->string_dict_->getDictId() << ") with " << num_dest_entries
-          << " total entries (" << dest_proxy->transientEntryCountUnlocked()
-          << " literals).";
+          << string_dict_->getDictKey() << ") with " << num_total_entries
+          << " total entries ( " << num_transient_entries << " literals)"
+          << " translated to dictionary (" << dest_proxy->string_dict_->getDictKey()
+          << ") with " << num_dest_entries << " total entries ("
+          << dest_proxy->transientEntryCountUnlocked() << " literals).";
 
   return id_map;
 }
 
-void order_translation_locks(const int32_t source_dict_id,
-                             const int32_t dest_dict_id,
+void order_translation_locks(const shared::StringDictKey& source_dict_key,
+                             const shared::StringDictKey& dest_dict_key,
                              std::shared_lock<std::shared_mutex>& source_proxy_read_lock,
                              std::unique_lock<std::shared_mutex>& dest_proxy_write_lock) {
-  if (source_dict_id == dest_dict_id) {
+  if (source_dict_key == dest_dict_key) {
     // proxies are same, only take one write lock
     dest_proxy_write_lock.lock();
-  } else if (source_dict_id < dest_dict_id) {
+  } else if (source_dict_key < dest_dict_key) {
     source_proxy_read_lock.lock();
     dest_proxy_write_lock.lock();
   } else {
@@ -384,8 +382,8 @@ StringDictionaryProxy::IdMap
 StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxy(
     const StringDictionaryProxy* dest_proxy,
     const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const {
-  const auto source_dict_id = getDictId();
-  const auto dest_dict_id = dest_proxy->getDictId();
+  const auto& source_dict_id = getDictKey();
+  const auto& dest_dict_id = dest_proxy->getDictKey();
 
   std::shared_lock<std::shared_mutex> source_proxy_read_lock(rw_mutex_, std::defer_lock);
   std::unique_lock<std::shared_mutex> dest_proxy_write_lock(dest_proxy->rw_mutex_,
@@ -400,8 +398,8 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOt
     const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const {
   auto timer = DEBUG_TIMER(__func__);
 
-  const auto source_dict_id = getDictId();
-  const auto dest_dict_id = dest_proxy->getDictId();
+  const auto& source_dict_id = getDictKey();
+  const auto& dest_dict_id = dest_proxy->getDictKey();
   std::shared_lock<std::shared_mutex> source_proxy_read_lock(rw_mutex_, std::defer_lock);
   std::unique_lock<std::shared_mutex> dest_proxy_write_lock(dest_proxy->rw_mutex_,
                                                             std::defer_lock);
@@ -421,11 +419,12 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOt
         static_cast<size_t>(std::numeric_limits<int32_t>::max() -
                             2); /* -2 accounts for INVALID_STR_ID and NULL value */
     if (total_post_translation_dest_transients > max_allowed_transients) {
-      throw std::runtime_error("Union translation to dictionary" +
-                               std::to_string(getDictId()) + " would result in " +
-                               std::to_string(total_post_translation_dest_transients) +
-                               " transient entries, which is more than limit of " +
-                               std::to_string(max_allowed_transients) + " transients.");
+      std::stringstream ss;
+      ss << "Union translation to dictionary " << getDictKey() << " would result in "
+         << total_post_translation_dest_transients
+         << " transient entries, which is more than limit of " << max_allowed_transients
+         << " transients.";
+      throw std::runtime_error(ss.str());
     }
     const int32_t map_domain_start = id_map.domainStart();
     const int32_t map_domain_end = id_map.domainEnd();
@@ -813,7 +812,7 @@ int64_t StringDictionaryProxy::getGeneration() const noexcept {
 }
 
 bool StringDictionaryProxy::operator==(StringDictionaryProxy const& rhs) const {
-  return string_dict_id_ == rhs.string_dict_id_ &&
+  return string_dict_key_ == rhs.string_dict_key_ &&
          transient_str_to_int_ == rhs.transient_str_to_int_;
 }
 

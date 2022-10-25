@@ -163,7 +163,6 @@ class ResultSet {
             const ExecutorDeviceType device_type,
             const QueryMemoryDescriptor& query_mem_desc,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-            const Catalog_Namespace::Catalog* catalog,
             const unsigned block_size,
             const unsigned grid_size);
 
@@ -176,7 +175,6 @@ class ResultSet {
             const int device_id,
             const QueryMemoryDescriptor& query_mem_desc,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-            const Catalog_Namespace::Catalog* catalog,
             const unsigned block_size,
             const unsigned grid_size);
 
@@ -594,12 +592,14 @@ class ResultSet {
     separate_varlen_storage_valid_ = val;
   }
 
-  const std::vector<std::string> getStringDictionaryPayloadCopy(const int dict_id) const;
+  const std::vector<std::string> getStringDictionaryPayloadCopy(
+      const shared::StringDictKey& dict_key) const;
 
   const std::pair<std::vector<int32_t>, std::vector<std::string>>
   getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const;
 
-  StringDictionaryProxy* getStringDictionaryProxy(int const dict_id) const;
+  StringDictionaryProxy* getStringDictionaryProxy(
+      const shared::StringDictKey& dict_key) const;
 
   template <typename ENTRY_TYPE, QueryDescriptionType QUERY_TYPE, bool COLUMNAR_FORMAT>
   ENTRY_TYPE getEntryAt(const size_t row_idx,
@@ -944,7 +944,6 @@ class ResultSet {
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   Permutation permutation_;
 
-  const Catalog_Namespace::Catalog* catalog_;
   unsigned block_size_{0};
   unsigned grid_size_{0};
   QueryExecutionTimings timings_;

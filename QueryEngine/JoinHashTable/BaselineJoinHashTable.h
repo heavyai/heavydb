@@ -79,7 +79,7 @@ class BaselineJoinHashTable : public HashJoin {
   HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,
                                          const size_t) override;
 
-  int getInnerTableId() const noexcept override;
+  shared::TableKey getInnerTableId() const noexcept override;
 
   int getInnerTableRteIdx() const noexcept override;
 
@@ -157,7 +157,8 @@ class BaselineJoinHashTable : public HashJoin {
 
   size_t getKeyBufferSize() const noexcept;
 
-  static int getInnerTableId(const std::vector<InnerOuter>& inner_outer_pairs);
+  static shared::TableKey getInnerTableId(
+      const std::vector<InnerOuter>& inner_outer_pairs);
 
   virtual void reifyWithLayout(const HashType layout);
 
@@ -262,7 +263,6 @@ class BaselineJoinHashTable : public HashJoin {
 
   std::vector<InnerOuter> inner_outer_pairs_;
   std::vector<InnerOuterStringOpInfos> inner_outer_string_op_infos_pairs_;
-  const Catalog_Namespace::Catalog* catalog_;
   const int device_count_;
   RegisteredQueryHint query_hints_;
   mutable bool needs_dict_translation_;

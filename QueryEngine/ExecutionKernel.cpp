@@ -53,9 +53,11 @@ bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
        (chunk_ti.is_string() && chunk_ti.get_compression() == kENCODING_NONE))) {
     for (const auto target_expr : ra_exe_unit.target_exprs) {
       const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
-      if (col_var && col_var->get_column_id() == chunk->getColumnDesc()->columnId &&
-          col_var->get_table_id() == chunk->getColumnDesc()->tableId) {
-        return true;
+      if (col_var) {
+        const auto& column_key = col_var->getColumnKey();
+        return column_key.column_id == chunk->getColumnDesc()->columnId &&
+               column_key.table_id == chunk->getColumnDesc()->tableId &&
+               column_key.db_id == chunk->getColumnDesc()->db_id;
       }
     }
   }
@@ -67,11 +69,15 @@ bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
     const auto target_expr = ra_exe_unit.target_exprs[i];
     const auto& col_lazy_fetch = lazy_fetch_info[i];
     const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
-    if (col_var && col_var->get_column_id() == chunk->getColumnDesc()->columnId &&
-        col_var->get_table_id() == chunk->getColumnDesc()->tableId) {
-      if (col_lazy_fetch.is_lazily_fetched) {
-        // hold lazy fetched inputs for later iteration
-        return true;
+    if (col_var) {
+      const auto& column_key = col_var->getColumnKey();
+      if (column_key.column_id == chunk->getColumnDesc()->columnId &&
+          column_key.table_id == chunk->getColumnDesc()->tableId &&
+          column_key.db_id == chunk->getColumnDesc()->db_id) {
+        if (col_lazy_fetch.is_lazily_fetched) {
+          // hold lazy fetched inputs for later iteration
+          return true;
+        }
       }
     }
   }
@@ -160,17 +166,14 @@ void ExecutionKernel::runImpl(Executor* executor,
                                 : Data_Namespace::CPU_LEVEL;
   CHECK_GE(frag_list.size(), size_t(1));
   // frag_list[0].table_id is how we tell which query we are running for UNION ALL.
-  const int outer_table_id = ra_exe_unit_.union_all
-                                 ? frag_list[0].table_id
-                                 : ra_exe_unit_.input_descs[0].getTableId();
-  CHECK_EQ(frag_list[0].table_id, outer_table_id);
+  const auto& outer_table_key = ra_exe_unit_.union_all
+                                    ? frag_list[0].table_key
+                                    : ra_exe_unit_.input_descs[0].getTableKey();
+  CHECK_EQ(frag_list[0].table_key, outer_table_key);
   const auto& outer_tab_frag_ids = frag_list[0].fragment_ids;
 
   CHECK_GE(chosen_device_id, 0);
   CHECK_LT(chosen_device_id, Executor::max_gpu_count);
-
-  auto catalog = executor->getCatalog();
-  CHECK(catalog);
 
   auto data_mgr = executor->getDataMgr();
 
@@ -187,7 +190,7 @@ void ExecutionKernel::runImpl(Executor* executor,
   }
   std::shared_ptr<FetchResult> fetch_result(new FetchResult);
   try {
-    std::map<int, const TableFragments*> all_tables_fragments;
+    std::map<shared::TableKey, const TableFragments*> all_tables_fragments;
     QueryFragmentDescriptor::computeAllTablesFragments(
         all_tables_fragments, ra_exe_unit_, shared_context.getQueryInfos());
 
@@ -198,7 +201,6 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                      memory_level,
                                                      all_tables_fragments,
                                                      frag_list,
-                                                     *catalog,
                                                      *chunk_iterators_ptr,
                                                      chunks,
                                                      device_allocator.get(),
@@ -210,7 +212,6 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                 memory_level,
                                                 all_tables_fragments,
                                                 frag_list,
-                                                *catalog,
                                                 *chunk_iterators_ptr,
                                                 chunks,
                                                 device_allocator.get(),
@@ -241,7 +242,7 @@ void ExecutionKernel::runImpl(Executor* executor,
     if (ra_exe_unit_.input_descs.size() > 1) {
       throw std::runtime_error("Joins not supported through external execution");
     }
-    const auto query = serialize_to_sql(&ra_exe_unit_, catalog);
+    const auto query = serialize_to_sql(&ra_exe_unit_);
     GroupByAndAggregate group_by_and_aggregate(executor,
                                                ExecutorDeviceType::CPU,
                                                ra_exe_unit_,
@@ -357,7 +358,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                   chosen_device_type,
                                                   kernel_dispatch_mode,
                                                   chosen_device_id,
-                                                  outer_table_id,
+                                                  outer_table_key,
                                                   total_num_input_rows,
                                                   fetch_result->col_buffers,
                                                   fetch_result->frag_offsets,
@@ -397,7 +398,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                               optimize_cuda_block_and_grid_sizes);
   } else {
     if (ra_exe_unit_.union_all) {
-      VLOG(1) << "outer_table_id=" << outer_table_id
+      VLOG(1) << "outer_table_key=" << outer_table_key
               << " ra_exe_unit_.scan_limit=" << ra_exe_unit_.scan_limit;
     }
     err = executor->executePlanWithGroupBy(ra_exe_unit_,
@@ -412,7 +413,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                            fetch_result->frag_offsets,
                                            data_mgr,
                                            chosen_device_id,
-                                           outer_table_id,
+                                           outer_table_key,
                                            ra_exe_unit_.scan_limit,
                                            start_rowid,
                                            ra_exe_unit_.input_descs.size(),
@@ -475,9 +476,9 @@ void KernelSubtask::runImpl(Executor* executor) {
   const bool do_render = kernel_.render_info_ && kernel_.render_info_->isInSitu();
   const CompilationResult& compilation_result =
       kernel_.query_comp_desc.getCompilationResult();
-  const int outer_table_id = kernel_.ra_exe_unit_.union_all
-                                 ? kernel_.frag_list[0].table_id
-                                 : kernel_.ra_exe_unit_.input_descs[0].getTableId();
+  const shared::TableKey& outer_table_key =
+      kernel_.ra_exe_unit_.union_all ? kernel_.frag_list[0].table_key
+                                     : kernel_.ra_exe_unit_.input_descs[0].getTableKey();
 
   if (!query_exe_context_owned) {
     try {
@@ -495,7 +496,7 @@ void KernelSubtask::runImpl(Executor* executor) {
           kernel_.chosen_device_type,
           kernel_.kernel_dispatch_mode,
           kernel_.chosen_device_id,
-          outer_table_id,
+          outer_table_key,
           total_num_input_rows_,
           col_buffers,
           frag_offsets,
@@ -511,8 +512,6 @@ void KernelSubtask::runImpl(Executor* executor) {
   }
 
   const auto& outer_tab_frag_ids = kernel_.frag_list[0].fragment_ids;
-  auto catalog = executor->getCatalog();
-  CHECK(catalog);
   QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
   CHECK(query_exe_context);
   int32_t err{0};
@@ -530,7 +529,7 @@ void KernelSubtask::runImpl(Executor* executor) {
                                               query_exe_context,
                                               fetch_result_->num_rows,
                                               fetch_result_->frag_offsets,
-                                              &catalog->getDataMgr(),
+                                              executor->getDataMgr(),
                                               kernel_.chosen_device_id,
                                               start_rowid_,
                                               kernel_.ra_exe_unit_.input_descs.size(),
@@ -549,9 +548,9 @@ void KernelSubtask::runImpl(Executor* executor) {
                                            query_exe_context,
                                            fetch_result_->num_rows,
                                            fetch_result_->frag_offsets,
-                                           &catalog->getDataMgr(),
+                                           executor->getDataMgr(),
                                            kernel_.chosen_device_id,
-                                           outer_table_id,
+                                           outer_table_key,
                                            kernel_.ra_exe_unit_.scan_limit,
                                            start_rowid_,
                                            kernel_.ra_exe_unit_.input_descs.size(),

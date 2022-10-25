@@ -60,12 +60,12 @@ size_t QueryPlanDagCache::translateColVarsToInfoHash(
   std::sort(col_vars.begin(),
             col_vars.end(),
             [](const Analyzer::ColumnVar* lhs, const Analyzer::ColumnVar* rhs) {
-              return lhs->get_column_id() < rhs->get_column_id();
+              return lhs->getColumnKey() < rhs->getColumnKey();
             });
   size_t col_vars_info_hash = EMPTY_HASHED_PLAN_DAG_KEY;
   using Hasher = std::function<void(Analyzer::ColumnVar const*)>;
   Hasher hash_col_id = [&col_vars_info_hash](auto const* cv) {
-    boost::hash_combine(col_vars_info_hash, cv->get_column_id());
+    boost::hash_combine(col_vars_info_hash, cv->getColumnKey().column_id);
   };
   Hasher hash_cv_string = [&col_vars_info_hash](auto const* cv) {
     boost::hash_combine(col_vars_info_hash, cv->toString());

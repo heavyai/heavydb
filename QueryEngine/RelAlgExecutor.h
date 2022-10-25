@@ -54,11 +54,9 @@ class RelAlgExecutor : private StorageIOFacility {
   using TargetInfoList = std::vector<TargetInfo>;
 
   RelAlgExecutor(Executor* executor,
-                 Catalog_Namespace::Catalog& cat,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
-      : StorageIOFacility(executor, cat)
+      : StorageIOFacility(executor)
       , executor_(executor)
-      , cat_(cat)
       , query_state_(std::move(query_state))
       , now_(0)
       , queue_time_ms_(0) {
@@ -66,13 +64,11 @@ class RelAlgExecutor : private StorageIOFacility {
   }
 
   RelAlgExecutor(Executor* executor,
-                 Catalog_Namespace::Catalog& cat,
                  const std::string& query_ra,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
-      : StorageIOFacility(executor, cat)
+      : StorageIOFacility(executor)
       , executor_(executor)
-      , cat_(cat)
-      , query_dag_(RelAlgDagBuilder::buildDag(query_ra, cat, true))
+      , query_dag_(RelAlgDagBuilder::buildDag(query_ra, true))
       , query_state_(std::move(query_state))
       , now_(0)
       , queue_time_ms_(0) {
@@ -80,12 +76,10 @@ class RelAlgExecutor : private StorageIOFacility {
   }
 
   RelAlgExecutor(Executor* executor,
-                 Catalog_Namespace::Catalog& cat,
                  std::unique_ptr<RelAlgDag> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
-      : StorageIOFacility(executor, cat)
+      : StorageIOFacility(executor)
       , executor_(executor)
-      , cat_(cat)
       , query_dag_(std::move(query_dag))
       , query_state_(std::move(query_state))
       , now_(0)
@@ -210,7 +204,7 @@ class RelAlgExecutor : private StorageIOFacility {
 
   void prepareForeignTable();
 
-  std::unordered_set<int> getPhysicalTableIds() const;
+  std::unordered_set<shared::TableKey> getPhysicalTableIds() const;
 
   void prepareForSystemTableExecution(const CompilationOptions& co) const;
 
@@ -437,7 +431,6 @@ class RelAlgExecutor : private StorageIOFacility {
   void setupCaching(const RelAlgNode* ra);
 
   Executor* executor_;
-  Catalog_Namespace::Catalog& cat_;
   std::unique_ptr<RelAlgDag> query_dag_;
   std::shared_ptr<const query_state::QueryState> query_state_;
   TemporaryTables temporary_tables_;

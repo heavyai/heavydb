@@ -969,17 +969,23 @@ class RelAlgNode {
 class RelScan : public RelAlgNode {
  public:
   // constructor used for deserialization only
-  RelScan(const TableDescriptor* td) : td_{td}, hint_applied_{false} {}
+  RelScan(const TableDescriptor* td, const Catalog_Namespace::Catalog& catalog)
+      : td_{td}, hint_applied_{false}, catalog_(catalog) {}
 
-  RelScan(const TableDescriptor* td, const std::vector<std::string>& field_names)
+  RelScan(const TableDescriptor* td,
+          const std::vector<std::string>& field_names,
+          const Catalog_Namespace::Catalog& catalog)
       : td_(td)
       , field_names_(field_names)
       , hint_applied_(false)
-      , hints_(std::make_unique<Hints>()) {}
+      , hints_(std::make_unique<Hints>())
+      , catalog_(catalog) {}
 
   size_t size() const override { return field_names_.size(); }
 
   const TableDescriptor* getTableDescriptor() const { return td_; }
+
+  const Catalog_Namespace::Catalog& getCatalog() const { return catalog_; }
 
   const size_t getNumFragments() const { return td_->fragmenter->getNumFragments(); }
 
@@ -1040,6 +1046,7 @@ class RelScan : public RelAlgNode {
   std::vector<std::string> field_names_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
+  const Catalog_Namespace::Catalog& catalog_;
 
   friend struct RelAlgDagSerializer;
 };
@@ -1050,12 +1057,14 @@ class ModifyManipulationTarget {
                            bool const delete_via_select = false,
                            bool const varlen_update_required = false,
                            TableDescriptor const* table_descriptor = nullptr,
-                           ColumnNameList target_columns = ColumnNameList())
+                           ColumnNameList target_columns = ColumnNameList(),
+                           const Catalog_Namespace::Catalog* catalog = nullptr)
       : is_update_via_select_(update_via_select)
       , is_delete_via_select_(delete_via_select)
       , varlen_update_required_(varlen_update_required)
       , table_descriptor_(table_descriptor)
-      , target_columns_(target_columns) {}
+      , target_columns_(target_columns)
+      , catalog_(catalog) {}
 
   void setUpdateViaSelectFlag(bool required) const { is_update_via_select_ = required; }
   void setDeleteViaSelectFlag(bool required) const { is_delete_via_select_ = required; }
@@ -1068,6 +1077,12 @@ class ModifyManipulationTarget {
   TableDescriptor const* getTableDescriptor() const { return table_descriptor_; }
   void setModifiedTableDescriptor(TableDescriptor const* td) const {
     table_descriptor_ = td;
+  }
+
+  const Catalog_Namespace::Catalog* getModifiedTableCatalog() const { return catalog_; }
+
+  void setModifiedTableCatalog(const Catalog_Namespace::Catalog* catalog) const {
+    catalog_ = catalog;
   }
 
   auto const isUpdateViaSelect() const { return is_update_via_select_; }
@@ -1102,6 +1117,7 @@ class ModifyManipulationTarget {
   mutable TableDescriptor const* table_descriptor_ = nullptr;
   mutable ColumnNameList target_columns_;
   mutable bool force_rowwise_output_ = false;
+  mutable const Catalog_Namespace::Catalog* catalog_{nullptr};
 
   friend struct RelAlgDagSerializer;
 };
@@ -1113,8 +1129,8 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   using ConstRexScalarPtrVector = std::vector<ConstRexScalarPtr>;
 
   // constructor used for deserialization only
-  RelProject(const TableDescriptor* td)
-      : ModifyManipulationTarget(false, false, false, td)
+  RelProject(const TableDescriptor* td, const Catalog_Namespace::Catalog* catalog)
+      : ModifyManipulationTarget(false, false, false, td, {}, catalog)
       , hint_applied_{false}
       , has_pushed_down_window_expr_{false} {}
 
@@ -1168,11 +1184,13 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
     }
     new_project_node->setModifiedTableDescriptor(getModifiedTableDescriptor());
     new_project_node->setTargetColumns(getTargetColumns());
+    new_project_node->setModifiedTableCatalog(getModifiedTableCatalog());
     resetModifyManipulationTarget();
   }
 
   void resetModifyManipulationTarget() const {
     setModifiedTableDescriptor(nullptr);
+    setModifiedTableCatalog(nullptr);
     setUpdateViaSelectFlag(false);
     setDeleteViaSelectFlag(false);
     setVarlenUpdateRequired(false);
@@ -1776,8 +1794,8 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
 class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
  public:
   // constructor used for deserialization only
-  RelCompound(const TableDescriptor* td)
-      : ModifyManipulationTarget(false, false, false, td)
+  RelCompound(const TableDescriptor* td, const Catalog_Namespace::Catalog* catalog)
+      : ModifyManipulationTarget(false, false, false, td, {}, catalog)
       , groupby_count_{0}
       , is_agg_{false}
       , hint_applied_{false} {}
@@ -1796,12 +1814,14 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
               bool delete_disguised_as_select = false,
               bool varlen_update_required = false,
               TableDescriptor const* manipulation_target_table = nullptr,
-              ColumnNameList target_columns = ColumnNameList())
+              ColumnNameList target_columns = ColumnNameList(),
+              const Catalog_Namespace::Catalog* catalog = nullptr)
       : ModifyManipulationTarget(update_disguised_as_select,
                                  delete_disguised_as_select,
                                  varlen_update_required,
                                  manipulation_target_table,
-                                 target_columns)
+                                 target_columns,
+                                 catalog)
       , filter_expr_(std::move(filter_expr))
       , groupby_count_(groupby_count)
       , fields_(fields)
@@ -2086,6 +2106,9 @@ class RelModify : public RelAlgNode {
   }
 
   TableDescriptor const* const getTableDescriptor() const { return table_descriptor_; }
+
+  const Catalog_Namespace::Catalog& getCatalog() const { return catalog_; }
+
   bool const isFlattened() const { return flattened_; }
   ModifyOperation getOperation() const { return operation_; }
   TargetColumnList const& getUpdateColumnNames() const { return target_column_list_; }
@@ -2137,9 +2160,9 @@ class RelModify : public RelAlgNode {
   }
 
   void applyUpdateModificationsToInputNode() {
-    RelProject const* previous_project_node =
-        dynamic_cast<RelProject const*>(inputs_[0].get());
-    CHECK(previous_project_node != nullptr);
+    auto previous_node = dynamic_cast<RelProject const*>(inputs_[0].get());
+    CHECK(previous_node != nullptr);
+    auto previous_project_node = const_cast<RelProject*>(previous_node);
 
     if (previous_project_node->hasWindowFunctionExpr()) {
       if (table_descriptor_->fragmenter->getNumFragments() > 1) {
@@ -2160,6 +2183,7 @@ class RelModify : public RelAlgNode {
 
     previous_project_node->setModifiedTableDescriptor(table_descriptor_);
     previous_project_node->setTargetColumns(target_column_list_);
+    previous_project_node->setModifiedTableCatalog(&catalog_);
 
     int target_update_column_expr_start = 0;
     int target_update_column_expr_end = (int)(target_column_list_.size() - 1);
@@ -2204,11 +2228,12 @@ class RelModify : public RelAlgNode {
   }
 
   void applyDeleteModificationsToInputNode() {
-    RelProject const* previous_project_node =
-        dynamic_cast<RelProject const*>(inputs_[0].get());
-    CHECK(previous_project_node != nullptr);
+    auto previous_node = dynamic_cast<RelProject const*>(inputs_[0].get());
+    CHECK(previous_node != nullptr);
+    auto previous_project_node = const_cast<RelProject*>(previous_node);
     previous_project_node->setDeleteViaSelectFlag(true);
     previous_project_node->setModifiedTableDescriptor(table_descriptor_);
+    previous_project_node->setModifiedTableCatalog(&catalog_);
   }
 
  private:
@@ -3016,7 +3041,6 @@ struct RelAlgDagBuilder : public RelAlgDagModifier {
    * @param cat DB catalog for the current user.
    */
   static std::unique_ptr<RelAlgDag> buildDag(const std::string& query_ra,
-                                             const Catalog_Namespace::Catalog& cat,
                                              const bool optimize_dag);
 
   /**
@@ -3029,14 +3053,12 @@ struct RelAlgDagBuilder : public RelAlgDagModifier {
    */
   static std::unique_ptr<RelAlgDag> buildDagForSubquery(
       RelAlgDag& root_dag,
-      const rapidjson::Value& query_ast,
-      const Catalog_Namespace::Catalog& cat);
+      const rapidjson::Value& query_ast);
 
   static void optimizeDag(RelAlgDag& rel_alg_dag);
 
  private:
   static std::unique_ptr<RelAlgDag> build(const rapidjson::Value& query_ast,
-                                          const Catalog_Namespace::Catalog& cat,
                                           RelAlgDag* root_dag,
                                           const bool optimize_dag);
 };

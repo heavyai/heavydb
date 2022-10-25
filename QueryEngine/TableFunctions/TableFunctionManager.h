@@ -229,28 +229,36 @@ struct TableFunctionManager {
     row_set_mem_owner_->getTableFunctionMetadata(key, raw_bytes, num_bytes, value_type);
   }
 
-  inline int32_t getNewDictId() {
-    const auto proxy =
-        executor_->getStringDictionaryProxy(TRANSIENT_DICT_ID, row_set_mem_owner_, true);
-    return proxy->getDictId();
+  inline int32_t getNewDictDbId() {
+    const auto proxy = executor_->getStringDictionaryProxy(
+        {0, TRANSIENT_DICT_ID}, row_set_mem_owner_, true);
+    return proxy->getDictKey().db_id;
   }
 
-  inline std::string getString(int32_t dict_id, int32_t string_id) {
+  inline int32_t getNewDictId() {
+    const auto proxy = executor_->getStringDictionaryProxy(
+        {0, TRANSIENT_DICT_ID}, row_set_mem_owner_, true);
+    return proxy->getDictKey().dict_id;
+  }
+
+  inline std::string getString(int32_t db_id, int32_t dict_id, int32_t string_id) {
     const auto proxy =
-        executor_->getStringDictionaryProxy(dict_id, row_set_mem_owner_, true);
+        executor_->getStringDictionaryProxy({db_id, dict_id}, row_set_mem_owner_, true);
     return proxy->getString(string_id);
   }
 
-  inline const char* getCString(int32_t dict_id, int32_t string_id) {
+  inline const char* getCString(int32_t db_id, int32_t dict_id, int32_t string_id) {
     const auto proxy =
-        executor_->getStringDictionaryProxy(dict_id, row_set_mem_owner_, true);
+        executor_->getStringDictionaryProxy({db_id, dict_id}, row_set_mem_owner_, true);
     auto [c_str, len] = proxy->getStringBytes(string_id);
     return c_str;
   }
 
-  inline const int32_t getOrAddTransient(int32_t dict_id, const std::string& str) {
+  inline const int32_t getOrAddTransient(int32_t db_id,
+                                         int32_t dict_id,
+                                         const std::string& str) {
     const auto proxy =
-        executor_->getStringDictionaryProxy(dict_id, row_set_mem_owner_, true);
+        executor_->getStringDictionaryProxy({db_id, dict_id}, row_set_mem_owner_, true);
     return proxy->getOrAddTransient(str);
   }
 

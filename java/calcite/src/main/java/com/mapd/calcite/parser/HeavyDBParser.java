@@ -389,15 +389,22 @@ public final class HeavyDBParser {
         return false;
       }
     };
-    // create the db schema for the user session
-    final HeavyDBSchema defaultSchema =
-            new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
-    final SchemaPlus dbSchema =
-            Frameworks.createRootSchema(true).add(dbUser.getDB(), defaultSchema);
+
+    final HeavyDBSchema defaultSchema = new HeavyDBSchema(
+            dataDir, this, dbPort, dbUser, sock_transport_properties, dbUser.getDB());
+    final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
+    final SchemaPlus defaultSchemaPlus = rootSchema.add(dbUser.getDB(), defaultSchema);
+    for (String db : mc.getDatabases()) {
+      if (!db.equalsIgnoreCase(dbUser.getDB())) {
+        rootSchema.add(db,
+                new HeavyDBSchema(
+                        dataDir, this, dbPort, dbUser, sock_transport_properties, db));
+      }
+    }
 
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()
-                    .defaultSchema(dbSchema)
+                    .defaultSchema(defaultSchemaPlus)
                     .operatorTable(dbSqlOperatorTable.get())
                     .parserConfig(SqlParser.configBuilder()
                                           .setConformance(SqlConformanceEnum.LENIENT)
@@ -443,8 +450,8 @@ public final class HeavyDBParser {
 
   public String buildRATreeAndPerformQueryOptimization(
           String query, final HeavyDBParserOptions parserOptions) throws IOException {
-    HeavyDBSchema schema =
-            new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
+    HeavyDBSchema schema = new HeavyDBSchema(
+            dataDir, this, dbPort, dbUser, sock_transport_properties, dbUser.getDB());
     HeavyDBPlanner planner = getPlanner(
             true, parserOptions.isWatchdogEnabled(), parserOptions.isDistributedMode());
 
@@ -501,11 +508,11 @@ public final class HeavyDBParser {
 
   public HashSet<ImmutableList<String>> resolveSelectIdentifiers(
           SqlIdentifierCapturer capturer) {
-    HeavyDBSchema schema =
-            new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
     HashSet<ImmutableList<String>> resolved = new HashSet<ImmutableList<String>>();
 
     for (ImmutableList<String> names : capturer.selects) {
+      HeavyDBSchema schema = new HeavyDBSchema(
+              dataDir, this, dbPort, dbUser, sock_transport_properties, names.get(1));
       HeavyDBTable table = (HeavyDBTable) schema.getTable(names.get(0));
       if (null == table) {
         throw new RuntimeException("table/view not found: " + names.get(0));
@@ -636,7 +643,7 @@ public final class HeavyDBParser {
   private LogicalTableModify getDummyUpdate(SqlUpdate update)
           throws SqlParseException, ValidationException, RelConversionException {
     SqlIdentifier targetTable = (SqlIdentifier) update.getTargetTable();
-    String targetTableName = targetTable.names.get(targetTable.names.size() - 1);
+    String targetTableName = targetTable.toString();
     HeavyDBPlanner planner = getPlanner();
     String dummySql = "DELETE FROM " + targetTableName;
     SqlNode dummyNode = planner.parse(dummySql);
@@ -920,10 +927,10 @@ public final class HeavyDBParser {
     planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
     // check to see if a view is involved in the query
     boolean foundView = false;
-    HeavyDBSchema schema =
-            new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
     SqlIdentifierCapturer capturer = captureIdentifiers(sqlNode);
     for (ImmutableList<String> names : capturer.selects) {
+      HeavyDBSchema schema = new HeavyDBSchema(
+              dataDir, this, dbPort, dbUser, sock_transport_properties, names.get(1));
       HeavyDBTable table = (HeavyDBTable) schema.getTable(names.get(0));
       if (null == table) {
         throw new RuntimeException("table/view not found: " + names.get(0));
@@ -1722,11 +1729,31 @@ public final class HeavyDBParser {
     try {
       SqlIdentifierCapturer capturer = new SqlIdentifierCapturer();
       capturer.scan(node);
+      capturer.selects = addDbContextIfMissing(capturer.selects);
+      capturer.updates = addDbContextIfMissing(capturer.updates);
+      capturer.deletes = addDbContextIfMissing(capturer.deletes);
+      capturer.inserts = addDbContextIfMissing(capturer.inserts);
       return capturer;
     } catch (Exception | Error e) {
       HEAVYDBLOGGER.error("Error parsing sql: " + node, e);
       return new SqlIdentifierCapturer();
     }
+  }
+
+  private Set<ImmutableList<String>> addDbContextIfMissing(
+          Set<ImmutableList<String>> names) {
+    Set<ImmutableList<String>> result = new HashSet<>();
+    for (ImmutableList<String> name : names) {
+      if (name.size() == 1) {
+        result.add(new ImmutableList.Builder<String>()
+                           .addAll(name)
+                           .add(dbUser.getDB())
+                           .build());
+      } else {
+        result.add(name);
+      }
+    }
+    return result;
   }
 
   public int getCallCount() {
@@ -1735,8 +1762,8 @@ public final class HeavyDBParser {
 
   public void updateMetaData(String schema, String table) {
     HEAVYDBLOGGER.debug("schema :" + schema + " table :" + table);
-    HeavyDBSchema db =
-            new HeavyDBSchema(dataDir, this, dbPort, null, sock_transport_properties);
+    HeavyDBSchema db = new HeavyDBSchema(
+            dataDir, this, dbPort, null, sock_transport_properties, schema);
     db.updateMetaData(schema, table);
   }
 

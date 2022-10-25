@@ -45,7 +45,7 @@ SqlCreateForeignTable SqlCreateForeignTable(Span s, boolean replace) :
 {
     <FOREIGN> <TABLE>
     ifNotExists = IfNotExistsOpt()
-    tableName = CompoundIdentifier()
+    tableName = SimpleIdentifier()
     (
       <SCHEMA>
       schemaLit = Literal()

@@ -4853,7 +4853,7 @@ int main(int argc, char* argv[]) {
   }
 
   logger::init(log_options);
-
+  DBHandlerTestFixture::createDBHandler();
   QR::init(BASE_PATH);
 
   g_calcite = QR::get()->getCatalog()->getCalciteMgr();

@@ -233,6 +233,7 @@ struct FlatBufferManager {
 
   struct DTypeMetadataSizeDictId {
     int64_t size;
+    int32_t db_id;
     int32_t dict_id;
   };
 
@@ -296,17 +297,32 @@ struct FlatBufferManager {
   }
 
   // dtype dict id accessors:
-  void setDTypeMetadataDictId(int32_t dict_id) {
+  void setDTypeMetadataDictKey(int32_t db_id, int32_t dict_id) {
     switch (getDTypeMetadataKind()) {
       case DTypeMetadataKind::SIZE:
         break;
       case DTypeMetadataKind::SIZE_DICTID: {
         DTypeMetadataSizeDictId* metadata =
             reinterpret_cast<DTypeMetadataSizeDictId*>(getDTypeMetadataBuffer());
+        metadata->db_id = db_id;
         metadata->dict_id = dict_id;
       } break;
       default:;
     }
+  }
+
+  int32_t getDTypeMetadataDictDbId() const {
+    switch (getDTypeMetadataKind()) {
+      case DTypeMetadataKind::SIZE:
+        break;
+      case DTypeMetadataKind::SIZE_DICTID: {
+        const DTypeMetadataSizeDictId* metadata =
+            reinterpret_cast<const DTypeMetadataSizeDictId*>(getDTypeMetadataBuffer());
+        return metadata->db_id;
+      }
+      default:;
+    }
+    return {};
   }
 
   int32_t getDTypeMetadataDictId() const {
@@ -320,7 +336,7 @@ struct FlatBufferManager {
       }
       default:;
     }
-    return 0;
+    return {};
   }
 
   // VarlenArray support:

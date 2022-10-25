@@ -6,6 +6,9 @@
 #include <functional>
 #include <string>
 
+#include "Shared/DbObjectKeys.h"
+
+// TODO: Replace DictRef with StringDictKey.
 struct dict_ref_t {
   int32_t dbId;
   int32_t dictId;
@@ -16,6 +19,8 @@ struct dict_ref_t {
 
   dict_ref_t() : dbId(invalidDbId), dictId(invalidDictId) {}
   dict_ref_t(int32_t db_id, int32_t dict_id) : dbId(db_id), dictId(dict_id) {}
+
+  operator shared::StringDictKey() const { return {dbId, dictId}; }
 
   inline bool operator==(const struct dict_ref_t& rhs) const {
     return this->dictId == rhs.dictId && this->dbId == rhs.dbId;
