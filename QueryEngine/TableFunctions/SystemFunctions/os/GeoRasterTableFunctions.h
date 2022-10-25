@@ -20,6 +20,7 @@
 
 #include <vector>
 #include "QueryEngine/heavydbTypes.h"
+#include "Shared/StringTransform.h"
 
 // Note that GAUSS_AVG and AVG only valid in context of fill pass
 enum class RasterAggType { COUNT, MIN, MAX, SUM, AVG, GAUSS_AVG, BOX_AVG, INVALID };
@@ -99,11 +100,11 @@ struct ComputeAgg<RasterAggType::BOX_AVG> {};
 
 template <typename T, typename Z>
 struct GeoRaster {
-  const RasterAggType raster_agg_type_;
   const T bin_dim_meters_;
   const bool geographic_coords_;
   const Z null_sentinel_;
   std::vector<Z> z_;
+  std::vector<std::vector<Z>> z_cols_;
   std::vector<Z> counts_;
   T x_min_{0};
   T x_max_{0};
@@ -128,6 +129,15 @@ struct GeoRaster {
             const Column<T2>& input_y,
             const Column<Z2>& input_z,
             const RasterAggType raster_agg_type,
+            const double bin_dim_meters,
+            const bool geographic_coords,
+            const bool align_bins_to_zero_based_grid);
+
+  template <typename T2, typename Z2>
+  GeoRaster(const Column<T2>& input_x,
+            const Column<T2>& input_y,
+            const ColumnList<Z2>& input_z_cols,
+            const std::vector<RasterAggType>& raster_agg_types,
             const double bin_dim_meters,
             const bool geographic_coords,
             const bool align_bins_to_zero_based_grid);
@@ -196,12 +206,19 @@ struct GeoRaster {
   void compute(const Column<T2>& input_x,
                const Column<T2>& input_y,
                const Column<Z2>& input_z,
+               std::vector<Z>& output_z,
+               const RasterAggType raster_agg_type,
                const size_t max_inputs_per_thread);
 
   void fill_bins_from_neighbors(
       const int64_t neighborhood_fill_radius,
       const bool fill_only_nulls,
       const RasterAggType raster_agg_type = RasterAggType::GAUSS_AVG);
+
+  void fill_bins_from_neighbors(const int64_t neighborhood_fill_radius,
+                                const bool fill_only_nulls,
+                                const RasterAggType raster_agg_type,
+                                std::vector<Z>& z);
 
   bool get_nxn_neighbors_if_not_null(const int64_t x_bin,
                                      const int64_t y_bin,
@@ -218,6 +235,11 @@ struct GeoRaster {
                              Column<T>& output_x,
                              Column<T>& output_y,
                              Column<Z>& output_z) const;
+
+  int64_t outputDenseColumns(TableFunctionManager& mgr,
+                             Column<T>& output_x,
+                             Column<T>& output_y,
+                             Column<Array<Z>>& output_z) const;
 
   int64_t outputDenseColumns(TableFunctionManager& mgr,
                              Column<T>& output_x,
@@ -248,19 +270,23 @@ struct GeoRaster {
 
   inline Z fill_bin_from_avg_box_neighborhood(const int64_t x_centroid_bin,
                                               const int64_t y_centroid_bin,
-                                              const int64_t bins_radius) const;
+                                              const int64_t bins_radius,
+                                              std::vector<Z>& z) const;
 
   template <RasterAggType AggType>
   inline Z fill_bin_from_box_neighborhood(const int64_t x_centroid_bin,
                                           const int64_t y_centroid_bin,
                                           const int64_t bins_radius,
-                                          const ComputeAgg<AggType>& compute_agg) const;
+                                          const ComputeAgg<AggType>& compute_agg,
+                                          std::vector<Z>& z) const;
 
   template <RasterAggType AggType>
   void fill_bins_from_box_neighborhood(const int64_t neighborhood_fill_radius,
-                                       const bool fill_only_nulls);
+                                       const bool fill_only_nulls,
+                                       std::vector<Z>& z);
   void fill_bins_from_gaussian_neighborhood(const int64_t neighborhood_fill_radius,
-                                            const bool fill_only_nulls);
+                                            const bool fill_only_nulls,
+                                            std::vector<Z>& z);
 };
 
 template <typename T, typename Z>
@@ -459,6 +485,84 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
 
   return geo_raster.outputDenseColumns(mgr, output_x, output_y, output_z);
 }
+
+// clang-format off
+/*
+  UDTF: tf_geo_multi_rasterize__cpu_template(TableFunctionManager,
+  Cursor<Column<T> x, Column<T> y, ColumnList<Z> z> raster, TextEncodingNone agg_types,
+  TextEncodingNone fill_agg_types, T bin_dim_meters | require="bin_dim_meters > 0", bool geographic_coords,
+  int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0",
+  bool fill_only_nulls) | filter_table_function_transpose=on ->
+  Column<T> x, Column<T> y, Column<Array<Z>> z, T=[float, double], Z=[float, double]
+ */
+// clang-format on
+
+template <typename T, typename Z>
+TEMPLATE_NOINLINE int32_t
+tf_geo_multi_rasterize__cpu_template(TableFunctionManager& mgr,
+                                     const Column<T>& input_x,
+                                     const Column<T>& input_y,
+                                     const ColumnList<Z>& input_z_cols,
+                                     const TextEncodingNone& agg_types_str,
+                                     const TextEncodingNone& fill_agg_types_str,
+                                     const T bin_dim_meters,
+                                     const bool geographic_coords,
+                                     const int64_t neighborhood_fill_radius,
+                                     const bool fill_only_nulls,
+                                     Column<T>& output_x,
+                                     Column<T>& output_y,
+                                     Column<Array<Z>>& output_z) {
+  const int64_t num_z_cols = input_z_cols.numCols();
+  const auto agg_types_strs = split(agg_types_str.getString(), "|");
+  const auto fill_agg_types_strs = split(fill_agg_types_str.getString(), "|");
+  if (num_z_cols != static_cast<int64_t>(agg_types_strs.size()) ||
+      num_z_cols != static_cast<int64_t>(fill_agg_types_strs.size())) {
+    const std::string error_msg =
+        "Mismatch between number of cols and number of agg or fill agg types.";
+    return mgr.ERROR_MESSAGE(error_msg);
+  }
+
+  auto get_agg_types = [](const std::vector<std::string>& agg_types_strs,
+                          const bool is_fill_agg) {
+    std::vector<RasterAggType> agg_types;
+    for (const auto& agg_type_str : agg_types_strs) {
+      agg_types.emplace_back(get_raster_agg_type(agg_type_str, is_fill_agg));
+      if (agg_types.back() == RasterAggType::INVALID) {
+        throw std::runtime_error("Invalid agg type");
+      }
+    }
+    return agg_types;
+  };
+
+  std::vector<RasterAggType> raster_agg_types;
+  std::vector<RasterAggType> raster_fill_agg_types;
+  try {
+    raster_agg_types = get_agg_types(agg_types_strs, false);
+    raster_fill_agg_types = get_agg_types(fill_agg_types_strs, true);
+  } catch (std::exception& e) {
+    return mgr.ERROR_MESSAGE(e.what());
+  }
+
+  GeoRaster<T, Z> geo_raster(input_x,
+                             input_y,
+                             input_z_cols,
+                             raster_agg_types,
+                             bin_dim_meters,
+                             geographic_coords,
+                             true);
+  geo_raster.setMetadata(mgr);
+
+  if (neighborhood_fill_radius > 0) {
+    for (int64_t z_col_idx = 0; z_col_idx < num_z_cols; ++z_col_idx) {
+      geo_raster.fill_bins_from_neighbors(neighborhood_fill_radius,
+                                          fill_only_nulls,
+                                          raster_fill_agg_types[z_col_idx],
+                                          geo_raster.z_cols_[z_col_idx]);
+    }
+  }
+  return geo_raster.outputDenseColumns(mgr, output_x, output_y, output_z);
+}
+
 // clang-format off
 /*
   UDTF: tf_geo_rasterize_slope__cpu_template(TableFunctionManager,

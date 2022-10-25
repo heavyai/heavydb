@@ -339,6 +339,7 @@ bool is_table_function_whitelisted(const std::string& function_name) {
       "tf_mandelbrot_cuda",
       "tf_mandelbrot_cuda_float",
       "tf_geo_rasterize",
+      "tf_geo_multi_rasterize",
       "tf_geo_rasterize_slope",
       "tf_compute_dwell_times",
       "tf_feature_similarity",

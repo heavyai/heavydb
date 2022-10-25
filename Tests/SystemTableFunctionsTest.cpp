@@ -859,6 +859,53 @@ TEST_F(SystemTFs, GeoRasterize) {
         }
       }
     }
+    // Test tf_geo_multi_rasterize
+    {
+      const std::string multi_raster_values_sql =
+          "CURSOR(SELECT CAST(x AS DOUBLE) AS x, CAST(y AS DOUBLE) AS y, CAST(z0 AS "
+          "FLOAT) AS "
+          "z0, CAST(z1 AS FLOAT) AS z1 FROM (VALUES (0.0, 0.0, 10.0, 20.0), (1.1, 1.2, "
+          "20.0, 30.0), "
+          "(0.8, 0., 5.0, 15.0), (1.2, 1.43, 15.0, 25.0), (-0.4, 0.8, 40.0, 50.0)) AS "
+          "t(x, y, z0, z1))";
+      const std::string non_named_arg_query =
+          "SELECT x, y, z[1] AS z0, z[2] AS z1 FROM "
+          "TABLE(tf_geo_multi_rasterize(" +
+          multi_raster_values_sql +
+          ", 'MAX|MAX' /* agg_types */, 'BOX_AVG|BOX_AVG' /* fill_agg_types */, "
+          "1.0 /* bin_dim_meters */, false /* geographic_coords "
+          "*/, 0 /* neighborhood_fill_radius */, false /* fill_only_nulls */)) ORDER BY "
+          "x, y;";
+      const auto named_arg_query =
+          "SELECT x, y, z[1] AS z0, z[2] AS z1 FROM "
+          "TABLE(tf_geo_multi_rasterize(raster => " +
+          multi_raster_values_sql +
+          ", agg_types => 'MAX|MAX', fill_agg_types => 'BOX_AVG|BOX_AVG', "
+          "bin_dim_meters => 1.0, neighborhood_fill_radius => 0, "
+          "geographic_coords=>false, fill_only_nulls => false)) ORDER BY x, y;";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        const size_t num_rows = rows->rowCount();
+        ASSERT_EQ(num_rows, size_t(6));
+        ASSERT_EQ(rows->colCount(), size_t(4));
+        const int64_t null_val = inline_fp_null_val(SQLTypeInfo(kFLOAT, false));
+        const std::vector<int64_t> expected_z0_values = {
+            40, null_val, 10, null_val, null_val, 20};
+        const std::vector<int64_t> expected_z1_values = {
+            50, null_val, 20, null_val, null_val, 30};
+        for (size_t r = 0; r < num_rows; ++r) {
+          auto crt_row = rows->getNextRow(false, false);
+          ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[0]))),
+                    static_cast<int64_t>(r) / 2 - 1);
+          ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[1]))),
+                    static_cast<int64_t>(r) % 2);
+          ASSERT_EQ(static_cast<int64_t>(TestHelpers::v<float>(crt_row[2])),
+                    expected_z0_values[r]);
+          ASSERT_EQ(static_cast<int64_t>(TestHelpers::v<float>(crt_row[3])),
+                    expected_z1_values[r]);
+        }
+      }
+    }
 
     // TODO(todd): Add tests for geographic coords
   }

@@ -39,8 +39,7 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
                            const double bin_dim_meters,
                            const bool geographic_coords,
                            const bool align_bins_to_zero_based_grid)
-    : raster_agg_type_(raster_agg_type)
-    , bin_dim_meters_(bin_dim_meters)
+    : bin_dim_meters_(bin_dim_meters)
     , geographic_coords_(geographic_coords)
     , null_sentinel_(inline_null_value<Z>()) {
   auto timer = DEBUG_TIMER(__func__);
@@ -69,7 +68,60 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
   }
 
   calculate_bins_and_scales();
-  compute(input_x, input_y, input_z, max_inputs_per_thread);
+  compute(input_x, input_y, input_z, z_, raster_agg_type, max_inputs_per_thread);
+}
+
+template <typename T, typename Z>
+template <typename T2, typename Z2>
+GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
+                           const Column<T2>& input_y,
+                           const ColumnList<Z2>& input_z_cols,
+                           const std::vector<RasterAggType>& raster_agg_types,
+                           const double bin_dim_meters,
+                           const bool geographic_coords,
+                           const bool align_bins_to_zero_based_grid)
+    : bin_dim_meters_(bin_dim_meters)
+    , geographic_coords_(geographic_coords)
+    , null_sentinel_(inline_null_value<Z>()) {
+  auto timer = DEBUG_TIMER(__func__);
+  const int64_t input_size{input_x.size()};
+  const int64_t num_z_cols = input_z_cols.numCols();
+  if (num_z_cols != static_cast<int64_t>(raster_agg_types.size())) {
+    throw std::runtime_error("Number of z cols and raster_agg_types do not match.");
+  }
+  if (input_size <= 0) {
+    num_bins_ = 0;
+    num_x_bins_ = 0;
+    num_y_bins_ = 0;
+    return;
+  }
+  z_cols_.resize(num_z_cols);
+  const auto min_max_x = get_column_min_max(input_x);
+  const auto min_max_y = get_column_min_max(input_y);
+  x_min_ = min_max_x.first;
+  x_max_ = min_max_x.second;
+  y_min_ = min_max_y.first;
+  y_max_ = min_max_y.second;
+
+  if (align_bins_to_zero_based_grid && !geographic_coords_) {
+    // For implicit, data-defined bounds, we treat the max of the x and y ranges as
+    // inclusive (closed interval), since if the max of the data in either x/y dimensions
+    // is at the first value of the next bin, values at that max will be discarded if we
+    // don't include the final bin. For exmaple, if the input data (perhaps already binned
+    // with a group by query) goes from 0.0 to 40.0 in both x and y directions, we should
+    // have the last x/y bins cover the range [40.0, 50.0), not [30.0, 40.0)
+    align_bins_max_inclusive();
+  }
+
+  calculate_bins_and_scales();
+  for (int64_t z_col_idx = 0; z_col_idx < num_z_cols; ++z_col_idx) {
+    compute(input_x,
+            input_y,
+            input_z_cols[z_col_idx],
+            z_cols_[z_col_idx],
+            raster_agg_types[z_col_idx],
+            max_inputs_per_thread);
+  }
 }
 
 // Allow input types to GeoRaster that are different than class types/output Z type
@@ -88,8 +140,7 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
                            const T x_max,
                            const T y_min,
                            const T y_max)
-    : raster_agg_type_(raster_agg_type)
-    , bin_dim_meters_(bin_dim_meters)
+    : bin_dim_meters_(bin_dim_meters)
     , geographic_coords_(geographic_coords)
     , null_sentinel_(inline_null_value<Z>())
     , x_min_(x_min)
@@ -107,7 +158,7 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
     align_bins_max_exclusive();
   }
   calculate_bins_and_scales();
-  compute(input_x, input_y, input_z, max_inputs_per_thread);
+  compute(input_x, input_y, input_z, z_, raster_agg_type, max_inputs_per_thread);
 }
 
 template <typename T, typename Z>
@@ -183,9 +234,8 @@ void GeoRaster<T, Z>::computeSerialImpl(const Column<T2>& input_x,
                                         std::vector<Z>& output_z) {
   auto timer = DEBUG_TIMER(__func__);
   const int64_t input_size{input_z.size()};
-  const Z agg_sentinel = raster_agg_type_ == RasterAggType::MIN
-                             ? std::numeric_limits<Z>::max()
-                             : std::numeric_limits<Z>::lowest();
+  const Z agg_sentinel = AggType == RasterAggType::MIN ? std::numeric_limits<Z>::max()
+                                                       : std::numeric_limits<Z>::lowest();
   output_z.resize(num_bins_, agg_sentinel);
   ComputeAgg<AggType> compute_agg;
   for (int64_t sparse_idx = 0; sparse_idx != input_size; ++sparse_idx) {
@@ -261,9 +311,8 @@ void GeoRaster<T, Z>::computeParallelImpl(const Column<T2>& input_x,
 
   std::vector<std::vector<Z>> per_thread_z_outputs(num_threads);
   // Fix
-  const Z agg_sentinel = raster_agg_type_ == RasterAggType::MIN
-                             ? std::numeric_limits<Z>::max()
-                             : std::numeric_limits<Z>::lowest();
+  const Z agg_sentinel = AggType == RasterAggType::MIN ? std::numeric_limits<Z>::max()
+                                                       : std::numeric_limits<Z>::lowest();
 
   tbb::parallel_for(tbb::blocked_range<size_t>(0, num_threads),
                     [&](const tbb::blocked_range<size_t>& r) {
@@ -313,31 +362,33 @@ template <typename T2, typename Z2>
 void GeoRaster<T, Z>::compute(const Column<T2>& input_x,
                               const Column<T2>& input_y,
                               const Column<Z2>& input_z,
+                              std::vector<Z>& output_z,
+                              const RasterAggType raster_agg_type,
                               const size_t max_inputs_per_thread) {
-  switch (raster_agg_type_) {
+  switch (raster_agg_type) {
     case RasterAggType::COUNT: {
       computeParallelImpl<RasterAggType::COUNT, T2, Z2>(
-          input_x, input_y, input_z, z_, max_inputs_per_thread);
+          input_x, input_y, input_z, output_z, max_inputs_per_thread);
       break;
     }
     case RasterAggType::MIN: {
       computeParallelImpl<RasterAggType::MIN, T2, Z2>(
-          input_x, input_y, input_z, z_, max_inputs_per_thread);
+          input_x, input_y, input_z, output_z, max_inputs_per_thread);
       break;
     }
     case RasterAggType::MAX: {
       computeParallelImpl<RasterAggType::MAX, T2, Z2>(
-          input_x, input_y, input_z, z_, max_inputs_per_thread);
+          input_x, input_y, input_z, output_z, max_inputs_per_thread);
       break;
     }
     case RasterAggType::SUM: {
       computeParallelImpl<RasterAggType::SUM, T2, Z2>(
-          input_x, input_y, input_z, z_, max_inputs_per_thread);
+          input_x, input_y, input_z, output_z, max_inputs_per_thread);
       break;
     }
     case RasterAggType::AVG: {
       computeParallelImpl<RasterAggType::SUM, T2, Z2>(
-          input_x, input_y, input_z, z_, max_inputs_per_thread);
+          input_x, input_y, input_z, output_z, max_inputs_per_thread);
       computeParallelImpl<RasterAggType::COUNT, T2, Z2>(
           input_x, input_y, input_z, counts_, max_inputs_per_thread);
       tbb::parallel_for(tbb::blocked_range<size_t>(0, num_bins_),
@@ -349,7 +400,7 @@ void GeoRaster<T, Z>::compute(const Column<T2>& input_x,
                             // counts[bin_idx] > 1 will avoid division for nulls and 1
                             // counts
                             if (counts_[bin_idx] > 1) {
-                              z_[bin_idx] /= counts_[bin_idx];
+                              output_z[bin_idx] /= counts_[bin_idx];
                             }
                           }
                         });
@@ -362,10 +413,10 @@ void GeoRaster<T, Z>::compute(const Column<T2>& input_x,
 }
 
 template <typename T, typename Z>
-inline Z GeoRaster<T, Z>::fill_bin_from_avg_box_neighborhood(
-    const int64_t x_centroid_bin,
-    const int64_t y_centroid_bin,
-    const int64_t bins_radius) const {
+inline Z GeoRaster<T, Z>::fill_bin_from_avg_box_neighborhood(const int64_t x_centroid_bin,
+                                                             const int64_t y_centroid_bin,
+                                                             const int64_t bins_radius,
+                                                             std::vector<Z>& z) const {
   Z val = 0.0;
   int32_t count = 0;
   for (int64_t y_bin = y_centroid_bin - bins_radius;
@@ -376,7 +427,7 @@ inline Z GeoRaster<T, Z>::fill_bin_from_avg_box_neighborhood(
          x_bin++) {
       if (x_bin >= 0 && x_bin < num_x_bins_ && y_bin >= 0 && y_bin < num_y_bins_) {
         const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
-        const Z bin_val = z_[bin_idx];
+        const Z bin_val = z[bin_idx];
         if (bin_val != null_sentinel_) {
           count++;
           val += bin_val;
@@ -401,24 +452,25 @@ std::vector<double> generate_1d_gaussian_kernel(const int64_t fill_radius, doubl
 template <typename T, typename Z>
 void GeoRaster<T, Z>::fill_bins_from_gaussian_neighborhood(
     const int64_t neighborhood_fill_radius,
-    const bool fill_only_nulls) {
+    const bool fill_only_nulls,
+    std::vector<Z>& z) {
   const double sigma = neighborhood_fill_radius * 2.0 / 6.0;
   const auto gaussian_kernel =
       generate_1d_gaussian_kernel(neighborhood_fill_radius, sigma);
   std::vector<Z> only_nulls_source_z;
   if (fill_only_nulls) {
     // Copy z_
-    only_nulls_source_z.resize(z_.size());
+    only_nulls_source_z.resize(z.size());
     tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_bins_),
                       [&](const tbb::blocked_range<int64_t>& r) {
                         const int64_t end_bin_idx = r.end();
                         for (int64_t bin_idx = r.begin(); bin_idx < end_bin_idx;
                              ++bin_idx) {
-                          only_nulls_source_z[bin_idx] = z_[bin_idx];
+                          only_nulls_source_z[bin_idx] = z[bin_idx];
                         }
                       });
   }
-  auto& source_z = fill_only_nulls ? only_nulls_source_z : z_;
+  auto& source_z = fill_only_nulls ? only_nulls_source_z : z;
 
   std::vector<Z> new_z(num_bins_);
   tbb::parallel_for(
@@ -479,17 +531,17 @@ void GeoRaster<T, Z>::fill_bins_from_gaussian_neighborhood(
         }
       });
   if (fill_only_nulls) {
-    // Only copy convolved results in new_z back to z_ for
-    // values in z_ that are null
+    // Only copy convolved results in new_z back to z for
+    // values in z that are null
     tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_bins_),
                       [&](const tbb::blocked_range<int64_t>& r) {
                         const int64_t end_bin_idx = r.end();
                         for (int64_t bin_idx = r.begin(); bin_idx < end_bin_idx;
                              ++bin_idx) {
-                          if (z_[bin_idx] == null_sentinel_) {
-                            z_[bin_idx] = new_z[bin_idx];
+                          if (z[bin_idx] == null_sentinel_) {
+                            z[bin_idx] = new_z[bin_idx];
                           }
-                          only_nulls_source_z[bin_idx] = z_[bin_idx];
+                          only_nulls_source_z[bin_idx] = z[bin_idx];
                         }
                       });
   } else {
@@ -503,7 +555,8 @@ inline Z GeoRaster<T, Z>::fill_bin_from_box_neighborhood(
     const int64_t x_centroid_bin,
     const int64_t y_centroid_bin,
     const int64_t bins_radius,
-    const ComputeAgg<AggType>& compute_agg) const {
+    const ComputeAgg<AggType>& compute_agg,
+    std::vector<Z>& z) const {
   const Z agg_sentinel = AggType == RasterAggType::MIN ? std::numeric_limits<Z>::max()
                                                        : std::numeric_limits<Z>::lowest();
   Z val{agg_sentinel};
@@ -515,7 +568,7 @@ inline Z GeoRaster<T, Z>::fill_bin_from_box_neighborhood(
          x_bin++) {
       if (x_bin >= 0 && x_bin < num_x_bins_ && y_bin >= 0 && y_bin < num_y_bins_) {
         const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
-        compute_agg(z_[bin_idx], val, null_sentinel_);
+        compute_agg(z[bin_idx], val, null_sentinel_);
       }
     }
   }
@@ -526,7 +579,8 @@ template <typename T, typename Z>
 template <RasterAggType AggType>
 void GeoRaster<T, Z>::fill_bins_from_box_neighborhood(
     const int64_t neighborhood_fill_radius,
-    const bool fill_only_nulls) {
+    const bool fill_only_nulls,
+    std::vector<Z>& z) {
   CHECK(AggType != RasterAggType::GAUSS_AVG);  // Should have gone down Gaussian path
   CHECK(AggType != RasterAggType::AVG);        // Should be BOX_AVG for fill pass
   CHECK(AggType != RasterAggType::INVALID);
@@ -539,14 +593,14 @@ void GeoRaster<T, Z>::fill_bins_from_box_neighborhood(
                         for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
                           const int64_t bin_idx =
                               x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
-                          const Z z_val = z_[bin_idx];
+                          const Z z_val = z[bin_idx];
                           if (!fill_only_nulls || z_val == null_sentinel_) {
                             if constexpr (AggType == RasterAggType::BOX_AVG) {
                               new_z[bin_idx] = fill_bin_from_avg_box_neighborhood(
-                                  x_bin, y_bin, neighborhood_fill_radius);
+                                  x_bin, y_bin, neighborhood_fill_radius, z);
                             } else {
                               new_z[bin_idx] = fill_bin_from_box_neighborhood(
-                                  x_bin, y_bin, neighborhood_fill_radius, compute_agg);
+                                  x_bin, y_bin, neighborhood_fill_radius, compute_agg, z);
                             }
                           } else {
                             new_z[bin_idx] = z_val;
@@ -554,13 +608,22 @@ void GeoRaster<T, Z>::fill_bins_from_box_neighborhood(
                         }
                       }
                     });
-  z_.swap(new_z);
+  z.swap(new_z);
 }
 
 template <typename T, typename Z>
 void GeoRaster<T, Z>::fill_bins_from_neighbors(const int64_t neighborhood_fill_radius,
                                                const bool fill_only_nulls,
                                                const RasterAggType raster_fill_agg_type) {
+  fill_bins_from_neighbors(
+      neighborhood_fill_radius, fill_only_nulls, raster_fill_agg_type, z_);
+}
+
+template <typename T, typename Z>
+void GeoRaster<T, Z>::fill_bins_from_neighbors(const int64_t neighborhood_fill_radius,
+                                               const bool fill_only_nulls,
+                                               const RasterAggType raster_fill_agg_type,
+                                               std::vector<Z>& z) {
   auto timer = DEBUG_TIMER(__func__);
   // Note: only GAUSSIAN_AVG supports Gaussian 2-pass technique currently,
   // as only an AVG aggregate makes sense for Gaussian blur. However we
@@ -570,32 +633,32 @@ void GeoRaster<T, Z>::fill_bins_from_neighbors(const int64_t neighborhood_fill_r
 
   switch (raster_fill_agg_type) {
     case RasterAggType::COUNT: {
-      fill_bins_from_box_neighborhood<RasterAggType::COUNT>(neighborhood_fill_radius,
-                                                            fill_only_nulls);
+      fill_bins_from_box_neighborhood<RasterAggType::COUNT>(
+          neighborhood_fill_radius, fill_only_nulls, z);
       break;
     }
     case RasterAggType::MIN: {
-      fill_bins_from_box_neighborhood<RasterAggType::MIN>(neighborhood_fill_radius,
-                                                          fill_only_nulls);
+      fill_bins_from_box_neighborhood<RasterAggType::MIN>(
+          neighborhood_fill_radius, fill_only_nulls, z);
       break;
     }
     case RasterAggType::MAX: {
-      fill_bins_from_box_neighborhood<RasterAggType::MAX>(neighborhood_fill_radius,
-                                                          fill_only_nulls);
+      fill_bins_from_box_neighborhood<RasterAggType::MAX>(
+          neighborhood_fill_radius, fill_only_nulls, z);
       break;
     }
     case RasterAggType::SUM: {
-      fill_bins_from_box_neighborhood<RasterAggType::SUM>(neighborhood_fill_radius,
-                                                          fill_only_nulls);
+      fill_bins_from_box_neighborhood<RasterAggType::SUM>(
+          neighborhood_fill_radius, fill_only_nulls, z);
       break;
     }
     case RasterAggType::BOX_AVG: {
-      fill_bins_from_box_neighborhood<RasterAggType::BOX_AVG>(neighborhood_fill_radius,
-                                                              fill_only_nulls);
+      fill_bins_from_box_neighborhood<RasterAggType::BOX_AVG>(
+          neighborhood_fill_radius, fill_only_nulls, z);
       break;
     }
     case RasterAggType::GAUSS_AVG: {
-      fill_bins_from_gaussian_neighborhood(neighborhood_fill_radius, fill_only_nulls);
+      fill_bins_from_gaussian_neighborhood(neighborhood_fill_radius, fill_only_nulls, z);
       break;
     }
     default: {
@@ -754,6 +817,49 @@ int64_t GeoRaster<T, Z>::outputDenseColumns(TableFunctionManager& mgr,
           }
         }
       });
+  return num_bins_;
+}
+
+template <typename T, typename Z>
+int64_t GeoRaster<T, Z>::outputDenseColumns(TableFunctionManager& mgr,
+                                            Column<T>& output_x,
+                                            Column<T>& output_y,
+                                            Column<Array<Z>>& output_z) const {
+  auto timer = DEBUG_TIMER(__func__);
+  const int64_t num_z_cols = static_cast<int64_t>(z_cols_.size());
+  mgr.set_output_array_values_total_number(
+      /*output column index=*/2,
+      /*upper bound to the number of items in all output arrays=*/num_bins_ * num_z_cols);
+  mgr.set_output_row_size(num_bins_);
+  for (int64_t y_bin = 0; y_bin != num_y_bins_; ++y_bin) {
+    for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
+      const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+      output_x[bin_idx] = x_min_ + (x_bin + 0.5) * x_scale_bin_to_input_;
+      output_y[bin_idx] = y_min_ + (y_bin + 0.5) * y_scale_bin_to_input_;
+      Array<Z> z_array = output_z.getItem(bin_idx, num_z_cols);
+      for (int64_t z_col_idx = 0; z_col_idx < num_z_cols; ++z_col_idx) {
+        const Z z_val = z_cols_[z_col_idx][bin_idx];
+        z_array[z_col_idx] = z_val;
+      }
+    }
+  }
+
+  // tbb::parallel_for(
+  //    tbb::blocked_range<int64_t>(0, num_y_bins_),
+  //    [&](const tbb::blocked_range<int64_t>& r) {
+  //      for (int64_t y_bin = r.begin(); y_bin != r.end(); ++y_bin) {
+  //        for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
+  //          const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+  //          output_x[bin_idx] = x_min_ + (x_bin + 0.5) * x_scale_bin_to_input_;
+  //          output_y[bin_idx] = y_min_ + (y_bin + 0.5) * y_scale_bin_to_input_;
+  //          Array<Z> z_array = output_z.getItem(bin_idx, num_z_cols);
+  //          for (int64_t z_col_idx = 0; z_col_idx < num_z_cols; ++z_col_idx) {
+  //            const Z z_val = z_cols_[z_col_idx][bin_idx];
+  //            z_array[z_col_idx] = z_val;
+  //          }
+  //        }
+  //      }
+  //    });
   return num_bins_;
 }
 
