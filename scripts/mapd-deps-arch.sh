@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# Must be run from the scripts/ directory as the non-root user.
+# Since we use an older version of Apache Arrow, automatic updates to arrow can be avoided by
+# adding it to the uncommented IgnorePkg line in /etc/pacman.conf. Example:
+# IgnorePkg   = arrow
+
 set -e
 set -x
 
@@ -25,6 +30,7 @@ yay -S \
     gdal \
     geos \
     git \
+    glslang \
     go \
     google-glog \
     intel-tbb \
@@ -38,6 +44,7 @@ yay -S \
     ninja \
     python-numpy \
     snappy \
+    spirv-cross \
     thrift \
     vulkan-headers \
     wget \
@@ -45,16 +52,6 @@ yay -S \
 
 # Install Arrow
 pushd arch/arrow
-makepkg -cis
-popd
-
-# Install SPIRV-Cross
-pushd arch/spirv-cross
-makepkg -cis
-popd
-
-# Install glslang
-pushd arch/glslang
 makepkg -cis
 popd
 

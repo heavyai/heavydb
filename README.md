@@ -314,6 +314,12 @@ The [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) and [scripts/mapd
 
 Note: Apache Arrow, while available in the AUR, requires a few custom build flags in order to be used with Core. A custom PKGBUILD for it is included.
 
+
+Note: Package folly, while available in the AUR, is not supported while for building Core on Arch. Similarly for AWS S3. If these packages are installed, support for them should be disabled when building Core. To do so, use the following options when running CMake:
+
+    cmake -DENABLE_FOLLY=off -DENABLE_AWS_S3=off ..
+
+
 ### CUDA
 
 CUDA and the NVIDIA drivers may be installed using the following.
