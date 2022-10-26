@@ -638,58 +638,87 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
            (Column<int>, Column<int>, Column<int>, int)
    */
   // clang-format on
-  std::vector<std::vector<SQLTypeInfo>> type_infos_variants;
-  for (auto ti : type_infos_input) {
-    if (type_infos_variants.begin() == type_infos_variants.end()) {
-      type_infos_variants.push_back({ti});
-      if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
-        if (ti.is_column()) {
-          auto mti = generate_column_list_type(ti);
-          if (mti.get_subtype() == kNULLT) {
-            continue;  // skip unsupported element type.
-          }
-          mti.set_dimension(1);
-          type_infos_variants.push_back({mti});
-        }
+
+  // We first check if any of the matched extension functions
+  // in the ext_funcs list allow for column lists, as if they do not,
+  // we do not need to account for possible input permutations with
+  // ColumnList arguments, which currently can be slow time
+  // to match with the extension functions if the number of arguments
+  // is high
+
+  // Todo: Develop faster matching algorithm to avoid such performance
+  // hits when ColumnLists are allowed
+
+  bool ext_funcs_allow_column_lists{false};
+  for (const auto& ext_func : ext_funcs) {
+    auto ext_func_args = ext_func.getInputArgs();
+    for (const auto& arg : ext_func_args) {
+      if (is_ext_arg_type_column_list(arg)) {
+        ext_funcs_allow_column_lists = true;
+        break;
       }
-      continue;
     }
-    std::vector<std::vector<SQLTypeInfo>> new_type_infos_variants;
-    for (auto& type_infos : type_infos_variants) {
-      if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
-        if (ti.is_column()) {
-          auto new_type_infos = type_infos;  // makes a copy
-          const auto& last = type_infos.back();
-          if (last.is_column_list() && last.has_same_itemtype(ti)) {
-            // last column_list consumes column argument if item types match
-            new_type_infos.back().set_dimension(last.get_dimension() + 1);
-          } else {
-            // add column as column_list argument
+    if (ext_funcs_allow_column_lists) {
+      break;
+    }
+  }
+
+  std::vector<std::vector<SQLTypeInfo>> type_infos_variants;
+  if (ext_funcs_allow_column_lists) {
+    for (const auto& ti : type_infos_input) {
+      if (type_infos_variants.begin() == type_infos_variants.end()) {
+        type_infos_variants.push_back({ti});
+        if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
+          if (ti.is_column()) {
             auto mti = generate_column_list_type(ti);
             if (mti.get_subtype() == kNULLT) {
-              // skip unsupported element type
-              type_infos.push_back(ti);
-              continue;
+              continue;  // skip unsupported element type.
             }
             mti.set_dimension(1);
-            new_type_infos.push_back(mti);
+            type_infos_variants.push_back({mti});
           }
-          new_type_infos_variants.push_back(new_type_infos);
         }
+        continue;
       }
-      type_infos.push_back(ti);
+      std::vector<std::vector<SQLTypeInfo>> new_type_infos_variants;
+      for (auto& type_infos : type_infos_variants) {
+        if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
+          if (ti.is_column()) {
+            auto new_type_infos = type_infos;  // makes a copy
+            const auto& last = type_infos.back();
+            if (last.is_column_list() && last.has_same_itemtype(ti)) {
+              // last column_list consumes column argument if item types match
+              new_type_infos.back().set_dimension(last.get_dimension() + 1);
+            } else {
+              // add column as column_list argument
+              auto mti = generate_column_list_type(ti);
+              if (mti.get_subtype() == kNULLT) {
+                // skip unsupported element type
+                type_infos.push_back(ti);
+                continue;
+              }
+              mti.set_dimension(1);
+              new_type_infos.push_back(mti);
+            }
+            new_type_infos_variants.push_back(new_type_infos);
+          }
+        }
+        type_infos.push_back(ti);
+      }
+      type_infos_variants.insert(type_infos_variants.end(),
+                                 new_type_infos_variants.begin(),
+                                 new_type_infos_variants.end());
     }
-    type_infos_variants.insert(type_infos_variants.end(),
-                               new_type_infos_variants.begin(),
-                               new_type_infos_variants.end());
+  } else {
+    type_infos_variants.emplace_back(type_infos_input);
   }
 
   // Find extension function that gives the best match on the set of
   // argument type variants:
-  for (auto ext_func : ext_funcs) {
+  for (const auto& ext_func : ext_funcs) {
     index++;
 
-    auto ext_func_args = ext_func.getInputArgs();
+    const auto& ext_func_args = ext_func.getInputArgs();
     int index_variant = -1;
     for (const auto& type_infos : type_infos_variants) {
       index_variant++;
