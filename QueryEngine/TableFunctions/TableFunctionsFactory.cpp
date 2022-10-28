@@ -335,7 +335,16 @@ bool is_table_function_whitelisted(const std::string& function_name) {
       "linear_reg_predict",
       "linear_reg_fit_predict",
       "tf_point_cloud_metadata",
-      "tf_load_point_cloud"};
+      "tf_load_point_cloud"
+#ifdef HAVE_OMNIVERSE_CONNECTOR
+      ,
+      "tf_export_ov_terrain_texture",
+      "tf_export_ov_buildings_texture",
+      "tf_export_ov_polygons_2d",
+      "tf_export_ov_polygons_3d",
+      "tf_export_ov_grid_mesh"
+#endif
+  };
 
   return whitelisted_table_functions.find(function_name) !=
          whitelisted_table_functions.end();

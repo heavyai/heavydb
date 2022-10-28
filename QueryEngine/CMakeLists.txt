@@ -245,11 +245,20 @@ if(ENABLE_SYSTEM_TFS)
       list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/Loaders/PdalLoader.cpp)
       list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/PointCloudTableFunctions.cpp)
     endif()
+    if(ENABLE_OMNIVERSE_CONNECTOR)
+      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/OmniverseExportTableFunctions.hpp)
+      list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/OmniverseConnector.cpp)
+      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/OmniverseConnector.h)
+    endif()
   endif()
 endif()
 
 add_library(QueryEngine ${query_engine_source_files} $<$<BOOL:ENABLE_CUDA>:${query_engine_cuda_source_files}>)
 add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init)
+
+if(ENABLE_OMNIVERSE_CONNECTOR)
+  target_compile_definitions(QueryEngine PRIVATE HAVE_OMNIVERSE_CONNECTOR)
+endif()
 
 add_custom_command(
   DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp GeoOpsRuntime.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp ${CMAKE_SOURCE_DIR}/Geospatial/Utm.h
@@ -330,6 +339,10 @@ set(QUERY_ENGINE_LIBS
 )
 
 list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})
+
+if(ENABLE_OMNIVERSE_CONNECTOR)
+  list(APPEND QUERY_ENGINE_LIBS poly2tri)
+endif()
 
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
