@@ -103,6 +103,7 @@ struct GeoRaster {
   const T bin_dim_meters_;
   const bool geographic_coords_;
   const Z null_sentinel_;
+  const bool is_multi_z_;
   std::vector<Z> z_;
   std::vector<std::vector<Z>> z_cols_;
   std::vector<Z> counts_;
@@ -196,6 +197,11 @@ struct GeoRaster {
   inline Z offset_source_z_from_raster_z(const int64_t source_x_bin,
                                          const int64_t source_y_bin,
                                          const Z source_z_offset) const;
+
+  inline Z offset_source_z_from_raster_z(const int64_t source_x_bin,
+                                         const int64_t source_y_bin,
+                                         const Z source_z_offset,
+                                         const int64_t z_col_idx) const;
   void align_bins_max_inclusive();
 
   void align_bins_max_exclusive();
@@ -234,18 +240,23 @@ struct GeoRaster {
   int64_t outputDenseColumns(TableFunctionManager& mgr,
                              Column<T>& output_x,
                              Column<T>& output_y,
-                             Column<Z>& output_z) const;
+                             Column<Z>& output_z,
+                             const int64_t band_idx = 0) const;
+
+  int64_t outputDenseColumn(TableFunctionManager& mgr,
+                            Column<Z>& output_z,
+                            const int64_t band_idx) const;
 
   int64_t outputDenseColumns(TableFunctionManager& mgr,
                              Column<T>& output_x,
                              Column<T>& output_y,
                              Column<Array<Z>>& output_z) const;
 
-  int64_t outputDenseColumns(TableFunctionManager& mgr,
-                             Column<T>& output_x,
-                             Column<T>& output_y,
-                             Column<Z>& output_z,
-                             const int64_t neighborhood_null_fill_radius) const;
+  int64_t outputDenseColumnsAndFill(TableFunctionManager& mgr,
+                                    Column<T>& output_x,
+                                    Column<T>& output_y,
+                                    Column<Z>& output_z,
+                                    const int64_t neighborhood_null_fill_radius) const;
 
   void setMetadata(TableFunctionManager& mgr) const;
 
