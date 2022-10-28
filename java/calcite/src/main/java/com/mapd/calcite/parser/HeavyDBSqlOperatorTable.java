@@ -294,6 +294,9 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
 
     addOperator(new HeavyDB_Geo_PolyBoundsPtr());
     addOperator(new HeavyDB_Geo_PolyRenderGroup());
+    addOperator(new HeavyDB_Geo_PolyCoordsArray());
+    addOperator(new HeavyDB_Geo_PolyRingSizesArray());
+    addOperator(new HeavyDB_Geo_PolyPolyRingsArray());
     addOperator(new convert_meters_to_pixel_width());
     addOperator(new convert_meters_to_pixel_height());
     addOperator(new is_point_in_view());
@@ -3024,6 +3027,63 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+  }
+
+  static class HeavyDB_Geo_PolyCoordsArray extends SqlFunction {
+    HeavyDB_Geo_PolyCoordsArray() {
+      super("HeavyDB_Geo_PolyCoordsArray",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createArrayType(
+              typeFactory.createSqlType(SqlTypeName.DOUBLE), -1);
+    }
+  }
+
+  static class HeavyDB_Geo_PolyRingSizesArray extends SqlFunction {
+    HeavyDB_Geo_PolyRingSizesArray() {
+      super("HeavyDB_Geo_PolyRingSizesArray",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createArrayType(
+              typeFactory.createSqlType(SqlTypeName.INTEGER), -1);
+    }
+  }
+
+  static class HeavyDB_Geo_PolyPolyRingsArray extends SqlFunction {
+    HeavyDB_Geo_PolyPolyRingsArray() {
+      super("HeavyDB_Geo_PolyPolyRingsArray",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createArrayType(
+              typeFactory.createSqlType(SqlTypeName.INTEGER), -1);
     }
   }
 

@@ -156,3 +156,5 @@
   libuv                                     [MIT](https://github.com/libuv/libuv/blob/v1.x/LICENSE)                                            Distributed consensus
   ---                                       ---                                                                                                ---
   stb_image                                 [MIT](https://github.com/nothings/stb/blob/master/LICENSE)                                         Image file utils
+  ---                                       ---                                                                                                ---
+  poly2tri                                  [BSD](https://github.com/greenm01/poly2tri/blob/master/LICENSE)                                    Polygon triangulation
