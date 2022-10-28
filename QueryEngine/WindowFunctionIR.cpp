@@ -68,7 +68,8 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
       return codegenWindowFunctionAggregate(co);
     }
     case SqlWindowFunctionKind::LEAD_IN_FRAME:
-    case SqlWindowFunctionKind::LAG_IN_FRAME: {
+    case SqlWindowFunctionKind::LAG_IN_FRAME:
+    case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME: {
       return codegenWindowNavigationFunctionOnFrame(co);
     }
     default: {
@@ -352,12 +353,6 @@ llvm::Value* Executor::codegenWindowNavigationFunctionOnFrame(
       WindowProjectNodeContext::getActiveWindowFunctionContext(this);
   const auto window_func = window_func_context->getWindowFunction();
   const auto window_func_kind = window_func->getKind();
-  // currently, we only support below two window frame navigation functions
-  bool const is_lag_or_lead_in_frame =
-      window_func_kind == SqlWindowFunctionKind::LEAD_IN_FRAME ||
-      window_func_kind == SqlWindowFunctionKind::LAG_IN_FRAME;
-  CHECK(is_lag_or_lead_in_frame);
-  bool const is_lag_in_frame = window_func_kind == SqlWindowFunctionKind::LAG_IN_FRAME;
   const auto& args = window_func->getArgs();
   CHECK(args.size() >= 1 && args.size() <= 3);
   CodeGenerator code_generator(this);
@@ -470,12 +465,27 @@ llvm::Value* Executor::codegenWindowNavigationFunctionOnFrame(
   llvm::Value* modified_cur_row_idx_in_frame_lv{nullptr};
   auto const offset_lv =
       cgen_state_->castToTypeIn(code_generator.codegen(args[1].get(), true, co)[0], 64);
-  if (is_lag_in_frame) {
-    modified_cur_row_idx_in_frame_lv =
-        cgen_state_->ir_builder_.CreateSub(cur_row_idx_in_frame_lv, offset_lv);
-  } else {
-    modified_cur_row_idx_in_frame_lv =
-        cgen_state_->ir_builder_.CreateAdd(cur_row_idx_in_frame_lv, offset_lv);
+  switch (window_func_kind) {
+    case SqlWindowFunctionKind::LAG_IN_FRAME:
+      modified_cur_row_idx_in_frame_lv =
+          cgen_state_->ir_builder_.CreateSub(cur_row_idx_in_frame_lv, offset_lv);
+      break;
+    case SqlWindowFunctionKind::LEAD_IN_FRAME:
+      modified_cur_row_idx_in_frame_lv =
+          cgen_state_->ir_builder_.CreateAdd(cur_row_idx_in_frame_lv, offset_lv);
+      break;
+    case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME: {
+      auto candidate_row_idx =
+          cgen_state_->ir_builder_.CreateAdd(frame_start_bound_lv, offset_lv);
+      auto out_of_frame_bound_lv =
+          cgen_state_->ir_builder_.CreateICmpSGT(candidate_row_idx, frame_end_bound_lv);
+      // return null if the candidate_row_idx is out of frame bounds
+      modified_cur_row_idx_in_frame_lv = cgen_state_->ir_builder_.CreateSelect(
+          out_of_frame_bound_lv, cgen_state_->llInt((int64_t)-1), candidate_row_idx);
+      break;
+    }
+    default:
+      UNREACHABLE() << "Unsupported window function to navigate a window frame.";
   }
   CHECK(modified_cur_row_idx_in_frame_lv);
 

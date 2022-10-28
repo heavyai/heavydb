@@ -2317,13 +2317,25 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       break;
     }
     case SqlWindowFunctionKind::NTH_VALUE:
+    case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME:
       // todo (yoonmin) : args.size() will be three if we support default value
       CHECK_EQ(2u, args.size());
-      // NTH_VALUE may return null value even if the argument is non-null column
+      // NTH_VALUE(_IN_FRAME) may return null value even if the argument is non-null
+      // column
       ti.set_notnull(false);
       if (!args[1]) {
         throw std::runtime_error(
             "NTH_VALUE window function must have a positional argument expression.");
+      }
+      if (window_func_kind == SqlWindowFunctionKind::NTH_VALUE_IN_FRAME) {
+        if (order_keys.empty()) {
+          throw std::runtime_error(::toString(window_func_kind) +
+                                   " requires an ORDER BY clause");
+        }
+        if (!has_framing_clause) {
+          throw std::runtime_error(::toString(window_func_kind) +
+                                   " requires window frame definition");
+        }
       }
       if (args[1]->get_type_info().is_integer()) {
         if (auto* n_value_ptr = dynamic_cast<Analyzer::Constant*>(args[1].get())) {
