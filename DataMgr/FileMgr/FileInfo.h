@@ -60,6 +60,7 @@ struct FileInfo {
   size_t numPages;             /// the number of pages in the file
   bool isDirty{false};         // True if writes have occured since last sync
   std::set<size_t> freePages;  /// set of page numbers of free pages
+  std::string file_path;
   mutable std::mutex freePagesMutex_;
   mutable std::mutex readWriteMutex_;
 
@@ -69,6 +70,7 @@ struct FileInfo {
            FILE* f,
            const size_t pageSize,
            const size_t numPages,
+           const std::string& file_path,
            const bool init = false);
 
   /// Destructor

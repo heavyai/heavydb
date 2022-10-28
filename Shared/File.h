@@ -41,10 +41,10 @@ std::string get_data_file_path(const std::string& base_path,
 
 std::string get_legacy_data_file_path(const std::string& new_data_file_path);
 
-FILE* create(const std::string& basePath,
-             const int fileId,
-             const size_t pageSize,
-             const size_t npages);
+std::pair<FILE*, std::string> create(const std::string& basePath,
+                                     const int fileId,
+                                     const size_t pageSize,
+                                     const size_t npages);
 
 FILE* create(const std::string& fullPath, const size_t requestedFileSize);
 
@@ -79,12 +79,16 @@ bool removeFile(const std::string basePath, const std::string filename);
  *
  * @param f Pointer to the FILE.
  * @param offset The location within the file from which to read.
- * @param n The number of bytes to be read.
+ * @param size The number of bytes to be read.
  * @param buf The destination buffer to where data is being read from the file.
- * @param err If not NULL, will hold an error code should an error occur.
+ * @param file_path Path of file to read from.
  * @return size_t The number of bytes read.
  */
-size_t read(FILE* f, const size_t offset, const size_t size, int8_t* buf);
+size_t read(FILE* f,
+            const size_t offset,
+            const size_t size,
+            int8_t* buf,
+            const std::string& file_path);
 
 /**
  * @brief Writes the specified number of bytes to the offset position in file f from buf.
@@ -116,10 +120,14 @@ size_t append(FILE* f, const size_t size, const int8_t* buf);
  * @param pageSize The logical page size of the file.
  * @param pageNum The page number from where data is being read.
  * @param buf The destination buffer to where data is being written.
- * @param err If not NULL, will hold an error code should an error occur.
+ * @param file_path Path of file to read from.
  * @return size_t The number of bytes read (should be equal to pageSize).
  */
-size_t readPage(FILE* f, const size_t pageSize, const size_t pageNum, int8_t* buf);
+size_t readPage(FILE* f,
+                const size_t pageSize,
+                const size_t pageNum,
+                int8_t* buf,
+                const std::string& file_path);
 
 /**
  * @brief Writes a page from buf to the file.
