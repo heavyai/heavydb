@@ -52,6 +52,8 @@
 #include <string>
 #include <thread>
 
+#include "../Shared/StackTrace.h"
+
 #ifdef ERROR
 // A common way for this to occur is with a #include <windows.h> which globally defines a
 // number of macros, such as ERROR, that interferes with other headers. This may be
@@ -286,9 +288,11 @@ inline bool fast_logging_check(Severity severity) {
 
 #define VLOGGING(n) logger::fast_logging_check(logger::DEBUG##n)
 
-#define CHECK(condition)            \
-  if (BOOST_UNLIKELY(!(condition))) \
-  LOG(FATAL) << "Check failed: " #condition " "
+#define CHECK(condition)                                \
+  if (BOOST_UNLIKELY(!(condition)))                     \
+  LOG(FATAL) << "Stack trace:\n"                        \
+             << getCurrentStackTrace(1, nullptr, false) \
+             << "Check failed: " #condition " "
 
 #define CHECK_OP(OP, x, y)                                      \
   if (std::string* fatal_msg = logger::Check##OP(x, y, #x, #y)) \

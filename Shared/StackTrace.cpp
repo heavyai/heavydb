@@ -18,6 +18,7 @@
 
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED 1
 
+#include "Shared/StringTransform.h"
 #include "Shared/boost_stacktrace.hpp"
 
 #include <boost/algorithm/string.hpp>
@@ -78,6 +79,10 @@ std::string getCurrentStackTrace(uint32_t num_frames_to_skip,
     }
 
     // add to string
+    frame_string = strip(frame_string);
+    if (frame_string.empty()) {
+      continue;
+    }
     stack_trace += frame_string + std::string("\n");
   }
 
