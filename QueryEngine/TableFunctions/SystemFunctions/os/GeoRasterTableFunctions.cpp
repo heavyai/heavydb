@@ -41,7 +41,8 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
                            const bool align_bins_to_zero_based_grid)
     : bin_dim_meters_(bin_dim_meters)
     , geographic_coords_(geographic_coords)
-    , null_sentinel_(inline_null_value<Z>()) {
+    , null_sentinel_(inline_null_value<Z>())
+    , is_multi_z_(false) {
   auto timer = DEBUG_TIMER(__func__);
   const int64_t input_size{input_z.size()};
   if (input_size <= 0) {
@@ -82,7 +83,8 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
                            const bool align_bins_to_zero_based_grid)
     : bin_dim_meters_(bin_dim_meters)
     , geographic_coords_(geographic_coords)
-    , null_sentinel_(inline_null_value<Z>()) {
+    , null_sentinel_(inline_null_value<Z>())
+    , is_multi_z_(true) {
   auto timer = DEBUG_TIMER(__func__);
   const int64_t input_size{input_x.size()};
   const int64_t num_z_cols = input_z_cols.numCols();
@@ -143,6 +145,7 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
     : bin_dim_meters_(bin_dim_meters)
     , geographic_coords_(geographic_coords)
     , null_sentinel_(inline_null_value<Z>())
+    , is_multi_z_(false)
     , x_min_(x_min)
     , x_max_(x_max)
     , y_min_(y_min)
@@ -169,6 +172,22 @@ inline Z GeoRaster<T, Z>::offset_source_z_from_raster_z(const int64_t source_x_b
     return null_sentinel_;
   }
   const Z terrain_z = z_[x_y_bin_to_bin_index(source_x_bin, source_y_bin, num_x_bins_)];
+  if (terrain_z == null_sentinel_) {
+    return terrain_z;
+  }
+  return terrain_z + source_z_offset;
+}
+
+template <typename T, typename Z>
+inline Z GeoRaster<T, Z>::offset_source_z_from_raster_z(const int64_t source_x_bin,
+                                                        const int64_t source_y_bin,
+                                                        const Z source_z_offset,
+                                                        const int64_t z_col_idx) const {
+  if (is_bin_out_of_bounds(source_x_bin, source_y_bin)) {
+    return null_sentinel_;
+  }
+  const Z terrain_z =
+      z_cols_[z_col_idx][x_y_bin_to_bin_index(source_x_bin, source_y_bin, num_x_bins_)];
   if (terrain_z == null_sentinel_) {
     return terrain_z;
   }
@@ -758,7 +777,7 @@ void GeoRaster<T, Z>::calculate_slope_and_aspect(
 }
 
 template <typename T, typename Z>
-int64_t GeoRaster<T, Z>::outputDenseColumns(
+int64_t GeoRaster<T, Z>::outputDenseColumnsAndFill(
     TableFunctionManager& mgr,
     Column<T>& output_x,
     Column<T>& output_y,
@@ -797,7 +816,10 @@ template <typename T, typename Z>
 int64_t GeoRaster<T, Z>::outputDenseColumns(TableFunctionManager& mgr,
                                             Column<T>& output_x,
                                             Column<T>& output_y,
-                                            Column<Z>& output_z) const {
+                                            Column<Z>& output_z,
+                                            const int64_t band_idx) const {
+  const std::vector<Z>& z = z_cols_.empty() ? z_ : z_cols_[band_idx];
+
   auto timer = DEBUG_TIMER(__func__);
   mgr.set_output_row_size(num_bins_);
   tbb::parallel_for(
@@ -808,17 +830,68 @@ int64_t GeoRaster<T, Z>::outputDenseColumns(TableFunctionManager& mgr,
             const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
             output_x[bin_idx] = x_min_ + (x_bin + 0.5) * x_scale_bin_to_input_;
             output_y[bin_idx] = y_min_ + (y_bin + 0.5) * y_scale_bin_to_input_;
-            const Z z_val = z_[bin_idx];
+            const Z z_val = z[bin_idx];
             if (z_val == null_sentinel_) {
               output_z.setNull(bin_idx);
             } else {
-              output_z[bin_idx] = z_[bin_idx];
+              output_z[bin_idx] = z_val;
             }
           }
         }
       });
   return num_bins_;
 }
+
+template <typename T, typename Z>
+int64_t GeoRaster<T, Z>::outputDenseColumn(TableFunctionManager& mgr,
+                                           Column<Z>& output_z,
+                                           const int64_t band_idx) const {
+  const std::vector<Z>& z = z_cols_.empty() ? z_ : z_cols_[band_idx];
+
+  auto timer = DEBUG_TIMER(__func__);
+  tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_y_bins_),
+                    [&](const tbb::blocked_range<int64_t>& r) {
+                      for (int64_t y_bin = r.begin(); y_bin != r.end(); ++y_bin) {
+                        for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
+                          const int64_t bin_idx =
+                              x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+                          const Z z_val = z[bin_idx];
+                          if (z_val == null_sentinel_) {
+                            output_z.setNull(bin_idx);
+                          } else {
+                            output_z[bin_idx] = z_val;
+                          }
+                        }
+                      }
+                    });
+  return num_bins_;
+}
+
+// template <typename T, typename Z>
+// int64_t GeoRaster<T, Z>::outputDenseColumns(TableFunctionManager& mgr,
+//                                            Column<T>& output_x,
+//                                            Column<T>& output_y,
+//                                            std::vector<Column<Z>>& output_z_cols) const
+//                                            {
+//  auto timer = DEBUG_TIMER(__func__);
+//  const int64_t num_z_cols = static_cast<int64_t>(z_cols_.size());
+//  mgr.set_output_array_values_total_number(
+//      /*output column index=*/2,
+//      /*upper bound to the number of items in all output arrays=*/num_bins_ *
+//      num_z_cols);
+//  mgr.set_output_row_size(num_bins_);
+//  for (int64_t y_bin = 0; y_bin != num_y_bins_; ++y_bin) {
+//    for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
+//      const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+//      output_x[bin_idx] = x_min_ + (x_bin + 0.5) * x_scale_bin_to_input_;
+//      output_y[bin_idx] = y_min_ + (y_bin + 0.5) * y_scale_bin_to_input_;
+//      Array<Z> z_array = output_z.getItem(bin_idx, num_z_cols);
+//      for (int64_t z_col_idx = 0; z_col_idx < num_z_cols; ++z_col_idx) {
+//        const Z z_val = z_cols_[z_col_idx][bin_idx];
+//        z_array[z_col_idx] = z_val;
+//      }
+//    }
+//  }
 
 template <typename T, typename Z>
 int64_t GeoRaster<T, Z>::outputDenseColumns(TableFunctionManager& mgr,
@@ -843,23 +916,6 @@ int64_t GeoRaster<T, Z>::outputDenseColumns(TableFunctionManager& mgr,
       }
     }
   }
-
-  // tbb::parallel_for(
-  //    tbb::blocked_range<int64_t>(0, num_y_bins_),
-  //    [&](const tbb::blocked_range<int64_t>& r) {
-  //      for (int64_t y_bin = r.begin(); y_bin != r.end(); ++y_bin) {
-  //        for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
-  //          const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
-  //          output_x[bin_idx] = x_min_ + (x_bin + 0.5) * x_scale_bin_to_input_;
-  //          output_y[bin_idx] = y_min_ + (y_bin + 0.5) * y_scale_bin_to_input_;
-  //          Array<Z> z_array = output_z.getItem(bin_idx, num_z_cols);
-  //          for (int64_t z_col_idx = 0; z_col_idx < num_z_cols; ++z_col_idx) {
-  //            const Z z_val = z_cols_[z_col_idx][bin_idx];
-  //            z_array[z_col_idx] = z_val;
-  //          }
-  //        }
-  //      }
-  //    });
   return num_bins_;
 }
 
