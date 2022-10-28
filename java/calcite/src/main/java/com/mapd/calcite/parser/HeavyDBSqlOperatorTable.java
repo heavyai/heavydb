@@ -24,6 +24,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import com.mapd.parser.extension.ddl.SqlLeadLag;
+import com.mapd.parser.extension.ddl.SqlNthValueInFrame;
 import com.mapd.parser.server.ExtensionFunction;
 
 import org.apache.calcite.rel.metadata.RelColumnMapping;
@@ -208,8 +209,6 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new KeyForString());
     addOperator(new SampleRatio());
     addOperator(new WidthBucket());
-    addOperator(new LagInFrame());
-    addOperator(new LeadInFrame());
     addOperator(new ArrayLength());
     addOperator(new PgILike());
     addOperator(new LTrim());
@@ -283,6 +282,11 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new Mode());
     addOperator(new Sample());
     addOperator(new LastSample());
+
+    // window functions on window frame
+    addOperator(new NthValueInFrame());
+    addOperator(new LagInFrame());
+    addOperator(new LeadInFrame());
 
     // conditional window aggregate functions
     addOperator(new CountIf());
@@ -734,6 +738,12 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public static class LagInFrame extends SqlLeadLag {
     public LagInFrame() {
       super("LAG_IN_FRAME", SqlKind.LAG);
+    }
+  }
+
+  public static class NthValueInFrame extends SqlNthValueInFrame {
+    public NthValueInFrame() {
+      super("NTH_VALUE_IN_FRAME");
     }
   }
 
