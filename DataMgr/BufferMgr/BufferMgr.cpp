@@ -738,8 +738,14 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
 
     buffer_it->second->last_touched = buffer_epoch_++;  // race
 
-    if (buffer_it->second->buffer->size() < num_bytes) {
+    auto buffer_size = buffer_it->second->buffer->size();
+    if (buffer_size < num_bytes) {
       // need to fetch part of buffer we don't have - up to numBytes
+      VLOG(1) << ToString(getMgrType())
+              << ": Fetching buffer from parent manager. Reason: increased buffer size. "
+                 "Buffer size: "
+              << buffer_size << ", num bytes to fetch: " << num_bytes
+              << ", chunk key: " << keyToString(key);
       parent_mgr_->fetchBuffer(key, buffer_it->second->buffer, num_bytes);
     }
     return buffer_it->second->buffer;
@@ -748,6 +754,10 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
     // createChunk pins for us
     AbstractBuffer* buffer = createBuffer(key, page_size_, num_bytes);
     try {
+      VLOG(1) << ToString(getMgrType())
+              << ": Fetching buffer from parent manager. Reason: cache miss. Num bytes "
+                 "to fetch: "
+              << num_bytes << ", chunk key: " << keyToString(key);
       parent_mgr_->fetchBuffer(
           key, buffer, num_bytes);  // this should put buffer in a BufferSegment
     } catch (const foreign_storage::ForeignStorageException& error) {
@@ -779,6 +789,10 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
     CHECK(parent_mgr_ != 0);
     buffer = createBuffer(key, page_size_, num_bytes);  // will pin buffer
     try {
+      VLOG(1) << ToString(getMgrType())
+              << ": Fetching buffer from parent manager. Reason: cache miss. Num bytes "
+                 "to fetch: "
+              << num_bytes << ", chunk key: " << keyToString(key);
       parent_mgr_->fetchBuffer(key, buffer, num_bytes);
     } catch (const foreign_storage::ForeignStorageException& error) {
       deleteBuffer(key);  // buffer failed to load, ensure it is cleaned up
@@ -792,8 +806,14 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
   } else {
     buffer = buffer_it->second->buffer;
     buffer->pin();
-    if (num_bytes > buffer->size()) {
+    auto buffer_size = buffer->size();
+    if (num_bytes > buffer_size) {
       try {
+        VLOG(1) << ToString(getMgrType())
+                << ": Fetching buffer from parent manager. Reason: increased buffer "
+                   "size. Buffer size: "
+                << buffer_size << ", num bytes to fetch: " << num_bytes
+                << ", chunk key: " << keyToString(key);
         parent_mgr_->fetchBuffer(key, buffer, num_bytes);
       } catch (const foreign_storage::ForeignStorageException& error) {
         LOG(WARNING) << "Could not fetch parent chunk " << keyToString(key)

@@ -628,7 +628,7 @@ int32_t FileMgr::openAndReadLegacyEpochFile(const std::string& epochFileName) {
   }
   FILE* legacyEpochFile = open(epochFilePath);
   int32_t epoch;
-  read(legacyEpochFile, 0, sizeof(int32_t), (int8_t*)&epoch);
+  read(legacyEpochFile, 0, sizeof(int32_t), (int8_t*)&epoch, epochFilePath);
   close(legacyEpochFile);
   return epoch;
 }
@@ -650,7 +650,7 @@ void FileMgr::openAndReadEpochFile(const std::string& epochFileName) {
     }
     epochFile_ = open(epochFilePath);
   }
-  read(epochFile_, 0, Epoch::byte_size(), epoch_.storage_ptr());
+  read(epochFile_, 0, Epoch::byte_size(), epoch_.storage_ptr(), epochFileName);
 }
 
 void FileMgr::writeAndSyncEpochToDisk() {
@@ -948,7 +948,7 @@ FileInfo* FileMgr::openExistingFile(const std::string& path,
                                     std::vector<HeaderInfo>& headerVec) {
   FILE* f = open(path);
   FileInfo* fInfo = new FileInfo(
-      this, fileId, f, pageSize, numPages, false);  // false means don't init file
+      this, fileId, f, pageSize, numPages, path, false);  // false means don't init file
 
   fInfo->openExistingFile(headerVec);
   heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
@@ -964,17 +964,17 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
   }
 
   // create the new file
-  FILE* f = create(fileMgrBasePath_,
-                   nextFileId_,
-                   pageSize,
-                   numPages);  // TM: not sure if I like naming scheme here - should be in
-                               // separate namespace?
+  auto [f, file_path] = create(fileMgrBasePath_,
+                               nextFileId_,
+                               pageSize,
+                               numPages);  // TM: not sure if I like naming scheme here -
+                                           // should be in separate namespace?
   CHECK(f);
 
   // instantiate a new FileInfo for the newly created file
   int32_t fileId = nextFileId_++;
-  FileInfo* fInfo =
-      new FileInfo(this, fileId, f, pageSize, numPages, true);  // true means init file
+  FileInfo* fInfo = new FileInfo(
+      this, fileId, f, pageSize, numPages, file_path, true);  // true means init file
   CHECK(fInfo);
 
   heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
@@ -1071,7 +1071,7 @@ int32_t FileMgr::readVersionFromDisk(const std::string& versionFileName) const {
   }
   FILE* versionFile = open(versionFilePath);
   int32_t version;
-  read(versionFile, 0, sizeof(int32_t), (int8_t*)&version);
+  read(versionFile, 0, sizeof(int32_t), (int8_t*)&version, versionFilePath);
   close(versionFile);
   return version;
 }

@@ -54,10 +54,10 @@ std::string get_legacy_data_file_path(const std::string& new_data_file_path) {
   return legacy_path.string();
 }
 
-FILE* create(const std::string& basePath,
-             const int fileId,
-             const size_t pageSize,
-             const size_t numPages) {
+std::pair<FILE*, std::string> create(const std::string& basePath,
+                                     const int fileId,
+                                     const size_t pageSize,
+                                     const size_t numPages) {
   auto path = get_data_file_path(basePath, fileId, pageSize);
   if (numPages < 1 || pageSize < 1) {
     LOG(FATAL) << "Error trying to create file '" << path
@@ -79,7 +79,7 @@ FILE* create(const std::string& basePath,
   }
   boost::filesystem::create_symlink(boost::filesystem::canonical(path).filename(),
                                     get_legacy_data_file_path(path));
-  return f;
+  return {f, path};
 }
 
 FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
@@ -139,11 +139,21 @@ bool removeFile(const std::string basePath, const std::string filename) {
   return remove(filePath.c_str()) == 0;
 }
 
-size_t read(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
+size_t read(FILE* f,
+            const size_t offset,
+            const size_t size,
+            int8_t* buf,
+            const std::string& file_path) {
   // read "size" bytes from the offset location in the file into the buffer
   CHECK_EQ(fseek(f, static_cast<long>(offset), SEEK_SET), 0);
   size_t bytesRead = fread(buf, sizeof(int8_t), size, f);
-  CHECK_EQ(bytesRead, sizeof(int8_t) * size);
+  auto expected_bytes_read = sizeof(int8_t) * size;
+  CHECK_EQ(bytesRead, expected_bytes_read)
+      << "Unexpected number of bytes read from file: " << file_path
+      << ". Expected bytes read: " << expected_bytes_read
+      << ", actual bytes read: " << bytesRead << ", offset: " << offset
+      << ", file stream error set: " << (std::ferror(f) ? "true" : "false")
+      << ", EOF reached: " << (std::feof(f) ? "true" : "false");
   return bytesRead;
 }
 
@@ -172,8 +182,12 @@ size_t append(FILE* f, const size_t size, const int8_t* buf) {
   return write(f, fileSize(f), size, buf);
 }
 
-size_t readPage(FILE* f, const size_t pageSize, const size_t pageNum, int8_t* buf) {
-  return read(f, pageNum * pageSize, pageSize, buf);
+size_t readPage(FILE* f,
+                const size_t pageSize,
+                const size_t pageNum,
+                int8_t* buf,
+                const std::string& file_path) {
+  return read(f, pageNum * pageSize, pageSize, buf, file_path);
 }
 
 size_t readPartialPage(FILE* f,
@@ -181,8 +195,9 @@ size_t readPartialPage(FILE* f,
                        const size_t offset,
                        const size_t readSize,
                        const size_t pageNum,
-                       int8_t* buf) {
-  return read(f, pageNum * pageSize + offset, readSize, buf);
+                       int8_t* buf,
+                       const std::string& file_path) {
+  return read(f, pageNum * pageSize + offset, readSize, buf, file_path);
 }
 
 size_t writePage(FILE* f, const size_t pageSize, const size_t pageNum, int8_t* buf) {

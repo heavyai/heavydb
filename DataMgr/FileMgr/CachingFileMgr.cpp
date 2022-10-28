@@ -770,7 +770,7 @@ TableFileMgr::TableFileMgr(const std::string& table_path)
     CHECK(bf::file_size(epoch_file_path_) == Epoch::byte_size())
         << "Found epoch file '" << epoch_file_path_ << "' which is not of expected size";
     epoch_file_ = open(epoch_file_path_);
-    read(epoch_file_, 0, Epoch::byte_size(), epoch_.storage_ptr());
+    read(epoch_file_, 0, Epoch::byte_size(), epoch_.storage_ptr(), epoch_file_path_);
   } else {
     epoch_file_ = create(epoch_file_path_, sizeof(Epoch::byte_size()));
     writeAndSyncEpochToDisk();

@@ -55,9 +55,10 @@ class FileInfoTest : public testing::Test {
         0, fsi_, test_data_dir, 0, page_size, meta_page_size);
     fm_ptr_ = dynamic_cast<File_Namespace::FileMgr*>(gfm_->getFileMgr(1, 1));
 
-    auto fd = File_Namespace::create(test_data_dir, data_file_id, page_size, num_pages);
+    auto [fd, file_path] =
+        File_Namespace::create(test_data_dir, data_file_id, page_size, num_pages);
     file_info_ = std::make_unique<File_Namespace::FileInfo>(
-        fm_ptr_, data_file_id, fd, page_size, num_pages);
+        fm_ptr_, data_file_id, fd, page_size, num_pages, file_path);
   }
 
   void TearDown() override {
@@ -83,7 +84,7 @@ class FileInfoTest : public testing::Test {
     auto fd = heavyai::fopen(file, "r");
     std::vector<T> buf(num_elems);
     File_Namespace::read(
-        fd, offset, num_elems * sizeof(T), reinterpret_cast<int8_t*>(buf.data()));
+        fd, offset, num_elems * sizeof(T), reinterpret_cast<int8_t*>(buf.data()), file);
     fclose(fd);
     return buf;
   }
@@ -122,7 +123,7 @@ TEST_F(FileInfoTest, initNewFile) {
   int32_t header_size = 0;
   int8_t* buf = reinterpret_cast<int8_t*>(&header_size);
   for (size_t i = 0; i < page_size * num_pages; i += page_size) {
-    File_Namespace::read(fd, i, sizeof(int32_t), buf);
+    File_Namespace::read(fd, i, sizeof(int32_t), buf, data_file_name);
     // Check that all pages have zero-ed headers
     ASSERT_EQ(*(reinterpret_cast<int32_t*>(buf)), 0);
   }
@@ -484,7 +485,8 @@ TEST_F(OpenExistingFileTest, Data) {
   bf::copy(source_data_file, data_file_name);
 
   auto fd = heavyai::fopen(data_file_name, "r+w");
-  File_Namespace::FileInfo file_info(fm_.get(), data_file_id, fd, page_size, num_pages);
+  File_Namespace::FileInfo file_info(
+      fm_.get(), data_file_id, fd, page_size, num_pages, data_file_name);
 
   std::vector<File_Namespace::HeaderInfo> headers;
   file_info.openExistingFile(headers);
@@ -525,7 +527,7 @@ TEST_F(OpenExistingFileTest, Metadata) {
 
   auto fd = heavyai::fopen(meta_file_name, "r+w");
   File_Namespace::FileInfo file_info(
-      fm_.get(), meta_file_id, fd, meta_page_size, num_pages);
+      fm_.get(), meta_file_id, fd, meta_page_size, num_pages, meta_file_name);
 
   std::vector<File_Namespace::HeaderInfo> headers;
   file_info.openExistingFile(headers);
