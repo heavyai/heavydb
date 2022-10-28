@@ -140,7 +140,7 @@ list(APPEND SANITY_TEST_PROGRAMS ColumnarResultsTest)
 ##########
 
 add_executable(CommandLineTest CommandLineTest.cpp)
-target_link_libraries(CommandLineTest gtest Logger Shared ${Boost_LIBRARIES})
+target_link_libraries(CommandLineTest gtest Logger Shared ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
 add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS CommandLineTest)
 
@@ -205,7 +205,7 @@ list(APPEND SANITY_TEST_PROGRAMS DataRecyclerTest)
 ##########
 
 add_executable(DateTimeUtilsTest Shared/DateTimeUtilsTest.cpp)
-target_link_libraries(DateTimeUtilsTest gtest Logger Shared ${LLVM_LINKER_FLAGS})
+target_link_libraries(DateTimeUtilsTest gtest Logger Shared ${LLVM_LINKER_FLAGS} ${CMAKE_DL_LIBS})
 add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS DateTimeUtilsTest)
 
@@ -367,7 +367,7 @@ list(APPEND SANITY_TEST_PROGRAMS JoinHashTableTest)
 
 if(NOT MSVC)
   add_executable(JSONTest JSONTest.cpp)
-  target_link_libraries(JSONTest gtest Logger Shared)
+  target_link_libraries(JSONTest gtest Logger Shared ${CMAKE_DL_LIBS})
   add_test(JSONTest JSONTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS JSONTest)
 endif()
@@ -448,7 +448,7 @@ list(APPEND SANITY_TEST_PROGRAMS PersistentStorageTest)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   add_executable(PkiEncryptorTest ee/PkiEncryptorTest.cpp)
-  target_link_libraries(PkiEncryptorTest gtest Logger Shared)
+  target_link_libraries(PkiEncryptorTest gtest Logger Shared ${CMAKE_DL_LIBS})
   add_test(PkiEncryptorTest PkiEncryptorTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS PkiEncryptorTest)
 endif()
@@ -537,13 +537,13 @@ if(ENABLE_FOLLY)
   target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary
     StringOps Logger Utils
     $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
-    ${CMAKE_DL_LIBS} ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES}
-    ${AwsS3_CURL_SUPPORT})
+    ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES}
+    ${AwsS3_CURL_SUPPORT} ${CMAKE_DL_LIBS})
 else()
   target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary
     StringOps Logger Utils
     $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
-    ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${AwsS3_CURL_SUPPORT})
+    ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${AwsS3_CURL_SUPPORT} ${CMAKE_DL_LIBS})
 endif()
 add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS StringDictionaryTest)
@@ -576,7 +576,7 @@ list(APPEND SANITY_TEST_PROGRAMS TableFunctionsTest)
 ##########
 
 add_executable(ThreadingTest Shared/ThreadingTest.cpp)
-target_link_libraries(ThreadingTest dl gtest Logger Shared ${LLVM_LINKER_FLAGS} ${TBB_LIBRARIES})
+target_link_libraries(ThreadingTest ${CMAKE_DL_LIBS} gtest Logger Shared ${LLVM_LINKER_FLAGS} ${TBB_LIBRARIES} ${CMAKE_DL_LIBS})
 add_test(ThreadingTest ThreadingTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ThreadingTest)
 
@@ -584,14 +584,14 @@ list(APPEND SANITY_TEST_PROGRAMS ThreadingTest)
 
 add_executable(ThreadingTestSTD Shared/ThreadingTest.cpp)
 target_compile_options(ThreadingTestSTD PRIVATE -UENABLE_TBB -DENABLE_TBB=0)
-target_link_libraries(ThreadingTestSTD gtest Logger Shared ${LLVM_LINKER_FLAGS})
+target_link_libraries(ThreadingTestSTD gtest Logger Shared ${LLVM_LINKER_FLAGS} ${CMAKE_DL_LIBS})
 add_test(ThreadingTestSTD ThreadingTestSTD ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ThreadingTestSTD)
 
 ##########
 
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
-target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Logger Shared ${Boost_LIBRARIES})
+target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Logger Shared ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
 add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS TokenCompletionHintsTest)
 
@@ -654,7 +654,7 @@ endif()  # Partition 4
 
 if(NOT MSVC)
   add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
-  target_link_libraries(ArrowIpcIntegrationTest gtest fmt::fmt ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
+  target_link_libraries(ArrowIpcIntegrationTest gtest fmt::fmt ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS})
   add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
 endif()
 
@@ -662,7 +662,7 @@ endif()
 
 if(NOT MSVC)
   add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
-  target_link_libraries(CtasIntegrationTest gtest Logger Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
+  target_link_libraries(CtasIntegrationTest gtest Logger Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS} ${CMAKE_DL_LIBS})
 endif()
 
 ##########
@@ -711,15 +711,15 @@ add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 
 add_executable(StringDictionaryBenchmark StringDictionaryBenchmark.cpp)
 if(ENABLE_FOLLY)
-  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${CMAKE_DL_LIBS} ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
 else()
-  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
 endif()
 
 ##########
 
 add_executable(StringTransformTest StringTransformTest.cpp)
-target_link_libraries(StringTransformTest Logger Shared gtest ${Boost_LIBRARIES})
+target_link_libraries(StringTransformTest Logger Shared gtest ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
 add_test(StringTransformTest StringTransformTest ${TEST_ARGS})
 
 ##########
@@ -731,7 +731,7 @@ target_link_libraries(TableUpdateDeleteBenchmark benchmark ${EXECUTE_TEST_LIBS})
 
 add_executable(UtilTest UtilTest.cpp)
 target_link_libraries(UtilTest Utils gtest Logger Shared ${Boost_LIBRARIES})
-target_link_libraries(UtilTest OSDependent)
+target_link_libraries(UtilTest OSDependent ${CMAKE_DL_LIBS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
 
 ##########

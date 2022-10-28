@@ -408,4 +408,4 @@ if(ENABLE_CUDA)
 endif()
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
-target_link_libraries(group_by_hash_test gtest Logger Shared ${Boost_LIBRARIES} ${PROFILER_LIBS})
+target_link_libraries(group_by_hash_test gtest Logger Shared ${Boost_LIBRARIES} ${PROFILER_LIBS} ${CMAKE_DL_LIBS})
