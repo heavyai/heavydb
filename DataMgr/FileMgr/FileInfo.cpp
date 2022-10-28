@@ -33,8 +33,14 @@ FileInfo::FileInfo(FileMgr* fileMgr,
                    FILE* f,
                    const size_t pageSize,
                    size_t numPages,
+                   const std::string& file_path,
                    bool init)
-    : fileMgr(fileMgr), fileId(fileId), f(f), pageSize(pageSize), numPages(numPages) {
+    : fileMgr(fileMgr)
+    , fileId(fileId)
+    , f(f)
+    , pageSize(pageSize)
+    , numPages(numPages)
+    , file_path(file_path) {
   if (init) {
     initNewFile();
   }
@@ -68,7 +74,7 @@ size_t FileInfo::write(const size_t offset, const size_t size, const int8_t* buf
 
 size_t FileInfo::read(const size_t offset, const size_t size, int8_t* buf) {
   std::lock_guard<std::mutex> lock(readWriteMutex_);
-  return File_Namespace::read(f, offset, size, buf);
+  return File_Namespace::read(f, offset, size, buf, file_path);
 }
 
 void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec) {
