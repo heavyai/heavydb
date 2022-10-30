@@ -2561,7 +2561,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
               SqlKind.OTHER_FUNCTION,
               null,
               null,
-              OperandTypes.family(SqlTypeFamily.NUMERIC),
+              OperandTypes.or(OperandTypes.family(SqlTypeFamily.NUMERIC),
+                      OperandTypes.family(SqlTypeFamily.GEO)),
               SqlFunctionCategory.SYSTEM);
     }
 

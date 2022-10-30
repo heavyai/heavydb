@@ -69,6 +69,18 @@ ExtArgumentType get_column_arg_elem_type(const ExtArgumentType ext_arg_column_ty
       return ExtArgumentType::ArrayBool;
     case ExtArgumentType::ColumnArrayTextEncodingDict:
       return ExtArgumentType::ArrayTextEncodingDict;
+    case ExtArgumentType::ColumnGeoPoint:
+      return ExtArgumentType::GeoPoint;
+    case ExtArgumentType::ColumnGeoLineString:
+      return ExtArgumentType::GeoLineString;
+    case ExtArgumentType::ColumnGeoPolygon:
+      return ExtArgumentType::GeoPolygon;
+    case ExtArgumentType::ColumnGeoMultiPoint:
+      return ExtArgumentType::GeoMultiPoint;
+    case ExtArgumentType::ColumnGeoMultiLineString:
+      return ExtArgumentType::GeoMultiLineString;
+    case ExtArgumentType::ColumnGeoMultiPolygon:
+      return ExtArgumentType::GeoMultiPolygon;
     default:
       UNREACHABLE();
   }
@@ -110,6 +122,18 @@ ExtArgumentType get_column_list_arg_elem_type(
       return ExtArgumentType::ArrayBool;
     case ExtArgumentType::ColumnListArrayTextEncodingDict:
       return ExtArgumentType::ArrayTextEncodingDict;
+    case ExtArgumentType::ColumnListGeoPoint:
+      return ExtArgumentType::GeoPoint;
+    case ExtArgumentType::ColumnListGeoLineString:
+      return ExtArgumentType::GeoLineString;
+    case ExtArgumentType::ColumnListGeoPolygon:
+      return ExtArgumentType::GeoPolygon;
+    case ExtArgumentType::ColumnListGeoMultiPoint:
+      return ExtArgumentType::GeoMultiPoint;
+    case ExtArgumentType::ColumnListGeoMultiLineString:
+      return ExtArgumentType::GeoMultiLineString;
+    case ExtArgumentType::ColumnListGeoMultiPolygon:
+      return ExtArgumentType::GeoMultiPolygon;
     default:
       UNREACHABLE();
   }

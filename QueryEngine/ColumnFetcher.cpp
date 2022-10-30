@@ -995,7 +995,8 @@ const int8_t* ColumnFetcher::transferColumnIfNeeded(
   if (memory_level == Data_Namespace::GPU_LEVEL) {
     const auto& col_ti = columnar_results->getColumnType(col_id);
     size_t num_bytes;
-    if (col_ti.is_array() && FlatBufferManager::isFlatBuffer(col_buffers[col_id])) {
+    if (col_ti.supports_flatbuffer() &&
+        FlatBufferManager::isFlatBuffer(col_buffers[col_id])) {
       num_bytes = FlatBufferManager::getBufferSize(col_buffers[col_id]);
     } else {
       num_bytes = columnar_results->size() * col_ti.get_size();

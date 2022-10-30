@@ -56,6 +56,18 @@ inline ExtArgumentType ext_arg_type_ensure_column(const ExtArgumentType ext_arg_
       return ExtArgumentType::ColumnArrayTextEncodingDict;
     case ExtArgumentType::ArrayTextEncodingNone:
       return ExtArgumentType::ColumnArrayTextEncodingNone;
+    case ExtArgumentType::GeoPoint:
+      return ExtArgumentType::ColumnGeoPoint;
+    case ExtArgumentType::GeoLineString:
+      return ExtArgumentType::ColumnGeoLineString;
+    case ExtArgumentType::GeoPolygon:
+      return ExtArgumentType::ColumnGeoPolygon;
+    case ExtArgumentType::GeoMultiPoint:
+      return ExtArgumentType::ColumnGeoMultiPoint;
+    case ExtArgumentType::GeoMultiLineString:
+      return ExtArgumentType::ColumnGeoMultiLineString;
+    case ExtArgumentType::GeoMultiPolygon:
+      return ExtArgumentType::ColumnGeoMultiPolygon;
     default:
       return ext_arg_type;
   }
@@ -144,6 +156,12 @@ inline bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ColumnArrayBool:
     case ExtArgumentType::ColumnArrayTextEncodingDict:
     case ExtArgumentType::ColumnArrayTextEncodingNone:
+    case ExtArgumentType::ColumnGeoPoint:
+    case ExtArgumentType::ColumnGeoLineString:
+    case ExtArgumentType::ColumnGeoPolygon:
+    case ExtArgumentType::ColumnGeoMultiPoint:
+    case ExtArgumentType::ColumnGeoMultiLineString:
+    case ExtArgumentType::ColumnGeoMultiPolygon:
       return true;
 
     default:
@@ -171,6 +189,12 @@ inline bool is_ext_arg_type_column_list(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ColumnListArrayBool:
     case ExtArgumentType::ColumnListArrayTextEncodingDict:
     case ExtArgumentType::ColumnListArrayTextEncodingNone:
+    case ExtArgumentType::ColumnListGeoPoint:
+    case ExtArgumentType::ColumnListGeoLineString:
+    case ExtArgumentType::ColumnListGeoPolygon:
+    case ExtArgumentType::ColumnListGeoMultiPoint:
+    case ExtArgumentType::ColumnListGeoMultiLineString:
+    case ExtArgumentType::ColumnListGeoMultiPolygon:
       return true;
 
     default:

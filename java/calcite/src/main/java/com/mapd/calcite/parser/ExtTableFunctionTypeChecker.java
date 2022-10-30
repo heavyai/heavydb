@@ -71,6 +71,7 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
     } catch (Exception e) {
       return false;
     }
+
     SqlTypeName typeName = type.getSqlTypeName();
     SqlTypeFamily formalTypeFamily =
             toSqlTypeName(tf.getArgTypes().get(iFormalOperand)).getFamily();

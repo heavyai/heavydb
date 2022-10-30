@@ -366,7 +366,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   size_t total_group_by_buffer_size{0};
   for (size_t i = 0; i < num_columns; ++i) {
     auto ti = exe_unit.target_exprs[i]->get_type_info();
-    if (ti.is_array()) {
+    if (ti.supports_flatbuffer()) {
       // See TableFunctionManager.h for info regarding flatbuffer
       // memory managment.
       auto slot_idx = query_mem_desc.getSlotIndexForSingleSlotCol(i);

@@ -108,6 +108,18 @@ enum class ExtArgumentType {
   GeoMultiPoint,
   DayTimeInterval,
   YearMonthTimeInterval,
+  ColumnGeoPoint,
+  ColumnGeoLineString,
+  ColumnGeoPolygon,
+  ColumnGeoMultiPoint,
+  ColumnGeoMultiLineString,
+  ColumnGeoMultiPolygon,
+  ColumnListGeoPoint,
+  ColumnListGeoLineString,
+  ColumnListGeoPolygon,
+  ColumnListGeoMultiPoint,
+  ColumnListGeoMultiLineString,
+  ColumnListGeoMultiPolygon
 };
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);

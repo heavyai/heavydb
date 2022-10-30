@@ -139,22 +139,22 @@ public class HeavyDBTable implements Table {
       case INTERVAL_YEAR_MONTH:
         return typeFactory.createSqlType(SqlTypeName.INTERVAL_YEAR_MONTH);
       case POINT:
-        return typeFactory.createSqlType(SqlTypeName.ANY);
+        return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
       // return new PointSqlType();
       case MULTIPOINT:
-        return typeFactory.createSqlType(SqlTypeName.ANY);
+        return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
       // return new MultipointSqlType();
       case LINESTRING:
-        return typeFactory.createSqlType(SqlTypeName.ANY);
+        return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
       // return new LinestringSqlType();
       case MULTILINESTRING:
-        return typeFactory.createSqlType(SqlTypeName.ANY);
+        return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
       // return new MultilinestringSqlType();
       case POLYGON:
-        return typeFactory.createSqlType(SqlTypeName.ANY);
+        return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
       // return new PolygonSqlType();
       case MULTIPOLYGON:
-        return typeFactory.createSqlType(SqlTypeName.ANY);
+        return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
       // return new MultipolygonSqlType();
       default:
         throw new AssertionError(dType.name());

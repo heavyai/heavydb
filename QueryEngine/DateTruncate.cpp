@@ -239,7 +239,7 @@ datetrunc_millennium(int64_t timeval) {
 /*
  * @brief support the SQL DATE_TRUNC function
  */
-int64_t DateTruncate(DatetruncField field, const int64_t timeval) {
+DEVICE int64_t DateTruncate(DatetruncField field, const int64_t timeval) {
   switch (field) {
     case dtNANOSECOND:
     case dtMICROSECOND:

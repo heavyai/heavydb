@@ -50,6 +50,38 @@ extern "C" DEVICE RUNTIME_EXPORT void set_output_row_size(int64_t num_rows) {
 }
 
 /*
+  set_output_item_values_total_number sets the total number of itrem
+  values in the index-th output Column of non-scalars.
+
+  set_output_item_values_total_number must be called before
+  set_output_row_size.
+*/
+extern "C" DEVICE RUNTIME_EXPORT void
+TableFunctionManager_set_output_item_values_total_number(
+    int8_t* mgr_ptr,
+    int32_t index,
+    int64_t output_item_values_total_number) {
+  auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
+  if (output_item_values_total_number < 0) {
+    throw TableFunctionError(
+        "set_output_item_values_total_number: expected non-negative size but "
+        "got " +
+        std::to_string(output_item_values_total_number));
+  }
+  mgr->set_output_item_values_total_number(index, output_item_values_total_number);
+}
+
+extern "C" DEVICE RUNTIME_EXPORT void set_output_item_values_total_number(
+    int32_t index,
+    int64_t output_item_values_total_number) {
+  auto& mgr = TableFunctionManager::get_singleton();
+  TableFunctionManager_set_output_item_values_total_number(
+      reinterpret_cast<int8_t*>(mgr), index, output_item_values_total_number);
+}
+
+/*
+  NOTE: use set_output_item_values_total_number instead!
+
   set_output_array_values_total_number sets the total number of array
   values in the index-th output Column of arrays.
 
@@ -64,7 +96,7 @@ TableFunctionManager_set_output_array_values_total_number(
   auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
   if (output_array_values_total_number < 0) {
     throw TableFunctionError(
-        "set_output_array_values_total_number: expected non-negative array size but "
+        "set_output_array_values_total_number: expected non-negative size but "
         "got " +
         std::to_string(output_array_values_total_number));
   }

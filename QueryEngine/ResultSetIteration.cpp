@@ -1783,6 +1783,34 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
                 varlen_buffer[getCoordsDataPtr(geo_target_ptr) + 1].size()));
       } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
         const auto& frag_col_buffers = getFragColBuffers();
+        auto ptr = frag_col_buffers[col_lazy_fetch->local_col_id];
+        if (FlatBufferManager::isFlatBuffer(ptr)) {
+          FlatBufferManager m{const_cast<int8_t*>(ptr)};
+          // TODO: support other return types
+          CHECK(ResultSet::GeoReturnType::WktString == geo_return_type_);
+
+          int8_t* buf = nullptr;
+          int64_t* cumcounts = nullptr;
+          int64_t nof_counts = 0;
+          bool is_null = false;
+
+          m.getItem2(entry_buff_idx, cumcounts, nof_counts, buf, is_null);
+
+          if (is_null) {
+            return NullableString("NULL");
+          }
+
+          std::vector<int32_t> ring_sizes_vec;
+          ring_sizes_vec.reserve(nof_counts);
+          for (int i = 0; i < nof_counts; i++) {
+            ring_sizes_vec.push_back(cumcounts[i + 1] - cumcounts[i]);
+          }
+          int32_t length = (cumcounts[nof_counts] - cumcounts[0]) * m.dtypeSize();
+          Geospatial::GeoPolygon poly(
+              *decompress_coords<double, SQLTypeInfo>(target_info.sql_type, buf, length),
+              ring_sizes_vec);
+          return NullableString(poly.getWktString());
+        }
 
         return GeoTargetValueBuilder<kPOLYGON, GeoLazyFetchHandler>::build(
             target_info.sql_type,

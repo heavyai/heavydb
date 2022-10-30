@@ -203,17 +203,17 @@ std::string serialize_type(const ExtArgumentType type,
     case ExtArgumentType::ArrayTextEncodingDict:
       return (declare ? "{i32*, i64, i8}*" : "Array<TextEncodingDict>");
     case ExtArgumentType::GeoPoint:
-      return "geo_point";
+      return (declare ? "geo_point" : "GeoPoint");
     case ExtArgumentType::GeoMultiPoint:
-      return "geo_multi_point";
+      return (declare ? "geo_multi_point" : "GeoMultiPoint");
     case ExtArgumentType::GeoLineString:
-      return "geo_linestring";
+      return (declare ? "geo_linestring" : "GeoLineString");
     case ExtArgumentType::GeoMultiLineString:
-      return "geo_multi_linestring";
+      return (declare ? "geo_multi_linestring" : "GeoMultiLineSting");
     case ExtArgumentType::GeoPolygon:
-      return "geo_polygon";
+      return (declare ? "geo_polygon" : "GeoPolygon");
     case ExtArgumentType::GeoMultiPolygon:
-      return "geo_multi_polygon";
+      return (declare ? "geo_multi_polygon" : "GeoMultiPolygon");
     case ExtArgumentType::Cursor:
       return "cursor";
     case ExtArgumentType::ColumnInt8:
@@ -292,6 +292,30 @@ std::string serialize_type(const ExtArgumentType type,
       return (declare ? "{ i64 }" : "DayTimeInterval");
     case ExtArgumentType::YearMonthTimeInterval:
       return (declare ? "{ i64 }" : "YearMonthTimeInterval");
+    case ExtArgumentType::ColumnGeoPoint:
+      return (declare ? "{i8*, i64}*" : "Column<GeoPoint>");
+    case ExtArgumentType::ColumnGeoLineString:
+      return (declare ? "{i8*, i64}*" : "Column<GeoLineString>");
+    case ExtArgumentType::ColumnGeoPolygon:
+      return (declare ? "{i8*, i64}*" : "Column<GeoPolygon>");
+    case ExtArgumentType::ColumnGeoMultiPoint:
+      return (declare ? "{i8*, i64}*" : "Column<GeoMultiPoint>");
+    case ExtArgumentType::ColumnGeoMultiLineString:
+      return (declare ? "{i8*, i64}*" : "Column<GeoMultiLineString>");
+    case ExtArgumentType::ColumnGeoMultiPolygon:
+      return (declare ? "{i8*, i64}*" : "Column<GeoMultiPolygon>");
+    case ExtArgumentType::ColumnListGeoPoint:
+      return (declare ? "{i8*, i64, i64}*" : "ColumnList<GeoPoint>");
+    case ExtArgumentType::ColumnListGeoLineString:
+      return (declare ? "{i8*, i64, i64}*" : "ColumnList<GeoLineString>");
+    case ExtArgumentType::ColumnListGeoPolygon:
+      return (declare ? "{i8*, i64, i64}*" : "ColumnList<GeoPolygon>");
+    case ExtArgumentType::ColumnListGeoMultiPoint:
+      return (declare ? "{i8*, i64, i64}*" : "ColumnList<GeoMultiPoint>");
+    case ExtArgumentType::ColumnListGeoMultiLineString:
+      return (declare ? "{i8*, i64, i64}*" : "ColumnList<GeoMultiLineString>");
+    case ExtArgumentType::ColumnListGeoMultiPolygon:
+      return (declare ? "{i8*, i64, i64}*" : "ColumnList<GeoMultiPolygon>");
     default:
       CHECK(false);
   }
@@ -350,6 +374,20 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
     c = kENCODING_##ARRAYENCODING;                                    \
     break;
 
+#define EXTARGGEOTYPECASE(GEOTYPE, KTYPE)       \
+  case ExtArgumentType::Geo##GEOTYPE:           \
+    type = KTYPE;                               \
+    subtype = kGEOMETRY;                        \
+    break;                                      \
+  case ExtArgumentType::ColumnGeo##GEOTYPE:     \
+    type = kCOLUMN;                             \
+    subtype = KTYPE;                            \
+    break;                                      \
+  case ExtArgumentType::ColumnListGeo##GEOTYPE: \
+    type = kCOLUMN_LIST;                        \
+    subtype = KTYPE;                            \
+    break;
+
   switch (ext_arg_type) {
     EXTARGTYPECASE(Bool, kBOOLEAN, NONE, ARRAY);
     EXTARGTYPECASE(Int8, kTINYINT, NONE, ARRAY);
@@ -378,6 +416,12 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::YearMonthTimeInterval:
       type = kINTERVAL_YEAR_MONTH;
       break;
+      EXTARGGEOTYPECASE(Point, kPOINT);
+      EXTARGGEOTYPECASE(LineString, kLINESTRING);
+      EXTARGGEOTYPECASE(Polygon, kPOLYGON);
+      EXTARGGEOTYPECASE(MultiPoint, kMULTIPOINT);
+      EXTARGGEOTYPECASE(MultiLineString, kMULTILINESTRING);
+      EXTARGGEOTYPECASE(MultiPolygon, kMULTIPOLYGON);
     default:
       LOG(FATAL) << "ExtArgumentType `" << serialize_type(ext_arg_type)
                  << "` cannot be converted to SQLTypes.";
@@ -577,6 +621,30 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "DAY TIME INTERVAL";
     case ExtArgumentType::YearMonthTimeInterval:
       return "YEAR MONTH INTERVAL";
+    case ExtArgumentType::ColumnGeoPoint:
+      return "COLUMN<GEOPOINT>";
+    case ExtArgumentType::ColumnGeoLineString:
+      return "COLUMN<GEOLINESTRING>";
+    case ExtArgumentType::ColumnGeoPolygon:
+      return "COLUMN<GEOPOLYGON>";
+    case ExtArgumentType::ColumnGeoMultiPoint:
+      return "COLUMN<GEOMULTIPOINT>";
+    case ExtArgumentType::ColumnGeoMultiLineString:
+      return "COLUMN<GEOMULTILINESTRING>";
+    case ExtArgumentType::ColumnGeoMultiPolygon:
+      return "COLUMN<GEOMULTIPOLYGON>";
+    case ExtArgumentType::ColumnListGeoPoint:
+      return "COLUMNLIST<GEOPOINT>";
+    case ExtArgumentType::ColumnListGeoLineString:
+      return "COLUMNLIST<GEOLINESTRING>";
+    case ExtArgumentType::ColumnListGeoPolygon:
+      return "COLUMNLIST<GEOPOLYGON>";
+    case ExtArgumentType::ColumnListGeoMultiPoint:
+      return "COLUMNLIST<GEOMULTIPOINT>";
+    case ExtArgumentType::ColumnListGeoMultiLineString:
+      return "COLUMNLIST<GEOMULTILINESTRING>";
+    case ExtArgumentType::ColumnListGeoMultiPolygon:
+      return "COLUMNLIST<GEOMULTIPOLYGON>";
     default:
       UNREACHABLE();
   }
@@ -756,22 +824,22 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "Array<TextEncodingDict>") {
     return ExtArgumentType::ArrayTextEncodingDict;
   }
-  if (type_name == "geo_point") {
+  if (type_name == "geo_point" || type_name == "GeoPoint") {
     return ExtArgumentType::GeoPoint;
   }
-  if (type_name == "geo_multi_point") {
+  if (type_name == "geo_multi_point" || type_name == "GeoMultiPoint") {
     return ExtArgumentType::GeoMultiPoint;
   }
-  if (type_name == "geo_linestring") {
+  if (type_name == "geo_linestring" || type_name == "GeoLineString") {
     return ExtArgumentType::GeoLineString;
   }
-  if (type_name == "geo_multi_linestring") {
+  if (type_name == "geo_multi_linestring" || type_name == "GeoMultiLineString") {
     return ExtArgumentType::GeoMultiLineString;
   }
-  if (type_name == "geo_polygon") {
+  if (type_name == "geo_polygon" || type_name == "GeoPolygon") {
     return ExtArgumentType::GeoPolygon;
   }
-  if (type_name == "geo_multi_polygon") {
+  if (type_name == "geo_multi_polygon" || type_name == "GeoMultiPolygon") {
     return ExtArgumentType::GeoMultiPolygon;
   }
   if (type_name == "cursor") {
@@ -890,6 +958,42 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "YearMonthTimeInterval") {
     return ExtArgumentType::YearMonthTimeInterval;
+  }
+  if (type_name == "Column<GeoPoint>") {
+    return ExtArgumentType::ColumnGeoPoint;
+  }
+  if (type_name == "Column<GeoLineString>") {
+    return ExtArgumentType::ColumnGeoLineString;
+  }
+  if (type_name == "Column<GeoPolygon>") {
+    return ExtArgumentType::ColumnGeoPolygon;
+  }
+  if (type_name == "Column<GeoMultiPoint>") {
+    return ExtArgumentType::ColumnGeoMultiPoint;
+  }
+  if (type_name == "Column<GeoMultiLineString>") {
+    return ExtArgumentType::ColumnGeoMultiLineString;
+  }
+  if (type_name == "Column<GeoMultiPolygon>") {
+    return ExtArgumentType::ColumnGeoMultiPolygon;
+  }
+  if (type_name == "ColumnList<GeoPoint>") {
+    return ExtArgumentType::ColumnListGeoPoint;
+  }
+  if (type_name == "ColumnList<GeoLineString>") {
+    return ExtArgumentType::ColumnListGeoLineString;
+  }
+  if (type_name == "ColumnList<GeoPolygon>") {
+    return ExtArgumentType::ColumnListGeoPolygon;
+  }
+  if (type_name == "ColumnList<GeoMultiPoint>") {
+    return ExtArgumentType::ColumnListGeoMultiPoint;
+  }
+  if (type_name == "ColumnList<GeoMultiLineString>") {
+    return ExtArgumentType::ColumnListGeoMultiLineString;
+  }
+  if (type_name == "ColumnList<GeoMultiPolygon>") {
+    return ExtArgumentType::ColumnListGeoMultiPolygon;
   }
   CHECK(false);
   return ExtArgumentType::Int16;

@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include "Shared/funcannotations.h"
+#include "../Shared/funcannotations.h"
 
 #define COMPRESSION_NONE 0
 #define COMPRESSION_GEOINT32 1
