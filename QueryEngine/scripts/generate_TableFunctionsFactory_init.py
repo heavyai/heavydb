@@ -311,6 +311,8 @@ class Bracket:
             ctype = name
         elif name == 'YearMonthTimeInterval':
             ctype = name
+        elif name in ['GeoPoint', 'GeoLineString', 'GeoPolygon']:
+            ctype = name
         else:
             raise NotImplementedError(self)
         if clsname is None:

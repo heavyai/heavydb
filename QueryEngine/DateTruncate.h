@@ -69,7 +69,7 @@ static_assert(dtSECOND + 1 == dtMILLISECOND, "Please keep these consecutive.");
 static_assert(dtMILLISECOND + 1 == dtMICROSECOND, "Please keep these consecutive.");
 static_assert(dtMICROSECOND + 1 == dtNANOSECOND, "Please keep these consecutive.");
 
-int64_t DateTruncate(DatetruncField field, const int64_t timeval);
+DEVICE int64_t DateTruncate(DatetruncField field, const int64_t timeval);
 
 extern "C" RUNTIME_EXPORT DEVICE int64_t
 DateTruncateHighPrecisionToDate(const int64_t timeval, const int64_t scale);

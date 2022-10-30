@@ -79,7 +79,7 @@ inline llvm::Type* get_llvm_type_from_sql_column_type(const SQLTypeInfo elem_ti,
     return get_int_ptr_type(8, ctx);
   } else if (elem_ti.is_timestamp()) {
     return get_int_ptr_type(elem_ti.get_size() * 8, ctx);
-  } else if (elem_ti.is_array()) {
+  } else if (elem_ti.supports_flatbuffer()) {
     return get_int_ptr_type(8, ctx);
   }
   LOG(FATAL) << "get_llvm_type_from_sql_column_type: not implemented for "

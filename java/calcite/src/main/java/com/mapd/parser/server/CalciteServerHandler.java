@@ -641,6 +641,30 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.DayTimeInterval;
       case YearMonthTimeInterval:
         return ExtensionFunction.ExtArgumentType.YearMonthTimeInterval;
+      case ColumnGeoPoint:
+        return ExtensionFunction.ExtArgumentType.ColumnGeoPoint;
+      case ColumnGeoLineString:
+        return ExtensionFunction.ExtArgumentType.ColumnGeoLineString;
+      case ColumnGeoPolygon:
+        return ExtensionFunction.ExtArgumentType.ColumnGeoPolygon;
+      case ColumnGeoMultiPoint:
+        return ExtensionFunction.ExtArgumentType.ColumnGeoMultiPoint;
+      case ColumnGeoMultiLineString:
+        return ExtensionFunction.ExtArgumentType.ColumnGeoMultiLineString;
+      case ColumnGeoMultiPolygon:
+        return ExtensionFunction.ExtArgumentType.ColumnGeoMultiPolygon;
+      case ColumnListGeoPoint:
+        return ExtensionFunction.ExtArgumentType.ColumnListGeoPoint;
+      case ColumnListGeoLineString:
+        return ExtensionFunction.ExtArgumentType.ColumnListGeoLineString;
+      case ColumnListGeoPolygon:
+        return ExtensionFunction.ExtArgumentType.ColumnListGeoPolygon;
+      case ColumnListGeoMultiPoint:
+        return ExtensionFunction.ExtArgumentType.ColumnListGeoMultiPoint;
+      case ColumnListGeoMultiLineString:
+        return ExtensionFunction.ExtArgumentType.ColumnListGeoMultiLineString;
+      case ColumnListGeoMultiPolygon:
+        return ExtensionFunction.ExtArgumentType.ColumnListGeoMultiPolygon;
       default:
         HEAVYDBLOGGER.error("toExtArgumentType: unknown type " + type);
         return null;

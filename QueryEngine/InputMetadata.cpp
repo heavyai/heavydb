@@ -257,10 +257,11 @@ ChunkMetadataMap synthesize_metadata_table_function(const ResultSet* rows) {
     if (is_array) {
       CHECK(FlatBufferManager::isFlatBuffer(columnar_buffer));
       FlatBufferManager m{const_cast<int8_t*>(columnar_buffer)};
-      chunk_metadata->numBytes = m.flatbufferSize();
-      values_count = m.VarlenArray_nof_values();
-      values_buffer = m.VarlenArray_values();
+      chunk_metadata->numBytes = m.getBufferSize();
+      values_count = m.get_nof_values();
+      values_buffer = m.get_values();
     } else {
+      CHECK(!FlatBufferManager::isFlatBuffer(columnar_buffer));
       chunk_metadata->numBytes = row_count * col_type_info.get_size();
       values_count = row_count;
       values_buffer = columnar_buffer;

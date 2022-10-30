@@ -22,6 +22,10 @@
 
 #pragma once
 
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
+#include "toString.h"
+#endif
+
 #include "../Logger/Logger.h"
 #include "Datum.h"
 #include "funcannotations.h"
@@ -969,6 +973,9 @@ class SQLTypeInfo {
                compression == kENCODING_ARRAY_DICT) {
       type_info.set_type(kARRAY);
       type_info.set_compression(kENCODING_DICT);
+    } else if ((type == kCOLUMN || type == kCOLUMN_LIST) && IS_GEO(subtype)) {
+      type_info.set_type(subtype);
+      type_info.set_subtype(kGEOMETRY);
     } else {
       type_info.set_type(subtype);
       type_info.set_subtype(kNULLT);
@@ -1028,6 +1035,19 @@ class SQLTypeInfo {
     dict_key_ = dict_key;
     // If comp_param is set, it should equal dict_id.
     CHECK(dict_key_.dict_id == comp_param || comp_param == 0);
+  }
+
+  // column of this type can use FlatBuffer storage
+  inline bool supports_flatbuffer() const {
+    switch (type) {
+      case kARRAY:
+      case kPOINT:
+      case kLINESTRING:
+      case kPOLYGON:
+        return true;
+      default:;
+    }
+    return false;
   }
 
  private:
@@ -1381,6 +1401,11 @@ Collection types
   of items(=text)" with a specified compression scheme and comp_param
   attributes.
 
+- The type of a column of geometru points is specified as
+
+    SQLTypeInfo(type=kCOLUMN, subtype=kPOINT, dimension=<input srid>, scale=<output srid>, compression=<kENCODING_NONE|kENCODING_GEOINT>)
+
+
 */
 // clang-format on
 
@@ -1396,6 +1421,7 @@ inline auto generate_column_type(const SQLTypeInfo& elem_ti) {
   }
   auto c = elem_ti.get_compression();
   auto d = elem_ti.get_dimension();
+  auto s = elem_ti.get_scale();
   auto p = elem_ti.get_comp_param();
   switch (elem_type) {
     case kBOOLEAN:
@@ -1408,6 +1434,18 @@ inline auto generate_column_type(const SQLTypeInfo& elem_ti) {
       if (c == kENCODING_NONE && p == 0) {
         break;  // here and below `break` means supported element type
                 // for extension functions
+      }
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOINT:
+    case kMULTILINESTRING:
+    case kMULTIPOLYGON:
+      if (c == kENCODING_NONE && p == 0) {
+        break;
+      }
+      if (c == kENCODING_GEOINT && p == 32) {
+        break;
       }
     case kTEXT:
     case kVARCHAR:
@@ -1439,6 +1477,7 @@ inline auto generate_column_type(const SQLTypeInfo& elem_ti) {
   if (c == kENCODING_DICT) {
     ti.setStringDictKey(elem_ti.getStringDictKey());
   }
+  ti.set_scale(s);
   return ti;
 }
 
@@ -1458,47 +1497,6 @@ inline auto generate_column_list_type(const SQLTypeInfo& elem_ti) {
 
 #include "../QueryEngine/Utils/FlatBuffer.h"
 
-inline int64_t getVarlenArrayBufferSize(int64_t items_count,
-                                        int64_t max_nof_values,
-                                        const SQLTypeInfo& ti) {
-  CHECK(ti.is_array());
-  const size_t array_item_size = ti.get_elem_type().get_size();
-  if (ti.is_text_encoding_dict_array()) {
-    return FlatBufferManager::get_VarlenArray_flatbuffer_size(
-        items_count,
-        max_nof_values,
-        array_item_size,
-        FlatBufferManager::DTypeMetadataKind::SIZE_DICTID);
-  } else {
-    return FlatBufferManager::get_VarlenArray_flatbuffer_size(
-        items_count,
-        max_nof_values,
-        array_item_size,
-        FlatBufferManager::DTypeMetadataKind::SIZE);
-  }
-}
-
-inline void initializeVarlenArray(FlatBufferManager& m,
-                                  int64_t items_count,
-                                  int64_t max_nof_values,
-                                  const SQLTypeInfo& ti) {
-  CHECK(ti.is_array());
-  const size_t array_item_size = ti.get_elem_type().get_size();
-  if (ti.is_text_encoding_dict_array()) {
-    m.initializeVarlenArray(items_count,
-                            max_nof_values,
-                            array_item_size,
-                            FlatBufferManager::DTypeMetadataKind::SIZE_DICTID);
-    const auto& dict_key = ti.getStringDictKey();
-    m.setDTypeMetadataDictKey(dict_key.db_id, dict_key.dict_id);
-  } else {
-    m.initializeVarlenArray(items_count,
-                            max_nof_values,
-                            array_item_size,
-                            FlatBufferManager::DTypeMetadataKind::SIZE);
-  }
-}
-
 // ChunkIter_get_nth variant for array buffers using FlatBuffer storage schema:
 DEVICE inline void VarlenArray_get_nth(int8_t* buf,
                                        int n,
@@ -1516,6 +1514,100 @@ DEVICE inline void VarlenArray_get_nth(int8_t* buf,
 #ifndef __CUDACC__
     CHECK_EQ(status, FlatBufferManager::Status::Success);
 #endif
+  }
+}
+
+inline int64_t getFlatBufferSize(int64_t items_count,
+                                 int64_t max_nof_values,
+                                 const SQLTypeInfo& ti) {
+  switch (ti.get_type()) {
+    case kPOINT: {
+      FlatBufferManager::GeoPoint metadata{items_count,
+                                           ti.get_input_srid(),
+                                           ti.get_output_srid(),
+                                           ti.get_compression() == kENCODING_GEOINT};
+      return FlatBufferManager::compute_flatbuffer_size(
+          GeoPointFormatId, reinterpret_cast<const int8_t*>(&metadata));
+    }
+    case kLINESTRING: {
+      FlatBufferManager::GeoLineString metadata{items_count,
+                                                max_nof_values,
+                                                ti.get_input_srid(),
+                                                ti.get_output_srid(),
+                                                ti.get_compression() == kENCODING_GEOINT};
+      return FlatBufferManager::compute_flatbuffer_size(
+          GeoLineStringFormatId, reinterpret_cast<const int8_t*>(&metadata));
+    }
+    case kPOLYGON: {
+      FlatBufferManager::GeoPolygon metadata{items_count,
+                                             max_nof_values,
+                                             max_nof_values / 3,
+                                             ti.get_input_srid(),
+                                             ti.get_output_srid(),
+                                             ti.get_compression() == kENCODING_GEOINT};
+      return FlatBufferManager::compute_flatbuffer_size(
+          GeoPolygonFormatId, reinterpret_cast<const int8_t*>(&metadata));
+    }
+    case kARRAY: {
+      const size_t array_item_size = ti.get_elem_type().get_size();
+      const auto dict_key = ti.getStringDictKey();
+      FlatBufferManager::VarlenArray metadata{
+          items_count, max_nof_values, array_item_size, {}};
+      metadata.params[FlatBufferManager::VarlenArrayParamDictId] = ti.get_comp_param();
+      metadata.params[FlatBufferManager::VarlenArrayParamDbId] = dict_key.db_id;
+      return FlatBufferManager::compute_flatbuffer_size(
+          VarlenArrayFormatId, reinterpret_cast<const int8_t*>(&metadata));
+    }
+    default:
+      UNREACHABLE();
+  }
+  return 0;
+}
+
+inline void initializeFlatBuffer(FlatBufferManager& m,
+                                 int64_t items_count,
+                                 int64_t max_nof_values,
+                                 const SQLTypeInfo& ti) {
+  switch (ti.get_type()) {
+    case kPOINT: {
+      FlatBufferManager::GeoPoint metadata{items_count,
+                                           ti.get_input_srid(),
+                                           ti.get_output_srid(),
+                                           ti.get_compression() == kENCODING_GEOINT};
+      m.initialize(GeoPointFormatId, reinterpret_cast<const int8_t*>(&metadata));
+      break;
+    }
+    case kLINESTRING: {
+      FlatBufferManager::GeoLineString metadata{items_count,
+                                                max_nof_values,
+                                                ti.get_input_srid(),
+                                                ti.get_output_srid(),
+                                                ti.get_compression() == kENCODING_GEOINT};
+      m.initialize(GeoLineStringFormatId, reinterpret_cast<const int8_t*>(&metadata));
+      break;
+    }
+    case kPOLYGON: {
+      FlatBufferManager::GeoPolygon metadata{items_count,
+                                             max_nof_values,
+                                             max_nof_values / 3,
+                                             ti.get_input_srid(),
+                                             ti.get_output_srid(),
+                                             ti.get_compression() == kENCODING_GEOINT};
+      m.initialize(GeoPolygonFormatId, reinterpret_cast<const int8_t*>(&metadata));
+      break;
+    }
+    case kARRAY: {
+      const size_t array_item_size = ti.get_elem_type().get_size();
+      const auto dict_key = ti.getStringDictKey();
+      FlatBufferManager::VarlenArray metadata{
+          items_count, max_nof_values, array_item_size, {}};
+      metadata.params[FlatBufferManager::VarlenArrayParamDictId] = ti.get_comp_param();
+      metadata.params[FlatBufferManager::VarlenArrayParamDbId] = dict_key.db_id;
+      m.initialize(VarlenArrayFormatId, reinterpret_cast<const int8_t*>(&metadata));
+      break;
+    }
+    default:
+      UNREACHABLE();
   }
 }
 

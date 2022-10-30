@@ -76,6 +76,18 @@ enum TExtArgumentType {
   GeoMultiPoint,
   DayTimeInterval,
   YearMonthTimeInterval,
+  ColumnGeoPoint,
+  ColumnGeoLineString,
+  ColumnGeoPolygon,
+  ColumnGeoMultiPoint,
+  ColumnGeoMultiLineString,
+  ColumnGeoMultiPolygon,
+  ColumnListGeoPoint,
+  ColumnListGeoLineString,
+  ColumnListGeoPolygon,
+  ColumnListGeoMultiPoint,
+  ColumnListGeoMultiLineString,
+  ColumnListGeoMultiPolygon,
 }
 
 /* See QueryEngine/TableFunctions/TableFunctionsFactory.h for required values */

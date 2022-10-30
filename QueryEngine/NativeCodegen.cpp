@@ -109,7 +109,7 @@ void load_geos_dynamic_library() {
     if (!geos_dynamic_library.isValid()) {
       LOG(ERROR) << "Failed to load GEOS library '" + filename + "'";
       std::string exception_message = "Failed to load GEOS library: " + error_message;
-      throw std::runtime_error(exception_message.c_str());
+      throw std::runtime_error(exception_message);
     } else {
       LOG(INFO) << "Loaded GEOS library '" + filename + "'";
     }

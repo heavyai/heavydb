@@ -597,22 +597,24 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   // places
   for (size_t col_idx = 0; col_idx < num_out_columns; col_idx++) {
     auto ti = exe_unit.target_exprs[col_idx]->get_type_info();
-    if (ti.is_array()) {
+    if (ti.supports_flatbuffer()) {
       // TODO: implement FlatBuffer normalization when the
       // max_nof_values is larger than the nof specified values.
       //
       // TODO: implement flatbuffer resize when output_row_count < mgr->get_nrows()
       CHECK_EQ(mgr->get_nrows(), output_row_count);
       FlatBufferManager m{src};
-      const size_t allocated_column_size = m.flatbufferSize();
+      const size_t allocated_column_size = m.getBufferSize();
       const size_t actual_column_size = allocated_column_size;
       src = align_to_int64(src + allocated_column_size);
       dst = align_to_int64(dst + actual_column_size);
       if (ti.is_text_encoding_dict_array()) {
-        CHECK_EQ(m.getDTypeMetadataDictDbId(),
-                 ti.getStringDictKey().db_id);  // ensure that db_id is preserved
-        CHECK_EQ(m.getDTypeMetadataDictId(),
-                 ti.getStringDictKey().dict_id);  // ensure that dict_id is preserved
+        CHECK_EQ(
+            m.getVarlenArrayMetadata()->params[FlatBufferManager::VarlenArrayParamDictId],
+            ti.getStringDictKey().dict_id);  // ensure that dict_id is preserved
+        CHECK_EQ(
+            m.getVarlenArrayMetadata()->params[FlatBufferManager::VarlenArrayParamDbId],
+            ti.getStringDictKey().db_id);  // ensure that db_id is preserved
       }
     } else {
       const size_t target_width = ti.get_size();

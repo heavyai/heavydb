@@ -240,12 +240,30 @@ std::pair<int32_t, int32_t> TableFunction::getInputID(const size_t idx) const {
         case ExtArgumentType::TextEncodingDict:
         case ExtArgumentType::ColumnTextEncodingDict:
         case ExtArgumentType::ColumnListTextEncodingDict:
+        case ExtArgumentType::GeoPoint:
+        case ExtArgumentType::ColumnGeoPoint:
+        case ExtArgumentType::ColumnListGeoPoint:
+        case ExtArgumentType::GeoLineString:
+        case ExtArgumentType::ColumnGeoLineString:
+        case ExtArgumentType::ColumnListGeoLineString:
+        case ExtArgumentType::GeoPolygon:
+        case ExtArgumentType::ColumnGeoPolygon:
+        case ExtArgumentType::ColumnListGeoPolygon:
+        case ExtArgumentType::GeoMultiPoint:
+        case ExtArgumentType::ColumnGeoMultiPoint:
+        case ExtArgumentType::ColumnListGeoMultiPoint:
+        case ExtArgumentType::GeoMultiLineString:
+        case ExtArgumentType::ColumnGeoMultiLineString:
+        case ExtArgumentType::ColumnListGeoMultiLineString:
+        case ExtArgumentType::GeoMultiPolygon:
+        case ExtArgumentType::ColumnGeoMultiPolygon:
+        case ExtArgumentType::ColumnListGeoMultiPolygon:
           return std::make_pair(lo, 0);
         default:
           lo++;
       }
     }
-    UNREACHABLE();
+    return {-1, -1};  // indicates unspecified
   }
 
   const std::string& input_id = annot->second;

@@ -144,7 +144,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
       return cols;
     }
   } else {
-    if (col_var->get_type_info().is_geometry()) {
+    const auto& col_ti = col_var->get_type_info();
+    if (col_ti.is_geometry() && !col_ti.supports_flatbuffer()) {
       throw std::runtime_error(
           "Geospatial columns not supported in temporary tables yet");
     }
@@ -210,7 +211,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
     }
     return varlen_str_column_lvs;
   }
-  if (col_ti.is_array()) {
+  if (col_ti.supports_flatbuffer()) {
     return {col_byte_stream};
   }
   if (window_func_context) {

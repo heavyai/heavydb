@@ -5220,7 +5220,25 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   constexpr int32_t transient_pos{-1};
   for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
     auto ti = table_function_impl.getOutputSQLType(i);
-    if (ti.is_dict_encoded_string() || ti.is_text_encoding_dict_array()) {
+    if (ti.is_geometry()) {
+      auto p = table_function_impl.getInputID(i);
+      int32_t input_pos = p.first;
+      if (input_pos != transient_pos) {
+        CHECK(!ti.is_column_list());  // see QE-472
+        CHECK_LT(input_pos, input_exprs_owned.size());
+        const auto& reference_ti = input_exprs_owned[input_pos]->get_type_info();
+        CHECK(IS_GEO(reference_ti.get_type()) || IS_GEO(reference_ti.get_subtype()));
+        ti.set_input_srid(reference_ti.get_input_srid());
+        ti.set_output_srid(reference_ti.get_output_srid());
+        ti.set_compression(reference_ti.get_compression());
+        ti.set_comp_param(reference_ti.get_comp_param());
+      } else {
+        ti.set_input_srid(0);
+        ti.set_output_srid(0);
+        ti.set_compression(kENCODING_NONE);
+        ti.set_comp_param(0);
+      }
+    } else if (ti.is_dict_encoded_string() || ti.is_text_encoding_dict_array()) {
       auto p = table_function_impl.getInputID(i);
 
       int32_t input_pos = p.first;

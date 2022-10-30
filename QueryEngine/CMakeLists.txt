@@ -1,162 +1,174 @@
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
 if(MSVC)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall")
 else()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall -Wno-attributes")
-# /opt/cuda/include/cub/detail/device_synchronize.cuh:33: warning: ignoring ‘#pragma nv_exec_check_disable ’
-set_source_files_properties(JoinHashTable/Runtime/HashJoinRuntime.cpp PROPERTIES COMPILE_OPTIONS "-Wno-unknown-pragmas")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall -Wno-attributes")
+
+  # /opt/cuda/include/cub/detail/device_synchronize.cuh:33: warning: ignoring ‘#pragma nv_exec_check_disable ’
+  set_source_files_properties(JoinHashTable/Runtime/HashJoinRuntime.cpp PROPERTIES COMPILE_OPTIONS "-Wno-unknown-pragmas")
 endif()
 
 set_source_files_properties(RuntimeFunctionsCodegenWithIncludes.cpp PROPERTIES COMPILE_FLAGS -O0)
 set(query_engine_source_files
-    AggregatedColRange.cpp
-    ArithmeticIR.cpp
-    ArrayIR.cpp
-    ArrayOps.cpp
-    ArrowResultSetConverter.cpp
-    ArrowResultSet.cpp
-    CalciteAdapter.cpp
-    CalciteDeserializerUtils.cpp
-    CardinalityEstimator.cpp
-    CaseIR.cpp
-    CastIR.cpp
-    CgenState.cpp
-    Codec.cpp
-    CodeCacheAccessor.cpp
-    ColumnarResults.cpp
-    ColumnFetcher.cpp
-    ColumnIR.cpp
-    CompareIR.cpp
-    ConstantIR.cpp
-    DateTimeIR.cpp
-    DateTimePlusRewrite.cpp
-    DateTimeTranslator.cpp
-    DateTruncate.cpp
-    Descriptors/ColSlotContext.cpp
-    Descriptors/InputDescriptors.cpp
-    Descriptors/QueryCompilationDescriptor.cpp
-    Descriptors/QueryFragmentDescriptor.cpp
-    Descriptors/QueryMemoryDescriptor.cpp
-    Descriptors/RelAlgExecutionDescriptor.cpp
-    DeviceKernel.cpp
-    EquiJoinCondition.cpp
-    Execute.cpp
-    ExecuteUpdate.cpp
-    ExecutionKernel.cpp
-    ExpressionRange.cpp
-    ExpressionRewrite.cpp
-    ExtensionFunctionsBinding.cpp
-    ExtensionFunctionsWhitelist.cpp
-    ExtensionFunctions.ast
-    ExtensionsIR.cpp
-    ExternalExecutor.cpp
-    ExtractFromTime.cpp
-    FromTableReordering.cpp
-    GeoIR.cpp
-    GpuInterrupt.cpp
-    GpuMemUtils.cpp
-    GpuSharedMemoryUtils.cpp
-    InPlaceSort.cpp
-    InValuesIR.cpp
-    IRCodegen.cpp
-    GeoOps.cpp
-    GeoOperators/Codegen.cpp
-    GroupByAndAggregate.cpp
-    InValuesBitmap.cpp
-    InputMetadata.cpp
-    JoinFilterPushDown.cpp
-    JoinHashTable/BaselineJoinHashTable.cpp
-    JoinHashTable/HashJoin.cpp
-    JoinHashTable/HashTable.cpp
-    JoinHashTable/OverlapsJoinHashTable.cpp
-    JoinHashTable/PerfectJoinHashTable.cpp
-    JoinHashTable/Runtime/HashJoinRuntime.cpp
-    JoinHashTable/RangeJoinHashTable.cpp
-    LogicalIR.cpp
-    LLVMFunctionAttributesUtil.cpp
-    LLVMGlobalContext.cpp
-    MaxwellCodegenPatch.cpp
-    MurmurHash.cpp
-    NativeCodegen.cpp
-    NvidiaKernel.cpp
-    OutputBufferInitialization.cpp
-    QueryPhysicalInputsCollector.cpp
-    PlanState.cpp
-    QueryEngine.cpp
-    QueryRewrite.cpp
-    QueryTemplateGenerator.cpp
-    QueryExecutionContext.cpp
-    QueryMemoryInitializer.cpp
-    RelAlgDag.cpp
-    RelAlgDagSerializer/Serializer.cpp
-    RelLeftDeepInnerJoin.cpp
-    RelAlgExecutor.cpp
-    RelAlgTranslator.cpp
-    RelAlgTranslatorGeo.cpp
-    RelAlgOptimizer.cpp
-    ResultSet.cpp
-    ResultSetBuilder.cpp
-    ResultSetIteration.cpp
-    ResultSetReduction.cpp
-    ResultSetReductionCodegen.cpp
-    ResultSetReductionInterpreter.cpp
-    ResultSetReductionInterpreterStubs.cpp
-    ResultSetReductionJIT.cpp
-    ResultSetStorage.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/LoopControlFlow/JoinLoop.cpp
-    ResultSetSort.cpp
-    RuntimeFunctions.cpp
-    RuntimeFunctions.bc
-    DynamicWatchdog.cpp
-    ScalarCodeGenerator.cpp
-    SerializeToSql.cpp
-    SpeculativeTopN.cpp
-    StreamingTopN.cpp
-    StringDictionaryGenerations.cpp
-    TableFunctions/TableFunctionCompilationContext.cpp
-    TableFunctions/TableFunctionExecutionContext.cpp
-    TableFunctions/TableFunctionsFactory.cpp
-    TableFunctions/TableFunctionOps.cpp
-    TableGenerations.cpp
-    TableOptimizer.cpp
-    TargetExprBuilder.cpp
-    Utils/DiamondCodegen.cpp
-    StringDictionaryTranslationMgr.cpp
-    StringFunctions.cpp
-    StringOpsIR.cpp
-    RegexpFunctions.cpp
-    Visitors/RelRexDagVisitor.cpp
-    Visitors/RexSubQueryIdCollector.cpp
-    WindowContext.cpp
-    WindowExpressionRewrite.cpp
-    WindowFunctionIR.cpp
-    QueryPlanDagCache.cpp
-    QueryPlanDagExtractor.cpp
-    ResultSetRecyclerHolder.cpp
-    DataRecycler/HashtableRecycler.cpp
-    DataRecycler/HashingSchemeRecycler.cpp
-    DataRecycler/OverlapsTuningParamRecycler.cpp
-    DataRecycler/ResultSetRecycler.cpp
-    DataRecycler/ChunkMetadataRecycler.cpp
-    Visitors/QueryPlanDagChecker.cpp
-    Visitors/SQLOperatorDetector.cpp
-    Visitors/GeospatialFunctionFinder.cpp
+  AggregatedColRange.cpp
+  ArithmeticIR.cpp
+  ArrayIR.cpp
+  ArrayOps.cpp
+  ArrowResultSetConverter.cpp
+  ArrowResultSet.cpp
+  CalciteAdapter.cpp
+  CalciteDeserializerUtils.cpp
+  CardinalityEstimator.cpp
+  CaseIR.cpp
+  CastIR.cpp
+  CgenState.cpp
+  Codec.cpp
+  CodeCacheAccessor.cpp
+  ColumnarResults.cpp
+  ColumnFetcher.cpp
+  ColumnIR.cpp
+  CompareIR.cpp
+  ConstantIR.cpp
+  DateTimeIR.cpp
+  DateTimePlusRewrite.cpp
+  DateTimeTranslator.cpp
+  DateTruncate.cpp
+  Descriptors/ColSlotContext.cpp
+  Descriptors/InputDescriptors.cpp
+  Descriptors/QueryCompilationDescriptor.cpp
+  Descriptors/QueryFragmentDescriptor.cpp
+  Descriptors/QueryMemoryDescriptor.cpp
+  Descriptors/RelAlgExecutionDescriptor.cpp
+  DeviceKernel.cpp
+  EquiJoinCondition.cpp
+  Execute.cpp
+  ExecuteUpdate.cpp
+  ExecutionKernel.cpp
+  ExpressionRange.cpp
+  ExpressionRewrite.cpp
+  ExtensionFunctionsBinding.cpp
+  ExtensionFunctionsWhitelist.cpp
+  ExtensionFunctions.ast
+  ExtensionsIR.cpp
+  ExternalExecutor.cpp
+  ExtractFromTime.cpp
+  FromTableReordering.cpp
+  GeoIR.cpp
+  GpuInterrupt.cpp
+  GpuMemUtils.cpp
+  GpuSharedMemoryUtils.cpp
+  InPlaceSort.cpp
+  InValuesIR.cpp
+  IRCodegen.cpp
+  GeoOps.cpp
+  GeoOperators/Codegen.cpp
+  GroupByAndAggregate.cpp
+  InValuesBitmap.cpp
+  InputMetadata.cpp
+  JoinFilterPushDown.cpp
+  JoinHashTable/BaselineJoinHashTable.cpp
+  JoinHashTable/HashJoin.cpp
+  JoinHashTable/HashTable.cpp
+  JoinHashTable/OverlapsJoinHashTable.cpp
+  JoinHashTable/PerfectJoinHashTable.cpp
+  JoinHashTable/Runtime/HashJoinRuntime.cpp
+  JoinHashTable/RangeJoinHashTable.cpp
+  LogicalIR.cpp
+  LLVMFunctionAttributesUtil.cpp
+  LLVMGlobalContext.cpp
+  MaxwellCodegenPatch.cpp
+  MurmurHash.cpp
+  NativeCodegen.cpp
+  NvidiaKernel.cpp
+  OutputBufferInitialization.cpp
+  QueryPhysicalInputsCollector.cpp
+  PlanState.cpp
+  QueryEngine.cpp
+  QueryRewrite.cpp
+  QueryTemplateGenerator.cpp
+  QueryExecutionContext.cpp
+  QueryMemoryInitializer.cpp
+  RelAlgDag.cpp
+  RelAlgDagSerializer/Serializer.cpp
+  RelLeftDeepInnerJoin.cpp
+  RelAlgExecutor.cpp
+  RelAlgTranslator.cpp
+  RelAlgTranslatorGeo.cpp
+  RelAlgOptimizer.cpp
+  ResultSet.cpp
+  ResultSetBuilder.cpp
+  ResultSetIteration.cpp
+  ResultSetReduction.cpp
+  ResultSetReductionCodegen.cpp
+  ResultSetReductionInterpreter.cpp
+  ResultSetReductionInterpreterStubs.cpp
+  ResultSetReductionJIT.cpp
+  ResultSetStorage.cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/LoopControlFlow/JoinLoop.cpp
+  ResultSetSort.cpp
+  RuntimeFunctions.cpp
+  RuntimeFunctions.bc
+  DynamicWatchdog.cpp
+  ScalarCodeGenerator.cpp
+  SerializeToSql.cpp
+  SpeculativeTopN.cpp
+  StreamingTopN.cpp
+  StringDictionaryGenerations.cpp
+  TableFunctions/TableFunctionCompilationContext.cpp
+  TableFunctions/TableFunctionExecutionContext.cpp
+  TableFunctions/TableFunctionsFactory.cpp
+  TableFunctions/TableFunctionOps.cpp
+  TableGenerations.cpp
+  TableOptimizer.cpp
+  TargetExprBuilder.cpp
+  Utils/DiamondCodegen.cpp
+  StringDictionaryTranslationMgr.cpp
+  StringFunctions.cpp
+  StringOpsIR.cpp
+  RegexpFunctions.cpp
+  Visitors/RelRexDagVisitor.cpp
+  Visitors/RexSubQueryIdCollector.cpp
+  WindowContext.cpp
+  WindowExpressionRewrite.cpp
+  WindowFunctionIR.cpp
+  QueryPlanDagCache.cpp
+  QueryPlanDagExtractor.cpp
+  ResultSetRecyclerHolder.cpp
+  DataRecycler/HashtableRecycler.cpp
+  DataRecycler/HashingSchemeRecycler.cpp
+  DataRecycler/OverlapsTuningParamRecycler.cpp
+  DataRecycler/ResultSetRecycler.cpp
+  DataRecycler/ChunkMetadataRecycler.cpp
+  Visitors/QueryPlanDagChecker.cpp
+  Visitors/SQLOperatorDetector.cpp
+  Visitors/GeospatialFunctionFinder.cpp
 
-    Codec.h
-    Execute.h
-    NvidiaKernel.h
-    QueryTemplateGenerator.h
-    TableFunctions/TableFunctionManager.h
-    Utils/SegmentTree.h)
+  Codec.h
+  Execute.h
+  NvidiaKernel.h
+  QueryTemplateGenerator.h
+  TableFunctions/TableFunctionManager.h
+  Utils/SegmentTree.h)
+
+set(SHARED_SQL_TYPES_H_AND_DEPS
+  ${CMAKE_SOURCE_DIR}/Shared/sqltypes.h
+  ${CMAKE_SOURCE_DIR}/Shared/funcannotations.h
+  ${CMAKE_SOURCE_DIR}/Shared/Datum.h
+  ${CMAKE_SOURCE_DIR}/Shared/InlineNullValues.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/DateAdd.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/DateTruncate.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/ExtractFromTime.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/Utils/FlatBuffer.h
+  )
 
 set(query_engine_cuda_source_files
-    TopKSort.cu
-    InPlaceSortImpl.cu
-    ResultSetSortImpl.cu
-    GpuInitGroups.cu
-    JoinHashTable/Runtime/HashJoinRuntimeGpu.cu)
+  TopKSort.cu
+  InPlaceSortImpl.cu
+  ResultSetSortImpl.cu
+  GpuInitGroups.cu
+  JoinHashTable/Runtime/HashJoinRuntimeGpu.cu)
 
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   list(APPEND query_engine_source_files
@@ -183,7 +195,7 @@ if(NOT PREFER_STATIC_LIBS)
   list(APPEND MAPD_DEFINITIONS "-DBOOST_LOG_DYN_LINK")
 endif()
 
-if (SUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS)
+if(SUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS)
   list(APPEND MAPD_DEFINITIONS "-DSUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS")
 endif()
 
@@ -261,7 +273,7 @@ if(ENABLE_OMNIVERSE_CONNECTOR)
 endif()
 
 add_custom_command(
-  DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp GeoOpsRuntime.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp ${CMAKE_SOURCE_DIR}/Geospatial/Utm.h
+  DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp GeoOpsRuntime.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp ${CMAKE_SOURCE_DIR}/Geospatial/Utm.h ${SHARED_SQL_TYPES_H_AND_DEPS}
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
   COMMAND ${llvm_clangpp_cmd}
   ARGS -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm
@@ -272,7 +284,7 @@ add_custom_command(
   ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
 add_custom_command(
-  DEPENDS GeosRuntime.cpp GeosRuntime.h ${CMAKE_SOURCE_DIR}/Geospatial/Compression.cpp
+  DEPENDS GeosRuntime.cpp GeosRuntime.h ${CMAKE_SOURCE_DIR}/Geospatial/Compression.cpp ${SHARED_SQL_TYPES_H_AND_DEPS}
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
   COMMAND ${llvm_clangpp_cmd}
   ARGS -DNO_BOOST -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm

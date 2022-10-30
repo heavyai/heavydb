@@ -100,6 +100,18 @@ public class ExtensionFunction {
     GeoMultiPoint,
     DayTimeInterval,
     YearMonthTimeInterval,
+    ColumnGeoPoint,
+    ColumnGeoLineString,
+    ColumnGeoPolygon,
+    ColumnGeoMultiPoint,
+    ColumnGeoMultiLineString,
+    ColumnGeoMultiPolygon,
+    ColumnListGeoPoint,
+    ColumnListGeoLineString,
+    ColumnListGeoPolygon,
+    ColumnListGeoMultiPoint,
+    ColumnListGeoMultiLineString,
+    ColumnListGeoMultiPolygon,
   }
   ;
 
@@ -372,6 +384,30 @@ public class ExtensionFunction {
         return "DayTimeInterval";
       case YearMonthTimeInterval:
         return "YearMonthTimeInterval";
+      case ColumnGeoPoint:
+        return "Column<GeoPoint>";
+      case ColumnGeoLineString:
+        return "Column<GeoLineString>";
+      case ColumnGeoPolygon:
+        return "Column<GeoPolygon>";
+      case ColumnGeoMultiPoint:
+        return "Column<GeoMultiPoint>";
+      case ColumnGeoMultiLineString:
+        return "Column<GeoMultiLineString>";
+      case ColumnGeoMultiPolygon:
+        return "Column<GeoMultiPolygon>";
+      case ColumnListGeoPoint:
+        return "ColumnList<GeoPoint>";
+      case ColumnListGeoLineString:
+        return "ColumnList<GeoLineString>";
+      case ColumnListGeoPolygon:
+        return "ColumnList<GeoPolygon>";
+      case ColumnListGeoMultiPoint:
+        return "ColumnList<GeoMultiPoint>";
+      case ColumnListGeoMultiLineString:
+        return "ColumnList<GeoMultiLineString>";
+      case ColumnListGeoMultiPolygon:
+        return "ColumnList<GeoMultiPolygon>";
     }
     HEAVYDBLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
@@ -452,7 +488,13 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnFloat || type == ExtArgumentType.ColumnDouble
             || type == ExtArgumentType.ColumnBool
             || type == ExtArgumentType.ColumnTextEncodingDict
-            || type == ExtArgumentType.ColumnTimestamp || isColumnArrayType(type);
+            || type == ExtArgumentType.ColumnTimestamp || isColumnArrayType(type)
+            || type == ExtArgumentType.ColumnGeoPoint
+            || type == ExtArgumentType.ColumnGeoLineString
+            || type == ExtArgumentType.ColumnGeoPolygon
+            || type == ExtArgumentType.ColumnGeoMultiPoint
+            || type == ExtArgumentType.ColumnGeoMultiLineString
+            || type == ExtArgumentType.ColumnGeoMultiPolygon;
   }
 
   public static boolean isColumnListType(final ExtArgumentType type) {
@@ -464,7 +506,12 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnListDouble
             || type == ExtArgumentType.ColumnListBool
             || type == ExtArgumentType.ColumnListTextEncodingDict
-            || isColumnListArrayType(type);
+            || isColumnListArrayType(type) || type == ExtArgumentType.ColumnListGeoPoint
+            || type == ExtArgumentType.ColumnListGeoLineString
+            || type == ExtArgumentType.ColumnListGeoPolygon
+            || type == ExtArgumentType.ColumnListGeoMultiPoint
+            || type == ExtArgumentType.ColumnListGeoMultiLineString
+            || type == ExtArgumentType.ColumnListGeoMultiPolygon;
   }
 
   public static ExtArgumentType getValueType(final ExtArgumentType type) {
@@ -549,6 +596,24 @@ public class ExtensionFunction {
         return ExtArgumentType.ArrayDouble;
       case ColumnListArrayBool:
         return ExtArgumentType.ArrayBool;
+      case ColumnGeoPoint:
+      case ColumnListGeoPoint:
+        return ExtArgumentType.GeoPoint;
+      case ColumnGeoLineString:
+      case ColumnListGeoLineString:
+        return ExtArgumentType.GeoLineString;
+      case ColumnGeoPolygon:
+      case ColumnListGeoPolygon:
+        return ExtArgumentType.GeoPolygon;
+      case ColumnGeoMultiPoint:
+      case ColumnListGeoMultiPoint:
+        return ExtArgumentType.GeoMultiPoint;
+      case ColumnGeoMultiLineString:
+      case ColumnListGeoMultiLineString:
+        return ExtArgumentType.GeoMultiLineString;
+      case ColumnGeoMultiPolygon:
+      case ColumnListGeoMultiPolygon:
+        return ExtArgumentType.GeoMultiPolygon;
     }
     HEAVYDBLOGGER.error("getValueType: no value for type " + type);
     assert false;
@@ -614,6 +679,12 @@ public class ExtensionFunction {
       case GeoMultiLineString:
       case GeoPolygon:
       case GeoMultiPolygon:
+      case ColumnGeoPoint:
+      case ColumnGeoLineString:
+      case ColumnGeoPolygon:
+      case ColumnGeoMultiPoint:
+      case ColumnGeoMultiLineString:
+      case ColumnGeoMultiPolygon:
         return SqlTypeName.GEOMETRY;
       case Cursor:
         return SqlTypeName.CURSOR;
@@ -640,6 +711,12 @@ public class ExtensionFunction {
       case ColumnListArrayBool:
       case ColumnListArrayTextEncodingDict:
       case ColumnListTextEncodingDict:
+      case ColumnListGeoPoint:
+      case ColumnListGeoLineString:
+      case ColumnListGeoPolygon:
+      case ColumnListGeoMultiPoint:
+      case ColumnListGeoMultiLineString:
+      case ColumnListGeoMultiPolygon:
         return SqlTypeName.COLUMN_LIST;
       case DayTimeInterval:
         return SqlTypeName.INTERVAL_DAY_HOUR;

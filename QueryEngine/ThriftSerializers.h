@@ -533,6 +533,30 @@ inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
       return ExtArgumentType::DayTimeInterval;
     case TExtArgumentType::YearMonthTimeInterval:
       return ExtArgumentType::YearMonthTimeInterval;
+    case TExtArgumentType::ColumnGeoPoint:
+      return ExtArgumentType::ColumnGeoPoint;
+    case TExtArgumentType::ColumnGeoLineString:
+      return ExtArgumentType::ColumnGeoLineString;
+    case TExtArgumentType::ColumnGeoPolygon:
+      return ExtArgumentType::ColumnGeoPolygon;
+    case TExtArgumentType::ColumnGeoMultiPoint:
+      return ExtArgumentType::ColumnGeoMultiPoint;
+    case TExtArgumentType::ColumnGeoMultiLineString:
+      return ExtArgumentType::ColumnGeoMultiLineString;
+    case TExtArgumentType::ColumnGeoMultiPolygon:
+      return ExtArgumentType::ColumnGeoMultiPolygon;
+    case TExtArgumentType::ColumnListGeoPoint:
+      return ExtArgumentType::ColumnListGeoPoint;
+    case TExtArgumentType::ColumnListGeoLineString:
+      return ExtArgumentType::ColumnListGeoLineString;
+    case TExtArgumentType::ColumnListGeoPolygon:
+      return ExtArgumentType::ColumnListGeoPolygon;
+    case TExtArgumentType::ColumnListGeoMultiPoint:
+      return ExtArgumentType::ColumnListGeoMultiPoint;
+    case TExtArgumentType::ColumnListGeoMultiLineString:
+      return ExtArgumentType::ColumnListGeoMultiLineString;
+    case TExtArgumentType::ColumnListGeoMultiPolygon:
+      return ExtArgumentType::ColumnListGeoMultiPolygon;
   }
   UNREACHABLE();
   return ExtArgumentType{};
@@ -686,6 +710,30 @@ inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
       return TExtArgumentType::DayTimeInterval;
     case ExtArgumentType::YearMonthTimeInterval:
       return TExtArgumentType::YearMonthTimeInterval;
+    case ExtArgumentType::ColumnGeoPoint:
+      return TExtArgumentType::ColumnGeoPoint;
+    case ExtArgumentType::ColumnGeoLineString:
+      return TExtArgumentType::ColumnGeoLineString;
+    case ExtArgumentType::ColumnGeoPolygon:
+      return TExtArgumentType::ColumnGeoPolygon;
+    case ExtArgumentType::ColumnGeoMultiPoint:
+      return TExtArgumentType::ColumnGeoMultiPoint;
+    case ExtArgumentType::ColumnGeoMultiLineString:
+      return TExtArgumentType::ColumnGeoMultiLineString;
+    case ExtArgumentType::ColumnGeoMultiPolygon:
+      return TExtArgumentType::ColumnGeoMultiPolygon;
+    case ExtArgumentType::ColumnListGeoPoint:
+      return TExtArgumentType::ColumnListGeoPoint;
+    case ExtArgumentType::ColumnListGeoLineString:
+      return TExtArgumentType::ColumnListGeoLineString;
+    case ExtArgumentType::ColumnListGeoPolygon:
+      return TExtArgumentType::ColumnListGeoPolygon;
+    case ExtArgumentType::ColumnListGeoMultiPoint:
+      return TExtArgumentType::ColumnListGeoMultiPoint;
+    case ExtArgumentType::ColumnListGeoMultiLineString:
+      return TExtArgumentType::ColumnListGeoMultiLineString;
+    case ExtArgumentType::ColumnListGeoMultiPolygon:
+      return TExtArgumentType::ColumnListGeoMultiPolygon;
   }
   UNREACHABLE();
   return TExtArgumentType::type{};

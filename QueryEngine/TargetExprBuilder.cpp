@@ -129,11 +129,12 @@ void TargetExprCodegen::codegen(
   CHECK(group_by_and_agg);
   CHECK(executor);
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
-
   auto agg_out_ptr_w_idx = agg_out_ptr_w_idx_in;
   const auto arg_expr = agg_arg(target_expr);
-
   const bool varlen_projection = is_varlen_projection(target_expr, target_info.sql_type);
+  /* TODO: find a better way to determine if target uses FlatBuffer storage or not.
+   */
+  const bool uses_flatbuffer = target_info.sql_type.get_type() == kPOLYGON;
   const auto agg_fn_names = agg_fn_base_names(target_info, varlen_projection);
   const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
   WindowProjectNodeContext::resetWindowFunctionContext(executor);
@@ -166,7 +167,9 @@ void TargetExprCodegen::codegen(
     // array. Ensure that the target values generated match the number of agg
     // functions before continuing
     if (target_lvs.size() < agg_fn_names.size()) {
-      CHECK_EQ(target_lvs.size(), agg_fn_names.size() / 2);
+      if (!uses_flatbuffer) {
+        CHECK_EQ(target_lvs.size(), agg_fn_names.size() / 2);
+      }
       std::vector<llvm::Value*> new_target_lvs;
       new_target_lvs.reserve(agg_fn_names.size());
       for (const auto& target_lv : target_lvs) {
@@ -177,16 +180,21 @@ void TargetExprCodegen::codegen(
     }
   }
   if (target_lvs.size() < agg_fn_names.size()) {
-    CHECK_EQ(size_t(1), target_lvs.size());
-    CHECK_EQ(size_t(2), agg_fn_names.size());
+    if (!uses_flatbuffer) {
+      CHECK_EQ(size_t(1), target_lvs.size());
+      CHECK_EQ(size_t(2), agg_fn_names.size());
+    }
     for (size_t i = 1; i < agg_fn_names.size(); ++i) {
       target_lvs.push_back(target_lvs.front());
     }
   } else {
     if (target_has_geo(target_info)) {
       if (!target_info.is_agg && !varlen_projection) {
-        CHECK_EQ(static_cast<size_t>(2 * target_info.sql_type.get_physical_coord_cols()),
-                 target_lvs.size());
+        if (!uses_flatbuffer) {
+          CHECK_EQ(
+              static_cast<size_t>(2 * target_info.sql_type.get_physical_coord_cols()),
+              target_lvs.size());
+        }
         CHECK_EQ(agg_fn_names.size(), target_lvs.size());
       }
     } else {

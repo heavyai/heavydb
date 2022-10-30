@@ -71,6 +71,8 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "COLUMN_LIST",
                                                      "MULTILINESTRING",
                                                      "MULTIPOINT"};
+// TODO: comp_name, EncodingType in sqltypes.h, and HeavyDBEncoding in
+// HeavyDBEncoding.java appear to be out of sync!
 std::string SQLTypeInfo::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 
