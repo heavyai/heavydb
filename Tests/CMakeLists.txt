@@ -637,8 +637,7 @@ endif()
 ##########
 
 add_executable(SessionsStoreTest SessionsStoreTest.cpp)
-target_link_libraries(SessionsStoreTest gtest Catalog ${Boost_LIBRARIES}
-  ${MAPD_LIBRARIES} ${CUDA_LIBRARIES} ${AwsS3_CURL_SUPPORT})
+target_link_libraries(SessionsStoreTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 add_test(SessionsStoreTest SessionsStoreTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS SessionsStoreTest)
 
@@ -673,6 +672,7 @@ if(NOT MSVC)
   add_dependencies(LoadBalancerTest thrift_gen)
   add_dependencies(LoadBalancerTest heavydb) # test invokes heavydb bin directly
   add_dependencies(LoadBalancerTest mapd_java_components)
+  add_test(LoadBalancerTest, LoadBalancerTest ${TEST_ARGS})
 endif()
 
 ##########
