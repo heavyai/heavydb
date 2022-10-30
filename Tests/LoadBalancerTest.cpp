@@ -31,6 +31,14 @@
 #include "gen-cpp/Heavy.h"
 
 std::filesystem::path binary_path;
+// This is an odd hack that is needed because the Go compiler has some issues with our C++
+// program linking a Go library compiled from a C++ file containg C functions.  This gets
+// overwritten later in linking, but we need a default definition to avoid a linking
+// error.
+extern "C" void etcd_onMemberUpdate_thunk(void* self,
+                                          char* member_name,
+                                          char* hostip_cstr,
+                                          int port) {}
 
 using namespace apache::thrift::protocol;
 namespace bp = boost::process;
@@ -92,6 +100,7 @@ struct Connection {
         std::cout << "connected to server on port " << port << "\n";
         break;
       } catch (...) {
+        std::this_thread::sleep_for(1'000ms);
         // Keep trying to connect until we are successful.
       }
     }

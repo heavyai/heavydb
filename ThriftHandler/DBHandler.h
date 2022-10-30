@@ -943,7 +943,6 @@ class DBHandler : public HeavyIf {
       bool assign_render_groups);
 
   query_state::QueryStates query_states_;
-  std::unique_ptr<Catalog_Namespace::SessionsStore> sessions_store_;
   std::unordered_map<std::string, Catalog_Namespace::SessionInfoPtr> calcite_sessions_;
   mutable heavyai::shared_mutex calcite_sessions_mtx_;
 
@@ -974,6 +973,8 @@ class DBHandler : public HeavyIf {
   const std::string& udf_filename_;
   const std::string& clang_path_;
   const std::vector<std::string>& clang_options_;
+  int32_t max_num_sessions_{-1};
+  std::unique_ptr<Catalog_Namespace::SessionsStore> sessions_store_;
 
   struct DeferredCopyFromState {
     std::string table;
@@ -1096,4 +1097,6 @@ class DBHandler : public HeavyIf {
                             const import_export::CopyParams& copy_params,
                             const TRowDescriptor& row_desc,
                             const TCreateParams& create_params);
+
+  void resetSessionsStore();
 };

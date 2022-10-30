@@ -30,6 +30,7 @@
 #include "Catalog/SysCatalog.h"
 #include "CudaMgr/CudaMgr.h"
 #include "Shared/StringTransform.h"
+#include "Tests/DBHandlerTestHelpers.h"
 #include "Tests/TestHelpers.h"
 
 #ifndef BASE_PATH

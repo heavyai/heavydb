@@ -772,15 +772,6 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
-  static void setupSignalHandler() {
-    TestProcessSignalHandler::registerSignalHandler();
-    TestProcessSignalHandler::addShutdownCallback([]() {
-      if (db_handler_) {
-        db_handler_->shutdown();
-      }
-    });
-  }
-
   static std::unique_ptr<DBHandler> db_handler_;
   static TSessionId session_id_;
   static TSessionId admin_session_id_;
@@ -792,13 +783,23 @@ class DBHandlerTestFixture : public testing::Test {
   static std::string udf_compiler_path_;
   static std::string default_user_;
   static std::string default_pass_;
-  static std::string default_db_name_;
   static std::vector<std::string> udf_compiler_options_;
 #ifdef ENABLE_GEOS
   static std::string libgeos_so_filename_;
 #endif
 
  public:
+  static void setupSignalHandler() {
+    TestProcessSignalHandler::registerSignalHandler();
+    TestProcessSignalHandler::addShutdownCallback([]() {
+      if (db_handler_) {
+        db_handler_->shutdown();
+      }
+    });
+  }
+
+  static std::string default_db_name_;
+
   static std::string cluster_config_file_path_;
   static File_Namespace::DiskCacheLevel disk_cache_level_;
 };

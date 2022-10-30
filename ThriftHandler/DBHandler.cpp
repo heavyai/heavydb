@@ -211,13 +211,6 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , legacy_syntax_(legacy_syntax)
     , dispatch_queue_(
           std::make_unique<QueryDispatchQueue>(system_parameters.num_executors))
-    , sessions_store_(Catalog_Namespace::SessionsStore::create(
-          base_data_path,
-          1,
-          idle_session_duration * 60,
-          max_session_duration * 60,
-          system_parameters.num_sessions,
-          [this](auto& session_ptr) { disconnect_impl(session_ptr); }))
     , super_user_rights_(false)
     , idle_session_duration_(idle_session_duration * 60)
     , max_session_duration_(max_session_duration * 60)
@@ -240,10 +233,27 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , udf_filename_(udf_filename)
     , clang_path_(clang_path)
     , clang_options_(clang_options)
-
-{
+    , max_num_sessions_(-1) {
   LOG(INFO) << "HeavyDB Server " << MAPD_RELEASE;
   initialize(is_new_db);
+  resetSessionsStore();
+}
+
+void DBHandler::resetSessionsStore() {
+  if (sessions_store_) {
+    // Disconnect any existing sessions.
+    auto sessions = sessions_store_->getAllSessions();
+    for (auto session : sessions) {
+      sessions_store_->disconnect(session->get_session_id());
+    }
+  }
+  sessions_store_ = Catalog_Namespace::SessionsStore::create(
+      base_data_path_,
+      1,
+      idle_session_duration_,
+      max_session_duration_,
+      max_num_sessions_,
+      [this](auto& session_ptr) { disconnect_impl(session_ptr); });
 }
 
 void DBHandler::initialize(const bool is_new_db) {
@@ -6624,7 +6634,6 @@ void DBHandler::execute_rel_alg_with_filter_push_down(
 void DBHandler::execute_distributed_copy_statement(
     Parser::CopyTableStmt* copy_stmt,
     const Catalog_Namespace::SessionInfo& session_info) {}
-
 
 namespace {
 bool check_and_reset_in_memory_system_table(const Catalog& catalog,
