@@ -776,7 +776,8 @@ class DBHandler : public HeavyIf {
       const SystemParameters& system_parameters,
       const bool check_privileges);
 
-  TQueryResult validate_rel_alg(const std::string& query_ra, QueryStateProxy);
+  TRowDescriptor validateRelAlg(const std::string& query_ra,
+                                QueryStateProxy query_state_proxy);
 
   void dispatch_query_task(std::shared_ptr<QueryDispatchQueue::Task> query_task,
                            const bool is_update_delete);
@@ -816,8 +817,7 @@ class DBHandler : public HeavyIf {
 
   TColumnType populateThriftColumnType(const Catalog_Namespace::Catalog* cat,
                                        const ColumnDescriptor* cd);
-  TRowDescriptor fixup_row_descriptor(const TRowDescriptor& row_desc,
-                                      const Catalog_Namespace::Catalog& cat);
+
   void set_execution_mode_nolock(Catalog_Namespace::SessionInfo* session_ptr,
                                  const TExecuteMode::type mode);
   char unescape_char(std::string str);

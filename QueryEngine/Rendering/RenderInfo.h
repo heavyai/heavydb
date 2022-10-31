@@ -20,6 +20,7 @@
 #include "Catalog/Catalog.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/Rendering/RenderAllocator.h"
+#include "Shared/FullyQualifiedTableName.h"
 #include "Shared/Rendering/InSituFlags.h"
 #include "Shared/Rendering/RenderQueryOptions.h"
 
@@ -37,7 +38,7 @@ class RenderInfo : public heavyai::InSituFlagsOwnerInterface {
   std::vector<std::shared_ptr<Analyzer::TargetEntry>> targets;
 
   // All the "selected from" tables in a query. Includes resolved and un-resolved views.
-  std::unordered_set<std::string> table_names;
+  std::unordered_set<shared::FullyQualifiedTableName> table_names;
 
   RenderInfo(const ::QueryRenderer::RenderSessionKey& in_render_session_key,
              const RenderQueryOptions& in_render_query_opts,
