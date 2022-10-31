@@ -73,6 +73,10 @@ size_t TableKey::hash() const {
   return shared::compute_hash(db_id, table_id);
 }
 
+size_t hash_value(const TableKey& table_key) {
+  return table_key.hash();
+}
+
 bool ColumnKey::operator==(const ColumnKey& other) const {
   return db_id == other.db_id && table_id == other.table_id &&
          column_id == other.column_id;

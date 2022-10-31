@@ -33,6 +33,7 @@ class CrossDatabaseQueryTest : public DBHandlerTestFixture {
     createDBHandler();
     sql("CREATE DATABASE db_1;");
     sql("CREATE DATABASE db_2;");
+    sql("CREATE DATABASE empty_db;");
 
     createTestTable(shared::kDefaultDbName, "test_table");
     insertIntoTestTable(shared::kDefaultDbName, "test_table", {1, 2, 3}, {"a", "b", "c"});
@@ -62,6 +63,7 @@ class CrossDatabaseQueryTest : public DBHandlerTestFixture {
     sql("DROP USER IF EXISTS test_user;");
     sql("DROP DATABASE IF EXISTS db_1;");
     sql("DROP DATABASE IF EXISTS db_2;");
+    sql("DROP DATABASE IF EXISTS empty_db;");
     sql("DROP TABLE IF EXISTS test_table;");
     sql("DROP VIEW IF EXISTS test_view;");
     std::filesystem::remove_all(export_file_path_);
@@ -300,10 +302,26 @@ TEST_F(CrossDatabaseQueryTest, TableIdWithMoreThanTwoComponents) {
 }
 
 TEST_F(CrossDatabaseQueryTest, ValidateTableInAnotherDb) {
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "empty_db");
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   TRowDescriptor result;
   db_handler->sql_validate(result, session_id, "SELECT * FROM db_2.db_2_table;");
   ASSERT_EQ(result.size(), size_t(3));
+
+  EXPECT_EQ(result[0].col_name, "i");
+  EXPECT_EQ(result[0].col_type.type, TDatumType::type::INT);
+  EXPECT_EQ(result[0].col_type.encoding, TEncodingType::type::NONE);
+  EXPECT_EQ(result[0].col_type.comp_param, 0);
+
+  EXPECT_EQ(result[1].col_name, "t");
+  EXPECT_EQ(result[1].col_type.type, TDatumType::type::STR);
+  EXPECT_EQ(result[1].col_type.encoding, TEncodingType::type::DICT);
+  EXPECT_EQ(result[1].col_type.comp_param, 32);
+
+  EXPECT_EQ(result[2].col_name, "t2");
+  EXPECT_EQ(result[2].col_type.type, TDatumType::type::STR);
+  EXPECT_EQ(result[2].col_type.encoding, TEncodingType::type::NONE);
+  EXPECT_EQ(result[2].col_type.comp_param, 0);
 }
 
 class CrossDatabaseWriteQueryTest : public CrossDatabaseQueryTest {

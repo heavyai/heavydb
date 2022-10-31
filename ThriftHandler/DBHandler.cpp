@@ -1474,10 +1474,7 @@ void DBHandler::sql_validate(TRowDescriptor& _return,
                                                 system_parameters_,
                                                 /*check_privileges=*/true);
     const auto query_ra = parse_result.plan_result;
-
-    const auto result = validate_rel_alg(query_ra, query_state->createQueryStateProxy());
-    _return = fixup_row_descriptor(result.row_set.row_desc,
-                                   query_state->getConstSessionInfo()->getCatalog());
+    _return = validateRelAlg(query_ra, query_state->createQueryStateProxy());
   } catch (const std::exception& e) {
     THROW_DB_EXCEPTION(std::string(e.what()));
   }
@@ -1682,19 +1679,19 @@ void DBHandler::dispatch_query_task(std::shared_ptr<QueryDispatchQueue::Task> qu
   dispatch_queue_->submit(std::move(query_task), is_update_delete);
 }
 
-TQueryResult DBHandler::validate_rel_alg(const std::string& query_ra,
+TRowDescriptor DBHandler::validateRelAlg(const std::string& query_ra,
                                          QueryStateProxy query_state_proxy) {
-  TQueryResult _return;
-  ExecutionResult result;
+  TQueryResult query_result;
+  ExecutionResult execution_result;
   auto execute_rel_alg_task = std::make_shared<QueryDispatchQueue::Task>(
       [this,
-       &result,
+       &execution_result,
        query_state_proxy,
        &query_ra,
        parent_thread_local_ids =
            logger::thread_local_ids()](const size_t executor_index) {
         logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-        execute_rel_alg(result,
+        execute_rel_alg(execution_result,
                         query_state_proxy,
                         query_ra,
                         true,
@@ -1709,8 +1706,30 @@ TQueryResult DBHandler::validate_rel_alg(const std::string& query_ra,
   dispatch_query_task(execute_rel_alg_task, /*is_update_delete=*/false);
   auto result_future = execute_rel_alg_task->get_future();
   result_future.get();
-  DBHandler::convertData(_return, result, query_state_proxy, true, -1, -1);
-  return _return;
+  DBHandler::convertData(query_result, execution_result, query_state_proxy, true, -1, -1);
+
+  const auto& row_desc = query_result.row_set.row_desc;
+  const auto& targets_meta = execution_result.getTargetsMeta();
+  CHECK_EQ(row_desc.size(), targets_meta.size());
+
+  // TODO: Below fixup logic should no longer be needed after the comp_param refactor
+  TRowDescriptor fixedup_row_desc;
+  for (size_t i = 0; i < row_desc.size(); i++) {
+    const auto& col_desc = row_desc[i];
+    auto fixedup_col_desc = col_desc;
+    if (col_desc.col_type.encoding == TEncodingType::DICT &&
+        col_desc.col_type.comp_param > 0) {
+      const auto& type_info = targets_meta[i].get_type_info();
+      CHECK_EQ(type_info.get_compression(), kENCODING_DICT);
+      const auto cat = Catalog_Namespace::SysCatalog::instance().getCatalog(
+          type_info.getStringDictKey().db_id);
+      const auto dd = cat->getMetadataForDict(col_desc.col_type.comp_param, false);
+      CHECK(dd);
+      fixedup_col_desc.col_type.comp_param = dd->dictNBits;
+    }
+    fixedup_row_desc.push_back(fixedup_col_desc);
+  }
+  return fixedup_row_desc;
 }
 
 void DBHandler::get_roles(std::vector<std::string>& roles,
@@ -2408,10 +2427,8 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
             have_privileges_on_view_sources = false;
           }
 
-          const auto result = validate_rel_alg(query_ra.plan_result,
-                                               query_state->createQueryStateProxy());
-
-          _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, *cat);
+          _return.row_desc =
+              validateRelAlg(query_ra.plan_result, query_state->createQueryStateProxy());
         } else {
           throw std::runtime_error(
               "Unable to access view " + table_name +
@@ -6153,22 +6170,6 @@ void DBHandler::convertRows(TQueryResult& _return,
       _return.row_set.rows.push_back(trow);
     }
   }
-}
-
-TRowDescriptor DBHandler::fixup_row_descriptor(const TRowDescriptor& row_desc,
-                                               const Catalog& cat) {
-  TRowDescriptor fixedup_row_desc;
-  for (const TColumnType& col_desc : row_desc) {
-    auto fixedup_col_desc = col_desc;
-    if (col_desc.col_type.encoding == TEncodingType::DICT &&
-        col_desc.col_type.comp_param > 0) {
-      const auto dd = cat.getMetadataForDict(col_desc.col_type.comp_param, false);
-      fixedup_col_desc.col_type.comp_param = dd->dictNBits;
-    }
-    fixedup_row_desc.push_back(fixedup_col_desc);
-  }
-
-  return fixedup_row_desc;
 }
 
 // create simple result set to return a single column result

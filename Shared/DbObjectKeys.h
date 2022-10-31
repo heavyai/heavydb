@@ -61,6 +61,9 @@ struct TableKey {
 
   size_t hash() const;
 
+  // Required by boost
+  friend size_t hash_value(const TableKey& table_key);
+
   int32_t db_id;
   int32_t table_id;
 };
