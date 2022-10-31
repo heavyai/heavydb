@@ -651,6 +651,10 @@ class CodeGenerator {
   PlanState* plan_state_;
 
   friend class GroupByAndAggregate;
+
+ private:
+  // mutex to protect the critical section in initializeNVPTXBackend
+  static std::mutex initialize_nvptx_mutex_;
 };
 
 // Code generator specialized for scalar expressions which doesn't require an executor.

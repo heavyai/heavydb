@@ -1471,9 +1471,14 @@ std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
 #endif
 }
 
+std::mutex CodeGenerator::initialize_nvptx_mutex_;
+
 std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend(
     const CudaMgr_Namespace::NvidiaDeviceArch arch) {
   auto timer = DEBUG_TIMER(__func__);
+
+  std::lock_guard<std::mutex> lock(initialize_nvptx_mutex_);
+
   llvm::InitializeAllTargets();
   llvm::InitializeAllTargetMCs();
   llvm::InitializeAllAsmPrinters();
