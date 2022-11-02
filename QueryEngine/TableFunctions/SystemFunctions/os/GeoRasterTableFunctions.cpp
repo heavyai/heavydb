@@ -676,6 +676,7 @@ void GeoRaster<T, Z>::fill_bins_from_neighbors(const int64_t neighborhood_fill_r
           neighborhood_fill_radius, fill_only_nulls, z);
       break;
     }
+    case RasterAggType::AVG:
     case RasterAggType::GAUSS_AVG: {
       fill_bins_from_gaussian_neighborhood(neighborhood_fill_radius, fill_only_nulls, z);
       break;
