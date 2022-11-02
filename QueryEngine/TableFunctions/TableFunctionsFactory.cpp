@@ -354,7 +354,9 @@ bool is_table_function_whitelisted(const std::string& function_name) {
       "linear_reg_predict",
       "linear_reg_fit_predict",
       "tf_point_cloud_metadata",
-      "tf_load_point_cloud"
+      "tf_load_point_cloud",
+      "tf_raster_contour_lines",
+      "tf_raster_contour_polygons"
 #ifdef HAVE_OMNIVERSE_CONNECTOR
       ,
       "tf_export_ov_terrain_texture",
