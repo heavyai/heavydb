@@ -69,7 +69,9 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
     }
     case SqlWindowFunctionKind::LEAD_IN_FRAME:
     case SqlWindowFunctionKind::LAG_IN_FRAME:
-    case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME: {
+    case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME:
+    case SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME:
+    case SqlWindowFunctionKind::LAST_VALUE_IN_FRAME: {
       return codegenWindowNavigationFunctionOnFrame(co);
     }
     default: {
@@ -461,27 +463,37 @@ llvm::Value* Executor::codegenWindowNavigationFunctionOnFrame(
                                WindowFrameBoundFuncArgs,
                                code_generator);
 
-  // apply offset
+  // compute the index of the current row in frame it belongs to
   llvm::Value* modified_cur_row_idx_in_frame_lv{nullptr};
-  auto const offset_lv =
-      cgen_state_->castToTypeIn(code_generator.codegen(args[1].get(), true, co)[0], 64);
+  llvm::Value* offset_lv{nullptr};
   switch (window_func_kind) {
     case SqlWindowFunctionKind::LAG_IN_FRAME:
+      offset_lv = cgen_state_->castToTypeIn(
+          code_generator.codegen(args[1].get(), true, co)[0], 64);
       modified_cur_row_idx_in_frame_lv =
           cgen_state_->ir_builder_.CreateSub(cur_row_idx_in_frame_lv, offset_lv);
       break;
     case SqlWindowFunctionKind::LEAD_IN_FRAME:
+      offset_lv = cgen_state_->castToTypeIn(
+          code_generator.codegen(args[1].get(), true, co)[0], 64);
       modified_cur_row_idx_in_frame_lv =
           cgen_state_->ir_builder_.CreateAdd(cur_row_idx_in_frame_lv, offset_lv);
       break;
+    case SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME:
+      modified_cur_row_idx_in_frame_lv = frame_start_bound_lv;
+      break;
+    case SqlWindowFunctionKind::LAST_VALUE_IN_FRAME:
+      modified_cur_row_idx_in_frame_lv = frame_end_bound_lv;
+      break;
     case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME: {
-      auto candidate_row_idx =
+      offset_lv = cgen_state_->castToTypeIn(
+          code_generator.codegen(args[1].get(), true, co)[0], 64);
+      auto candidate_offset_lv =
           cgen_state_->ir_builder_.CreateAdd(frame_start_bound_lv, offset_lv);
       auto out_of_frame_bound_lv =
-          cgen_state_->ir_builder_.CreateICmpSGT(candidate_row_idx, frame_end_bound_lv);
-      // return null if the candidate_row_idx is out of frame bounds
+          cgen_state_->ir_builder_.CreateICmpSGT(candidate_offset_lv, frame_end_bound_lv);
       modified_cur_row_idx_in_frame_lv = cgen_state_->ir_builder_.CreateSelect(
-          out_of_frame_bound_lv, cgen_state_->llInt((int64_t)-1), candidate_row_idx);
+          out_of_frame_bound_lv, cgen_state_->llInt((int64_t)-1), candidate_offset_lv);
       break;
     }
     default:

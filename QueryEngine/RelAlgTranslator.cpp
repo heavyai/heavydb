@@ -2273,26 +2273,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       }
     }
   }
+  auto const func_name = ::toString(window_func_kind);
+  auto const num_args = args.size();
+  bool need_order_by_clause = false;
+  bool need_frame_def = false;
   switch (window_func_kind) {
     case SqlWindowFunctionKind::LEAD_IN_FRAME:
     case SqlWindowFunctionKind::LAG_IN_FRAME: {
-      if (order_keys.empty()) {
-        throw std::runtime_error(::toString(window_func_kind) +
-                                 " requires an ORDER BY clause");
-      }
-      if (!has_framing_clause) {
-        throw std::runtime_error(::toString(window_func_kind) +
-                                 " requires window frame definition");
-      }
-      const auto num_args = args.size();
-      const auto func_name = ::toString(window_func_kind);
-      if (num_args == 1) {
-        Datum d;
-        d.intval = 1;
-        args.push_back(makeExpr<Analyzer::Constant>(kINT, false, d));
-      } else if (num_args < 1 || num_args > 2) {
+      need_order_by_clause = true;
+      need_frame_def = true;
+      if (num_args != 2) {
         throw std::runtime_error(func_name + " has an invalid number of input arguments");
       }
+      Datum d;
+      d.intval = 1;
+      args.push_back(makeExpr<Analyzer::Constant>(kINT, false, d));
       const auto target_expr_cv =
           dynamic_cast<const Analyzer::ColumnVar*>(args.front().get());
       if (!target_expr_cv) {
@@ -2319,27 +2314,32 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       }
       break;
     }
+    case SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME:
+    case SqlWindowFunctionKind::LAST_VALUE_IN_FRAME:
+      if (num_args != 1) {
+        throw std::runtime_error(func_name + " has an invalid number of input arguments");
+      }
+      need_order_by_clause = true;
+      need_frame_def = true;
+      break;
     case SqlWindowFunctionKind::NTH_VALUE:
-    case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME:
+    case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME: {
       // todo (yoonmin) : args.size() will be three if we support default value
-      CHECK_EQ(2u, args.size());
+      if (num_args != 2) {
+        throw std::runtime_error(func_name + " has an invalid number of input arguments");
+      }
       // NTH_VALUE(_IN_FRAME) may return null value even if the argument is non-null
       // column
       ti.set_notnull(false);
-      if (!args[1]) {
-        throw std::runtime_error(
-            "NTH_VALUE window function must have a positional argument expression.");
-      }
       if (window_func_kind == SqlWindowFunctionKind::NTH_VALUE_IN_FRAME) {
-        if (order_keys.empty()) {
-          throw std::runtime_error(::toString(window_func_kind) +
-                                   " requires an ORDER BY clause");
-        }
-        if (!has_framing_clause) {
-          throw std::runtime_error(::toString(window_func_kind) +
-                                   " requires window frame definition");
-        }
+        need_order_by_clause = true;
+        need_frame_def = true;
       }
+      if (!args[1]) {
+        throw std::runtime_error(func_name +
+                                 " must have a positional argument expression.");
+      }
+      bool has_valid_arg = false;
       if (args[1]->get_type_info().is_integer()) {
         if (auto* n_value_ptr = dynamic_cast<Analyzer::Constant*>(args[1].get())) {
           if (0 < n_value_ptr->get_constval().intval) {
@@ -2348,16 +2348,26 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
             auto d = n_value_ptr->get_constval();
             d.intval -= 1;
             n_value_ptr->set_constval(d);
-            break;
+            has_valid_arg = true;
           }
         }
       }
-      throw std::runtime_error(
-          "The positional argument of the NTH_VALUE window function must be a positive "
-          "integer constant.");
+      if (!has_valid_arg) {
+        throw std::runtime_error("The positional argument of the " + func_name +
+                                 " must be a positive integer constant.");
+      }
+      break;
+    }
     default:
       break;
   }
+  if (need_order_by_clause && order_keys.empty()) {
+    throw std::runtime_error(func_name + " requires an ORDER BY clause");
+  }
+  if (need_frame_def && !has_framing_clause) {
+    throw std::runtime_error(func_name + " requires window frame definition");
+  }
+
   if (!has_framing_clause) {
     frame_start_bound_type = SqlWindowFrameBoundType::UNKNOWN;
     frame_end_bound_type = SqlWindowFrameBoundType::UNKNOWN;
