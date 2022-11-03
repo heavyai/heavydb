@@ -2522,7 +2522,7 @@ class WindowFrame : public Expr {
 class WindowFunction : public Expr {
  public:
   enum class FrameBoundType { NONE, ROW, RANGE };
-  static constexpr std::array<SqlWindowFunctionKind, 11> FRAMING_ALLOWED_WINDOW_FUNCS{
+  static constexpr std::array<SqlWindowFunctionKind, 13> FRAMING_ALLOWED_WINDOW_FUNCS{
       SqlWindowFunctionKind::SUM,
       SqlWindowFunctionKind::SUM_IF,
       SqlWindowFunctionKind::SUM_INTERNAL,
@@ -2533,7 +2533,9 @@ class WindowFunction : public Expr {
       SqlWindowFunctionKind::COUNT_IF,
       SqlWindowFunctionKind::LAG_IN_FRAME,
       SqlWindowFunctionKind::LEAD_IN_FRAME,
-      SqlWindowFunctionKind::NTH_VALUE_IN_FRAME};
+      SqlWindowFunctionKind::NTH_VALUE_IN_FRAME,
+      SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME,
+      SqlWindowFunctionKind::LAST_VALUE_IN_FRAME};
   static constexpr std::array<SqlWindowFunctionKind, 8>
       AGGREGATION_TREE_REQUIRED_WINDOW_FUNCS_FOR_FRAMING{
           SqlWindowFunctionKind::SUM,
@@ -2544,10 +2546,12 @@ class WindowFunction : public Expr {
           SqlWindowFunctionKind::MAX,
           SqlWindowFunctionKind::COUNT,
           SqlWindowFunctionKind::COUNT_IF};
-  static constexpr std::array<SqlWindowFunctionKind, 3> REQUIRE_HASH_TABLE_FOR_FRAMING{
+  static constexpr std::array<SqlWindowFunctionKind, 5> REQUIRE_HASH_TABLE_FOR_FRAMING{
       SqlWindowFunctionKind::LAG_IN_FRAME,
       SqlWindowFunctionKind::LEAD_IN_FRAME,
-      SqlWindowFunctionKind::NTH_VALUE_IN_FRAME};
+      SqlWindowFunctionKind::NTH_VALUE_IN_FRAME,
+      SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME,
+      SqlWindowFunctionKind::LAST_VALUE_IN_FRAME};
 
   WindowFunction(const SQLTypeInfo& ti,
                  const SqlWindowFunctionKind kind,

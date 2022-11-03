@@ -24177,151 +24177,191 @@ TEST_F(Select, WindowFrameNavigationFunctionsLeadAndLag) {
 
 TEST_F(Select, WindowFrameNavigationFunctionsValueFunction) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto query_gen = [](const std::string& func,
+                      const std::string& frame,
+                      const std::string& order,
+                      const std::string& offset,
+                      std::optional<bool> nulls_first = std::nullopt) {
+    std::ostringstream oss;
+    oss << "SELECT p, o, " << func << "(v";
+    if (boost::equals(func, "NTH_VALUE_IN_FRAME")) {
+      oss << ", " << offset;
+    }
+    oss << ") OVER (PARTITION BY p ORDER BY o " << order;
+    if (nulls_first) {
+      std::string null_order = *nulls_first ? " NULLS FIRST " : " NULLS LAST ";
+      oss << null_order;
+    }
+    oss << " " << frame
+        << " BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM test_frame_nav_dup2 WHERE ";
+    if (!nulls_first) {
+      oss << "p = 2 AND o < 3";
+    } else {
+      oss << "p = 2 AND (o IS NULL or o < 3)";
+    }
+    oss << " ORDER BY 1, 2, 3";
+    if (nulls_first) {
+      std::string null_order = *nulls_first ? " NULLS FIRST" : " NULLS LAST";
+      oss << null_order;
+    }
+    oss << ";";
+    return oss.str();
+  };
+  using VT = std::vector<std::string>;
+  auto answer_gen = [](const VT& vec, std::optional<bool> nulls_first = std::nullopt) {
+    VT values;
+    for (std::string const& v : vec) {
+      std::ostringstream oss;
+      oss << "(2," << v << ")";
+      values.push_back(oss.str());
+    }
+    std::string val_str = boost::join(values, ",");
+    std::ostringstream oss;
+    oss << "SELECT * FROM (VALUES" << val_str << ")";
+    if (nulls_first) {
+      std::string null_order = *nulls_first ? " NULLS FIRST" : " NULLS LAST";
+      oss << " ORDER BY 2" << null_order;
+    }
+    oss << ";";
+    return oss.str();
+  };
   // NTH_VALUE_IN_FRAME
   {
-    auto query_gen = [](const std::string& frame,
-                        const std::string order,
-                        const std::string& offset,
-                        std::optional<bool> nulls_first = std::nullopt) {
-      std::ostringstream oss;
-      oss << "SELECT p, o, NTH_VALUE_IN_FRAME(v, " << offset
-          << ") OVER (PARTITION BY p ORDER BY o " << order;
-      if (nulls_first) {
-        std::string null_order = *nulls_first ? " NULLS FIRST " : " NULLS LAST ";
-        oss << null_order;
-      }
-      oss << " " << frame
-          << " BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM test_frame_nav_dup2 WHERE ";
-      if (!nulls_first) {
-        oss << "p = 2 AND o < 3";
-      } else {
-        oss << "p = 2 AND (o IS NULL or o < 3)";
-      }
-      oss << " ORDER BY 1, 2, 3";
-      return oss.str();
-    };
-    using VT = std::vector<std::string>;
-    auto answer_gen = [](const VT& vec) {
-      VT values;
-      for (std::string const& v : vec) {
-        std::ostringstream oss;
-        oss << "(2," << v << ")";
-        values.push_back(oss.str());
-      }
-      std::string val_str = boost::join(values, ",");
-      std::ostringstream oss;
-      oss << "SELECT * FROM (VALUES" << val_str << ");";
-      return oss.str();
-    };
     // rows mode
     {
       VT query;
+      std::vector<VT> ans;
+      std::string func = "NTH_VALUE_IN_FRAME";
       for (std::string mode : {"ROWS", "RANGE"}) {
         for (std::string order : {"ASC", "DESC"}) {
           if (boost::equals(mode, "ROWS")) {
             for (std::string offset : {"1", "2", "3", "4"}) {
-              query.push_back(query_gen(mode, order, offset));
+              query.push_back(query_gen(func, mode, order, offset));
             }
           } else {
             for (std::string offset : {"1", "6", "7"}) {
-              query.push_back(query_gen(mode, order, offset));
+              query.push_back(query_gen(func, mode, order, offset));
             }
           }
           for (bool nulls_first : {true, false}) {
-            query.push_back(query_gen(mode, order, "1", std::make_optional(nulls_first)));
-            query.push_back(query_gen(mode, order, "2", std::make_optional(nulls_first)));
+            query.push_back(
+                query_gen(func, mode, order, "1", std::make_optional(nulls_first)));
+            query.push_back(
+                query_gen(func, mode, order, "2", std::make_optional(nulls_first)));
           }
         }
       }
-      std::vector<VT> ans;
-      // ROWS / ASC / DEFAULT
+
       ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,2", "2,2"});
       ans.push_back(VT{"1,1", "1,1", "1,1", "2,2", "2,2", "2,2"});
       ans.push_back(VT{"1,1", "1,2", "1,NULL", "2,2", "2,2", "2,NULL"});
       ans.push_back(VT{"1,NULL", "1,NULL", "1,NULL", "2,NULL", "2,NULL", "2,NULL"});
 
-      // ROWS / ASC / NULLS FIRST
       ans.push_back(
-          VT{"1,1", "1,1", "1,NULL", "2,1", "2,2", "2,2", "NULL, NULL", "NULL, NULL"});
+          VT{"1,NULL", "1,1", "1,1", "2,1", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
       ans.push_back(
-          VT{"1,1", "1,1", "1,1", "2,2", "2,2", "2,2", "NULL, NULL", "NULL, NULL"});
+          VT{"1,1", "1,1", "1,1", "2,2", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
+      ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,2", "2,2", "NULL,2", "NULL,NULL"});
+      ans.push_back(
+          VT{"1,1", "1,1", "1,1", "2,2", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
 
-      // ROWS / ASC / NULLS LAST
-      ans.push_back(
-          VT{"1,1", "1,1", "1,1", "2,1", "2,2", "2,2", "NULL, 2", "NULL, NULL"});
-      ans.push_back(
-          VT{"1,1", "1,1", "1,1", "2,2", "2,2", "2,2", "NULL, NULL", "NULL, NULL"});
-
-      // ROWS / DESC / DEFAULT
       ans.push_back(VT{"1,1", "1,1", "1,2", "2,2", "2,2", "2,2"});
       ans.push_back(VT{"1,1", "1,1", "1,1", "2,2", "2,2", "2,2"});
       ans.push_back(VT{"1,1", "1,1", "1,NULL", "2,1", "2,2", "2,NULL"});
       ans.push_back(VT{"1,NULL", "1,NULL", "1,NULL", "2,NULL", "2,NULL", "2,NULL"});
 
-      // ROWS / DESC / NULLS FIRST
       ans.push_back(
-          VT{"1,1", "1,1", "1,2", "2,2", "2,2", "2,NULL", "NULL, NULL", "NULL, NULL"});
+          VT{"1,1", "1,1", "1,2", "2,NULL", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
       ans.push_back(
-          VT{"1,1", "1,1", "1,1", "2,2", "2,2", "2,2", "NULL, NULL", "NULL, NULL"});
+          VT{"1,1", "1,1", "1,1", "2,2", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
+      ans.push_back(VT{"1,1", "1,1", "1,2", "2,2", "2,2", "2,2", "NULL,1", "NULL,NULL"});
+      ans.push_back(
+          VT{"1,1", "1,1", "1,1", "2,2", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
 
-      // ROWS / DESC / NULLS LAST
-      ans.push_back(
-          VT{"1,1", "1,1", "1,2", "2,2", "2,2", "2,2", "NULL, 1", "NULL, NULL"});
-      ans.push_back(
-          VT{"1,1", "1,1", "1,1", "2,2", "2,2", "2,2", "NULL, NULL", "NULL, NULL"});
-
-      // RANGE / ASC / DEFAULT
       ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1"});
       ans.push_back(VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2"});
       ans.push_back(VT{"1,NULL", "1,NULL", "1,NULL", "2,NULL", "2,NULL", "2,NULL"});
+      ans.push_back(
+          VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1", "NULL,NULL", "NULL,NULL"});
+      ans.push_back(
+          VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1", "NULL,NULL", "NULL,NULL"});
+      ans.push_back(
+          VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1", "NULL,NULL", "NULL,NULL"});
+      ans.push_back(
+          VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1", "NULL,NULL", "NULL,NULL"});
 
-      // RANGE / ASC / NULLS FIRST
-      ans.push_back(
-          VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1", "NULL, NULL", "NULL, NULL"});
-      ans.push_back(
-          VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1", "NULL, NULL", "NULL, NULL"});
-
-      // RANGE / ASC / NULLS LAST
-      ans.push_back(
-          VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1", "NULL, NULL", "NULL, NULL"});
-      ans.push_back(
-          VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1", "NULL, NULL", "NULL, NULL"});
-
-      // RANGE / DESC / DEFAULT
       ans.push_back(VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2"});
       ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1"});
       ans.push_back(VT{"1,NULL", "1,NULL", "1,NULL", "2,NULL", "2,NULL", "2,NULL"});
-
-      // RANGE / DESC / NULLS FIRST
       ans.push_back(
-          VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2", "NULL, NULL", "NULL, NULL"});
+          VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
       ans.push_back(
-          VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2", "NULL, NULL", "NULL, NULL"});
-
-      // RANGE / DESC / NULLS LAST
+          VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
       ans.push_back(
-          VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2", "NULL, NULL", "NULL, NULL"});
+          VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
       ans.push_back(
-          VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2", "NULL, NULL", "NULL, NULL"});
+          VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
 
       for (size_t i = 0; i < query.size(); ++i) {
         c(query[i], answer_gen(ans[i]), dt);
       }
     }
-    EXPECT_THROW(run_multiple_agg("SELECT NTH_VALUE_IN_FRAME(v, 0) OVER (PARTITION BY p "
-                                  "ORDER BY o ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) "
-                                  "FROM test_frame_nav_dup2;",
-                                  dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT NTH_VALUE_IN_FRAME(v, 0) OVER (PARTITION BY p) "
-                                  "FROM test_frame_nav_dup2;",
-                                  dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT NTH_VALUE_IN_FRAME(v, 0) OVER (PARTITION BY p "
-                                  "ORDER BY o) FROM test_frame_nav_dup2;",
-                                  dt),
-                 std::runtime_error);
+    EXPECT_ANY_THROW(
+        run_multiple_agg("SELECT NTH_VALUE_IN_FRAME(v, 0) OVER (PARTITION BY p "
+                         "ORDER BY o ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) "
+                         "FROM test_frame_nav_dup2;",
+                         dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("SELECT NTH_VALUE_IN_FRAME(v, 1) OVER (PARTITION BY p) "
+                         "FROM test_frame_nav_dup2;",
+                         dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("SELECT NTH_VALUE_IN_FRAME(v, 1) OVER (PARTITION BY p "
+                         "ORDER BY o) FROM test_frame_nav_dup2;",
+                         dt));
   }
+
+  // FIRST_VALUE_IN_FRAME / LAST_VALUE_IN_FRAME
+  {
+    VT query;
+    std::vector<VT> ans;
+    for (std::string func : {"FIRST_VALUE_IN_FRAME", "LAST_VALUE_IN_FRAME"}) {
+      for (std::string mode : {"ROWS", "RANGE"}) {
+        for (std::string order : {"ASC", "DESC"}) {
+          for (bool nulls : {true, false}) {
+            query.push_back(query_gen(func, mode, order, "", std::make_optional(nulls)));
+          }
+        }
+      }
+    }
+    ans.push_back(
+        VT{"1,NULL", "1,1", "1,1", "2,1", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
+    ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,2", "2,2", "NULL,2", "NULL,NULL"});
+    ans.push_back(VT{"1,1", "1,1", "1,2", "2,NULL", "2,2", "2,2", "NULL,2", "NULL,NULL"});
+    ans.push_back(VT{"1,1", "1,1", "1,2", "2,2", "2,2", "2,2", "NULL,1", "NULL,NULL"});
+    ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1", "NULL,NULL", "NULL,NULL"});
+    ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1", "NULL,NULL", "NULL,NULL"});
+    ans.push_back(VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
+    ans.push_back(VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
+
+    ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
+    ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
+    ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
+    ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
+    ans.push_back(VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
+    ans.push_back(VT{"1,2", "1,2", "1,2", "2,2", "2,2", "2,2", "NULL,NULL", "NULL,NULL"});
+    ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1", "NULL,NULL", "NULL,NULL"});
+    ans.push_back(VT{"1,1", "1,1", "1,1", "2,1", "2,1", "2,1", "NULL,NULL", "NULL,NULL"});
+  }
+
+  EXPECT_ANY_THROW(
+      run_multiple_agg("SELECT FIRST_VALUE_IN_FRAME(v, 0) OVER (PARTITION BY p "
+                       "ORDER BY o) FROM test_frame_nav_dup2;",
+                       dt));
+  EXPECT_ANY_THROW(
+      run_multiple_agg("SELECT FIRST_VALUE_IN_FRAME(v) OVER (PARTITION BY p) "
+                       "FROM test_frame_nav_dup2;",
+                       dt));
 }
 
 TEST_F(Select, ConditionalWindowFunction) {

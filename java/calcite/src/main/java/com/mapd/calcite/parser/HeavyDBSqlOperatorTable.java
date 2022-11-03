@@ -23,6 +23,7 @@ import static org.apache.calcite.util.Static.RESOURCE;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
+import com.mapd.parser.extension.ddl.SqlFirstLastValueInFrame;
 import com.mapd.parser.extension.ddl.SqlLeadLag;
 import com.mapd.parser.extension.ddl.SqlNthValueInFrame;
 import com.mapd.parser.server.ExtensionFunction;
@@ -285,6 +286,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
 
     // window functions on window frame
     addOperator(new NthValueInFrame());
+    addOperator(new FirstValueInFrame());
+    addOperator(new LastValueInFrame());
     addOperator(new LagInFrame());
     addOperator(new LeadInFrame());
 
@@ -747,6 +750,18 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public static class NthValueInFrame extends SqlNthValueInFrame {
     public NthValueInFrame() {
       super("NTH_VALUE_IN_FRAME");
+    }
+  }
+
+  public static class FirstValueInFrame extends SqlFirstLastValueInFrame {
+    public FirstValueInFrame() {
+      super("FIRST_VALUE_IN_FRAME", SqlKind.FIRST_VALUE);
+    }
+  }
+
+  public static class LastValueInFrame extends SqlFirstLastValueInFrame {
+    public LastValueInFrame() {
+      super("LAST_VALUE_IN_FRAME", SqlKind.LAST_VALUE);
     }
   }
 

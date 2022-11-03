@@ -1423,6 +1423,8 @@ void WindowFunctionContext::computePartitionBuffer(
     case SqlWindowFunctionKind::LEAD_IN_FRAME:
     case SqlWindowFunctionKind::LAG_IN_FRAME:
     case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME:
+    case SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME:
+    case SqlWindowFunctionKind::LAST_VALUE_IN_FRAME:
     case SqlWindowFunctionKind::COUNT_IF:
     case SqlWindowFunctionKind::SUM_IF: {
       const auto partition_row_offsets = payload() + offset;

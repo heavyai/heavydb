@@ -21,6 +21,7 @@ import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
+import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.util.Optionality;
 
 // COPY of SqlNthValueAggFunction in Calcite 1.25 code base with slight modifications
@@ -31,7 +32,7 @@ public class SqlNthValueInFrame extends SqlAggFunction {
             SqlKind.NTH_VALUE,
             ReturnTypes.ARG0_NULLABLE_IF_EMPTY,
             null,
-            OperandTypes.ANY_NUMERIC,
+            OperandTypes.family(SqlTypeFamily.ANY, SqlTypeFamily.INTEGER),
             SqlFunctionCategory.NUMERIC,
             false,
             true,

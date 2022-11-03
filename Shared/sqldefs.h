@@ -137,7 +137,9 @@ enum class SqlWindowFunctionKind {
   LEAD,
   LEAD_IN_FRAME,
   FIRST_VALUE,
+  FIRST_VALUE_IN_FRAME,
   LAST_VALUE,
+  LAST_VALUE_IN_FRAME,
   NTH_VALUE,
   NTH_VALUE_IN_FRAME,
   COUNT_IF,
@@ -476,8 +478,12 @@ inline std::string toString(const SqlWindowFunctionKind& kind) {
       return "LEAD";
     case SqlWindowFunctionKind::FIRST_VALUE:
       return "FIRST_VALUE";
+    case SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME:
+      return "FIRST_VALUE_IN_FRAME";
     case SqlWindowFunctionKind::LAST_VALUE:
       return "LAST_VALUE";
+    case SqlWindowFunctionKind::LAST_VALUE_IN_FRAME:
+      return "LAST_VALUE_IN_FRAME";
     case SqlWindowFunctionKind::NTH_VALUE:
       return "NTH_VALUE";
     case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME:

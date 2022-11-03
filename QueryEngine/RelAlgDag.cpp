@@ -1133,6 +1133,12 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "NTH_VALUE_IN_FRAME") {
     return SqlWindowFunctionKind::NTH_VALUE_IN_FRAME;
   }
+  if (name == "FIRST_VALUE_IN_FRAME") {
+    return SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME;
+  }
+  if (name == "LAST_VALUE_IN_FRAME") {
+    return SqlWindowFunctionKind::LAST_VALUE_IN_FRAME;
+  }
   if (name == "AVG") {
     return SqlWindowFunctionKind::AVG;
   }
