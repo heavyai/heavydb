@@ -666,14 +666,14 @@ endif()
 
 ##########
 
-if(NOT MSVC)
-  add_executable(LoadBalancerTest LoadBalancerTest.cpp)
-  target_link_libraries(LoadBalancerTest gtest ${MAPD_LIBRARIES})
-  add_dependencies(LoadBalancerTest thrift_gen)
-  add_dependencies(LoadBalancerTest heavydb) # test invokes heavydb bin directly
-  add_dependencies(LoadBalancerTest mapd_java_components)
-  add_test(LoadBalancerTest LoadBalancerTest ${TEST_ARGS})
-endif()
+#if(NOT MSVC)
+#  add_executable(LoadBalancerTest LoadBalancerTest.cpp)
+#  target_link_libraries(LoadBalancerTest gtest ${MAPD_LIBRARIES})
+#  add_dependencies(LoadBalancerTest thrift_gen)
+#  add_dependencies(LoadBalancerTest heavydb) # test invokes heavydb bin directly
+#  add_dependencies(LoadBalancerTest mapd_java_components)
+#  add_test(LoadBalancerTest, LoadBalancerTest ${TEST_ARGS})
+#endif()
 
 ##########
 
