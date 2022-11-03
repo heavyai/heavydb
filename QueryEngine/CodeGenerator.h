@@ -655,6 +655,9 @@ class CodeGenerator {
  private:
   // mutex to protect the critical section in initializeNVPTXBackend
   static std::mutex initialize_nvptx_mutex_;
+  // mutex to protect the critical sections in
+  // generateNativeCPUCode/create_execution_engine
+  static std::mutex initialize_cpu_backend_mutex_;
 };
 
 // Code generator specialized for scalar expressions which doesn't require an executor.
