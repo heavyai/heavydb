@@ -78,8 +78,6 @@ static_assert(false, "LLVM Version >= 9 is required.");
 
 float g_fraction_code_cache_to_evict = 0.2;
 
-static llvm::sys::Mutex g_ee_create_mutex;
-
 #ifdef ENABLE_GEOS
 
 #include <llvm/Support/DynamicLibrary.h>
@@ -421,12 +419,6 @@ ExecutionEngineWrapper create_execution_engine(llvm::Module* llvm_module,
                                                llvm::EngineBuilder& eb,
                                                const CompilationOptions& co) {
   auto timer = DEBUG_TIMER(__func__);
-  // Avoids data race in
-  // llvm::sys::DynamicLibrary::getPermanentLibrary and
-  // GDBJITRegistrationListener::notifyObjectLoaded while creating a
-  // new ExecutionEngine instance. Unfortunately we have to use global
-  // mutex here.
-  std::lock_guard<llvm::sys::Mutex> lock(g_ee_create_mutex);
   ExecutionEngineWrapper execution_engine(eb.create(), co);
   CHECK(execution_engine.get());
   // Force the module data layout to match the layout for the selected target
@@ -439,6 +431,8 @@ ExecutionEngineWrapper create_execution_engine(llvm::Module* llvm_module,
 }
 
 }  // namespace
+
+std::mutex CodeGenerator::initialize_cpu_backend_mutex_;
 
 ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     llvm::Function* func,
@@ -453,6 +447,17 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
       func, llvm_module, pass_manager, live_funcs, /*is_gpu_smem_used=*/false, co);
 #endif  // WITH_JIT_DEBUG
 
+  // The following lock avoids a data race in two places:
+  // 1) in initializaiton of the CPU backend targets
+  // 1) in llvm::sys::DynamicLibrary::getPermanentLibrary and
+  // GDBJITRegistrationListener::notifyObjectLoaded while creating a
+  // new ExecutionEngine instance in the child call create_execution_engine.
+
+  // Todo: Initialize backend CPU (and perhaps GPU?) targets at startup
+  // instead of for every compilation, and see if we can reduce
+  // the scope of the below lock
+
+  std::lock_guard<std::mutex> lock(initialize_cpu_backend_mutex_);
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
 
