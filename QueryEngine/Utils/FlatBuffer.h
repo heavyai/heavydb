@@ -119,15 +119,18 @@
   is described by GeoPolygon and GeoPolygonWorker struct
   definitions below. The raw data buffer memory layout is a follows:
 
-    | <point data>                                       | <compressed indices2>               |  <compressed indices>           | <storage indices>          |
+    | <point data>                                       | <counts2>                       | <compressed indices2>               |  <compressed indices>           | <storage indices>          |
     =
-    |<-- (max nof points) * (is_geoint ? 4 : 8) bytes -->|<-- (max nof rings + 1) * 4 bytes -->|<-- (num items + 1) * 8 bytes -->|<-- (num items) * 8 bytes-->|
+    |<-- (max nof points) * (is_geoint ? 4 : 8) bytes -->|<-- (max nof rings) * 4 bytes -->|<-- (max nof rings + 1) * 8 bytes -->|<-- (num items + 1) * 8 bytes -->|<-- (num items) * 8 bytes-->|
 
   where
 
      <point data> stores points coordinates in a point-wise manner:
      X0, Y0, X1, Y1, ... If is_geoint is true, point coordinates are
      stored as integers, otherwise as double floating point numbers.
+
+    <counts2> contains ring sizes (in points). All entires are
+      non-negative.
 
     <compressed indices2> contains the "cumulative sum" of all ring
       sizes (in points). All entires are non-negative and sorted.
@@ -251,7 +254,7 @@ struct FlatBufferManager {
       result += ", max_nof_values=" + std::to_string(max_nof_values);
       result += ", dtype_size=" + std::to_string(dtype_size);
       result += ", params=[";
-      for (int i; i < VarlenArrayParamsCount; i++) {
+      for (int i = 0; i < VarlenArrayParamsCount; i++) {
         result += (i > 0 ? ", " : " ");
         result += std::to_string(params[i]);
       }
@@ -375,6 +378,7 @@ struct FlatBufferManager {
     int64_t items_count;   // the number of specified items
     int64_t items2_count;  // the number of specified rings
     int64_t values_offset;
+    int64_t counts2_offset;
     int64_t compressed_indices2_offset;
     int64_t compressed_indices_offset;
     int64_t storage_indices_offset;
@@ -385,6 +389,7 @@ struct FlatBufferManager {
       result += "items_count=" + std::to_string(items_count);
       result += ", items2_count=" + std::to_string(items2_count);
       result += ", values_offset=" + std::to_string(values_offset);
+      result += ", counts2_offset=" + std::to_string(counts2_offset);
       result +=
           ", compressed_indices2_offset=" + std::to_string(compressed_indices2_offset);
       result +=
@@ -560,6 +565,8 @@ struct FlatBufferManager {
             2 * (format_metadata->is_geoint ? sizeof(int32_t) : sizeof(double));
         flatbuffer_size += _align_to_int64(
             itemsize * format_metadata->max_nof_values);  // values buffer size
+        flatbuffer_size += _align_to_int64(
+            sizeof(int32_t) * (format_metadata->max_nof_rings));  // counts2 buffer size
         flatbuffer_size +=
             _align_to_int64(sizeof(int64_t) * (format_metadata->max_nof_rings +
                                                1));  // compressed_indices2 buffer size
@@ -733,9 +740,13 @@ struct FlatBufferManager {
         this_worker->values_offset =
             base->format_worker_offset + _align_to_int64(sizeof(GeoPolygonWorker));
 
-        this_worker->compressed_indices2_offset =
+        this_worker->counts2_offset =
             this_worker->values_offset +
             _align_to_int64(itemsize * this_metadata->max_nof_values);
+
+        this_worker->compressed_indices2_offset =
+            this_worker->counts2_offset +
+            _align_to_int64(sizeof(int32_t) * this_metadata->max_nof_rings);
 
         this_worker->compressed_indices_offset =
             this_worker->compressed_indices2_offset +
@@ -745,12 +756,15 @@ struct FlatBufferManager {
             this_worker->compressed_indices_offset +
             _align_to_int64(sizeof(int64_t) * (this_metadata->total_items_count + 1));
 
+        int32_t* counts2 = get_counts2();
         int64_t* compressed_indices2 = get_compressed_indices2();
         int64_t* compressed_indices = get_compressed_indices();
         int64_t* storage_indices = get_storage_indices();
-        for (int i = 0; i <= this_metadata->max_nof_rings; i++) {
+        for (int i = 0; i < this_metadata->max_nof_rings; i++) {
+          counts2[i] = 0;
           compressed_indices2[i] = 0;
         }
+        compressed_indices2[this_metadata->max_nof_rings] = 0;
         for (int i = 0; i < this_metadata->total_items_count; i++) {
           compressed_indices[i] = 0;
           storage_indices[i] = -1;
@@ -939,6 +953,31 @@ struct FlatBufferManager {
     return buffer + offset;
   }
 
+  // Return the pointer to counts2 buffer
+  HOST DEVICE inline int32_t* get_counts2() {
+    int64_t offset = 0;
+    switch (format()) {
+      case GeoPolygonFormatId:
+        offset = getGeoPolygonWorker()->counts2_offset;
+        break;
+      default:
+        return nullptr;
+    }
+    return reinterpret_cast<int32_t*>(buffer + offset);
+  }
+
+  inline const int32_t* get_counts2() const {
+    int64_t offset = 0;
+    switch (format()) {
+      case GeoPolygonFormatId:
+        offset = getGeoPolygonWorker()->counts2_offset;
+        break;
+      default:
+        return nullptr;
+    }
+    return reinterpret_cast<int32_t*>(buffer + offset);
+  }
+
   // Return the pointer to compressed indices2 buffer
   HOST DEVICE inline int64_t* get_compressed_indices2() {
     int64_t offset = 0;
@@ -1082,8 +1121,8 @@ struct FlatBufferManager {
       }
       case GeoPolygonFormatId: {
         const int64_t itemsize = dtypeSize();
-        const int64_t counts = size / itemsize;
-        return setItem2(index, src, &counts, 1, dest);
+        const int32_t counts = size / itemsize;
+        return setItemCountsAndData(index, &counts, 1, src, dest);
       }
       default:
         return UnknownFormatError;
@@ -1132,8 +1171,8 @@ struct FlatBufferManager {
       }
       case GeoPolygonFormatId: {
         const int64_t itemsize = dtypeSize();
-        const int64_t counts = size / itemsize;
-        return setItem2NoValidation(index, src, &counts, 1, dest);
+        const int32_t counts = size / itemsize;
+        return setItemCountsAndDataNoValidation(index, &counts, 1, src, dest);
       }
       default:
         return UnknownFormatError;
@@ -1142,11 +1181,11 @@ struct FlatBufferManager {
     return Success;
   }
 
-  Status setItem2(int64_t index,
-                  const int8_t* src,
-                  const int64_t* counts,
-                  int64_t nof_counts,
-                  int8_t** dest = nullptr) {
+  Status setItemCountsAndData(const int64_t index,
+                              const int32_t* counts,
+                              const int64_t nof_counts,
+                              const int8_t* src,
+                              int8_t** dest = nullptr) {
     if (index < 0 || index >= itemsCount()) {
       return IndexError;
     }
@@ -1187,15 +1226,16 @@ struct FlatBufferManager {
       default:
         return UnknownFormatError;
     }
-    return setItem2NoValidation(index, src, counts, nof_counts, dest);
+    return setItemCountsAndDataNoValidation(index, counts, nof_counts, src, dest);
   }
 
   // Same as setItem but performs no input validation
-  Status setItem2NoValidation(int64_t index,
-                              const int8_t* src,      // coordinates of points
-                              const int64_t* counts,  // counts of points in rings
-                              int64_t nof_counts,     // nof rings
-                              int8_t** dest) {
+  Status setItemCountsAndDataNoValidation(
+      const int64_t index,
+      const int32_t* counts,     // counts of points in rings
+      const int64_t nof_counts,  // nof rings
+      const int8_t* src,         // coordinates of points
+      int8_t** dest) {
     switch (format()) {
       case VarlenArrayFormatId:
       case GeoPointFormatId:
@@ -1206,6 +1246,7 @@ struct FlatBufferManager {
         int64_t& storage_count2 = get_storage_count2();
         int64_t* storage_indices = get_storage_indices();
         int64_t* compressed_indices = get_compressed_indices();
+        int32_t* counts2 = get_counts2();
         int64_t* compressed_indices2 = get_compressed_indices2();
         int8_t* values = get_values();
         const int64_t valuesize = dtypeSize();
@@ -1220,6 +1261,7 @@ struct FlatBufferManager {
         for (int i = 0; i < nof_counts; i++) {
           size += valuesize * counts[i];
           cindex2 += counts[i];
+          counts2[storage_count2] = counts[i];
           storage_count2++;
           compressed_indices2[storage_count2] = cindex2;
         }
@@ -1571,6 +1613,55 @@ struct FlatBufferManager {
     return UnknownFormatError;
   }
 
+  HOST DEVICE Status getItemCountsAndData(const int64_t index,
+                                          int32_t*& counts,
+                                          int64_t& nof_counts,
+                                          int8_t*& dest,
+                                          int64_t& size,
+                                          bool& is_null) {
+    if (index < 0 || index >= itemsCount()) {
+      return IndexError;
+    }
+    switch (format()) {
+      case VarlenArrayFormatId:
+      case GeoPointFormatId:
+      case GeoLineStringFormatId:
+        break;
+      case GeoPolygonFormatId: {
+        const int64_t* storage_indices = get_storage_indices();
+        int64_t* compressed_indices = get_compressed_indices();
+        const int64_t* compressed_indices2 = get_compressed_indices2();
+        int8_t* values = get_values();
+
+        const int64_t storage_index = storage_indices[index];
+        if (storage_index < 0) {
+          return ItemUnspecifiedError;
+        }
+        const int64_t cindex = compressed_indices[storage_index];
+        if (cindex < 0) {
+          counts = nullptr;
+          nof_counts = 0;
+          dest = nullptr;
+          size = 0;
+          is_null = true;
+        } else {
+          const int64_t next_cindex = compressed_indices[storage_index + 1];
+          const int64_t valuesize = dtypeSize();
+          const int64_t cindex2 = compressed_indices2[cindex];
+          nof_counts =
+              (next_cindex < 0 ? -(next_cindex + 1) - cindex : next_cindex - cindex);
+          const int64_t* cumcounts = compressed_indices2 + cindex;
+          counts = get_counts2() + cindex;
+          dest = values + cindex2 * valuesize;
+          size = (cumcounts[nof_counts] - cumcounts[0]) * valuesize;
+          is_null = false;
+        }
+        return Success;
+      }
+    }
+    return UnknownFormatError;
+  }
+
   Status getItemLength(const int64_t index, int64_t& length) const {
     if (index < 0 || index >= itemsCount()) {
       return IndexError;
@@ -1719,92 +1810,95 @@ struct FlatBufferManager {
         break;
       }
     }
+
     switch (fmt) {
       case VarlenArrayFormatId:
-      case GeoLineStringFormatId: {
-        case GeoPolygonFormatId: {
-          result += ", values=";
-          const int64_t numvalues = get_nof_values();
-          const int64_t itemsize = dtypeSize();
-          switch (itemsize) {
-            case 1: {
-              const int8_t* values_buf = get_values();
-              std::vector<int8_t> values(values_buf, values_buf + numvalues);
-              result += ::toString(values);
-            } break;
-            case 2: {
-              const int16_t* values_buf = reinterpret_cast<const int16_t*>(get_values());
-              std::vector<int16_t> values(values_buf, values_buf + numvalues);
-              result += ::toString(values);
-            } break;
-            case 4: {
-              const int32_t* values_buf = reinterpret_cast<const int32_t*>(get_values());
-              std::vector<int32_t> values(values_buf, values_buf + numvalues);
-              result += ::toString(values);
-            } break;
-            case 8: {
-              if (fmt == GeoLineStringFormatId || fmt == GeoPolygonFormatId) {
-                const int32_t* values_buf =
-                    reinterpret_cast<const int32_t*>(get_values());
-                std::vector<int32_t> values(values_buf, values_buf + numvalues * 2);
-                result += ::toString(values);
-              } else {
-                const int64_t* values_buf =
-                    reinterpret_cast<const int64_t*>(get_values());
-                std::vector<int64_t> values(values_buf, values_buf + numvalues);
-                result += ::toString(values);
-              }
-            } break;
-            case 16: {
-              if (fmt == GeoLineStringFormatId || fmt == GeoPolygonFormatId) {
-                const double* values_buf = reinterpret_cast<const double*>(get_values());
-                std::vector<double> values(values_buf, values_buf + numvalues * 2);
-                result += ::toString(values);
-                break;
-              }
-            }
-            default:
-              result += "[UNEXPECTED ITEMSIZE:" + std::to_string(itemsize) + "]";
-          }
-          if (fmt == GeoPolygonFormatId) {
-            const int64_t numitems2 = items2Count();
-            const int64_t* compressed_indices2_buf = get_compressed_indices2();
-            std::vector<int64_t> compressed_indices2(
-                compressed_indices2_buf, compressed_indices2_buf + numitems2 + 1);
-            result += ", compressed_indices2=" + ::toString(compressed_indices2);
-          }
-
-          const int64_t numitems = itemsCount();
-          const int64_t* compressed_indices_buf = get_compressed_indices();
-          std::vector<int64_t> compressed_indices(compressed_indices_buf,
-                                                  compressed_indices_buf + numitems + 1);
-          result += ", compressed_indices=" + ::toString(compressed_indices);
-
-          const int64_t* storage_indices_buf = get_storage_indices();
-          std::vector<int64_t> storage_indices(storage_indices_buf,
-                                               storage_indices_buf + numitems);
-          result += ", storage_indices=" + ::toString(storage_indices);
-          return result + ")";
-        }
-        case GeoPointFormatId: {
-          const auto* metadata = getGeoPointMetadata();
-          result += ", point data=";
-          int64_t numitems = itemsCount();
-          if (metadata->is_geoint) {
+      case GeoLineStringFormatId:
+      case GeoPolygonFormatId: {
+        result += ", values=";
+        const int64_t numvalues = get_nof_values();
+        const int64_t itemsize = dtypeSize();
+        switch (itemsize) {
+          case 1: {
+            const int8_t* values_buf = get_values();
+            std::vector<int8_t> values(values_buf, values_buf + numvalues);
+            result += ::toString(values);
+          } break;
+          case 2: {
+            const int16_t* values_buf = reinterpret_cast<const int16_t*>(get_values());
+            std::vector<int16_t> values(values_buf, values_buf + numvalues);
+            result += ::toString(values);
+          } break;
+          case 4: {
             const int32_t* values_buf = reinterpret_cast<const int32_t*>(get_values());
-            std::vector<int32_t> values(values_buf, values_buf + numitems * 2);
+            std::vector<int32_t> values(values_buf, values_buf + numvalues);
             result += ::toString(values);
-          } else {
-            const double* values_buf = reinterpret_cast<const double*>(get_values());
-            std::vector<double> values(values_buf, values_buf + numitems * 2);
-            result += ::toString(values);
+          } break;
+          case 8: {
+            if (fmt == GeoLineStringFormatId || fmt == GeoPolygonFormatId) {
+              const int32_t* values_buf = reinterpret_cast<const int32_t*>(get_values());
+              std::vector<int32_t> values(values_buf, values_buf + numvalues * 2);
+              result += ::toString(values);
+            } else {
+              const int64_t* values_buf = reinterpret_cast<const int64_t*>(get_values());
+              std::vector<int64_t> values(values_buf, values_buf + numvalues);
+              result += ::toString(values);
+            }
+          } break;
+          case 16: {
+            if (fmt == GeoLineStringFormatId || fmt == GeoPolygonFormatId) {
+              const double* values_buf = reinterpret_cast<const double*>(get_values());
+              std::vector<double> values(values_buf, values_buf + numvalues * 2);
+              result += ::toString(values);
+              break;
+            }
           }
-          return result + ")";
+          default:
+            result += "[UNEXPECTED ITEMSIZE:" + std::to_string(itemsize) + "]";
         }
-        default:;
+        if (fmt == GeoPolygonFormatId) {
+          const int64_t numitems2 = items2Count();
+          const int64_t* compressed_indices2_buf = get_compressed_indices2();
+          std::vector<int64_t> compressed_indices2(
+              compressed_indices2_buf, compressed_indices2_buf + numitems2 + 1);
+          result += ", compressed_indices2=" + ::toString(compressed_indices2);
+
+          const int32_t* counts2_buf = get_counts2();
+          std::vector<int32_t> counts2(counts2_buf, counts2_buf + numitems2);
+          result += ", counts2=" + ::toString(counts2);
+        }
+
+        const int64_t numitems = itemsCount();
+        const int64_t* compressed_indices_buf = get_compressed_indices();
+        std::vector<int64_t> compressed_indices(compressed_indices_buf,
+                                                compressed_indices_buf + numitems + 1);
+        result += ", compressed_indices=" + ::toString(compressed_indices);
+
+        const int64_t* storage_indices_buf = get_storage_indices();
+        std::vector<int64_t> storage_indices(storage_indices_buf,
+                                             storage_indices_buf + numitems);
+        result += ", storage_indices=" + ::toString(storage_indices);
+        return result + ")";
       }
-        return ::typeName(this) + "[UNKNOWN FORMAT]";
+      case GeoPointFormatId: {
+        const auto* metadata = getGeoPointMetadata();
+        result += ", point data=";
+        int64_t numitems = itemsCount();
+        if (metadata->is_geoint) {
+          const int32_t* values_buf = reinterpret_cast<const int32_t*>(get_values());
+          std::vector<int32_t> values(values_buf, values_buf + numitems * 2);
+          result += ::toString(values);
+        } else {
+          const double* values_buf = reinterpret_cast<const double*>(get_values());
+          std::vector<double> values(values_buf, values_buf + numitems * 2);
+          result += ::toString(values);
+        }
+        return result + ")";
+      }
+      default:
+        break;
     }
+    return ::typeName(this) + "[UNKNOWN FORMAT]";
   }
 #endif
 };

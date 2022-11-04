@@ -1191,11 +1191,12 @@ struct Polygon {
   }
 
   FlatBufferManager::Status setItems(const int8_t* src,
-                                     const int64_t* subitem_sizes,
+                                     const int32_t* subitem_sizes,
                                      const int64_t nof_subitems,
                                      int8_t** dest = nullptr) {
     FlatBufferManager m{flatbuffer_};
-    auto status = m.setItem2(index_[0], src, subitem_sizes, nof_subitems, dest);
+    auto status =
+        m.setItemCountsAndData(index_[0], subitem_sizes, nof_subitems, src, dest);
     if (status != FlatBufferManager::Status::Success) {
 #ifndef __CUDACC__
       throw std::runtime_error("Geo::Polygon setItems failed: " + ::toString(status));
@@ -1233,10 +1234,10 @@ struct Polygon {
   template <typename CT>
   FlatBufferManager::Status fromCoords(const std::vector<std::vector<CT>>& coords) {
     bool is_geoint = get_is_geoint(flatbuffer_);
-    std::vector<int64_t> sizes;
+    std::vector<int32_t> sizes;
     sizes.reserve(coords.size());
     for (const auto& coord_vec : coords) {
-      int64_t sz = coord_vec.size() / 2;
+      int32_t sz = coord_vec.size() / 2;
       if (sz > 0) {
         sizes.push_back(sz);
       }
