@@ -785,7 +785,11 @@ void RasterImporter::getRawPixels(const uint32_t thread_idx,
                                0,
                                0,
                                nullptr);
-  CHECK_EQ(result, CE_None);
+  if (result != CE_None) {
+    throw std::runtime_error("Failed to read raster pixels, rows " +
+                             std::to_string(y_start) + " to " +
+                             std::to_string(y_start + num_rows));
+  }
 }
 
 //
