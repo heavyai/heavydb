@@ -13,6 +13,7 @@
 
 #include "Geospatial/Compression.h"
 #include "Geospatial/GDAL.h"
+#include "Shared/scope.h"
 
 #include "cpl_conv.h"
 #include "cpl_string.h"
@@ -59,6 +60,11 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
   }
   CHECK(value_type_str.length());
 
+  auto const num_values = raster_width * raster_height;
+  VLOG(1) << "tf_raster_contour: Input raster data has " << num_values << " values, min "
+          << *std::min_element(values, values + num_values) << ", max "
+          << *std::max_element(values, values + num_values);
+
   // geo type
   constexpr bool is_polygons = std::is_same_v<GeoPolygon, TG>;
 
@@ -75,8 +81,26 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
   // lazy init GDAL
   Geospatial::GDAL::init();
 
+  // things to clean up
+  char** options = nullptr;
+  GDALDatasetH raster_ds = nullptr;
+  GDALDataset* vector_ds = nullptr;
+
+  // auto clean-up on any exit
+  ScopeGuard cleanup = [options, raster_ds, vector_ds]() {
+    if (options) {
+      CSLDestroy(options);
+    }
+    if (raster_ds) {
+      GDALClose(raster_ds);
+    }
+    if (vector_ds) {
+      GDALClose(vector_ds);
+    }
+  };
+
   // input dataset
-  auto raster_ds = GDALOpen(mem_str.c_str(), GA_ReadOnly);
+  raster_ds = GDALOpen(mem_str.c_str(), GA_ReadOnly);
   CHECK(raster_ds);
 
   // input band
@@ -88,8 +112,8 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
   CHECK(memory_driver);
 
   // output dataset
-  auto* vector_dataset = memory_driver->Create("contours", 0, 0, 0, GDT_Unknown, NULL);
-  CHECK(vector_dataset);
+  vector_ds = memory_driver->Create("contours", 0, 0, 0, GDT_Unknown, NULL);
+  CHECK(vector_ds);
 
   // output spatial reference
   OGRSpatialReference spatial_reference;
@@ -98,7 +122,7 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
 
   // output layer
   auto* vector_layer =
-      vector_dataset->CreateLayer("lines", &spatial_reference, wkbLineString, NULL);
+      vector_ds->CreateLayer("lines", &spatial_reference, wkbLineString, NULL);
   CHECK(vector_layer);
 
   // contour values field
@@ -108,7 +132,6 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
   CHECK_GE(contour_values_field_index, 0);
 
   // options
-  char** options = nullptr;
   if (contour_values_field_index != -1) {
     if constexpr (is_polygons) {
       options = CSLAppendPrintf(options, "ELEV_FIELD_MIN=%d", contour_values_field_index);
@@ -137,10 +160,17 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
   }
 
   // reset the output dataset
-  vector_dataset->ResetReading();
+  vector_ds->ResetReading();
 
   // get feature count
   auto const num_features = static_cast<int32_t>(vector_layer->GetFeatureCount());
+
+  VLOG(1) << "tf_raster_contour: GDAL generated " << num_features << " features";
+
+  // did we get any features?
+  if (num_features == 0) {
+    return mgr.ERROR_MESSAGE("Contour computation did not generate any features");
+  }
 
   // first pass, accumulate total sizes
 
@@ -211,6 +241,8 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
       num_output_features++;
     }
   }
+
+  VLOG(1) << "tf_raster_contour: Total points " << total_num_points;
 
   // size outputs
   mgr.set_output_array_values_total_number(0, total_num_points * 2);
@@ -313,10 +345,7 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
     }
   }
 
-  // done with these
-  CSLDestroy(options);
-  GDALClose(raster_ds);
-  GDALClose(vector_dataset);
+  VLOG(1) << "tf_raster_contour: Output " << num_features << " features";
 
   // done
   return num_output_features;
