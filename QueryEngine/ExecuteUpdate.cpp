@@ -82,7 +82,8 @@ TableUpdateMetadata Executor::executeUpdate(
 
   ColumnFetcher column_fetcher(this, column_cache);
   CHECK_GT(ra_exe_unit.input_descs.size(), size_t(0));
-  const auto& table_key = ra_exe_unit.input_descs[0].getTableKey();
+  const auto& outer_table_key = ra_exe_unit.input_descs[0].getTableKey();
+  CHECK_EQ(outer_table_key, table_infos.front().table_key);
   const auto& outer_fragments = table_infos.front().info.fragments;
 
   std::vector<FragmentsPerTable> fragments = {{{0, 0}, {0}}};
@@ -152,7 +153,7 @@ TableUpdateMetadata Executor::executeUpdate(
               << ", fragment id: " << fragment_index;
       continue;
     }
-    fragments[0] = {table_key, {fragment_index}};
+    fragments[0] = {outer_table_key, {fragment_index}};
 
     {
       ExecutionKernel current_fragment_kernel(ra_exe_unit,
