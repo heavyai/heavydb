@@ -30,7 +30,7 @@ const Catalog_Namespace::SessionInfo& RenderInfo::getSessionInfo() const {
   CHECK(false);
   static const Catalog_Namespace::SessionInfo tmp(
       nullptr,
-      Catalog_Namespace::UserMetadata(-1, "", "", false, -1, false, false),
+      Catalog_Namespace::UserMetadata(-1, "", "", false, -1, false, ""),
       ExecutorDeviceType::CPU,
       "");
   return tmp;
@@ -85,6 +85,6 @@ const RenderQueryOptions& RenderInfo::getRenderQueryOptions() const {
 }
 
 void RenderInfo::reset(std::unique_ptr<RenderQueryOptions> in_query_opts,
-                       const bool in_force_non_in_situ_data) {
+                       const heavyai::InSituFlags in_insitu_flags) {
   CHECK(false);
 }

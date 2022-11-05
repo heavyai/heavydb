@@ -72,14 +72,16 @@ struct UserMetadata {
                bool s,
                int32_t d,
                bool l,
-               bool t)
+               bool t,
+               const std::string& immerse_metadata_json)
       : userId(u)
       , userName(n)
       , passwd_hash(p)
       , isSuper(s)
       , defaultDbId(d)
       , can_login(l)
-      , is_temporary(t) {}
+      , is_temporary(t)
+      , immerse_metadata_json(immerse_metadata_json) {}
   UserMetadata() {}
   UserMetadata(UserMetadata const& user_meta)
       : UserMetadata(user_meta.userId,
@@ -88,7 +90,8 @@ struct UserMetadata {
                      user_meta.isSuper.load(),
                      user_meta.defaultDbId,
                      user_meta.can_login,
-                     user_meta.is_temporary) {}
+                     user_meta.is_temporary,
+                     user_meta.immerse_metadata_json) {}
   UserMetadata& operator=(UserMetadata const& user_meta) {
     if (this != &user_meta) {
       userId = user_meta.userId;
@@ -98,6 +101,7 @@ struct UserMetadata {
       defaultDbId = user_meta.defaultDbId;
       can_login = user_meta.can_login;
       is_temporary = user_meta.is_temporary;
+      immerse_metadata_json = user_meta.immerse_metadata_json;
     }
     return *this;
   }
@@ -108,6 +112,7 @@ struct UserMetadata {
   int32_t defaultDbId{-1};
   bool can_login{true};
   bool is_temporary{false};
+  std::string immerse_metadata_json;
 
   // Return a string that is safe to log for the username based on --log-user-id.
   std::string userLoggable() const;
@@ -132,6 +137,7 @@ struct DBMetadata {
   int32_t dbId;
   std::string dbName;
   int32_t dbOwner;
+  std::string immerse_metadata_json;
 };
 
 /*
@@ -141,8 +147,15 @@ struct DBMetadata {
 struct DBSummary {
   std::string dbName;
   std::string dbOwnerName;
+  std::string immerse_metadata_json;
 };
 using DBSummaryList = std::list<DBSummary>;
+
+struct UserInfo {
+  std::string username;
+  std::vector<std::string> roles;
+  std::string immerse_metadata_json;
+};
 
 class CommonFileOperations {
  public:
@@ -237,10 +250,15 @@ class SysCatalog : private CommonFileOperations {
   SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();
+  void putImmerseUsersMetadata(
+      const std::vector<UserMetadata>& immerse_user_metadata_list);
+  std::vector<UserInfo> getUsersInfo(const UserMetadata& user);
   /**
    * return the users associated with the given DB
    */
   std::list<UserMetadata> getAllUserMetadata(const int64_t dbId);
+  void putImmerseDatabaseMetadata(const std::string& database_name,
+                                  const std::string& immerse_metadata_json);
   DBSummaryList getDatabaseListForUser(const UserMetadata& user);
   void createDBObject(const UserMetadata& user,
                       const std::string& objectName,
