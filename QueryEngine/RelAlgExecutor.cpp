@@ -4430,6 +4430,11 @@ std::vector<size_t> do_table_reordering(
     // information to break ties
     return {};
   }
+  if (node->isUpdateViaSelect() || node->isDeleteViaSelect()) {
+    // Do not reorder tables for UPDATE and DELETE queries, since the outer table always
+    // has to be the physical table.
+    return {};
+  }
   for (const auto& table_info : query_infos) {
     if (table_info.table_key.table_id < 0) {
       continue;

@@ -1182,6 +1182,76 @@ TEST_F(TableWithImmediateVacuumTest, FixedLenColumnUpdate) {
   sqlAndCompareResult("select * from test_table;", 2, "a");
 }
 
+using TestResultSet = std::vector<std::tuple<int32_t, std::string, std::string>>;
+class UpdateAndDeleteQueryTest : public ::testing::Test {
+ public:
+  static void SetUpTestSuite() {
+    run_ddl_statement(
+        "CREATE TABLE test_table_2 (i INTEGER, t TEXT ENCODING DICT(32), "
+        "t2 TEXT ENCODING NONE) WITH (fragment_size = 2);");
+    run_query(
+        "INSERT INTO test_table_2 VALUES (1, 'a', 'aaa'), (10, 'aa', 'aa'), "
+        "(100, 'aaa', 'a');");
+  }
+
+  static void TearDownTestSuite() {
+    run_ddl_statement("DROP TABLE IF EXISTS test_table_2;");
+  }
+
+  void SetUp() override {
+    run_ddl_statement("DROP TABLE IF EXISTS test_table_1;");
+    run_ddl_statement(
+        "CREATE TABLE test_table_1 (i INTEGER, t TEXT ENCODING DICT(32), "
+        "t2 TEXT ENCODING NONE) WITH (fragment_size = 2);");
+    run_query(
+        "INSERT INTO test_table_1 VALUES (1, 'a', 'cc'), (2, 'b', 'bb'), "
+        "(10, 'aa', 'aa'), (20, 'bb', 'b'), (30, 'cc', 'a');");
+  }
+
+  void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS test_table_1;"); }
+
+  void sqlAndCompareResult(const std::string& query,
+                           const TestResultSet& expected_result) {
+    auto result = run_query(query);
+    ASSERT_EQ(expected_result.size(), result->rowCount());
+    ASSERT_EQ(result->colCount(), size_t(3));
+
+    for (const auto& expected_row : expected_result) {
+      auto row = result->getNextRow(true, true);
+      EXPECT_EQ(std::get<0>(expected_row), getInt(row[0]));
+      EXPECT_EQ(std::get<1>(expected_row), getString(row[1]));
+      EXPECT_EQ(std::get<2>(expected_row), getString(row[2]));
+    }
+  }
+
+  int64_t getInt(const TargetValue& target_value) {
+    const auto& scalar_value = boost::get<ScalarTargetValue>(target_value);
+    return boost::get<int64_t>(scalar_value);
+  }
+
+  std::string getString(const TargetValue& target_value) {
+    const auto& scalar_value = boost::get<ScalarTargetValue>(target_value);
+    const auto& nullable_str = boost::get<NullableString>(scalar_value);
+    return boost::get<std::string>(nullable_str);
+  }
+};
+
+TEST_F(UpdateAndDeleteQueryTest, DeleteWithNestedQuery) {
+  run_query("DELETE FROM test_table_1 WHERE i IN (SELECT i FROM test_table_2);");
+  sqlAndCompareResult("SELECT * FROM test_table_1 ORDER BY i;",
+                      TestResultSet{{2, "b", "bb"}, {20, "bb", "b"}, {30, "cc", "a"}});
+}
+
+TEST_F(UpdateAndDeleteQueryTest, UpdateWithNestedQuery) {
+  run_query("UPDATE test_table_1 SET t = 'abc' WHERE i IN (SELECT i FROM test_table_2);");
+  sqlAndCompareResult("SELECT * FROM test_table_1 ORDER BY i;",
+                      TestResultSet{{1, "abc", "cc"},
+                                    {2, "b", "bb"},
+                                    {10, "abc", "aa"},
+                                    {20, "bb", "b"},
+                                    {30, "cc", "a"}});
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
