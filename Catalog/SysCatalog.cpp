@@ -322,15 +322,16 @@ void SysCatalog::initDB() {
     sqliteConnector_->query(
         "CREATE TABLE mapd_users (userid integer primary key, name text unique, "
         "passwd_hash text, issuper boolean, default_db integer references "
-        "mapd_databases, can_login boolean)");
+        "mapd_databases, can_login boolean, immerse_metadata_json text DEFAULT "
+        "NULL)");
     sqliteConnector_->query_with_text_params(
-        "INSERT INTO mapd_users VALUES (?, ?, ?, 1, NULL, 1)",
+        "INSERT INTO mapd_users VALUES (?, ?, ?, 1, NULL, 1, NULL)",
         std::vector<std::string>{shared::kRootUserIdStr,
                                  shared::kRootUsername,
                                  hash_with_bcrypt(shared::kDefaultRootPasswd)});
     sqliteConnector_->query(
         "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner "
-        "integer references mapd_users)");
+        "integer references mapd_users, immerse_metadata_json text DEFAULT NULL)");
     sqliteConnector_->query(
         "CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, "
         "userName))");
@@ -1033,7 +1034,8 @@ UserMetadata SysCatalog::createUser(const string& name,
                                                 *alts.is_super,
                                                 !alts.default_db->empty() ? db.dbId : -1,
                                                 *alts.can_login,
-                                                true);
+                                                true,
+                                                "");
     temporary_users_by_name_[name] = user2;
     temporary_users_by_id_[user2->userId] = user2;
     createRole_unsafe(name, /*userPrivateRole=*/true, /*is_temporary=*/true);
@@ -1683,9 +1685,10 @@ bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
   sys_read_lock read_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
-      "SELECT userid, name, passwd_hash, issuper, default_db, can_login FROM mapd_users "
-      "WHERE name = ?",
-      name);
+      "SELECT userid, name, passwd_hash, issuper, default_db, can_login, "
+      "immerse_metadata_json FROM mapd_users "
+      "WHERE UPPER(name) = ?",
+      to_upper(name));
   int numRows = sqliteConnector_->getNumRows();
   if (numRows == 0) {
     auto userit = temporary_users_by_name_.find(name);
@@ -1702,7 +1705,8 @@ bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
 bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
-      "SELECT userid, name, passwd_hash, issuper, default_db, can_login FROM mapd_users "
+      "SELECT userid, name, passwd_hash, issuper, default_db, can_login, "
+      "immerse_metadata_json FROM mapd_users "
       "WHERE userid = ?",
       std::to_string(idIn));
   int numRows = sqliteConnector_->getNumRows();
@@ -1720,7 +1724,8 @@ bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) 
 
 list<DBMetadata> SysCatalog::getAllDBMetadata() {
   sys_sqlite_lock sqlite_lock(this);
-  sqliteConnector_->query("SELECT dbid, name, owner FROM mapd_databases");
+  sqliteConnector_->query(
+      "SELECT dbid, name, owner, immerse_metadata_json FROM mapd_databases");
   int numRows = sqliteConnector_->getNumRows();
   list<DBMetadata> db_list;
   for (int r = 0; r < numRows; ++r) {
@@ -1728,6 +1733,7 @@ list<DBMetadata> SysCatalog::getAllDBMetadata() {
     db.dbId = sqliteConnector_->getData<int>(r, 0);
     db.dbName = sqliteConnector_->getData<string>(r, 1);
     db.dbOwner = sqliteConnector_->getData<int>(r, 2);
+    db.immerse_metadata_json = sqliteConnector_->getData<string>(r, 3);
     db_list.push_back(db);
   }
   return db_list;
@@ -1740,7 +1746,8 @@ auto get_users(SysCatalog& syscat,
                const int32_t dbId = -1) {
   // Normal users.
   sqliteConnector->query(
-      "SELECT userid, name, passwd_hash, issuper, default_db, can_login FROM mapd_users");
+      "SELECT userid, name, passwd_hash, issuper, default_db, can_login, "
+      "immerse_metadata_json FROM mapd_users");
   int numRows = sqliteConnector->getNumRows();
   list<UserMetadata> user_list;
   const bool return_all_users = dbId == -1;
@@ -1783,6 +1790,83 @@ list<UserMetadata> SysCatalog::getAllUserMetadata() {
   return get_users(*this, sqliteConnector_);
 }
 
+void SysCatalog::putImmerseUsersMetadata(
+    const std::vector<UserMetadata>& user_metadata_list) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    for (const auto& user_metadata : user_metadata_list) {
+      sqliteConnector_->query_with_text_params(
+          "UPDATE mapd_users SET immerse_metadata_json = ? WHERE UPPER(name) = ?",
+          std::vector<std::string>{user_metadata.immerse_metadata_json,
+                                   to_upper(user_metadata.userName)});
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+}
+
+namespace {
+std::string user_metadata_list_to_stringified_set(
+    const std::list<UserMetadata>& user_metadata_list) {
+  std::stringstream ss;
+  bool first_elem{true};
+  ss << "(";
+  for (const auto& current_user : user_metadata_list) {
+    if (!first_elem) {
+      ss << ", ";
+    }
+    first_elem = false;
+    ss << "'" << to_upper(current_user.userName) << "'";
+  }
+  ss << ")";
+  return ss.str();
+}
+}  // namespace
+
+std::vector<UserInfo> SysCatalog::getUsersInfo(const UserMetadata& user) {
+  sys_read_lock read_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
+  std::list<UserMetadata> user_metadata_list;
+  if (user.isSuper) {
+    user_metadata_list = SysCatalog::instance().getAllUserMetadata();
+  } else {
+    UserMetadata user_metadata;
+    getMetadataForUser(user.userName, user_metadata);
+    user_metadata_list.emplace_back(user_metadata);
+  }
+
+  std::map<std::string /*username*/, UserInfo> user_info_map;
+  for (const auto& current_user : user_metadata_list) {
+    user_info_map[to_upper(current_user.userName)] = UserInfo{current_user.userName};
+    for (const auto& effective_role : getRoles(current_user.userName)) {
+      user_info_map[to_upper(current_user.userName)].roles.emplace_back(effective_role);
+    }
+  }
+
+  auto stringified_username_set =
+      user_metadata_list_to_stringified_set(user_metadata_list);
+  sqliteConnector_->query(
+      "SELECT name, immerse_metadata_json FROM mapd_users WHERE UPPER(name) in " +
+      stringified_username_set);
+  auto numRows = sqliteConnector_->getNumRows();
+  for (size_t i = 0; i < numRows; i++) {
+    auto user_name = (sqliteConnector_->getData<std::string>(i, 0));
+    auto immerse_metadata_json = (sqliteConnector_->getData<std::string>(i, 1));
+    user_info_map[to_upper(user_name)].immerse_metadata_json = immerse_metadata_json;
+  }
+
+  std::vector<UserInfo> user_info_result;
+  for (const auto& [_, user_info] : user_info_map) {
+    user_info_result.push_back(user_info);
+  }
+  return user_info_result;
+}
+
 void SysCatalog::getMetadataWithDefaultDB(std::string& dbname,
                                           const std::string& username,
                                           Catalog_Namespace::DBMetadata& db_meta,
@@ -1823,7 +1907,8 @@ bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
   sys_read_lock read_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
-      "SELECT dbid, name, owner FROM mapd_databases WHERE UPPER(name) = ?",
+      "SELECT dbid, name, owner, immerse_metadata_json FROM mapd_databases WHERE "
+      "UPPER(name) = ?",
       to_upper(name));
   int numRows = sqliteConnector_->getNumRows();
   if (numRows == 0) {
@@ -1832,13 +1917,15 @@ bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
   db.dbId = sqliteConnector_->getData<int>(0, 0);
   db.dbName = sqliteConnector_->getData<string>(0, 1);
   db.dbOwner = sqliteConnector_->getData<int>(0, 2);
+  db.immerse_metadata_json = sqliteConnector_->getData<string>(0, 3);
   return true;
 }
 
 bool SysCatalog::getMetadataForDBById(const int32_t idIn, DBMetadata& db) {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
-      "SELECT dbid, name, owner FROM mapd_databases WHERE dbid = ?",
+      "SELECT dbid, name, owner, immerse_metadata_json FROM mapd_databases WHERE dbid = "
+      "?",
       std::to_string(idIn));
   int numRows = sqliteConnector_->getNumRows();
   if (numRows == 0) {
@@ -1847,7 +1934,24 @@ bool SysCatalog::getMetadataForDBById(const int32_t idIn, DBMetadata& db) {
   db.dbId = sqliteConnector_->getData<int>(0, 0);
   db.dbName = sqliteConnector_->getData<string>(0, 1);
   db.dbOwner = sqliteConnector_->getData<int>(0, 2);
+  db.immerse_metadata_json = sqliteConnector_->getData<string>(0, 3);
   return true;
+}
+
+void SysCatalog::putImmerseDatabaseMetadata(const std::string& database_name,
+                                            const std::string& immerse_metadata_json) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query_with_text_params(
+        "UPDATE mapd_databases SET immerse_metadata_json = ? WHERE UPPER(name) = ?",
+        std::vector<std::string>{immerse_metadata_json, to_upper(database_name)});
+  } catch (std::exception& e) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
 }
 
 DBSummaryList SysCatalog::getDatabaseListForUser(const UserMetadata& user) {
@@ -1870,9 +1974,9 @@ DBSummaryList SysCatalog::getDatabaseListForUser(const UserMetadata& user) {
     }
 
     if (auto it = user_id_to_name_map.find(d.dbOwner); it != user_id_to_name_map.end()) {
-      ret.emplace_back(DBSummary{d.dbName, it->second});
+      ret.emplace_back(DBSummary{d.dbName, it->second, d.immerse_metadata_json});
     } else {
-      ret.emplace_back(DBSummary{d.dbName, "<DELETED>"});
+      ret.emplace_back(DBSummary{d.dbName, "<DELETED>", d.immerse_metadata_json});
     }
   }
 

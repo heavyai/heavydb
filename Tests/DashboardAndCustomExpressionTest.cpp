@@ -1287,6 +1287,240 @@ TEST_F(CustomExpressionTest, DeleteCustomExpressionSoftDelete) {
   }
 }
 
+class ImmerseSettingsTest : public DashboardBasicTest {
+ public:
+  static void SetUpTestSuite() {
+    DashboardBasicTest::SetUpTestSuite();
+    test_user_2_id = createTestUser(user_2_, "test_pass");
+    test_user_3_id = createTestUser(user_3_, "test_pass");
+    sql("CREATE ROLE test_role_a;");
+    sql("CREATE ROLE test_role_b;");
+    sql("CREATE ROLE test_role_direct;");
+    sql("CREATE ROLE test_role_indirect;");
+    sql("CREATE ROLE test_role_indirect_indirect;");
+    sql("GRANT test_role_a to " + user_1_ + ", " + user_2_ + ";");
+    sql("GRANT test_role_b to " + user_2_ + ";");
+    sql("GRANT test_role_indirect_indirect to test_role_indirect;");
+    sql("GRANT test_role_indirect to test_role_direct;");
+    sql("GRANT test_role_direct to " + user_3_ + ";");
+    resetAdminAndInformationSchemaImmerseMetadata();
+  }
+
+  static void TearDownTestSuite() {
+    DashboardBasicTest::TearDownTestSuite();
+    dropTestUser(user_2_);
+    dropTestUser(user_3_);
+    sql("DROP ROLE test_role_a;");
+    sql("DROP ROLE test_role_b;");
+    sql("DROP ROLE test_role_direct;");
+    sql("DROP ROLE test_role_indirect;");
+    sql("DROP ROLE test_role_indirect_indirect;");
+    resetAdminAndInformationSchemaImmerseMetadata();
+  }
+
+  static void resetAdminAndInformationSchemaImmerseMetadata() {
+    // Since these syscatalog entities are not cleaned up between test runs we need to
+    // reset their data here
+    const std::vector<TImmerseUserMetadata> put_requests = {
+        newImmerseUserMetadata("admin", default_json_)};
+    const auto& [db_handler, adm_session] = getDbHandlerAndSessionId();
+    db_handler->put_immerse_users_metadata(adm_session, put_requests);
+    db_handler->put_immerse_database_metadata(adm_session, default_json_, db_2_);
+  }
+
+  static TImmerseUserMetadata newImmerseUserMetadata(
+      const std::string& username,
+      const std::string& immerse_metadata_json) {
+    // convenient constructor for objects used in requests to thrift api
+    // put_immerse_users_metadata
+    TImmerseUserMetadata immerse_user_metadata;
+    immerse_user_metadata.username = username;
+    immerse_user_metadata.immerse_metadata_json = immerse_metadata_json;
+    return immerse_user_metadata;
+  }
+
+  static TUserInfo newTUserInfo(const std::string& username,
+                                const std::vector<std::string>& roles,
+                                const std::string& immerse_metadata_json) {
+    // convenient constructor for objects returned from thrift api get_users_info
+    TUserInfo t_user_info;
+    t_user_info.username = username;
+    t_user_info.roles = roles;
+    t_user_info.immerse_metadata_json = immerse_metadata_json;
+    return t_user_info;
+  }
+
+  static TDBInfo newTDBInfo(const std::string& db_name,
+                            const std::string& db_owner,
+                            const std::string& immerse_metadata_json) {
+    // convenient constructor for objects returned from thrift api get_databases;
+    TDBInfo t_db_info;
+    t_db_info.db_name = db_name;
+    t_db_info.db_owner = db_owner;
+    t_db_info.immerse_metadata_json = immerse_metadata_json;
+    return t_db_info;
+  }
+
+  static void checkGetUsersInfoResult(
+      DBHandler* db_handler,
+      const TSessionId& session_id,
+      const std::vector<TUserInfo>& expected_users_infos) {
+    std::vector<TUserInfo> actual_users_infos;
+    db_handler->get_users_info(actual_users_infos, session_id);
+    EXPECT_EQ(actual_users_infos, expected_users_infos);
+  }
+
+  static void checkGetDatabasesResult(DBHandler* db_handler,
+                                      const TSessionId& session_id,
+                                      const std::vector<TDBInfo>& expected_db_infos) {
+    std::vector<TDBInfo> actual_db_infos;
+    db_handler->get_databases(actual_db_infos, session_id);
+    EXPECT_EQ(actual_db_infos, expected_db_infos);
+  }
+
+  inline static const std::string user_1_ = "test_user", user_2_ = "test_user_2",
+                                  user_3_ = "test_user_3", non_user_ = "non_user_",
+                                  db_1_ = "heavyai", db_2_ = "information_schema",
+                                  non_db_ = "non_db_", default_json_ = "",
+                                  generic_json_ = "{ \"some_key\": \"some_data\" }";
+  inline static int32_t test_user_2_id, test_user_3_id;
+};
+
+TEST_F(ImmerseSettingsTest, SuperUser_GetUserMetadata_Default) {
+  // results returned in alphabetical order
+  const std::vector<TUserInfo> expected_results = {
+      newTUserInfo("admin", {}, default_json_),
+      newTUserInfo(user_1_, {"test_role_a"}, default_json_),
+      newTUserInfo(user_2_, {"test_role_a", "test_role_b"}, default_json_),
+      newTUserInfo(
+          user_3_,
+          {"test_role_direct", "test_role_indirect", "test_role_indirect_indirect"},
+          default_json_)};
+  const auto& [db_handler, adm_session] = getDbHandlerAndSessionId();
+  checkGetUsersInfoResult(db_handler, adm_session, expected_results);
+}
+TEST_F(ImmerseSettingsTest, User_GetUserMetadata_Default) {
+  const std::vector<TUserInfo> expected_result = {
+      newTUserInfo(user_1_, {"test_role_a"}, default_json_)};
+  const auto& [db_handler, _] = getDbHandlerAndSessionId();
+  TSessionId usr_session;
+  login(user_1_, "test_pass", shared::kDefaultDbName, usr_session);
+  checkGetUsersInfoResult(db_handler, usr_session, expected_result);
+}
+TEST_F(ImmerseSettingsTest, SuperUser_GetDatabaseMetadata_Default) {
+  const std::vector<TDBInfo> expected_result = {
+      newTDBInfo(db_1_, "admin", default_json_),
+      newTDBInfo(db_2_, "admin", default_json_)};
+  const auto& [db_handler, adm_session] = getDbHandlerAndSessionId();
+  checkGetDatabasesResult(db_handler, adm_session, expected_result);
+}
+TEST_F(ImmerseSettingsTest, User_GetDatabaseMetadata_Default) {
+  const std::vector<TDBInfo> expected_result = {
+      newTDBInfo(db_1_, "admin", default_json_)};
+  const auto& [db_handler, _] = getDbHandlerAndSessionId();
+  TSessionId usr_session;
+  login(user_1_, "test_pass", shared::kDefaultDbName, usr_session);
+  checkGetDatabasesResult(db_handler, usr_session, expected_result);
+}
+
+TEST_F(ImmerseSettingsTest, SuperUser_PutUserMetadata_Valid) {
+  // use an arbritrary order for inputs
+  const std::vector<TImmerseUserMetadata> put_requests = {
+      newImmerseUserMetadata(user_2_, generic_json_),
+      newImmerseUserMetadata("admin", generic_json_)};
+  // results returned in alphabetical order
+  const std::vector<TUserInfo> expected_results = {
+      newTUserInfo("admin", {}, generic_json_),
+      newTUserInfo(user_1_, {"test_role_a"}, default_json_),
+      newTUserInfo(user_2_, {"test_role_a", "test_role_b"}, generic_json_),
+      newTUserInfo(
+          user_3_,
+          {"test_role_direct", "test_role_indirect", "test_role_indirect_indirect"},
+          default_json_)};
+  loginAdmin();
+  const auto& [db_handler, adm_session] = getDbHandlerAndSessionId();
+  db_handler->put_immerse_users_metadata(adm_session, put_requests);
+  checkGetUsersInfoResult(db_handler, adm_session, expected_results);
+}
+TEST_F(ImmerseSettingsTest, User_PutUserMetadata_Valid) {
+  const std::vector<TImmerseUserMetadata> put_request = {
+      newImmerseUserMetadata(user_1_, generic_json_)};
+  const std::vector<TUserInfo> expected_result = {
+      newTUserInfo(user_1_, {"test_role_a"}, generic_json_)};
+  const auto& [db_handler, _] = getDbHandlerAndSessionId();
+  TSessionId usr_session;
+  login(user_1_, "test_pass", shared::kDefaultDbName, usr_session);
+  db_handler->put_immerse_users_metadata(usr_session, put_request);
+  checkGetUsersInfoResult(db_handler, usr_session, expected_result);
+}
+TEST_F(ImmerseSettingsTest, SuperUser_PutDatabaseMetadata_Valid) {
+  const std::vector<TDBInfo> expected_result = {
+      newTDBInfo(db_1_, "admin", default_json_),
+      newTDBInfo(db_2_, "admin", generic_json_)};
+  const auto& [db_handler, adm_session] = getDbHandlerAndSessionId();
+  db_handler->put_immerse_database_metadata(adm_session, generic_json_, db_2_);
+  checkGetDatabasesResult(db_handler, adm_session, expected_result);
+}
+TEST_F(ImmerseSettingsTest, UserPutDatabaseMetadata_Invalid) {
+  const auto& [db_handler, _] = getDbHandlerAndSessionId();
+  TSessionId usr_session;
+  login(user_1_, "test_pass", shared::kDefaultDbName, usr_session);
+  executeLambdaAndAssertException(
+      [&, db_handler = db_handler]() {
+        db_handler->put_immerse_database_metadata(usr_session, generic_json_, db_1_);
+      },
+      "Immerse database metadata can only be altered by super users");
+}
+
+TEST_F(ImmerseSettingsTest, SuperUser_PutUserMetadata_NonExistentUser) {
+  const std::vector<TImmerseUserMetadata> put_request = {
+      newImmerseUserMetadata("non_user_", generic_json_)};
+  loginAdmin();
+  const auto& [db_handler, adm_session] = getDbHandlerAndSessionId();
+  executeLambdaAndAssertException(
+      [&, db_handler = db_handler, adm_session = adm_session]() {
+        db_handler->put_immerse_users_metadata(adm_session, put_request);
+      },
+      "Cannot put_immerse_users_metadata for user " + non_user_ +
+          ", user does not exist");
+}
+
+TEST_F(ImmerseSettingsTest, SuperUser_PutDatabaseMetadata_NonExistentDatabase) {
+  const auto& [db_handler, adm_session] = getDbHandlerAndSessionId();
+  executeLambdaAndAssertException(
+      [&, db_handler = db_handler, adm_session = adm_session]() {
+        db_handler->put_immerse_database_metadata(adm_session, generic_json_, non_db_);
+      },
+      "Cannot put_immerse_database_metadata for database, database " + non_db_ +
+          " does not exist");
+}
+
+TEST_F(ImmerseSettingsTest, User_PutUserMetadata_OtherUser) {
+  const std::vector<TImmerseUserMetadata> put_request = {
+      newImmerseUserMetadata(user_1_, generic_json_)};
+  const auto& [db_handler, _] = getDbHandlerAndSessionId();
+  TSessionId usr_session;
+  login(user_2_, "test_pass", shared::kDefaultDbName, usr_session);
+  executeLambdaAndAssertException(
+      [&, db_handler = db_handler]() {
+        db_handler->put_immerse_users_metadata(usr_session, put_request);
+      },
+      "User cannot set immerse_users_metadata for other users.");
+}
+TEST_F(ImmerseSettingsTest, User_PutUserMetadata_DuplicateUser) {
+  const std::vector<TImmerseUserMetadata> put_request = {
+      newImmerseUserMetadata(user_1_, generic_json_),
+      newImmerseUserMetadata(user_1_, default_json_)};
+  const auto& [db_handler, _] = getDbHandlerAndSessionId();
+  TSessionId usr_session;
+  login(user_1_, "test_pass", shared::kDefaultDbName, usr_session);
+  executeLambdaAndAssertException(
+      [&, db_handler = db_handler]() {
+        db_handler->put_immerse_users_metadata(usr_session, put_request);
+      },
+      "Immerse metadata was provided more than once for user " + user_1_);
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
