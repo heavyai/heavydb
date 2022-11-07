@@ -454,8 +454,7 @@ std::string const DBHandler::createInMemoryCalciteSession(
                                             true,
                                             -1,
                                             true,
-                                            false,
-                                            "");
+                                            false);
   const auto emplace_ret = calcite_sessions_.emplace(
       session_id,
       std::make_shared<Catalog_Namespace::SessionInfo>(
@@ -2725,61 +2724,6 @@ void DBHandler::get_users(std::vector<std::string>& user_names,
   }
 }
 
-void DBHandler::put_immerse_users_metadata(
-    const TSessionId& session_id_or_json,
-    const std::vector<TImmerseUserMetadata>& immerse_user_metadata_list) {
-  heavyai::RequestInfo const request_info(session_id_or_json);
-  SET_REQUEST_ID(request_info.requestId());
-  auto stdlog = STDLOG(get_session_ptr(request_info.sessionId()));
-  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  auto session_ptr = stdlog.getConstSessionInfo();
-  const auto& user = session_ptr->get_currentUser();
-
-  std::set<std::string /*username*/> duplicate_username_check;
-  std::vector<Catalog_Namespace::UserMetadata> valid_put_requests;
-
-  for (auto current_request : immerse_user_metadata_list) {
-    Catalog_Namespace::UserMetadata user_metadata;
-    if (!SysCatalog::instance().getMetadataForUser(to_upper(current_request.username),
-                                                   user_metadata)) {
-      THROW_DB_EXCEPTION("Cannot put_immerse_users_metadata for user " +
-                         current_request.username + ", user does not exist");
-    }
-    if (!user.isSuper && to_upper(user.userName) != to_upper(current_request.username)) {
-      THROW_DB_EXCEPTION("User cannot set immerse_users_metadata for other users.");
-    }
-    if (duplicate_username_check.find(to_upper(current_request.username)) !=
-        duplicate_username_check.end()) {
-      THROW_DB_EXCEPTION("Immerse metadata was provided more than once for user " +
-                         current_request.username);
-    } else {
-      duplicate_username_check.insert(to_upper(current_request.username));
-    }
-    valid_put_requests.emplace_back(user_metadata);
-    valid_put_requests.back().immerse_metadata_json =
-        current_request.immerse_metadata_json;
-  }
-  SysCatalog::instance().putImmerseUsersMetadata(valid_put_requests);
-}
-
-void DBHandler::get_users_info(std::vector<TUserInfo>& return_list,
-                               const TSessionId& session_id_or_json) {
-  heavyai::RequestInfo const request_info(session_id_or_json);
-  SET_REQUEST_ID(request_info.requestId());
-  auto stdlog = STDLOG(get_session_ptr(request_info.sessionId()));
-  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  auto session_ptr = stdlog.getConstSessionInfo();
-  const auto& user = session_ptr->get_currentUser();
-
-  for (const auto& user_info : SysCatalog::instance().getUsersInfo(user)) {
-    TUserInfo t_user_info;
-    t_user_info.username = std::move(user_info.username);
-    t_user_info.roles = std::move(user_info.roles);
-    t_user_info.immerse_metadata_json = std::move(user_info.immerse_metadata_json);
-    return_list.emplace_back(std::move(t_user_info));
-  }
-}
-
 void DBHandler::get_version(std::string& version) {
   version = MAPD_RELEASE;
 }
@@ -2914,27 +2858,6 @@ void DBHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
   }
 }
 
-void DBHandler::put_immerse_database_metadata(const TSessionId& session_id_or_json,
-                                              const std::string& immerse_metadata_json,
-                                              const std::string& database_name) {
-  heavyai::RequestInfo const request_info(session_id_or_json);
-  SET_REQUEST_ID(request_info.requestId());
-  auto stdlog = STDLOG(get_session_ptr(request_info.sessionId()));
-  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  auto session_ptr = stdlog.getConstSessionInfo();
-  const auto& user = session_ptr->get_currentUser();
-
-  if (!user.isSuper) {
-    THROW_DB_EXCEPTION("Immerse database metadata can only be altered by super users");
-  }
-  if (!SysCatalog::instance().getDB(database_name).has_value()) {
-    THROW_DB_EXCEPTION("Cannot put_immerse_database_metadata for database, database " +
-                       database_name + " does not exist");
-  }
-
-  SysCatalog::instance().putImmerseDatabaseMetadata(database_name, immerse_metadata_json);
-}
-
 void DBHandler::get_databases(std::vector<TDBInfo>& dbinfos,
                               const TSessionId& session_id_or_json) {
   heavyai::RequestInfo const request_info(session_id_or_json);
@@ -2949,7 +2872,6 @@ void DBHandler::get_databases(std::vector<TDBInfo>& dbinfos,
     TDBInfo dbinfo;
     dbinfo.db_name = std::move(db.dbName);
     dbinfo.db_owner = std::move(db.dbOwnerName);
-    dbinfo.immerse_metadata_json = std::move(db.immerse_metadata_json);
     dbinfos.push_back(std::move(dbinfo));
   }
 }

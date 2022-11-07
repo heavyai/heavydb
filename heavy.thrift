@@ -202,7 +202,6 @@ struct TDataFrame {
 struct TDBInfo {
   1: string db_name;
   2: string db_owner;
-  3: string immerse_metadata_json;
 }
 
 exception TDBException {
@@ -654,17 +653,6 @@ struct TLeafInfo {
   2: i32 num_leaves;
 }
 
-struct TImmerseUserMetadata {
-  1: string username;
-  2: string immerse_metadata_json;
-}
-
-struct TUserInfo {
-  1: string username;
-  2: list<string> roles;
-  3: string immerse_metadata_json;
-}
-
 service Heavy {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TDBException e)
@@ -685,6 +673,7 @@ service Heavy {
   TTableDetails get_internal_table_details(1: TSessionId session, 2: string table_name, 3: bool include_system_columns = true) throws (1: TDBException e)
   TTableDetails get_internal_table_details_for_database(1: TSessionId session, 2: string table_name, 3: string database_name) throws (1: TDBException e)
   list<string> get_users(1: TSessionId session) throws (1: TDBException e)
+  list<TDBInfo> get_databases(1: TSessionId session) throws (1: TDBException e)
   string get_version() throws (1: TDBException e)
   void start_heap_profile(1: TSessionId session) throws (1: TDBException e)
   void stop_heap_profile(1: TSessionId session) throws (1: TDBException e)
@@ -782,10 +771,4 @@ service Heavy {
   list<string> get_function_names(1: TSessionId session) throws (1: TDBException e)
   list<string> get_runtime_function_names(1: TSessionId session) throws (1: TDBException e)
   list<extension_functions.TUserDefinedFunction> get_function_details(1: TSessionId session, 2: list<string> udf_names) throws (1: TDBException e)
-
-  #immerse, settings api
-  void put_immerse_users_metadata(1: TSessionId session, 2: list<TImmerseUserMetadata> immerse_user_metadata_list) throws (1: TDBException e)
-  void put_immerse_database_metadata(1: TSessionId session, 2: string immerse_metadata_json, 3: string database_name) throws (1: TDBException e)
-  list<TUserInfo> get_users_info(1: TSessionId session) throws (1: TDBException e)
-  list<TDBInfo> get_databases(1: TSessionId session) throws (1: TDBException e)
 }

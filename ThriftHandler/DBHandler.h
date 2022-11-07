@@ -252,14 +252,6 @@ class DBHandler : public HeavyIf {
                                                const std::string& table_name,
                                                const std::string& database_name) override;
   void get_users(std::vector<std::string>& _return, const TSessionId& session) override;
-  void put_immerse_users_metadata(
-      const TSessionId& session,
-      const std::vector<TImmerseUserMetadata>& immerse_user_metadata_list) override;
-  void get_users_info(std::vector<TUserInfo>& return_list,
-                      const TSessionId& session) override;
-  void put_immerse_database_metadata(const TSessionId& session,
-                                     const std::string& immerse_metadata_json,
-                                     const std::string& database_name) override;
   void get_databases(std::vector<TDBInfo>& _return, const TSessionId& session) override;
 
   void get_version(std::string& _return) override;
