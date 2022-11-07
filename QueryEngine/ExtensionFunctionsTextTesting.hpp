@@ -16,11 +16,6 @@
 
 #include "heavydbTypes.h"
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
-#endif
-
 EXTENSION_NOINLINE
 int32_t text_encoding_none_length(const TextEncodingNone& t) {
   return t.size();
@@ -93,8 +88,4 @@ TextEncodingDict text_encoding_dict_copy_from(RowFunctionManager& mgr,
   }
   return mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, "copy: " + str);
 }
-#endif
-
-#ifdef __clang__
-#pragma clang diagnostic pop
 #endif

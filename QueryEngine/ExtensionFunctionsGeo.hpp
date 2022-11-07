@@ -9,11 +9,6 @@
 #define UNLIKELY
 #endif
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
-#endif
-
 // #define DEBUG_STMT(x) x;
 #define DEBUG_STMT(x)
 
