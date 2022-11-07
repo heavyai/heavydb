@@ -18,6 +18,11 @@
 #include "Shared/toString.h"
 #include "heavydbTypes.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
+#endif
+
 // To-Do: strtok_to_array with default "delimiters" value
 
 #ifndef __CUDACC__
@@ -98,3 +103,7 @@ Array<TextEncodingDict> strtok_to_array__1(RowFunctionManager& mgr,
   return out_arr;
 }
 #endif  // #ifndef __CUDACC__
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
