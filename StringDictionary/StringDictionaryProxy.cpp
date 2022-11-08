@@ -574,6 +574,7 @@ std::pair<const char*, size_t> StringDictionaryProxy::getStringBytes(
     return string_dict_.get()->getStringBytes(string_id);
   }
   unsigned const string_index = transientIdToIndex(string_id);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   CHECK_LT(string_index, transient_string_vec_.size());
   std::string const* const str_ptr = transient_string_vec_[string_index];
   return {str_ptr->c_str(), str_ptr->size()};
