@@ -740,8 +740,6 @@ size_t get_col_byte_width(const shared::ColumnKey& column_key) {
 std::map<shared::ColumnKey, size_t> Executor::getColumnByteWidthMap(
     const std::set<shared::TableKey>& table_ids_to_fetch,
     const bool include_lazy_fetched_cols) const {
-  using TableId = shared::TableKey;
-  using ColumnId = int;
   std::map<shared::ColumnKey, size_t> col_byte_width_map;
 
   for (const auto& fetched_col : plan_state_->columns_to_fetch_) {
