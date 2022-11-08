@@ -1094,6 +1094,26 @@ void validate_definition_levels(
   }
 }
 
+/**
+ * This function sets the definition levels to 1 for all read values in the
+ * case of required scalar/flat columns. The definition level of one informs
+ * all subsequent calls to parquet encoders to treat the read data as not null.
+ */
+void set_definition_levels_for_zero_max_definition_level_case(
+    const parquet::ColumnDescriptor* parquet_column_descriptor,
+    std::vector<int16_t>& def_levels) {
+  if (!is_valid_parquet_list_column(parquet_column_descriptor) &&
+      parquet_column_descriptor->max_definition_level() == 0) {
+    if (!parquet_column_descriptor->schema_node()->is_required()) {
+      throw std::runtime_error(
+          "Unsupported parquet column detected. Column '" +
+          parquet_column_descriptor->name() +
+          "' detected to have max definition level of 0 but is optional.");
+    }
+    def_levels.assign(def_levels.size(), 1);
+  }
+}
+
 void validate_max_repetition_and_definition_level(
     const ColumnDescriptor* omnisci_column_descriptor,
     const parquet::ColumnDescriptor* parquet_column_descriptor) {
@@ -1119,11 +1139,13 @@ void validate_max_repetition_and_definition_level(
     }
   } else {
     if (parquet_column_descriptor->max_repetition_level() != 0 ||
-        parquet_column_descriptor->max_definition_level() != 1) {
+        !(parquet_column_descriptor->max_definition_level() == 1 ||
+          parquet_column_descriptor->max_definition_level() == 0)) {
       throw std::runtime_error(
           "Incorrect schema max repetition level detected in column '" +
           parquet_column_descriptor->name() +
-          "'. Expected a max repetition level of 0 and max definition level of 1 for "
+          "'. Expected a max repetition level of 0 and max definition level of 1 or 0 "
+          "for "
           "flat column but column has a max "
           "repetition level of " +
           std::to_string(parquet_column_descriptor->max_repetition_level()) +
@@ -1843,6 +1865,9 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
 
     validate_max_repetition_and_definition_level(column_descriptor,
                                                  parquet_column_descriptor);
+    set_definition_levels_for_zero_max_definition_level_case(parquet_column_descriptor,
+                                                             def_levels);
+
     int64_t values_read = 0;
     for (int row_group_index = row_group_interval.start_index;
          row_group_index <= row_group_interval.end_index;

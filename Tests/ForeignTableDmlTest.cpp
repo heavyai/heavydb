@@ -4531,6 +4531,30 @@ TEST_F(SelectQueryTest, CsvNoTrimSpaces) {
   // clang-format on
 }
 
+TEST_F(SelectQueryTest, ParquetRequiredColumnScalars) {
+  const auto& query = getCreateForeignTableQuery(
+      "(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "txt_2 TEXT ENCODING NONE)",
+      "scalar_types_max_def_level_zero",
+      "parquet");
+  sql(query);
+
+  // clang-format off
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
+        "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
+      {False, 110L, 30500L, 2000500000L, 9000000050000000000L, 100.12f, 2.1234,
+        "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"},
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, 1000.123f, 100.1,
+        "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
+  };
+  // clang-format on
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY s;",
+                      expected_values);
+}
+
 TEST_F(SelectQueryTest, ParquetArrayInt8EmptyWithFixedLengthArray) {
   const auto& query = getCreateForeignTableQuery(
       "(tinyint_arr_empty TINYINT[1])", "int8_empty_array", "parquet");
