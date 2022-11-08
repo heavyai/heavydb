@@ -1939,6 +1939,38 @@ INSTANTIATE_TEST_SUITE_P(LocalFiles,
                          ::testing::Values("csv", "regex_parser", "parquet"),
                          FileTypeOnlyImportAndSelectTest::toString);
 
+class ParquetSpecificImportAndSelectTest : public ImportAndSelectTestBase {
+ protected:
+  ImportAndSelectTestParameters TestParam() override {
+    return {"parquet", "local", DEFAULT_FRAGMENT_ROWS, 1000000};
+  }
+};
+
+TEST_F(ParquetSpecificImportAndSelectTest, ZeroMaxDefinitionLevelScalars) {
+  auto query = createTableCopyFromAndSelect(
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "txt_2 TEXT ENCODING NONE",
+      "scalar_types_max_def_level_zero",
+      "SELECT * FROM import_test_new ORDER by s;",
+      {},
+      14);
+
+  // clang-format off
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
+        "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
+      {False, 110L, 30500L, 2000500000L, 9000000050000000000L, 100.12f, 2.1234,
+        "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"},
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, 1000.123f, 100.1,
+        "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
+  };
+  // clang-format on
+
+  validateImportStatus(3, 0, false);
+  assertResultSetEqual(expected_values, query);
+}
+
 const char* create_table_timestamps = R"(
     CREATE TABLE import_test_timestamps(
       id INT,
