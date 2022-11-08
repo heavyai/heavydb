@@ -19,6 +19,7 @@
 #include <atomic>
 #include <future>
 #include <numeric>
+#include <optional>
 #include <thread>
 
 #include "Logger/Logger.h"
@@ -49,7 +50,7 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> get_cols(
 BucketizedHashEntryInfo get_bucketized_hash_entry_info(SQLTypeInfo const& context_ti,
                                                        ExpressionRange const& col_range,
                                                        bool const is_bw_eq) {
-  using EmptyRangeSize = boost::optional<size_t>;
+  using EmptyRangeSize = std::optional<size_t>;
   auto empty_range_check = [](ExpressionRange const& col_range,
                               bool const is_bw_eq) -> EmptyRangeSize {
     if (col_range.getIntMin() > col_range.getIntMax()) {

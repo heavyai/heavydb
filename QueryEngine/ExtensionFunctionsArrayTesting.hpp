@@ -1,5 +1,10 @@
 #include "heavydbTypes.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
+#endif
+
 EXTENSION_NOINLINE int64_t raw_array_as_scalar_same_type(const int64_t* in_arr,
                                                          const int64_t val) {
   // return sum of array and val as array
@@ -43,3 +48,7 @@ EXTENSION_NOINLINE Array<int32_t> raw_array_as_array_diff_type(const int64_t* in
   array.ptr[val] = static_cast<int32_t>(val);
   return array;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

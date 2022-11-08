@@ -941,8 +941,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
       CHECK(catalog);
       fetcher_threads.push_back(std::async(
           std::launch::async,
-          [this,
-           &val_set,
+          [&val_set,
            &total_in_vals_count,
            sd,
            dd,

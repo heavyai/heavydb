@@ -991,6 +991,7 @@ std::vector<OneRow> get_rows_sorted_by_col(ResultSet& rs, const size_t col_idx) 
   return result;
 }
 
+#ifndef HAVE_TSAN
 void run_reduction(const std::vector<TargetInfo>& target_infos,
                    const QueryMemoryDescriptor& query_mem_desc,
                    NumberGenerator& generator1,
@@ -1015,6 +1016,7 @@ void run_reduction(const std::vector<TargetInfo>& target_infos,
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
   rs_manager.reduce(storage_set, Executor::UNITARY_EXECUTOR_ID);
 }
+#endif
 
 void test_reduce(const std::vector<TargetInfo>& target_infos,
                  const QueryMemoryDescriptor& query_mem_desc,
