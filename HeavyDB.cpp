@@ -492,6 +492,10 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
     LOG(FATAL) << "Failed to initialize service handler: " << e.what();
   }
 
+  // This migration will potentially run optimize queries, so it needs to be late enough
+  // in startup to allow that to happen.
+  Catalog_Namespace::SysCatalog::instance().checkDateInDaysMigration();
+
   if (g_enable_fsi) {
     foreign_storage::ForeignTableRefreshScheduler::start(g_running);
   }

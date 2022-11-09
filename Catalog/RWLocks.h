@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef RW_LOCKS_H
-#define RW_LOCKS_H
+#pragma once
 
 #include "OSDependent/heavyai_locks.h"
 #include "Shared/heavyai_shared_mutex.h"
 
 namespace Catalog_Namespace {
+class SysCatalog;
+class Catalog;
 
 /*
  *  The locking sequence for the locks below is as follows:
@@ -35,136 +36,79 @@ namespace Catalog_Namespace {
  */
 
 template <typename T>
-class read_lock {
-  const T* catalog;
-  heavyai::shared_lock<heavyai::shared_mutex> lock;
-  heavyai::shared_lock<heavyai::DistributedSharedMutex> dlock;
-  bool holds_lock;
-
-  template <typename inner_type>
-  void lock_catalog(const inner_type* cat) {
-    std::thread::id tid = std::this_thread::get_id();
-
-    if (cat->thread_holding_write_lock != tid && !inner_type::thread_holds_read_lock) {
-      if (!g_multi_instance) {
-        lock = heavyai::shared_lock<heavyai::shared_mutex>(cat->sharedMutex_);
-      } else {
-        dlock =
-            heavyai::shared_lock<heavyai::DistributedSharedMutex>(*cat->dcatalogMutex_);
-      }
-      inner_type::thread_holds_read_lock = true;
-      holds_lock = true;
-    }
-  }
-
+class cat_lock {
  public:
-  read_lock(const T* cat) : catalog(cat), holds_lock(false) { lock_catalog(cat); }
+  cat_lock(const T* cat);
+  virtual ~cat_lock();
+  virtual void lock() = 0;
+  virtual void unlock() = 0;
 
-  ~read_lock() { unlock(); }
-
-  void unlock() {
-    if (holds_lock) {
-      T::thread_holds_read_lock = false;
-      if (!g_multi_instance) {
-        lock.unlock();
-      } else {
-        dlock.unlock();
-      }
-      holds_lock = false;
-    }
-  }
+ protected:
+  const T* cat_;
+  bool holds_lock_;
 };
 
 template <typename T>
-class sqlite_lock {
+class read_lock : public cat_lock<T> {
+ public:
+  read_lock(const T* cat);
+  ~read_lock();
+  void lock() override;
+  void unlock() override;
+
+ private:
+  heavyai::shared_lock<heavyai::shared_mutex> lock_;
+  heavyai::shared_lock<heavyai::DistributedSharedMutex> dlock_;
+};
+
+template <typename T>
+class sqlite_lock : public cat_lock<T> {
+ public:
+  sqlite_lock(const T* cat);
+  ~sqlite_lock();
+  void lock() override;
+  void unlock() override;
+
+ private:
   // always obtain a read lock on catalog first
   // to ensure correct locking order
-  read_lock<T> cat_read_lock;
-  const T* catalog;
-  heavyai::unique_lock<std::mutex> lock;
-  heavyai::unique_lock<heavyai::DistributedSharedMutex> dlock;
-  bool holds_lock;
-
-  template <typename inner_type>
-  void lock_catalog(const inner_type* cat) {
-    std::thread::id tid = std::this_thread::get_id();
-
-    if (cat->thread_holding_sqlite_lock != tid) {
-      if (!g_multi_instance) {
-        lock = heavyai::unique_lock<std::mutex>(cat->sqliteMutex_);
-      } else {
-        dlock =
-            heavyai::unique_lock<heavyai::DistributedSharedMutex>(*cat->dsqliteMutex_);
-      }
-      cat->thread_holding_sqlite_lock = tid;
-      holds_lock = true;
-    }
-  }
-
- public:
-  sqlite_lock(const T* cat) : cat_read_lock(cat), catalog(cat), holds_lock(false) {
-    lock_catalog(cat);
-  }
-
-  ~sqlite_lock() { unlock(); }
-
-  void unlock() {
-    if (holds_lock) {
-      std::thread::id no_thread;
-      catalog->thread_holding_sqlite_lock = no_thread;
-      if (!g_multi_instance) {
-        lock.unlock();
-      } else {
-        dlock.unlock();
-      }
-      cat_read_lock.unlock();
-      holds_lock = false;
-    }
-  }
+  read_lock<T> cat_read_lock_;
+  heavyai::unique_lock<heavyai::shared_mutex> lock_;
+  heavyai::unique_lock<heavyai::DistributedSharedMutex> dlock_;
 };
 
 template <typename T>
-class write_lock {
-  const T* catalog;
-  heavyai::unique_lock<heavyai::shared_mutex> lock;
-  heavyai::unique_lock<heavyai::DistributedSharedMutex> dlock;
-  bool holds_lock;
-
-  template <typename inner_type>
-  void lock_catalog(const inner_type* cat) {
-    std::thread::id tid = std::this_thread::get_id();
-
-    if (cat->thread_holding_write_lock != tid) {
-      if (!g_multi_instance) {
-        lock = heavyai::unique_lock<heavyai::shared_mutex>(cat->sharedMutex_);
-      } else {
-        dlock =
-            heavyai::unique_lock<heavyai::DistributedSharedMutex>(*cat->dcatalogMutex_);
-      }
-      cat->thread_holding_write_lock = tid;
-      holds_lock = true;
-    }
-  }
-
+class write_lock : public cat_lock<T> {
  public:
-  write_lock(const T* cat) : catalog(cat), holds_lock(false) { lock_catalog(cat); }
+  write_lock(const T* cat);
+  ~write_lock();
+  void lock() override;
+  void unlock() override;
 
-  ~write_lock() { unlock(); }
+ private:
+  heavyai::unique_lock<heavyai::shared_mutex> lock_;
+  heavyai::unique_lock<heavyai::DistributedSharedMutex> dlock_;
+};
 
-  void unlock() {
-    if (holds_lock) {
-      std::thread::id no_thread;
-      catalog->thread_holding_write_lock = no_thread;
-      if (!g_multi_instance) {
-        lock.unlock();
-      } else {
-        dlock.unlock();
-      }
-      holds_lock = false;
-    }
-  }
+class cat_init_lock : public cat_lock<SysCatalog> {
+ public:
+  cat_init_lock(const SysCatalog* cat);
+  ~cat_init_lock();
+  void lock() override;
+  void unlock() override;
+
+ private:
+  // cat_init_lock does not need to support a distributed mutex because in multi-instance
+  // mode the cat_lock/sqlite_locks will handle concurrent access as they lock based on
+  // catalog db name, rather than catalog instance (they can lock between multiple catalog
+  // instances for the same db).
+  heavyai::unique_lock<heavyai::shared_mutex> lock_;
+};
+
+struct SharedMutexWrapper {
+  std::atomic<std::thread::id> thread_holding_lock;
+  heavyai::shared_mutex local_mutex;
+  std::unique_ptr<heavyai::DistributedSharedMutex> dist_mutex;
 };
 
 }  // namespace Catalog_Namespace
-
-#endif  // RW_LOCKS_H
