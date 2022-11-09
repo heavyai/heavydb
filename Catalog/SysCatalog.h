@@ -101,7 +101,7 @@ struct UserMetadata {
     }
     return *this;
   }
-  int32_t userId;
+  int32_t userId{-1};
   std::string userName;
   std::string passwd_hash;
   std::atomic<bool> isSuper{false};
