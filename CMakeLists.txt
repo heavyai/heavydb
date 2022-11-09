@@ -348,6 +348,7 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin" )
 endif()
 
 find_package(OpenSSL REQUIRED)
+add_definitions("-DOPENSSL_SUPPRESS_DEPRECATED")
 include_directories(${OPENSSL_INCLUDE_DIR})
 
 if(MSVC)
