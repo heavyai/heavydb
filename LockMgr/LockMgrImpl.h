@@ -272,7 +272,7 @@ class TableLockMgrImpl {
           table_key[CHUNK_KEY_DB_IDX]);
       CHECK(cat);
       heavyai::shared_lock<heavyai::DistributedSharedMutex> dread_lock(
-          *cat->dcatalogMutex_);
+          cat->getDistributedMutex());
     };
 
     if constexpr (T::kind == "schema") {
@@ -284,7 +284,7 @@ class TableLockMgrImpl {
             table_key[CHUNK_KEY_DB_IDX]);
         CHECK(cat);
         heavyai::shared_lock<heavyai::DistributedSharedMutex> dread_lock(
-            *cat->dcatalogMutex_);
+            cat->getDistributedMutex());
         cat->reloadTableMetadataUnlocked(table_key[CHUNK_KEY_TABLE_IDX]);
       };
 

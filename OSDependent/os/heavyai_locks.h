@@ -17,6 +17,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 
 inline bool g_multi_instance{
     false};  // TODO(sy): set true after internal testing is complete

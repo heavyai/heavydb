@@ -249,49 +249,6 @@ std::string get_data_wrapper_name(const std::string& data_wrapper_type) {
   }
   return data_wrapper;
 }
-
-foreign_storage::OptionsMap add_missing_options_for_wrapper(
-    const foreign_storage::OptionsMap& options,
-    const std::string& data_wrapper_type,
-    const std::vector<NameTypePair>& column_pairs,
-    const std::string& table_name,
-    const std::string& src_path,
-    const int32_t order_by_column_index = 0) {
-  foreign_storage::OptionsMap new_options = options;
-  if (data_wrapper_type == "regex_parser") {
-    if (options.find("LINE_REGEX") == options.end()) {
-      new_options["LINE_REGEX"] = get_line_regex(column_pairs.size());
-    }
-    if (options.find("HEADER") == options.end()) {
-      new_options["HEADER"] = "TRUE";
-    }
-  }
-
-  if (DBHandlerTestFixture::isOdbc(data_wrapper_type)) {
-    auto odbc_table_name =
-        DBHandlerTestFixture::getOdbcTableName(table_name, data_wrapper_type);
-    if (options.find("SQL_SELECT") == options.end()) {
-      std::stringstream ss;
-      ss << "select ";
-      size_t i = 0;
-      for (auto [name, type] : column_pairs) {
-        ss << name << ((++i < column_pairs.size()) ? ", " : " from " + odbc_table_name);
-      }
-      new_options["SQL_SELECT"] = ss.str();
-    }
-    if (options.find("SQL_ORDER_BY") == options.end()) {
-      CHECK_LT(static_cast<size_t>(order_by_column_index), column_pairs.size());
-      std::stringstream ss;
-      ss << column_pairs[order_by_column_index].first;
-      new_options["SQL_ORDER_BY"] = ss.str();
-    }
-  } else {
-    if (options.find("FILE_PATH") == options.end()) {
-      new_options["FILE_PATH"] = src_path;
-    }
-  }
-  return new_options;
-}
 }  // namespace
 
 /**
