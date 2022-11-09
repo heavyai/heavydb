@@ -20,7 +20,6 @@
  *
  */
 
-#include "SysCatalog.h"
 #include <algorithm>
 #include <cassert>
 #include <exception>
@@ -30,24 +29,24 @@
 #include <random>
 #include <sstream>
 #include <string_view>
-#include "Catalog.h"
-
-#include "Catalog/AuthMetadata.h"
-#include "QueryEngine/ExternalCacheInvalidators.h"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptor/map.hpp>
 #include <boost/version.hpp>
 
+#include "Catalog.h"
+#include "Catalog/AuthMetadata.h"
 #include "MapDRelease.h"
 #include "Parser/ParserNode.h"
+#include "QueryEngine/ExternalCacheInvalidators.h"
 #include "RWLocks.h"
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
+#include "SysCatalog.h"
 #include "include/bcrypt.h"
 
 using std::list;
@@ -149,6 +148,7 @@ thread_local bool SysCatalog::thread_holds_read_lock = false;
 std::mutex SysCatalog::instance_mutex_;
 std::unique_ptr<SysCatalog> SysCatalog::instance_;
 
+using cat_write_lock = write_lock<Catalog>;
 using sys_read_lock = read_lock<SysCatalog>;
 using sys_write_lock = write_lock<SysCatalog>;
 using sys_sqlite_lock = sqlite_lock<SysCatalog>;
@@ -198,15 +198,16 @@ void SysCatalog::init(const std::string& basePath,
   basePath_ = !g_multi_instance ? copy_catalog_if_read_only(basePath).string() : basePath;
   sqliteConnector_.reset(new SqliteConnector(
       shared::kSystemCatalogName, basePath_ + "/" + shared::kCatalogDirectoryName + "/"));
-  dcatalogMutex_ = std::make_unique<heavyai::DistributedSharedMutex>(
+  // Distributed mutexes can only be initialized once we have the base path.
+  mutex_desc_.dist_mutex = std::make_unique<heavyai::DistributedSharedMutex>(
       std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
           shared::kCatalogDirectoryName / (shared::kSystemCatalogName + ".lockfile"),
       [this](size_t) {
         heavyai::unique_lock<heavyai::DistributedSharedMutex> dsqlite_lock(
-            *dsqliteMutex_);
+            *sqlite_mutex_desc_.dist_mutex);
         buildMapsUnlocked();
       });
-  dsqliteMutex_ = std::make_unique<heavyai::DistributedSharedMutex>(
+  sqlite_mutex_desc_.dist_mutex = std::make_unique<heavyai::DistributedSharedMutex>(
       std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
       shared::kCatalogDirectoryName / (shared::kSystemCatalogName + ".sqlite.lockfile"));
   sys_write_lock write_lock(this);
@@ -233,6 +234,18 @@ void SysCatalog::init(const std::string& basePath,
     }
   }
   buildMaps(is_new_db);
+  if (!is_new_db && g_enable_system_tables) {
+    // info shcmea db is only initialized when the server is run (not initdb AKA
+    // is_new_db) because we don't have the runtime context (we don't know what server
+    // flags are going to be enabled).
+    if (DBMetadata db_metadata;
+        getMetadataForDB(shared::kInfoSchemaDbName, db_metadata)) {
+      // Initializing the info schema db can lead to the DataMgr erasing data while
+      // calling back into the SysCatalog and cause lock-order inversions.  If we
+      // initialize that catalog here then we can avoid any concurrency issues.
+      getCatalog(db_metadata, is_new_db);
+    }
+  }
   is_initialized_ = true;
 }
 
@@ -271,7 +284,7 @@ void SysCatalog::buildMapsUnlocked(bool is_new_db) {
   buildObjectDescriptorMapUnlocked();
   if (!is_new_db) {
     // We don't want to create the information schema db during database initialization
-    // because we don't have the appropriate context to intialize the tables.  For
+    // because we don't have the appropriate context to initialize the tables.  For
     // instance if the server is intended to run in distributed mode, initializing the
     // table as part of initdb will be missing information such as the location of the
     // string dictionary server.
@@ -296,11 +309,9 @@ void SysCatalog::buildMapsUnlocked(bool is_new_db) {
 SysCatalog::SysCatalog()
     : CommonFileOperations{basePath_}
     , aggregator_{false}
-    , sqliteMutex_{}
-    , sharedMutex_{}
-    , thread_holding_sqlite_lock{std::thread::id()}
-    , thread_holding_write_lock{std::thread::id()}
-    , dummyCatalog_{std::make_shared<Catalog>()} {}
+    , mutex_desc_{}
+    , sqlite_mutex_desc_{}
+    , cat_init_mutex_desc_{} {}
 
 SysCatalog::~SysCatalog() {
   // TODO(sy): Need to lock here to wait for other threads to complete before pulling out
@@ -1774,11 +1785,13 @@ auto get_users(SysCatalog& syscat,
 list<UserMetadata> SysCatalog::getAllUserMetadata(const int64_t dbId) {
   // this call is to return users that have some form of permissions to objects in the db
   // sadly mapd_object_permissions table is also misused to manage user roles.
+  sys_read_lock read_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   return get_users(*this, sqliteConnector_, dbId);
 }
 
 list<UserMetadata> SysCatalog::getAllUserMetadata() {
+  sys_read_lock read_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   return get_users(*this, sqliteConnector_);
 }
@@ -3012,25 +3025,29 @@ SysCatalog::getGranteesOfSharedDashboards(const std::vector<std::string>& dashbo
 }
 
 std::shared_ptr<Catalog> SysCatalog::getCatalog(const std::string& dbName) {
-  dbid_to_cat_map::const_accessor cata;
-  if (cat_map_.find(cata, to_upper(dbName))) {
-    return cata->second;
-  } else {
-    Catalog_Namespace::DBMetadata db_meta;
-    if (getMetadataForDB(dbName, db_meta)) {
-      return getCatalog(db_meta, false);
-    } else {
-      return nullptr;
+  auto upper_name = to_upper(dbName);
+  {
+    sys_read_lock read_lock(this);
+    if (auto it = cat_map_.find(upper_name); it != cat_map_.end()) {
+      return it->second;
     }
+  }
+
+  // This section creates a new entry and the child functions will acquire separate locks
+  // to do so.
+  Catalog_Namespace::DBMetadata db_meta;
+  if (getMetadataForDB(upper_name, db_meta)) {
+    return getCatalog(db_meta, false);
+  } else {
+    return nullptr;
   }
 }
 
 std::shared_ptr<Catalog> SysCatalog::getCatalog(const int32_t db_id) {
-  dbid_to_cat_map::const_accessor cata;
-  for (dbid_to_cat_map::iterator cat_it = cat_map_.begin(); cat_it != cat_map_.end();
-       ++cat_it) {
-    if (cat_it->second->getDatabaseId() == db_id) {
-      return cat_it->second;
+  sys_read_lock read_lock(this);
+  for (auto& [key, cat] : cat_map_) {
+    if (cat->getDatabaseId() == db_id) {
+      return cat;
     }
   }
   return nullptr;
@@ -3039,30 +3056,53 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const int32_t db_id) {
 std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is_new_db) {
   const auto key = to_upper(curDB.dbName);
   {
-    dbid_to_cat_map::const_accessor cata;
-    if (cat_map_.find(cata, key)) {
-      return cata->second;
+    sys_read_lock read_lock(this);
+    if (auto it = cat_map_.find(key); it != cat_map_.end()) {
+      return it->second;
     }
   }
 
-  // Catalog doesnt exist
-  // has to be made outside of lock as migration uses cat
-  auto cat = std::make_shared<Catalog>(
-      basePath_, curDB, dataMgr_, string_dict_hosts_, calciteMgr_, is_new_db);
+  // No cat found and we have the init lock, so we know no other thread is initializing
+  // a catalog.  Initialize a new catalog and add it to the map.
+  std::shared_ptr<Catalog> cat;
+  // There are some syscat values (root_user & user_name_by_user_id) that are needed for
+  // catalog initialization.  We would rather acquire them here and pass them in so that
+  // the Catalog does not need to reach back and lock the SysCatalog.
+  auto users = getAllUserMetadata();
+  std::map<int32_t, std::string> user_name_by_user_id;
+  for (const auto& user : users) {
+    user_name_by_user_id[user.userId] = user.userName;
+  }
+  UserMetadata root_user;
+  CHECK(getMetadataForUserById(shared::kRootUserId, root_user));
 
-  dbid_to_cat_map::accessor cata;
-
-  if (cat_map_.find(cata, key)) {
-    return cata->second;
+  {
+    // Hold a lock here to prevent concurrent initialization of catalogs.
+    // Note: cat_init_lock is not (and does not need to be) a distributed mutex.  See
+    // RWLocks.cpp for details.
+    cat_init_lock cat_lock(this);
+    cat = std::make_shared<Catalog>(basePath_,
+                                    curDB,
+                                    dataMgr_,
+                                    string_dict_hosts_,
+                                    calciteMgr_,
+                                    is_new_db,
+                                    user_name_by_user_id,
+                                    root_user);
   }
 
-  cat_map_.insert(cata, key);
-  cata->second = cat;
-
+  // Check again for the catalog, as another thread may have added it while we were
+  // waiting for the initialization lock.
+  sys_write_lock write_lock(this);
+  if (auto it = cat_map_.find(key); it != cat_map_.end()) {
+    return it->second;
+  }
+  cat_map_.emplace(key, cat);
   return cat;
 }
 
 void SysCatalog::removeCatalog(const std::string& dbName) {
+  sys_write_lock write_lock(this);
   cat_map_.erase(to_upper(dbName));
 }
 
@@ -3186,6 +3226,38 @@ void SysCatalog::rebuildObjectMapsUnlocked() {
   buildObjectDescriptorMapUnlocked();
 }
 
+void SysCatalog::checkDateInDaysMigration() const {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  static const std::string date_in_days_migration{"date_in_days_column"};
+  if (!hasExecutedMigration(date_in_days_migration)) {
+    auto cats = Catalog_Namespace::SysCatalog::instance().getCatalogsForAllDbs();
+    for (auto& cat : cats) {
+      cat->checkDateInDaysColumnMigration();
+    }
+    recordExecutedMigration(date_in_days_migration);
+  }
+}
+
+heavyai::DistributedSharedMutex& SysCatalog::getDistributedMutex() const {
+  CHECK(mutex_desc_.dist_mutex);
+  return *mutex_desc_.dist_mutex;
+}
+
+SysCatalog& SysCatalog::instance() {
+  std::unique_lock lk(instance_mutex_);
+  if (!instance_) {
+    instance_.reset(new SysCatalog());
+  }
+  return *instance_;
+}
+
+void SysCatalog::destroy() {
+  std::unique_lock lk(instance_mutex_);
+  instance_.reset();
+  migrations::MigrationMgr::destroy();
+}
+
 const TableDescriptor* get_metadata_for_table(const ::shared::TableKey& table_key,
                                               bool populate_fragmenter) {
   const auto catalog = SysCatalog::instance().getCatalog(table_key.db_id);
@@ -3198,4 +3270,5 @@ const ColumnDescriptor* get_metadata_for_column(const ::shared::ColumnKey& colum
   CHECK(catalog);
   return catalog->getMetadataForColumn(column_key.table_id, column_key.column_id);
 }
+
 }  // namespace Catalog_Namespace

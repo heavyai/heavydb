@@ -14,6 +14,7 @@ set(catalog_source_files
     DdlCommandExecutor.cpp
     DdlCommandExecutor.h
     RefreshTimeCalculator.cpp
+    RWLocks.cpp
 )
 
 get_target_property(StringDictionary_BINARY_DIR StringDictionary BINARY_DIR)
