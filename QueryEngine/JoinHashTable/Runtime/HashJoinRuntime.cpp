@@ -902,8 +902,7 @@ template <typename SLOT_SELECTOR>
 DEVICE void fill_row_ids_impl(int32_t* buff,
                               const int64_t hash_entry_count,
                               const JoinColumn join_column,
-                              const JoinColumnTypeInfo type_info,
-                              const bool for_window_framing
+                              const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
                               ,
                               const int32_t* sd_inner_to_outer_translation_map,
@@ -916,9 +915,6 @@ DEVICE void fill_row_ids_impl(int32_t* buff,
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   int32_t* id_buff = count_buff + hash_entry_count;
-  int32_t* reversed_id_buff =
-      for_window_framing ? id_buff + join_column.num_elems : nullptr;
-
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -955,9 +951,83 @@ DEVICE void fill_row_ids_impl(int32_t* buff,
     const auto bin_idx = pos_ptr - pos_buff;
     const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
     id_buff[id_buff_idx] = static_cast<int32_t>(index);
-    if (for_window_framing) {
-      reversed_id_buff[index] = id_buff_idx;
+  }
+}
+
+template <typename SLOT_SELECTOR>
+DEVICE void fill_row_ids_for_window_framing_impl(
+    int32_t* buff,
+    const int64_t hash_entry_count,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info
+#ifndef __CUDACC__
+    ,
+    const int32_t* sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count
+#endif
+    ,
+    SLOT_SELECTOR slot_selector) {
+  int32_t* pos_buff = buff;
+  int32_t* count_buff = buff + hash_entry_count;
+  int32_t* id_buff = count_buff + hash_entry_count;
+  int32_t* reversed_id_buff = id_buff + join_column.num_elems;
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+
+#endif
+  if (join_column.num_elems == 0) {
+    return;
+  }
+  JoinColumnTyped col{&join_column, &type_info};
+  bool all_nulls = hash_entry_count == 1 && type_info.min_val == 0 &&
+                   type_info.max_val == -1 &&
+                   (*col.begin()).element == type_info.null_val;
+  if (all_nulls) {
+    int32_t thread_idx = -1;
+#ifdef __CUDACC__
+    thread_idx = threadIdx.x;
+#else
+    thread_idx = cpu_thread_idx;
+#endif
+    if (thread_idx == 0) {
+      pos_buff[0] = 0;
+      count_buff[0] = join_column.num_elems - 1;
+      for (size_t i = 0; i < join_column.num_elems; i++) {
+        reversed_id_buff[i] = i;
+      }
     }
+    return;
+  }
+  for (auto item : col.slice(start, step)) {
+    const size_t index = item.index;
+    int64_t elem = item.element;
+    if (elem == type_info.null_val) {
+      elem = type_info.translated_null_val;
+    }
+#ifndef __CUDACC__
+    if (sd_inner_to_outer_translation_map && elem != type_info.translated_null_val) {
+      const auto outer_id = map_str_id_to_outer_dict(elem,
+                                                     min_inner_elem,
+                                                     type_info.min_val,
+                                                     type_info.max_val,
+                                                     sd_inner_to_outer_translation_map);
+      if (outer_id == StringDictionary::INVALID_STR_ID) {
+        continue;
+      }
+      elem = outer_id;
+    }
+#endif
+    auto pos_ptr = slot_selector(pos_buff, elem);
+    const auto bin_idx = pos_ptr - pos_buff;
+    auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
+    id_buff[id_buff_idx] = static_cast<int32_t>(index);
+    reversed_id_buff[index] = id_buff_idx;
   }
 }
 
@@ -978,20 +1048,35 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
     return SUFFIX(get_hash_slot)(pos_buff, elem, type_info.min_val);
   };
 
-  fill_row_ids_impl(buff,
-                    hash_entry_count,
-                    join_column,
-                    type_info,
-                    for_window_framing
+  if (!for_window_framing) {
+    fill_row_ids_impl(buff,
+                      hash_entry_count,
+                      join_column,
+                      type_info
 #ifndef __CUDACC__
-                    ,
-                    sd_inner_to_outer_translation_map,
-                    min_inner_elem,
-                    cpu_thread_idx,
-                    cpu_thread_count
+                      ,
+                      sd_inner_to_outer_translation_map,
+                      min_inner_elem,
+                      cpu_thread_idx,
+                      cpu_thread_count
 #endif
-                    ,
-                    slot_sel);
+                      ,
+                      slot_sel);
+  } else {
+    fill_row_ids_for_window_framing_impl(buff,
+                                         hash_entry_count,
+                                         join_column,
+                                         type_info
+#ifndef __CUDACC__
+                                         ,
+                                         sd_inner_to_outer_translation_map,
+                                         min_inner_elem,
+                                         cpu_thread_idx,
+                                         cpu_thread_count
+#endif
+                                         ,
+                                         slot_sel);
+  }
 }
 
 GLOBAL void SUFFIX(fill_row_ids_bucketized)(
@@ -1015,11 +1100,11 @@ GLOBAL void SUFFIX(fill_row_ids_bucketized)(
                                             type_info.translated_null_val,
                                             bucket_normalization);
   };
+
   fill_row_ids_impl(buff,
                     hash_entry_count,
                     join_column,
-                    type_info,
-                    false
+                    type_info
 #ifndef __CUDACC__
                     ,
                     sd_inner_to_outer_translation_map,
@@ -1111,12 +1196,10 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
                                          shard_info.num_shards,
                                          shard_info.device_count);
   };
-
   fill_row_ids_impl(buff,
                     hash_entry_count,
                     join_column,
-                    type_info,
-                    false
+                    type_info
 #ifndef __CUDACC__
                     ,
                     sd_inner_to_outer_translation_map,
@@ -1159,8 +1242,7 @@ GLOBAL void SUFFIX(fill_row_ids_sharded_bucketized)(
   fill_row_ids_impl(buff,
                     hash_entry_count,
                     join_column,
-                    type_info,
-                    false
+                    type_info
 #ifndef __CUDACC__
                     ,
                     sd_inner_to_outer_translation_map,
@@ -1474,7 +1556,6 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
   for (auto& child : pos_threads) {
     child.get();
   }
-
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
   std::vector<std::future<void>> rowid_threads;
   for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {

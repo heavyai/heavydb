@@ -75,7 +75,7 @@ WindowFunctionContext::WindowFunctionContext(
   dummy_payload_ =
       reinterpret_cast<int32_t*>(checked_malloc(elem_count_ * sizeof(int32_t)));
   std::iota(dummy_payload_, dummy_payload_ + elem_count_, int32_t(0));
-  if (window_func_->hasFraming() ||
+  if (window_func_->hasFraming() || window_func_->isMissingValueFillingFunction() ||
       window_func_->getKind() == SqlWindowFunctionKind::NTH_VALUE) {
     // in this case, we consider all rows of the row belong to the same and only
     // existing partition
@@ -122,7 +122,7 @@ WindowFunctionContext::WindowFunctionContext(
   size_t partition_count = partitionCount();
   partition_start_offset_ =
       reinterpret_cast<int64_t*>(checked_calloc(partition_count + 1, sizeof(int64_t)));
-  if (window_func_->hasFraming()) {
+  if (window_func_->hasFraming() || window_func_->isMissingValueFillingFunction()) {
     aggregate_trees_depth_ =
         reinterpret_cast<size_t*>(checked_calloc(partition_count, sizeof(size_t)));
     ordered_partition_null_start_pos_ =
@@ -560,18 +560,19 @@ void WindowFunctionContext::compute(
       elem_count_ * window_function_buffer_element_size(window_func_->getKind());
   output_ = static_cast<int8_t*>(row_set_mem_owner_->allocate(output_buf_sz,
                                                               /*thread_idx=*/0));
-  const bool is_window_function_aggregate_or_has_framing =
-      window_function_is_aggregate(window_func_->getKind()) || window_func_->hasFraming();
-  if (is_window_function_aggregate_or_has_framing) {
+  bool const is_agg_func = window_function_is_aggregate(window_func_->getKind());
+  bool const need_window_partition_buf =
+      window_func_->hasFraming() || window_func_->isMissingValueFillingFunction();
+  if (is_agg_func || need_window_partition_buf) {
     fillPartitionStart();
     if (window_function_requires_peer_handling(window_func_) ||
-        window_func_->hasFraming()) {
+        need_window_partition_buf) {
       fillPartitionEnd();
     }
   }
   std::unique_ptr<int64_t[]> scratchpad;
   int64_t* intermediate_output_buffer;
-  if (is_window_function_aggregate_or_has_framing) {
+  if (is_agg_func || need_window_partition_buf) {
     intermediate_output_buffer = reinterpret_cast<int64_t*>(output_);
   } else {
     output_buf_sz = sizeof(int64_t) * elem_count_;
@@ -592,7 +593,7 @@ void WindowFunctionContext::compute(
             << ")";
     DEBUG_TIMER("Window Function Cached Sorted Partition Copy");
     std::memcpy(intermediate_output_buffer, sorted_partition->data(), output_buf_sz);
-    if (window_func_->hasFraming()) {
+    if (need_window_partition_buf) {
       sorted_partition_buf_ = sorted_partition;
     }
   } else {
@@ -625,7 +626,7 @@ void WindowFunctionContext::compute(
     bool can_access_sorted_partition =
         sorted_partition_ref_cnt_it != sorted_partition_key_ref_count_map.end() &&
         sorted_partition_ref_cnt_it->second > 1;
-    if (can_access_sorted_partition || window_func_->hasFraming()) {
+    if (can_access_sorted_partition || need_window_partition_buf) {
       // keep the sorted partition only if it will be reused from other window function
       // context of this query
       sorted_partition_buf_ = std::make_shared<std::vector<int64_t>>(elem_count_);
@@ -642,7 +643,7 @@ void WindowFunctionContext::compute(
     }
   }
 
-  if (window_func_->hasFraming()) {
+  if (need_window_partition_buf) {
     const auto compute_ordered_partition_null_range = [=](const size_t start,
                                                           const size_t end) {
       for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
@@ -744,7 +745,7 @@ void WindowFunctionContext::compute(
     compute_partitions(0, partitionCount());
   }
 
-  if (is_window_function_aggregate_or_has_framing) {
+  if (is_agg_func || need_window_partition_buf) {
     // If window function is aggregate we were able to write to the final output buffer
     // directly in computePartition and we are done.
     return;
@@ -1426,7 +1427,9 @@ void WindowFunctionContext::computePartitionBuffer(
     case SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME:
     case SqlWindowFunctionKind::LAST_VALUE_IN_FRAME:
     case SqlWindowFunctionKind::COUNT_IF:
-    case SqlWindowFunctionKind::SUM_IF: {
+    case SqlWindowFunctionKind::SUM_IF:
+    case SqlWindowFunctionKind::FORWARD_FILL:
+    case SqlWindowFunctionKind::BACKWARD_FILL: {
       const auto partition_row_offsets = payload() + offset;
       if (window_function_requires_peer_handling(window_func)) {
         index_to_partition_end(partitionEnd(),

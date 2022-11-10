@@ -483,7 +483,7 @@ inline int64_t compute_current_row_idx_in_frame(const int64_t num_elems,
   }
   int64_t target_offset = l;
   int64_t candidate_row_idx = partition_rowid_buf[ordered_index_buf[target_offset]];
-  while (col_buf[candidate_row_idx] == target_value) {
+  while (col_buf[candidate_row_idx] == target_value && target_offset < num_elems) {
     if (candidate_row_idx == cur_row_idx) {
       return target_offset;
     }
@@ -1067,6 +1067,60 @@ DEF_HANDLE_NULL_FOR_WINDOW_FRAMING_AGG(double, int64_t)
 DEF_HANDLE_NULL_FOR_WINDOW_FRAMING_AGG(double, double)
 DEF_HANDLE_NULL_FOR_WINDOW_FRAMING_AGG(int64_t, int64_t)
 #undef DEF_HANDLE_NULL_FOR_WINDOW_FRAMING_AGG
+
+template <typename T>
+T fill_missing_value(int64_t const cur_idx,
+                     T const null_val,
+                     T* const col_buf,
+                     int64_t const num_elems_in_partition,
+                     int32_t* const partition_rowid_buf,
+                     int64_t* const ordered_index_buf,
+                     bool const is_forward_fill) {
+  T const cur_val = col_buf[partition_rowid_buf[ordered_index_buf[cur_idx]]];
+  if (cur_val == null_val) {
+    if (is_forward_fill) {
+      for (int64_t cand_idx = cur_idx - 1; cand_idx >= 0; --cand_idx) {
+        T const candidate_val = col_buf[partition_rowid_buf[ordered_index_buf[cand_idx]]];
+        if (candidate_val != null_val) {
+          return candidate_val;
+        }
+      }
+    } else {
+      for (int64_t cand_idx = cur_idx + 1; cand_idx < num_elems_in_partition;
+           ++cand_idx) {
+        T const candidate_val = col_buf[partition_rowid_buf[ordered_index_buf[cand_idx]]];
+        if (candidate_val != null_val) {
+          return candidate_val;
+        }
+      }
+    }
+  }
+  return cur_val;
+}
+#define DEF_FILL_MISSING_VALUE(col_type)                                            \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE col_type fill_##col_type##_missing_value( \
+      int64_t const cur_row_idx_in_frame,                                           \
+      col_type const null_val,                                                      \
+      col_type* const col_buf,                                                      \
+      int64_t const num_elems_in_partition,                                         \
+      int32_t* const partition_rowid_buf,                                           \
+      int64_t* const ordered_index_buf,                                             \
+      bool const is_forward_fill) {                                                 \
+    return fill_missing_value<col_type>(cur_row_idx_in_frame,                       \
+                                        null_val,                                   \
+                                        col_buf,                                    \
+                                        num_elems_in_partition,                     \
+                                        partition_rowid_buf,                        \
+                                        ordered_index_buf,                          \
+                                        is_forward_fill);                           \
+  }
+DEF_FILL_MISSING_VALUE(int8_t)
+DEF_FILL_MISSING_VALUE(int16_t)
+DEF_FILL_MISSING_VALUE(int32_t)
+DEF_FILL_MISSING_VALUE(int64_t)
+DEF_FILL_MISSING_VALUE(float)
+DEF_FILL_MISSING_VALUE(double)
+#undef DEF_FILL_MISSING_VALUE
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t agg_sum(int64_t* agg, const int64_t val) {
   const auto old = *agg;

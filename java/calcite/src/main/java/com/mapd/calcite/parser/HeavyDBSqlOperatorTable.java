@@ -32,9 +32,7 @@ import org.apache.calcite.rel.metadata.RelColumnMapping;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeFactory.FieldInfoBuilder;
-import org.apache.calcite.rel.type.RelDataTypeFamily;
 import org.apache.calcite.schema.FunctionParameter;
-import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlCallBinding;
@@ -57,7 +55,6 @@ import org.apache.calcite.sql.SqlWriter;
 import org.apache.calcite.sql.fun.SqlArrayValueConstructor;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParserPos;
-import org.apache.calcite.sql.type.ArraySqlType;
 import org.apache.calcite.sql.type.InferTypes;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
@@ -283,6 +280,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new Mode());
     addOperator(new Sample());
     addOperator(new LastSample());
+    addOperator(new ForwardFill());
+    addOperator(new BackwardFill());
 
     // window functions on window frame
     addOperator(new NthValueInFrame());
@@ -3227,6 +3226,46 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.TIMESTAMP, 9);
+    }
+  }
+
+  public class ForwardFill extends SqlAggFunction {
+    public ForwardFill() {
+      super("FORWARD_FILL",
+              null,
+              SqlKind.WINDOW,
+              ReturnTypes.ARG0,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM,
+              false,
+              true,
+              Optionality.FORBIDDEN);
+    }
+
+    @Override
+    public boolean allowsFraming() {
+      return false;
+    }
+  }
+
+  public class BackwardFill extends SqlAggFunction {
+    public BackwardFill() {
+      super("BACKWARD_FILL",
+              null,
+              SqlKind.WINDOW,
+              ReturnTypes.ARG0,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM,
+              false,
+              true,
+              Optionality.FORBIDDEN);
+    }
+
+    @Override
+    public boolean allowsFraming() {
+      return false;
     }
   }
 }

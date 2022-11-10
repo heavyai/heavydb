@@ -31,19 +31,15 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
     case SqlWindowFunctionKind::ROW_NUMBER:
     case SqlWindowFunctionKind::RANK:
     case SqlWindowFunctionKind::DENSE_RANK:
-    case SqlWindowFunctionKind::NTILE: {
-      // they are always evaluated on the entire partition
+    case SqlWindowFunctionKind::NTILE:
       return code_generator.codegenWindowPosition(window_func_context,
                                                   code_generator.posArg(nullptr));
-    }
     case SqlWindowFunctionKind::PERCENT_RANK:
-    case SqlWindowFunctionKind::CUME_DIST: {
-      // they are always evaluated on the entire partition
+    case SqlWindowFunctionKind::CUME_DIST:
       return cgen_state_->emitCall("percent_window_func",
                                    {cgen_state_->llInt(reinterpret_cast<const int64_t>(
                                         window_func_context->output())),
                                     code_generator.posArg(nullptr)});
-    }
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
     case SqlWindowFunctionKind::FIRST_VALUE:
@@ -63,20 +59,18 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
     case SqlWindowFunctionKind::SUM:
     case SqlWindowFunctionKind::SUM_IF:
     case SqlWindowFunctionKind::COUNT:
-    case SqlWindowFunctionKind::COUNT_IF: {
-      // they are always evaluated on the current frame
+    case SqlWindowFunctionKind::COUNT_IF:
       return codegenWindowFunctionAggregate(co);
-    }
     case SqlWindowFunctionKind::LEAD_IN_FRAME:
     case SqlWindowFunctionKind::LAG_IN_FRAME:
     case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME:
     case SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME:
-    case SqlWindowFunctionKind::LAST_VALUE_IN_FRAME: {
+    case SqlWindowFunctionKind::LAST_VALUE_IN_FRAME:
+    case SqlWindowFunctionKind::FORWARD_FILL:
+    case SqlWindowFunctionKind::BACKWARD_FILL:
       return codegenWindowNavigationFunctionOnFrame(co);
-    }
-    default: {
+    default:
       LOG(FATAL) << "Invalid window function kind";
-    }
   }
   return nullptr;
 }
@@ -378,9 +372,6 @@ llvm::Value* Executor::codegenWindowNavigationFunctionOnFrame(
     return target_col_null_val_lv;
   }
 
-  auto [frame_start_bound_expr_lv, frame_end_bound_expr_lv] =
-      codegenFrameBoundRange(window_func, code_generator, co);
-
   auto current_row_pos_lv = code_generator.posArg(nullptr);
   auto partition_index_lv =
       codegenCurrentPartitionIndex(window_func_context, current_row_pos_lv);
@@ -434,6 +425,32 @@ llvm::Value* Executor::codegenWindowNavigationFunctionOnFrame(
                              nulls_first_lv,
                              null_start_pos_lv,
                              null_end_pos_lv});
+
+  if (window_func->isMissingValueFillingFunction()) {
+    // We classify both FORWARD_FILL and BACKWARD_FILL as window frame navigate function
+    // b/c they need to determine the current row index within a sorted partition
+    // (as we did for window frame navigation functions) to compute the correct and
+    // consistent resultset Otherwise, the query result may differ per execution due to
+    // missing table ordering Now we know the current row's index in the sorted partition
+    // (cur_row_idx_in_frame_lv), so we can return by calling the runtime function with
+    // the index we computed
+    std::string func_name = "fill_" + target_col_type_name + "_missing_value";
+
+    llvm::Value* forward_fill_lv =
+        cgen_state_->llBool(window_func_kind == SqlWindowFunctionKind::FORWARD_FILL);
+    return cgen_state_->emitCall(func_name,
+                                 {cur_row_idx_in_frame_lv,
+                                  target_col_null_val_lv,
+                                  target_col_buf_lv,
+                                  partition_buf_ptrs.num_elem_current_partition_lv,
+                                  partition_buf_ptrs.target_partition_rowid_ptr_lv,
+                                  partition_buf_ptrs.target_partition_sorted_rowid_ptr_lv,
+                                  forward_fill_lv});
+  }
+
+  // compute frame bound for the current row
+  auto [frame_start_bound_expr_lv, frame_end_bound_expr_lv] =
+      codegenFrameBoundRange(window_func, code_generator, co);
 
   // compute frame bound for the current row
   auto const int64_t_zero_val_lv = cgen_state_->llInt((int64_t)0);
