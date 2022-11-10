@@ -2052,6 +2052,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
   for (const auto& order_key : rex_window_function->getOrderKeys()) {
     order_keys.push_back(translateScalarRex(order_key.get()));
   }
+  std::vector<Analyzer::OrderEntry> collation =
+      translate_collation(rex_window_function->getCollation());
+
   auto ti = rex_window_function->getType();
   auto window_func_kind = rex_window_function->getKind();
   if (window_function_is_value(window_func_kind)) {
@@ -2322,6 +2325,36 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       need_order_by_clause = true;
       need_frame_def = true;
       break;
+    case SqlWindowFunctionKind::FORWARD_FILL:
+    case SqlWindowFunctionKind::BACKWARD_FILL: {
+      if (has_framing_clause) {
+        throw std::runtime_error(func_name + " does not support window framing clause");
+      }
+      auto const input_expr_ti = args.front()->get_type_info();
+      if (input_expr_ti.is_string()) {
+        throw std::runtime_error(func_name + " not supported on " +
+                                 input_expr_ti.get_type_name() + " type yet");
+      }
+      need_order_by_clause = true;
+      std::string const arg_str{args.front()->toString()};
+      bool needs_inject_input_arg_ordering =
+          !std::any_of(order_keys.cbegin(),
+                       order_keys.cend(),
+                       [&arg_str](std::shared_ptr<Analyzer::Expr> const& expr) {
+                         return boost::equals(arg_str, expr->toString());
+                       });
+      if (needs_inject_input_arg_ordering) {
+        VLOG(1) << "Inject " << args.front()->toString() << " as ordering column of the "
+                << func_name << " function";
+        order_keys.push_back(args.front());
+        // forward_fill can fill null values if it is ordered with NULLS LAST
+        // in contrast, we make NULLS FIRST ordering for the backward_fill function
+        collation.emplace_back(collation.size() + 1,
+                               false,
+                               window_func_kind != SqlWindowFunctionKind::FORWARD_FILL);
+      }
+      break;
+    }
     case SqlWindowFunctionKind::NTH_VALUE:
     case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME: {
       // todo (yoonmin) : args.size() will be three if we support default value
@@ -2387,7 +2420,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       has_framing_clause ? frame_mode : Analyzer::WindowFunction::FrameBoundType::NONE,
       makeExpr<Analyzer::WindowFrame>(frame_start_bound_type, frame_start_bound_expr),
       makeExpr<Analyzer::WindowFrame>(frame_end_bound_type, frame_end_bound_expr),
-      translate_collation(rex_window_function->getCollation()));
+      collation);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateIntervalExprForWindowFraming(

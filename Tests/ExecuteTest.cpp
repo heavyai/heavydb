@@ -10551,43 +10551,31 @@ void import_window_function_framing_test() {
   run_ddl_statement(gen_table_creation_ddl("test_window_framing_multi_frag", true));
   g_sqlite_comparator.query(
       gen_table_creation_ddl("test_window_framing_multi_frag", false));
-  std::vector<std::string> rows;
-  rows.push_back(
+  std::vector<std::string> rows{
       "(1, 1, 1, -1, -1, -1, -1, -1.11, -1.1111, 1.11, 1.111111, 1.11, 1.111111, "
-      "'2022-05-17 01:00:010000000', '20:00:01', '2022-05-01');");
-  rows.push_back(
+      "'2022-05-17 01:00:010000000', '20:00:01', '2022-05-01');",
       "(1, 2, 2, -8, -8, -8, -8, -8.88, -8.8888, 1.12, 2.111111, 1.12, 2.111111, "
-      "'2022-05-17 01:00:020000000', '20:00:02', '2022-05-02');");
-  rows.push_back(
+      "'2022-05-17 01:00:020000000', '20:00:02', '2022-05-02');",
       "(1, 3, 3, null, null, null, null, null, null, 1.13, 3.111111, 1.13, 3.111111, "
-      "'2022-05-17 01:00:030000000', '20:00:03', '2022-05-03');");
-  rows.push_back(
+      "'2022-05-17 01:00:030000000', '20:00:03', '2022-05-03');",
       "(1, 4, 4, -1, -1, -1, -1, -1.11, -1.1111, 1.14, 4.111111, 1.14, 4.111111, "
-      "'2022-05-17 01:00:040000000', '20:00:04', '2022-05-04');");
-  rows.push_back(
+      "'2022-05-17 01:00:040000000', '20:00:04', '2022-05-04');",
       "(1, 5, 5, 1, 1, 1, 1, 1.11, 1.1111, 1.15, 5.111111, 1.15, 5.111111, '2022-05-17 "
-      "01:00:050000000', '20:00:05', '2022-05-05');");
-  rows.push_back(
+      "01:00:050000000', '20:00:05', '2022-05-05');",
       "(1, 6, 6, -2, -2, -2, -2, -2.22, -2.2222, 1.16, 6.111111, 1.16, 6.111111, "
-      "'2022-05-17 01:00:060000000', '20:00:06', '2022-05-06');");
-  rows.push_back(
+      "'2022-05-17 01:00:060000000', '20:00:06', '2022-05-06');",
       "(2, 7, 7, -1, -1, -1, -1, -1.11, -1.1111, 1.17, 7.111111, 1.17, 7.111111, "
-      "'2022-05-17 01:00:070000000', '20:00:07', '2022-05-07');");
-  rows.push_back(
+      "'2022-05-17 01:00:070000000', '20:00:07', '2022-05-07');",
       "(2, 8, 8, 4, 4, 4, 4, 4.4, 4.4444, 1.18, 8.111111, 1.18, 8.111111, '2022-05-17 "
-      "01:00:080000000', '20:00:08', '2022-05-08');");
-  rows.push_back(
+      "01:00:080000000', '20:00:08', '2022-05-08');",
       "(2, 9, 9, 1, 1, 1, 1, 1.11, 1.1111,  1.19, 9.111111, 1.19, 9.111111, '2022-05-17 "
-      "01:00:090000000', '20:00:09', '2022-05-09');");
-  rows.push_back(
+      "01:00:090000000', '20:00:09', '2022-05-09');",
       "(2, 10, 10, -1, -1, -1, -1, -1.11, -1.1111, 1.2, 10.111111, 1.2, 10.111111, "
-      "'2022-05-17 01:00:100000000', '20:00:10', '2022-05-10');");
-  rows.push_back(
+      "'2022-05-17 01:00:100000000', '20:00:10', '2022-05-10');",
       "(2, 11, 11, 2, 2, 2, 2, 2.22, 2.2222, 1.21, 11.111111, 1.21, 11.111111, "
-      "'2022-05-17 01:00:110000000', '20:00:11', '2022-05-11');");
-  rows.push_back(
+      "'2022-05-17 01:00:110000000', '20:00:11', '2022-05-11');",
       "(2, 12, 12, 5, 5, 5, 5, 5.55, 5.5555, 1.22, 12.111111, 1.22, 12.111111, "
-      "'2022-05-17 01:00:120000000', '20:00:12', '2022-05-12');");
+      "'2022-05-17 01:00:120000000', '20:00:12', '2022-05-12');"};
   std::mt19937 g(std::random_device{}());
   std::shuffle(rows.begin(), rows.end(), g);
   for (const auto& row : rows) {
@@ -10626,13 +10614,17 @@ void import_window_function_framing_timestamp_types() {
 
 void import_window_function_framing_navigation() {
   run_ddl_statement("DROP TABLE IF EXISTS test_frame_nav");
+  run_ddl_statement("DROP TABLE IF EXISTS test_nvf");
   g_sqlite_comparator.query("DROP TABLE IF EXISTS test_frame_nav");
   auto create_test_table = [&]() {
-    std::string heavy_ddl{"CREATE TABLE test_frame_nav("};
-    heavy_ddl +=
+    std::string test_frame_nav_ddl{"CREATE TABLE test_frame_nav("};
+    std::string test_nvf_ddl{"CREATE TABLE test_nvf("};
+    std::string col_def1 =
         "  rid INTEGER,"
         "  pc INTEGER,"
-        "  oc INTEGER,"
+        "  oc INTEGER,";
+    std::string col_def2 = " p1 INTEGER, p2 INTEGER, o1 INTEGER, o2 INTEGER,";
+    std::string col_def =
         "  ti TINYINT,"
         "  si SMALLINT,"
         "  si8 SMALLINT ENCODING FIXED(8),"
@@ -10659,7 +10651,10 @@ void import_window_function_framing_navigation() {
         "  t3 TIMESTAMP(3),"
         "  t6 TIMESTAMP(6),"
         "  t9 TIMESTAMP(9));";
-    run_ddl_statement(heavy_ddl);
+    test_frame_nav_ddl += col_def1 + col_def;
+    test_nvf_ddl += col_def2 + col_def;
+    run_ddl_statement(test_frame_nav_ddl);
+    run_ddl_statement(test_nvf_ddl);
     std::string sqlite_ddl{"CREATE TABLE test_frame_nav("};
     sqlite_ddl +=
         "  rid INTEGER,"
@@ -10753,137 +10748,6 @@ void import_window_function_framing_navigation() {
   std::random_device rd;
   std::mt19937 g(rd());
   std::shuffle(insert_row_ddls.begin(), insert_row_ddls.end(), g);
-  for (const auto& insert_row_ddl : insert_row_ddls) {
-    run_multiple_agg(insert_row_ddl, ExecutorDeviceType::CPU);
-    g_sqlite_comparator.query(insert_row_ddl);
-  }
-}
-
-void import_test_frame_nav() {
-  run_ddl_statement("DROP TABLE IF EXISTS test_frame_nav;");
-  g_sqlite_comparator.query("DROP TABLE IF EXISTS test_frame_nav;");
-  auto create_test_table = [&]() {
-    std::string heavy_ddl{"CREATE TABLE test_frame_nav("};
-    heavy_ddl +=
-        "  rid INTEGER,"
-        "  pc INTEGER,"
-        "  oc INTEGER,"
-        "  ti TINYINT,"
-        "  si SMALLINT,"
-        "  si8 SMALLINT ENCODING FIXED(8),"
-        "  i INTEGER,"
-        "  i8 INTEGER ENCODING FIXED(8),"
-        "  i16 INTEGER ENCODING FIXED(16),"
-        "  bi BIGINT,"
-        "  bi8 BIGINT ENCODING FIXED(8),"
-        "  bi16 BIGINT ENCODING FIXED(16),"
-        "  bi32 BIGINT ENCODING FIXED(32),"
-        "  f FLOAT,"
-        "  d DOUBLE,"
-        "  dc5 DECIMAL(5,4),"
-        "  dc9 DECIMAL(9,8),"
-        "  dc15 DECIMAL(15,14),"
-        "  str TEXT ENCODING DICT(32),"
-        "  dt DATE,"
-        "  dt16 DATE ENCODING DAYS(16),"
-        "  dt32 DATE ENCODING DAYS(32),"
-        "  tm TIME,"
-        "  tme TIME ENCODING FIXED(32),"
-        "  t0 TIMESTAMP(0),"
-        "  t0e TIMESTAMP(0) ENCODING FIXED(32),"
-        "  t3 TIMESTAMP(3),"
-        "  t6 TIMESTAMP(6),"
-        "  t9 TIMESTAMP(9));";
-    run_ddl_statement(heavy_ddl);
-    std::string sqlite_ddl{"CREATE TABLE test_frame_nav("};
-    sqlite_ddl +=
-        "  rid INTEGER,"
-        "  pc INTEGER,"
-        "  oc INTEGER,"
-        "  ti TINYINT,"
-        "  si SMALLINT,"
-        "  si8 SMALLINT,"
-        "  i INTEGER,"
-        "  i8 INTEGER,"
-        "  i16 INTEGER,"
-        "  bi BIGINT,"
-        "  bi8 BIGINT,"
-        "  bi16 BIGINT,"
-        "  bi32 BIGINT,"
-        "  f FLOAT,"
-        "  d DOUBLE,"
-        "  dc5 DECIMAL(5,4),"
-        "  dc9 DECIMAL(9,8),"
-        "  dc15 DECIMAL(15,14),"
-        "  str TEXT ENCODING DICT(32),"
-        "  dt DATE,"
-        "  dt16 DATE,"
-        "  dt32 DATE,"
-        "  tm TIME,"
-        "  tme TIME,"
-        "  t0 TIMESTAMP(0),"
-        "  t0e TIMESTAMP(0),"
-        "  t3 TIMESTAMP(3),"
-        "  t6 TIMESTAMP(6),"
-        "  t9 TIMESTAMP(9));";
-    g_sqlite_comparator.query(sqlite_ddl);
-  };
-  create_test_table();
-  const std::string null_val{"NULL"};
-  auto row_insert_ddl_gen = [](const std::string& int_val,
-                               const std::string& fp_val,
-                               const std::string& str_val,
-                               const std::string& date_val,
-                               const std::string& time_val,
-                               const std::string& timestamp_val) {
-    std::ostringstream insert_row_ddl;
-    for (int n = 0; n < 10; n++) {
-      insert_row_ddl << int_val << ", ";
-    }
-    for (int n = 0; n < 5; n++) {
-      insert_row_ddl << fp_val << ", ";
-    }
-    insert_row_ddl << str_val << ", ";
-    for (int n = 0; n < 3; n++) {
-      insert_row_ddl << date_val << ", ";
-    }
-    for (int n = 0; n < 2; n++) {
-      insert_row_ddl << time_val << ", ";
-    }
-    for (int n = 0; n < 4; n++) {
-      insert_row_ddl << timestamp_val << ", ";
-    }
-    insert_row_ddl << timestamp_val << ");";
-    return insert_row_ddl.str();
-  };
-  std::vector<std::string> insert_row_ddls;
-  size_t pc_idx = 1;
-  for (size_t i = 1; i <= 21; i++) {
-    std::string rid = ::toString(i);
-    auto pc_val = ::toString(pc_idx);
-    auto val = i % 7;
-    if (val == 0) {
-      pc_idx++;
-      val = 7;
-    }
-    std::ostringstream insert_row_ddl;
-    insert_row_ddl << "INSERT INTO test_frame_nav VALUES (";
-    insert_row_ddl << rid << ", " << pc_val << ", " << val << ", ";
-    if (val == 2 || val == 5) {
-      insert_row_ddl << row_insert_ddl_gen(
-          null_val, null_val, null_val, null_val, null_val, null_val);
-    } else {
-      std::string int_val = ::toString(val);
-      std::string fp_val = int_val + "." + int_val;
-      std::string str_val = "\'" + int_val + "\'";
-      std::string date_val = "\'2022-08-0" + int_val + "\'";
-      std::string time_val = "\'12:00:0" + int_val + "\'";
-      std::string timestamp_val = "\'2022-08-0" + int_val + " 12:00:0" + int_val + "\'";
-      insert_row_ddl << row_insert_ddl_gen(
-          int_val, fp_val, str_val, date_val, time_val, timestamp_val);
-    }
-    insert_row_ddls.emplace_back(insert_row_ddl.str());
-  }
   for (const auto& insert_row_ddl : insert_row_ddls) {
     run_multiple_agg(insert_row_ddl, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_row_ddl);
@@ -24364,6 +24228,214 @@ TEST_F(Select, WindowFrameNavigationFunctionsValueFunction) {
                        dt));
 }
 
+TEST_F(Select, FillNullValue) {
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  using VT = std::vector<std::string>;
+  std::vector<std::string> rows{
+      "INSERT INTO test_nvf VALUES(1,1,1,1, 1,1,1,1,1,1,1,1,1,1, "
+      "1.1,1.1111,1.1111,1.1111,1.1111,\'1\',\'2022-01-01\',\'2022-01-01\',\'2022-01-"
+      "01\',\'01:01:01\',\'01:01:01\',\'2022-01-01 01:01:01\',\'2022-01-01 "
+      "01:01:01\',\'2022-01-01 01:01:01\',\'2022-01-01 01:01:01\',\'2022-01-01 "
+      "01:01:01\');",
+      "INSERT INTO test_nvf VALUES(2,2,2,2, 2,2,2,2,2,2,2,2,2,2, "
+      "2.2,2.2222,2.2222,2.2222,2.2222,\'2\',\'2022-02-02\',\'2022-02-02\',\'2022-02-"
+      "02\',\'02:02:02\',\'02:02:02\',\'2022-02-02 02:02:02\',\'2022-02-02 "
+      "02:02:02\',\'2022-02-02 02:02:02\',\'2022-02-02 02:02:02\',\'2022-02-02 "
+      "02:02:02\');",
+      "INSERT INTO test_nvf VALUES(1,1,3,3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL);",
+      "INSERT INTO test_nvf VALUES(2,2,3,3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL);",
+      "INSERT INTO test_nvf VALUES(1,1,3,3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL);",
+      "INSERT INTO test_nvf VALUES(2,2,3,3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL);",
+      "INSERT INTO test_nvf VALUES(1,1,4,4, 3,3,3,3,3,3,3,3,3,3, "
+      "3.3,3.3333,3.3333,3.3333,3.3333,\'3\',\'2022-03-03\',\'2022-03-03\',\'2022-03-"
+      "03\',\'03:03:03\',\'03:03:03\',\'2022-03-03 03:03:03\',\'2022-03-03 "
+      "03:03:03\',\'2022-03-03 03:03:03\',\'2022-03-03 03:03:03\',\'2022-03-03 "
+      "03:03:03\');",
+      "INSERT INTO test_nvf VALUES(1,1,5,5, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL);",
+      "INSERT INTO test_nvf VALUES(2,2,5,5, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL);",
+      "INSERT INTO test_nvf VALUES(2,2,6,6, 4,4,4,4,4,4,4,4,4,4, "
+      "4.4,4.4444,4.4444,4.4444,4.4444,\'4\',\'2022-04-04\',\'2022-04-04\',\'2022-04-"
+      "04\',\'04:04:04\',\'04:04:04\',\'2022-04-04 04:04:04\',\'2022-04-04 "
+      "04:04:04\',\'2022-04-04 04:04:04\',\'2022-04-04 04:04:04\',\'2022-04-04 "
+      "04:04:04\');",
+      "INSERT INTO test_nvf VALUES(1,1,NULL,NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+      "INSERT INTO test_nvf VALUES(2,2,NULL,NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL, NULL, NULL);"};
+  for (auto const& row : rows) {
+    run_multiple_agg(row, dt);
+  }
+  auto answer_gen = [](VT const& answer) {
+    VT values;
+    for (std::string const& v : answer) {
+      std::ostringstream oss;
+      oss << "(" << v << ")";
+      values.push_back(oss.str());
+    }
+    std::string val_str = boost::join(values, ",");
+    std::ostringstream oss;
+    oss << "SELECT * FROM (VALUES" << val_str << ");";
+    return oss.str();
+  };
+  // order by target col
+  {
+    // clang-format off
+      std::vector<VT> answer{
+      VT{
+      "1", "2", "NULL", "NULL", "NULL", "NULL", "3", "NULL", "NULL", "4", "NULL", "NULL"
+      },
+      VT{
+      "1", "2", "1", "1", "1", "1", "3", "1", "1", "4", "1", "1"
+      },
+      VT{
+      "1", "2", "4", "4", "4", "4", "3", "4", "4", "4", "4", "4"
+      },
+      VT{
+      "1", "2", "NULL", "NULL", "NULL", "NULL", "3", "NULL", "NULL", "4", "NULL", "NULL"
+      },
+      VT{
+      "1", "2", "NULL", "NULL", "NULL", "NULL", "3", "NULL", "NULL", "4", "NULL", "NULL"
+      },
+      VT{
+      "1", "2", "4", "4", "4", "4", "3", "4", "4", "4", "4", "4"
+      },
+      VT{
+      "1", "2", "1", "1", "1", "1", "3", "1", "1", "4", "1", "1"
+      },
+      VT{"1", "2", "NULL", "NULL", "NULL", "NULL", "3", "NULL", "NULL", "4", "NULL", "NULL"
+      },
+        // clang-format on
+    };
+    size_t idx = 0;
+    for (std::string order : {"ASC ", "DESC "}) {
+      for (std::string nulls : {"NULLS FIRST", "NULLS LAST"}) {
+        for (std::string func : {"FORWARD_FILL", "BACKWARD_FILL"}) {
+          std::ostringstream oss;
+          oss << "SELECT " << func << "(i) OVER (ORDER BY i " << order << nulls
+              << ") FROM test_nvf;";
+          c(oss.str(), answer_gen(answer[idx]), dt);
+          ++idx;
+        }
+      }
+    }
+  }
+
+  // order by different col
+  {
+    // clang-format off
+      std::vector<VT> answer{
+      VT{
+      "1", "2", "2", "2", "2", "2", "3", "3", "3", "4", "NULL", "NULL"
+      },
+      VT{
+      "1", "2", "3", "3", "3", "3", "3", "4", "4", "4", "1", "1"
+      },
+      VT{
+      "1", "2", "2", "2", "2", "2", "3", "3", "3", "4", "4", "4"
+      },
+      VT{
+      "1", "2", "3", "3", "3", "3", "3", "4", "4", "4", "NULL", "NULL"
+      },
+      VT{
+      "1", "2", "3", "3", "3", "3", "3", "4", "4", "4", "NULL", "NULL"
+      },
+      VT{"1", "2", "2", "2", "2", "2", "3", "3", "3", "4", "4", "4"
+      },
+      VT{
+      "1", "2", "3", "3", "3", "3", "3", "4", "4", "4", "1", "1"},
+      VT{
+      "1", "2", "2", "2", "2", "2", "3", "3", "3", "4", "NULL", "NULL"
+      }
+      };
+    // clang-format on
+    size_t idx = 0;
+    for (std::string order : {"ASC ", "DESC "}) {
+      for (std::string nulls : {"NULLS FIRST", "NULLS LAST"}) {
+        for (std::string func : {"FORWARD_FILL", "BACKWARD_FILL"}) {
+          std::ostringstream oss;
+          oss << "SELECT " << func << "(i) OVER (ORDER BY o1 " << order << nulls
+              << ") FROM test_nvf;";
+          c(oss.str(), answer_gen(answer[idx]), dt);
+          ++idx;
+        }
+      }
+    }
+  }
+
+  // partitioned filling
+  {
+    // clang-format off
+      std::vector<VT> answer{
+      VT{
+      "1", "2", "1", "2", "1", "2", "3", "3", "2", "4", "NULL", "NULL"
+      },
+      VT{
+      "1", "2", "3", "4","3", "4", "3", "NULL", "4", "4", "1", "2"
+      },
+      VT{
+      "1", "2", "1", "2", "1", "2", "3", "3", "2", "4", "3", "4"
+      },
+      VT{
+      "1", "2","3", "4", "3", "4", "3", "NULL", "4", "4", "NULL", "NULL"
+    },
+    VT{
+    "1", "2", "3", "4", "3", "4", "3", "NULL", "4", "4", "NULL", "NULL"
+    },
+    VT{"1", "2", "1", "2", "1", "2", "3", "3", "2", "4", "3", "4"
+    },
+    VT{
+    "1", "2", "3", "4", "3", "4", "3", "NULL", "4", "4", "1", "2"},
+    VT{
+    "1", "2", "1", "2", "1", "2", "3", "3", "2", "4", "NULL", "NULL"
+    }
+    };
+    // clang-format on
+    size_t idx = 0;
+    for (std::string order : {"ASC ", "DESC "}) {
+      for (std::string nulls : {"NULLS FIRST", "NULLS LAST"}) {
+        for (std::string func : {"FORWARD_FILL", "BACKWARD_FILL"}) {
+          std::ostringstream oss;
+          std::string order_str = order + nulls;
+          std::string answer_q = answer_gen(answer[idx]);
+          oss << "SELECT " << func << "(i) OVER (PARTITION BY p1 ORDER BY o1 "
+              << order_str << ") FROM test_nvf;";
+          c(oss.str(), answer_q, dt);
+          std::ostringstream oss2;
+          oss2 << "SELECT " << func << "(i) OVER (PARTITION BY p1,p2 ORDER BY o1 "
+               << order_str << ",o2 " << order_str << ") FROM test_nvf;";
+          c(oss2.str(), answer_q, dt);
+          ++idx;
+        }
+      }
+    }
+  }
+  {
+    VT ans(10, "1");
+    c("select forward_fill(ofd) over (partition by y order by y) from test where y=43;",
+      answer_gen(ans),
+      dt);
+    c("select backward_fill(ofd) over (partition by y) from test where y=43;",
+      answer_gen(ans),
+      dt);
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "select backward_fill(str) over (partition by y) from test", dt));
+  }
+}
+
 TEST_F(Select, ConditionalWindowFunction) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   struct TestQuery {
@@ -24429,8 +24501,8 @@ TEST_F(Select, FilterNodeCoalesce) {
   // If we do not coalesce the filter with a subsequent project (manufacturing one if
   // neccessary), we currently pull all table columns into memory, which is highly
   // undesirable. For window functions with a preceding filter node, we can not coalesce
-  // the filter node into the window function projection node, as this leads to incorrect
-  // results, so we manufacture a preceding projection
+  // the filter node into the window function projection node, as this leads to
+  // incorrect results, so we manufacture a preceding projection
 
   // Do not run with temp tables as temp tables are pinned and so do not get cleared
   // with clearCpuMemory(), which in turn means we can't properly measure what
@@ -24471,7 +24543,8 @@ TEST_F(Select, FilterNodeCoalesce) {
     {
       std::string query =
           "SELECT x, y, LAG(f) OVER (PARTITION BY y ORDER BY x ASC) f_lag FROM "
-          "test_window_func WHERE x >= 3 ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, "
+          "test_window_func WHERE x >= 3 ORDER BY x ASC NULLS FIRST, y ASC NULLS "
+          "FIRST, "
           "f_lag ASC;";
       c(query, query, dt);
     }
@@ -24491,9 +24564,11 @@ TEST_F(Select, FilterNodeCoalesce) {
     QR::get()->clearCpuMemory();
     {
       std::string query =
-          "SELECT x, y, RANK() OVER (PARTITION BY y ORDER BY x ASC NULLS FIRST) rk FROM "
+          "SELECT x, y, RANK() OVER (PARTITION BY y ORDER BY x ASC NULLS FIRST) rk "
+          "FROM "
           "(SELECT x, y, LAG(f) OVER (PARTITION BY y ORDER BY x ASC) f_lag FROM "
-          "test_window_func WHERE x >= 3) foo WHERE x >= 3 ORDER BY x ASC NULLS FIRST, y "
+          "test_window_func WHERE x >= 3) foo WHERE x >= 3 ORDER BY x ASC NULLS FIRST, "
+          "y "
           "ASC NULLS FIRST, f_lag ASC;";
       c(query, query, dt);
     }
@@ -24507,14 +24582,17 @@ TEST_F(Select, FilterNodeCoalesce) {
     ASSERT_EQ(buffer_pool_stats.num_chunks, static_cast<size_t>(3));
   }
 
-  // Multi-fragment window function with filter should run due to preceding compound node
+  // Multi-fragment window function with filter should run due to preceding compound
+  // node
   {
     // Clear CPU memory and hash table caches
     QR::get()->clearCpuMemory();
     {
       std::string query =
-          "SELECT x, y, d, SUM(d) OVER (PARTITION BY x ORDER BY d ASC NULLS FIRST) sum_d "
-          "FROM test_x WHERE x > 6 ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, d ASC "
+          "SELECT x, y, d, SUM(d) OVER (PARTITION BY x ORDER BY d ASC NULLS FIRST) "
+          "sum_d "
+          "FROM test_x WHERE x > 6 ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, d "
+          "ASC "
           "NULLS FIRST;";
       c(query, query, dt);
     }
@@ -24533,8 +24611,10 @@ TEST_F(Select, FilterNodeCoalesce) {
     QR::get()->clearCpuMemory();
     {
       std::string query =
-          "SELECT x, y, d, SUM(d) OVER (PARTITION BY x ORDER BY d ASC NULLS FIRST) sum_d "
-          "FROM test_x ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, d ASC NULLS FIRST;";
+          "SELECT x, y, d, SUM(d) OVER (PARTITION BY x ORDER BY d ASC NULLS FIRST) "
+          "sum_d "
+          "FROM test_x ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, d ASC NULLS "
+          "FIRST;";
       c(query, query, dt);
     }
     const auto buffer_pool_stats =
@@ -24560,7 +24640,8 @@ TEST_F(Select, MultiStepColumnarization) {
     SKIP_NO_GPU();
     {
       std::string query(
-          "SELECT T.x, MAX(T.y) FROM(SELECT x, log10(SUM(f)) as y FROM test GROUP BY x) "
+          "SELECT T.x, MAX(T.y) FROM(SELECT x, log10(SUM(f)) as y FROM test GROUP BY "
+          "x) "
           "as T "
           "GROUP BY T.x ORDER BY T.x;");
       const auto result = run_multiple_agg(query, dt);
@@ -24616,13 +24697,15 @@ TEST_F(Select, MultiStepColumnarization) {
     {
       std::string query(
           "SELECT x, fixed_str, COUNT(*), SUM(t), SUM(dd), SUM(dd_notnull), MAX(ofd), "
-          "MAX(ufd), COUNT(ofq), COUNT(ufq) FROM test GROUP BY x, fixed_str ORDER BY x, "
+          "MAX(ufd), COUNT(ofq), COUNT(ufq) FROM test GROUP BY x, fixed_str ORDER BY "
+          "x, "
           "fixed_str ASC");
       c(query + " NULLS FIRST;", query + ";", dt);
     }
     {
       std::string query(
-          "SELECT DATE_TRUNC(MONTH, o) AS month_, DATE_TRUNC(DAY, m) AS day_, COUNT(*), "
+          "SELECT DATE_TRUNC(MONTH, o) AS month_, DATE_TRUNC(DAY, m) AS day_, "
+          "COUNT(*), "
           "SUM(x) + SUM(y), SAMPLE(t) FROM test GROUP BY month_, day_ ORDER BY month_, "
           "day_ LIMIT 1;");
       const auto result = run_multiple_agg(query, dt);
@@ -24644,9 +24727,11 @@ TEST_F(Select, MultiStepColumnarization) {
       dt);
     {
       std::string query(
-          "SELECT CAST(x as float) as key0, DATE_TRUNC(microsecond, m_6) as key1, dd as "
+          "SELECT CAST(x as float) as key0, DATE_TRUNC(microsecond, m_6) as key1, dd "
+          "as "
           "key2, EXTRACT(epoch from m) as key3, fixed_str as key4, COUNT(*), (SUM(y) + "
-          "SUM(t)) / AVG(z), SAMPLE(f) + SAMPLE(d) FROM test GROUP BY key0, key1, key2, "
+          "SUM(t)) / AVG(z), SAMPLE(f) + SAMPLE(d) FROM test GROUP BY key0, key1, "
+          "key2, "
           "key3, key4 ORDER BY key2 LIMIT 1;");
       const auto result = run_multiple_agg(query, dt);
       const auto first_row = result->getNextRow(true, true);
@@ -25153,21 +25238,28 @@ TEST_F(Select, DISABLED_Interop) {
   ScopeGuard interop_guard = [] { g_enable_interop = false; };
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT 'dict_' || str c1, 'fake_' || substring(real_str, 6) c2, x + 56 c3, f c4, "
-      "-d c5, smallint_nulls c6 FROM test WHERE ('fake_' || substring(real_str, 6)) LIKE "
+    c("SELECT 'dict_' || str c1, 'fake_' || substring(real_str, 6) c2, x + 56 c3, f "
+      "c4, "
+      "-d c5, smallint_nulls c6 FROM test WHERE ('fake_' || substring(real_str, 6)) "
+      "LIKE "
       "'%_ba%' ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 ASC, c6 ASC;",
-      "SELECT 'dict_' || str c1, 'fake_' || substr(real_str, 6) c2, x + 56 c3, f c4, -d "
+      "SELECT 'dict_' || str c1, 'fake_' || substr(real_str, 6) c2, x + 56 c3, f c4, "
+      "-d "
       "c5, smallint_nulls c6 FROM test WHERE ('fake_' || substr(real_str, 6)) LIKE "
       "'%_ba%' ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 ASC, c6 ASC;",
       dt);
-    c("SELECT 'dict_' || str c1, 'fake_' || substring(real_str, 6) c2, x + 56 c3, f c4, "
+    c("SELECT 'dict_' || str c1, 'fake_' || substring(real_str, 6) c2, x + 56 c3, f "
+      "c4, "
       "-d c5, smallint_nulls c6 FROM test ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 "
       "ASC, c6 ASC;",
-      "SELECT 'dict_' || str c1, 'fake_' || substr(real_str, 6) c2, x + 56 c3, f c4, -d "
-      "c5, smallint_nulls c6 FROM test ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 ASC, "
+      "SELECT 'dict_' || str c1, 'fake_' || substr(real_str, 6) c2, x + 56 c3, f c4, "
+      "-d "
+      "c5, smallint_nulls c6 FROM test ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 "
+      "ASC, "
       "c6 ASC;",
       dt);
-    c("SELECT str || '_dict' AS c1, COUNT(*) c2 FROM test GROUP BY str ORDER BY c1 ASC, "
+    c("SELECT str || '_dict' AS c1, COUNT(*) c2 FROM test GROUP BY str ORDER BY c1 "
+      "ASC, "
       "c2 ASC;",
       dt);
     c("SELECT str || '_dict' AS c1, COUNT(*) c2 FROM test WHERE x <> 8 GROUP BY str "
@@ -25175,13 +25267,15 @@ TEST_F(Select, DISABLED_Interop) {
       dt);
     {
       std::string part1 =
-          "SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC) - 1 r1, RANK() "
+          "SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC) - 1 r1, "
+          "RANK() "
           "OVER (PARTITION BY y ORDER BY x ASC) r2, DENSE_RANK() OVER (PARTITION BY y "
           "ORDER BY x DESC) r3 FROM test_window_func ORDER BY x ASC";
       std::string part2 = ", y ASC, r1 ASC, r2 ASC, r3 ASC;";
       c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
     }
-    c("SELECT CAST(('fake_' || SUBSTRING(real_str, 6)) LIKE '%_ba%' AS INT) b from test "
+    c("SELECT CAST(('fake_' || SUBSTRING(real_str, 6)) LIKE '%_ba%' AS INT) b from "
+      "test "
       "ORDER BY b;",
       "SELECT ('fake_' || SUBSTR(real_str, 6)) LIKE '%_ba%' b from test ORDER BY b;",
       dt);
@@ -25610,7 +25704,8 @@ TEST_F(Select, ResultsetAndChunkMetadataRecycling) {
 
   // subquery - group by
   auto q6 =
-      "SELECT /*+ keep_result */ COUNT(*) FROM subquery_test WHERE x NOT IN (SELECT /*+ "
+      "SELECT /*+ keep_result */ COUNT(*) FROM subquery_test WHERE x NOT IN (SELECT "
+      "/*+ "
       "keep_result */ x + 1 FROM subquery_test GROUP BY x);";
   c(q6, CPU_DT);
   collect_cache_key_and_ref_cnt();
@@ -25631,7 +25726,8 @@ TEST_F(Select, ResultsetAndChunkMetadataRecycling) {
   // subquery - order by
   auto q9 =
       "SELECT /*+ keep_result */ x, SUM(y) AS n, SUM(z) as n2 FROM (SELECT /*+ "
-      "keep_result */ x, SUM(y) as y, AVG(z) as z FROM test GROUP BY x ORDER BY x) GROUP "
+      "keep_result */ x, SUM(y) as y, AVG(z) as z FROM test GROUP BY x ORDER BY x) "
+      "GROUP "
       "BY x ORDER BY n;";
   c(q9, CPU_DT);
   collect_cache_key_and_ref_cnt();
@@ -25719,10 +25815,12 @@ TEST_F(Select, QueryStepSkipping) {
   g_allow_auto_resultset_caching = false;
 
   auto query_11_steps =
-      "select avg(v10+1) as v11 from (select avg(v9+1) as v10 from (select avg(v8+1) as "
+      "select avg(v10+1) as v11 from (select avg(v9+1) as v10 from (select avg(v8+1) "
+      "as "
       "v9 from (select avg(v7+1) as v8 from (select avg(v6+1) as v7 from (select "
       "avg(v5+1) as v6 from (select avg(v4+1) as v5 from (select avg(v3+1) as v4 from "
-      "(select avg(v2+1) as v3 from (select avg(v1+1) as v2 from (select avg(x+1) as v1 "
+      "(select avg(v2+1) as v3 from (select avg(v1+1) as v2 from (select avg(x+1) as "
+      "v1 "
       "from test group by x) t1) t2) t3) t4) t5) t6) t7) t8) t9);";
   auto ra_desc_1 = QR::get()->getRaExecutionSequence(query_11_steps);
   EXPECT_EQ(ra_desc_1.size(), static_cast<size_t>(11));
@@ -25975,8 +26073,8 @@ TEST_F(Select, UpdatePinnedBuffers) {
     EXPECT_EQ(v<int64_t>(original_row[1]), v<int64_t>(updated_row[1]));
     if (v<int64_t>(original_row[0]) == 1) {
       EXPECT_EQ(v<int64_t>(updated_row[2]), 10);
-      // EXPECT_EQ(v<int64_t>(original_row[2]), 5);// TODO: this ends up being 10 b/c the
-      // buffer was updated
+      // EXPECT_EQ(v<int64_t>(original_row[2]), 5);// TODO: this ends up being 10 b/c
+      // the buffer was updated
     } else {
       EXPECT_EQ(v<int64_t>(original_row[2]), v<int64_t>(updated_row[2]));
     }
@@ -26924,7 +27022,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "double, dn double, str varchar(10), null_str text, fixed_str text, "
         "fixed_null_str text, real_str text, "
         "shared_dict "
-        "text, m timestamp(0), me timestamp(0), m_3 timestamp(3), m_6 timestamp(6), m_9 "
+        "text, m timestamp(0), me timestamp(0), m_3 timestamp(3), m_6 timestamp(6), "
+        "m_9 "
         "timestamp(9), n "
         "time(0), ne time(0), o date, o1 date, o2 date, "
         "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
@@ -26977,7 +27076,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "-220.6, 'baz', null, null, null, "
         "'real_baz', 'baz', '2014-12-14 22:23:15', NULL, '2014-12-14 22:23:15.750', "
         "'2014-12-14 22:23:15.437321', "
-        "'2014-12-14 22:23:15.934567401', '15:13:14', NULL, '1999-09-09', '1999-09-09', "
+        "'2014-12-14 22:23:15.934567401', '15:13:14', NULL, '1999-09-09', "
+        "'1999-09-09', "
         "'1999-09-09', 11, "
         "333.3, 333.3, "
         "'boat', null, 1, "
@@ -27510,11 +27610,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
     LOG(ERROR) << "Failed to (re-)create table 'data_types_basic*'";
   }
   try {
-    import_test_frame_nav();
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'test_frame_nav'";
-  }
-  try {
     import_window_frame_navigation_table_with_dup_val();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_frame_nav_dup'";
@@ -27610,10 +27705,12 @@ int create_views() {
   const std::string drop_self_join_view2{"DROP VIEW IF EXISTS view_self_join_v2;"};
   const std::string drop_self_join_view3{"DROP VIEW IF EXISTS view_self_join_v3;"};
   const std::string create_self_join_view1{
-      "CREATE VIEW view_self_join_v1 AS SELECT count(1) FROM test r1, test r2 where r1.x "
+      "CREATE VIEW view_self_join_v1 AS SELECT count(1) FROM test r1, test r2 where "
+      "r1.x "
       "= r2.x;"};
   const std::string create_self_join_view2{
-      "CREATE VIEW view_self_join_v2 AS SELECT count(1) FROM test r1 INNER JOIN test r2 "
+      "CREATE VIEW view_self_join_v2 AS SELECT count(1) FROM test r1 INNER JOIN test "
+      "r2 "
       "on (r1.x = r2.x);"};
   const std::string create_self_join_view3{
       "CREATE VIEW view_self_join_v3 AS SELECT count(1) FROM test r1 LEFT JOIN test r2 "
@@ -27844,6 +27941,7 @@ void drop_tables() {
   const std::string drop_test_frame_nav_dup{"DROP TABLE IF EXISTS test_frame_nav_dup;"};
   run_ddl_statement(drop_test_frame_nav_dup);
   g_sqlite_comparator.query(drop_test_frame_nav_dup);
+  run_ddl_statement("DROP TABLE IF EXISTS test_nvf");
 }
 
 void drop_views() {

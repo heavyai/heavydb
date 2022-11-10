@@ -1163,6 +1163,12 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "$SUM0") {
     return SqlWindowFunctionKind::SUM_INTERNAL;
   }
+  if (name == "FORWARD_FILL") {
+    return SqlWindowFunctionKind::FORWARD_FILL;
+  }
+  if (name == "BACKWARD_FILL") {
+    return SqlWindowFunctionKind::BACKWARD_FILL;
+  }
   throw std::runtime_error("Unsupported window function: " + name);
 }
 

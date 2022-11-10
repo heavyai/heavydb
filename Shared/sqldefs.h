@@ -142,6 +142,8 @@ enum class SqlWindowFunctionKind {
   LAST_VALUE_IN_FRAME,
   NTH_VALUE,
   NTH_VALUE_IN_FRAME,
+  FORWARD_FILL,
+  BACKWARD_FILL,
   COUNT_IF,
   SUM_IF,
   SUM_INTERNAL,  // For deserialization from Calcite only. Gets rewritten to a regular
@@ -508,6 +510,10 @@ inline std::string toString(const SqlWindowFunctionKind& kind) {
       return "COUNT_IF";
     case SqlWindowFunctionKind::SUM_IF:
       return "SUM_IF";
+    case SqlWindowFunctionKind::FORWARD_FILL:
+      return "FORWARD_FILL";
+    case SqlWindowFunctionKind::BACKWARD_FILL:
+      return "BACKWARD_FILL";
     case SqlWindowFunctionKind::INVALID:
       return "INVALID";
   }
