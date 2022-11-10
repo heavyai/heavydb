@@ -208,7 +208,7 @@ Catalog::Catalog(const string& basePath,
     CHECK(!g_enable_s3_fsi) << "S3 FSI requires FSI to be enabled";
   }
 
-  if (!is_new_db && !g_multi_instance) {
+  if (!is_new_db) {
     CheckAndExecuteMigrations();
   }
 
