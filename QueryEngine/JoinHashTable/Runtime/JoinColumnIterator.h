@@ -86,6 +86,22 @@ struct JoinColumnIterator {
     return *this;
   }
 
+  DEVICE FORCE_INLINE JoinColumnIterator& operator--() {
+    index -= step;
+    index_inside_chunk -= step;
+    while (chunk_data &&
+           index_inside_chunk <= join_chunk_array[index_of_chunk].num_elems) {
+      index_inside_chunk -= join_chunk_array[index_of_chunk].num_elems;
+      --index_of_chunk;
+      if (index_of_chunk < join_column->num_chunks) {
+        chunk_data = join_chunk_array[index_of_chunk].col_buff;
+      } else {
+        chunk_data = nullptr;
+      }
+    }
+    return *this;
+  }
+
   DEVICE JoinColumnIterator() : chunk_data(nullptr) {}
 
   DEVICE JoinColumnIterator(

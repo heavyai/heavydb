@@ -2546,12 +2546,18 @@ class WindowFunction : public Expr {
           SqlWindowFunctionKind::MAX,
           SqlWindowFunctionKind::COUNT,
           SqlWindowFunctionKind::COUNT_IF};
-  static constexpr std::array<SqlWindowFunctionKind, 5> REQUIRE_HASH_TABLE_FOR_FRAMING{
+
+  static constexpr std::array<SqlWindowFunctionKind, 2> FILLING_FUNCS_USING_WINDOW{
+      SqlWindowFunctionKind::FORWARD_FILL,
+      SqlWindowFunctionKind::BACKWARD_FILL};
+  static constexpr std::array<SqlWindowFunctionKind, 7> REQUIRE_HASH_TABLE_FOR_FRAMING{
       SqlWindowFunctionKind::LAG_IN_FRAME,
       SqlWindowFunctionKind::LEAD_IN_FRAME,
       SqlWindowFunctionKind::NTH_VALUE_IN_FRAME,
       SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME,
-      SqlWindowFunctionKind::LAST_VALUE_IN_FRAME};
+      SqlWindowFunctionKind::LAST_VALUE_IN_FRAME,
+      SqlWindowFunctionKind::FORWARD_FILL,
+      SqlWindowFunctionKind::BACKWARD_FILL};
 
   WindowFunction(const SQLTypeInfo& ti,
                  const SqlWindowFunctionKind kind,
@@ -2635,6 +2641,13 @@ class WindowFunction : public Expr {
     return std::any_of(
         REQUIRE_HASH_TABLE_FOR_FRAMING.begin(),
         REQUIRE_HASH_TABLE_FOR_FRAMING.end(),
+        [this](SqlWindowFunctionKind target_kind) { return kind_ == target_kind; });
+  }
+
+  bool isMissingValueFillingFunction() const {
+    return std::any_of(
+        FILLING_FUNCS_USING_WINDOW.begin(),
+        FILLING_FUNCS_USING_WINDOW.end(),
         [this](SqlWindowFunctionKind target_kind) { return kind_ == target_kind; });
   }
 
