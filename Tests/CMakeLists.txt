@@ -265,8 +265,10 @@ target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
 add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ExecuteTest)
 add_test(NAME ExecuteTestTemporaryTables COMMAND ExecuteTest ${TEST_ARGS} "--use-temporary-tables")
+add_test(NAME ExecuteTestExecutorResourceMgr COMMAND ExecuteTest ${TEST_ARGS} "--enable-executor-resource-mgr")
 list(APPEND INSANITY_TEST_PROGRAMS ExecuteTest)
 list(APPEND INSANITY_TESTS ExecuteTestTemporaryTables)
+list(APPEND INSANITY_TESTS ExecuteTestExecutorResourceMgr)
 
 ##########
 
