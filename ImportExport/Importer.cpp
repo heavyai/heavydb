@@ -80,6 +80,7 @@
 #include "RenderGroupAnalyzer.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/SqlTypesLayout.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/enable_assign_render_groups.h"
 #include "Shared/file_path_util.h"
 #include "Shared/import_helpers.h"
@@ -3712,7 +3713,7 @@ foreign_storage::DataPreview get_parquet_data_preview(const std::string& file_na
   TableDescriptor td;
   td.tableName = "parquet-detect-table";
   td.tableId = -1;
-  td.maxFragRows = Detector::kDefaultSampleRowsCount;
+  td.maxFragRows = shared::kDefaultSampleRowsCount;
   auto [foreign_server, user_mapping, foreign_table] =
       foreign_storage::create_proxy_fsi_objects(file_name, copy_params, &td);
 
@@ -3739,7 +3740,7 @@ foreign_storage::DataPreview get_parquet_data_preview(const std::string& file_na
       foreign_table.get(), file_system);
   return parquet_data_wrapper->getDataPreview(g_detect_test_sample_size.has_value()
                                                   ? g_detect_test_sample_size.value()
-                                                  : Detector::kDefaultSampleRowsCount);
+                                                  : shared::kDefaultSampleRowsCount);
 }
 #endif
 

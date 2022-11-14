@@ -42,4 +42,5 @@ inline const std::string kCatalogDirectoryName = "catalogs";
 inline const std::string kDataDirectoryName = "data";
 inline const std::string kLockfilesDirectoryName = "lockfiles";
 inline const std::string kDefaultLicenseFileName = "heavyai.license";
+static constexpr size_t kDefaultSampleRowsCount{100};
 }  // namespace shared

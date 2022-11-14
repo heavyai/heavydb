@@ -4413,8 +4413,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         col.is_reserved_keyword = ImportHelpers::is_reserved_name(col.col_name);
         _return.row_set.row_desc[col_idx] = col;
       }
-      auto sample_data =
-          detector.get_sample_rows(import_export::Detector::kDefaultSampleRowsCount);
+      auto sample_data = detector.get_sample_rows(shared::kDefaultSampleRowsCount);
 
       TRow sample_row;
       for (auto row : sample_data) {
@@ -4441,12 +4440,11 @@ void DBHandler::detect_column_types(TDetectResult& _return,
       if (!is_raster) {
         // @TODO(se) support for raster?
         std::map<std::string, std::vector<std::string>> sample_data;
-        import_export::Importer::readMetadataSampleGDAL(
-            file_path.string(),
-            Geospatial::kGeoColumnName,
-            sample_data,
-            import_export::Detector::kDefaultSampleRowsCount,
-            copy_params);
+        import_export::Importer::readMetadataSampleGDAL(file_path.string(),
+                                                        Geospatial::kGeoColumnName,
+                                                        sample_data,
+                                                        shared::kDefaultSampleRowsCount,
+                                                        copy_params);
         if (sample_data.size() > 0) {
           for (size_t i = 0; i < sample_data.begin()->second.size(); i++) {
             TRow sample_row;
