@@ -54,7 +54,6 @@
 #include "Shared/ThreadController.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/fixautotools.h"
-
 // Some builds of boost::geometry require iostream, but don't explicitly include it.
 // Placing in own section to ensure it's included after iostream.
 #include <boost/geometry/index/rtree.hpp>
@@ -733,8 +732,6 @@ class Detector : public DataStreamSink {
   bool has_headers = false;
 
   std::vector<SQLTypeInfo> getBestColumnTypes() const;
-
-  static constexpr size_t kDefaultSampleRowsCount{100};
 
  private:
   void init();
