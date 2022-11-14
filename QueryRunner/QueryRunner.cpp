@@ -202,6 +202,7 @@ QueryRunner::QueryRunner(const char* db_path,
 #else
   uses_gpus = false;
 #endif
+  const size_t num_gpus = static_cast<size_t>(cuda_mgr ? cuda_mgr->getDeviceCount() : 0);
   SystemParameters mapd_params;
   mapd_params.gpu_buffer_mem_bytes = max_gpu_mem;
   mapd_params.aggregator = !leaf_servers.empty();
@@ -218,6 +219,28 @@ QueryRunner::QueryRunner(const char* db_path,
                                                               reserved_gpu_mem,
                                                               0,
                                                               disk_cache_config);
+
+    if (g_enable_executor_resource_mgr) {
+      // With the exception of cpu_result_mem, the below values essentially mirror
+      // how ExecutorResourceMgr is initialized by DBHandler for normal DB operation.
+      // The static 4GB allowcation of CPU result memory is sufficient for our tests,
+      // and prevents variability based on the DBHandler approach to sizing as a fraction
+      // of CPU buffer pool mem size.
+      Executor::init_resource_mgr(
+          cpu_threads() /* num_cpu_slots */,
+          num_gpus /* num_gpu_slots */,
+          static_cast<size_t>(1UL << 32) /* cpu_result_mem */,
+          data_mgr->getCpuBufferPoolSize() /* cpu_buffer_pool_mem */,
+          data_mgr->getGpuBufferPoolSize() /* gpu_buffer_pool_mem */,
+          0.9 /* per_query_max_cpu_slots_ratio */,
+          1.0 /* per_query_max_cpu_result_mem_ratio */,
+          true /* allow_cpu_kernel_concurrency */,
+          true /* allow_cpu_gpu_kernel_concurrency */,
+          false /* allow_cpu_slot_oversubscription_concurrency */,
+          false /* allow_cpu_result_mem_oversubscription_concurrency */,
+          0.9 /* max_available_resource_use_ratio */);
+    }
+
     sys_cat.init(g_base_path,
                  data_mgr,
                  {},

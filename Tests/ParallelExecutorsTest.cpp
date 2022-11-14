@@ -555,8 +555,9 @@ int main(int argc, char* argv[]) {
   if (vm.count("keep-data")) {
     g_keep_data = true;
   }
-  if (vm.count("enable-executor-resource-mgr")) {
-#ifndef HAVE_TSAN
+
+  if (g_enable_executor_resource_mgr) {
+#ifdef HAVE_TSAN
     // Parallel executor tests allocate too much memory to
     // instrument under TSAN, so only enable the ExecutorResourceMgr
     // (i.e. parallel kernel execution) if TSAN is off.
@@ -566,12 +567,8 @@ int main(int argc, char* argv[]) {
     // to run this test under TSAN as well.
     // Todo(todd): Find way to run this test with parallel kernel execution on
     // and TSAN enabled
-    g_enable_executor_resource_mgr = true;
-#else
     g_enable_executor_resource_mgr = false;
 #endif
-  } else {
-    g_enable_executor_resource_mgr = false;
   }
 
   int err{0};
