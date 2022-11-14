@@ -76,6 +76,7 @@ extern bool g_enable_interop;
 extern bool g_enable_union;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
 extern bool g_enable_table_functions;
+extern bool g_enable_executor_resource_mgr;
 
 extern size_t g_leaf_count;
 extern bool g_cluster;
@@ -28006,6 +28007,11 @@ int main(int argc, char** argv) {
                          ->default_value(g_enable_bump_allocator)
                          ->implicit_value(true),
                      "Enable the bump allocator for projection queries on GPU.");
+  desc.add_options()(
+      "enable-executor-resource-mgr",
+      po::value<bool>(&g_enable_executor_resource_mgr)->implicit_value(true),
+      "Enable executor resource manager to track execution resources and "
+      "selectively gate concurrency based on resource availability.");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
   desc.add_options()("use-existing-data",
                      "Don't create and drop tables and only run select tests (it "
