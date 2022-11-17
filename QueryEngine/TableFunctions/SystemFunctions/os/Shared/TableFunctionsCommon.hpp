@@ -28,11 +28,26 @@
 
 #include "QueryEngine/heavydbTypes.h"
 
+#ifdef HAVE_SYSTEM_TFS
+
 template <typename T>
 NEVER_INLINE HOST std::pair<T, T> get_column_min_max(const Column<T>& col);
 
 NEVER_INLINE HOST std::pair<int32_t, int32_t> get_column_min_max(
     const Column<TextEncodingDict>& col);
+
+#else  // Define stubs to allow build to complete when ENABLE_SYSTEM_TFS=off.
+
+template <typename T>
+std::pair<T, T> get_column_min_max(Column<T> const&) {
+  throw std::runtime_error("Table function called but built with ENABLE_SYSTEM_TFS=off.");
+}
+
+std::pair<int32_t, int32_t> get_column_min_max(Column<TextEncodingDict> const&) {
+  throw std::runtime_error("Table function called but built with ENABLE_SYSTEM_TFS=off.");
+}
+
+#endif
 
 template <typename T>
 NEVER_INLINE HOST double get_column_mean(const T* data, const int64_t num_rows);

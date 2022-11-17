@@ -427,6 +427,7 @@ else()
 endif()
 
 if(ENABLE_SYSTEM_TFS)
+  add_definitions ("-DHAVE_SYSTEM_TFS")
   if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
     if(ENABLE_RF_PROP_TFS)
       add_definitions ("-DHAVE_RF_PROP_TFS")
