@@ -543,6 +543,20 @@ TEST_F(ArrayExtOpsEnv, ArrayValidateRawInputArrayDiffType) {
   }
 }
 
+TEST_F(ArrayExtOpsEnv, CardinalityWithUdf) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT CARDINALITY(ARRAY_APPEND({1, 2}, 3));", dt));
+    }
+    {
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT ARRAY_LENGTH(ARRAY_APPEND({1, 2}, 3));", dt));
+    }
+  }
+}
+
 class FixedEncodedArrayTest : public ::testing::Test {
  protected:
   void SetUp() override { dropTestTables(); }
