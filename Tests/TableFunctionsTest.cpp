@@ -391,7 +391,7 @@ class TableFunctions : public ::testing::Test {
           "hh3 GEOMETRY(LINESTRING, 4326) ENCODING NONE, "
           "p4 GEOMETRY(POLYGON, 900913),"
           "r4 GEOMETRY(LINESTRING, 900913), h4 GEOMETRY(LINESTRING, 900913), hh4 "
-          "GEOMETRY(LINESTRING, 900913));");
+          "GEOMETRY(LINESTRING, 900913), sizes INT);");
 
       TestHelpers::ValuesGenerator gen("geo_polygon_test");
 
@@ -399,9 +399,9 @@ class TableFunctions : public ::testing::Test {
                            "'LINESTRING(1 2,3 4,5 6,7 8,9 10)'",
                            "'LINESTRING(2 3,3 4,1 2)'",
                            "'NULL'",
-                           "'POLYGON((0 0,5 0,5 5,0 5,0 0),(2 2, 2 1,1 2,2 2))'",
+                           "'POLYGON((0 0,5 0,5 5,0 5,0 0),(2 2, 2 1,1 1,1 2,2 2))'",
                            "'LINESTRING(0 0,5 0,5 5,0 5)'",
-                           "'LINESTRING(2 2,2 1,1 2)'",
+                           "'LINESTRING(2 2,2 1,1 1,1 2)'",
                            "'NULL'",
                            "'POLYGON((0 0,6 0,6 6,0 6,0 0),(3 3,3 2,2 2,2 3,3 3))'",
                            "'LINESTRING(0 0,6 0,6 6,0 6))'",
@@ -410,7 +410,8 @@ class TableFunctions : public ::testing::Test {
                            "'POLYGON((0 0,7 0,7 7,0 7,0 0),(4 4,2 4, 2 3,4 2,4 4))'",
                            "'LINESTRING(0 0,7 0,7 7,0 7)'",
                            "'LINESTRING(4 4,4 2,2 3,2 4)'",
-                           "'NULL'"),
+                           "'NULL'",
+                           "8"),
                        ExecutorDeviceType::CPU);
 
       run_multiple_agg(gen("'POLYGON((0 0,5 0,5 5,0 5,0 0))'",
@@ -428,7 +429,8 @@ class TableFunctions : public ::testing::Test {
                            "'POLYGON((0 0,4 0,4 4,0 4,0 0))'",
                            "'LINESTRING(0 0,4 0,4 4,0 4)'",
                            "'NULL'",
-                           "'NULL'"),
+                           "'NULL'",
+                           "4"),
                        ExecutorDeviceType::CPU);
 
       run_multiple_agg(
@@ -436,9 +438,9 @@ class TableFunctions : public ::testing::Test {
               "'LINESTRING(1 2,3 4,5 6,7 8,9 10)'",
               "'LINESTRING(2 3,3 4,1 2)'",
               "'LINESTRING(9 10,5 6,7 8)'",
-              "'POLYGON((0 0,5 0,5 5,0 5,0 0),(2 2,2 1,1 2,2 2),(0 0,0 1,1 0))'",
+              "'POLYGON((0 0,5 0,5 5,0 5,0 0),(2 2,2 1,1 1,1 2,2 2),(0 0,0 1,1 0))'",
               "'LINESTRING(0 0,5 0,5 5,0 5)'",
-              "'LINESTRING(2 2,2 1,1 2)'",
+              "'LINESTRING(2 2,2 1,1 1,1 2)'",
               "'LINESTRING(0 0,0 1,1 0)'",
               "'POLYGON((0 0,6 0,6 6,0 6,0 0),(3 3,3 2,2 2,2 3,3 3),(0 0,0 1,1 0))'",
               "'LINESTRING(0 0,6 0,6 6,0 6))'",
@@ -447,7 +449,8 @@ class TableFunctions : public ::testing::Test {
               "'POLYGON((0 0,7 0,7 7,0 7,0 0),(4 4,2 4, 2 3,4 2,4 4),(0 0,0 1,1 0))'",
               "'LINESTRING(0 0,7 0,7 7,0 7)'",
               "'LINESTRING(4 4,4 2,2 3,2 4)'",
-              "'LINESTRING(0 0,0 1,1 0)'"),
+              "'LINESTRING(0 0,0 1,1 0)'",
+              "11"),
           ExecutorDeviceType::CPU);
       run_multiple_agg(gen("'NULL'",
                            "'NULL'",
@@ -464,7 +467,8 @@ class TableFunctions : public ::testing::Test {
                            "'NULL'",
                            "'NULL'",
                            "'NULL'",
-                           "'NULL'"),
+                           "'NULL'",
+                           "NULL"),
                        ExecutorDeviceType::CPU);
     }
   }
@@ -3535,6 +3539,25 @@ TEST_F(TableFunctions, ColumnGeoPolygonOutput) {
         std::string q2 = "SELECT polygons FROM TABLE(CT_MAKE_POLYGON3(CURSOR(SELECT " +
                          rcol + ", " + hcol + ", " + hhcol + " FROM geo_polygon_test)));";
 
+        const auto expected_rows = run_multiple_agg(q1, dt);
+        const auto rows = run_multiple_agg(q2, dt);
+        assert_equal<double>(rows, expected_rows);
+      }
+    }
+
+    for (int i = 1; i <= 4; i++) {
+      std::string pcol = "p" + std::to_string(i);
+      std::string rcol = "r" + std::to_string(i);
+      std::string hcol = "h" + std::to_string(i);
+      std::string hhcol = "hh" + std::to_string(i);
+      {
+        std::string q1 = "SELECT sizes as key, COUNT(*) FROM (SELECT " + pcol +
+                         ", sizes FROM geo_polygon_test) GROUP BY key;";
+        std::string q2 =
+            "SELECT sizes as key, COUNT(*) FROM (SELECT polygons, sizes FROM "
+            "TABLE(CT_MAKE_POLYGON3(CURSOR(SELECT " +
+            rcol + ", " + hcol + ", " + hhcol +
+            " FROM geo_polygon_test)))) GROUP BY key;";
         const auto expected_rows = run_multiple_agg(q1, dt);
         const auto rows = run_multiple_agg(q2, dt);
         assert_equal<double>(rows, expected_rows);
