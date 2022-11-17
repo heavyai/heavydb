@@ -75,6 +75,12 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CardinalityExpr* expr,
   auto arr_lv = codegen(arr_expr, true, co);
   std::string fn_name("array_size");
 
+  if (auto alloca = llvm::dyn_cast<llvm::AllocaInst>(arr_lv.front())) {
+    if (alloca->getAllocatedType()->isStructTy()) {
+      throw std::runtime_error("Unsupported type used in 'cardinality'");
+    }
+  }
+
   std::vector<llvm::Value*> array_size_args{
       arr_lv.front(),
       posArg(arr_expr),
