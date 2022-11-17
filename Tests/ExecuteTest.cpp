@@ -12197,7 +12197,11 @@ TEST_F(Select, Joins_FunctionOper) {
           "select count(*) as n from table(generate_series(-80, 80, 1)) "
           "as ft(s), cte where geoToH3(cast(s as float), cast(s as float), 10) "
           "= cte.h3;";
+#ifdef HAVE_SYSTEM_TFS
       EXPECT_EQ(80 * 2 + 1, v<int64_t>(run_simple_agg(query, dt)));
+#else
+      EXPECT_ANY_THROW(run_simple_agg(query, dt));
+#endif
     }
     {
       // check whether we're properly generate a code for a left join between bigint and
@@ -12211,7 +12215,11 @@ TEST_F(Select, Joins_FunctionOper) {
         return oss.str();
       };
       for (const auto col_name : {"w", "z", "x", "fx"}) {
+#ifdef HAVE_SYSTEM_TFS
         EXPECT_NO_THROW(run_multiple_agg(gen_query(col_name), dt));
+#else
+        EXPECT_ANY_THROW(run_multiple_agg(gen_query(col_name), dt));
+#endif
       }
     }
   }
