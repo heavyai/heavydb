@@ -976,6 +976,14 @@ class SQLTypeInfo {
     } else if ((type == kCOLUMN || type == kCOLUMN_LIST) && IS_GEO(subtype)) {
       type_info.set_type(subtype);
       type_info.set_subtype(kGEOMETRY);
+    } else if (IS_GEO(type)) {
+      if (type_info.get_compression() == kENCODING_GEOINT) {
+        type_info.set_type(kINT);
+        type_info.set_compression(kENCODING_NONE);
+      } else {
+        type_info.set_type(kDOUBLE);
+      }
+      type_info.set_subtype(kNULLT);
     } else {
       type_info.set_type(subtype);
       type_info.set_subtype(kNULLT);

@@ -243,25 +243,38 @@ ChunkMetadataMap synthesize_metadata_table_function(const ResultSet* rows) {
     // metadata is supposed to be syntesized for a query like `SELECT
     // UNNEST(col_of_arrays) ... GROUP BY ...`. How can we verify that
     // here?
+
+    // min/max of a column of a geotype is defined as the min/max of
+    // all x and y coordinate values
     bool is_array = col_sql_type_info.is_array();
+    bool is_geometry = col_sql_type_info.is_geometry();
     const auto col_type =
-        (is_array ? col_sql_type_info.get_subtype() : col_sql_type_info.get_type());
+        (is_array ? col_sql_type_info.get_subtype()
+                  : (is_geometry ? col_sql_type_info.get_elem_type().get_type()
+                                 : col_sql_type_info.get_type()));
     const auto col_type_info =
-        (is_array ? col_sql_type_info.get_elem_type() : col_sql_type_info);
+        ((is_array || is_geometry) ? col_sql_type_info.get_elem_type()
+                                   : col_sql_type_info);
 
     chunk_metadata->sqlType = col_type_info;
     chunk_metadata->numElements = row_count;
 
     const int8_t* values_buffer;
     size_t values_count;
-    if (is_array) {
+    if (FlatBufferManager::isFlatBuffer(columnar_buffer)) {
       CHECK(FlatBufferManager::isFlatBuffer(columnar_buffer));
       FlatBufferManager m{const_cast<int8_t*>(columnar_buffer)};
       chunk_metadata->numBytes = m.getBufferSize();
-      values_count = m.get_nof_values();
+      if (is_geometry) {
+        // a geometry value is a pair of coordinates but its element
+        // type value is a int or double, hence multiplication by 2:
+        values_count = m.get_nof_values() * 2;
+      } else {
+        CHECK(is_array);
+        values_count = m.get_nof_values();
+      }
       values_buffer = m.get_values();
     } else {
-      CHECK(!FlatBufferManager::isFlatBuffer(columnar_buffer));
       chunk_metadata->numBytes = row_count * col_type_info.get_size();
       values_count = row_count;
       values_buffer = columnar_buffer;
