@@ -32,6 +32,10 @@ import org.apache.calcite.rel.metadata.RelColumnMapping;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeFactory.FieldInfoBuilder;
+import org.apache.calcite.rel.type.RelDataTypeFamily;
+import org.apache.calcite.runtime.Resources;
+import org.apache.calcite.runtime.Resources.BaseMessage;
+import org.apache.calcite.runtime.Resources.ExInst;
 import org.apache.calcite.schema.FunctionParameter;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlCall;
@@ -69,7 +73,10 @@ import org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.calcite.sql.util.ListSqlOperatorTable;
 import org.apache.calcite.sql.util.ReflectiveSqlOperatorTable;
 import org.apache.calcite.sql.validate.SqlNameMatcher;
+import org.apache.calcite.sql.validate.SqlValidator;
+import org.apache.calcite.sql.validate.SqlValidatorException;
 import org.apache.calcite.sql.validate.SqlValidatorImpl;
+import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.util.Optionality;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
@@ -779,6 +786,41 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
+
+    @Override
+    public void validateCall(SqlCall call,
+            SqlValidator validator,
+            SqlValidatorScope scope,
+            SqlValidatorScope operandScope) {
+      for (int i = 0; i < call.operandCount(); ++i) {
+        SqlNode operand = call.operand(i);
+        if (operand instanceof SqlCall) {
+          SqlCall operand_call = (SqlCall) operand;
+          SqlOperator call_oper = operand_call.getOperator();
+          if (call_oper instanceof SqlFunction) {
+            SqlFunction call_func = (SqlFunction) call_oper;
+            if (call_func.getFunctionType()
+                    == SqlFunctionCategory.USER_DEFINED_FUNCTION) {
+              // Cannot call ARRAY_LENGTH(UDF_func) as its llvm return type
+              // is different than the one expected by ARRAY_LENGTH
+              // - UDF(...) -> {T*, i64, i8}*
+              // - ARRAY_LENGTH(chunk_iter*) -> i32
+              throw validator.newValidationError(
+                      call, _ERRORS.illegalArrayLengthCall(call.toString()));
+            }
+          }
+        }
+      }
+      super.validateCall(call, validator, scope, operandScope);
+    }
+
+    public interface ArrayLengthErrors {
+      @BaseMessage("Illegal argument to 'ARRAY_LENGTH': ''{0}''")
+      ExInst<SqlValidatorException> illegalArrayLengthCall(String query);
+    }
+
+    public static final ArrayLengthErrors _ERRORS =
+            Resources.create(ArrayLengthErrors.class);
   }
 
   public static class PgILike extends SqlFunction {
@@ -2687,7 +2729,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               null,
               OperandTypes.family(sig.toSqlSignature()),
-              SqlFunctionCategory.SYSTEM);
+              SqlFunctionCategory.USER_DEFINED_FUNCTION);
       this.sig = sig;
       arg_names = sig.getArgNames();
     }
