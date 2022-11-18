@@ -55,20 +55,104 @@ std::vector<std::string> split_on_regex(const std::string& in, const std::string
   return tokens;
 }
 
-std::vector<ColumnPair> schema_string_to_pairs(const std::string& schema) {
-  auto schema_list = split_on_regex(schema, ",\\s+");
-  std::vector<ColumnPair> result;
-  for (const auto& token : schema_list) {
-    auto tokens = split_on_regex(token, "\\s+");
-    if (tokens[0] == "shard" &&
-        tokens[1].substr(0, 3) == "key") {  // skip `shard key` specifier
-      continue;
-    }
-    CHECK(tokens.size() >= 2);
-    result.push_back({tokens[0], tokens[1]});
+#ifdef XXX
+std::string parse_next_field(const std::string& record, size_t& pos) {
+  while (pos < record.size() && record[pos] == ' ') {
+    pos++;
   }
-  return result;
+  if (pos == record.size()) {
+    return "NULL";
+  }
+
+  // determine wrapper for the next data field
+  bool is_wrapped = false;
+  char field_wrapper;
+  if (record[pos] == '\'' || record[pos] == '"') {
+    is_wrapped = true;
+    field_wrapper = record[pos];
+    pos++;
+  }
+
+  // determine the length of the next data field
+  size_t field_length, end_pos;
+  if (is_wrapped) {
+    end_pos = record.find(field_wrapper, pos);
+    CHECK(end_pos < record.size()) << "Expected a terminating " << field_wrapper
+                                   << " in the record '" << record << "'.";
+  } else {
+    end_pos = record.find(',', pos);
+  }
+  field_length = end_pos - pos;
+
+  auto field_value = record.substr(pos, field_length);
+  pos = end_pos + (is_wrapped ? 2 : 1);
+
+  // determine if the data is nulled
+  if ((!is_wrapped && field_value.empty()) || field_value == "NULL" ||
+      field_value == "\\N") {
+    field_value = "NULL";
+  }
+
+  return field_value;
 }
+#endif
+#ifdef XXXX
+void apply_mods_to_insert_record(std::string& record,
+                                 const std::vector<ColumnPair>& column_pairs,
+                                 const std::string& data_wrapper_type) {
+  const std::vector<std::string> data_wrapper_requires_all_wrapped_fields = {
+      "sqlite", "postgres", "redshift", "snowflake"};
+  const std::vector<std::string> column_type_requires_wrapped_field = {
+      "timestamp", "string", "time", "date", "char", "string(12600)"};
+  const std::vector<std::string> is_geography_column_type = {
+      "point", "linestring", "polygon", "multipolygon", "geography", "geometry"};
+  const std::map<std::string, std::string> data_wrapper_to_geography_function = {
+      {"bigquery", "ST_GEOGFROMTEXT"}, {"redshift", "ST_GeomFromText"}};
+  const std::vector<std::string> is_bignumeric_column_type = {
+      "bignumeric(38)", "bigdecimal(38)", "bignumeric (38)", "bigdecimal (38)"};
+  const std::map<std::string, std::string> data_wrapper_to_bignumeric_literal_function = {
+      {"bigquery", "BIGNUMERIC"}};
+
+  std::stringstream ss;
+  size_t pos = 0;
+  for (size_t i = 0; i < column_pairs.size(); i++) {
+    auto field_value = parse_next_field(record, pos);
+    auto col_type = to_lower(column_pairs[i].second);
+    auto is_null = field_value == "NULL";
+
+    if (!is_null && shared::contains(is_geography_column_type, col_type)) {
+      if (data_wrapper_to_geography_function.find(data_wrapper_type) !=
+          data_wrapper_to_geography_function.end()) {
+        ss << data_wrapper_to_geography_function.at(data_wrapper_type) << "('"
+           << field_value << "')";
+      } else {
+        ss << "'" << field_value << "'";
+      }
+    } else if (!is_null && shared::contains(is_bignumeric_column_type, col_type)) {
+      if (data_wrapper_to_bignumeric_literal_function.find(data_wrapper_type) !=
+          data_wrapper_to_bignumeric_literal_function.end()) {
+        ss << data_wrapper_to_bignumeric_literal_function.at(data_wrapper_type) << " '"
+           << field_value << "'";
+      } else {
+        ss << field_value;
+      }
+
+    } else if (!is_null &&
+               (shared::contains(data_wrapper_requires_all_wrapped_fields,
+                                 data_wrapper_type) ||
+                shared::contains(column_type_requires_wrapped_field, col_type))) {
+      ss << "'" << field_value << "'";
+    } else {
+      ss << field_value;
+    }
+
+    if (i < column_pairs.size() - 1) {
+      ss << ",";
+    }
+  }
+  record = ss.str();
+}
+#endif
 
 boost::regex make_regex(const std::string& pattern) {
   std::string whitespace_wrapper = "\\s*" + pattern + "\\s*";
@@ -78,10 +162,12 @@ boost::regex make_regex(const std::string& pattern) {
 const std::map<std::string, std::map<boost::regex, std::string>>
     k_rdms_column_type_substitutes = {
         {"sqlite",
-         {{make_regex("DECIMAL\\s*\\(\\d+,\\s*\\d+\\)\\s*(\\[\\d*\\])?"), "double"},
+         {{make_regex("TEXT.*"), "text"},
+          {make_regex("DECIMAL\\s*\\(\\d+,\\s*\\d+\\)\\s*(\\[\\d*\\])?"), "double"},
           {make_regex("FLOAT"), "double"}}},
         {"postgres",
-         {{make_regex("FLOAT"), "real"},
+         {{make_regex("TEXT.*"), "text"},
+          {make_regex("FLOAT"), "real"},
           {make_regex("DOUBLE"), "double precision"},
           {make_regex("TINYINT"), "smallint"},
           {make_regex("TIME\\b"), "time(0)"},
@@ -92,7 +178,8 @@ const std::map<std::string, std::map<boost::regex, std::string>>
           {make_regex("POLYGON"), "geometry"},
           {make_regex("MULTIPOLYGON"), "geometry"}}},
         {"redshift",
-         {{make_regex("FLOAT"), "real"},
+         {{make_regex("TEXT.*"), "text"},
+          {make_regex("FLOAT"), "real"},
           {make_regex("DOUBLE"), "double precision"},
           {make_regex("TIMESTAMP\\s*\\(\\d+\\)"), "timestamp"},
           {make_regex("TINYINT"), "smallint"},
@@ -101,22 +188,53 @@ const std::map<std::string, std::map<boost::regex, std::string>>
           {make_regex("POLYGON"), "geometry"},
           {make_regex("MULTIPOLYGON"), "geometry"}}},
         {"snowflake",
-         {{make_regex("TIME\\b"), "time(0)"},
+         {{make_regex("TEXT.*"), "text"},
+          {make_regex("TIME\\b"), "time(0)"},
+          {make_regex("POINT"), "geography"},
+          {make_regex("LINESTRING"), "geography"},
+          {make_regex("POLYGON"), "geography"},
+          {make_regex("MULTIPOLYGON"), "geography"}}},
+        {"bigquery",
+         {{make_regex("TEXT.*"), "string"},
+          {make_regex("TIMESTAMP\\s*\\(\\d+\\)"), "timestamp"},
+          {make_regex("TIME\\s*\\(\\d+\\)"), "time"},
+          {make_regex("FLOAT"), "float64"},
+          {make_regex("DOUBLE"), "float64"},
           {make_regex("POINT"), "geography"},
           {make_regex("LINESTRING"), "geography"},
           {make_regex("POLYGON"), "geography"},
           {make_regex("MULTIPOLYGON"), "geography"}}}};
 
-void substitute_rdms_column_types(const std::string& rdms_type, std::string& type) {
-  if (const auto& rdms_it = k_rdms_column_type_substitutes.find(rdms_type);
+const std::map<std::string, std::map<boost::regex, std::string>>
+    k_rdms_column_type_prepend = {
+        {"bigquery",
+         {{make_regex("DECIMAL\\s*\\(\\d\\d+(,\\s*\\d\\d+)?\\)\\s*"), "BIG"}}}};
+// `DECIMAL` types need to be upgraded to `BIGDECIMAL` if the
+// scale exceeds the absolute range: 0 ≤ S ≤ 9 or if the precision
+// exceeds the relative range: max(1, S) ≤ P ≤ S + 29
+
+std::string get_col_type_for_rdms(std::string col_type, const std::string& rdms) {
+  if (const auto& rdms_it = k_rdms_column_type_substitutes.find(rdms);
       rdms_it != k_rdms_column_type_substitutes.end()) {
     for (const auto& substitute : rdms_it->second) {
-      if (boost::regex_match(type, substitute.first)) {
-        type = substitute.second;
-        return;
+      if (boost::regex_match(col_type, substitute.first)) {
+        col_type = substitute.second;
+        break;
       }
     }
   }
+
+  if (const auto& rdms_it = k_rdms_column_type_prepend.find(rdms);
+      rdms_it != k_rdms_column_type_prepend.end()) {
+    for (const auto& prepend : rdms_it->second) {
+      if (boost::regex_match(col_type, prepend.first)) {
+        col_type = prepend.second + col_type;
+        break;
+      }
+    }
+  }
+
+  return col_type;
 }
 
 }  // namespace
@@ -290,7 +408,7 @@ class DBHandlerTestFixture : public testing::Test {
 
   static bool isOdbc(const std::string& data_wrapper_type) {
     static const std::vector<std::string> odbc_wrappers{
-        "sqlite", "postgres", "redshift", "snowflake"};
+        "sqlite", "postgres", "redshift", "snowflake", "bigquery"};
     return std::find(odbc_wrappers.begin(), odbc_wrappers.end(), data_wrapper_type) !=
            odbc_wrappers.end();
   }
@@ -548,33 +666,47 @@ class DBHandlerTestFixture : public testing::Test {
 
   static void setSessionId(const std::string& session_id) { session_id_ = session_id; }
 
-  static std::string createSchemaString(const std::string& schema,
-                                        const std::string& dbms_type = "") {
-    return createSchemaString(schema_string_to_pairs(schema), dbms_type);
+  static std::vector<ColumnPair> schema_string_to_column_pairs(
+      const std::string& schema) {
+    auto schema_list = split_on_regex(schema, ",\\s+");
+    std::vector<ColumnPair> result;
+    for (const auto& token : schema_list) {
+      auto tokens = split_on_regex(token, "\\s+");
+      if (tokens[0] == "shard" &&
+          tokens[1].substr(0, 3) == "key") {  // skip `shard key` specifier
+        continue;
+      }
+      CHECK(tokens.size() >= 2);
+      result.push_back({tokens[0], tokens[1]});
+    }
+    return result;
   }
 
-  static std::string createSchemaString(const std::vector<ColumnPair>& column_pairs,
-                                        const std::string& dbms_type = "") {
-    std::stringstream schema_stream;
-    schema_stream << "(";
-    size_t i = 0;
-    for (auto [name, type] : column_pairs) {
-      if (!dbms_type.empty()) {
-        if (std::string::npos != type.find("TEXT")) {
-          // remove encoding information
-          type = "TEXT";
-        } else {
-          substitute_rdms_column_types(dbms_type, type);
-        }
+  static std::string column_pairs_to_schema_string(
+      const std::vector<ColumnPair>& column_pairs) {
+    std::stringstream ss;
+    for (size_t i = 0; i < column_pairs.size(); i++) {
+      const auto& [col_name, col_type] = column_pairs[i];
+      ss << col_name << " " << col_type;
+      if (i < column_pairs.size() - 1) {
+        ss << ", ";
       }
-      schema_stream << name << " " << type;
-      schema_stream << ((++i < column_pairs.size()) ? ", " : ") ");
     }
-    return schema_stream.str();
+    return ss.str();
+  }
+
+  static std::vector<ColumnPair> get_column_pairs_for_rdms(
+      const std::vector<ColumnPair>& column_pairs,
+      const std::string& rdms) {
+    std::vector<ColumnPair> result;
+    for (auto [col_name, col_type] : column_pairs) {
+      result.emplace_back(col_name, get_col_type_for_rdms(col_type, rdms));
+    }
+    return result;
   }
 
   static void createODBCSourceTable(const std::string& table_name,
-                                    const std::string& table_schema,
+                                    const std::vector<ColumnPair>& column_pairs,
                                     const std::string& src_file,
                                     const std::string& data_wrapper_type,
                                     const bool is_odbc_geo = false) {}
