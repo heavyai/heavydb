@@ -193,7 +193,7 @@ class CachedSessionStore : public SessionsStore {
     }
   }
 
-  ~CachedSessionStore() {
+  ~CachedSessionStore() override {
     std::lock_guard lg(mtx_);
     sessions_.clear();
   }

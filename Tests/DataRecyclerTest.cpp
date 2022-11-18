@@ -378,13 +378,13 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
 
   std::unordered_set<std::string> query_plan_dag_hash;
   std::vector<std::string> queries;
-  queries.push_back(
+  queries.emplace_back(
       "SELECT COUNT(1) FROM T1 LEFT JOIN T2 ON T1.y <= T2.y WHERE T1.x = T2.x");
-  queries.push_back(
+  queries.emplace_back(
       "SELECT COUNT(1) FROM T1 LEFT JOIN T2 ON T1.y = T2.y WHERE T1.x = T2.x");
-  queries.push_back(
+  queries.emplace_back(
       "SELECT COUNT(1) FROM T1 INNER JOIN T2 ON T1.y = T2.y WHERE T1.x = T2.x");
-  queries.push_back(
+  queries.emplace_back(
       "SELECT COUNT(1) FROM T1 INNER JOIN T2 ON T1.y <= T2.y WHERE T1.x = T2.x");
   for (const auto& sql : queries) {
     auto query_info = QR::get()->getQueryInfoForDataRecyclerTest(sql);

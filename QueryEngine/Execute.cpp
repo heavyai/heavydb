@@ -5114,11 +5114,11 @@ std::vector<QuerySessionStatus> Executor::getQuerySessionInfo(
     auto& query_infos = queries_session_map_.at(query_session);
     std::vector<QuerySessionStatus> ret;
     for (auto& info : query_infos) {
-      ret.push_back(QuerySessionStatus(query_session,
-                                       info.second.getExecutorId(),
-                                       info.second.getQueryStr(),
-                                       info.second.getQuerySubmittedTime(),
-                                       info.second.getQueryStatus()));
+      ret.emplace_back(query_session,
+                       info.second.getExecutorId(),
+                       info.second.getQueryStr(),
+                       info.second.getQuerySubmittedTime(),
+                       info.second.getQueryStatus());
     }
     return ret;
   }

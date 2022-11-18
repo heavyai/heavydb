@@ -941,7 +941,7 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     FsiImportTest::teardownS3();
   }
 
-  virtual ~ImportAndSelectTestBase() = default;
+  ~ImportAndSelectTestBase() override = default;
 
   virtual ImportAndSelectTestParameters TestParam() = 0;
 

@@ -215,7 +215,7 @@ std::vector<std::string> get_ome_tiff_band_names(
             if (name_attribute) {
               auto const* name = String::transcode(name_attribute);
               if (name) {
-                band_names.push_back(name);
+                band_names.emplace_back(name);
               }
             }
           }
@@ -837,7 +837,7 @@ void RasterImporter::getRawBandNamesForFormat(
           raw_band_names_.clear();
           return;
         }
-        names.push_back(description);
+        names.emplace_back(description);
       }
       raw_band_names_.emplace_back(std::move(names));
     }

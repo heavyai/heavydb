@@ -185,8 +185,8 @@ ResultSetPtr TableFunctionExecutionContext::execute(
       }
       if (ti.is_column_list()) {
         if (col_index == -1) {
-          col_list_bufs.push_back({});
-          input_col_list_str_dict_proxy_ptrs.push_back({});
+          col_list_bufs.emplace_back();
+          input_col_list_str_dict_proxy_ptrs.emplace_back();
           col_list_bufs.back().reserve(ti.get_dimension());
           input_col_list_str_dict_proxy_ptrs.back().reserve(ti.get_dimension());
         } else {

@@ -28,8 +28,8 @@ class CudaEventClock : public DeviceClock {
     cuEventCreate(&start_, 0);
     cuEventCreate(&stop_, 0);
   }
-  virtual void start() override { cuEventRecord(start_, 0); }
-  virtual int stop() override {
+  void start() override { cuEventRecord(start_, 0); }
+  int stop() override {
     cuEventRecord(stop_, 0);
     cuEventSynchronize(stop_);
     float ms = 0;

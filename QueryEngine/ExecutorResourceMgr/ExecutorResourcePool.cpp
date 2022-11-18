@@ -492,8 +492,9 @@ bool ExecutorResourcePool::check_request_against_global_policy(
     const ConcurrentResourceGrantPolicy& concurrent_resource_grant_policy) const {
   if (concurrent_resource_grant_policy.concurrency_policy ==
           ResourceConcurrencyPolicy::ALLOW_SINGLE_REQUEST_GLOBALLY &&
-      resource_allocated > 0)
+      resource_allocated > 0) {
     return false;
+  }
   if (concurrent_resource_grant_policy.oversubscription_concurrency_policy ==
           ResourceConcurrencyPolicy::ALLOW_SINGLE_REQUEST_GLOBALLY &&
       resource_allocated > resource_total) {

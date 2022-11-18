@@ -1071,8 +1071,9 @@ std::unordered_set<llvm::Function*> findAliveRuntimeFuncs(
 
     for (llvm::inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
       if (llvm::CallInst* CI = llvm::dyn_cast<llvm::CallInst>(&*I)) {
-        if (CI->isInlineAsm())  // libdevice calls inline assembly code
+        if (CI->isInlineAsm()) {  // libdevice calls inline assembly code
           continue;
+        }
         llvm::Function* called = CI->getCalledFunction();
         if (!called || visited.find(called) != visited.end()) {
           continue;
@@ -1104,8 +1105,9 @@ void CodeGenerator::linkModuleWithLibdevice(
   // Saves functions \in module
   std::vector<llvm::Function*> roots;
   for (llvm::Function& fn : llvm_module) {
-    if (!fn.isDeclaration())
+    if (!fn.isDeclaration()) {
       roots.emplace_back(&fn);
+    }
   }
 
   // Bind libdevice to the current module
@@ -2251,8 +2253,9 @@ void Executor::createErrorCheckControlFlow(
 
 void Executor::AutoTrackBuffersInRuntimeIR() {
   llvm::Module* M = cgen_state_->module_;
-  if (M->getFunction("allocate_varlen_buffer") == nullptr)
+  if (M->getFunction("allocate_varlen_buffer") == nullptr) {
     return;
+  }
 
   // read metadata
   bool should_track = false;
