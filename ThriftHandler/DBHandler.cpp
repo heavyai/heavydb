@@ -947,6 +947,8 @@ void DBHandler::value_to_thrift_column(const TargetValue& tv,
                                        const SQLTypeInfo& ti,
                                        TColumn& column) {
   if (ti.is_array()) {
+    CHECK(!ti.get_elem_type().get_notnull())
+        << "element types of arrays should always be nullable";
     TColumn tColumn;
     const auto array_tv = boost::get<ArrayTargetValue>(&tv);
     CHECK(array_tv);
@@ -1071,6 +1073,8 @@ TDatum DBHandler::value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti) 
   const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
   if (!scalar_tv) {
     CHECK(ti.is_array());
+    CHECK(!ti.get_elem_type().get_notnull())
+        << "element types of arrays should always be nullable";
     const auto array_tv = boost::get<ArrayTargetValue>(&tv);
     CHECK(array_tv);
     if (array_tv->is_initialized()) {
