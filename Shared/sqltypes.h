@@ -984,6 +984,10 @@ class SQLTypeInfo {
         type_info.set_type(kDOUBLE);
       }
       type_info.set_subtype(kNULLT);
+    } else if (type == kARRAY) {
+      type_info.set_type(subtype);
+      type_info.set_subtype(kNULLT);
+      type_info.set_notnull(false);
     } else {
       type_info.set_type(subtype);
       type_info.set_subtype(kNULLT);
