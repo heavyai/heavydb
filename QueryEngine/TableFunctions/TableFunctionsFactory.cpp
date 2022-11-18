@@ -307,8 +307,9 @@ size_t TableFunction::getSqlOutputRowSizeParameter() const {
     };
 
     while ((size_t)ext_arg_index < sizer) {
-      if ((size_t)ext_arg_index == sizer - 1)
+      if ((size_t)ext_arg_index == sizer - 1) {
         return sql_arg_index;
+      }
 
       const auto& ext_arg = input_args_[ext_arg_index];
       const auto& sql_arg = sql_args_[sql_arg_index];

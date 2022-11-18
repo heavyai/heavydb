@@ -463,7 +463,8 @@ void ForeignDataImporter::finalize(
     }
     auto dict_descriptor =
         catalog.getMetadataForDict(column_descriptor->columnType.get_comp_param(), true);
-    string_dictionaries.push_back({column_descriptor, dict_descriptor->stringDict.get()});
+    string_dictionaries.emplace_back(column_descriptor,
+                                     dict_descriptor->stringDict.get());
   }
 
   finalize(parent_session_info, import_status, string_dictionaries);

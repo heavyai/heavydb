@@ -281,7 +281,7 @@ struct GpuFunction final : public GpuFunctionDefinition {
   GpuFunction(char const* name) : GpuFunctionDefinition(name) {}
 
   llvm::FunctionCallee getFunction(llvm::Module* llvm_module,
-                                   llvm::LLVMContext& context) const {
+                                   llvm::LLVMContext& context) const override {
     return llvm_module->getOrInsertFunction(name_, getTy<TYPES>(context)...);
   }
 };

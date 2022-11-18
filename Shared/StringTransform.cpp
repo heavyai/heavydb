@@ -25,7 +25,7 @@
 #include <regex>
 #include <string>
 
-#include <math.h>  // format_bytes round call
+#include <cmath>   // format_bytes round call
 #include <vector>  // format_bytes
 
 #ifndef __CUDACC__

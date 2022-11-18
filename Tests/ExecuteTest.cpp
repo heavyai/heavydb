@@ -23591,19 +23591,19 @@ TEST_F(Select, WindowFunctionFraming) {
   // 8. use multiple window aggregate functions over the window frame
   {
     std::vector<std::string> test_query;
-    test_query.push_back(
+    test_query.emplace_back(
         "SELECT oc, MIN(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 PRECEDING "
         "AND 2 FOLLOWING), MIN(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 "
         "PRECEDING AND 2 FOLLOWING) FROM test_window_framing ORDER BY oc;");
-    test_query.push_back(
+    test_query.emplace_back(
         "SELECT oc, MIN(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 PRECEDING "
         "AND 2 FOLLOWING), MAX(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 "
         "PRECEDING AND 2 FOLLOWING) FROM test_window_framing ORDER BY oc;");
-    test_query.push_back(
+    test_query.emplace_back(
         "SELECT oc, MIN(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 PRECEDING "
         "AND 2 FOLLOWING), MIN(ti) OVER (PARTITION BY pc ORDER BY oc RANGE BETWEEN 2 "
         "PRECEDING AND 2 FOLLOWING) FROM test_window_framing ORDER BY oc;");
-    test_query.push_back(
+    test_query.emplace_back(
         "SELECT oc, MIN(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 PRECEDING "
         "AND 2 FOLLOWING), MAX(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 "
         "PRECEDING AND 2 FOLLOWING), SUM(ti) OVER (PARTITION BY pc ORDER BY oc RANGE "
@@ -26174,7 +26174,7 @@ class ValuesTest : public ::testing::Test {
       const auto crt_row = g_use_row_iterator ? *it++ : rs->getNextRow(true, true);
       CHECK(!crt_row.empty());
 
-      values2.push_back({});
+      values2.emplace_back();
       for (size_t col_idx = 0; col_idx < values[row_idx].size(); ++col_idx) {
         const auto omnisci_variant = crt_row[col_idx];
         const auto scalar_omnisci_variant =

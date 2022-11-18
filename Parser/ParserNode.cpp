@@ -1145,7 +1145,7 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
                                      : import_export::ImportHeaderRow::kNoHeader;
 #ifdef ENABLE_IMPORT_PARQUET
       } else if (boost::iequals(*p->get_name(), "parquet")) {
-        warnings.push_back(
+        warnings.emplace_back(
             "Deprecation Warning: COPY FROM WITH (parquet='true') is deprecated. Use "
             "WITH (source_type='parquet_file') instead.");
         const StringLiteral* str_literal =
@@ -1284,7 +1284,7 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
         }
         copy_params.lonlat = bool_from_string_literal(str_literal);
       } else if (boost::iequals(*p->get_name(), "geo")) {
-        warnings.push_back(
+        warnings.emplace_back(
             "Deprecation Warning: COPY FROM WITH (geo='true') is deprecated. Use WITH "
             "(source_type='geo_file') instead.");
         const StringLiteral* str_literal =
@@ -6764,8 +6764,9 @@ void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session,
 
   // Test to see if the user does not exist *and* if_exists_ flag set
   Catalog_Namespace::UserMetadata user;
-  if (if_exists_ && !SysCatalog::instance().getMetadataForUser(*user_name_, user))
+  if (if_exists_ && !SysCatalog::instance().getMetadataForUser(*user_name_, user)) {
     return;
+  }
 
   SysCatalog::instance().dropUser(*user_name_);
 }

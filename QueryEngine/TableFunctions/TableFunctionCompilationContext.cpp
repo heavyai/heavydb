@@ -628,7 +628,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
 
       if (columnTypeRequiresCasting(ti) &&
           exe_unit.table_func.mayRequireCastingInputTypes()) {
-        columns_to_cast.push_back(std::make_pair(col_ptr, ti));
+        columns_to_cast.emplace_back(col_ptr, ti);
       }
       CHECK_EQ(col_index, -1);
     } else if (ti.is_column_list()) {
