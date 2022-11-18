@@ -95,7 +95,8 @@ static const std::vector<WrapperType> csv_s3_wrappers{"csv", "csv_s3_select"};
 static const std::vector<WrapperType> odbc_wrappers{"snowflake",
                                                     "sqlite",
                                                     "postgres",
-                                                    "redshift"};
+                                                    "redshift",
+                                                    "bigquery"};
 
 static const std::string default_table_name = "test_foreign_table";
 static const std::string default_table_name_2 = "test_foreign_table_2";
@@ -398,22 +399,15 @@ class ForeignTableTest : public DBHandlerTestFixture {
       const foreign_storage::OptionsMap options = {},
       const std::string& table_name = default_table_name,
       const std::vector<NameTypePair>& db_specific_column_pairs = {},
-      const bool is_odbc_geo = false,
       const int order_by_column_index = -1) {
     std::stringstream ss;
-    ss << "CREATE FOREIGN TABLE " << table_name << " ";
-    std::string schema = DBHandlerTestFixture::createSchemaString(column_pairs);
-    ss << schema;
+    ss << "CREATE FOREIGN TABLE " << table_name << " (";
+    ss << column_pairs_to_schema_string(column_pairs) << ") ";
+    const auto& stored_column_pairs =
+        (db_specific_column_pairs.empty()) ? column_pairs : db_specific_column_pairs;
 
     if (isOdbc(data_wrapper_type)) {
-      std::string db_specific_schema =
-          DBHandlerTestFixture::createSchemaString(column_pairs, data_wrapper_type);
-      ss << "SERVER temp_odbc WITH (sql_select = 'select ";
-      size_t i = 0;
-      for (auto [name, type] : column_pairs) {
-        ss << name << ((++i < column_pairs.size()) ? ", " : " from " + table_name + "'");
-      }
-      createODBCSourceTable(table_name, db_specific_schema, src_path, data_wrapper_type);
+      createODBCSourceTable(table_name, stored_column_pairs, src_path, data_wrapper_type);
     } else {
       ss << "SERVER " + get_default_server(data_wrapper_type);
       ss << " WITH (file_path = '";
@@ -538,19 +532,19 @@ class ForeignTableTest : public DBHandlerTestFixture {
     // clang-format off
     assertResultSetEqual({
       {
-        i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
-        "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+        i(1), "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+        "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
       },
       {
         i(2), Null, Null, Null, Null
       },
       {
         i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
-        "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+        "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2),(2.1 2.1,2.1 2.9,2.9 2.1,2.1 2.1)))"
       },
       {
         i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
-        "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+        "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"
       },
       {
         i(5), Null, Null, Null, Null
@@ -960,18 +954,10 @@ class DataTypeFragmentSizeAndDataWrapperTest
     }
     test_chunk_metadata_map[{0, 8}] =
         createChunkMetadata<int64_t>(8, num_elems * 8, num_elems, 10, 10 * 60 * 60, true);
-    if (wrapper_type_ == "sqlite" && !data_loaded) {
-      // Sqlite seems to incorrectly calculate the max timestamp as the 2020
-      test_chunk_metadata_map[{0, 9}] = createChunkMetadata<int64_t>(
-          9, num_elems * 8, num_elems, 946684859, 1592182799, true);
-      test_chunk_metadata_map[{0, 10}] = createChunkMetadata<int64_t>(
-          10, num_elems * 4, num_elems, 946684800, 1592179200, true);
-    } else {
-      test_chunk_metadata_map[{0, 9}] = createChunkMetadata<int64_t>(
-          9, num_elems * 8, num_elems, 946684859, 16756761599, true);
-      test_chunk_metadata_map[{0, 10}] = createChunkMetadata<int64_t>(
-          10, num_elems * 4, num_elems, 946684800, 16756675200, true);
-    }
+    test_chunk_metadata_map[{0, 9}] = createChunkMetadata<int64_t>(
+        9, num_elems * 8, num_elems, 946684859, 16756761599, true);
+    test_chunk_metadata_map[{0, 10}] = createChunkMetadata<int64_t>(
+        10, num_elems * 4, num_elems, 946684800, 16756675200, true);
     // encoded string
     if (data_loaded) {
       test_chunk_metadata_map[{0, 11}] =
@@ -2851,10 +2837,8 @@ class RefreshTests : public ForeignTableTest, public TempDirManager {
                     bf::copy_option::overwrite_if_exists);
       if (isOdbc(wrapper_type_)) {
         // If we are in ODBC we need to recreate the ODBC table as well.
-        createODBCSourceTable(table_names_[i],
-                              DBHandlerTestFixture::createSchemaString(column_pairs),
-                              tmp_file_names_[i],
-                              wrapper_type_);
+        createODBCSourceTable(
+            table_names_[i], column_pairs, tmp_file_names_[i], wrapper_type_);
       }
     }
   }
@@ -3550,11 +3534,11 @@ class AppendRefreshBase : public RecoverCacheQueryTest, public TempDirManager {
     return (is_evict_) ? " WITH (evict = true)" : " WITH (evict = false)";
   }
 
-  void overwriteSourceDir(const std::string& table_schema) {
+  void overwriteSourceDir(const std::vector<ColumnPair>& column_pairs) {
     overwriteTempDir(getDataFilesPath() + "append_after");
     if (isOdbc(wrapper_type_)) {
       createODBCSourceTable(
-          table_name_, table_schema, test_temp_dir + file_name_, wrapper_type_);
+          table_name_, column_pairs, test_temp_dir + file_name_, wrapper_type_);
     }
   }
 
@@ -3624,7 +3608,6 @@ class FragmentSizesAppendRefreshTest
                                  {"REFRESH_UPDATE_TYPE", "APPEND"}},
                                 table_name_,
                                 {},
-                                false,
                                 0));
   }
 };
@@ -3725,7 +3708,7 @@ TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
 
   // Overwrite source dir with append_after data and update odbc source table (if
   // necessary).
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
 
   recoverCacheIfSpecified();
 
@@ -3800,7 +3783,6 @@ class StringDictAppendTest
                                  {"REFRESH_UPDATE_TYPE", "APPEND"}},
                                 custom_table_name,
                                 {},
-                                false,
                                 0));
   }
 };
@@ -3875,7 +3857,7 @@ TEST_P(StringDictAppendTest, AppendStringDictFilter) {
   sqlAndCompareResult("SELECT count(txt) from " + table_name_ + " WHERE txt = 'a';",
                       {{i(1)}});
   recoverCacheIfSpecified();
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"txt", "TEXT"}}));
+  overwriteSourceDir({{"txt", "TEXT"}});
   sql("REFRESH FOREIGN TABLES " + table_name_ + evictString() + ";");
   sqlAndCompareResult("SELECT count(txt) from " + table_name_ + " WHERE txt = 'aaaa';",
                       {{i(1)}});
@@ -3895,7 +3877,6 @@ TEST_P(StringDictAppendTest, AppendStringDictJoin) {
                                 options,
                                 name,
                                 {},
-                                false,
                                 0));
   }
 
@@ -3904,7 +3885,7 @@ TEST_P(StringDictAppendTest, AppendStringDictJoin) {
 
   sqlAndCompareResult(join, {{"a", "a"}, {"aa", "aa"}, {"aaa", "aaa"}});
   recoverCacheIfSpecified();
-  auto table_schema = DBHandlerTestFixture::createSchemaString({{"txt", "TEXT"}});
+  std::vector<ColumnPair> table_schema = {{"txt", "TEXT"}};
   overwriteSourceDir(table_schema);
   // Need an extra createODBCSourceTable() call as only the first table is handled by
   // overwriteSourceDir()
@@ -3954,7 +3935,6 @@ class DataWrapperAppendRefreshTest
                                 options,
                                 table_name_,
                                 {},
-                                false,
                                 0));
   }
 
@@ -4000,7 +3980,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
   sqlCreateTestTable();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
 
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
 
   // Refresh command
   if (isOdbc(wrapper_type_)) {
@@ -4023,7 +4003,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRowsEvict) {
   file_name_ = "single_file_delete_rows"s + wrapper_ext(wrapper_type_);
   sqlCreateTestTable();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   sql("REFRESH FOREIGN TABLES " + table_name_ + " WITH (evict=true); ");
   sqlAndCompareResult(select_query, {{i(1)}});
 }
@@ -4035,7 +4015,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_missing_file";
   sqlCreateTestTable();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   queryAndAssertException("REFRESH FOREIGN TABLES " + table_name_ + ";",
                           getRemovedFileErrorMessage("one_row_2"));
 }
@@ -4047,7 +4027,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFileAlterFromAppendToAll) {
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_missing_file";
   sqlCreateTestTable();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   sql("ALTER FOREIGN TABLE " + table_name_ + " SET (REFRESH_UPDATE_TYPE = 'ALL');");
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(1)}});
@@ -4062,7 +4042,7 @@ TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_multi_bad_append";
   sqlCreateTestTable();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
 }
@@ -4075,7 +4055,7 @@ TEST_P(DataWrapperAppendRefreshTest, SortedFiles) {
   sqlCreateTestTable({{"FILE_SORT_ORDER_BY", "REGEX_NUMBER"},
                       {"FILE_SORT_REGEX", "[^-]+_[^-]+_(\\d+)_.*"}});
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
 }
@@ -4087,7 +4067,7 @@ TEST_P(DataWrapperAppendRefreshTest, FilteredFiles) {
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file";
   sqlCreateTestTable({{"REGEX_PATH_FILTER", ".*two.*"}});
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(4)}, {i(5)}});
 }
@@ -4100,7 +4080,7 @@ TEST_P(DataWrapperAppendRefreshTest, FileRollOffOnly) {
   fragment_size_ = DEFAULT_FRAGMENT_ROWS;
   sqlCreateTestTableWithRollOffOption();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_only");
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(3)}, {i(4)}});
@@ -4114,7 +4094,7 @@ TEST_P(DataWrapperAppendRefreshTest, FileRollOffAppend) {
   fragment_size_ = DEFAULT_FRAGMENT_ROWS;
   sqlCreateTestTableWithRollOffOption();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_append");
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(3)}, {i(4)}, {i(5)}});
@@ -4128,7 +4108,7 @@ TEST_P(DataWrapperAppendRefreshTest, AllFilesRolledOff) {
   fragment_size_ = DEFAULT_FRAGMENT_ROWS;
   sqlCreateTestTableWithRollOffOption();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   renameToEmptyDir();
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {});
@@ -4142,7 +4122,7 @@ TEST_P(DataWrapperAppendRefreshTest, AllFilesRolledOffAndNewFiles) {
   fragment_size_ = DEFAULT_FRAGMENT_ROWS;
   sqlCreateTestTableWithRollOffOption();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_new_files");
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(7)}, {i(8)}});
@@ -4156,7 +4136,7 @@ TEST_P(DataWrapperAppendRefreshTest, FileRollOffMultipleFragments) {
   fragment_size_ = 2;
   sqlCreateTestTableWithRollOffOption();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_append");
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(3)}, {i(4)}, {i(5)}});
@@ -4170,7 +4150,7 @@ TEST_P(DataWrapperAppendRefreshTest, FileRollOffOptionSetAndRegularAppend) {
   fragment_size_ = DEFAULT_FRAGMENT_ROWS;
   sqlCreateTestTableWithRollOffOption();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
 }
@@ -4182,7 +4162,7 @@ TEST_P(DataWrapperAppendRefreshTest, FileRollOffOptionSetAndOldestFileNotRemoved
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
   sqlCreateTestTableWithRollOffOption();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_middle_file_roll_off");
   queryAndAssertException("REFRESH FOREIGN TABLES " + table_name_ + ";",
                           getRemovedFileErrorMessage("2"));
@@ -4195,7 +4175,7 @@ TEST_P(DataWrapperAppendRefreshTest, AlterAddFileRollOff) {
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
   sqlCreateTestTable();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_only");
   queryAndAssertException("REFRESH FOREIGN TABLES " + table_name_ + ";",
                           getRemovedFileErrorMessage("1"));
@@ -4211,7 +4191,7 @@ TEST_P(DataWrapperAppendRefreshTest, AlterRemoveFileRollOff) {
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
   sqlCreateTestTableWithRollOffOption();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_only");
   sql("ALTER FOREIGN TABLE " + table_name_ + " SET (allow_file_roll_off = 'false');");
   queryAndAssertException("REFRESH FOREIGN TABLES " + table_name_ + ";",
@@ -4226,7 +4206,7 @@ TEST_P(DataWrapperAppendRefreshTest, AppendToLastFile) {
   fragment_size_ = 2;
   sqlCreateTestTable();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}});
 }
@@ -4239,7 +4219,7 @@ TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileThatSpansMultipleFragments)
   fragment_size_ = 2;
   sqlCreateTestTable();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}, {i(6)}});
 }
@@ -4252,7 +4232,7 @@ TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileAndNewFileAdded) {
   fragment_size_ = 2;
   sqlCreateTestTable();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_last_file_append_new_file");
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
@@ -4266,7 +4246,7 @@ TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileAndRollOff) {
   fragment_size_ = 2;
   sqlCreateTestTableWithRollOffOption();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
-  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir({{"i", "BIGINT"}});
   renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_last_file_append_roll_off");
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(2)}, {i(3)}, {i(4)}});
@@ -4294,7 +4274,7 @@ class DistributedCacheConsistencyTest : public DataWrapperAppendRefreshTest {
   }
 
   void rollOffFileAndRefresh() {
-    overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+    overwriteSourceDir({{"i", "BIGINT"}});
     renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_only");
     sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   }
@@ -4711,9 +4691,9 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
       {
         i(1),
         "POINT (0 0)",
-        "LINESTRING (0 0,0 0)",
+        "LINESTRING (0 0,0.999999940861017 0.999999982770532)",
         "POLYGON ((0 0,0.999999940861017 0.0,0.999999940861017 0.999999982770532,0.0 0.999999982770532,0 0))",
-        "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)))"},
+        "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)),((1.99999996554106 1.99999996554106,2.99999999022111 1.99999996554106,1.99999996554106 2.99999999022111,1.99999996554106 1.99999996554106)))"},
       {
         i(2), Null, Null, Null, Null
       },
@@ -4725,8 +4705,7 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
         "POLYGON ((4.99999995576218 3.99999997299165,6.99999992130324 "
         "3.99999997299165,5.99999998044223 4.99999999767169,4.99999995576218 "
         "3.99999997299165))",
-        "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)),((0 "
-        "0,1.99999996554106 0.0,0.0 1.99999996554106,0 0)))",
+        "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)),((1.99999996554106 1.99999996554106,2.99999999022111 1.99999996554106,1.99999996554106 2.99999999022111,1.99999996554106 1.99999996554106),(2.09999992609955 2.09999996800907,2.09999992609955 2.89999998775311,2.89999994584359 2.09999996800907,2.09999992609955 2.09999996800907)))",
       },
       {
         i(4),
@@ -4736,9 +4715,7 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
         "POLYGON ((0.999999940861017 0.999999982770532,2.99999999022111 "
         "0.999999982770532,1.99999996554106 2.99999999022111,0.999999940861017 "
         "0.999999982770532))",
-        "MULTIPOLYGON (((0 0,2.99999999022111 0.0,0.0 2.99999999022111,0 0)),((0 "
-        "0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)),((0 0,1.99999996554106 "
-        "0.0,0.0 1.99999996554106,0 0)))",
+        "MULTIPOLYGON (((4.99999995576218 4.99999999767169,7.99999994598329 7.99999998789281,4.99999995576218 7.99999998789281,4.99999995576218 4.99999999767169)),((0 0,2.99999999022111 0.0,0.0 2.99999999022111,0 0)),((10.9999999362044 10.9999999781139,9.99999999534339 11.9999999608845,9.99999999534339 9.99999999534339,10.9999999362044 10.9999999781139)))",
       },
       {
         i(5), Null, Null, Null, Null
@@ -4786,11 +4763,11 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
       createChunkMetadata<int32_t>(11, 20, 5, -1, 0, false);  // adjust for RGs
   test_chunk_metadata_map[{0, 12}] = createChunkMetadata(12, 0, 5, true);
   test_chunk_metadata_map[{0, 13}] =
-      createChunkMetadata<int8_t>(13, 288, 5, -16, 64, true);
-  test_chunk_metadata_map[{0, 14}] = createChunkMetadata<int32_t>(14, 24, 5, 3, 3, true);
-  test_chunk_metadata_map[{0, 15}] = createChunkMetadata<int32_t>(15, 24, 5, 1, 1, true);
+      createChunkMetadata<int8_t>(13, 384, 5, -52, 64, true);
+  test_chunk_metadata_map[{0, 14}] = createChunkMetadata<int32_t>(14, 32, 5, 3, 3, true);
+  test_chunk_metadata_map[{0, 15}] = createChunkMetadata<int32_t>(15, 28, 5, 1, 2, true);
   test_chunk_metadata_map[{0, 16}] =
-      createChunkMetadata<double>(16, 160, 5, 0.000000, 3.000000, true);
+      createChunkMetadata<double>(16, 160, 5, 0.000000, 12.000000, true);
   test_chunk_metadata_map[{0, 17}] =
       createChunkMetadata<int32_t>(17, 20, 5, -1, 0, false);  // adjust for RGs
   assertExpectedChunkMetadata(test_chunk_metadata_map);
@@ -5057,19 +5034,19 @@ TEST_F(PostGisSelectQueryTest, GeometryFromPostGisAsText) {
   // clang-format off
   assertResultSetEqual({
     {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+      i(1), "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
     },
     {
       i(2), Null, Null, Null, Null
     },
     {
       i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2),(2.1 2.1,2.1 2.9,2.9 2.1,2.1 2.1)))"
     },
     {
       i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
-      "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+      "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"
     },
     {
       i(5), Null, Null, Null, Null
@@ -5597,7 +5574,6 @@ TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
                                {"REFRESH_UPDATE_TYPE", "APPEND"}},
                               default_table_name,
                               {},
-                              false,
                               0));
 
   auto td = cat_->getMetadataForTable(default_table_name, false);
@@ -5621,11 +5597,7 @@ TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
   // Recreate table for ODBC data wrappers
   if (isOdbc(wrapper_type_)) {
     createODBCSourceTable(
-        default_table_name,
-        DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}, wrapper_type_),
-        file_path,
-        wrapper_type_,
-        false);
+        default_table_name, {{"i", "BIGINT"}}, file_path, wrapper_type_);
   }
 
   // Refresh command
@@ -5744,7 +5716,7 @@ class SchemaMismatchTest : public ForeignTableTest,
 
   virtual void setTestFile(const std::string& file_name,
                            const std::string& ext,
-                           const std::string& table_schema) {
+                           const std::vector<ColumnPair>& table_schema) {
     bf::copy_file(getDataFilesPath() + file_name + ext,
                   test_temp_dir + TEMP_FILE + ext,
                   bf::copy_option::overwrite_if_exists);
@@ -5831,7 +5803,7 @@ TEST_P(SchemaMismatchTest, FileHasTooManyColumns_Refresh) {
   if (is_regex(wrapper_type_)) {
     options["LINE_REGEX"] = get_line_regex(2);
   }
-  setTestFile("0", ext_, DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  setTestFile("0", ext_, {{"i", "BIGINT"}});
   sql(createForeignTableQuery(
       {{"i", "BIGINT"}}, test_temp_dir + TEMP_FILE + ext_, wrapper_type_, options));
   sql("SELECT COUNT(*) FROM " + default_table_name + ";");
@@ -5839,8 +5811,7 @@ TEST_P(SchemaMismatchTest, FileHasTooManyColumns_Refresh) {
     // Mismatch between file content and regex should result in rows with all null values
     sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{NULL_BIGINT}});
   }
-  setTestFile(
-      "two_col_1_2", ext_, DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  setTestFile("two_col_1_2", ext_, {{"i", "BIGINT"}});
   queryAndAssertException("REFRESH FOREIGN TABLES " + default_table_name + ";",
                           "Mismatched number of logical columns: (expected 1 "
                           "columns, has 2): in file '" +
@@ -5853,10 +5824,7 @@ TEST_P(SchemaMismatchTest, FileHasTooFewColumns_Refresh) {
   if (is_regex(wrapper_type_)) {
     options["LINE_REGEX"] = get_line_regex(1);
   }
-  setTestFile(
-      "two_col_1_2",
-      ext_,
-      DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}, {"i2", "BIGINT"}}));
+  setTestFile("two_col_1_2", ext_, {{"i", "BIGINT"}, {"i2", "BIGINT"}});
   sql(createForeignTableQuery({{"i", "BIGINT"}, {"i2", "BIGINT"}},
                               test_temp_dir + TEMP_FILE + ext_,
                               wrapper_type_,
@@ -5867,7 +5835,7 @@ TEST_P(SchemaMismatchTest, FileHasTooFewColumns_Refresh) {
     sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
                         {{NULL_BIGINT, NULL_BIGINT}});
   }
-  setTestFile("0", ext_, createSchemaString({{"i", "BIGINT"}, {"i2", "BIGINT"}}));
+  setTestFile("0", ext_, {{"i", "BIGINT"}, {"i2", "BIGINT"}});
   queryAndAssertException("REFRESH FOREIGN TABLES " + default_table_name + ";",
                           "Mismatched number of logical columns: (expected 2 "
                           "columns, has 1): in file '" +
@@ -7268,8 +7236,10 @@ TEST_F(OdbcSkipMetadataTest, JoinOnNonDictColumnEmptyRefresh) {
       {{"SQL_SELECT", "select t, i, d from " + t2}, {"SQL_ORDER_BY", "i"}},
       t2));
   bf::ofstream(test_temp_dir + "/empty.csv");
-  createODBCSourceTable(
-      t1, "(t TEXT, i INTEGER, d DOUBLE)", test_temp_dir + "/empty.csv", wrapper_type_);
+  createODBCSourceTable(t1,
+                        {{"t", "TEXT"}, {"i", "INTEGER"}, {"d", "DOUBLE"}},
+                        test_temp_dir + "/empty.csv",
+                        wrapper_type_);
   sql("REFRESH FOREIGN TABLES " + t1 + " WITH (evict='true')");
   sqlAndCompareResult("SELECT " + t1 + ".i, " + t2 + ".i from " + t1 + ", " + t2 +
                           " WHERE " + t1 + ".i = " + t2 + ".i ORDER BY " + t1 + ".i",

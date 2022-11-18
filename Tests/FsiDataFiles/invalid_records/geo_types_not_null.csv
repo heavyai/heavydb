@@ -1,6 +1,6 @@
 index,point,linestring,polygon,multipolygon
-1, "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
-2,NULL, "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
-3, "POINT (0 0)",NULL, "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
-4, "POINT (0 0)", "LINESTRING (0 0,0 0)",NULL, "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
-5, "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",NULL
+1, "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
+2,NULL, "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
+3, "POINT (0 0)",NULL, "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
+4, "POINT (0 0)", "LINESTRING (0 0,1 1)",NULL, "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
+5, "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",NULL
