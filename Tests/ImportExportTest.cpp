@@ -1048,7 +1048,6 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
       const std::string& odbc_order_by = {},
       const std::string& table_options = {},
       const bool is_dir = false,
-      const bool is_odbc_geo = false,
       const std::optional<int64_t> max_reject = std::nullopt,
       const std::list<std::pair<std::string, std::string>>& odbc_schema_modifications =
           {},
@@ -1080,11 +1079,6 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     std::string extension =
         isOdbc(import_type) || import_type == "regex_parser" ? "csv" : import_type;
     std::string base_name = file_name_base + "." + extension;
-    if (is_odbc_geo && import_type == "redshift") {
-      // redshift geo types require the inclusion of ST_GeomFromText when inserting
-      // geometry values
-      base_name = file_name_base + "_redshift." + extension;
-    }
     if (is_dir) {
       base_name = file_name_base + "_" + extension + "_dir";
     }
@@ -1261,31 +1255,32 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
   std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
       "index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON",
-      "geo_types_valid",
+      param_.data_source_type == "local" ? "geo_types_valid" : "geo_types_2",
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_geo_regex(4),
       256,
       sql_select_stmt,
       "index",
       {},
-      false,
-      /*is_odbc_geo=*/true);
+      false);
   // clang-format off
     assertResultSetEqual({
     {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+      i(1), "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
     },
     {
       i(2), Null, Null, Null, Null
     },
     {
       i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2),(2.1 2.1,2.1 2.9,2.9 2.1,2.1 2.1)))"
     },
     {
       i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
-      "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+      param_.import_type == "bigquery" 
+        ? "MULTIPOLYGON (((11 11,10 12,10 10,11 11)),((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)))"
+        : "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"
     },
     {
       i(5), Null, Null, Null, Null
@@ -1496,7 +1491,8 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
   std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
       "index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON",
-      "invalid_records/geo_types",
+      param_.data_source_type == "local" ? "invalid_records/geo_types"
+                                         : "invalid_records/geo_types_2",
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_geo_regex(4),
       256,
@@ -1504,21 +1500,22 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
       "index",
       {},
       false,
-      /*is_odbc_geo=*/true,
       std::nullopt,
       {{"LINESTRING", "TEXT"}});
   // clang-format off
     assertResultSetEqual({
     {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+      i(1), "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
     },
     {
       i(2), Null, Null, Null, Null
     },
     {
       i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
-      "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+      param_.import_type == "bigquery" 
+        ? "MULTIPOLYGON (((11 11,10 12,10 10,11 11)),((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)))"
+        : "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"
     },
     {
       i(5), Null, Null, Null, Null
@@ -1549,14 +1546,13 @@ TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
       "index",
       {},
       false,
-      /*is_odbc_geo=*/true,
       std::nullopt,
       {{"LINESTRING", "TEXT"}});
   // clang-format off
     assertResultSetEqual({
     {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+      i(1), "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
     }},
     query);
   // clang-format on
@@ -1724,7 +1720,6 @@ TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
       "s",
       {},
       false,
-      false,
       std::nullopt,
       {{"INTEGER", "BIGINT"}});
 
@@ -1763,7 +1758,6 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
       "s",
       {},
       false,
-      false,
       std::nullopt,
       {{"INTEGER", "BIGINT"}});
 
@@ -1799,7 +1793,6 @@ TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
       "s",
       "SHARD_COUNT=2",
       false,
-      false,
       std::nullopt,
       {{"INTEGER", "BIGINT"}});
 
@@ -1830,7 +1823,6 @@ TEST_P(ImportAndSelectTest, MaxRejectReached) {
       sql_select_stmt,
       "s",
       {},
-      false,
       false,
       /*max_reject=*/0,
       {{"INTEGER", "BIGINT"}});
@@ -1941,7 +1933,6 @@ TEST_P(LowProxyForeignTableFragmentSizeImportTest, LargeNumberOfFragments) {
       "SELECT count(*) FROM import_test_new;",
       get_line_regex(12),
       14,
-      {},
       {},
       {},
       {},
