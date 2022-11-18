@@ -616,6 +616,29 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
   // clang-format on
 }
 
+class ImportBasicTest : public ImportExportTestBase {
+ protected:
+  void SetUp() override {
+    ImportExportTestBase::SetUp();
+    sql("drop table if exists import_test_table;");
+    sql("create table import_test_table (id int, arr int[] not null);");
+  }
+
+  void TearDown() override {
+    sql("drop table if exists import_test_table;");
+    ImportExportTestBase::TearDown();
+  }
+};
+
+TEST_F(ImportBasicTest, ImportNullInNotNullArray) {
+  ASSERT_NO_THROW(
+      sql("COPY import_test_table FROM "
+          "'../../Tests/Import/datafiles/array_with_nulls.csv';"));
+
+  sqlAndCompareResult("select * from import_test_table order by id;",
+                      {{1L, array({1L, 2L, 3L})}, {2L, array({1L, 2L, Null})}});
+}
+
 class FsiImportTest {
  public:
   static void setupS3() {
