@@ -57,8 +57,9 @@ struct PlanState {
   std::vector<Analyzer::Expr*> target_exprs_;
   HoistedFiltersSet hoisted_filters_;
   std::unordered_map<InputColDescriptor, size_t> global_to_local_col_ids_;
-  std::set<shared::ColumnKey> columns_to_fetch_;
-  std::set<shared::ColumnKey> columns_to_not_fetch_;
+  std::unordered_set<shared::ColumnKey> columns_to_fetch_;
+  mutable std::unordered_set<shared::ColumnKey> columns_to_not_fetch_;
+  std::unordered_set<shared::ColumnKey> force_non_lazy_fetch_columns_;
   std::unordered_map<size_t, std::vector<std::shared_ptr<Analyzer::Expr>>>
       left_join_non_hashtable_quals_;
   bool allow_lazy_fetch_;
@@ -98,6 +99,8 @@ struct PlanState {
   std::list<std::shared_ptr<Analyzer::Expr>> getSimpleQuals() const {
     return simple_quals_;
   }
+
+  bool hasGeometryTargetExpr() const;
 
   void addNonHashtableQualForLeftJoin(size_t idx, std::shared_ptr<Analyzer::Expr> expr);
 };

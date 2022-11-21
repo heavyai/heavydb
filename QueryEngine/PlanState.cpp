@@ -32,14 +32,23 @@ bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) const {
       return false;
     }
   }
-  std::set<shared::ColumnKey> intersect;
-  std::set_intersection(columns_to_fetch_.begin(),
-                        columns_to_fetch_.end(),
-                        columns_to_not_fetch_.begin(),
-                        columns_to_not_fetch_.end(),
-                        std::inserter(intersect, intersect.begin()));
-  if (!intersect.empty()) {
-    throw CompilationRetryNoLazyFetch();
+
+  if (!shared::is_unordered_set_intersection_empty(columns_to_fetch_,
+                                                   columns_to_not_fetch_)) {
+    if (columns_to_fetch_.count(column_key) && columns_to_not_fetch_.count(column_key) &&
+        hasGeometryTargetExpr()) {
+      // when a query having a projection expression of the non-point geometry type,
+      // we must avoid throwing a false `CompilationRetryNoLazyFetch` exception
+      // because the non-point geometry projection expression must be lazy fetched
+      // this can be achieved by making an expression as non-lazy fetched column iff
+      // it is included as both lazy and non-lazy fetched column simultaneously
+      // (we throw the exception for that case; see the previous code of this function)
+      VLOG(2) << "Set a column " << do_not_fetch_column->toString()
+              << " as non-lazy fetching column";
+      columns_to_not_fetch_.erase(column_key);
+    } else {
+      throw CompilationRetryNoLazyFetch();
+    }
   }
   return columns_to_fetch_.find(column_key) == columns_to_fetch_.end();
 }
@@ -80,4 +89,11 @@ void PlanState::addNonHashtableQualForLeftJoin(size_t idx,
   } else {
     it->second.emplace_back(expr);
   }
+}
+
+bool PlanState::hasGeometryTargetExpr() const {
+  return std::any_of(
+      target_exprs_.begin(), target_exprs_.end(), [=](Analyzer::Expr const* expr) {
+        return expr->get_type_info().is_geometry();
+      });
 }
