@@ -1763,6 +1763,7 @@ std::shared_ptr<Analyzer::Expr> set_transient_dict(
   auto transient_dict_ti = ti;
   transient_dict_ti.set_compression(kENCODING_DICT);
   transient_dict_ti.set_comp_param(TRANSIENT_DICT_ID);
+  transient_dict_ti.setStringDictKey(shared::StringDictKey::kTransientDictKey);
   transient_dict_ti.set_fixed_size();
   return expr->add_cast(transient_dict_ti);
 }
@@ -5250,6 +5251,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       int32_t input_pos = p.first;
       if (input_pos == transient_pos) {
         ti.set_comp_param(TRANSIENT_DICT_ID);
+        ti.setStringDictKey(shared::StringDictKey::kTransientDictKey);
       } else {
         // Iterate over the list of arguments to compute the offset. Use this offset to
         // get the corresponding input

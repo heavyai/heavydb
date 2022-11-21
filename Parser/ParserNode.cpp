@@ -1830,6 +1830,7 @@ void QuerySpec::analyze_group_by(const Catalog_Namespace::Catalog& catalog,
         set_new_type = true;
         ti.set_compression(kENCODING_DICT);
         ti.set_comp_param(TRANSIENT_DICT_ID);
+        ti.setStringDictKey(shared::StringDictKey::kTransientDictKey);
         ti.set_fixed_size();
       }
       std::shared_ptr<Analyzer::Var> v;

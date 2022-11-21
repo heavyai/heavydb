@@ -49,6 +49,9 @@ bool StringDictKey::isTransientDict() const {
   return dict_id == TRANSIENT_DICT_ID;
 }
 
+const StringDictKey StringDictKey::kTransientDictKey = {TRANSIENT_DICT_DB_ID,
+                                                        TRANSIENT_DICT_ID};
+
 bool TableKey::operator==(const TableKey& other) const {
   return db_id == other.db_id && table_id == other.table_id;
 }
