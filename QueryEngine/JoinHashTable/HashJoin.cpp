@@ -480,7 +480,7 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
     ChunkKey cache_key_chunks_for_column{
         inner_column_key.db_id, inner_column_key.table_id, inner_column_key.column_id};
     if (inner_ti.is_string() &&
-        (!(inner_ti.get_comp_param() == outer_ti.get_comp_param()) ||
+        (!(inner_ti.getStringDictKey() == outer_ti.getStringDictKey()) ||
          (has_string_op_infos &&
           (inner_outer_string_op_infos_pairs[string_op_info_pairs_idx].first.size() ||
            inner_outer_string_op_infos_pairs[string_op_info_pairs_idx].second.size())))) {

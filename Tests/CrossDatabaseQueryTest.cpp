@@ -33,6 +33,7 @@ class CrossDatabaseQueryTest : public DBHandlerTestFixture {
     createDBHandler();
     sql("CREATE DATABASE db_1;");
     sql("CREATE DATABASE db_2;");
+    sql("CREATE DATABASE db_3;");
     sql("CREATE DATABASE empty_db;");
 
     createTestTable(shared::kDefaultDbName, "test_table");
@@ -51,6 +52,10 @@ class CrossDatabaseQueryTest : public DBHandlerTestFixture {
         std::filesystem::canonical("../../Tests/FsiDataFiles/example_2.csv").string() +
         "');");
 
+    createTestTable("db_3", "db_3_table", true);
+    insertIntoTestTable(
+        "db_3", "db_3_table", {1, 2, 10, 20, 30}, {"cc", "bb", "aa", "b", "a"});
+
     switchToAdmin();
     sql("CREATE USER test_user (password = 'test_pass');");
     sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
@@ -63,6 +68,7 @@ class CrossDatabaseQueryTest : public DBHandlerTestFixture {
     sql("DROP USER IF EXISTS test_user;");
     sql("DROP DATABASE IF EXISTS db_1;");
     sql("DROP DATABASE IF EXISTS db_2;");
+    sql("DROP DATABASE IF EXISTS db_3;");
     sql("DROP DATABASE IF EXISTS empty_db;");
     sql("DROP TABLE IF EXISTS test_table;");
     sql("DROP VIEW IF EXISTS test_view;");
@@ -163,6 +169,15 @@ TEST_F(CrossDatabaseQueryTest, JoinBetweenTableInCurrentDbAndAnotherDb) {
                         "ORDER BY i;",
                       {{i(1), "a", "cc", i(2), "POINT (1 1)"},
                        {i(2), "b", "bb", i(4), "POINT (2 2)"}});
+  // clang-format on
+}
+
+TEST_F(CrossDatabaseQueryTest, MultiCompositeColumnsJoinWithSameDictIdButDifferentDb) {
+  // clang-format off
+  sqlAndCompareResult("SELECT table_1.i, table_2.i, table_1.t, table_2.t "
+                        "FROM db_1.db_1_table as table_1, db_3.db_3_table as table_2 "
+                        "WHERE table_1.i = table_2.i and table_1.t = table_2.t;",
+                      {{i(10), i(10), "aa", "aa"}});
   // clang-format on
 }
 
