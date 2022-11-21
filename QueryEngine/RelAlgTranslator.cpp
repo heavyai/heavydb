@@ -577,6 +577,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
       casted_target_ti.set_type(kTEXT);
       casted_target_ti.set_compression(kENCODING_DICT);
       casted_target_ti.set_comp_param(TRANSIENT_DICT_ID);
+      casted_target_ti.setStringDictKey(shared::StringDictKey::kTransientDictKey);
       casted_target_ti.set_fixed_size();
       return makeExpr<Analyzer::UOper>(
           casted_target_ti, operand_expr->get_contains_agg(), kCAST, operand_expr);
@@ -1634,7 +1635,7 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
         sql_type.set_compression(kENCODING_DICT);
         if (first_element_logical_type.is_none_encoded_string()) {
           sql_type.set_comp_param(TRANSIENT_DICT_ID);
-          sql_type.setStringDictKey({TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID});
+          sql_type.setStringDictKey(shared::StringDictKey::kTransientDictKey);
         } else {
           CHECK(first_element_logical_type.is_dict_encoded_string());
           sql_type.set_comp_param(first_element_logical_type.get_comp_param());

@@ -200,6 +200,8 @@ class ArrayElementStringLiteralEncodingVisitor : public DeepCopyVisitor {
 
         transient_dict_type_info.set_compression(kENCODING_DICT);
         transient_dict_type_info.set_comp_param(TRANSIENT_DICT_ID);
+        transient_dict_type_info.setStringDictKey(
+            shared::StringDictKey::kTransientDictKey);
         transient_dict_type_info.set_fixed_size();
         args_copy.push_back(element_expr_ptr->add_cast(transient_dict_type_info));
       }

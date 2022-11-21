@@ -42,6 +42,8 @@ struct StringDictKey {
 
   bool isTransientDict() const;
 
+  static const StringDictKey kTransientDictKey;
+
   int32_t db_id;
   int32_t dict_id;
 };

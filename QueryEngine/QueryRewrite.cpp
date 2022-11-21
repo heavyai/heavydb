@@ -235,7 +235,8 @@ std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(
     auto in_val_copy = in_val->deep_copy();
     auto ti = in_val_copy->get_type_info();
     if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
-      ti.set_comp_param(0);
+      ti.set_comp_param(TRANSIENT_DICT_ID);
+      ti.setStringDictKey(shared::StringDictKey::kTransientDictKey);
     }
     in_val_copy->set_type_info(ti);
     case_expr_list.emplace_back(case_cond, in_val_copy);

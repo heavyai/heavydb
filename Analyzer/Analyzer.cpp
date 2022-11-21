@@ -783,6 +783,7 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
     casted_new_type_info.set_type(kTEXT);
     casted_new_type_info.set_compression(kENCODING_DICT);
     casted_new_type_info.set_comp_param(TRANSIENT_DICT_ID);
+    casted_new_type_info.setStringDictKey(shared::StringDictKey::kTransientDictKey);
     casted_new_type_info.set_fixed_size();
     return makeExpr<UOper>(casted_new_type_info, contains_agg, kCAST, shared_from_this());
   }
@@ -1440,6 +1441,9 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::add_cast(const SQLTypeInfo& new_type_i
       type_info.get_compression() == kENCODING_NONE &&
       type_info.getStringDictKey().dict_id > TRANSIENT_DICT_ID) {
     ti.set_comp_param(TRANSIENT_DICT(type_info.get_comp_param()));
+    auto dict_key = type_info.getStringDictKey();
+    dict_key.dict_id = TRANSIENT_DICT(dict_key.dict_id);
+    ti.setStringDictKey(dict_key);
   }
 
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
