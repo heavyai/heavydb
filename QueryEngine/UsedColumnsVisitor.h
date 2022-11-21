@@ -15,19 +15,21 @@
  */
 
 #include "ScalarExprVisitor.h"
+#include "Shared/DbObjectKeys.h"
 
 #include <unordered_set>
 
-class UsedColumnsVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
+class UsedColumnsVisitor
+    : public ScalarExprVisitor<std::unordered_set<shared::ColumnKey>> {
  protected:
-  std::unordered_set<int> visitColumnVar(
+  std::unordered_set<shared::ColumnKey> visitColumnVar(
       const Analyzer::ColumnVar* column) const override {
-    return {column->getColumnKey().column_id};
+    return {column->getColumnKey()};
   }
 
-  std::unordered_set<int> aggregateResult(
-      const std::unordered_set<int>& aggregate,
-      const std::unordered_set<int>& next_result) const override {
+  std::unordered_set<shared::ColumnKey> aggregateResult(
+      const std::unordered_set<shared::ColumnKey>& aggregate,
+      const std::unordered_set<shared::ColumnKey>& next_result) const override {
     auto result = aggregate;
     result.insert(next_result.begin(), next_result.end());
     return result;

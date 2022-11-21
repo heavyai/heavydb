@@ -67,7 +67,7 @@ std::vector<int64_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_
   }
   std::vector<int64_t> target_indices(ra_exe_unit.target_exprs.size(), -1);
   UsedColumnsVisitor columns_visitor;
-  std::unordered_set<int> used_columns;
+  std::unordered_set<shared::ColumnKey> used_columns;
   for (const auto& simple_qual : ra_exe_unit.simple_quals) {
     const auto crt_used_columns = columns_visitor.visit(simple_qual.get());
     used_columns.insert(crt_used_columns.begin(), crt_used_columns.end());
@@ -101,7 +101,7 @@ std::vector<int64_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_
       continue;
     }
     if (!ti.is_varlen() &&
-        used_columns.find(col_var->getColumnKey().column_id) == used_columns.end()) {
+        used_columns.find(col_var->getColumnKey()) == used_columns.end()) {
       // setting target index to be zero so that later it can be decoded properly (in lazy
       // fetch, the zeroth target index indicates the corresponding rowid column for the
       // projected entry)
@@ -1253,6 +1253,10 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tSort on GPU: " + ::toString(sort_on_gpu_) + "\n";
   str += "\tUse Streaming Top N: " + ::toString(use_streaming_top_n_) + "\n";
   str += "\tOutput Columnar: " + ::toString(output_columnar_) + "\n";
+  auto const allow_lazy_fetch = executor_->plan_state_
+                                    ? executor_->plan_state_->allow_lazy_fetch_
+                                    : g_enable_lazy_fetch;
+  str += "\tAllow Lazy Fetch: " + ::toString(allow_lazy_fetch) + "\n";
   str += "\tRender Output: " + ::toString(render_output_) + "\n";
   str += "\tUse Baseline Sort: " + ::toString(must_use_baseline_sort_) + "\n";
   str += "\tIs Table Function: " + ::toString(is_table_function_) + "\n";

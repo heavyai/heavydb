@@ -51,7 +51,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
         has_cardinality_estimation,
         column_fetcher.columnarized_table_cache_,
         render_info);
-  } catch (const CompilationRetryNoLazyFetch&) {
+  } catch (const CompilationRetryNoLazyFetch& e) {
+    VLOG(1) << e.what();
     if (executor->cgen_state_->module_) {
       delete executor->cgen_state_->module_;
     }
