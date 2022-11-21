@@ -331,6 +331,33 @@ inline unsigned ceil_div(unsigned const dividend, unsigned const divisor) {
 }
 
 size_t compute_hash(int32_t item_1, int32_t item_2);
+
+template <typename T>
+bool is_unordered_set_intersection_empty(std::unordered_set<T> const& r,
+                                         std::unordered_set<T> const& s) {
+  auto const& c_r = r.size() < s.size() ? r : s;
+  auto const& c_s = r.size() < s.size() ? s : r;
+  for (auto const& v : c_r) {
+    if (c_s.count(v)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+template <typename T>
+void compute_unordered_set_intersection(std::unordered_set<T>* const dest,
+                                        std::unordered_set<T> const& r,
+                                        std::unordered_set<T> const& s) {
+  auto const& c_r = r.size() < s.size() ? r : s;
+  auto const& c_s = r.size() < s.size() ? s : r;
+  for (auto const& v : c_r) {
+    if (c_s.count(v)) {
+      dest->insert(v);
+    }
+  }
+}
+
 }  // namespace shared
 
 ////////// std::endian //////////

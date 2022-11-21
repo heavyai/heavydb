@@ -1682,11 +1682,6 @@ bool GroupByAndAggregate::codegenAggCalls(
                          varlen_output_buffer,
                          diamond_codegen);
 
-  for (auto target_expr : ra_exe_unit_.target_exprs) {
-    CHECK(target_expr);
-    executor_->plan_state_->isLazyFetchColumn(target_expr);
-  }
-
   return can_return_error;
 }
 
@@ -2167,9 +2162,15 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
       }
     }
   }
+  bool fetch_column = !executor_->plan_state_->allow_lazy_fetch_;
+  auto cv = dynamic_cast<Analyzer::ColumnVar const*>(target_expr);
+  if (cv && !fetch_column &&
+      executor_->plan_state_->force_non_lazy_fetch_columns_.count(cv->getColumnKey())) {
+    VLOG(2) << "Force to fetch the target expression: " << cv->toString();
+    fetch_column = true;
+  }
   return agg_expr ? code_generator.codegen(agg_expr->get_arg(), true, co)
-                  : code_generator.codegen(
-                        target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
+                  : code_generator.codegen(target_expr, fetch_column, co);
 }
 
 llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname,

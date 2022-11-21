@@ -671,6 +671,7 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
        sizeof(int64_t)) &&
       !is_columnar_projection(query_mem_desc)) {
     // TODO(miyu): enable different byte width in the layout w/o padding
+    VLOG(2) << "Throw CompilationRetryNoCompaction exception";
     throw CompilationRetryNoCompaction();
   }
 
@@ -680,6 +681,8 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
     // lazy fetch index to be placed in the column. The QueryMemoryDescriptor is created
     // before Lazy Fetch information is known, therefore we need to update the QMD with
     // the new slot size width bytes for these columns.
+    VLOG(2) << "Set padded slot-width byte for the slot-"
+            << std::to_string(slot_index_counter) << " to 8";
     query_mem_desc.setPaddedSlotWidthBytes(slot_index_counter, int8_t(8));
     CHECK_EQ(query_mem_desc.getPaddedSlotWidthBytes(slot_index_counter), int8_t(8));
   }

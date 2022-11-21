@@ -2068,7 +2068,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                            this);
         CHECK(query_mem_desc_owned);
         crt_min_byte_width = query_comp_desc_owned->getMinByteWidth();
-      } catch (CompilationRetryNoCompaction&) {
+      } catch (CompilationRetryNoCompaction& e) {
+        VLOG(1) << e.what();
         crt_min_byte_width = MAX_BYTE_WIDTH_SUPPORTED;
         continue;
       }
@@ -2081,10 +2082,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     }
     if (eo.just_explain) {
       return executeExplain(*query_comp_desc_owned);
-    }
-
-    for (const auto target_expr : ra_exe_unit.target_exprs) {
-      plan_state_->target_exprs_.push_back(target_expr);
     }
 
     if (!eo.just_validate) {

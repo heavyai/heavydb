@@ -72,6 +72,7 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/QueryTemplateGenerator.h"
+#include "QueryEngine/UsedColumnsVisitor.h"
 #include "Shared/InlineNullValues.h"
 #include "Shared/MathUtils.h"
 #include "StreamingTopN.h"
@@ -2714,6 +2715,33 @@ std::string serialize_llvm_metadata_footnotes(llvm::Function* query_func,
 }
 #endif  // NDEBUG
 
+void register_target_exprs(PlanState* plan_state,
+                           RelAlgExecutionUnit const& ra_exe_unit,
+                           ExecutionOptions const& eo) {
+  if (plan_state->target_exprs_.empty()) {
+    plan_state->target_exprs_ = ra_exe_unit.target_exprs;
+    std::unordered_set<shared::ColumnKey> raw_columns;
+    for (auto const& target_expr : ra_exe_unit.target_exprs) {
+      if (auto const& cv = dynamic_cast<Analyzer::ColumnVar const*>(target_expr)) {
+        raw_columns.insert(cv->getColumnKey());
+      }
+    }
+    UsedColumnsVisitor uc_visitor;
+    for (const auto target_expr : ra_exe_unit.target_exprs) {
+      if (!dynamic_cast<Analyzer::ColumnVar const*>(target_expr) &&
+          !eo.output_columnar_hint) {
+        auto const& used_columns = uc_visitor.visit(target_expr);
+        // raw_columns in used_columns are used as both a column reference and an operand
+        // of a generic expression like a column x in "SELECT x, x+y ..."; in this case,
+        // we must fetch the column x to correctly project the result
+        // but we want to keep the current logic if columnar output is enabled
+        shared::compute_unordered_set_intersection(
+            &plan_state->force_non_lazy_fetch_columns_, raw_columns, used_columns);
+      }
+    }
+  }
+}
+
 }  // namespace
 
 std::tuple<CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
@@ -2754,6 +2782,9 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                                query_infos,
                                                deleted_cols_map,
                                                &ra_exe_unit);  // locks compilation_mutex
+
+  // fill all target exprs to plan_state when necessary
+  register_target_exprs(plan_state_.get(), ra_exe_unit, eo);
 
   addTransientStringLiterals(ra_exe_unit, row_set_mem_owner);
 
