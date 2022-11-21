@@ -684,14 +684,15 @@ endif()
 
 ##########
 
-#if(NOT MSVC)
-#  add_executable(LoadBalancerTest LoadBalancerTest.cpp)
-#  target_link_libraries(LoadBalancerTest gtest ${MAPD_LIBRARIES})
-#  add_dependencies(LoadBalancerTest thrift_gen)
-#  add_dependencies(LoadBalancerTest heavydb) # test invokes heavydb bin directly
-#  add_dependencies(LoadBalancerTest mapd_java_components)
-#  add_test(LoadBalancerTest, LoadBalancerTest ${TEST_ARGS})
-#endif()
+
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  add_executable(MultiInstanceTest ee/MultiInstanceTest.cpp)
+  target_link_libraries(MultiInstanceTest gtest ${MAPD_LIBRARIES} ${CURL_LIBRARIES})
+  add_dependencies(MultiInstanceTest thrift_gen)
+  add_dependencies(MultiInstanceTest heavydb) # test invokes heavydb bin directly
+  add_dependencies(MultiInstanceTest mapd_java_components)
+  add_test(MultiInstanceTest, MultiInstanceTest ${TEST_ARGS})
+endif()
 
 ##########
 
