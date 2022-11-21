@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef TEST_HELPERS_H_
-#define TEST_HELPERS_H_
+#pragma once
 
 #include "LeafHostInfo.h"
 #include "Logger/Logger.h"
@@ -372,5 +371,3 @@ std::string build_create_table_statement(
 }
 
 }  // namespace TestHelpers
-
-#endif  // TEST_HELPERS_H_
