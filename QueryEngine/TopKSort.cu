@@ -1,4 +1,5 @@
-/* copyright 2017 MapD Technologies, Inc.
+/*
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,13 +14,6 @@
  * limitations under the License.
  */
 
-/*
- * @file    TopKSort.cu
- * @author  Minggang Yu <miyu@mapd.com>
- * @brief   Top-k sorting on streaming top-k heaps on VRAM
- *
- * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
- */
 #include "BufferEntryUtils.h"
 #include "GpuMemUtils.h"
 #include "ResultSetBufferAccessors.h"
