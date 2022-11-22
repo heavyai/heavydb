@@ -1421,6 +1421,7 @@ void WindowFunctionContext::computePartitionBuffer(
     case SqlWindowFunctionKind::MAX:
     case SqlWindowFunctionKind::SUM:
     case SqlWindowFunctionKind::COUNT:
+    case SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT:
     case SqlWindowFunctionKind::LEAD_IN_FRAME:
     case SqlWindowFunctionKind::LAG_IN_FRAME:
     case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME:
@@ -1457,6 +1458,17 @@ void WindowFunctionContext::resizeStorageForWindowFraming(bool for_reuse) {
   }
 }
 
+namespace {
+bool allow_framing_on_time_or_date(SqlWindowFunctionKind kind) {
+  switch (kind) {
+    case SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT:
+      return true;
+    default:
+      return false;
+  }
+}
+}  // namespace
+
 void WindowFunctionContext::buildAggregationTreeForPartition(
     SqlWindowFunctionKind agg_type,
     size_t partition_idx,
@@ -1469,9 +1481,11 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
     throw QueryNotSupported("Window aggregate function over frame on a column type " +
                             ::toString(input_col_ti.get_type()) + " is not supported.");
   }
-  if (input_col_ti.is_time_or_date() && !(agg_type == SqlWindowFunctionKind::MIN ||
-                                          agg_type == SqlWindowFunctionKind::MAX ||
-                                          agg_type == SqlWindowFunctionKind::COUNT)) {
+  if (input_col_ti.is_time_or_date() &&
+      !allow_framing_on_time_or_date(window_func_->getKind()) &&
+      !(agg_type == SqlWindowFunctionKind::MIN ||
+        agg_type == SqlWindowFunctionKind::MAX ||
+        agg_type == SqlWindowFunctionKind::COUNT)) {
     throw QueryNotSupported(
         "Aggregation over a window frame for a column type " +
         ::toString(input_col_ti.get_type()) +

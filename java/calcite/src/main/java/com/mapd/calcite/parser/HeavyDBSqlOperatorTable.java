@@ -300,6 +300,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     // conditional window aggregate functions
     addOperator(new CountIf());
     addOperator(new SumIf());
+    addOperator(new ConditionalChangeEvent());
 
     addOperator(new HeavyDB_Geo_PolyBoundsPtr());
     addOperator(new HeavyDB_Geo_PolyRenderGroup());
@@ -2719,6 +2720,37 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class ConditionalChangeEvent extends SqlAggFunction {
+    public ConditionalChangeEvent() {
+      super("CONDITIONAL_CHANGE_EVENT",
+              null,
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM,
+              false,
+              true,
+              Optionality.FORBIDDEN);
+    }
+
+    @Override
+    public boolean allowsFraming() {
+      return true;
+    }
+
+    @Override
+    public boolean allowsNullTreatment() {
+      return true;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BIGINT);
     }
   }
 

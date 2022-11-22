@@ -2522,7 +2522,7 @@ class WindowFrame : public Expr {
 class WindowFunction : public Expr {
  public:
   enum class FrameBoundType { NONE, ROW, RANGE };
-  static constexpr std::array<SqlWindowFunctionKind, 13> FRAMING_ALLOWED_WINDOW_FUNCS{
+  static constexpr std::array<SqlWindowFunctionKind, 14> FRAMING_ALLOWED_WINDOW_FUNCS{
       SqlWindowFunctionKind::SUM,
       SqlWindowFunctionKind::SUM_IF,
       SqlWindowFunctionKind::SUM_INTERNAL,
@@ -2535,8 +2535,9 @@ class WindowFunction : public Expr {
       SqlWindowFunctionKind::LEAD_IN_FRAME,
       SqlWindowFunctionKind::NTH_VALUE_IN_FRAME,
       SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME,
-      SqlWindowFunctionKind::LAST_VALUE_IN_FRAME};
-  static constexpr std::array<SqlWindowFunctionKind, 8>
+      SqlWindowFunctionKind::LAST_VALUE_IN_FRAME,
+      SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT};
+  static constexpr std::array<SqlWindowFunctionKind, 9>
       AGGREGATION_TREE_REQUIRED_WINDOW_FUNCS_FOR_FRAMING{
           SqlWindowFunctionKind::SUM,
           SqlWindowFunctionKind::SUM_IF,
@@ -2545,8 +2546,8 @@ class WindowFunction : public Expr {
           SqlWindowFunctionKind::MIN,
           SqlWindowFunctionKind::MAX,
           SqlWindowFunctionKind::COUNT,
-          SqlWindowFunctionKind::COUNT_IF};
-
+          SqlWindowFunctionKind::COUNT_IF,
+          SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT};
   static constexpr std::array<SqlWindowFunctionKind, 2> FILLING_FUNCS_USING_WINDOW{
       SqlWindowFunctionKind::FORWARD_FILL,
       SqlWindowFunctionKind::BACKWARD_FILL};

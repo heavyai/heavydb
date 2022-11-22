@@ -79,9 +79,21 @@ class SegmentTree {
       // we can use an array as a segment tree for the rest of aggregates
       aggregated_values_ =
           reinterpret_cast<AGG_TYPE*>(checked_malloc(tree_size_ * sizeof(AGG_TYPE)));
-      agg_type_ == SqlWindowFunctionKind::COUNT
-          ? buildForCount(0, 0)
-          : is_conditional_agg_ ? buildForCondAgg(0, 0) : build(0, 0);
+      switch (agg_type_) {
+        case SqlWindowFunctionKind::COUNT:
+          buildForCount(0, 0);
+          break;
+        case SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT:
+          buildForConditionalChangeEvent(0, 0);
+          break;
+        default: {
+          if (is_conditional_agg_) {
+            buildForCondAgg(0, 0);
+          } else {
+            build(0, 0);
+          }
+        }
+      }
     }
   }
 
@@ -262,6 +274,43 @@ class SegmentTree {
     return aggregated_values_[cur_node_idx];
   }
 
+  AGG_TYPE buildForConditionalChangeEvent(int64_t cur_node_idx, size_t cur_node_depth) {
+    if (cur_node_idx >= leaf_range_.first && cur_node_idx <= leaf_range_.second) {
+      int64_t input_col_idx = cur_node_idx - leaf_range_.first;
+      if (input_col_idx >= num_elems_) {
+        aggregated_values_[cur_node_idx] = invalid_val_;
+        return invalid_val_;
+      }
+      auto cur_row_idx =
+          original_input_col_idx_buf_[ordered_input_col_idx_buf_[input_col_idx]];
+      if (input_col_idx == 0) {
+        aggregated_values_[cur_node_idx] = 0;
+      } else {
+        auto prev_row_idx =
+            original_input_col_idx_buf_[ordered_input_col_idx_buf_[input_col_idx - 1]];
+        auto const col_val = input_col_buf_[cur_row_idx];
+        auto const prev_col_val = input_col_buf_[prev_row_idx];
+        aggregated_values_[cur_node_idx] =
+            col_val != input_type_null_val_ && prev_col_val != input_type_null_val_
+                ? col_val != prev_col_val
+                : 0;
+      }
+      return aggregated_values_[cur_node_idx];
+    }
+
+    // when reaching here, we need to take care of a node having child nodes,
+    // and we compute an aggregated value from its child nodes
+    std::vector<AGG_TYPE> child_vals =
+        prepareChildValuesforAggregationForConditionalChangeEvent(cur_node_idx,
+                                                                  cur_node_depth);
+
+    // compute the new aggregated value
+    aggregated_values_[cur_node_idx] = aggregateValue(child_vals);
+
+    // return the value for the upper-level aggregation
+    return aggregated_values_[cur_node_idx];
+  }
+
   // the logic is exactly the same as normal aggregate case, but has a different
   // node type: SumAndCountPair
   SumAndCountPair<AGG_TYPE> buildForDerivedAggregate(int64_t cur_node_idx,
@@ -295,16 +344,10 @@ class SegmentTree {
   std::vector<AGG_TYPE> prepareChildValuesforAggregation(int64_t parent_idx,
                                                          size_t cur_node_depth) {
     std::vector<AGG_TYPE> child_vals(fan_out_);
-    size_t next_node_depth = cur_node_depth + 1;
-    if (cur_node_depth == 0) {
-      for (size_t i = 0; i < fan_out_; ++i) {
-        child_vals[i] = build(i + 1, next_node_depth);
-      }
-    } else {
-      int64_t cur_depth_start_offset = parent_idx * fan_out_ + 1;
-      for (size_t i = 0; i < fan_out_; ++i) {
-        child_vals[i] = build(cur_depth_start_offset + i, next_node_depth);
-      }
+    int64_t const offset = cur_node_depth ? parent_idx * fan_out_ + 1 : 1;
+    size_t const next_node_depth = cur_node_depth + 1;
+    for (size_t i = 0; i < fan_out_; ++i) {
+      child_vals[i] = build(offset + i, next_node_depth);
     }
     return child_vals;
   }
@@ -314,16 +357,10 @@ class SegmentTree {
       int64_t parent_idx,
       size_t cur_node_depth) {
     std::vector<AGG_TYPE> child_vals(fan_out_);
-    size_t next_node_depth = cur_node_depth + 1;
-    if (cur_node_depth == 0) {
-      for (size_t i = 0; i < fan_out_; ++i) {
-        child_vals[i] = buildForCondAgg(i + 1, next_node_depth);
-      }
-    } else {
-      int64_t cur_depth_start_offset = parent_idx * fan_out_ + 1;
-      for (size_t i = 0; i < fan_out_; ++i) {
-        child_vals[i] = buildForCondAgg(cur_depth_start_offset + i, next_node_depth);
-      }
+    int64_t const offset = cur_node_depth ? parent_idx * fan_out_ + 1 : 1;
+    size_t const next_node_depth = cur_node_depth + 1;
+    for (size_t i = 0; i < fan_out_; ++i) {
+      child_vals[i] = buildForCondAgg(offset + i, next_node_depth);
     }
     return child_vals;
   }
@@ -332,16 +369,23 @@ class SegmentTree {
   std::vector<AGG_TYPE> prepareChildValuesforAggregationForCount(int64_t parent_idx,
                                                                  size_t cur_node_depth) {
     std::vector<AGG_TYPE> child_vals(fan_out_);
-    size_t next_node_depth = cur_node_depth + 1;
-    if (cur_node_depth == 0) {
-      for (size_t i = 0; i < fan_out_; ++i) {
-        child_vals[i] = buildForCount(i + 1, next_node_depth);
-      }
-    } else {
-      int64_t cur_depth_start_offset = parent_idx * fan_out_ + 1;
-      for (size_t i = 0; i < fan_out_; ++i) {
-        child_vals[i] = buildForCount(cur_depth_start_offset + i, next_node_depth);
-      }
+    int64_t const offset = cur_node_depth ? parent_idx * fan_out_ + 1 : 1;
+    size_t const next_node_depth = cur_node_depth + 1;
+    for (size_t i = 0; i < fan_out_; ++i) {
+      child_vals[i] = buildForCount(offset + i, next_node_depth);
+    }
+    return child_vals;
+  }
+
+  // gather aggregated values of each child node
+  std::vector<AGG_TYPE> prepareChildValuesforAggregationForConditionalChangeEvent(
+      int64_t const parent_idx,
+      size_t const cur_node_depth) {
+    std::vector<AGG_TYPE> child_vals(fan_out_);
+    int64_t const offset = cur_node_depth ? parent_idx * fan_out_ + 1 : 1;
+    size_t const next_node_depth = cur_node_depth + 1;
+    for (size_t i = 0; i < fan_out_; ++i) {
+      child_vals[i] = buildForConditionalChangeEvent(offset + i, next_node_depth);
     }
     return child_vals;
   }
@@ -350,17 +394,10 @@ class SegmentTree {
       int64_t parent_idx,
       size_t cur_node_depth) {
     std::vector<SumAndCountPair<AGG_TYPE>> child_vals(fan_out_);
-    size_t next_node_depth = cur_node_depth + 1;
-    if (cur_node_depth == 0) {
-      for (size_t i = 0; i < fan_out_; ++i) {
-        child_vals[i] = buildForDerivedAggregate(i + 1, next_node_depth);
-      }
-    } else {
-      int64_t cur_depth_start_offset = parent_idx * fan_out_ + 1;
-      for (size_t i = 0; i < fan_out_; ++i) {
-        child_vals[i] =
-            buildForDerivedAggregate(cur_depth_start_offset + i, next_node_depth);
-      }
+    int64_t const offset = cur_node_depth ? parent_idx * fan_out_ + 1 : 1;
+    size_t const next_node_depth = cur_node_depth + 1;
+    for (size_t i = 0; i < fan_out_; ++i) {
+      child_vals[i] = buildForDerivedAggregate(offset + i, next_node_depth);
     }
     return child_vals;
   }
@@ -399,7 +436,7 @@ class SegmentTree {
       AGG_TYPE agg_val = 0;
       std::for_each(
           vals.begin(), vals.end(), [&agg_val, &all_nulls, this](const AGG_TYPE val) {
-            if (val != null_val_ && val != invalid_val_) {
+            if (val != null_val_) {
               agg_val += val;
               all_nulls = false;
             }
@@ -445,7 +482,7 @@ class SegmentTree {
       AGG_TYPE agg_val = 0;
       for (size_t i = cur_col_idx; i < end_idx; ++i) {
         AGG_TYPE val = aggregated_values_[i];
-        if (val != null_val_ && val != invalid_val_) {
+        if (val != null_val_) {
           agg_val += val;
           all_nulls = false;
         }
@@ -484,7 +521,7 @@ class SegmentTree {
     auto end_idx = cur_col_idx + num_visits;
     for (size_t i = cur_col_idx; i < end_idx; ++i) {
       const SumAndCountPair<AGG_TYPE> cur_pair_val = aggregated_values_[i];
-      if (cur_pair_val.sum != null_val_ && cur_pair_val.sum != invalid_val_) {
+      if (cur_pair_val.sum != null_val_) {
         res.sum += cur_pair_val.sum;
         res.count += cur_pair_val.count;
         all_nulls = false;

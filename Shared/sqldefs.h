@@ -148,6 +148,7 @@ enum class SqlWindowFunctionKind {
   SUM_IF,
   SUM_INTERNAL,  // For deserialization from Calcite only. Gets rewritten to a regular
                  // SUM.
+  CONDITIONAL_CHANGE_EVENT,
   INVALID
 };
 
@@ -514,6 +515,8 @@ inline std::string toString(const SqlWindowFunctionKind& kind) {
       return "FORWARD_FILL";
     case SqlWindowFunctionKind::BACKWARD_FILL:
       return "BACKWARD_FILL";
+    case SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT:
+      return "CONDITIONAL_CHANGE_EVENT";
     case SqlWindowFunctionKind::INVALID:
       return "INVALID";
   }

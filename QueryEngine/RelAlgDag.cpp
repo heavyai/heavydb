@@ -860,19 +860,21 @@ size_t RelLogicalUnion::toHash() const {
 }
 
 std::string RelLogicalUnion::getFieldName(const size_t i) const {
-  if (auto const* input = dynamic_cast<RelCompound const*>(inputs_[0].get())) {
-    return input->getFieldName(i);
-  } else if (auto const* input = dynamic_cast<RelProject const*>(inputs_[0].get())) {
-    return input->getFieldName(i);
-  } else if (auto const* input = dynamic_cast<RelLogicalUnion const*>(inputs_[0].get())) {
-    return input->getFieldName(i);
-  } else if (auto const* input = dynamic_cast<RelAggregate const*>(inputs_[0].get())) {
-    return input->getFieldName(i);
-  } else if (auto const* input = dynamic_cast<RelScan const*>(inputs_[0].get())) {
-    return input->getFieldName(i);
-  } else if (auto const* input =
+  if (auto const* compound = dynamic_cast<RelCompound const*>(inputs_[0].get())) {
+    return compound->getFieldName(i);
+  } else if (auto const* project = dynamic_cast<RelProject const*>(inputs_[0].get())) {
+    return project->getFieldName(i);
+  } else if (auto const* logical_union =
+                 dynamic_cast<RelLogicalUnion const*>(inputs_[0].get())) {
+    return logical_union->getFieldName(i);
+  } else if (auto const* aggregate =
+                 dynamic_cast<RelAggregate const*>(inputs_[0].get())) {
+    return aggregate->getFieldName(i);
+  } else if (auto const* scan = dynamic_cast<RelScan const*>(inputs_[0].get())) {
+    return scan->getFieldName(i);
+  } else if (auto const* table_func =
                  dynamic_cast<RelTableFunction const*>(inputs_[0].get())) {
-    return input->getFieldName(i);
+    return table_func->getFieldName(i);
   }
   UNREACHABLE() << "Unhandled input type: " << ::toString(inputs_.front());
   return {};
@@ -1168,6 +1170,9 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   }
   if (name == "BACKWARD_FILL") {
     return SqlWindowFunctionKind::BACKWARD_FILL;
+  }
+  if (name == "CONDITIONAL_CHANGE_EVENT") {
+    return SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT;
   }
   throw std::runtime_error("Unsupported window function: " + name);
 }
@@ -2411,9 +2416,9 @@ void separate_window_function_expressions(
       // a map between nested window function (hash val) and
       // its rex index stored in the `new_rex_input_for_window_func`
       std::unordered_map<size_t, size_t> window_func_to_new_rex_input_idx_map;
-      // a map between RexInput of the current window function projection node (hash val)
-      // and its corresponding new RexInput which is pushed down to the new projection
-      // node
+      // a map between RexInput of the current window function projection node (hash
+      // val) and its corresponding new RexInput which is pushed down to the new
+      // projection node
       std::unordered_map<size_t, std::unique_ptr<const RexInput>>
           new_rex_input_from_child_node;
       RexDeepCopyVisitor copier;
@@ -2448,8 +2453,8 @@ void separate_window_function_expressions(
                       const auto rex_idx = new_rex_input_for_window_func.size();
                       window_func_to_new_rex_input_idx_map.emplace(kv.first, rex_idx);
 
-                      // create a new RexInput and make it as one of new expression of the
-                      // newly created project node
+                      // create a new RexInput and make it as one of new expression of
+                      // the newly created project node
                       new_rex_input_for_window_func.emplace_back(
                           std::make_unique<const RexInput>(new_project.get(), rex_idx));
                       new_scalar_expr_for_window_project.push_back(
@@ -2555,14 +2560,14 @@ std::pair<bool, bool> need_pushdown_generic_expr(
 /**
  * Inserts a simple project before any project containing a window function node. Forces
  * all window function inputs into a single contiguous buffer for centralized processing
- * (e.g. in distributed mode). This is also needed when a window function node is preceded
- * by a filter node, both for correctness (otherwise a window operator will be coalesced
- * with its preceding filter node and be computer over unfiltered results, and for
- * performance, as currently filter nodes that are not coalesced into projects keep all
- * columns from the table as inputs, and hence bring everything in memory.
- * Once the new project has been created, the inputs in the
- * window function project must be rewritten to read from the new project, and to index
- * off the projected exprs in the new project.
+ * (e.g. in distributed mode). This is also needed when a window function node is
+ * preceded by a filter node, both for correctness (otherwise a window operator will be
+ * coalesced with its preceding filter node and be computer over unfiltered results, and
+ * for performance, as currently filter nodes that are not coalesced into projects keep
+ * all columns from the table as inputs, and hence bring everything in memory. Once the
+ * new project has been created, the inputs in the window function project must be
+ * rewritten to read from the new project, and to index off the projected exprs in the
+ * new project.
  */
 void add_window_function_pre_project(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
@@ -2639,7 +2644,8 @@ void add_window_function_pre_project(
       std::vector<std::string> fields_for_window_project;
       std::vector<std::string> fields_for_new_project;
 
-      // step 0. create new project node with an empty scalar expr to rebind target exprs
+      // step 0. create new project node with an empty scalar expr to rebind target
+      // exprs
       std::vector<std::unique_ptr<const RexScalar>> dummy_scalar_exprs;
       std::vector<std::string> dummy_fields;
       auto new_project =
@@ -2667,8 +2673,8 @@ void add_window_function_pre_project(
       if (has_groupby && visitor.hasPartitionExpression()) {
         // we currently may compute incorrect result with columnar output when
         // 1) the window function has partition expression, and
-        // 2) a parent node of the window function projection node has group by expression
-        // todo (yoonmin) : relax this
+        // 2) a parent node of the window function projection node has group by
+        // expression todo (yoonmin) : relax this
         VLOG(1)
             << "Query output overridden to row-wise format due to presence of a window "
                "function with partition expression and group-by expression.";
