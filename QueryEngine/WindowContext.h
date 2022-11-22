@@ -50,6 +50,7 @@ inline bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
     case SqlWindowFunctionKind::SUM_INTERNAL:
     case SqlWindowFunctionKind::COUNT_IF:
     case SqlWindowFunctionKind::SUM_IF:
+    case SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT:
       return true;
     default:
       return false;

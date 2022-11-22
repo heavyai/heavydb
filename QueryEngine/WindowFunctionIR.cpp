@@ -60,6 +60,7 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
     case SqlWindowFunctionKind::SUM_IF:
     case SqlWindowFunctionKind::COUNT:
     case SqlWindowFunctionKind::COUNT_IF:
+    case SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT:
       return codegenWindowFunctionAggregate(co);
     case SqlWindowFunctionKind::LEAD_IN_FRAME:
     case SqlWindowFunctionKind::LAG_IN_FRAME:
@@ -90,7 +91,8 @@ std::string get_window_agg_name(const SqlWindowFunctionKind kind,
       break;
     }
     case SqlWindowFunctionKind::AVG:
-    case SqlWindowFunctionKind::SUM: {
+    case SqlWindowFunctionKind::SUM:
+    case SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT: {
       agg_name = "agg_sum";
       break;
     }
@@ -431,9 +433,9 @@ llvm::Value* Executor::codegenWindowNavigationFunctionOnFrame(
     // b/c they need to determine the current row index within a sorted partition
     // (as we did for window frame navigation functions) to compute the correct and
     // consistent resultset Otherwise, the query result may differ per execution due to
-    // missing table ordering Now we know the current row's index in the sorted partition
-    // (cur_row_idx_in_frame_lv), so we can return by calling the runtime function with
-    // the index we computed
+    // missing table ordering Now we know the current row's index in the sorted
+    // partition (cur_row_idx_in_frame_lv), so we can return by calling the runtime
+    // function with the index we computed
     std::string func_name = "fill_" + target_col_type_name + "_missing_value";
 
     llvm::Value* forward_fill_lv =
@@ -734,22 +736,22 @@ llvm::Value* Executor::codegenCurrentPartitionIndex(
       llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
   auto row_pos_lv = current_row_pos_lv;
   if (window_func_context->getWindowFunction()->isFrameNavigateWindowFunction()) {
-    // `current_row_pos_lv` indicates the index of the current row, but to figure out it's
-    // index of window partition it belongs to, we need a special approach especially for
-    // window framing navigation function  for instance, when we have five rows having two
-    // columns pc and val such as (2,1), (2,2), (2,3), (1,1), (1,2), we build a OneToMany
-    // Perfect Hash Table as: offset: 0 2 / count: 2 3 / payload: i1, i2, i3, i4, i5 where
-    // i1 ~ i3 and i4 ~ i5 are rows for partition 1 (i.e., pc = 1) and 2 (i.e., prc = 2),
-    // respectively. But when processing the first row (2, 1), the original
-    // `current_row_pos_lv` stands for zero so computing which partitions it belongs to is
-    // hard unless hashing the value at runtime. Even if we do hash, we cannot know the
-    // exact hash slot unless we do binary + linear searches multiple times (via payload
-    // buffer and the ordered payload buffer) i.e., when the row (1,2) is assigned to the
-    // partition[4], we cannot find the hash slot index '4' by using `current_row_pos_lv`
-    // unless doing a costly operation like a linear search over the entire window
-    // partition Instead, we collect a hash slot that each row is assigned to and keep
-    // this info at the payload buffer `hash_slot_idx_ptr_lv` and use it for computing
-    // window frame navigation functions
+    // `current_row_pos_lv` indicates the index of the current row, but to figure out
+    // it's index of window partition it belongs to, we need a special approach
+    // especially for window framing navigation function  for instance, when we have
+    // five rows having two columns pc and val such as (2,1), (2,2), (2,3), (1,1),
+    // (1,2), we build a OneToMany Perfect Hash Table as: offset: 0 2 / count: 2 3 /
+    // payload: i1, i2, i3, i4, i5 where i1 ~ i3 and i4 ~ i5 are rows for partition 1
+    // (i.e., pc = 1) and 2 (i.e., prc = 2), respectively. But when processing the first
+    // row (2, 1), the original `current_row_pos_lv` stands for zero so computing which
+    // partitions it belongs to is hard unless hashing the value at runtime. Even if we
+    // do hash, we cannot know the exact hash slot unless we do binary + linear searches
+    // multiple times (via payload buffer and the ordered payload buffer) i.e., when the
+    // row (1,2) is assigned to the partition[4], we cannot find the hash slot index '4'
+    // by using `current_row_pos_lv` unless doing a costly operation like a linear
+    // search over the entire window partition Instead, we collect a hash slot that each
+    // row is assigned to and keep this info at the payload buffer
+    // `hash_slot_idx_ptr_lv` and use it for computing window frame navigation functions
     auto* const hash_slot_idx_ptr =
         window_func_context->payload() + window_func_context->elementCount();
     auto hash_slot_idx_buf_lv =
@@ -1031,9 +1033,10 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
   const auto& args = window_func->getArgs();
   CodeGenerator code_generator(this);
   if (window_func_context->needsToBuildAggregateTree()) {
-    // compute an aggregated value for each row of the window frame by using segment tree
-    // when constructing a window context, we build a necessary segment tree (so called
-    // `aggregate tree`) to query the aggregated value of the specific window frame
+    // compute an aggregated value for each row of the window frame by using segment
+    // tree when constructing a window context, we build a necessary segment tree (so
+    // called `aggregate tree`) to query the aggregated value of the specific window
+    // frame
     const auto pi64_type =
         llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
     const auto ppi64_type = llvm::PointerType::get(

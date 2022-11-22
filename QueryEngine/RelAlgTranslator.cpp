@@ -2152,13 +2152,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       has_framing_clause = false;
     }
   } else {
-    if (frame_start_bound_type == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
-        frame_end_bound_type == SqlWindowFrameBoundType::CURRENT_ROW) {
-      // Calcite sets this frame bound by default when order by clause is given but has no
-      // window frame definition (even if user gives the same bound, our previous window
-      // computation logic returns exactly the same result)
-      has_framing_clause = false;
-    }
     auto translate_frame_bound_expr = [&](const RexScalar* bound_expr) {
       std::shared_ptr<Analyzer::Expr> translated_expr;
       const auto rex_oper = dynamic_cast<const RexOperator*>(bound_expr);
@@ -2391,8 +2384,25 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       }
       break;
     }
-    default:
+    case SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT:
+      if (order_keys.empty()) {
+        throw std::runtime_error(
+            ::toString(window_func_kind) +
+            " requires an ORDER BY sub-clause within the window clause");
+      }
+      if (has_framing_clause) {
+        LOG(INFO)
+            << ::toString(window_func_kind)
+            << " must use a pre-defined window frame range (e.g., ROWS BETWEEN "
+               "UNBOUNDED PRECEDING AND CURRENT ROW). "
+               "Thus, we skip the user-defined window frame for this window function";
+      }
+      has_framing_clause = true;
+      frame_mode = Analyzer::WindowFunction::FrameBoundType::ROW;
+      frame_start_bound_type = SqlWindowFrameBoundType::UNBOUNDED_PRECEDING;
+      frame_end_bound_type = SqlWindowFrameBoundType::CURRENT_ROW;
       break;
+    default:;
   }
   if (need_order_by_clause && order_keys.empty()) {
     throw std::runtime_error(func_name + " requires an ORDER BY clause");
@@ -2400,7 +2410,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
   if (need_frame_def && !has_framing_clause) {
     throw std::runtime_error(func_name + " requires window frame definition");
   }
-
   if (!has_framing_clause) {
     frame_start_bound_type = SqlWindowFrameBoundType::UNKNOWN;
     frame_end_bound_type = SqlWindowFrameBoundType::UNKNOWN;

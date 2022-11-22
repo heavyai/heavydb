@@ -24504,6 +24504,109 @@ TEST_F(Select, ConditionalWindowFunction) {
       }
     }
   }
+
+  using VT = std::vector<std::string>;
+  auto answer_gen = [](const VT& vec) {
+    VT values;
+    for (std::string const& v : vec) {
+      std::ostringstream oss;
+      oss << "(" << v << ")";
+      values.push_back(oss.str());
+    }
+    std::string val_str = boost::join(values, ",");
+    std::ostringstream oss;
+    oss << "SELECT * FROM (VALUES" << val_str << ");";
+    return oss.str();
+  };
+  // CONDITIONAL_CHANGE_EVENT
+  {
+    run_ddl_statement("DROP TABLE IF EXISTS TCE1;");
+    run_ddl_statement("DROP TABLE IF EXISTS TCE2;");
+    run_ddl_statement("DROP TABLE IF EXISTS TCE3;");
+    run_ddl_statement("CREATE TABLE TCE1 (site_id int, ts int, voltage int);");
+    run_ddl_statement("CREATE TABLE TCE2 (p int, c1 int, c2 int);");
+    run_ddl_statement("CREATE TABLE TCE3 (x INT, y INT, z DATE) WITH (fragment_size=2);");
+    VT rows_tce1{"INSERT INTO TCE1 VALUES (1, 1, 120);",
+                 "INSERT INTO TCE1 VALUES (1, 2, 120);",
+                 "INSERT INTO TCE1 VALUES (1, 3,   0);",
+                 "INSERT INTO TCE1 VALUES (1, 4,   0);",
+                 "INSERT INTO TCE1 VALUES (1, 5,   0);",
+                 "INSERT INTO TCE1 VALUES (1, 6,   0);",
+                 "INSERT INTO TCE1 VALUES (1, 7, 120);"};
+    VT rows_tce2{"INSERT INTO TCE2 VALUES (1,    0, 10);",
+                 "INSERT INTO TCE2 VALUES (1,    0, 10);",
+                 "INSERT INTO TCE2 VALUES (1,   13, 10);",
+                 "INSERT INTO TCE2 VALUES (1,   13, 11);",
+                 "INSERT INTO TCE2 VALUES (1,   14, 11);",
+                 "INSERT INTO TCE2 VALUES (1,   15, 12);",
+                 "INSERT INTO TCE2 VALUES (1, null, null);",
+                 "INSERT INTO TCE2 VALUES (2,    30, 30);"};
+    VT rows_tce3{"insert into TCE3 values (1, 1, \'2022-11-01\');",
+                 "insert into TCE3 values (2, 1, \'2022-11-02\');",
+                 "insert into TCE3 values (3, 1, \'2022-11-02\');",
+                 "insert into TCE3 values (4, 1, NULL);",
+                 "insert into TCE3 values (5, 2, \'2022-11-02\');",
+                 "insert into TCE3 values (6, 2, \'2022-11-03\');",
+                 "insert into TCE3 values (7, 2, NULL);",
+                 "insert into TCE3 values (8, 2, \'2022-11-04\');",
+                 "insert into TCE3 values (9, 3, \'2022-11-05\');",
+                 "insert into TCE3 values (10, 3, \'2022-11-06\');"};
+    for (std::string const& r : rows_tce1) {
+      run_multiple_agg(r, dt);
+    }
+    for (std::string const& r : rows_tce2) {
+      run_multiple_agg(r, dt);
+    }
+    for (std::string const& r : rows_tce3) {
+      run_multiple_agg(r, dt);
+    }
+    std::string q1{
+        "SELECT site_id, ts, voltage, conditional_change_event(voltage = 0) over (order "
+        "by ts) from tce1"};
+    VT ans1{"1,1,120,0",
+            "1,2,120,0",
+            "1,3,0,1",
+            "1,4,0,1",
+            "1,5,0,1",
+            "1,6,0,1",
+            "1,7,120,2"};
+    c(q1, answer_gen(ans1), dt);
+
+    std::string q2{
+        "select p, c1, conditional_change_event(c1) over (partition by p order by c1) "
+        "from tce2 order by p, c1;"};
+    VT ans2{
+        "1,0,0", "1,0,0", "1,13,1", "1,13,1", "1,14,2", "1,15,3", "1,NULL,3", "2,30,0"};
+    c(q2, answer_gen(ans2), dt);
+
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "SELECT conditional_change_event(c1) over (partition by p) FROM tce2", dt));
+
+    std::string q3{
+        "SELECT f, conditional_change_event(f < 1.2) OVER (ORDER BY f) FROM test ORDER "
+        "BY f;"};
+    VT ans3;
+    for (size_t i = 0; i < 10; i++) {
+      ans3.push_back("1.1,0");
+    }
+    for (size_t i = 0; i < 5; i++) {
+      ans3.push_back("1.2,1");
+    }
+    for (size_t i = 0; i < 5; i++) {
+      ans3.push_back("1.3,1");
+    }
+    c(q3, answer_gen(ans3), dt);
+
+    std::string q4{
+        "SELECT x, conditional_change_event(z) OVER (PARTITION BY y ORDER BY x) FROM "
+        "TCE3 ORDER BY x;"};
+    VT ans4{"1,0", "2,1", "3,1", "4,1", "5,0", "6,1", "7,1", "8,1", "9,0", "10,1"};
+    c(q4, answer_gen(ans4), dt);
+
+    run_ddl_statement("DROP TABLE TCE1;");
+    run_ddl_statement("DROP TABLE TCE2;");
+    run_ddl_statement("DROP TABLE TCE3;");
+  }
 }
 
 TEST_F(Select, FilterNodeCoalesce) {
