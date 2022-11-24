@@ -120,6 +120,13 @@ set(query_engine_source_files
   SpeculativeTopN.cpp
   StreamingTopN.cpp
   StringDictionaryGenerations.cpp
+  TableFunctions/TestFunctions/ArrayTestTableFunctions.cpp
+  TableFunctions/TestFunctions/FilterPushdownTestTableFunctions.cpp
+  TableFunctions/TestFunctions/GeoTestTableFunctions.cpp
+  TableFunctions/TestFunctions/OtherTestTableFunctions.cpp
+  TableFunctions/TestFunctions/RbcTestTableFunctions.cpp
+  TableFunctions/TestFunctions/SignatureTestTableFunctions.cpp
+  TableFunctions/TestFunctions/StringTestTableFunctions.cpp
   TableFunctions/TableFunctionCompilationContext.cpp
   TableFunctions/TableFunctionExecutionContext.cpp
   TableFunctions/TableFunctionsFactory.cpp
@@ -222,9 +229,13 @@ endif()
 
 if(ENABLE_CUDA)
   set(CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_gpu.hpp)
+  list(APPEND CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TestFunctions/RbcTestTableFunctions.cpp)
+  list(APPEND CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TestFunctions/StringTestTableFunctions.cpp)
+  list(APPEND CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TestFunctions/SignatureTestTableFunctions.cpp)
+  list(APPEND CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TestFunctions/OtherTestTableFunctions.cpp)
 endif()
 
-set(TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctionsTesting.hpp)
+set(TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TestFunctions/TableFunctionsTesting.h)
 
 if(ENABLE_SYSTEM_TFS)
   list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.hpp)
