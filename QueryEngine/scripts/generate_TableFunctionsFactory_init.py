@@ -2038,12 +2038,28 @@ __declspec(noinline)
 #else
  __attribute__((noinline))
 #endif
+
+#if defined(__clang__)
+#define NO_OPT_ATTRIBUTE __attribute__((optnone))
+
+#elif defined(__GNUC__) || defined(__GNUG__)
+#define NO_OPT_ATTRIBUTE __attribute__((optimize("O0")))
+
+#elif defined(_MSC_VER)
+#define NO_OPT_ATTRIBUTE
+
+#endif
+
+#if defined(_MSC_VER)
+#pragma optimize("", off)
+#endif
+
 volatile
-bool avoid_opt_address(void *address) {
+NO_OPT_ATTRIBUTE bool avoid_opt_address(void *address) {
   return address != nullptr;
 }
 
-bool functions_exist() {
+NO_OPT_ATTRIBUTE bool functions_exist() {
     bool ret = true;
 
     ret &= (%s);
@@ -2056,21 +2072,6 @@ extern bool g_enable_table_functions;
 namespace table_functions {
 
 std::once_flag init_flag;
-
-#if defined(__clang__)
-#define NO_OPT_ATTRIBUTE __attribute__((optnone))
-
-#elif defined(__GNUC__) || defined(__GNUG__)
-#define NO_OPT_ATTRIBUTE __attribute((optimize("O0")))
-
-#elif defined(_MSC_VER)
-#define NO_OPT_ATTRIBUTE
-
-#endif
-
-#if defined(_MSC_VER)
-#pragma optimize("", off)
-#endif
 
 struct AddTableFunctions {
 %s
