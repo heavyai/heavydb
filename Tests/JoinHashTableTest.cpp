@@ -14,16 +14,6 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/operations.hpp>
-#include <boost/program_options.hpp>
-#include <csignal>
-#include <exception>
-#include <memory>
-#include <ostream>
-#include <set>
-#include <vector>
 #include "Catalog/Catalog.h"
 #include "Catalog/DBObject.h"
 #include "DataMgr/DataMgr.h"
@@ -36,6 +26,19 @@
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/thread_count.h"
 #include "TestHelpers.h"
+
+#include <gtest/gtest.h>
+
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/operations.hpp>
+#include <boost/program_options.hpp>
+
+#include <csignal>
+#include <exception>
+#include <memory>
+#include <ostream>
+#include <set>
+#include <vector>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -50,7 +53,9 @@ namespace {
 ExecutorDeviceType g_device_type;
 }
 
+class Build : public TestHelpers::TbbPrivateServerKiller {};
 class MultiFragmentTest : public TestHelpers::TbbPrivateServerKiller {};
+class Other : public TestHelpers::TbbPrivateServerKiller {};
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
@@ -156,7 +161,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
                                         executor.get());
 }
 
-TEST(Build, PerfectOneToOne1) {
+TEST_F(Build, PerfectOneToOne1) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
@@ -211,7 +216,7 @@ TEST(Build, PerfectOneToOne1) {
   }
 }
 
-TEST(Build, PerfectOneToOne2) {
+TEST_F(Build, PerfectOneToOne2) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
@@ -262,7 +267,7 @@ TEST(Build, PerfectOneToOne2) {
   }
 }
 
-TEST(Build, PerfectOneToMany1) {
+TEST_F(Build, PerfectOneToMany1) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
@@ -310,7 +315,7 @@ TEST(Build, PerfectOneToMany1) {
   }
 }
 
-TEST(Build, PerfectOneToMany2) {
+TEST_F(Build, PerfectOneToMany2) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
@@ -356,7 +361,7 @@ TEST(Build, PerfectOneToMany2) {
   }
 }
 
-TEST(Build, detectProperJoinQual) {
+TEST_F(Build, detectProperJoinQual) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
@@ -457,7 +462,7 @@ TEST(Build, detectProperJoinQual) {
   }
 }
 
-TEST(Build, KeyedOneToOne) {
+TEST_F(Build, KeyedOneToOne) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
@@ -515,7 +520,7 @@ TEST(Build, KeyedOneToOne) {
   }
 }
 
-TEST(Build, KeyedOneToMany) {
+TEST_F(Build, KeyedOneToMany) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
@@ -575,7 +580,7 @@ TEST(Build, KeyedOneToMany) {
   }
 }
 
-TEST(Build, GeoOneToMany1) {
+TEST_F(Build, GeoOneToMany1) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
@@ -650,7 +655,7 @@ TEST(Build, GeoOneToMany1) {
   }
 }
 
-TEST(Build, GeoOneToMany2) {
+TEST_F(Build, GeoOneToMany2) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
@@ -1040,7 +1045,7 @@ TEST_F(MultiFragmentTest, KeyedOneToMany) {
   }
 }
 
-TEST(Other, Regression) {
+TEST_F(Other, Regression) {
   sql(R"(
       drop table if exists table_a;
       drop table if exists table_b;
