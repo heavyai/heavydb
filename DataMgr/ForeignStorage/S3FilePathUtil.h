@@ -4,7 +4,6 @@
 
 #include <aws/s3/model/Object.h>
 
-// #include "DataMgr/OmniSciAwsSdk.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/file_path_util.h"
 

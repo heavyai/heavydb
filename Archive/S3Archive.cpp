@@ -28,7 +28,7 @@
 #include <memory>
 
 #include "DataMgr/ForeignStorage/S3FilePathUtil.h"
-#include "DataMgr/OmniSciAwsSdk.h"
+#include "DataMgr/HeavyDbAwsSdk.h"
 #include "Logger/Logger.h"
 
 bool g_allow_s3_server_privileges{false};
@@ -84,7 +84,7 @@ void S3Archive::init_for_read() {
     Aws::Client::ClientConfiguration s3_config;
     s3_config.region = s3_region;
     s3_config.endpointOverride = s3_endpoint;
-    auto ssl_config = omnisci_aws_sdk::get_ssl_config();
+    auto ssl_config = heavydb_aws_sdk::get_ssl_config();
     s3_config.caPath = ssl_config.ca_path;
     s3_config.caFile = ssl_config.ca_file;
 

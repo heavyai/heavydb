@@ -26,7 +26,7 @@
 #include <picosha2.h>
 
 #ifdef HAVE_AWS_S3
-#include "DataMgr/OmniSciAwsSdk.h"
+#include "DataMgr/HeavyDbAwsSdk.h"
 #endif  // HAVE_AWS_S3
 #include "Geospatial/ColumnNames.h"
 #include "ImportExport/ForeignDataImporter.h"
@@ -494,7 +494,7 @@ class DBHandlerFilePathTest
  protected:
   static void SetUpTestSuite() {
 #ifdef HAVE_AWS_S3
-    omnisci_aws_sdk::init_sdk();
+    heavydb_aws_sdk::init_sdk();
 #endif  // HAVE_AWS_S3
 
     createDBHandler();
@@ -511,7 +511,7 @@ class DBHandlerFilePathTest
     boost::filesystem::remove_all(getImportPath());
 
 #ifdef HAVE_AWS_S3
-    omnisci_aws_sdk::shutdown_sdk();
+    heavydb_aws_sdk::shutdown_sdk();
 #endif  // HAVE_AWS_S3
   }
 

@@ -99,7 +99,7 @@ function(set_arrow_has_private_aws_sdk)
 endfunction()
 
 if(ENABLE_AWS_S3)
-  list(APPEND datamgr_source_files OmniSciAwsSdk.cpp)
+  list(APPEND datamgr_source_files HeavyDbAwsSdk.cpp)
   set_arrow_has_private_aws_sdk()
 endif()
 
