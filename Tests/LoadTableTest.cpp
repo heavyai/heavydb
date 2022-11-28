@@ -23,7 +23,7 @@
 
 #ifdef HAVE_AWS_S3
 #include "AwsHelpers.h"
-#include "DataMgr/OmniSciAwsSdk.h"
+#include "DataMgr/HeavyDbAwsSdk.h"
 #include "Shared/ThriftTypesConvert.h"
 #endif  // HAVE_AWS_S3
 #include "Geospatial/ColumnNames.h"
@@ -1022,7 +1022,7 @@ class ThriftDetectServerPrivilegeTest : public DBHandlerTestFixture {
 
   static void SetUpTestSuite() {
     DBHandlerTestFixture::SetUpTestSuite();
-    omnisci_aws_sdk::init_sdk();
+    heavydb_aws_sdk::init_sdk();
     g_allow_s3_server_privileges = true;
     aws_environment_ = unset_aws_env();
     create_stub_aws_profile(AWS_DUMMY_CREDENTIALS_DIR);
@@ -1030,7 +1030,7 @@ class ThriftDetectServerPrivilegeTest : public DBHandlerTestFixture {
 
   static void TearDownTestSuite() {
     DBHandlerTestFixture::TearDownTestSuite();
-    omnisci_aws_sdk::shutdown_sdk();
+    heavydb_aws_sdk::shutdown_sdk();
     g_allow_s3_server_privileges = false;
     restore_aws_env(aws_environment_);
     boost::filesystem::remove_all(AWS_DUMMY_CREDENTIALS_DIR);

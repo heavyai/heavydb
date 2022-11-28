@@ -36,7 +36,7 @@
 #include "Catalog/Catalog.h"
 #ifdef HAVE_AWS_S3
 #include "AwsHelpers.h"
-#include "DataMgr/OmniSciAwsSdk.h"
+#include "DataMgr/HeavyDbAwsSdk.h"
 #endif  // HAVE_AWS_S3
 #include "DataMgr/ForeignStorage/RegexFileBufferParser.h"
 #include "Geospatial/ColumnNames.h"
@@ -643,14 +643,14 @@ class FsiImportTest {
  public:
   static void setupS3() {
 #ifdef HAVE_AWS_S3
-    omnisci_aws_sdk::init_sdk();
+    heavydb_aws_sdk::init_sdk();
     g_allow_s3_server_privileges = true;
 #endif
   }
 
   static void teardownS3() {
 #ifdef HAVE_AWS_S3
-    omnisci_aws_sdk::shutdown_sdk();
+    heavydb_aws_sdk::shutdown_sdk();
     g_allow_s3_server_privileges = false;
 #endif
   }
@@ -2256,9 +2256,9 @@ const char* create_table_example_2 = R"(
 class ImportTest : public ImportExportTestBase {
  protected:
 #ifdef HAVE_AWS_S3
-  static void SetUpTestSuite() { omnisci_aws_sdk::init_sdk(); }
+  static void SetUpTestSuite() { heavydb_aws_sdk::init_sdk(); }
 
-  static void TearDownTestSuite() { omnisci_aws_sdk::shutdown_sdk(); }
+  static void TearDownTestSuite() { heavydb_aws_sdk::shutdown_sdk(); }
 #endif
 
   void SetUp() override {
@@ -3698,7 +3698,7 @@ class ImportServerPrivilegeTest : public ImportExportTestBase {
   inline static std::optional<std::string> aws_region_ = std::nullopt;
 
   static void SetUpTestSuite() {
-    omnisci_aws_sdk::init_sdk();
+    heavydb_aws_sdk::init_sdk();
     g_allow_s3_server_privileges = true;
     aws_environment_ = unset_aws_env();
     create_stub_aws_profile(AWS_DUMMY_CREDENTIALS_DIR);
@@ -3709,7 +3709,7 @@ class ImportServerPrivilegeTest : public ImportExportTestBase {
     if (aws_region_.has_value()) {
       setAwsRegion(aws_region_.value());
     }
-    omnisci_aws_sdk::shutdown_sdk();
+    heavydb_aws_sdk::shutdown_sdk();
     g_allow_s3_server_privileges = false;
     restore_aws_env(aws_environment_);
     boost::filesystem::remove_all(AWS_DUMMY_CREDENTIALS_DIR);
@@ -3853,9 +3853,9 @@ class SortedImportTest
       public testing::WithParamInterface<std::tuple<std::string, std::string>> {
  public:
 #ifdef HAVE_AWS_S3
-  static void SetUpTestSuite() { omnisci_aws_sdk::init_sdk(); }
+  static void SetUpTestSuite() { heavydb_aws_sdk::init_sdk(); }
 
-  static void TearDownTestSuite() { omnisci_aws_sdk::shutdown_sdk(); }
+  static void TearDownTestSuite() { heavydb_aws_sdk::shutdown_sdk(); }
 #endif
 
   void SetUp() override {

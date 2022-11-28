@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "OmniSciAwsSdk.h"
+#include "HeavyDbAwsSdk.h"
 
 #include <arrow/filesystem/s3fs.h>
 #include <arrow/status.h>
@@ -30,8 +30,8 @@
 static Aws::SDKOptions awsapi_options;
 #endif
 
-void omnisci_aws_sdk::init_sdk() {
-  auto ssl_config = omnisci_aws_sdk::get_ssl_config();
+void heavydb_aws_sdk::init_sdk() {
+  auto ssl_config = heavydb_aws_sdk::get_ssl_config();
   arrow::fs::FileSystemGlobalOptions global_options;
   global_options.tls_ca_dir_path = ssl_config.ca_path;
   global_options.tls_ca_file_path = ssl_config.ca_file;
@@ -46,7 +46,7 @@ void omnisci_aws_sdk::init_sdk() {
 #endif
 }
 
-void omnisci_aws_sdk::shutdown_sdk() {
+void heavydb_aws_sdk::shutdown_sdk() {
   auto status = arrow::fs::FinalizeS3();
   CHECK(status.ok()) << "FinalizeS3 resulted in an error: " << status.message();
 #ifdef ARROW_HAS_PRIVATE_AWS_SDK
@@ -55,8 +55,8 @@ void omnisci_aws_sdk::shutdown_sdk() {
 #endif
 }
 
-using omnisci_aws_sdk::SslConfig;
-SslConfig omnisci_aws_sdk::get_ssl_config() {
+using heavydb_aws_sdk::SslConfig;
+SslConfig heavydb_aws_sdk::get_ssl_config() {
   SslConfig ssl_config;
   /*
     Fix a wrong ca path established at building libcurl on Centos being carried to

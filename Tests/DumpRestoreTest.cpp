@@ -29,7 +29,7 @@
 
 #ifdef HAVE_AWS_S3
 #include "AwsHelpers.h"
-#include "DataMgr/OmniSciAwsSdk.h"
+#include "DataMgr/HeavyDbAwsSdk.h"
 #endif
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
@@ -584,9 +584,9 @@ TEST_F(DumpAndRestoreTest, DumpAlteredTable) {
 #ifdef HAVE_AWS_S3
 class S3RestoreTest : public DumpAndRestoreTest {
  protected:
-  static void SetUpTestSuite() { omnisci_aws_sdk::init_sdk(); }
+  static void SetUpTestSuite() { heavydb_aws_sdk::init_sdk(); }
 
-  static void TearDownTestSuite() { omnisci_aws_sdk::shutdown_sdk(); }
+  static void TearDownTestSuite() { heavydb_aws_sdk::shutdown_sdk(); }
 
   void SetUp() override {
     g_allow_s3_server_privileges = false;

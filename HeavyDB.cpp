@@ -56,9 +56,8 @@
 #include <vector>
 
 #ifdef HAVE_AWS_S3
-#include "DataMgr/OmniSciAwsSdk.h"
+#include "DataMgr/HeavyDbAwsSdk.h"
 #endif
-#include "MapDRelease.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "Shared/Compressor.h"
 #include "Shared/SystemParameters.h"
@@ -389,7 +388,7 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
   LOG(INFO) << "TBB max concurrency: " << tbb_max_concurrency << " threads.";
 #endif  // ENABLE_TBB
 #ifdef HAVE_AWS_S3
-  omnisci_aws_sdk::init_sdk();
+  heavydb_aws_sdk::init_sdk();
 #endif  // HAVE_AWS_S3
   std::set<std::unique_ptr<std::thread>> server_threads;
   auto wait_for_server_threads = [&] {
@@ -425,7 +424,7 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
     wait_for_server_threads();
 
 #ifdef HAVE_AWS_S3
-    omnisci_aws_sdk::shutdown_sdk();
+    heavydb_aws_sdk::shutdown_sdk();
 #endif  // HAVE_AWS_S3
 
     // Flush the logs last to capture maximum debugging information.
