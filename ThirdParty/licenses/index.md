@@ -39,9 +39,9 @@ spirv-tools | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Tools/blob/mast
 spirv-cross | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Cross/blob/master/LICENSE) | Rendering support
 Vulkan Memory Allocator | [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt) | Rendering support
 GLM | [MIT](https://github.com/g-truc/glm/blob/master/copying.txt) | Rendering support
-GLFW | [zlib](https://github.com/glfw/glfw/blob/master/LICENSE.md) | Rendering support
-STB | [MIT](https://github.com/nothings/stb/blob/master/LICENSE) | Rendering support
-ImGui | [MIT](https://github.com/ocornut/imgui/blob/master/LICENSE.txt) | Rendering support
+GLFW | [zlib](https://github.com/glfw/glfw/blob/master/LICENSE.md) | Rendering tools
+ImGui | [MIT](https://github.com/ocornut/imgui/blob/master/LICENSE.txt) | Rendering tools
+ImPlot | [MIT](https://github.com/epezent/implot/blob/master/LICENSE) | Rendering tools
 --- | --- | --- |
 gdal | [MIT](<http://svn.osgeo.org/gdal/trunk/gdal/LICENSE.TXT>) | GDAL, Geospatial import |
 hdf5 | [BSD](<https://github.com/HDFGroup/hdf5/blob/develop/COPYING>) | GDAL, netcdf import |
@@ -158,5 +158,7 @@ geos | [LGPLv2.1](<https://github.com/libgeos/geos/blob/master/COPYING>) | Geo s
 --- | --- | --- |
 Canonical Raft | [LGPLv3](<https://github.com/canonical/raft/blob/master/LICENSE>) | Distributed consensus |
 libuv | [MIT](<https://github.com/libuv/libuv/blob/v1.x/LICENSE>) | Distributed consensus |
+--- | --- | --- |
+STB | [MIT](https://github.com/nothings/stb/blob/master/LICENSE) | Image file utils
 --- | --- | --- |
 | poly2tri  | [BSD](https://github.com/greenm01/poly2tri/blob/master/LICENSE) | GDAL, Polygon triangulation  |

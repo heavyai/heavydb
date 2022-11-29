@@ -12,25 +12,25 @@
   EGL, KHR                                  [MIT]()                                                                                            Rendering Support
   fmt                                       [MIT](https://github.com/fmtlib/fmt/blob/master/LICENSE.rst)                                       Folly
   Folly                                     [Apache](https://github.com/facebook/folly/blob/master/LICENSE)                                    Multiple
-  glbinding                                 [MIT](https://github.com/cginternals/glbinding/blob/master/LICENSE)                                OpenGL management
   gflags                                    [BSD-like](https://github.com/gflags/gflags/blob/master/COPYING.txt)                               Folly
   glog                                      [BSD-like](https://github.com/google/glog/blob/master/COPYING)                                     C++ logging
   cpp-jwt                                   [MIT](https://github.com/arun11299/cpp-jwt/blob/master/LICENSE)                                    Elliptical Curve Digital Signature
   libcurl                                   [MIT](https://curl.haxx.se/docs/copyright.html)                                                    AWS metadata download
   libldap                                   varies, [OpenLDAP](http://www.openldap.org/software/release/license.html)                          LDAP support; provided by OS (dynamic linked)
-  libnuma                                   [LGPL](<https://github.com/numactl/numactl/blob/master/LICENSE.LGPL2.1>)                           Optane support, dynamic linked
+  libnuma                                   [LGPL](https://github.com/numactl/numactl/blob/master/LICENSE.LGPL2.1)                             Optane support, dynamic linked
   libpng                                    [libpng](http://libpng.org/pub/png/src/libpng-LICENSE.txt)                                         Render encoding / transport
   linenoise                                 [BSD](https://github.com/antirez/linenoise/blob/master/LICENSE)                                    CLI
   LLVM                                      [LLVM](http://llvm.org/releases/3.9.1/LICENSE.TXT)                                                 JIT
-  memkind                                   [BSD](<https://github.com/memkind/memkind/blob/master/COPYING>)                                    Optane support
+  memkind                                   [BSD](https://github.com/memkind/memkind/blob/master/COPYING)                                      Optane support
   muparserx                                 [BSD](https://github.com/beltoforion/muparserx/blob/master/License.txt)                            Expression string parsing
   ncurses                                   [X11](http://invisible-island.net/ncurses/ncurses.faq.html#who_owns_it)                            CLI/password entry
   PicoSHA2                                  [MIT](https://github.com/okdshin/PicoSHA2/blob/master/LICENSE)                                     SHA256 Library
   rapidjson                                 [MIT](https://github.com/miloyip/rapidjson/blob/master/license.txt)                                JSON parsing
-  robin_hood                                [MIT](https://github.com/martinus/robin-hood-hashing/blob/master/LICENSE)                          Unordered Map and Set
+  robin\_hood                               [MIT](https://github.com/martinus/robin-hood-hashing/blob/master/LICENSE)                          Unordered Map and Set
   SQLite                                    [Public Domain](https://www.sqlite.org/copyright.html)                                             Catalog management
   TBB                                       [Apache-2.0](https://raw.githubusercontent.com/oneapi-src/oneTBB/tbb_2020/LICENSE)                 Threadpool support
   TimeGM                                    [BSD](https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc/pkgtools/libnbcompat/files/timegm.c)        Date/time support
+  Uber H3                                   [Apache-2.0](https://github.com/uber/h3/blob/master/LICENSE)                                       H3 index encoding/decoding
   Xorg                                      [MIT](https://www.x.org/releases/X11R7.7/doc/xorg-docs/License.html)                               OpenGL rendering
   zlib                                      [zlib](http://zlib.net/zlib_license.html)                                                          PNG support
   ---                                       ---                                                                                                ---
@@ -38,6 +38,10 @@
   spirv-tools                               [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Tools/blob/master/LICENSE)                      Rendering support
   spirv-cross                               [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Cross/blob/master/LICENSE)                      Rendering support
   Vulkan Memory Allocator                   [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt)   Rendering support
+  GLM                                       [MIT](https://github.com/g-truc/glm/blob/master/copying.txt)                                       Rendering support
+  GLFW                                      [zlib](https://github.com/glfw/glfw/blob/master/LICENSE.md)                                        Rendering tools
+  ImGui                                     [MIT](https://github.com/ocornut/imgui/blob/master/LICENSE.txt)                                    Rendering tools
+  ImPlot                                    [MIT](https://github.com/epezent/implot/blob/master/LICENSE)                                       Rendering tools
   ---                                       ---                                                                                                ---
   gdal                                      [MIT](http://svn.osgeo.org/gdal/trunk/gdal/LICENSE.TXT)                                            GDAL, Geospatial import
   hdf5                                      [BSD](https://github.com/HDFGroup/hdf5/blob/develop/COPYING)                                       GDAL, netcdf import
@@ -49,7 +53,7 @@
   proj4                                     [MIT](http://proj4.org/license.html)                                                               GDAL, Geospatial reprojection
   shapelib                                  [MIT](http://shapelib.maptools.org/license.html)                                                   GDAL, Shapefile import
   uriparser                                 [BSD](https://sourceforge.net/p/uriparser/git/ci/master/tree/COPYING)                              GDAL, KML import
-  PDAL                                      [BSD](https://raw.githubusercontent.com/PDAL/PDAL/master/LICENSE.txt)                              Point cloud import
+  pdal                                      [BSD](https://raw.githubusercontent.com/PDAL/PDAL/master/LICENSE.txt)                              Point cloud import
   ---                                       ---                                                                                                ---
   generate\_cert (Go)                       [BSD](https://github.com/golang/go/blob/master/LICENSE)                                            HTTPS certificate generator
   gorilla/context                           [BSD](https://github.com/gorilla/context/blob/master/LICENSE)                                      HTTP session handlers
@@ -155,6 +159,6 @@
   Canonical Raft                            [LGPLv3](https://github.com/canonical/raft/blob/master/LICENSE)                                    Distributed consensus
   libuv                                     [MIT](https://github.com/libuv/libuv/blob/v1.x/LICENSE)                                            Distributed consensus
   ---                                       ---                                                                                                ---
-  stb_image                                 [MIT](https://github.com/nothings/stb/blob/master/LICENSE)                                         Image file utils
+  STB                                       [MIT](https://github.com/nothings/stb/blob/master/LICENSE)                                         Image file utils
   ---                                       ---                                                                                                ---
-  poly2tri                                  [BSD](https://github.com/greenm01/poly2tri/blob/master/LICENSE)                                    Polygon triangulation
+  poly2tri                                  [BSD](https://github.com/greenm01/poly2tri/blob/master/LICENSE)                                    GDAL, Polygon triangulation
