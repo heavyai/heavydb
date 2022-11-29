@@ -11,7 +11,6 @@ set(shared_source_files
     MathUtils.cpp
     file_path_util.cpp
     file_type.cpp
-    enable_assign_render_groups.cpp
     distributed.cpp
     TargetInfo.cpp
     DbObjectKeys.cpp
@@ -19,7 +18,9 @@ set(shared_source_files
 
 include_directories(${CMAKE_SOURCE_DIR})
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  list(APPEND shared_source_files ee/Encryption.cpp)
+  list(APPEND shared_source_files Compressor.cpp ee/Encryption.cpp)
+else()
+  list(APPEND shared_source_files enable_assign_render_groups.cpp)
 endif()
 
 if(ENABLE_NVTX)
@@ -31,6 +32,7 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/funcannotations.h DESTINATION ${CMAKE_BINA
 add_library(Shared ${shared_source_files} "cleanup_global_namespace.h" "boost_stacktrace.hpp")
 target_link_libraries(Shared OSDependent Logger ${BLOSC_LIBRARIES} ${Boost_LIBRARIES})
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  target_link_libraries(Shared ${CMAKE_DL_LIBS})
   target_link_libraries(Shared ${OPENSSL_LIBRARIES})
 endif()
 
