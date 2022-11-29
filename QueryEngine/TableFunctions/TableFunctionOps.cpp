@@ -236,4 +236,107 @@ TableFunctionManager_getOrAddTransient(int8_t* mgr_ptr,
   return mgr->getOrAddTransient(db_id, dict_id, str);
 }
 
+extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_getItem(int8_t* flatbuffer,
+                                                          const int64_t index,
+                                                          const int64_t expected_numel,
+                                                          int8_t*& ptr,
+                                                          int64_t& size,
+                                                          bool& is_null,
+                                                          int64_t sizeof_T) {
+  FlatBufferManager m{flatbuffer};
+  auto status = m.getItem(index, size, ptr, is_null);
+  if (status == FlatBufferManager::Status::ItemUnspecifiedError) {
+    if (expected_numel < 0) {
+#ifndef __CUDACC__
+      throw std::runtime_error("getItem failed: " + ::toString(status));
+#endif
+    }
+    status = m.setItem(index,
+                       nullptr,
+                       expected_numel * sizeof_T,
+                       nullptr);  // reserves a junk in array buffer
+    if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+      throw std::runtime_error("getItem failed[setItem]: " + ::toString(status));
+#endif
+    }
+    status = m.getItem(index, size, ptr, is_null);
+  }
+  if (status == FlatBufferManager::Status::Success) {
+    if (expected_numel >= 0 && expected_numel * sizeof_T != size) {
+#ifndef __CUDACC__
+      throw std::runtime_error("getItem failed: unexpected size");
+#endif
+    }
+  } else {
+#ifndef __CUDACC__
+    throw std::runtime_error("getItem failed: " + ::toString(status));
+#endif
+  }
+}
+
+extern "C" DEVICE RUNTIME_EXPORT bool ColumnArray_isNull(int8_t* flatbuffer,
+                                                         int64_t index) {
+  FlatBufferManager m{flatbuffer};
+  bool is_null = false;
+  auto status = m.isNull(index, is_null);
+#ifndef __CUDACC__
+  if (status != FlatBufferManager::Status::Success) {
+    throw std::runtime_error("isNull failed: " + ::toString(status));
+  }
+#endif
+  return is_null;
+}
+
+extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_setNull(int8_t* flatbuffer,
+                                                          int64_t index) {
+  FlatBufferManager m{flatbuffer};
+  auto status = m.setNull(index);
+#ifndef __CUDACC__
+  if (status != FlatBufferManager::Status::Success) {
+    throw std::runtime_error("setNull failed: " + ::toString(status));
+  }
+#endif
+}
+
+extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_setItem(int8_t* flatbuffer,
+                                                          int64_t index,
+                                                          const int8_t* ptr,
+                                                          int64_t size,
+                                                          bool is_null,
+                                                          int64_t sizeof_T) {
+  FlatBufferManager m{flatbuffer};
+  FlatBufferManager::Status status;
+  if (is_null) {
+    status = m.setNull(index);
+  } else {
+    status = m.setItem(index, ptr, size * sizeof_T);
+  }
+#ifndef __CUDACC__
+  if (status != FlatBufferManager::Status::Success) {
+    throw std::runtime_error("setItem failed: " + ::toString(status));
+  }
+#endif
+}
+
+extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_concatItem(int8_t* flatbuffer,
+                                                             int64_t index,
+                                                             const int8_t* ptr,
+                                                             int64_t size,
+                                                             bool is_null,
+                                                             int64_t sizeof_T) {
+  FlatBufferManager m{flatbuffer};
+  FlatBufferManager::Status status;
+  if (is_null) {
+    status = m.setNull(index);
+  } else {
+    status = m.concatItem(index, ptr, size * sizeof_T);
+#ifndef __CUDACC__
+    if (status != FlatBufferManager::Status::Success) {
+      throw std::runtime_error("concatItem failed: " + ::toString(status));
+    }
+#endif
+  }
+}
+
 #endif  // EXECUTE_INCLUDE
