@@ -259,6 +259,22 @@ mkdir -p $PREFIX/include/imgui
 rsync -av imgui.$VERS/* $PREFIX/include/imgui
 popd #imgui
 
+# ImPlot
+VERS=0.14
+rm -rf implot
+mkdir -p implot
+pushd implot
+wget --continue ${HTTP_DEPS}/implot.$VERS.tar.gz
+tar xvf implot.$VERS.tar.gz
+# Patch #includes for imgui.h / imgui_internal.h
+pushd implot.$VERS
+sudo patch -p0 < $SCRIPTS_DIR/implot-0.14_fix_imgui_includes.patch
+popd
+mkdir -p $PREFIX/include
+mkdir -p $PREFIX/include/implot
+rsync -av implot.$VERS/* $PREFIX/include/implot
+popd #implot
+
 # Vulkan
 # Custom tarball which excludes the spir-v toolchain
 VERS=1.2.198.1 # stable 12/3/21

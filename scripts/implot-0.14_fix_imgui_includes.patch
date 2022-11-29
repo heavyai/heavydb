@@ -1,0 +1,24 @@
+--- implot.h
++++ implot.h
+@@ -45,7 +45,7 @@
+ // [SECTION] Obsolete API
+ 
+ #pragma once
+-#include "imgui.h"
++#include <imgui/imgui.h>
+ 
+ //-----------------------------------------------------------------------------
+ // [SECTION] Macros and Defines
+--- implot_internal.h
++++ implot_internal.h
+@@ -36,7 +36,7 @@
+ #endif
+ 
+ #include <time.h>
+-#include "imgui_internal.h"
++#include <imgui/imgui_internal.h>
+ 
+ #ifndef IMPLOT_VERSION
+ #error Must include implot.h before implot_internal.h
+-- 
+2.25.1
