@@ -1475,7 +1475,7 @@ inline auto generate_column_type(const SQLTypeInfo& elem_ti) {
         if (c == kENCODING_NONE && p == 0) {
           c = kENCODING_ARRAY;
           break;
-        } else if (c == kENCODING_DICT && p != 0) {
+        } else if (c == kENCODING_DICT) {
           c = kENCODING_ARRAY_DICT;
           break;
         }
