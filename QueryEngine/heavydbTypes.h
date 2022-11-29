@@ -156,6 +156,36 @@ EXTENSION_NOINLINE_HOST int32_t RowFunctionManager_getOrAddTransient(int8_t* mgr
                                                                      int32_t dict_id,
                                                                      std::string str);
 
+/*
+  Column<Array<T>> methods
+*/
+
+EXTENSION_NOINLINE_HOST void ColumnArray_getItem(int8_t* flatbuffer,
+                                                 const int64_t index,
+                                                 const int64_t expected_numel,
+                                                 int8_t*& ptr,
+                                                 int64_t& size,
+                                                 bool& is_null,
+                                                 int64_t sizeof_T);
+
+EXTENSION_NOINLINE_HOST bool ColumnArray_isNull(int8_t* flatbuffer, int64_t index);
+
+EXTENSION_NOINLINE_HOST void ColumnArray_setNull(int8_t* flatbuffer, int64_t index);
+
+EXTENSION_NOINLINE_HOST void ColumnArray_setItem(int8_t* flatbuffer,
+                                                 int64_t index,
+                                                 const int8_t* ptr,
+                                                 int64_t size,
+                                                 bool is_null,
+                                                 int64_t sizeof_T);
+
+EXTENSION_NOINLINE_HOST void ColumnArray_concatItem(int8_t* flatbuffer,
+                                                    int64_t index,
+                                                    const int8_t* ptr,
+                                                    int64_t size,
+                                                    bool is_null,
+                                                    int64_t sizeof_T);
+
 // https://www.fluentcpp.com/2018/04/06/strong-types-by-struct/
 struct TextEncodingDict {
   int32_t value;
@@ -1567,41 +1597,20 @@ struct Column<Array<T>> {
       : flatbuffer_(flatbuffer), num_rows_(num_rows) {}
 
   DEVICE Array<T> getItem(const int64_t index, const int64_t expected_numel = -1) const {
-    FlatBufferManager m{flatbuffer_};
     int8_t* ptr;
-    int64_t size;
-    bool is_null;
-    auto status = m.getItem(index, size, ptr, is_null);
-    if (status == FlatBufferManager::Status::ItemUnspecifiedError) {
-      if (expected_numel < 0) {
-#ifndef __CUDACC__
-        throw std::runtime_error("getItem failed: " + ::toString(status));
-#endif
-      }
-      status = m.setItem(index,
-                         nullptr,
-                         expected_numel * sizeof(T),
-                         nullptr);  // reserves a junk in array buffer
-      if (status != FlatBufferManager::Status::Success) {
-#ifndef __CUDACC__
-        throw std::runtime_error("getItem failed[setItem]: " + ::toString(status));
-#endif
-      }
-      status = m.getItem(index, size, ptr, is_null);
-    }
-    if (status == FlatBufferManager::Status::Success) {
-      if (expected_numel >= 0 &&
-          expected_numel * static_cast<int64_t>(sizeof(T)) != size) {
-#ifndef __CUDACC__
-        throw std::runtime_error("getItem failed: unexpected size");
-#endif
-      }
-    } else {
-#ifndef __CUDACC__
-      throw std::runtime_error("getItem failed: " + ::toString(status));
-#endif
-    }
-    Array<T> result(reinterpret_cast<T*>(ptr), size / sizeof(T), is_null);
+    int64_t size = 0;
+    bool is_null = false;
+
+    ColumnArray_getItem(flatbuffer_,
+                        index,
+                        expected_numel,
+                        ptr,
+                        size,
+                        is_null,
+                        static_cast<int64_t>(sizeof(T)));
+
+    Array<T> result(
+        reinterpret_cast<T*>(ptr), size / static_cast<int64_t>(sizeof(T)), is_null);
     return result;
   }
 
@@ -1612,59 +1621,27 @@ struct Column<Array<T>> {
   DEVICE int64_t size() const { return num_rows_; }
 
   DEVICE inline bool isNull(int64_t index) const {
-    FlatBufferManager m{flatbuffer_};
-    bool is_null = false;
-    auto status = m.isNull(index, is_null);
-#ifndef __CUDACC__
-    if (status != FlatBufferManager::Status::Success) {
-      throw std::runtime_error("isNull failed: " + ::toString(status));
-    }
-#endif
-    return is_null;
+    return ColumnArray_isNull(flatbuffer_, index);
   }
 
-  DEVICE inline void setNull(int64_t index) {
-    FlatBufferManager m{flatbuffer_};
-    auto status = m.setNull(index);
-#ifndef __CUDACC__
-    if (status != FlatBufferManager::Status::Success) {
-      throw std::runtime_error("setNull failed: " + ::toString(status));
-    }
-#endif
-  }
+  DEVICE inline void setNull(int64_t index) { ColumnArray_setNull(flatbuffer_, index); }
 
   DEVICE inline void setItem(int64_t index, const Array<T>& other) {
-    FlatBufferManager m{flatbuffer_};
-    FlatBufferManager::Status status;
-    if (other.isNull()) {
-      status = m.setNull(index);
-    } else {
-      status = m.setItem(index,
-                         reinterpret_cast<const int8_t*>(&(other[0])),
-                         other.getSize() * sizeof(T));
-    }
-#ifndef __CUDACC__
-    if (status != FlatBufferManager::Status::Success) {
-      throw std::runtime_error("setItem failed: " + ::toString(status));
-    }
-#endif
+    ColumnArray_setItem(flatbuffer_,
+                        index,
+                        reinterpret_cast<const int8_t*>(&(other[0])),
+                        other.getSize(),
+                        other.isNull(),
+                        sizeof(T));
   }
 
   DEVICE inline void concatItem(int64_t index, const Array<T>& other) {
-    FlatBufferManager m{flatbuffer_};
-    FlatBufferManager::Status status;
-    if (other.isNull()) {
-      status = m.setNull(index);
-    } else {
-      status = m.concatItem(index,
-                            reinterpret_cast<const int8_t*>(&(other[0])),
-                            other.getSize() * sizeof(T));
-#ifndef __CUDACC__
-      if (status != FlatBufferManager::Status::Success) {
-        throw std::runtime_error("concatItem failed: " + ::toString(status));
-      }
-#endif
-    }
+    ColumnArray_concatItem(flatbuffer_,
+                           index,
+                           reinterpret_cast<const int8_t*>(&(other[0])),
+                           other.getSize(),
+                           other.isNull(),
+                           sizeof(T));
   }
 
   DEVICE inline int32_t getDictDbId() const {
