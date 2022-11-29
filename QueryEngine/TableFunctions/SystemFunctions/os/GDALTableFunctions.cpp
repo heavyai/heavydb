@@ -370,6 +370,11 @@ int32_t tf_raster_contour_rasterize_impl(TableFunctionManager& mgr,
                                          const TV contour_offset,
                                          Column<TG>& contour_features,
                                          Column<TV>& contour_values) {
+  // enforce parser validation
+  CHECK_GT(bin_dim_meters, 0.0f);
+  CHECK_GE(neighborhood_fill_radius, 0);
+
+  // validate the rest
   auto const raster_agg_type = get_raster_agg_type(agg_type, false);
   if (raster_agg_type == RasterAggType::INVALID) {
     auto const error_msg = "Invalid Raster Aggregate Type: " + agg_type.getString();
@@ -382,28 +387,32 @@ int32_t tf_raster_contour_rasterize_impl(TableFunctionManager& mgr,
     return mgr.ERROR_MESSAGE(error_msg);
   }
 
-  GeoRaster<TLL, TV> geo_raster(
-      lon, lat, values, raster_agg_type, bin_dim_meters, true, true);
+  std::unique_ptr<GeoRaster<TLL, TV>> geo_raster;
+  try {
+    geo_raster = std::make_unique<GeoRaster<TLL, TV>>(
+        lon, lat, values, raster_agg_type, bin_dim_meters, true, true);
+    CHECK(geo_raster);
+  } catch (std::runtime_error& e) {
+    return mgr.ERROR_MESSAGE(std::string("Failed to create GeoRaster: ") + e.what());
+  }
 
   if (neighborhood_fill_radius > 0) {
-    geo_raster.fill_bins_from_neighbors(
+    geo_raster->fill_bins_from_neighbors(
         neighborhood_fill_radius, fill_only_nulls, raster_fill_agg_type);
   }
 
-  int64_t raster_width = geo_raster.num_x_bins_;
-  int64_t raster_height = geo_raster.num_y_bins_;
-  double lon_min = geo_raster.x_min_;
-  double lat_min = geo_raster.y_min_;
-  double lon_bin_scale = geo_raster.x_scale_input_to_bin_;
-  double lat_bin_scale = geo_raster.y_scale_input_to_bin_;
+  int64_t raster_width = geo_raster->num_x_bins_;
+  int64_t raster_height = geo_raster->num_y_bins_;
+  double lon_min = geo_raster->x_min_;
+  double lat_min = geo_raster->y_min_;
+  double lon_bin_scale = geo_raster->x_scale_input_to_bin_;
+  double lat_bin_scale = geo_raster->y_scale_input_to_bin_;
 
-  // validate
-  if (raster_width < 2 || raster_height < 2) {
-    return mgr.ERROR_MESSAGE("Invalid raster width/height");
-  }
-  if (lon_bin_scale <= 0.0 || lat_bin_scale <= 0.0) {
-    return mgr.ERROR_MESSAGE("Invalid bin scales");
-  }
+  // enforce previous validation
+  CHECK_GE(raster_width, 1ll);
+  CHECK_GE(raster_height, 1ll);
+  CHECK_GT(lon_bin_scale, 0.0);
+  CHECK_GT(lat_bin_scale, 0.0);
 
   // build affine transform matrix
   std::array<double, 6> affine_transform;
@@ -424,7 +433,7 @@ int32_t tf_raster_contour_rasterize_impl(TableFunctionManager& mgr,
                                         static_cast<int32_t>(raster_width),
                                         static_cast<int32_t>(raster_height),
                                         affine_transform.data(),
-                                        geo_raster.z_.data(),
+                                        geo_raster->z_.data(),
                                         contour_interval,
                                         contour_offset,
                                         contour_features,
@@ -447,10 +456,9 @@ int32_t tf_raster_contour_direct_impl(TableFunctionManager& mgr,
                                       const TV contour_offset,
                                       Column<TG>& contour_features,
                                       Column<TV>& contour_values) {
-  // validate
-  if (raster_width < 2 || raster_height < 2) {
-    return mgr.ERROR_MESSAGE("Invalid raster width/height");
-  }
+  // enforce parser validation
+  CHECK_GE(raster_width, 1u);
+  CHECK_GE(raster_height, 1u);
 
   // expected pixel counts
   auto const num_pixels =

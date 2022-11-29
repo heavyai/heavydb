@@ -214,6 +214,7 @@ void GeoRaster<T, Z>::align_bins_max_exclusive() {
 
 template <typename T, typename Z>
 void GeoRaster<T, Z>::calculate_bins_and_scales() {
+  CHECK_GT(bin_dim_meters_, static_cast<T>(0));
   x_range_ = x_max_ - x_min_;
   y_range_ = y_max_ - y_min_;
   if (geographic_coords_) {
@@ -228,6 +229,11 @@ void GeoRaster<T, Z>::calculate_bins_and_scales() {
     num_x_bins_ = x_range_ * x_meters_per_degree_ / bin_dim_meters_;
     num_y_bins_ = y_range_ * y_meters_per_degree_ / bin_dim_meters_;
 
+    if (num_x_bins_ < 1 || num_y_bins_ < 1) {
+      throw std::runtime_error("Invalid GeoRaster (" + std::to_string(num_x_bins_) + "x" +
+                               std::to_string(num_y_bins_) + " bins)");
+    }
+
     x_scale_input_to_bin_ = x_meters_per_degree_ / bin_dim_meters_;
     y_scale_input_to_bin_ = y_meters_per_degree_ / bin_dim_meters_;
     x_scale_bin_to_input_ = bin_dim_meters_ / x_meters_per_degree_;
@@ -236,6 +242,11 @@ void GeoRaster<T, Z>::calculate_bins_and_scales() {
   } else {
     num_x_bins_ = x_range_ / bin_dim_meters_;
     num_y_bins_ = y_range_ / bin_dim_meters_;
+
+    if (num_x_bins_ < 1 || num_y_bins_ < 1) {
+      throw std::runtime_error("Invalid GeoRaster (" + std::to_string(num_x_bins_) + "x" +
+                               std::to_string(num_y_bins_) + " bins)");
+    }
 
     x_scale_input_to_bin_ = 1.0 / bin_dim_meters_;
     y_scale_input_to_bin_ = 1.0 / bin_dim_meters_;
