@@ -248,15 +248,15 @@ popd #build
 popd #glfw
 
 # ImGui
-VERS=1.87
+VERS=1.89.1-docking
 rm -rf imgui
 mkdir -p imgui
 pushd imgui
-download https://github.com/ocornut/imgui/archive/refs/tags/v${VERS}.tar.gz
-extract v${VERS}.tar.gz
+wget --continue ${HTTP_DEPS}/imgui.$VERS.tar.gz
+tar xvf imgui.$VERS.tar.gz
 mkdir -p $PREFIX/include
 mkdir -p $PREFIX/include/imgui
-mv imgui-${VERS}/* $PREFIX/include/imgui
+rsync -av imgui.$VERS/* $PREFIX/include/imgui
 popd #imgui
 
 # Vulkan
