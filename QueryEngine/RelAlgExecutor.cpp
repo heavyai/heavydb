@@ -4031,7 +4031,7 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
                                    false,
                                    column_cache);
   } catch (const foreign_storage::ForeignStorageException& error) {
-    throw error;
+    throw;
   } catch (const QueryMustRunOnCpu&) {
     // force a retry of the top level query on CPU
     throw;
