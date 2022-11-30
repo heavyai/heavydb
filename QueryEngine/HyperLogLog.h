@@ -86,7 +86,7 @@ inline uint32_t count_zeros(T* M, size_t m) {
 
 template <class T>
 inline size_t hll_size(const T* M, const size_t bitmap_sz_bits) {
-  size_t m = 1 << bitmap_sz_bits;
+  size_t const m = size_t(1) << bitmap_sz_bits;
 
   uint32_t zeros = count_zeros(M, m);
   double estimate = get_alpha_adjusted_estimate(m, M);
