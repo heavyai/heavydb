@@ -764,7 +764,7 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
       deleteBuffer(key);  // buffer failed to load, ensure it is cleaned up
       LOG(WARNING) << "Get chunk - Could not load chunk " << keyToString(key)
                    << " from foreign storage. Error was " << error.what();
-      throw error;
+      throw;
     } catch (const std::exception& error) {
       LOG(FATAL) << "Get chunk - Could not find chunk " << keyToString(key)
                  << " in buffer pool or parent buffer pools. Error was " << error.what();
@@ -798,7 +798,7 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
       deleteBuffer(key);  // buffer failed to load, ensure it is cleaned up
       LOG(WARNING) << "Could not fetch parent chunk " << keyToString(key)
                    << " from foreign storage. Error was " << error.what();
-      throw error;
+      throw;
     } catch (std::runtime_error& error) {
       LOG(FATAL) << "Could not fetch parent buffer " << keyToString(key)
                  << " error: " << error.what();
@@ -818,7 +818,7 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
       } catch (const foreign_storage::ForeignStorageException& error) {
         LOG(WARNING) << "Could not fetch parent chunk " << keyToString(key)
                      << " from foreign storage. Error was " << error.what();
-        throw error;
+        throw;
       } catch (std::runtime_error& error) {
         LOG(FATAL) << "Could not fetch parent buffer " << keyToString(key)
                    << " error: " << error.what();
