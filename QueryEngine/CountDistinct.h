@@ -111,23 +111,23 @@ inline void count_distinct_set_union(
           old_count_distinct_desc.device_type == ExecutorDeviceType::GPU) {
         hll_unify(reinterpret_cast<int32_t*>(new_set),
                   reinterpret_cast<int32_t*>(old_set),
-                  1 << old_count_distinct_desc.bitmap_sz_bits);
+                  size_t(1) << old_count_distinct_desc.bitmap_sz_bits);
       } else if (new_count_distinct_desc.device_type == ExecutorDeviceType::GPU &&
                  old_count_distinct_desc.device_type == ExecutorDeviceType::CPU) {
         hll_unify(reinterpret_cast<int32_t*>(new_set),
                   reinterpret_cast<int8_t*>(old_set),
-                  1 << old_count_distinct_desc.bitmap_sz_bits);
+                  size_t(1) << old_count_distinct_desc.bitmap_sz_bits);
       } else if (new_count_distinct_desc.device_type == ExecutorDeviceType::CPU &&
                  old_count_distinct_desc.device_type == ExecutorDeviceType::GPU) {
         hll_unify(reinterpret_cast<int8_t*>(new_set),
                   reinterpret_cast<int32_t*>(old_set),
-                  1 << old_count_distinct_desc.bitmap_sz_bits);
+                  size_t(1) << old_count_distinct_desc.bitmap_sz_bits);
       } else {
         CHECK(old_count_distinct_desc.device_type == ExecutorDeviceType::CPU &&
               new_count_distinct_desc.device_type == ExecutorDeviceType::CPU);
         hll_unify(reinterpret_cast<int8_t*>(new_set),
                   reinterpret_cast<int8_t*>(old_set),
-                  1 << old_count_distinct_desc.bitmap_sz_bits);
+                  size_t(1) << old_count_distinct_desc.bitmap_sz_bits);
       }
     } else {
       CHECK_EQ(new_count_distinct_desc.sub_bitmap_count,

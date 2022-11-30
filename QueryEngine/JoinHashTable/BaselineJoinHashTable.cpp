@@ -543,7 +543,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
     for (int i = 1; i < thread_count; ++i) {
       hll_unify(hll_result,
                 hll_result + i * padded_size_bytes,
-                1 << count_distinct_desc.bitmap_sz_bits);
+                size_t(1) << count_distinct_desc.bitmap_sz_bits);
     }
     return std::make_pair(hll_size(hll_result, count_distinct_desc.bitmap_sz_bits), 0);
   }
@@ -607,7 +607,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
     auto& host_hll_buffer = host_hll_buffers[device_id];
     hll_unify(hll_result,
               reinterpret_cast<int32_t*>(&host_hll_buffer[0]),
-              1 << count_distinct_desc.bitmap_sz_bits);
+              size_t(1) << count_distinct_desc.bitmap_sz_bits);
   }
   return std::make_pair(hll_size(hll_result, count_distinct_desc.bitmap_sz_bits), 0);
 #else

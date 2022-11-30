@@ -1041,7 +1041,7 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
     for (int i = 1; i < thread_count; ++i) {
       hll_unify(hll_result,
                 hll_result + i * padded_size_bytes,
-                1 << count_distinct_desc.bitmap_sz_bits);
+                size_t(1) << count_distinct_desc.bitmap_sz_bits);
     }
     return std::make_pair(
         hll_size(hll_result, count_distinct_desc.bitmap_sz_bits),
@@ -1131,7 +1131,7 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
     auto& host_hll_buffer = host_hll_buffers[device_id];
     hll_unify(hll_result,
               reinterpret_cast<int32_t*>(&host_hll_buffer[0]),
-              1 << count_distinct_desc.bitmap_sz_bits);
+              size_t(1) << count_distinct_desc.bitmap_sz_bits);
   }
   const size_t emitted_keys_count =
       std::accumulate(emitted_keys_count_device_threads.begin(),

@@ -596,7 +596,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
     for (int i = 1; i < thread_count; ++i) {
       hll_unify(hll_result,
                 hll_result + i * padded_size_bytes,
-                1 << count_distinct_desc.bitmap_sz_bits);
+                size_t(1) << count_distinct_desc.bitmap_sz_bits);
     }
     return std::make_pair(hll_size(hll_result, count_distinct_desc.bitmap_sz_bits),
                           num_keys_for_row.size() > 0 ? num_keys_for_row.back() : 0);
@@ -688,7 +688,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
     auto& host_hll_buffer = host_hll_buffers[device_id];
     hll_unify(hll_result,
               reinterpret_cast<int32_t*>(&host_hll_buffer[0]),
-              1 << count_distinct_desc.bitmap_sz_bits);
+              size_t(1) << count_distinct_desc.bitmap_sz_bits);
   }
   size_t emitted_keys_count = 0;
   for (auto& emitted_keys_count_device : emitted_keys_count_device_threads) {

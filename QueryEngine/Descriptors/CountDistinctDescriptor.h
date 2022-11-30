@@ -41,6 +41,8 @@ enum class CountDistinctImplType { Invalid, Bitmap, UnorderedSet };
 struct CountDistinctDescriptor {
   CountDistinctImplType impl_type_;
   int64_t min_val;
+  // When used in the approximate count distinct algorithm, bitmap_sz_bits has a
+  // different meaning than the bitmap size: https://en.wikipedia.org/wiki/HyperLogLog
   int64_t bitmap_sz_bits;
   bool approximate;
   ExecutorDeviceType device_type;
@@ -48,9 +50,9 @@ struct CountDistinctDescriptor {
 
   size_t bitmapSizeBytes() const {
     CHECK(impl_type_ == CountDistinctImplType::Bitmap);
-    const auto approx_reg_bytes =
-        (device_type == ExecutorDeviceType::GPU ? sizeof(int32_t) : 1);
-    return approximate ? (1 << bitmap_sz_bits) * approx_reg_bytes
+    size_t const approx_reg_bytes =
+        device_type == ExecutorDeviceType::GPU ? sizeof(int32_t) : 1;
+    return approximate ? approx_reg_bytes << bitmap_sz_bits
                        : bitmap_bits_to_bytes(bitmap_sz_bits);
   }
 
