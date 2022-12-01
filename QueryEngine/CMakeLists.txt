@@ -30,6 +30,7 @@ set(query_engine_source_files
   ColumnIR.cpp
   CompareIR.cpp
   ConstantIR.cpp
+  CodegenHelper.cpp
   DateTimeIR.cpp
   DateTimePlusRewrite.cpp
   DateTimeTranslator.cpp
