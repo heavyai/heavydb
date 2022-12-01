@@ -65,6 +65,7 @@ static_assert(false, "LLVM Version >= 9 is required.");
 
 #include "CudaMgr/CudaMgr.h"
 #include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/CodegenHelper.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/GpuSharedMemoryUtils.h"
 #include "QueryEngine/LLVMFunctionAttributesUtil.h"
@@ -326,8 +327,8 @@ void optimize_ir(llvm::Function* query_func,
   if (!is_gpu_smem_used) {
     // thread jumps can change the execution order around SMEM sections guarded by
     // `__syncthreads()`, which results in race conditions. For now, disable jump
-    // threading for shared memory queries. In the future, consider handling shared memory
-    // aggregations with a separate kernel launch
+    // threading for shared memory queries. In the future, consider handling shared
+    // memory aggregations with a separate kernel launch
     pass_manager.add(llvm::createJumpThreadingPass());  // Thread jumps.
   }
   pass_manager.add(llvm::createCFGSimplificationPass());
@@ -1391,8 +1392,9 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
          ++it) {
       if (llvm::isa<llvm::CallInst>(*it)) {
         auto& get_gv_call = llvm::cast<llvm::CallInst>(*it);
-        if (get_gv_call.getCalledFunction()->getName() == "array_size" ||
-            get_gv_call.getCalledFunction()->getName() == "linear_probabilistic_count") {
+        auto const func_name = CodegenUtil::getCalledFunctionName(get_gv_call);
+        if (func_name &&
+            (*func_name == "array_size" || *func_name == "linear_probabilistic_count")) {
           mark_function_never_inline(cgen_state_->row_func_);
           row_func_not_inlined = true;
           break;
@@ -1619,7 +1621,8 @@ void bind_pos_placeholders(const std::string& pos_fn_name,
       continue;
     }
     auto& pos_call = llvm::cast<llvm::CallInst>(*it);
-    if (std::string(pos_call.getCalledFunction()->getName()) == pos_fn_name) {
+    auto const func_name = CodegenUtil::getCalledFunctionName(pos_call);
+    if (func_name && *func_name == pos_fn_name) {
       if (use_resume_param) {
         const auto error_code_arg = get_arg_by_name(query_func, "error_code");
         llvm::ReplaceInstWithInst(
@@ -1771,7 +1774,8 @@ void bind_query(llvm::Function* query_func,
       continue;
     }
     auto& query_call = llvm::cast<llvm::CallInst>(*it);
-    if (std::string(query_call.getCalledFunction()->getName()) == query_fname) {
+    auto const call_func_name = CodegenUtil::getCalledFunctionName(query_call);
+    if (call_func_name && *call_func_name == query_fname) {
       query_stubs.push_back(&query_call);
     }
   }
@@ -2030,7 +2034,8 @@ void Executor::createErrorCheckControlFlow(
         continue;
       }
       auto& row_func_call = llvm::cast<llvm::CallInst>(*inst_it);
-      if (std::string(row_func_call.getCalledFunction()->getName()) == "row_process") {
+      auto const row_func_name = CodegenUtil::getCalledFunctionName(row_func_call);
+      if (row_func_name && *row_func_name == "row_process") {
         auto next_inst_it = inst_it;
         ++next_inst_it;
         auto new_bb = bb_it->splitBasicBlock(next_inst_it);
@@ -2277,11 +2282,9 @@ void Executor::AutoTrackBuffersInRuntimeIR() {
       for (llvm::Instruction& I : BB) {
         if (llvm::CallInst* CI = llvm::dyn_cast<llvm::CallInst>(&I)) {
           // Keep track of calls to "allocate_varlen_buffer" for later processing
-          llvm::Function* called = CI->getCalledFunction();
-          if (called) {
-            if (called->getName() == "allocate_varlen_buffer") {
-              calls_to_analyze.push_back(CI);
-            }
+          auto const called_func_name = CodegenUtil::getCalledFunctionName(*CI);
+          if (called_func_name && *called_func_name == "allocate_varlen_buffer") {
+            calls_to_analyze.push_back(CI);
           }
         }
       }
@@ -2306,8 +2309,8 @@ void Executor::AutoTrackBuffersInRuntimeIR() {
     // if no such instruction exist, add one registering the buffer
     for (llvm::User* U : CI->users()) {
       if (llvm::CallInst* call = llvm::dyn_cast<llvm::CallInst>(U)) {
-        if (call->getCalledFunction() and
-            call->getCalledFunction()->getName() == "register_buffer_with_executor_rsm") {
+        auto const func_name = CodegenUtil::getCalledFunctionName(*call);
+        if (func_name && *func_name == "register_buffer_with_executor_rsm") {
           found = true;
           break;
         }
@@ -3185,8 +3188,8 @@ void Executor::insertErrorCodeChecker(llvm::Function* query_func,
         continue;
       }
       auto& row_func_call = llvm::cast<llvm::CallInst>(*inst_it);
-      if (std::string(row_func_call.getCalledFunction()->getName()) ==
-          query_stub_func_name) {
+      auto const row_func_name = CodegenUtil::getCalledFunctionName(row_func_call);
+      if (row_func_name && *row_func_name == query_stub_func_name) {
         auto next_inst_it = inst_it;
         ++next_inst_it;
         auto new_bb = bb_it->splitBasicBlock(next_inst_it);
