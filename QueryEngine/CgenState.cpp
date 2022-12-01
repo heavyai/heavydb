@@ -16,6 +16,7 @@
 
 #include "CgenState.h"
 #include "CodeGenerator.h"
+#include "CodegenHelper.h"
 #include "OutputBufferInitialization.h"
 
 #include <llvm/IR/InstIterator.h>
@@ -312,12 +313,12 @@ std::vector<std::string> CgenState::gpuFunctionsToReplace(llvm::Function* fn) {
     auto& inst_list = basic_block.getInstList();
     for (auto inst_itr = inst_list.begin(); inst_itr != inst_list.end(); ++inst_itr) {
       if (auto call_inst = llvm::dyn_cast<llvm::CallInst>(inst_itr)) {
-        auto called_fcn = call_inst->getCalledFunction();
-        CHECK(called_fcn);
+        auto const called_func_name = CodegenUtil::getCalledFunctionName(*call_inst);
+        CHECK(called_func_name);
 
-        if (gpu_replacement_functions.find(called_fcn->getName().str()) !=
+        if (gpu_replacement_functions.find(std::string(*called_func_name)) !=
             gpu_replacement_functions.end()) {
-          ret.emplace_back(called_fcn->getName());
+          ret.emplace_back(*called_func_name);
         }
       }
     }
@@ -345,10 +346,8 @@ void CgenState::replaceFunctionForGpu(const std::string& fcn_to_replace,
     auto& inst_list = basic_block.getInstList();
     for (auto inst_itr = inst_list.begin(); inst_itr != inst_list.end(); ++inst_itr) {
       if (auto call_inst = llvm::dyn_cast<llvm::CallInst>(inst_itr)) {
-        auto called_fcn = call_inst->getCalledFunction();
-        CHECK(called_fcn);
-
-        if (called_fcn->getName() == fcn_to_replace) {
+        auto called_func = CodegenUtil::findCalledFunction(*call_inst);
+        if (called_func && called_func->getName().str() == fcn_to_replace) {
           std::vector<llvm::Value*> args;
           std::vector<llvm::Type*> arg_types;
           for (auto& arg : call_inst->args()) {
@@ -359,7 +358,7 @@ void CgenState::replaceFunctionForGpu(const std::string& fcn_to_replace,
           CHECK(gpu_func);
           auto gpu_func_type = gpu_func.getFunctionType();
           CHECK(gpu_func_type);
-          CHECK_EQ(gpu_func_type->getReturnType(), called_fcn->getReturnType());
+          CHECK_EQ(gpu_func_type->getReturnType(), called_func->getReturnType());
           llvm::ReplaceInstWithInst(call_inst,
                                     llvm::CallInst::Create(gpu_func, args, ""));
           return;

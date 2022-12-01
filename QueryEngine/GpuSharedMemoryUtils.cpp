@@ -16,6 +16,7 @@
 
 #include <llvm/Transforms/Utils/Cloning.h>
 
+#include "CodegenHelper.h"
 #include "GpuSharedMemoryUtils.h"
 #include "ResultSetReductionJIT.h"
 #include "RuntimeFunctions.h"
@@ -168,21 +169,24 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
         continue;
       }
       auto& func_call = llvm::cast<llvm::CallInst>(*it);
-      std::string func_name = func_call.getCalledFunction()->getName().str();
-      if (func_name.length() > 4 && func_name.substr(0, 4) == "agg_") {
-        if (func_name.length() > 7 &&
-            func_name.substr(func_name.length() - 7) == "_shared") {
-          continue;
+      auto const func_name = CodegenUtil::getCalledFunctionName(func_call);
+      if (func_name) {
+        std::string_view func_name_str = *func_name;
+        if (func_name_str.substr(0, 4) == "agg_") {
+          if (func_name_str.substr(func_name_str.length() - 7) == "_shared") {
+            continue;
+          }
+          agg_func_found = true;
+          std::vector<llvm::Value*> args;
+          args.reserve(func_call.getNumOperands());
+          for (size_t i = 0; i < func_call.getNumOperands() - 1; ++i) {
+            args.push_back(func_call.getArgOperand(i));
+          }
+          auto gpu_agg_func = getFunction(std::string(func_name_str) + "_shared");
+          llvm::ReplaceInstWithInst(&func_call,
+                                    llvm::CallInst::Create(gpu_agg_func, args, ""));
+          break;
         }
-        agg_func_found = true;
-        std::vector<llvm::Value*> args;
-        for (size_t i = 0; i < func_call.getNumOperands() - 1; ++i) {
-          args.push_back(func_call.getArgOperand(i));
-        }
-        auto gpu_agg_func = getFunction(func_name + "_shared");
-        llvm::ReplaceInstWithInst(&func_call,
-                                  llvm::CallInst::Create(gpu_agg_func, args, ""));
-        break;
       }
     }
   }
@@ -381,7 +385,8 @@ void replace_called_function_with(llvm::Function* main_func,
       continue;
     }
     auto& instruction = llvm::cast<llvm::CallInst>(*it);
-    if (std::string(instruction.getCalledFunction()->getName()) == target_func_name) {
+    auto const inst_func_name = CodegenUtil::getCalledFunctionName(instruction);
+    if (inst_func_name && *inst_func_name == target_func_name) {
       std::vector<llvm::Value*> args;
       for (size_t i = 0; i < instruction.getNumOperands() - 1; ++i) {
         args.push_back(instruction.getArgOperand(i));
