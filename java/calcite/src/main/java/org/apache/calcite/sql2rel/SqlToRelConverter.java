@@ -4768,8 +4768,18 @@ public class SqlToRelConverter {
           return agg.lookupAggregates(call);
         }
       }
-      return exprConverter.convertCall(
-              this, new SqlCallBinding(validator, scope, call).permutedCall());
+      SqlCall permutedCall =
+              new SqlCallBinding(validator, scope, call).permutedCall(); // HEAVY.AI new
+      if (permutedCall.getOperator() instanceof ExtTableFunction) { // HEAVY.AI new
+        ExtTableFunction tf =
+                (ExtTableFunction) permutedCall.getOperator(); // HEAVY.AI new
+        if (tf.supportsDefaultArguments() // HEAVY.AI new
+                && permutedCall.getOperandList().stream().anyMatch( // HEAVY.AI new
+                        op -> op.getKind() == SqlKind.DEFAULT)) { // HEAVY.AI new
+          permutedCall = tf.rewriteCallWithDefaultArguments(permutedCall); // HEAVY.AI new
+        } // HEAVY.AI new
+      } // HEAVY.AI new
+      return exprConverter.convertCall(this, permutedCall); // HEAVY.AI new
     }
 
     public RexNode visit(SqlNodeList nodeList) {

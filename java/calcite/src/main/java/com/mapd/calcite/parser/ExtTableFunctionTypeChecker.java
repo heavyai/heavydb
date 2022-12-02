@@ -38,6 +38,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
   final HeavyDBSqlOperatorTable opTable;
@@ -46,13 +47,15 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
     this.opTable = opTable;
   }
 
+  /*
+   * This function is meant to check optionality when typechecking single
+   * operators. Since
+   * we perform type checking of all possible overloads of an operator, we use
+   * each UDTF's
+   * isArgumentOptional() method instead.
+   */
   public boolean isOptional(int argIndex) {
-    // We need to mark all arguments as optional, otherwise Calcite may invalidate some
-    // valid calls during the validation process. This is because if it previously bound
-    // the call to a UDTF operator that receives more arguments, it fills up the missing
-    // arguments with DEFAULTs. DEFAULT arguments however will not get to the typechecking
-    // stage if they are not optional for that oeprator.
-    return true;
+    return false;
   }
 
   public boolean doesOperandTypeMatch(ExtTableFunction tf,
@@ -61,18 +64,19 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
           int iFormalOperand) {
     SqlCall permutedCall = callBinding.permutedCall();
     SqlNode permutedOperand = permutedCall.operand(iFormalOperand);
-    RelDataType type;
+    RelDataType actualType;
 
-    // For candidate calls to incompatible operators, type inference of operands may fail.
+    // For candidate calls to incompatible operators, type inference of operands may
+    // fail.
     // In that case, we just catch the exception and invalidade the candidate.
     try {
-      type = callBinding.getValidator().deriveType(
+      actualType = callBinding.getValidator().deriveType(
               callBinding.getScope(), permutedOperand);
     } catch (Exception e) {
       return false;
     }
 
-    SqlTypeName typeName = type.getSqlTypeName();
+    SqlTypeName typeName = actualType.getSqlTypeName();
     SqlTypeFamily formalTypeFamily =
             toSqlTypeName(tf.getArgTypes().get(iFormalOperand)).getFamily();
 
@@ -80,10 +84,26 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
       SqlCall cursorCall = (SqlCall) permutedOperand;
       RelDataType cursorType = callBinding.getValidator().deriveType(
               callBinding.getScope(), cursorCall.operand(0));
-      return doesCursorOperandTypeMatch(tf, iFormalOperand, cursorType);
+      if (checkCursorOperandTypes(tf, iFormalOperand, cursorType)) {
+        return true;
+      }
     } else {
-      return formalTypeFamily.getTypeNames().contains(typeName);
+      if (formalTypeFamily.getTypeNames().contains(typeName)) {
+        return true;
+      }
     }
+
+    /*
+     * If actual operand is a DEFAULT clause, and the candidate table function accepts a
+     * default value, the operand should typecheck (processing of the DEFAULT value will
+     * be handled later).
+     */
+    if (permutedOperand.getKind() == SqlKind.DEFAULT
+            && tf.isArgumentOptional(iFormalOperand)) {
+      return true;
+    }
+
+    return false;
   }
 
   public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
@@ -103,9 +123,11 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
     }
 
     // Remove all candidates whose number of formal args doesn't match the
-    // call's number of real args.
-    candidateOverloads.removeIf(
-            tf -> tf.getArgTypes().size() != callBinding.getOperandCount());
+    // call's number of real args (accounting for possible default args).
+    candidateOverloads.removeIf(tf
+            -> (callBinding.getOperandCount()
+                       < (tf.getArgTypes().size() - tf.getNumOptionalArguments()))
+                    || (callBinding.getOperandCount() > tf.getArgTypes().size()));
 
     SqlNode[] operandArray = new SqlNode[callBinding.getCall().getOperandList().size()];
     for (Ord<SqlNode> arg : Ord.zip(callBinding.getCall().getOperandList())) {
@@ -125,12 +147,31 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
       candidateBindings.put(tf, candidateBinding);
     }
 
-    for (int i = 0; i < operandArray.length; i++) {
-      int idx = i;
-      candidateOverloads.removeIf(tf
-              -> !doesOperandTypeMatch(
-                      tf, candidateBindings.get(tf), operandArray[idx], idx));
-    }
+    // remove candidate calls that have DEFAULT values for operands which are
+    // mandatory
+    candidateOverloads.removeIf(tf
+            -> IntStream
+                       .range(0,
+                               candidateBindings.get(tf)
+                                       .permutedCall()
+                                       .getOperandList()
+                                       .size())
+                       .anyMatch(idx
+                               -> candidateBindings.get(tf)
+                                                       .permutedCall()
+                                                       .operand(idx)
+                                                       .getKind()
+                                               == SqlKind.DEFAULT
+                                       && !tf.isArgumentOptional(idx)));
+
+    // Typecheck each operand of the candidate call
+    candidateOverloads.removeIf(tf
+            -> IntStream.range(0, candidateBindings.get(tf).getOperandCount())
+                       .anyMatch(idx
+                               -> !doesOperandTypeMatch(tf,
+                                       candidateBindings.get(tf),
+                                       operandArray[idx],
+                                       idx)));
 
     // If there are no candidates left, the call is invalid.
     if (candidateOverloads.size() == 0) {
@@ -151,7 +192,7 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
     return true;
   }
 
-  public boolean doesCursorOperandTypeMatch(
+  public boolean checkCursorOperandTypes(
           ExtTableFunction tf, int iFormalOperand, RelDataType actualOperand) {
     String formalOperandName = tf.getExtendedParamNames().get(iFormalOperand);
     List<ExtArgumentType> formalFieldTypes =
@@ -268,7 +309,8 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
                             + callBinding.getOperator().getAllowedSignatures()));
   }
 
-  // Returns a call signature with detailed CURSOR type information, to emit better error
+  // Returns a call signature with detailed CURSOR type information, to emit
+  // better error
   // messages
   public String getCallSignature(
           SqlCallBinding callBinding, SqlValidator validator, SqlValidatorScope scope) {

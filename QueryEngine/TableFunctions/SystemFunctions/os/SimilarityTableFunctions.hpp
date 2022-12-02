@@ -162,7 +162,7 @@ int64_t similarity_impl(const Column<K>& primary_key,
   UDTF: tf_feature_similarity__cpu_template(Cursor<Column<K> primary_key,
   ColumnList<F> pivot_features, Column<M> metric> primary_features,
   Cursor<ColumnList<F> comparison_pivot_features, Column<M> comparison_metric> comparison_features,
-  bool use_tf_idf) -> Column<K> class | input_id=args<0>, Column<float> similarity_score, K=[int32_t, int64_t, TextEncodingDict], F=[int32_t, int64_t], M=[int32_t, int64_t, float, double]
+  bool use_tf_idf | default=false) -> Column<K> class | input_id=args<0>, Column<float> similarity_score, K=[int32_t, int64_t, TextEncodingDict], F=[int32_t, int64_t], M=[int32_t, int64_t, float, double]
 */
 // clang-format on
 
@@ -225,7 +225,7 @@ int64_t tf_feature_similarity__cpu_template(
 /*
   UDTF: tf_feature_similarity__cpu_template(Cursor<Column<K> primary_key, ColumnList<TextEncodingDict> pivot_features,
   Column<M> metric> primary_features, Cursor<ColumnList<TextEncodingDict> comparison_pivot_features, 
-  Column<M> comparison_metric> comparison_features, bool use_tf_idf) ->
+  Column<M> comparison_metric> comparison_features, bool use_tf_idf | default=false) ->
   Column<K> class | input_id=args<0>, Column<float> similarity_score, K=[int32_t, int64_t, TextEncodingDict], M=[int32_t, int64_t, float, double]
 */
 // clang-format on
@@ -321,7 +321,7 @@ int64_t tf_feature_similarity__cpu_template(
 
 // clang-format off
 /*
-  UDTF: tf_feature_self_similarity__cpu_template(Cursor<Column<K> primary_key, ColumnList<F> pivot_features, Column<M> metric> primary_features, bool use_tf_idf) -> Column<K> class1 | input_id=args<0>, Column<K> class2 | input_id=args<0>, Column<float> similarity_score, K=[int32_t, int64_t, TextEncodingDict], F=[int32_t, int64_t, TextEncodingDict], M=[int32_t, int64_t, float, double]
+  UDTF: tf_feature_self_similarity__cpu_template(Cursor<Column<K> primary_key, ColumnList<F> pivot_features, Column<M> metric> primary_features, bool use_tf_idf | default=false) -> Column<K> class1 | input_id=args<0>, Column<K> class2 | input_id=args<0>, Column<float> similarity_score, K=[int32_t, int64_t, TextEncodingDict], F=[int32_t, int64_t, TextEncodingDict], M=[int32_t, int64_t, float, double]
 */
 // clang-format on
 

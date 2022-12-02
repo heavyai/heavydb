@@ -228,6 +228,17 @@ const std::string TableFunction::getArgNames(bool use_input_args) const {
   return "[" + boost::algorithm::join(names, ", ") + "]";
 }
 
+const std::string TableFunction::getInputArgsDefaultValues() const {
+  std::vector<std::string> default_values;
+  default_values.reserve(sql_args_.size());
+  for (size_t idx = 0; idx < sql_args_.size(); idx++) {
+    const std::string& name = getInputAnnotation(idx, "default", "UNSPECIFIED");
+    default_values.emplace_back(name);
+  }
+
+  return "[" + boost::algorithm::join(default_values, ",") + "]";
+}
+
 std::pair<int32_t, int32_t> TableFunction::getInputID(const size_t idx) const {
   // if the annotation is of the form args<INT,INT>, it is refering to a column list
 #define PREFIX_LENGTH 5

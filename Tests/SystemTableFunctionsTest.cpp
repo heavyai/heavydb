@@ -684,13 +684,13 @@ TEST_F(SystemTFs, GeoRasterize) {
           TableFunctionError);
     }
 
-    // tf_geo_rasterize requires all arguments to be specified
+    // tf_geo_rasterize requires all non-default arguments to be specified
     {
       EXPECT_THROW(
           run_multiple_agg("SELECT * FROM TABLE(tf_geo_rasterize(raster => " +
                                raster_values_sql +
                                ", agg_type => 'MAX', fill_agg_type => 'BOX_AVG', "
-                               "bin_dim_meters => 1.0, geographic_coords => false, "
+                               "geographic_coords => false, "
                                "fill_only_nulls => false));",
                            dt),
           std::exception);
@@ -708,8 +708,12 @@ TEST_F(SystemTFs, GeoRasterize) {
           ", agg_type => 'MAX', fill_agg_type => 'BOX_AVG', "
           "bin_dim_meters => 1.0, neighborhood_fill_radius => 0, "
           "geographic_coords=>false, fill_only_nulls => false)) ORDER BY x, y;";
-
-      for (auto query : {non_named_arg_query, named_arg_query}) {
+      const auto named_arg_query_using_defaults =
+          "SELECT * FROM TABLE(tf_geo_rasterize(raster => " + raster_values_sql +
+          ", agg_type => 'MAX', fill_agg_type => 'BOX_AVG', "
+          "bin_dim_meters => 1.0, geographic_coords => false)) ORDER BY x, y;";
+      for (auto query :
+           {non_named_arg_query, named_arg_query, named_arg_query_using_defaults}) {
         const auto rows = run_multiple_agg(query, dt);
         const size_t num_rows = rows->rowCount();
         ASSERT_EQ(num_rows, size_t(6));
@@ -744,8 +748,15 @@ TEST_F(SystemTFs, GeoRasterize) {
           "x_max => 2.0, y_max => 2.0, fill_only_nulls=> false, "
           "x_min => 1.0, geographic_coords => false, neighborhood_fill_radius => 0, "
           "y_min => 1.0 )) ORDER BY x, y;";
+      const auto named_arg_query_with_defaults =
+          "SELECT * FROM TABLE(tf_geo_rasterize(raster => " + raster_values_sql +
+          ", agg_type => 'MAX', fill_agg_type => 'BOX_AVG', bin_dim_meters => 1.0, "
+          "x_max => 2.0, y_max => 2.0, fill_only_nulls=> false, "
+          "x_min => 1.0, geographic_coords => false, neighborhood_fill_radius => 0, "
+          "y_min => 1.0 )) ORDER BY x, y;";
 
-      for (auto query : {non_named_arg_query, named_arg_query}) {
+      for (auto query :
+           {non_named_arg_query, named_arg_query, named_arg_query_with_defaults}) {
         const auto rows = run_multiple_agg(query, dt);
         const size_t num_rows = rows->rowCount();
         ASSERT_EQ(num_rows, size_t(1));
@@ -820,7 +831,15 @@ TEST_F(SystemTFs, GeoRasterize) {
           "bin_dim_meters => 2.0, geographic_coords => false, "
           "neighborhood_fill_radius => 0, fill_only_nulls => true, "
           "compute_slope_in_degrees => true)) ORDER BY x, y;";
-      for (auto query : {non_named_arg_query, named_arg_query}) {
+      const std::string named_arg_query_with_defaults =
+          "SELECT * FROM TABLE(tf_geo_rasterize_slope("
+          "raster => " +
+          slope_aspect_raster_values_sql +
+          ", agg_type => 'MAX', "
+          "bin_dim_meters => 2.0, geographic_coords => false, "
+          "fill_only_nulls => true, compute_slope_in_degrees => true)) ORDER BY x, y;";
+      for (auto query :
+           {non_named_arg_query, named_arg_query, named_arg_query_with_defaults}) {
         const auto rows = run_multiple_agg(query, dt);
         const size_t num_rows = rows->rowCount();
         ASSERT_EQ(num_rows, size_t(25));
@@ -883,7 +902,14 @@ TEST_F(SystemTFs, GeoRasterize) {
           ", agg_types => 'MAX|MAX', fill_agg_types => 'BOX_AVG|BOX_AVG', "
           "bin_dim_meters => 1.0, neighborhood_fill_radius => 0, "
           "geographic_coords=>false, fill_only_nulls => false)) ORDER BY x, y;";
-      for (auto query : {non_named_arg_query, named_arg_query}) {
+      const auto named_arg_query_with_defaults =
+          "SELECT x, y, z[1] AS z0, z[2] AS z1 FROM "
+          "TABLE(tf_geo_multi_rasterize(raster => " +
+          multi_raster_values_sql +
+          ", agg_types => 'MAX|MAX', fill_agg_types => 'BOX_AVG|BOX_AVG', "
+          "bin_dim_meters => 1.0, geographic_coords=>false)) ORDER BY x, y;";
+      for (auto query :
+           {non_named_arg_query, named_arg_query, named_arg_query_with_defaults}) {
         const auto rows = run_multiple_agg(query, dt);
         const size_t num_rows = rows->rowCount();
         ASSERT_EQ(num_rows, size_t(6));
