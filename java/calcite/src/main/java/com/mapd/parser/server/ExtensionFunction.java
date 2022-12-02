@@ -21,6 +21,7 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.Comparable;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -126,13 +127,15 @@ public class ExtensionFunction {
     this.isRowUdf = true;
     this.options = null;
     this.cursor_field_types = null;
+    this.default_values = null;
   }
 
   ExtensionFunction(final List<ExtArgumentType> args,
           final List<ExtArgumentType> outs,
           final List<String> names,
           final Map<String, String> options,
-          final Map<String, List<ExtArgumentType>> cursor_field_types) {
+          final Map<String, List<ExtArgumentType>> cursor_field_types,
+          final Map<String, java.lang.Comparable<?>> default_values) {
     this.args = args;
     this.ret = null;
     this.outs = outs;
@@ -141,6 +144,12 @@ public class ExtensionFunction {
     this.annotations = null;
     this.options = options;
     this.cursor_field_types = cursor_field_types;
+    this.default_values = default_values;
+  }
+
+  public Map<String, Comparable<?>> getDefaultValues() {
+    assert (this.isTableUdf());
+    return this.default_values;
   }
 
   public Map<String, List<ExtArgumentType>> getCursorFieldTypes() {
@@ -427,6 +436,7 @@ public class ExtensionFunction {
   private final Map<String, String> options;
   private final Map<String, List<ExtArgumentType>>
           cursor_field_types; // only used by UDTFs
+  private final Map<String, Comparable<?>> default_values;
 
   public final java.util.List<SqlTypeFamily> toSqlSignature() {
     java.util.List<SqlTypeFamily> sql_sig = new java.util.ArrayList<SqlTypeFamily>();

@@ -28,6 +28,7 @@ import com.mapd.parser.extension.ddl.SqlLeadLag;
 import com.mapd.parser.extension.ddl.SqlNthValueInFrame;
 import com.mapd.parser.server.ExtensionFunction;
 
+import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.rel.metadata.RelColumnMapping;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -38,6 +39,7 @@ import org.apache.calcite.runtime.Resources.BaseMessage;
 import org.apache.calcite.runtime.Resources.ExInst;
 import org.apache.calcite.schema.FunctionParameter;
 import org.apache.calcite.sql.SqlAggFunction;
+import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlCallBinding;
 import org.apache.calcite.sql.SqlDynamicParam;
@@ -2810,6 +2812,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       pretty_arg_names = sig.getPrettyArgNames();
       options = sig.getOptions();
       cursor_field_types = sig.getCursorFieldTypes();
+      default_values = sig.getDefaultValues();
     }
 
     // The following method allows for parameter annotation
@@ -3070,6 +3073,80 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       return arg_types;
     }
 
+    Map<String, Comparable<?>> getDefaultValues() {
+      return default_values;
+    }
+
+    public boolean supportsDefaultArguments() {
+      return (default_values.size() > 0);
+    }
+
+    /* Returns whether the i-th argument is optional. That is, whether it has an
+     * associated default value.
+     */
+    public boolean isArgumentOptional(int i) {
+      String paramName = getParamNames().get(i);
+      return getDefaultValues().get(paramName) != null;
+    }
+
+    public int getNumOptionalArguments() {
+      return getDefaultValues().size();
+    }
+
+    /* Rewrites a call to the table function containing DEFAULT arguments, replacing the
+     * DEFAULT actual parameter literals by the default value for that parameter specified
+     * in the table function's signature.
+     *
+     * e.g. signature: my_udtf(Column<int> col, int scalar | default=10)
+     *
+     * call 'select * from table(my_udtf(cursor(select int_col from table), DEFAULT))' ->
+     *      'select * from table(my_udtf(cursor(select int_col from table), 10))'
+     *
+     * for calls with named arguments, the explicit DEFAULTs can be omitted:
+     * call 'select * from table(my_udtf(inp0 => cursor(select int_col from table)))' ->
+     *      'select * from table(my_udtf(cursor(select int_col from table), 10))
+     */
+    public SqlCall rewriteCallWithDefaultArguments(SqlCall permutedCall) {
+      for (Ord<SqlNode> operand : Ord.zip(permutedCall.getOperandList())) {
+        if (operand.e.getClass() == SqlBasicCall.class) {
+          SqlBasicCall operandAsCall = (SqlBasicCall) operand.e;
+          if (operandAsCall.getOperator().getName() == "DEFAULT") {
+            ExtTableFunction tf = (ExtTableFunction) permutedCall.getOperator();
+            String paramName = tf.getExtendedParamNames().get(operand.i);
+            Comparable<?> defaultVal = tf.getDefaultValues().get(paramName);
+            SqlLiteral newOperand = createLiteralForDefaultValue(
+                    defaultVal, operand.e.getParserPosition());
+            permutedCall.setOperand(operand.i, newOperand);
+          }
+        }
+      }
+      return permutedCall;
+    }
+
+    SqlLiteral createLiteralForDefaultValue(Comparable<?> value, SqlParserPos pos) {
+      if (value instanceof Integer || value instanceof Long || value instanceof Float
+              || value instanceof Double) {
+        return SqlLiteral.createExactNumeric(value.toString(), pos);
+      } else if (value instanceof Boolean) {
+        Boolean asBool = (Boolean) value;
+        return SqlLiteral.createBoolean(asBool.booleanValue(), pos);
+      } else if (value instanceof String) {
+        return SqlLiteral.createCharString(value.toString(), pos);
+      } else {
+        return null;
+      }
+    }
+
+    @Override
+    public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
+      // We need to override this because the default Calcite implementation adds logic to
+      // handle default values before deferring typechecking to the operator's own
+      // SqlOperandTypeChecker. Since we want to handle default values differently for
+      // UDTFs, this method bypasses that logic and simply calls the type checker
+      // directly.
+      return getOperandTypeChecker().checkOperandTypes(callBinding, throwOnFailure);
+    }
+
     private final List<ExtArgumentType> arg_types;
     private final List<ExtArgumentType> outs;
     private final List<String> arg_names;
@@ -3077,6 +3154,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     private final List<String> out_names;
     private final Map<String, String> options;
     private final Map<String, List<ExtArgumentType>> cursor_field_types;
+    private final Map<String, Comparable<?>> default_values;
   }
 
   //

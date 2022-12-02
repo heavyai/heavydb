@@ -335,10 +335,12 @@ TEMPLATE_NOINLINE int32_t geo_rasterize_impl(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: tf_geo_rasterize__cpu_template(TableFunctionManager,
-  Cursor<Column<T> x, Column<T> y, Column<Z> z> raster, TextEncodingNone agg_type,
-  T bin_dim_meters | require="bin_dim_meters > 0", bool geographic_coords,
-  int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0",
-  bool fill_only_nulls) | filter_table_function_transpose=on ->
+  Cursor<Column<T> x, Column<T> y, Column<Z> z> raster,
+  TextEncodingNone agg_type | default="AVG",
+  T bin_dim_meters | require="bin_dim_meters > 0",
+  bool geographic_coords | default=true,
+  int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0" | default=0,
+  bool fill_only_nulls | default=false) | filter_table_function_transpose=on ->
   Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
  */
 // clang-format on
@@ -381,10 +383,13 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: tf_geo_rasterize__cpu_template(TableFunctionManager,
-  Cursor<Column<T> x, Column<T> y, Column<Z> z> raster, TextEncodingNone agg_type,
-  TextEncodingNone fill_agg_type, T bin_dim_meters | require="bin_dim_meters > 0", bool geographic_coords,
-  int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0",
-  bool fill_only_nulls) | filter_table_function_transpose=on ->
+  Cursor<Column<T> x, Column<T> y, Column<Z> z> raster,
+  TextEncodingNone agg_type | default = "AVG",
+  TextEncodingNone fill_agg_type | default = "GAUSS_AVG",
+  T bin_dim_meters | require="bin_dim_meters > 0",
+  bool geographic_coords | default=true,
+  int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0" | default=0,
+  bool fill_only_nulls | default=false) | filter_table_function_transpose=on ->
   Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
  */
 // clang-format on
@@ -435,9 +440,12 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
 /*
   UDTF: tf_geo_rasterize__cpu_template(TableFunctionManager,
   Cursor<Column<T> x, Column<T> y, Column<Z> z> raster,
-  TextEncodingNone agg_type, TextEncodingNone fill_agg_type, 
+  TextEncodingNone agg_type | default="AVG",
+  TextEncodingNone fill_agg_type | default="GAUSS_AVG", 
   T bin_dim_meters | require="bin_dim_meters > 0",
-  bool geographic_coords, int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0", bool fill_only_nulls,
+  bool geographic_coords | default=true,
+  int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0" | default = 0,
+  bool fill_only_nulls | default = false,
   T x_min, T x_max | require="x_max > x_min", T y_min, T y_max | require="y_max > y_min") ->
   Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
  */
@@ -500,10 +508,13 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: tf_geo_multi_rasterize__cpu_template(TableFunctionManager,
-  Cursor<Column<T> x, Column<T> y, ColumnList<Z> z> raster, TextEncodingNone agg_types,
-  TextEncodingNone fill_agg_types, T bin_dim_meters | require="bin_dim_meters > 0", bool geographic_coords,
-  int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0",
-  bool fill_only_nulls) | filter_table_function_transpose=on ->
+  Cursor<Column<T> x, Column<T> y, ColumnList<Z> z> raster,
+  TextEncodingNone agg_types, 
+  TextEncodingNone fill_agg_types,
+  T bin_dim_meters | require="bin_dim_meters > 0",
+  bool geographic_coords | default=true,
+  int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0" | default=0,
+  bool fill_only_nulls | default=false) | filter_table_function_transpose=on ->
   Column<T> x, Column<T> y, Column<Array<Z>> z, T=[float, double], Z=[float, double]
  */
 // clang-format on
@@ -578,9 +589,12 @@ tf_geo_multi_rasterize__cpu_template(TableFunctionManager& mgr,
 /*
   UDTF: tf_geo_rasterize_slope__cpu_template(TableFunctionManager,
   Cursor<Column<T> x, Column<T> y, Column<Z> z> raster,
-  TextEncodingNone agg_type, T bin_dim_meters | require="bin_dim_meters > 0",
-  bool geographic_coords, int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0", bool fill_only_nulls,
-  bool compute_slope_in_degrees) | filter_table_function_transpose=on ->
+  TextEncodingNone agg_type | default="AVG",
+  T bin_dim_meters | require="bin_dim_meters > 0",
+  bool geographic_coords | default=true,
+  int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0" | default=0,
+  bool fill_only_nulls | default=false,
+  bool compute_slope_in_degrees | default=true) | filter_table_function_transpose=on ->
   Column<T> x, Column<T> y, Column<Z> z, Column<Z> slope, Column<Z> aspect, T=[float, double], Z=[float, double]
  */
 // clang-format on

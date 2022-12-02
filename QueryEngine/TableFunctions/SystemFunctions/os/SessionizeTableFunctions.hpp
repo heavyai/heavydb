@@ -36,9 +36,9 @@ inline int32_t get_elapsed_seconds(const Timestamp& start, const Timestamp& end)
 /*
   UDTF: tf_compute_dwell_times__cpu_template(TableFunctionManager,
   Cursor<Column<I> entity_id, Column<S> site_id, Column<Timestamp> ts> data,
-  int64_t min_dwell_points | require="min_dwell_points >= 0",
-  int64_t min_dwell_seconds | require="min_dwell_seconds >= 0",
-  int64_t max_inactive_seconds | require="max_inactive_seconds >= 0") | filter_table_function_transpose=on ->
+  int64_t min_dwell_points | require="min_dwell_points >= 0" | default=1,
+  int64_t min_dwell_seconds | require="min_dwell_seconds >= 0" | default=0,
+  int64_t max_inactive_seconds | require="max_inactive_seconds >= 0" | default=999999999999) | filter_table_function_transpose=on ->
   Column<I> entity_id | input_id=args<0>, Column<S> site_id | input_id=args<1>, Column<S> prev_site_id | input_id=args<1>, 
   Column<S> next_site_id | input_id=args<1>, Column<int32_t> session_id, Column<int32_t> start_seq_id,
   Column<Timestamp> ts, Column<int32_t> dwell_time_sec, Column<int32_t> num_dwell_points, 

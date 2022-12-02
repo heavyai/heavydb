@@ -1695,6 +1695,11 @@ TEST_F(TableFunctions, DictionaryWriteAccess) {
           "SELECT concatted_str FROM TABLE(ct_string_concat(CURSOR(SELECT t1, t2, t3 "
           "FROM sd_test), '|')) ORDER BY concatted_str;",
           dt);
+      const auto rows_with_default_arg = run_multiple_agg(
+          "SELECT concatted_str FROM TABLE(ct_string_concat(inp0 => CURSOR(SELECT t1, "
+          "t2, t3 "
+          "FROM sd_test))) ORDER BY concatted_str;",
+          dt);
       const std::vector<std::string> expected_result_strings{
           "California|California|California",
           "New York|Indiana|Indiana",
@@ -1703,10 +1708,16 @@ TEST_F(TableFunctions, DictionaryWriteAccess) {
           "Ohio|Ohio|North Carolina"};
       ASSERT_EQ(rows->rowCount(), expected_result_strings.size());
       ASSERT_EQ(rows->colCount(), size_t(1));
+      ASSERT_EQ(rows_with_default_arg->rowCount(), expected_result_strings.size());
+      ASSERT_EQ(rows_with_default_arg->colCount(), size_t(1));
       for (size_t r = 0; r < expected_result_strings.size(); ++r) {
         auto row = rows->getNextRow(true, false);
+        auto default_row = rows_with_default_arg->getNextRow(true, false);
         auto str = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        auto default_str =
+            boost::get<std::string>(TestHelpers::v<NullableString>(default_row[0]));
         ASSERT_EQ(str, expected_result_strings[r]);
+        ASSERT_EQ(default_str, expected_result_strings[r]);
       }
     }
 
@@ -3562,6 +3573,70 @@ TEST_F(TableFunctions, ColumnGeoPolygonOutput) {
         const auto rows = run_multiple_agg(q2, dt);
         assert_equal<double>(rows, expected_rows);
       }
+    }
+  }
+}
+
+TEST_F(TableFunctions, DefaultScalarValues) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    std::string regular_query =
+        "SELECT out0 from TABLE(ct_test_int_default_arg(inp0 => CURSOR(select x from "
+        "tf_test), x => 10));";
+    std::string default_arg_query =
+        "SELECT out0 from TABLE(ct_test_int_default_arg(inp0 => CURSOR(select x from "
+        "tf_test)));";
+    auto expected_rows = run_multiple_agg(regular_query, dt);
+    auto rows = run_multiple_agg(default_arg_query, dt);
+    assert_equal<int32_t>(rows, expected_rows);
+
+    regular_query =
+        "SELECT out0 from TABLE(ct_test_int_default_arg(inp0 => CURSOR(select y from "
+        "err_test), x => 10));";
+    default_arg_query =
+        "SELECT out0 from TABLE(ct_test_int_default_arg(inp0 => CURSOR(select y from "
+        "err_test)));";
+    expected_rows = run_multiple_agg(regular_query, dt);
+    rows = run_multiple_agg(default_arg_query, dt);
+    assert_equal<int64_t>(rows, expected_rows);
+
+    regular_query =
+        "SELECT out0 from TABLE(ct_test_float_default_arg(inp0 => CURSOR(select f from "
+        "tf_test), x => 10.0));";
+    default_arg_query =
+        "SELECT out0 from TABLE(ct_test_float_default_arg(inp0 => CURSOR(select f from "
+        "tf_test)));";
+    expected_rows = run_multiple_agg(regular_query, dt);
+    rows = run_multiple_agg(default_arg_query, dt);
+    assert_equal<float>(rows, expected_rows);
+
+    regular_query =
+        "SELECT out0 from TABLE(ct_test_float_default_arg(inp0 => CURSOR(select d from "
+        "tf_test), x => 10.0));";
+    default_arg_query =
+        "SELECT out0 from TABLE(ct_test_float_default_arg(inp0 => CURSOR(select d from "
+        "tf_test)));";
+    expected_rows = run_multiple_agg(regular_query, dt);
+    rows = run_multiple_agg(default_arg_query, dt);
+    assert_equal<double>(rows, expected_rows);
+  }
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    std::string regular_query =
+        "SELECT out0 from TABLE(ct_test_string_default_arg(inp0 => CURSOR(select t1 from "
+        "sd_test), suffix => \'_suffix\'));";
+    std::string default_arg_query =
+        "SELECT out0 from TABLE(ct_test_string_default_arg(inp0 => CURSOR(select t1 from "
+        "sd_test)));";
+    const auto expected_rows = run_multiple_agg(regular_query, dt);
+    const auto rows = run_multiple_agg(default_arg_query, dt);
+    for (size_t i = 0; i < 5; ++i) {
+      const auto expected_row = expected_rows->getNextRow(true, false);
+      const auto default_query_row = rows->getNextRow(true, false);
+      auto expected_string =
+          boost::get<std::string>(TestHelpers::v<NullableString>(expected_row[0]));
+      auto default_query_string =
+          boost::get<std::string>(TestHelpers::v<NullableString>(default_query_row[0]));
+      ASSERT_EQ(expected_string, default_query_string);
     }
   }
 }

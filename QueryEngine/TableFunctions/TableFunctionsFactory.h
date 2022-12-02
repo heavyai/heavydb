@@ -259,6 +259,7 @@ class TableFunction {
   const std::vector<std::string> getCursorFields(const size_t sql_idx) const;
   const std::string getArgTypes(const bool use_input_args) const;
   const std::string getArgNames(const bool use_input_args) const;
+  const std::string getInputArgsDefaultValues() const;
   std::pair<int32_t, int32_t> getInputID(const size_t idx) const;
 
   size_t getSqlOutputRowSizeParameter() const;
