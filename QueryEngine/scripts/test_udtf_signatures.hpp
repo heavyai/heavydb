@@ -125,5 +125,30 @@
   UDTF: foo_42(int32_t x | range=[1, 10], RowMultiplier) -> Column<int32_t> $=>$
         foo_42(Int32 | name=x | range=[1,10] | require="1 <= x && x <= 10", kUserSpecifiedRowMultiplier<2>) -> ColumnInt32
 
+UDTF: foo_43(int32_t x | default=10, TextEncodingNone str | default="Blah", double d | default=10.0, bool b | default=true) -> Column<int32_t> $=>$
+        foo_43(Int32 | name=x | default=10, TextEncodingNone | name=str | default="Blah", Double | name=d | default=10.0, Bool | name=b | default=True) -> ColumnInt32
+
+  UDTF: foo_44(Column<int32_t> x | default=10) -> Column<int32_t> $=>$
+        TransformerException: Error in function "foo_44", input annotation 'default=10'. "default" annotation is only supported for scalar types!
+
+  UDTF: foo_45_template(T x | default=10) -> Column<T>, T=[int32_t, int64_t] $=>$
+        foo_45_template(Int32 | name=x | default=10) -> ColumnInt32  $=>$
+        foo_45_template(Int64 | name=x | default=10) -> ColumnInt64
+
+  UDTF: foo_46(int32_t x | default=true) -> Column<int32_t> $=>$
+        TransformerException: Error in function "foo_46", input annotation 'default=True'. Argument is of type "int32_t" but value type was inferred as "bool".
+
+  UDTF: foo_47_template(T x | default = 10) -> Column<T>, T=[int32_t, TextEncodingNone] $=>$
+        TransformerException: Error in function "foo_47_template", input annotation 'default=10'. Argument is of type "TextEncodingNone" but value type was inferred as "int".
+
+  UDTF: foo_48_template(T x | default = -10) -> Column<T>, T=[int32_t] $=>$
+        foo_48_template(Int32 | name=x | default=-10) -> ColumnInt32
+
+  UDTF: foo_49(double d | default=-10.0) -> Column<double> $=>$
+        foo_49(Double | name=d | default=-10.0) -> ColumnDouble
+
+  UDTF: foo_50(int32_t x | default=-10, double d | default=-10.0) -> Column<double> $=>$
+        foo_50(Int32 | name=x | default=-10, Double | name=d | default=-10.0) -> ColumnDouble
+
  */
 // clang-format on

@@ -517,11 +517,13 @@ RasterGraphEdges<Z> generate_raster_graph_edges(const GeoRaster<T, Z>& geo_raste
 // clang-format off
 /*
   UDTF: tf_raster_graph_shortest_slope_weighted_path__cpu_template(TableFunctionManager,
-  Cursor<Column<T> x, Column<T> y, Column<Z> z> raster, TextEncodingNone agg_type,
-  T bin_dim | require="bin_dim > 0", bool geographic_coords,
-  int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0",
-  bool fill_only_nulls, T origin_x, T origin_y, T destination_x, T destination_y,
-  Z slope_weight_exponent, Z slope_pct_max) -> Column<int32_t> path_step, Column<T> x,
+  Cursor<Column<T> x, Column<T> y, Column<Z> z> raster, 
+  TextEncodingNone agg_type | default="AVG",
+  T bin_dim | require="bin_dim > 0",
+  bool geographic_coords | default=true,
+  int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0" | default=0,
+  bool fill_only_nulls | default=false, T origin_x, T origin_y, T destination_x, T destination_y,
+  Z slope_weight_exponent | default=3.0, Z slope_pct_max | default=100.0) -> Column<int32_t> path_step, Column<T> x,
   Column<T> y, T=[float, double], Z=[float, double]
 */
 // clang-format on

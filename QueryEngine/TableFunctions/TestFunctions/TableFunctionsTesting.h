@@ -468,7 +468,7 @@ int32_t ct_substr__cpu_(TableFunctionManager& mgr,
 
 // clang-format off
 /*
-  UDTF: ct_string_concat__cpu_(TableFunctionManager, Cursor<ColumnList<TextEncodingDict>>, TextEncodingNone separator) -> Column<TextEncodingDict> concatted_str | input_id=args<0, 0>
+  UDTF: ct_string_concat__cpu_(TableFunctionManager, Cursor<ColumnList<TextEncodingDict>>, TextEncodingNone separator | default = "|") -> Column<TextEncodingDict> concatted_str | input_id=args<0, 0>
 */
 // clang-format on
 EXTENSION_NOINLINE_HOST
@@ -1449,7 +1449,7 @@ EXTENSION_NOINLINE int32_t column_list_first_last(const ColumnList<double>& col_
 // clang-format off
 /*
   UDTF: column_list_row_sum__cpu_(Cursor<ColumnList<int32_t>>) -> Column<int32_t>
- */
+*/
 // clang-format on
 
 #ifndef __CUDACC__
@@ -1458,3 +1458,38 @@ EXTENSION_NOINLINE_HOST int32_t
 column_list_row_sum__cpu_(const ColumnList<int32_t>& input, Column<int32_t>& out);
 
 #endif  // #ifndef __CUDACC__
+
+// clang-format off
+/*
+  UDTF: ct_test_int_default_arg__template(Column<T>, T x | default = 10, RowMultiplier) -> Column<T>, T=[int8_t, int16_t, int32_t, int64_t]
+  UDTF: ct_test_float_default_arg__template(Column<T>, T x | default = 10.0, RowMultiplier) -> Column<T>, T=[float, double]
+*/
+// clang-format on
+
+template <typename T>
+TEMPLATE_NOINLINE int32_t ct_test_int_default_arg__template(const Column<T>& inp,
+                                                            const T x,
+                                                            const int32_t multiplier,
+                                                            Column<T>& out);
+
+template <typename T>
+TEMPLATE_NOINLINE int32_t ct_test_float_default_arg__template(const Column<T>& inp,
+                                                              const T x,
+                                                              const int32_t multiplier,
+                                                              Column<T>& out);
+
+#ifndef __CUDACC__
+
+// clang-format off
+/*
+  UDTF: ct_test_string_default_arg__cpu_(TableFunctionManager, Column<TextEncodingDict>, TextEncodingNone suffix | default="_suffix") -> Column<TextEncodingDict> | input_id=args<0>
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t
+ct_test_string_default_arg__cpu_(TableFunctionManager& mgr,
+                                 const Column<TextEncodingDict>& inp,
+                                 const TextEncodingNone& suffix,
+                                 Column<TextEncodingDict>& out);
+
+#endif

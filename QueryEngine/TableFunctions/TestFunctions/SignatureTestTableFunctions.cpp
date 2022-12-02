@@ -648,3 +648,88 @@ EXTENSION_NOINLINE int32_t ct_require_range__cpu_(const Column<int32_t>& input1,
   out[0] = 0;
   return 1;
 }
+
+template <typename T>
+TEMPLATE_NOINLINE int32_t ct_test_int_default_arg__template(const Column<T>& inp,
+                                                            const T x,
+                                                            const int32_t multiplier,
+                                                            Column<T>& out) {
+  int32_t size = inp.size();
+  for (int i = 0; i < size; ++i) {
+    out[i] = inp[i] * x;
+  }
+
+  return size;
+}
+
+// explicit instantiations
+template TEMPLATE_NOINLINE int32_t
+ct_test_int_default_arg__template(const Column<int8_t>& inp,
+                                  const int8_t x,
+                                  const int32_t multiplier,
+                                  Column<int8_t>& out);
+
+template TEMPLATE_NOINLINE int32_t
+ct_test_int_default_arg__template(const Column<int16_t>& inp,
+                                  const int16_t x,
+                                  const int32_t multiplier,
+                                  Column<int16_t>& out);
+
+template TEMPLATE_NOINLINE int32_t
+ct_test_int_default_arg__template(const Column<int32_t>& inp,
+                                  const int32_t x,
+                                  const int32_t multiplier,
+                                  Column<int32_t>& out);
+
+template TEMPLATE_NOINLINE int32_t
+ct_test_int_default_arg__template(const Column<int64_t>& inp,
+                                  const int64_t x,
+                                  const int32_t multiplier,
+                                  Column<int64_t>& out);
+
+template <typename T>
+TEMPLATE_NOINLINE int32_t ct_test_float_default_arg__template(const Column<T>& inp,
+                                                              const T x,
+                                                              const int32_t multiplier,
+                                                              Column<T>& out) {
+  int32_t size = inp.size();
+  for (int i = 0; i < size; ++i) {
+    out[i] = inp[i] / x;
+  }
+
+  return size;
+}
+
+// explicit instantiations
+template TEMPLATE_NOINLINE int32_t
+ct_test_float_default_arg__template(const Column<float>& inp,
+                                    const float x,
+                                    const int32_t multiplier,
+                                    Column<float>& out);
+
+template TEMPLATE_NOINLINE int32_t
+ct_test_float_default_arg__template(const Column<double>& inp,
+                                    const double x,
+                                    const int32_t multiplier,
+                                    Column<double>& out);
+
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE int32_t
+ct_test_string_default_arg__cpu_(TableFunctionManager& mgr,
+                                 const Column<TextEncodingDict>& inp,
+                                 const TextEncodingNone& suffix,
+                                 Column<TextEncodingDict>& out) {
+  int32_t size = inp.size();
+  mgr.set_output_row_size(size);
+  for (int i = 0; i < size; ++i) {
+    std::string output_string = inp.getString(i);
+    output_string += suffix.getString();
+    const TextEncodingDict concatted_id = out.getOrAddTransient(output_string);
+    out[i] = concatted_id;
+  }
+
+  return size;
+}
+
+#endif

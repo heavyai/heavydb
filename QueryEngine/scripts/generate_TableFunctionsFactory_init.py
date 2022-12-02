@@ -40,6 +40,7 @@ Supported annotation labels are:
 
 - name: to specify argument name
 - input_id: to specify the dict id mapping for output TextEncodingDict columns.
+- default: to specify a default value for an argument (scalar only)
 
 If argument type follows an identifier, it will be mapped to name
 annotations. For example, the following argument type specifications
@@ -63,6 +64,7 @@ import os
 import sys
 import itertools
 import copy
+from ast import literal_eval
 from abc import abstractmethod
 
 from collections import deque, namedtuple
@@ -84,7 +86,7 @@ kConstant, kUserSpecifiedConstantParameter, kUserSpecifiedRowMultiplier, kTableF
 '''.strip().replace(' ', '').split(',')
 
 SupportedAnnotations = '''
-input_id, name, fields, require, range
+input_id, name, fields, require, range, default
 '''.strip().replace(' ', '').split(',')
 
 # TODO: support `gpu`, `cpu`, `template` as function annotations
@@ -419,6 +421,7 @@ class Token:
     RSQB = 13        # ]
     IDENTIFIER = 14  #
     COLON = 15       # :
+    BOOLEAN = 16     #
 
     def __init__(self, type, lexeme):
         """
@@ -450,6 +453,7 @@ class Token:
             Token.RSQB: "RSQB",
             Token.IDENTIFIER: "IDENTIFIER",
             Token.COLON: "COLON",
+            Token.BOOLEAN: "BOOLEAN"
         }
         return names.get(token)
 
@@ -481,12 +485,12 @@ class Tokenize:
 
             if self.is_token_whitespace():
                 self.consume_whitespace()
-            elif self.is_digit():
+            elif self.is_number():
                 self.consume_number()
             elif self.is_token_string():
                 self.consume_string()
-            elif self.is_token_identifier():
-                self.consume_identifier()
+            elif self.is_token_identifier_or_boolean():
+                self.consume_identifier_or_boolean()
             elif self.can_token_be_double_char():
                 self.consume_double_char()
             else:
@@ -573,18 +577,25 @@ class Tokenize:
 
     def consume_number(self):
         """
-        NUMBER: [0-9]+
+        NUMBER: [-]([0-9]*[.])?[0-9]+
         """
+        found_dot = False
         while True:
             char = self.lookahead()
-            if char and char.isdigit():
-                self.advance()
+            if char:
+                if char.isdigit():
+                    self.advance()
+                elif char == "." and not found_dot:
+                    found_dot = True
+                    self.advance()
+                else:
+                    break
             else:
                 break
         self.add_token(Token.NUMBER)
         self.advance()
 
-    def consume_identifier(self):
+    def consume_identifier_or_boolean(self):
         """
         IDENTIFIER: [A-Za-z_][A-Za-z0-9_]*
         """
@@ -594,17 +605,21 @@ class Tokenize:
                 self.advance()
             else:
                 break
-        self.add_token(Token.IDENTIFIER)
+        if self.current_token().lower() in ("true", "false"):
+            self.add_token(Token.BOOLEAN)
+        else:
+            self.add_token(Token.IDENTIFIER)
         self.advance()
 
-    def is_token_identifier(self):
+    def is_token_identifier_or_boolean(self):
         return self.peek().isalpha() or self.peek() == "_"
 
     def is_token_string(self):
         return self.peek() == '"'
 
-    def is_digit(self):
-        return self.peek().isdigit()
+    def is_number(self):
+        return self.peek().isdigit() or (self.peek() == '-' \
+            and self.lookahead().isdigit())
 
     def is_alpha(self):
         return self.peek().isalpha()
@@ -874,7 +889,6 @@ class TextEncodingDictTransformer(AstTransformer):
 
 
 class FieldAnnotationTransformer(AstTransformer):
-
     def visit_udtf_node(self, udtf_node):
         """
         * Generate fields annotation to Cursor if non-existing
@@ -889,6 +903,38 @@ class FieldAnnotationTransformer(AstTransformer):
             if t.type.is_cursor() and t.get_annotation('fields') is None:
                 fields = list(PrimitiveNode(a.get_annotation('name', 'field%s' % i)) for i, a in enumerate(t.type.inner))
                 t.annotations.append(AnnotationNode('fields', fields))
+
+        return udtf_node
+
+class DefaultValueAnnotationTransformer(AstTransformer):
+    def visit_udtf_node(self, udtf_node):
+        """
+        * Typechecks default value annotations.
+        """
+        udtf_node = super(type(self), self).visit_udtf_node(udtf_node)
+
+        for t in udtf_node.inputs:
+            for a in filter(lambda x: x.key == "default", t.annotations):
+                if not t.type.is_scalar():
+                    raise TransformerException(
+                        'Error in function "%s", input annotation \'%s=%s\'. '
+                        '\"default\" annotation is only supported for scalar types!'\
+                        % (udtf_node.name, a.key, a.value)
+                    )
+                literal = literal_eval(a.value)
+                lst = [(bool, 'is_boolean_scalar'), (int, 'is_integer_scalar'), (float, 'is_float_scalar'),
+                (str, 'is_string_scalar')]
+
+                for (cls, mthd) in lst:
+                    if type(literal) is cls:
+                        assert isinstance(t, ArgNode)
+                        m = getattr(t.type, mthd)
+                        if not m():
+                            raise TransformerException(
+                                'Error in function "%s", input annotation \'%s=%s\'. '
+                                'Argument is of type "%s" but value type was inferred as "%s".'
+                                % (udtf_node.name, a.key, a.value, t.type.type, type(literal).__name__))
+                        break
 
         return udtf_node
         
@@ -1080,8 +1126,6 @@ class UdtfNode(Node, IterableNode):
                 yield t
 
     __repr__ = __str__
-
-
 class ArgNode(Node, IterableNode):
 
     def __init__(self, type, annotations):
@@ -1149,6 +1193,23 @@ class TypeNode(Node):
     def is_output_buffer_sizer(self):
         t = self.type
         return translate_map.get(t, t) in OutputBufferSizeTypes
+    
+    def is_integer_scalar(self):
+        return self.type.lower() in ('int8_t', 'int16_t', 'int32_t', 'int64_t')
+    
+    def is_float_scalar(self):
+        return self.type.lower() in ('float', 'double')
+    
+    def is_boolean_scalar(self):
+        return self.type.lower() == 'bool'
+    
+    def is_string_scalar(self):
+        # we only support 'TextEncodingNone' string scalars atm
+        return self.type == "TextEncodingNone"
+
+    def is_scalar(self):
+        return self.is_integer_scalar() or self.is_float_scalar() or self.is_boolean_scalar() or self.is_string_scalar()
+
 
 
 class PrimitiveNode(TypeNode):
@@ -1495,6 +1556,7 @@ class Parser:
         primitive: IDENTIFIER
                  | NUMBER
                  | STRING
+                 | BOOLEAN
 
         fmt: on
         """
@@ -1504,6 +1566,8 @@ class Parser:
             lexeme = self.parse_number()
         elif self.match(Token.STRING):
             lexeme = self.parse_string()
+        elif self.match(Token.BOOLEAN):
+            lexeme = self.parse_boolean()
         else:
             raise self.raise_parser_error()
         return PrimitiveNode(lexeme)
@@ -1546,6 +1610,7 @@ class Parser:
         annotation: IDENTIFIER "=" IDENTIFIER ("<" NUMBER ("," NUMBER) ">")?
                   | IDENTIFIER "=" "[" PRIMITIVE? ("," PRIMITIVE)* "]"
                   | "require" "=" STRING
+                  | "default" "=" STRING | NUMBER | BOOLEAN
 
         fmt: on
         """
@@ -1554,6 +1619,20 @@ class Parser:
 
         if key == "require":
             value = self.parse_string()
+        elif key == "default":
+            if self.match(Token.NUMBER):
+                value = self.parse_number()
+            elif self.match(Token.STRING):
+                value = self.parse_string()
+            elif self.match(Token.BOOLEAN):
+                value = self.parse_boolean()
+            else:
+                self.raise_parser_error(
+                    'Unable to parse value in \"default\" annotation.\n'
+                    'Expected type NUMBER, STRING or BOOLEAN.\n'
+                    'Found token: "%s" of type "%s" \n'
+                    % (self.current_token().lexeme, Token.tok_name(self.current_token().type))
+                )
         elif not self.is_at_end() and self.match(Token.LSQB):
             value = []
             self.consume(Token.LSQB)
@@ -1603,12 +1682,26 @@ class Parser:
     def parse_number(self):
         """ fmt: off
 
-        NUMBER: [0-9]+
+        NUMBER: [-]([0-9]*[.])?[0-9]+
 
         fmt: on
         """
         token = self.consume(Token.NUMBER)
         return token.lexeme
+
+    def parse_boolean(self):
+        """ fmt: off
+
+        BOOLEAN: \bTrue\b|\bFalse\b
+
+        fmt: on
+        """
+        token = self.consume(Token.BOOLEAN)
+        # Make sure booleans are normalized to "False" or "True" regardless
+        # of original capitalization, so they can be properly parsed during
+        # typechecking
+        new_token = token.lexeme.lower().capitalize()
+        return new_token
 
     def parse(self):
         """fmt: off
@@ -1628,10 +1721,12 @@ class Parser:
         primitive: IDENTIFIER
                  | NUMBER
                  | STRING
+                 | BOOLEAN
 
         annotation: IDENTIFIER "=" IDENTIFIER ("<" NUMBER ("," NUMBER) ">")?
                   | IDENTIFIER "=" "[" PRIMITIVE? ("," PRIMITIVE)* "]"
                   | "require" "=" STRING
+                  | "default" "=" STRING | NUMBER | BOOLEAN
 
         templates: template ("," template)
         template: IDENTIFIER "=" "[" IDENTIFIER ("," IDENTIFIER)* "]"
@@ -1639,6 +1734,7 @@ class Parser:
         IDENTIFIER: [A-Za-z_][A-Za-z0-9_]*
         NUMBER: [0-9]+
         STRING: \".*?\"
+        BOOLEAN: \bTrue\b|\bFalse\b
 
         fmt: on
         """
@@ -1696,6 +1792,7 @@ def find_signatures(input_file):
                 result = Pipeline(TemplateTransformer,
                                   FieldAnnotationTransformer,
                                   TextEncodingDictTransformer,
+                                  DefaultValueAnnotationTransformer,
                                   SupportedAnnotationsTransformer,
                                   RangeAnnotationTransformer,
                                   FixRowMultiplierPosArgTransformer,
@@ -1716,6 +1813,7 @@ def find_signatures(input_file):
             signature = Pipeline(TemplateTransformer,
                              FieldAnnotationTransformer,
                              TextEncodingDictTransformer,
+                             DefaultValueAnnotationTransformer,
                              SupportedAnnotationsTransformer,
                              RangeAnnotationTransformer,
                              FixRowMultiplierPosArgTransformer,
@@ -1832,7 +1930,7 @@ def must_emit_preflight_function(sig, sizer):
 def format_annotations(annotations_):
     def fmt(k, v):
         # type(v) is not always 'str'
-        if k == 'require':
+        if k == 'require' or k == 'default' and v[0] == "\"":
             return v[1:-1]
         return v
 

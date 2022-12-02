@@ -1713,6 +1713,7 @@ ExecutionResult ShowTableFunctionsCommand::execute(bool read_only_mode) {
     label_infos.emplace_back("signature", SQLTypeInfo(kTEXT, true));
     label_infos.emplace_back("input_names", SQLTypeInfo(kTEXT, true));
     label_infos.emplace_back("input_types", SQLTypeInfo(kTEXT, true));
+    label_infos.emplace_back("input_arg_defaults", SQLTypeInfo(kTEXT, true));
     label_infos.emplace_back("output_names", SQLTypeInfo(kTEXT, true));
     label_infos.emplace_back("output_types", SQLTypeInfo(kTEXT, true));
     label_infos.emplace_back("CPU", SQLTypeInfo(kBOOLEAN, true));
@@ -1736,6 +1737,8 @@ ExecutionResult ShowTableFunctionsCommand::execute(bool read_only_mode) {
         // Input argument types
         logical_values.back().emplace_back(
             genLiteralStr(tf.getArgTypes(/* use_input_args */ true)));
+        // Input argument default values
+        logical_values.back().emplace_back(genLiteralStr(tf.getInputArgsDefaultValues()));
         // Output argument names
         logical_values.back().emplace_back(
             genLiteralStr(tf.getArgNames(/* use_input_args */ false)));

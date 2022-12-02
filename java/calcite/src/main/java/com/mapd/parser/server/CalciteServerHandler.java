@@ -457,6 +457,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     List<ExtensionFunction.ExtArgumentType> args = new ArrayList<>();
     Map<String, List<ExtensionFunction.ExtArgumentType>> cursor_field_types =
             new HashMap<>();
+    Map<String, Comparable<?>> default_values = new HashMap<>();
     for (TExtArgumentType atype : udtf.sqlArgTypes) {
       args.add(toExtArgumentType(atype));
       Map<String, String> annot = udtf.annotations.get(sqlInputArgIdx);
@@ -481,6 +482,13 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         name = name + field_names_annot;
         cursor_field_types.put(name, field_types);
       } else {
+        String default_value_annot = annot.getOrDefault("default", null);
+        if (default_value_annot != null) {
+          Comparable<?> default_val = getDefaultValueForAnnot(default_value_annot, atype);
+          if (default_val != null) {
+            default_values.put(name, default_val);
+          }
+        }
         inputArgIdx++;
       }
       names.add(name);
@@ -499,7 +507,34 @@ public class CalciteServerHandler implements CalciteServer.Iface {
             outs,
             names,
             udtf.annotations.get(udtf.annotations.size() - 1),
-            cursor_field_types);
+            cursor_field_types,
+            default_values);
+  }
+
+  private static Comparable<?> getDefaultValueForAnnot(
+          String annot, TExtArgumentType input_type) {
+    switch (input_type) {
+      case Int8:
+        return new Byte(annot);
+      case Int16:
+        return new Short(annot);
+      case Int32:
+        return new Integer(annot);
+      case Int64:
+        return new Long(annot);
+      case Float:
+        return new Float(annot);
+      case Double:
+        return new Double(annot);
+      case Bool:
+        return new Boolean(annot);
+      case TextEncodingNone:
+        return annot;
+      default:
+        HEAVYDBLOGGER.error("Unsupported type in UDTF 'default' annotation: "
+                + input_type.toString());
+        return null;
+    }
   }
 
   private static ExtensionFunction.ExtArgumentType toExtArgumentType(
