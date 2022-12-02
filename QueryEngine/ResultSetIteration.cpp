@@ -1792,8 +1792,8 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
           bool is_null = false;
           int32_t* counts = nullptr;
           int64_t length{};
-          m.getItemCountsAndData(
-              entry_buff_idx, counts, nof_counts, coords_buf, length, is_null);
+          int64_t index = getCoordsDataPtr(geo_target_ptr);
+          m.getItemCountsAndData(index, counts, nof_counts, coords_buf, length, is_null);
 
           if (ResultSet::GeoReturnType::WktString == geo_return_type_) {
             if (is_null) {
