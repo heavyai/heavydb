@@ -408,11 +408,15 @@ int32_t tf_raster_contour_rasterize_impl(TableFunctionManager& mgr,
   double lon_bin_scale = geo_raster->x_scale_input_to_bin_;
   double lat_bin_scale = geo_raster->y_scale_input_to_bin_;
 
-  // enforce previous validation
-  CHECK_GE(raster_width, 1ll);
-  CHECK_GE(raster_height, 1ll);
-  CHECK_GT(lon_bin_scale, 0.0);
-  CHECK_GT(lat_bin_scale, 0.0);
+  // GeoRaster constructor can still return zero size if no input
+  if (raster_width < 1 || raster_height < 1) {
+    return mgr.ERROR_MESSAGE("No input raster data. Cannot compute contours.");
+  }
+
+  // this should never happen, but make it an exception anyway
+  if (lon_bin_scale <= 0.0 || lat_bin_scale <= 0.0) {
+    return mgr.ERROR_MESSAGE("Invalid input raster scale. Cannot compute contours.");
+  }
 
   // build affine transform matrix
   std::array<double, 6> affine_transform;
