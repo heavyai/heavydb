@@ -1638,7 +1638,8 @@ void throw_row_group_larger_than_fragment_size_error(
 MaxRowGroupSizeStats validate_column_mapping_and_row_group_metadata(
     const std::shared_ptr<parquet::FileMetaData>& file_metadata,
     const std::string& file_path,
-    const ForeignTableSchema& schema) {
+    const ForeignTableSchema& schema,
+    const bool do_metadata_stats_validation) {
   auto column_it = schema.getLogicalColumns().begin();
   MaxRowGroupSizeStats max_row_group_stats{0, 0};
   for (int i = 0; i < file_metadata->num_columns(); ++i, ++column_it) {
@@ -1664,23 +1665,25 @@ MaxRowGroupSizeStats validate_column_mapping_and_row_group_metadata(
         max_row_group_stats.file_path = file_path;
       }
 
-      auto column_chunk = group_metadata->ColumnChunk(i);
-      bool contains_metadata = column_chunk->is_stats_set();
-      if (contains_metadata) {
-        auto stats = column_chunk->statistics();
-        bool is_all_nulls = stats->null_count() == column_chunk->num_values();
-        bool is_list = is_valid_parquet_list_column(file_metadata->schema()->Column(i));
-        // Given a list, it is possible it has no min or max if it is comprised
-        // only of empty lists & nulls. This can not be detected by comparing
-        // the null count; therefore we afford list types the benefit of the
-        // doubt in this situation.
-        if (!(stats->HasMinMax() || is_all_nulls || is_list)) {
-          contains_metadata = false;
+      if (do_metadata_stats_validation) {
+        auto column_chunk = group_metadata->ColumnChunk(i);
+        bool contains_metadata = column_chunk->is_stats_set();
+        if (contains_metadata) {
+          auto stats = column_chunk->statistics();
+          bool is_all_nulls = stats->null_count() == column_chunk->num_values();
+          bool is_list = is_valid_parquet_list_column(file_metadata->schema()->Column(i));
+          // Given a list, it is possible it has no min or max if it is comprised
+          // only of empty lists & nulls. This can not be detected by comparing
+          // the null count; therefore we afford list types the benefit of the
+          // doubt in this situation.
+          if (!(stats->HasMinMax() || is_all_nulls || is_list)) {
+            contains_metadata = false;
+          }
         }
-      }
 
-      if (!contains_metadata) {
-        throw_missing_metadata_error(r, i, file_path);
+        if (!contains_metadata) {
+          throw_missing_metadata_error(r, i, file_path);
+        }
       }
     }
   }
@@ -1690,9 +1693,11 @@ MaxRowGroupSizeStats validate_column_mapping_and_row_group_metadata(
 MaxRowGroupSizeStats validate_parquet_metadata(
     const std::shared_ptr<parquet::FileMetaData>& file_metadata,
     const std::string& file_path,
-    const ForeignTableSchema& schema) {
+    const ForeignTableSchema& schema,
+    const bool do_metadata_stats_validation) {
   validate_number_of_columns(file_metadata, file_path, schema);
-  return validate_column_mapping_and_row_group_metadata(file_metadata, file_path, schema);
+  return validate_column_mapping_and_row_group_metadata(
+      file_metadata, file_path, schema, do_metadata_stats_validation);
 }
 
 std::list<RowGroupMetadata> metadata_scan_rowgroup_interval(
@@ -2442,8 +2447,11 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
   // peel the first file_path out of the async loop below to perform population.
   const auto& first_path = *file_paths.begin();
   auto first_reader = file_reader_cache_->insert(first_path, file_system_);
-  auto max_row_group_stats = validate_parquet_metadata(
-      first_reader->parquet_reader()->metadata(), first_path, schema);
+  auto max_row_group_stats =
+      validate_parquet_metadata(first_reader->parquet_reader()->metadata(),
+                                first_path,
+                                schema,
+                                do_metadata_stats_validation);
   auto encoder_map = populate_encoder_map_for_metadata_scan(column_interval,
                                                             schema,
                                                             first_reader,
@@ -2482,8 +2490,11 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
           for (const auto& path : paths.get()) {
             auto reader = file_reader_cache.get().getOrInsert(path, file_system_);
             validate_equal_schema(first_reader, reader, first_path, path);
-            auto local_max_row_group_stats = validate_parquet_metadata(
-                reader->parquet_reader()->metadata(), path, schema);
+            auto local_max_row_group_stats =
+                validate_parquet_metadata(reader->parquet_reader()->metadata(),
+                                          path,
+                                          schema,
+                                          do_metadata_stats_validation);
             if (local_max_row_group_stats.max_row_group_size >
                 max_row_group_stats.max_row_group_size) {
               max_row_group_stats = local_max_row_group_stats;

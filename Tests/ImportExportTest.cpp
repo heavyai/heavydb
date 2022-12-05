@@ -1985,6 +1985,28 @@ TEST_F(ParquetSpecificImportAndSelectTest, ZeroMaxDefinitionLevelScalars) {
   assertResultSetEqual(expected_values, query);
 }
 
+TEST_F(ParquetSpecificImportAndSelectTest, NoMetadataStatistics) {
+  auto query = createTableCopyFromAndSelect("a BIGINT, b BIGINT, c TEXT, d DOUBLE",
+                                            "no_stats",
+                                            "SELECT * FROM import_test_new ORDER by a;",
+                                            {},
+                                            14);
+
+  // clang-format off
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {1L,3L,"5",7.1},
+      {2L,4L,"stuff",Null},
+      {3L,5L,"8",1.1},
+      {4L,6L,"9",0.022123},
+      {5L,7L,"10",-1.0},
+      {6L,8L,"1",-100.0},
+  };
+  // clang-format on
+
+  validateImportStatus(6, 0, false);
+  assertResultSetEqual(expected_values, query);
+}
+
 const char* create_table_timestamps = R"(
     CREATE TABLE import_test_timestamps(
       id INT,
