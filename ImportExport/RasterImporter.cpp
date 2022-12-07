@@ -37,6 +37,7 @@
 #include <ogrsf_frmts.h>
 
 #include "Shared/import_helpers.h"
+#include "Shared/misc.h"
 #include "Shared/scope.h"
 
 #define DEBUG_RASTER_IMPORT 0
@@ -251,6 +252,19 @@ double conv_4326_900913_x(const double x) {
 
 double conv_4326_900913_y(const double y) {
   return 6378136.99911 * log(tan(.00872664626 * y + .785398163397));
+}
+
+std::string get_datasource_driver_name(OGRDataSource* source) {
+  CHECK(source);
+  auto driver = source->GetDriver();
+  CHECK(driver);
+  std::string name = driver->GetDescription();
+  return name;
+}
+
+bool datasource_requires_libhdf(OGRDataSource* source) {
+  std::string name = get_datasource_driver_name(source);
+  return name == "HDF5Image" || name == "HDF5" || name == "BAG" || name == "KEA";
 }
 
 }  // namespace
@@ -530,7 +544,7 @@ void RasterImporter::detect(const std::string& file_name,
   }
 }
 
-void RasterImporter::import(const uint32_t max_threads) {
+void RasterImporter::import(size_t& max_threads, const bool max_threads_using_default) {
   // validate
   if (import_band_infos_.size() == 0) {
     throw std::runtime_error("Raster Import aborted. No bands to import.");
@@ -540,18 +554,37 @@ void RasterImporter::import(const uint32_t max_threads) {
   CHECK_GE(max_threads, 1u);
 
   // open all datasources on all threads
-  for (auto const& datasource_name : datasource_names_) {
-    std::vector<Geospatial::GDAL::DataSourceUqPtr> datasource_thread_handles;
-    for (uint32_t i = 0; i < max_threads; i++) {
+  std::map<std::string, std::vector<Geospatial::GDAL::DataSourceUqPtr>>
+      datasource_thread_handles_map;
+  for (uint32_t i = 0; i < max_threads; i++) {
+    for (auto const& datasource_name : datasource_names_) {
+      auto& datasource_thread_handles = datasource_thread_handles_map[datasource_name];
       auto datasource_handle = Geospatial::GDAL::openDataSource(
           datasource_name, import_export::SourceType::kRasterFile);
       if (datasource_handle == nullptr) {
         throw std::runtime_error("Raster Importer: Unable to open raster file " +
                                  datasource_name);
       }
+      if (i == 0) {  // check for HDF5 data sources in first loop
+        if (datasource_requires_libhdf(datasource_handle.get()) && max_threads > 1) {
+          if (!max_threads_using_default) {
+            throw std::runtime_error("Raster Importer: Unable to import raster file " +
+                                     datasource_name + ": GDAL driver " +
+                                     get_datasource_driver_name(datasource_handle.get()) +
+                                     " requires use of HDF5 library which is "
+                                     "incompatible with multithreading.");
+          } else {
+            max_threads = 1;  // force use of one thread
+          }
+        }
+      }
       datasource_thread_handles.emplace_back(std::move(datasource_handle));
     }
-    datasource_handles_.emplace_back(std::move(datasource_thread_handles));
+  }
+
+  for (auto const& datasource_name : datasource_names_) {
+    datasource_handles_.emplace_back(
+        std::move(shared::get_from_map(datasource_thread_handles_map, datasource_name)));
   }
 
   // use handle for the first datasource from the first thread to read the globals

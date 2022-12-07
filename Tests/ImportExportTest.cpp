@@ -5005,6 +5005,60 @@ TEST_F(TemporalColumnExportTest, Unquoted) {
 // Raster Tests
 //
 
+class BasicRasterImporterTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS import_test_table;");
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS import_test_table;");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(BasicRasterImporterTest, HDF5Image) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto hdf5_filename =
+      boost::filesystem::canonical(
+          "../../Tests/Import/datafiles/raster/Q2012034.L3m_DAY_SCI_V5.0_SSS_1deg.hdf5")
+          .string();
+  sql("COPY import_test_table FROM '" + hdf5_filename +
+      "' WITH (source_type='raster_file', raster_import_bands='band_1_1', threads=1);");
+
+  sqlAndCompareResult("SELECT COUNT(*) FROM import_test_table;", {{64800L}});
+}
+
+TEST_F(BasicRasterImporterTest, HDF5ImageDefaultThreads) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto hdf5_filename =
+      boost::filesystem::canonical(
+          "../../Tests/Import/datafiles/raster/Q2012034.L3m_DAY_SCI_V5.0_SSS_1deg.hdf5")
+          .string();
+  sql("COPY import_test_table FROM '" + hdf5_filename +
+      "' WITH (source_type='raster_file', raster_import_bands='band_1_1');");
+
+  sqlAndCompareResult("SELECT COUNT(*) FROM import_test_table;", {{64800L}});
+}
+
+TEST_F(BasicRasterImporterTest, HDF5ImageMultiThreaded) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto hdf5_filename =
+      boost::filesystem::canonical(
+          "../../Tests/Import/datafiles/raster/Q2012034.L3m_DAY_SCI_V5.0_SSS_1deg.hdf5")
+          .string();
+  // NOTE: A partial exception is checked for below due to the exception
+  // arising from DBHandler, which is not typical in most cases of COPY FROM,
+  // however, raster import is unique.
+  queryAndAssertPartialException(
+      "COPY import_test_table FROM '" + hdf5_filename +
+          "' WITH (source_type='raster_file', raster_import_bands='band_1_1', "
+          "threads=32);",
+      "GDAL driver HDF5Image "
+      "requires use of HDF5 library which is incompatible with multithreading.");
+}
+
 #define DEBUG_RASTER_TESTS 0
 
 static constexpr const char* kPNG = "beach.png";
@@ -5074,7 +5128,11 @@ class RasterImporterTest : public DBHandlerTestFixture {
 #endif
   }
 
-  void doImport(const int max_threads) { raster_importer_->import(max_threads); }
+  void doImport(const int max_threads) {
+    size_t max_threads_in = max_threads;
+    raster_importer_->import(max_threads_in, false);
+    CHECK_EQ(static_cast<size_t>(max_threads), max_threads_in);
+  }
 
   static constexpr float kFloatEpsilon = 1.0E-3;
   static constexpr double kDoubleEpsilon = 1.0E-6;
