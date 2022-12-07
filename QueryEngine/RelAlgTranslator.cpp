@@ -264,12 +264,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translate(RexScalar const* rex
 namespace {
 
 bool is_agg_supported_for_type(const SQLAgg& agg_kind, const SQLTypeInfo& arg_ti) {
-  if ((agg_kind == kMIN || agg_kind == kMAX || agg_kind == kSUM || agg_kind == kAVG) &&
-      !(arg_ti.is_number() || arg_ti.is_boolean() || arg_ti.is_time())) {
-    return false;
-  }
-
-  return true;
+  return arg_ti.is_number() || arg_ti.is_boolean() || arg_ti.is_time() ||
+         (agg_kind == kMODE && arg_ti.is_string()) ||
+         !shared::is_any<kAVG, kMIN, kMAX, kSUM, kAPPROX_QUANTILE, kMODE>(agg_kind);
 }
 
 }  // namespace
@@ -296,9 +293,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
               const_arg1->get_constval().intval < 1 ||
               const_arg1->get_constval().intval > 100) {
             throw std::runtime_error(
-                "APPROX_COUNT_DISTINCT's second parameter should be SMALLINT literal "
-                "between "
-                "1 and 100");
+                "APPROX_COUNT_DISTINCT's second parameter must be a SMALLINT literal "
+                "between 1 and 100");
           }
           arg1 = scalar_sources[rex->getOperand(1)];
         }
@@ -335,6 +331,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
         if (rex->isDistinct()) {
           throw std::runtime_error(
               "Currently, COUNT_IF function does not support DISTINCT qualifier.");
+        } else if (arg_expr->get_type_info().is_geometry()) {
+          throw std::runtime_error(
+              "COUNT_IF does not currently support geospatial types.");
         }
         break;
       case kSUM_IF:
