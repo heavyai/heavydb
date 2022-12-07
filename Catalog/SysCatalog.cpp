@@ -1126,6 +1126,10 @@ void SysCatalog::dropUser(const string& name) {
     throw runtime_error("Cannot drop user. User " + loggable + "does not exist.");
   }
 
+  if (user.userId == shared::kRootUserId) {
+    throw runtime_error("Cannot drop user. User " + loggable + "is required to exist.");
+  }
+
   auto dbs = getAllDBMetadata();
   for (const auto& db : dbs) {
     if (db.dbOwner == user.userId) {
