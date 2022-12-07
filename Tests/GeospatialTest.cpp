@@ -481,10 +481,11 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     }
 
     // Unsupported aggs
-    EXPECT_ANY_THROW(run_simple_agg("SELECT MIN(p) FROM geospatial_test;", dt));
-    EXPECT_ANY_THROW(run_simple_agg("SELECT MAX(p) FROM geospatial_test;", dt));
-    EXPECT_ANY_THROW(run_simple_agg("SELECT AVG(p) FROM geospatial_test;", dt));
-    EXPECT_ANY_THROW(run_simple_agg("SELECT SUM(p) FROM geospatial_test;", dt));
+    for (std::string const agg :
+         {"AVG", "MIN", "MAX", "SUM", "APPROX_MEDIAN", "MODE", "COUNT_IF"}) {
+      auto const query = "SELECT " + agg + "(p) FROM geospatial_test;";
+      EXPECT_ANY_THROW(run_simple_agg(query, dt));
+    }
     EXPECT_ANY_THROW(run_simple_agg(
         "SELECT COUNT(*) FROM geospatial_test a, geospatial_test b WHERE a.p = b.p;",
         dt));
