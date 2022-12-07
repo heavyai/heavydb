@@ -69,7 +69,7 @@ class RasterImporter {
               const bool throw_on_error,
               const MetadataColumnInfos& metadata_column_infos);
 
-  void import(const uint32_t max_threads);
+  void import(size_t& max_threads, const bool max_threads_using_default);
 
   using NamesAndSQLTypes = std::vector<std::pair<std::string, SQLTypes>>;
   using RawPixels = std::vector<std::byte>;
