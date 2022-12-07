@@ -630,6 +630,13 @@ ImportStatus ForeignDataImporter::importGeneralS3(
   std::string base_path = "s3-import-" + boost::uuids::to_string(uuid);
   auto import_path = std::filesystem::path(default_import_path_) / base_path;
 
+  // Ensure files & dirs are cleaned up, regardless of outcome
+  ScopeGuard cleanup_guard = [&] {
+    if (std::filesystem::exists(import_path)) {
+      std::filesystem::remove_all(import_path);
+    }
+  };
+
   auto s3_archive = std::make_unique<S3Archive>(copy_from_source_,
                                                 copy_params_.s3_access_key,
                                                 copy_params_.s3_secret_key,
@@ -653,13 +660,6 @@ ImportStatus ForeignDataImporter::importGeneralS3(
     object.object_key = objkey;
     object.is_downloaded = false;
   }
-
-  // Ensure files & dirs are cleaned up, regardless of outcome
-  ScopeGuard cleanup_guard = [&] {
-    if (std::filesystem::exists(import_path)) {
-      std::filesystem::remove_all(import_path);
-    }
-  };
 
   ImportStatus aggregate_import_status;
   const int num_download_threads = copy_params_.s3_max_concurrent_downloads;
