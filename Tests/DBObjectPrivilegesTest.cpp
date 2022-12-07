@@ -4619,6 +4619,13 @@ TEST(SyncUserWithRemoteProvider, IS_SUPER) {
   ASSERT_EQ(u2->isSuper, false);
 }
 
+class DropUserTest : public DBHandlerTestFixture {};
+
+TEST_F(DropUserTest, DropAdmin) {
+  queryAndAssertException("DROP USER admin;",
+                          "Cannot drop user. User admin is required to exist.");
+}
+
 class CreateDropDatabaseTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
