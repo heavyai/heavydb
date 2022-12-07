@@ -449,6 +449,7 @@ struct CgenState {
   void maybeCloneFunctionRecursive(llvm::Function* fn);
 
  private:
+  // todo (yoonmin) : avoid linear scanning of `literals` map
   template <class T>
   std::tuple<size_t, size_t> getOrAddLiteral(const T& val, const int device_id) {
     const LiteralValue var_val(val);

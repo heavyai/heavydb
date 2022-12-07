@@ -16,6 +16,9 @@
 
 #pragma once
 
+#include "CodeGenerator.h"
+#include "CompilationOptions.h"
+
 #include <optional>
 #include <string_view>
 
@@ -26,5 +29,12 @@ namespace CodegenUtil {
 // todo (yoonmin) : locate more utility functions used during codegen here
 llvm::Function* findCalledFunction(llvm::CallInst& call_inst);
 std::optional<std::string_view> getCalledFunctionName(llvm::CallInst& call_inst);
+std::vector<llvm::Value*> createPtrWithHoistedMemoryAddr(
+    CgenState* cgen_state,
+    CodeGenerator* code_generator,
+    CompilationOptions const& co,
+    llvm::ConstantInt* ptr,
+    llvm::Type* type,
+    size_t num_devices_to_hoist_literal);
 
 }  // namespace CodegenUtil

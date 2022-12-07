@@ -117,6 +117,13 @@ struct WindowPartitionBufferPtrs {
 // way we do for non-window queries.
 class WindowFunctionContext {
  public:
+  // we currently only use a single GPU to process the window function because
+  // a query step having a window function expression only has a single fragment input
+  // (i.e., push the window function expression down to the child projection node)
+  // todo (yoonmin) : support window function execution with multi-fragmented input
+  // todo (yoonmin) : support heterogeneous execution (i.e., CPU + GPU)
+  static const int NUM_EXECUTION_DEVICES = 1;
+
   // non-partitioned version
   WindowFunctionContext(const Analyzer::WindowFunction* window_func,
                         const size_t elem_count,

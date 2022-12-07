@@ -25,6 +25,7 @@ CodeCacheVal<CompilationContext> CodeCacheAccessor<CompilationContext>::get_valu
   auto it = code_cache_.find(key);
   if (it != code_cache_.cend()) {
     found_count_++;
+    VLOG(1) << "Reuse cached compiled kernel";
     return it->second;
   }
   return {};
@@ -40,6 +41,7 @@ void CodeCacheAccessor<CompilationContext>::put(const CodeCacheKey& key,
     auto it = code_cache_.find(key);
     put_count_++;
     if (it == code_cache_.cend()) {
+      VLOG(1) << "Add compiled kernel to code cache";
       code_cache_.put(key, value);
     } else {
       ignore_count_++;
@@ -61,6 +63,7 @@ CodeCacheVal<CompilationContext>* CodeCacheAccessor<CompilationContext>::get_or_
   if (cached_code) {
     if (cached_code->get()) {
       found_count_++;
+      VLOG(1) << "Reuse a cached compiled code";
       return cached_code;
     } else {
       // Wait until compiling thread inserts code to cache. TODO: this
@@ -74,6 +77,7 @@ CodeCacheVal<CompilationContext>* CodeCacheAccessor<CompilationContext>::get_or_
       cached_code = code_cache_.get(key);
       CHECK(cached_code->get());
       found_count_++;
+      VLOG(1) << "Reuse a cached compiled code";
       return cached_code;
     }
   }
