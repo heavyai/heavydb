@@ -5822,6 +5822,17 @@ ImportStatus Importer::importGDALRaster(
                      kMaxRasterScanlinesPerThread);
   VLOG(1) << "Raster Importer: Max scanlines per thread: " << max_scanlines_per_thread;
 
+  // prepare to checkpoint the table
+  auto table_epochs = loader->getTableEpochs();
+
+  // start wall clock
+  auto wall_timer = timer_start();
+
+  // start the import
+  raster_importer.import(
+      max_threads,
+      copy_params.threads == 0);  // NOTE: `max_threads` may change after this call
+
   // make an import buffer for each thread
   CHECK_EQ(import_buffers_vec.size(), 0u);
   import_buffers_vec.resize(max_threads);
@@ -6079,15 +6090,6 @@ ImportStatus Importer::importGDALRaster(
     // done
     return {std::move(thread_import_status), {proj_s, read_s, conv_s}};
   };
-
-  // prepare to checkpoint the table
-  auto table_epochs = loader->getTableEpochs();
-
-  // start wall clock
-  auto wall_timer = timer_start();
-
-  // start the import
-  raster_importer.import(max_threads);
 
   // time the phases
   float total_proj_s{0.0f};
