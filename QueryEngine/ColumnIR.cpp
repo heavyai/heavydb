@@ -16,6 +16,7 @@
 
 #include "CodeGenerator.h"
 #include "Codec.h"
+#include "CodegenHelper.h"
 #include "Execute.h"
 #include "WindowContext.h"
 
@@ -216,7 +217,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   }
   if (window_func_context) {
     return {codegenFixedLengthColVarInWindow(
-        col_var, col_byte_stream, pos_arg, window_func_context)};
+        col_var, col_byte_stream, pos_arg, co, window_func_context)};
   }
   const auto fixed_length_column_lv =
       codegenFixedLengthColVar(col_var, col_byte_stream, pos_arg);
@@ -293,6 +294,7 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
     const Analyzer::ColumnVar* col_var,
     llvm::Value* col_byte_stream,
     llvm::Value* pos_arg,
+    const CompilationOptions& co,
     const WindowFunctionContext* window_function_context) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
@@ -314,15 +316,21 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
     auto n_value_lv = cgen_state_->llInt((int64_t)n_value_ptr->get_constval().intval);
     CHECK(n_value_lv);
 
-    auto partition_index_lv =
-        executor_->codegenCurrentPartitionIndex(window_function_context, pos_arg);
+    auto partition_index_lv = executor_->codegenCurrentPartitionIndex(
+        window_function_context, this, co, pos_arg);
     // # elems per partition
     const auto pi32_type =
         llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
     const auto partition_count_buf =
         cgen_state_->llInt(reinterpret_cast<int64_t>(window_function_context->counts()));
-    auto partition_count_buf_ptr_lv =
-        cgen_state_->ir_builder_.CreateIntToPtr(partition_count_buf, pi32_type);
+    auto partition_count_buf_ptr_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
+                                          cgen_state_,
+                                          this,
+                                          co,
+                                          partition_count_buf,
+                                          pi32_type,
+                                          WindowFunctionContext::NUM_EXECUTION_DEVICES)
+                                          .front();
 
     // # elems of the given partition
     const auto num_elem_current_partition_ptr =

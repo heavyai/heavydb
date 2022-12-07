@@ -382,6 +382,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstants(
   int16_t lit_off{-1};
   size_t lit_bytes;
   try {
+    // currently, we assume that `constants.size()` indicates the number of devices
+    // which is equivalent to the total number of devices that a system has
+    // so we need to revisit this to support the selection of devices to execute
+    // the query (i.e., use GPU 1 and 4 to execute the query among eight GPUs)
+    // todo (yoonmin) : indicate a set of devices to hoist a literal
     for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
       const auto constant = constants[device_id];
       const auto& crt_type_info = constant->get_type_info();

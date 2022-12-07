@@ -313,6 +313,7 @@ class CodeGenerator {
       const Analyzer::ColumnVar* col_var,
       llvm::Value* col_byte_stream,
       llvm::Value* pos_arg,
+      const CompilationOptions& co,
       const WindowFunctionContext* window_function_context = nullptr);
 
   std::vector<llvm::Value*> codegenVariableLengthStringColVar(

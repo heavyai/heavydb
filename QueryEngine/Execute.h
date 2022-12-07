@@ -698,14 +698,19 @@ class Executor {
       CompilationOptions const& co) const;
 
   // Generate code for an aggregate window function target.
-  llvm::Value* codegenWindowFunctionAggregate(const CompilationOptions& co);
+  llvm::Value* codegenWindowFunctionAggregate(CodeGenerator* code_generator,
+                                              const CompilationOptions& co);
 
   // The aggregate state requires a state reset when starting a new partition. Generate
   // the new partition check and return the continuation basic block.
-  llvm::BasicBlock* codegenWindowResetStateControlFlow();
+  std::pair<llvm::BasicBlock*, llvm::Value*> codegenWindowResetStateControlFlow(
+      CodeGenerator* code_generator,
+      const CompilationOptions& co);
 
   // Generate code for initializing the state of a window aggregate.
-  void codegenWindowFunctionStateInit(llvm::Value* aggregate_state);
+  void codegenWindowFunctionStateInit(CodeGenerator* code_generator,
+                                      const CompilationOptions& co,
+                                      llvm::Value* aggregate_state);
 
   // Generates the required calls for an aggregate window function and returns the final
   // result.
@@ -718,6 +723,8 @@ class Executor {
   // Generate code for computing current partition index from a given row_pos
   llvm::Value* codegenCurrentPartitionIndex(
       const WindowFunctionContext* window_func_context,
+      CodeGenerator* code_generator,
+      const CompilationOptions& co,
       llvm::Value* current_row_pos_lv);
 
   // Generate code to analyze user-given window frame bound expr
@@ -736,16 +743,22 @@ class Executor {
                                  const WindowFrameBoundFuncArgs& args);
 
   std::pair<std::string, llvm::Value*> codegenLoadOrderKeyBufPtr(
-      WindowFunctionContext* window_func_context) const;
+      WindowFunctionContext* window_func_context,
+      CodeGenerator* code_generator,
+      const CompilationOptions& co) const;
 
   // Generate code to load null range of the window partition
   std::pair<llvm::Value*, llvm::Value*> codegenFrameNullRange(
       WindowFunctionContext* window_func_context,
+      CodeGenerator* code_generator,
+      const CompilationOptions& co,
       llvm::Value* partition_index_lv) const;
 
   // Generate codes for loading various buffers of window partitions
   WindowPartitionBufferPtrs codegenLoadPartitionBuffers(
       WindowFunctionContext* window_func_context,
+      CodeGenerator* code_generator,
+      const CompilationOptions& co,
       llvm::Value* partition_index_lv) const;
 
   // Generate code for computing a window frame bound
@@ -789,12 +802,18 @@ class Executor {
 
   // The AVG window function requires some post-processing: the sum is divided by count
   // and the result is stored back for the current row.
-  void codegenWindowAvgEpilogue(llvm::Value* crt_val, llvm::Value* window_func_null_val);
+  void codegenWindowAvgEpilogue(CodeGenerator* code_generator,
+                                const CompilationOptions& co,
+                                llvm::Value* crt_val,
+                                llvm::Value* window_func_null_val);
 
   // Generates code which loads the current aggregate value for the window context.
-  llvm::Value* codegenAggregateWindowState();
+  llvm::Value* codegenAggregateWindowState(CodeGenerator* code_generator,
+                                           const CompilationOptions& co,
+                                           llvm::Value* aggregate_state);
 
-  llvm::Value* aggregateWindowStatePtr();
+  llvm::Value* aggregateWindowStatePtr(CodeGenerator* code_generator,
+                                       const CompilationOptions& co);
 
   CudaMgr_Namespace::CudaMgr* cudaMgr() const {
     CHECK(data_mgr_);

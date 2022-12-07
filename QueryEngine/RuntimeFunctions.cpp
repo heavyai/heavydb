@@ -396,7 +396,7 @@ extern "C" GPU_RT_STUB void agg_approximate_count_distinct_gpu(int64_t*,
                                                                const int64_t,
                                                                const int64_t) {}
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t bit_is_set(const int64_t bitset,
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t bit_is_set(const int8_t* bitset,
                                                           const int64_t val,
                                                           const int64_t min_val,
                                                           const int64_t max_val,
@@ -412,10 +412,7 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t bit_is_set(const int64_t bitset,
     return 0;
   }
   const uint64_t bitmap_idx = val - min_val;
-  return (reinterpret_cast<const int8_t*>(bitset))[bitmap_idx >> 3] &
-                 (1 << (bitmap_idx & 7))
-             ? 1
-             : 0;
+  return bitset[bitmap_idx >> 3] & (1 << (bitmap_idx & 7)) ? 1 : 0;
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t

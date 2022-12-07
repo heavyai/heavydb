@@ -135,9 +135,14 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) co
   const auto needle_i64 = executor->cgen_state_->castToTypeIn(needle, 64);
   const auto null_bool_val =
       static_cast<int8_t>(inline_int_null_val(SQLTypeInfo(kBOOLEAN, false)));
+  auto pi8_ty =
+      llvm::PointerType::get(get_int_type(8, executor->cgen_state_->context_), 0);
   if (bitsets_.empty()) {
+    auto empty_bitmap = executor->cgen_state_->llInt(int64_t(0));
+    auto empty_bitmap_ptr =
+        executor->cgen_state_->ir_builder_.CreateIntToPtr(empty_bitmap, pi8_ty);
     return executor->cgen_state_->emitCall("bit_is_set",
-                                           {executor->cgen_state_->llInt(int64_t(0)),
+                                           {empty_bitmap_ptr,
                                             needle_i64,
                                             executor->cgen_state_->llInt(int64_t(0)),
                                             executor->cgen_state_->llInt(int64_t(0)),
@@ -148,14 +153,15 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) co
   const auto bitset_handle_lvs =
       code_generator.codegenHoistedConstants(constants, kENCODING_NONE, {});
   CHECK_EQ(size_t(1), bitset_handle_lvs.size());
-  return executor->cgen_state_->emitCall(
-      "bit_is_set",
-      {executor->cgen_state_->castToTypeIn(bitset_handle_lvs.front(), 64),
-       needle_i64,
-       executor->cgen_state_->llInt(min_val_),
-       executor->cgen_state_->llInt(max_val_),
-       executor->cgen_state_->llInt(null_val_),
-       executor->cgen_state_->llInt(null_bool_val)});
+  auto bitset_ptr = executor->cgen_state_->ir_builder_.CreateIntToPtr(
+      bitset_handle_lvs.front(), pi8_ty);
+  return executor->cgen_state_->emitCall("bit_is_set",
+                                         {bitset_ptr,
+                                          needle_i64,
+                                          executor->cgen_state_->llInt(min_val_),
+                                          executor->cgen_state_->llInt(max_val_),
+                                          executor->cgen_state_->llInt(null_val_),
+                                          executor->cgen_state_->llInt(null_bool_val)});
 }
 
 bool InValuesBitmap::isEmpty() const {
