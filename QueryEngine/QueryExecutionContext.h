@@ -98,6 +98,7 @@ class QueryExecutionContext : boost::noncopyable {
   int64_t getAggInitValForIndex(const size_t index) const;
 
  private:
+  // enum must be kept in sync w/ prepareKernelParams().
   enum {
     COL_BUFFERS,
     NUM_FRAGMENTS,
@@ -114,8 +115,46 @@ class QueryExecutionContext : boost::noncopyable {
     ROW_FUNC_MGR,
     KERN_PARAM_COUNT,
   };
+  using KernelParamSizes = std::array<size_t, KERN_PARAM_COUNT>;
+  using KernelParams = std::array<int8_t*, KERN_PARAM_COUNT>;
 
-  std::vector<int8_t*> prepareKernelParams(
+  size_t sizeofColBuffers(
+      std::vector<std::vector<int8_t const*>> const& col_buffers) const;
+  void copyColBuffersToDevice(
+      int8_t* device_ptr,
+      std::vector<std::vector<int8_t const*>> const& col_buffers) const;
+
+  template <typename T>
+  size_t sizeofFlattened2dVec(uint32_t const expected_subvector_size,
+                              std::vector<std::vector<T>> const& vec2d) const;
+  template <typename T>
+  void copyFlattened2dVecToDevice(int8_t* device_ptr,
+                                  uint32_t const expected_subvector_size,
+                                  std::vector<std::vector<T>> const& vec2d) const;
+
+  size_t sizeofInitAggVals(bool const is_group_by,
+                           std::vector<int64_t> const& init_agg_vals) const;
+  void copyInitAggValsToDevice(int8_t* device_ptr,
+                               bool const is_group_by,
+                               std::vector<int64_t> const& init_agg_vals) const;
+
+  size_t sizeofJoinHashTables(std::vector<int8_t*> const& join_hash_tables) const;
+  int8_t* copyJoinHashTablesToDevice(int8_t* device_ptr,
+                                     std::vector<int8_t*> const& join_hash_tables) const;
+
+  size_t sizeofLiterals(std::vector<int8_t> const& literal_buff) const;
+  int8_t* copyLiteralsToDevice(int8_t* device_ptr,
+                               std::vector<int8_t> const& literal_buff) const;
+
+  template <typename T>
+  void copyValueToDevice(int8_t* device_ptr, T const value) const;
+
+  template <typename T>
+  size_t sizeofVector(std::vector<T> const& vec) const;
+  template <typename T>
+  void copyVectorToDevice(int8_t* device_ptr, std::vector<T> const& vec) const;
+
+  KernelParams prepareKernelParams(
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       const std::vector<int8_t>& literal_buff,
       const std::vector<std::vector<int64_t>>& num_rows,
