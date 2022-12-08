@@ -373,6 +373,7 @@ int32_t tf_raster_contour_rasterize_impl(TableFunctionManager& mgr,
   // enforce parser validation
   CHECK_GT(bin_dim_meters, 0.0f);
   CHECK_GE(neighborhood_fill_radius, 0);
+  CHECK_GT(contour_interval, static_cast<TV>(0));
 
   // validate the rest
   auto const raster_agg_type = get_raster_agg_type(agg_type, false);
@@ -463,6 +464,7 @@ int32_t tf_raster_contour_direct_impl(TableFunctionManager& mgr,
   // enforce parser validation
   CHECK_GE(raster_width, 1u);
   CHECK_GE(raster_height, 1u);
+  CHECK_GT(contour_interval, static_cast<TV>(0));
 
   // expected pixel counts
   auto const num_pixels =

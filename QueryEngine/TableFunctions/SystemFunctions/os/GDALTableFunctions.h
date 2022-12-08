@@ -14,7 +14,7 @@
   Cursor<Column<TLL> lon, Column<TLL> lat, Column<TV> values> raster,
   TextEncodingNone agg_type, float bin_dim_meters | require="bin_dim_meters > 0.0",
   int32_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0",
-  bool fill_only_nulls, TextEncodingNone fill_agg_type, bool flip_latitude, TV contour_interval,
+  bool fill_only_nulls, TextEncodingNone fill_agg_type, bool flip_latitude, TV contour_interval | require="contour_interval > 0.0",
   TV contour_offset) -> Column<GeoLineString> contour_lines, Column<TV> contour_values,
   TLL=[float, double], TV=[float, double]
  */
@@ -42,7 +42,8 @@ tf_raster_contour_lines__cpu_template(TableFunctionManager& mgr,
   UDTF: tf_raster_contour_lines__cpu_template(TableFunctionManager mgr,
   Cursor<Column<TLL> lon, Column<TLL> lat, Column<TV> values> raster,
   int32_t raster_width | require="raster_width > 0", int32_t raster_height | require="raster_height > 0",
-  bool flip_latitude, TV contour_interval, TV contour_offset) -> Column<GeoLineString> contour_lines, Column<TV> contour_values,
+  bool flip_latitude, TV contour_interval | require="contour_interval > 0.0",
+  TV contour_offset) -> Column<GeoLineString> contour_lines, Column<TV> contour_values,
   TLL=[float, double], TV=[float, double]
  */
 // clang-format on
@@ -67,7 +68,8 @@ tf_raster_contour_lines__cpu_template(TableFunctionManager& mgr,
   Cursor<Column<TLL> lon, Column<TLL> lat, Column<TV> values> raster,
   TextEncodingNone agg_type, float bin_dim_meters | require="bin_dim_meters > 0.0",
   int32_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0", bool fill_only_nulls, TextEncodingNone fill_agg_type,
-  bool flip_latitude, TV contour_interval, TV contour_offset) -> Column<GeoPolygon> contour_polygons, Column<TV> contour_values,
+  bool flip_latitude, TV contour_interval | require="contour_interval > 0.0",
+  TV contour_offset) -> Column<GeoPolygon> contour_polygons, Column<TV> contour_values,
   TLL=[float, double], TV=[float, double]
  */
 // clang-format on
@@ -94,7 +96,8 @@ tf_raster_contour_polygons__cpu_template(TableFunctionManager& mgr,
   UDTF: tf_raster_contour_polygons__cpu_template(TableFunctionManager mgr,
   Cursor<Column<TLL> lon, Column<TLL> lat, Column<TV> values> raster,
   int32_t raster_width | require="raster_width > 0", int32_t raster_height | require="raster_height > 0",
-  bool flip_latitude, TV contour_interval, TV contour_offset) -> Column<GeoPolygon> contour_polygons, Column<TV> contour_values,
+  bool flip_latitude, TV contour_interval | require="contour_interval > 0.0",
+  TV contour_offset) -> Column<GeoPolygon> contour_polygons, Column<TV> contour_values,
   TLL=[float, double], TV=[float, double]
  */
 // clang-format on
