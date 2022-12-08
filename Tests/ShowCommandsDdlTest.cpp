@@ -3613,7 +3613,7 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
                         i(1), getGpuPageSize(device_id), i(0), i(0), i(0)},
                        {"Server", Null, Null, Null, Null, Null, Null, Null, i(device_id),
                         "GPU", "FREE", getAllocatedGpuPageCount(device_id) - 1,
-                        getGpuPageSize(device_id), i(0), i(1), i(14)}});
+                        getGpuPageSize(device_id), i(0), i(1), i(4)}});
   // clang-format on
 }
 

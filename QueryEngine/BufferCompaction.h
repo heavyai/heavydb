@@ -44,4 +44,13 @@ FORCE_INLINE HOST DEVICE T align_to_int64(T addr) {
   return (T)(((uint64_t)addr >> 3) << 3);
 }
 
+// Return nearest multiple of N for val rounding up.
+// Example: align_to<8>(10) = 16.
+template <size_t N, typename T>
+FORCE_INLINE HOST DEVICE T align_to(T const val) {
+  constexpr T mask = static_cast<T>(N - 1);
+  static_assert(N && (N & mask) == 0, "N must be a power of 2.");
+  return (val + mask) & ~mask;
+}
+
 #endif /* BUFFER_COMPACTION_H */
