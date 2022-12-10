@@ -1517,17 +1517,34 @@ SqlDrop SqlDropPolicy(Span s) :
 }
 
 /*
+ * Parse the ALL keyphrase.
+ *
+ * [ ALL ]
+ */
+boolean All() :
+{
+}
+{
+    <ALL> { return true; }
+    |
+    { return false; }
+}
+
+/*
  * Reassign owned database objects using the following syntax:
  *
- * REASSIGN OWNED BY <old_owner>, <old_owner>, ... TO <new_owner>
+ * REASSIGN [ALL] OWNED BY <old_owner>, <old_owner>, ... TO <new_owner>
  */
 SqlDdl SqlReassignOwned(Span s) :
 {
     SqlIdentifier userName = null;
     List<String> oldOwners = null;
+    final boolean all;
 }
 {
-    <REASSIGN> <OWNED> <BY>
+    <REASSIGN>
+    all = All()
+    <OWNED> <BY>
     userName = HyphenatedCompoundIdentifier()
     {
         oldOwners = new ArrayList<String>();
@@ -1543,7 +1560,7 @@ SqlDdl SqlReassignOwned(Span s) :
     <TO>
     userName = HyphenatedCompoundIdentifier()
     {
-        return new SqlReassignOwned(s.end(this), oldOwners, userName.toString());
+        return new SqlReassignOwned(s.end(this), oldOwners, userName.toString(), all);
     }
 }
 

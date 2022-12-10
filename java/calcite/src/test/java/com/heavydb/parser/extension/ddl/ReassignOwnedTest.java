@@ -23,4 +23,14 @@ public class ReassignOwnedTest extends DDLTest {
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);
   }
+
+  @Test
+  public void reassignAllOwned() throws Exception {
+    final JsonObject expectedJsonObject = getJsonFromFile("reassign_all_owned.json");
+    final TPlanResult result =
+            processDdlCommand("REASSIGN ALL OWNED BY user_1, user_2 To user_3;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
 }
