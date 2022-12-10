@@ -2395,6 +2395,8 @@ ReassignOwnedCommand::ReassignOwnedCommand(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : DdlCommand(ddl_data, session_ptr) {
   auto& ddl_payload = extractPayload(ddl_data_);
+  CHECK(ddl_payload.HasMember("all"));
+  CHECK(ddl_payload["all"].IsBool());
   CHECK(ddl_payload.HasMember("oldOwners"));
   CHECK(ddl_payload["oldOwners"].IsArray());
   for (const auto& old_owner : ddl_payload["oldOwners"].GetArray()) {
@@ -2404,6 +2406,7 @@ ReassignOwnedCommand::ReassignOwnedCommand(
   CHECK(ddl_payload.HasMember("newOwner"));
   CHECK(ddl_payload["newOwner"].IsString());
   new_owner_ = ddl_payload["newOwner"].GetString();
+  all_ = ddl_payload["all"].GetBool();
 }
 
 ExecutionResult ReassignOwnedCommand::execute(bool read_only_mode) {
@@ -2414,7 +2417,14 @@ ExecutionResult ReassignOwnedCommand::execute(bool read_only_mode) {
     throw std::runtime_error{
         "Only super users can reassign ownership of database objects."};
   }
-  const auto catalog = session_ptr_->get_catalog_ptr();
-  catalog->reassignOwners(old_owners_, new_owner_);
+  if (all_) {
+    auto catalogs = Catalog_Namespace::SysCatalog::instance().getCatalogsForAllDbs();
+    for (auto& catalog : catalogs) {
+      catalog->reassignOwners(old_owners_, new_owner_);
+    }
+  } else {
+    const auto catalog = session_ptr_->get_catalog_ptr();
+    catalog->reassignOwners(old_owners_, new_owner_);
+  }
   return ExecutionResult();
 }

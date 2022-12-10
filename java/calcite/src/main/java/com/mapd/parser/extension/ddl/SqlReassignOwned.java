@@ -19,10 +19,16 @@ public class SqlReassignOwned extends SqlCustomDdl {
   @Expose
   private String newOwner;
 
-  public SqlReassignOwned(
-          final SqlParserPos pos, final List<String> oldOwners, final String newOwner) {
+  @Expose
+  private boolean all;
+
+  public SqlReassignOwned(final SqlParserPos pos,
+          final List<String> oldOwners,
+          final String newOwner,
+          final boolean all) {
     super(OPERATOR, pos);
     this.oldOwners = oldOwners;
     this.newOwner = newOwner;
+    this.all = all;
   }
 }

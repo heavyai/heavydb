@@ -300,6 +300,7 @@ class ReassignOwnedCommand : public DdlCommand {
  private:
   std::string new_owner_;
   std::set<std::string> old_owners_;
+  bool all_;
 };
 
 enum class ExecutionLocation { ALL_NODES, AGGREGATOR_ONLY, LEAVES_ONLY };
