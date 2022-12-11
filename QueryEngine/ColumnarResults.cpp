@@ -264,8 +264,10 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     if (ti.supports_flatbuffer()) {
       if (isDirectColumnarConversionPossible() &&
           rows.isZeroCopyColumnarConversionPossible(i)) {
-        const int8_t* col_buf = rows.getColumnarBuffer(i);
-        CHECK(FlatBufferManager::isFlatBuffer(col_buf));
+        if (num_rows_) {
+          const int8_t* col_buf = rows.getColumnarBuffer(i);
+          CHECK(FlatBufferManager::isFlatBuffer(col_buf));
+        }
       } else {
         int64_t values_count = -1;
         switch (ti.get_type()) {
