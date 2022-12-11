@@ -61,7 +61,7 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
   CHECK(value_type_str.length());
 
   auto const num_values = raster_width * raster_height;
-  VLOG(1) << "tf_raster_contour: Input raster data has " << num_values << " values, min "
+  VLOG(2) << "tf_raster_contour: Final raster data has " << num_values << " values, min "
           << *std::min_element(values, values + num_values) << ", max "
           << *std::max_element(values, values + num_values);
 
@@ -125,28 +125,36 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
       vector_ds->CreateLayer("lines", &spatial_reference, wkbLineString, NULL);
   CHECK(vector_layer);
 
-  // contour values field
-  OGRFieldDefn contour_value_field_defn("contour_values", OFTReal);
-  vector_layer->CreateField(&contour_value_field_defn);
-  auto contour_values_field_index = vector_layer->FindFieldIndex("contour_values", TRUE);
-  CHECK_GE(contour_values_field_index, 0);
+  // contour values fields
+  int contour_min_field_index{-1};
+  int contour_max_field_index{-1};
+  int contour_val_field_index{-1};
+  if (is_polygons) {
+    OGRFieldDefn contour_min_field_defn("contour_min", OFTReal);
+    vector_layer->CreateField(&contour_min_field_defn);
+    contour_min_field_index = vector_layer->FindFieldIndex("contour_min", TRUE);
+    CHECK_GE(contour_min_field_index, 0);
+    OGRFieldDefn contour_max_field_defn("contour_max", OFTReal);
+    vector_layer->CreateField(&contour_max_field_defn);
+    contour_max_field_index = vector_layer->FindFieldIndex("contour_max", TRUE);
+    CHECK_GE(contour_max_field_index, 0);
+  } else {
+    OGRFieldDefn contour_val_field_defn("contour_val", OFTReal);
+    vector_layer->CreateField(&contour_val_field_defn);
+    contour_val_field_index = vector_layer->FindFieldIndex("contour_val", TRUE);
+    CHECK_GE(contour_val_field_index, 0);
+  }
 
   // options
-  if (contour_values_field_index != -1) {
-    if constexpr (is_polygons) {
-      options = CSLAppendPrintf(options, "ELEV_FIELD_MIN=%d", contour_values_field_index);
-    } else {
-      options = CSLAppendPrintf(options, "ELEV_FIELD=%d", contour_values_field_index);
-    }
+  if constexpr (is_polygons) {
+    options = CSLAppendPrintf(options, "ELEV_FIELD_MIN=%d", contour_min_field_index);
+    options = CSLAppendPrintf(options, "ELEV_FIELD_MAX=%d", contour_max_field_index);
+  } else {
+    options = CSLAppendPrintf(options, "ELEV_FIELD=%d", contour_val_field_index);
   }
-  if (contour_interval != 0.0) {
-    options = CSLAppendPrintf(
-        options, "LEVEL_INTERVAL=%f", static_cast<float>(contour_interval));
-  }
-  if (contour_offset != 0.0) {
-    options =
-        CSLAppendPrintf(options, "LEVEL_BASE=%f", static_cast<float>(contour_offset));
-  }
+  options =
+      CSLAppendPrintf(options, "LEVEL_INTERVAL=%f", static_cast<float>(contour_interval));
+  options = CSLAppendPrintf(options, "LEVEL_BASE=%f", static_cast<float>(contour_offset));
   options = CSLAppendPrintf(options, "NODATA=%.19g", null_value);
   if constexpr (is_polygons) {
     options = CSLAppendPrintf(options, "POLYGONIZE=YES");
@@ -169,7 +177,10 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
 
   // did we get any features?
   if (num_features == 0) {
-    return mgr.ERROR_MESSAGE("Contour computation did not generate any features");
+    mgr.set_output_array_values_total_number(0, 0);
+    mgr.set_output_array_values_total_number(1, 0);
+    mgr.set_output_row_size(0);
+    return 0;
   }
 
   // first pass, accumulate total sizes
@@ -311,8 +322,15 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
         }
 
         // set output contour value
-        contour_values[output_feature_index] =
-            static_cast<TV>(feature->GetFieldAsDouble(contour_values_field_index));
+        // min value may be zero; if so, replace with (max - interval)
+        // that will still be valid in the cases of max == interval or offset != 0
+        auto const contour_min =
+            static_cast<TV>(feature->GetFieldAsDouble(contour_min_field_index));
+        auto const contour_max =
+            static_cast<TV>(feature->GetFieldAsDouble(contour_max_field_index));
+        contour_values[output_feature_index] = (contour_min == static_cast<TV>(0))
+                                                   ? (contour_max - contour_interval)
+                                                   : contour_min;
 
         // done
         output_feature_index++;
@@ -338,7 +356,7 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
 
       // set output contour value
       contour_values[output_feature_index] =
-          static_cast<TV>(feature->GetFieldAsDouble(contour_values_field_index));
+          static_cast<TV>(feature->GetFieldAsDouble(contour_val_field_index));
 
       // done
       output_feature_index++;
@@ -388,6 +406,12 @@ int32_t tf_raster_contour_rasterize_impl(TableFunctionManager& mgr,
     return mgr.ERROR_MESSAGE(error_msg);
   }
 
+  VLOG(2) << "tf_raster_contour: Input raster data has " << values.size()
+          << " values, min "
+          << *std::min_element(values.getPtr(), values.getPtr() + values.size())
+          << ", max "
+          << *std::max_element(values.getPtr(), values.getPtr() + values.size());
+
   std::unique_ptr<GeoRaster<TLL, TV>> geo_raster;
   try {
     geo_raster = std::make_unique<GeoRaster<TLL, TV>>(
@@ -397,22 +421,27 @@ int32_t tf_raster_contour_rasterize_impl(TableFunctionManager& mgr,
     return mgr.ERROR_MESSAGE(std::string("Failed to create GeoRaster: ") + e.what());
   }
 
+  int64_t raster_width = geo_raster->num_x_bins_;
+  int64_t raster_height = geo_raster->num_y_bins_;
+
+  // GeoRaster constructor can still return zero size if no input
+  if (raster_width < 1 || raster_height < 1) {
+    VLOG(1) << "tf_raster_contour: No input raster data. Cannot compute contours.";
+    mgr.set_output_array_values_total_number(0, 0);
+    mgr.set_output_array_values_total_number(1, 0);
+    mgr.set_output_row_size(0);
+    return 0;
+  }
+
   if (neighborhood_fill_radius > 0) {
     geo_raster->fill_bins_from_neighbors(
         neighborhood_fill_radius, fill_only_nulls, raster_fill_agg_type);
   }
 
-  int64_t raster_width = geo_raster->num_x_bins_;
-  int64_t raster_height = geo_raster->num_y_bins_;
   double lon_min = geo_raster->x_min_;
   double lat_min = geo_raster->y_min_;
   double lon_bin_scale = geo_raster->x_scale_input_to_bin_;
   double lat_bin_scale = geo_raster->y_scale_input_to_bin_;
-
-  // GeoRaster constructor can still return zero size if no input
-  if (raster_width < 1 || raster_height < 1) {
-    return mgr.ERROR_MESSAGE("No input raster data. Cannot compute contours.");
-  }
 
   // this should never happen, but make it an exception anyway
   if (lon_bin_scale <= 0.0 || lat_bin_scale <= 0.0) {
