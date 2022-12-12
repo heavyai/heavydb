@@ -418,14 +418,13 @@ int32_t tf_raster_contour_rasterize_impl(TableFunctionManager& mgr,
         lon, lat, values, raster_agg_type, bin_dim_meters, true, true);
     CHECK(geo_raster);
   } catch (std::runtime_error& e) {
-    return mgr.ERROR_MESSAGE(std::string("Failed to create GeoRaster: ") + e.what());
+    // the only exception this variant of GeoRaster constructor will throw
+    // is when num_x_bins_ < 1 || num_y_bins_ < 1, which is handled below
+    geo_raster = nullptr;
   }
 
-  int64_t raster_width = geo_raster->num_x_bins_;
-  int64_t raster_height = geo_raster->num_y_bins_;
-
   // GeoRaster constructor can still return zero size if no input
-  if (raster_width < 1 || raster_height < 1) {
+  if (!geo_raster || geo_raster->num_x_bins_ < 1 || geo_raster->num_y_bins_ < 1) {
     VLOG(1) << "tf_raster_contour: No input raster data. Cannot compute contours.";
     mgr.set_output_array_values_total_number(0, 0);
     mgr.set_output_array_values_total_number(1, 0);
@@ -438,10 +437,12 @@ int32_t tf_raster_contour_rasterize_impl(TableFunctionManager& mgr,
         neighborhood_fill_radius, fill_only_nulls, raster_fill_agg_type);
   }
 
-  double lon_min = geo_raster->x_min_;
-  double lat_min = geo_raster->y_min_;
-  double lon_bin_scale = geo_raster->x_scale_input_to_bin_;
-  double lat_bin_scale = geo_raster->y_scale_input_to_bin_;
+  auto const raster_width = static_cast<int32_t>(geo_raster->num_x_bins_);
+  auto const raster_height = static_cast<int32_t>(geo_raster->num_y_bins_);
+  auto const lon_min = static_cast<double>(geo_raster->x_min_);
+  auto const lat_min = static_cast<double>(geo_raster->y_min_);
+  auto const lon_bin_scale = static_cast<double>(geo_raster->x_scale_input_to_bin_);
+  auto const lat_bin_scale = static_cast<double>(geo_raster->y_scale_input_to_bin_);
 
   // this should never happen, but make it an exception anyway
   if (lon_bin_scale <= 0.0 || lat_bin_scale <= 0.0) {
@@ -464,8 +465,8 @@ int32_t tf_raster_contour_rasterize_impl(TableFunctionManager& mgr,
 
   // do it
   return tf_raster_contour_impl<TV, TG>(mgr,
-                                        static_cast<int32_t>(raster_width),
-                                        static_cast<int32_t>(raster_height),
+                                        raster_width,
+                                        raster_height,
                                         affine_transform.data(),
                                         geo_raster->z_.data(),
                                         contour_interval,
