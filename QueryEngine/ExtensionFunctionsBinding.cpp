@@ -576,11 +576,6 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
         "Cannot bind function with invalid UDF/UDTF function name: " + name);
   }
 
-  int minimal_score = std::numeric_limits<int>::max();
-  int index = -1;
-  int optimal = -1;
-  int optimal_variant = -1;
-
   std::vector<SQLTypeInfo> type_infos_input;
   std::vector<bool> args_are_constants;
   for (auto atype : func_args) {
@@ -618,166 +613,120 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
     return {ext_funcs[0], empty_type_info_variant};
   }
 
+  int minimal_score = std::numeric_limits<int>::max();
+  int index = -1;
+  int optimal = -1;
+  int optimal_variant = -1;
+  std::vector<std::vector<SQLTypeInfo>> type_infos_variants;
+
   // clang-format off
   /*
     Table functions may have arguments such as ColumnList that collect
-    neighboring columns with the same data type into a single object.
-    Here we compute all possible combinations of mapping a subset of
-    columns into columns sets. For example, if the types of function
-    arguments are (as given in func_args argument)
+    neighboring columns with the same data type into a single object. In
+    general, the binding of UDTFs with ColumnLists might be ambiguous depending
+    on the order of the arguments:
 
-      (Column<int>, Column<int>, Column<int>, int)
+      foo(ColumnList<T>, ColumnList<T>) -> Column<T>, T=[int]
+      bar(ColumnList<T>, Column<T>, ColumnList<T>) -> Column<T>, T=[int]
 
-    then the computed variants will be
+    Here both declarations above are ambiguous as the first ColumnList can
+    consume as many columns as possible, leaving a single column for each one
+    one of the remaining types. Or it can consume one argument, leaving the bulk
+    to the last ColumnList. Nevertheless, not all ColumnList declarations result
+    in an ambiguity signature. The example below shows an example of a function
+    that takes two ColumnLists of different types which has an exact match.
 
-      (Column<int>, Column<int>, Column<int>, int)
-      (Column<int>, Column<int>, ColumnList[1]<int>, int)
-      (Column<int>, ColumnList[1]<int>, Column<int>, int)
-      (Column<int>, ColumnList[2]<int>, int)
-      (ColumnList[1]<int>, Column<int>, Column<int>, int)
-      (ColumnList[1]<int>, Column<int>, ColumnList[1]<int>, int)
-      (ColumnList[2]<int>, Column<int>, int)
-      (ColumnList[3]<int>, int)
+      baz(ColumnList<P>, ColumnList<T>) -> Column<T>, T=[int], Z=[float]
 
-    where the integers in [..] indicate the number of collected
-    columns. In the SQLTypeInfo instance, this number is stored in the
-    SQLTypeInfo dimension attribute.
+    To match a list of SQL arguments with an extension function, HeavyDB uses a
+    greedy algorithm that resolves the issue binding ambiguity as explained
+    below. As an example, let us consider a SQL query containing the following
+    expression calling a UDTF `bar` defined above:
 
-    As an example, let us consider a SQL query containing the
-    following expression calling a UDTF foo:
+      table(bar(select a, b, c, d, e from tableofints), 1)
 
-      table(foo(cursor(select a, b, c from tableofints), 1))
+    The algorithm will generate the following type variant, where the integer
+    value in [..] indicate the number of collected columns. This number is later
+    stored in the SQLTypeInfo dimension attribute.
 
-    Here follows a list of table functions and the corresponding
-    optimal argument type variants that are computed for the given
-    query expression:
+      bar(ColumnList<T>[3], Column<T>, ColumnList<T>[1])
 
-    UDTF:  foo(ColumnList<int>, RowMultiplier) -> Column<int>
-           (ColumnList[3]<int>, int)               # a, b, c are all collected to column_list
+  */
 
-    UDTF:  foo(Column<int>, ColumnList<int>, RowMultiplier) -> Column<int>
-           (Column<int>, ColumnList[2]<int>, int)  # b and c are collected to column_list
-
-    UDTF:  foo(Column<int>, Column<int>, Column<int>, RowMultiplier) -> Column<int>
-           (Column<int>, Column<int>, Column<int>, int)
-   */
   // clang-format on
 
-  // We first check if any of the matched extension functions
-  // in the ext_funcs list allow for column lists, as if they do not,
-  // we do not need to account for possible input permutations with
-  // ColumnList arguments, which currently can be slow time
-  // to match with the extension functions if the number of arguments
-  // is high
-
-  // Todo: Develop faster matching algorithm to avoid such performance
-  // hits when ColumnLists are allowed
-
-  bool ext_funcs_allow_column_lists{false};
-  for (const auto& ext_func : ext_funcs) {
-    auto ext_func_args = ext_func.getInputArgs();
-    for (const auto& arg : ext_func_args) {
-      if (is_ext_arg_type_column_list(arg)) {
-        ext_funcs_allow_column_lists = true;
-        break;
-      }
-    }
-    if (ext_funcs_allow_column_lists) {
-      break;
-    }
-  }
-
-  std::vector<std::vector<SQLTypeInfo>> type_infos_variants;
-  if (ext_funcs_allow_column_lists) {
-    for (const auto& ti : type_infos_input) {
-      if (type_infos_variants.begin() == type_infos_variants.end()) {
-        type_infos_variants.push_back({ti});
-        if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
-          if (ti.is_column()) {
-            auto mti = generate_column_list_type(ti);
-            if (mti.get_subtype() == kNULLT) {
-              continue;  // skip unsupported element type.
-            }
-            mti.set_dimension(1);
-            type_infos_variants.push_back({mti});
-          }
-        }
-        continue;
-      }
-      std::vector<std::vector<SQLTypeInfo>> new_type_infos_variants;
-      for (auto& type_infos : type_infos_variants) {
-        if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
-          if (ti.is_column()) {
-            auto new_type_infos = type_infos;  // makes a copy
-            const auto& last = type_infos.back();
-            if (last.is_column_list() && last.has_same_itemtype(ti)) {
-              // last column_list consumes column argument if item types match
-              new_type_infos.back().set_dimension(last.get_dimension() + 1);
-            } else {
-              // add column as column_list argument
-              auto mti = generate_column_list_type(ti);
-              if (mti.get_subtype() == kNULLT) {
-                // skip unsupported element type
-                type_infos.push_back(ti);
-                continue;
-              }
-              mti.set_dimension(1);
-              new_type_infos.push_back(mti);
-            }
-            new_type_infos_variants.push_back(new_type_infos);
-          }
-        }
-        type_infos.push_back(ti);
-      }
-      type_infos_variants.insert(type_infos_variants.end(),
-                                 new_type_infos_variants.begin(),
-                                 new_type_infos_variants.end());
-    }
-  } else {
-    type_infos_variants.emplace_back(type_infos_input);
-  }
-
   // Find extension function that gives the best match on the set of
-  // argument type variants:
+  // argument type variants
   for (const auto& ext_func : ext_funcs) {
     index++;
 
     const auto& ext_func_args = ext_func.getInputArgs();
-    int index_variant = -1;
-    for (const auto& type_infos : type_infos_variants) {
-      index_variant++;
-      int penalty_score = 0;
-      int pos = 0;
-      int original_input_idx = 0;
-      CHECK_LE(type_infos.size(), args_are_constants.size());
-      for (const auto& ti : type_infos) {
-        int offset = match_arguments(ti,
+
+    int penalty_score = 0;
+    int pos = 0;
+    int original_input_idx = 0;
+    type_infos_variants.emplace_back();
+
+    for (size_t i = 0; i < type_infos_input.size(); i++) {
+      const SQLTypeInfo& ti = type_infos_input[i];
+
+      if ((size_t)pos >= ext_func_args.size()) {
+        pos = -1;
+        break;
+      } else if (is_ext_arg_type_column_list(ext_func_args[pos])) {
+        SQLTypeInfo ti_col_list = generate_column_list_type(ti);
+        int offset = match_arguments(ti_col_list,
                                      args_are_constants[original_input_idx],
                                      pos,
                                      ext_func_args,
                                      penalty_score);
         if (offset < 0) {
-          // atype does not match with ext_func argument
           pos = -1;
           break;
         }
-        if (ti.get_type() == kCOLUMN_LIST) {
-          original_input_idx += ti.get_dimension();
-        } else {
-          original_input_idx++;
-        }
-        pos += offset;
-      }
 
-      if ((size_t)pos == ext_func_args.size()) {
-        CHECK_EQ(args_are_constants.size(), original_input_idx);
-        // prefer smaller return types
-        penalty_score += ext_arg_type_to_type_info(ext_func.getRet()).get_logical_size();
-        if (penalty_score < minimal_score) {
-          optimal = index;
-          minimal_score = penalty_score;
-          optimal_variant = index_variant;
+        // if offset > 0, greedly iterate over the rest of input args
+        // to consume columns with the same type as "ti"
+        int j = i;
+        size_t args_left = ext_func_args.size() - pos - 1;
+        while ((type_infos_input.size() - j > args_left) and
+               (ti_col_list.has_same_itemtype(type_infos_input[j]))) {
+          j++;
         }
+        // push_back a ColumnList with dimension equals to the number of columns
+        // consumed above
+        ti_col_list.set_dimension(j - i);
+        type_infos_variants.back().push_back(ti_col_list);
+        // Move the "i" pointer to the last argument consumed
+        i = j - 1;
+        original_input_idx = j;
+        pos += offset;
+      } else {
+        int offset = match_arguments(ti,
+                                     args_are_constants[original_input_idx],
+                                     pos,
+                                     ext_func_args,
+                                     penalty_score);
+
+        if (offset > 0) {
+          type_infos_variants.back().push_back(ti);
+          original_input_idx += 1;
+          pos += offset;
+        } else {
+          pos = -1;
+          break;
+        }
+      }
+    }
+
+    if ((size_t)pos == ext_func_args.size()) {
+      CHECK_EQ(args_are_constants.size(), original_input_idx);
+      // prefer smaller return types
+      penalty_score += ext_arg_type_to_type_info(ext_func.getRet()).get_logical_size();
+      if (penalty_score < minimal_score) {
+        optimal = index;
+        minimal_score = penalty_score;
+        optimal_variant = type_infos_variants.size() - 1;
       }
     }
   }
