@@ -13,13 +13,12 @@ HEAVY.AI provides pre-built binaries for Linux for stable releases of the projec
 
 | Distro | Package type | CPU/GPU | Repository | Docs |
 | --- | --- | --- | --- | --- |
-| CentOS | RPM | CPU | https://releases.omnisci.com/os/yum/stable/cpu | https://docs.omnisci.com/latest/4_centos7-yum-cpu-os-recipe.html |
-| CentOS | RPM | GPU | https://releases.omnisci.com/os/yum/stable/cuda | https://docs.omnisci.com/latest/4_centos7-yum-gpu-os-recipe.html |
-| Ubuntu | DEB | CPU | deb https://releases.omnisci.com/os/apt/ stable cpu | https://docs.omnisci.com/latest/4_ubuntu-apt-cpu-os-recipe.html |
-| Ubuntu | DEB | GPU | deb https://releases.omnisci.com/os/apt/ stable cuda | https://docs.omnisci.com/latest/4_ubuntu-apt-gpu-os-recipe.html |
-| * | tarball | CPU | https://releases.omnisci.com/os/tar/omnisci-os-latest-Linux-x86_64-cpu.tar.gz |  |
-| * | tarball | GPU | https://releases.omnisci.com/os/tar/omnisci-os-latest-Linux-x86_64-cuda.tar.gz |  |
-
+| CentOS | RPM | CPU | https://releases.heavy.ai/os/yum/stable/cpu |  https://docs.heavy.ai/installation-and-configuration/installation/installing-on-centos/centos-yum-gpu-ee |
+| CentOS | RPM | GPU | https://releases.heavy.ai/os/yum/stable/cuda | https://docs.heavy.ai/installation-and-configuration/installation/installing-on-centos/centos-yum-gpu-ee |
+| Ubuntu | DEB | CPU | https://releases.heavy.ai/os/apt/dists/stable/cpu | https://docs.heavy.ai/installation-and-configuration/installation/installing-on-ubuntu/centos-yum-gpu-ee |
+| Ubuntu | DEB | GPU | https://releases.heavy.ai/os/apt/dists/stable/cuda | https://docs.heavy.ai/installation-and-configuration/installation/installing-on-ubuntu/centos-yum-gpu-ee |
+| * | tarball | CPU | https://releases.heavy.ai/os/tar/heavyai-os-latest-Linux-x86_64-cpu.tar.gz |  |
+| * | tarball | GPU | https://releases.heavy.ai/os/tar/heavyai-os-latest-Linux-x86_64.tar.gz |  |
 ***
 
 # Developing HeavyDB: Table of Contents
@@ -37,9 +36,9 @@ HEAVY.AI provides pre-built binaries for Linux for stable releases of the projec
 # Links
 
 - [Developer Documentation](https://heavyai.github.io/heavydb/)
-- [Doxygen-generated Documentation](http://doxygen.omnisci.com/)
+- [Doxygen-generated Documentation](http://doxygen.mapd.com/)
 - [Product Documentation](https://docs.heavy.ai/)
-- [Release Notes](https://docs.omnisci.com/latest/7_0_release.html)
+- [Release Notes](https://docs.heavy.ai/overview/release-notes)
 - [Community Forum](https://community.heavy.ai)
 - [HEAVY.AI Homepage](https://www.heavy.ai)
 - [HEAVY.AI Blog](https://www.heavy.ai/blog/)
@@ -78,14 +77,13 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 - `-DENABLE_FOLLY=on` - Use Folly. Default is `on`.
 - `-DENABLE_IWYU=off` - Enable include-what-you-use. Default is `off`.
 - `-DENABLE_JIT_DEBUG=off` - Enable debugging symbols for the JIT. Default is `off`.
+- `-DENABLE_ONLY_ONE_ARCH=off` - Compile GPU code only for the host machine's architecture, speeding up compilation. Default is `off`.
 - `-DENABLE_PROFILER=off` - Enable google perftools. Default is `off`.
 - `-DENABLE_STANDALONE_CALCITE=off` - Require standalone Calcite server. Default is `off`.
 - `-DENABLE_TESTS=on` - Build unit tests. Default is `on`.
 - `-DENABLE_TSAN=off` - Enable thread sanitizer. Default is `off`.
 - `-DENABLE_CODE_COVERAGE=off` - Enable code coverage symbols (clang only). Default is `off`.
-- `-DMAPD_DOCS_DOWNLOAD=on` - Download the latest master build of the documentation / `docs.mapd.com`. Default is `off`.
-                              **Note:** this is a >50MB download.
-- `-DPREFER_STATIC_LIBS=off` - Static link dependencies, if available. Default is `off`.
+- `-DPREFER_STATIC_LIBS=off` - Static link dependencies, if available. Default is `off`. Only works on CentOS.
 
 # Testing
 
@@ -118,7 +116,7 @@ Finally run the tests:
 
 We use a TSAN suppressions file to ignore warnings in third party libraries. Source the suppressions file by adding it to your `TSAN_OPTIONS` env:
 
-    export TSAN_OPTIONS="suppressions=/path/to/mapd/config/tsan.suppressions"
+    export TSAN_OPTIONS="suppressions=/path/to/heavydb/config/tsan.suppressions"
 
 Finally run the tests:
 
@@ -143,15 +141,15 @@ The last command generates a `.tar.gz` package. The `TGZ` can be replaced with, 
 
 # Using
 
-The [`startomnisci`](startomnisci) wrapper script may be used to start HeavyDB in a testing environment. This script performs the following tasks:
+The [`startheavy`](startheavy) wrapper script may be used to start HeavyDB in a testing environment. This script performs the following tasks:
 
 - initializes the `data` storage directory via `initdb`, if required
-- starts the main HeavyDB server, `omnisci_server`
+- starts the main HeavyDB server, `heavydb`
 - offers to download and import a sample dataset, using the `insert_sample_data` script
 
-Assuming you are in the `build` directory, and it is a subdirectory of the `heavydb` repository, `startomnisci` may be run by:
+Assuming you are in the `build` directory, and it is a subdirectory of the `heavydb` repository, `startheavy` may be run by:
 
-    ../startomnisci
+    ../startheavy
 
 ## Starting Manually
 
@@ -163,15 +161,15 @@ Initialize the `data` storage directory. This command only needs to be run once.
 
 Start the HeavyDB server:
 
-    ./bin/omnisci_server
+    ./bin/heavydb
 
 If desired, insert a sample dataset by running the `insert_sample_data` script in a new terminal:
 
     ../insert_sample_data
 
-You can now start using the database. The `omnisql` utility may be used to interact with the database from the command line:
+You can now start using the database. The `heavysql` utility may be used to interact with the database from the command line:
 
-    ./bin/omnisql -p HyperInteractive
+    ./bin/heavysql -p HyperInteractive
 
 where `HyperInteractive` is the default password. The default user `admin` is assumed if not provided.
 
