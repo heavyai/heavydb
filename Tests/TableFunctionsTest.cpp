@@ -3641,6 +3641,23 @@ TEST_F(TableFunctions, DefaultScalarValues) {
   }
 }
 
+TEST_F(TableFunctions, TFBindingAlgorithm) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    {
+      const auto result = run_multiple_agg(
+          "SELECT * from table(ct_binding_udtf_constant(CURSOR(SELECT l, l, l, l, l, "
+          "l, "
+          "l, l, l, l, l, l, l, l, l, l, l, l, l, l from arr_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+      auto crt_row = result->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(242));
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

@@ -125,7 +125,7 @@
   UDTF: foo_42(int32_t x | range=[1, 10], RowMultiplier) -> Column<int32_t> $=>$
         foo_42(Int32 | name=x | range=[1,10] | require="1 <= x && x <= 10", kUserSpecifiedRowMultiplier<2>) -> ColumnInt32
 
-UDTF: foo_43(int32_t x | default=10, TextEncodingNone str | default="Blah", double d | default=10.0, bool b | default=true) -> Column<int32_t> $=>$
+  UDTF: foo_43(int32_t x | default=10, TextEncodingNone str | default="Blah", double d | default=10.0, bool b | default=true) -> Column<int32_t> $=>$
         foo_43(Int32 | name=x | default=10, TextEncodingNone | name=str | default="Blah", Double | name=d | default=10.0, Bool | name=b | default=True) -> ColumnInt32
 
   UDTF: foo_44(Column<int32_t> x | default=10) -> Column<int32_t> $=>$
@@ -149,6 +149,15 @@ UDTF: foo_43(int32_t x | default=10, TextEncodingNone str | default="Blah", doub
 
   UDTF: foo_50(int32_t x | default=-10, double d | default=-10.0) -> Column<double> $=>$
         foo_50(Int32 | name=x | default=-10, Double | name=d | default=-10.0) -> ColumnDouble
+
+  UDTF: foo_51(ColumnList<T>, ColumnList<U>) -> Column<T>, T=[int64_t], U=[float, int64_t] $=>$
+        TransformerWarning: foo_51 signature is ambiguous as there are two ColumnList with the same subtype in the same group.
+
+  UDTF: foo_52(ColumnList<T>, Column<T>, ColumnList<T>) -> Column<T>, T=[int64_t] $=>$
+        TransformerWarning: foo_52 signature is ambiguous as there are two ColumnList with the same subtype in the same group.
+
+  UDTF: foo_53(ColumnList<T>, ColumnList<U>) -> Column<T>, T=[int64_t], U=[int32_t] $=>$
+        foo_53(ColumnListInt64, ColumnListInt32) -> ColumnInt64
 
  */
 // clang-format on

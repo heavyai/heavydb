@@ -64,6 +64,7 @@ import os
 import sys
 import itertools
 import copy
+import warnings
 from ast import literal_eval
 from abc import abstractmethod
 
@@ -402,6 +403,10 @@ class ParserException(Exception):
 
 
 class TransformerException(Exception):
+    pass
+
+
+class TransformerWarning(UserWarning):
     pass
 
 
@@ -906,6 +911,7 @@ class FieldAnnotationTransformer(AstTransformer):
 
         return udtf_node
 
+
 class DefaultValueAnnotationTransformer(AstTransformer):
     def visit_udtf_node(self, udtf_node):
         """
@@ -937,7 +943,8 @@ class DefaultValueAnnotationTransformer(AstTransformer):
                         break
 
         return udtf_node
-        
+
+
 class SupportedAnnotationsTransformer(AstTransformer):
     """
     * Checks for supported annotations in a UDTF
@@ -980,6 +987,59 @@ class RangeAnnotationTransformer(AstTransformer):
                     raise TransformerException('"range" requires an interval. Got {l}'.format(l=l))
                 arg_node.set_annotation('require', value)
         return arg_node
+
+
+class AmbiguousSignatureCheckTransformer(AstTransformer):
+    """
+    * A UDTF declaration is ambiguous if two or more ColumnLists are adjacent
+    to each other:
+
+        func__0(ColumnList<T> X, ColumnList<T> Z) -> Column<U>
+        func__1(ColumnList<T> X, Column<T> Y, ColumnList<T> Z) -> Column<U>
+
+    The first ColumnList ends up consuming all of the arguments leaving a single
+    one for the last ColumnList. In other words, Z becomes a Column
+    """
+    def visit_udtf_node(self, udtf_node):
+        lst = []
+        for arg in udtf_node.inputs:
+            s = arg.accept(self)
+            if isinstance(s, list):
+                lst.extend(s)
+            else:
+                lst.append(s)
+
+
+        for i in range(len(lst)):
+            if not lst[i].is_column_list():
+                i += 1
+                continue
+
+            collist = lst[i]
+            T = collist.inner[0]
+
+            for j in range(i+1, len(lst)):
+                # if lst[j] == Column<T>, just continue
+                if lst[j].is_column() and lst[j].is_column_of(T):
+                    continue
+                elif lst[j].is_column_list() and lst[j].is_column_list_of(T):
+                    msg = ('%s signature is ambiguous as there are two '
+                           'ColumnList with the same subtype in the same '
+                           'group.') % (udtf_node.name)
+                    warnings.warn(msg, TransformerWarning)
+                else:
+                    break
+        return udtf_node
+
+    def visit_composed_node(self, composed_node):
+        s = super(type(self), self).visit_composed_node(composed_node)
+        if composed_node.is_cursor():
+            return [i.accept(self) for i in composed_node.inner]
+        return s
+
+    def visit_arg_node(self, arg_node):
+        # skip annotations
+        return arg_node.type.accept(self)
 
 
 class DeclBracketTransformer(AstTransformer):
@@ -1234,6 +1294,11 @@ class PrimitiveNode(TypeNode):
     def is_array_text_encoding_dict(self):
         return self.type == 'ArrayTextEncodingDict'
 
+    def __eq__(self, other):
+        if isinstance(other, PrimitiveNode):
+            return self.type == other.type
+        return False
+
     __repr__ = __str__
 
 
@@ -1281,6 +1346,12 @@ class ComposedNode(TypeNode, IterableNode):
 
     def is_any_text_encoding_dict(self):
         return self.inner[0].is_text_encoding_dict() or self.inner[0].is_array_text_encoding_dict()
+
+    def is_column_of(self, T):
+        return self.is_column() and self.inner[0] == T
+
+    def is_column_list_of(self, T):
+        return self.is_column_list() and self.inner[0] == T
 
     __repr__ = __str__
 
@@ -1787,9 +1858,11 @@ def find_signatures(input_file):
         ast = Parser(line).parse()
 
         if expected_result is not None:
-            # Template transformer expands templates into multiple lines
+            # Treat warnings as errors so that one can test TransformeWarnings
+            warnings.filterwarnings("error")
             try:
                 result = Pipeline(TemplateTransformer,
+                                  AmbiguousSignatureCheckTransformer,
                                   FieldAnnotationTransformer,
                                   TextEncodingDictTransformer,
                                   DefaultValueAnnotationTransformer,
@@ -1798,7 +1871,7 @@ def find_signatures(input_file):
                                   FixRowMultiplierPosArgTransformer,
                                   RenameNodesTransformer,
                                   AstPrinter)(ast)
-            except TransformerException as msg:
+            except (TransformerException, TransformerWarning) as msg:
                 result = ['%s: %s' % (type(msg).__name__, msg)]
             assert len(result) == len(expected_result), "\n\tresult:   %s \n!= \n\texpected: %s" % (
                 '\n\t\t  '.join(result),
@@ -1808,9 +1881,10 @@ def find_signatures(input_file):
                 '\n\t\t  '.join(result),
                 '\n\t\t  '.join(expected_result),
             )
-            
+
         else:
             signature = Pipeline(TemplateTransformer,
+                             AmbiguousSignatureCheckTransformer,
                              FieldAnnotationTransformer,
                              TextEncodingDictTransformer,
                              DefaultValueAnnotationTransformer,
