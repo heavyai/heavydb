@@ -48,6 +48,7 @@ const size_t default_min_cpu_result_mem_request{1UL << 28};  // 256MB
 
 const ChunkRequestInfo default_chunk_request_info;  // Empty request info to satisfy
                                                     // request_resources signature
+const bool default_output_buffers_reusable_intra_thread{false};
 
 const size_t ZERO_SIZE{0UL};
 
@@ -79,7 +80,8 @@ RequestInfo gen_default_request_info() {
                                  default_min_gpu_slots_request,
                                  default_cpu_result_mem_request,
                                  default_min_cpu_result_mem_request,
-                                 default_chunk_request_info);
+                                 default_chunk_request_info,
+                                 default_output_buffers_reusable_intra_thread);
   return request_info;
 }
 
@@ -302,15 +304,17 @@ TEST(ExecutorResourceMgr, ErrorOnPerQueryLargeRequests) {
       15};  // Less than total available (16) but more than 80% max ratio per query
             // policy, should throw
 
-  const RequestInfo too_many_cpu_slots_request_info(ExecutorDeviceType::CPU,
-                                                    default_priority_level_request,
-                                                    jumbo_cpu_slots_request,
-                                                    jumbo_cpu_slots_request,
-                                                    default_gpu_slots_request,
-                                                    default_min_gpu_slots_request,
-                                                    default_cpu_result_mem_request,
-                                                    default_min_cpu_result_mem_request,
-                                                    default_chunk_request_info);
+  const RequestInfo too_many_cpu_slots_request_info(
+      ExecutorDeviceType::CPU,
+      default_priority_level_request,
+      jumbo_cpu_slots_request,
+      jumbo_cpu_slots_request,
+      default_gpu_slots_request,
+      default_min_gpu_slots_request,
+      default_cpu_result_mem_request,
+      default_min_cpu_result_mem_request,
+      default_chunk_request_info,
+      default_output_buffers_reusable_intra_thread);
 
   EXPECT_THROW(executor_resource_mgr->request_resources(too_many_cpu_slots_request_info),
                QueryNeedsTooManyCpuSlots);
@@ -328,15 +332,17 @@ TEST(ExecutorResourceMgr, ErrorOnPerQueryLargeRequests) {
                   default_gpu_buffer_pool_mem);
 
   const size_t jumbo_gpu_slots_request{3};
-  const RequestInfo too_many_gpu_slots_request_info(ExecutorDeviceType::GPU,
-                                                    default_priority_level_request,
-                                                    default_cpu_slots_request,
-                                                    default_min_cpu_slots_request,
-                                                    jumbo_gpu_slots_request,
-                                                    jumbo_gpu_slots_request,
-                                                    default_cpu_result_mem_request,
-                                                    default_min_cpu_result_mem_request,
-                                                    default_chunk_request_info);
+  const RequestInfo too_many_gpu_slots_request_info(
+      ExecutorDeviceType::GPU,
+      default_priority_level_request,
+      default_cpu_slots_request,
+      default_min_cpu_slots_request,
+      jumbo_gpu_slots_request,
+      jumbo_gpu_slots_request,
+      default_cpu_result_mem_request,
+      default_min_cpu_result_mem_request,
+      default_chunk_request_info,
+      default_output_buffers_reusable_intra_thread);
 
   EXPECT_THROW(executor_resource_mgr->request_resources(too_many_gpu_slots_request_info),
                QueryNeedsTooManyGpuSlots);
@@ -353,15 +359,17 @@ TEST(ExecutorResourceMgr, ErrorOnPerQueryLargeRequests) {
                   default_gpu_buffer_pool_mem);
 
   const size_t jumbo_cpu_result_mem_request{1UL << 38};
-  const RequestInfo too_much_cpu_result_mem_request_info(ExecutorDeviceType::CPU,
-                                                         default_priority_level_request,
-                                                         default_cpu_slots_request,
-                                                         default_min_cpu_slots_request,
-                                                         default_gpu_slots_request,
-                                                         default_min_gpu_slots_request,
-                                                         jumbo_cpu_result_mem_request,
-                                                         jumbo_cpu_result_mem_request,
-                                                         default_chunk_request_info);
+  const RequestInfo too_much_cpu_result_mem_request_info(
+      ExecutorDeviceType::CPU,
+      default_priority_level_request,
+      default_cpu_slots_request,
+      default_min_cpu_slots_request,
+      default_gpu_slots_request,
+      default_min_gpu_slots_request,
+      jumbo_cpu_result_mem_request,
+      jumbo_cpu_result_mem_request,
+      default_chunk_request_info,
+      default_output_buffers_reusable_intra_thread);
 
   EXPECT_THROW(
       executor_resource_mgr->request_resources(too_much_cpu_result_mem_request_info),
@@ -420,7 +428,8 @@ TEST(ExecutorResourceMgr, AllowPerQueryLargeRequestsWithSmallMinRequests) {
         default_min_gpu_slots_request,
         default_cpu_result_mem_request,
         default_min_cpu_result_mem_request,
-        default_chunk_request_info);
+        default_chunk_request_info,
+        default_output_buffers_reusable_intra_thread);
 
     ASSERT_NO_THROW(
         executor_resource_mgr->request_resources(min_cpu_slots_fallback_request_info));
@@ -475,25 +484,21 @@ TEST(ExecutorResourceMgr, AllowPerQueryLargeRequestsWithSmallMinRequests) {
         default_max_available_resource_use_ratio);
 
     const size_t jumbo_cpu_result_mem_request{default_cpu_result_mem * 4};
-    const RequestInfo jumbo_cpu_result_mem_request_info(ExecutorDeviceType::CPU,
-                                                        default_priority_level_request,
-                                                        default_cpu_slots_request,
-                                                        default_min_cpu_slots_request,
-                                                        default_gpu_slots_request,
-                                                        default_min_gpu_slots_request,
-                                                        jumbo_cpu_result_mem_request,
-                                                        default_cpu_result_mem,
-                                                        default_chunk_request_info);
+    const RequestInfo jumbo_cpu_result_mem_request_info(
+        ExecutorDeviceType::CPU,
+        default_priority_level_request,
+        default_cpu_slots_request,
+        default_min_cpu_slots_request,
+        default_gpu_slots_request,
+        default_min_gpu_slots_request,
+        jumbo_cpu_result_mem_request,
+        default_cpu_result_mem,
+        default_chunk_request_info,
+        default_output_buffers_reusable_intra_thread);
 
-    // const auto executor_resource_handle =
-    //    executor_resource_mgr->request_resources(jumbo_cpu_result_mem_request_info);
-    // const auto resource_grant = executor_resource_handle->get_resource_grant();
     //// Should be ceil(16 * 0.8) -> 13, where 16 is total cpu slots and 0.8
     //// default_per_query_max_cpu_result_mem_ratio which we initialized the resource mgr
     //// with
-    // EXPECT_EQ(resource_grant.cpu_slots, default_cpu_slots_request);
-    // EXPECT_EQ(resource_grant.gpu_slots, default_gpu_slots_request);
-    // EXPECT_EQ(resource_grant.cpu_result_mem, default_cpu_result_mem);
   }
 }
 

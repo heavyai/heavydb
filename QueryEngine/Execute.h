@@ -1075,6 +1075,10 @@ class Executor {
       std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,
       std::shared_ptr<RowSetMemoryOwner>,
       const QueryMemoryDescriptor&) const;
+  std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>
+  getUniqueThreadSharedResultSets(
+      const std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device)
+      const;
   ResultSetPtr reduceMultiDeviceResultSets(
       std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,
       std::shared_ptr<RowSetMemoryOwner>,

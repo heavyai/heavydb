@@ -252,7 +252,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     const CountDistinctDescriptors count_distinct_descriptors,
     const bool must_use_baseline_sort,
     const bool output_columnar_hint,
-    const bool streaming_top_n_hint) {
+    const bool streaming_top_n_hint,
+    const bool threads_can_reuse_group_by_buffers) {
   auto group_col_widths = get_col_byte_widths(ra_exe_unit.groupby_exprs);
   const bool is_group_by{!group_col_widths.empty()};
 
@@ -291,7 +292,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         output_columnar_hint,
         render_info && render_info->isInSitu(),
         must_use_baseline_sort,
-        /*use_streaming_top_n=*/false);
+        /*use_streaming_top_n=*/false,
+        threads_can_reuse_group_by_buffers);
   }
 
   size_t entry_count = 1;
@@ -429,7 +431,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
                                                  output_columnar,
                                                  render_info && render_info->isInSitu(),
                                                  must_use_baseline_sort,
-                                                 streaming_top_n);
+                                                 streaming_top_n,
+                                                 threads_can_reuse_group_by_buffers);
 }
 
 namespace {
@@ -461,7 +464,8 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const bool output_columnar_hint,
     const bool render_output,
     const bool must_use_baseline_sort,
-    const bool use_streaming_top_n)
+    const bool use_streaming_top_n,
+    const bool threads_can_reuse_group_by_buffers)
     : executor_(executor)
     , allow_multifrag_(allow_multifrag)
     , query_desc_type_(col_range_info.hash_type_)
@@ -482,6 +486,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , must_use_baseline_sort_(must_use_baseline_sort)
     , is_table_function_(false)
     , use_streaming_top_n_(use_streaming_top_n)
+    , threads_can_reuse_group_by_buffers_(threads_can_reuse_group_by_buffers)
     , force_4byte_float_(false)
     , col_slot_context_(col_slot_context) {
   CHECK(!(query_desc_type_ == QueryDescriptionType::TableFunction));
@@ -558,6 +563,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
     , must_use_baseline_sort_(false)
     , is_table_function_(false)
     , use_streaming_top_n_(false)
+    , threads_can_reuse_group_by_buffers_(false)
     , force_4byte_float_(false) {}
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
@@ -582,6 +588,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , must_use_baseline_sort_(false)
     , is_table_function_(is_table_function)
     , use_streaming_top_n_(false)
+    , threads_can_reuse_group_by_buffers_(false)
     , force_4byte_float_(false) {}
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_desc_type,
@@ -608,6 +615,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_de
     , must_use_baseline_sort_(false)
     , is_table_function_(false)
     , use_streaming_top_n_(false)
+    , threads_can_reuse_group_by_buffers_(false)
     , force_4byte_float_(false) {}
 
 bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const {
@@ -669,6 +677,9 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
     return false;
   }
   if (col_slot_context_ != other.col_slot_context_) {
+    return false;
+  }
+  if (threads_can_reuse_group_by_buffers_ != other.threads_can_reuse_group_by_buffers_) {
     return false;
   }
   return true;

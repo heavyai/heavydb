@@ -130,6 +130,10 @@ TableUpdateMetadata Executor::executeUpdate(
                                               this);
   }
   CHECK(query_mem_desc);
+  // Since we execute updates one thread/fragment at a time,
+  // buffer re-use is not applicable and can cause issues
+  // when the contents of the output buffer are written to storage
+  query_mem_desc->setThreadsCanReuseGroupByBuffers(false);
 
   TableUpdateMetadata table_update_metadata;
   for (size_t fragment_index = 0; fragment_index < outer_fragments.size();

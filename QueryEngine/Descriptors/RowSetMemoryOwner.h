@@ -50,7 +50,9 @@ class ResultSet;
 class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
  public:
   RowSetMemoryOwner(const size_t arena_block_size, const size_t num_kernel_threads = 0)
-      : arena_block_size_(arena_block_size) {
+      : non_owned_group_by_buffers_(num_kernel_threads + 1, nullptr)
+      , arena_block_size_(arena_block_size) {
+    allocators_.reserve(num_kernel_threads + 1);
     for (size_t i = 0; i < num_kernel_threads + 1; i++) {
       allocators_.emplace_back(std::make_unique<DramArena>(arena_block_size));
     }
@@ -64,6 +66,23 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     auto allocator = allocators_[thread_idx].get();
     std::lock_guard<std::mutex> lock(state_mutex_);
     return reinterpret_cast<int8_t*>(allocator->allocate(num_bytes));
+  }
+
+  std::pair<int64_t*, bool> allocateCachedGroupByBuffer(const size_t num_bytes,
+                                                        const size_t thread_idx) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    CHECK_LT(thread_idx, non_owned_group_by_buffers_.size());
+    // First try cache
+    if (non_owned_group_by_buffers_[thread_idx]) {  // not nullptr
+      return std::make_pair(non_owned_group_by_buffers_[thread_idx], true);
+    }
+    // Was not in cache so must allocate
+    auto allocator = allocators_[thread_idx].get();
+    int64_t* group_by_buffer = reinterpret_cast<int64_t*>(allocator->allocate(num_bytes));
+    CHECK(group_by_buffer);
+    // Put in cache
+    non_owned_group_by_buffers_[thread_idx] = group_by_buffer;
+    return std::make_pair(group_by_buffer, false);
   }
 
   int8_t* allocateCountDistinctBuffer(const size_t num_bytes,
@@ -87,9 +106,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     count_distinct_sets_.push_back(count_distinct_set);
   }
 
-  void addGroupByBuffer(int64_t* group_by_buffer) {
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    group_by_buffers_.push_back(group_by_buffer);
+  void clearNonOwnedGroupByBuffers() {
+    non_owned_group_by_buffers_.assign(non_owned_group_by_buffers_.size(), nullptr);
   }
 
   void addVarlenBuffer(void* varlen_buffer) {
@@ -271,9 +289,6 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     for (auto count_distinct_set : count_distinct_sets_) {
       delete count_distinct_set;
     }
-    for (auto group_by_buffer : group_by_buffers_) {
-      free(group_by_buffer);
-    }
     for (auto varlen_buffer : varlen_buffers_) {
       free(varlen_buffer);
     }
@@ -346,7 +361,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   std::vector<CountDistinctBitmapBuffer> count_distinct_bitmaps_;
   std::vector<CountDistinctSet*> count_distinct_sets_;
-  std::vector<int64_t*> group_by_buffers_;
+  std::vector<int64_t*> non_owned_group_by_buffers_;
   std::vector<void*> varlen_buffers_;
   std::list<std::string> strings_;
   std::list<std::vector<int64_t>> arrays_;

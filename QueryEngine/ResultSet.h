@@ -173,6 +173,7 @@ class ResultSet {
             const std::vector<int64_t>& consistent_frag_sizes,
             const ExecutorDeviceType device_type,
             const int device_id,
+            const int thread_idx,
             const QueryMemoryDescriptor& query_mem_desc,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
             const unsigned block_size,
@@ -397,6 +398,7 @@ class ResultSet {
 
   bool isGeoColOnGpu(const size_t col_idx) const;
   int getDeviceId() const;
+  int getThreadIdx() const;
 
   // Materialize string from StringDictionaryProxy
   std::string getString(SQLTypeInfo const&, int64_t const ival) const;
@@ -934,6 +936,7 @@ class ResultSet {
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;
   const int device_id_;
+  const int thread_idx_;
   QueryMemoryDescriptor query_mem_desc_;
   mutable std::unique_ptr<ResultSetStorage> storage_;
   AppendedStorage appended_storage_;
