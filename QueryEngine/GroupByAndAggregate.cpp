@@ -877,6 +877,10 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     const bool output_columnar_hint) {
   const bool is_group_by{!ra_exe_unit_.groupby_exprs.empty()};
 
+  const bool threads_can_reuse_group_by_buffers =
+      device_type_ == ExecutorDeviceType::CPU && is_group_by &&
+      ra_exe_unit_.groupby_exprs.front();
+
   auto col_range_info_nosharding = getColRangeInfo();
 
   const auto shard_count = device_type_ == ExecutorDeviceType::GPU
@@ -927,7 +931,8 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                        count_distinct_descriptors,
                                        must_use_baseline_sort,
                                        output_columnar_hint,
-                                       /*streaming_top_n_hint=*/true);
+                                       /*streaming_top_n_hint=*/true,
+                                       threads_can_reuse_group_by_buffers);
   } catch (const StreamingTopNOOM& e) {
     LOG(WARNING) << e.what() << " Disabling Streaming Top N.";
     return QueryMemoryDescriptor::init(executor_,
@@ -945,7 +950,8 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                        count_distinct_descriptors,
                                        must_use_baseline_sort,
                                        output_columnar_hint,
-                                       /*streaming_top_n_hint=*/false);
+                                       /*streaming_top_n_hint=*/false,
+                                       threads_can_reuse_group_by_buffers);
   }
 }
 
@@ -1004,7 +1010,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
   llvm::BasicBlock* filter_false{nullptr};
 
   {
-    const bool is_group_by = !ra_exe_unit_.groupby_exprs.empty();
+    const bool is_group_by{!ra_exe_unit_.groupby_exprs.empty()};
 
     if (executor_->isArchMaxwell(co.device_type)) {
       prependForceSync();

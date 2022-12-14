@@ -1528,10 +1528,39 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
                                        gridSize());
   }
 
+  if (query_mem_desc.threadsCanReuseGroupByBuffers()) {
+    auto unique_results = getUniqueThreadSharedResultSets(results_per_device);
+    return reduceMultiDeviceResultSets(
+        unique_results,
+        row_set_mem_owner,
+        ResultSet::fixupQueryMemoryDescriptor(query_mem_desc));
+  }
   return reduceMultiDeviceResultSets(
       results_per_device,
       row_set_mem_owner,
       ResultSet::fixupQueryMemoryDescriptor(query_mem_desc));
+}
+
+std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>
+Executor::getUniqueThreadSharedResultSets(
+    const std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device)
+    const {
+  std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> unique_thread_results;
+  if (results_per_device.empty()) {
+    return unique_thread_results;
+  }
+  auto max_ti = [](int acc, auto& e) { return std::max(acc, e.first->getThreadIdx()); };
+  int const max_thread_idx =
+      std::accumulate(results_per_device.begin(), results_per_device.end(), -1, max_ti);
+  std::vector<bool> seen_thread_idxs(max_thread_idx + 1, false);
+  for (const auto& result : results_per_device) {
+    const int32_t result_thread_idx = result.first->getThreadIdx();
+    if (!seen_thread_idxs[result_thread_idx]) {
+      seen_thread_idxs[result_thread_idx] = true;
+      unique_thread_results.emplace_back(result);
+    }
+  }
+  return unique_thread_results;
 }
 
 namespace {
@@ -1961,6 +1990,7 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
       cgen_state_->in_values_bitmaps_.clear();
       cgen_state_->str_dict_translation_mgrs_.clear();
     }
+    row_set_mem_owner_->clearNonOwnedGroupByBuffers();
   };
 
   try {
@@ -2981,7 +3011,8 @@ void Executor::launchKernelsViaResourceMgr(
   auto gen_resource_request_info = [device_type,
                                     num_compute_slots,
                                     cpu_result_mem_bytes_per_kernel,
-                                    &chunk_request_info]() {
+                                    &chunk_request_info,
+                                    &query_mem_desc]() {
     if (device_type == ExecutorDeviceType::GPU) {
       return ExecutorResourceMgr_Namespace::RequestInfo(
           device_type,
@@ -2992,9 +3023,14 @@ void Executor::launchKernelsViaResourceMgr(
           num_compute_slots,                                    // min_gpu_slots
           cpu_result_mem_bytes_per_kernel * num_compute_slots,  // cpu_result_mem,
           cpu_result_mem_bytes_per_kernel * num_compute_slots,  // min_cpu_result_mem,
-          chunk_request_info);                                  // chunks needed
+          chunk_request_info,                                   // chunks needed
+          false);  // output_buffers_reusable_intra_thrad
     } else {
       const size_t min_cpu_slots{1};
+      const size_t min_cpu_result_mem =
+          query_mem_desc.threadsCanReuseGroupByBuffers()
+              ? cpu_result_mem_bytes_per_kernel * min_cpu_slots
+              : cpu_result_mem_bytes_per_kernel * num_compute_slots;
       return ExecutorResourceMgr_Namespace::RequestInfo(
           device_type,
           static_cast<size_t>(0),                               // priority_level
@@ -3003,8 +3039,10 @@ void Executor::launchKernelsViaResourceMgr(
           size_t(0),                                            // gpu_slots
           size_t(0),                                            // min_gpu_slots
           cpu_result_mem_bytes_per_kernel * num_compute_slots,  // cpu_result_mem
-          cpu_result_mem_bytes_per_kernel * num_compute_slots,  // min_cpu_result_mem
-          chunk_request_info);                                  // chunks needed
+          min_cpu_result_mem,                                   // min_cpu_result_mem
+          chunk_request_info,                                   // chunks needed
+          query_mem_desc
+              .threadsCanReuseGroupByBuffers());  // output_buffers_reusable_intra_thread
     }
   };
 

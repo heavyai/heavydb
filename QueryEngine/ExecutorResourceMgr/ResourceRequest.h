@@ -90,7 +90,8 @@ struct RequestInfo {
               const size_t min_gpu_slots,
               const size_t cpu_result_mem,
               const size_t min_cpu_result_mem,
-              const ChunkRequestInfo& chunk_request_info)
+              const ChunkRequestInfo& chunk_request_info,
+              const bool output_buffers_reusable_intra_thread)
       : request_device_type(request_device_type)
       , priority_level(priority_level)
       , cpu_slots(cpu_slots)
@@ -99,7 +100,8 @@ struct RequestInfo {
       , min_gpu_slots(min_gpu_slots)
       , cpu_result_mem(cpu_result_mem)
       , min_cpu_result_mem(min_cpu_result_mem)
-      , chunk_request_info(chunk_request_info) {}
+      , chunk_request_info(chunk_request_info)
+      , output_buffers_reusable_intra_thread(output_buffers_reusable_intra_thread) {}
 
   /**
    * @brief Simple constructor assuming no difference between min and requested resources,

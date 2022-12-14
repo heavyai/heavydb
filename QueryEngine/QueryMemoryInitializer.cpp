@@ -56,20 +56,25 @@ inline void check_total_bitmap_memory(const QueryMemoryDescriptor& query_mem_des
   }
 }
 
-int64_t* alloc_group_by_buffer(const size_t numBytes,
-                               RenderAllocatorMap* render_allocator_map,
-                               const size_t thread_idx,
-                               RowSetMemoryOwner* mem_owner) {
+std::pair<int64_t*, bool> alloc_group_by_buffer(
+    const size_t numBytes,
+    RenderAllocatorMap* render_allocator_map,
+    const size_t thread_idx,
+    RowSetMemoryOwner* mem_owner,
+    const bool reuse_existing_buffer_for_thread) {
   if (render_allocator_map) {
     // NOTE(adb): If we got here, we are performing an in-situ rendering query and are not
     // using CUDA buffers. Therefore we need to allocate result set storage using CPU
     // memory.
     const auto gpu_idx = 0;  // Only 1 GPU supported in CUDA-disabled rendering mode
     auto render_allocator_ptr = render_allocator_map->getRenderAllocator(gpu_idx);
-    return reinterpret_cast<int64_t*>(render_allocator_ptr->alloc(numBytes));
-  } else {
-    return reinterpret_cast<int64_t*>(mem_owner->allocate(numBytes, thread_idx));
+    return std::make_pair(
+        reinterpret_cast<int64_t*>(render_allocator_ptr->alloc(numBytes)), false);
+  } else if (reuse_existing_buffer_for_thread) {
+    return mem_owner->allocateCachedGroupByBuffer(numBytes, thread_idx);
   }
+  return std::make_pair(
+      reinterpret_cast<int64_t*>(mem_owner->allocate(numBytes, thread_idx)), false);
 }
 
 inline int64_t get_consistent_frag_size(const std::vector<uint64_t>& frag_offsets) {
@@ -278,25 +283,47 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     group_by_buffers_.push_back(varlen_output_buffer);
   }
 
+  if (query_mem_desc.threadsCanReuseGroupByBuffers()) {
+    // Sanity checks, intra-thread buffer reuse should only
+    // occur on CPU for group-by queries, which also means
+    // that only one group-by buffer should be allocated
+    // (multiple-buffer allocation only occurs for GPU)
+    CHECK(device_type == ExecutorDeviceType::CPU);
+    CHECK(query_mem_desc.isGroupBy());
+    CHECK_EQ(group_buffers_count, size_t(1));
+  }
+
+  // Group-by buffer reuse assumes 1 group-by-buffer per query step
+  // Multiple group-by-buffers should only be used on GPU,
+  // whereas buffer reuse only is done on CPU
+  CHECK(group_buffers_count <= 1 || !query_mem_desc.threadsCanReuseGroupByBuffers());
   for (size_t i = 0; i < group_buffers_count; i += step) {
-    auto group_by_buffer = alloc_group_by_buffer(actual_group_buffer_size,
-                                                 render_allocator_map,
-                                                 thread_idx_,
-                                                 row_set_mem_owner_.get());
-    if (!query_mem_desc.lazyInitGroups(device_type)) {
-      if (group_by_buffer_template) {
-        memcpy(group_by_buffer + index_buffer_qw,
-               group_by_buffer_template,
-               group_buffer_size);
-      } else {
-        initGroupByBuffer(group_by_buffer + index_buffer_qw,
-                          ra_exe_unit,
-                          query_mem_desc,
-                          device_type,
-                          output_columnar,
-                          executor);
+    auto group_by_info =
+        alloc_group_by_buffer(actual_group_buffer_size,
+                              render_allocator_map,
+                              thread_idx_,
+                              row_set_mem_owner_.get(),
+                              query_mem_desc.threadsCanReuseGroupByBuffers());
+
+    auto group_by_buffer = group_by_info.first;
+    const bool was_cached = group_by_info.second;
+    if (!was_cached) {
+      if (!query_mem_desc.lazyInitGroups(device_type)) {
+        if (group_by_buffer_template) {
+          memcpy(group_by_buffer + index_buffer_qw,
+                 group_by_buffer_template,
+                 group_buffer_size);
+        } else {
+          initGroupByBuffer(group_by_buffer + index_buffer_qw,
+                            ra_exe_unit,
+                            query_mem_desc,
+                            device_type,
+                            output_columnar,
+                            executor);
+        }
       }
     }
+
     group_by_buffers_.push_back(group_by_buffer);
     for (size_t j = 1; j < step; ++j) {
       group_by_buffers_.push_back(nullptr);
@@ -317,6 +344,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
                       column_frag_sizes,
                       device_type,
                       device_id,
+                      thread_idx,
                       ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
                       row_set_mem_owner_,
                       executor->blockSize(),
@@ -382,8 +410,12 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   }
 
   CHECK_EQ(num_buffers_, size_t(1));
-  auto group_by_buffer = alloc_group_by_buffer(
-      total_group_by_buffer_size, nullptr, thread_idx_, row_set_mem_owner.get());
+  auto group_by_buffer = alloc_group_by_buffer(total_group_by_buffer_size,
+                                               nullptr,
+                                               thread_idx_,
+                                               row_set_mem_owner.get(),
+                                               false)
+                             .first;
   group_by_buffers_.push_back(group_by_buffer);
 
   const auto column_frag_offsets =
@@ -398,6 +430,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
                     column_frag_sizes,
                     device_type,
                     device_id,
+                    -1, /*thread_idx*/
                     ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
                     row_set_mem_owner_,
                     executor->blockSize(),

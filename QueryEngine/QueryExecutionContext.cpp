@@ -98,6 +98,7 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
                                   std::vector<int64_t>{},
                                   ExecutorDeviceType::CPU,
                                   -1,
+                                  -1,
                                   deinterleaved_query_mem_desc,
                                   row_set_mem_owner_,
                                   executor_->blockSize(),

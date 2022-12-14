@@ -390,6 +390,8 @@ ExecutorResourcePool::calc_min_max_resource_grants_for_request(
         request_info.min_gpu_slots);
   }
 
+  // Todo (todd): Modulate number of CPU threads launched to ensure that
+  // query can fit in max grantable CPU result memory (if possible)
   max_resource_grant.cpu_result_mem = calc_max_resource_grant_for_request(
       request_info.cpu_result_mem,
       request_info.min_cpu_result_mem,
@@ -956,6 +958,8 @@ std::pair<bool, ResourceGrant> ExecutorResourcePool::determine_dynamic_resource_
       get_allocated_resource_of_type(ResourceType::GPU_SLOTS),
       get_total_resource(ResourceType::GPU_SLOTS),
       max_request_backoff_ratio);
+  // Todo (todd): Modulate number of CPU threads launched to ensure that
+  // query can fit in currently available CPU result memory
   actual_resource_grant.cpu_result_mem = determine_dynamic_single_resource_grant(
       min_resource_grant.cpu_result_mem,
       max_resource_grant.cpu_result_mem,

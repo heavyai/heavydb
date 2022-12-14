@@ -86,7 +86,8 @@ class QueryMemoryDescriptor {
                         const bool output_columnar,
                         const bool render_output,
                         const bool must_use_baseline_sort,
-                        const bool use_streaming_top_n);
+                        const bool use_streaming_top_n,
+                        const bool threads_can_reuse_group_by_buffers);
 
   QueryMemoryDescriptor(const Executor* executor,
                         const size_t entry_count,
@@ -121,7 +122,8 @@ class QueryMemoryDescriptor {
       const CountDistinctDescriptors count_distinct_descriptors,
       const bool must_use_baseline_sort,
       const bool output_columnar_hint,
-      const bool streaming_top_n_hint);
+      const bool streaming_top_n_hint,
+      const bool threads_can_reuse_group_by_buffers);
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
       const RelAlgExecutionUnit&,
@@ -278,6 +280,14 @@ class QueryMemoryDescriptor {
 
   bool mustUseBaselineSort() const { return must_use_baseline_sort_; }
 
+  bool threadsCanReuseGroupByBuffers() const {
+    return threads_can_reuse_group_by_buffers_;
+  }
+
+  void setThreadsCanReuseGroupByBuffers(const bool val) {
+    threads_can_reuse_group_by_buffers_ = val;
+  }
+
   // TODO(adb): remove and store this info more naturally in another
   // member
   bool forceFourByteFloat() const { return force_4byte_float_; }
@@ -381,7 +391,7 @@ class QueryMemoryDescriptor {
   bool must_use_baseline_sort_;
   bool is_table_function_;
   bool use_streaming_top_n_;
-
+  bool threads_can_reuse_group_by_buffers_;
   bool force_4byte_float_;
 
   ColSlotContext col_slot_context_;

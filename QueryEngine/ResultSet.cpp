@@ -70,6 +70,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     : targets_(targets)
     , device_type_(device_type)
     , device_id_(-1)
+    , thread_idx_(-1)
     , query_mem_desc_(query_mem_desc)
     , crt_row_buff_idx_(0)
     , fetched_so_far_(0)
@@ -96,6 +97,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const std::vector<int64_t>& consistent_frag_sizes,
                      const ExecutorDeviceType device_type,
                      const int device_id,
+                     const int thread_idx,
                      const QueryMemoryDescriptor& query_mem_desc,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                      const unsigned block_size,
@@ -103,6 +105,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     : targets_(targets)
     , device_type_(device_type)
     , device_id_(device_id)
+    , thread_idx_(thread_idx)
     , query_mem_desc_(query_mem_desc)
     , crt_row_buff_idx_(0)
     , fetched_so_far_(0)
@@ -132,6 +135,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
                      Data_Namespace::DataMgr* data_mgr)
     : device_type_(device_type)
     , device_id_(device_id)
+    , thread_idx_(-1)
     , query_mem_desc_{}
     , crt_row_buff_idx_(0)
     , estimator_(estimator)
@@ -161,6 +165,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
 ResultSet::ResultSet(const std::string& explanation)
     : device_type_(ExecutorDeviceType::CPU)
     , device_id_(-1)
+    , thread_idx_(-1)
     , fetched_so_far_(0)
     , separate_varlen_storage_valid_(false)
     , explanation_(explanation)
@@ -178,6 +183,7 @@ ResultSet::ResultSet(int64_t queue_time_ms,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
     : device_type_(ExecutorDeviceType::CPU)
     , device_id_(-1)
+    , thread_idx_(-1)
     , fetched_so_far_(0)
     , row_set_mem_owner_(row_set_mem_owner)
     , timings_(QueryExecutionTimings{queue_time_ms, render_time_ms, 0, 0})
@@ -751,6 +757,10 @@ bool ResultSet::isValidationOnlyRes() const {
 
 int ResultSet::getDeviceId() const {
   return device_id_;
+}
+
+int ResultSet::getThreadIdx() const {
+  return thread_idx_;
 }
 
 QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
