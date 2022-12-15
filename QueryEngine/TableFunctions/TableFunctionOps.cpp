@@ -45,7 +45,7 @@ extern "C" DEVICE RUNTIME_EXPORT void TableFunctionManager_set_output_row_size(
 }
 
 extern "C" DEVICE RUNTIME_EXPORT void set_output_row_size(int64_t num_rows) {
-  auto& mgr = TableFunctionManager::get_singleton();
+  TableFunctionManager*& mgr = TableFunctionManager::get_singleton_internal();
   TableFunctionManager_set_output_row_size(reinterpret_cast<int8_t*>(mgr), num_rows);
 }
 
@@ -74,7 +74,7 @@ TableFunctionManager_set_output_item_values_total_number(
 extern "C" DEVICE RUNTIME_EXPORT void set_output_item_values_total_number(
     int32_t index,
     int64_t output_item_values_total_number) {
-  auto& mgr = TableFunctionManager::get_singleton();
+  TableFunctionManager*& mgr = TableFunctionManager::get_singleton_internal();
   TableFunctionManager_set_output_item_values_total_number(
       reinterpret_cast<int8_t*>(mgr), index, output_item_values_total_number);
 }
@@ -106,7 +106,7 @@ TableFunctionManager_set_output_array_values_total_number(
 extern "C" DEVICE RUNTIME_EXPORT void set_output_array_values_total_number(
     int32_t index,
     int64_t output_array_values_total_number) {
-  auto& mgr = TableFunctionManager::get_singleton();
+  TableFunctionManager*& mgr = TableFunctionManager::get_singleton_internal();
   TableFunctionManager_set_output_array_values_total_number(
       reinterpret_cast<int8_t*>(mgr), index, output_array_values_total_number);
 }
@@ -146,7 +146,7 @@ TableFunctionManager_error_message(int8_t* mgr_ptr, const char* message) {
 }
 
 extern "C" DEVICE RUNTIME_EXPORT int32_t table_function_error(const char* message) {
-  auto& mgr = TableFunctionManager::get_singleton();
+  TableFunctionManager*& mgr = TableFunctionManager::get_singleton_internal();
   return TableFunctionManager_error_message(reinterpret_cast<int8_t*>(mgr), message);
 }
 /*
@@ -155,7 +155,7 @@ extern "C" DEVICE RUNTIME_EXPORT int32_t table_function_error(const char* messag
   otherwise throws runtime error.
 */
 extern "C" DEVICE RUNTIME_EXPORT int8_t* TableFunctionManager_get_singleton() {
-  auto& mgr = TableFunctionManager::get_singleton();
+  TableFunctionManager*& mgr = TableFunctionManager::get_singleton_internal();
   if (!mgr) {
     throw TableFunctionError("uninitialized TableFunctionManager singleton");
   }

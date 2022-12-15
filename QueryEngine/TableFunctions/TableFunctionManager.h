@@ -316,7 +316,7 @@ struct TableFunctionManager {
     }
   }
 
-  static TableFunctionManager*& get_singleton() {
+  static TableFunctionManager*& get_singleton_internal() {
     static TableFunctionManager* instance = nullptr;
     return instance;
   }
@@ -326,7 +326,7 @@ struct TableFunctionManager {
   void unlock() { TableFunctionManager_singleton_mutex.unlock(); }
 
   static void set_singleton(TableFunctionManager* instance) {
-    auto& instance_ = get_singleton();
+    TableFunctionManager*& instance_ = get_singleton_internal();
     // ensure being singleton and lock/unlock
     if (instance) {
       instance->lock();
