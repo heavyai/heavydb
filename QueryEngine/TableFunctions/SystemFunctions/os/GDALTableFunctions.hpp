@@ -2,14 +2,18 @@
  * Copyright 2022 HEAVY.AI, Inc.
  */
 
+#pragma once
+
 #ifndef __CUDACC__
 
 #include "QueryEngine/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.hpp"
+#include "QueryEngine/heavydbTypes.h"
 
 #include <algorithm>
 #include <array>
 
-#include "GDALTableFunctions.h"
+#include "GDALTableFunctions.hpp"
+#include "GeoRasterTableFunctions.hpp"
 
 #include "Geospatial/Compression.h"
 #include "Geospatial/GDAL.h"
@@ -543,6 +547,18 @@ int32_t tf_raster_contour_direct_impl(TableFunctionManager& mgr,
 // public TFs
 //
 
+// clang-format off
+/*
+  UDTF: tf_raster_contour_lines__cpu_template(TableFunctionManager mgr,
+  Cursor<Column<TLL> lon, Column<TLL> lat, Column<TV> values> raster,
+  TextEncodingNone agg_type, float bin_dim_meters | require="bin_dim_meters > 0.0",
+  int32_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0",
+  bool fill_only_nulls, TextEncodingNone fill_agg_type, bool flip_latitude, TV contour_interval | require="contour_interval > 0.0",
+  TV contour_offset) -> Column<GeoLineString> contour_lines, Column<TV> contour_values,
+  TLL=[float, double], TV=[float, double]
+ */
+// clang-format on
+
 template <typename TLL, typename TV>
 TEMPLATE_NOINLINE int32_t
 tf_raster_contour_lines__cpu_template(TableFunctionManager& mgr,
@@ -576,6 +592,17 @@ tf_raster_contour_lines__cpu_template(TableFunctionManager& mgr,
       contour_values);
 }
 
+// clang-format off
+/*
+  UDTF: tf_raster_contour_lines__cpu_template(TableFunctionManager mgr,
+  Cursor<Column<TLL> lon, Column<TLL> lat, Column<TV> values> raster,
+  int32_t raster_width | require="raster_width > 0", int32_t raster_height | require="raster_height > 0",
+  bool flip_latitude, TV contour_interval | require="contour_interval > 0.0",
+  TV contour_offset) -> Column<GeoLineString> contour_lines, Column<TV> contour_values,
+  TLL=[float, double], TV=[float, double]
+ */
+// clang-format on
+
 template <typename TLL, typename TV>
 TEMPLATE_NOINLINE int32_t
 tf_raster_contour_lines__cpu_template(TableFunctionManager& mgr,
@@ -602,6 +629,18 @@ tf_raster_contour_lines__cpu_template(TableFunctionManager& mgr,
       contour_lines,
       contour_values);
 }
+
+// clang-format off
+/*
+  UDTF: tf_raster_contour_polygons__cpu_template(TableFunctionManager mgr,
+  Cursor<Column<TLL> lon, Column<TLL> lat, Column<TV> values> raster,
+  TextEncodingNone agg_type, float bin_dim_meters | require="bin_dim_meters > 0.0",
+  int32_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0", bool fill_only_nulls, TextEncodingNone fill_agg_type,
+  bool flip_latitude, TV contour_interval | require="contour_interval > 0.0",
+  TV contour_offset) -> Column<GeoPolygon> contour_polygons, Column<TV> contour_values,
+  TLL=[float, double], TV=[float, double]
+ */
+// clang-format on
 
 template <typename TLL, typename TV>
 TEMPLATE_NOINLINE int32_t
@@ -635,6 +674,17 @@ tf_raster_contour_polygons__cpu_template(TableFunctionManager& mgr,
       contour_polygons,
       contour_values);
 }
+
+// clang-format off
+/*
+  UDTF: tf_raster_contour_polygons__cpu_template(TableFunctionManager mgr,
+  Cursor<Column<TLL> lon, Column<TLL> lat, Column<TV> values> raster,
+  int32_t raster_width | require="raster_width > 0", int32_t raster_height | require="raster_height > 0",
+  bool flip_latitude, TV contour_interval | require="contour_interval > 0.0",
+  TV contour_offset) -> Column<GeoPolygon> contour_polygons, Column<TV> contour_values,
+  TLL=[float, double], TV=[float, double]
+ */
+// clang-format on
 
 template <typename TLL, typename TV>
 TEMPLATE_NOINLINE int32_t

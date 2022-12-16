@@ -29,7 +29,7 @@
 
 #include "ThirdParty/robin_hood/robin_hood.h"
 
-#include "QueryEngine/TableFunctions/SystemFunctions/os/GeoRasterTableFunctions.h"
+#include "QueryEngine/TableFunctions/SystemFunctions/os/GeoRasterTableFunctions.hpp"
 
 template <class T>
 struct get_mapped;

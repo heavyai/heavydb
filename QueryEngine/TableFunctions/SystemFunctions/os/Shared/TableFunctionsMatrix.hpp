@@ -184,8 +184,8 @@ inline CompositeKeyMetadata unionCompositeKeyMetadata(
   return unioned_composite_key_metadata;
 }
 
-void copyCompositeKeyMetadataNulls(CompositeKeyMetadata& dest_metadata,
-                                   const CompositeKeyMetadata& src_metadata) {
+inline void copyCompositeKeyMetadataNulls(CompositeKeyMetadata& dest_metadata,
+                                          const CompositeKeyMetadata& src_metadata) {
   CHECK_EQ(dest_metadata.keys_metadata.size(), src_metadata.keys_metadata.size());
   for (size_t k = 0; k != dest_metadata.keys_metadata.size(); ++k) {
     dest_metadata.keys_metadata[k].column_metadata.null_sentinel =

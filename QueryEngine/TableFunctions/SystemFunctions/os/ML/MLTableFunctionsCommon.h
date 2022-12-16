@@ -22,7 +22,7 @@
 
 enum class MLFramework { DEFAULT, ONEDAL, MLPACK, INVALID };
 
-MLFramework get_ml_framework(const std::string& ml_framework_str) {
+inline MLFramework get_ml_framework(const std::string& ml_framework_str) {
   const auto upper_ml_framework_str = to_upper(ml_framework_str);
   const static std::map<std::string, MLFramework> ml_framework_map = {
       {"DEFAULT", MLFramework::DEFAULT},
@@ -37,7 +37,7 @@ MLFramework get_ml_framework(const std::string& ml_framework_str) {
 
 enum class KMeansInitStrategy { DEFAULT, DETERMINISTIC, RANDOM, PLUS_PLUS, INVALID };
 
-KMeansInitStrategy get_kmeans_init_type(const std::string& init_type_str) {
+inline KMeansInitStrategy get_kmeans_init_type(const std::string& init_type_str) {
   const auto upper_init_type_str = to_upper(init_type_str);
   const static std::map<std::string, KMeansInitStrategy> kmeans_init_type_map = {
       {"DEFAULT", KMeansInitStrategy::DEFAULT},
