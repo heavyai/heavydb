@@ -3709,7 +3709,7 @@ int32_t Executor::executePlanWithoutGroupBy(
     render_allocator_map_ptr = render_info->render_allocator_map_ptr.get();
   }
 
-  int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
+  int32_t error_code = 0;
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
   const auto join_hash_table_ptrs = getJoinHashTablePtrs(device_type, device_id);
@@ -3742,6 +3742,7 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                frag_offsets,
                                                0,
                                                &error_code,
+                                               start_rowid,
                                                num_tables,
                                                join_hash_table_ptrs,
                                                rows_to_process);
@@ -3932,7 +3933,7 @@ int32_t Executor::executePlanWithGroupBy(
   // 2. Resize on overflow.
   // 3. Optimize runtime.
   auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
-  int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
+  int32_t error_code = 0;
   const auto join_hash_table_ptrs = getJoinHashTablePtrs(device_type, device_id);
   if (allow_runtime_interrupt) {
     bool isInterrupted = false;
@@ -4012,6 +4013,7 @@ int32_t Executor::executePlanWithGroupBy(
                                      frag_offsets,
                                      max_matched,
                                      &error_code,
+                                     start_rowid,
                                      num_tables,
                                      join_hash_table_ptrs,
                                      rows_to_process);

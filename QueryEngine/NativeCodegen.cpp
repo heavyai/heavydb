@@ -1626,11 +1626,11 @@ void bind_pos_placeholders(const std::string& pos_fn_name,
     auto const func_name = CodegenUtil::getCalledFunctionName(pos_call);
     if (func_name && *func_name == pos_fn_name) {
       if (use_resume_param) {
-        const auto error_code_arg = get_arg_by_name(query_func, "error_code");
+        auto* const row_index_resume = get_arg_by_name(query_func, "row_index_resume");
         llvm::ReplaceInstWithInst(
             &pos_call,
             llvm::CallInst::Create(llvm_module->getFunction(pos_fn_name + "_impl"),
-                                   error_code_arg));
+                                   row_index_resume));
       } else {
         llvm::ReplaceInstWithInst(
             &pos_call,
@@ -2936,7 +2936,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
   fetch_ir_builder.SetInsertPoint(&*fetch_bb.begin());
   auto col_heads = generate_column_heads_load(ra_exe_unit.input_col_descs.size(),
-                                              query_func->args().begin(),
+                                              get_arg_by_name(query_func, "byte_stream"),
                                               fetch_ir_builder,
                                               cgen_state_->context_);
   CHECK_EQ(ra_exe_unit.input_col_descs.size(), col_heads.size());
@@ -3078,8 +3078,10 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   CHECK(multifrag_query_func);
 
   if (co.device_type == ExecutorDeviceType::GPU && eo.allow_multifrag) {
-    insertErrorCodeChecker(
-        multifrag_query_func, co.hoist_literals, eo.allow_runtime_query_interrupt);
+    insertErrorCodeChecker(multifrag_query_func,
+                           get_index_by_name(query_func, "error_code"),
+                           co.hoist_literals,
+                           eo.allow_runtime_query_interrupt);
   }
 
   bind_query(query_func,
@@ -3181,6 +3183,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 }
 
 void Executor::insertErrorCodeChecker(llvm::Function* query_func,
+                                      unsigned const error_code_idx,
                                       bool hoist_literals,
                                       bool allow_runtime_query_interrupt) {
   auto query_stub_func_name =
@@ -3201,25 +3204,9 @@ void Executor::insertErrorCodeChecker(llvm::Function* query_func,
         llvm::Value* err_lv = &*inst_it;
         auto error_check_bb =
             bb_it->splitBasicBlock(llvm::BasicBlock::iterator(br_instr), ".error_check");
-        llvm::Value* error_code_arg = nullptr;
-        auto arg_cnt = 0;
-        for (auto arg_it = query_func->arg_begin(); arg_it != query_func->arg_end();
-             arg_it++, ++arg_cnt) {
-          // since multi_frag_* func has anonymous arguments so we use arg_offset
-          // explicitly to capture "error_code" argument in the func's argument list
-          if (hoist_literals) {
-            if (arg_cnt == 9) {
-              error_code_arg = &*arg_it;
-              break;
-            }
-          } else {
-            if (arg_cnt == 8) {
-              error_code_arg = &*arg_it;
-              break;
-            }
-          }
-        }
-        CHECK(error_code_arg);
+        // query_func does not have parameter names assigned.
+        llvm::Value* const error_code_arg = get_arg_by_index(query_func, error_code_idx);
+        CHECK(error_code_arg) << error_code_idx << '/' << query_func->arg_size();
         llvm::Value* err_code = nullptr;
         if (allow_runtime_query_interrupt) {
           // decide the final error code with a consideration of interrupt status

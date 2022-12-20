@@ -45,6 +45,7 @@ class DeviceKernel {
   virtual void resetRuntimeInterrupter(const int device_id) = 0;
 
   virtual std::unique_ptr<DeviceClock> make_clock() = 0;
+  virtual char const* name() const = 0;
 
   virtual ~DeviceKernel() = default;
 };
