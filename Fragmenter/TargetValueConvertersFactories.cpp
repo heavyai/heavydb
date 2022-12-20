@@ -254,8 +254,7 @@ struct GeoConverterFactory<
     typename std::enable_if_t<std::is_same_v<GeoPolygonValueConverter, CONVERTER> ||
                               std::is_same_v<GeoMultiPolygonValueConverter, CONVERTER>>> {
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
-    return std::make_unique<CONVERTER>(
-        param.target_cat, param.num_rows, param.target, param.render_group_analyzer_map);
+    return std::make_unique<CONVERTER>(param.target_cat, param.num_rows, param.target);
   }
 };
 

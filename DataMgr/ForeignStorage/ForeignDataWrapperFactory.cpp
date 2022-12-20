@@ -310,8 +310,6 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
     foreign_table->options[CsvFileBufferParser::ARRAY_MARKER_KEY] = array_marker.data();
     foreign_table->options[CsvFileBufferParser::LONLAT_KEY] =
         bool_to_option_value(copy_params.lonlat);
-    foreign_table->options[CsvFileBufferParser::GEO_ASSIGN_RENDER_GROUPS_KEY] =
-        bool_to_option_value(copy_params.geo_assign_render_groups);
     if (copy_params.geo_explode_collections) {
       throw std::runtime_error(
           "geo_explode_collections is not yet supported for FSI CSV import");

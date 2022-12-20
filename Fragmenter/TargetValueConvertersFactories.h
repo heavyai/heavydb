@@ -21,10 +21,6 @@
 
 #include <map>
 
-#include "ImportExport/RenderGroupAnalyzer.h"
-
-using RenderGroupAnalyzerMap = std::map<int, import_export::RenderGroupAnalyzer>;
-
 struct ConverterCreateParameter {
   size_t num_rows;
   const TargetMetaInfo source;
@@ -34,7 +30,6 @@ struct ConverterCreateParameter {
   bool can_be_null;
   StringDictionaryProxy* literals_dictionary;
   StringDictionaryProxy* source_dictionary_proxy;
-  RenderGroupAnalyzerMap* render_group_analyzer_map;
 };
 
 struct TargetValueConverterFactory {

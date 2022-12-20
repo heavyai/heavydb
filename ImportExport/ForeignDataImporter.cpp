@@ -27,7 +27,6 @@
 #include "DataMgr/ForeignStorage/ParquetImporter.h"
 #include "Importer.h"
 #include "Parser/ParserNode.h"
-#include "Shared/enable_assign_render_groups.h"
 #include "Shared/file_path_util.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
@@ -250,13 +249,6 @@ import_export::ImportStatus import_foreign_data(
     const import_export::CopyParams& copy_params,
     const std::string& copy_from_source,
     const size_t maximum_num_fragments_buffered) {
-  if (g_enable_assign_render_groups && copy_params.geo_assign_render_groups) {
-    // if render group assignment is enabled, tell the wrapper to create any
-    // RenderGroupAnalyzers it may need for any poly columns in the table, if
-    // that wrapper type supports it
-    data_wrapper->createRenderGroupAnalyzers();
-  }
-
   import_export::ImportStatus import_status;
 
   std::mutex communication_mutex;

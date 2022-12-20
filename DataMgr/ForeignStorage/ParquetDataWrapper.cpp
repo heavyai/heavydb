@@ -25,7 +25,6 @@
 #include "ForeignStorageException.h"
 #include "FsiChunkUtils.h"
 #include "FsiJsonUtils.h"
-#include "ImportExport/RenderGroupAnalyzer.h"
 #include "LazyParquetChunkLoader.h"
 #include "ParquetShared.h"
 #include "Shared/SysDefinitions.h"
@@ -441,7 +440,7 @@ void ParquetDataWrapper::metadataScanRowGroupMetadata(
 std::list<RowGroupMetadata> ParquetDataWrapper::getRowGroupMetadataForFilePaths(
     const std::vector<std::string>& file_paths) const {
   LazyParquetChunkLoader chunk_loader(
-      file_system_, file_reader_cache_.get(), nullptr, foreign_table_->tableName);
+      file_system_, file_reader_cache_.get(), foreign_table_->tableName);
   return chunk_loader.metadataScan(file_paths, *schema_, do_metadata_stats_validation_);
 }
 
@@ -546,10 +545,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
   if (delete_buffer) {
     rejected_row_indices = std::make_unique<RejectedRowIndices>();
   }
-  LazyParquetChunkLoader chunk_loader(file_system_,
-                                      file_reader_cache_.get(),
-                                      &render_group_analyzer_map_,
-                                      foreign_table_->tableName);
+  LazyParquetChunkLoader chunk_loader(
+      file_system_, file_reader_cache_.get(), foreign_table_->tableName);
   auto metadata = chunk_loader.loadChunk(row_group_intervals,
                                          parquet_column_index,
                                          chunks,
@@ -724,39 +721,14 @@ bool ParquetDataWrapper::isRestored() const {
 }
 
 DataPreview ParquetDataWrapper::getDataPreview(const size_t num_rows) {
-  LazyParquetChunkLoader chunk_loader(file_system_,
-                                      file_reader_cache_.get(),
-                                      &render_group_analyzer_map_,
-                                      foreign_table_->tableName);
+  LazyParquetChunkLoader chunk_loader(
+      file_system_, file_reader_cache_.get(), foreign_table_->tableName);
   auto file_paths = getAllFilePaths();
   if (file_paths.empty()) {
     throw ForeignStorageException{"No file found at \"" +
                                   getFullFilePath(foreign_table_) + "\""};
   }
   return chunk_loader.previewFiles(file_paths, num_rows, *foreign_table_);
-}
-
-// declared in three derived classes to avoid
-// polluting ForeignDataWrapper virtual base
-// @TODO refactor to lower class if needed
-void ParquetDataWrapper::createRenderGroupAnalyzers() {
-  // must have these
-  CHECK_GE(db_id_, 0);
-  CHECK(foreign_table_);
-
-  // populate map for all poly columns in this table
-  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
-  CHECK(catalog);
-  auto columns =
-      catalog->getAllColumnMetadataForTable(foreign_table_->tableId, false, false, true);
-  for (auto const& column : columns) {
-    if (IS_GEO_POLY(column->columnType.get_type())) {
-      CHECK(render_group_analyzer_map_
-                .try_emplace(column->columnId,
-                             std::make_unique<import_export::RenderGroupAnalyzer>())
-                .second);
-    }
-  }
 }
 
 void ParquetDataWrapper::removeMetadataForLastFile(const std::string& last_file_path) {

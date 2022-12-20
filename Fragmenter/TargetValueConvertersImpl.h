@@ -19,9 +19,7 @@
 
 #include "Fragmenter/TargetValueConverters.h"
 #include "Geospatial/Compression.h"
-#include "ImportExport/RenderGroupAnalyzer.h"
 #include "Shared/checked_alloc.h"
-#include "Shared/enable_assign_render_groups.h"
 #include "StringDictionary/StringDictionary.h"
 
 #include <atomic>
@@ -952,23 +950,7 @@ struct GeoMultiLinestringValueConverter : public GeoPointValueConverter {
   }
 };
 
-struct GeoPolygonRenderGroupManager {
- protected:
-  GeoPolygonRenderGroupManager(RenderGroupAnalyzerMap* render_group_analyzer_map,
-                               const int column_id)
-      : render_group_analyzer_{nullptr} {
-    if (render_group_analyzer_map) {
-      // NOTE: this is not thread safe
-      auto itr = render_group_analyzer_map->try_emplace(column_id).first;
-      render_group_analyzer_ = &itr->second;
-    }
-  }
-
-  import_export::RenderGroupAnalyzer* render_group_analyzer_;
-};
-
-struct GeoPolygonValueConverter : public GeoPointValueConverter,
-                                  public GeoPolygonRenderGroupManager {
+struct GeoPolygonValueConverter : public GeoPointValueConverter {
   const ColumnDescriptor* ring_sizes_column_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
@@ -979,11 +961,8 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter,
 
   GeoPolygonValueConverter(const Catalog_Namespace::Catalog& cat,
                            size_t num_rows,
-                           const ColumnDescriptor* logicalColumnDescriptor,
-                           RenderGroupAnalyzerMap* render_group_analyzer_map)
-      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor)
-      , GeoPolygonRenderGroupManager(render_group_analyzer_map,
-                                     logicalColumnDescriptor->columnId) {
+                           const ColumnDescriptor* logicalColumnDescriptor)
+      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor) {
     ring_sizes_column_descriptor_ = cat.getMetadataForColumn(
         column_descriptor_->tableId, column_descriptor_->columnId + 2);
     CHECK(ring_sizes_column_descriptor_);
@@ -1024,12 +1003,7 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter,
       (*ring_sizes_data_)[row] = to_array_datum(geoPoly->ring_sizes);
       auto bounds = compute_bounds_of_coords(geoPoly->coords);
       (*bounds_data_)[row] = to_array_datum(bounds);
-      if (render_group_analyzer_) {
-        render_group_data_[row] =
-            render_group_analyzer_->insertBoundsAndReturnRenderGroup(bounds);
-      } else {
-        render_group_data_[row] = 0;
-      }
+      render_group_data_[row] = 0;
     } else {
       // NULL Polygon
       (*column_data_)[row] = "";
@@ -1064,8 +1038,7 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter,
   }
 };
 
-struct GeoMultiPolygonValueConverter : public GeoPointValueConverter,
-                                       public GeoPolygonRenderGroupManager {
+struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
   const ColumnDescriptor* ring_sizes_column_descriptor_;
   const ColumnDescriptor* ring_sizes_solumn_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
@@ -1078,11 +1051,8 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter,
 
   GeoMultiPolygonValueConverter(const Catalog_Namespace::Catalog& cat,
                                 size_t num_rows,
-                                const ColumnDescriptor* logicalColumnDescriptor,
-                                RenderGroupAnalyzerMap* render_group_analyzer_map)
-      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor)
-      , GeoPolygonRenderGroupManager(render_group_analyzer_map,
-                                     logicalColumnDescriptor->columnId) {
+                                const ColumnDescriptor* logicalColumnDescriptor)
+      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor) {
     ring_sizes_column_descriptor_ = cat.getMetadataForColumn(
         column_descriptor_->tableId, column_descriptor_->columnId + 2);
     CHECK(ring_sizes_column_descriptor_);
@@ -1128,12 +1098,7 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter,
       (*poly_rings_data_)[row] = to_array_datum(geoMultiPoly->poly_rings);
       auto bounds = compute_bounds_of_coords(geoMultiPoly->coords);
       (*bounds_data_)[row] = to_array_datum(bounds);
-      if (render_group_analyzer_) {
-        render_group_data_[row] =
-            render_group_analyzer_->insertBoundsAndReturnRenderGroup(bounds);
-      } else {
-        render_group_data_[row] = 0;
-      }
+      render_group_data_[row] = 0;
     } else {
       // NULL MultiPolygon
       (*column_data_)[row] = "";

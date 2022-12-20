@@ -52,7 +52,6 @@
 #include "Geospatial/Types.h"
 #include "ImportExport/ForeignDataImporter.h"
 #include "ImportExport/Importer.h"
-#include "ImportExport/RenderGroupAnalyzer.h"
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
@@ -66,7 +65,6 @@
 #include "Shared/DbObjectKeys.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
-#include "Shared/enable_assign_render_groups.h"
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
 #include "TableArchiver/TableArchiver.h"
@@ -1484,13 +1482,6 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
               "Invalid value for 'partitions' option. Must be 'REPLICATED'.");
         }
         deferred_copy_from_partitions_ = partitions_uc;
-      } else if (boost::iequals(*p->get_name(), "geo_assign_render_groups")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("geo_assign_render_groups option must be a boolean.");
-        }
-        copy_params.geo_assign_render_groups = bool_from_string_literal(str_literal);
       } else if (boost::iequals(*p->get_name(), "geo_explode_collections")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -4009,8 +4000,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           thread_end_idx[0] = result_rows->entryCount();
         }
 
-        RenderGroupAnalyzerMap render_group_analyzer_map;
-
         for (size_t block_start = 0; block_start < num_rows;
              block_start += rows_per_block) {
           const auto num_rows_this_itr = block_start + rows_per_block < num_rows
@@ -4035,10 +4024,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                           sourceDataMetaInfo.get_type_info().getStringDictKey(),
                           result_rows->getRowSetMemOwner(),
                           true)
-                    : nullptr,
-                IS_GEO_POLY(targetDescriptor->columnType.get_type()) &&
-                        g_enable_assign_render_groups
-                    ? &render_group_analyzer_map
                     : nullptr};
             auto converter = factory.create(param);
             value_converters.push_back(std::move(converter));

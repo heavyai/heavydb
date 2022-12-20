@@ -336,8 +336,7 @@ void InsertOrderFragmenter::updateColumns(
                     sourceDataMetaInfo.get_type_info().getStringDictKey(),
                     executor->getRowSetMemoryOwner(),
                     true)
-              : nullptr,
-          nullptr};
+              : nullptr};
       auto converter = factory.create(param);
       sourceDataConverters[indexOfTargetColumn] = std::move(converter);
 

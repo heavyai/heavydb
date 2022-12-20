@@ -257,8 +257,7 @@ ParseBufferResult RegexFileBufferParser::parseBuffer(ParseBufferRequest& request
                                  is_null,
                                  request.first_row_index,
                                  row_count,
-                                 request.getCatalog(),
-                                 request.render_group_analyzer_map);
+                                 request.getCatalog());
               } catch (const std::exception& e) {
                 if (request.track_rejected_rows) {
                   result.rejected_rows.insert(current_row_id);

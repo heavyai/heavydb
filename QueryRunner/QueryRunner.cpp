@@ -1236,7 +1236,6 @@ void ImportDriver::importGeoTable(const std::string& file_path,
     copy_params.geo_coords_encoding = EncodingType::kENCODING_NONE;
     copy_params.geo_coords_comp_param = 0;
   }
-  copy_params.geo_assign_render_groups = false;
   copy_params.geo_explode_collections = explode_collections;
 
   std::map<std::string, std::string> colname_to_src;

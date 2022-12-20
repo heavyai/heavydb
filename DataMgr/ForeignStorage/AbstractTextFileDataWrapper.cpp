@@ -30,7 +30,6 @@
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "ForeignStorageException.h"
 #include "FsiJsonUtils.h"
-#include "ImportExport/RenderGroupAnalyzer.h"
 #include "Shared/misc.h"
 
 namespace foreign_storage {
@@ -418,7 +417,6 @@ void AbstractTextFileDataWrapper::populateChunks(
                                      foreign_table_,
                                      column_filter_set,
                                      file_path,
-                                     &render_group_analyzer_map_,
                                      delete_buffer != nullptr);
     auto start_index = i;
     auto end_index =
@@ -1442,7 +1440,6 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
                                                   foreign_table_,
                                                   columns_to_scan,
                                                   getFullFilePath(foreign_table_),
-                                                  nullptr,
                                                   disable_cache_);
 
       futures.emplace_back(std::async(std::launch::async,
@@ -1592,7 +1589,6 @@ void AbstractTextFileDataWrapper::iterativeFileScan(
                                                      foreign_table_,
                                                      columns_to_scan,
                                                      getFullFilePath(foreign_table_),
-                                                     &render_group_analyzer_map_,
                                                      true);
       }
       futures.emplace_back(std::async(std::launch::async,
@@ -1748,29 +1744,6 @@ void AbstractTextFileDataWrapper::restoreDataWrapperInternals(
 
 bool AbstractTextFileDataWrapper::isRestored() const {
   return is_restored_;
-}
-
-// declared in three derived classes to avoid
-// polluting ForeignDataWrapper virtual base
-// @TODO refactor to lower class if needed
-void AbstractTextFileDataWrapper::createRenderGroupAnalyzers() {
-  // must have these
-  CHECK_GE(db_id_, 0);
-  CHECK(foreign_table_);
-
-  // populate map for all poly columns in this table
-  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
-  CHECK(catalog);
-  auto columns =
-      catalog->getAllColumnMetadataForTable(foreign_table_->tableId, false, false, true);
-  for (auto const& column : columns) {
-    if (IS_GEO_POLY(column->columnType.get_type())) {
-      CHECK(render_group_analyzer_map_
-                .try_emplace(column->columnId,
-                             std::make_unique<import_export::RenderGroupAnalyzer>())
-                .second);
-    }
-  }
 }
 
 std::optional<size_t> AbstractTextFileDataWrapper::getMaxFileCount() const {

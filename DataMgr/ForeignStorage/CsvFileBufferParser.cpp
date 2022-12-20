@@ -239,8 +239,7 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
                                is_null,
                                request.first_row_index,
                                row_index_plus_one,
-                               request.getCatalog(),
-                               request.render_group_analyzer_map);
+                               request.getCatalog());
             } catch (const std::exception& e) {
               if (request.track_rejected_rows) {
                 result.rejected_rows.insert(current_row_id);
@@ -383,9 +382,6 @@ import_export::CopyParams CsvFileBufferParser::validateAndGetCopyParams(
   }
   copy_params.lonlat =
       validate_and_get_bool_value(foreign_table, LONLAT_KEY).value_or(copy_params.lonlat);
-  copy_params.geo_assign_render_groups =
-      validate_and_get_bool_value(foreign_table, GEO_ASSIGN_RENDER_GROUPS_KEY)
-          .value_or(copy_params.geo_assign_render_groups);
   copy_params.geo_explode_collections =
       validate_and_get_bool_value(foreign_table, GEO_EXPLODE_COLLECTIONS_KEY)
           .value_or(copy_params.geo_explode_collections);

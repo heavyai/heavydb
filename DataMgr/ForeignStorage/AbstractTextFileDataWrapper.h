@@ -118,8 +118,6 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
     return INTRA_FRAGMENT;
   }
 
-  void createRenderGroupAnalyzers() override;
-
   bool isLazyFragmentFetchingEnabled() const override { return true; }
 
   struct ResidualBuffer {
@@ -194,11 +192,6 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
 
   // Track the fragment for which the last request currently processed belongs to
   int iterative_scan_last_fragment_id_;
-
-  // declared in three derived classes to avoid
-  // polluting ForeignDataWrapper virtual base
-  // @TODO refactor to lower class if needed
-  RenderGroupAnalyzerMap render_group_analyzer_map_;
 
   // These parameters may be reused in a iterative file scan
   MetadataScanMultiThreadingParams multi_threading_params_;
