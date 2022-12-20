@@ -73,8 +73,6 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
     return INTRA_FRAGMENT;
   }
 
-  void createRenderGroupAnalyzers() override;
-
   DataPreview getDataPreview(const size_t num_rows);
 
  private:
@@ -145,10 +143,5 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
   std::unique_ptr<FileReaderMap> file_reader_cache_;
 
   std::mutex delete_buffer_mutex_;
-
-  // declared in three derived classes to avoid
-  // polluting ForeignDataWrapper virtual base
-  // @TODO refactor to lower class if needed
-  RenderGroupAnalyzerMap render_group_analyzer_map_;
 };
 }  // namespace foreign_storage

@@ -24,10 +24,9 @@ class OdbcGeospatialEncoder : public GeospatialEncoder {
  public:
   OdbcGeospatialEncoder(std::list<Chunk_NS::Chunk>& chunks,
                         std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
-                        const RenderGroupAnalyzerMap* render_group_analyzer_map,
                         const bool is_error_tracking_enabled,
                         const SQLTypeInfo& sql_type_info)
-      : GeospatialEncoder(chunks, chunk_metadata, render_group_analyzer_map)
+      : GeospatialEncoder(chunks, chunk_metadata)
       , type_info_(sql_type_info)
       , is_error_tracking_enabled_(is_error_tracking_enabled) {}
 

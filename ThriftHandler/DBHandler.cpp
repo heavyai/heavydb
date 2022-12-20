@@ -108,7 +108,6 @@
 
 #include "Shared/ArrowUtil.h"
 #include "Shared/distributed.h"
-#include "Shared/enable_assign_render_groups.h"
 
 #ifdef ENABLE_IMPORT_PARQUET
 extern bool g_enable_parquet_import_fsi;
@@ -697,11 +696,6 @@ void DBHandler::disconnect_impl(Catalog_Namespace::SessionInfoPtr& session_ptr) 
     }
   } catch (...) {
     leaf_exception = std::current_exception();
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(render_group_assignment_mutex_);
-    render_group_assignment_map_.erase(session_id);
   }
 
   if (render_handler_) {
@@ -3121,8 +3115,7 @@ void DBHandler::fillGeoColumns(
     const ColumnDescriptor* cd,
     size_t& col_idx,
     size_t num_rows,
-    const std::string& table_name,
-    bool assign_render_groups) {
+    const std::string& table_name) {
   auto geo_col_idx = col_idx - 1;
   const auto wkt_or_wkb_hex_column = import_buffers[geo_col_idx]->getGeoStringBuffer();
   std::vector<std::vector<double>> coords_column, bounds_column;
@@ -3143,59 +3136,8 @@ void DBHandler::fillGeoColumns(
   }
 
   // start or continue assigning render groups for poly columns?
-  if (IS_GEO_POLY(cd->columnType.get_type()) && assign_render_groups &&
-      g_enable_assign_render_groups) {
-    // get RGA to use
-    import_export::RenderGroupAnalyzer* render_group_analyzer{};
-    {
-      // mutex the map access
-      std::lock_guard<std::mutex> lock(render_group_assignment_mutex_);
-
-      // emplace new RGA or fetch existing RGA from map
-      auto [itr_table, emplaced_table] = render_group_assignment_map_.try_emplace(
-          session_id, RenderGroupAssignmentTableMap());
-      LOG_IF(INFO, emplaced_table)
-          << "load_table_binary_columnar_polys: Creating Render Group Assignment "
-             "Persistent Data for Session '"
-          << session_id << "'";
-      auto [itr_column, emplaced_column] =
-          itr_table->second.try_emplace(table_name, RenderGroupAssignmentColumnMap());
-      LOG_IF(INFO, emplaced_column)
-          << "load_table_binary_columnar_polys: Creating Render Group Assignment "
-             "Persistent Data for Table '"
-          << table_name << "'";
-      auto [itr_analyzer, emplaced_analyzer] = itr_column->second.try_emplace(
-          cd->columnName, std::make_unique<import_export::RenderGroupAnalyzer>());
-      LOG_IF(INFO, emplaced_analyzer)
-          << "load_table_binary_columnar_polys: Creating Render Group Assignment "
-             "Persistent Data for Column '"
-          << cd->columnName << "'";
-      render_group_analyzer = itr_analyzer->second.get();
-      CHECK(render_group_analyzer);
-
-      // seed new RGA from existing table/column, to handle appends
-      if (emplaced_analyzer) {
-        LOG(INFO) << "load_table_binary_columnar_polys: Seeding Render Groups from "
-                     "existing table...";
-        render_group_analyzer->seedFromExistingTableContents(
-            catalog, table_name, cd->columnName);
-        LOG(INFO) << "load_table_binary_columnar_polys: Done";
-      }
-    }
-
-    // assign render groups for this set of bounds
-    LOG(INFO) << "load_table_binary_columnar_polys: Assigning Render Groups...";
-    render_groups_column.reserve(bounds_column.size());
-    for (auto const& bounds : bounds_column) {
-      CHECK_EQ(bounds.size(), 4u);
-      int rg = render_group_analyzer->insertBoundsAndReturnRenderGroup(bounds);
-      render_groups_column.push_back(rg);
-    }
-    LOG(INFO) << "load_table_binary_columnar_polys: Done";
-  } else {
-    // render groups all zero
-    render_groups_column.resize(bounds_column.size(), 0);
-  }
+  // render groups all zero
+  render_groups_column.resize(bounds_column.size(), 0);
 
   // Populate physical columns, advance col_idx
   import_export::Importer::set_geo_physical_import_buffer_columnar(catalog,
@@ -3216,8 +3158,7 @@ void DBHandler::fillMissingBuffers(
     const std::list<const ColumnDescriptor*>& cds,
     const std::vector<int>& desc_id_to_column_id,
     size_t num_rows,
-    const std::string& table_name,
-    bool assign_render_groups) {
+    const std::string& table_name) {
   size_t skip_physical_cols = 0;
   size_t col_idx = 0, import_idx = 0;
   for (const auto& cd : cds) {
@@ -3232,14 +3173,8 @@ void DBHandler::fillMissingBuffers(
       import_buffers[col_idx]->addDefaultValues(cd, num_rows);
       col_idx++;
       if (cd->columnType.is_geometry()) {
-        fillGeoColumns(session_id,
-                       catalog,
-                       import_buffers,
-                       cd,
-                       col_idx,
-                       num_rows,
-                       table_name,
-                       assign_render_groups);
+        fillGeoColumns(
+            session_id, catalog, import_buffers, cd, col_idx, num_rows, table_name);
       }
     } else {
       col_idx++;
@@ -3310,8 +3245,7 @@ void DBHandler::load_table_binary(const TSessionId& session_id_or_json,
                        col_descs,
                        desc_id_to_column_id,
                        rows_completed,
-                       table_name,
-                       false);
+                       table_name);
     auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
     if (!loader->load(import_buffers, rows.size(), session_ptr.get())) {
@@ -3398,64 +3332,10 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session_id_or_json,
                                            const std::vector<std::string>& column_names) {
   heavyai::RequestInfo const request_info(session_id_or_json);
   SET_REQUEST_ID(request_info.requestId());
-  loadTableBinaryColumnarInternal(request_info.sessionId(),
-                                  table_name,
-                                  cols,
-                                  column_names,
-                                  AssignRenderGroupsMode::kNone);
-}
-
-void DBHandler::load_table_binary_columnar_polys(
-    const TSessionId& session_id_or_json,
-    const std::string& table_name,
-    const std::vector<TColumn>& cols,
-    const std::vector<std::string>& column_names,
-    const bool assign_render_groups) {
-  heavyai::RequestInfo const request_info(session_id_or_json);
-  SET_REQUEST_ID(request_info.requestId());
-  loadTableBinaryColumnarInternal(request_info.sessionId(),
-                                  table_name,
-                                  cols,
-                                  column_names,
-                                  assign_render_groups
-                                      ? AssignRenderGroupsMode::kAssign
-                                      : AssignRenderGroupsMode::kCleanUp);
-}
-
-void DBHandler::loadTableBinaryColumnarInternal(
-    const TSessionId& session_id,
-    const std::string& table_name,
-    const std::vector<TColumn>& cols,
-    const std::vector<std::string>& column_names,
-    const AssignRenderGroupsMode assign_render_groups_mode) {
-  auto stdlog = STDLOG(get_session_ptr(session_id), "table_name", table_name);
+  auto stdlog =
+      STDLOG(get_session_ptr(request_info.sessionId()), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
-
-  if (assign_render_groups_mode == AssignRenderGroupsMode::kCleanUp) {
-    // throw if the user tries to pass column data on a clean-up
-    if (cols.size()) {
-      THROW_DB_EXCEPTION(
-          "load_table_binary_columnar_polys: Column data must be empty when called with "
-          "assign_render_groups = false");
-    }
-
-    // mutex the map access
-    std::lock_guard<std::mutex> lock(render_group_assignment_mutex_);
-
-    // drop persistent render group assignment data for this session and table
-    // keep the per-session map in case other tables are active (ideally not)
-    auto itr_session = render_group_assignment_map_.find(session_id);
-    if (itr_session != render_group_assignment_map_.end()) {
-      LOG(INFO) << "load_table_binary_columnar_polys: Cleaning up Render Group "
-                   "Assignment Persistent Data for Session '"
-                << session_id << "', Table '" << table_name << "'";
-      itr_session->second.erase(table_name);
-    }
-
-    // just doing clean-up, so we're done
-    return;
-  }
 
   const auto execute_read_lock =
       heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
@@ -3498,14 +3378,13 @@ void DBHandler::loadTableBinaryColumnarInternal(
         col_idx++;
         // For geometry columns: process WKT strings and fill physical columns
         if (cd->columnType.is_geometry()) {
-          fillGeoColumns(session_id,
+          fillGeoColumns(request_info.sessionId(),
                          session_ptr->getCatalog(),
                          import_buffers,
                          cd,
                          col_idx,
                          num_rows,
-                         table_name,
-                         assign_render_groups_mode == AssignRenderGroupsMode::kAssign);
+                         table_name);
           skip_physical_cols = cd->columnType.get_physical_cols();
         }
       } else {
@@ -3524,14 +3403,13 @@ void DBHandler::loadTableBinaryColumnarInternal(
         << ". Issue at column : " << (col_idx + 1) << ". Import aborted";
     THROW_DB_EXCEPTION(oss.str());
   }
-  fillMissingBuffers(session_id,
+  fillMissingBuffers(request_info.sessionId(),
                      session_ptr->getCatalog(),
                      import_buffers,
                      loader->get_column_descs(),
                      desc_id_to_column_id,
                      num_rows,
-                     table_name,
-                     assign_render_groups_mode == AssignRenderGroupsMode::kAssign);
+                     table_name);
   auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
       session_ptr->getCatalog(), table_name);
   if (!loader->load(import_buffers, num_rows, session_ptr.get())) {
@@ -3648,8 +3526,7 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session_id_or_json,
                      loader->get_column_descs(),
                      desc_id_to_column_id,
                      num_rows,
-                     table_name,
-                     false);
+                     table_name);
   auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
       session_ptr->getCatalog(), table_name);
   if (!loader->load(import_buffers, num_rows, session_ptr.get())) {
@@ -3750,8 +3627,7 @@ void DBHandler::load_table(const TSessionId& session_id_or_json,
                              cd,
                              col_idx,
                              rows_completed,
-                             table_name,
-                             false);
+                             table_name);
             } else {
               col_idx += skip_physical_cols;
             }
@@ -3771,8 +3647,7 @@ void DBHandler::load_table(const TSessionId& session_id_or_json,
                        col_descs,
                        desc_id_to_column_id,
                        rows_completed,
-                       table_name,
-                       false);
+                       table_name);
     auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
     if (!loader->load(import_buffers, rows_completed, session_ptr.get())) {
@@ -3931,8 +3806,6 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
   }
   copy_params.sanitize_column_names = cp.sanitize_column_names;
   copy_params.geo_layer_name = cp.geo_layer_name;
-  copy_params.geo_assign_render_groups =
-      cp.geo_assign_render_groups && g_enable_assign_render_groups;
   copy_params.geo_explode_collections = cp.geo_explode_collections;
   copy_params.source_srid = cp.source_srid;
   switch (cp.raster_point_type) {
@@ -4068,7 +3941,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   copy_params.geo_coords_srid = cp.geo_coords_srid;
   copy_params.sanitize_column_names = cp.sanitize_column_names;
   copy_params.geo_layer_name = cp.geo_layer_name;
-  copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
+  copy_params.geo_assign_render_groups = false;
   copy_params.geo_explode_collections = cp.geo_explode_collections;
   copy_params.source_srid = cp.source_srid;
   switch (cp.raster_point_type) {

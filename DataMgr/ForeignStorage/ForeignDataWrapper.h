@@ -23,18 +23,12 @@
 #include <map>
 
 struct ColumnDescriptor;
-namespace import_export {
-class RenderGroupAnalyzer;
-}
 
 namespace foreign_storage {
 struct ForeignServer;
 struct ForeignTable;
 struct UserMapping;
 using ChunkToBufferMap = std::map<ChunkKey, AbstractBuffer*>;
-
-using RenderGroupAnalyzerMap =
-    std::map<int, std::unique_ptr<import_export::RenderGroupAnalyzer>>;
 
 class ForeignDataWrapper {
  public:
@@ -154,12 +148,6 @@ class ForeignDataWrapper {
    * aware of during data requests.
    */
   virtual ParallelismLevel getNonCachedParallelismLevel() const { return NONE; }
-
-  /**
-   * @brief Create RenderGroupAnalyzers for poly columns
-   *
-   */
-  virtual void createRenderGroupAnalyzers() {}
 
   /**
    * If `true` data wrapper implements a lazy fragment fetching mode. This mode

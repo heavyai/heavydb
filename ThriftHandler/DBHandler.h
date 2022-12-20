@@ -438,11 +438,6 @@ class DBHandler : public HeavyIf {
                                   const std::string& table_name,
                                   const std::vector<TColumn>& cols,
                                   const std::vector<std::string>& column_names) override;
-  void load_table_binary_columnar_polys(const TSessionId& session,
-                                        const std::string& table_name,
-                                        const std::vector<TColumn>& cols,
-                                        const std::vector<std::string>& column_names,
-                                        const bool assign_render_groups) override;
   void load_table_binary_arrow(const TSessionId& session,
                                const std::string& table_name,
                                const std::string& arrow_stream,
@@ -936,8 +931,7 @@ class DBHandler : public HeavyIf {
       const ColumnDescriptor* cd,
       size_t& col_idx,
       size_t num_rows,
-      const std::string& table_name,
-      bool assign_render_groups);
+      const std::string& table_name);
 
   void fillMissingBuffers(
       const TSessionId& session,
@@ -946,8 +940,7 @@ class DBHandler : public HeavyIf {
       const std::list<const ColumnDescriptor*>& cds,
       const std::vector<int>& desc_id_to_column_id,
       size_t num_rows,
-      const std::string& table_name,
-      bool assign_render_groups);
+      const std::string& table_name);
 
   query_state::QueryStates query_states_;
   std::unordered_map<std::string, Catalog_Namespace::SessionInfoPtr> calcite_sessions_;
@@ -1067,28 +1060,8 @@ class DBHandler : public HeavyIf {
                     const std::pair<std::string, std::string>& session_parameter,
                     int64_t& execution_time_ms);
 
-  // render group assignment
-
-  enum class AssignRenderGroupsMode { kNone, kAssign, kCleanUp };
-
-  void loadTableBinaryColumnarInternal(
-      const TSessionId& session,
-      const std::string& table_name,
-      const std::vector<TColumn>& cols,
-      const std::vector<std::string>& column_names,
-      const AssignRenderGroupsMode assign_render_groups_mode);
-
   TRole::type getServerRole() const;
 
-  using RenderGroupAssignmentColumnMap =
-      std::unordered_map<std::string,
-                         std::unique_ptr<import_export::RenderGroupAnalyzer>>;
-  using RenderGroupAssignmentTableMap =
-      std::unordered_map<std::string, RenderGroupAssignmentColumnMap>;
-  using RenderGroupAnalyzerSessionMap =
-      std::unordered_map<TSessionId, RenderGroupAssignmentTableMap>;
-  RenderGroupAnalyzerSessionMap render_group_assignment_map_;
-  std::mutex render_group_assignment_mutex_;
   heavyai::shared_mutex custom_expressions_mutex_;
 
   void importGeoTableGlobFilterSort(const TSessionId& session,

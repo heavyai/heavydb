@@ -32,7 +32,6 @@ using namespace std::string_literals;
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "Shared/Compressor.h"
 #include "Shared/SysDefinitions.h"
-#include "Shared/enable_assign_render_groups.h"
 #include "StringDictionary/StringDictionary.h"
 #include "Utils/DdlUtils.h"
 
@@ -1130,12 +1129,6 @@ void CommandLineOptions::fillAdvancedOptions() {
                               ->default_value(g_enable_http_binary_server)
                               ->implicit_value(true),
                           "Enable binary over HTTP Thrift server");
-
-  help_desc.add_options()("enable-assign-render-groups",
-                          po::value<bool>(&g_enable_assign_render_groups)
-                              ->default_value(g_enable_assign_render_groups)
-                              ->implicit_value(true),
-                          "Enable Render Group assignment");
 
   help_desc.add_options()("enable-query-engine-cuda-streams",
                           po::value<bool>(&g_query_engine_cuda_streams)

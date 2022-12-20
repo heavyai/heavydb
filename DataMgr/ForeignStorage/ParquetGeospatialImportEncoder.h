@@ -30,13 +30,13 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
  public:
   ParquetGeospatialImportEncoder()
       : ParquetEncoder(nullptr)
-      , GeospatialEncoder(nullptr)
+      , GeospatialEncoder()
       , current_batch_offset_(0)
       , invalid_indices_(nullptr) {}
 
   ParquetGeospatialImportEncoder(std::list<Chunk_NS::Chunk>& chunks)
       : ParquetEncoder(nullptr)
-      , GeospatialEncoder(chunks, nullptr)
+      , GeospatialEncoder(chunks)
       , current_batch_offset_(0)
       , invalid_indices_(nullptr)
       , base_column_buffer_(nullptr)

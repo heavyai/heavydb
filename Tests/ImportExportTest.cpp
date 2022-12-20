@@ -46,7 +46,6 @@
 #include "ImportExport/Importer.h"
 #include "QueryEngine/ResultSet.h"
 #include "Shared/SysDefinitions.h"
-#include "Shared/enable_assign_render_groups.h"
 #include "Shared/file_path_util.h"
 #include "Shared/import_helpers.h"
 #include "Shared/misc.h"
@@ -1125,38 +1124,6 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     return result;
   }
 
-  TQueryResult createTableCopyFromAndSelectRenderGroups(
-      const std::string& file_name_base) {
-    auto& import_type = param_.import_type;
-    auto& data_source_type = param_.data_source_type;
-
-    std::string extension = import_type;
-    std::string base_name = file_name_base + "." + extension;
-    std::string file_path;
-    if (data_source_type == "local") {
-      file_path = "../../Tests/FsiDataFiles/" + base_name;
-    } else if (data_source_type == "s3_private") {
-      file_path = "s3://omnisci-fsi-test/FsiDataFiles/" + base_name;
-    } else if (data_source_type == "s3_public") {
-      file_path = "s3://omnisci-fsi-test-public/FsiDataFiles/" + base_name;
-    }
-
-    std::string create_sql =
-        "CREATE TABLE import_test_new (mpoly GEOMETRY(MULTIPOLYGON, 4326) ENCODING "
-        "COMPRESSED(32));";
-
-    std::string copy_from_sql = "COPY import_test_new FROM '" + file_path + "'";
-    copy_from_sql += getCopyFromOptions(import_type, data_source_type, "");
-    copy_from_sql += ";";
-
-    EXPECT_NO_THROW(sql(create_sql));
-    EXPECT_NO_THROW(sql(copy_from_sql));
-
-    TQueryResult result;
-    sql(result, "SELECT MAX(HeavyDB_Geo_PolyRenderGroup(mpoly)) FROM import_test_new;");
-    return result;
-  }
-
   std::string getCopyFromOptions(const std::string& import_type,
                                  const std::string& data_source_type,
                                  const std::string& line_regex,
@@ -1288,27 +1255,6 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
     query);
   // clang-format on
   validateImportStatus(5, 0, false);
-}
-
-TEST_P(ImportAndSelectTest, GeoTypesRenderGroups) {
-  // we only need to run this test for one of these combos, skip all others
-  if (param_.fragment_size != 1 || param_.num_elements_per_chunk != 1) {
-    GTEST_SKIP() << "Skipping test for duplicate ignored values";
-  }
-  // @TODO(se) test ODBC
-  if (isOdbc(param_.import_type) || param_.import_type == "regex_parser") {
-    GTEST_SKIP() << "Skipping test for import type '" << param_.import_type << "'";
-  }
-
-  // skip if render group assignment is disabled
-  if (!g_enable_assign_render_groups) {
-    GTEST_SKIP() << "Skipping test because Render Group Assignment is disabled";
-  }
-
-  // run the test
-  auto query = createTableCopyFromAndSelectRenderGroups("overlap");
-  static constexpr int kMaxExpectedRenderGroupValue = 163;
-  assertResultSetEqual({{i(kMaxExpectedRenderGroupValue)}}, query);
 }
 
 TEST_P(ImportAndSelectTest, ArrayTypes) {

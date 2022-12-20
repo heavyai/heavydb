@@ -19,8 +19,6 @@ set(shared_source_files
 include_directories(${CMAKE_SOURCE_DIR})
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND shared_source_files Compressor.cpp ee/Encryption.cpp)
-else()
-  list(APPEND shared_source_files enable_assign_render_groups.cpp)
 endif()
 
 if(ENABLE_NVTX)

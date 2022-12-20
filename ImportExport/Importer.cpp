@@ -77,11 +77,9 @@
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TypePunning.h"
-#include "RenderGroupAnalyzer.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/SysDefinitions.h"
-#include "Shared/enable_assign_render_groups.h"
 #include "Shared/file_path_util.h"
 #include "Shared/import_helpers.h"
 #include "Shared/likely.h"
@@ -151,8 +149,6 @@ namespace import_export {
 
 using FieldNameToIndexMapType = std::map<std::string, size_t>;
 using ColumnNameToSourceNameMapType = std::map<std::string, std::string>;
-using ColumnIdToRenderGroupAnalyzerMapType =
-    std::map<int, std::shared_ptr<RenderGroupAnalyzer>>;
 using FeaturePtrVector = std::vector<Geospatial::GDAL::FeatureUqPtr>;
 
 #define DEBUG_TIMING false
@@ -2005,7 +2001,6 @@ static ImportStatus import_thread_delimited(
     size_t begin_pos,
     size_t end_pos,
     size_t total_size,
-    const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap,
     size_t first_row_index_this_buffer,
     const Catalog_Namespace::SessionInfo* session_info,
     Executor* executor) {
@@ -2259,21 +2254,7 @@ static ImportStatus import_thread_delimited(
                   }
                 }
 
-                // assign render group?
-                if (columnIdToRenderGroupAnalyzerMap.size()) {
-                  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-                    if (ring_sizes.size()) {
-                      // get a suitable render group for these poly coords
-                      auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
-                      CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
-                      render_group =
-                          (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
-                    } else {
-                      // empty poly
-                      render_group = -1;
-                    }
-                  }
-                }
+                render_group = -1;
               }
 
               // import extracted geo
@@ -2385,7 +2366,6 @@ static ImportStatus import_thread_shapefile(
     size_t numFeatures,
     const FieldNameToIndexMapType& fieldNameToIndexMap,
     const ColumnNameToSourceNameMapType& columnNameToSourceNameMap,
-    const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap,
     const Catalog_Namespace::SessionInfo* session_info,
     Executor* executor,
     const MetadataColumnInfos& metadata_column_infos) {
@@ -2498,20 +2478,7 @@ static ImportStatus import_thread_shapefile(
               }
             }
 
-            if (columnIdToRenderGroupAnalyzerMap.size()) {
-              if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-                if (ring_sizes.size()) {
-                  // get a suitable render group for these poly coords
-                  auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
-                  CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
-                  render_group =
-                      (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
-                } else {
-                  // empty poly
-                  render_group = -1;
-                }
-              }
-            }
+            render_group = -1;
 
             // create coords array value and add it to the physical column
             ++cd_it;
@@ -4487,30 +4454,6 @@ ImportStatus Importer::importDelimited(
   size_t size =
       fread(reinterpret_cast<void*>(scratch_buffer.get()), 1, alloc_size, p_file);
 
-  // make render group analyzers for each poly column
-  ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  if (copy_params.geo_assign_render_groups) {
-    if (g_enable_assign_render_groups) {
-      auto& cat = loader->getCatalog();
-      auto* td = loader->getTableDesc();
-      CHECK(td);
-      auto column_descriptors =
-          cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
-      for (auto const& cd : column_descriptors) {
-        if (IS_GEO_POLY(cd->columnType.get_type())) {
-          auto rga = std::make_shared<RenderGroupAnalyzer>();
-          rga->seedFromExistingTableContents(cat, td->tableName, cd->columnName);
-          columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
-        }
-      }
-    } else {
-      fclose(p_file);
-      throw std::runtime_error(
-          "Render Group Assignment requested in CopyParams but disabled in Server "
-          "Config. Set enable_assign_render_groups=true in Server Config to override.");
-    }
-  }
-
   ChunkKey chunkKey = {loader->getCatalog().getCurrentDB().dbId,
                        loader->getTableDesc()->tableId};
   auto table_epochs = loader->getTableEpochs();
@@ -4559,7 +4502,6 @@ ImportStatus Importer::importDelimited(
                                    begin_pos,
                                    end_pos,
                                    end_pos,
-                                   columnIdToRenderGroupAnalyzerMap,
                                    first_row_index_this_buffer,
                                    session_info,
                                    executor));
@@ -5425,29 +5367,6 @@ ImportStatus Importer::importGDALGeo(
     }
   }
 
-  // make render group analyzers for each poly column
-  ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  if (copy_params.geo_assign_render_groups) {
-    if (g_enable_assign_render_groups) {
-      auto& cat = loader->getCatalog();
-      auto* td = loader->getTableDesc();
-      CHECK(td);
-      auto column_descriptors =
-          cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
-      for (auto const& cd : column_descriptors) {
-        if (IS_GEO_POLY(cd->columnType.get_type())) {
-          auto rga = std::make_shared<RenderGroupAnalyzer>();
-          rga->seedFromExistingTableContents(cat, td->tableName, cd->columnName);
-          columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
-        }
-      }
-    } else {
-      throw std::runtime_error(
-          "Render Group Assignment requested in CopyParams but disabled in Server "
-          "Config. Set enable_assign_render_groups=true in Server Config to override.");
-    }
-  }
-
 #if !DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
   // threads
   std::list<std::future<ImportStatus>> threads;
@@ -5540,7 +5459,6 @@ ImportStatus Importer::importGDALGeo(
                                 numFeaturesThisChunk,
                                 fieldNameToIndexMap,
                                 columnNameToSourceNameMap,
-                                columnIdToRenderGroupAnalyzerMap,
                                 session_info,
                                 executor.get(),
                                 metadata_column_infos);
@@ -5560,7 +5478,6 @@ ImportStatus Importer::importGDALGeo(
                                  numFeaturesThisChunk,
                                  fieldNameToIndexMap,
                                  columnNameToSourceNameMap,
-                                 columnIdToRenderGroupAnalyzerMap,
                                  session_info,
                                  executor.get(),
                                  metadata_column_infos));

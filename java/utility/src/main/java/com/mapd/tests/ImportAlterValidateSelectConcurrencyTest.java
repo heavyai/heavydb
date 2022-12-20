@@ -185,7 +185,7 @@ public class ImportAlterValidateSelectConcurrencyTest {
                                                  new java.util.ArrayList<TColumnType>(),
                                                  new TCreateParams()),
                       geoTableName);
-              loadTableBinaryColumnarPolys(user, logPrefix);
+              loadTableBinaryColumnar(user, logPrefix);
             }
 
             final String selectSql = "SELECT * FROM " + geoTableName + " LIMIT 2;";
@@ -334,20 +334,6 @@ public class ImportAlterValidateSelectConcurrencyTest {
     }
     user.load_table_binary_columnar(
             csvTableName, columns, Arrays.asList("faii", "fatx", "fatx2"));
-  }
-
-  private void loadTableBinaryColumnarPolys(HeavyDBTestClient user, String logPrefix)
-          throws Exception {
-    logger.info(logPrefix + " Calling load_table_binary_columnar_polys API");
-    List<List<Object>> columns = new ArrayList<>();
-    for (int i = 0; i < 2; i++) {
-      columns.add(new ArrayList<>());
-    }
-    for (int i = 0; i < 5; i++) {
-      columns.get(0).add(Long.valueOf(i));
-      columns.get(1).add("MULTIPOLYGON(((0 0,0 9,9 9,9 0),(2 2,1 1,3 3)))");
-    }
-    user.load_table_binary_columnar_polys(geoTableName, columns, new ArrayList<>());
   }
 
   private void getTableDetails(HeavyDBTestClient user, String logPrefix)

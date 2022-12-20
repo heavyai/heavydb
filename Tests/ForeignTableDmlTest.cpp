@@ -41,7 +41,6 @@
 #include "ImportExport/DelimitedParserUtils.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
-#include "Shared/enable_assign_render_groups.h"
 #include "Shared/scope.h"
 #include "TestHelpers.h"
 
@@ -4731,12 +4730,6 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
 // igore that parts that don't matter).
 TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
-  // enable for these tests
-  bool enable_assign_render_groups = g_enable_assign_render_groups;
-  ScopeGuard restore = [&]() {
-    g_enable_assign_render_groups = enable_assign_render_groups;
-  };
-  g_enable_assign_render_groups = true;
 
   const auto& query = getCreateForeignTableQuery(
       "( index INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON )",

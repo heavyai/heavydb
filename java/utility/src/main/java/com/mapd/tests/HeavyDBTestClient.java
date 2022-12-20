@@ -194,14 +194,6 @@ public class HeavyDBTestClient {
     client.load_table_binary_columnar(sessionId, tableName, load_columns, columnNames);
   }
 
-  public void load_table_binary_columnar_polys(
-          String tableName, List<List<Object>> columns, List<String> columnNames)
-          throws Exception {
-    List<TColumn> load_columns = convertToTColumns(columns);
-    client.load_table_binary_columnar_polys(
-            sessionId, tableName, load_columns, columnNames, true);
-  }
-
   private List<TColumn> convertToTColumns(List<List<Object>> columns) {
     List<TColumn> load_columns = new ArrayList<>();
     for (List<Object> column : columns) {

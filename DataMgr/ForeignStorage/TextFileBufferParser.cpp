@@ -20,21 +20,18 @@
 
 namespace foreign_storage {
 
-ParseBufferRequest::ParseBufferRequest(
-    size_t buffer_size,
-    const import_export::CopyParams& copy_params,
-    int db_id,
-    const ForeignTable* foreign_table,
-    std::set<int> column_filter_set,
-    const std::string& full_path,
-    const RenderGroupAnalyzerMap* render_group_analyzer_map,
-    const bool track_rejected_rows)
+ParseBufferRequest::ParseBufferRequest(size_t buffer_size,
+                                       const import_export::CopyParams& copy_params,
+                                       int db_id,
+                                       const ForeignTable* foreign_table,
+                                       std::set<int> column_filter_set,
+                                       const std::string& full_path,
+                                       const bool track_rejected_rows)
     : buffer_size(buffer_size)
     , buffer_alloc_size(buffer_size)
     , copy_params(copy_params)
     , db_id(db_id)
     , foreign_table_schema(std::make_unique<ForeignTableSchema>(db_id, foreign_table))
-    , render_group_analyzer_map(render_group_analyzer_map)
     , full_path(full_path)
     , track_rejected_rows(track_rejected_rows) {
   if (buffer_size > 0) {
@@ -257,8 +254,7 @@ void TextFileBufferParser::processGeoColumn(
     bool is_null,
     size_t first_row_index,
     size_t row_index_plus_one,
-    std::shared_ptr<Catalog_Namespace::Catalog> catalog,
-    const RenderGroupAnalyzerMap* render_group_analyzer_map) {
+    std::shared_ptr<Catalog_Namespace::Catalog> catalog) {
   auto cd = *cd_it;
   auto col_ti = cd->columnType;
   SQLTypes col_type = col_ti.get_type();
@@ -327,15 +323,7 @@ void TextFileBufferParser::processGeoColumn(
         }
       }
 
-      // get render group
-      if (IS_GEO_POLY(col_type) && render_group_analyzer_map &&
-          render_group_analyzer_map->size()) {
-        auto const itr = render_group_analyzer_map->find(cd->columnId);
-        if (itr != render_group_analyzer_map->end()) {
-          auto& render_group_analyzer = *itr->second;
-          render_group = render_group_analyzer.insertBoundsAndReturnRenderGroup(bounds);
-        }
-      }
+      render_group = 0;
     }
   }
 
