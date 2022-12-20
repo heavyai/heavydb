@@ -25,9 +25,10 @@
 
 #include "QueryEngine/CgenState.h"
 #include "QueryEngine/ColumnFetcher.h"
-#include "QueryEngine/CompilationContext.h"
 #include "QueryEngine/GpuSharedMemoryContext.h"
 #include "QueryEngine/PlanState.h"
+
+class CompilationContext;
 
 struct CompilationResult {
   std::shared_ptr<CompilationContext> generated_code;

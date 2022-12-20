@@ -276,7 +276,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                            hoist_literals,
                                            is_group_by);
 
-  CHECK_EQ(static_cast<size_t>(KERN_PARAM_COUNT), kernel_params.size());
+  static_assert(size_t(KERN_PARAM_COUNT) == kernel_params.size());
   CHECK(!kernel_params[GROUPBY_BUF]);
 
   const unsigned block_size_y = 1;
@@ -319,6 +319,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     }
 
     if (hoist_literals) {
+      VLOG(1) << "Launching(" << kernel->name() << ") on device_id(" << device_id << ')';
       kernel->launch(grid_size_x,
                      grid_size_y,
                      grid_size_z,
@@ -330,6 +331,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                      optimize_cuda_block_and_grid_sizes);
     } else {
       param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
+      VLOG(1) << "Launching(" << kernel->name() << ") on device_id(" << device_id << ')';
       kernel->launch(grid_size_x,
                      grid_size_y,
                      grid_size_z,
@@ -475,6 +477,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     }
 
     if (hoist_literals) {
+      VLOG(1) << "Launching(" << kernel->name() << ") on device_id(" << device_id << ')';
       kernel->launch(grid_size_x,
                      grid_size_y,
                      grid_size_z,
@@ -486,6 +489,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                      optimize_cuda_block_and_grid_sizes);
     } else {
       param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
+      VLOG(1) << "Launching(" << kernel->name() << ") on device_id(" << device_id << ')';
       kernel->launch(grid_size_x,
                      grid_size_y,
                      grid_size_z,
@@ -564,6 +568,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     const std::vector<std::vector<uint64_t>>& frag_offsets,
     const int32_t scan_limit,
     int32_t* error_code,
+    const uint32_t start_rowid,
     const uint32_t num_tables,
     const std::vector<int8_t*>& join_hash_tables,
     const int64_t num_rows_to_process) {
@@ -579,9 +584,9 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
   }
   const int8_t*** multifrag_cols_ptr{
       multifrag_col_buffers.empty() ? nullptr : &multifrag_col_buffers[0]};
-  const uint64_t num_fragments =
-      multifrag_cols_ptr ? static_cast<uint64_t>(col_buffers.size()) : uint64_t(0);
-  const auto num_out_frags = multifrag_cols_ptr ? num_fragments : uint64_t(0);
+  const uint32_t num_fragments =
+      multifrag_cols_ptr ? static_cast<uint32_t>(col_buffers.size()) : uint32_t(0);
+  const auto num_out_frags = multifrag_cols_ptr ? num_fragments : uint32_t(0);
 
   const bool is_group_by{query_mem_desc_.isGroupBy()};
   std::vector<int64_t*> out_vec;
@@ -613,8 +618,9 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     flatened_frag_offsets.insert(
         flatened_frag_offsets.end(), offsets.begin(), offsets.end());
   }
-  int64_t rowid_lookup_num_rows{*error_code ? *error_code + 1 : 0};
-  int64_t* num_rows_ptr;
+  const int64_t rowid_lookup_num_rows =
+      start_rowid ? static_cast<int64_t>(start_rowid) + 1 : 0;
+  int64_t const* num_rows_ptr;
   if (num_rows_to_process > 0) {
     flatened_num_rows[0] = num_rows_to_process;
     num_rows_ptr = flatened_num_rows.data();
@@ -642,91 +648,43 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
           : (join_hash_tables.size() > 1
                  ? reinterpret_cast<const int64_t*>(&join_hash_tables[0])
                  : nullptr);
+  VLOG(1) << "Calling " << native_code->name() << " hoist_literals(" << hoist_literals
+          << ')';
+  const int64_t* const init_agg_value =
+      is_group_by ? cmpt_val_buff.data() : init_agg_vals.data();
+  int64_t** const out =
+      is_group_by ? query_buffers_->getGroupByBuffersPtr() : out_vec.data();
   if (hoist_literals) {
-    using agg_query = void (*)(const int8_t***,  // col_buffers
-                               const uint64_t*,  // num_fragments
-                               const int8_t*,    // literals
-                               const int64_t*,   // num_rows
-                               const uint64_t*,  // frag_row_offsets
-                               const int32_t*,   // max_matched
-                               int32_t*,         // total_matched
-                               const int64_t*,   // init_agg_value
-                               int64_t**,        // out
-                               int32_t*,         // error_code
-                               const uint32_t*,  // num_tables
-                               const int64_t*,   // join_hash_tables_ptr
-                               const int8_t*);   // row_func_mgr
-    if (is_group_by) {
-      reinterpret_cast<agg_query>(native_code->func())(
-          multifrag_cols_ptr,
-          &num_fragments,
-          literal_buff.data(),
-          num_rows_ptr,
-          flatened_frag_offsets.data(),
-          &scan_limit,
-          &total_matched_init,
-          cmpt_val_buff.data(),
-          query_buffers_->getGroupByBuffersPtr(),
-          error_code,
-          &num_tables,
-          join_hash_tables_ptr,
-          row_func_mgr_ptr);
-    } else {
-      reinterpret_cast<agg_query>(native_code->func())(multifrag_cols_ptr,
-                                                       &num_fragments,
-                                                       literal_buff.data(),
-                                                       num_rows_ptr,
-                                                       flatened_frag_offsets.data(),
-                                                       &scan_limit,
-                                                       &total_matched_init,
-                                                       init_agg_vals.data(),
-                                                       out_vec.data(),
-                                                       error_code,
-                                                       &num_tables,
-                                                       join_hash_tables_ptr,
-                                                       row_func_mgr_ptr);
-    }
+    native_code->call(
+        error_code,           // int32_t*,         // error_code
+        &total_matched_init,  // int32_t*,         // total_matched
+        out,                  // int64_t**,        // out
+        &num_fragments,       // const uint32_t*,  // num_fragments
+        &num_tables,          // const uint32_t*,  // num_tables
+        &start_rowid,         // const uint32_t*,  // start_rowid aka row_index_resume
+        multifrag_cols_ptr,   // const int8_t***,  // col_buffers
+        literal_buff.data(),  // const int8_t*,    // literals
+        num_rows_ptr,         // const int64_t*,   // num_rows
+        flatened_frag_offsets.data(),  // const uint64_t*,  // frag_row_offsets
+        &scan_limit,                   // const int32_t*,   // max_matched
+        init_agg_value,                // const int64_t*,   // init_agg_value
+        join_hash_tables_ptr,          // const int64_t*,   // join_hash_tables_ptr
+        row_func_mgr_ptr);             // const int8_t*);   // row_func_mgr
   } else {
-    using agg_query = void (*)(const int8_t***,  // col_buffers
-                               const uint64_t*,  // num_fragments
-                               const int64_t*,   // num_rows
-                               const uint64_t*,  // frag_row_offsets
-                               const int32_t*,   // max_matched
-                               int32_t*,         // total_matched
-                               const int64_t*,   // init_agg_value
-                               int64_t**,        // out
-                               int32_t*,         // error_code
-                               const uint32_t*,  // num_tables
-                               const int64_t*,   // join_hash_tables_ptr
-                               const int8_t*);   // row_func_mgr
-    if (is_group_by) {
-      reinterpret_cast<agg_query>(native_code->func())(
-          multifrag_cols_ptr,
-          &num_fragments,
-          num_rows_ptr,
-          flatened_frag_offsets.data(),
-          &scan_limit,
-          &total_matched_init,
-          cmpt_val_buff.data(),
-          query_buffers_->getGroupByBuffersPtr(),
-          error_code,
-          &num_tables,
-          join_hash_tables_ptr,
-          row_func_mgr_ptr);
-    } else {
-      reinterpret_cast<agg_query>(native_code->func())(multifrag_cols_ptr,
-                                                       &num_fragments,
-                                                       num_rows_ptr,
-                                                       flatened_frag_offsets.data(),
-                                                       &scan_limit,
-                                                       &total_matched_init,
-                                                       init_agg_vals.data(),
-                                                       out_vec.data(),
-                                                       error_code,
-                                                       &num_tables,
-                                                       join_hash_tables_ptr,
-                                                       row_func_mgr_ptr);
-    }
+    native_code->call(
+        error_code,           // int32_t*,         // error_code
+        &total_matched_init,  // int32_t*,         // total_matched
+        out,                  // int64_t**,        // out
+        &num_fragments,       // const uint32_t*,  // num_fragments
+        &num_tables,          // const uint32_t*,  // num_tables
+        &start_rowid,         // const uint32_t*,  // start_rowid aka row_index_resume
+        multifrag_cols_ptr,   // const int8_t***,  // col_buffers
+        num_rows_ptr,         // const int64_t*,   // num_rows
+        flatened_frag_offsets.data(),  // const uint64_t*,  // frag_row_offsets
+        &scan_limit,                   // const int32_t*,   // max_matched
+        init_agg_value,                // const int64_t*,   // init_agg_value
+        join_hash_tables_ptr,          // const int64_t*,   // join_hash_tables_ptr
+        row_func_mgr_ptr);             // const int8_t*);   // row_func_mgr
   }
 
   if (ra_exe_unit.estimator) {
@@ -913,42 +871,44 @@ QueryExecutionContext::KernelParams QueryExecutionContext::prepareKernelParams(
 
   // All sizes are in number of bytes and divisible by 8 (int64_t-aligned).
   KernelParamSizes param_sizes;
+  param_sizes[ERROR_CODE] = align_to<8>(sizeofVector(error_codes));
+  param_sizes[TOTAL_MATCHED] = align_to<8>(sizeof(uint32_t));
+  param_sizes[GROUPBY_BUF] = 0u;
+  param_sizes[NUM_FRAGMENTS] = align_to<8>(sizeof(uint32_t));
+  param_sizes[NUM_TABLES] = align_to<8>(sizeof(num_tables));
+  param_sizes[ROW_INDEX_RESUME] = align_to<8>(sizeof(uint32_t));
   param_sizes[COL_BUFFERS] = sizeofColBuffers(col_buffers);
-  param_sizes[NUM_FRAGMENTS] = sizeof(uint64_t);
   param_sizes[LITERALS] = align_to<8>(sizeofLiterals(literal_buff));
   param_sizes[NUM_ROWS] = sizeofFlattened2dVec(num_tables, num_rows);
   param_sizes[FRAG_ROW_OFFSETS] = sizeofFlattened2dVec(num_tables, frag_offsets);
   param_sizes[MAX_MATCHED] = align_to<8>(sizeof(scan_limit));
-  param_sizes[TOTAL_MATCHED] = align_to<8>(sizeof(uint32_t));
   param_sizes[INIT_AGG_VALS] = sizeofInitAggVals(is_group_by, init_agg_vals);
-  param_sizes[GROUPBY_BUF] = 0u;
-  param_sizes[ERROR_CODE] = align_to<8>(sizeofVector(error_codes));
-  param_sizes[NUM_TABLES] = align_to<8>(sizeof(num_tables));
   param_sizes[JOIN_HASH_TABLES] = sizeofJoinHashTables(join_hash_tables);
   param_sizes[ROW_FUNC_MGR] = 0u;
   auto const nbytes = std::accumulate(param_sizes.begin(), param_sizes.end(), size_t(0));
 
   KernelParams params;
   // Allocate one block for all kernel params and set pointers based on param_sizes.
-  params[COL_BUFFERS] = gpu_allocator_->alloc(nbytes);
-  static_assert(COL_BUFFERS == 0);
+  params[ERROR_CODE] = gpu_allocator_->alloc(nbytes);
+  static_assert(ERROR_CODE == 0);
   for (size_t i = 1; i < params.size(); ++i) {
     params[i] = params[i - 1] + param_sizes[i - 1];
   }
   // Copy data to device based on params w/ adjustments to LITERALS and JOIN_HASH_TABLES.
+  copyVectorToDevice(params[ERROR_CODE], error_codes);
+  copyValueToDevice(params[TOTAL_MATCHED], int32_t(0));
+  params[GROUPBY_BUF] = nullptr;
+  copyValueToDevice(params[NUM_FRAGMENTS], uint32_t(col_buffers.size()));
+  copyValueToDevice(params[NUM_TABLES], num_tables);
+  copyValueToDevice(params[ROW_INDEX_RESUME], uint32_t(0));
   copyColBuffersToDevice(params[COL_BUFFERS], col_buffers);
-  copyValueToDevice(params[NUM_FRAGMENTS], uint64_t(col_buffers.size()));
   params[LITERALS] = copyLiteralsToDevice(params[LITERALS], literal_buff);
   copyFlattened2dVecToDevice(params[NUM_ROWS], num_tables, num_rows);
   copyFlattened2dVecToDevice(params[FRAG_ROW_OFFSETS], num_tables, frag_offsets);
   // Note that this will be overwritten if we are setting the entry count during group by
   // buffer allocation and initialization
   copyValueToDevice(params[MAX_MATCHED], scan_limit);
-  copyValueToDevice(params[TOTAL_MATCHED], int32_t(0));
   copyInitAggValsToDevice(params[INIT_AGG_VALS], is_group_by, init_agg_vals);
-  params[GROUPBY_BUF] = nullptr;
-  copyVectorToDevice(params[ERROR_CODE], error_codes);
-  copyValueToDevice(params[NUM_TABLES], num_tables);
   params[JOIN_HASH_TABLES] =
       copyJoinHashTablesToDevice(params[JOIN_HASH_TABLES], join_hash_tables);
 

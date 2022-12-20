@@ -59,10 +59,12 @@ class GpuDeviceCompilationContext {
   ~GpuDeviceCompilationContext();
   CUfunction kernel() { return kernel_; }
   CUmodule module() { return module_; }
+  std::string const& name() const { return kernel_name_; }
 
  private:
   CUmodule module_;
   CUfunction kernel_;
+  std::string const kernel_name_;
 #ifdef HAVE_CUDA
   const int device_id_;
   const CudaMgr_Namespace::CudaMgr* cuda_mgr_;
@@ -91,6 +93,11 @@ class GpuCompilationContext : public CompilationContext {
       fn_ptrs.push_back(device_context->kernel());
     }
     return fn_ptrs;
+  }
+
+  std::string const& name(size_t const device_id) const {
+    CHECK_LT(device_id, contexts_per_device_.size());
+    return contexts_per_device_[device_id]->name();
   }
 
  private:

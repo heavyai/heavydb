@@ -200,6 +200,7 @@ GpuDeviceCompilationContext::GpuDeviceCompilationContext(const void* image,
                                                          void** option_vals)
     : module_(nullptr)
     , kernel_(nullptr)
+    , kernel_name_(kernel_name)
     , device_id_(device_id)
     , cuda_mgr_(static_cast<const CudaMgr_Namespace::CudaMgr*>(cuda_mgr)) {
   LOG_IF(FATAL, cuda_mgr_ == nullptr)
@@ -207,7 +208,7 @@ GpuDeviceCompilationContext::GpuDeviceCompilationContext(const void* image,
   cuda_mgr_->loadGpuModuleData(
       &module_, image, num_options, options, option_vals, device_id_);
   CHECK(module_);
-  checkCudaErrors(cuModuleGetFunction(&kernel_, module_, kernel_name.c_str()));
+  checkCudaErrors(cuModuleGetFunction(&kernel_, module_, kernel_name_.c_str()));
 }
 #endif  // HAVE_CUDA
 

@@ -19,7 +19,6 @@
 #include <boost/functional/hash.hpp>
 #include <memory>
 
-#include "QueryEngine/CompilationContext.h"
 #include "StringDictionary/LruCache.hpp"
 
 using CodeCacheKey = std::vector<std::string>;

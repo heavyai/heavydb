@@ -175,6 +175,26 @@ inline llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& nam
   return nullptr;
 }
 
+inline llvm::Value* get_arg_by_index(llvm::Function* func, unsigned const index) {
+#if 10 <= LLVM_VERSION_MAJOR
+  return index < func->arg_size() ? func->getArg(index) : nullptr;
+#else
+  return index < func->arg_size() ? func->arg_begin() + index : nullptr;
+#endif
+}
+
+// Returns func->arg_size() if name is not found.
+inline unsigned get_index_by_name(llvm::Function* func, const std::string& name) {
+  unsigned index = 0;
+  for (auto& arg : func->args()) {
+    if (arg.getName() == name) {
+      break;
+    }
+    ++index;
+  }
+  return index;
+}
+
 inline uint32_t log2_bytes(const uint32_t bytes) {
   switch (bytes) {
     case 1:
@@ -1177,6 +1197,7 @@ class Executor {
                                    const std::vector<InputTableInfo>& input_table_infos);
 
   void insertErrorCodeChecker(llvm::Function* query_func,
+                              unsigned const error_code_idx,
                               bool hoist_literals,
                               bool allow_runtime_query_interrupt);
 

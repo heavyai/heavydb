@@ -46,6 +46,7 @@ class NvidiaKernel : public DeviceKernel {
   NvidiaKernel(const CompilationContext* ctx, int device_id) : device_id(device_id) {
     auto cuda_ctx = dynamic_cast<const GpuCompilationContext*>(ctx);
     CHECK(cuda_ctx);
+    name_ = cuda_ctx->name(device_id);
     const auto native_code = cuda_ctx->getNativeCode(device_id);
     function_ptr = static_cast<CUfunction>(native_code.first);
     module_ptr = static_cast<CUmodule>(native_code.second);
@@ -188,10 +189,13 @@ class NvidiaKernel : public DeviceKernel {
     return std::make_unique<CudaEventClock>();
   }
 
+  char const* name() const override { return name_.c_str(); }
+
  private:
   CUfunction function_ptr;
   CUmodule module_ptr;
   int device_id;
+  std::string name_;
 };
 #endif
 

@@ -63,9 +63,17 @@ class CpuCompilationContext : public CompilationContext {
   CpuCompilationContext(ExecutionEngineWrapper&& execution_engine)
       : execution_engine_(std::move(execution_engine)) {}
 
+  template <typename... Ts>
+  void call(Ts... args) const {
+    reinterpret_cast<void (*)(Ts...)>(func_)(args...);
+  }
+
+  const std::string& name() const { return name_; }
+
   void setFunctionPointer(llvm::Function* function) {
     func_ = execution_engine_->getPointerToFunction(function);
     CHECK(func_);
+    name_ = function->getName().str();
     execution_engine_->removeModule(function->getParent());
   }
 
@@ -84,5 +92,6 @@ class CpuCompilationContext : public CompilationContext {
 
  private:
   void* func_{nullptr};
+  std::string name_;
   ExecutionEngineWrapper execution_engine_;
 };

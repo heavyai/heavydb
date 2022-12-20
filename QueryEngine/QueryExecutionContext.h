@@ -20,15 +20,14 @@
 #include "CompilationOptions.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
 #include "GpuMemUtils.h"
+#include "QueryMemoryInitializer.h"
 #include "Rendering/RenderInfo.h"
 #include "ResultSet.h"
-
-#include "CompilationContext.h"
-#include "QueryMemoryInitializer.h"
 
 #include <boost/core/noncopyable.hpp>
 #include <vector>
 
+class CompilationContext;
 class GpuCompilationContext;
 class CpuCompilationContext;
 
@@ -91,6 +90,7 @@ class QueryExecutionContext : boost::noncopyable {
       const std::vector<std::vector<uint64_t>>& frag_row_offsets,
       const int32_t scan_limit,
       int32_t* error_code,
+      const uint32_t start_rowid,
       const uint32_t num_tables,
       const std::vector<int8_t*>& join_hash_tables,
       const int64_t num_rows_to_process = -1);
@@ -100,20 +100,21 @@ class QueryExecutionContext : boost::noncopyable {
  private:
   // enum must be kept in sync w/ prepareKernelParams().
   enum {
-    COL_BUFFERS,
+    ERROR_CODE,
+    TOTAL_MATCHED,
+    GROUPBY_BUF,
     NUM_FRAGMENTS,
+    NUM_TABLES,
+    ROW_INDEX_RESUME,
+    COL_BUFFERS,
     LITERALS,
     NUM_ROWS,
     FRAG_ROW_OFFSETS,
     MAX_MATCHED,
-    TOTAL_MATCHED,
     INIT_AGG_VALS,
-    GROUPBY_BUF,
-    ERROR_CODE,
-    NUM_TABLES,
     JOIN_HASH_TABLES,
     ROW_FUNC_MGR,
-    KERN_PARAM_COUNT,
+    KERN_PARAM_COUNT
   };
   using KernelParamSizes = std::array<size_t, KERN_PARAM_COUNT>;
   using KernelParams = std::array<int8_t*, KERN_PARAM_COUNT>;
