@@ -1081,13 +1081,23 @@ add_custom_command(
 
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/)
 
+# Check if the git hash file exists and set the CPack version if it does
+# If not, get the hash from git and create the file
 execute_process(
   COMMAND ${GIT_EXECUTABLE} rev-parse --short=10 HEAD
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   OUTPUT_VARIABLE MAPD_GIT_HASH
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-file(WRITE ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt "${MAPD_GIT_HASH}\n")
+)
+
+# Ensure the git hash file exists
+file(WRITE ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt "${MAPD_GIT_HASH}")
+
+# Make the CMake configuration dependent on the git hash file
+# This will trigger a re-run of CMake if it changes, updating the CPack and version files
+set_property(
+  DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt
+)
+
+# Ensure MAPD_GIT_HASH is set and embed in CPack
 file(STRINGS ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt MAPD_GIT_HASH)
 set(CPACK_PACKAGE_VERSION "${MAPD_VERSION_RAW}-${MAPD_BUILD_DATE}-${MAPD_GIT_HASH}")
 
@@ -1096,6 +1106,17 @@ configure_file(
   "${CMAKE_BINARY_DIR}/MapDRelease.h"
   @ONLY
   )
+
+# On every build, check if the git hash has changed, and if so update cache file
+# triggering a reconfigure
+add_custom_target(get_git_hash ALL
+  COMMENT "Checking git hash"
+  BYPRODUCTS ${CMAKE_BINARY_DIR}/heavyai_git_hash_new.txt
+  OUTPUT ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt
+  COMMAND ${GIT_EXECUTABLE} rev-parse --short=10 HEAD > ${CMAKE_BINARY_DIR}/heavyai_git_hash_new.txt
+  COMMAND bash -c "${CMAKE_SOURCE_DIR}/scripts/update_git_hash.sh ${CMAKE_BINARY_DIR}"
+)
+
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MapDRelease.h)
 
@@ -1338,16 +1359,10 @@ if(DOXYGEN_FOUND)
   add_dependencies(sphinx doxygen)
 endif(DOXYGEN_FOUND)
 
-# rerun_cmake: required to force regen of heavyai_git_hash.txt, MapDRelease.h
-add_custom_target(rerun_cmake ALL
-  COMMAND cmake .
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-  )
-add_dependencies(heavydb rerun_cmake)
+add_dependencies(heavydb get_git_hash)
 
 # heavy: build our main executables (the entire bin/ directory)
 list(APPEND HEAVY_TARGETS heavydb initheavy heavysql)
 add_dependencies(initheavy mapd_java_components)
 add_dependencies(heavydb mapd_java_components)
 add_custom_target(heavy ALL DEPENDS ${HEAVY_TARGETS})
-
