@@ -520,7 +520,6 @@ class DBHandlerTestFixture : public testing::Test {
       const bool intel_jit_profile{false};
       const bool allow_loop_joins{false};
       const bool enable_rendering{false};
-      const bool renderer_use_ppll_polys{false};
       const bool renderer_prefer_igpu{false};
       const unsigned renderer_vulkan_timeout_ms{300000};
       const bool renderer_use_parallel_executors{false};
@@ -552,7 +551,6 @@ class DBHandlerTestFixture : public testing::Test {
                                                 g_read_only,
                                                 allow_loop_joins,
                                                 enable_rendering,
-                                                renderer_use_ppll_polys,
                                                 renderer_prefer_igpu,
                                                 renderer_vulkan_timeout_ms,
                                                 renderer_use_parallel_executors,

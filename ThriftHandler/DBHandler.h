@@ -34,7 +34,6 @@
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Geospatial/Transforms.h"
 #include "ImportExport/Importer.h"
-#include "ImportExport/RenderGroupAnalyzer.h"
 #include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
 #include "Parser/ParserNode.h"
@@ -174,7 +173,6 @@ class DBHandler : public HeavyIf {
             const bool read_only,
             const bool allow_loop_joins,
             const bool enable_rendering,
-            const bool renderer_use_ppll_polys,
             const bool renderer_prefer_igpu,
             const unsigned renderer_vulkan_timeout_ms,
             const bool renderer_use_parallel_executors,
@@ -955,7 +953,6 @@ class DBHandler : public HeavyIf {
   const int max_session_duration_;   // max duration of session
 
   const bool enable_rendering_;
-  const bool renderer_use_ppll_polys_;
   const bool renderer_prefer_igpu_;
   const unsigned renderer_vulkan_timeout_;
   const bool renderer_use_parallel_executors_;
