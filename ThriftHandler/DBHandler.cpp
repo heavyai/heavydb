@@ -170,7 +170,6 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const bool read_only,
                      const bool allow_loop_joins,
                      const bool enable_rendering,
-                     const bool renderer_use_ppll_polys,
                      const bool renderer_prefer_igpu,
                      const unsigned renderer_vulkan_timeout_ms,
                      const bool renderer_use_parallel_executors,
@@ -214,7 +213,6 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , idle_session_duration_(idle_session_duration * 60)
     , max_session_duration_(max_session_duration * 60)
     , enable_rendering_(enable_rendering)
-    , renderer_use_ppll_polys_(renderer_use_ppll_polys)
     , renderer_prefer_igpu_(renderer_prefer_igpu)
     , renderer_vulkan_timeout_(renderer_vulkan_timeout_ms)
     , renderer_use_parallel_executors_(renderer_use_parallel_executors)
@@ -515,7 +513,6 @@ void DBHandler::initialize(const bool is_new_db) {
                                               max_concurrent_render_sessions_,
                                               render_compositor_use_last_gpu_,
                                               false,
-                                              0,
                                               false,
                                               renderer_prefer_igpu_,
                                               renderer_vulkan_timeout_,

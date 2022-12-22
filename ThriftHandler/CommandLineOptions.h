@@ -70,7 +70,6 @@ class CommandLineOptions {
   size_t render_mem_bytes = 1000000000;
   size_t max_concurrent_render_sessions = 500;
   bool render_compositor_use_last_gpu = true;
-  bool renderer_use_ppll_polys = false;
   bool renderer_prefer_igpu = false;
   unsigned renderer_vulkan_timeout_ms = 60000;  // in milliseconds
   bool renderer_use_parallel_executors = true;
