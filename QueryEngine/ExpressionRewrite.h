@@ -48,6 +48,21 @@ struct OverlapsJoinConjunction {
   std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
 };
 
+struct OverlapsJoinTranslationInfo {
+  JoinQualsPerNestingLevel join_quals;
+  bool has_overlaps_join{false};
+  bool is_reordered{false};
+};
+
+struct OverlapsJoinTranslationResult {
+  bool swap_arguments{false};
+  std::optional<OverlapsJoinConjunction> converted_overlaps_join_info{std::nullopt};
+
+  static OverlapsJoinTranslationResult createEmptyResult() {
+    return {false, std::nullopt};
+  }
+};
+
 enum class OverlapsJoinRewriteType { OVERLAPS_JOIN, RANGE_JOIN, UNKNOWN };
 
 struct OverlapsJoinSupportedFunction {
@@ -194,17 +209,20 @@ struct OverlapsJoinSupportedFunction {
   }
 };
 
-boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
+OverlapsJoinTranslationResult translate_overlaps_conjunction_with_reordering(
     const std::shared_ptr<Analyzer::Expr> expr,
-    const std::vector<InputDescriptor>& input_table_info,
-    const OverlapsJoinRewriteType rewrite_type,
-    const Executor* executor);
+    std::vector<InputDescriptor> const& input_descs,
+    std::unordered_map<const RelAlgNode*, int> const& input_to_nest_level,
+    std::vector<size_t> const& input_permutation,
+    std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc,
+    const OverlapsJoinRewriteType rewrite_type);
 
-boost::optional<OverlapsJoinConjunction> convert_to_range_join_oper(
-    const std::shared_ptr<Analyzer::Expr> expr,
-    const Analyzer::BinOper* range_join_expr,
-    const Analyzer::GeoOperator* lhs,
-    const Analyzer::Constant* rhs);
+OverlapsJoinTranslationInfo convert_overlaps_join(
+    JoinQualsPerNestingLevel const& join_quals,
+    std::vector<InputDescriptor>& input_descs,
+    std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+    std::vector<size_t>& input_permutation,
+    std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc);
 
 std::list<std::shared_ptr<Analyzer::Expr>> strip_join_covered_filter_quals(
     const std::list<std::shared_ptr<Analyzer::Expr>>& quals,

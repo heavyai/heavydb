@@ -2187,7 +2187,10 @@ const auto setup_stmts = {
     "CREATE TABLE TEST_GEOPT (ptc4326 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32), pt "
     "GEOMETRY(POINT) ENCODING NONE, pt4326 GEOMETRY(POINT, 4326) ENCODING NONE, pt900913 "
     "GEOMETRY(POINT, 900913), x float, y float);",
-    "CREATE TABLE TEST_GEOPT2 (ls GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32));",
+    "CREATE TABLE TEST_GEOPT2 (ls GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32), "
+    "pt4326 GEOMETRY(POINT, 4326) ENCODING NONE);",
+    "CREATE TABLE TEST_GEOPT3 (p1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32));",
+    "CREATE TABLE TEST_GEOPT4 (p2 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32));",
 };
 
 const auto insert_data_stmts = {
@@ -2200,14 +2203,19 @@ const auto insert_data_stmts = {
     "INSERT INTO TEST_GEOPT VALUES ('point(3.123 0.123)', 'point(3.123 0.123)', "
     "'point(3.123 0.123)', 'point(3.123 0.123)', 3.123, 0.123 );",
     "INSERT INTO TEST_GEOPT2 VALUES ( 'linestring(0.123 0.123, 1.123 0.123, 2.123 "
-    "2.123)' );",
+    "2.123)', 'point(0.123 0.123)' );",
     "INSERT INTO TEST_GEOPT2 VALUES ( 'linestring(0.123 0.123, 1.123 0.123, 2.123 "
-    "2.123)' );",
+    "2.123)', 'point(0.123 0.123)' );",
+    "INSERT INTO TEST_GEOPT3 VALUES ('point(1 1)');",
+    "INSERT INTO TEST_GEOPT3 VALUES ('point(1 1)');",
+    "INSERT INTO TEST_GEOPT4 VALUES ('point(1 1)');",
 };
 
 const auto cleanup_stmts = {
     "DROP TABLE IF EXISTS TEST_GEOPT;",
     "DROP TABLE IF EXISTS TEST_GEOPT2;",
+    "DROP TABLE IF EXISTS TEST_GEOPT3;",
+    "DROP TABLE IF EXISTS TEST_GEOPT4;",
 };
 }  // namespace OverlapsJoinRewriter
 
@@ -2306,6 +2314,27 @@ TEST_F(OverlapsJoinRewriteTest, P2PDistanceJoinGeoTypeChecking) {
       g_from_table_reordering = table_reordering;
       EXPECT_ANY_THROW(execSQL(query, ExecutorDeviceType::CPU));
     }
+  }
+}
+
+TEST_F(OverlapsJoinRewriteTest, ArgumentOrderingAfterTableReordering) {
+  // test logic is different compared with the previous test,
+  // so we do not use performTest function here
+  QR::get()->clearCpuMemory();
+  g_enable_distance_rangejoin = true;
+  ScopeGuard reset_flag = [orig = g_from_table_reordering] {
+    g_from_table_reordering = orig;
+  };
+  auto q1 =
+      "SELECT COUNT(*) FROM TEST_GEOPT R, TEST_GEOPT2 S WHERE ST_DISTANCE(R.pt4326, "
+      "S.pt4326) < 0.01;";
+  auto q2 =
+      "SELECT COUNT(*) FROM TEST_GEOPT3, TEST_GEOPT4 WHERE ST_DISTANCE(p1, p2) < 0.001;";
+  for (bool const table_reordering : {true, false}) {
+    g_from_table_reordering = table_reordering;
+    // check whether the query finishes without a crash
+    execSQL(q1, ExecutorDeviceType::CPU);
+    EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(execSQL(q2, ExecutorDeviceType::CPU)));
   }
 }
 

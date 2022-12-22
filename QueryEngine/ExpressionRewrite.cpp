@@ -20,7 +20,6 @@
 #include <boost/locale/conversion.hpp>
 #include <unordered_set>
 
-#include "Analyzer/Analyzer.h"
 #include "Logger/Logger.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/DeepCopyVisitor.h"
@@ -793,30 +792,83 @@ Analyzer::ExpressionPtr rewrite_expr(const Analyzer::Expr* expr) {
   return rewritten_expr;
 }
 
-boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
-    const std::shared_ptr<Analyzer::Expr> expr,
-    const std::vector<InputDescriptor>& input_table_info,
-    const OverlapsJoinRewriteType rewrite_type,
-    const Executor* executor) {
-  auto collect_table_cardinality =
-      [](const Analyzer::Expr* lhs, const Analyzer::Expr* rhs, const Executor* executor) {
-        const auto lhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
-        const auto rhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(rhs);
-        if (lhs_cv && rhs_cv) {
-          const auto inner_table_metadata = Catalog_Namespace::get_metadata_for_table(
-              {lhs_cv->getColumnKey().db_id, lhs_cv->getColumnKey().table_id});
-          const auto outer_table_metadata = Catalog_Namespace::get_metadata_for_table(
-              {rhs_cv->getColumnKey().db_id, rhs_cv->getColumnKey().table_id});
-          if (inner_table_metadata->fragmenter && outer_table_metadata->fragmenter) {
-            return std::make_pair<int64_t, int64_t>(
-                inner_table_metadata->fragmenter->getNumRows(),
-                outer_table_metadata->fragmenter->getNumRows());
-          }
-        }
-        // otherwise, return an invalid table cardinality
-        return std::make_pair<int64_t, int64_t>(-1, -1);
-      };
+namespace {
 
+void update_input_to_nest_lv(
+    std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+    shared::ColumnKey const& column_key,
+    int target_nest_lv) {
+  for (auto& kv : input_to_nest_level) {
+    auto ra = kv.first;
+    auto table_keys = get_physical_table_inputs(ra);
+    if (std::any_of(table_keys.begin(),
+                    table_keys.end(),
+                    [column_key](shared::TableKey const& key) {
+                      return key.table_id == column_key.table_id &&
+                             key.db_id == column_key.db_id;
+                    })) {
+      input_to_nest_level[ra] = target_nest_lv;
+      return;
+    }
+  }
+}
+
+int update_input_desc(std::vector<InputDescriptor>& input_descs,
+                      shared::ColumnKey const& column_key,
+                      int target_nest_lv) {
+  int num_input_descs = static_cast<int>(input_descs.size());
+  for (int i = 0; i < num_input_descs; i++) {
+    auto const tbl_key = input_descs[i].getTableKey();
+    if (tbl_key.db_id == column_key.db_id && tbl_key.table_id == column_key.table_id) {
+      input_descs[i] = InputDescriptor(tbl_key.db_id, tbl_key.table_id, target_nest_lv);
+      return i;
+    }
+  }
+  return -1;
+}
+
+auto update_input_col_desc(
+    std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc,
+    shared::ColumnKey const& column_key,
+    int target_nest_lv) {
+  for (auto it = input_col_desc.begin(); it != input_col_desc.end(); it++) {
+    auto const tbl_key = (*it)->getScanDesc().getTableKey();
+    if (tbl_key.db_id == column_key.db_id && tbl_key.table_id == column_key.table_id) {
+      (*it) = std::make_shared<InputColDescriptor>(
+          (*it)->getColId(), tbl_key.table_id, tbl_key.db_id, target_nest_lv);
+      return it;
+    }
+  }
+  return input_col_desc.end();
+}
+
+}  // namespace
+
+OverlapsJoinTranslationResult translate_overlaps_conjunction_with_reordering(
+    const std::shared_ptr<Analyzer::Expr> expr,
+    std::vector<InputDescriptor>& input_descs,
+    std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+    std::vector<size_t>& input_permutation,
+    std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc,
+    const OverlapsJoinRewriteType rewrite_type) {
+  auto collect_table_cardinality = [](const Analyzer::Expr* lhs,
+                                      const Analyzer::Expr* rhs) {
+    const auto lhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
+    const auto rhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(rhs);
+    if (lhs_cv && rhs_cv) {
+      const auto inner_table_metadata = Catalog_Namespace::get_metadata_for_table(
+          {lhs_cv->getColumnKey().db_id, lhs_cv->getColumnKey().table_id});
+      const auto outer_table_metadata = Catalog_Namespace::get_metadata_for_table(
+          {rhs_cv->getColumnKey().db_id, rhs_cv->getColumnKey().table_id});
+      if (inner_table_metadata->fragmenter && outer_table_metadata->fragmenter) {
+        return std::make_pair<int64_t, int64_t>(
+            inner_table_metadata->fragmenter->getNumRows(),
+            outer_table_metadata->fragmenter->getNumRows());
+      }
+    }
+    // otherwise, return an invalid table cardinality
+    return std::make_pair<int64_t, int64_t>(-1, -1);
+  };
   auto has_invalid_join_col_order = [](const Analyzer::Expr* lhs,
                                        const Analyzer::Expr* rhs) {
     // Check for compatible join ordering. If the join ordering does not match expected
@@ -832,14 +884,13 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
     return std::make_pair(has_invalid_num_join_cols || has_invalid_rte_idx,
                           has_invalid_rte_idx);
   };
-
+  bool swap_args = false;
   auto convert_to_range_join_oper =
       [&](std::string_view func_name,
           const std::shared_ptr<Analyzer::Expr> expr,
           const Analyzer::BinOper* range_join_expr,
           const Analyzer::GeoOperator* lhs,
-          const Analyzer::Constant* rhs,
-          const Executor* executor) -> std::shared_ptr<Analyzer::BinOper> {
+          const Analyzer::Constant* rhs) -> std::shared_ptr<Analyzer::BinOper> {
     if (OverlapsJoinSupportedFunction::is_range_join_rewrite_target_func(func_name)) {
       CHECK_EQ(lhs->size(), size_t(2));
       auto l_arg = lhs->getOperand(0);
@@ -852,7 +903,6 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
                 << expr->toString();
         return nullptr;
       }
-
       // Check for compatible join ordering. If the join ordering does not match expected
       // ordering for overlaps, the join builder will fail.
       Analyzer::Expr* range_join_arg = r_arg;
@@ -881,25 +931,63 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
                    "distance query: fallback to a loop join";
         return nullptr;
       }
-
-      bool swap_args = false;
-      auto const card_info =
-          collect_table_cardinality(range_join_arg, bin_oper_arg, executor);
+      auto const card_info = collect_table_cardinality(range_join_arg, bin_oper_arg);
       if (invalid_range_join_qual.second && card_info.first > 0 && lhs_is_point) {
         swap_args = true;
       } else if (card_info.first >= 0 && card_info.first < card_info.second) {
         swap_args = true;
       }
-
       if (swap_args) {
-        // to exploit range hash join, we need to assign point geometry to rhs
-        r_arg = lhs->getOperand(0);
-        l_arg = lhs->getOperand(1);
-        VLOG(1) << "Swap range join qual's input arguments to exploit overlaps "
-                   "hash join framework";
-        invalid_range_join_qual.first = false;
+        // todo (yoonmin) : find the best reordering scheme when a query has multiple
+        // range join candidates; it needs a (cost-based) plan enumeration logic
+        // in our optimizer
+        auto r_cv = dynamic_cast<Analyzer::ColumnVar*>(lhs->getOperand(1));
+        auto l_cv = dynamic_cast<Analyzer::ColumnVar*>(lhs->getOperand(0));
+        if (r_cv && l_cv && input_descs.size() == 2) {
+          // to exploit range hash join, we need to assign point geometry to rhs
+          // specifically, we need to propagate the changes made here via various
+          // query metadata such as `input_desc`, `input_col_desc` and so on
+          // otherwise, we do not try swapping join arguments for safety
+          // and we do not try argument swapping if the input query has more two
+          // input tables; but it is enough to cover most of immerse use-cases
+          auto const r_col_key = r_cv->getColumnKey();
+          auto const l_col_key = l_cv->getColumnKey();
+          int r_rte_idx = r_cv->get_rte_idx();
+          int l_rte_idx = l_cv->get_rte_idx();
+          r_cv->set_rte_idx(l_rte_idx);
+          l_cv->set_rte_idx(r_rte_idx);
+          update_input_to_nest_lv(input_to_nest_level, r_col_key, l_rte_idx);
+          update_input_to_nest_lv(input_to_nest_level, l_col_key, r_rte_idx);
+          auto const r_input_desc_idx =
+              update_input_desc(input_descs, r_col_key, l_rte_idx);
+          CHECK_GE(r_input_desc_idx, 0);
+          auto const l_input_desc_idx =
+              update_input_desc(input_descs, l_col_key, r_rte_idx);
+          CHECK_GE(l_input_desc_idx, 0);
+          auto r_input_col_desc_it =
+              update_input_col_desc(input_col_desc, r_col_key, l_rte_idx);
+          CHECK(r_input_col_desc_it != input_col_desc.end());
+          auto l_input_col_desc_it =
+              update_input_col_desc(input_col_desc, l_col_key, r_rte_idx);
+          CHECK(l_input_col_desc_it != input_col_desc.end());
+          if (!input_permutation.empty()) {
+            auto r_itr =
+                std::find(input_permutation.begin(), input_permutation.end(), r_rte_idx);
+            CHECK(r_itr != input_permutation.end());
+            auto l_itr =
+                std::find(input_permutation.begin(), input_permutation.end(), l_rte_idx);
+            CHECK(l_itr != input_permutation.end());
+            std::swap(*r_itr, *l_itr);
+          }
+          std::swap(input_descs[r_input_desc_idx], input_descs[l_input_desc_idx]);
+          std::swap(r_input_col_desc_it, l_input_col_desc_it);
+          r_arg = lhs->getOperand(0);
+          l_arg = lhs->getOperand(1);
+          VLOG(1) << "Swap range join qual's input arguments to exploit overlaps "
+                     "hash join framework";
+          invalid_range_join_qual.first = false;
+        }
       }
-
       const bool inclusive = range_join_expr->get_optype() == kLE;
       auto range_expr = makeExpr<Analyzer::RangeOper>(
           inclusive, inclusive, r_arg->deep_copy(), rhs->deep_copy());
@@ -937,7 +1025,7 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
         OverlapsJoinSupportedFunction::is_many_to_many_func(func_name)) {
       LOG(WARNING) << "Many-to-many hashjoin support is disabled, unable to rewrite "
                    << func_oper->toString() << " to use accelerated geo join.";
-      return boost::none;
+      return OverlapsJoinTranslationResult::createEmptyResult();
     }
     DeepCopyVisitor deep_copy_visitor;
     if (func_name == OverlapsJoinSupportedFunction::ST_OVERLAPS_sv) {
@@ -982,8 +1070,7 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
                                        distance_oper,
                                        distance_oper.get(),
                                        range_oper.get(),
-                                       distance_const_val,
-                                       executor);
+                                       distance_const_val);
         needs_to_return_original_expr = true;
       }
     } else if (OverlapsJoinSupportedFunction::is_poly_mpoly_rewrite_target_func(
@@ -1058,7 +1145,7 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
                   << " to overlaps conjunction. LHS input type is neither a geospatial "
                      "column nor a constructed point"
                   << func_oper->toString();
-        return boost::none;
+        return OverlapsJoinTranslationResult::createEmptyResult();
       }
 
       // rhs is coordinates of the poly col
@@ -1071,7 +1158,7 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
                   << " to overlaps conjunction. Cannot build hash table over LHS type. "
                      "Check join order."
                   << func_oper->toString();
-        return boost::none;
+        return OverlapsJoinTranslationResult::createEmptyResult();
       }
 
       VLOG(1) << "Rewriting " << func_name << " to use overlaps join with lhs as "
@@ -1092,21 +1179,92 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
     auto rhs = dynamic_cast<const Analyzer::Constant*>(bin_oper->get_right_operand());
     CHECK(rhs);
     func_name = lhs->getName();
-    overlaps_oper =
-        convert_to_range_join_oper(func_name, expr, bin_oper, lhs, rhs, executor);
+    overlaps_oper = convert_to_range_join_oper(func_name, expr, bin_oper, lhs, rhs);
     needs_to_return_original_expr = true;
   }
   const auto expr_str = !func_name.empty() ? func_name : expr->toString();
   if (overlaps_oper) {
-    VLOG(1) << "Successfully converted " << expr_str << " to overlaps join";
+    OverlapsJoinTranslationResult res;
+    res.swap_arguments = swap_args;
+    OverlapsJoinConjunction overlaps_join_qual;
+    overlaps_join_qual.join_quals.push_back(overlaps_oper);
     if (needs_to_return_original_expr) {
-      return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
-    } else {
-      return OverlapsJoinConjunction{{}, {overlaps_oper}};
+      overlaps_join_qual.quals.push_back(expr);
     }
+    res.converted_overlaps_join_info = overlaps_join_qual;
+    VLOG(1) << "Successfully converted " << expr_str << " to overlaps join";
+    return res;
   }
   VLOG(1) << "Overlaps join not enabled for " << expr_str;
-  return boost::none;
+  return OverlapsJoinTranslationResult::createEmptyResult();
+}
+
+OverlapsJoinTranslationInfo convert_overlaps_join(
+    JoinQualsPerNestingLevel const& join_quals,
+    std::vector<InputDescriptor>& input_descs,
+    std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+    std::vector<size_t>& input_permutation,
+    std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc) {
+  if (!g_enable_overlaps_hashjoin || join_quals.empty()) {
+    return {join_quals, false, false};
+  }
+
+  JoinQualsPerNestingLevel join_condition_per_nesting_level;
+  bool is_reordered{false};
+  bool has_overlaps_join{false};
+  for (const auto& join_condition_in : join_quals) {
+    JoinCondition join_condition{{}, join_condition_in.type};
+
+    for (const auto& join_qual_expr_in : join_condition_in.quals) {
+      bool try_to_rewrite_expr_to_overlaps_join = false;
+      OverlapsJoinRewriteType rewrite_type{OverlapsJoinRewriteType::UNKNOWN};
+      auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(join_qual_expr_in.get());
+      if (func_oper) {
+        const auto func_name = func_oper->getName();
+        if (OverlapsJoinSupportedFunction::is_overlaps_supported_func(func_name)) {
+          try_to_rewrite_expr_to_overlaps_join = true;
+          rewrite_type = OverlapsJoinRewriteType::OVERLAPS_JOIN;
+        }
+      }
+      auto bin_oper = dynamic_cast<Analyzer::BinOper*>(join_qual_expr_in.get());
+      if (bin_oper && (bin_oper->get_optype() == kLE || bin_oper->get_optype() == kLT)) {
+        auto lhs =
+            dynamic_cast<const Analyzer::GeoOperator*>(bin_oper->get_left_operand());
+        auto rhs = dynamic_cast<const Analyzer::Constant*>(bin_oper->get_right_operand());
+        if (g_enable_distance_rangejoin && lhs && rhs) {
+          try_to_rewrite_expr_to_overlaps_join = true;
+          rewrite_type = OverlapsJoinRewriteType::RANGE_JOIN;
+        }
+      }
+      OverlapsJoinTranslationResult translation_res;
+      if (try_to_rewrite_expr_to_overlaps_join) {
+        translation_res =
+            translate_overlaps_conjunction_with_reordering(join_qual_expr_in,
+                                                           input_descs,
+                                                           input_to_nest_level,
+                                                           input_permutation,
+                                                           input_col_desc,
+                                                           rewrite_type);
+      }
+      if (translation_res.converted_overlaps_join_info) {
+        const auto& overlaps_quals = *translation_res.converted_overlaps_join_info;
+        has_overlaps_join = true;
+        // Add overlaps qual
+        join_condition.quals.insert(join_condition.quals.end(),
+                                    overlaps_quals.join_quals.begin(),
+                                    overlaps_quals.join_quals.end());
+        // Add original quals
+        join_condition.quals.insert(join_condition.quals.end(),
+                                    overlaps_quals.quals.begin(),
+                                    overlaps_quals.quals.end());
+      } else {
+        join_condition.quals.push_back(join_qual_expr_in);
+      }
+      is_reordered |= translation_res.swap_arguments;
+    }
+    join_condition_per_nesting_level.push_back(join_condition);
+  }
+  return {join_condition_per_nesting_level, has_overlaps_join, is_reordered};
 }
 
 /**
