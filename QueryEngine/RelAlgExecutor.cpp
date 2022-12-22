@@ -4487,7 +4487,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   std::tie(input_descs, input_col_descs, std::ignore) =
       get_input_desc(compound, input_to_nest_level, {});
   VLOG(3) << "input_descs=" << shared::printContainer(input_descs);
-  const auto query_infos = get_table_infos(input_descs, executor_);
+  VLOG(3) << "input_col_descs=" << shared::printContainer(input_col_descs);
+  auto query_infos = get_table_infos(input_descs, executor_);
   CHECK_EQ(size_t(1), compound->inputCount());
   const auto left_deep_join =
       dynamic_cast<const RelLeftDeepInnerJoin*>(compound->getInput(0));
@@ -4519,12 +4520,26 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
           left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
     }
   }
+  auto const overlaps_quals_info = convert_overlaps_join(left_deep_join_quals,
+                                                         input_descs,
+                                                         input_to_nest_level,
+                                                         input_permutation,
+                                                         input_col_descs);
+  if (overlaps_quals_info.is_reordered) {
+    query_infos = get_table_infos(input_descs, executor_);
+    VLOG(3) << "input_descs=" << shared::printContainer(input_descs);
+    VLOG(3) << "input_col_descs=" << shared::printContainer(input_col_descs);
+  }
+  if (overlaps_quals_info.has_overlaps_join) {
+    left_deep_join_quals = overlaps_quals_info.join_quals;
+  }
   RelAlgTranslator translator(
       query_state_, executor_, input_to_nest_level, join_types, now_, eo.just_explain);
+  const auto quals_cf = translate_quals(compound, translator);
+  const auto quals = rewrite_quals(quals_cf.quals);
   const auto scalar_sources =
       translate_scalar_sources(compound, translator, eo.executor_type);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
-  const auto quals_cf = translate_quals(compound, translator);
   std::unordered_map<size_t, SQLTypeInfo> target_exprs_type_infos;
   const auto target_exprs = translate_targets(target_exprs_owned_,
                                               target_exprs_type_infos,
@@ -4545,7 +4560,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   const RelAlgExecutionUnit exe_unit = {input_descs,
                                         input_col_descs,
                                         quals_cf.simple_quals,
-                                        rewrite_quals(quals_cf.quals),
+                                        quals,
                                         left_deep_join_quals,
                                         groupby_exprs,
                                         target_exprs,
@@ -4869,8 +4884,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
   auto input_to_nest_level = get_input_nest_levels(project, {});
   std::tie(input_descs, input_col_descs, std::ignore) =
       get_input_desc(project, input_to_nest_level, {});
-  const auto query_infos = get_table_infos(input_descs, executor_);
-
+  VLOG(3) << "input_descs=" << shared::printContainer(input_descs);
+  VLOG(3) << "input_col_descs=" << shared::printContainer(input_col_descs);
+  auto query_infos = get_table_infos(input_descs, executor_);
   const auto left_deep_join =
       dynamic_cast<const RelLeftDeepInnerJoin*>(project->getInput(0));
   JoinQualsPerNestingLevel left_deep_join_quals;
@@ -4882,7 +4898,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
   if (left_deep_join) {
     left_deep_tree_id = left_deep_join->getId();
     left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
-    const auto query_infos = get_table_infos(input_descs, executor_);
     left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
     if (g_from_table_reordering) {
@@ -4900,7 +4915,19 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
           left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
     }
   }
-
+  auto const overlaps_quals_info = convert_overlaps_join(left_deep_join_quals,
+                                                         input_descs,
+                                                         input_to_nest_level,
+                                                         input_permutation,
+                                                         input_col_descs);
+  if (overlaps_quals_info.is_reordered) {
+    query_infos = get_table_infos(input_descs, executor_);
+    VLOG(3) << "input_descs=" << shared::printContainer(input_descs);
+    VLOG(3) << "input_col_descs=" << shared::printContainer(input_col_descs);
+  }
+  if (overlaps_quals_info.has_overlaps_join) {
+    left_deep_join_quals = overlaps_quals_info.join_quals;
+  }
   RelAlgTranslator translator(
       query_state_, executor_, input_to_nest_level, join_types, now_, eo.just_explain);
   const auto target_exprs_owned =
