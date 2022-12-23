@@ -3697,10 +3697,15 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   }
   if (!eo.just_explain && eo.find_push_down_candidates) {
     // find potential candidates:
+    VLOG(1) << "Try to find filter predicate push-down candidate.";
     auto selected_filters = selectFiltersToBePushedDown(work_unit, co, eo);
     if (!selected_filters.empty() || eo.just_calcite_explain) {
+      VLOG(1) << "Found " << selected_filters.size()
+              << " filter(s) to be pushed down. Re-create a query plan based on pushed "
+                 "filter predicate(s).";
       return ExecutionResult(selected_filters, eo.find_push_down_candidates);
     }
+    VLOG(1) << "Continue with the current query plan";
   }
   if (render_info && render_info->isInSitu()) {
     co.allow_lazy_fetch = false;
