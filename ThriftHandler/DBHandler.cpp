@@ -6555,8 +6555,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
                                                     executor_device_type,
                                                     first_n,
                                                     at_most_n,
-                                                    explain.isJustExplain(),
-                                                    explain.isCalciteExplain(),
+                                                    false,
+                                                    false,
                                                     filter_push_down_requests);
             }
           }
@@ -6623,14 +6623,8 @@ void DBHandler::execute_rel_alg_with_filter_push_down(
                    .first.plan_result;
   }));
 
-  if (is_calcite_explain) {
-    // return the new ra as the result
-    _return.updateResultSet(query_ra, ExecutionResult::Explanation);
-    return;
-  }
-
   // execute the new relational algebra plan:
-  auto explain_info = ExplainInfo(ExplainInfo::ExplainType::IR);
+  auto explain_info = ExplainInfo(ExplainInfo::ExplainType::None);
   execute_rel_alg(_return,
                   query_state_proxy,
                   query_ra,

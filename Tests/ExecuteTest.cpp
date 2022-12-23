@@ -12398,8 +12398,24 @@ TEST_F(Select, Joins_DifferentIntegerTypes) {
 }
 
 TEST_F(Select, Joins_FilterPushDown) {
-  auto default_flag = g_enable_filter_push_down;
-  auto default_lower_frac = g_filter_push_down_low_frac;
+  ScopeGuard reset_status = [orig1 = g_enable_filter_push_down,
+                             orig2 = g_filter_push_down_low_frac] {
+    g_enable_filter_push_down = orig1;
+    g_filter_push_down_low_frac = orig2;
+    run_ddl_statement("DROP TABLE lt;");
+    run_ddl_statement("DROP TABLE rt;");
+  };
+  run_ddl_statement("DROP TABLE IF EXISTS lt;");
+  run_ddl_statement("DROP TABLE IF EXISTS rt;");
+  run_ddl_statement("CREATE TABLE lt (id int);");
+  run_ddl_statement("CREATE TABLE rt (id int);");
+  for (int i = 1; i <= 5; i++) {
+    auto const val = std::to_string(i);
+    if (i <= 3) {
+      run_multiple_agg("INSERT INTO rt VALUES(" + val + ");", ExecutorDeviceType::CPU);
+    }
+    run_multiple_agg("INSERT INTO lt VALUES(" + val + ");", ExecutorDeviceType::CPU);
+  }
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     for (auto fpd : {std::make_pair(true, 1.0), std::make_pair(false, 0.0)}) {
@@ -12452,11 +12468,18 @@ TEST_F(Select, Joins_FilterPushDown) {
         "coalesce_cols_test_1 R, (SELECT x, y FROM coalesce_cols_test_1) S WHERE R.y = "
         "S.y AND s.x < -999);",
         dt);
+      if (!g_aggregator) {
+        EXPECT_EQ(
+            static_cast<int64_t>(1),
+            v<int64_t>(run_simple_agg(
+                "select count(1) from lt join rt on rt.id=lt.id where rt.id=1;", dt)));
+        EXPECT_EQ(
+            static_cast<int64_t>(1),
+            v<int64_t>(run_simple_agg(
+                "select count(1) from lt join rt on rt.id=lt.id where lt.id=1;", dt)));
+      }
     }
   }
-  // reloading default values
-  g_enable_filter_push_down = default_flag;
-  g_filter_push_down_low_frac = default_lower_frac;
 }
 
 TEST_F(Select, Joins_InnerJoin_TwoTables) {
