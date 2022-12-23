@@ -28,8 +28,9 @@
 
 using MatrixT = arma::Mat<double>;
 
-arma::Mat<double> create_input_matrix(const std::vector<const float*>& input_features,
-                                      const int64_t num_rows) {
+inline arma::Mat<double> create_input_matrix(
+    const std::vector<const float*>& input_features,
+    const int64_t num_rows) {
   const int64_t num_features = input_features.size();
   arma::Mat<double> features_matrix(num_rows, num_features);
   for (int64_t c = 0; c < num_features; ++c) {
@@ -47,8 +48,9 @@ arma::Mat<double> create_input_matrix(const std::vector<const float*>& input_fea
   return features_matrix;
 }
 
-arma::Mat<double> create_input_matrix(const std::vector<const double*>& input_features,
-                                      const int64_t num_rows) {
+inline arma::Mat<double> create_input_matrix(
+    const std::vector<const double*>& input_features,
+    const int64_t num_rows) {
   const int64_t num_features = input_features.size();
   arma::Mat<double> features_matrix(num_rows, num_features);
   for (int64_t c = 0; c < num_features; ++c) {
@@ -57,9 +59,9 @@ arma::Mat<double> create_input_matrix(const std::vector<const double*>& input_fe
   return features_matrix;
 }
 
-void rewrite_cluster_id_nulls(const arma::Row<size_t>& cluster_assignments,
-                              int32_t* output_clusters,
-                              const int64_t num_rows) {
+inline void rewrite_cluster_id_nulls(const arma::Row<size_t>& cluster_assignments,
+                                     int32_t* output_clusters,
+                                     const int64_t num_rows) {
   tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
                     [&](const tbb::blocked_range<int64_t>& r) {
                       const int64_t start_idx = r.begin();
