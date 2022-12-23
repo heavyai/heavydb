@@ -62,7 +62,7 @@ const NumericTablePtr prepare_pivoted_data_table(const T* data, const int64_t nu
   return data_table;
 }
 
-kmeans::init::Method get_kmeans_init_type(const KMeansInitStrategy init_type) {
+inline kmeans::init::Method get_kmeans_init_type(const KMeansInitStrategy init_type) {
   const static std::map<KMeansInitStrategy, kmeans::init::Method> kmeans_init_type_map = {
       {KMeansInitStrategy::DEFAULT, kmeans::init::Method::deterministicDense},
       {KMeansInitStrategy::DETERMINISTIC, kmeans::init::Method::deterministicDense},
