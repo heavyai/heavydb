@@ -4524,7 +4524,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                                          input_descs,
                                                          input_to_nest_level,
                                                          input_permutation,
-                                                         input_col_descs);
+                                                         input_col_descs,
+                                                         executor_);
   if (overlaps_quals_info.is_reordered) {
     query_infos = get_table_infos(input_descs, executor_);
     VLOG(3) << "input_descs=" << shared::printContainer(input_descs);
@@ -4919,7 +4920,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
                                                          input_descs,
                                                          input_to_nest_level,
                                                          input_permutation,
-                                                         input_col_descs);
+                                                         input_col_descs,
+                                                         executor_);
   if (overlaps_quals_info.is_reordered) {
     query_infos = get_table_infos(input_descs, executor_);
     VLOG(3) << "input_descs=" << shared::printContainer(input_descs);

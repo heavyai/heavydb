@@ -24,7 +24,6 @@
 #include "Parser/ParserNode.h"
 #include "QueryEngine/DeepCopyVisitor.h"
 #include "QueryEngine/Execute.h"
-#include "QueryEngine/RelAlgTranslator.h"
 #include "QueryEngine/ScalarExprVisitor.h"
 #include "QueryEngine/WindowExpressionRewrite.h"
 #include "Shared/sqldefs.h"
@@ -850,25 +849,21 @@ OverlapsJoinTranslationResult translate_overlaps_conjunction_with_reordering(
     std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     std::vector<size_t>& input_permutation,
     std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc,
-    const OverlapsJoinRewriteType rewrite_type) {
-  auto collect_table_cardinality = [](const Analyzer::Expr* lhs,
-                                      const Analyzer::Expr* rhs) {
+    const OverlapsJoinRewriteType rewrite_type,
+    Executor const* executor) {
+  auto collect_table_cardinality = [&executor](const Analyzer::Expr* lhs,
+                                               const Analyzer::Expr* rhs) {
     const auto lhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
     const auto rhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(rhs);
     if (lhs_cv && rhs_cv) {
-      const auto inner_table_metadata = Catalog_Namespace::get_metadata_for_table(
-          {lhs_cv->getColumnKey().db_id, lhs_cv->getColumnKey().table_id});
-      const auto outer_table_metadata = Catalog_Namespace::get_metadata_for_table(
-          {rhs_cv->getColumnKey().db_id, rhs_cv->getColumnKey().table_id});
-      if (inner_table_metadata->fragmenter && outer_table_metadata->fragmenter) {
-        return std::make_pair<int64_t, int64_t>(
-            inner_table_metadata->fragmenter->getNumRows(),
-            outer_table_metadata->fragmenter->getNumRows());
-      }
+      return std::make_pair<int64_t, int64_t>(
+          get_table_cardinality(lhs_cv->getTableKey(), executor),
+          get_table_cardinality(rhs_cv->getTableKey(), executor));
     }
     // otherwise, return an invalid table cardinality
     return std::make_pair<int64_t, int64_t>(-1, -1);
   };
+
   auto has_invalid_join_col_order = [](const Analyzer::Expr* lhs,
                                        const Analyzer::Expr* rhs) {
     // Check for compatible join ordering. If the join ordering does not match expected
@@ -1204,7 +1199,8 @@ OverlapsJoinTranslationInfo convert_overlaps_join(
     std::vector<InputDescriptor>& input_descs,
     std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     std::vector<size_t>& input_permutation,
-    std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc) {
+    std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc,
+    Executor const* executor) {
   if (!g_enable_overlaps_hashjoin || join_quals.empty()) {
     return {join_quals, false, false};
   }
@@ -1244,7 +1240,8 @@ OverlapsJoinTranslationInfo convert_overlaps_join(
                                                            input_to_nest_level,
                                                            input_permutation,
                                                            input_col_desc,
-                                                           rewrite_type);
+                                                           rewrite_type,
+                                                           executor);
       }
       if (translation_res.converted_overlaps_join_info) {
         const auto& overlaps_quals = *translation_res.converted_overlaps_join_info;
@@ -1386,4 +1383,16 @@ const int get_max_rte_scan_table(
     }
   }
   return ret;
+}
+
+size_t get_table_cardinality(shared::TableKey const& table_key,
+                             Executor const* executor) {
+  if (table_key.table_id > 0) {
+    auto const td = Catalog_Namespace::get_metadata_for_table(table_key);
+    CHECK(td);
+    CHECK(td->fragmenter);
+    return td->fragmenter->getNumRows();
+  }
+  auto temp_tbl = get_temporary_table(executor->getTemporaryTables(), table_key.table_id);
+  return temp_tbl->rowCount();
 }

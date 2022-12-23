@@ -215,14 +215,16 @@ OverlapsJoinTranslationResult translate_overlaps_conjunction_with_reordering(
     std::unordered_map<const RelAlgNode*, int> const& input_to_nest_level,
     std::vector<size_t> const& input_permutation,
     std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc,
-    const OverlapsJoinRewriteType rewrite_type);
+    const OverlapsJoinRewriteType rewrite_type,
+    Executor const* executor);
 
 OverlapsJoinTranslationInfo convert_overlaps_join(
     JoinQualsPerNestingLevel const& join_quals,
     std::vector<InputDescriptor>& input_descs,
     std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     std::vector<size_t>& input_permutation,
-    std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc);
+    std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc,
+    Executor const* executor);
 
 std::list<std::shared_ptr<Analyzer::Expr>> strip_join_covered_filter_quals(
     const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
@@ -236,3 +238,5 @@ bool self_join_not_covered_by_left_deep_tree(const Analyzer::ColumnVar* lhs,
 
 const int get_max_rte_scan_table(
     std::unordered_map<int, llvm::Value*>& scan_idx_to_hash_pos);
+
+size_t get_table_cardinality(shared::TableKey const& table_key, Executor const* executor);

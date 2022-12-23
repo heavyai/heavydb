@@ -23,10 +23,15 @@
 #include "Analyzer/Analyzer.h"
 #include "Shared/DbObjectKeys.h"
 
+struct GeoJoinOperandsTableKeyPair {
+  shared::TableKey inner_table_key;
+  shared::TableKey outer_table_key;
+};
+
 class GeospatialFunctionFinder : public ScalarExprVisitor<void*> {
  public:
   const std::vector<const Analyzer::ColumnVar*>& getGeoArgCvs() const;
-  const std::pair<shared::TableKey, shared::TableKey> getTableIdsOfGeoExpr() const;
+  const std::optional<GeoJoinOperandsTableKeyPair> getJoinTableKeyPair() const;
   const std::string& getGeoFunctionName() const;
 
  protected:
