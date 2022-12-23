@@ -2338,6 +2338,34 @@ TEST_F(OverlapsJoinRewriteTest, ArgumentOrderingAfterTableReordering) {
   }
 }
 
+TEST_F(OverlapsJoinRewriteTest, TemporaryTable) {
+  QR::get()->runDDLStatement("DROP TABLE IF EXISTS tp1;");
+  QR::get()->runDDLStatement("DROP TABLE IF EXISTS tp2;");
+  QR::get()->runDDLStatement(
+      "CREATE TABLE tp1 (id int, p1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32));");
+  QR::get()->runDDLStatement(
+      "CREATE TABLE tp2 (id int, p2 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32));");
+  QR::get()->runSQL("INSERT INTO tp1 VALUES(1, 'POINT(1 1)');", ExecutorDeviceType::CPU);
+  QR::get()->runSQL("INSERT INTO tp1 VALUES(2, 'POINT(1 1)');", ExecutorDeviceType::CPU);
+  QR::get()->runSQL("INSERT INTO tp2 VALUES(1, 'POINT(1 1)');", ExecutorDeviceType::CPU);
+  QR::get()->runSQL("INSERT INTO tp2 VALUES(2, 'POINT(2 2)');", ExecutorDeviceType::CPU);
+  ScopeGuard reset_flag = [orig = g_from_table_reordering] {
+    g_from_table_reordering = orig;
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS tp1;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS tp2;");
+  };
+  std::string query{
+      "select count(1) from (select * from tp1 where id > 1) R, tp2 S where "
+      "st_distance(R.p1, S.p2) < 0.01;"};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    g_from_table_reordering = true;
+    EXPECT_NO_THROW(execSQL(query, dt));
+    g_from_table_reordering = false;
+    EXPECT_ANY_THROW(execSQL(query, dt));
+  }
+}
+
 int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

@@ -745,6 +745,11 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
       const auto col_lvs = code_generator.codegen(outer_col, true, co);
       CHECK_EQ(col_lvs.size(), size_t(1));
       auto column_key = outer_col_var->getColumnKey();
+      if (column_key.table_id < 0) {
+        // todo: relax this
+        throw QueryNotSupported(
+            "Geospatial columns not yet supported in this temporary table context.");
+      }
       column_key.column_id = column_key.column_id + 1;
       const auto coords_cd = Catalog_Namespace::get_metadata_for_column(column_key);
       CHECK(coords_cd);
