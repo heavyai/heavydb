@@ -201,7 +201,7 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
 
     // runtime functions may not have CURSOR field type information, so we default
     // to old behavior of assuming they typecheck
-    if (formalFieldTypes.size() == 0) {
+    if (formalFieldTypes == null || formalFieldTypes.size() == 0) {
       System.out.println(
               "Warning: UDTF has no CURSOR field subtype data. Proceeding assuming CURSOR typechecks.");
       return true;

@@ -911,3 +911,19 @@ EXTENSION_NOINLINE int32_t ct_gpu_default_init__gpu_(Column<int32_t>& output_buf
   // output_buffer[0] should always be 0 due to default initialization for GPU
   return 1;
 }
+
+EXTENSION_NOINLINE int32_t ct_test_func__cpu_1(const Column<int32_t>& input1,
+                                               const int32_t x,
+                                               const int32_t multiplier,
+                                               Column<int32_t>& out) {
+  out[0] = 123;
+  return 1;
+}
+
+EXTENSION_NOINLINE int32_t ct_test_func__cpu_2(const Column<int32_t>& input1,
+                                               const Column<int32_t>& input2,
+                                               const int32_t multiplier,
+                                               Column<int32_t>& out) {
+  out[0] = 234;
+  return 1;
+}
