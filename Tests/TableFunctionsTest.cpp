@@ -917,6 +917,33 @@ TEST_F(TableFunctions, BasicProjection) {
     }
   }
 }
+
+TEST_F(TableFunctions, TestCalciteOverload) {
+  // Test for QE-646 as calcite is failing with a NullPointerException
+  for (auto dt : {ExecutorDeviceType::CPU}) {
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_test_func(cursor(SELECT x from tf_test), 1, 1));", dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      std::vector<int64_t> expected_result_set{123};
+      auto row = rows->getNextRow(true, false);
+      auto v = TestHelpers::v<int64_t>(row[0]);
+      ASSERT_EQ(v, expected_result_set[0]);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_test_func(cursor(SELECT x from tf_test), cursor(SELECT "
+          "x from tf_test), 1));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      std::vector<int64_t> expected_result_set{234};
+      auto row = rows->getNextRow(true, false);
+      auto v = TestHelpers::v<int64_t>(row[0]);
+      ASSERT_EQ(v, expected_result_set[0]);
+    }
+  }
+}
+
 TEST_F(TableFunctions, GpuDefaultOutputInitializaiton) {
   for (auto dt : {ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

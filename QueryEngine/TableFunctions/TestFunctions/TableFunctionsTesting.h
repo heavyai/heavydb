@@ -1492,4 +1492,20 @@ ct_test_string_default_arg__cpu_(TableFunctionManager& mgr,
                                  const TextEncodingNone& suffix,
                                  Column<TextEncodingDict>& out);
 
+// clang-format off
+/*
+  UDTF: ct_test_func__cpu_1(Cursor<int32_t>, int32, RowMultiplier) -> Column<int32_t>
+  UDTF: ct_test_func__cpu_2(Cursor<int32_t>, Cursor<int32_t>, RowMultiplier) -> Column<int32_t>
+*/
+// clang-format on
+// Tests for QE-646
+EXTENSION_NOINLINE int32_t ct_test_func__cpu_1(const Column<int32_t>& input1,
+                                               const int32_t x,
+                                               const int32_t multiplier,
+                                               Column<int32_t>& out);
+
+EXTENSION_NOINLINE int32_t ct_test_func__cpu_2(const Column<int32_t>& input1,
+                                               const Column<int32_t>& input2,
+                                               const int32_t multiplier,
+                                               Column<int32_t>& out);
 #endif
