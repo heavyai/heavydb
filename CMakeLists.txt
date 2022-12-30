@@ -1084,6 +1084,7 @@ list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/
 # Check if the git hash file exists and set the CPack version if it does
 # If not, get the hash from git and create the file
 execute_process(
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMAND ${GIT_EXECUTABLE} rev-parse --short=10 HEAD
   OUTPUT_VARIABLE MAPD_GIT_HASH
 )
@@ -1113,6 +1114,7 @@ add_custom_target(get_git_hash ALL
   COMMENT "Checking git hash"
   BYPRODUCTS ${CMAKE_BINARY_DIR}/heavyai_git_hash_new.txt
   OUTPUT ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMAND ${GIT_EXECUTABLE} rev-parse --short=10 HEAD > ${CMAKE_BINARY_DIR}/heavyai_git_hash_new.txt
   COMMAND bash -c "${CMAKE_SOURCE_DIR}/scripts/update_git_hash.sh ${CMAKE_BINARY_DIR}"
 )
