@@ -159,5 +159,8 @@
   UDTF: foo_53(ColumnList<T>, ColumnList<U>) -> Column<T>, T=[int64_t], U=[int32_t] $=>$
         foo_53(ColumnListInt64, ColumnListInt32) -> ColumnInt64
 
+  UDTF: foo_54(Cursor<ColumnList<T>, Column<T>>, Cursor<ColumnList<T>>) -> Column<T>, T=[int64_t] $=>$
+        foo_54(Cursor<ColumnListInt64, ColumnInt64> | fields=[field0,field1], Cursor<ColumnListInt64> | fields=[field0]) -> ColumnInt64
+
  */
 // clang-format on
