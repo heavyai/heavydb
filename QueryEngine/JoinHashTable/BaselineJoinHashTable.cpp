@@ -248,11 +248,6 @@ bool needs_dictionary_translation(
 void BaselineJoinHashTable::reify(const HashType preferred_layout) {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
-  const auto composite_key_info = HashJoin::getCompositeKeyInfo(
-      inner_outer_pairs_, executor_, inner_outer_string_op_infos_pairs_);
-  needs_dict_translation_ = needs_dictionary_translation(
-      inner_outer_pairs_, inner_outer_string_op_infos_pairs_, executor_);
-
   HashJoin::checkHashJoinReplicationConstraint(
       getInnerTableId(inner_outer_pairs_),
       BaselineJoinHashTable::getShardCountForCondition(
@@ -454,7 +449,9 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
         for (int device_id = 0; device_id < device_count_; ++device_id) {
           auto cpu_hash_table = std::dynamic_pointer_cast<BaselineHashTable>(
               hash_tables_for_device_[device_id]);
-          copyCpuHashTableToGpu(cpu_hash_table, device_id, data_mgr);
+          if (cpu_hash_table->getEntryCount()) {
+            copyCpuHashTableToGpu(cpu_hash_table, device_id, data_mgr);
+          }
         }
 #else
         UNREACHABLE();
@@ -851,7 +848,9 @@ int BaselineJoinHashTable::initHashTableForDevice(
 #ifdef HAVE_CUDA
       auto cpu_hash_table = std::dynamic_pointer_cast<BaselineHashTable>(
           hash_tables_for_device_[device_id]);
-      copyCpuHashTableToGpu(cpu_hash_table, device_id, executor_->getDataMgr());
+      if (cpu_hash_table->getEntryCount()) {
+        copyCpuHashTableToGpu(cpu_hash_table, device_id, executor_->getDataMgr());
+      }
 #else
       CHECK(false);
 #endif

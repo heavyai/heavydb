@@ -476,6 +476,12 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
     const auto outer_col = inner_outer_pair.second;
     const auto& inner_ti = inner_col->get_type_info();
     const auto& outer_ti = outer_col->get_type_info();
+    if (inner_ti.is_string() && outer_ti.is_string() &&
+        inner_ti.is_dict_encoded_string() != outer_ti.is_dict_encoded_string()) {
+      throw std::runtime_error(
+          "Detected a join between dictionary-encoded and none-encoded text columns. "
+          "Please consider applying dictionary-encoding for the other column.");
+    }
     const auto& inner_column_key = inner_col->getColumnKey();
     ChunkKey cache_key_chunks_for_column{
         inner_column_key.db_id, inner_column_key.table_id, inner_column_key.column_id};
@@ -485,19 +491,23 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
           (inner_outer_string_op_infos_pairs[string_op_info_pairs_idx].first.size() ||
            inner_outer_string_op_infos_pairs[string_op_info_pairs_idx].second.size())))) {
       CHECK(outer_ti.is_string());
-      CHECK(inner_ti.get_compression() == kENCODING_DICT &&
-            outer_ti.get_compression() == kENCODING_DICT);
-      const auto sd_inner_proxy = executor->getStringDictionaryProxy(
-          inner_ti.getStringDictKey(), executor->getRowSetMemoryOwner(), true);
-      auto sd_outer_proxy = executor->getStringDictionaryProxy(
-          outer_ti.getStringDictKey(), executor->getRowSetMemoryOwner(), true);
-      CHECK(sd_inner_proxy && sd_outer_proxy);
-      sd_inner_proxy_per_key.push_back(sd_inner_proxy);
-      sd_outer_proxy_per_key.push_back(sd_outer_proxy);
-      cache_key_chunks_for_column.push_back(sd_outer_proxy->getGeneration());
+      StringDictionaryProxy* sd_inner_proxy{nullptr};
+      StringDictionaryProxy* sd_outer_proxy{nullptr};
+      if (inner_ti.get_compression() == kENCODING_DICT) {
+        sd_inner_proxy = executor->getStringDictionaryProxy(
+            inner_ti.getStringDictKey(), executor->getRowSetMemoryOwner(), true);
+        sd_inner_proxy_per_key.push_back(sd_inner_proxy);
+      }
+      if (outer_ti.get_compression() == kENCODING_DICT) {
+        sd_outer_proxy = executor->getStringDictionaryProxy(
+            outer_ti.getStringDictKey(), executor->getRowSetMemoryOwner(), true);
+        sd_outer_proxy_per_key.push_back(sd_outer_proxy);
+        cache_key_chunks_for_column.push_back(sd_outer_proxy->getGeneration());
+      }
     } else {
       sd_inner_proxy_per_key.emplace_back();
       sd_outer_proxy_per_key.emplace_back();
+      cache_key_chunks_for_column.push_back({-1});
     }
     cache_key_chunks.push_back(cache_key_chunks_for_column);
     string_op_info_pairs_idx++;
@@ -658,12 +668,10 @@ std::vector<InputTableInfo> getSyntheticInputTableInfo(
   // and RelAlgExecutor.cpp and rte_idx there.
   std::vector<InputTableInfo> query_infos;
   query_infos.reserve(phys_table_ids.size());
-  size_t i = 0;
   for (const auto& table_key : phys_table_ids) {
     auto td = Catalog_Namespace::get_metadata_for_table(table_key);
     CHECK(td);
     query_infos.push_back({table_key, td->fragmenter->getFragmentsForQuery()});
-    ++i;
   }
 
   return query_infos;

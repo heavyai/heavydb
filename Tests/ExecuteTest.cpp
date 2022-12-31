@@ -9812,6 +9812,27 @@ void import_hash_join_test() {
   }
 }
 
+void import_hash_join_with_composite_text_cols_test() {
+  for (std::string tbl_name : {"CTX1", "CTX2", "CTX3", "CTX4"}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + tbl_name + ";");
+    run_ddl_statement("CREATE TABLE " + tbl_name +
+                      "(v1 TEXT ENCODING NONE, v2 TEXT ENCODING DICT(8), v3 TEXT "
+                      "ENCODING DICT(8), v4 TEXT ENCODING DICT(8));");
+  }
+  run_multiple_agg("INSERT INTO CTX1 VALUES ('A', 'A', 'A', 'A');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO CTX1 VALUES ('A', 'A', 'A', 'A');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO CTX1 VALUES ('B', 'B', 'B', 'B');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO CTX1 VALUES ('B', 'B', 'B', 'B');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO CTX2 VALUES ('A', 'A', 'A', 'A');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO CTX2 VALUES ('A', 'A', 'A', 'A');",
+                   ExecutorDeviceType::CPU);
+}
+
 void import_hash_join_decimal_test() {
   const std::string drop_old_test{"DROP TABLE IF EXISTS hash_join_decimal_test;"};
   run_ddl_statement(drop_old_test);
@@ -21308,6 +21329,15 @@ TEST(Join, MultiCompositeColumns) {
       "join_test.dup_str IS NULL)) AND (test.x = join_test.x OR (test.x IS NULL AND "
       "join_test.x IS NULL));",
       dt);
+    // a composite keys having text columns
+    EXPECT_ANY_THROW(
+        run_multiple_agg("SELECT COUNT(1) FROM CTX1 S, CTX2 R WHERE R.v3 = S.v3 AND R.v4 "
+                         "= S.v4 AND R.v2 = S.v1;",
+                         dt));
+    EXPECT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg("SELECT COUNT(1) FROM CTX3 S, CTX4 R WHERE R.v3 "
+                                        "= S.v3 AND R.v4 = S.v4 AND R.v2 = S.v2;",
+                                        dt)));
   }
 }
 
@@ -27650,6 +27680,13 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return -EEXIST;
   }
   try {
+    import_hash_join_with_composite_text_cols_test();
+  } catch (...) {
+    LOG(ERROR)
+        << "Failed to (re-)create table 'import_hash_join_with_composite_text_cols_test'";
+    return -EEXIST;
+  }
+  try {
     import_emp_table();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'emp'";
@@ -28077,6 +28114,9 @@ void drop_tables() {
   run_ddl_statement(drop_test_frame_nav_dup);
   g_sqlite_comparator.query(drop_test_frame_nav_dup);
   run_ddl_statement("DROP TABLE IF EXISTS test_nvf");
+  for (std::string tbl : {"CTX1", "CTX2", "CTX3", "CTX4"}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + tbl + ";");
+  }
 }
 
 void drop_views() {

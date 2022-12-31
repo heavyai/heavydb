@@ -2618,7 +2618,7 @@ bool GeoBinOper::operator==(const Expr& rhs) const {
 std::string ColumnVar::toString() const {
   std::stringstream ss;
   ss << "(ColumnVar " << column_key_ << ", rte: " << std::to_string(rte_idx_) << " "
-     << get_type_info().get_type_name() << ") ";
+     << get_type_info().get_type_name() << ", type: " << type_info.toString() << ") ";
   return ss.str();
 }
 
