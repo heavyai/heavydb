@@ -305,6 +305,10 @@ class BaselineJoinHashTableBuilder {
 
     hash_table_ = std::make_unique<BaselineHashTable>(
         layout, keyspace_entry_count, keys_for_all_rows, hash_table_size);
+    if (entry_cnt == 0) {
+      VLOG(1) << "Stop building a hash table on an empty input table";
+      return 0;
+    }
     VLOG(1) << "Initialize a CPU baseline hash table for join type "
             << HashJoin::getHashTypeString(layout)
             << ", hash table size: " << hash_table_size << " Bytes"
