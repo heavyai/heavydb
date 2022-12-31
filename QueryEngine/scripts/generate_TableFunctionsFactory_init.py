@@ -1000,35 +1000,50 @@ class AmbiguousSignatureCheckTransformer(AstTransformer):
     The first ColumnList ends up consuming all of the arguments leaving a single
     one for the last ColumnList. In other words, Z becomes a Column
     """
+    def check_ambiguity(self, udtf_name, lst):
+        """
+        udtf_name: str
+        lst: list[list[Node]]
+        """
+        for l in lst:
+            for i in range(len(l)):
+                if not l[i].is_column_list():
+                    i += 1
+                    continue
+
+                collist = l[i]
+                T = collist.inner[0]
+
+                for j in range(i+1, len(l)):
+                    # if lst[j] == Column<T>, just continue
+                    if l[j].is_column() and l[j].is_column_of(T):
+                        continue
+                    elif l[j].is_column_list() and l[j].is_column_list_of(T):
+                        msg = ('%s signature is ambiguous as there are two '
+                            'ColumnList with the same subtype in the same '
+                            'group.') % (udtf_name)
+                        warnings.warn(msg, TransformerWarning)
+                    else:
+                        break
+
     def visit_udtf_node(self, udtf_node):
         lst = []
+        cursor = False
         for arg in udtf_node.inputs:
             s = arg.accept(self)
             if isinstance(s, list):
-                lst.extend(s)
+                lst.append(s)  # Cursor
+                cursor = True
             else:
-                lst.append(s)
-
-
-        for i in range(len(lst)):
-            if not lst[i].is_column_list():
-                i += 1
-                continue
-
-            collist = lst[i]
-            T = collist.inner[0]
-
-            for j in range(i+1, len(lst)):
-                # if lst[j] == Column<T>, just continue
-                if lst[j].is_column() and lst[j].is_column_of(T):
-                    continue
-                elif lst[j].is_column_list() and lst[j].is_column_list_of(T):
-                    msg = ('%s signature is ambiguous as there are two '
-                           'ColumnList with the same subtype in the same '
-                           'group.') % (udtf_node.name)
-                    warnings.warn(msg, TransformerWarning)
+                # Aggregate single arguments in a list
+                if cursor or len(lst) == 0:
+                    lst.append([s])
                 else:
-                    break
+                    lst[-1].append(s)
+                cursor = False
+
+        self.check_ambiguity(udtf_node.name, lst)
+
         return udtf_node
 
     def visit_composed_node(self, composed_node):
