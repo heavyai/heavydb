@@ -51,6 +51,9 @@ typename TypeR::rep timer_stop(Type clock_begin) {
   return duration.count();
 }
 
+const auto timer_stop_microseconds =
+    timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>;
+
 template <typename Type = std::chrono::steady_clock::time_point,
           typename TypeR = std::chrono::milliseconds>
 std::string timer_lap(Type clock_begin, Type& clock_last) {
