@@ -305,7 +305,6 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new ConditionalChangeEvent());
 
     addOperator(new HeavyDB_Geo_PolyBoundsPtr());
-    addOperator(new HeavyDB_Geo_PolyRenderGroup());
     addOperator(new HeavyDB_Geo_PolyCoordsArray());
     addOperator(new HeavyDB_Geo_PolyRingSizesArray());
     addOperator(new HeavyDB_Geo_PolyPolyRingsArray());
@@ -3158,7 +3157,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 
   //
-  // Internal accessors for in-situ poly render queries
+  // Temporary internal accessors for passing poly data into UDTFs
   //
 
   static class HeavyDB_Geo_PolyBoundsPtr extends SqlFunction {
@@ -3176,24 +3175,6 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BIGINT);
-    }
-  }
-
-  static class HeavyDB_Geo_PolyRenderGroup extends SqlFunction {
-    HeavyDB_Geo_PolyRenderGroup() {
-      super("HeavyDB_Geo_PolyRenderGroup",
-              SqlKind.OTHER_FUNCTION,
-              null,
-              null,
-              OperandTypes.family(SqlTypeFamily.ANY),
-              SqlFunctionCategory.SYSTEM);
-    }
-
-    @Override
-    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 

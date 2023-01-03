@@ -207,7 +207,6 @@ class RelAlgTranslator {
       const RexScalar* rex_scalar,
       SQLTypeInfo& arg_ti,
       const bool with_bounds,
-      const bool with_render_group,
       const bool expand_geo_col,
       const bool is_projection = false,
       const bool use_geo_expressions = false,
@@ -218,7 +217,6 @@ class RelAlgTranslator {
       const RexInput*,
       SQLTypeInfo&,
       const bool with_bounds,
-      const bool with_render_group,
       const bool expand_geo_col) const;
 
   std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoLiteral(const RexLiteral*,

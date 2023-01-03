@@ -2894,24 +2894,17 @@ class GeoColumnVar : public ColumnVar {
   GeoColumnVar(const SQLTypeInfo& ti,
                const shared::ColumnKey& column_key,
                const int32_t range_table_index,
-               const bool with_bounds,
-               const bool with_render_group)
-      : ColumnVar(ti, column_key, range_table_index)
-      , with_bounds_(with_bounds)
-      , with_render_group_(with_render_group) {}
+               const bool with_bounds)
+      : ColumnVar(ti, column_key, range_table_index), with_bounds_(with_bounds) {}
 
-  GeoColumnVar(const Analyzer::ColumnVar* column_var,
-               const bool with_bounds,
-               const bool with_render_group)
+  GeoColumnVar(const Analyzer::ColumnVar* column_var, const bool with_bounds)
       : ColumnVar(column_var->get_type_info(),
                   column_var->getColumnKey(),
                   column_var->get_rte_idx())
-      , with_bounds_(with_bounds)
-      , with_render_group_(with_render_group) {}
+      , with_bounds_(with_bounds) {}
 
  protected:
   bool with_bounds_;
-  bool with_render_group_;
 };
 
 class GeoConstant : public GeoExpr {
