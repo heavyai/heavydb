@@ -4989,17 +4989,12 @@ bool ST_Intersects_MultiPolygon_MultiPolygon(int8_t* mpoly1_coords,
 }
 
 //
-// Accessors for poly bounds and render group for in-situ poly render queries
+// Temporary accessors for passing poly data into UDTFs
 //
 
 EXTENSION_INLINE
 int64_t HeavyDB_Geo_PolyBoundsPtr(double* bounds, int64_t size) {
   return reinterpret_cast<int64_t>(bounds);
-}
-
-EXTENSION_INLINE
-int32_t HeavyDB_Geo_PolyRenderGroup(int32_t render_group) {
-  return render_group;
 }
 
 EXTENSION_INLINE
