@@ -35,19 +35,14 @@ class PerfectHashTable : public HashTable {
       , layout_(layout)
       , entry_count_(entry_count)
       , emitted_keys_count_(emitted_keys_count) {
-    std::string device_str = "GPU";
     if (device_type == ExecutorDeviceType::CPU) {
-      device_str = "CPU";
       cpu_hash_table_buff_size_ =
           layout_ == HashType::OneToOne
               ? entry_count_
               : 2 * entry_count_ + ((1 + for_window_framing) * emitted_keys_count_);
       cpu_hash_table_buff_.reset(new int32_t[cpu_hash_table_buff_size_]);
+      print_log(ExecutorDeviceType::CPU);
     }
-    VLOG(1) << "Initialize a " << device_str << " perfect hash table for join type "
-            << ::toString(layout) << " # hash entries: " << entry_count
-            << ", # entries stored in the payload buffer: " << emitted_keys_count
-            << ", hash table size : " << cpu_hash_table_buff_size_ * 4 << " Bytes";
   }
 
   ~PerfectHashTable() override {
@@ -67,6 +62,7 @@ class PerfectHashTable : public HashTable {
     CHECK(!gpu_hash_table_buff_);
     gpu_hash_table_buff_ = CudaAllocator::allocGpuAbstractBuffer(
         data_mgr_, entries * sizeof(int32_t), device_id);
+    print_log(ExecutorDeviceType::GPU, device_id);
   }
 
   size_t getHashTableBufferSize(const ExecutorDeviceType device_type) const override {
@@ -101,6 +97,18 @@ class PerfectHashTable : public HashTable {
   BucketizedHashEntryInfo getHashEntryInfo() const { return hash_entry_info_; }
 
   size_t getColumnNumElems() const { return column_num_elems_; }
+
+  void print_log(ExecutorDeviceType device_type, int device_id = 0) {
+    std::string device_str{"GPU"};
+    if (device_type == ExecutorDeviceType::CPU) {
+      device_str = "CPU";
+    }
+    VLOG(1) << "Initialize a " << device_str << " perfect hash table for join type "
+            << ::toString(layout_) << " on device-" << device_id
+            << ": # hash entries: " << entry_count_
+            << ", # entries stored in the payload buffer: " << emitted_keys_count_
+            << ", hash table size : " << getHashTableBufferSize(device_type) << " Bytes";
+  }
 
  private:
   Data_Namespace::AbstractBuffer* gpu_hash_table_buff_{nullptr};

@@ -30,6 +30,9 @@ using namespace std::string_literals;
 #include "MapDRelease.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "QueryEngine/GroupByAndAggregate.h"
+#include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
 #include "Shared/Compressor.h"
 #include "Shared/SysDefinitions.h"
 #include "StringDictionary/StringDictionary.h"
@@ -782,6 +785,28 @@ void CommandLineOptions::fillAdvancedOptions() {
                                po::value<int>(&system_parameters.num_executors)
                                    ->default_value(system_parameters.num_executors),
                                "Number of executors to run in parallel.");
+  developer_desc.add_options()(
+      "num-tuple-threshold-switch-to-baseline",
+      po::value<size_t>(&g_num_tuple_threshold_switch_to_baseline)
+          ->default_value(g_num_tuple_threshold_switch_to_baseline)
+          ->implicit_value(100000),
+      "Control a threshold to switch perfect hash join to baseline hash join by "
+      "comparing a hash entry range of the join column to the input table cardinality."
+      "This condition checks the following: |INPUT_TABLE| < {THIS_THRESHOLD}"
+      "We switch hash table layout when this condition and the condition related to "
+      "\'col-range-to-num-hash-entries-threshold-switch-to-baseline\' are satisfied "
+      "together.");
+  developer_desc.add_options()(
+      "ratio-num-hash-entry-to-num-tuple-switch-to-baseline",
+      po::value<size_t>(&g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline)
+          ->default_value(g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline)
+          ->implicit_value(100),
+      "Control a threshold to switch perfect hash join to baseline hash join by "
+      "comparing a hash entry range of the join column to the input table cardinality."
+      "This condition checks the following: HASH_ENTRY_RANGE / |INPUT_TABLE| < "
+      "{THIS_THRESHOLD}"
+      "We switch hash table layout when this condition and the condition related to "
+      "\'num-tuple-threshold-switch-to-baseline\' are satisfied together.");
   developer_desc.add_options()(
       "gpu-shared-mem-threshold",
       po::value<size_t>(&g_gpu_smem_threshold)->default_value(g_gpu_smem_threshold),
