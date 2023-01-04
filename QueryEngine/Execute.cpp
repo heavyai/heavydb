@@ -4814,7 +4814,7 @@ QueryPlanDagCache& Executor::getQueryPlanDagCache() {
   return query_plan_dag_cache_;
 }
 
-ResultSetRecyclerHolder& Executor::getRecultSetRecyclerHolder() {
+ResultSetRecyclerHolder& Executor::getResultSetRecyclerHolder() {
   return resultset_recycler_holder_;
 }
 

@@ -970,7 +970,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
   if (g_allow_query_step_skipping) {
     for (const auto& kv : seq.getSkippedQueryStepCacheKeys()) {
       const auto cached_res =
-          executor_->getRecultSetRecyclerHolder().getCachedQueryResultSet(kv.second);
+          executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(kv.second);
       CHECK(cached_res);
       addTemporaryTable(kv.first, cached_res);
     }
@@ -1219,14 +1219,14 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
 
   if (canUseResultsetCache(eo, render_info) && has_valid_query_plan_dag(body)) {
     if (auto cached_resultset =
-            executor_->getRecultSetRecyclerHolder().getCachedQueryResultSet(
+            executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(
                 body->getQueryPlanDagHash())) {
       VLOG(1) << "recycle resultset of the root node " << body->getRelNodeDagId()
               << " from resultset cache";
       body->setOutputMetainfo(cached_resultset->getTargetMetaInfo());
       if (render_info) {
         std::vector<std::shared_ptr<Analyzer::Expr>>& cached_target_exprs =
-            executor_->getRecultSetRecyclerHolder().getTargetExprs(
+            executor_->getResultSetRecyclerHolder().getTargetExprs(
                 body->getQueryPlanDagHash());
         std::vector<Analyzer::Expr*> copied_target_exprs;
         for (const auto& expr : cached_target_exprs) {
@@ -2437,7 +2437,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
   auto use_resultset_recycler = canUseResultsetCache(eo, nullptr);
   if (use_resultset_recycler && has_valid_query_plan_dag(table_func)) {
     auto cached_resultset =
-        executor_->getRecultSetRecyclerHolder().getCachedQueryResultSet(
+        executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(
             table_func->getQueryPlanDagHash());
     if (cached_resultset) {
       VLOG(1) << "recycle table function's resultset of the root node "
@@ -2476,7 +2476,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
     if (allow_auto_caching_resultset) {
       VLOG(1) << "Automatically keep table function's query resultset to recycler";
     }
-    executor_->getRecultSetRecyclerHolder().putQueryResultSetToCache(
+    executor_->getResultSetRecyclerHolder().putQueryResultSetToCache(
         table_func_work_unit.exe_unit.query_plan_dag_hash,
         resultset_ptr->getInputTableKeys(),
         resultset_ptr,
@@ -3333,7 +3333,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     if (enable_resultset_recycler && has_valid_query_plan_dag(source_node) &&
         !sort->isEmptyResult()) {
       if (auto cached_resultset =
-              executor_->getRecultSetRecyclerHolder().getCachedQueryResultSet(
+              executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(
                   source_query_plan_dag)) {
         CHECK(cached_resultset->canUseSpeculativeTopNSort());
         VLOG(1) << "recycle resultset of the root node " << source_node->getRelNodeDagId()
@@ -3980,7 +3980,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     }
     res->setUseSpeculativeTopNSort(
         use_speculative_top_n(ra_exe_unit, res->getQueryMemDesc()));
-    executor_->getRecultSetRecyclerHolder().putQueryResultSetToCache(
+    executor_->getResultSetRecyclerHolder().putQueryResultSetToCache(
         ra_exe_unit.query_plan_dag_hash,
         res->getInputTableKeys(),
         res,

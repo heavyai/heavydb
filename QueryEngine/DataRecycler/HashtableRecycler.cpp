@@ -139,12 +139,13 @@ void HashtableRecycler::putItemToCache(QueryPlanHash key,
     auto cache_status = metric_tracker.canAddItem(device_identifier, item_size);
     if (cache_status == CacheAvailability::UNAVAILABLE) {
       // hashtable is too large
+      LOG(INFO) << "Caching hash table fails: hash table is too large";
       return;
     } else if (cache_status == CacheAvailability::AVAILABLE_AFTER_CLEANUP) {
-      // we need to cleanup some cached hashtables to make a room to insert this hashtable
-      // here we try to cache the new one anyway since we don't know the importance of
-      // this hashtable yet and if it is not that frequently reused it is removed
-      // in a near future
+      // we need to clean up some cached hashtables to make a room to insert this
+      // hashtable here we try to cache the new one anyway since we don't know the
+      // importance of this hashtable yet and if it is not that frequently reused it is
+      // removed in a near future
       auto required_size = metric_tracker.calculateRequiredSpaceForItemAddition(
           device_identifier, item_size);
       cleanupCacheForInsertion(item_type, device_identifier, required_size, lock);

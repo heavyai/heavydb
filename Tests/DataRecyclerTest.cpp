@@ -2403,7 +2403,7 @@ TEST(DataRecycler, Lazy_Cache_Invalidation) {
 
 TEST(DataRecycler, MetricTrackerTest) {
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-  auto& resultset_recycler_holder = executor->getRecultSetRecyclerHolder();
+  auto& resultset_recycler_holder = executor->getResultSetRecyclerHolder();
   auto resultset_recycler = resultset_recycler_holder.getResultSetRecycler();
   CHECK(resultset_recycler);
   auto& metric_tracker = resultset_recycler->getResultSetRecyclerMetricTracker();
@@ -2469,6 +2469,45 @@ TEST(DataRecycler, MetricTrackerTest) {
     CacheAvailability ca4 = metric_tracker.canAddItem(dummy_id, 16);
     EXPECT_EQ(ca4, CacheAvailability::UNAVAILABLE);
   }
+}
+
+TEST(DataRecycler, LargeHashTable) {
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  executor->clearMemory(MemoryLevel::CPU_LEVEL);
+  executor->getQueryPlanDagCache().clearQueryPlanCache();
+  auto drop_tables = [] {
+    run_ddl_statement("DROP TABLE IF EXISTS ct1;");
+    run_ddl_statement("DROP TABLE IF EXISTS ct2;");
+  };
+  drop_tables();
+  auto const dt = ExecutorDeviceType::CPU;
+  run_ddl_statement("CREATE TABLE ct1 (v int);");
+  run_ddl_statement("CREATE TABLE ct2 (v int);");
+  QR::get()->runSQL("INSERT INTO ct1 VALUES (1);", dt);
+  QR::get()->runSQL("INSERT INTO ct1 VALUES (1000000000);", dt);
+  QR::get()->runSQL("INSERT INTO ct2 VALUES (2);", dt);
+  QR::get()->runSQL("INSERT INTO ct2 VALUES (1000000000);", dt);
+  ScopeGuard reset = [orig1 = g_hashtable_cache_total_bytes,
+                      orig2 = g_max_cacheable_hashtable_size_bytes] {
+    PerfectJoinHashTable::getHashTableCache()->setTotalCacheSize(
+        CacheItemType::PERFECT_HT, orig1);
+    PerfectJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
+        CacheItemType::PERFECT_HT, orig2);
+  };
+  auto q = "select count(1) from ct1, ct2 where ct1.v = ct2.v;";
+  QR::get()->runSQL(q, dt);
+  EXPECT_EQ(static_cast<size_t>(0),
+            QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT));
+  PerfectJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
+      CacheItemType::PERFECT_HT, 8000000000);
+  PerfectJoinHashTable::getHashTableCache()->setTotalCacheSize(CacheItemType::PERFECT_HT,
+                                                               8000000000);
+  QR::get()->runSQL(q, dt);
+  EXPECT_EQ(static_cast<size_t>(1),
+            QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT));
+  drop_tables();
 }
 
 int main(int argc, char* argv[]) {

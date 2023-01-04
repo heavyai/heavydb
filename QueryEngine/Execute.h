@@ -1378,7 +1378,7 @@ class Executor {
 
   heavyai::shared_mutex& getDataRecyclerLock();
   QueryPlanDagCache& getQueryPlanDagCache();
-  ResultSetRecyclerHolder& getRecultSetRecyclerHolder();
+  ResultSetRecyclerHolder& getResultSetRecyclerHolder();
 
   CgenState* getCgenStatePtr() const { return cgen_state_.get(); }
   PlanState* getPlanStatePtr() const { return plan_state_.get(); }
