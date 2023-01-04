@@ -338,6 +338,17 @@ void DBHandler::init_executor_resource_mgr() {
       g_executor_resource_mgr_max_available_resource_use_ratio);
 }
 
+void DBHandler::validate_configurations() {
+#ifndef _WIN32
+  size_t temp;
+  CHECK(!__builtin_mul_overflow(g_num_tuple_threshold_switch_to_baseline,
+                                g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline,
+                                &temp))
+      << "The product of g_num_tuple_threshold_switch_to_baseline and "
+         "g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline exceeds 64 bits.";
+#endif
+}
+
 void DBHandler::resetSessionsStore() {
   if (sessions_store_) {
     // Disconnect any existing sessions.
@@ -414,6 +425,8 @@ void DBHandler::initialize(const bool is_new_db) {
     }
   }
 #endif  // HAVE_CUDA
+
+  validate_configurations();
 
   try {
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),

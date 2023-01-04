@@ -21352,6 +21352,56 @@ TEST(Join, BuildHashTable) {
   }
 }
 
+TEST(Join, SwitchToBaselineJoin) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto const dt = ExecutorDeviceType::GPU;
+  if (skip_tests(dt)) {
+    return;
+  }
+  auto drop_table = [&](std::string const& table_name) {
+    std::ostringstream oss;
+    oss << "DROP TABLE IF EXISTS " << table_name << ";";
+    run_ddl_statement(oss.str());
+  };
+  auto create_table = [&](std::string const& table_name) {
+    std::ostringstream oss;
+    oss << "CREATE TABLE " << table_name
+        << "(id int, SHARD KEY (id)) WITH (SHARD_COUNT=2);";
+    run_ddl_statement(oss.str());
+  };
+  for (std::string tbl_name : {"tjs1", "tjs2", "tjs3", "tjs4"}) {
+    drop_table(tbl_name);
+    create_table(tbl_name);
+  }
+  for (int v : {30, 2, 2, 4, 1, 3}) {
+    std::ostringstream oss1;
+    oss1 << "INSERT INTO tjs1 VALUES (" << v << ");";
+    std::ostringstream oss2;
+    oss2 << "INSERT INTO tjs3 VALUES (" << v << ");";
+    run_multiple_agg(oss1.str(), ExecutorDeviceType::CPU);
+    run_multiple_agg(oss2.str(), ExecutorDeviceType::CPU);
+  }
+  run_multiple_agg("INSERT INTO tjs2 VALUES (2);", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO tjs4 VALUES (2);", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO tjs2 VALUES (10000000);", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO tjs4 VALUES (20);", ExecutorDeviceType::CPU);
+
+  ASSERT_EQ(int64_t(2),
+            v<int64_t>(run_simple_agg(
+                "SELECT COUNT(1) FROM tjs1 a JOIN tjs2 b ON a.id = b.id;", dt)));
+  ScopeGuard reset_flag = [orig =
+                               g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline]() {
+    g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline = orig;
+  };
+  g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline = 5;
+  ASSERT_EQ(int64_t(2),
+            v<int64_t>(run_simple_agg(
+                "SELECT COUNT(1) FROM tjs3 a JOIN tjs4 b ON a.id = b.id;", dt)));
+  for (std::string tbl_name : {"tjs1", "tjs2", "tjs3", "tjs4"}) {
+    drop_table(tbl_name);
+  }
+}
+
 TEST(Join, ComplexQueries) {
   SKIP_ALL_ON_AGGREGATOR();
 

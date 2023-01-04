@@ -31,6 +31,8 @@
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 #include "QueryEngine/RuntimeFunctions.h"
 
+extern bool g_is_test_env;
+
 // let's only consider CPU hahstable recycler at this moment
 std::unique_ptr<HashtableRecycler> PerfectJoinHashTable::hash_table_cache_ =
     std::make_unique<HashtableRecycler>(CacheItemType::PERFECT_HT,
@@ -148,6 +150,20 @@ size_t get_shard_count(
              : 0;
 }
 
+const InputTableInfo& get_inner_query_info(
+    const shared::TableKey& inner_table_key,
+    const std::vector<InputTableInfo>& query_infos) {
+  std::optional<size_t> ti_idx;
+  for (size_t i = 0; i < query_infos.size(); ++i) {
+    if (inner_table_key == query_infos[i].table_key) {
+      ti_idx = i;
+      break;
+    }
+  }
+  CHECK(ti_idx);
+  return query_infos[*ti_idx];
+}
+
 //! Make hash table from an in-flight SQL query's parse tree etc.
 std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
@@ -208,6 +224,35 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   auto bucketized_entry_count = bucketized_entry_count_info.getNormalizedHashEntryCount();
   if (bucketized_entry_count > max_hash_entry_count) {
     throw TooManyHashEntries();
+  }
+
+  auto const& inner_table_info =
+      get_inner_query_info(inner_col->getTableKey(), query_infos).info;
+  auto const num_inner_table_tuple = inner_table_info.getFragmentNumTuplesUpperBound();
+  // when a table is small but has too wide hash entry value range, it's better to deploy
+  // baseline hash join to save unnecessary memory space and expensive hash table
+  // initialization & building cost required to build a perfect join hash table
+  auto const deploy_baseline_join =
+      !g_is_test_env &&
+      num_inner_table_tuple < g_num_tuple_threshold_switch_to_baseline &&
+      num_inner_table_tuple * g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline <
+          bucketized_entry_count;
+  if (deploy_baseline_join) {
+    std::ostringstream oss;
+    oss << "Switch to baseline hash join: a join column has too wide hash value range "
+           "when comparing the actual # rows";
+    oss << "(# hash entries: " << bucketized_entry_count
+        << ", # rows: " << num_inner_table_tuple << ")";
+    throw TooManyHashEntries(oss.str());
+  }
+
+  auto const shard_count = get_shard_count(qual_bin_oper.get(), executor);
+  if (device_count > 1 && shard_count > 1) {
+    // use baseline hash join to compute this case until resolving related hash join logic
+    // todd(yoonmin): relax this after fixing related hashtable build/probe logic is fixed
+    throw TooManyHashEntries(
+        "Use baseline hash join: multiple GPUs process the input sharded table via "
+        "perfect hash can cause a wrong result");
   }
 
   if (qual_bin_oper->get_optype() == kBW_EQ &&
@@ -736,11 +781,12 @@ int PerfectJoinHashTable::initHashTableForDevice(
   auto timer = DEBUG_TIMER(__func__);
   const auto inner_col = cols.first;
   CHECK(inner_col);
-  if (hash_entry_info_.bucketized_hash_entry_count == 0 && layout == HashType::OneToOne) {
+  if ((join_column.num_elems == 0 || hash_entry_info_.bucketized_hash_entry_count == 0) &&
+      layout == HashType::OneToOne) {
     // the reason of why checking the layout is OneToOne is we start to build a hash table
     // with OneToOne layout
     VLOG(1) << "Stop building a hash table based on a column " << inner_col->toString()
-            << ": it is from an empty table";
+            << " (device_id: " << device_id << "): it is from an empty table";
     return 0;
   }
 #ifndef HAVE_CUDA
@@ -1253,20 +1299,6 @@ llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,
 const InputTableInfo& PerfectJoinHashTable::getInnerQueryInfo(
     const Analyzer::ColumnVar* inner_col) const {
   return get_inner_query_info(inner_col->getTableKey(), query_infos_);
-}
-
-const InputTableInfo& get_inner_query_info(
-    const shared::TableKey& inner_table_key,
-    const std::vector<InputTableInfo>& query_infos) {
-  std::optional<size_t> ti_idx;
-  for (size_t i = 0; i < query_infos.size(); ++i) {
-    if (inner_table_key == query_infos[i].table_key) {
-      ti_idx = i;
-      break;
-    }
-  }
-  CHECK(ti_idx);
-  return query_infos[*ti_idx];
 }
 
 size_t get_entries_per_device(const size_t total_entries,

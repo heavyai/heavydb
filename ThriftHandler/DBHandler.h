@@ -679,6 +679,7 @@ class DBHandler : public HeavyIf {
  private:
   std::atomic<bool> initialized_{false};
   void init_executor_resource_mgr();
+  void validate_configurations();
   std::shared_ptr<Catalog_Namespace::SessionInfo> create_new_session(
       TSessionId& session,
       const std::string& dbname,

@@ -192,6 +192,8 @@ extern size_t g_filter_push_down_passing_row_ubound;
 extern bool g_enable_columnar_output;
 extern bool g_optimize_row_initialization;
 extern bool g_enable_overlaps_hashjoin;
+extern size_t g_num_tuple_threshold_switch_to_baseline;
+extern size_t g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline;
 extern bool g_enable_hashjoin_many_to_many;
 extern bool g_enable_distance_rangejoin;
 extern size_t g_overlaps_max_table_size_bytes;
