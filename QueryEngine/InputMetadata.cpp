@@ -507,7 +507,7 @@ const ChunkMetadataMap& Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap(
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
     if (enable_chunk_metadata_cache) {
       std::optional<ChunkMetadataMap> cached =
-          executor->getRecultSetRecyclerHolder().getCachedChunkMetadata(
+          executor->getResultSetRecyclerHolder().getCachedChunkMetadata(
               resultSet->getQueryPlanHash());
       if (cached) {
         chunkMetadataMap = *cached;
@@ -517,7 +517,7 @@ const ChunkMetadataMap& Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap(
     if (need_to_compute_metadata) {
       chunkMetadataMap = synthesize_metadata(resultSet);
       if (enable_chunk_metadata_cache && !chunkMetadataMap.empty()) {
-        executor->getRecultSetRecyclerHolder().putChunkMetadataToCache(
+        executor->getResultSetRecyclerHolder().putChunkMetadataToCache(
             resultSet->getQueryPlanHash(),
             resultSet->getInputTableKeys(),
             chunkMetadataMap);

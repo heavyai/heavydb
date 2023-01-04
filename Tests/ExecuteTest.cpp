@@ -25754,7 +25754,7 @@ TEST_F(Select, ResultsetAndChunkMetadataRecycling) {
   g_allow_auto_resultset_caching = false;
 
   auto CPU_DT = ExecutorDeviceType::CPU;
-  auto& recycler_holder = executor->getRecultSetRecyclerHolder();
+  auto& recycler_holder = executor->getResultSetRecyclerHolder();
   auto resultset_recycler = recycler_holder.getResultSetRecycler();
   auto chunk_metadata_recycler = recycler_holder.getChunkMetadataRecycler();
   CHECK(resultset_recycler);
@@ -26058,7 +26058,7 @@ TEST_F(Select, AutoQueryCaching) {
     executor->clearMemory(MemoryLevel::CPU_LEVEL);
     executor->getQueryPlanDagCache().clearQueryPlanCache();
   };
-  auto resultset_recycler = executor->getRecultSetRecyclerHolder().getResultSetRecycler();
+  auto resultset_recycler = executor->getResultSetRecyclerHolder().getResultSetRecycler();
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     using Param = std::pair<size_t, int>;

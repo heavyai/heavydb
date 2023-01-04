@@ -243,11 +243,11 @@ RaExecutionDesc* RaExecutionSequence::next() {
   auto checkQueryStepSkippable =
       [&](RelAlgNode const* node, QueryPlanHash key, size_t step_id) {
         CHECK_GE(step_id, 0);
-        if (executor_->getRecultSetRecyclerHolder().hasCachedQueryResultSet(key)) {
+        if (executor_->getResultSetRecyclerHolder().hasCachedQueryResultSet(key)) {
           cached_query_steps_.insert(step_id);
           cached_resultset_keys_.emplace(-node->getId(), key);
           const auto output_meta_info =
-              executor_->getRecultSetRecyclerHolder().getOutputMetaInfo(key);
+              executor_->getResultSetRecyclerHolder().getOutputMetaInfo(key);
           CHECK(output_meta_info);
           node->setOutputMetainfo(*output_meta_info);
         }

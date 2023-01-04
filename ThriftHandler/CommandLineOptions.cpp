@@ -1715,6 +1715,20 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     g_use_hashtable_cache = use_hashtable_cache;
     g_max_cacheable_hashtable_size_bytes = max_cacheable_hashtable_size_bytes;
     g_hashtable_cache_total_bytes = hashtable_cache_total_bytes;
+    if (g_use_hashtable_cache) {
+      PerfectJoinHashTable::getHashTableCache()->setTotalCacheSize(
+          CacheItemType::PERFECT_HT, g_hashtable_cache_total_bytes);
+      BaselineJoinHashTable::getHashTableCache()->setTotalCacheSize(
+          CacheItemType::BASELINE_HT, g_hashtable_cache_total_bytes);
+      OverlapsJoinHashTable::getHashTableCache()->setTotalCacheSize(
+          CacheItemType::OVERLAPS_HT, g_hashtable_cache_total_bytes);
+      PerfectJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
+          CacheItemType::PERFECT_HT, g_max_cacheable_hashtable_size_bytes);
+      BaselineJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
+          CacheItemType::BASELINE_HT, g_max_cacheable_hashtable_size_bytes);
+      OverlapsJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
+          CacheItemType::OVERLAPS_HT, g_max_cacheable_hashtable_size_bytes);
+    }
     g_optimize_cuda_block_and_grid_sizes = optimize_cuda_block_and_grid_sizes;
 
     if (g_multi_instance) {
