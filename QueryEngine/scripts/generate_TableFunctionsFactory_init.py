@@ -1022,7 +1022,9 @@ class AmbiguousSignatureCheckTransformer(AstTransformer):
                         msg = ('%s signature is ambiguous as there are two '
                             'ColumnList with the same subtype in the same '
                             'group.') % (udtf_name)
-                        warnings.warn(msg, TransformerWarning)
+                        if udtf_name not in ['ct_overload_column_list_test2__cpu_template']:
+                            # warn only when the function ought to be fixed
+                            warnings.warn(msg, TransformerWarning)
                     else:
                         break
 
