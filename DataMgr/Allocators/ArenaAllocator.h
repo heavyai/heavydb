@@ -63,7 +63,7 @@ constexpr size_t kArenaBlockOverhead =
     folly::Arena<::SysAllocator<AllocatorType>>::kBlockOverhead;
 
 /**
- * Arena allocator using checked_malloc with default allocation size 2GB. Note that the
+ * Arena allocator using checked_malloc with default allocation size 4GB. Note that the
  * allocator only frees memory on destruction.
  */
 class DramArena : public Arena, public folly::Arena<::SysAllocator<AllocatorType>> {

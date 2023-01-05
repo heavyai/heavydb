@@ -1864,13 +1864,17 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   if (system_parameters.cuda_grid_size) {
     LOG(INFO) << " cuda grid size " << system_parameters.cuda_grid_size;
   }
-  LOG(INFO) << " Min CPU buffer pool slab size " << system_parameters.min_cpu_slab_size;
-  LOG(INFO) << " Max CPU buffer pool slab size " << system_parameters.max_cpu_slab_size;
-  LOG(INFO) << " Min GPU buffer pool slab size " << system_parameters.min_gpu_slab_size;
-  LOG(INFO) << " Max GPU buffer pool slab size " << system_parameters.max_gpu_slab_size;
-  LOG(INFO) << " calcite JVM max memory  " << system_parameters.calcite_max_mem;
-  LOG(INFO) << " HeavyDB Server Port  " << system_parameters.omnisci_server_port;
-  LOG(INFO) << " HeavyDB Calcite Port  " << system_parameters.calcite_port;
+  LOG(INFO) << " Min CPU buffer pool slab size (in bytes) "
+            << system_parameters.min_cpu_slab_size;
+  LOG(INFO) << " Max CPU buffer pool slab size (in bytes) "
+            << system_parameters.max_cpu_slab_size;
+  LOG(INFO) << " Min GPU buffer pool slab size (in bytes) "
+            << system_parameters.min_gpu_slab_size;
+  LOG(INFO) << " Max GPU buffer pool slab size (in bytes) "
+            << system_parameters.max_gpu_slab_size;
+  LOG(INFO) << " calcite JVM max memory (in MB) " << system_parameters.calcite_max_mem;
+  LOG(INFO) << " HeavyDB Server Port " << system_parameters.omnisci_server_port;
+  LOG(INFO) << " HeavyDB Calcite Port " << system_parameters.calcite_port;
   LOG(INFO) << " Enable Calcite view optimize "
             << system_parameters.enable_calcite_view_optimize;
   LOG(INFO) << " Allow Local Auth Fallback: "
