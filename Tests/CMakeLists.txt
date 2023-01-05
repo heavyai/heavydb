@@ -140,7 +140,7 @@ list(APPEND SANITY_TEST_PROGRAMS ColumnarResultsTest)
 ##########
 
 add_executable(CommandLineTest CommandLineTest.cpp)
-target_link_libraries(CommandLineTest gtest Logger Shared ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
+target_link_libraries(CommandLineTest gtest Logger Shared ${Boost_LIBRARIES})
 add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS CommandLineTest)
 
@@ -212,7 +212,7 @@ list(APPEND SANITY_TEST_PROGRAMS DataRecyclerTest)
 ##########
 
 add_executable(DateTimeUtilsTest Shared/DateTimeUtilsTest.cpp)
-target_link_libraries(DateTimeUtilsTest gtest Logger Shared ${LLVM_LINKER_FLAGS} ${CMAKE_DL_LIBS})
+target_link_libraries(DateTimeUtilsTest gtest Logger Shared ${LLVM_LINKER_FLAGS})
 add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS DateTimeUtilsTest)
 
@@ -383,7 +383,8 @@ list(APPEND SANITY_TEST_PROGRAMS JoinHashTableTest)
 
 if(NOT MSVC)
   add_executable(JSONTest JSONTest.cpp)
-  target_link_libraries(JSONTest gtest Logger Shared ${CMAKE_DL_LIBS})
+  add_dependencies(JSONTest system_dashboard_data)
+  target_link_libraries(JSONTest gtest Logger Shared)
   add_test(JSONTest JSONTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS JSONTest)
 endif()
@@ -466,7 +467,7 @@ list(APPEND SANITY_TEST_PROGRAMS PersistentStorageTest)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   add_executable(PkiEncryptorTest ee/PkiEncryptorTest.cpp)
-  target_link_libraries(PkiEncryptorTest gtest Logger Shared ${CMAKE_DL_LIBS})
+  target_link_libraries(PkiEncryptorTest gtest Logger Shared)
   add_test(PkiEncryptorTest PkiEncryptorTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS PkiEncryptorTest)
 endif()
@@ -594,7 +595,7 @@ list(APPEND SANITY_TEST_PROGRAMS TableFunctionsTest)
 ##########
 
 add_executable(ThreadingTest Shared/ThreadingTest.cpp)
-target_link_libraries(ThreadingTest ${CMAKE_DL_LIBS} gtest Logger Shared ${LLVM_LINKER_FLAGS} ${TBB_LIBRARIES} ${CMAKE_DL_LIBS})
+target_link_libraries(ThreadingTest ${CMAKE_DL_LIBS} gtest Logger Shared ${LLVM_LINKER_FLAGS} ${TBB_LIBRARIES})
 add_test(ThreadingTest ThreadingTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ThreadingTest)
 
@@ -671,7 +672,7 @@ endif()  # Partition 4
 
 if(NOT MSVC)
   add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
-  target_link_libraries(ArrowIpcIntegrationTest gtest fmt::fmt ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS})
+  target_link_libraries(ArrowIpcIntegrationTest gtest fmt::fmt ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
   add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
 endif()
 
@@ -679,7 +680,7 @@ endif()
 
 if(NOT MSVC)
   add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
-  target_link_libraries(CtasIntegrationTest gtest Logger Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS} ${CMAKE_DL_LIBS})
+  target_link_libraries(CtasIntegrationTest gtest Logger Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
 endif()
 
 ##########
@@ -730,15 +731,15 @@ add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 
 add_executable(StringDictionaryBenchmark StringDictionaryBenchmark.cpp)
 if(ENABLE_FOLLY)
-  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
+  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 else()
-  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
+  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 endif()
 
 ##########
 
 add_executable(StringTransformTest StringTransformTest.cpp)
-target_link_libraries(StringTransformTest Logger Shared gtest ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
+target_link_libraries(StringTransformTest Logger Shared gtest ${Boost_LIBRARIES})
 add_test(StringTransformTest StringTransformTest ${TEST_ARGS})
 
 ##########
@@ -749,8 +750,7 @@ target_link_libraries(TableUpdateDeleteBenchmark benchmark ${EXECUTE_TEST_LIBS})
 ##########
 
 add_executable(UtilTest UtilTest.cpp)
-target_link_libraries(UtilTest Utils gtest Logger Shared ${Boost_LIBRARIES})
-target_link_libraries(UtilTest OSDependent ${CMAKE_DL_LIBS})
+target_link_libraries(UtilTest Utils gtest Logger Shared ${Boost_LIBRARIES} OSDependent)
 add_test(UtilTest UtilTest ${TEST_ARGS})
 
 ##########
@@ -769,9 +769,11 @@ add_custom_target(init_test_dir
     COMMAND initheavy -f ${TEST_BASE_PATH} || exit 0
     USES_TERMINAL)
 
-foreach(PROGRAM ${SANITY_TEST_PROGRAMS} ${INSANITY_TEST_PROGRAMS})
-  add_dependencies(${PROGRAM} init_test_dir)
-endforeach()
+if (ENABLE_INIT_DIR)
+  foreach(PROGRAM ${SANITY_TEST_PROGRAMS} ${INSANITY_TEST_PROGRAMS})
+    add_dependencies(${PROGRAM} init_test_dir)
+  endforeach()
+endif()
 
 list(APPEND SANITY_TESTS ${SANITY_TEST_PROGRAMS})
 set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "_sanity_")
