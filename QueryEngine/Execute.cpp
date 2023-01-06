@@ -166,7 +166,7 @@ bool g_enable_automatic_ir_metadata{true};
 
 size_t g_max_log_length{500};
 
-bool g_enable_executor_resource_mgr{false};
+bool g_enable_executor_resource_mgr{true};
 
 double g_executor_resource_mgr_cpu_result_mem_ratio{0.8};
 size_t g_executor_resource_mgr_cpu_result_mem_bytes{Executor::auto_cpu_mem_bytes};
@@ -5217,7 +5217,6 @@ void Executor::init_resource_mgr(
     const bool allow_cpu_slot_oversubscription_concurrency,
     const bool allow_cpu_result_mem_oversubscription_concurrency,
     const double max_available_resource_use_ratio) {
-  CHECK(!Executor::executor_resource_mgr_);
   const double per_query_max_pinned_cpu_buffer_pool_mem_ratio{1.0};
   const double per_query_max_pageable_cpu_buffer_pool_mem_ratio{0.5};
   executor_resource_mgr_ = ExecutorResourceMgr_Namespace::generate_executor_resource_mgr(
