@@ -34,148 +34,75 @@ void cuda_kernel_launch_wrapper(F func, ARGS&&... args) {
   checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
 }
 
-__global__ void fill_hash_join_buff_wrapper(int32_t* buff,
-                                            const int32_t invalid_slot_val,
-                                            const bool for_semi_join,
-                                            const JoinColumn join_column,
-                                            const JoinColumnTypeInfo type_info,
-                                            int* err) {
-  int partial_err = SUFFIX(fill_hash_join_buff)(
-      buff, invalid_slot_val, for_semi_join, join_column, type_info, NULL, NULL, -1, -1);
-  atomicCAS(err, 0, partial_err);
+__global__ void fill_hash_join_buff_wrapper(
+    OneToOnePerfectJoinHashTableFillFuncArgs const args) {
+  auto fill_hash_join_buff_func = args.type_info.uses_bw_eq
+                                      ? SUFFIX(fill_hash_join_buff_bitwise_eq)
+                                      : SUFFIX(fill_hash_join_buff);
+  int partial_err = fill_hash_join_buff_func(args, -1, -1);
+  atomicCAS(args.dev_err_buff, 0, partial_err);
 }
 
 __global__ void fill_hash_join_buff_bucketized_wrapper(
-    int32_t* buff,
-    const int32_t invalid_slot_val,
-    const bool for_semi_join,
-    const JoinColumn join_column,
-    const JoinColumnTypeInfo type_info,
-    int* err,
-    const int64_t bucket_normalization) {
-  int partial_err = SUFFIX(fill_hash_join_buff_bucketized)(buff,
-                                                           invalid_slot_val,
-                                                           for_semi_join,
-                                                           join_column,
-                                                           type_info,
-                                                           NULL,
-                                                           NULL,
-                                                           -1,
-                                                           -1,
-                                                           bucket_normalization);
-  atomicCAS(err, 0, partial_err);
+    OneToOnePerfectJoinHashTableFillFuncArgs const args) {
+  int partial_err = SUFFIX(fill_hash_join_buff_bucketized)(args, -1, -1);
+  atomicCAS(args.dev_err_buff, 0, partial_err);
 }
 
-void fill_hash_join_buff_on_device_bucketized(int32_t* buff,
-                                              const int32_t invalid_slot_val,
-                                              const bool for_semi_join,
-                                              int* dev_err_buff,
-                                              const JoinColumn join_column,
-                                              const JoinColumnTypeInfo type_info,
-                                              const int64_t bucket_normalization) {
-  cuda_kernel_launch_wrapper(fill_hash_join_buff_bucketized_wrapper,
-                             buff,
-                             invalid_slot_val,
-                             for_semi_join,
-                             join_column,
-                             type_info,
-                             dev_err_buff,
-                             bucket_normalization);
+void fill_hash_join_buff_on_device_bucketized(
+    OneToOnePerfectJoinHashTableFillFuncArgs const args) {
+  cuda_kernel_launch_wrapper(fill_hash_join_buff_bucketized_wrapper, args);
 }
 
-void fill_hash_join_buff_on_device(int32_t* buff,
-                                   const int32_t invalid_slot_val,
-                                   const bool for_semi_join,
-                                   int* dev_err_buff,
-                                   const JoinColumn join_column,
-                                   const JoinColumnTypeInfo type_info) {
-  cuda_kernel_launch_wrapper(fill_hash_join_buff_wrapper,
-                             buff,
-                             invalid_slot_val,
-                             for_semi_join,
-                             join_column,
-                             type_info,
-                             dev_err_buff);
+void fill_hash_join_buff_on_device(OneToOnePerfectJoinHashTableFillFuncArgs const args) {
+  cuda_kernel_launch_wrapper(fill_hash_join_buff_wrapper, args);
 }
 
 __global__ void fill_hash_join_buff_wrapper_sharded_bucketized(
-    int32_t* buff,
-    const int32_t invalid_slot_val,
-    const bool for_semi_join,
-    const JoinColumn join_column,
-    const JoinColumnTypeInfo type_info,
-    const ShardInfo shard_info,
-    int* err,
-    const int64_t bucket_normalization) {
-  int partial_err = SUFFIX(fill_hash_join_buff_sharded_bucketized)(buff,
-                                                                   invalid_slot_val,
-                                                                   for_semi_join,
-                                                                   join_column,
-                                                                   type_info,
-                                                                   shard_info,
-                                                                   NULL,
-                                                                   NULL,
-                                                                   -1,
-                                                                   -1,
-                                                                   bucket_normalization);
-  atomicCAS(err, 0, partial_err);
+    OneToOnePerfectJoinHashTableFillFuncArgs const args,
+    ShardInfo const shard_info) {
+  int partial_err =
+      SUFFIX(fill_hash_join_buff_sharded_bucketized)(args.buff,
+                                                     args.invalid_slot_val,
+                                                     args.for_semi_join,
+                                                     args.join_column,
+                                                     args.type_info,
+                                                     shard_info,
+                                                     NULL,
+                                                     NULL,
+                                                     -1,
+                                                     -1,
+                                                     args.bucket_normalization);
+  atomicCAS(args.dev_err_buff, 0, partial_err);
 }
 
-__global__ void fill_hash_join_buff_wrapper_sharded(int32_t* buff,
-                                                    const int32_t invalid_slot_val,
-                                                    const bool for_semi_join,
-                                                    const JoinColumn join_column,
-                                                    const JoinColumnTypeInfo type_info,
-                                                    const ShardInfo shard_info,
-                                                    int* err) {
-  int partial_err = SUFFIX(fill_hash_join_buff_sharded)(buff,
-                                                        invalid_slot_val,
-                                                        for_semi_join,
-                                                        join_column,
-                                                        type_info,
+__global__ void fill_hash_join_buff_wrapper_sharded(
+    OneToOnePerfectJoinHashTableFillFuncArgs const args,
+    ShardInfo const shard_info) {
+  int partial_err = SUFFIX(fill_hash_join_buff_sharded)(args.buff,
+                                                        args.invalid_slot_val,
+                                                        args.for_semi_join,
+                                                        args.join_column,
+                                                        args.type_info,
                                                         shard_info,
                                                         NULL,
                                                         NULL,
                                                         -1,
                                                         -1);
-  atomicCAS(err, 0, partial_err);
+  atomicCAS(args.dev_err_buff, 0, partial_err);
 }
 
 void fill_hash_join_buff_on_device_sharded_bucketized(
-    int32_t* buff,
-    const int32_t invalid_slot_val,
-    const bool for_semi_join,
-    int* dev_err_buff,
-    const JoinColumn join_column,
-    const JoinColumnTypeInfo type_info,
-    const ShardInfo shard_info,
-    const int64_t bucket_normalization) {
-  cuda_kernel_launch_wrapper(fill_hash_join_buff_wrapper_sharded_bucketized,
-                             buff,
-                             invalid_slot_val,
-                             for_semi_join,
-                             join_column,
-                             type_info,
-                             shard_info,
-                             dev_err_buff,
-                             bucket_normalization);
+    OneToOnePerfectJoinHashTableFillFuncArgs const args,
+    ShardInfo const shard_info) {
+  cuda_kernel_launch_wrapper(
+      fill_hash_join_buff_wrapper_sharded_bucketized, args, shard_info);
 }
 
-void fill_hash_join_buff_on_device_sharded(int32_t* buff,
-                                           const int32_t invalid_slot_val,
-                                           const bool for_semi_join,
-                                           int* dev_err_buff,
-                                           const JoinColumn join_column,
-                                           const JoinColumnTypeInfo type_info,
-                                           const ShardInfo shard_info) {
-  cuda_kernel_launch_wrapper(fill_hash_join_buff_wrapper_sharded,
-                             buff,
-                             invalid_slot_val,
-                             for_semi_join,
-                             join_column,
-                             type_info,
-                             shard_info,
-                             dev_err_buff);
+void fill_hash_join_buff_on_device_sharded(
+    OneToOnePerfectJoinHashTableFillFuncArgs const args,
+    ShardInfo const shard_info) {
+  cuda_kernel_launch_wrapper(fill_hash_join_buff_wrapper_sharded, args, shard_info);
 }
 
 __global__ void init_hash_join_buff_wrapper(int32_t* buff,
@@ -245,91 +172,72 @@ void fill_one_to_many_hash_table_on_device_impl(int32_t* buff,
   fill_row_ids_func();
 }
 
-void fill_one_to_many_hash_table_on_device(int32_t* buff,
-                                           const BucketizedHashEntryInfo hash_entry_info,
-                                           const JoinColumn& join_column,
-                                           const JoinColumnTypeInfo& type_info,
-                                           const bool for_window_framing) {
-  auto hash_entry_count = hash_entry_info.bucketized_hash_entry_count;
-  auto count_matches_func = [count_buff = buff + hash_entry_count,
-                             join_column,
-                             type_info] {
-    cuda_kernel_launch_wrapper(SUFFIX(count_matches), count_buff, join_column, type_info);
+void fill_one_to_many_hash_table_on_device(
+    OneToManyPerfectJoinHashTableFillFuncArgs const args) {
+  auto buff = args.buff;
+  auto hash_entry_count = args.hash_entry_info.bucketized_hash_entry_count;
+  auto count_matches_func = [count_buff = buff + hash_entry_count, &args] {
+    cuda_kernel_launch_wrapper(
+        SUFFIX(count_matches), count_buff, args.join_column, args.type_info);
   };
-
-  auto fill_row_ids_func =
-      [buff, hash_entry_count, join_column, type_info, for_window_framing] {
-        cuda_kernel_launch_wrapper(SUFFIX(fill_row_ids),
-                                   buff,
-                                   hash_entry_count,
-                                   join_column,
-                                   type_info,
-                                   for_window_framing);
-      };
-
+  auto fill_row_ids_func = [buff, hash_entry_count, &args] {
+    cuda_kernel_launch_wrapper(SUFFIX(fill_row_ids),
+                               buff,
+                               hash_entry_count,
+                               args.join_column,
+                               args.type_info,
+                               args.for_window_framing);
+  };
   fill_one_to_many_hash_table_on_device_impl(buff,
                                              hash_entry_count,
-                                             join_column,
-                                             type_info,
+                                             args.join_column,
+                                             args.type_info,
                                              count_matches_func,
                                              fill_row_ids_func);
 }
 
 void fill_one_to_many_hash_table_on_device_bucketized(
-    int32_t* buff,
-    const BucketizedHashEntryInfo hash_entry_info,
-    const JoinColumn& join_column,
-    const JoinColumnTypeInfo& type_info) {
-  auto hash_entry_count = hash_entry_info.getNormalizedHashEntryCount();
-  auto count_matches_func = [count_buff = buff + hash_entry_count,
-                             join_column,
-                             type_info,
-                             bucket_normalization =
-                                 hash_entry_info.bucket_normalization] {
+    OneToManyPerfectJoinHashTableFillFuncArgs const args) {
+  auto hash_entry_count = args.hash_entry_info.getNormalizedHashEntryCount();
+  auto const buff = args.buff;
+  auto count_matches_func = [count_buff = buff + hash_entry_count, &args] {
     cuda_kernel_launch_wrapper(SUFFIX(count_matches_bucketized),
                                count_buff,
-                               join_column,
-                               type_info,
-                               bucket_normalization);
+                               args.join_column,
+                               args.type_info,
+                               args.bucket_normalization);
   };
-
-  auto fill_row_ids_func = [buff,
-                            hash_entry_count =
-                                hash_entry_info.getNormalizedHashEntryCount(),
-                            join_column,
-                            type_info,
-                            bucket_normalization = hash_entry_info.bucket_normalization] {
+  auto fill_row_ids_func = [buff, hash_entry_count, &args] {
     cuda_kernel_launch_wrapper(SUFFIX(fill_row_ids_bucketized),
                                buff,
                                hash_entry_count,
-                               join_column,
-                               type_info,
-                               bucket_normalization);
+                               args.join_column,
+                               args.type_info,
+                               args.bucket_normalization);
   };
-
   fill_one_to_many_hash_table_on_device_impl(buff,
                                              hash_entry_count,
-                                             join_column,
-                                             type_info,
+                                             args.join_column,
+                                             args.type_info,
                                              count_matches_func,
                                              fill_row_ids_func);
 }
 
 void fill_one_to_many_hash_table_on_device_sharded(
-    int32_t* buff,
-    const BucketizedHashEntryInfo hash_entry_info,
-    const JoinColumn& join_column,
-    const JoinColumnTypeInfo& type_info,
-    const ShardInfo& shard_info) {
-  auto hash_entry_count = hash_entry_info.bucketized_hash_entry_count;
-  int32_t* pos_buff = buff;
-  int32_t* count_buff = buff + hash_entry_count;
+    OneToManyPerfectJoinHashTableFillFuncArgs const args,
+    ShardInfo const shard_info) {
+  auto hash_entry_count = args.hash_entry_info.bucketized_hash_entry_count;
+  int32_t* pos_buff = args.buff;
+  int32_t* count_buff = args.buff + hash_entry_count;
   auto qe_cuda_stream = getQueryEngineCudaStream();
   checkCudaErrors(
       cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
   checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
-  cuda_kernel_launch_wrapper(
-      SUFFIX(count_matches_sharded), count_buff, join_column, type_info, shard_info);
+  cuda_kernel_launch_wrapper(SUFFIX(count_matches_sharded),
+                             count_buff,
+                             args.join_column,
+                             args.type_info,
+                             shard_info);
 
   cuda_kernel_launch_wrapper(set_valid_pos_flag, pos_buff, count_buff, hash_entry_count);
 
@@ -341,10 +249,10 @@ void fill_one_to_many_hash_table_on_device_sharded(
       cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
   checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
   cuda_kernel_launch_wrapper(SUFFIX(fill_row_ids_sharded),
-                             buff,
+                             args.buff,
                              hash_entry_count,
-                             join_column,
-                             type_info,
+                             args.join_column,
+                             args.type_info,
                              shard_info);
 }
 
