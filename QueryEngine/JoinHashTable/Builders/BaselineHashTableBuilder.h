@@ -37,7 +37,6 @@ int fill_baseline_hash_join_buff(int8_t* hash_buff,
                                  const size_t num_elems,
                                  const int32_t cpu_thread_idx,
                                  const int32_t cpu_thread_count) {
-  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     return fill_baseline_hash_join_buff_32(hash_buff,
                                            entry_count,
@@ -87,7 +86,6 @@ int fill_baseline_hash_join_buff(int8_t* hash_buff,
                                  const size_t num_elems,
                                  const int32_t cpu_thread_idx,
                                  const int32_t cpu_thread_count) {
-  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     return fill_baseline_hash_join_buff_64(hash_buff,
                                            entry_count,
@@ -136,7 +134,6 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             int* dev_err_buff,
                                             const KEY_HANDLER* key_handler,
                                             const size_t num_elems) {
-  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_baseline_hash_join_buff_on_device_32(hash_buff,
                                               entry_count,
@@ -168,7 +165,6 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             int* dev_err_buff,
                                             const KEY_HANDLER* key_handler,
                                             const size_t num_elems) {
-  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_baseline_hash_join_buff_on_device_64(hash_buff,
                                               entry_count,
@@ -212,7 +208,6 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const KEY_HANDLER* key_handler,
                                                     const size_t num_elems,
                                                     const bool for_window_framing) {
-  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_one_to_many_baseline_hash_table_on_device_32(buff,
                                                       composite_key_dict,
@@ -239,7 +234,6 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const KEY_HANDLER* key_handler,
                                                     const size_t num_elems,
                                                     const bool for_window_framing) {
-  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_one_to_many_baseline_hash_table_on_device_64(buff,
                                                       composite_key_dict,
@@ -321,7 +315,7 @@ class BaselineJoinHashTableBuilder {
     std::vector<std::future<void>> init_cpu_buff_threads;
     setHashLayout(layout);
     {
-      auto timer_init = DEBUG_TIMER("CPU Baseline-Hash: init_baseline_hash_join_buff_32");
+      auto timer_init = DEBUG_TIMER("Initialize CPU Baseline Join Hash Table");
 #ifdef HAVE_TBB
       switch (key_component_width) {
         case 4:
@@ -385,60 +379,64 @@ class BaselineJoinHashTableBuilder {
 #endif  // !HAVE_TBB
     }
     std::vector<std::future<int>> fill_cpu_buff_threads;
-    for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-      fill_cpu_buff_threads.emplace_back(std::async(
-          std::launch::async,
-          [key_handler,
-           keyspace_entry_count,
-           &join_columns,
-           key_component_count,
-           key_component_width,
-           layout,
-           thread_idx,
-           cpu_hash_table_ptr,
-           thread_count,
-           for_semi_join,
-           parent_thread_local_ids = logger::thread_local_ids()] {
-            logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-            DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
-            switch (key_component_width) {
-              case 4: {
-                return fill_baseline_hash_join_buff<int32_t>(cpu_hash_table_ptr,
-                                                             keyspace_entry_count,
-                                                             -1,
-                                                             for_semi_join,
-                                                             key_component_count,
-                                                             layout == HashType::OneToOne,
-                                                             key_handler,
-                                                             join_columns[0].num_elems,
-                                                             thread_idx,
-                                                             thread_count);
-                break;
-              }
-              case 8: {
-                return fill_baseline_hash_join_buff<int64_t>(cpu_hash_table_ptr,
-                                                             keyspace_entry_count,
-                                                             -1,
-                                                             for_semi_join,
-                                                             key_component_count,
-                                                             layout == HashType::OneToOne,
-                                                             key_handler,
-                                                             join_columns[0].num_elems,
-                                                             thread_idx,
-                                                             thread_count);
-                break;
-              }
-              default:
-                CHECK(false);
-            }
-            return -1;
-          }));
-    }
     int err = 0;
-    for (auto& child : fill_cpu_buff_threads) {
-      int partial_err = child.get();
-      if (partial_err) {
-        err = partial_err;
+    {
+      auto timer_fill = DEBUG_TIMER("Fill CPU Baseline Join Hash Table");
+      for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+        fill_cpu_buff_threads.emplace_back(std::async(
+            std::launch::async,
+            [key_handler,
+             keyspace_entry_count,
+             &join_columns,
+             key_component_count,
+             key_component_width,
+             layout,
+             thread_idx,
+             cpu_hash_table_ptr,
+             thread_count,
+             for_semi_join,
+             parent_thread_local_ids = logger::thread_local_ids()] {
+              logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+              DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
+              switch (key_component_width) {
+                case 4: {
+                  return fill_baseline_hash_join_buff<int32_t>(
+                      cpu_hash_table_ptr,
+                      keyspace_entry_count,
+                      -1,
+                      for_semi_join,
+                      key_component_count,
+                      layout == HashType::OneToOne,
+                      key_handler,
+                      join_columns[0].num_elems,
+                      thread_idx,
+                      thread_count);
+                }
+                case 8: {
+                  return fill_baseline_hash_join_buff<int64_t>(
+                      cpu_hash_table_ptr,
+                      keyspace_entry_count,
+                      -1,
+                      for_semi_join,
+                      key_component_count,
+                      layout == HashType::OneToOne,
+                      key_handler,
+                      join_columns[0].num_elems,
+                      thread_idx,
+                      thread_count);
+                }
+                default:
+                  UNREACHABLE()
+                      << "Unexpected key_component_width: " << key_component_width;
+              }
+              return -1;
+            }));
+      }
+      for (auto& child : fill_cpu_buff_threads) {
+        int partial_err = child.get();
+        if (partial_err) {
+          err = partial_err;
+        }
       }
     }
     if (err) {
@@ -449,7 +447,7 @@ class BaselineJoinHashTableBuilder {
           cpu_hash_table_ptr + keyspace_entry_count * entry_size);
       {
         auto timer_init_additional_buffers =
-            DEBUG_TIMER("CPU Baseline-Hash: Additional Buffers init_hash_join_buff");
+            DEBUG_TIMER("Initialize Additional Buffers for CPU Baseline Join Hash Table");
         init_hash_join_buff(one_to_many_buff, keyspace_entry_count, -1, 0, 1);
       }
       bool is_geo_compressed = false;
@@ -460,6 +458,8 @@ class BaselineJoinHashTableBuilder {
         }
       }
       setHashLayout(layout);
+      auto timer_fill_additional_buffers =
+          DEBUG_TIMER("Fill Additional Buffers for CPU Baseline Join Hash Table");
       switch (key_component_width) {
         case 4: {
           const auto composite_key_dict = reinterpret_cast<int32_t*>(cpu_hash_table_ptr);
@@ -595,55 +595,61 @@ class BaselineJoinHashTableBuilder {
         layout == HashType::OneToOne;
     setHashLayout(layout);
     const auto key_handler_gpu = transfer_flat_object_to_gpu(*key_handler, *allocator);
-    switch (key_component_width) {
-      case 4:
-        init_baseline_hash_join_buff_on_device_32(gpu_hash_table_buff,
-                                                  keyspace_entry_count,
-                                                  key_component_count,
-                                                  layout == HashType::OneToOne,
-                                                  -1);
-        break;
-      case 8:
-        init_baseline_hash_join_buff_on_device_64(gpu_hash_table_buff,
-                                                  keyspace_entry_count,
-                                                  key_component_count,
-                                                  layout == HashType::OneToOne,
-                                                  -1);
-        break;
-      default:
-        UNREACHABLE();
+    {
+      auto timer_init = DEBUG_TIMER("Initialize GPU Baseline Join Hash Table");
+      switch (key_component_width) {
+        case 4:
+          init_baseline_hash_join_buff_on_device_32(gpu_hash_table_buff,
+                                                    keyspace_entry_count,
+                                                    key_component_count,
+                                                    layout == HashType::OneToOne,
+                                                    -1);
+          break;
+        case 8:
+          init_baseline_hash_join_buff_on_device_64(gpu_hash_table_buff,
+                                                    keyspace_entry_count,
+                                                    key_component_count,
+                                                    layout == HashType::OneToOne,
+                                                    -1);
+          break;
+        default:
+          UNREACHABLE();
+      }
     }
-    switch (key_component_width) {
-      case 4: {
-        fill_baseline_hash_join_buff_on_device<int32_t>(
-            gpu_hash_table_buff,
-            keyspace_entry_count,
-            -1,
-            for_semi_join,
-            key_component_count,
-            layout == HashType::OneToOne,
-            reinterpret_cast<int*>(dev_err_buff),
-            key_handler_gpu,
-            join_columns.front().num_elems);
-        allocator->copyFromDevice(&err, dev_err_buff, sizeof(err));
-        break;
+    {
+      auto timer_fill = DEBUG_TIMER("Fill GPU Baseline Join Hash Table");
+      switch (key_component_width) {
+        case 4: {
+          fill_baseline_hash_join_buff_on_device<int32_t>(
+              gpu_hash_table_buff,
+              keyspace_entry_count,
+              -1,
+              for_semi_join,
+              key_component_count,
+              layout == HashType::OneToOne,
+              reinterpret_cast<int*>(dev_err_buff),
+              key_handler_gpu,
+              join_columns.front().num_elems);
+          allocator->copyFromDevice(&err, dev_err_buff, sizeof(err));
+          break;
+        }
+        case 8: {
+          fill_baseline_hash_join_buff_on_device<int64_t>(
+              gpu_hash_table_buff,
+              keyspace_entry_count,
+              -1,
+              for_semi_join,
+              key_component_count,
+              layout == HashType::OneToOne,
+              reinterpret_cast<int*>(dev_err_buff),
+              key_handler_gpu,
+              join_columns.front().num_elems);
+          allocator->copyFromDevice(&err, dev_err_buff, sizeof(err));
+          break;
+        }
+        default:
+          UNREACHABLE();
       }
-      case 8: {
-        fill_baseline_hash_join_buff_on_device<int64_t>(
-            gpu_hash_table_buff,
-            keyspace_entry_count,
-            -1,
-            for_semi_join,
-            key_component_count,
-            layout == HashType::OneToOne,
-            reinterpret_cast<int*>(dev_err_buff),
-            key_handler_gpu,
-            join_columns.front().num_elems);
-        allocator->copyFromDevice(&err, dev_err_buff, sizeof(err));
-        break;
-      }
-      default:
-        UNREACHABLE();
     }
     if (err) {
       return err;
@@ -652,8 +658,14 @@ class BaselineJoinHashTableBuilder {
       const auto entry_size = key_component_count * key_component_width;
       auto one_to_many_buff = reinterpret_cast<int32_t*>(
           gpu_hash_table_buff + keyspace_entry_count * entry_size);
-      init_hash_join_buff_on_device(one_to_many_buff, keyspace_entry_count, -1);
+      {
+        auto timer_init =
+            DEBUG_TIMER("Initialize Additional Buffer for GPU Baseline Join Hash Table");
+        init_hash_join_buff_on_device(one_to_many_buff, keyspace_entry_count, -1);
+      }
       setHashLayout(layout);
+      auto timer_fill =
+          DEBUG_TIMER("Fill Additional Buffer for GPU Baseline Join Hash Table");
       switch (key_component_width) {
         case 4: {
           const auto composite_key_dict = reinterpret_cast<int32_t*>(gpu_hash_table_buff);

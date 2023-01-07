@@ -234,6 +234,12 @@ extern "C" RUNTIME_EXPORT int32_t* get_bucketized_hash_slot(
     const int64_t translated_null_val,
     const int64_t bucket_normalization = 1);
 
+extern "C" RUNTIME_EXPORT int32_t* get_hash_slot_bitwise_eq(
+    int32_t* buff,
+    const int64_t key,
+    const int64_t min_key,
+    const int64_t translated_null_val);
+
 extern "C" RUNTIME_EXPORT int32_t* get_hash_slot(int32_t* buff,
                                                  const int64_t key,
                                                  const int64_t min_key);

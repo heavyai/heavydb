@@ -157,113 +157,77 @@ struct JoinBucketInfo {
   bool is_double;  // TODO(adb): assume float otherwise (?)
 };
 
-int fill_hash_join_buff_bucketized(int32_t* buff,
-                                   const int32_t invalid_slot_val,
-                                   const bool for_semi_join,
-                                   const JoinColumn join_column,
-                                   const JoinColumnTypeInfo type_info,
-                                   const int32_t* sd_inner_to_outer_translation_map,
-                                   const int32_t min_inner_elem,
-                                   const int32_t cpu_thread_idx,
-                                   const int32_t cpu_thread_count,
-                                   const int64_t bucket_normalization);
-
-int fill_hash_join_buff(int32_t* buff,
-                        const int32_t invalid_slot_val,
-                        const bool for_semi_join,
-                        const JoinColumn join_column,
-                        const JoinColumnTypeInfo type_info,
-                        const int32_t* sd_inner_to_outer_translation_map,
-                        const int32_t min_inner_elem,
-                        const int32_t cpu_thread_idx,
-                        const int32_t cpu_thread_count);
-
-void fill_hash_join_buff_on_device(int32_t* buff,
-                                   const int32_t invalid_slot_val,
-                                   const bool for_semi_join,
-                                   int* dev_err_buff,
-                                   const JoinColumn join_column,
-                                   const JoinColumnTypeInfo type_info);
-
-void fill_hash_join_buff_on_device_bucketized(int32_t* buff,
-                                              const int32_t invalid_slot_val,
-                                              const bool for_semi_join,
-                                              int* dev_err_buff,
-                                              const JoinColumn join_column,
-                                              const JoinColumnTypeInfo type_info,
-                                              const int64_t bucket_normalization);
-
 struct ShardInfo {
-  const size_t shard;
-  const size_t entry_count_per_shard;
-  const size_t num_shards;
-  const int device_count;
+  size_t shard;
+  size_t entry_count_per_shard;
+  size_t num_shards;
+  int device_count;
 };
 
-void fill_hash_join_buff_on_device_sharded(int32_t* buff,
-                                           const int32_t invalid_slot_val,
-                                           const bool for_semi_join,
-                                           int* dev_err_buff,
-                                           const JoinColumn join_column,
-                                           const JoinColumnTypeInfo type_info,
-                                           const ShardInfo shard_info);
+struct OneToOnePerfectJoinHashTableFillFuncArgs {
+  int32_t* buff;
+  int32_t* dev_err_buff;
+  const int32_t invalid_slot_val;
+  const bool for_semi_join;
+  const JoinColumn join_column;
+  const JoinColumnTypeInfo type_info;
+  const int32_t* sd_inner_to_outer_translation_map;
+  const int32_t min_inner_elem;
+  const int64_t bucket_normalization;  // used only if we call bucketized_hash_join
+};
 
-void fill_hash_join_buff_on_device_sharded_bucketized(int32_t* buff,
-                                                      const int32_t invalid_slot_val,
-                                                      const bool for_semi_join,
-                                                      int* dev_err_buff,
-                                                      const JoinColumn join_column,
-                                                      const JoinColumnTypeInfo type_info,
-                                                      const ShardInfo shard_info,
-                                                      const int64_t bucket_normalization);
+struct OneToManyPerfectJoinHashTableFillFuncArgs {
+  int32_t* buff;
+  const BucketizedHashEntryInfo hash_entry_info;
+  const JoinColumn join_column;
+  const JoinColumnTypeInfo type_info;
+  const int32_t* sd_inner_to_outer_translation_map;
+  const int32_t min_inner_elem;
+  const int64_t bucket_normalization;  // used only if we call bucketized_hash_join
+  const bool for_window_framing;
+};
 
-void fill_one_to_many_hash_table(int32_t* buff,
-                                 const BucketizedHashEntryInfo hash_entry_info,
-                                 const JoinColumn& join_column,
-                                 const JoinColumnTypeInfo& type_info,
-                                 const int32_t* sd_inner_to_outer_translation_map,
-                                 const int32_t min_inner_elem,
-                                 const unsigned cpu_thread_count,
-                                 const bool for_window_framing);
+int fill_hash_join_buff_bucketized(OneToOnePerfectJoinHashTableFillFuncArgs const args,
+                                   int32_t const cpu_thread_idx,
+                                   int32_t const cpu_thread_count);
+
+int fill_hash_join_buff(OneToOnePerfectJoinHashTableFillFuncArgs const args,
+                        int32_t const cpu_thread_idx,
+                        int32_t const cpu_thread_count);
+
+int fill_hash_join_buff_bitwise_eq(OneToOnePerfectJoinHashTableFillFuncArgs const args,
+                                   int32_t const cpu_thread_idx,
+                                   int32_t const cpu_thread_count);
+
+void fill_hash_join_buff_on_device(OneToOnePerfectJoinHashTableFillFuncArgs const args);
+
+void fill_hash_join_buff_on_device_bucketized(
+    OneToOnePerfectJoinHashTableFillFuncArgs const args);
+
+void fill_hash_join_buff_on_device_sharded(
+    OneToOnePerfectJoinHashTableFillFuncArgs const args,
+    ShardInfo const shard_info);
+
+void fill_hash_join_buff_on_device_sharded_bucketized(
+    OneToOnePerfectJoinHashTableFillFuncArgs const args,
+    ShardInfo const shard_info);
+
+void fill_one_to_many_hash_table(OneToManyPerfectJoinHashTableFillFuncArgs const args,
+                                 int32_t const cpu_thread_count);
 
 void fill_one_to_many_hash_table_bucketized(
-    int32_t* buff,
-    const BucketizedHashEntryInfo hash_entry_info,
-    const JoinColumn& join_column,
-    const JoinColumnTypeInfo& type_info,
-    const int32_t* sd_inner_to_outer_translation_map,
-    const int32_t min_inner_elem,
-    const unsigned cpu_thread_count);
+    OneToManyPerfectJoinHashTableFillFuncArgs const args,
+    int32_t const cpu_thread_count);
 
-void fill_one_to_many_hash_table_sharded_bucketized(
-    int32_t* buff,
-    const BucketizedHashEntryInfo hash_entry_info,
-    const int32_t invalid_slot_val,
-    const JoinColumn& join_column,
-    const JoinColumnTypeInfo& type_info,
-    const ShardInfo& shard_info,
-    const int32_t* sd_inner_to_outer_translation_map,
-    const int32_t min_inner_elem,
-    const unsigned cpu_thread_count);
-
-void fill_one_to_many_hash_table_on_device(int32_t* buff,
-                                           const BucketizedHashEntryInfo hash_entry_info,
-                                           const JoinColumn& join_column,
-                                           const JoinColumnTypeInfo& type_info,
-                                           const bool for_window_framing);
+void fill_one_to_many_hash_table_on_device(
+    OneToManyPerfectJoinHashTableFillFuncArgs const args);
 
 void fill_one_to_many_hash_table_on_device_bucketized(
-    int32_t* buff,
-    const BucketizedHashEntryInfo hash_entry_info,
-    const JoinColumn& join_column,
-    const JoinColumnTypeInfo& type_info);
+    OneToManyPerfectJoinHashTableFillFuncArgs const args);
 
 void fill_one_to_many_hash_table_on_device_sharded(
-    int32_t* buff,
-    const BucketizedHashEntryInfo hash_entry_info,
-    const JoinColumn& join_column,
-    const JoinColumnTypeInfo& type_info,
-    const ShardInfo& shard_info);
+    OneToManyPerfectJoinHashTableFillFuncArgs const args,
+    ShardInfo const shard_info);
 
 int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
                                     const int64_t entry_count,

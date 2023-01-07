@@ -79,6 +79,14 @@ extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot)(int32_t* buff,
   return buff + (key - min_key);
 }
 
+extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot_bitwise_eq)(
+    int32_t* buff,
+    const int64_t key,
+    const int64_t min_key,
+    const int64_t translated_null_val) {
+  return buff + (key - min_key) + (key == translated_null_val);
+}
+
 extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot_sharded)(
     int32_t* buff,
     const int64_t key,

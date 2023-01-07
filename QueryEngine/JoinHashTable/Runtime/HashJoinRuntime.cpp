@@ -116,11 +116,7 @@ void SUFFIX(init_hash_join_buff_tbb)(int32_t* groups_buffer,
 #endif
 
 template <typename HASHTABLE_FILLING_FUNC>
-DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
-                                     const JoinColumn join_column,
-                                     const JoinColumnTypeInfo type_info,
-                                     const int32_t* sd_inner_to_outer_translation_map,
-                                     const int32_t min_inner_elem,
+DEVICE auto fill_hash_join_buff_impl(OneToOnePerfectJoinHashTableFillFuncArgs const args,
                                      const int32_t cpu_thread_idx,
                                      const int32_t cpu_thread_count,
                                      HASHTABLE_FILLING_FUNC filling_func) {
@@ -131,6 +127,8 @@ DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
   int32_t start = cpu_thread_idx;
   int32_t step = cpu_thread_count;
 #endif
+  auto const join_column = args.join_column;
+  auto const type_info = args.type_info;
   JoinColumnTyped col{&join_column, &type_info};
   for (auto item : col.slice(start, step)) {
     const size_t index = item.index;
@@ -143,6 +141,8 @@ DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
       }
     }
 #ifndef __CUDACC__
+    auto const sd_inner_to_outer_translation_map = args.sd_inner_to_outer_translation_map;
+    auto const min_inner_elem = args.min_inner_elem;
     if (sd_inner_to_outer_translation_map &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       const auto outer_id = map_str_id_to_outer_dict(elem,
@@ -164,62 +164,54 @@ DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
 };
 
 DEVICE int SUFFIX(fill_hash_join_buff_bucketized)(
-    int32_t* buff,
-    const int32_t invalid_slot_val,
-    const bool for_semi_join,
-    const JoinColumn join_column,
-    const JoinColumnTypeInfo type_info,
-    const int32_t* sd_inner_to_outer_translation_map,
-    const int32_t min_inner_elem,
-    const int32_t cpu_thread_idx,
-    const int32_t cpu_thread_count,
-    const int64_t bucket_normalization) {
-  auto filling_func = for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
-                                    : SUFFIX(fill_one_to_one_hashtable);
+    OneToOnePerfectJoinHashTableFillFuncArgs const args,
+    int32_t const cpu_thread_idx,
+    int32_t const cpu_thread_count) {
+  auto filling_func = args.for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
+                                         : SUFFIX(fill_one_to_one_hashtable);
   auto hashtable_filling_func = [&](auto elem, size_t index) {
-    auto entry_ptr =
-        SUFFIX(get_bucketized_hash_slot)(buff,
-                                         elem,
-                                         type_info.min_val / bucket_normalization,
-                                         type_info.translated_null_val,
-                                         bucket_normalization);
-    return filling_func(index, entry_ptr, invalid_slot_val);
+    auto entry_ptr = SUFFIX(get_bucketized_hash_slot)(
+        args.buff,
+        elem,
+        args.type_info.min_val / args.bucket_normalization,
+        args.type_info.translated_null_val,
+        args.bucket_normalization);
+    return filling_func(index, entry_ptr, args.invalid_slot_val);
   };
 
-  return fill_hash_join_buff_impl(buff,
-                                  join_column,
-                                  type_info,
-                                  sd_inner_to_outer_translation_map,
-                                  min_inner_elem,
-                                  cpu_thread_idx,
-                                  cpu_thread_count,
-                                  hashtable_filling_func);
+  return fill_hash_join_buff_impl(
+      args, cpu_thread_idx, cpu_thread_count, hashtable_filling_func);
 }
 
-DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
-                                       const int32_t invalid_slot_val,
-                                       const bool for_semi_join,
-                                       const JoinColumn join_column,
-                                       const JoinColumnTypeInfo type_info,
-                                       const int32_t* sd_inner_to_outer_translation_map,
-                                       const int32_t min_inner_elem,
-                                       const int32_t cpu_thread_idx,
-                                       const int32_t cpu_thread_count) {
-  auto filling_func = for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
-                                    : SUFFIX(fill_one_to_one_hashtable);
+DEVICE int SUFFIX(fill_hash_join_buff_bitwise_eq)(
+    OneToOnePerfectJoinHashTableFillFuncArgs const args,
+    int32_t const cpu_thread_idx,
+    int32_t const cpu_thread_count) {
+  auto filling_func = args.for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
+                                         : SUFFIX(fill_one_to_one_hashtable);
   auto hashtable_filling_func = [&](auto elem, size_t index) {
-    auto entry_ptr = SUFFIX(get_hash_slot)(buff, elem, type_info.min_val);
-    return filling_func(index, entry_ptr, invalid_slot_val);
+    auto entry_ptr = SUFFIX(get_hash_slot_bitwise_eq)(
+        args.buff, elem, args.type_info.min_val, args.type_info.translated_null_val);
+    return filling_func(index, entry_ptr, args.invalid_slot_val);
   };
 
-  return fill_hash_join_buff_impl(buff,
-                                  join_column,
-                                  type_info,
-                                  sd_inner_to_outer_translation_map,
-                                  min_inner_elem,
-                                  cpu_thread_idx,
-                                  cpu_thread_count,
-                                  hashtable_filling_func);
+  return fill_hash_join_buff_impl(
+      args, cpu_thread_idx, cpu_thread_count, hashtable_filling_func);
+}
+
+DEVICE int SUFFIX(fill_hash_join_buff)(
+    OneToOnePerfectJoinHashTableFillFuncArgs const args,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count) {
+  auto filling_func = args.for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
+                                         : SUFFIX(fill_one_to_one_hashtable);
+  auto hashtable_filling_func = [&](auto elem, size_t index) {
+    auto entry_ptr = SUFFIX(get_hash_slot)(args.buff, elem, args.type_info.min_val);
+    return filling_func(index, entry_ptr, args.invalid_slot_val);
+  };
+
+  return fill_hash_join_buff_impl(
+      args, cpu_thread_idx, cpu_thread_count, hashtable_filling_func);
 }
 
 template <typename HASHTABLE_FILLING_FUNC>
@@ -1513,7 +1505,7 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
                                       const JoinColumnTypeInfo& type_info,
                                       const int32_t* sd_inner_to_outer_translation_map,
                                       const int32_t min_inner_elem,
-                                      const unsigned cpu_thread_count,
+                                      const int32_t cpu_thread_count,
                                       const bool for_window_framing,
                                       COUNT_MATCHES_LAUNCH_FUNCTOR count_matches_func,
                                       FILL_ROW_IDS_LAUNCH_FUNCTOR fill_row_ids_func) {
@@ -1522,7 +1514,7 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
   int32_t* count_buff = buff + hash_entry_count;
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
   std::vector<std::future<void>> counter_threads;
-  for (unsigned cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
+  for (int32_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     counter_threads.push_back(std::async(
         std::launch::async, count_matches_func, cpu_thread_idx, cpu_thread_count));
   }
@@ -1541,7 +1533,7 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
       count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
 #endif
   std::vector<std::future<void>> pos_threads;
-  for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
+  for (int32_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     pos_threads.push_back(std::async(
         std::launch::async,
         [&](size_t thread_idx) {
@@ -1558,7 +1550,7 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
   }
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
   std::vector<std::future<void>> rowid_threads;
-  for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
+  for (int32_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     rowid_threads.push_back(std::async(
         std::launch::async, fill_row_ids_func, cpu_thread_idx, cpu_thread_count));
   }
@@ -1568,105 +1560,80 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
   }
 }
 
-void fill_one_to_many_hash_table(int32_t* buff,
-                                 const BucketizedHashEntryInfo hash_entry_info,
-                                 const JoinColumn& join_column,
-                                 const JoinColumnTypeInfo& type_info,
-                                 const int32_t* sd_inner_to_outer_translation_map,
-                                 const int32_t min_inner_elem,
-                                 const unsigned cpu_thread_count,
-                                 const bool for_window_framing) {
+void fill_one_to_many_hash_table(OneToManyPerfectJoinHashTableFillFuncArgs const args,
+                                 const int32_t cpu_thread_count) {
   auto timer = DEBUG_TIMER(__func__);
-  auto launch_count_matches =
-      [count_buff = buff + hash_entry_info.bucketized_hash_entry_count,
-       &join_column,
-       &type_info,
-       sd_inner_to_outer_translation_map,
-       min_inner_elem](auto cpu_thread_idx, auto cpu_thread_count) {
-        SUFFIX(count_matches)
-        (count_buff,
-         join_column,
-         type_info,
-         sd_inner_to_outer_translation_map,
-         min_inner_elem,
-         cpu_thread_idx,
-         cpu_thread_count);
-      };
+  auto const buff = args.buff;
+  auto const hash_entry_info = args.hash_entry_info;
+  auto launch_count_matches = [count_buff =
+                                   buff + hash_entry_info.bucketized_hash_entry_count,
+                               &args](auto cpu_thread_idx, auto cpu_thread_count) {
+    SUFFIX(count_matches)
+    (count_buff,
+     args.join_column,
+     args.type_info,
+     args.sd_inner_to_outer_translation_map,
+     args.min_inner_elem,
+     cpu_thread_idx,
+     cpu_thread_count);
+  };
   auto launch_fill_row_ids =
-      [hash_entry_count = hash_entry_info.bucketized_hash_entry_count,
-       buff,
-       &join_column,
-       &type_info,
-       sd_inner_to_outer_translation_map,
-       min_inner_elem,
-       for_window_framing](auto cpu_thread_idx, auto cpu_thread_count) {
+      [hash_entry_count = hash_entry_info.bucketized_hash_entry_count, buff, args](
+          auto cpu_thread_idx, auto cpu_thread_count) {
         SUFFIX(fill_row_ids)
         (buff,
          hash_entry_count,
-         join_column,
-         type_info,
-         for_window_framing,
-         sd_inner_to_outer_translation_map,
-         min_inner_elem,
+         args.join_column,
+         args.type_info,
+         args.for_window_framing,
+         args.sd_inner_to_outer_translation_map,
+         args.min_inner_elem,
          cpu_thread_idx,
          cpu_thread_count);
       };
 
   fill_one_to_many_hash_table_impl(buff,
                                    hash_entry_info.bucketized_hash_entry_count,
-                                   join_column,
-                                   type_info,
-                                   sd_inner_to_outer_translation_map,
-                                   min_inner_elem,
+                                   args.join_column,
+                                   args.type_info,
+                                   args.sd_inner_to_outer_translation_map,
+                                   args.min_inner_elem,
                                    cpu_thread_count,
-                                   for_window_framing,
+                                   args.for_window_framing,
                                    launch_count_matches,
                                    launch_fill_row_ids);
 }
 
 void fill_one_to_many_hash_table_bucketized(
-    int32_t* buff,
-    const BucketizedHashEntryInfo hash_entry_info,
-    const JoinColumn& join_column,
-    const JoinColumnTypeInfo& type_info,
-    const int32_t* sd_inner_to_outer_translation_map,
-    const int32_t min_inner_elem,
-    const unsigned cpu_thread_count) {
+    OneToManyPerfectJoinHashTableFillFuncArgs const args,
+    const int32_t cpu_thread_count) {
   auto timer = DEBUG_TIMER(__func__);
+  auto const buff = args.buff;
+  auto const hash_entry_info = args.hash_entry_info;
   auto bucket_normalization = hash_entry_info.bucket_normalization;
   auto hash_entry_count = hash_entry_info.getNormalizedHashEntryCount();
   auto launch_count_matches = [bucket_normalization,
                                count_buff = buff + hash_entry_count,
-                               &join_column,
-                               &type_info,
-                               sd_inner_to_outer_translation_map,
-                               min_inner_elem](auto cpu_thread_idx,
-                                               auto cpu_thread_count) {
+                               &args](auto cpu_thread_idx, auto cpu_thread_count) {
     SUFFIX(count_matches_bucketized)
     (count_buff,
-     join_column,
-     type_info,
-     sd_inner_to_outer_translation_map,
-     min_inner_elem,
+     args.join_column,
+     args.type_info,
+     args.sd_inner_to_outer_translation_map,
+     args.min_inner_elem,
      cpu_thread_idx,
      cpu_thread_count,
      bucket_normalization);
   };
-  auto launch_fill_row_ids = [bucket_normalization,
-                              hash_entry_count,
-                              buff,
-                              &join_column,
-                              &type_info,
-                              sd_inner_to_outer_translation_map,
-                              min_inner_elem](auto cpu_thread_idx,
-                                              auto cpu_thread_count) {
+  auto launch_fill_row_ids = [bucket_normalization, hash_entry_count, buff, args](
+                                 auto cpu_thread_idx, auto cpu_thread_count) {
     SUFFIX(fill_row_ids_bucketized)
     (buff,
      hash_entry_count,
-     join_column,
-     type_info,
-     sd_inner_to_outer_translation_map,
-     min_inner_elem,
+     args.join_column,
+     args.type_info,
+     args.sd_inner_to_outer_translation_map,
+     args.min_inner_elem,
      cpu_thread_idx,
      cpu_thread_count,
      bucket_normalization);
@@ -1674,10 +1641,10 @@ void fill_one_to_many_hash_table_bucketized(
 
   fill_one_to_many_hash_table_impl(buff,
                                    hash_entry_count,
-                                   join_column,
-                                   type_info,
-                                   sd_inner_to_outer_translation_map,
-                                   min_inner_elem,
+                                   args.join_column,
+                                   args.type_info,
+                                   args.sd_inner_to_outer_translation_map,
+                                   args.min_inner_elem,
                                    cpu_thread_count,
                                    false,
                                    launch_count_matches,
@@ -1693,7 +1660,7 @@ void fill_one_to_many_hash_table_sharded_impl(
     const ShardInfo& shard_info,
     const int32_t* sd_inner_to_outer_translation_map,
     const int32_t min_inner_elem,
-    const unsigned cpu_thread_count,
+    const int32_t cpu_thread_count,
     COUNT_MATCHES_LAUNCH_FUNCTOR count_matches_launcher,
     FILL_ROW_IDS_LAUNCH_FUNCTOR fill_row_ids_launcher) {
   auto timer = DEBUG_TIMER(__func__);
@@ -1701,7 +1668,7 @@ void fill_one_to_many_hash_table_sharded_impl(
   int32_t* count_buff = buff + hash_entry_count;
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
   std::vector<std::future<void>> counter_threads;
-  for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
+  for (int32_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     counter_threads.push_back(std::async(
         std::launch::async, count_matches_launcher, cpu_thread_idx, cpu_thread_count));
   }
@@ -1716,10 +1683,10 @@ void fill_one_to_many_hash_table_sharded_impl(
   ::inclusive_scan(
       count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
   std::vector<std::future<void>> pos_threads;
-  for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
+  for (int32_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     pos_threads.push_back(std::async(
         std::launch::async,
-        [&](const unsigned thread_idx) {
+        [&](const int32_t thread_idx) {
           for (int64_t i = thread_idx; i < hash_entry_count; i += cpu_thread_count) {
             if (count_buff[i]) {
               pos_buff[i] = count_copy[i];
@@ -1734,7 +1701,7 @@ void fill_one_to_many_hash_table_sharded_impl(
 
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
   std::vector<std::future<void>> rowid_threads;
-  for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
+  for (int32_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     rowid_threads.push_back(std::async(
         std::launch::async, fill_row_ids_launcher, cpu_thread_idx, cpu_thread_count));
   }
@@ -1751,7 +1718,7 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
                                          const ShardInfo& shard_info,
                                          const int32_t* sd_inner_to_outer_translation_map,
                                          const int32_t min_inner_elem,
-                                         const unsigned cpu_thread_count) {
+                                         const int32_t cpu_thread_count) {
   auto launch_count_matches = [count_buff = buff + hash_entry_count,
                                &join_column,
                                &type_info,
