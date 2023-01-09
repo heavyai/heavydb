@@ -30,7 +30,7 @@ const Catalog_Namespace::SessionInfo& RenderInfo::getSessionInfo() const {
   CHECK(false);
   static const Catalog_Namespace::SessionInfo tmp(
       nullptr,
-      Catalog_Namespace::UserMetadata(-1, "", "", false, -1, false),
+      Catalog_Namespace::UserMetadata(-1, "", "", false, -1, false, ""),
       ExecutorDeviceType::CPU,
       "");
   return tmp;
@@ -43,10 +43,6 @@ std::shared_ptr<Catalog_Namespace::SessionInfo const> RenderInfo::getSessionInfo
 }
 
 void RenderInfo::forceNonInSitu() {
-  CHECK(false);
-}
-
-void RenderInfo::setNonInSitu() {
   CHECK(false);
 }
 
@@ -76,6 +72,10 @@ std::shared_ptr<QueryRenderer::QueryDataLayout> RenderInfo::getQuerySsboLayout()
 
 void RenderInfo::setQuerySsboLayout(
     const std::shared_ptr<QueryRenderer::QueryDataLayout>& ssbo_layout) {
+  CHECK(false);
+}
+
+void RenderInfo::setNonInSitu() {
   CHECK(false);
 }
 

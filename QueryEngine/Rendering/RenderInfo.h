@@ -62,20 +62,11 @@ class RenderInfo : public heavyai::InSituFlagsOwnerInterface {
 
   const RenderQueryOptions& getRenderQueryOptions() const;
 
-  bool setInSituDataIfUnset(const bool is_in_situ_data);
-
   void reset(std::unique_ptr<RenderQueryOptions> in_query_opts,
-             const bool in_force_non_in_situ_data);
+             const heavyai::InSituFlags in_insitu_flags);
 
  private:
   enum class InSituState { UNSET, IS_IN_SITU, IS_NOT_IN_SITU };
-  InSituState
-      in_situ_data;  // Should be set to true if query results can be written directly to
-                     // CUDA-mapped buffers for rendering. Should be set to false
-                     // otherwise, meaning results are written to CPU first, and buffered
-                     // back to GPU for rendering. An alternative meaning is that when
-                     // false, you've encountered a non-projection query. Can only be set
-                     // once for the lifetime of the object.
   bool force_non_in_situ_data;
   bool cuda_using_buffers_;
 
