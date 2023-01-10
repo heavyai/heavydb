@@ -52,6 +52,11 @@ class CpuBufferMgr : public BufferMgr {
   inline MgrType getMgrType() override { return CPU_MGR; }
   inline std::string getStringMgrType() override { return ToString(CPU_MGR); }
 
+  // Used for testing.
+  void setAllocator(std::unique_ptr<DramArena> allocator) {
+    allocator_ = std::move(allocator);
+  }
+
  protected:
   void addSlab(const size_t slab_size) override;
   void freeAllMem() override;
