@@ -203,6 +203,165 @@ void MigrationMgr::migrateDateInDaysMetadata(
   LOG(INFO) << "Successfully migrated all date in days column metadata.";
 }
 
+void MigrationMgr::dropRenderGroupColumns(
+    const Catalog_Namespace::TableDescriptorMapById& table_descriptors_by_id,
+    Catalog_Namespace::Catalog* cat) {
+  // for this catalog...
+  CHECK(cat);
+  auto& catalog = *cat;
+
+  // skip info schema catalog
+  if (catalog.isInfoSchemaDb()) {
+    return;
+  }
+
+  // report catalog
+  LOG(INFO) << "MigrationMgr: dropRenderGroupColumns: Processing catalog '"
+            << catalog.name() << "'";
+
+  // HeavyConnect cache
+  auto* heavyconnect_cache =
+      catalog.getDataMgr().getPersistentStorageMgr()->getDiskCache();
+
+  // all tables...
+  for (auto itr = table_descriptors_by_id.begin(); itr != table_descriptors_by_id.end();
+       itr++) {
+    // the table...
+    auto const* td = itr->second;
+    CHECK(td);
+
+    // skip views and temps
+    if (td->isView) {
+      LOG(INFO) << "MigrationMgr: dropRenderGroupColumns:  Skipping view '"
+                << td->tableName << "'";
+      continue;
+    }
+    if (table_is_temporary(td)) {
+      LOG(INFO) << "MigrationMgr: dropRenderGroupColumns:  Skipping temporary table '"
+                << td->tableName << "'";
+      continue;
+    }
+
+    LOG(INFO) << "MigrationMgr: dropRenderGroupColumns:  Examining table '"
+              << td->tableName << "'";
+
+    // find render group columns
+    auto logical_cds =
+        catalog.getAllColumnMetadataForTable(td->tableId, false, false, false);
+    // prepare to capture names
+    std::vector<std::string> columns_to_drop;
+    // iterate all columns
+    for (auto itr = logical_cds.begin(); itr != logical_cds.end(); itr++) {
+      auto const* cd = *itr;
+      CHECK(cd);
+      // poly or multipoly column?
+      auto const cd_type = cd->columnType.get_type();
+      if (cd_type == kPOLYGON || cd_type == kMULTIPOLYGON) {
+        // next logical column
+        auto const next_itr = std::next(itr);
+        if (next_itr == logical_cds.end()) {
+          // no next column, perhaps table already migrated
+          break;
+        }
+        // the next column
+        auto const* next_cd = *next_itr;
+        CHECK(next_cd);
+        // expected name?
+        auto const next_name = next_cd->columnName;
+        auto const expected_name = cd->columnName + "_render_group";
+        if (next_name == expected_name) {
+          // expected type?
+          auto const next_type = next_cd->columnType.get_type();
+          if (next_type == kINT) {
+            // expected ID increment
+            auto const next_id = next_cd->columnId;
+            auto const expected_next_id =
+                cd->columnId + cd->columnType.get_physical_cols() + 1;
+            if (next_id == expected_next_id) {
+              // report
+              LOG(INFO) << "MigrationMgr: dropRenderGroupColumns:   Removing render "
+                           "group column '"
+                        << next_name << "'";
+              // capture name
+              columns_to_drop.emplace_back(next_name);
+              // restart with the column after the one we identified
+              itr++;
+            } else {
+              LOG(WARNING) << "MigrationMgr: dropRenderGroupColumns:   Expected render "
+                              "group column '"
+                           << next_name << "' has wrong ID (" << next_id << "/"
+                           << expected_next_id << "), skipping...";
+            }
+          } else {
+            LOG(WARNING) << "MigrationMgr: dropRenderGroupColumns:   Expected render "
+                            "group column '"
+                         << next_name << "' has wrong type (" << to_string(next_type)
+                         << "), skipping...";
+          }
+        }
+      }
+    }
+
+    // any to drop?
+    if (columns_to_drop.size() == 0) {
+      LOG(INFO)
+          << "MigrationMgr: dropRenderGroupColumns:   No render group columns found";
+      continue;
+    }
+
+    // drop the columns
+    catalog.getSqliteConnector().query("BEGIN TRANSACTION");
+    try {
+      std::vector<int> column_ids;
+      for (auto const& column : columns_to_drop) {
+        auto const* cd = catalog.getMetadataForColumn(td->tableId, column);
+        CHECK(cd);
+        catalog.dropColumn(*td, *cd);
+        column_ids.push_back(cd->columnId);
+      }
+      for (auto const* physical_td : catalog.getPhysicalTablesDescriptors(td)) {
+        CHECK(physical_td);
+        // getMetadataForTable() may not have been called on this table, so
+        // the table may not yet have a fragmenter (which that function lazy
+        // creates by default) so call it manually here to force creation of
+        // the fragmenter so we can use it to actually drop the columns
+        if (physical_td->fragmenter == nullptr) {
+          catalog.getMetadataForTable(physical_td->tableId, true);
+          CHECK(physical_td->fragmenter);
+        }
+        physical_td->fragmenter->dropColumns(column_ids);
+      }
+      catalog.roll(true);
+      if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+        catalog.resetTableEpochFloor(td->tableId);
+        catalog.checkpoint(td->tableId);
+      }
+      catalog.getSqliteConnector().query("END TRANSACTION");
+    } catch (std::exception& e) {
+      catalog.setForReload(td->tableId);
+      catalog.roll(false);
+      catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
+      LOG(ERROR) << "MigrationMgr: dropRenderGroupColumns:   Failed to drop render group "
+                    "columns for table '"
+                 << td->tableName << "' (" << e.what() << ")";
+      // don't do anything else for this table
+      continue;
+    }
+
+    // flush any HeavyConnect foreign table cache for the physical tables
+    if (heavyconnect_cache) {
+      for (auto const* physical_td : catalog.getPhysicalTablesDescriptors(td)) {
+        CHECK(physical_td);
+        LOG(INFO) << "MigrationMgr: dropRenderGroupColumns:   Flushing HeavyConnect "
+                     "cache for table '"
+                  << physical_td->tableName << "'";
+        heavyconnect_cache->clearForTablePrefix(
+            {catalog.getCurrentDB().dbId, physical_td->tableId});
+      }
+    }
+  }
+}
+
 namespace {
 bool rename_and_symlink_path(const std::filesystem::path& old_path,
                              const std::filesystem::path& new_path) {

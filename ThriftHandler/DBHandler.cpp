@@ -3130,7 +3130,6 @@ void DBHandler::fillGeoColumns(
   const auto wkt_or_wkb_hex_column = import_buffers[geo_col_idx]->getGeoStringBuffer();
   std::vector<std::vector<double>> coords_column, bounds_column;
   std::vector<std::vector<int>> ring_sizes_column, poly_rings_column;
-  std::vector<int> render_groups_column;
   SQLTypeInfo ti = cd->columnType;
   if (num_rows != wkt_or_wkb_hex_column->size() ||
       !Geospatial::GeoTypesFactory::getGeoColumns(wkt_or_wkb_hex_column,
@@ -3145,10 +3144,6 @@ void DBHandler::fillGeoColumns(
     THROW_DB_EXCEPTION(oss.str());
   }
 
-  // start or continue assigning render groups for poly columns?
-  // render groups all zero
-  render_groups_column.resize(bounds_column.size(), 0);
-
   // Populate physical columns, advance col_idx
   import_export::Importer::set_geo_physical_import_buffer_columnar(catalog,
                                                                    cd,
@@ -3157,8 +3152,7 @@ void DBHandler::fillGeoColumns(
                                                                    coords_column,
                                                                    bounds_column,
                                                                    ring_sizes_column,
-                                                                   poly_rings_column,
-                                                                   render_groups_column);
+                                                                   poly_rings_column);
 }
 
 void DBHandler::fillMissingBuffers(

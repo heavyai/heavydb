@@ -845,7 +845,6 @@ class Importer : public DataStreamSink, public AbstractImporter {
       std::vector<double>& bounds,
       std::vector<int>& ring_sizes,
       std::vector<int>& poly_rings,
-      int render_group,
       const bool force_null = false);
   static void set_geo_physical_import_buffer_columnar(
       const Catalog_Namespace::Catalog& catalog,
@@ -855,8 +854,7 @@ class Importer : public DataStreamSink, public AbstractImporter {
       std::vector<std::vector<double>>& coords_column,
       std::vector<std::vector<double>>& bounds_column,
       std::vector<std::vector<int>>& ring_sizes_column,
-      std::vector<std::vector<int>>& poly_rings_column,
-      std::vector<int>& render_groups_column);
+      std::vector<std::vector<int>>& poly_rings_column);
   void checkpoint(const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs);
   auto getLoader() const { return loader.get(); }
 

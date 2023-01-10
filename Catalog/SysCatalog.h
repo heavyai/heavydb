@@ -391,7 +391,7 @@ class SysCatalog : private CommonFileOperations {
       const Catalog_Namespace::Catalog& catalog);
 
   bool hasExecutedMigration(const std::string& migration_name) const;
-
+  void checkDropRenderGroupColumnsMigration() const;
  private:
   using GranteeMap = std::map<std::string, std::unique_ptr<Grantee>>;
   using ObjectRoleDescriptorMap =

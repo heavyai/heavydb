@@ -928,6 +928,11 @@ void Catalog::checkDateInDaysColumnMigration() {
       tableDescriptorMapById_, getCurrentDB().dbId, this, sqliteConnector_);
 }
 
+void Catalog::checkDropRenderGroupColumnsMigration() {
+  // do not take cat_sqlite_lock here as Catalog functions do that themselves
+  migrations::MigrationMgr::dropRenderGroupColumns(tableDescriptorMapById_, this);
+}
+
 void Catalog::createDashboardSystemRoles() {
   std::unordered_map<std::string, std::pair<int, std::string>> dashboards;
   std::vector<std::string> dashboard_ids;
@@ -2668,12 +2673,6 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
         physical_cd_bounds.columnType = bounds_ti;
         columns.push_back(physical_cd_bounds);
 
-        ColumnDescriptor physical_cd_render_group(true);
-        physical_cd_render_group.columnName = cd.columnName + "_render_group";
-        SQLTypeInfo render_group_ti = SQLTypeInfo(kINT, col_ti.get_notnull());
-        physical_cd_render_group.columnType = render_group_ti;
-        columns.push_back(physical_cd_render_group);
-
         // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
 
         break;
@@ -2708,12 +2707,6 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
         bounds_ti.set_size(4 * sizeof(double));
         physical_cd_bounds.columnType = bounds_ti;
         columns.push_back(physical_cd_bounds);
-
-        ColumnDescriptor physical_cd_render_group(true);
-        physical_cd_render_group.columnName = cd.columnName + "_render_group";
-        SQLTypeInfo render_group_ti = SQLTypeInfo(kINT, col_ti.get_notnull());
-        physical_cd_render_group.columnType = render_group_ti;
-        columns.push_back(physical_cd_render_group);
 
         // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
 
