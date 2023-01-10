@@ -2524,8 +2524,6 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
         std::vector<double> bounds;
         std::vector<int> ring_sizes;
         std::vector<int> poly_rings;
-        int render_group =
-            0;  // @TODO simon.eves where to get render_group from in this context?!
         SQLTypeInfo import_ti{cd->columnType};
         if (!is_null) {
           if (!Geospatial::GeoTypesFactory::getGeoColumns(
@@ -2648,21 +2646,6 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
           query_values_list.emplace_back(new Analyzer::TargetEntry(
               "",
               makeExpr<Analyzer::Constant>(cd_bounds->columnType, is_null, value_exprs),
-              false));
-          ++cds_id;
-        }
-
-        if (cd->columnType.get_type() == kPOLYGON ||
-            cd->columnType.get_type() == kMULTIPOLYGON) {
-          // Put render group into separate physical column
-          const auto* cd_render_group = cds[cds_id];
-          CHECK(cd_render_group);
-          CHECK_EQ(cd_render_group->columnType.get_type(), kINT);
-          Datum d;
-          d.intval = render_group;
-          query_values_list.emplace_back(new Analyzer::TargetEntry(
-              "",
-              makeExpr<Analyzer::Constant>(cd_render_group->columnType, is_null, d),
               false));
           ++cds_id;
         }
@@ -5150,7 +5133,6 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
               if (cd->columnType.is_geometry()) {
                 std::vector<double> coords, bounds;
                 std::vector<int> ring_sizes, poly_rings;
-                int render_group = 0;
                 SQLTypeInfo tinfo{cd->columnType};
                 if (!Geospatial::GeoTypesFactory::getGeoColumns(
                         cd->default_value.value_or("NULL"),
@@ -5171,8 +5153,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
                                                                         coords,
                                                                         bounds,
                                                                         ring_sizes,
-                                                                        poly_rings,
-                                                                        render_group);
+                                                                        poly_rings);
                 // skip following phy cols
                 skip_physical_cols = cd->columnType.get_physical_cols();
               }

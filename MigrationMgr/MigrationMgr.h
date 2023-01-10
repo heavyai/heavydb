@@ -36,6 +36,10 @@ class MigrationMgr {
       Catalog_Namespace::Catalog* cat,
       SqliteConnector& sqlite);
 
+  static void dropRenderGroupColumns(
+      const Catalog_Namespace::TableDescriptorMapById& table_descriptors_by_id,
+      Catalog_Namespace::Catalog* cat);
+
   static void executeRebrandMigration(const std::string& base_path);
 
   static void takeMigrationLock(const std::string& base_path);

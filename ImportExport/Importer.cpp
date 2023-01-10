@@ -797,7 +797,6 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
       // Populate physical columns (ref. DBHandler::load_table)
       std::vector<double> coords, bounds;
       std::vector<int> ring_sizes, poly_rings;
-      int render_group = 0;
       SQLTypeInfo ti;
       // replace any unexpected exception from getGeoColumns or other
       // on this path with a GeoImportException so that we wont over
@@ -830,8 +829,7 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
             coords,
             bounds,
             ring_sizes,
-            poly_rings,
-            render_group);
+            poly_rings);
       } catch (GeoImportException&) {
         throw;
       } catch (std::runtime_error& e) {
@@ -1630,7 +1628,6 @@ void Importer::set_geo_physical_import_buffer(
     std::vector<double>& bounds,
     std::vector<int>& ring_sizes,
     std::vector<int>& poly_rings,
-    int render_group,
     const bool force_null) {
   const auto col_ti = cd->columnType;
   const auto col_type = col_ti.get_type();
@@ -1715,15 +1712,6 @@ void Importer::set_geo_physical_import_buffer(
     tdd_bounds.is_null = is_null_geo;
     import_buffers[col_idx++]->add_value(cd_bounds, tdd_bounds, false);
   }
-
-  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-    // Create render_group value and add it to the physical column
-    auto cd_render_group = catalog.getMetadataForColumn(cd->tableId, ++columnId);
-    TDatum td_render_group;
-    td_render_group.val.int_val = render_group;
-    td_render_group.is_null = is_null_geo;
-    import_buffers[col_idx++]->add_value(cd_render_group, td_render_group, false);
-  }
 }
 
 void Importer::set_geo_physical_import_buffer_columnar(
@@ -1734,8 +1722,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
     std::vector<std::vector<double>>& coords_column,
     std::vector<std::vector<double>>& bounds_column,
     std::vector<std::vector<int>>& ring_sizes_column,
-    std::vector<std::vector<int>>& poly_rings_column,
-    std::vector<int>& render_groups_column) {
+    std::vector<std::vector<int>>& poly_rings_column) {
   const auto col_ti = cd->columnType;
   const auto col_type = col_ti.get_type();
   auto columnId = cd->columnId;
@@ -1851,18 +1838,6 @@ void Importer::set_geo_physical_import_buffer_columnar(
       tdd_bounds.val.arr_val = td_bounds_data;
       tdd_bounds.is_null = is_null_geo;
       import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false);
-    }
-    col_idx++;
-  }
-
-  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-    // Create render_group value and add it to the physical column
-    auto cd_render_group = catalog.getMetadataForColumn(cd->tableId, ++columnId);
-    for (auto const& render_group : render_groups_column) {
-      TDatum td_render_group;
-      td_render_group.val.int_val = render_group;
-      td_render_group.is_null = false;
-      import_buffers[col_idx]->add_value(cd_render_group, td_render_group, false);
     }
     col_idx++;
   }
@@ -2142,7 +2117,6 @@ static ImportStatus import_thread_delimited(
               std::vector<double> bounds;
               std::vector<int> ring_sizes;
               std::vector<int> poly_rings;
-              int render_group = 0;
 
               // if this is a POINT column, and the field is not null, and
               // looks like a scalar numeric value (and not a hex blob)
@@ -2253,8 +2227,6 @@ static ImportStatus import_thread_delimited(
                     }
                   }
                 }
-
-                render_group = -1;
               }
 
               // import extracted geo
@@ -2265,8 +2237,7 @@ static ImportStatus import_thread_delimited(
                                                        coords,
                                                        bounds,
                                                        ring_sizes,
-                                                       poly_rings,
-                                                       render_group);
+                                                       poly_rings);
 
               // skip remaining physical columns
               for (int i = 0; i < cd->columnType.get_physical_cols(); ++i) {
@@ -2435,7 +2406,6 @@ static ImportStatus import_thread_shapefile(
             std::vector<double> bounds;
             std::vector<int> ring_sizes;
             std::vector<int> poly_rings;
-            int render_group = 0;
 
             // extract it
             SQLTypeInfo import_ti{col_ti};
@@ -2477,8 +2447,6 @@ static ImportStatus import_thread_shapefile(
                 }
               }
             }
-
-            render_group = -1;
 
             // create coords array value and add it to the physical column
             ++cd_it;
@@ -2556,17 +2524,6 @@ static ImportStatus import_thread_shapefile(
               tdd_bounds.val.arr_val = td_bounds_data;
               tdd_bounds.is_null = is_null_geo;
               import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false);
-              ++col_idx;
-            }
-
-            if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-              // Create render_group value and add it to the physical column
-              ++cd_it;
-              auto cd_render_group = *cd_it;
-              TDatum td_render_group;
-              td_render_group.val.int_val = render_group;
-              td_render_group.is_null = is_null_geo;
-              import_buffers[col_idx]->add_value(cd_render_group, td_render_group, false);
               ++col_idx;
             }
           } else if (field_column_count < fieldNameToIndexMap.size()) {
@@ -6190,21 +6147,13 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
     if (cd->columnType.is_geometry()) {
       std::vector<double> coords, bounds;
       std::vector<int> ring_sizes, poly_rings;
-      int render_group = 0;
       SQLTypeInfo tinfo{cd->columnType};
       CHECK(Geospatial::GeoTypesFactory::getGeoColumns(
           default_value, tinfo, coords, bounds, ring_sizes, poly_rings, false));
       // set physical columns starting with the following ID
       auto next_col = i + 1;
-      import_export::Importer::set_geo_physical_import_buffer(*cat,
-                                                              cd,
-                                                              defaults_buffers,
-                                                              next_col,
-                                                              coords,
-                                                              bounds,
-                                                              ring_sizes,
-                                                              poly_rings,
-                                                              render_group);
+      import_export::Importer::set_geo_physical_import_buffer(
+          *cat, cd, defaults_buffers, next_col, coords, bounds, ring_sizes, poly_rings);
       // skip physical columns filled with the call above
       i += cd->columnType.get_physical_cols();
     }

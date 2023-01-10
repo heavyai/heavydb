@@ -3190,6 +3190,19 @@ void SysCatalog::rebuildObjectMapsUnlocked() {
   buildObjectDescriptorMapUnlocked();
 }
 
+void SysCatalog::checkDropRenderGroupColumnsMigration() const {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  static const std::string drop_render_groups_migration{"drop_render_groups"};
+  if (!hasExecutedMigration(drop_render_groups_migration)) {
+    auto cats = Catalog_Namespace::SysCatalog::instance().getCatalogsForAllDbs();
+    for (auto& cat : cats) {
+      cat->checkDropRenderGroupColumnsMigration();    
+    }
+    recordExecutedMigration(drop_render_groups_migration);
+  }
+}
+
 const TableDescriptor* get_metadata_for_table(const ::shared::TableKey& table_key,
                                               bool populate_fragmenter) {
   const auto catalog = SysCatalog::instance().getCatalog(table_key.db_id);

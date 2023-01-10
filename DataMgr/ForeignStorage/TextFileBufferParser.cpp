@@ -225,7 +225,6 @@ void TextFileBufferParser::processInvalidGeoColumn(
   std::vector<double> bounds;
   std::vector<int> ring_sizes;
   std::vector<int> poly_rings;
-  int render_group = 0;
 
   SQLTypeInfo import_ti{col_ti};
   Geospatial::GeoTypesFactory::getNullGeoColumns(
@@ -240,7 +239,6 @@ void TextFileBufferParser::processInvalidGeoColumn(
                                                           bounds,
                                                           ring_sizes,
                                                           poly_rings,
-                                                          render_group,
                                                           /*force_null=*/true);
 }
 
@@ -270,7 +268,6 @@ void TextFileBufferParser::processGeoColumn(
   std::vector<double> bounds;
   std::vector<int> ring_sizes;
   std::vector<int> poly_rings;
-  int render_group = 0;
 
   // prepare to transform from another SRID
   SQLTypeInfo import_ti{col_ti};
@@ -322,8 +319,6 @@ void TextFileBufferParser::processGeoColumn(
                                    cd->columnName);
         }
       }
-
-      render_group = 0;
     }
   }
 
@@ -334,15 +329,8 @@ void TextFileBufferParser::processGeoColumn(
   }
 
   // import extracted geo
-  import_export::Importer::set_geo_physical_import_buffer(*catalog,
-                                                          cd,
-                                                          import_buffers,
-                                                          col_idx,
-                                                          coords,
-                                                          bounds,
-                                                          ring_sizes,
-                                                          poly_rings,
-                                                          render_group);
+  import_export::Importer::set_geo_physical_import_buffer(
+      *catalog, cd, import_buffers, col_idx, coords, bounds, ring_sizes, poly_rings);
 
   // store null string in the base column
   import_buffers[starting_col_idx]->add_value(

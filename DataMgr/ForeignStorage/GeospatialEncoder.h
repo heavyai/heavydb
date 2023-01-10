@@ -49,13 +49,11 @@ class GeospatialEncoder {
       , bounds_column_encoder_(nullptr)
       , ring_or_line_sizes_column_encoder_(nullptr)
       , poly_rings_column_encoder_(nullptr)
-      , render_group_column_encoder_(nullptr)
       , base_column_metadata_(nullptr)
       , coords_column_metadata_(nullptr)
       , bounds_column_metadata_(nullptr)
       , ring_or_line_sizes_column_metadata_(nullptr)
-      , poly_rings_column_metadata_(nullptr)
-      , render_group_column_metadata_(nullptr) {
+      , poly_rings_column_metadata_(nullptr) {
     CHECK(geo_column_descriptor_->columnType.is_geometry());
     validateChunksSizing(chunks);
     const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
@@ -73,10 +71,6 @@ class GeospatialEncoder {
       ring_or_line_sizes_column_descriptor_ =
           getColumnDescriptor(chunks, geo_column_type, RING_OR_LINE_SIZES);
     }
-    if (hasRenderGroupColumn()) {
-      render_group_column_descriptor_ =
-          getColumnDescriptor(chunks, geo_column_type, RENDER_GROUP);
-    }
 
     // initialize poly rings column
     if (hasPolyRingsColumn()) {
@@ -93,13 +87,11 @@ class GeospatialEncoder {
       , bounds_column_encoder_(nullptr)
       , ring_or_line_sizes_column_encoder_(nullptr)
       , poly_rings_column_encoder_(nullptr)
-      , render_group_column_encoder_(nullptr)
       , base_column_metadata_(nullptr)
       , coords_column_metadata_(nullptr)
       , bounds_column_metadata_(nullptr)
       , ring_or_line_sizes_column_metadata_(nullptr)
-      , poly_rings_column_metadata_(nullptr)
-      , render_group_column_metadata_(nullptr) {
+      , poly_rings_column_metadata_(nullptr) {
     CHECK(geo_column_descriptor_->columnType.is_geometry());
 
     validateChunksSizing(chunks);
@@ -136,13 +128,6 @@ class GeospatialEncoder {
           initEncoderAndGetEncoderAndMetadata(
               chunks, chunk_metadata, geo_column_type, RING_OR_LINE_SIZES);
     }
-    if (hasRenderGroupColumn()) {
-      std::tie(render_group_column_encoder_,
-               render_group_column_metadata_,
-               render_group_column_descriptor_) =
-          initEncoderAndGetEncoderAndMetadata(
-              chunks, chunk_metadata, geo_column_type, RENDER_GROUP);
-    }
 
     // initialize poly rings column
     if (hasPolyRingsColumn()) {
@@ -155,48 +140,21 @@ class GeospatialEncoder {
   }
 
  protected:
-  void appendBaseAndRenderGroupDataAndUpdateMetadata(const int64_t row_count) {
+  void appendBaseDataAndUpdateMetadata(const int64_t row_count) {
     base_values_.resize(row_count);
     *base_column_metadata_ =
         *base_column_encoder_->appendData(&base_values_, 0, row_count);
-    if (hasRenderGroupColumn()) {
-      CHECK_EQ(render_group_value_buffer_.size(), static_cast<size_t>(row_count))
-          << "Render Group Values not generated correctly!";
-      auto data_ptr = reinterpret_cast<int8_t*>(render_group_value_buffer_.data());
-      *render_group_column_metadata_ = *render_group_column_encoder_->appendData(
-          data_ptr, row_count, render_group_column_descriptor_->columnType);
-    }
   }
 
   void validateChunksSizing(std::list<Chunk_NS::Chunk>& chunks) const {
-    const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
-    if (geo_column_type == kPOINT) {
-      CHECK(chunks.size() == 2);
-    } else if (geo_column_type == kLINESTRING || geo_column_type == kMULTIPOINT) {
-      CHECK(chunks.size() == 3);
-    } else if (geo_column_type == kMULTILINESTRING) {
-      CHECK(chunks.size() == 4);
-    } else if (geo_column_type == kPOLYGON) {
-      CHECK(chunks.size() == 5);
-    } else if (geo_column_type == kMULTIPOLYGON) {
-      CHECK(chunks.size() == 6);
-    }
+    size_t expected_size = geo_column_descriptor_->columnType.get_physical_cols() + 1;
+    CHECK_EQ(chunks.size(), expected_size);
   }
 
   void validateMetadataSizing(
       std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata) const {
-    const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
-    if (geo_column_type == kPOINT) {
-      CHECK(chunk_metadata.size() == 2);
-    } else if (geo_column_type == kLINESTRING || geo_column_type == kMULTIPOINT) {
-      CHECK(chunk_metadata.size() == 3);
-    } else if (geo_column_type == kMULTILINESTRING) {
-      CHECK(chunk_metadata.size() == 4);
-    } else if (geo_column_type == kPOLYGON) {
-      CHECK(chunk_metadata.size() == 5);
-    } else if (geo_column_type == kMULTIPOLYGON) {
-      CHECK(chunk_metadata.size() == 6);
-    }
+    size_t expected_size = geo_column_descriptor_->columnType.get_physical_cols() + 1;
+    CHECK_EQ(chunk_metadata.size(), expected_size);
   }
 
   void appendArrayDatumsToBufferAndUpdateMetadata() {
@@ -276,10 +234,6 @@ class GeospatialEncoder {
       poly_rings_datum_buffer_.emplace_back(
           encode_as_array_datum(poly_rings_parse_buffer_));
     }
-
-    if (hasRenderGroupColumn()) {
-      render_group_value_buffer_.emplace_back(0);
-    }
   }
 
   void processNullGeoElement() {
@@ -314,10 +268,6 @@ class GeospatialEncoder {
           import_export::ImporterUtils::composeNullArray(
               poly_rings_column_descriptor_->columnType));
     }
-    if (hasRenderGroupColumn()) {
-      static constexpr int32_t kNullRenderGroupValue = -1;
-      render_group_value_buffer_.emplace_back(kNullRenderGroupValue);
-    }
   }
 
   void clearParseBuffers() {
@@ -332,10 +282,9 @@ class GeospatialEncoder {
     bounds_datum_buffer_.clear();
     ring_or_line_sizes_datum_buffer_.clear();
     poly_rings_datum_buffer_.clear();
-    render_group_value_buffer_.clear();
   }
 
-  enum GeoColumnType { COORDS, BOUNDS, RING_OR_LINE_SIZES, POLY_RINGS, RENDER_GROUP };
+  enum GeoColumnType { COORDS, BOUNDS, RING_OR_LINE_SIZES, POLY_RINGS };
 
   template <typename T>
   typename std::list<T>::iterator getIteratorForGeoColumnType(
@@ -388,10 +337,6 @@ class GeospatialEncoder {
         if (geo_column == BOUNDS) {
           return list_iter;
         }
-        list_iter++;
-        if (geo_column == RENDER_GROUP) {
-          return list_iter;
-        }
         UNREACHABLE();
       }
       case kMULTIPOLYGON: {
@@ -408,10 +353,6 @@ class GeospatialEncoder {
         }
         list_iter++;
         if (geo_column == BOUNDS) {
-          return list_iter;
-        }
-        list_iter++;
-        if (geo_column == RENDER_GROUP) {
           return list_iter;
         }
         UNREACHABLE();
@@ -471,11 +412,6 @@ class GeospatialEncoder {
            geo_column_type == kMULTILINESTRING;
   }
 
-  bool hasRenderGroupColumn() const {
-    const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
-    return geo_column_type == kPOLYGON || geo_column_type == kMULTIPOLYGON;
-  }
-
   bool hasPolyRingsColumn() const {
     const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
     return geo_column_type == kMULTIPOLYGON;
@@ -490,20 +426,17 @@ class GeospatialEncoder {
   Encoder* bounds_column_encoder_;
   Encoder* ring_or_line_sizes_column_encoder_;
   Encoder* poly_rings_column_encoder_;
-  Encoder* render_group_column_encoder_;
 
   ChunkMetadata* base_column_metadata_;
   ChunkMetadata* coords_column_metadata_;
   ChunkMetadata* bounds_column_metadata_;
   ChunkMetadata* ring_or_line_sizes_column_metadata_;
   ChunkMetadata* poly_rings_column_metadata_;
-  ChunkMetadata* render_group_column_metadata_;
 
   const ColumnDescriptor* coords_column_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
   const ColumnDescriptor* ring_or_line_sizes_column_descriptor_;
   const ColumnDescriptor* poly_rings_column_descriptor_;
-  const ColumnDescriptor* render_group_column_descriptor_;
 
   std::vector<std::string> base_values_;
 
@@ -519,7 +452,6 @@ class GeospatialEncoder {
   std::vector<ArrayDatum> bounds_datum_buffer_;
   std::vector<ArrayDatum> ring_or_line_sizes_datum_buffer_;
   std::vector<ArrayDatum> poly_rings_datum_buffer_;
-  std::vector<int32_t> render_group_value_buffer_;
 };
 
 }  // namespace foreign_storage

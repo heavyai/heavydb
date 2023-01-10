@@ -60,7 +60,7 @@ class OdbcGeospatialEncoder : public GeospatialEncoder {
       }
     }
     appendArrayDatumsToBufferAndUpdateMetadata();
-    appendBaseAndRenderGroupDataAndUpdateMetadata(num_rows);
+    appendBaseDataAndUpdateMetadata(num_rows);
   }
 
  private:

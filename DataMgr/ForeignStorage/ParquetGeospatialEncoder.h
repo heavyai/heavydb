@@ -72,7 +72,7 @@ class ParquetGeospatialEncoder : public ParquetEncoder, public GeospatialEncoder
 
     appendArrayDatumsToBufferAndUpdateMetadata();
 
-    appendBaseAndRenderGroupDataAndUpdateMetadata(levels_read);
+    appendBaseDataAndUpdateMetadata(levels_read);
 
     if (is_error_tracking_enabled_) {
       current_chunk_offset_ += levels_read;

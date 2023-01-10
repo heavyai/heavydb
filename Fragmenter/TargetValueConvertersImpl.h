@@ -953,11 +953,9 @@ struct GeoMultiLinestringValueConverter : public GeoPointValueConverter {
 struct GeoPolygonValueConverter : public GeoPointValueConverter {
   const ColumnDescriptor* ring_sizes_column_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
-  const ColumnDescriptor* render_group_column_descriptor_;
 
   std::unique_ptr<std::vector<ArrayDatum>> ring_sizes_data_;
   std::unique_ptr<std::vector<ArrayDatum>> bounds_data_;
-  std::unique_ptr<int32_t[]> render_group_data_;
 
   GeoPolygonValueConverter(const Catalog_Namespace::Catalog& cat,
                            size_t num_rows,
@@ -969,9 +967,6 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
     bounds_column_descriptor_ = cat.getMetadataForColumn(
         column_descriptor_->tableId, column_descriptor_->columnId + 3);
     CHECK(bounds_column_descriptor_);
-    render_group_column_descriptor_ = cat.getMetadataForColumn(
-        column_descriptor_->tableId, column_descriptor_->columnId + 4);
-    CHECK(render_group_column_descriptor_);
 
     if (num_rows) {
       allocateColumnarData(num_rows);
@@ -984,7 +979,6 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
     GeoPointValueConverter::allocateColumnarData(num_rows);
     ring_sizes_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
     bounds_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
-    render_group_data_ = std::make_unique<int32_t[]>(num_rows);
   }
 
   boost_variant_accessor<GeoPolyTargetValue> GEO_POLY_VALUE_ACCESSOR;
@@ -1003,7 +997,6 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
       (*ring_sizes_data_)[row] = to_array_datum(geoPoly->ring_sizes);
       auto bounds = compute_bounds_of_coords(geoPoly->coords);
       (*bounds_data_)[row] = to_array_datum(bounds);
-      render_group_data_[row] = 0;
     } else {
       // NULL Polygon
       (*column_data_)[row] = "";
@@ -1014,27 +1007,22 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
       auto bounds_datum = to_array_datum(bounds);
       bounds_datum.is_null = true;
       (*bounds_data_)[row] = bounds_datum;
-      render_group_data_[row] = NULL_INT;
     }
   }
 
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     GeoPointValueConverter::addDataBlocksToInsertData(insertData);
 
-    DataBlockPtr ringSizes, bounds, renderGroup;
+    DataBlockPtr ringSizes, bounds;
 
     ringSizes.arraysPtr = ring_sizes_data_.get();
     bounds.arraysPtr = bounds_data_.get();
-    renderGroup.numbersPtr = reinterpret_cast<int8_t*>(render_group_data_.get());
 
     insertData.data.emplace_back(ringSizes);
     insertData.columnIds.emplace_back(ring_sizes_column_descriptor_->columnId);
 
     insertData.data.emplace_back(bounds);
     insertData.columnIds.emplace_back(bounds_column_descriptor_->columnId);
-
-    insertData.data.emplace_back(renderGroup);
-    insertData.columnIds.emplace_back(render_group_column_descriptor_->columnId);
   }
 };
 
@@ -1042,12 +1030,10 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
   const ColumnDescriptor* ring_sizes_column_descriptor_;
   const ColumnDescriptor* ring_sizes_solumn_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
-  const ColumnDescriptor* render_group_column_descriptor_;
 
   std::unique_ptr<std::vector<ArrayDatum>> ring_sizes_data_;
   std::unique_ptr<std::vector<ArrayDatum>> poly_rings_data_;
   std::unique_ptr<std::vector<ArrayDatum>> bounds_data_;
-  std::unique_ptr<int32_t[]> render_group_data_;
 
   GeoMultiPolygonValueConverter(const Catalog_Namespace::Catalog& cat,
                                 size_t num_rows,
@@ -1062,9 +1048,6 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
     bounds_column_descriptor_ = cat.getMetadataForColumn(
         column_descriptor_->tableId, column_descriptor_->columnId + 4);
     CHECK(bounds_column_descriptor_);
-    render_group_column_descriptor_ = cat.getMetadataForColumn(
-        column_descriptor_->tableId, column_descriptor_->columnId + 5);
-    CHECK(render_group_column_descriptor_);
 
     if (num_rows) {
       allocateColumnarData(num_rows);
@@ -1078,7 +1061,6 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
     ring_sizes_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
     poly_rings_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
     bounds_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
-    render_group_data_ = std::make_unique<int32_t[]>(num_rows);
   }
 
   boost_variant_accessor<GeoMultiPolyTargetValue> GEO_MULTI_POLY_VALUE_ACCESSOR;
@@ -1098,7 +1080,6 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
       (*poly_rings_data_)[row] = to_array_datum(geoMultiPoly->poly_rings);
       auto bounds = compute_bounds_of_coords(geoMultiPoly->coords);
       (*bounds_data_)[row] = to_array_datum(bounds);
-      render_group_data_[row] = 0;
     } else {
       // NULL MultiPolygon
       (*column_data_)[row] = "";
@@ -1110,19 +1091,17 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
       auto bounds_datum = to_array_datum(bounds);
       bounds_datum.is_null = true;
       (*bounds_data_)[row] = bounds_datum;
-      render_group_data_[row] = NULL_INT;
     }
   }
 
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     GeoPointValueConverter::addDataBlocksToInsertData(insertData);
 
-    DataBlockPtr ringSizes, polyRings, bounds, renderGroup;
+    DataBlockPtr ringSizes, polyRings, bounds;
 
     ringSizes.arraysPtr = ring_sizes_data_.get();
     polyRings.arraysPtr = poly_rings_data_.get();
     bounds.arraysPtr = bounds_data_.get();
-    renderGroup.numbersPtr = reinterpret_cast<int8_t*>(render_group_data_.get());
 
     insertData.data.emplace_back(ringSizes);
     insertData.columnIds.emplace_back(ring_sizes_column_descriptor_->columnId);
@@ -1132,9 +1111,6 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
 
     insertData.data.emplace_back(bounds);
     insertData.columnIds.emplace_back(bounds_column_descriptor_->columnId);
-
-    insertData.data.emplace_back(renderGroup);
-    insertData.columnIds.emplace_back(render_group_column_descriptor_->columnId);
   }
 };
 

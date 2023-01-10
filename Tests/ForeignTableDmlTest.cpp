@@ -4753,17 +4753,13 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   test_chunk_metadata_map[{0, 9}] = createChunkMetadata<int32_t>(9, 12, 5, 3, 4, true);
   test_chunk_metadata_map[{0, 10}] =
       createChunkMetadata<double>(10, 160, 5, 0.000000, 7.000000, true);
-  test_chunk_metadata_map[{0, 11}] =
-      createChunkMetadata<int32_t>(11, 20, 5, -1, 0, false);  // adjust for RGs
-  test_chunk_metadata_map[{0, 12}] = createChunkMetadata(12, 0, 5, true);
-  test_chunk_metadata_map[{0, 13}] =
-      createChunkMetadata<int8_t>(13, 384, 5, -52, 64, true);
-  test_chunk_metadata_map[{0, 14}] = createChunkMetadata<int32_t>(14, 32, 5, 3, 3, true);
-  test_chunk_metadata_map[{0, 15}] = createChunkMetadata<int32_t>(15, 28, 5, 1, 2, true);
-  test_chunk_metadata_map[{0, 16}] =
-      createChunkMetadata<double>(16, 160, 5, 0.000000, 12.000000, true);
-  test_chunk_metadata_map[{0, 17}] =
-      createChunkMetadata<int32_t>(17, 20, 5, -1, 0, false);  // adjust for RGs
+  test_chunk_metadata_map[{0, 11}] = createChunkMetadata(11, 0, 5, true);
+  test_chunk_metadata_map[{0, 12}] =
+      createChunkMetadata<int8_t>(12, 384, 5, -52, 64, true);
+  test_chunk_metadata_map[{0, 13}] = createChunkMetadata<int32_t>(13, 32, 5, 3, 3, true);
+  test_chunk_metadata_map[{0, 14}] = createChunkMetadata<int32_t>(14, 28, 5, 1, 2, true);
+  test_chunk_metadata_map[{0, 15}] =
+      createChunkMetadata<double>(15, 160, 5, 0.000000, 12.000000, true);
   assertExpectedChunkMetadata(test_chunk_metadata_map);
 }
 
@@ -7047,7 +7043,7 @@ TEST_F(PrefetchLimitTest, PartialFragmentLimitPolygon) {
 
   // Despite having room for part of a third fragment we should only store 2, because
   // caching a geo-column should be atomic.
-  auto mock_data_wrapper = std::make_shared<CountChunksMockWrapper>(16);
+  auto mock_data_wrapper = std::make_shared<CountChunksMockWrapper>(14);
   setMockWrapper(mock_data_wrapper, default_table_name);
 
   sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
@@ -7071,7 +7067,7 @@ TEST_F(PrefetchLimitTest, PartialFragmentLimitMultiPolygon) {
 
   // Despite having room for part of a third fragment we should only store 2, because
   // caching a geo-column should be atomic
-  auto mock_data_wrapper = std::make_shared<CountChunksMockWrapper>(20);
+  auto mock_data_wrapper = std::make_shared<CountChunksMockWrapper>(18);
   setMockWrapper(mock_data_wrapper, default_table_name);
 
   sqlAndCompareResult(

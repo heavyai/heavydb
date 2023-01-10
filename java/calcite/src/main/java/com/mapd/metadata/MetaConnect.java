@@ -392,9 +392,9 @@ public class MetaConnect {
       case KMULTILINESTRING:
         return 3; // coords, linestring_sizes, bounds
       case KPOLYGON:
-        return 4; // coords, ring_sizes, bounds, render_group
+        return 3; // coords, ring_sizes, bounds
       case KMULTIPOLYGON:
-        return 5; // coords, ring_sizes, poly_rings, bounds, render_group
+        return 4; // coords, ring_sizes, poly_rings, bounds
       default:
         break;
     }

@@ -581,11 +581,11 @@ TEST_P(CreateTableTest, GeoTypes) {
   auto& catalog = getCatalog();
   auto table = catalog.getMetadataForTable("test_table", false);
   /**
-   * LINESTRING adds 2 additional columns, MULTIPOLYGON adds 5 additional columns,
-   * POLYGON adds 1 additional column, and POLYGON adds 4 additional columns when
+   * LINESTRING adds 2 additional columns, MULTIPOLYGON adds 4 additional columns,
+   * POINT adds 1 additional column, and POLYGON adds 3 additional columns when
    * expanded.
    */
-  assertTableDetails(table, GetParam(), "test_table", 41);
+  assertTableDetails(table, GetParam(), "test_table", 37);
 
   auto columns = catalog.getAllColumnMetadataForTable(table->tableId, true, true, true);
   auto it = columns.begin();
@@ -604,7 +604,7 @@ TEST_P(CreateTableTest, GeoTypes) {
   expected_attributes.sub_type = kGEOMETRY;
   assertColumnDetails(expected_attributes, column);
 
-  std::advance(it, 6);
+  std::advance(it, 5);
   column = *it;
   expected_attributes = {};
   expected_attributes.column_name = "p";
@@ -620,7 +620,7 @@ TEST_P(CreateTableTest, GeoTypes) {
   expected_attributes.sub_type = kGEOMETRY;
   assertColumnDetails(expected_attributes, column);
 
-  std::advance(it, 5);
+  std::advance(it, 4);
   column = *it;
   expected_attributes = {};
   expected_attributes.column_name = "p1";
@@ -700,7 +700,7 @@ TEST_P(CreateTableTest, GeoTypes) {
   expected_attributes.encoding_size = 32;
   assertColumnDetails(expected_attributes, column);
 
-  std::advance(it, 5);
+  std::advance(it, 4);
   column = *it;
   expected_attributes = {};
   expected_attributes.column_name = "mpoly1";

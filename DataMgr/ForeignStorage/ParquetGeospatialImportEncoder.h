@@ -43,8 +43,7 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
       , coords_column_buffer_(nullptr)
       , bounds_column_buffer_(nullptr)
       , ring_or_line_sizes_column_buffer_(nullptr)
-      , poly_rings_column_buffer_(nullptr)
-      , render_group_column_buffer_(nullptr) {
+      , poly_rings_column_buffer_(nullptr) {
     CHECK(geo_column_descriptor_->columnType.is_geometry());
 
     const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
@@ -71,10 +70,6 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
           dynamic_cast<TypedParquetStorageBuffer<ArrayDatum>*>(
               getBuffer(chunks, geo_column_type, RING_OR_LINE_SIZES));
       CHECK(ring_or_line_sizes_column_buffer_);
-    }
-    if (hasRenderGroupColumn()) {
-      render_group_column_buffer_ = getBuffer(chunks, geo_column_type, RENDER_GROUP);
-      CHECK(render_group_column_buffer_);
     }
 
     // initialize poly rings column
@@ -112,11 +107,6 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
     if (hasPolyRingsColumn()) {
       poly_rings_column_buffer_->eraseInvalidData(invalid_indices);
     }
-    if (hasRenderGroupColumn()) {
-      render_group_column_buffer_->setSize(
-          sizeof(int32_t) *
-          (render_group_column_buffer_->size() - invalid_indices.size()));
-    }
   }
 
   void appendData(const int16_t* def_levels,
@@ -151,7 +141,7 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
 
     appendArrayDatumsToBuffer();
 
-    appendBaseAndRenderGroupData(levels_read);
+    appendBaseData(levels_read);
 
     current_batch_offset_ += levels_read;
   }
@@ -184,13 +174,9 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
     appendArrayDatumsIfApplicable(poly_rings_column_buffer_, poly_rings_datum_buffer_);
   }
 
-  void appendBaseAndRenderGroupData(const int64_t row_count) {
+  void appendBaseData(const int64_t row_count) {
     for (int64_t i = 0; i < row_count; ++i) {
       base_column_buffer_->appendElement("");
-    }
-    if (render_group_column_buffer_) {
-      auto data_ptr = reinterpret_cast<int8_t*>(render_group_value_buffer_.data());
-      render_group_column_buffer_->append(data_ptr, sizeof(int32_t) * row_count);
     }
   }
 
@@ -209,7 +195,6 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
   TypedParquetStorageBuffer<ArrayDatum>* bounds_column_buffer_;
   TypedParquetStorageBuffer<ArrayDatum>* ring_or_line_sizes_column_buffer_;
   TypedParquetStorageBuffer<ArrayDatum>* poly_rings_column_buffer_;
-  AbstractBuffer* render_group_column_buffer_;
 };
 
 }  // namespace foreign_storage

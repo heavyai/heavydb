@@ -426,66 +426,25 @@ class SQLTypeInfo {
       case kMULTILINESTRING:
         return 3;  // coords, linestring_sizes, bounds
       case kPOLYGON:
-        return 4;  // coords, ring_sizes, bounds, render_group
+        return 3;  // coords, ring_sizes, bounds
       case kMULTIPOLYGON:
-        return 5;  // coords, ring_sizes, poly_rings, bounds, render_group
+        return 4;  // coords, ring_sizes, poly_rings, bounds
       default:
         break;
     }
     return 0;
   }
   inline int get_physical_coord_cols() const {
-    // @TODO dmitri/simon rename this function?
-    // It needs to return the number of extra columns
-    // which need to go through the executor, as opposed
-    // to those which are only needed by CPU for poly
-    // cache building or what-not. For now, we just omit
-    // the Render Group column. If we add Bounding Box
-    // or something this may require rethinking. Perhaps
-    // these two functions need to return an array of
-    // offsets rather than just a number to loop over,
-    // so that executor and non-executor columns can
-    // be mixed.
-    // NOTE(adb): In binding to extension functions, we need to know some pretty specific
-    // type info about each of the physical coords cols for each geo type. I added checks
-    // there to ensure the physical coords col for the geo type match what we expect. If
-    // these values are ever changed, corresponding values in
-    // ExtensionFunctionsBinding.cpp::compute_narrowing_conv_scores and
-    // ExtensionFunctionsBinding.cpp::compute_widening_conv_scores will also need to be
-    // changed.
-    switch (type) {
-      case kPOINT:
-        return 1;
-      case kMULTIPOINT:
-        return 1;  // omit bounds
-      case kLINESTRING:
-        return 1;  // omit bounds
-      case kMULTILINESTRING:
-        return 2;  // omit bounds
-      case kPOLYGON:
-        return 2;  // omit bounds, render group
-      case kMULTIPOLYGON:
-        return 3;  // omit bounds, render group
-      default:
-        break;
-    }
-    return 0;
+    // Return the number of extra columns which need to go through the executor,
+    // as opposed to those which are only needed by CPU. In other words, we omit
+    // any Bounds column.
+    return has_bounds() ? get_physical_cols() - 1 : get_physical_cols();
   }
   inline bool has_bounds() const {
     switch (type) {
       case kMULTIPOINT:
       case kLINESTRING:
       case kMULTILINESTRING:
-      case kPOLYGON:
-      case kMULTIPOLYGON:
-        return true;
-      default:
-        break;
-    }
-    return false;
-  }
-  inline bool has_render_group() const {
-    switch (type) {
       case kPOLYGON:
       case kMULTIPOLYGON:
         return true;
