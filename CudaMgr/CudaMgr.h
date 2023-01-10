@@ -81,7 +81,7 @@ struct DeviceProperties {
 class CudaMgr {
  public:
   CudaMgr(const int num_gpus, const int start_gpu = 0);
-  ~CudaMgr();
+  virtual ~CudaMgr();
 
   void synchronizeDevices() const;
   int getDeviceCount() const { return device_count_; }
@@ -106,7 +106,7 @@ class CudaMgr {
                           CUstream cuda_stream = 0);
 
   int8_t* allocatePinnedHostMem(const size_t num_bytes);
-  int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num);
+  virtual int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num);
   void freePinnedHostMem(int8_t* host_ptr);
   void freeDeviceMem(int8_t* device_ptr);
   void zeroDeviceMem(int8_t* device_ptr,
