@@ -155,7 +155,6 @@ set(query_engine_source_files
   Visitors/QueryPlanDagChecker.cpp
   Visitors/SQLOperatorDetector.cpp
   Visitors/GeospatialFunctionFinder.cpp
-
   Codec.h
   Execute.h
   NvidiaKernel.h
@@ -184,7 +183,9 @@ set(query_engine_cuda_source_files
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   list(APPEND query_engine_source_files
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderAllocator.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderInfo.cpp)
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderInfo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ee/ResultSetSerialization.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ee/PendingExecutionClosure.cpp)
 else()
   list(APPEND query_engine_source_files
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderAllocator.cpp
