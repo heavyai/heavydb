@@ -103,7 +103,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
       get_inner_query_info(HashJoin::getInnerTableId(inner_outer_pairs), query_infos)
           .info;
   const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
-  if (total_entries > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+  if (total_entries > HashJoin::MAX_NUM_HASH_ENTRIES) {
     throw TooManyHashEntries();
   }
 
@@ -1250,22 +1250,25 @@ void OverlapsJoinHashTable::reifyForDevice(
   CHECK_EQ(getKeyComponentWidth(), size_t(8));
   CHECK(layoutRequiresAdditionalBuffers(layout));
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
-
+  BaselineHashTableEntryInfo hash_table_entry_info(entry_count,
+                                                   emitted_keys_count,
+                                                   sizeof(int32_t),
+                                                   getKeyComponentCount(),
+                                                   getKeyComponentWidth(),
+                                                   layout,
+                                                   false);
   if (effective_memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
     VLOG(1) << "Building overlaps join hash table on CPU.";
     auto hash_table = initHashTableOnCpu(columns_for_device.join_columns,
                                          columns_for_device.join_column_types,
                                          columns_for_device.join_buckets,
-                                         layout,
-                                         entry_count,
-                                         emitted_keys_count,
+                                         hash_table_entry_info,
                                          skip_hashtable_caching);
     CHECK(hash_table);
 
 #ifdef HAVE_CUDA
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
-      auto gpu_hash_table = copyCpuHashTableToGpu(
-          hash_table, layout, entry_count, emitted_keys_count, device_id);
+      auto gpu_hash_table = copyCpuHashTableToGpu(hash_table, device_id);
       CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
       hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
     } else {
@@ -1282,9 +1285,7 @@ void OverlapsJoinHashTable::reifyForDevice(
     auto hash_table = initHashTableOnGpu(columns_for_device.join_columns,
                                          columns_for_device.join_column_types,
                                          columns_for_device.join_buckets,
-                                         layout,
-                                         entry_count,
-                                         emitted_keys_count,
+                                         hash_table_entry_info,
                                          device_id);
     CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
     hash_tables_for_device_[device_id] = std::move(hash_table);
@@ -1298,9 +1299,7 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
     const std::vector<JoinColumn>& join_columns,
     const std::vector<JoinColumnTypeInfo>& join_column_types,
     const std::vector<JoinBucketInfo>& join_bucket_info,
-    const HashType layout,
-    const size_t entry_count,
-    const size_t emitted_keys_count,
+    const BaselineHashTableEntryInfo hash_table_entry_info,
     const bool skip_hashtable_caching) {
   auto timer = DEBUG_TIMER(__func__);
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
@@ -1308,6 +1307,7 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
   CHECK(!join_columns.empty());
   CHECK(!join_bucket_info.empty());
   std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
+  auto const hash_table_layout = hash_table_entry_info.getHashTableLayout();
   if (auto generic_hash_table =
           initHashTableOnCpuFromCache(hashtable_cache_key_.front(),
                                       CacheItemType::OVERLAPS_HT,
@@ -1317,18 +1317,18 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
       VLOG(1) << "Using cached CPU hash table for initialization.";
       // See if a hash table of a different layout was returned.
       // If it was OneToMany, we can reuse it on ManyToMany.
-      if (layout == HashType::ManyToMany &&
+      if (hash_table_layout == HashType::ManyToMany &&
           hash_table->getLayout() == HashType::OneToMany) {
         // use the cached hash table
         layout_override_ = HashType::ManyToMany;
         return hash_table;
       }
-      if (layout == hash_table->getLayout()) {
+      if (hash_table_layout == hash_table->getLayout()) {
         return hash_table;
       }
     }
   }
-  CHECK(layoutRequiresAdditionalBuffers(layout));
+  CHECK(layoutRequiresAdditionalBuffers(hash_table_layout));
   const auto key_component_count =
       join_bucket_info[0].inverse_bucket_sizes_for_dimension.size();
 
@@ -1346,12 +1346,9 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
                                  join_column_types,
                                  join_bucket_info,
                                  dummy_str_proxy_translation_maps_ptrs_and_offsets,
-                                 entry_count,
-                                 emitted_keys_count,
-                                 layout,
+                                 hash_table_entry_info,
                                  join_type_,
-                                 getKeyComponentWidth(),
-                                 getKeyComponentCount(),
+                                 executor_,
                                  query_hints_);
   ts2 = std::chrono::steady_clock::now();
   if (err) {
@@ -1380,9 +1377,7 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnGpu(
     const std::vector<JoinColumn>& join_columns,
     const std::vector<JoinColumnTypeInfo>& join_column_types,
     const std::vector<JoinBucketInfo>& join_bucket_info,
-    const HashType layout,
-    const size_t entry_count,
-    const size_t emitted_keys_count,
+    const BaselineHashTableEntryInfo hash_table_entry_info,
     const size_t device_id) {
   CHECK_EQ(memory_level_, Data_Namespace::MemoryLevel::GPU_LEVEL);
 
@@ -1405,12 +1400,8 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnGpu(
 
   const auto err = builder.initHashTableOnGpu(&key_handler,
                                               join_columns,
-                                              layout,
                                               join_type_,
-                                              getKeyComponentWidth(),
-                                              getKeyComponentCount(),
-                                              entry_count,
-                                              emitted_keys_count,
+                                              hash_table_entry_info,
                                               device_id,
                                               executor_,
                                               query_hints_);
@@ -1424,9 +1415,6 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnGpu(
 
 std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::copyCpuHashTableToGpu(
     std::shared_ptr<BaselineHashTable>& cpu_hash_table,
-    const HashType layout,
-    const size_t entry_count,
-    const size_t emitted_keys_count,
     const size_t device_id) {
   CHECK_EQ(memory_level_, Data_Namespace::MemoryLevel::GPU_LEVEL);
 
@@ -1434,14 +1422,8 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::copyCpuHashTableToGpu(
 
   // copy hash table to GPU
   BaselineJoinHashTableBuilder gpu_builder;
-  gpu_builder.allocateDeviceMemory(layout,
-                                   getKeyComponentWidth(),
-                                   getKeyComponentCount(),
-                                   entry_count,
-                                   emitted_keys_count,
-                                   device_id,
-                                   executor_,
-                                   query_hints_);
+  gpu_builder.allocateDeviceMemory(
+      cpu_hash_table->getHashTableEntryInfo(), device_id, executor_, query_hints_);
   std::shared_ptr<BaselineHashTable> gpu_hash_table = gpu_builder.getHashTable();
   CHECK(gpu_hash_table);
   auto gpu_buffer_ptr = gpu_hash_table->getGpuBuffer();

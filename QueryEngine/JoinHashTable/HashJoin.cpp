@@ -343,12 +343,13 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                           table_id_to_node_map);
     } catch (JoinHashTableTooBig& e) {
       throw e;
-    } catch (TooManyHashEntries&) {
+    } catch (TooManyHashEntries& e) {
       const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
       CHECK_EQ(join_quals.size(), size_t(1));
       const auto join_qual =
           std::dynamic_pointer_cast<Analyzer::BinOper>(join_quals.front());
-      VLOG(1) << "Trying to build keyed hash table after perfect hash table:";
+      VLOG(1) << "Building a perfect join hash table fails: " << e.what();
+      VLOG(1) << "Trying to re-build keyed join hash table";
       join_hash_table = BaselineJoinHashTable::getInstance(join_qual,
                                                            query_infos,
                                                            memory_level,
@@ -1042,6 +1043,23 @@ bool HashJoin::canAccessHashTable(bool allow_hash_table_recycling,
                                   JoinType join_type) {
   return g_enable_data_recycler && g_use_hashtable_cache && !invalid_cache_key &&
          allow_hash_table_recycling && join_type != JoinType::INVALID;
+}
+
+size_t HashJoin::getMaximumNumHashEntriesCanHold(MemoryLevel memory_level,
+                                                 const Executor* executor,
+                                                 size_t rowid_size) noexcept {
+  if (memory_level == Data_Namespace::CPU_LEVEL) {
+    // we can hold up to 2B hash entries b/c CPU hash table buffer is allocated
+    // to heap which is a memory region that our buffer manager does not manage
+    // i.e., can allocate a contiguous memory larger than `max_cpu_slab_size`
+    return HashJoin::MAX_NUM_HASH_ENTRIES;
+  } else {
+    // allocate memory buffer for hash table from data_mgr that considers
+    // `max_gpu_slab_size` but still it can have up to 2B rows.
+    CHECK_GT(rowid_size, static_cast<size_t>(0));
+    return std::min(HashJoin::MAX_NUM_HASH_ENTRIES,
+                    executor->maxGpuSlabSize() / rowid_size);
+  }
 }
 
 namespace {

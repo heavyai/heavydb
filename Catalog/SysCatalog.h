@@ -392,6 +392,7 @@ class SysCatalog : private CommonFileOperations {
 
   bool hasExecutedMigration(const std::string& migration_name) const;
   void checkDropRenderGroupColumnsMigration() const;
+
  private:
   using GranteeMap = std::map<std::string, std::unique_ptr<Grantee>>;
   using ObjectRoleDescriptorMap =

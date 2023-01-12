@@ -187,6 +187,7 @@ class PerfectJoinHashTable : public HashJoin {
                        const RegisteredQueryHint& query_hints,
                        const HashTableBuildDagMap& hashtable_build_dag_map,
                        const TableIdToNodeMap& table_id_to_node_map,
+                       const size_t rowid_size,
                        const InnerOuterStringOpInfos& inner_outer_string_op_infos = {})
       : qual_bin_oper_(qual_bin_oper)
       , join_type_(join_type)
@@ -204,7 +205,8 @@ class PerfectJoinHashTable : public HashJoin {
       , needs_dict_translation_(false)
       , hashtable_build_dag_map_(hashtable_build_dag_map)
       , table_id_to_node_map_(table_id_to_node_map)
-      , inner_outer_string_op_infos_(inner_outer_string_op_infos) {
+      , inner_outer_string_op_infos_(inner_outer_string_op_infos)
+      , rowid_size_(rowid_size) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
     CHECK_GT(device_count_, 0);
     hash_tables_for_device_.resize(device_count_);
@@ -244,6 +246,7 @@ class PerfectJoinHashTable : public HashJoin {
   HashTable* getHashTableForDevice(const size_t device_id) const;
 
   void copyCpuHashTableToGpu(std::shared_ptr<PerfectHashTable>& cpu_hash_table,
+                             const PerfectHashTableEntryInfo hash_table_entry_info,
                              const int device_id,
                              Data_Namespace::DataMgr* data_mgr);
 
@@ -297,6 +300,7 @@ class PerfectJoinHashTable : public HashJoin {
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;
   const InnerOuterStringOpInfos inner_outer_string_op_infos_;
+  const size_t rowid_size_;
 
   static std::unique_ptr<HashtableRecycler> hash_table_cache_;
   static std::unique_ptr<HashingSchemeRecycler> hash_table_layout_cache_;

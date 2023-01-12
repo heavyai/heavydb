@@ -136,7 +136,8 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , query_hints_(query_hints)
     , needs_dict_translation_(false)
     , hashtable_build_dag_map_(hashtable_build_dag_map)
-    , table_id_to_node_map_(table_id_to_node_map) {
+    , table_id_to_node_map_(table_id_to_node_map)
+    , rowid_size_(sizeof(int32_t)) {
   CHECK_GT(device_count_, 0);
   hash_tables_for_device_.resize(std::max(device_count_, 1));
 }
@@ -308,7 +309,7 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
   }
 
   const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
-  if (total_entries > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+  if (total_entries > HashJoin::MAX_NUM_HASH_ENTRIES) {
     throw TooManyHashEntries();
   }
 
@@ -445,7 +446,6 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
     } else {
       if (memory_level_ == Data_Namespace::GPU_LEVEL) {
 #ifdef HAVE_CUDA
-        auto data_mgr = executor_->getDataMgr();
         for (int device_id = 0; device_id < device_count_; ++device_id) {
           auto cpu_hash_table = std::dynamic_pointer_cast<BaselineHashTable>(
               hash_tables_for_device_[device_id]);
@@ -474,32 +474,32 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
   }
 
   auto hashtable_layout_type = layout;
-  size_t emitted_keys_count = 0;
   if (hashtable_layout_type == HashType::OneToMany) {
     CHECK(!columns_per_device.front().join_columns.empty());
-    emitted_keys_count = columns_per_device.front().join_columns.front().num_elems;
     size_t tuple_count;
     std::tie(tuple_count, std::ignore) = approximateTupleCount(columns_per_device);
     const auto entry_count = 2 * std::max(tuple_count, size_t(1));
-
     // reset entries per device with one to many info
     entries_per_device =
         get_entries_per_device(entry_count, shard_count, device_count_, memory_level_);
   }
   std::vector<std::future<void>> init_threads;
   for (int device_id = 0; device_id < device_count_; ++device_id) {
-    const auto fragments =
-        shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-            : query_info.fragments;
+    BaselineHashTableEntryInfo hash_table_entry_info(
+        entries_per_device,
+        columns_per_device[device_id].join_columns.front().num_elems,
+        rowid_size_,
+        getKeyComponentCount(),
+        getKeyComponentWidth(),
+        hashtable_layout_type,
+        join_type_ == JoinType::WINDOW_FUNCTION_FRAMING);
     init_threads.push_back(std::async(std::launch::async,
                                       &BaselineJoinHashTable::reifyForDevice,
                                       this,
                                       columns_per_device[device_id],
                                       hashtable_layout_type,
                                       device_id,
-                                      entries_per_device,
-                                      emitted_keys_count,
+                                      hash_table_entry_info,
                                       logger::thread_local_ids()));
   }
   for (auto& init_thread : init_threads) {
@@ -656,8 +656,7 @@ void BaselineJoinHashTable::reifyForDevice(
     const ColumnsForDevice& columns_for_device,
     const HashType layout,
     const int device_id,
-    const size_t entry_count,
-    const size_t emitted_keys_count,
+    const BaselineHashTableEntryInfo hash_table_entries_info,
     const logger::ThreadLocalIds parent_thread_local_ids) {
   logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
   DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
@@ -668,8 +667,7 @@ void BaselineJoinHashTable::reifyForDevice(
                                           columns_for_device.join_buckets,
                                           layout,
                                           effective_memory_level,
-                                          entry_count,
-                                          emitted_keys_count,
+                                          hash_table_entries_info,
                                           device_id);
   if (err) {
     throw HashJoinFail(
@@ -687,6 +685,9 @@ size_t BaselineJoinHashTable::shardCount() const {
 }
 
 size_t BaselineJoinHashTable::getKeyComponentWidth() const {
+  // todo: relax the assumption that all keys have the same width
+  // (i.e., 3 join keys having different integer types: (smallint, int, bigint)
+  // current: 3 * 8 = 24 bytes / ideal: 2 + 4 + 8 = 14 bytes)
   for (const auto& inner_outer_pair : inner_outer_pairs_) {
     const auto inner_col = inner_outer_pair.first;
     const auto& inner_col_ti = inner_col->get_type_info();
@@ -718,14 +719,8 @@ void BaselineJoinHashTable::copyCpuHashTableToGpu(
     Data_Namespace::DataMgr* data_mgr) {
   BaselineJoinHashTableBuilder builder;
 
-  builder.allocateDeviceMemory(cpu_hash_table->getLayout(),
-                               getKeyComponentWidth(),
-                               getKeyComponentCount(),
-                               cpu_hash_table->getEntryCount(),
-                               cpu_hash_table->getEmittedKeysCount(),
-                               device_id,
-                               executor_,
-                               query_hints_);
+  builder.allocateDeviceMemory(
+      cpu_hash_table->getHashTableEntryInfo(), device_id, executor_, query_hints_);
   auto gpu_target_hash_table = builder.getHashTable();
   CHECK(gpu_target_hash_table);
 
@@ -769,8 +764,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
     const std::vector<JoinBucketInfo>& join_bucket_info,
     const HashType layout,
     const Data_Namespace::MemoryLevel effective_memory_level,
-    const size_t entry_count,
-    const size_t emitted_keys_count,
+    const BaselineHashTableEntryInfo hash_table_entry_info,
     const int device_id) {
   auto timer = DEBUG_TIMER(__func__);
   const auto key_component_count = getKeyComponentCount();
@@ -782,7 +776,6 @@ int BaselineJoinHashTable::initHashTableForDevice(
                                                 needs_dict_translation_,
                                                 inner_outer_string_op_infos_pairs_,
                                                 getInnerTableId(inner_outer_pairs_));
-  HashType hashtable_layout = layout;
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
     std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
 
@@ -813,18 +806,17 @@ int BaselineJoinHashTable::initHashTableForDevice(
                                      join_column_types,
                                      join_bucket_info,
                                      str_proxy_translation_map_ptrs_and_offsets,
-                                     entry_count,
-                                     join_columns.front().num_elems,
-                                     hashtable_layout,
+                                     hash_table_entry_info,
                                      join_type_,
-                                     getKeyComponentWidth(),
-                                     getKeyComponentCount(),
+                                     executor_,
                                      query_hints_);
     hash_tables_for_device_[device_id] = builder.getHashTable();
     ts2 = std::chrono::steady_clock::now();
     auto hashtable_build_time =
         std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
-    if (!err && allow_hashtable_recycling && hash_tables_for_device_[device_id]) {
+    if (!err && allow_hashtable_recycling && hash_tables_for_device_[device_id] &&
+        hash_tables_for_device_[device_id]->getHashTableBufferSize(
+            ExecutorDeviceType::CPU) > 0) {
       // add ht-related items to cache iff we have a valid hashtable
       putHashTableOnCpuToCache(hashtable_cache_key_[device_id],
                                CacheItemType::BASELINE_HT,
@@ -875,12 +867,8 @@ int BaselineJoinHashTable::initHashTableForDevice(
 
     err = builder.initHashTableOnGpu(&key_handler,
                                      join_columns,
-                                     hashtable_layout,
                                      join_type_,
-                                     getKeyComponentWidth(),
-                                     getKeyComponentCount(),
-                                     entry_count,
-                                     emitted_keys_count,
+                                     hash_table_entry_info,
                                      device_id,
                                      executor_,
                                      query_hints_);

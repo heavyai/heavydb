@@ -23,47 +23,91 @@
 
 #include "QueryEngine/JoinHashTable/HashTable.h"
 
-class BaselineHashTable : public HashTable {
+class BaselineHashTableEntryInfo : public HashTableEntryInfo {
  public:
-  // CPU constructor
-  BaselineHashTable(HashType layout,
-                    const size_t entry_count,
-                    const size_t emitted_keys_count,
-                    const size_t hash_table_size)
-      : cpu_hash_table_buff_size_(hash_table_size)
-      , gpu_hash_table_buff_(nullptr)
-#ifdef HAVE_CUDA
-      , device_id_(0)
-      , data_mgr_(nullptr)
-#endif
-      , layout_(layout)
-      , entry_count_(entry_count)
-      , emitted_keys_count_(emitted_keys_count) {
-    cpu_hash_table_buff_.reset(new int8_t[cpu_hash_table_buff_size_]);
+  BaselineHashTableEntryInfo(size_t num_hash_entries,
+                             size_t num_keys,
+                             size_t rowid_size_in_bytes,
+                             size_t num_join_keys,
+                             size_t join_key_size_in_byte,
+                             HashType layout,
+                             bool for_window_framing = false)
+      : HashTableEntryInfo(num_hash_entries,
+                           num_keys,
+                           rowid_size_in_bytes,
+                           layout,
+                           for_window_framing)
+      , num_join_keys_(num_join_keys)
+      , join_key_size_in_byte_(join_key_size_in_byte) {}
+
+  size_t computeTotalNumSlots() const override { return num_hash_entries_; }
+
+  size_t computeKeySize() const {
+    auto const entry_cnt = (num_join_keys_ + (layout_ == HashType::OneToOne ? 1 : 0));
+    return entry_cnt * join_key_size_in_byte_;
   }
 
-  // GPU constructor
-  BaselineHashTable(Data_Namespace::DataMgr* data_mgr,
-                    HashType layout,
-                    const size_t entry_count,
-                    const size_t emitted_keys_count,
-                    const size_t hash_table_size,
-                    const size_t device_id)
-      : gpu_hash_table_buff_(nullptr)
-#ifdef HAVE_CUDA
-      , device_id_(device_id)
+  size_t computeNumAdditionalSlotsForOneToManyJoin() const {
+    return HashJoin::layoutRequiresAdditionalBuffers(layout_)
+               ? 2 * num_hash_entries_ + (num_keys_ * (1 + (for_window_framing_)))
+               : 0;
+  }
+
+  size_t computeHashTableSize() const override {
+    return computeTotalNumSlots() * computeKeySize() +
+           computeNumAdditionalSlotsForOneToManyJoin() * rowid_size_in_bytes_;
+  }
+
+  size_t getNumJoinKeys() const { return num_join_keys_; }
+
+  size_t getJoinKeysSize() const { return join_key_size_in_byte_; }
+
+ private:
+  size_t const num_join_keys_;
+  size_t const join_key_size_in_byte_;
+};
+
+class BaselineHashTable : public HashTable {
+ public:
+  // CPU + GPU constructor
+  BaselineHashTable(MemoryLevel memory_level,
+                    BaselineHashTableEntryInfo hash_table_entry_info,
+                    Data_Namespace::DataMgr* data_mgr = nullptr,
+                    const int device_id = -1)
+      : memory_level_(memory_level)
+      , hash_table_entry_info_(hash_table_entry_info)
       , data_mgr_(data_mgr)
-#endif
-      , layout_(layout)
-      , entry_count_(entry_count)
-      , emitted_keys_count_(emitted_keys_count) {
+      , device_id_(device_id) {
+    auto const hash_table_size = hash_table_entry_info.computeHashTableSize();
+    if (memory_level_ == Data_Namespace::GPU_LEVEL) {
 #ifdef HAVE_CUDA
-    CHECK(data_mgr_);
-    gpu_hash_table_buff_ =
-        CudaAllocator::allocGpuAbstractBuffer(data_mgr_, hash_table_size, device_id_);
+      CHECK(data_mgr_);
+      gpu_hash_table_buff_ =
+          CudaAllocator::allocGpuAbstractBuffer(data_mgr_, hash_table_size, device_id_);
 #else
-    UNREACHABLE();
+      UNREACHABLE();
 #endif
+    } else {
+      CHECK(!data_mgr_);  // we do not need `data_mgr` for CPU hash table
+      cpu_hash_table_buff_.reset(new int8_t[hash_table_size]);
+    }
+    std::string device_str = memory_level_ == MemoryLevel::GPU_LEVEL ? "GPU" : "CPU";
+    std::string layout_str =
+        hash_table_entry_info_.getHashTableLayout() == HashType::OneToOne ? "OneToOne"
+                                                                          : "OneToMany";
+    std::ostringstream oss;
+    oss << "Initialize a " << device_str << " baseline hash table";
+    if (memory_level_ == MemoryLevel::GPU_LEVEL) {
+      CHECK_GE(device_id, 0);
+      oss << " for device " << device_id_;
+    }
+    oss << " with join type " << layout_str << ", hash table size: " << hash_table_size
+        << " Bytes"
+        << ", # hash entries: " << hash_table_entry_info_.getNumHashEntries()
+        << ", # entries stored in the payload buffer: "
+        << hash_table_entry_info_.getNumKeys()
+        << ", rowid size: " << hash_table_entry_info_.getRowIdSizeInBytes() << " Bytes";
+    VLOG(1) << oss.str();
   }
 
   ~BaselineHashTable() override {
@@ -80,33 +124,33 @@ class BaselineHashTable : public HashTable {
   }
 
   size_t getHashTableBufferSize(const ExecutorDeviceType device_type) const override {
-    if (device_type == ExecutorDeviceType::CPU) {
-      return cpu_hash_table_buff_size_ *
-             sizeof(decltype(cpu_hash_table_buff_)::element_type);
-    } else {
-      return gpu_hash_table_buff_ ? gpu_hash_table_buff_->reservedSize() : 0;
-    }
+    return hash_table_entry_info_.computeHashTableSize();
   }
 
-  int8_t* getCpuBuffer() override {
-    return reinterpret_cast<int8_t*>(cpu_hash_table_buff_.get());
-  }
+  int8_t* getCpuBuffer() override { return cpu_hash_table_buff_.get(); }
 
-  HashType getLayout() const override { return layout_; }
-  size_t getEntryCount() const override { return entry_count_; }
-  size_t getEmittedKeysCount() const override { return emitted_keys_count_; }
+  HashType getLayout() const override {
+    return hash_table_entry_info_.getHashTableLayout();
+  }
+  size_t getEntryCount() const override {
+    return hash_table_entry_info_.getNumHashEntries();
+  }
+  size_t getEmittedKeysCount() const override {
+    return hash_table_entry_info_.getNumKeys();
+  }
+  size_t getRowIdSize() const override {
+    return hash_table_entry_info_.getRowIdSizeInBytes();
+  }
+  BaselineHashTableEntryInfo getHashTableEntryInfo() const {
+    return hash_table_entry_info_;
+  }
 
  private:
   std::unique_ptr<int8_t[]> cpu_hash_table_buff_;
-  size_t cpu_hash_table_buff_size_;
-  Data_Namespace::AbstractBuffer* gpu_hash_table_buff_;
+  Data_Namespace::AbstractBuffer* gpu_hash_table_buff_{nullptr};
 
-#ifdef HAVE_CUDA
-  const size_t device_id_;
+  MemoryLevel memory_level_;
+  BaselineHashTableEntryInfo hash_table_entry_info_;
   Data_Namespace::DataMgr* data_mgr_;
-#endif
-
-  HashType layout_;
-  size_t entry_count_;         // number of keys in the hash table
-  size_t emitted_keys_count_;  // number of keys emitted across all rows
+  const int device_id_;
 };

@@ -55,6 +55,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include "DataMgr/MemoryLevel.h"
 #include "sqldefs.h"
 
 #ifdef ENABLE_TOSTRING_RAPIDJSON
@@ -295,6 +297,19 @@ std::string toString(const T& v) {
         return "WINDOW_FUNCTION_FRAMING";
       case JoinType::INVALID:
         return "INVALID";
+    }
+    assert(false);
+    return "";
+  } else if constexpr (std::is_same_v<T, Data_Namespace::MemoryLevel>) {
+    switch (v) {
+      case Data_Namespace::MemoryLevel::DISK_LEVEL:
+        return "DISK";
+      case Data_Namespace::MemoryLevel::CPU_LEVEL:
+        return "CPU_Memory";
+      case Data_Namespace::MemoryLevel::GPU_LEVEL:
+        return "GPU_Memory";
+      default:
+        break;
     }
     assert(false);
     return "";
