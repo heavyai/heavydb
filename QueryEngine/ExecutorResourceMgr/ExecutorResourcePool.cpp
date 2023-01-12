@@ -1053,12 +1053,14 @@ void ExecutorResourcePool::allocate_resources(
     increment_total_per_resource_num_requests(ResourceType::CPU_RESULT_MEM);
   }
   if (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU) {
-    if (resource_grant.buffer_mem_gated_per_slot || chunk_request_info.num_chunks > 0) {
+    if (resource_grant.buffer_mem_gated_per_slot ||
+        (chunk_request_info.num_chunks > 0 && chunk_request_info.total_bytes > 0)) {
       increment_outstanding_per_resource_num_requests(ResourceType::CPU_BUFFER_POOL_MEM);
       increment_total_per_resource_num_requests(ResourceType::CPU_BUFFER_POOL_MEM);
     }
   } else if (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::GPU) {
-    if (resource_grant.buffer_mem_gated_per_slot || chunk_request_info.num_chunks > 0) {
+    if (resource_grant.buffer_mem_gated_per_slot ||
+        (chunk_request_info.num_chunks > 0 && chunk_request_info.total_bytes > 0)) {
       increment_outstanding_per_resource_num_requests(ResourceType::GPU_BUFFER_POOL_MEM);
       increment_total_per_resource_num_requests(ResourceType::GPU_BUFFER_POOL_MEM);
     }
@@ -1115,11 +1117,13 @@ void ExecutorResourcePool::deallocate_resources(
     decrement_outstanding_per_resource_num_requests(ResourceType::CPU_RESULT_MEM);
   }
   if (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU) {
-    if (resource_grant.buffer_mem_gated_per_slot || chunk_request_info.num_chunks > 0) {
+    if (resource_grant.buffer_mem_gated_per_slot ||
+        (chunk_request_info.num_chunks > 0 && chunk_request_info.total_bytes > 0)) {
       decrement_outstanding_per_resource_num_requests(ResourceType::CPU_BUFFER_POOL_MEM);
     }
   } else if (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::GPU) {
-    if (resource_grant.buffer_mem_gated_per_slot || chunk_request_info.num_chunks > 0) {
+    if (resource_grant.buffer_mem_gated_per_slot ||
+        (chunk_request_info.num_chunks > 0 && chunk_request_info.total_bytes > 0)) {
       decrement_outstanding_per_resource_num_requests(ResourceType::GPU_BUFFER_POOL_MEM);
     }
   }
