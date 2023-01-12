@@ -4441,12 +4441,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-
-  // After the logs_system_tables are disabled, reinitialize the DBHandler so that the
-  // initialization doesn't cause lock-inversion issues with other tests.
-  g_enable_logs_system_tables = false;
-  DBHandlerTestFixture::createDBHandler();
-  DBHandlerTestFixture::destroyDBHandler();
   g_enable_fsi = false;
   g_enable_system_tables = false;
   return err;

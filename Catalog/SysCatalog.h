@@ -48,7 +48,6 @@
 #include "LeafHostInfo.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "OSDependent/heavyai_locks.h"
-#include "RWLocks.h"
 #include "ObjectRoleDescriptor.h"
 #include "PkiServer.h"
 #include "Shared/DbObjectKeys.h"
@@ -166,11 +165,6 @@ class CommonFileOperations {
  */
 class SysCatalog : private CommonFileOperations {
  public:
-  friend class read_lock<SysCatalog>;
-  friend class write_lock<SysCatalog>;
-  friend class sqlite_lock<SysCatalog>;
-  friend class cat_init_lock;
-
   void init(const std::string& basePath,
             std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
             const AuthMetadata& authMetadata,
@@ -346,8 +340,19 @@ class SysCatalog : private CommonFileOperations {
   // users or roles.
   std::set<std::string> getCreatedRoles() const;
   bool isAggregator() const { return aggregator_; }
-  static SysCatalog& instance();
-  static void destroy();
+  static SysCatalog& instance() {
+    std::unique_lock lk(instance_mutex_);
+    if (!instance_) {
+      instance_.reset(new SysCatalog());
+    }
+    return *instance_;
+  }
+
+  static void destroy() {
+    std::unique_lock lk(instance_mutex_);
+    instance_.reset();
+    migrations::MigrationMgr::destroy();
+  }
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
   std::string name() const { return shared::kSystemCatalogName; }
@@ -360,6 +365,8 @@ class SysCatalog : private CommonFileOperations {
       const std::vector<std::string>& dashboard_ids);
   void check_for_session_encryption(const std::string& pki_cert, std::string& session);
   std::vector<Catalog*> getCatalogsForAllDbs();
+
+  std::shared_ptr<Catalog> getDummyCatalog() { return dummyCatalog_; }
 
   std::shared_ptr<Catalog> getCatalog(const std::string& dbName);
   std::shared_ptr<Catalog> getCatalog(const int32_t db_id);
@@ -384,10 +391,6 @@ class SysCatalog : private CommonFileOperations {
       const Catalog_Namespace::Catalog& catalog);
 
   bool hasExecutedMigration(const std::string& migration_name) const;
-
-  void checkDateInDaysMigration() const;
-
-  heavyai::DistributedSharedMutex& getDistributedMutex() const;
 
  private:
   using GranteeMap = std::map<std::string, std::unique_ptr<Grantee>>;
@@ -514,7 +517,9 @@ class SysCatalog : private CommonFileOperations {
 
   // contains a map of all the catalog within this system
   // it is lazy loaded
-  std::map<std::string, std::shared_ptr<Catalog>> cat_map_;
+  // std::map<std::string, std::shared_ptr<Catalog>> cat_map_;
+  using dbid_to_cat_map = tbb::concurrent_hash_map<std::string, std::shared_ptr<Catalog>>;
+  dbid_to_cat_map cat_map_;
 
   static std::mutex instance_mutex_;
   static std::unique_ptr<SysCatalog> instance_;
@@ -524,16 +529,16 @@ class SysCatalog : private CommonFileOperations {
   // re-initializing SysCatalog.
   bool is_initialized_{false};
 
-  mutable SharedMutexWrapper mutex_desc_;           // General mutex for syscat.
-  mutable SharedMutexWrapper sqlite_mutex_desc_;    // Sqlite mutex.
-  mutable SharedMutexWrapper cat_init_mutex_desc_;  // Mutex for initializing catalogs.
-
  public:
-  // This value is used by read_lock when acquiring mutex_desc_ to record which thread
-  // holds a lock.  It should idealy be moved into the SharedMutexWrapper class, but it
-  // needs to be static to the SysCatalog, so some refactor would be needed.
+  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dcatalogMutex_;
+  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dsqliteMutex_;
+  mutable std::mutex sqliteMutex_;
+  mutable heavyai::shared_mutex sharedMutex_;
+  mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
+  mutable std::atomic<std::thread::id> thread_holding_write_lock;
   static thread_local bool thread_holds_read_lock;
-
+  // used by catalog when initially creating a catalog instance
+  std::shared_ptr<Catalog> dummyCatalog_;
   std::unordered_map<std::string, std::shared_ptr<UserMetadata>> temporary_users_by_name_;
   std::unordered_map<int32_t, std::shared_ptr<UserMetadata>> temporary_users_by_id_;
   int32_t next_temporary_user_id_{shared::kTempUserIdRange};

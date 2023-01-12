@@ -55,7 +55,6 @@
 #include "DataMgr/DataMgr.h"
 #include "OSDependent/heavyai_locks.h"
 #include "QueryEngine/CompilationOptions.h"
-#include "RWLocks.h"
 #include "Shared/heavyai_shared_mutex.h"
 #include "SqliteConnector/SqliteConnector.h"
 
@@ -134,10 +133,6 @@ static const std::array<std::string, 4> kAggregatorOnlySystemTables{
 
 class Catalog final {
  public:
-  friend class read_lock<Catalog>;
-  friend class write_lock<Catalog>;
-  friend class sqlite_lock<Catalog>;
-
   /**
    * @brief Constructor - takes basePath to already extant
    * data directory for writing
@@ -151,9 +146,13 @@ class Catalog final {
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
           const std::vector<LeafHostInfo>& string_dict_hosts,
           std::shared_ptr<Calcite> calcite,
-          bool is_new_db,
-          const std::map<int32_t, std::string>& user_id_name_map,
-          const UserMetadata& root_user);
+          bool is_new_db);
+
+  /**
+   * @brief Constructor builds a hollow catalog
+   * used during constructor of other catalogs
+   */
+  Catalog();
 
   /**
    * @brief Destructor - deletes all
@@ -604,12 +603,9 @@ class Catalog final {
 
   bool isInfoSchemaDb() const;
 
-  void checkDateInDaysColumnMigration();
-
-  heavyai::DistributedSharedMutex& getDistributedMutex() const;
-
  protected:
   void CheckAndExecuteMigrations();
+  void CheckAndExecuteMigrationsPostBuildMaps();
   void updateDictionaryNames();
   void updateTableDescriptorSchema();
   void updateFixlenArrayColumns();
@@ -628,8 +624,9 @@ class Catalog final {
   void updateFsiSchemas();
   void renameLegacyDataWrappers();
   void recordOwnershipOfObjectsInObjectPermissions();
+  void checkDateInDaysColumnMigration();
   void createDashboardSystemRoles();
-  void buildMaps(const std::map<int32_t, std::string>& user_id_to_name_map);
+  void buildMaps();
   void addTableToMap(const TableDescriptor* td,
                      const std::list<ColumnDescriptor>& columns,
                      const std::list<DictDescriptor>& dicts);
@@ -781,6 +778,7 @@ class Catalog final {
   foreign_storage::ForeignTable* getForeignTableUnlocked(
       const std::string& tableName) const;
 
+  const Catalog* getObjForLock();
   void removeChunks(const int table_id) const;
 
   void buildCustomExpressionsMapUnlocked();
@@ -795,7 +793,7 @@ class Catalog final {
       const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
       int32_t new_owner_id);
 
-  void conditionallyInitializeSystemObjects(const UserMetadata& root_user);
+  void conditionallyInitializeSystemObjects();
   void initializeSystemServers();
   void initializeSystemTables();
   void initializeUsersSystemTable();
@@ -850,13 +848,14 @@ class Catalog final {
                                                                EXECUTOR_STATS_SERVER_NAME,
                                                                LOGS_SERVER_NAME};
 
-  mutable SharedMutexWrapper mutex_desc_;         // General mutex for cat.
-  mutable SharedMutexWrapper sqlite_mutex_desc_;  // sqlite mutex.
-
  public:
-  // This value is used by read_lock when acquiring mutex_desc_ to record which thread
-  // holds a lock.  It should idealy be moved into the SharedMutexWrapper class, but it
-  // needs to be static to the SysCatalog, so some refactor would be needed.
+  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dcatalogMutex_;
+  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dsqliteMutex_;
+  mutable std::mutex sqliteMutex_;
+  mutable heavyai::shared_mutex sharedMutex_;
+  mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
+  mutable std::atomic<std::thread::id> thread_holding_write_lock;
+  // assuming that you never call into a catalog from another catalog via the same thread
   static thread_local bool thread_holds_read_lock;
   bool initialized_ = false;
 };

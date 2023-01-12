@@ -6862,8 +6862,7 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     // begins running. The table locks will protect the running query.
     std::shared_lock<heavyai::DistributedSharedMutex> cat_lock;
     if (g_multi_instance) {
-      cat_lock =
-          std::shared_lock<heavyai::DistributedSharedMutex>(cat->getDistributedMutex());
+      cat_lock = std::shared_lock<heavyai::DistributedSharedMutex>(*cat->dcatalogMutex_);
     }
     result = processCalciteRequest(timer.createQueryStateProxy(),
                                    cat,

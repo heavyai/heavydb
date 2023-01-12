@@ -38,7 +38,6 @@
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
 extern bool g_enable_system_tables;
-extern bool g_enable_logs_system_tables;
 
 namespace BF = boost::filesystem;
 using SC = Catalog_Namespace::SysCatalog;
@@ -87,23 +86,8 @@ class CatalogTest : public DBHandlerTestFixture {
     db_metadata.dbName = shared::kDefaultDbName;
     db_metadata.dbId = 1;
     std::vector<LeafHostInfo> leaves{};
-    auto users = Catalog_Namespace::SysCatalog::instance().getAllUserMetadata();
-    std::map<int32_t, std::string> user_name_by_user_id;
-    for (const auto& user : users) {
-      user_name_by_user_id[user.userId] = user.userName;
-    }
-    Catalog_Namespace::UserMetadata root_user;
-    CHECK(Catalog_Namespace::SysCatalog::instance().getMetadataForUserById(
-        shared::kRootUserId, root_user));
-
-    return std::make_unique<Catalog_Namespace::Catalog>(BASE_PATH,
-                                                        db_metadata,
-                                                        nullptr,
-                                                        leaves,
-                                                        nullptr,
-                                                        false,
-                                                        user_name_by_user_id,
-                                                        root_user);
+    return std::make_unique<Catalog_Namespace::Catalog>(
+        BASE_PATH, db_metadata, nullptr, leaves, nullptr, false);
   }
 
   SqliteConnector cat_conn_;
@@ -139,7 +123,7 @@ class SysCatalogTest : public CatalogTest {
     syscat_conn_.query_with_text_params(
         "INSERT INTO mapd_users (name, passwd_hash, issuper, can_login) VALUES (?, ?, ?, "
         "?)",
-        {"test_user", "passwd", "1", "1"});
+        {"test_user", "passwd", "true", "true"});
   }
 
   static void reinitializeSystemCatalog() {
@@ -149,22 +133,6 @@ class SysCatalogTest : public CatalogTest {
 
   SqliteConnector syscat_conn_;
 };
-
-// This test will deadlock if the DateInDaysColumnMigration is executed as part of catalog
-// construction.
-TEST_F(SysCatalogTest, Deadlock) {
-  sql("DROP TABLE IF EXISTS t1;");
-  sql("CREATE TABLE t1(d DATE);");
-
-  cat_conn_.query(
-      "DELETE FROM mapd_version_history where migration_history = "
-      "'date_in_days_column';");
-
-  reinitializeSystemCatalog();
-  SC::instance().getCatalog(shared::kDefaultDbName);
-
-  sql("DROP TABLE t1;");
-}
 
 // Check that we migrate correctly from pre 4.0 catalog.
 TEST_F(SysCatalogTest, MigrateRoles) {
@@ -216,40 +184,6 @@ TEST_F(SysCatalogTest, FixIncorrectRolesMigration) {
 
   ASSERT_TRUE(hasResult("SELECT name FROM mapd_users WHERE name='test_user'"));
   ASSERT_FALSE(hasResult("SELECT roleName FROM mapd_roles WHERE roleName='test_user'"));
-}
-
-class LogsSystemTableTest : public SysCatalogTest {
- public:
-  bool old_logs_flag;
-
-  void SetUp() {
-    old_logs_flag = g_enable_logs_system_tables;
-    // Temporarily instantiate the logs system table in the catalog/syscat.
-    g_enable_logs_system_tables = true;
-    login(shared::kRootUsername, shared::kDefaultRootPasswd, "information_schema");
-    sql("SHOW TABLES;");
-  }
-
-  void TearDown() {
-    Catalog_Namespace::DBMetadata temp_meta;
-    SC::instance().getMetadataForDB("tempdb", temp_meta);
-    SC::instance().dropDatabase(temp_meta);
-    g_enable_logs_system_tables = old_logs_flag;
-  }
-};
-
-TEST_F(LogsSystemTableTest, LogsSystemTableDeadlock) {
-  resetCatalog();
-  g_enable_logs_system_tables = false;
-  // With the catalog reset and the logs option disabled, the next instantiation of the
-  // info_schema catalog should attempt to drop the logs tables (assuming they were set up
-  // properly in SetUp()) which can cause deadlock (lock order inversion) if performed
-  // concurrently with SysCatalog::createDatabase().
-  Catalog_Namespace::DBMetadata info_schema_meta;
-  SC::instance().getMetadataForDB(shared::kInfoSchemaDbName, info_schema_meta);
-  auto future = std::async(std::launch::async,
-                           [&] { SC::instance().getCatalog(info_schema_meta, false); });
-  SC::instance().createDatabase("tempdb", shared::kRootUserId);
 }
 
 class FsiSchemaTest : public CatalogTest {
