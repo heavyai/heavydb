@@ -76,18 +76,14 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
       const std::vector<JoinColumn>& join_columns,
       const std::vector<JoinColumnTypeInfo>& join_column_types,
       const std::vector<JoinBucketInfo>& join_bucket_info,
-      const HashType layout,
-      const size_t entry_count,
-      const size_t emitted_keys_count);
+      const BaselineHashTableEntryInfo hash_table_entry_info);
 
 #ifdef HAVE_CUDA
   std::shared_ptr<BaselineHashTable> initHashTableOnGpu(
       const std::vector<JoinColumn>& join_columns,
       const std::vector<JoinColumnTypeInfo>& join_column_types,
       const std::vector<JoinBucketInfo>& join_bucket_info,
-      const HashType layout,
-      const size_t entry_count,
-      const size_t emitted_keys_count,
+      const BaselineHashTableEntryInfo hash_table_entry_info,
       const size_t device_id);
 #endif
 

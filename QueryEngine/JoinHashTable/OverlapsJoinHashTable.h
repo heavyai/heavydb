@@ -173,9 +173,7 @@ class OverlapsJoinHashTable : public HashJoin {
       const std::vector<JoinColumn>& join_columns,
       const std::vector<JoinColumnTypeInfo>& join_column_types,
       const std::vector<JoinBucketInfo>& join_bucket_info,
-      const HashType layout,
-      const size_t entry_count,
-      const size_t emitted_keys_count,
+      const BaselineHashTableEntryInfo hash_table_entry_info,
       const bool skip_hashtable_caching);
 
 #ifdef HAVE_CUDA
@@ -183,16 +181,11 @@ class OverlapsJoinHashTable : public HashJoin {
       const std::vector<JoinColumn>& join_columns,
       const std::vector<JoinColumnTypeInfo>& join_column_types,
       const std::vector<JoinBucketInfo>& join_bucket_info,
-      const HashType layout,
-      const size_t entry_count,
-      const size_t emitted_keys_count,
+      const BaselineHashTableEntryInfo hash_table_entry_info,
       const size_t device_id);
 
   std::shared_ptr<BaselineHashTable> copyCpuHashTableToGpu(
       std::shared_ptr<BaselineHashTable>& cpu_hash_table,
-      const HashType layout,
-      const size_t entry_count,
-      const size_t emitted_keys_count,
       const size_t device_id);
 #endif  // HAVE_CUDA
 

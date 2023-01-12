@@ -109,7 +109,7 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
           .info;
 
   const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
-  if (total_entries > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+  if (total_entries > HashJoin::MAX_NUM_HASH_ENTRIES) {
     throw TooManyHashEntries();
   }
 
@@ -295,11 +295,7 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
         if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
 #ifdef HAVE_CUDA
           for (int device_id = 0; device_id < device_count_; ++device_id) {
-            auto gpu_hash_table = copyCpuHashTableToGpu(hash_table,
-                                                        layout,
-                                                        hash_table->getEntryCount(),
-                                                        hash_table->getEmittedKeysCount(),
-                                                        device_id);
+            auto gpu_hash_table = copyCpuHashTableToGpu(hash_table, device_id);
             CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
             hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
           }
@@ -358,21 +354,24 @@ void RangeJoinHashTable::reifyForDevice(
   DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
   CHECK_EQ(getKeyComponentWidth(), size_t(8));
   CHECK(layoutRequiresAdditionalBuffers(layout));
-
+  BaselineHashTableEntryInfo hash_table_entry_info(entry_count,
+                                                   emitted_keys_count,
+                                                   sizeof(int32_t),
+                                                   getKeyComponentCount(),
+                                                   getKeyComponentWidth(),
+                                                   layout,
+                                                   false);
   if (effective_memory_level_ == Data_Namespace::MemoryLevel::CPU_LEVEL) {
     VLOG(1) << "Building range join hash table on CPU.";
     auto hash_table = initHashTableOnCpu(columns_for_device.join_columns,
                                          columns_for_device.join_column_types,
                                          columns_for_device.join_buckets,
-                                         layout,
-                                         entry_count,
-                                         emitted_keys_count);
+                                         hash_table_entry_info);
     CHECK(hash_table);
 
 #ifdef HAVE_CUDA
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
-      auto gpu_hash_table = copyCpuHashTableToGpu(
-          hash_table, layout, entry_count, emitted_keys_count, device_id);
+      auto gpu_hash_table = copyCpuHashTableToGpu(hash_table, device_id);
       CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
       hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
     } else {
@@ -389,9 +388,7 @@ void RangeJoinHashTable::reifyForDevice(
     auto hash_table = initHashTableOnGpu(columns_for_device.join_columns,
                                          columns_for_device.join_column_types,
                                          columns_for_device.join_buckets,
-                                         layout,
-                                         entry_count,
-                                         emitted_keys_count,
+                                         hash_table_entry_info,
                                          device_id);
     CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
     hash_tables_for_device_[device_id] = std::move(hash_table);
@@ -407,9 +404,7 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnGpu(
     const std::vector<JoinColumn>& join_columns,
     const std::vector<JoinColumnTypeInfo>& join_column_types,
     const std::vector<JoinBucketInfo>& join_bucket_info,
-    const HashType layout,
-    const size_t entry_count,
-    const size_t emitted_keys_count,
+    const BaselineHashTableEntryInfo hash_table_entry_info,
     const size_t device_id) {
   CHECK_EQ(memory_level_, Data_Namespace::MemoryLevel::GPU_LEVEL);
 
@@ -436,12 +431,8 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnGpu(
 
   const auto err = builder.initHashTableOnGpu(&key_handler,
                                               join_columns,
-                                              layout,
                                               join_type_,
-                                              getKeyComponentWidth(),
-                                              getKeyComponentCount(),
-                                              entry_count,
-                                              emitted_keys_count,
+                                              hash_table_entry_info,
                                               device_id,
                                               executor_,
                                               query_hints_);
@@ -458,9 +449,7 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
     const std::vector<JoinColumn>& join_columns,
     const std::vector<JoinColumnTypeInfo>& join_column_types,
     const std::vector<JoinBucketInfo>& join_bucket_info,
-    const HashType layout,
-    const size_t entry_count,
-    const size_t emitted_keys_count) {
+    const BaselineHashTableEntryInfo hash_table_entry_info) {
   auto timer = DEBUG_TIMER(__func__);
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
   ts1 = std::chrono::steady_clock::now();
@@ -469,7 +458,7 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
   CHECK(!join_columns.empty());
   CHECK(!join_bucket_info.empty());
 
-  CHECK(layoutRequiresAdditionalBuffers(layout));
+  CHECK(layoutRequiresAdditionalBuffers(hash_table_entry_info.getHashTableLayout()));
   const auto key_component_count =
       join_bucket_info[0].inverse_bucket_sizes_for_dimension.size();
 
@@ -489,12 +478,9 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
                                  join_column_types,
                                  join_bucket_info,
                                  dummy_str_proxy_translation_maps_ptrs_and_offsets,
-                                 entry_count,
-                                 emitted_keys_count,
-                                 layout,
+                                 hash_table_entry_info,
                                  join_type_,
-                                 getKeyComponentWidth(),
-                                 getKeyComponentCount(),
+                                 executor_,
                                  query_hints_);
   ts2 = std::chrono::steady_clock::now();
   if (err) {

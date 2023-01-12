@@ -3197,7 +3197,7 @@ void SysCatalog::checkDropRenderGroupColumnsMigration() const {
   if (!hasExecutedMigration(drop_render_groups_migration)) {
     auto cats = Catalog_Namespace::SysCatalog::instance().getCatalogsForAllDbs();
     for (auto& cat : cats) {
-      cat->checkDropRenderGroupColumnsMigration();    
+      cat->checkDropRenderGroupColumnsMigration();
     }
     recordExecutedMigration(drop_render_groups_migration);
   }

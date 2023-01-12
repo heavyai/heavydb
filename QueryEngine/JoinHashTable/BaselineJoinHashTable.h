@@ -190,8 +190,7 @@ class BaselineJoinHashTable : public HashJoin {
   virtual void reifyForDevice(const ColumnsForDevice& columns_for_device,
                               const HashType layout,
                               const int device_id,
-                              const size_t entry_count,
-                              const size_t emitted_keys_count,
+                              const BaselineHashTableEntryInfo hash_table_entry_info,
                               const logger::ThreadLocalIds parent_thread_local_ids);
 
   virtual int initHashTableForDevice(
@@ -200,8 +199,7 @@ class BaselineJoinHashTable : public HashJoin {
       const std::vector<JoinBucketInfo>& join_buckets,
       const HashType layout,
       const Data_Namespace::MemoryLevel effective_memory_level,
-      const size_t entry_count,
-      const size_t emitted_keys_count,
+      const BaselineHashTableEntryInfo hash_table_entry_info,
       const int device_id);
 
   llvm::Value* hashPtr(const size_t index);
@@ -275,6 +273,7 @@ class BaselineJoinHashTable : public HashJoin {
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;
+  const size_t rowid_size_;
 
   static std::unique_ptr<HashtableRecycler> hash_table_cache_;
   static std::unique_ptr<HashingSchemeRecycler> hash_table_layout_cache_;

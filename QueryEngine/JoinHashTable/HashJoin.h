@@ -37,18 +37,16 @@ class CodeGenerator;
 
 class JoinHashTableTooBig : public std::runtime_error {
  public:
-  JoinHashTableTooBig(size_t cur_hash_table_size, size_t query_hint_size)
-      : std::runtime_error(
-            "The size of hash table is larger than a threshold defined in the query hint "
-            "(" +
-            ::toString(cur_hash_table_size) + " > " + ::toString(query_hint_size) + ")") {
-  }
+  JoinHashTableTooBig(size_t cur_hash_table_size, size_t threshold_size)
+      : std::runtime_error("The size of hash table is larger than a threshold (" +
+                           ::toString(cur_hash_table_size) + " > " +
+                           ::toString(threshold_size) + ")") {}
 };
 
 class TooManyHashEntries : public std::runtime_error {
  public:
   TooManyHashEntries()
-      : std::runtime_error("Hash tables with more than 2B entries not supported yet") {}
+      : std::runtime_error("Hash tables with more than 4B entries not supported yet") {}
 
   TooManyHashEntries(const std::string& reason) : std::runtime_error(reason) {}
 };
@@ -134,6 +132,7 @@ class DeviceAllocator;
 
 class HashJoin {
  public:
+  static constexpr size_t MAX_NUM_HASH_ENTRIES = size_t(1) << 31;
   virtual std::string toString(const ExecutorDeviceType device_type,
                                const int device_id = 0,
                                bool raw = false) const = 0;
@@ -157,6 +156,20 @@ class HashJoin {
   virtual int getInnerTableRteIdx() const noexcept = 0;
 
   virtual HashType getHashType() const noexcept = 0;
+
+  static size_t getMaximumNumHashEntriesCanHold(MemoryLevel memory_level,
+                                                const Executor* executor,
+                                                size_t rowid_size) noexcept;
+
+  static std::string generateTooManyHashEntriesErrMsg(size_t num_entries,
+                                                      size_t threshold,
+                                                      MemoryLevel memory_level) {
+    std::ostringstream oss;
+    oss << "Hash tables with more than " << threshold
+        << " entries (# hash entries: " << num_entries << ") on "
+        << ::toString(memory_level) << " not supported yet";
+    return oss.str();
+  }
 
   static bool layoutRequiresAdditionalBuffers(HashType layout) noexcept {
     return (layout == HashType::ManyToMany || layout == HashType::OneToMany);

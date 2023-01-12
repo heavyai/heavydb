@@ -31,6 +31,44 @@ struct DecodedJoinHashBufferEntry {
   }
 };
 
+class HashTableEntryInfo {
+ public:
+  HashTableEntryInfo(size_t num_hash_entries,
+                     size_t num_keys,
+                     size_t rowid_size_in_bytes,
+                     HashType layout,
+                     bool for_window_framing = false)
+      : num_hash_entries_(num_hash_entries)
+      , num_keys_(num_keys)
+      , rowid_size_in_bytes_(rowid_size_in_bytes)
+      , layout_(layout)
+      , for_window_framing_(for_window_framing) {}
+
+  virtual size_t computeTotalNumSlots() const = 0;
+  virtual size_t computeHashTableSize() const = 0;
+
+  size_t getNumHashEntries() const { return num_hash_entries_; }
+  size_t getNumKeys() const { return num_keys_; }
+  size_t getRowIdSizeInBytes() const { return rowid_size_in_bytes_; }
+  HashType getHashTableLayout() const { return layout_; }
+  void setNumHashEntries(size_t num_hash_entries) {
+    num_hash_entries_ = num_hash_entries;
+  }
+  void setNumKeys(size_t num_keys) { num_keys_ = num_keys; }
+  void setRowIdSizeInBytes(size_t rowid_size_in_bytes) {
+    rowid_size_in_bytes_ = rowid_size_in_bytes;
+  }
+  void setHashTableLayout(HashType layout) { layout_ = layout; }
+  bool forWindowFraming() const { return for_window_framing_; }
+
+ protected:
+  size_t num_hash_entries_;
+  size_t num_keys_;
+  size_t rowid_size_in_bytes_;
+  HashType layout_;
+  bool for_window_framing_;
+};
+
 using DecodedJoinHashBufferSet = std::set<DecodedJoinHashBufferEntry>;
 
 class HashTable {
@@ -45,6 +83,7 @@ class HashTable {
 
   virtual size_t getEntryCount() const = 0;
   virtual size_t getEmittedKeysCount() const = 0;
+  virtual size_t getRowIdSize() const = 0;
 
   //! Decode hash table into a std::set for easy inspection and validation.
   static DecodedJoinHashBufferSet toSet(
