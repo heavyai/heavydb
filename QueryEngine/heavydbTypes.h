@@ -29,6 +29,8 @@
 
 #include "DateAdd.h"
 
+#include "../Shared/sqltypes_lite.h"
+
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
 #include "../Shared/DateTimeParser.h"
 #endif
@@ -725,7 +727,7 @@ struct GeoPolygonStruct {
 
 typedef struct GeoPolygonStruct GeoPolygon;
 
-struct GeoMultiPolygon {
+struct GeoMultiPolygonStruct {
   int8_t* ptr_coords;
   int32_t coords_size;
   int8_t* ring_sizes;
@@ -751,6 +753,8 @@ struct GeoMultiPolygon {
 
   DEVICE int32_t getOutputSrid() const { return output_srid; }
 };
+
+typedef struct GeoMultiPolygonStruct GeoMultiPolygon;
 
 // There are redundant #ifndef UDF_COMPILED inside
 // ifguard for StringDictionaryProxy to flag that
@@ -868,28 +872,56 @@ DEVICE inline double decompress_y_coord(const int8_t* data,
   }
 }
 
+DEVICE inline double decompress_x_coord(const int8_t* data,
+                                        const int64_t index,
+                                        const bool is_geoint,
+                                        const int32_t input_srid,
+                                        const int32_t output_srid) {
+  double x = decompress_x_coord(data, index, is_geoint);
+  if (input_srid == output_srid || output_srid == 0) {
+    return x;
+  } else if (input_srid == 4326 && output_srid == 900913) {
+    // WGS 84 --> Web Mercator
+    x *= 111319.490778;
+  } else {
+#ifndef __CUDACC__
+    throw std::runtime_error("decompress_x_coord: unhandled geo transformation from " +
+                             std::to_string(input_srid) + " to " +
+                             std::to_string(output_srid) + '.');
+#endif
+  }
+  return x;
+}
+
+DEVICE inline double decompress_y_coord(const int8_t* data,
+                                        const int64_t index,
+                                        const bool is_geoint,
+                                        const int32_t input_srid,
+                                        const int32_t output_srid) {
+  double y = decompress_y_coord(data, index, is_geoint);
+  if (input_srid == output_srid || output_srid == 0) {
+    return y;
+  } else if (input_srid == 4326 && output_srid == 900913) {
+    // WGS 84 --> Web Mercator
+    y = 6378136.99911 * log(tan(.00872664626 * y + .785398163397));
+  } else {
+#ifndef __CUDACC__
+    throw std::runtime_error("decompress_y_coord: unhandled geo transformation from " +
+                             std::to_string(input_srid) + " to " +
+                             std::to_string(output_srid) + '.');
+#endif
+  }
+  return y;
+}
+
 DEVICE inline Point2D get_point(const int8_t* data,
                                 const int64_t index,
                                 const int32_t input_srid,
                                 const int32_t output_srid,
                                 const bool is_geoint) {
-  Point2D point{decompress_x_coord(data, index, is_geoint),
-                decompress_y_coord(data, index, is_geoint)};
-  if (input_srid == output_srid || output_srid == 0) {
-    return point;
-  } else if (input_srid == 4326 && output_srid == 900913) {
-    // WGS 84 --> Web Mercator
-    point.x *= 111319.490778;
-    point.y = 6378136.99911 * log(tan(.00872664626 * point.y + .785398163397));
-    return point;
-  }
-#ifdef __CUDACC__
-  return {};  // (NaN,NaN)
-#else
-  throw std::runtime_error("Unhandled geo transformation from " +
-                           std::to_string(input_srid) + " to " +
-                           std::to_string(output_srid) + '.');
-#endif
+  Point2D point{decompress_x_coord(data, index, is_geoint, input_srid, output_srid),
+                decompress_y_coord(data, index, is_geoint, input_srid, output_srid)};
+  return point;
 }
 
 #ifndef __CUDACC__
@@ -911,6 +943,7 @@ inline std::vector<int32_t> compress_coords(const int8_t* data,
   }
   return result;
 }
+
 inline std::vector<double> decompress_coords(const int8_t* data,
                                              const int64_t size,
                                              const bool is_geoint) {
@@ -923,6 +956,71 @@ inline std::vector<double> decompress_coords(const int8_t* data,
   }
   return result;
 }
+
+inline std::vector<int32_t> compress_coords(const std::vector<double>& coords) {
+  std::vector<int32_t> result;
+  const size_t nofpoints = coords.size() / 2;
+  result.reserve(coords.size());
+  const double* buf = coords.data();
+  for (size_t i = 0; i < nofpoints; i++) {
+    result.push_back(compress_x_coord(buf, 2 * i));
+    result.push_back(compress_y_coord(buf, 2 * i));
+  }
+  return result;
+}
+
+inline std::vector<double> decompress_coords(const std::vector<int32_t>& coords) {
+  std::vector<double> result;
+  const size_t nofpoints = coords.size() / 2;
+  result.reserve(coords.size());
+  const int8_t* buf = reinterpret_cast<const int8_t*>(coords.data());
+  for (size_t i = 0; i < nofpoints; i++) {
+    result.push_back(decompress_x_coord(buf, 2 * i, true));
+    result.push_back(decompress_y_coord(buf, 2 * i, true));
+  }
+  return result;
+}
+
+inline std::vector<std::vector<int32_t>> compress_coords(
+    const std::vector<std::vector<double>>& coords) {
+  std::vector<std::vector<int32_t>> result;
+  result.reserve(coords.size());
+  for (size_t i = 0; i < coords.size(); i++) {
+    result.push_back(compress_coords(coords[i]));
+  }
+  return result;
+}
+
+inline std::vector<std::vector<double>> decompress_coords(
+    const std::vector<std::vector<int32_t>>& coords) {
+  std::vector<std::vector<double>> result;
+  result.reserve(coords.size());
+  for (size_t i = 0; i < coords.size(); i++) {
+    result.push_back(decompress_coords(coords[i]));
+  }
+  return result;
+}
+
+inline std::vector<std::vector<std::vector<int32_t>>> compress_coords(
+    const std::vector<std::vector<std::vector<double>>>& coords) {
+  std::vector<std::vector<std::vector<int32_t>>> result;
+  result.reserve(coords.size());
+  for (size_t i = 0; i < coords.size(); i++) {
+    result.push_back(compress_coords(coords[i]));
+  }
+  return result;
+}
+
+inline std::vector<std::vector<std::vector<double>>> decompress_coords(
+    const std::vector<std::vector<std::vector<int32_t>>>& coords) {
+  std::vector<std::vector<std::vector<double>>> result;
+  result.reserve(coords.size());
+  for (size_t i = 0; i < coords.size(); i++) {
+    result.push_back(decompress_coords(coords[i]));
+  }
+  return result;
+}
+
 #endif
 
 inline bool get_is_geoint(const int8_t* flatbuffer) {
@@ -983,7 +1081,7 @@ inline int32_t get_output_srid(const int8_t* flatbuffer) {
 }
 
 struct LineString {
-  int8_t* flatbuffer_;  // FlatBuffer of GeoLineStrings or GeoPolygon
+  int8_t* flatbuffer_;  // FlatBuffer of GeoLineStrings or GeoPolygon or GeoMultiPolygon
   int64_t index_[3];    // line string index within a
                       // Column<GeoLineString>/Column<GeoPolygon>/Column<GeoMultiPolygon>
 
@@ -995,7 +1093,7 @@ struct LineString {
         status = m.getItem(index_[0], size, dest, is_null);
         break;
       case GeoPolygonFormatId:
-        status = m.getSubItem(index_[0], index_[1], size, dest, is_null);
+        status = m.getSubItem(index_[1], index_[0], size, dest, is_null);
         break;
       default:
         status = FlatBufferManager::Status::NotImplementedError;
@@ -1005,10 +1103,49 @@ struct LineString {
 
   // Get the index-th point of the line string
   DEVICE Geo::Point2D getItem(const int64_t index, const int32_t output_srid = 0) const {
+    FlatBufferManager m{flatbuffer_};
+    FlatBufferManager::Status status = FlatBufferManager::Status::NotImplementedError;
+    if (m.isNestedArray()) {
+      const SQLTypeInfoLite* ti =
+          reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+      if (ti == nullptr) {
+        status = FlatBufferManager::UserDataError;
+      } else {
+        if (m.getDimensions() == 3) {
+          if (index_[2] >= 0) {
+            bool is_null = false;
+            int32_t nof_points;
+            int8_t* coords_ptr;
+            status = m.getItem(
+                index_[2], index_[1], index_[0], nof_points, coords_ptr, is_null);
+            if (status == FlatBufferManager::Status::Success) {
+              if (is_null) {
+                status = FlatBufferManager::Status::UnexpectedNullItemError;
+              } else if (index < 0 || index >= nof_points) {
+                status = FlatBufferManager::Status::IndexError;
+              } else {
+                return Geo::get_point(
+                    coords_ptr,
+                    2 * index,
+                    ti->get_input_srid(),
+                    (output_srid < 0 ? ti->get_output_srid() : output_srid),
+                    ti->is_geoint());
+              }
+            }
+          }
+        }
+      }
+      if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+        throw std::runtime_error("LineString.getItem failed: " + ::toString(status));
+#endif
+      }
+    }
+    // to be deprecated in favor of NestedArray:
     int8_t* ptr;
     int64_t size;
     bool is_null;
-    auto status = getBuffer(size, ptr, is_null);
+    status = getBuffer(size, ptr, is_null);
     if (status != FlatBufferManager::Status::Success) {
 #ifndef __CUDACC__
       throw std::runtime_error("LineString.getItem failed: " + ::toString(status));
@@ -1018,7 +1155,7 @@ struct LineString {
     int32_t this_input_srid = get_input_srid(flatbuffer_);
     int32_t this_output_srid = get_output_srid(flatbuffer_);
     return Geo::get_point(ptr,
-                          index,
+                          2 * index,
                           this_input_srid,
                           (output_srid < 0 ? this_output_srid : output_srid),
                           is_geoint);
@@ -1032,14 +1169,39 @@ struct LineString {
 
 #ifndef __CUDACC__
   std::vector<double> toCoords() const {
+    FlatBufferManager m{flatbuffer_};
+    FlatBufferManager::Status status = FlatBufferManager::Status::NotImplementedError;
+    if (m.isNestedArray()) {
+      const SQLTypeInfoLite* ti =
+          reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+      if (ti == nullptr) {
+        status = FlatBufferManager::UserDataError;
+      } else {
+        if (m.getDimensions() == 3) {
+          if (index_[2] >= 0) {
+            bool is_null = false;
+            int32_t nof_points;
+            int8_t* coords_ptr;
+            FlatBufferManager::Status status = m.getItem(
+                index_[2], index_[1], index_[0], nof_points, coords_ptr, is_null);
+            if (status == FlatBufferManager::Status::Success) {
+              return decompress_coords(
+                  coords_ptr, nof_points * m.getValueSize(), ti->is_geoint());
+            }
+          }
+        }
+      }
+      if (status != FlatBufferManager::Status::Success) {
+        throw std::runtime_error("LineString.toCoords2 failed: " + ::toString(status));
+      }
+    }
     int8_t* ptr;
     int64_t size;
     bool is_null;
-    auto status = getBuffer(size, ptr, is_null);
+    status = getBuffer(size, ptr, is_null);
 
-    std::vector<double> result;
     if (status != FlatBufferManager::Status::Success) {
-      throw std::runtime_error("LineString.getBuffer failed: " + ::toString(status));
+      throw std::runtime_error("LineString.toCoords failed: " + ::toString(status));
     }
     if (is_null) {
       return {};
@@ -1051,19 +1213,49 @@ struct LineString {
 #endif
 
   // Return the number of points of the line string
-  int64_t size() const {
+  size_t size() const {
     FlatBufferManager m{flatbuffer_};
+    FlatBufferManager::Status status = FlatBufferManager::Status::NotImplementedError;
+    if (m.isNestedArray()) {
+      size_t length = 0;
+      if (m.getDimensions() == 3) {
+        if (index_[2] >= 0) {
+          status = m.getLength(index_[2], index_[1], index_[0], length);
+        } else if (index_[1] >= 0) {
+          status = m.getLength(index_[1], index_[0], length);
+        } else {
+          status = m.getLength(index_[0], length);
+        }
+      } else {
+        status = FlatBufferManager::Status::NotImplementedError;
+      }
+      if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+        throw std::runtime_error("Geo::LineString size failed: " + ::toString(status));
+#endif
+      }
+      return length;
+    }
+    // to be deprecated in favor of NestedArray:
     int64_t length = 0;
     switch (m.format()) {
       case GeoLineStringFormatId:
-        m.getItemLength(index_[0], length);
+        status = m.getItemLength(index_[0], length);
+        break;
+      case GeoPolygonFormatId:
+        status = m.getSubItemLength(index_[1], index_[0], length);
         break;
       default:
 #ifndef __CUDACC__
-        throw std::runtime_error("LineString::size: not implemented for format " +
-                                 ::toString(m.format()));
+        throw std::runtime_error("Geo::LineString::size: not implemented for format " +
+                                 ::toString(static_cast<int64_t>(m.format())));
 #else
           ;
+#endif
+    }
+    if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+      throw std::runtime_error("Geo::LineString size failed: " + ::toString(status));
 #endif
     }
     return length;
@@ -1169,9 +1361,21 @@ struct Polygon {
   int8_t* flatbuffer_;  // FlatBuffer of GeoPolygons
   int64_t index_[2];    // polygon index in a Column<GeoPolygon>/Column<GeoMultiPolygon>
 
+#ifndef __CUDACC__
+  std::vector<std::vector<double>> toCoords() const {
+    std::vector<std::vector<double>> result;
+    auto sz = size();
+    result.reserve(sz);
+    for (size_t i = 0; i < sz; i++) {
+      result.push_back(getItem(i).toCoords());
+    }
+    return result;
+  }
+#endif
+
   // Return the index-th linestring
-  Geo::LineString getItem(const int64_t index) const {
-    Geo::LineString linestring{flatbuffer_, {index_[0], index, -1}};
+  Geo::LineString getItem(const int64_t index, const int32_t output_srid = 0) const {
+    Geo::LineString linestring{flatbuffer_, {index, index_[0], index_[1]}};
     return linestring;
   }
 
@@ -1244,19 +1448,71 @@ struct Polygon {
   }
 
   // Return the number of line strings in a polygon
-  int64_t size() const {
+  size_t size() const {
     FlatBufferManager m{flatbuffer_};
-    int64_t length = 0;
-    m.getItemLength(index_[0], length);
-    return length;
+    FlatBufferManager::Status status;
+    if (m.isNestedArray()) {
+      size_t length = 0;
+      if (m.getDimensions() == 3) {
+        if (index_[1] >= 0) {
+          status = m.getLength(index_[1], index_[0], length);
+        } else {
+          status = m.getLength(index_[0], length);
+        }
+      } else {
+        status = FlatBufferManager::Status::NotImplementedError;
+      }
+      if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+        throw std::runtime_error("Geo::Polygon size failed: " + ::toString(status));
+#endif
+      }
+      return length;
+    } else {
+      int64_t length = 0;
+      status = m.getItemLength(index_[0], length);
+      if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+        throw std::runtime_error("Geo::Polygon size failed: " + ::toString(status));
+#endif
+      }
+      return length;
+    }
   }
 
   // Return the number of points in the index-th line string
-  int64_t size(const int64_t index) const {
+  size_t size(const int64_t index) const {
     FlatBufferManager m{flatbuffer_};
-    int64_t length = 0;
-    m.getSubItemLength(index_[0], index, length);
-    return length;
+    FlatBufferManager::Status status;
+    if (m.isNestedArray()) {
+      size_t length = 0;
+      if (m.getDimensions() == 3) {
+        if (index_[1] >= 0) {
+          status = m.getLength(index_[1], index_[0], index, length);
+        } else {
+          status = m.getLength(index_[0], index, length);
+        }
+      } else {
+        status = FlatBufferManager::Status::NotImplementedError;
+      }
+      if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+        throw std::runtime_error("Geo::Polygon size(lineindex) failed: " +
+                                 ::toString(status));
+#endif
+      }
+      return length;
+    } else {
+      int64_t length = 0;
+      status = m.getSubItemLength(index_[0], index, length);
+      if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+        throw std::runtime_error("Geo::Polygon size(lineindex) failed: " +
+                                 ::toString(status));
+#endif
+      }
+      return length;
+    }
   }
 
 #ifndef __CUDACC__
@@ -1307,6 +1563,87 @@ struct Polygon {
       }
     }
     return status;
+  }
+#endif
+
+#ifdef HAVE_TOSTRING
+  std::string toString() const {
+    return ::typeName(this) + "(..., {" + std::to_string(index_[0]) + ", " +
+           std::to_string(index_[1]) + "})";
+  }
+#endif
+};
+
+struct MultiPolygon {
+  int8_t* flatbuffer_;  // FlatBuffer of GeoMultiPolygons
+  int64_t index_[1];    // multipolygon index of Column<GeoMultiPolygon>
+
+  // Return the number of polygons in the multipolgon
+  size_t size() const {
+    FlatBufferManager m{flatbuffer_};
+    FlatBufferManager::Status status;
+    size_t length;
+    // return the length of a multipolygon
+    status = m.getLength(index_[0], length);
+    if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+      throw std::runtime_error("Geo::MultiPolygon size failed: " + ::toString(status));
+#endif
+    }
+    return length;
+  }
+
+  // Return the index-th polygon
+  Geo::Polygon getItem(const int64_t index, const int32_t output_srid = 0) const {
+    Geo::Polygon polygon{flatbuffer_, {index, index_[0]}};
+    return polygon;
+  }
+
+  DEVICE inline Geo::Polygon operator[](const unsigned int index) const {
+    /* Use getItem(index, output_srid) to enable user-specified
+       transformation. */
+    return getItem(index);
+  }
+
+#ifndef __CUDACC__
+  // Construct a multipolygon from a vector of vector of coordinates vector
+  template <typename CT>
+  FlatBufferManager::Status fromCoords(
+      const std::vector<std::vector<std::vector<CT>>>& coords) {
+    FlatBufferManager m{flatbuffer_};
+    const SQLTypeInfoLite* ti =
+        reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+    if (ti == nullptr) {
+      return FlatBufferManager::UserDataError;
+    }
+    if (ti->compression == SQLTypeInfoLite::GEOINT) {
+      if constexpr (std::is_same<CT, double>::value) {
+        const auto ccoords = compress_coords(coords);
+        return m.setItem(index_[0], ccoords);
+      } else {
+        return m.setItem(index_[0], coords);
+      }
+    } else if (ti->compression == SQLTypeInfoLite::NONE) {
+      if constexpr (std::is_same<CT, double>::value) {
+        return m.setItem(index_[0], coords);
+      } else {
+        const auto dcoords = decompress_coords(coords);
+        return m.setItem(index_[0], dcoords);
+      }
+    } else {
+      UNREACHABLE();
+    }
+    return FlatBufferManager::NotImplementedError;
+  }
+
+  std::vector<std::vector<std::vector<double>>> toCoords() const {
+    std::vector<std::vector<std::vector<double>>> result;
+    auto sz = size();
+    result.reserve(sz);
+    for (size_t i = 0; i < sz; i++) {
+      result.push_back(getItem(i).toCoords());
+    }
+    return result;
   }
 #endif
 
@@ -1567,10 +1904,122 @@ struct Column<GeoPolygon> {
 #endif
   }
 
+  DEVICE inline void setItem(int64_t index, const Geo::Polygon& polygon) {
+    FlatBufferManager this_m{flatbuffer_};
+    FlatBufferManager m{polygon.flatbuffer_};
+    FlatBufferManager::Status status;
+    if (polygon.index_[1] == -1) {
+      // flatbuffer contains Column<GeoPolygon>
+      int32_t* ring_sizes;
+      int8_t* points;
+      int64_t nof_rings, size;
+      bool is_null;
+      status = m.getItemCountsAndData(
+          polygon.index_[0], ring_sizes, nof_rings, points, size, is_null);
+      if (status != FlatBufferManager::Status::Success) {
+        goto fail;
+      }
+      if (is_null) {
+        status = this_m.setNull(index);
+      } else {
+        status = this_m.setItemCountsAndData(index, ring_sizes, nof_rings, points);
+      }
+      if (status != FlatBufferManager::Status::Success) {
+        goto fail;
+      }
+    } else {
+      // flatbuffer contains Column<GeoMultiPolygon>
+      int32_t nof_points;
+      int32_t nof_rings;
+      int8_t* points;
+      int8_t* ring_sizes;
+      bool is_null;
+      status = m.getItem(polygon.index_[1],
+                         polygon.index_[0],
+                         nof_points,
+                         points,
+                         nof_rings,
+                         ring_sizes,
+                         is_null);
+      if (status != FlatBufferManager::Status::Success) {
+        goto fail;
+      }
+      if (is_null) {
+        status = this_m.setNull(index);
+      } else {
+        status = this_m.setItemCountsAndData(
+            index, reinterpret_cast<const int32_t*>(ring_sizes), nof_rings, points);
+      }
+      if (status != FlatBufferManager::Status::Success) {
+        goto fail;
+      }
+    }
+    return;
+  fail:
+#ifndef __CUDACC__
+    throw std::runtime_error("setItem failed: " + ::toString(status));
+#endif
+    ;
+  }
+
   // Return the total number of points in a Column<GeoPolygon>
   inline int64_t getNofValues() const {
     FlatBufferManager m{flatbuffer_};
     return m.get_nof_values();
+  }
+
+#ifdef HAVE_FLATBUFFER_TOSTRING
+  std::string toString() const {
+    FlatBufferManager m{flatbuffer_};
+    return ::typeName(this) + "(" + m.toString() +
+           ", num_rows=" + std::to_string(num_rows_) + ")";
+  }
+#endif
+};
+
+template <>
+struct Column<GeoMultiPolygon> {
+  int8_t* flatbuffer_;
+  int64_t num_rows_;
+
+  DEVICE Geo::MultiPolygon getItem(const int64_t index) const {
+    Geo::MultiPolygon mpolygon{flatbuffer_, {index}};
+    return mpolygon;
+  }
+
+  DEVICE inline Geo::MultiPolygon operator[](const unsigned int index) const {
+    return getItem(static_cast<int64_t>(index));
+  }
+
+  DEVICE int64_t size() const { return num_rows_; }
+
+  DEVICE inline bool isNull(int64_t index) const {
+    FlatBufferManager m{flatbuffer_};
+    bool is_null = false;
+    auto status = m.isNull(index, is_null);
+#ifndef __CUDACC__
+    if (status != FlatBufferManager::Status::Success) {
+      throw std::runtime_error("isNull failed: " + ::toString(status));
+    }
+#endif
+    return is_null;
+  }
+
+  DEVICE inline void setNull(int64_t index) {
+    FlatBufferManager m{flatbuffer_};
+    auto status = m.setNull(index);
+#ifndef __CUDACC__
+    if (status != FlatBufferManager::Status::Success) {
+      throw std::runtime_error("setNull(" + std::to_string(index) +
+                               ") failed: " + ::toString(status));
+    }
+#endif
+  }
+
+  // Return the total number of points in a Column<GeoMultiPolygon>
+  inline int64_t getNofValues() const {
+    FlatBufferManager m{flatbuffer_};
+    return m.getValuesCount();
   }
 
 #ifdef HAVE_FLATBUFFER_TOSTRING
