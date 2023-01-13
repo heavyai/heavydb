@@ -266,14 +266,20 @@ ChunkMetadataMap synthesize_metadata_table_function(const ResultSet* rows) {
       FlatBufferManager m{const_cast<int8_t*>(columnar_buffer)};
       chunk_metadata->numBytes = m.getBufferSize();
       if (is_geometry) {
-        // a geometry value is a pair of coordinates but its element
-        // type value is a int or double, hence multiplication by 2:
-        values_count = m.get_nof_values() * 2;
+        if (col_sql_type_info.get_type() == kMULTIPOLYGON) {
+          values_count = m.getValuesCount();
+          values_buffer = m.get_values_buffer();
+        } else {
+          // a geometry value is a pair of coordinates but its element
+          // type value is a int or double, hence multiplication by 2:
+          values_count = m.get_nof_values() * 2;
+          values_buffer = m.get_values();
+        }
       } else {
         CHECK(is_array);
         values_count = m.get_nof_values();
+        values_buffer = m.get_values();
       }
-      values_buffer = m.get_values();
     } else {
       chunk_metadata->numBytes = row_count * col_type_info.get_size();
       values_count = row_count;

@@ -204,9 +204,10 @@ int64_t countNumberOfValuesGeoPolygon(const ResultSet& rows,
             CHECK(ns);
             const auto s_ptr = boost::get<std::string>(ns);
             if (s_ptr) {
-              // We count the number of commas and parenthesis in WKT representation
-              // of a polygon (e.g. POLYGON ((0 0,4 0,4 4,0 4,0 0),(1 1,1 2,2 2,2 1,1 1)))
-              // to get the number of points it contains:
+              // We count the number of commas in WKT representation
+              // of a polygon (e.g. POLYGON ((0 0,4 0,4 4,0 4,0 0),(1
+              // 1,1 2,2 2,2 1,1 1))) to get the number of points it
+              // contains:
               running_count += std::count(s_ptr->begin(), s_ptr->end(), ',') + 1;
             }
           } else if (const auto tv =
@@ -220,10 +221,60 @@ int64_t countNumberOfValuesGeoPolygon(const ResultSet& rows,
                                                                        : sizeof(double)) /
                              2;
           } else if (const auto tv = boost::get<GeoTargetValue>(&crt_row[column_idx])) {
-            const auto s = boost::get<GeoPolyTargetValue>(tv->get());
-            std::vector<double>* d = s.coords.get();
-            CHECK(d);
-            running_count += d->size();
+            if (tv->get_ptr() != nullptr) {
+              const auto s = boost::get<GeoPolyTargetValue>(tv->get());
+              std::vector<double>* d = s.coords.get();
+              CHECK(d);
+              running_count += d->size();
+            }  // else s is NULL
+          } else {
+            UNREACHABLE();
+          }
+        }
+        return running_count;
+      },
+      std::plus<int64_t>());
+}
+
+int64_t countNumberOfValuesGeoMultiPolygon(const ResultSet& rows,
+                                           const SQLTypeInfo& ti,
+                                           const size_t column_idx) {
+  return tbb::parallel_reduce(
+      tbb::blocked_range<int64_t>(0, rows.rowCount()),
+      static_cast<int64_t>(0),
+      [&](tbb::blocked_range<int64_t> r, int64_t running_count) {
+        for (int i = r.begin(); i < r.end(); ++i) {
+          const auto crt_row = rows.getRowAtNoTranslations(i);
+          if (const auto tv = boost::get<ScalarTargetValue>(&crt_row[column_idx])) {
+            const auto ns = boost::get<NullableString>(tv);
+            CHECK(ns);
+            const auto s_ptr = boost::get<std::string>(ns);
+            if (s_ptr && *s_ptr != "NULL") {
+              // We count the number of commas in WKT representation
+              // of a multi-polygon (e.g. MULTIPOLYGON (((0 0,4 0,4
+              // 4,0 4,0 0),(1 1,1 2,2 2,2 1,1 1)), (...)))  to get
+              // the number of points it contains:
+              running_count += std::count(s_ptr->begin(), s_ptr->end(), ',') + 1;
+            }
+          } else if (const auto tv =
+                         boost::get<GeoTargetValuePtr>(&crt_row[column_idx])) {
+            const auto s = boost::get<GeoMultiPolyTargetValuePtr>(tv);
+            CHECK(s);
+            if (s->coords_data != nullptr && s->coords_data->pointer != nullptr) {
+              VarlenDatum* d = s->coords_data.get();
+              if (ti.get_compression() == kENCODING_GEOINT) {
+                running_count += d->length / (2 * sizeof(int32_t));
+              } else {
+                running_count += d->length / (2 * sizeof(double));
+              }
+            }  // else s is NULL
+          } else if (const auto tv = boost::get<GeoTargetValue>(&crt_row[column_idx])) {
+            if (tv->get_ptr() != nullptr) {
+              const auto s = boost::get<GeoMultiPolyTargetValue>(tv->get());
+              std::vector<double>* d = s.coords.get();
+              CHECK(d);
+              running_count += d->size() / 2;
+            }  // else s is NULL
           } else {
             UNREACHABLE();
           }
@@ -283,10 +334,14 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
           case kPOLYGON:
             values_count = countNumberOfValuesGeoPolygon(rows, ti, i);
             break;
+          case kMULTIPOLYGON:
+            values_count = countNumberOfValuesGeoMultiPolygon(rows, ti, i);
+            break;
           default:
             UNREACHABLE() << "count number of values not implemented for "
                           << ti.toString();
         }
+        // TODO: include sizes count to optimize flatbuffer size
         const int64_t flatbuffer_size = getFlatBufferSize(num_rows_, values_count, ti);
         column_buffers_[i] = row_set_mem_owner->allocate(flatbuffer_size, thread_idx_);
         FlatBufferManager m{column_buffers_[i]};
@@ -670,7 +725,7 @@ inline void ColumnarResults::writeBackCell(const TargetValue& col_val,
           const auto ns = boost::get<NullableString>(tv);
           CHECK(ns);
           const auto s_ptr = boost::get<std::string>(ns);
-          if (s_ptr == nullptr) {
+          if (s_ptr == nullptr || *s_ptr == "NULL") {
             auto lock_scope =
                 (write_mutex == nullptr ? std::unique_lock<std::mutex>()
                                         : std::unique_lock<std::mutex>(*write_mutex));
@@ -725,26 +780,134 @@ inline void ColumnarResults::writeBackCell(const TargetValue& col_val,
           }
           CHECK_EQ(status, FlatBufferManager::Status::Success);
         } else if (const auto tv = boost::get<GeoTargetValue>(&col_val)) {
-          /*
-            Warning: the following code fails for NULL row values
-            because of the failure to detect the nullness correctly.
-          */
-          const auto s = boost::get<GeoPolyTargetValue>(tv->get());
-          const std::vector<double>* d = s.coords.get();
-          const std::vector<int32_t>* r = s.ring_sizes.get();
-          CHECK(d);
-          CHECK(r);
-          std::vector<uint8_t> compressed_coords =
-              Geospatial::compress_coords(*d, type_info);
-          {
+          if (tv->get_ptr() == nullptr) {
             auto lock_scope =
                 (write_mutex == nullptr ? std::unique_lock<std::mutex>()
                                         : std::unique_lock<std::mutex>(*write_mutex));
-            status = m.setItemCountsAndData(
-                row_idx,
-                r->data(),
-                r->size(),
-                reinterpret_cast<const int8_t*>(compressed_coords.data()));
+            status = m.setNull(row_idx);
+          } else {
+            const auto s = boost::get<GeoPolyTargetValue>(tv->get());
+            const std::vector<double>* d = s.coords.get();
+            const std::vector<int32_t>* r = s.ring_sizes.get();
+            CHECK(d);
+            CHECK(r);
+            if (d->size() == 0) {
+              CHECK_EQ(r->size(), 0);
+              auto lock_scope =
+                  (write_mutex == nullptr ? std::unique_lock<std::mutex>()
+                                          : std::unique_lock<std::mutex>(*write_mutex));
+              status = m.setNull(row_idx);
+            } else {
+              std::vector<uint8_t> compressed_coords =
+                  Geospatial::compress_coords(*d, type_info);
+              {
+                auto lock_scope =
+                    (write_mutex == nullptr ? std::unique_lock<std::mutex>()
+                                            : std::unique_lock<std::mutex>(*write_mutex));
+                status = m.setItemCountsAndData(
+                    row_idx,
+                    r->data(),
+                    r->size(),
+                    reinterpret_cast<const int8_t*>(compressed_coords.data()));
+              }
+            }
+          }
+          CHECK_EQ(status, FlatBufferManager::Status::Success);
+        } else {
+          UNREACHABLE();
+        }
+        break;
+      }
+      case kMULTIPOLYGON: {
+        CHECK(FlatBufferManager::isFlatBuffer(column_buffers_[column_idx]));
+        FlatBufferManager m{column_buffers_[column_idx]};
+        const SQLTypeInfoLite* ti_lite =
+            reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+        if (ti_lite->compression == SQLTypeInfoLite::GEOINT) {
+          CHECK_EQ(type_info.get_compression(), kENCODING_GEOINT);
+        } else {
+          CHECK_EQ(type_info.get_compression(), kENCODING_NONE);
+        }
+        FlatBufferManager::Status status{};
+        if (const auto tv = boost::get<ScalarTargetValue>(&col_val)) {
+          const auto ns = boost::get<NullableString>(tv);
+          CHECK(ns);
+          const auto s_ptr = boost::get<std::string>(ns);
+          if (s_ptr == nullptr || *s_ptr == "NULL") {
+            auto lock_scope =
+                (write_mutex == nullptr ? std::unique_lock<std::mutex>()
+                                        : std::unique_lock<std::mutex>(*write_mutex));
+            status = m.setNull(row_idx);
+          } else {
+            std::vector<double> coords;
+            std::vector<int32_t> ring_sizes;
+            std::vector<int32_t> polygon_sizes;
+            std::vector<double> bounds;
+            int64_t approx_nof_coords = 2 * std::count(s_ptr->begin(), s_ptr->end(), ',');
+            int64_t approx_nof_rings = std::count(s_ptr->begin(), s_ptr->end(), '(') - 1;
+            int64_t approx_nof_polygons = approx_nof_rings;  // upper bound
+            coords.reserve(approx_nof_coords);
+            ring_sizes.reserve(approx_nof_rings);
+            polygon_sizes.reserve(approx_nof_polygons);
+            bounds.reserve(4);
+            const auto gdal_wkt_ls = Geospatial::GeoMultiPolygon(*s_ptr);
+            gdal_wkt_ls.getColumns(coords, ring_sizes, polygon_sizes, bounds);
+            const std::vector<uint8_t> compressed_coords =
+                Geospatial::compress_coords(coords, type_info);
+            {
+              auto lock_scope =
+                  (write_mutex == nullptr ? std::unique_lock<std::mutex>()
+                                          : std::unique_lock<std::mutex>(*write_mutex));
+              status = m.setItem(row_idx, compressed_coords, ring_sizes, polygon_sizes);
+            }
+          }
+          CHECK_EQ(status, FlatBufferManager::Status::Success);
+        } else if (const auto tv = boost::get<GeoTargetValuePtr>(&col_val)) {
+          const auto s = boost::get<GeoMultiPolyTargetValuePtr>(tv);
+          CHECK(s);
+          if (s->coords_data == nullptr || s->coords_data->pointer == nullptr) {
+            status = m.setNull(row_idx);
+          } else {
+            const VarlenDatum* d = s->coords_data.get();
+            const VarlenDatum* r = s->ring_sizes_data.get();
+            const VarlenDatum* p = s->poly_rings_data.get();
+            CHECK(d);
+            CHECK(d->pointer);
+            {
+              auto lock_scope =
+                  (write_mutex == nullptr ? std::unique_lock<std::mutex>()
+                                          : std::unique_lock<std::mutex>(*write_mutex));
+              status = m.setItem(row_idx,
+                                 d->pointer,
+                                 d->length,
+                                 reinterpret_cast<const int32_t*>(r->pointer),
+                                 r->length / sizeof(int32_t),
+                                 reinterpret_cast<const int32_t*>(p->pointer),
+                                 p->length / sizeof(int32_t));
+            }
+          }
+          CHECK_EQ(status, FlatBufferManager::Status::Success);
+        } else if (const auto tv = boost::get<GeoTargetValue>(&col_val)) {
+          if (tv->get_ptr() == nullptr) {
+            auto lock_scope =
+                (write_mutex == nullptr ? std::unique_lock<std::mutex>()
+                                        : std::unique_lock<std::mutex>(*write_mutex));
+            status = m.setNull(row_idx);
+          } else {
+            const auto s = boost::get<GeoMultiPolyTargetValue>(tv->get());
+            const std::vector<double>* d = s.coords.get();
+            const std::vector<int32_t>* r = s.ring_sizes.get();
+            const std::vector<int32_t>* p = s.poly_rings.get();
+            CHECK(d);
+            CHECK_NE(d->size(), 0);
+            std::vector<uint8_t> compressed_coords =
+                Geospatial::compress_coords(*d, type_info);
+            {
+              auto lock_scope =
+                  (write_mutex == nullptr ? std::unique_lock<std::mutex>()
+                                          : std::unique_lock<std::mutex>(*write_mutex));
+              status = m.setItem(row_idx, compressed_coords, *r, *p);
+            }
           }
           CHECK_EQ(status, FlatBufferManager::Status::Success);
         } else {

@@ -134,7 +134,8 @@ void TargetExprCodegen::codegen(
   const bool varlen_projection = is_varlen_projection(target_expr, target_info.sql_type);
   /* TODO: find a better way to determine if target uses FlatBuffer storage or not.
    */
-  const bool uses_flatbuffer = target_info.sql_type.get_type() == kPOLYGON;
+  const bool uses_flatbuffer = (target_info.sql_type.get_type() == kPOLYGON ||
+                                target_info.sql_type.get_type() == kMULTIPOLYGON);
   const auto agg_fn_names = agg_fn_base_names(target_info, varlen_projection);
   const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
   WindowProjectNodeContext::resetWindowFunctionContext(executor);
