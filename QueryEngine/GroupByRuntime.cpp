@@ -272,7 +272,7 @@ bucketized_hash_join_idx(int64_t hash_buff,
                          int64_t const max_key,
                          const int64_t translated_null_val,
                          int64_t bucket_normalization) {
-  if (key >= min_key && key <= max_key) {
+  if (hash_buff && key >= min_key && key <= max_key) {
     return *SUFFIX(get_bucketized_hash_slot)(reinterpret_cast<int32_t*>(hash_buff),
                                              key,
                                              min_key / bucket_normalization,
@@ -354,7 +354,7 @@ hash_join_idx_sharded(int64_t hash_buff,
                       const uint32_t entry_count_per_shard,
                       const uint32_t num_shards,
                       const uint32_t device_count) {
-  if (key >= min_key && key <= max_key) {
+  if (hash_buff && key >= min_key && key <= max_key) {
     return *SUFFIX(get_hash_slot_sharded)(reinterpret_cast<int32_t*>(hash_buff),
                                           key,
                                           min_key,
