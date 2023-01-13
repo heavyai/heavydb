@@ -29,6 +29,7 @@
 #include "../Logger/Logger.h"
 #include "Datum.h"
 #include "funcannotations.h"
+#include "sqltypes_lite.h"
 
 #include <cassert>
 #include <ctime>
@@ -1015,10 +1016,117 @@ class SQLTypeInfo {
       case kPOINT:
       case kLINESTRING:
       case kPOLYGON:
+      case kMULTIPOLYGON:
         return true;
       default:;
     }
     return false;
+  }
+
+  SQLTypeInfoLite toLite() const {
+    SQLTypeInfoLite ti_lite;
+    switch (type) {
+      case kPOINT:
+        ti_lite.type = SQLTypeInfoLite::POINT;
+        ti_lite.subtype = SQLTypeInfoLite::UNSPECIFIED;
+        break;
+      case kLINESTRING:
+        ti_lite.type = SQLTypeInfoLite::LINESTRING;
+        ti_lite.subtype = SQLTypeInfoLite::UNSPECIFIED;
+        break;
+      case kPOLYGON:
+        ti_lite.type = SQLTypeInfoLite::POLYGON;
+        ti_lite.subtype = SQLTypeInfoLite::UNSPECIFIED;
+        break;
+      case kMULTIPOINT:
+        ti_lite.type = SQLTypeInfoLite::MULTIPOINT;
+        ti_lite.subtype = SQLTypeInfoLite::UNSPECIFIED;
+        break;
+      case kMULTILINESTRING:
+        ti_lite.type = SQLTypeInfoLite::MULTILINESTRING;
+        ti_lite.subtype = SQLTypeInfoLite::UNSPECIFIED;
+        break;
+      case kMULTIPOLYGON:
+        ti_lite.type = SQLTypeInfoLite::MULTIPOLYGON;
+        ti_lite.subtype = SQLTypeInfoLite::UNSPECIFIED;
+        break;
+      case kTEXT:
+        ti_lite.type = SQLTypeInfoLite::TEXT;
+        ti_lite.subtype = SQLTypeInfoLite::UNSPECIFIED;
+        break;
+      case kARRAY:
+        ti_lite.type = SQLTypeInfoLite::ARRAY;
+        switch (subtype) {
+          case kBOOLEAN:
+            ti_lite.subtype = SQLTypeInfoLite::BOOLEAN;
+            break;
+          case kTINYINT:
+            ti_lite.subtype = SQLTypeInfoLite::TINYINT;
+            break;
+          case kSMALLINT:
+            ti_lite.subtype = SQLTypeInfoLite::SMALLINT;
+            break;
+          case kINT:
+            ti_lite.subtype = SQLTypeInfoLite::INT;
+            break;
+          case kBIGINT:
+            ti_lite.subtype = SQLTypeInfoLite::BIGINT;
+            break;
+          case kFLOAT:
+            ti_lite.subtype = SQLTypeInfoLite::FLOAT;
+            break;
+          case kDOUBLE:
+            ti_lite.subtype = SQLTypeInfoLite::DOUBLE;
+            break;
+          case kTEXT:
+            ti_lite.subtype = SQLTypeInfoLite::TEXT;
+            break;
+          default:
+            UNREACHABLE();
+        }
+        break;
+      default:
+        UNREACHABLE();
+    }
+    if (is_geometry()) {
+      switch (get_compression()) {
+        case kENCODING_NONE:
+          ti_lite.compression = SQLTypeInfoLite::NONE;
+          break;
+        case kENCODING_GEOINT:
+          ti_lite.compression = SQLTypeInfoLite::GEOINT;
+          break;
+        default:
+          UNREACHABLE();
+      }
+      ti_lite.dimension = get_input_srid();
+      ti_lite.scale = get_output_srid();
+      ti_lite.db_id = 0;    // unused
+      ti_lite.dict_id = 0;  // unused
+    } else if (type == kTEXT) {
+      switch (get_compression()) {
+        case kENCODING_NONE:
+          ti_lite.compression = SQLTypeInfoLite::NONE;
+          break;
+        case kENCODING_DICT:
+          ti_lite.compression = SQLTypeInfoLite::DICT;
+          break;
+        default:
+          UNREACHABLE();
+      }
+      ti_lite.dimension = 0;  // unused
+      ti_lite.scale = 0;      // unused
+      ti_lite.db_id = dict_key_.db_id;
+      ti_lite.dict_id = dict_key_.dict_id;
+    } else if (type == kARRAY) {
+      ti_lite.dimension = 0;  // unused
+      ti_lite.scale = 0;      // unused
+      ti_lite.db_id = dict_key_.db_id;
+      ti_lite.dict_id = dict_key_.dict_id;
+    } else {
+      UNREACHABLE();
+    }
+    return ti_lite;
   }
 
  private:
@@ -1491,6 +1599,73 @@ DEVICE inline void VarlenArray_get_nth(int8_t* buf,
 inline int64_t getFlatBufferSize(int64_t items_count,
                                  int64_t max_nof_values,
                                  const SQLTypeInfo& ti) {
+  size_t dimensions = 0;
+  FlatBufferManager::ValueType value_type;
+  int64_t max_nof_sizes = 0;
+  switch (ti.get_type()) {
+    case kPOINT:
+      dimensions = 0;
+      break;
+    case kLINESTRING:
+    case kMULTIPOINT:
+    case kARRAY:
+      dimensions = 1;
+      max_nof_sizes = items_count;
+      break;
+    case kPOLYGON:
+    case kMULTILINESTRING:
+      dimensions = 2;
+      max_nof_sizes = items_count + max_nof_values / 3;
+      break;
+    case kMULTIPOLYGON:
+      dimensions = 3;
+      max_nof_sizes = items_count + 2 * (max_nof_values / 3 + 1);
+      break;
+    default:
+      UNREACHABLE();
+  }
+
+  if (ti.is_geometry()) {
+    if (ti.get_compression() == kENCODING_GEOINT) {
+      value_type = FlatBufferManager::PointInt32;
+    } else {
+      value_type = FlatBufferManager::PointFloat64;
+    }
+  } else if (ti.is_array()) {
+    switch (ti.get_subtype()) {
+      case kBOOLEAN:
+        value_type = FlatBufferManager::Bool8;
+        break;
+      case kTINYINT:
+        value_type = FlatBufferManager::Int8;
+        break;
+      case kSMALLINT:
+        value_type = FlatBufferManager::Int16;
+        break;
+      case kINT:
+        value_type = FlatBufferManager::Int32;
+        break;
+      case kTEXT:
+        CHECK_EQ(ti.get_compression(), kENCODING_DICT);
+        value_type = FlatBufferManager::Int32;
+        break;
+      case kBIGINT:
+        value_type = FlatBufferManager::Int64;
+        break;
+      case kFLOAT:
+        value_type = FlatBufferManager::Float32;
+        break;
+      case kDOUBLE:
+        value_type = FlatBufferManager::Float64;
+        break;
+      default:
+        UNREACHABLE();
+        break;
+    }
+  } else {
+    UNREACHABLE();
+  }
+
   switch (ti.get_type()) {
     case kPOINT: {
       FlatBufferManager::GeoPoint metadata{items_count,
@@ -1519,6 +1694,17 @@ inline int64_t getFlatBufferSize(int64_t items_count,
       return FlatBufferManager::compute_flatbuffer_size(
           GeoPolygonFormatId, reinterpret_cast<const int8_t*>(&metadata));
     }
+    case kMULTIPOINT:
+    case kMULTILINESTRING:
+    case kMULTIPOLYGON: {
+      return FlatBufferManager::compute_flatbuffer_size(
+          /* dimensions= */ dimensions,
+          /* total_items_count= */ items_count,
+          /* total sizes count= */ max_nof_sizes,
+          /* total values count= */ max_nof_values,
+          value_type,
+          /* user data size= */ sizeof(SQLTypeInfoLite));
+    }
     case kARRAY: {
       const size_t array_item_size = ti.get_elem_type().get_size();
       const auto dict_key = ti.getStringDictKey();
@@ -1539,6 +1725,75 @@ inline void initializeFlatBuffer(FlatBufferManager& m,
                                  int64_t items_count,
                                  int64_t max_nof_values,
                                  const SQLTypeInfo& ti) {
+  size_t dimensions = 0;
+  FlatBufferManager::ValueType value_type;
+  int64_t max_nof_sizes = 0;
+  switch (ti.get_type()) {
+    case kPOINT:
+      dimensions = 0;
+      break;
+    case kLINESTRING:
+    case kMULTIPOINT:
+    case kARRAY:
+      dimensions = 1;
+      max_nof_sizes = items_count;
+      break;
+    case kPOLYGON:
+    case kMULTILINESTRING:
+      dimensions = 2;
+      max_nof_sizes = items_count + max_nof_values / 3;
+      break;
+    case kMULTIPOLYGON:
+      dimensions = 3;
+      max_nof_sizes = items_count + 2 * (max_nof_values / 3 + 1);
+      break;
+    default:
+      UNREACHABLE();
+  }
+
+  if (ti.is_geometry()) {
+    if (ti.get_compression() == kENCODING_GEOINT) {
+      value_type = FlatBufferManager::PointInt32;
+    } else {
+      value_type = FlatBufferManager::PointFloat64;
+    }
+  } else if (ti.is_array()) {
+    switch (ti.get_subtype()) {
+      case kBOOLEAN:
+        value_type = FlatBufferManager::Bool8;
+        break;
+      case kTINYINT:
+        value_type = FlatBufferManager::Int8;
+        break;
+      case kSMALLINT:
+        value_type = FlatBufferManager::Int16;
+        break;
+      case kINT:
+        value_type = FlatBufferManager::Int32;
+        break;
+      case kTEXT:
+        CHECK_EQ(ti.get_compression(), kENCODING_DICT);
+        value_type = FlatBufferManager::Int32;
+        break;
+      case kBIGINT:
+        value_type = FlatBufferManager::Int64;
+        break;
+      case kFLOAT:
+        value_type = FlatBufferManager::Float32;
+        break;
+      case kDOUBLE:
+        value_type = FlatBufferManager::Float64;
+        break;
+      default:
+        UNREACHABLE();
+        break;
+    }
+  } else {
+    UNREACHABLE();
+  }
+
+  SQLTypeInfoLite ti_lite = ti.toLite();
+
   switch (ti.get_type()) {
     case kPOINT: {
       FlatBufferManager::GeoPoint metadata{items_count,
@@ -1565,6 +1820,31 @@ inline void initializeFlatBuffer(FlatBufferManager& m,
                                              ti.get_output_srid(),
                                              ti.get_compression() == kENCODING_GEOINT};
       m.initialize(GeoPolygonFormatId, reinterpret_cast<const int8_t*>(&metadata));
+      break;
+    }
+    case kMULTIPOINT:
+    case kMULTILINESTRING:
+    case kMULTIPOLYGON: {
+      int8_t* null_value_ptr = nullptr;
+      uint32_t geoint_null_value[2] = {0x80000000U, 0x80000000U};
+      double null_point[2] = {2 * DBL_MIN, 2 * DBL_MIN};
+      if (ti.get_compression() == kENCODING_GEOINT) {
+        null_value_ptr = reinterpret_cast<int8_t*>(geoint_null_value);
+      } else {
+        null_value_ptr = reinterpret_cast<int8_t*>(null_point);
+      }
+      auto status =
+          m.initialize(NestedArrayFormatId,
+                       /* dimensions= */ dimensions,
+                       /* total_items_count= */ items_count,
+                       /* total_sizes_count= */ max_nof_sizes,
+                       /* total_values_count= */ max_nof_values,
+                       value_type,
+                       /* null value buffer=*/null_value_ptr,  // null value buffer size
+                                                               // is defined by value type
+                       /* user data buffer=*/reinterpret_cast<const int8_t*>(&ti_lite),
+                       /* user data buffer size=*/sizeof(SQLTypeInfoLite));
+      CHECK_EQ(status, FlatBufferManager::Success);
       break;
     }
     case kARRAY: {
