@@ -1317,6 +1317,8 @@ EXTENSION_NOINLINE int32_t ct_require_range__cpu_(const Column<int32_t>& input1,
   UDTF: ct_linestringn__cpu_(TableFunctionManager, Column<GeoPolygon> polygons, int64_t n) -> Column<GeoLineString> linestrings
   UDTF: ct_make_polygon3__cpu_(TableFunctionManager, Cursor<Column<GeoLineString> rings, Column<GeoLineString> holes1, Column<GeoLineString> holes2>) -> Column<GeoPolygon> polygons, Column<int> sizes
   UDTF: ct_make_linestring2__cpu_(TableFunctionManager, Cursor<Column<double> x, Column<double> y>, double dx, double dy) -> Column<GeoLineString> linestrings
+  UDTF: ct_make_multipolygon__cpu_(TableFunctionManager, Column<GeoPolygon> polygons) -> Column<GeoMultiPolygon> mpolygons
+  UDTF: ct_polygonn__cpu_(TableFunctionManager, Column<GeoMultiPolygon> mpolygons, int64_t n) -> Column<GeoPolygon> polygons
 */
 // clang-format on
 
@@ -1359,6 +1361,15 @@ EXTENSION_NOINLINE int32_t ct_make_linestring2__cpu_(TableFunctionManager& mgr,
                                                      double dx,
                                                      double dy,
                                                      Column<GeoLineString>& linestrings);
+
+EXTENSION_NOINLINE int32_t ct_make_multipolygon__cpu_(TableFunctionManager& mgr,
+                                                      const Column<GeoPolygon>& polygons,
+                                                      Column<GeoMultiPolygon>& mpolygons);
+
+EXTENSION_NOINLINE int32_t ct_polygonn__cpu_(TableFunctionManager& mgr,
+                                             const Column<GeoMultiPolygon>& mpolygons,
+                                             int64_t n,
+                                             Column<GeoPolygon>& polygons);
 
 #endif  // ifndef __CUDACC__
 
