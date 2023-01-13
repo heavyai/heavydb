@@ -12820,6 +12820,45 @@ TEST_F(Select, Joins_Negative_ShardKey) {
   }
 }
 
+TEST_F(Select, Joins_One_Shard_Is_Empty) {
+  SKIP_ALL_ON_AGGREGATOR();
+  if (skip_tests(ExecutorDeviceType::GPU)) {
+    return;
+  }
+  size_t num_shards = choose_shard_count();
+  if (num_shards == 1) {
+    return;
+  }
+  auto drop_tbls = [] {
+    run_ddl_statement("DROP TABLE IF EXISTS SJ1;");
+    run_ddl_statement("DROP TABLE IF EXISTS SJ2;");
+  };
+  drop_tbls();
+  for (auto tbl_name : {"SJ1", "SJ2"}) {
+    std::ostringstream oss;
+    oss << "CREATE TABLE " << tbl_name
+        << " (v INT, SHARD KEY(v)) WITH (SHARD_COUNT=" << num_shards << ");";
+    run_ddl_statement(oss.str());
+  }
+  for (auto v : {2, 10}) {
+    std::ostringstream oss;
+    oss << "INSERT INTO SJ1 VALUES(" << v << ");";
+    run_multiple_agg(oss.str(), ExecutorDeviceType::CPU);
+  }
+  for (auto v : {30, 2, 2, 4, 1, 3}) {
+    std::ostringstream oss;
+    oss << "INSERT INTO SJ2 VALUES(" << v << ");";
+    run_multiple_agg(oss.str(), ExecutorDeviceType::CPU);
+  }
+  ScopeGuard reset = [drop_tbls] { drop_tbls(); };
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_EQ(v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(1) FROM SJ1 R, SJ2 S WHERE R.v = S.v;", dt)),
+              int64_t(2));
+  }
+}
+
 TEST_F(Select, Joins_InnerJoin_AtLeastThreeTables) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
