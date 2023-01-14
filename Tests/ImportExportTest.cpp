@@ -2173,6 +2173,15 @@ const char* create_table_with_side_spaces = R"(
     ) WITH (FRAGMENT_SIZE=75000000);
   )";
 
+const char* create_table_with_quoted_fields_and_side_spaces = R"(
+    CREATE TABLE with_quoted_fields_and_side_spaces (
+      id        INTEGER,
+      str1      TEXT,
+      bool1     BOOLEAN,
+      smallint1 SMALLINT
+    ) WITH (FRAGMENT_SIZE=75000000);
+  )";
+
 const char* create_table_with_side_spaced_array = R"(
     CREATE TABLE array_with_side_spaces (
       id        INTEGER,
@@ -2223,6 +2232,8 @@ class ImportTest : public ImportExportTestBase {
     sql(create_table_with_null_text_arrays);
     sql("drop table if exists with_side_spaces;");
     sql(create_table_with_side_spaces);
+    sql("drop table if exists with_quoted_fields_and_side_spaces;");
+    sql(create_table_with_quoted_fields_and_side_spaces);
     sql("drop table if exists array_with_side_spaces;");
     sql(create_table_with_side_spaced_array);
     sql("drop table if exists null_table;");
@@ -2329,6 +2340,25 @@ class ImportTest : public ImportExportTestBase {
     sqlAndCompareResult(select_query_str,
                         {{i(1), result, True, i(1)}, {i(2), "test2", False, i(2)}});
     return true;
+  }
+
+  void importTestWithQuotedFieldsAndSideSpaces(const std::string& filename,
+                                               const std::string& quoted,
+                                               const std::string& trim) {
+    sql("TRUNCATE TABLE with_quoted_fields_and_side_spaces;");
+    string query_str =
+        "COPY with_quoted_fields_and_side_spaces FROM '../../Tests/Import/datafiles/" +
+        filename + "' WITH (quoted='" + quoted + "',trim_spaces='" + trim + "');";
+    sql(query_str);
+    string select_query_str =
+        "SELECT * FROM with_quoted_fields_and_side_spaces ORDER BY id;";
+    string test1 = (trim == "true" ? "test1" : "  test1   ");
+    string test4 = (trim == "true" ? "test4" : " test4  ");
+    sqlAndCompareResult(select_query_str,
+                        {{i(1), test1, True, i(1)},
+                         {i(2), "test2", False, i(2)},
+                         {i(3), NULL, True, i(3)},
+                         {i(4), test4, False, i(4)}});
   }
 
   bool importTestArrayWithSideSpaces(const string& filename, const string& trim) {
@@ -2698,9 +2728,34 @@ TEST_F(ImportTest, with_quoted_fields) {
   }
 }
 
+TEST_F(ImportTest, with_quoted_fields_unmatched_quote) {
+  std::string error_msg{
+      "Unable to find a matching end quote for the quote character '\"' after reading 60 "
+      "characters. Please ensure that all data fields are correctly formatted or update "
+      "the \"buffer_size\" option appropriately. Row number: 2. First few characters in "
+      "row:              "};
+  queryAndAssertException(
+      "COPY with_quoted_fields FROM "
+      "'../../Tests/Import/datafiles/with_quoted_fields_unmatched_left_quote.csv' WITH "
+      "(header='true', quoted='true');",
+      error_msg + "\"2\",\"test2,\"false\",\"2\"   \n\"3\", \"\", \"t");
+  queryAndAssertException(
+      "COPY with_quoted_fields FROM "
+      "'../../Tests/Import/datafiles/with_quoted_fields_unmatched_right_quote.csv' WITH "
+      "(header='true', quoted='true');",
+      error_msg + "\"2\",test2\",\"false\",\"2\"   \n\"3\", \"\", \"t");
+}
+
 TEST_F(ImportTest, with_side_spaces) {
   for (auto trim : {"false", "true"}) {
     EXPECT_NO_THROW(importTestWithSideSpaces("with_side_spaces.csv", trim));
+  }
+}
+
+TEST_F(ImportTest, with_quoted_fields_and_side_spaces) {
+  for (auto trim : {"false", "true"}) {
+    EXPECT_NO_THROW(importTestWithQuotedFieldsAndSideSpaces(
+        "with_quoted_fields_and_side_spaces.csv", "true", trim));
   }
 }
 
@@ -3027,7 +3082,7 @@ TEST_F(ImportTestGeo, CSV_Import_Buffer_Size_Less_Than_Row_Size) {
 }
 
 TEST_F(ImportTestGeo, CSV_Import_Max_Buffer_Resize_Less_Than_Row_Size) {
-  import_export::delimited_parser::set_max_buffer_resize(170);
+  import_export::delimited_parser::set_max_buffer_resize(168);
   const auto file_path =
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
 
@@ -3036,9 +3091,9 @@ TEST_F(ImportTestGeo, CSV_Import_Max_Buffer_Resize_Less_Than_Row_Size) {
   // adapt value based on which importer we're testing as they have different buffer size
   // management heuristics
   if (g_enable_legacy_delimited_import) {
-    expected_error_message += "170";
+    expected_error_message += "168";
   } else {
-    expected_error_message += "169";
+    expected_error_message += "167";
   }
   expected_error_message +=
       " characters. "
