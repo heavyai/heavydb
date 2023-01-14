@@ -168,6 +168,8 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
     std::vector<std::unique_ptr<char[]>>
         tmp_buffers;  // holds string w/ removed escape chars, etc
     const char* line_start = p;
+    row_index_plus_one++;
+    bool incorrect_column_count = false;
     p = import_export::delimited_parser::get_row(p,
                                                  thread_buf_end,
                                                  buf_end,
@@ -177,10 +179,6 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
                                                  tmp_buffers,
                                                  try_single_thread,
                                                  !columns_are_pre_filtered);
-
-    row_index_plus_one++;
-
-    bool incorrect_column_count = false;
     try {
       validate_expected_column_count(row, num_cols, point_cols, file_path);
     } catch (const ForeignStorageException& e) {
