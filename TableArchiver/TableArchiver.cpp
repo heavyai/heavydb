@@ -54,9 +54,13 @@ extern bool g_cluster;
 extern std::string g_base_path;
 bool g_test_rollback_dump_restore{false};
 
+constexpr static int kDumpVersion = 1;
+constexpr static int kDumpVersion_remove_render_group_columns = 1;
+
 constexpr static char const* table_schema_filename = "_table.sql";
 constexpr static char const* table_oldinfo_filename = "_table.oldinfo";
 constexpr static char const* table_epoch_filename = "_table.epoch";
+constexpr static char const* table_dumpversion_filename = "_table.dumpversion";
 
 #if BOOST_VERSION < 107300
 namespace std {
@@ -79,7 +83,9 @@ inline std::string abs_path(const File_Namespace::GlobalFileMgr* global_file_mgr
   return boost::filesystem::canonical(global_file_mgr->getBasePath()).string();
 }
 
-inline std::string run(const std::string& cmd, const std::string& chdir = "") {
+inline std::string run(const std::string& cmd,
+                       const std::string& chdir = "",
+                       const bool log_failure = true) {
   VLOG(3) << "running cmd: " << cmd;
   int rcode;
   std::error_code ec;
@@ -99,11 +105,13 @@ inline std::string run(const std::string& cmd, const std::string& chdir = "") {
     errors = ss_errors.str();
   });
   if (rcode || ec) {
-    LOG(ERROR) << "failed cmd: " << cmd;
-    LOG(ERROR) << "exit code: " << rcode;
-    LOG(ERROR) << "error code: " << ec.value() << " - " << ec.message();
-    LOG(ERROR) << "stdout: " << output;
-    LOG(ERROR) << "stderr: " << errors;
+    if (log_failure) {
+      LOG(ERROR) << "failed cmd: " << cmd;
+      LOG(ERROR) << "exit code: " << rcode;
+      LOG(ERROR) << "error code: " << ec.value() << " - " << ec.message();
+      LOG(ERROR) << "stdout: " << output;
+      LOG(ERROR) << "stderr: " << errors;
+    }
 #if defined(__APPLE__)
     // osx bsdtar options "--use-compress-program" and "--fast-read" together
     // run into pipe write error after tar extracts the first occurrence of a
@@ -150,7 +158,8 @@ inline std::string run(const std::string& cmd, const std::string& chdir = "") {
 
 inline std::string simple_file_cat(const std::string& archive_path,
                                    const std::string& file_name,
-                                   const std::string& compression) {
+                                   const std::string& compression,
+                                   const bool log_failure = true) {
   ddl_utils::validate_allowed_file_path(archive_path,
                                         ddl_utils::DataTransferType::IMPORT);
 #if defined(__APPLE__)
@@ -163,7 +172,8 @@ inline std::string simple_file_cat(const std::string& archive_path,
   boost::filesystem::create_directories(temp_dir);
   run("tar " + compression + " -xvf " + get_quoted_string(archive_path) + " " +
           opt_occurrence + " " + file_name,
-      temp_dir.string());
+      temp_dir.string(),
+      log_failure);
   const auto output = run("cat " + (temp_dir / file_name).string());
   boost::filesystem::remove_all(temp_dir);
   return output;
@@ -180,10 +190,11 @@ inline std::string get_table_schema(const std::string& archive_path,
 
 // If a table was altered there may be a mapping from old column ids to new ones these
 // values need to be replaced in the page headers.
-void rewrite_column_ids_in_page_headers(
+void update_or_drop_column_ids_in_page_headers(
     const boost::filesystem::path& path,
     const std::unordered_map<int, int>& column_ids_map,
-    const int32_t table_epoch) {
+    const int32_t table_epoch,
+    const bool drop_not_update) {
   const std::string file_path = path.string();
   const std::string file_name = path.filename().string();
   std::vector<std::string> tokens;
@@ -230,11 +241,31 @@ void rewrite_column_ids_in_page_headers(
         continue;
       }
       auto column_map_it = column_ids_map.find(col_id);
-      CHECK(column_map_it != column_ids_map.end()) << "could not find " << col_id;
-      // If a header contains a column id that is remapped to new location
-      // then write that change to the file.
-      if (const auto dest_col_id = column_map_it->second; col_id != dest_col_id) {
-        col_id = dest_col_id;
+      bool rewrite_header = false;
+      if (drop_not_update) {
+        // if the header contains a column ID that is a key of the map
+        // erase the entire header so that column is effectively dropped
+        // the value of the map is ignored, thus allowing us to use the
+        // same function for both operations
+        if (column_map_it != column_ids_map.end()) {
+          // clear the entire header
+          std::memset(header_info, 0, sizeof(header_info));
+          rewrite_header = true;
+        }
+      } else {
+        if (column_map_it == column_ids_map.end()) {
+          throw std::runtime_error("Page " + std::to_string(page) + " in " + file_path +
+                                   " has unexpected Column ID " + std::to_string(col_id) +
+                                   ". Dump may be corrupt.");
+        }
+        // If a header contains a column id that is remapped to new location
+        // then write that change to the file.
+        if (const auto dest_col_id = column_map_it->second; col_id != dest_col_id) {
+          col_id = dest_col_id;
+          rewrite_header = true;
+        }
+      }
+      if (rewrite_header) {
         if (0 != std::fseek(fp.get(), page * page_size, SEEK_SET)) {
           throw std::runtime_error("Failed to seek to page# " + std::to_string(page) +
                                    file_path + " for write: " + std::strerror(errno));
@@ -248,12 +279,15 @@ void rewrite_column_ids_in_page_headers(
   }
 }
 
-// Adjust column ids in chunk keys in a table's data files under a temp_data_dir,
+// Rewrite column ids in chunk keys in a table's data files under a temp_data_dir,
 // including files of all shards of the table. Can be slow for big files but should
 // be scale faster than refragmentizing. Table altering should be rare for olap.
-void adjust_altered_table_files(const int32_t table_epoch,
-                                const std::string& temp_data_dir,
-                                const std::unordered_map<int, int>& column_ids_map) {
+// Also used to erase page headers for columns that must be dropped completely.
+void update_or_drop_column_ids_in_table_files(
+    const int32_t table_epoch,
+    const std::string& temp_data_dir,
+    const std::unordered_map<int, int>& column_ids_map,
+    const bool drop_not_update) {
   boost::filesystem::path base_path(temp_data_dir);
   boost::filesystem::recursive_directory_iterator end_it;
   ThreadController_NS::SimpleThreadController<> thread_controller(cpu_threads());
@@ -261,8 +295,11 @@ void adjust_altered_table_files(const int32_t table_epoch,
        ++fit) {
     if (!boost::filesystem::is_symlink(fit->path()) &&
         boost::filesystem::is_regular_file(fit->status())) {
-      thread_controller.startThread(
-          rewrite_column_ids_in_page_headers, fit->path(), column_ids_map, table_epoch);
+      thread_controller.startThread(update_or_drop_column_ids_in_page_headers,
+                                    fit->path(),
+                                    column_ids_map,
+                                    table_epoch,
+                                    drop_not_update);
       thread_controller.checkThreadsStatus();
     }
   }
@@ -330,6 +367,73 @@ void rename_table_directories(const File_Namespace::GlobalFileMgr* global_file_m
   }
 }
 
+std::unordered_map<int, int> find_render_group_columns(
+    const std::list<ColumnDescriptor>& src_columns,
+    std::vector<std::string>& src_oldinfo_strs,
+    const std::string& archive_path) {
+  // scan for poly or mpoly columns and collect their names
+  std::vector<std::string> poly_column_names;
+  for (auto const& src_column : src_columns) {
+    auto const sqltype = src_column.columnType.get_type();
+    if (sqltype == kPOLYGON || sqltype == kMULTIPOLYGON) {
+      poly_column_names.push_back(src_column.columnName);
+    }
+  }
+
+  // remove any matching render group columns from the source list
+  // and capture their IDs in the keys of a map (value is ignored)
+  std::unordered_map<int, int> column_ids_to_drop;
+  auto last_itr = std::remove_if(
+      src_oldinfo_strs.begin(),
+      src_oldinfo_strs.end(),
+      [&](const std::string& v) -> bool {
+        // tokenize
+        std::vector<std::string> tokens;
+        boost::algorithm::split(
+            tokens, v, boost::is_any_of(":"), boost::token_compress_on);
+        // extract name and ID
+        if (tokens.size() < 2) {
+          throw std::runtime_error(
+              "Dump " + archive_path +
+              " has invalid oldinfo file contents. Dump may be corrupt.");
+        }
+        auto const& column_name = tokens[0];
+        auto const column_id = std::stoi(tokens[1]);
+        for (auto const& poly_column_name : poly_column_names) {
+          // is it a render group column?
+          auto const render_group_column_name = poly_column_name + "_render_group";
+          if (column_name == render_group_column_name) {
+            LOG(INFO) << "RESTORE TABLE dropping render group column '"
+                      << render_group_column_name << "' from dump " << archive_path;
+            // add to "set"
+            column_ids_to_drop[column_id] = -1;
+            return true;
+          }
+        }
+        return false;
+      });
+  src_oldinfo_strs.erase(last_itr, src_oldinfo_strs.end());
+
+  return column_ids_to_drop;
+}
+
+void drop_render_group_columns(
+    const std::unordered_map<int, int>& render_group_column_ids,
+    const std::string& archive_path,
+    const std::string& temp_data_dir,
+    const std::string& compression) {
+  // rewrite page files to drop the columns with IDs that are the keys of the map
+  if (render_group_column_ids.size()) {
+    const auto epoch = boost::lexical_cast<int32_t>(
+        simple_file_cat(archive_path, table_epoch_filename, compression));
+    const auto time_ms = measure<>::execution([&]() {
+      update_or_drop_column_ids_in_table_files(
+          epoch, temp_data_dir, render_group_column_ids, true /* drop */);
+    });
+    VLOG(3) << "drop render group columns: " << time_ms << " ms";
+  }
+}
+
 }  // namespace
 
 void TableArchiver::dumpTable(const TableDescriptor* td,
@@ -387,6 +491,10 @@ void TableArchiver::dumpTable(const TableDescriptor* td,
 
   const auto table_name = td->tableName;
   {
+    // - gen dumpversion file
+    const auto dumpversion_str = std::to_string(kDumpVersion);
+    file_writer(
+        uuid_dir / table_dumpversion_filename, "table dumpversion", dumpversion_str);
     // - gen schema file
     const auto schema_str = cat_->dumpSchema(td);
     file_writer(uuid_dir / table_schema_filename, "table schema", schema_str);
@@ -512,6 +620,36 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
                           all_src_oldinfo_str,
                           boost::is_any_of(" "),
                           boost::token_compress_on);
+
+  // fetch dump version
+  int dump_version = -1;
+  try {
+    // attempt to read file, do not log if fail to read
+    auto const dump_version_str =
+        simple_file_cat(archive_path, table_dumpversion_filename, compression, false);
+    dump_version = std::stoi(dump_version_str);
+  } catch (std::runtime_error& e) {
+    // no dump version file found
+    dump_version = 0;
+  }
+  LOG(INFO) << "Dump Version: " << dump_version;
+
+  // version-specific behavior
+  const bool do_drop_render_group_columns =
+      (dump_version < kDumpVersion_remove_render_group_columns);
+
+  // remove any render group columns from the source columns so that the list of
+  // source columns matches the already-created table, and the removed ones will
+  // not have an entry in column_ids_map, and hence will not have their data
+  // mapped later (effectively dropping them), and return their IDs for when
+  // they are actually dropped later
+  std::unordered_map<int, int> render_group_column_ids;
+  if (do_drop_render_group_columns) {
+    render_group_column_ids =
+        find_render_group_columns(src_columns, src_oldinfo_strs, archive_path);
+  }
+
+  // compare with the destination columns
   auto all_dst_columns =
       cat_->getAllColumnMetadataForTable(td->tableId, true, true, true);
   if (src_oldinfo_strs.size() != all_dst_columns.size()) {
@@ -559,20 +697,30 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
     was_table_altered = was_table_altered || it.first != it.second;
   });
   VLOG(3) << "was_table_altered = " << was_table_altered;
+
   // extract all data files to a temp dir. will swap with dst table dir after all set,
   // otherwise will corrupt table in case any bad thing happens in the middle.
   run("rm -rf " + temp_data_dir.string());
   run("mkdir -p " + temp_data_dir.string());
   run("tar " + compression + " -xvf " + get_quoted_string(archive_path), temp_data_dir);
 
+  // drop the render group columns here
+  if (do_drop_render_group_columns) {
+    drop_render_group_columns(
+        render_group_column_ids, archive_path, temp_data_dir, compression);
+  }
+
   // if table was ever altered after it was created, update column ids in chunk headers.
   if (was_table_altered) {
     const auto epoch = boost::lexical_cast<int32_t>(
         simple_file_cat(archive_path, table_epoch_filename, compression));
-    const auto time_ms = measure<>::execution(
-        [&]() { adjust_altered_table_files(epoch, temp_data_dir, column_ids_map); });
-    VLOG(3) << "adjust_altered_table_files: " << time_ms << " ms";
+    const auto time_ms = measure<>::execution([&]() {
+      update_or_drop_column_ids_in_table_files(
+          epoch, temp_data_dir, column_ids_map, false /* update */);
+    });
+    VLOG(3) << "update_column_ids_table_files: " << time_ms << " ms";
   }
+
   // finally,,, swap table data/dict dirs!
   const auto data_file_dirs = cat_->getTableDataDirectories(td);
   const auto dict_file_dirs = cat_->getTableDictDirectories(td);
