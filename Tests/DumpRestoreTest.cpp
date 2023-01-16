@@ -250,6 +250,7 @@ class DumpAndRestoreTest : public ::testing::Test {
     boost::filesystem::remove_all(tar_ball_path);
     run_ddl_statement("DROP TABLE IF EXISTS test_table;");
     run_ddl_statement("DROP TABLE IF EXISTS test_table_2;");
+    run_ddl_statement("DROP TABLE IF EXISTS render_groups;");
     g_test_rollback_dump_restore = false;
   }
 
@@ -257,6 +258,7 @@ class DumpAndRestoreTest : public ::testing::Test {
     boost::filesystem::remove_all(tar_ball_path);
     run_ddl_statement("DROP TABLE IF EXISTS test_table;");
     run_ddl_statement("DROP TABLE IF EXISTS test_table_2;");
+    run_ddl_statement("DROP TABLE IF EXISTS render_groups;");
   }
 
   void sqlAndCompareResult(const std::string& sql,
@@ -579,6 +581,30 @@ TEST_F(DumpAndRestoreTest, DumpAlteredTable) {
   run_ddl_statement("DROP TABLE test_table;");
   run_ddl_statement("RESTORE TABLE test_table FROM '" + tar_ball_path + "';");
   sqlAndCompareResult("SELECT * FROM test_table;", std::vector<int64_t>{1});
+}
+
+TEST_F(DumpAndRestoreTest, DropRenderGroupColumns) {
+  static constexpr int kNullInt = std::numeric_limits<int>::min();
+  auto file_path = boost::filesystem::canonical(
+                       "../../Tests/Export/TableDump/dump_with_render_groups_good.gz")
+                       .string();
+  EXPECT_NO_THROW(run_ddl_statement("RESTORE TABLE render_groups FROM '" + file_path +
+                                    "' WITH (compression='gzip');"));
+  sqlAndCompareResult("SELECT id FROM render_groups;",
+                      std::vector<int64_t>{1, 2, 3, 4, 5});
+  sqlAndCompareResult("SELECT ST_NPOINTS(poly) FROM render_groups;",
+                      std::vector<int64_t>{4, kNullInt, 3, 3, 0});
+  sqlAndCompareResult("SELECT ST_NPOINTS(multipoly) FROM render_groups;",
+                      std::vector<int64_t>{6, kNullInt, 9, 9, 0});
+}
+
+TEST_F(DumpAndRestoreTest, DropRenderGroupColumnsBad) {
+  auto file_path = boost::filesystem::canonical(
+                       "../../Tests/Export/TableDump/dump_with_render_groups_bad.gz")
+                       .string();
+  EXPECT_THROW(run_ddl_statement("RESTORE TABLE render_groups FROM '" + file_path +
+                                 "' WITH (compression='gzip');"),
+               std::runtime_error);
 }
 
 #ifdef HAVE_AWS_S3
