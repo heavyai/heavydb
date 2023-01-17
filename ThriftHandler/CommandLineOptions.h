@@ -42,7 +42,7 @@ class CommandLineOptions {
   CommandLineOptions(char const* argv0, bool dist_v5_ = false)
       : log_options_(argv0), exe_name(argv0), dist_v5_(dist_v5_) {
     fillOptions();
-    fillAdvancedOptions();
+    fillDeveloperOptions();
   }
   int http_port = 6278;
   int http_binary_port = 6276;
@@ -126,12 +126,12 @@ class CommandLineOptions {
   bool enable_drop_render_group_columns_migration = false;
 
   void fillOptions();
-  void fillAdvancedOptions();
+  void fillDeveloperOptions();
 
   std::string compressor = std::string(BLOSC_LZ4HC_COMPNAME);
 
-  po::options_description help_desc;
-  po::options_description developer_desc;
+  po::options_description help_desc_;
+  po::options_description developer_desc_;
   logger::LogOptions log_options_;
   std::string exe_name;
   po::positional_options_description positional_options;
