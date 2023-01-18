@@ -2338,6 +2338,36 @@ TEST_F(OverlapsJoinRewriteTest, ArgumentOrderingAfterTableReordering) {
   }
 }
 
+TEST_F(OverlapsJoinRewriteTest, ArgumentReorderingNonPointCol) {
+  // test logic is different compared with the previous test,
+  // so we do not use performTest function here
+  QR::get()->clearCpuMemory();
+  g_enable_distance_rangejoin = true;
+  ScopeGuard reset_flag = [orig = g_from_table_reordering] {
+    g_from_table_reordering = orig;
+  };
+  auto q1 =
+      "SELECT COUNT(*) FROM TEST_GEOPT R, TEST_GEOPT2 S WHERE ST_DISTANCE( "
+      "ST_GeomFromText('POINT(-87.653800724 41.839365536)', 4326), R.pt4326 ) <= 1.0 AND "
+      "ST_DISTANCE(R.pt4326, S.pt4326) < 0.01;";
+  auto q2 =
+      "SELECT COUNT(*) FROM TEST_GEOPT R, TEST_GEOPT2 S WHERE ST_DISTANCE( S.pt4326, "
+      "ST_GeomFromText('POINT(-87.653800724 41.839365536)', 4326) ) <= 1.0 AND "
+      "ST_DISTANCE(R.pt4326, S.pt4326) < 0.01;";
+  auto q3 =
+      "SELECT COUNT(*) FROM TEST_GEOPT R, TEST_GEOPT2 S WHERE ST_DISTANCE( R.pt4326, "
+      "ST_GeomFromText('POINT(-87.653800724 41.839365536)', 4326) ) <= 1.0 AND "
+      "ST_DISTANCE( S.pt4326, ST_GeomFromText('POINT(-87.653800724 41.839365536)', 4326) "
+      ") <= 1.0;";
+  for (bool const table_reordering : {true, false}) {
+    g_from_table_reordering = table_reordering;
+    // check whether the query finishes without a crash
+    EXPECT_EQ((int64_t)0, v<int64_t>(execSQL(q1, ExecutorDeviceType::CPU)));
+    EXPECT_EQ((int64_t)0, v<int64_t>(execSQL(q2, ExecutorDeviceType::CPU)));
+    EXPECT_EQ((int64_t)0, v<int64_t>(execSQL(q3, ExecutorDeviceType::CPU)));
+  }
+}
+
 TEST_F(OverlapsJoinRewriteTest, TemporaryTable) {
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS tp1;");
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS tp2;");
