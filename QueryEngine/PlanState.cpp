@@ -67,17 +67,45 @@ void PlanState::allocateLocalColumnIds(
 
 int PlanState::getLocalColumnId(const Analyzer::ColumnVar* col_var,
                                 const bool fetch_column) {
+  // Previously, we consider `rte_idx` of `col_var` w/ its column key together
+  // to specify columns in the `global_to_local_col_ids_`.
+  // But there is a case when the same col has multiple 'rte_idx's
+  // For instance, the same geometry col is used not only as input col of the geo join op,
+  // but also included as input col of filter predicate
+  // In such a case, the same geometry col has two rte_idxs (the one defined by the filter
+  // predicate and the other determined by the geo join operator)
+  // The previous logic cannot cover this case b/c it allows only one `rte_idx` per col
+  // But it is safe to share `rte_idx` of among all use cases of the same col
   CHECK(col_var);
   const auto& global_col_key = col_var->getColumnKey();
-  const int scan_idx = col_var->get_rte_idx();
-  InputColDescriptor scan_col_desc(
-      global_col_key.column_id, global_col_key.table_id, global_col_key.db_id, scan_idx);
+  InputColDescriptor scan_col_desc(global_col_key.column_id,
+                                   global_col_key.table_id,
+                                   global_col_key.db_id,
+                                   col_var->get_rte_idx());
+  std::optional<int> col_id{std::nullopt};
+  // let's try to find col_id w/ considering `rte_idx`
   const auto it = global_to_local_col_ids_.find(scan_col_desc);
-  CHECK(it != global_to_local_col_ids_.end()) << "Expected to find " << scan_col_desc;
-  if (fetch_column) {
-    columns_to_fetch_.insert(global_col_key);
+  if (it != global_to_local_col_ids_.end()) {
+    // we have a valid col_id
+    col_id = it->second;
+  } else {
+    // otherwise, let's try to find col_id for the same col
+    // (but have different 'rte_idx') to share it w/ `col_var`
+    for (auto const& kv : global_to_local_col_ids_) {
+      if (kv.first.getColumnKey() == global_col_key) {
+        col_id = kv.second;
+        break;
+      }
+    }
   }
-  return it->second;
+  if (col_id && *col_id >= 0) {
+    if (fetch_column) {
+      columns_to_fetch_.insert(global_col_key);
+    }
+    return *col_id;
+  }
+  CHECK(false) << "Expected to find " << global_col_key;
+  return {};
 }
 
 void PlanState::addNonHashtableQualForLeftJoin(size_t idx,
