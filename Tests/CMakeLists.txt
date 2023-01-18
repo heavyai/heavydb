@@ -383,7 +383,6 @@ list(APPEND SANITY_TEST_PROGRAMS JoinHashTableTest)
 
 if(NOT MSVC)
   add_executable(JSONTest JSONTest.cpp)
-  add_dependencies(JSONTest system_dashboard_data)
   target_link_libraries(JSONTest gtest Logger Shared)
   add_test(JSONTest JSONTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS JSONTest)
