@@ -802,10 +802,10 @@ include_directories(${RdKafka_INCLUDE_DIRS})
 find_package(LibArchive REQUIRED)
 include_directories(${LibArchive_INCLUDE_DIRS})
 
-find_package(CURL REQUIRED QUIET)
-if(CURL_FOUND)
-  set(CURL_LIBRARIES ${LibAwsS3_SUPPORT_LIBRARIES})
-endif()
+#find_package(CURL REQUIRED QUIET)
+#if(CURL_FOUND)
+  #set(CURL_LIBRARIES ${LibAwsS3_SUPPORT_LIBRARIES})
+#endif()
 
 # bcrypt
 include_directories(ThirdParty/bcrypt)
