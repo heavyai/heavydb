@@ -314,7 +314,12 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                          query_hint,
                                                          table_id_to_node_map);
   } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
-                 qual_bin_oper->get_left_operand())) {
+                 qual_bin_oper->get_left_operand()) ||
+             query_hint.force_baseline_hash_join) {
+    if (query_hint.force_baseline_hash_join) {
+      LOG(INFO) << "A user's query hint forced the join operation to use the Baseline "
+                   "hash join layout";
+    }
     VLOG(1) << "Trying to build keyed hash table:";
     join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
                                                          query_infos,
