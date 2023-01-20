@@ -46,9 +46,19 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     const RegisteredQueryHint& query_hints,
     const TableIdToNodeMap& table_id_to_node_map) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
-
+  auto copied_query_hints = query_hints;
+  if (query_hints.force_one_to_many_hash_join) {
+    LOG(INFO) << "Ignoring query hint \'force_one_to_many_hash_join\' for the overlaps "
+                 "or range hash "
+                 "join operation";
+    copied_query_hints.force_one_to_many_hash_join = false;
+  }
+  if (query_hints.force_baseline_hash_join) {
+    LOG(INFO) << "Ignoring query hint \'force_baseline_hash_join\' for the overlaps or "
+                 "range hash join operation";
+    copied_query_hints.force_baseline_hash_join = false;
+  }
   std::vector<InnerOuter> inner_outer_pairs;
-
   if (const auto range_expr =
           dynamic_cast<const Analyzer::RangeOper*>(condition->get_right_operand())) {
     return RangeJoinHashTable::getInstance(condition,
@@ -60,7 +70,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                            column_cache,
                                            executor,
                                            hashtable_build_dag_map,
-                                           query_hints,
+                                           copied_query_hints,
                                            table_id_to_node_map);
   } else {
     inner_outer_pairs =
@@ -115,7 +125,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                                                  executor,
                                                                  inner_outer_pairs,
                                                                  device_count,
-                                                                 query_hints,
+                                                                 copied_query_hints,
                                                                  hashtable_build_dag_map,
                                                                  table_id_to_node_map);
   try {

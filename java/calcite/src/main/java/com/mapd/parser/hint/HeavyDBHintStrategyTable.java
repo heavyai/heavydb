@@ -37,6 +37,8 @@ public class HeavyDBHintStrategyTable {
     supportedHints.add("disable_loop_join");
     supportedHints.add("loop_join_inner_table_max_num_rows");
     supportedHints.add("max_join_hashtable_size");
+    supportedHints.add("force_baseline_hash_join");
+    supportedHints.add("force_one_to_many_hash_join");
 
     for (String hint_name : supportedHints) {
       // add local / global hints, e.., cpu_mode / g_cpu_mode
