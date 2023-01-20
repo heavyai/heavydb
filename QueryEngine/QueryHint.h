@@ -50,6 +50,8 @@ enum QueryHint {
   kDisableLoopJoin,
   kLoopJoinInnerTableMaxNumRows,
   kMaxJoinHashTableSize,
+  kforceBaselineHashJoin,
+  kforceOneToManyHashJoin,
   kHintCount,   // should be at the last elem before INVALID enum value to count #
                 // supported hints correctly
   kInvalidHint  // this should be the last elem of this enum
@@ -78,7 +80,9 @@ static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"allow_loop_join", QueryHint::kAllowLoopJoin},
     {"disable_loop_join", QueryHint::kDisableLoopJoin},
     {"loop_join_inner_table_max_num_rows", QueryHint::kLoopJoinInnerTableMaxNumRows},
-    {"max_join_hashtable_size", QueryHint::kMaxJoinHashTableSize}};
+    {"max_join_hashtable_size", QueryHint::kMaxJoinHashTableSize},
+    {"force_baseline_hash_join", QueryHint::kforceBaselineHashJoin},
+    {"force_one_to_many_hash_join", QueryHint::kforceOneToManyHashJoin}};
 
 struct HintIdentifier {
   bool global_hint;
@@ -203,6 +207,8 @@ struct RegisteredQueryHint {
       , use_loop_join(std::nullopt)
       , loop_join_inner_table_max_num_rows(g_trivial_loop_join_threshold)
       , max_join_hash_table_size(std::numeric_limits<size_t>::max())
+      , force_baseline_hash_join(false)
+      , force_one_to_many_hash_join(false)
       , registered_hint(QueryHint::kHintCount, false) {}
 
   RegisteredQueryHint operator||(const RegisteredQueryHint& global_hints) const {
@@ -286,6 +292,14 @@ struct RegisteredQueryHint {
             updated_query_hints.max_join_hash_table_size =
                 global_hints.max_join_hash_table_size;
             break;
+          case QueryHint::kforceBaselineHashJoin:
+            updated_query_hints.force_baseline_hash_join =
+                global_hints.force_baseline_hash_join;
+            break;
+          case QueryHint::kforceOneToManyHashJoin:
+            updated_query_hints.force_one_to_many_hash_join =
+                global_hints.force_one_to_many_hash_join;
+            break;
           default:
             UNREACHABLE();
         }
@@ -323,6 +337,8 @@ struct RegisteredQueryHint {
   std::optional<bool> use_loop_join;
   size_t loop_join_inner_table_max_num_rows;
   size_t max_join_hash_table_size;
+  bool force_baseline_hash_join;
+  bool force_one_to_many_hash_join;
 
   std::vector<bool> registered_hint;
 
