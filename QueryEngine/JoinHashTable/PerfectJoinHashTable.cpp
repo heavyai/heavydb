@@ -251,14 +251,19 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   if (VLOGGING(1)) {
     ts1 = std::chrono::steady_clock::now();
   }
-
+  auto hash_type = preferred_hash_type;
+  if (query_hints.force_one_to_many_hash_join) {
+    LOG(INFO) << "A user's query hint forced the join operation to use OneToMany hash "
+                 "join layout";
+    hash_type = HashType::OneToMany;
+  }
   auto join_hash_table = std::shared_ptr<PerfectJoinHashTable>(
       new PerfectJoinHashTable(qual_bin_oper,
                                inner_col,
                                query_infos,
                                memory_level,
                                join_type,
-                               preferred_hash_type,
+                               hash_type,
                                col_range,
                                rhs_source_col_range,
                                bucketized_entry_count_info,

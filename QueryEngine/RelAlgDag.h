@@ -2877,6 +2877,24 @@ class RelAlgDag : public boost::noncopyable {
           }
           break;
         }
+        case QueryHint::kforceBaselineHashJoin: {
+          query_hint.registerHint(QueryHint::kforceBaselineHashJoin);
+          query_hint.force_baseline_hash_join = true;
+          if (target.isGlobalHint()) {
+            global_query_hint.registerHint(QueryHint::kforceBaselineHashJoin);
+            global_query_hint.force_baseline_hash_join = true;
+          }
+          break;
+        }
+        case QueryHint::kforceOneToManyHashJoin: {
+          query_hint.registerHint(QueryHint::kforceOneToManyHashJoin);
+          query_hint.force_one_to_many_hash_join = true;
+          if (target.isGlobalHint()) {
+            global_query_hint.registerHint(QueryHint::kforceOneToManyHashJoin);
+            global_query_hint.force_one_to_many_hash_join = true;
+          }
+          break;
+        }
         default:
           break;
       }
