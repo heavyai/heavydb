@@ -839,7 +839,7 @@ TEST_P(BufferMgrTest, DeleteBuffersWithPrefixPinnedBuffer) {
 
 TEST_P(BufferMgrTest, DeleteBuffersWithPrefixNoMatchingPrefix) {
   buffer_mgr_ = createBufferMgr();
-  createPinnedBuffers(1);
+  createUnpinnedBuffers(1);
 
   assertSegmentCount(2);
   assertSegmentAttributes(0, 0, Buffer_Namespace::USED);
@@ -848,6 +848,56 @@ TEST_P(BufferMgrTest, DeleteBuffersWithPrefixNoMatchingPrefix) {
 
   EXPECT_TRUE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
   buffer_mgr_->deleteBuffersWithPrefix({1, 1, 2});
+  EXPECT_TRUE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+
+  assertSegmentCount(2);
+  assertSegmentAttributes(0, 0, Buffer_Namespace::USED);
+  assertSegmentAttributes(0, 1, Buffer_Namespace::FREE);
+  assertExpectedBufferMgrAttributes();
+}
+
+TEST_P(BufferMgrTest, DeleteBuffersWithLongerPrefixBeforeCachedChunkKey) {
+  buffer_mgr_ = createBufferMgr();
+  createUnpinnedBuffers(1);
+
+  assertSegmentCount(2);
+  assertSegmentAttributes(0, 0, Buffer_Namespace::USED);
+  assertSegmentAttributes(0, 1, Buffer_Namespace::FREE);
+  assertExpectedBufferMgrAttributes();
+
+  EXPECT_TRUE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+
+  // Use a prefix that is longer than `test_chunk_key_` but occurs before it when sorted.
+  auto chunk_prefix = test_chunk_key_;
+  chunk_prefix.emplace_back(1);
+  chunk_prefix[CHUNK_KEY_TABLE_IDX]--;
+
+  buffer_mgr_->deleteBuffersWithPrefix(chunk_prefix);
+  EXPECT_TRUE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+
+  assertSegmentCount(2);
+  assertSegmentAttributes(0, 0, Buffer_Namespace::USED);
+  assertSegmentAttributes(0, 1, Buffer_Namespace::FREE);
+  assertExpectedBufferMgrAttributes();
+}
+
+TEST_P(BufferMgrTest, DeleteBuffersWithLongerPrefixAfterCachedChunkKey) {
+  buffer_mgr_ = createBufferMgr();
+  createUnpinnedBuffers(1);
+
+  assertSegmentCount(2);
+  assertSegmentAttributes(0, 0, Buffer_Namespace::USED);
+  assertSegmentAttributes(0, 1, Buffer_Namespace::FREE);
+  assertExpectedBufferMgrAttributes();
+
+  EXPECT_TRUE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+
+  // Use a prefix that is longer than `test_chunk_key_` but occurs after it when sorted.
+  auto chunk_prefix = test_chunk_key_;
+  chunk_prefix.emplace_back(1);
+  chunk_prefix[CHUNK_KEY_TABLE_IDX]++;
+
+  buffer_mgr_->deleteBuffersWithPrefix(chunk_prefix);
   EXPECT_TRUE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
 
   assertSegmentCount(2);
