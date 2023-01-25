@@ -381,15 +381,19 @@ class TableFunctions : public ::testing::Test {
       run_ddl_statement(
           "CREATE TABLE geo_polygon_test("
           "p1 POLYGON, "
+          "ml1 MULTILINESTRING, "
           "r1 LINESTRING, h1 LINESTRING, hh1 LINESTRING, "
-          "p2 GEOMETRY(POLYGON, 4326), "  // uses geoint compression
+          "p2 GEOMETRY(POLYGON, 4326), "           // uses geoint compression
+          "ml2 GEOMETRY(MULTILINESTRING, 4326), "  // uses geoint compression
           "r2 GEOMETRY(LINESTRING, 4326), h2 GEOMETRY(LINESTRING, 4326), hh2 "
           "GEOMETRY(LINESTRING, 4326), "
           "p3 GEOMETRY(POLYGON, 4326) ENCODING NONE, "
+          "ml3 GEOMETRY(MULTILINESTRING, 4326) ENCODING NONE, "
           "r3 GEOMETRY(LINESTRING, 4326) ENCODING NONE, h3 GEOMETRY(LINESTRING, 4326) "
           "ENCODING NONE, "
           "hh3 GEOMETRY(LINESTRING, 4326) ENCODING NONE, "
           "p4 GEOMETRY(POLYGON, 900913),"
+          "ml4 GEOMETRY(MULTILINESTRING, 900913),"
           "r4 GEOMETRY(LINESTRING, 900913), h4 GEOMETRY(LINESTRING, 900913), hh4 "
           "GEOMETRY(LINESTRING, 900913), "
           "mp1 MULTIPOLYGON, "
@@ -402,18 +406,22 @@ class TableFunctions : public ::testing::Test {
 
       run_multiple_agg(
           gen("'POLYGON((1 2,3 4,5 6,7 8,9 10),(2 3,3 4,1 2))'",
+              "'MULTILINESTRING((1 2,3 4,5 6,7 8,9 10),(2 3,3 4,1 2))'",
               "'LINESTRING(1 2,3 4,5 6,7 8,9 10)'",
               "'LINESTRING(2 3,3 4,1 2)'",
               "'NULL'",
               "'POLYGON((0 0,5 0,5 5,0 5,0 0),(2 2, 2 1,1 1,1 2,2 2))'",
+              "'MULTILINESTRING((0 0,5 0,5 5,0 5),(2 2, 2 1,1 1,1 2))'",
               "'LINESTRING(0 0,5 0,5 5,0 5)'",
               "'LINESTRING(2 2,2 1,1 1,1 2)'",
               "'NULL'",
               "'POLYGON((0 0,6 0,6 6,0 6,0 0),(3 3,3 2,2 2,2 3,3 3))'",
+              "'MULTILINESTRING((0 0,6 0,6 6,0 6),(3 3,3 2,2 2,2 3))'",
               "'LINESTRING(0 0,6 0,6 6,0 6))'",
               "'LINESTRING(3 3,3 2,2 2,2 3)'",
               "'NULL'",
               "'POLYGON((0 0,7 0,7 7,0 7,0 0),(4 4,2 4, 2 3,4 2,4 4))'",
+              "'MULTILINESTRING((0 0,7 0,7 7,0 7),(4 4,2 4, 2 3,4 2))'",
               "'LINESTRING(0 0,7 0,7 7,0 7)'",
               "'LINESTRING(4 4,4 2,2 3,2 4)'",
               "'NULL'",
@@ -425,18 +433,22 @@ class TableFunctions : public ::testing::Test {
           ExecutorDeviceType::CPU);
 
       run_multiple_agg(gen("'POLYGON((0 0,5 0,5 5,0 5,0 0))'",
+                           "'MULTILINESTRING((0 0,5 0,5 5,0 5))'",
                            "'LINESTRING(0 0,5 0,5 5,0 5)'",
                            "'NULL'",
                            "'NULL'",
                            "'POLYGON((0 0,6 0,6 6,0 6,0 0))'",
+                           "'MULTILINESTRING((0 0,6 0,6 6,0 6))'",
                            "'LINESTRING(0 0,6 0,6 6,0 6)'",
                            "'NULL'",
                            "'NULL'",
                            "'POLYGON((0 0,7 0,7 7,0 7,0 0))'",
+                           "'MULTILINESTRING((0 0,7 0,7 7,0 7))'",
                            "'LINESTRING(0 0,7 0,7 7,0 7)'",
                            "'NULL'",
                            "'NULL'",
                            "'POLYGON((0 0,4 0,4 4,0 4,0 0))'",
+                           "'MULTILINESTRING((0 0,4 0,4 4,0 4))'",
                            "'LINESTRING(0 0,4 0,4 4,0 4)'",
                            "'NULL'",
                            "'NULL'",
@@ -449,18 +461,22 @@ class TableFunctions : public ::testing::Test {
 
       run_multiple_agg(
           gen("'POLYGON((1 2,3 4,5 6,7 8,9 10),(3 4,1 2,2 3),(5 6,7 8,9 10))'",
+              "'MULTILINESTRING((1 2,3 4,5 6,7 8,9 10),(3 4,1 2,2 3),(5 6,7 8,9 10))'",
               "'LINESTRING(1 2,3 4,5 6,7 8,9 10)'",
               "'LINESTRING(2 3,3 4,1 2)'",
               "'LINESTRING(9 10,5 6,7 8)'",
               "'POLYGON((0 0,5 0,5 5,0 5,0 0),(2 2,2 1,1 1,1 2,2 2),(0 0,0 1,1 0))'",
+              "'MULTILINESTRING((0 0,5 0,5 5,0 5),(2 2,2 1,1 1,1 2),(0 0,0 1,1 0))'",
               "'LINESTRING(0 0,5 0,5 5,0 5)'",
               "'LINESTRING(2 2,2 1,1 1,1 2)'",
               "'LINESTRING(0 0,0 1,1 0)'",
               "'POLYGON((0 0,6 0,6 6,0 6,0 0),(3 3,3 2,2 2,2 3,3 3),(0 0,0 1,1 0))'",
+              "'MULTILINESTRING((0 0,6 0,6 6,0 6),(3 3,3 2,2 2,2 3),(0 0,0 1,1 0))'",
               "'LINESTRING(0 0,6 0,6 6,0 6))'",
               "'LINESTRING(3 3,3 2,2 2,2 3)'",
               "'LINESTRING(0 0,0 1,1 0)'",
               "'POLYGON((0 0,7 0,7 7,0 7,0 0),(4 4,2 4, 2 3,4 2,4 4),(0 0,0 1,1 0))'",
+              "'MULTILINESTRING((0 0,7 0,7 7,0 7),(4 4,2 4, 2 3,4 2),(0 0,0 1,1 0))'",
               "'LINESTRING(0 0,7 0,7 7,0 7)'",
               "'LINESTRING(4 4,4 2,2 3,2 4)'",
               "'LINESTRING(0 0,0 1,1 0)'",
@@ -474,6 +490,10 @@ class TableFunctions : public ::testing::Test {
               "11"),
           ExecutorDeviceType::CPU);
       run_multiple_agg(gen("'NULL'",
+                           "'NULL'",
+                           "'NULL'",
+                           "'NULL'",
+                           "'NULL'",
                            "'NULL'",
                            "'NULL'",
                            "'NULL'",
@@ -2966,6 +2986,13 @@ void assert_equal(const TargetValue& val1,
           gdal_wkt_poly2.getColumns(coords2, ring_sizes2, bounds2);
           break;
         }
+        case kMULTILINESTRING: {
+          const auto gdal_wkt_poly1 = Geospatial::GeoMultiLineString(*s1);
+          gdal_wkt_poly1.getColumns(coords1, ring_sizes1, bounds1);
+          const auto gdal_wkt_poly2 = Geospatial::GeoMultiLineString(*s2);
+          gdal_wkt_poly2.getColumns(coords2, ring_sizes2, bounds2);
+          break;
+        }
         case kMULTIPOLYGON: {
           const auto gdal_wkt_mpoly1 = Geospatial::GeoMultiPolygon(*s1);
           gdal_wkt_mpoly1.getColumns(coords1, ring_sizes1, poly_sizes1, bounds1);
@@ -3546,7 +3573,7 @@ TEST_F(TableFunctions, ColumnGeoLineStringInput) {
   }
 }
 
-TEST_F(TableFunctions, ColumnGeoLineStringInputOutput) {
+TEST_F(TableFunctions, ColumnGeoLineStringCopy) {
   for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
     SKIP_NO_GPU();
     for (int i = 1; i <= 4; i++) {
@@ -3554,8 +3581,62 @@ TEST_F(TableFunctions, ColumnGeoLineStringInputOutput) {
       {
         // Test Column<GeoLineString> input and output
         std::string q1 = "SELECT " + col + " FROM geo_line_string_test;";
-        std::string q2 = "SELECT copied_linestrings FROM TABLE(CT_COPY(CURSOR(SELECT " +
-                         col + " FROM geo_line_string_test)))";
+        std::string q2 = "SELECT outputs FROM TABLE(CT_COPY(CURSOR(SELECT " + col +
+                         " FROM geo_line_string_test)))";
+        const auto expected_rows = run_multiple_agg(q1, dt);
+        const auto rows = run_multiple_agg(q2, dt);
+        assert_equal<double>(rows, expected_rows);
+      }
+    }
+  }
+}
+
+TEST_F(TableFunctions, ColumnGeoMultiLineStringCopy) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+    for (int i = 1; i <= 4; i++) {
+      std::string col = "ml" + std::to_string(i);
+      {
+        // Test Column<GeoLineString> input and output
+        std::string q1 = "SELECT " + col + " FROM geo_polygon_test;";
+        std::string q2 = "SELECT outputs FROM TABLE(CT_COPY(CURSOR(SELECT " + col +
+                         " FROM geo_polygon_test)))";
+        const auto expected_rows = run_multiple_agg(q1, dt);
+        const auto rows = run_multiple_agg(q2, dt);
+        assert_equal<double>(rows, expected_rows);
+      }
+    }
+  }
+}
+
+TEST_F(TableFunctions, ColumnGeoPolygonCopy) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+    for (int i = 1; i <= 4; i++) {
+      std::string col = "p" + std::to_string(i);
+      {
+        // Test Column<GeoLineString> input and output
+        std::string q1 = "SELECT " + col + " FROM geo_polygon_test;";
+        std::string q2 = "SELECT outputs FROM TABLE(CT_COPY(CURSOR(SELECT " + col +
+                         " FROM geo_polygon_test)))";
+        const auto expected_rows = run_multiple_agg(q1, dt);
+        const auto rows = run_multiple_agg(q2, dt);
+        assert_equal<double>(rows, expected_rows);
+      }
+    }
+  }
+}
+
+TEST_F(TableFunctions, ColumnGeoMultiPolygonCopy) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+    for (int i = 1; i <= 4; i++) {
+      std::string col = "mp" + std::to_string(i);
+      {
+        // Test Column<GeoLineString> input and output
+        std::string q1 = "SELECT " + col + " FROM geo_polygon_test;";
+        std::string q2 = "SELECT outputs FROM TABLE(CT_COPY(CURSOR(SELECT " + col +
+                         " FROM geo_polygon_test)))";
         const auto expected_rows = run_multiple_agg(q1, dt);
         const auto rows = run_multiple_agg(q2, dt);
         assert_equal<double>(rows, expected_rows);
@@ -3655,6 +3736,45 @@ TEST_F(TableFunctions, ColumnGeoPolygonInOutput) {
             "SELECT linestrings FROM TABLE(CT_LINESTRINGN(CURSOR("
             "SELECT polygons FROM TABLE(CT_MAKE_POLYGON3(CURSOR(SELECT " +
             rcol + ", " + hcol + ", " + hhcol + " FROM geo_polygon_test)))), 1));";
+        const auto expected_rows = run_multiple_agg(q1, dt);
+        const auto rows = run_multiple_agg(q2, dt);
+        assert_equal<double>(rows, expected_rows);
+      }
+    }
+  }
+}
+
+TEST_F(TableFunctions, ColumnGeoMultiLineStringOutput) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+    for (int i = 1; i <= 4; i++) {
+      std::string pcol = "p" + std::to_string(i);
+      std::string mlcol = "ml" + std::to_string(i);
+      {
+        std::string q1 = "SELECT " + mlcol + " FROM geo_polygon_test;";
+        std::string q2 =
+            "SELECT mlinestrings FROM TABLE(CT_TO_MULTILINESTRING(CURSOR(SELECT " + pcol +
+            " FROM geo_polygon_test)));";
+
+        const auto expected_rows = run_multiple_agg(q1, dt);
+        const auto rows = run_multiple_agg(q2, dt);
+        assert_equal<double>(rows, expected_rows);
+      }
+    }
+  }
+}
+
+TEST_F(TableFunctions, ColumnGeoMultiLineStringInput) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+    for (int i = 1; i <= 4; i++) {
+      std::string pcol = "p" + std::to_string(i);
+      std::string mlcol = "ml" + std::to_string(i);
+      {
+        std::string q1 = "SELECT " + pcol + " FROM geo_polygon_test;";
+        std::string q2 = "SELECT polygons FROM TABLE(CT_TO_POLYGON(CURSOR(SELECT " +
+                         mlcol + " FROM geo_polygon_test)));";
+
         const auto expected_rows = run_multiple_agg(q1, dt);
         const auto rows = run_multiple_agg(q2, dt);
         assert_equal<double>(rows, expected_rows);

@@ -266,14 +266,20 @@ ChunkMetadataMap synthesize_metadata_table_function(const ResultSet* rows) {
       FlatBufferManager m{const_cast<int8_t*>(columnar_buffer)};
       chunk_metadata->numBytes = m.getBufferSize();
       if (is_geometry) {
-        if (col_sql_type_info.get_type() == kMULTIPOLYGON) {
-          values_count = m.getValuesCount();
-          values_buffer = m.get_values_buffer();
-        } else {
-          // a geometry value is a pair of coordinates but its element
-          // type value is a int or double, hence multiplication by 2:
-          values_count = m.get_nof_values() * 2;
-          values_buffer = m.get_values();
+        switch (col_sql_type_info.get_type()) {
+          case kLINESTRING:
+          case kPOLYGON:
+          case kMULTILINESTRING:
+          case kMULTIPOLYGON: {
+            values_count = m.getValuesCount();
+            values_buffer = m.get_values_buffer();
+          } break;
+          default: {
+            // a geometry value is a pair of coordinates but its element
+            // type value is a int or double, hence multiplication by 2:
+            values_count = m.get_nof_values() * 2;
+            values_buffer = m.get_values();
+          }
         }
       } else {
         CHECK(is_array);
