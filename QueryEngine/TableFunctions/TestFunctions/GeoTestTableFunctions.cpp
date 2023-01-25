@@ -84,21 +84,42 @@ EXTENSION_NOINLINE int32_t ct_pointn__cpu_(TableFunctionManager& mgr,
   return size;
 }
 
-EXTENSION_NOINLINE int32_t ct_copy__cpu_(TableFunctionManager& mgr,
-                                         const Column<GeoLineString>& linestrings,
-                                         Column<GeoLineString>& copied_linestrings) {
-  auto size = linestrings.size();
-  mgr.set_output_item_values_total_number(0, linestrings.getNofValues());
+template <typename T>
+NEVER_INLINE HOST int32_t ct_copy__cpu_template(TableFunctionManager& mgr,
+                                                const Column<T>& inputs,
+                                                Column<T>& outputs) {
+  auto size = inputs.size();
+  mgr.set_output_item_values_total_number(0, inputs.getNofValues());
   mgr.set_output_row_size(size);
   for (int64_t i = 0; i < size; i++) {
-    if (linestrings.isNull(i)) {
-      copied_linestrings.setNull(i);
+    if (inputs.isNull(i)) {
+      outputs.setNull(i);
     } else {
-      copied_linestrings[i] = linestrings[i];
+      outputs[i] = inputs[i];
     }
   }
   return size;
 }
+
+// explicit instantiations
+template NEVER_INLINE HOST int32_t
+ct_copy__cpu_template(TableFunctionManager& mgr,
+                      const Column<GeoLineString>& inputs,
+                      Column<GeoLineString>& outputs);
+
+template NEVER_INLINE HOST int32_t
+ct_copy__cpu_template(TableFunctionManager& mgr,
+                      const Column<GeoMultiLineString>& inputs,
+                      Column<GeoMultiLineString>& outputs);
+
+template NEVER_INLINE HOST int32_t ct_copy__cpu_template(TableFunctionManager& mgr,
+                                                         const Column<GeoPolygon>& inputs,
+                                                         Column<GeoPolygon>& outputs);
+
+template NEVER_INLINE HOST int32_t
+ct_copy__cpu_template(TableFunctionManager& mgr,
+                      const Column<GeoMultiPolygon>& inputs,
+                      Column<GeoMultiPolygon>& outputs);
 
 EXTENSION_NOINLINE int32_t ct_linestringn__cpu_(TableFunctionManager& mgr,
                                                 const Column<GeoPolygon>& polygons,
@@ -111,7 +132,14 @@ EXTENSION_NOINLINE int32_t ct_linestringn__cpu_(TableFunctionManager& mgr,
     if (polygons.isNull(i)) {
       linestrings.setNull(i);
     } else {
-      linestrings.setItem(i, polygons[i], n - 1);
+      int64_t sz = polygons[i].size();
+      if (n < 1 || n > sz) {
+        linestrings.setNull(i);
+      } else {
+        const auto poly = polygons[i];
+        const auto ring = poly[n - 1];
+        linestrings.setItem(i, ring);
+      }
     }
   }
   return size;
@@ -138,8 +166,12 @@ EXTENSION_NOINLINE int32_t ct_make_polygon3__cpu_(TableFunctionManager& mgr,
       std::vector<std::vector<double>> polygon_coords;
 
       polygon_coords.push_back(rings[i].toCoords());
-      polygon_coords.push_back(holes1[i].toCoords());
-      polygon_coords.push_back(holes2[i].toCoords());
+      if (!holes1.isNull(i)) {
+        polygon_coords.push_back(holes1[i].toCoords());
+        if (!holes2.isNull(i)) {
+          polygon_coords.push_back(holes2[i].toCoords());
+        }
+      }
 
       auto polygon = polygons[i];
       auto status = polygon.fromCoords(polygon_coords);
@@ -282,9 +314,8 @@ EXTENSION_NOINLINE int32_t ct_make_linestring2__cpu_(TableFunctionManager& mgr,
     if (x.isNull(i) || y.isNull(i)) {
       linestrings.setNull(i);
     } else {
-      double line[4] = {x[i], y[i], x[i] + dx, y[i] + dy};
-      linestrings.setItem(
-          i, reinterpret_cast<const int8_t*>(&line[0]), 4 * sizeof(double));
+      std::vector<double> line{x[i], y[i], x[i] + dx, y[i] + dy};
+      linestrings[i].fromCoords(line);
     }
   }
   return size;
@@ -456,6 +487,60 @@ EXTENSION_NOINLINE int32_t ct_polygonn__cpu_(TableFunctionManager& mgr,
       polygons.setNull(i);
     } else {
       polygons.setItem(i, mpolygons[i][n - 1]);
+    }
+  }
+  return size;
+}
+
+EXTENSION_NOINLINE int32_t
+ct_to_multilinestring__cpu_(TableFunctionManager& mgr,
+                            const Column<GeoPolygon>& polygons,
+                            Column<GeoMultiLineString>& mlinestrings) {
+  auto size = polygons.size();
+  mgr.set_output_item_values_total_number(0, polygons.getNofValues());
+  mgr.set_output_row_size(size);
+  // Initialize mlinestrings
+  int count_nulls = 0;
+  FlatBufferManager::Status status{};
+  for (int64_t i = 0; i < size; i++) {
+    if (polygons.isNull(i)) {
+      mlinestrings.setNull(i);
+      count_nulls++;
+    } else {
+      std::vector<std::vector<double>> polygon_coords = polygons[i].toCoords();
+      status = mlinestrings[i].fromCoords(polygon_coords);
+      if (status != FlatBufferManager::Status::Success) {
+        return mgr.ERROR_MESSAGE("fromCoords failed: " + ::toString(status));
+      }
+    }
+  }
+  return size;
+}
+
+EXTENSION_NOINLINE int32_t
+ct_to_polygon__cpu_(TableFunctionManager& mgr,
+                    const Column<GeoMultiLineString>& mlinestrings,
+                    Column<GeoPolygon>& polygons) {
+  auto size = mlinestrings.size();
+  mgr.set_output_item_values_total_number(0, mlinestrings.getNofValues());
+  mgr.set_output_row_size(size);
+  // Initialize polygons
+  int count_nulls = 0;
+  FlatBufferManager::Status status{};
+  for (int64_t i = 0; i < size; i++) {
+    if (mlinestrings.isNull(i)) {
+      polygons.setNull(i);
+      count_nulls++;
+    } else {
+      std::vector<std::vector<double>> polygon_coords;
+      status = mlinestrings[i].toCoords(polygon_coords);
+      if (status != FlatBufferManager::Status::Success) {
+        return mgr.ERROR_MESSAGE("toCoords failed: " + ::toString(status));
+      }
+      status = polygons[i].fromCoords(polygon_coords);
+      if (status != FlatBufferManager::Status::Success) {
+        return mgr.ERROR_MESSAGE("fromCoords failed: " + ::toString(status));
+      }
     }
   }
   return size;

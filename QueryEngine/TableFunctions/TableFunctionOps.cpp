@@ -251,10 +251,10 @@ extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_getItem(int8_t* flatbuffer,
       throw std::runtime_error("getItem failed: " + ::toString(status));
 #endif
     }
-    status = m.setItem(index,
-                       nullptr,
-                       expected_numel * sizeof_T,
-                       nullptr);  // reserves a junk in array buffer
+    status = m.setItemOld(index,
+                          nullptr,
+                          expected_numel * sizeof_T,
+                          nullptr);  // reserves a junk in array buffer
     if (status != FlatBufferManager::Status::Success) {
 #ifndef __CUDACC__
       throw std::runtime_error("getItem failed[setItem]: " + ::toString(status));
@@ -310,7 +310,7 @@ extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_setItem(int8_t* flatbuffer,
   if (is_null) {
     status = m.setNull(index);
   } else {
-    status = m.setItem(index, ptr, size * sizeof_T);
+    status = m.setItemOld(index, ptr, size * sizeof_T);
   }
 #ifndef __CUDACC__
   if (status != FlatBufferManager::Status::Success) {

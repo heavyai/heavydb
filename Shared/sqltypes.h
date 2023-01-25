@@ -1016,6 +1016,7 @@ class SQLTypeInfo {
       case kPOINT:
       case kLINESTRING:
       case kPOLYGON:
+      case kMULTILINESTRING:
       case kMULTIPOLYGON:
         return true;
       default:;
@@ -1599,27 +1600,27 @@ DEVICE inline void VarlenArray_get_nth(int8_t* buf,
 inline int64_t getFlatBufferSize(int64_t items_count,
                                  int64_t max_nof_values,
                                  const SQLTypeInfo& ti) {
-  size_t dimensions = 0;
+  size_t ndims = 0;
   FlatBufferManager::ValueType value_type;
   int64_t max_nof_sizes = 0;
   switch (ti.get_type()) {
     case kPOINT:
-      dimensions = 0;
+      ndims = 0;
       break;
     case kLINESTRING:
     case kMULTIPOINT:
     case kARRAY:
-      dimensions = 1;
-      max_nof_sizes = items_count;
+      ndims = 1;
+      max_nof_sizes = items_count + max_nof_values / 3;
       break;
     case kPOLYGON:
     case kMULTILINESTRING:
-      dimensions = 2;
-      max_nof_sizes = items_count + max_nof_values / 3;
+      ndims = 2;
+      max_nof_sizes = items_count + 2 * max_nof_values / 3;
       break;
     case kMULTIPOLYGON:
-      dimensions = 3;
-      max_nof_sizes = items_count + 2 * (max_nof_values / 3 + 1);
+      ndims = 3;
+      max_nof_sizes = items_count + max_nof_values;
       break;
     default:
       UNREACHABLE();
@@ -1675,30 +1676,13 @@ inline int64_t getFlatBufferSize(int64_t items_count,
       return FlatBufferManager::compute_flatbuffer_size(
           GeoPointFormatId, reinterpret_cast<const int8_t*>(&metadata));
     }
-    case kLINESTRING: {
-      FlatBufferManager::GeoLineString metadata{items_count,
-                                                max_nof_values,
-                                                ti.get_input_srid(),
-                                                ti.get_output_srid(),
-                                                ti.get_compression() == kENCODING_GEOINT};
-      return FlatBufferManager::compute_flatbuffer_size(
-          GeoLineStringFormatId, reinterpret_cast<const int8_t*>(&metadata));
-    }
-    case kPOLYGON: {
-      FlatBufferManager::GeoPolygon metadata{items_count,
-                                             max_nof_values,
-                                             max_nof_values / 3,
-                                             ti.get_input_srid(),
-                                             ti.get_output_srid(),
-                                             ti.get_compression() == kENCODING_GEOINT};
-      return FlatBufferManager::compute_flatbuffer_size(
-          GeoPolygonFormatId, reinterpret_cast<const int8_t*>(&metadata));
-    }
+    case kLINESTRING:
+    case kPOLYGON:
     case kMULTIPOINT:
     case kMULTILINESTRING:
     case kMULTIPOLYGON: {
-      return FlatBufferManager::compute_flatbuffer_size(
-          /* dimensions= */ dimensions,
+      return FlatBufferManager::computeBufferSizeNestedArray(
+          /* ndims= */ ndims,
           /* total_items_count= */ items_count,
           /* total sizes count= */ max_nof_sizes,
           /* total values count= */ max_nof_values,
@@ -1725,27 +1709,27 @@ inline void initializeFlatBuffer(FlatBufferManager& m,
                                  int64_t items_count,
                                  int64_t max_nof_values,
                                  const SQLTypeInfo& ti) {
-  size_t dimensions = 0;
+  size_t ndims = 0;
   FlatBufferManager::ValueType value_type;
   int64_t max_nof_sizes = 0;
   switch (ti.get_type()) {
     case kPOINT:
-      dimensions = 0;
+      ndims = 0;
       break;
     case kLINESTRING:
     case kMULTIPOINT:
     case kARRAY:
-      dimensions = 1;
-      max_nof_sizes = items_count;
+      ndims = 1;
+      max_nof_sizes = items_count + max_nof_values / 3;
       break;
     case kPOLYGON:
     case kMULTILINESTRING:
-      dimensions = 2;
-      max_nof_sizes = items_count + max_nof_values / 3;
+      ndims = 2;
+      max_nof_sizes = items_count + 2 * max_nof_values / 3;
       break;
     case kMULTIPOLYGON:
-      dimensions = 3;
-      max_nof_sizes = items_count + 2 * (max_nof_values / 3 + 1);
+      ndims = 3;
+      max_nof_sizes = items_count + max_nof_values;
       break;
     default:
       UNREACHABLE();
@@ -1803,25 +1787,8 @@ inline void initializeFlatBuffer(FlatBufferManager& m,
       m.initialize(GeoPointFormatId, reinterpret_cast<const int8_t*>(&metadata));
       break;
     }
-    case kLINESTRING: {
-      FlatBufferManager::GeoLineString metadata{items_count,
-                                                max_nof_values,
-                                                ti.get_input_srid(),
-                                                ti.get_output_srid(),
-                                                ti.get_compression() == kENCODING_GEOINT};
-      m.initialize(GeoLineStringFormatId, reinterpret_cast<const int8_t*>(&metadata));
-      break;
-    }
-    case kPOLYGON: {
-      FlatBufferManager::GeoPolygon metadata{items_count,
-                                             max_nof_values,
-                                             max_nof_values / 3,
-                                             ti.get_input_srid(),
-                                             ti.get_output_srid(),
-                                             ti.get_compression() == kENCODING_GEOINT};
-      m.initialize(GeoPolygonFormatId, reinterpret_cast<const int8_t*>(&metadata));
-      break;
-    }
+    case kLINESTRING:
+    case kPOLYGON:
     case kMULTIPOINT:
     case kMULTILINESTRING:
     case kMULTIPOLYGON: {
@@ -1833,17 +1800,16 @@ inline void initializeFlatBuffer(FlatBufferManager& m,
       } else {
         null_value_ptr = reinterpret_cast<int8_t*>(null_point);
       }
-      auto status =
-          m.initialize(NestedArrayFormatId,
-                       /* dimensions= */ dimensions,
-                       /* total_items_count= */ items_count,
-                       /* total_sizes_count= */ max_nof_sizes,
-                       /* total_values_count= */ max_nof_values,
-                       value_type,
-                       /* null value buffer=*/null_value_ptr,  // null value buffer size
-                                                               // is defined by value type
-                       /* user data buffer=*/reinterpret_cast<const int8_t*>(&ti_lite),
-                       /* user data buffer size=*/sizeof(SQLTypeInfoLite));
+      auto status = m.initializeNestedArray(
+          /* ndims= */ ndims,
+          /* total_items_count= */ items_count,
+          /* total_sizes_count= */ max_nof_sizes,
+          /* total_values_count= */ max_nof_values,
+          value_type,
+          /* null value buffer=*/null_value_ptr,  // null value buffer size
+                                                  // is defined by value type
+          /* user data buffer=*/reinterpret_cast<const int8_t*>(&ti_lite),
+          /* user data buffer size=*/sizeof(SQLTypeInfoLite));
       CHECK_EQ(status, FlatBufferManager::Success);
       break;
     }

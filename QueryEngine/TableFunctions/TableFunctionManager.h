@@ -148,6 +148,8 @@ struct TableFunctionManager {
           case kARRAY:
           case kLINESTRING:
           case kPOLYGON:
+          case kMULTIPOINT:
+          case kMULTILINESTRING:
           case kMULTIPOLYGON: {
             if (output_item_values_total_number_[i] == -1) {
               throw std::runtime_error("set_output_item_values_total_number(" +
@@ -223,6 +225,8 @@ struct TableFunctionManager {
             case kARRAY:
             case kLINESTRING:
             case kPOLYGON:
+            case kMULTIPOINT:
+            case kMULTILINESTRING:
             case kMULTIPOLYGON: {
               total_number = output_item_values_total_number_[i];
               break;

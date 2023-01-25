@@ -132,10 +132,15 @@ void TargetExprCodegen::codegen(
   auto agg_out_ptr_w_idx = agg_out_ptr_w_idx_in;
   const auto arg_expr = agg_arg(target_expr);
   const bool varlen_projection = is_varlen_projection(target_expr, target_info.sql_type);
-  /* TODO: find a better way to determine if target uses FlatBuffer storage or not.
+  /* TODO: find a better way to determine if target uses FlatBuffer
+     storage or not. Atm, we assume that target uses it whenever the
+     target sql type supports FlatBuffer but it may not be 100%
+     correct. Although, here the correctness does not matter much as
+     the effect of uses_flatbuffer being true is that it just disables
+     few checks and does not affect the functionality of codegen at
+     all.
    */
-  const bool uses_flatbuffer = (target_info.sql_type.get_type() == kPOLYGON ||
-                                target_info.sql_type.get_type() == kMULTIPOLYGON);
+  const bool uses_flatbuffer = target_info.sql_type.supports_flatbuffer();
   const auto agg_fn_names = agg_fn_base_names(target_info, varlen_projection);
   const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
   WindowProjectNodeContext::resetWindowFunctionContext(executor);

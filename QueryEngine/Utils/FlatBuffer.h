@@ -88,87 +88,6 @@
   if is_geoint is true, point coordinates are stored as integers,
   otherwise as double floating point numbers.
 
-  GeoLineString format specification
-  ----------------------------------
-
-  The GeoLineString format metadata and worker buffers memory layout
-  is described by GeoLineString and GeoLineStringWorker struct
-  definitions below. The raw data buffer memory layout is a follows:
-
-    | <point data>                                       | <compressed indices>            | <storage indices>          |
-    =
-    |<-- (max nof values) * (is_geoint ? 4 : 8) bytes -->|<-- (num items + 1) * 8 bytes -->|<-- (num items) * 8 bytes-->|
-
-  where <point data> stores points coordinates in a point-wise manner:
-  X0, Y0, X1, Y1, ...
-
-  if is_geoint is true, point coordinates are stored as integers,
-  otherwise as double floating point numbers.
-
-  A line of n-th item consists of points defined by
-
-    i0 = compressed_indices[storage_indices[n]]
-    i1 = compressed_indices[storage_indices[n] + 1]
-    line_string = point_data[i0:i1]
-
-  GeoPolygon format specification
-  ----------------------------------
-
-  The GeoPolygon format metadata and worker buffers memory layout
-  is described by GeoPolygon and GeoPolygonWorker struct
-  definitions below. The raw data buffer memory layout is a follows:
-
-    | <point data>                                       | <counts2>                       | <compressed indices2>               |  <compressed indices>           | <storage indices>          |
-    =
-    |<-- (max nof points) * (is_geoint ? 4 : 8) bytes -->|<-- (max nof rings) * 4 bytes -->|<-- (max nof rings + 1) * 8 bytes -->|<-- (num items + 1) * 8 bytes -->|<-- (num items) * 8 bytes-->|
-
-  where
-
-     <point data> stores points coordinates in a point-wise manner:
-     X0, Y0, X1, Y1, ... If is_geoint is true, point coordinates are
-     stored as integers, otherwise as double floating point numbers.
-
-    <counts2> contains ring sizes (in points). All entires are
-      non-negative.
-
-    <compressed indices2> contains the "cumulative sum" of all ring
-      sizes (in points). All entires are non-negative and sorted.
-
-    <compressed indices> contains the "cumulative sum" of item sizes
-      (in rings).  Negative entries indicate null items.
-
-    <storage indices> defines the order of specifying items in the flat
-      buffer
-
-  Assuming that a ring consists of at least 3 points, we'll have
-
-    <max nof rings> * 3 <= <max nof points>
-
-  A polygon of n-th item consists of rings defined by
-
-    i0 = compressed_indices[storage_indices[n]]
-    i1 = compressed_indices[storage_indices[n] + 1]
-
-    for i in range(i0, i1):
-        j0 = compressed_indices2[i]
-        j1 = compressed_indices2[i + 1]
-        ring_points = values[j0:j1]
-
-  For example, consider two polygons:
-
-    Polygon([p0, p1 ,p2, p3], [p4, p5, p6], [p7, p8, p9])
-    Polygon([r0, r1 ,r2], [r3, r4, r5], [r6, r7, r8])
-
-  and storage_indices=[0, 1], then
-
-    compressed_indices = [0 3 6]
-    compressed_indices2 = [0 4 7 10 13 16 19]
-    values = [p0, ..., p9, r0, ..., r8]
-
-  Notice that compressed_indices2 describes the partitioning of points
-  into rings and compressed_indices describes the partitioning of
-  rings into polygons.
-
   NestedArray format specification
   --------------------------------
 
@@ -211,7 +130,7 @@
   sizes and values counts, value type, and user data buffer size,
   use::
 
-    int64_t compute_flatbuffer_size(dimensions,
+    int64_t compute_flatbuffer_size(ndims,
                                     total_items_count,
                                     total_sizes_count,
                                     total_values_count,
@@ -220,7 +139,7 @@
 
   To initialize the provided buffer for nested array format, use::
 
-    Status .initialize(dimensions,
+    Status .initialize(ndims,
                        total_items_count,
                        total_sizes_count,
                        total_values_count,
@@ -251,7 +170,7 @@
 
   To get the dimensionality of a nested array::
 
-    size_t .getDimensions()
+    size_t .getNDims()
 
   To get various buffers::
 
@@ -266,85 +185,98 @@
 
     bool .containsNullValue()
 
-  To get the item and subitems of a nested array::
+  To get the item (and subitems) of a nested array::
+
+    template <size_t NDIM>
+    Status getItemWorker(const int64_t index[NDIM],
+                        const size_t n,
+                        int8_t*& values,
+                        int32_t& nof_values,
+                        int32_t* sizes_buffers[NDIM],
+                        int32_t sizes_lengths[NDIM],
+                        int32_t& nof_sizes,
+                        bool& is_null)
+
+    template <size_t NDIM>
+    Status getItem(const int64_t index, NestedArrayItem<NDIM>& result)
+
+    template <size_t NDIM>
+    Status getItem(const int64_t index[NDIM], const size_t n, NestedArrayItem<NDIM>& result)
 
     template <typename CT>
-    Status .getItem(index,
-                    vector<CT>& values,
-                    vector<int32_t>& sizes,
-                    vector<int32_t>& sizes_of_sizes,
-                    bool& is_null)                           # ndims == 3
-
-    Status .getItem(index,
-                    subindex,
-                    vector<CT>& values,
-                    vector<int32_t>& sizes,
-                    bool& is_null)                           # ndims == 3
-
-    Status .getItem(index,
-                    subindex,
-                    subsubindex,
-                    vector<CT>& values,
-                    bool& is_null)                           # ndims == 3
-
-    Status .getItem(index,
-                    int32_t& nof_values,
-                    int8_t*& values,
-                    int32_t& nof_sizes,
-                    int8_t*& sizes,
-                    int32_t& nof_sizes_of_sizes,
-                    int8_t*& sizes_of_sizes,
-                    bool& is_null)                           # ndims == 3
-
-    Status .getItem(index,
-                    subindex,
-                    int32_t& nof_values,
-                    int8_t*& values,
-                    int32_t& nof_sizes,
-                    int8_t*& sizes,
-                    bool& is_null)                            # ndims == 3
-
-    Status .getItem(index,
-                    subindex,
-                    subsubindex,
-                    int32_t& nof_values,
-                    int8_t*& values,
-                    int32_t& nof_sizes,
-                    int8_t*& sizes,
-                    bool& is_null)                            # ndims == 3
-
-  To get the item or subitem lengths::
-
-    Status .getLength(index, size_t& length)                        # ndims == 3
-    Status .getLength(index, subindex, size_t& length)              # ndims == 3
-    Status .getLength(index, subindex, subsubindex, size_t& length) # ndims == 3
-
-  To set an item of a nested array array::
-
-    Status .setItem(index, vector<double>& arr)               # ndims == 1
-
-    Status .setItem(index, vector<vector<double>>& arr)       # ndims == 2
+    Status getItem(const int64_t index,
+                   std::vector<CT>& values,
+                   std::vector<int32_t>& sizes,
+                   bool& is_null)
 
     template <typename CT>
-    Status .setItem(index, vector<vector<vector<CT>>>& arr)   # ndims == 3
+    Status getItem(const int64_t index,
+                   std::vector<CT>& values,
+                   std::vector<int32_t>& sizes,
+                   std::vector<int32_t>& sizes_of_sizes,
+                   bool& is_null)
 
-    template <typename CT>
-    Status .setItem(index,
-                    vector<CT>
-                    vector<int32_t>& sizes,
-                    vector<int32_t>& sizes_of_sizes)          # ndims == 3
 
+
+  To set the item of a nested array::
+
+    template <size_t NDIM, bool check_sizes=true>
+    Status setItemWorker(const int64_t index,
+                         const int8_t* values,
+                         const int32_t nof_values,
+                         const int32_t* const sizes_buffers[NDIM],
+                         const int32_t sizes_lengths[NDIM],
+                         const int32_t nof_sizes)
+
+    template <size_t NDIM=0, bool check_sizes=true>
     Status setItem(const int64_t index,
-                   int8_t* values_buf,
-                   size_t values_buf_size,
-                   int32_t* sizes_buf,
-                   int32_t nof_sizes,
-                   int32_t* sizes_of_sizes_buf,
-                   int32_t nof_sizes_of_sizes)                # ndims == 3
+                   const int8_t* values_buf,
+                   const int32_t nof_values)
 
-  To test if item is NULL::
+    template <size_t NDIM=1, bool check_sizes=true>
+    Status setItem(const int64_t index,
+                   const int8_t* values_buf,
+                   const int32_t nof_values,
+                   const int32_t* sizes_buf,
+                   const int32_t nof_sizes)
+
+    template <size_t NDIM=2, bool check_sizes=true>
+    Status setItem(const int64_t index,
+                   const int8_t* values_buf,
+                   const int32_t nof_values,
+                   const int32_t* sizes_buf,
+                   const int32_t nof_sizes,
+                   const int32_t* sizes_of_sizes_buf,
+                   const int32_t nof_sizes_of_sizes)
+
+    template <typename CT, size_t NDIM=0>
+    Status setItem(const int64_t index, const std::vector<CT>& arr)
+
+    template <typename CT, size_t NDIM=1, bool check_sizes=false>
+    Status setItem(const int64_t index, const std::vector<std::vector<CT>>& item)
+
+    template <typename CT, size_t NDIM=2, bool check_sizes=false>
+    Status setItem(const int64_t index,
+                   const std::vector<std::vector<std::vector<CT>>>& item)
+
+    template <typename CT, size_t NDIM=1, bool check_sizes=true>
+    Status setItem(const int64_t index,
+                   const std::vector<CT>& values,
+                   const std::vector<int32_t>& sizes)
+
+    template <typename CT, size_t NDIM=2, bool check_sizes=true>
+    Status setItem(const int64_t index,
+                   const std::vector<CT>& values,
+                   const std::vector<int32_t>& sizes,
+                   const std::vector<int32_t>& sizes_of_sizes)
+
+    Status setNull(int64_t index)
+
+  To test if the item is NULL::
 
     Status isNull(index, bool& is_null)
+
+
 
   FlatBuffer usage
   ----------------
@@ -393,10 +325,10 @@
 // false positive test results, use a non-trival integer value when
 // introducing new formats.
 enum FlatBufferFormat {
-  VarlenArrayFormatId = 0x7661726c65634152,    // hex repr of 'varlenAR'
-  GeoPointFormatId = 0x67656f706f696e74,       // hex repr of 'geopoint'
-  GeoLineStringFormatId = 0x676c696e65737472,  // hex repr of 'glinestr'
-  GeoPolygonFormatId = 0x67706f6c79676f6e,     // hex repr of 'gpolygon'
+  VarlenArrayFormatId = 0x7661726c65634152,  // hex repr of 'varlenAR'
+  GeoPointFormatId = 0x67656f706f696e74,     // hex repr of 'geopoint'
+  // GeoLineStringFormatId = 0x676c696e65737472,  // hex repr of 'glinestr'
+  // GeoPolygonFormatId = 0x67706f6c79676f6e,     // hex repr of 'gpolygon'
   // GeoMultiPointFormatId      = 0x47656f706f696e74,  // hex repr of 'Geopoint'
   // GeoMultiLineStringFormatId = 0x476c696e65737472,  // hex repr of 'Glinestr'
   NestedArrayFormatId = 0x6e65737465644152  // hex repr of 'nestedAR'
@@ -567,94 +499,6 @@ struct FlatBufferManager {
 #endif
   };
 
-  struct GeoLineString {
-    int64_t total_items_count;  // the total number of items
-    int64_t max_nof_values;     // the maximum number of points in all items
-    int32_t input_srid;
-    int32_t output_srid;
-    bool is_geoint;
-#ifdef HAVE_TOSTRING
-    std::string toString() const {
-      std::string result = ::typeName(this) + "{";
-      result += "total_items_count=" + std::to_string(total_items_count);
-      result += ", max_nof_values=" + std::to_string(max_nof_values);
-      result += ", input_srid=" + std::to_string(output_srid);
-      result += ", output_srid=" + std::to_string(output_srid);
-      result += ", is_geoint=" + std::to_string(is_geoint);
-      result += "}";
-      return result;
-    }
-#endif
-  };
-
-  struct GeoLineStringWorker {
-    int64_t items_count;  // the number of specified items
-    int64_t values_offset;
-    int64_t compressed_indices_offset;
-    int64_t storage_indices_offset;
-#ifdef HAVE_TOSTRING
-    std::string toString() const {
-      std::string result = ::typeName(this) + "{";
-      result += "items_count=" + std::to_string(items_count);
-      result += ", values_offset=" + std::to_string(values_offset);
-      result +=
-          ", compressed_indices_offset=" + std::to_string(compressed_indices_offset);
-      result += ", storage_indices_offset=" + std::to_string(storage_indices_offset);
-      result += "}";
-      return result;
-    }
-#endif
-  };
-
-  struct GeoPolygon {
-    int64_t total_items_count;  // the total number of items
-    int64_t max_nof_values;     // the maximum number of points in all items
-    int64_t max_nof_rings;      // the maximum number of rings in all items
-    int32_t input_srid;
-    int32_t output_srid;
-    bool is_geoint;
-#ifdef HAVE_TOSTRING
-    std::string toString() const {
-      std::string result = ::typeName(this) + "{";
-      result += "total_items_count=" + std::to_string(total_items_count);
-      result += ", max_nof_values=" + std::to_string(max_nof_values);
-      result += ", max_nof_rings=" + std::to_string(max_nof_rings);
-      result += ", input_srid=" + std::to_string(output_srid);
-      result += ", output_srid=" + std::to_string(output_srid);
-      result += ", is_geoint=" + std::to_string(is_geoint);
-      result += "}";
-      return result;
-    }
-#endif
-  };
-
-  struct GeoPolygonWorker {
-    int64_t items_count;   // the number of specified items
-    int64_t items2_count;  // the number of specified rings
-    int64_t values_offset;
-    int64_t counts2_offset;
-    int64_t compressed_indices2_offset;
-    int64_t compressed_indices_offset;
-    int64_t storage_indices_offset;
-
-#ifdef HAVE_TOSTRING
-    std::string toString() const {
-      std::string result = ::typeName(this) + "{";
-      result += "items_count=" + std::to_string(items_count);
-      result += ", items2_count=" + std::to_string(items2_count);
-      result += ", values_offset=" + std::to_string(values_offset);
-      result += ", counts2_offset=" + std::to_string(counts2_offset);
-      result +=
-          ", compressed_indices2_offset=" + std::to_string(compressed_indices2_offset);
-      result +=
-          ", compressed_indices_offset=" + std::to_string(compressed_indices_offset);
-      result += ", storage_indices_offset=" + std::to_string(storage_indices_offset);
-      result += "}";
-      return result;
-    }
-#endif
-  };
-
   struct NestedArrayWorker {
     int64_t specified_items_count;
     // all offsets are in bytes
@@ -684,7 +528,7 @@ struct FlatBufferManager {
   };
 
   struct NestedArray {
-    size_t dimensions;
+    size_t ndims;
     int64_t total_items_count;
     int64_t total_sizes_count;
     int64_t total_values_count;
@@ -693,7 +537,7 @@ struct FlatBufferManager {
 #ifdef HAVE_TOSTRING
     std::string toString() const {
       std::string result = ::typeName(this) + "{";
-      result += "dimensions=" + std::to_string(dimensions);
+      result += "ndims=" + std::to_string(ndims);
       result += ",\n    total_items_count=" + std::to_string(total_items_count);
       result += ",\n    total_sizes_count=" + std::to_string(total_sizes_count);
       result += ",\n    total_values_count=" + std::to_string(total_values_count);
@@ -740,9 +584,7 @@ struct FlatBufferManager {
       switch (header_format) {
         case NestedArrayFormatId:
         case VarlenArrayFormatId:
-        case GeoPointFormatId:
-        case GeoLineStringFormatId:
-        case GeoPolygonFormatId: {
+        case GeoPointFormatId: {
           int64_t flatbuffer_size = base->flatbuffer_size;
           if (flatbuffer_size > 0) {
             FlatBufferFormat footer_format = static_cast<FlatBufferFormat>(
@@ -759,7 +601,7 @@ struct FlatBufferManager {
   }
 
   // Return the allocation size of the the FlatBuffer storage, in bytes
-  // TODO: return size_t value, 0 when not a flat buffer
+  // TODO?: return size_t value, 0 when not a flat buffer
   static int64_t getBufferSize(const void* buffer) {
     if (isFlatBuffer(buffer)) {
       return reinterpret_cast<const BaseWorker*>(buffer)->flatbuffer_size;
@@ -769,7 +611,7 @@ struct FlatBufferManager {
   }
 
   // Return the allocation size of the the FlatBuffer storage, in bytes
-  // TODO: int64_t -> size_t
+  // TODO?: int64_t -> size_t
   inline int64_t getBufferSize() const {
     return reinterpret_cast<const BaseWorker*>(buffer)->flatbuffer_size;
   }
@@ -802,34 +644,14 @@ struct FlatBufferManager {
   }
 
   // Return the number of items
-  // To be deprecated in favor of NestedArray format
   HOST DEVICE inline int64_t itemsCount() const {
     switch (format()) {
       case VarlenArrayFormatId:
         return getVarlenArrayMetadata()->total_items_count;
       case GeoPointFormatId:
         return getGeoPointMetadata()->total_items_count;
-      case GeoLineStringFormatId:
-        return getGeoLineStringMetadata()->total_items_count;
-      case GeoPolygonFormatId:
-        return getGeoPolygonMetadata()->total_items_count;
       case NestedArrayFormatId:
         return getNestedArrayMetadata()->total_items_count;
-      default:
-        break;
-    }
-    return -1;  // invalid value
-  }
-
-  // To be deprecated in favor of NestedArray format
-  HOST DEVICE inline int64_t items2Count() const {
-    switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoPointFormatId:
-      case GeoLineStringFormatId:
-        break;
-      case GeoPolygonFormatId:
-        return getGeoPolygonMetadata()->max_nof_rings;
       default:
         break;
     }
@@ -843,12 +665,6 @@ struct FlatBufferManager {
         return getVarlenArrayMetadata()->dtype_size;
       case GeoPointFormatId:
         return 2 * (getGeoPointMetadata()->is_geoint ? sizeof(int32_t) : sizeof(double));
-      case GeoLineStringFormatId:
-        return 2 *
-               (getGeoLineStringMetadata()->is_geoint ? sizeof(int32_t) : sizeof(double));
-      case GeoPolygonFormatId:
-        return 2 *
-               (getGeoPolygonMetadata()->is_geoint ? sizeof(int32_t) : sizeof(double));
       default:
         break;
     }
@@ -862,12 +678,6 @@ struct FlatBufferManager {
         return getVarlenArrayMetadata()->dtype_size;
       case GeoPointFormatId:
         return 2 * (getGeoPointMetadata()->is_geoint ? sizeof(int32_t) : sizeof(double));
-      case GeoLineStringFormatId:
-        return 2 *
-               (getGeoLineStringMetadata()->is_geoint ? sizeof(int32_t) : sizeof(double));
-      case GeoPolygonFormatId:
-        return 2 *
-               (getGeoPolygonMetadata()->is_geoint ? sizeof(int32_t) : sizeof(double));
       default:
         break;
     }
@@ -908,45 +718,6 @@ struct FlatBufferManager {
             itemsize * format_metadata->total_items_count);  // values buffer size
         break;
       }
-      case GeoLineStringFormatId: {
-        const auto format_metadata =
-            reinterpret_cast<const GeoLineString*>(format_metadata_ptr);
-        flatbuffer_size += _align_to_int64(sizeof(GeoLineString));
-        flatbuffer_size += _align_to_int64(sizeof(GeoLineStringWorker));
-        const auto itemsize =
-            2 * (format_metadata->is_geoint ? sizeof(int32_t) : sizeof(double));
-        flatbuffer_size += _align_to_int64(
-            itemsize * format_metadata->max_nof_values);  // values buffer size
-        flatbuffer_size +=
-            _align_to_int64(sizeof(int64_t) * (format_metadata->total_items_count +
-                                               1));  // compressed_indices buffer size
-        flatbuffer_size += _align_to_int64(
-            sizeof(int64_t) *
-            (format_metadata->total_items_count));  // storage_indices buffer size
-        break;
-      }
-      case GeoPolygonFormatId: {
-        const auto format_metadata =
-            reinterpret_cast<const GeoPolygon*>(format_metadata_ptr);
-        flatbuffer_size += _align_to_int64(sizeof(GeoPolygon));
-        flatbuffer_size += _align_to_int64(sizeof(GeoPolygonWorker));
-        const auto itemsize =
-            2 * (format_metadata->is_geoint ? sizeof(int32_t) : sizeof(double));
-        flatbuffer_size += _align_to_int64(
-            itemsize * format_metadata->max_nof_values);  // values buffer size
-        flatbuffer_size += _align_to_int64(
-            sizeof(int32_t) * (format_metadata->max_nof_rings));  // counts2 buffer size
-        flatbuffer_size +=
-            _align_to_int64(sizeof(int64_t) * (format_metadata->max_nof_rings +
-                                               1));  // compressed_indices2 buffer size
-        flatbuffer_size +=
-            _align_to_int64(sizeof(int64_t) * (format_metadata->total_items_count +
-                                               1));  // compressed_indices buffer size
-        flatbuffer_size += _align_to_int64(
-            sizeof(int64_t) *
-            (format_metadata->total_items_count));  // storage_indices buffer size
-        break;
-      }
       default:
         FLATBUFFER_UNREACHABLE();
     }
@@ -983,19 +754,7 @@ struct FlatBufferManager {
   // To be deprecated in favor of NestedArray format
   FLATBUFFER_MANAGER_FORMAT_TOOLS(VarlenArray);
   FLATBUFFER_MANAGER_FORMAT_TOOLS(GeoPoint);
-  FLATBUFFER_MANAGER_FORMAT_TOOLS(GeoLineString);
-  FLATBUFFER_MANAGER_FORMAT_TOOLS(GeoPolygon);
-  /*
-  HOST DEVICE inline NestedArrayWorker* getNestedArrayWorker() {
-    auto* base = getBaseWorker();
-    return reinterpret_cast<NestedArrayWorker*>(buffer + base->format_worker_offset);
-  }
-  HOST DEVICE inline const NestedArrayWorker* getNestedArrayWorker() const {
-    const auto* base = getBaseWorker();
-    return reinterpret_cast<const NestedArrayWorker*>(buffer +
-                                                      base->format_worker_offset);
-  }
-  */
+
 #define FLATBUFFER_MANAGER_FORMAT_TOOLS_NEW(TYPENAME)                                 \
   HOST DEVICE inline NestedArrayWorker* get##TYPENAME##Worker() {                     \
     auto* base = getBaseWorker();                                                     \
@@ -1024,12 +783,12 @@ struct FlatBufferManager {
   offset = OBJ->NAME##_offset = offset + _align_to_int64(previous_size); \
   previous_size = SIZE;
 
-  static int64_t compute_flatbuffer_size(int64_t dimensions,
-                                         int64_t total_items_count,
-                                         int64_t total_sizes_count,
-                                         int64_t total_values_count,
-                                         ValueType value_type,
-                                         size_t user_data_size) {
+  static int64_t computeBufferSizeNestedArray(int64_t ndims,
+                                              int64_t total_items_count,
+                                              int64_t total_sizes_count,
+                                              int64_t total_values_count,
+                                              ValueType value_type,
+                                              size_t user_data_size) {
     size_t value_size = get_size(value_type);
     offsets_t flatbuffer_size = _align_to_int64(sizeof(FlatBufferManager::BaseWorker));
     flatbuffer_size += _align_to_int64(sizeof(NestedArray));
@@ -1040,8 +799,8 @@ struct FlatBufferManager {
         _align_to_int64(sizeof(sizes_t) * total_sizes_count);  // sizes buffer
     flatbuffer_size +=
         _align_to_int64(sizeof(offsets_t) * (total_items_count + 1));  // values offsets
-    flatbuffer_size += _align_to_int64(
-        sizeof(offsets_t) * (total_items_count * dimensions + 1));  // sizes offsets
+    flatbuffer_size += _align_to_int64(sizeof(offsets_t) *
+                                       (total_items_count * ndims + 1));  // sizes offsets
     flatbuffer_size += _align_to_int64(
         sizeof(sizes_t) * total_items_count);  // storage indices, must use signed type
     flatbuffer_size += _align_to_int64(user_data_size);   // user data
@@ -1049,32 +808,30 @@ struct FlatBufferManager {
     return flatbuffer_size;
   }
 
-  Status initialize(FlatBufferFormat format_id,  // TODO: eliminate format_id or add it to
-                                                 // compute_flatbuffer_size
-                    int64_t dimensions,
-                    int64_t total_items_count,
-                    int64_t total_sizes_count,
-                    int64_t total_values_count,
-                    ValueType value_type,
-                    const int8_t* null_value_ptr,
-                    const int8_t* user_data_ptr,
-                    size_t user_data_size) {
+  Status initializeNestedArray(int64_t ndims,
+                               int64_t total_items_count,
+                               int64_t total_sizes_count,
+                               int64_t total_values_count,
+                               ValueType value_type,
+                               const int8_t* null_value_ptr,
+                               const int8_t* user_data_ptr,
+                               size_t user_data_size) {
     auto* base = getBaseWorker();
-    base->format_id = format_id;
+    base->format_id = NestedArrayFormatId;
     size_t value_size = get_size(value_type);
-    base->flatbuffer_size = compute_flatbuffer_size(dimensions,
-                                                    total_items_count,
-                                                    total_sizes_count,
-                                                    total_values_count,
-                                                    value_type,
-                                                    user_data_size);
+    base->flatbuffer_size = computeBufferSizeNestedArray(ndims,
+                                                         total_items_count,
+                                                         total_sizes_count,
+                                                         total_values_count,
+                                                         value_type,
+                                                         user_data_size);
     offsets_t offset = 0;
     size_t previous_size = sizeof(FlatBufferManager::BaseWorker);
     FLATBUFFER_MANAGER_SET_OFFSET(base, format_metadata, sizeof(NestedArray));
     FLATBUFFER_MANAGER_SET_OFFSET(base, format_worker, sizeof(NestedArrayWorker));
 
     auto* metadata = getNestedArrayMetadata();
-    metadata->dimensions = dimensions;
+    metadata->ndims = ndims;
     metadata->total_items_count = total_items_count;
     metadata->total_sizes_count = total_sizes_count;
     metadata->total_values_count = total_values_count;
@@ -1092,7 +849,7 @@ struct FlatBufferManager {
     FLATBUFFER_MANAGER_SET_OFFSET(
         worker, values_offsets, sizeof(offsets_t) * (total_items_count + 1));
     FLATBUFFER_MANAGER_SET_OFFSET(
-        worker, sizes_offsets, sizeof(offsets_t) * (total_items_count * dimensions + 1));
+        worker, sizes_offsets, sizeof(offsets_t) * (total_items_count * ndims + 1));
     FLATBUFFER_MANAGER_SET_OFFSET(
         worker, storage_indices, sizeof(sizes_t) * total_items_count);
     FLATBUFFER_MANAGER_SET_OFFSET(worker, user_data_buffer, user_data_size);
@@ -1106,7 +863,7 @@ struct FlatBufferManager {
     offsets_t* sizes_offsets = get_sizes_offsets();
     values_offsets[0] = 0;
     sizes_offsets[0] = 0;
-    sizes_t* storage_indices = get_storage_indices_new();
+    sizes_t* storage_indices = get_storage_indices();
     for (int i = 0; i < total_items_count; i++) {
       storage_indices[i] = -1;
     }
@@ -1131,9 +888,10 @@ struct FlatBufferManager {
     }
 
     ((int64_t*)buffer)[base->flatbuffer_size / sizeof(int64_t) - 1] =
-        static_cast<int64_t>(format_id);
+        static_cast<int64_t>(base->format_id);
 
     if (isFlatBuffer(buffer)) {
+      // make sure that initialization leads to a valid FlatBuffer
       return Success;
     }
     RETURN_ERROR(UnknownFormatError);
@@ -1204,100 +962,6 @@ struct FlatBufferManager {
             base->format_worker_offset + _align_to_int64(sizeof(GeoPointWorker));
         break;
       }
-      case GeoLineStringFormatId: {
-        base->format_worker_offset =
-            base->format_metadata_offset + _align_to_int64(sizeof(GeoLineString));
-
-        const auto* format_metadata =
-            reinterpret_cast<const GeoLineString*>(format_metadata_ptr);
-        auto* this_metadata = getGeoLineStringMetadata();
-        this_metadata->total_items_count = format_metadata->total_items_count;
-        this_metadata->max_nof_values = format_metadata->max_nof_values;
-        this_metadata->input_srid = format_metadata->input_srid;
-        this_metadata->output_srid = format_metadata->output_srid;
-        this_metadata->is_geoint = format_metadata->is_geoint;
-
-        const auto itemsize =
-            2 * (this_metadata->is_geoint ? sizeof(int32_t) : sizeof(double));
-
-        auto* this_worker = getGeoLineStringWorker();
-        this_worker->items_count = 0;
-        this_worker->values_offset =
-            base->format_worker_offset + _align_to_int64(sizeof(GeoLineStringWorker));
-        this_worker->compressed_indices_offset =
-            this_worker->values_offset +
-            _align_to_int64(itemsize * this_metadata->max_nof_values);
-        ;
-        this_worker->storage_indices_offset =
-            this_worker->compressed_indices_offset +
-            _align_to_int64(sizeof(int64_t) * (this_metadata->total_items_count + 1));
-
-        int64_t* compressed_indices =
-            reinterpret_cast<int64_t*>(buffer + this_worker->compressed_indices_offset);
-        int64_t* storage_indices =
-            reinterpret_cast<int64_t*>(buffer + this_worker->storage_indices_offset);
-        for (int i = 0; i < this_metadata->total_items_count; i++) {
-          compressed_indices[i] = 0;
-          storage_indices[i] = -1;
-        }
-        compressed_indices[this_metadata->total_items_count] = 0;
-        break;
-      }
-      case GeoPolygonFormatId: {
-        base->format_worker_offset =
-            base->format_metadata_offset + _align_to_int64(sizeof(GeoPolygon));
-
-        const auto* format_metadata =
-            reinterpret_cast<const GeoPolygon*>(format_metadata_ptr);
-        auto* this_metadata = getGeoPolygonMetadata();
-        this_metadata->total_items_count = format_metadata->total_items_count;
-        this_metadata->max_nof_values = format_metadata->max_nof_values;
-        this_metadata->max_nof_rings = format_metadata->max_nof_rings;
-        this_metadata->input_srid = format_metadata->input_srid;
-        this_metadata->output_srid = format_metadata->output_srid;
-        this_metadata->is_geoint = format_metadata->is_geoint;
-
-        const auto itemsize =
-            2 * (this_metadata->is_geoint ? sizeof(int32_t) : sizeof(double));
-
-        auto* this_worker = getGeoPolygonWorker();
-        this_worker->items_count = 0;
-        this_worker->items2_count = 0;
-        this_worker->values_offset =
-            base->format_worker_offset + _align_to_int64(sizeof(GeoPolygonWorker));
-
-        this_worker->counts2_offset =
-            this_worker->values_offset +
-            _align_to_int64(itemsize * this_metadata->max_nof_values);
-
-        this_worker->compressed_indices2_offset =
-            this_worker->counts2_offset +
-            _align_to_int64(sizeof(int32_t) * this_metadata->max_nof_rings);
-
-        this_worker->compressed_indices_offset =
-            this_worker->compressed_indices2_offset +
-            _align_to_int64(sizeof(int64_t) * (this_metadata->max_nof_rings + 1));
-        ;
-        this_worker->storage_indices_offset =
-            this_worker->compressed_indices_offset +
-            _align_to_int64(sizeof(int64_t) * (this_metadata->total_items_count + 1));
-
-        int32_t* counts2 = get_counts2();
-        int64_t* compressed_indices2 = get_compressed_indices2();
-        int64_t* compressed_indices = get_compressed_indices();
-        int64_t* storage_indices = get_storage_indices();
-        for (int i = 0; i < this_metadata->max_nof_rings; i++) {
-          counts2[i] = 0;
-          compressed_indices2[i] = 0;
-        }
-        compressed_indices2[this_metadata->max_nof_rings] = 0;
-        for (int i = 0; i < this_metadata->total_items_count; i++) {
-          compressed_indices[i] = 0;
-          storage_indices[i] = -1;
-        }
-        compressed_indices[this_metadata->total_items_count] = 0;
-        break;
-      }
     }
     ((int64_t*)buffer)[base->flatbuffer_size / sizeof(int64_t) - 1] =
         static_cast<int64_t>(format_id);
@@ -1305,9 +969,9 @@ struct FlatBufferManager {
 
   // Low-level API
 
-  inline size_t getDimensions() const {
+  inline size_t getNDims() const {
     if (isNestedArray()) {
-      return getNestedArrayMetadata()->dimensions;
+      return getNestedArrayMetadata()->ndims;
     }
     FLATBUFFER_UNREACHABLE();
     return 0;
@@ -1321,10 +985,6 @@ struct FlatBufferManager {
         return getVarlenArrayMetadata()->max_nof_values;
       case GeoPointFormatId:
         return getGeoPointMetadata()->total_items_count;
-      case GeoLineStringFormatId:
-        return getGeoLineStringMetadata()->max_nof_values;
-      case GeoPolygonFormatId:
-        return getGeoPolygonMetadata()->max_nof_values;
       default:
         break;
     }
@@ -1338,11 +998,6 @@ struct FlatBufferManager {
       case NestedArrayFormatId: {
         FLATBUFFER_UNREACHABLE();
         break;
-      }
-      case GeoPolygonFormatId: {
-        const int64_t storage_count2 = get_storage_count2();
-        const int64_t* compressed_indices2 = get_compressed_indices2();
-        return compressed_indices2[storage_count2];
       }
       default: {
         const int64_t storage_count = get_storage_count();
@@ -1360,10 +1015,6 @@ struct FlatBufferManager {
         return getVarlenArrayWorker()->items_count;
       case GeoPointFormatId:
         return getGeoPointMetadata()->total_items_count;
-      case GeoLineStringFormatId:
-        return getGeoLineStringWorker()->items_count;
-      case GeoPolygonFormatId:
-        return getGeoPolygonWorker()->items_count;
       default:
         break;
     }
@@ -1378,46 +1029,11 @@ struct FlatBufferManager {
         return getVarlenArrayWorker()->items_count;
       case GeoPointFormatId:
         return getGeoPointMetadata()->total_items_count;
-      case GeoLineStringFormatId:
-        return getGeoLineStringWorker()->items_count;
-      case GeoPolygonFormatId:
-        return getGeoPolygonWorker()->items_count;
       default:
         break;
     }
     static int64_t dummy = -1;
     return dummy;
-  }
-
-  // Return the number of specified blocks
-  // To be deprecated in favor of NestedArray format
-  HOST DEVICE inline int64_t& get_storage_count2() {
-    switch (format()) {
-      case GeoPolygonFormatId:
-        return getGeoPolygonWorker()->items2_count;
-      case VarlenArrayFormatId:
-      case GeoPointFormatId:
-      case GeoLineStringFormatId:
-      default:
-        break;
-    }
-    static int64_t dummy_storage_count = -1;
-    return dummy_storage_count;
-  }
-
-  // To be deprecated in favor of NestedArray format
-  inline const int64_t& get_storage_count2() const {
-    switch (format()) {
-      case GeoPolygonFormatId:
-        return getGeoPolygonWorker()->items2_count;
-      case VarlenArrayFormatId:
-      case GeoPointFormatId:
-      case GeoLineStringFormatId:
-      default:
-        break;
-    }
-    static int64_t dummy_storage_count = -1;
-    return dummy_storage_count;
   }
 
   // Return the size of values buffer in bytes
@@ -1434,32 +1050,6 @@ struct FlatBufferManager {
             2 * (metadata->is_geoint ? sizeof(int32_t) : sizeof(double));
         return _align_to_int64(itemsize * metadata->total_items_count);
       }
-      case GeoLineStringFormatId: {
-        const auto* worker = getGeoLineStringWorker();
-        return worker->compressed_indices_offset - worker->values_offset;
-      }
-      case GeoPolygonFormatId: {
-        const auto* worker = getGeoPolygonWorker();
-        return worker->compressed_indices2_offset - worker->values_offset;
-      }
-      default:
-        break;
-    }
-    static int64_t dummy = -1;
-    return dummy;
-  }
-
-  // Return the size of compressed_indices2 buffer in bytes
-  // To be deprecated in favor of NestedArray format
-  inline int64_t get_compressed_indices2_buffer_size() const {
-    switch (format()) {
-      case GeoPolygonFormatId: {
-        const auto* worker = getGeoPolygonWorker();
-        return worker->compressed_indices_offset - worker->compressed_indices2_offset;
-      }
-      case VarlenArrayFormatId:
-      case GeoPointFormatId:
-      case GeoLineStringFormatId:
       default:
         break;
     }
@@ -1478,12 +1068,6 @@ struct FlatBufferManager {
       case GeoPointFormatId:
         offset = getGeoPointWorker()->values_offset;
         break;
-      case GeoLineStringFormatId:
-        offset = getGeoLineStringWorker()->values_offset;
-        break;
-      case GeoPolygonFormatId:
-        offset = getGeoPolygonWorker()->values_offset;
-        break;
       default:
         return nullptr;
     }
@@ -1500,70 +1084,10 @@ struct FlatBufferManager {
       case GeoPointFormatId:
         offset = getGeoPointWorker()->values_offset;
         break;
-      case GeoLineStringFormatId:
-        offset = getGeoLineStringWorker()->values_offset;
-        break;
-      case GeoPolygonFormatId:
-        offset = getGeoPolygonWorker()->values_offset;
-        break;
       default:
         return nullptr;
     }
     return buffer + offset;
-  }
-
-  // Return the pointer to counts2 buffer
-  // To be deprecated in favor of NestedArray format
-  HOST DEVICE inline int32_t* get_counts2() {
-    int64_t offset = 0;
-    switch (format()) {
-      case GeoPolygonFormatId:
-        offset = getGeoPolygonWorker()->counts2_offset;
-        break;
-      default:
-        return nullptr;
-    }
-    return reinterpret_cast<int32_t*>(buffer + offset);
-  }
-
-  // To be deprecated in favor of NestedArray format
-  inline const int32_t* get_counts2() const {
-    int64_t offset = 0;
-    switch (format()) {
-      case GeoPolygonFormatId:
-        offset = getGeoPolygonWorker()->counts2_offset;
-        break;
-      default:
-        return nullptr;
-    }
-    return reinterpret_cast<int32_t*>(buffer + offset);
-  }
-
-  // Return the pointer to compressed indices2 buffer
-  // To be deprecated in favor of NestedArray format
-  HOST DEVICE inline int64_t* get_compressed_indices2() {
-    int64_t offset = 0;
-    switch (format()) {
-      case GeoPolygonFormatId:
-        offset = getGeoPolygonWorker()->compressed_indices2_offset;
-        break;
-      default:
-        return nullptr;
-    }
-    return reinterpret_cast<int64_t*>(buffer + offset);
-  }
-
-  // To be deprecated in favor of NestedArray format
-  inline const int64_t* get_compressed_indices2() const {
-    int64_t offset = 0;
-    switch (format()) {
-      case GeoPolygonFormatId:
-        offset = getGeoPolygonWorker()->compressed_indices2_offset;
-        break;
-      default:
-        return nullptr;
-    }
-    return reinterpret_cast<int64_t*>(buffer + offset);
   }
 
   // Return the pointer to compressed indices buffer
@@ -1573,12 +1097,6 @@ struct FlatBufferManager {
     switch (format()) {
       case VarlenArrayFormatId:
         offset = getVarlenArrayWorker()->compressed_indices_offset;
-        break;
-      case GeoLineStringFormatId:
-        offset = getGeoLineStringWorker()->compressed_indices_offset;
-        break;
-      case GeoPolygonFormatId:
-        offset = getGeoPolygonWorker()->compressed_indices_offset;
         break;
       default:
         return nullptr;
@@ -1592,12 +1110,6 @@ struct FlatBufferManager {
     switch (format()) {
       case VarlenArrayFormatId:
         offset = getVarlenArrayWorker()->compressed_indices_offset;
-        break;
-      case GeoLineStringFormatId:
-        offset = getGeoLineStringWorker()->compressed_indices_offset;
-        break;
-      case GeoPolygonFormatId:
-        offset = getGeoPolygonWorker()->compressed_indices_offset;
         break;
       default:
         return nullptr;
@@ -1672,17 +1184,11 @@ struct FlatBufferManager {
   }
 
   // To be deprecated in favor of NestedArray format
-  HOST DEVICE inline int64_t* get_storage_indices() {
+  HOST DEVICE inline int64_t* get_storage_indices_old() {
     int64_t offset = 0;
     switch (format()) {
       case VarlenArrayFormatId:
         offset = getVarlenArrayWorker()->storage_indices_offset;
-        break;
-      case GeoLineStringFormatId:
-        offset = getGeoLineStringWorker()->storage_indices_offset;
-        break;
-      case GeoPolygonFormatId:
-        offset = getGeoPolygonWorker()->storage_indices_offset;
         break;
       default:
         return nullptr;
@@ -1691,17 +1197,11 @@ struct FlatBufferManager {
   }
 
   // To be deprecated in favor of NestedArray format
-  inline const int64_t* get_storage_indices() const {
+  inline const int64_t* get_storage_indices_old() const {
     int64_t offset = 0;
     switch (format()) {
       case VarlenArrayFormatId:
         offset = getVarlenArrayWorker()->storage_indices_offset;
-        break;
-      case GeoLineStringFormatId:
-        offset = getGeoLineStringWorker()->storage_indices_offset;
-        break;
-      case GeoPolygonFormatId:
-        offset = getGeoPolygonWorker()->storage_indices_offset;
         break;
       default:
         return nullptr;
@@ -1709,8 +1209,7 @@ struct FlatBufferManager {
     return reinterpret_cast<int64_t*>(buffer + offset);
   }
 
-  // TODO: rename to get_storage_indices
-  HOST DEVICE inline sizes_t* get_storage_indices_new() {
+  HOST DEVICE inline sizes_t* get_storage_indices() {
     offsets_t offset = 0;
     switch (format()) {
       case NestedArrayFormatId:
@@ -1722,7 +1221,7 @@ struct FlatBufferManager {
     return reinterpret_cast<sizes_t*>(buffer + offset);
   }
 
-  inline const sizes_t* get_storage_indices_new() const {
+  inline const sizes_t* get_storage_indices() const {
     offsets_t offset = 0;
     switch (format()) {
       case NestedArrayFormatId:
@@ -1732,107 +1231,506 @@ struct FlatBufferManager {
         return nullptr;
     }
     return reinterpret_cast<sizes_t*>(buffer + offset);
-  }
-
-  Status getItemPrepare(const int64_t index, const size_t ndims) const {
-    if (index < 0 || index >= itemsCount()) {
-      RETURN_ERROR(IndexError);
-    }
-    if (format() != NestedArrayFormatId) {
-      RETURN_ERROR(NotSupportedFormatError);
-    }
-    if (getDimensions() != ndims) {
-      RETURN_ERROR(DimensionalityError);
-    }
-    return Success;
   }
 
   inline sizes_t get_storage_index(const int64_t index) const {
-    return get_storage_indices_new()[index];
+    return get_storage_indices()[index];
   }
 
   // High-level API
 
-  Status getLength(const int64_t index, size_t& length) const {
-    const size_t ndims = getDimensions();
-    Status status = getItemPrepare(index, ndims);
-    if (status != Success) {
-      return status;
+  // This getLength method is a worker method of accessing the
+  // flatbuffer content.
+  template <size_t NDIM>
+  Status getLength(const int64_t index[NDIM], const size_t n, size_t& length) const {
+    if (!isNestedArray()) {
+      RETURN_ERROR(NotSupportedFormatError);
     }
-    const auto storage_index = get_storage_index(index);
-    if (ndims == 3) {
-      const auto* values_offsets = get_values_offsets();
-      const auto values_offset = values_offsets[storage_index];
-      if (values_offset < 0) {
-        length = 0;
-        return Success;
-      }
-      const auto* sizes_offsets = get_sizes_offsets();
-      const auto* sizes_buffer = get_sizes_buffer();
-      const auto sizes_offset = sizes_offsets[storage_index * ndims];
-      length = sizes_buffer[sizes_offset];
-    } else {
-      RETURN_ERROR(NotImplementedError);
+    const size_t ndims = getNDims();
+    if (n == 0) {
+      length = itemsCount();
+      return Success;
     }
-
-    return Success;
-  }
-
-  Status getLength(const int64_t index, const int64_t subindex, size_t& length) const {
-    const size_t ndims = getDimensions();
-    Status status = getItemPrepare(index, ndims);
-    if (status != Success) {
-      return status;
+    if (n > ndims + 1) {
+      RETURN_ERROR(DimensionalityError);
     }
-    const auto storage_index = get_storage_index(index);
-    if (ndims == 3) {
-      const auto* values_offsets = get_values_offsets();
-      const auto values_offset = values_offsets[storage_index];
-      if (values_offset < 0) {
-        RETURN_ERROR(IndexError);
-      }
-      const auto* sizes_offsets = get_sizes_offsets();
-      const auto* sizes_buffer = get_sizes_buffer();
-      const auto sizes2_offset = sizes_offsets[storage_index * ndims + 1];
-      length = (sizes_buffer + sizes2_offset)[subindex];
-    } else {
-      RETURN_ERROR(NotImplementedError);
+    const auto storage_index = get_storage_index(index[0]);
+    const auto* values_offsets = get_values_offsets();
+    const auto values_offset = values_offsets[storage_index];
+    if (values_offset < 0) {  // NULL item
+      length = 0;
+      return Success;
     }
-    return Success;
-  }
-
-  Status getLength(const int64_t index,
-                   const int64_t subindex,
-                   const int64_t subsubindex,
-                   size_t& length) const {
-    const size_t ndims = getDimensions();
-    Status status = getItemPrepare(index, ndims);
-    if (status != Success) {
-      return status;
-    }
-    const auto storage_index = get_storage_index(index);
-    if (ndims == 3) {
-      const auto* values_offsets = get_values_offsets();
-      const auto values_offset = values_offsets[storage_index];
-      if (values_offset < 0) {
-        RETURN_ERROR(IndexError);
-      }
-      const auto* sizes_offsets = get_sizes_offsets();
-      const auto* sizes_buffer = get_sizes_buffer();
-      const auto sizes2_offset = sizes_offsets[storage_index * ndims + 1];
-      const auto sizes3_offset = sizes_offsets[storage_index * ndims + 2];
-      offsets_t soffset = 0;
-      for (int64_t i = 0; i < subindex; i++) {
-        soffset += (sizes_buffer + sizes2_offset)[i];
-      }
-      length = (sizes_buffer + sizes3_offset + soffset)[subsubindex];
-    } else {
-      RETURN_ERROR(NotImplementedError);
+    const auto* sizes_offsets = get_sizes_offsets();
+    const auto* sizes_buffer = get_sizes_buffer();
+    const auto sizes_offset = sizes_offsets[storage_index * ndims];
+    switch (n) {
+      case 1: {
+        length = sizes_buffer[sizes_offset];
+      } break;
+      case 2: {
+        const auto sizes2_offset = sizes_offsets[storage_index * ndims + 1];
+        if (index[1] < 0 || index[1] >= sizes_buffer[sizes_offset]) {
+          RETURN_ERROR(SubIndexError);
+        }
+        length = sizes_buffer[sizes2_offset + index[1]];
+      } break;
+      case 3: {
+        const auto sizes2_offset = sizes_offsets[storage_index * ndims + 1];
+        const auto sizes3_offset = sizes_offsets[storage_index * ndims + 2];
+        if (index[1] < 0 || index[1] >= sizes_buffer[sizes_offset]) {
+          RETURN_ERROR(SubIndexError);
+        }
+        if (index[2] < 0 || index[2] >= sizes_buffer[sizes2_offset + index[1]]) {
+          RETURN_ERROR(SubIndexError);
+        }
+        offsets_t soffset = 0;
+        for (int64_t i = 0; i < index[1]; i++) {
+          soffset += sizes_buffer[sizes2_offset + i];
+        }
+        length = sizes_buffer[sizes3_offset + soffset + index[2]];
+      } break;
+      default:
+        RETURN_ERROR(NotImplementedError);
+        break;
     }
     return Success;
   }
 
-  // TODO: parametrize sizes type
+  // This getItem method is a worker method of accessing the
+  // flatbuffer content.
+  template <size_t NDIM>
+  Status getItemWorker(const int64_t index[NDIM],
+                       const size_t n,
+                       int8_t*& values,
+                       int32_t& nof_values,
+                       int32_t* sizes_buffers[NDIM],
+                       int32_t sizes_lengths[NDIM],
+                       int32_t& nof_sizes,
+                       bool& is_null) {
+    if (format() != NestedArrayFormatId) {
+      RETURN_ERROR(NotSupportedFormatError);
+    }
+
+    const size_t ndims = getNDims();
+    if (n <= 0 || n > ndims + 1) {
+      RETURN_ERROR(DimensionalityError);
+    }
+    // clang-format off
+    /*
+      multipolygon (ndims == 3):
+
+        n == 0 means return a column of multipolygons: flatbuffer, getLenght returns
+          itemsCount()
+
+        n == 1 means return a multipolygon: values, sizes(=sizes_buffers[1]),
+          sizes_of_sizes(=sizes_buffers[0]), getLength returns
+          len(sizes_of_sizes)(=sizes_lengths[0])
+
+        n == 2 means return a polygon: values, sizes, getLength
+          returns len(sizes)
+
+        n == 3 means return a linestring: values, getLength returns
+          len(values)
+
+        n == 4 means return a point: value, getLength returns 0 [NOTIMPL]
+
+      polygon/multilinestring (ndims == 2):
+
+        n == 0 means return a column of polygons/multilinestring:
+          flatbuffer, getLenght returns itemsCount()
+
+        n == 1 means return a polygon/multilinestring: values, sizes,
+          getLength returns len(sizes)
+
+        n == 2 means return a linestring: values, getLength
+          returns len(values)
+
+        n == 3 means return a point: value, getLength returns 0 [NOTIMPL]
+
+      linestring/multipoint (ndims == 1):
+
+        n == 0 means return a column of linestring/multipoint:
+          flatbuffer, getLenght returns itemsCount()
+
+        n == 1 means return a linestring: values, getLength returns
+          len(values)
+
+        n == 2 means return a point: value, getLength returns 0 [NOTIMPL]
+
+    */
+    // clang-format off
+    const auto storage_index = get_storage_index(index[0]);
+    const auto* values_offsets = get_values_offsets();
+    const auto values_offset = values_offsets[storage_index];
+    if (values_offset < 0) {
+      values = nullptr;
+      nof_values = 0;
+      nof_sizes = 0;
+      is_null = true;
+      return Success;
+    }
+    is_null = false;
+    const auto* sizes_offsets = get_sizes_offsets();
+    auto* sizes_buffer = get_sizes_buffer();
+    auto* values_buffer = get_values_buffer();
+    const auto valuesize = getValueSize();
+    const auto next_values_offset = values_offsets[storage_index + 1];
+
+    const auto sizes_offset = sizes_offsets[storage_index * ndims];
+    nof_sizes = ndims - n;
+    switch (n) {
+      case 1: {
+        if (next_values_offset < 0) {
+          nof_values = -(next_values_offset + 1) - values_offset;
+        } else {
+          nof_values = next_values_offset - values_offset;
+        }
+        values = values_buffer + values_offset * valuesize;
+        switch (ndims) {
+          case 3: {
+            const auto sizes2_offset = sizes_offsets[storage_index * ndims + 1];
+            const auto sizes3_offset = sizes_offsets[storage_index * ndims + 2];
+            sizes_buffers[0] = sizes_buffer + sizes2_offset;
+            sizes_buffers[1] = sizes_buffer + sizes3_offset;
+            sizes_lengths[0] = sizes_buffer[sizes_offset];
+            sizes_lengths[1] = sizes_offsets[storage_index * ndims + 3] - sizes3_offset;
+            break;
+          }
+          case 2: {
+            const auto sizes2_offset = sizes_offsets[storage_index * ndims + 1];
+            sizes_buffers[0] = sizes_buffer + sizes2_offset;
+            sizes_lengths[0] = sizes_buffer[sizes_offset];
+            break;
+          }
+          case 1:
+            break;
+          default:
+            FLATBUFFER_UNREACHABLE();
+            break;
+        }
+        break;
+      }
+      case 2: {
+        const auto sizes2_offset = sizes_offsets[storage_index * ndims + 1];
+        if (index[1] < 0 || index[1] >= sizes_buffer[sizes_offset]) {
+          RETURN_ERROR(SubIndexError);
+        }
+        offsets_t soffset = 0;
+        for (int64_t i = 0; i < index[1]; i++) {
+          soffset += sizes_buffer[sizes2_offset + i];
+        }
+        values = values_buffer + (values_offset + soffset) * valuesize;
+        switch (ndims) {
+          case 3: {
+            const auto sizes3_offset = sizes_offsets[storage_index * ndims + 2];
+            const sizes_t nsizes = sizes_buffer[sizes2_offset + index[1]];
+            auto sizes_buf = sizes_buffer + sizes3_offset + soffset;
+            sizes_buffers[0] = sizes_buf;
+            sizes_lengths[0] = nsizes;
+            nof_values = 0;
+            for (int64_t i = 0; i < nsizes; i++) {
+              nof_values += sizes_buf[i];
+            }
+            break;
+          }
+          case 2: {
+            nof_values = sizes_buffer[sizes2_offset + index[1]];
+            break;
+          }
+          default:
+            FLATBUFFER_UNREACHABLE();
+            break;
+        }
+        break;
+      }
+      case 3: {
+        if (ndims != 3) {
+          RETURN_ERROR(NotImplementedError);
+        }
+        const auto sizes2_offset = sizes_offsets[storage_index * ndims + 1];
+        const auto sizes3_offset = sizes_offsets[storage_index * ndims + 2];
+        if (index[1] < 0 || index[1] >= sizes_buffer[sizes_offset]) {
+          RETURN_ERROR(SubIndexError);
+        }
+        if (index[2] < 0 || index[2] >= sizes_buffer[sizes2_offset + index[1]]) {
+          RETURN_ERROR(SubIndexError);
+        }
+
+        int64_t i3 = 0;
+        int64_t soffset = 0;
+        int64_t voffset = 0;
+        for (int64_t i = 0; i < index[1]; i++) {
+          auto size2 = sizes_buffer[sizes2_offset + i];
+          soffset += size2;
+          for (int64_t j = 0; j < size2; j++) {
+            voffset += sizes_buffer[sizes3_offset + i3];
+            i3++;
+          }
+        }
+        for (int64_t j = 0; j < index[2]; j++) {
+          voffset += sizes_buffer[sizes3_offset + i3];
+          i3++;
+        }
+        values = values_buffer + (values_offset + voffset) * valuesize;
+        nof_values = sizes_buffer[sizes3_offset + soffset + index[2]];
+        break;
+      }
+      default:
+        RETURN_ERROR(NotImplementedError);
+        break;
+    }
+    return Success;
+  }
+
+  template <size_t NDIM>
+  struct NestedArrayItem {
+    int8_t* values;
+    int32_t nof_values;
+    int32_t* sizes_buffers[NDIM];
+    int32_t sizes_lengths[NDIM];
+    int32_t nof_sizes;
+    bool is_null;
+  };
+
+  template <size_t NDIM>
+  Status getItem(const int64_t index, NestedArrayItem<NDIM>& result) {
+    const int64_t index_[NDIM] = {index};
+    return getItem<NDIM>(index_, 1, result);
+  }
+
+  template <size_t NDIM>
+  Status getItem(const int64_t index[NDIM], const size_t n, NestedArrayItem<NDIM>& result) {
+    return getItemWorker<NDIM>(index, n,
+                         result.values,
+                         result.nof_values,
+                         result.sizes_buffers,
+                         result.sizes_lengths,
+                         result.nof_sizes,
+                         result.is_null);
+  }
+
+  // This setItem method is a worker method of initializing the
+  // flatbuffer content. It can be called once per index value.
+  template <size_t NDIM, bool check_sizes=true>
+  Status setItemWorker(const int64_t index,
+                 const int8_t* values,
+                 const int32_t nof_values,
+                 const int32_t* const sizes_buffers[NDIM],
+                 const int32_t sizes_lengths[NDIM],
+                 const int32_t nof_sizes) {
+    if (format() != NestedArrayFormatId) {
+      RETURN_ERROR(NotSupportedFormatError);
+    }
+    if (index < 0 || index >= itemsCount()) {
+      RETURN_ERROR(IndexError);
+    }
+    const int32_t ndims = getNDims();
+    if (nof_sizes + 1 != ndims) {
+      RETURN_ERROR(DimensionalityError);
+    }
+
+    auto* storage_indices = get_storage_indices();
+    if (storage_indices[index] >= 0) {
+      RETURN_ERROR(ItemAlreadySpecifiedError);
+    }
+    auto* worker = getNestedArrayWorker();
+    const auto storage_index = worker->specified_items_count;
+    storage_indices[index] = storage_index;
+    worker->specified_items_count++;
+
+    auto* values_offsets = get_values_offsets();
+    auto* sizes_offsets = get_sizes_offsets();
+    auto* sizes_buffer = get_sizes_buffer();
+    auto* values_buffer = get_values_buffer();
+    const auto* metadata = getNestedArrayMetadata();
+    const auto valuesize = getValueSize();
+
+    auto values_offset = values_offsets[storage_index];
+    const auto sizes_offset = sizes_offsets[storage_index * ndims];
+    if (values_offset + nof_values > metadata->total_values_count) {
+      RETURN_ERROR(ValuesBufferTooSmallError);
+    }
+
+    switch (ndims) {
+      case 1: {
+        sizes_buffer[sizes_offset] = nof_values;
+        sizes_offsets[storage_index * ndims + 1] = sizes_offset + 1;
+      } break;
+      case 2: {
+        const auto sizes2_offset = sizes_offset + 1;
+        if (sizes2_offset + sizes_lengths[0] > metadata->total_sizes_count) {
+          RETURN_ERROR(SizesBufferTooSmallError);
+        }
+        sizes_buffer[sizes_offset] = sizes_lengths[0];
+        if constexpr (check_sizes) {
+          // check consistency of sizes and nof_values
+          int32_t sum_of_sizes = 0;
+          for (int32_t i=0; i < sizes_lengths[0]; i++) {
+            sum_of_sizes += sizes_buffers[0][i];
+          }
+          if (nof_values != sum_of_sizes) {
+            RETURN_ERROR(InconsistentSizesError);
+          }
+        }
+        if (memcpy(sizes_buffer + sizes2_offset,
+                   sizes_buffers[0],
+                   sizes_lengths[0] * sizeof(sizes_t)) == nullptr) {
+          RETURN_ERROR(MemoryError);
+        }
+        sizes_offsets[storage_index * ndims + 1] = sizes2_offset;
+        sizes_offsets[storage_index * ndims + 2] = sizes2_offset + sizes_lengths[0];
+      } break;
+      case 3: {
+        const auto sizes2_offset = sizes_offset + 1;
+        const auto sizes3_offset = sizes2_offset + sizes_lengths[0];
+        if (sizes2_offset + sizes_lengths[0] + sizes_lengths[1] >
+            metadata->total_sizes_count) {
+          RETURN_ERROR(SizesBufferTooSmallError);
+        }
+        sizes_buffer[sizes_offset] = sizes_lengths[0];
+        if constexpr (check_sizes) {
+          // check consistency of sizes of sizes and nof_sizes
+          int32_t sum_of_sizes_of_sizes = 0;
+          for (int32_t i=0; i < sizes_lengths[0]; i++) {
+            sum_of_sizes_of_sizes += sizes_buffers[0][i];
+          }
+          if (sizes_lengths[1] != sum_of_sizes_of_sizes) {
+            RETURN_ERROR(InconsistentSizesError);
+          }
+        }
+        if (memcpy(sizes_buffer + sizes2_offset,
+                   sizes_buffers[0],
+                   sizes_lengths[0] * sizeof(sizes_t)) == nullptr) {
+          RETURN_ERROR(MemoryError);
+        }
+        if constexpr (check_sizes) {
+          // check consistency of sizes and nof_values
+          int32_t sum_of_sizes = 0;
+          for (int32_t i=0; i < sizes_lengths[1]; i++) {
+            sum_of_sizes += sizes_buffers[1][i];
+          }
+          if (nof_values != sum_of_sizes) {
+            RETURN_ERROR(InconsistentSizesError);
+          }
+        }
+        if (memcpy(sizes_buffer + sizes3_offset,
+                   sizes_buffers[1],
+                   sizes_lengths[1] * sizeof(sizes_t)) == nullptr) {
+          RETURN_ERROR(MemoryError);
+        }
+        sizes_offsets[storage_index * ndims + 1] = sizes2_offset;
+        sizes_offsets[storage_index * ndims + 2] = sizes3_offset;
+        sizes_offsets[storage_index * ndims + 3] = sizes3_offset + sizes_lengths[1];
+      } break;
+      default:
+        FLATBUFFER_UNREACHABLE();
+        break;
+    }
+    if (values != nullptr) {
+      if (memcpy(values_buffer + values_offset * valuesize,
+                 values,
+                 nof_values * valuesize) == nullptr) {
+        RETURN_ERROR(MemoryError);
+      }
+    }
+    values_offsets[storage_index + 1] = values_offset + nof_values;
+    return Success;
+  }
+
+  template <size_t NDIM=0, bool check_sizes=true>
+  Status setItem(const int64_t index,
+                 const int8_t* values_buf,
+                 const int32_t nof_values) {
+    const int32_t* const sizes_buffers[1] = {nullptr};
+    int32_t sizes_lengths[1] = {0};
+    return setItemWorker<1, check_sizes>(index,
+                                            values_buf,
+                                            nof_values,
+                                            sizes_buffers,
+                                            sizes_lengths,
+                                            0);
+  }
+
+  template <size_t NDIM=1, bool check_sizes=true>
+  Status setItem(const int64_t index,
+                 const int8_t* values_buf,
+                 const int32_t nof_values,
+                 const int32_t* sizes_buf,
+                 const int32_t nof_sizes) {
+    const int32_t* const sizes_buffers[NDIM] = {sizes_buf};
+    int32_t sizes_lengths[NDIM] = {nof_sizes};
+    return setItemWorker<NDIM, check_sizes>(index,
+                                            values_buf,
+                                            nof_values,
+                                            sizes_buffers,
+                                            sizes_lengths,
+                                            static_cast<int32_t>(NDIM));
+  }
+
+  template <size_t NDIM=2, bool check_sizes=true>
+  Status setItem(const int64_t index,
+                 const int8_t* values_buf,
+                 const int32_t nof_values,
+                 const int32_t* sizes_buf,
+                 const int32_t nof_sizes,
+                 const int32_t* sizes_of_sizes_buf,
+                 const int32_t nof_sizes_of_sizes) {
+    const int32_t* const sizes_buffers[NDIM] = {sizes_of_sizes_buf, sizes_buf};
+    int32_t sizes_lengths[NDIM] = {nof_sizes_of_sizes, nof_sizes};
+    return setItemWorker<NDIM, check_sizes>(index,
+                                            values_buf,
+                                            nof_values,
+                                            sizes_buffers,
+                                            sizes_lengths,
+                                            static_cast<int32_t>(NDIM));
+  }
+
+  template <typename CT>
+  Status getItem(const int64_t index,
+                 std::vector<CT>& values,
+                 std::vector<int32_t>& sizes,
+                 bool& is_null) {
+    if constexpr (!std::is_same<CT, uint8_t>::value) {
+      if constexpr (std::is_same<CT, double>::value) {
+        const auto* metadata = getNestedArrayMetadata();
+        if (metadata->value_type != PointFloat64) {
+          RETURN_ERROR(TypeError);
+        }
+      } else if constexpr (std::is_same<CT, int32_t>::value) {
+        const auto* metadata = getNestedArrayMetadata();
+        if (metadata->value_type != PointInt32) {
+          RETURN_ERROR(TypeError);
+        }
+      } else {
+        RETURN_ERROR(NotImplementedError);
+      }
+    }
+    NestedArrayItem<2> item;
+    Status status = getItem(index, item);
+    if (status != Success) {
+      return status;
+    }
+    if (item.is_null) {
+      return Success;
+    }
+    if (item.nof_sizes != 1) {
+      RETURN_ERROR(InconsistentSizesError);
+    }
+    const auto valuesize = getValueSize();
+    const auto values_count = item.nof_values * valuesize / sizeof(CT);
+    values.reserve(values_count);
+    values.insert(values.end(),
+                  reinterpret_cast<CT*>(item.values),
+                  reinterpret_cast<CT*>(item.values) + values_count);
+
+    sizes.reserve(item.sizes_lengths[0]);
+    sizes.insert(sizes.end(),
+                 reinterpret_cast<sizes_t*>(item.sizes_buffers[0]),
+                 reinterpret_cast<sizes_t*>(item.sizes_buffers[0] + item.sizes_lengths[0] * sizeof(int32_t)));
+  return Success;
+  }
+
   template <typename CT>
   Status getItem(const int64_t index,
                  std::vector<CT>& values,
@@ -1854,466 +1752,161 @@ struct FlatBufferManager {
         RETURN_ERROR(NotImplementedError);
       }
     }
-    int32_t nof_values;
-    int8_t* values_ptr;
-    int32_t nof_sizes;
-    int8_t* sizes_ptr;
-    int32_t nof_sizes_of_sizes;
-    int8_t* sizes_of_sizes_ptr;
-
-    Status status = getItem(index,
-                            nof_values,
-                            values_ptr,
-                            nof_sizes,
-                            sizes_ptr,
-                            nof_sizes_of_sizes,
-                            sizes_of_sizes_ptr,
-                            is_null);
-
+    NestedArrayItem<3> item;
+    Status status = getItem(index, item);
     if (status != Success) {
       return status;
     }
-    if (is_null) {
+    if (item.is_null) {
       return Success;
     }
+    if (item.nof_sizes != 2) {
+      RETURN_ERROR(InconsistentSizesError);
+    }
     const auto valuesize = getValueSize();
-    const auto values_count = nof_values * valuesize / sizeof(CT);
+    const auto values_count = item.nof_values * valuesize / sizeof(CT);
     values.reserve(values_count);
     values.insert(values.end(),
-                  reinterpret_cast<CT*>(values_ptr),
-                  reinterpret_cast<CT*>(values_ptr) + values_count);
+                  reinterpret_cast<CT*>(item.values),
+                  reinterpret_cast<CT*>(item.values) + values_count);
 
-    sizes.reserve(nof_sizes);
+    sizes.reserve(item.sizes_lengths[1]);
     sizes.insert(sizes.end(),
-                 reinterpret_cast<sizes_t*>(sizes_ptr),
-                 reinterpret_cast<sizes_t*>(sizes_ptr + nof_sizes * sizeof(sizes_t)));
+                 reinterpret_cast<sizes_t*>(item.sizes_buffers[1]),
+                 reinterpret_cast<sizes_t*>(item.sizes_buffers[1] + item.sizes_lengths[1] * sizeof(int32_t)));
 
-    sizes_of_sizes.reserve(nof_sizes_of_sizes);
+    sizes_of_sizes.reserve(item.sizes_lengths[0]);
     sizes_of_sizes.insert(sizes_of_sizes.end(),
-                          reinterpret_cast<sizes_t*>(sizes_of_sizes_ptr),
-                          reinterpret_cast<sizes_t*>(
-                              sizes_of_sizes_ptr + nof_sizes_of_sizes * sizeof(sizes_t)));
+                          reinterpret_cast<sizes_t*>(item.sizes_buffers[0]),
+                          reinterpret_cast<sizes_t*>(item.sizes_buffers[0] + item.sizes_lengths[0] * sizeof(int32_t)));
+  return Success;
 
-    return Success;
   }
 
-  template <typename CT>
-  Status getItem(const int64_t index,
-                 const int64_t subindex,
-                 std::vector<CT>& values,
-                 std::vector<int32_t>& sizes,
-                 bool& is_null) {
-    if constexpr (!std::is_same<CT, uint8_t>::value) {
-      if constexpr (std::is_same<CT, double>::value) {
-        const auto* metadata = getNestedArrayMetadata();
-        if (metadata->value_type != PointFloat64) {
-          RETURN_ERROR(TypeError);
-        }
-      } else if constexpr (std::is_same<CT, int32_t>::value) {
-        const auto* metadata = getNestedArrayMetadata();
-        if (metadata->value_type != PointInt32) {
-          RETURN_ERROR(TypeError);
-        }
-      } else {
-        RETURN_ERROR(NotImplementedError);
-      }
-    }
-    int32_t nof_values;
-    int8_t* values_ptr;
-    int32_t nof_sizes;
-    int8_t* sizes_ptr;
-
-    Status status =
-        getItem(index, subindex, nof_values, values_ptr, nof_sizes, sizes_ptr, is_null);
-
-    if (status != Success) {
-      return status;
-    }
-    if (is_null) {
-      return Success;
-    }
-    const auto valuesize = getValueSize();
-    const auto values_count = nof_values * valuesize / sizeof(CT);
-    values.reserve(values_count);
-    values.insert(values.end(),
-                  reinterpret_cast<CT*>(values_ptr),
-                  reinterpret_cast<CT*>(values_ptr) + values_count);
-
-    sizes.reserve(nof_sizes);
-    sizes.insert(sizes.end(),
-                 reinterpret_cast<sizes_t*>(sizes_ptr),
-                 reinterpret_cast<sizes_t*>(sizes_ptr + nof_sizes * sizeof(sizes_t)));
-
-    return Success;
-  }
-
-  template <typename CT>
-  Status getItem(const int64_t index,
-                 const int64_t subindex,
-                 const int64_t subsubindex,
-                 std::vector<CT>& values,
-                 bool& is_null) {
-    if constexpr (!std::is_same<CT, uint8_t>::value) {
-      if constexpr (std::is_same<CT, double>::value) {
-        const auto* metadata = getNestedArrayMetadata();
-        if (metadata->value_type != PointFloat64) {
-          RETURN_ERROR(TypeError);
-        }
-      } else if constexpr (std::is_same<CT, int32_t>::value) {
-        const auto* metadata = getNestedArrayMetadata();
-        if (metadata->value_type != PointInt32) {
-          RETURN_ERROR(TypeError);
-        }
-      } else {
-        RETURN_ERROR(NotImplementedError);
-      }
-    }
-    int32_t nof_values;
-    int8_t* values_ptr;
-
-    Status status =
-        getItem(index, subindex, subsubindex, nof_values, values_ptr, is_null);
-    if (status != Success) {
-      return status;
-    }
-    if (is_null) {
-      return Success;
-    }
-    const auto valuesize = getValueSize();
-    const auto values_count = nof_values * valuesize / sizeof(CT);
-    values.reserve(values_count);
-    values.insert(values.end(),
-                  reinterpret_cast<CT*>(values_ptr),
-                  reinterpret_cast<CT*>(values_ptr) + values_count);
-    return Success;
-  }
-
-  Status getItem(const int64_t index,
-                 const int64_t subindex,
-                 int32_t& nof_values,
-                 int8_t*& values,
-                 int32_t& nof_sizes,
-                 int8_t*& sizes,
-                 bool& is_null) {
-    const size_t ndims = 3;
-    Status status = getItemPrepare(index, ndims);
-    if (status != Success) {
-      return status;
-    }
-    const auto storage_index = get_storage_index(index);
-    auto* values_offsets = get_values_offsets();
-    auto values_offset = values_offsets[storage_index];
-    if (values_offset < 0) {
-      is_null = true;
-      nof_values = 0;
-      nof_sizes = 0;
-      values = nullptr;
-      sizes = nullptr;
-      return Success;
-    }
-
-    const auto* sizes_offsets = get_sizes_offsets();
-    auto* sizes_buffer = get_sizes_buffer();
-    auto* values_buffer = get_values_buffer();
-    const auto valuesize = getValueSize();
-    const auto sizes2_offset = sizes_offsets[storage_index * ndims + 1];
-    const auto sizes3_offset = sizes_offsets[storage_index * ndims + 2];
-
-    is_null = false;
-    offsets_t soffset = 0;
-    for (int64_t i = 0; i < subindex; i++) {
-      soffset += (sizes_buffer + sizes2_offset)[i];
-    }
-    nof_sizes = (sizes_buffer + sizes2_offset)[subindex];
-    values = values_buffer + (values_offset + soffset) * valuesize;
-    sizes = reinterpret_cast<int8_t*>(sizes_buffer + sizes3_offset + soffset);
-    nof_values = 0;
-    for (int64_t i = 0; i < nof_sizes; i++) {
-      nof_values += sizes[i];
-    }
-    return Success;
-  }
-
-  Status getItem(const int64_t index,
-                 const int64_t subindex,
-                 const int64_t subsubindex,
-                 int32_t& nof_values,
-                 int8_t*& values,
-                 bool& is_null) {
-    const size_t ndims = 3;
-    Status status = getItemPrepare(index, ndims);
-    if (status != Success) {
-      return status;
-    }
-    const auto storage_index = get_storage_index(index);
-    auto* values_offsets = get_values_offsets();
-    auto values_offset = values_offsets[storage_index];
-    if (values_offset < 0) {
-      is_null = true;
-      nof_values = 0;
-      values = nullptr;
-      return Success;
-    }
-
-    const auto* sizes_offsets = get_sizes_offsets();
-    auto* sizes_buffer = get_sizes_buffer();
-    auto* values_buffer = get_values_buffer();
-    const auto valuesize = getValueSize();
-    const auto sizes2_offset = sizes_offsets[storage_index * ndims + 1];
-    const auto sizes3_offset = sizes_offsets[storage_index * ndims + 2];
-
-    is_null = false;
-    offsets_t soffset = 0;
-    for (int64_t i = 0; i < subindex; i++) {
-      soffset += (sizes_buffer + sizes2_offset)[i];
-    }
-    offsets_t soffset2 = 0;
-    for (int64_t i = 0; i < subsubindex; i++) {
-      soffset2 += (sizes_buffer + sizes3_offset + soffset)[i];
-    }
-    values = values_buffer + (values_offset + soffset + soffset2) * valuesize;
-    nof_values = (sizes_buffer + sizes3_offset + soffset)[subsubindex];
-    return Success;
-  }
-
-  Status getItem(const int64_t index,
-                 int32_t& nof_values,
-                 int8_t*& values,
-                 int32_t& nof_sizes,
-                 int8_t*& sizes,
-                 int32_t& nof_sizes_of_sizes,
-                 int8_t*& sizes_of_sizes,
-                 bool& is_null) {
-    const size_t ndims = 3;
-    Status status = getItemPrepare(index, ndims);
-    if (status != Success) {
-      return status;
-    }
-    const auto storage_index = get_storage_index(index);
-
-    auto* values_offsets = get_values_offsets();
-    auto values_offset = values_offsets[storage_index];
-    if (values_offset < 0) {
-      is_null = true;
-      nof_values = 0;
-      nof_sizes = 0;
-      nof_sizes_of_sizes = 0;
-      values = nullptr;
-      sizes = nullptr;
-      sizes_of_sizes = nullptr;
-      return Success;
-    }
-
-    const auto* sizes_offsets = get_sizes_offsets();
-    auto* sizes_buffer = get_sizes_buffer();
-    auto* values_buffer = get_values_buffer();
-    const auto valuesize = getValueSize();
-    const auto sizes_offset = sizes_offsets[storage_index * ndims];
-    const auto sizes2_offset = sizes_offsets[storage_index * ndims + 1];
-    const auto sizes3_offset = sizes_offsets[storage_index * ndims + 2];
-    const auto next_values_offset = values_offsets[storage_index + 1];
-
-    is_null = false;
-    if (next_values_offset < 0) {
-      nof_values = -(next_values_offset + 1) - values_offset;
-    } else {
-      nof_values = next_values_offset - values_offset;
-    }
-    values = values_buffer + values_offset * valuesize;
-
-    nof_sizes_of_sizes = sizes_buffer[sizes_offset];
-    sizes_of_sizes = reinterpret_cast<int8_t*>(sizes_buffer + sizes2_offset);
-    sizes = reinterpret_cast<int8_t*>(sizes_buffer + sizes3_offset);
-    nof_sizes = 0;
-    for (int32_t i = 0; i < nof_sizes_of_sizes; i++) {
-      nof_sizes += (sizes_buffer + sizes2_offset)[i];
-    }
-    return Success;
-  }
-
-  Status setItemPrepare(const int64_t index, const size_t ndims) {
-    if (index < 0 || index >= itemsCount()) {
-      RETURN_ERROR(IndexError);
-    }
-    if (format() != NestedArrayFormatId) {
-      RETURN_ERROR(NotSupportedFormatError);
-    }
-    if (getDimensions() != ndims) {
+  template <typename CT, size_t NDIM=0>
+  Status setItem(const int64_t index, const std::vector<CT>& arr) {
+    if (getNDims() != NDIM + 1) {
       RETURN_ERROR(DimensionalityError);
     }
-    auto* storage_indices = get_storage_indices_new();
-    if (storage_indices[index] >= 0) {
-      RETURN_ERROR(ItemAlreadySpecifiedError);
-    }
-    auto* worker = getNestedArrayWorker();
-    auto storage_index = worker->specified_items_count;
-    storage_indices[index] = storage_index;
-    worker->specified_items_count++;
-    return Success;
-  }
-
-  // TODO: rename to setNull
-  Status setNullNew(int64_t index) {
-    const size_t ndims = getDimensions();
-    Status status = setItemPrepare(index, ndims);
-    if (status != Success) {
-      RETURN_ERROR(status);
-    }
-    const auto storage_index = get_storage_index(index);
-
-    auto* values_offsets = get_values_offsets();
-    auto* sizes_offsets = get_sizes_offsets();
-
-    const auto values_offset = values_offsets[storage_index];
-    const auto sizes_offset = sizes_offsets[storage_index * ndims];
-    auto* sizes_buffer = get_sizes_buffer();
-
-    sizes_buffer[sizes_offset] = 0;
-    for (size_t i = 0; i < ndims; i++) {
-      sizes_offsets[storage_index * ndims + i + 1] = sizes_offset + 1;
-    }
-    values_offsets[storage_index] = -(values_offset + 1);
-    values_offsets[storage_index + 1] = values_offset;
-    return Success;
-  }
-
-  Status setItem(const int64_t index, std::vector<double>& arr) {
-    const size_t ndims = 1;
-    Status status = setItemPrepare(index, ndims);
-    if (status != Success) {
-      return status;
-    }
-    const auto storage_index = get_storage_index(index);
-
-    auto* values_offsets = get_values_offsets();
-    auto* sizes_offsets = get_sizes_offsets();
-    auto* sizes_buffer = get_sizes_buffer();
-    auto* values_buffer = get_values_buffer();
-    const auto* metadata = getNestedArrayMetadata();
-    const auto valuesize = getValueSize();
-
-    auto values_offset = values_offsets[storage_index];
-    const auto sizes_offset = sizes_offsets[storage_index * ndims];
-
-    sizes_t sz = (arr.size() * sizeof(double)) / valuesize;
-    sizes_buffer[sizes_offset] = sz;
-
-    if (values_offset + sz > metadata->total_values_count) {
-      RETURN_ERROR(ValuesBufferTooSmallError);
-    }
-    if (memcpy(values_buffer + values_offset * valuesize, arr.data(), sz * valuesize) ==
-        nullptr) {
-      RETURN_ERROR(MemoryError);
-    }
-    values_offset += sz;
-
-    sizes_offsets[storage_index * ndims + 1] = sizes_offset + 1;
-    values_offsets[storage_index + 1] = values_offset;
-    return Success;
-  }
-
-  Status setItem(const int64_t index, const std::vector<std::vector<double>>& item) {
-    const size_t ndims = 2;
-    Status status = setItemPrepare(index, ndims);
-    if (status != Success) {
-      return status;
-    }
-    const auto storage_index = get_storage_index(index);
-
-    auto* values_offsets = get_values_offsets();
-    auto* sizes_offsets = get_sizes_offsets();
-    auto* sizes_buffer = get_sizes_buffer();
-    auto* values_buffer = get_values_buffer();
-    const auto* metadata = getNestedArrayMetadata();
-    const auto valuesize = getValueSize();
-    const sizes_t size = item.size();
-
-    auto values_offset = values_offsets[storage_index];
-    const auto sizes_offset = sizes_offsets[storage_index * ndims];
-    const auto sizes2_offset = sizes_offset + 1;
-    if (sizes2_offset + size > metadata->total_sizes_count) {
-      RETURN_ERROR(SizesBufferTooSmallError);
-    }
-    sizes_buffer[sizes_offset] = size;
-    for (sizes_t i = 0; i < size; i++) {
-      std::vector<double> arr = item[i];
-      sizes_t sz = (arr.size() * sizeof(double)) / valuesize;
-      sizes_buffer[sizes2_offset + i] = sz;
-      if (values_offset + sz > metadata->total_values_count) {
-        RETURN_ERROR(ValuesBufferTooSmallError);
+    if constexpr (!std::is_same<CT, uint8_t>::value) {
+      if constexpr (std::is_same<CT, double>::value) {
+        const auto* metadata = getNestedArrayMetadata();
+        if (metadata->value_type != PointFloat64) {
+          RETURN_ERROR(TypeError);
+        }
+      } else if constexpr (std::is_same<CT, int32_t>::value) {
+        const auto* metadata = getNestedArrayMetadata();
+        if (metadata->value_type != PointInt32) {
+          RETURN_ERROR(TypeError);
+        }
+      } else {
+        RETURN_ERROR(NotImplementedError);
       }
-      if (memcpy(values_buffer + values_offset * valuesize, arr.data(), sz * valuesize) ==
-          nullptr) {
-        RETURN_ERROR(MemoryError);
-      }
-      values_offset += sz;
     }
-    sizes_offsets[storage_index * ndims + 1] = sizes2_offset;
-    sizes_offsets[storage_index * ndims + 2] = sizes2_offset + size;
-    values_offsets[storage_index + 1] = values_offset;
-    return Success;
+    const auto valuesize = getValueSize();
+    auto sz = (arr.size() * sizeof(CT)) / valuesize;
+    const int32_t* const sizes_buffers[1] = {nullptr};
+    int32_t sizes_lengths[1] = {0};
+    return setItemWorker<1, false>(index,
+                                reinterpret_cast<const int8_t*>(arr.data()),
+                                sz,
+                                sizes_buffers,
+                                sizes_lengths,
+                                0);
   }
 
-  template <typename CT>
+  template <typename CT, size_t NDIM=1, bool check_sizes=false>
+  Status setItem(const int64_t index, const std::vector<std::vector<CT>>& item) {
+    const auto valuesize = getValueSize();
+    std::vector<int32_t> sizes;
+    sizes.reserve(item.size());
+    int32_t nof_values = 0;
+    size_t nof_elements = 0;
+    for (const auto& subitem: item) {
+      const auto sz = (subitem.size() * sizeof(CT)) / valuesize;
+      sizes.push_back(sz);
+      nof_values += sz;
+      nof_elements += subitem.size();
+    }
+    std::vector<CT> flatitem;
+    flatitem.reserve(nof_elements);
+    for (const auto& subitem: item) {
+      flatitem.insert(flatitem.end(), subitem.begin(), subitem.end());
+    }
+    return setItem<CT, NDIM, check_sizes>(index, flatitem, sizes);
+  }
+
+  template <typename CT, size_t NDIM=2, bool check_sizes=false>
   Status setItem(const int64_t index,
                  const std::vector<std::vector<std::vector<CT>>>& item) {
-    const size_t ndims = 3;
-    Status status = setItemPrepare(index, ndims);
-    if (status != Success) {
-      return status;
-    }
-    const auto storage_index = get_storage_index(index);
-
-    auto* values_offsets = get_values_offsets();
-    auto* sizes_offsets = get_sizes_offsets();
-    auto* sizes_buffer = get_sizes_buffer();
-    auto* values_buffer = get_values_buffer();
-    const auto* metadata = getNestedArrayMetadata();
     const auto valuesize = getValueSize();
-    const sizes_t size = item.size();
-
-    auto values_offset = values_offsets[storage_index];
-    const auto sizes_offset = sizes_offsets[storage_index * ndims];
-    const auto sizes2_offset = sizes_offset + 1;
-    const auto sizes3_offset = sizes2_offset + size;
-    sizes_t i3 = 0;
-    sizes_buffer[sizes_offset] = size;
-
-    for (sizes_t i = 0; i < size; i++) {
-      const std::vector<std::vector<CT>>& item2 = item[i];
-      sizes_t size2 = item2.size();
-      if (sizes3_offset + i3 + size2 > metadata->total_sizes_count) {
-        RETURN_ERROR(SizesBufferTooSmallError);
-      }
-      sizes_buffer[sizes2_offset + i] = size2;
-      for (sizes_t j = 0; j < size2; j++) {
-        const std::vector<CT>& arr = item2[j];
-        sizes_t sz = (arr.size() * sizeof(CT)) / valuesize;
-        sizes_buffer[sizes3_offset + i3] = sz;
-        i3 += 1;
-        if (values_offset + sz > metadata->total_values_count) {
-          RETURN_ERROR(ValuesBufferTooSmallError);
-        }
-        if (memcpy(values_buffer + values_offset * valuesize,
-                   arr.data(),
-                   sz * valuesize) == nullptr) {
-          RETURN_ERROR(MemoryError);
-        }
-        values_offset += sz;
+    std::vector<int32_t> sizes_of_sizes;
+    std::vector<int32_t> sizes;
+    std::vector<CT> flatitem;
+    sizes_of_sizes.reserve(item.size());
+    size_t nof_sizes_of_sizes = 0;
+    for (const auto& subitem: item) {
+      sizes_of_sizes.push_back(subitem.size());
+      nof_sizes_of_sizes += subitem.size();
+    }
+    sizes.reserve(nof_sizes_of_sizes);
+    int32_t nof_values = 0;
+    size_t nof_elements = 0;
+    for (const auto& subitem: item) {
+      for (const auto& subitem1: subitem) {
+        const auto sz = (subitem1.size() * sizeof(CT)) / valuesize;
+        sizes.push_back(sz);
+        nof_values += sz;
+        nof_elements += subitem1.size();
       }
     }
-    sizes_offsets[storage_index * ndims + 1] = sizes2_offset;
-    sizes_offsets[storage_index * ndims + 2] = sizes3_offset;
-    sizes_offsets[storage_index * ndims + 3] = sizes3_offset + i3;
-    values_offsets[storage_index + 1] = values_offset;
-    return Success;
+    flatitem.reserve(nof_elements);
+    for (const auto& subitem: item) {
+      for (const auto& subitem1: subitem) {
+        flatitem.insert(flatitem.end(), subitem1.begin(), subitem1.end());
+      }
+    }
+    return setItem<CT, NDIM, check_sizes>(index, flatitem, sizes, sizes_of_sizes);
   }
 
-  template <typename CT>
+  template <typename CT, size_t NDIM=1, bool check_sizes=true>
+  Status setItem(const int64_t index,
+                 const std::vector<CT>& values,
+                 const std::vector<int32_t>& sizes) {
+    if (getNDims() != NDIM + 1) {
+      RETURN_ERROR(DimensionalityError);
+    }
+    const auto* metadata = getNestedArrayMetadata();
+    if constexpr (!std::is_same<CT, uint8_t>::value) {
+      if constexpr (std::is_same<CT, double>::value) {
+        if (metadata->value_type != PointFloat64) {
+          RETURN_ERROR(TypeError);
+        }
+      } else if constexpr (std::is_same<CT, int32_t>::value) {
+        if (metadata->value_type != PointInt32) {
+          RETURN_ERROR(TypeError);
+        }
+      } else {
+        RETURN_ERROR(NotImplementedError);
+      }
+    }
+    const auto valuesize = getValueSize();
+    const int32_t nof_values = (values.size() * sizeof(CT)) / valuesize;
+    return setItem<NDIM, check_sizes>(index,
+                                      reinterpret_cast<const int8_t*>(values.data()),
+                                      nof_values,
+                                      sizes.data(),
+                                      sizes.size());
+  }
+
+  template <typename CT, size_t NDIM=2, bool check_sizes=true>
   Status setItem(const int64_t index,
                  const std::vector<CT>& values,
                  const std::vector<int32_t>& sizes,
                  const std::vector<int32_t>& sizes_of_sizes) {
+    if (getNDims() != NDIM + 1) {
+      RETURN_ERROR(DimensionalityError);
+    }
     const auto* metadata = getNestedArrayMetadata();
     if constexpr (!std::is_same<CT, uint8_t>::value) {
       if constexpr (std::is_same<CT, double>::value) {
@@ -2328,79 +1921,16 @@ struct FlatBufferManager {
         RETURN_ERROR(NotImplementedError);
       }
     }
-    return setItem(index,
-                   reinterpret_cast<const int8_t*>(values.data()),
-                   values.size() * sizeof(CT),
-                   sizes.data(),
-                   sizes.size(),
-                   sizes_of_sizes.data(),
-                   sizes_of_sizes.size());
-  }
-
-  Status setItem(const int64_t index,
-                 const int8_t* values_buf,
-                 const size_t values_buf_size,  // in bytes
-                 const int32_t* sizes_buf,
-                 const int32_t nof_sizes,
-                 const int32_t* sizes_of_sizes_buf,
-                 const int32_t nof_sizes_of_sizes) {
-    const size_t ndims = 3;
-    Status status = setItemPrepare(index, ndims);
-    if (status != Success) {
-      RETURN_ERROR(status);
-    }
-    const auto* metadata = getNestedArrayMetadata();
-    const auto storage_index = get_storage_index(index);
-
-    auto* values_offsets = get_values_offsets();
-    auto* sizes_offsets = get_sizes_offsets();
-    auto* sizes_buffer = get_sizes_buffer();
-    auto* values_buffer = get_values_buffer();
     const auto valuesize = getValueSize();
-    auto values_offset = values_offsets[storage_index];
-    const auto sizes_offset = sizes_offsets[storage_index * ndims];
-    const auto sizes2_offset = sizes_offset + 1;
-    const auto sizes3_offset = sizes2_offset + nof_sizes_of_sizes;
-    if (sizes_offset + 1 + nof_sizes_of_sizes + nof_sizes > metadata->total_sizes_count) {
-      RETURN_ERROR(SizesBufferTooSmallError);
-    }
-    sizes_t sum_sizes_of_sizes = 0;
-    for (sizes_t i = 0; i < nof_sizes_of_sizes; i++) {
-      sum_sizes_of_sizes += sizes_of_sizes_buf[i];
-    }
-    if (sum_sizes_of_sizes != nof_sizes) {
-      RETURN_ERROR(InconsistentSizesError);
-    }
-    sizes_t sum_sizes = 0;
-    for (sizes_t i = 0; i < nof_sizes; i++) {
-      sum_sizes += sizes_buf[i];
-    }
-    sizes_t values_count = values_buf_size / valuesize;
-    if (sum_sizes != values_count) {
-      RETURN_ERROR(InconsistentSizesError);
-    }
-    if (values_offset + values_count > metadata->total_values_count) {
-      RETURN_ERROR(ValuesBufferTooSmallError);
-    }
-    sizes_buffer[sizes_offset] = nof_sizes_of_sizes;
-    if (memcpy(sizes_buffer + sizes2_offset,
-               sizes_of_sizes_buf,
-               nof_sizes_of_sizes * sizeof(int32_t)) == nullptr) {
-      RETURN_ERROR(MemoryError);
-    }
-    if (memcpy(sizes_buffer + sizes3_offset, sizes_buf, nof_sizes * sizeof(int32_t)) ==
-        nullptr) {
-      RETURN_ERROR(MemoryError);
-    }
-    if (memcpy(values_buffer + values_offset * valuesize, values_buf, values_buf_size) ==
-        nullptr) {
-      RETURN_ERROR(MemoryError);
-    }
-    sizes_offsets[storage_index * ndims + 1] = sizes2_offset;
-    sizes_offsets[storage_index * ndims + 2] = sizes3_offset;
-    sizes_offsets[storage_index * ndims + 3] = sizes3_offset + sum_sizes_of_sizes;
-    values_offsets[storage_index + 1] = values_offset + values_count;
-    return Success;
+    const auto nof_values = (values.size() * sizeof(CT)) / valuesize;
+    return setItem<NDIM, check_sizes>(index,
+                                      reinterpret_cast<const int8_t*>(values.data()),
+                                      nof_values,
+                                      sizes.data(),
+                                      sizes.size(),
+                                      sizes_of_sizes.data(),
+                                      sizes_of_sizes.size()
+                                      );
   }
 
   // Set a new item with index and size (in bytes) and initialize its
@@ -2408,7 +1938,7 @@ struct FlatBufferManager {
   // uninitialized when source buffer is nullptr. If dest != nullptr
   // then the item's buffer pointer will be stored in *dest.
   // To be deprecated in favor of NestedArray format
-  Status setItem(const int64_t index,
+  Status setItemOld(const int64_t index,
                  const int8_t* src,
                  const int64_t size,
                  int8_t** dest = nullptr) {
@@ -2416,11 +1946,10 @@ struct FlatBufferManager {
       RETURN_ERROR(IndexError);
     }
     switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoLineStringFormatId: {
+      case VarlenArrayFormatId: {
         int64_t& storage_count = get_storage_count();
         int64_t* compressed_indices = get_compressed_indices();
-        int64_t* storage_indices = get_storage_indices();
+        int64_t* storage_indices = get_storage_indices_old();
         const int64_t itemsize = dtypeSize();
         if (size % itemsize != 0) {
           return SizeError;  // size must be multiple of itemsize. Perhaps size is not in
@@ -2444,11 +1973,6 @@ struct FlatBufferManager {
         }
         break;
       }
-      case GeoPolygonFormatId: {
-        const int64_t itemsize = dtypeSize();
-        const int32_t counts = size / itemsize;
-        return setItemCountsAndData(index, &counts, 1, src, dest);
-      }
       default:
         RETURN_ERROR(UnknownFormatError);
     }
@@ -2462,10 +1986,9 @@ struct FlatBufferManager {
                              const int64_t size,
                              int8_t** dest) {
     switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoLineStringFormatId: {
+      case VarlenArrayFormatId: {
         int64_t& storage_count = get_storage_count();
-        int64_t* storage_indices = get_storage_indices();
+        int64_t* storage_indices = get_storage_indices_old();
         int64_t* compressed_indices = get_compressed_indices();
         int8_t* values = get_values();
         const int64_t itemsize = dtypeSize();
@@ -2495,202 +2018,10 @@ struct FlatBufferManager {
         }
         break;
       }
-      case GeoPolygonFormatId: {
-        const int64_t itemsize = dtypeSize();
-        const int32_t counts = size / itemsize;
-        return setItemCountsAndDataNoValidation(index, &counts, 1, src, dest);
-      }
       default:
         RETURN_ERROR(UnknownFormatError);
     }
 
-    return Success;
-  }
-
-  // To be deprecated in favor of NestedArray format
-  Status setItemCountsAndData(const int64_t index,
-                              const int32_t* counts,
-                              const int64_t nof_counts,
-                              const int8_t* src,
-                              int8_t** dest = nullptr) {
-    if (index < 0 || index >= itemsCount()) {
-      RETURN_ERROR(IndexError);
-    }
-    switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoPointFormatId:
-      case GeoLineStringFormatId:
-        RETURN_ERROR(NotSupportedFormatError);
-      case GeoPolygonFormatId: {
-        const int64_t& storage_count = get_storage_count();
-        const int64_t& storage_count2 = get_storage_count2();
-        const int64_t* compressed_indices = get_compressed_indices();
-        const int64_t* compressed_indices2 = get_compressed_indices2();
-        const int64_t* storage_indices = get_storage_indices();
-        const int64_t valuesize = dtypeSize();
-        if (storage_indices[index] >= 0) {
-          RETURN_ERROR(ItemAlreadySpecifiedError);
-        }
-
-        const int64_t compressed_indices2_buffer_size =
-            get_compressed_indices2_buffer_size();
-        if (compressed_indices[storage_count] + nof_counts >
-            compressed_indices2_buffer_size) {
-          RETURN_ERROR(CompressedIndices2BufferTooSmallError);
-        }
-
-        const int64_t offset = compressed_indices2[storage_count2] * valuesize;
-        int64_t size = 0;
-        for (int i = 0; i < nof_counts; i++) {
-          size += valuesize * counts[i];
-        }
-        const int64_t values_buffer_size = get_values_buffer_size();
-        if (offset + size > values_buffer_size) {
-          RETURN_ERROR(ValuesBufferTooSmallError);
-        }
-        break;
-      }
-      default:
-        RETURN_ERROR(UnknownFormatError);
-    }
-    return setItemCountsAndDataNoValidation(index, counts, nof_counts, src, dest);
-  }
-
-  // To be deprecated in favor of NestedArray format
-  // Same as setItem but performs no input validation
-  Status setItemCountsAndDataNoValidation(
-      const int64_t index,
-      const int32_t* counts,     // counts of points in rings
-      const int64_t nof_counts,  // nof rings
-      const int8_t* src,         // coordinates of points
-      int8_t** dest) {
-    switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoPointFormatId:
-      case GeoLineStringFormatId:
-        RETURN_ERROR(NotSupportedFormatError);
-      case GeoPolygonFormatId: {
-        int64_t& storage_count = get_storage_count();
-        int64_t& storage_count2 = get_storage_count2();
-        int64_t* storage_indices = get_storage_indices();
-        int64_t* compressed_indices = get_compressed_indices();
-        int32_t* counts2 = get_counts2();
-        int64_t* compressed_indices2 = get_compressed_indices2();
-        int8_t* values = get_values();
-        const int64_t valuesize = dtypeSize();
-        storage_indices[index] = storage_count;
-
-        compressed_indices[storage_count + 1] =
-            compressed_indices[storage_count] + nof_counts;
-
-        int64_t cindex2 = compressed_indices2[storage_count2];
-        const int64_t offset = cindex2 * valuesize;
-        int64_t size = 0;
-        for (int i = 0; i < nof_counts; i++) {
-          size += valuesize * counts[i];
-          cindex2 += counts[i];
-          counts2[storage_count2] = counts[i];
-          storage_count2++;
-          compressed_indices2[storage_count2] = cindex2;
-        }
-        if (size > 0 && src != nullptr && memcpy(values + offset, src, size) == nullptr) {
-          RETURN_ERROR(MemoryError);
-        }
-        if (dest != nullptr) {
-          *dest = values + offset;
-        }
-        storage_count++;
-        break;
-      }
-      default:
-        RETURN_ERROR(UnknownFormatError);
-    }
-
-    return Success;
-  }
-
-  // To be deprecated in favor of NestedArray format
-  Status setSubItem(const int64_t index,
-                    const int64_t subindex,
-                    const int8_t* src,
-                    const int64_t size,
-                    int8_t** dest = nullptr) {
-    if (index < 0 || index >= itemsCount()) {
-      RETURN_ERROR(IndexError);
-    }
-    switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoPointFormatId:
-      case GeoLineStringFormatId:
-        return NotSupportedFormatError;
-      case GeoPolygonFormatId: {
-        const int64_t* storage_indices = get_storage_indices();
-        const int64_t storage_index = storage_indices[index];
-        if (storage_index < 0) {
-          RETURN_ERROR(ItemUnspecifiedError);
-        }
-        int64_t* compressed_indices = get_compressed_indices();
-        const int64_t cindex = compressed_indices[storage_index];
-        if (cindex < 0) {
-          if (size > 0) {
-            RETURN_ERROR(UnexpectedNullItemError);
-          }
-        } else {
-          const int64_t next_cindex = compressed_indices[storage_index + 1];
-          const int64_t nof_counts =
-              (next_cindex < 0 ? -(next_cindex + 1) - cindex : next_cindex - cindex);
-          if (subindex < 0 || subindex >= nof_counts) {
-            return SubIndexError;
-          }
-          int64_t* compressed_indices2 = get_compressed_indices2();
-          const int64_t valuesize = dtypeSize();
-          const int64_t cindex2 = compressed_indices2[cindex + subindex];
-          const int64_t next_cindex2 = compressed_indices2[cindex + subindex + 1];
-          const int64_t expected_size = (next_cindex2 - cindex2) * valuesize;
-          if (expected_size != size) {
-            RETURN_ERROR(SizeError);
-          }
-        }
-        break;
-      }
-      default:
-        RETURN_ERROR(UnknownFormatError);
-    }
-    return setSubItemNoValidation(index, subindex, src, size, dest);
-  }
-
-  // To be deprecated in favor of NestedArray format
-  Status setSubItemNoValidation(const int64_t index,
-                                const int64_t subindex,
-                                const int8_t* src,
-                                const int64_t size,
-                                int8_t** dest) {
-    switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoPointFormatId:
-      case GeoLineStringFormatId:
-        RETURN_ERROR(NotSupportedFormatError);
-      case GeoPolygonFormatId: {
-        const int64_t* storage_indices = get_storage_indices();
-        const int64_t storage_index = storage_indices[index];
-        int64_t* compressed_indices = get_compressed_indices();
-        const int64_t cindex = compressed_indices[storage_index];
-        int8_t* values = get_values();
-        int64_t* compressed_indices2 = get_compressed_indices2();
-        const int64_t valuesize = dtypeSize();
-        const int64_t cindex2 = compressed_indices2[cindex + subindex];
-        const int64_t offset = cindex2 * valuesize;
-        if (size > 0 && src != nullptr && memcpy(values + offset, src, size) == nullptr) {
-          RETURN_ERROR(MemoryError);
-        }
-        if (dest != nullptr) {
-          *dest = values + offset;
-        }
-        break;
-      }
-      default:
-        RETURN_ERROR(UnknownFormatError);
-    }
     return Success;
   }
 
@@ -2707,17 +2038,16 @@ struct FlatBufferManager {
       RETURN_ERROR(IndexError);
     }
     switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoLineStringFormatId: {
+      case VarlenArrayFormatId: {
         int64_t next_storage_count = get_storage_count();
         int64_t storage_count = next_storage_count - 1;
         int64_t* compressed_indices = get_compressed_indices();
-        int64_t* storage_indices = get_storage_indices();
+        int64_t* storage_indices = get_storage_indices_old();
         int8_t* values = get_values();
         int64_t itemsize = dtypeSize();
         int64_t storage_index = storage_indices[index];
         if (storage_index == -1) {  // unspecified, so setting the item
-          return setItem(index, src, size, nullptr);
+          return setItemOld(index, src, size, nullptr);
         }
         if (size % itemsize != 0) {
           RETURN_ERROR(SizeError);
@@ -2747,16 +2077,41 @@ struct FlatBufferManager {
   }
 
   // Set item with index as a null item
-  // To be deprecated in favor of NestedArray format
   Status setNull(int64_t index) {
     if (index < 0 || index >= itemsCount()) {
       RETURN_ERROR(IndexError);
     }
+    if (isNestedArray()) {
+      auto* storage_indices = get_storage_indices();
+      if (storage_indices[index] >= 0) {
+        RETURN_ERROR(ItemAlreadySpecifiedError);
+      }
+      auto* worker = getNestedArrayWorker();
+      const auto storage_index = worker->specified_items_count;
+      worker->specified_items_count++;
+      storage_indices[index] = storage_index;
+      const size_t ndims = getNDims();
+      auto* sizes_buffer = get_sizes_buffer();
+      auto* values_offsets = get_values_offsets();
+      auto* sizes_offsets = get_sizes_offsets();
+      const auto values_offset = values_offsets[storage_index];
+      const auto sizes_offset = sizes_offsets[storage_index * ndims];
+      sizes_buffer[sizes_offset] = 0;
+      for (size_t i = 0; i < ndims; i++) {
+        sizes_offsets[storage_index * ndims + i + 1] = sizes_offset + 1;
+      }
+      values_offsets[storage_index] = -(values_offset + 1);
+      values_offsets[storage_index + 1] = values_offset;
+      return Success;
+    }
+    // To be deprecated in favor of NestedArray format:
+    if (index < 0 || index >= itemsCount()) {
+      RETURN_ERROR(IndexError);
+    }
+
     switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoLineStringFormatId:
-      case GeoPolygonFormatId: {
-        int64_t* storage_indices = get_storage_indices();
+      case VarlenArrayFormatId: {
+        int64_t* storage_indices = get_storage_indices_old();
         if (storage_indices[index] >= 0) {
           return ItemAlreadySpecifiedError;
         }
@@ -2764,9 +2119,6 @@ struct FlatBufferManager {
       }
       case GeoPointFormatId: {
         return setNullNoValidation(index);
-      }
-      case NestedArrayFormatId: {
-        return setNullNew(index);
       }
       default:
         break;
@@ -2778,11 +2130,9 @@ struct FlatBufferManager {
   // To be deprecated in favor of NestedArray format
   Status setNullNoValidation(int64_t index) {
     switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoLineStringFormatId:
-      case GeoPolygonFormatId: {
+      case VarlenArrayFormatId: {
         int64_t& storage_count = get_storage_count();
-        int64_t* storage_indices = get_storage_indices();
+        int64_t* storage_indices = get_storage_indices_old();
         int64_t* compressed_indices = get_compressed_indices();
         const int64_t cindex = compressed_indices[storage_count];
         storage_indices[index] = storage_count;
@@ -2816,12 +2166,10 @@ struct FlatBufferManager {
 
   // Check if the item is unspecified or null.
   Status isNull(int64_t index, bool& is_null) const {
+    if (index < 0 || index >= itemsCount()) {
+      RETURN_ERROR(IndexError);
+    }
     if (isNestedArray()) {
-      const size_t ndims = getDimensions();
-      Status status = getItemPrepare(index, ndims);
-      if (status != Success) {
-        return status;
-      }
       const auto storage_index = get_storage_index(index);
       const auto* values_offsets = get_values_offsets();
       const auto values_offset = values_offsets[storage_index];
@@ -2833,11 +2181,9 @@ struct FlatBufferManager {
     }
     // To be deprecated in favor of NestedArray format:
     switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoLineStringFormatId:
-      case GeoPolygonFormatId: {
+      case VarlenArrayFormatId: {
         const int64_t* compressed_indices = get_compressed_indices();
-        const int64_t* storage_indices = get_storage_indices();
+        const int64_t* storage_indices = get_storage_indices_old();
         const int64_t storage_index = storage_indices[index];
         if (storage_index < 0) {
           RETURN_ERROR(ItemUnspecifiedError);
@@ -2875,11 +2221,10 @@ struct FlatBufferManager {
       RETURN_ERROR(IndexError);
     }
     switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoLineStringFormatId: {
+      case VarlenArrayFormatId: {
         int8_t* values = get_values();
         const int64_t* compressed_indices = get_compressed_indices();
-        const int64_t* storage_indices = get_storage_indices();
+        const int64_t* storage_indices = get_storage_indices_old();
         const int64_t storage_index = storage_indices[index];
         if (storage_index < 0) {
           return ItemUnspecifiedError;
@@ -2909,8 +2254,6 @@ struct FlatBufferManager {
         is_null = false;
         return Success;
       }
-      case GeoPolygonFormatId:
-        break;
       default:
         break;
     }
@@ -2926,106 +2269,6 @@ struct FlatBufferManager {
   }
 
   // To be deprecated in favor of NestedArray format
-  HOST DEVICE Status getItem2(int64_t index,
-                              int64_t*& cumcounts,
-                              int64_t& nof_counts,
-                              int8_t*& dest,
-                              bool& is_null) {
-    if (index < 0 || index >= itemsCount()) {
-      RETURN_ERROR(IndexError);
-    }
-    switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoPointFormatId:
-      case GeoLineStringFormatId:
-        break;
-      case GeoPolygonFormatId: {
-        const int64_t* storage_indices = get_storage_indices();
-        int64_t* compressed_indices = get_compressed_indices();
-        int64_t* compressed_indices2 = get_compressed_indices2();
-        int8_t* values = get_values();
-
-        const int64_t storage_index = storage_indices[index];
-        if (storage_index < 0) {
-          RETURN_ERROR(ItemUnspecifiedError);
-        }
-        const int64_t cindex = compressed_indices[storage_index];
-        if (cindex < 0) {
-          cumcounts = nullptr;
-          nof_counts = 0;
-          dest = nullptr;
-          is_null = true;
-        } else {
-          const int64_t next_cindex = compressed_indices[storage_index + 1];
-          const int64_t valuesize = dtypeSize();
-          const int64_t cindex2 = compressed_indices2[cindex];
-          nof_counts =
-              (next_cindex < 0 ? -(next_cindex + 1) - cindex : next_cindex - cindex);
-          cumcounts = compressed_indices2 + cindex;
-          dest = values + cindex2 * valuesize;
-          is_null = false;
-        }
-        return Success;
-      }
-      default:
-        break;
-    }
-    RETURN_ERROR(UnknownFormatError);
-  }
-
-  // To be deprecated in favor of NestedArray format
-  HOST DEVICE Status getItemCountsAndData(const int64_t index,
-                                          int32_t*& counts,
-                                          int64_t& nof_counts,
-                                          int8_t*& dest,
-                                          int64_t& size,
-                                          bool& is_null) {
-    if (index < 0 || index >= itemsCount()) {
-      RETURN_ERROR(IndexError);
-    }
-    switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoPointFormatId:
-      case GeoLineStringFormatId:
-        break;
-      case GeoPolygonFormatId: {
-        const int64_t* storage_indices = get_storage_indices();
-        int64_t* compressed_indices = get_compressed_indices();
-        const int64_t* compressed_indices2 = get_compressed_indices2();
-        int8_t* values = get_values();
-
-        const int64_t storage_index = storage_indices[index];
-        if (storage_index < 0) {
-          RETURN_ERROR(ItemUnspecifiedError);
-        }
-        const int64_t cindex = compressed_indices[storage_index];
-        if (cindex < 0) {
-          counts = nullptr;
-          nof_counts = 0;
-          dest = nullptr;
-          size = 0;
-          is_null = true;
-        } else {
-          const int64_t next_cindex = compressed_indices[storage_index + 1];
-          const int64_t valuesize = dtypeSize();
-          const int64_t cindex2 = compressed_indices2[cindex];
-          nof_counts =
-              (next_cindex < 0 ? -(next_cindex + 1) - cindex : next_cindex - cindex);
-          const int64_t* cumcounts = compressed_indices2 + cindex;
-          counts = get_counts2() + cindex;
-          dest = values + cindex2 * valuesize;
-          size = (cumcounts[nof_counts] - cumcounts[0]) * valuesize;
-          is_null = false;
-        }
-        return Success;
-      }
-      default:
-        break;
-    }
-    RETURN_ERROR(UnknownFormatError);
-  }
-
-  // To be deprecated in favor of NestedArray format
   Status getItemLength(const int64_t index, int64_t& length) const {
     if (index < 0 || index >= itemsCount()) {
       RETURN_ERROR(IndexError);
@@ -3033,11 +2276,9 @@ struct FlatBufferManager {
     switch (format()) {
       case GeoPointFormatId:
         break;
-      case VarlenArrayFormatId:
-      case GeoLineStringFormatId:
-      case GeoPolygonFormatId: {
+      case VarlenArrayFormatId: {
         const int64_t* compressed_indices = get_compressed_indices();
-        const int64_t* storage_indices = get_storage_indices();
+        const int64_t* storage_indices = get_storage_indices_old();
         const int64_t storage_index = storage_indices[index];
         if (storage_index < 0) {
           RETURN_ERROR(ItemUnspecifiedError);
@@ -3048,99 +2289,6 @@ struct FlatBufferManager {
         } else {
           const int64_t next_cindex = compressed_indices[storage_index + 1];
           length = (next_cindex < 0 ? -(next_cindex + 1) - cindex : next_cindex - cindex);
-        }
-        return Success;
-      }
-      default:
-        break;
-    }
-    RETURN_ERROR(UnknownFormatError);
-  }
-
-  // To be deprecated in favor of NestedArray format
-  Status getSubItemLength(const int64_t index,
-                          const int64_t subindex,
-                          int64_t& length) const {
-    if (index < 0 || index >= itemsCount()) {
-      RETURN_ERROR(IndexError);
-    }
-    switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoPointFormatId:
-      case GeoLineStringFormatId:
-        break;
-      case GeoPolygonFormatId: {
-        const int64_t* storage_indices = get_storage_indices();
-        const int64_t* compressed_indices = get_compressed_indices();
-        const int64_t storage_index = storage_indices[index];
-        if (storage_index < 0) {
-          RETURN_ERROR(ItemUnspecifiedError);
-        }
-        const int64_t cindex = compressed_indices[storage_index];
-        if (cindex < 0) {
-          length = 0;
-        } else {
-          const int64_t next_cindex = compressed_indices[storage_index + 1];
-          const int64_t nof_counts =
-              (next_cindex < 0 ? -(next_cindex + 1) - cindex : next_cindex - cindex);
-          if (subindex < 0 || subindex >= nof_counts) {
-            return SubIndexError;
-          }
-          const int64_t* compressed_indices2 = get_compressed_indices2();
-          const int64_t cindex2 = compressed_indices2[cindex + subindex];
-          const int64_t next_cindex2 = compressed_indices2[cindex + subindex + 1];
-          length = next_cindex2 - cindex2;
-        }
-        return Success;
-      }
-      default:
-        break;
-    }
-    RETURN_ERROR(UnknownFormatError);
-  }
-
-  // Get a subitem data of an item, e.g. a linestring within a polygon
-  // To be deprecated in favor of NestedArray format
-  HOST DEVICE Status getSubItem(int64_t index,
-                                int64_t subindex,
-                                int64_t& size,
-                                int8_t*& dest,
-                                bool& is_null) {
-    if (index < 0 || index >= itemsCount()) {
-      RETURN_ERROR(IndexError);
-    }
-    switch (format()) {
-      case VarlenArrayFormatId:
-      case GeoPointFormatId:
-      case GeoLineStringFormatId:
-        RETURN_ERROR(NotSupportedFormatError);
-      case GeoPolygonFormatId: {
-        const int64_t* storage_indices = get_storage_indices();
-        const int64_t storage_index = storage_indices[index];
-        if (storage_index < 0) {
-          RETURN_ERROR(ItemUnspecifiedError);
-        }
-        int64_t* compressed_indices = get_compressed_indices();
-        const int64_t cindex = compressed_indices[storage_index];
-        if (cindex < 0) {
-          dest = nullptr;
-          size = 0;
-          is_null = true;
-        } else {
-          const int64_t next_cindex = compressed_indices[storage_index + 1];
-          const int64_t nof_counts =
-              (next_cindex < 0 ? -(next_cindex + 1) - cindex : next_cindex - cindex);
-          if (subindex < 0 || subindex >= nof_counts) {
-            return SubIndexError;
-          }
-          int8_t* values = get_values();
-          int64_t* compressed_indices2 = get_compressed_indices2();
-          const int64_t valuesize = dtypeSize();
-          const int64_t cindex2 = compressed_indices2[cindex + subindex];
-          const int64_t next_cindex2 = compressed_indices2[cindex + subindex + 1];
-          dest = values + cindex2 * valuesize;
-          size = (next_cindex2 - cindex2) * valuesize;
-          is_null = false;
         }
         return Success;
       }
@@ -3253,13 +2401,13 @@ struct FlatBufferManager {
                 "]";
       result += ",\n  sizes_offsets=[" +
                 bufferToString(reinterpret_cast<const int8_t*>(get_sizes_offsets()),
-                               (metadata->total_items_count * metadata->dimensions + 1) *
+                               (metadata->total_items_count * metadata->ndims + 1) *
                                    get_size(FLATBUFFER_OFFSETS_T_VALUE_TYPE),
                                FLATBUFFER_OFFSETS_T_VALUE_TYPE) +
                 "]";
       result += ",\n  storage_indices=[" +
                 bufferToString(
-                    reinterpret_cast<const int8_t*>(get_storage_indices_new()),
+                    reinterpret_cast<const int8_t*>(get_storage_indices()),
                     metadata->total_items_count * get_size(FLATBUFFER_SIZES_T_VALUE_TYPE),
                     FLATBUFFER_SIZES_T_VALUE_TYPE) +
                 "]";
@@ -3280,19 +2428,9 @@ struct FlatBufferManager {
         result += ", " + getVarlenArrayWorker()->toString();
         break;
       }
-      case GeoLineStringFormatId: {
-        result += ", " + getGeoLineStringMetadata()->toString();
-        result += ", " + getGeoLineStringWorker()->toString();
-        break;
-      }
       case GeoPointFormatId: {
         result += ", " + getGeoPointMetadata()->toString();
         result += ", " + getGeoPointWorker()->toString();
-        break;
-      }
-      case GeoPolygonFormatId: {
-        result += ", " + getGeoPolygonMetadata()->toString();
-        result += ", " + getGeoPolygonWorker()->toString();
         break;
       }
       default:
@@ -3300,9 +2438,7 @@ struct FlatBufferManager {
     }
 
     switch (fmt) {
-      case VarlenArrayFormatId:
-      case GeoLineStringFormatId:
-      case GeoPolygonFormatId: {
+      case VarlenArrayFormatId: {
         result += ", values=";
         const int64_t numvalues = get_nof_values();
         const int64_t itemsize = dtypeSize();
@@ -3323,37 +2459,12 @@ struct FlatBufferManager {
             result += ::toString(values);
           } break;
           case 8: {
-            if (fmt == GeoLineStringFormatId || fmt == GeoPolygonFormatId) {
-              const int32_t* values_buf = reinterpret_cast<const int32_t*>(get_values());
-              std::vector<int32_t> values(values_buf, values_buf + numvalues * 2);
-              result += ::toString(values);
-            } else {
-              const int64_t* values_buf = reinterpret_cast<const int64_t*>(get_values());
-              std::vector<int64_t> values(values_buf, values_buf + numvalues);
-              result += ::toString(values);
-            }
+            const int64_t* values_buf = reinterpret_cast<const int64_t*>(get_values());
+            std::vector<int64_t> values(values_buf, values_buf + numvalues);
+            result += ::toString(values);
           } break;
-          case 16: {
-            if (fmt == GeoLineStringFormatId || fmt == GeoPolygonFormatId) {
-              const double* values_buf = reinterpret_cast<const double*>(get_values());
-              std::vector<double> values(values_buf, values_buf + numvalues * 2);
-              result += ::toString(values);
-              break;
-            }
-          }
           default:
             result += "[UNEXPECTED ITEMSIZE:" + std::to_string(itemsize) + "]";
-        }
-        if (fmt == GeoPolygonFormatId) {
-          const int64_t numitems2 = items2Count();
-          const int64_t* compressed_indices2_buf = get_compressed_indices2();
-          std::vector<int64_t> compressed_indices2(
-              compressed_indices2_buf, compressed_indices2_buf + numitems2 + 1);
-          result += ", compressed_indices2=" + ::toString(compressed_indices2);
-
-          const int32_t* counts2_buf = get_counts2();
-          std::vector<int32_t> counts2(counts2_buf, counts2_buf + numitems2);
-          result += ", counts2=" + ::toString(counts2);
         }
 
         const int64_t numitems = itemsCount();
@@ -3362,7 +2473,7 @@ struct FlatBufferManager {
                                                 compressed_indices_buf + numitems + 1);
         result += ", compressed_indices=" + ::toString(compressed_indices);
 
-        const int64_t* storage_indices_buf = get_storage_indices();
+        const int64_t* storage_indices_buf = get_storage_indices_old();
         std::vector<int64_t> storage_indices(storage_indices_buf,
                                              storage_indices_buf + numitems);
         result += ", storage_indices=" + ::toString(storage_indices);
