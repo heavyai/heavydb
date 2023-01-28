@@ -58,6 +58,7 @@ extern int64_t g_large_ndv_threshold;
 extern size_t g_large_ndv_multiplier;
 extern int64_t g_bitmap_memory_limit;
 extern bool g_enable_seconds_refresh;
+extern bool g_enable_foreign_table_scheduled_refresh;
 extern size_t g_approx_quantile_buffer;
 extern size_t g_approx_quantile_centroids;
 extern size_t g_parallel_top_min;
@@ -1059,6 +1060,11 @@ void CommandLineOptions::fillDeveloperOptions() {
           ->implicit_value(true),
       "Enable temporary users for SAML and LDAP logins on read-only servers. "
       "Normally should be on but techs might want to disable for troubleshooting.");
+  desc.add_options()("enable-foreign-table-scheduled-refresh",
+                     po::value<bool>(&g_enable_foreign_table_scheduled_refresh)
+                         ->default_value(g_enable_foreign_table_scheduled_refresh)
+                         ->implicit_value(true),
+                     "Enable scheduled foreign table refresh.");
   desc.add_options()(
       "enable-seconds-refresh-interval",
       po::value<bool>(&g_enable_seconds_refresh)

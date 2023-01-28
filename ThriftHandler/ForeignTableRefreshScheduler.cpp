@@ -20,6 +20,8 @@
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
 
+bool g_enable_foreign_table_scheduled_refresh{true};
+
 namespace foreign_storage {
 
 void ForeignTableRefreshScheduler::invalidateQueryEngineCaches() {
