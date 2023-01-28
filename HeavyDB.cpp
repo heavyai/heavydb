@@ -287,6 +287,7 @@ void run_warmup_queries(std::shared_ptr<DBHandler> handler,
 
 extern bool g_enable_thrift_logs;
 extern bool g_enable_fsi;
+extern bool g_enable_foreign_table_scheduled_refresh;
 
 void thrift_stop() {
   if (auto thrift_http_server = g_thrift_http_server; thrift_http_server) {
@@ -496,7 +497,7 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
     Catalog_Namespace::SysCatalog::instance().checkDropRenderGroupColumnsMigration();
   }
 
-  if (g_enable_fsi) {
+  if (g_enable_fsi && g_enable_foreign_table_scheduled_refresh) {
     foreign_storage::ForeignTableRefreshScheduler::start(g_running);
   }
 
