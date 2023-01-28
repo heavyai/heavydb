@@ -229,7 +229,7 @@ if(MSVC)
 endif()
 
 if(ENABLE_CUDA)
-  set(CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_gpu.hpp)
+  set(CUDA_TABLE_FUNCTION_FILES "")
   list(APPEND CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TestFunctions/RbcTestTableFunctions.cpp)
   list(APPEND CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TestFunctions/StringTestTableFunctions.cpp)
   list(APPEND CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TestFunctions/SignatureTestTableFunctions.cpp)
@@ -286,7 +286,55 @@ if(ENABLE_SYSTEM_TFS)
   endif()
 endif()
 
-add_library(QueryEngine ${query_engine_source_files} $<$<BOOL:ENABLE_CUDA>:${query_engine_cuda_source_files}>)
+find_program(PYTHON_EXECUTABLE python)
+
+execute_process(
+  COMMAND ${PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_TableFunctionsFactory_init.py
+    ${TABLE_FUNCTION_HEADERS}
+    ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
+    COMMAND_ECHO STDOUT)
+
+# cpu files
+file(GLOB GENERATED_TF_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_cpu*.cpp)
+
+# table function add functions
+file(GLOB GENERATED_TF_ADD_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_add*.cpp)
+
+# gpu files
+file(GLOB GENERATED_TF_GPU_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_gpu*.cpp)
+
+# set properties
+set_property(DIRECTORY APPEND PROPERTY GENERATED SOURCE
+  ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
+  ${GENERATED_TF_FILES}
+  ${GENERATED_TF_GPU_FILES}
+  ${GENERATED_TF_ADD_FILES})
+
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS SOURCE
+  ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
+  ${GENERATED_TF_FILES}
+  ${GENERATED_TF_GPU_FILES}
+  ${GENERATED_TF_ADD_FILES})
+
+set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES SOURCE
+  ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
+  ${GENERATED_TF_FILES}
+  ${GENERATED_TF_GPU_FILES}
+  ${GENERATED_TF_ADD_FILES})
+
+if(ENABLE_CUDA)
+  list(APPEND CUDA_TABLE_FUNCTION_FILES ${GENERATED_TF_GPU_FILES})
+endif()
+
+add_library(QueryEngine
+  ${query_engine_source_files}
+  ${TABLE_FUNCTION_FILES}
+  ${GENERATED_TF_FILES}
+  ${GENERATED_TF_ADD_FILES}
+  $<$<BOOL:ENABLE_CUDA>:${query_engine_cuda_source_files}>
+)
+
 add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init)
 
 if(ENABLE_OMNIVERSE_CONNECTOR)
@@ -318,8 +366,6 @@ add_custom_command(
   -I ${GEOS_INCLUDE_DIR} -Qy
   ${CMAKE_CURRENT_SOURCE_DIR}/GeosRuntime.cpp)
 
-find_package(PythonInterp REQUIRED)
-
 add_custom_command(
   DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsArray.hpp ExtensionFunctionsText.hpp ExtensionFunctionsTesting.hpp ExtensionFunctionsArrayTesting.hpp ExtensionFunctionsTextTesting.hpp
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw
@@ -341,15 +387,11 @@ add_custom_target(QueryEngineFunctionsTargets
 
 add_custom_command(
   DEPENDS ${TABLE_FUNCTION_HEADERS}
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_cpu.hpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_gpu.hpp
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
   COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_TableFunctionsFactory_init.py ${TABLE_FUNCTION_HEADERS} ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp)
 
 add_custom_target(QueryEngineTableFunctionsFactory_init
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_cpu.hpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_gpu.hpp)
-
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp GENERATED)
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_cpu.hpp GENERATED)
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_gpu.hpp GENERATED)
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp ${GENERATED_TF_FILES} ${GENERATED_TF_GPU_FILES} ${GENERATED_TF_ADD_FILES})
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/heavydbTypes.h DESTINATION ${CMAKE_BINARY_DIR}/QueryEngine/)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Utils/FlatBuffer.h DESTINATION ${CMAKE_BINARY_DIR}/QueryEngine/Utils/)
