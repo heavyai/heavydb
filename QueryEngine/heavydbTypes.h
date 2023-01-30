@@ -646,7 +646,7 @@ struct GeoPointStruct {
 
 typedef struct GeoPointStruct GeoPoint;
 
-struct GeoMultiPoint {
+struct GeoMultiPointStruct {
   int8_t* ptr;
   int32_t sz;
   int32_t compression;
@@ -661,6 +661,8 @@ struct GeoMultiPoint {
 
   DEVICE int32_t getOutputSrid() const { return output_srid; }
 };
+
+typedef struct GeoMultiPointStruct GeoMultiPoint;
 
 struct GeoLineStringStruct {
   int8_t* ptr;
@@ -1431,6 +1433,68 @@ struct LineString : public GeoNestedArray<Point2D, false> {
 #endif
 };
 
+struct MultiPoint : public GeoNestedArray<Point2D, false> {
+  using GeoNestedArray<Point2D, false>::flatbuffer_;
+  using GeoNestedArray<Point2D, false>::index_;
+  using GeoNestedArray<Point2D, false>::n_;
+
+  DEVICE Point2D getItem(const int64_t index) {
+    FlatBufferManager m{flatbuffer_};
+    const SQLTypeInfoLite* ti =
+        reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+    int8_t* points;
+    int32_t nof_points;
+    int32_t nof_sizes;
+    int32_t* sizes[NESTED_ARRAY_NDIM];
+    int32_t sizes_lengths[NESTED_ARRAY_NDIM];
+    bool is_null;
+    auto status = m.getItemWorker<NESTED_ARRAY_NDIM>(
+        index_, n_, points, nof_points, sizes, sizes_lengths, nof_sizes, is_null);
+    if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+      throw std::runtime_error("MultiPoint.getItem failed: flatbuffer getItem raised " +
+                               ::toString(status));
+#endif
+    }
+    if (is_null) {
+      Point2D result;
+      return result;
+    }
+    if (index < 0 || index >= nof_points) {
+#ifndef __CUDACC__
+      throw std::runtime_error("MultiPoint.getItem failed: index " + ::toString(index) +
+                               " is out of range [0, " + ::toString(nof_points) + ")");
+#endif
+    }
+    return get_point(
+        points, 2 * index, ti->get_input_srid(), ti->get_output_srid(), ti->is_geoint());
+  }
+
+  DEVICE inline Point2D operator[](const unsigned int index) {
+    return getItem(static_cast<int64_t>(index));
+  }
+
+#ifndef __CUDACC__
+
+  using GeoNestedArray<Point2D, false>::toCoords;
+
+  template <typename CT>
+  std::vector<CT> toCoords() const {
+    std::vector<CT> result;
+    auto status = toCoords(result);
+    if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+      throw std::runtime_error("MultiPoint.toCoords failed: " + ::toString(status));
+#endif
+    }
+    return result;
+  }
+
+  std::vector<double> toCoords() const { return toCoords<double>(); }
+
+#endif
+};
+
 struct MultiLineString : public GeoNestedArray<LineString> {
 #ifndef __CUDACC__
 
@@ -1562,6 +1626,9 @@ struct ColumnFlatBuffer {
 
 template <>
 struct Column<GeoLineString> : public ColumnFlatBuffer<Geo::LineString> {};
+
+template <>
+struct Column<GeoMultiPoint> : public ColumnFlatBuffer<Geo::MultiPoint> {};
 
 template <>
 struct Column<GeoPolygon> : public ColumnFlatBuffer<Geo::Polygon> {};

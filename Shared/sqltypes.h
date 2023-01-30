@@ -1016,6 +1016,7 @@ class SQLTypeInfo {
       case kPOINT:
       case kLINESTRING:
       case kPOLYGON:
+      case kMULTIPOINT:
       case kMULTILINESTRING:
       case kMULTIPOLYGON:
         return true;

@@ -1312,8 +1312,8 @@ EXTENSION_NOINLINE int32_t ct_require_range__cpu_(const Column<int32_t>& input1,
 /*
   UDTF: ct_coords__cpu_(TableFunctionManager, Column<GeoPoint> points) -> Column<double> x, Column<double> y
   UDTF: ct_shift__cpu_(TableFunctionManager, Column<GeoPoint> points, double x, double y) -> Column<GeoPoint> shifted
-  UDTF: ct_pointn__cpu_(TableFunctionManager, Column<GeoLineString> linestrings, int64_t n) -> Column<double> x, Column<double> y
-  UDTF: ct_copy__cpu_template(TableFunctionManager mgr, Column<T> inputs) -> Column<T> outputs | input_id=args<0>, T=[GeoLineString, GeoMultiLineString, GeoPolygon, GeoMultiPolygon]
+  UDTF: ct_pointn__cpu_template(TableFunctionManager, Column<T> points, int64_t n) -> Column<double> x, Column<double> y, T=[GeoLineString, GeoMultiPoint]
+  UDTF: ct_copy__cpu_template(TableFunctionManager mgr, Column<T> inputs) -> Column<T> outputs | input_id=args<0>, T=[GeoMultiPoint, GeoLineString, GeoMultiLineString, GeoPolygon, GeoMultiPolygon]
   UDTF: ct_linestringn__cpu_(TableFunctionManager, Column<GeoPolygon> polygons, int64_t n) -> Column<GeoLineString> linestrings
   UDTF: ct_make_polygon3__cpu_(TableFunctionManager, Cursor<Column<GeoLineString> rings, Column<GeoLineString> holes1, Column<GeoLineString> holes2>) -> Column<GeoPolygon> polygons, Column<int> sizes
   UDTF: ct_make_linestring2__cpu_(TableFunctionManager, Cursor<Column<double> x, Column<double> y>, double dx, double dy) -> Column<GeoLineString> linestrings
@@ -1335,11 +1335,12 @@ EXTENSION_NOINLINE int32_t ct_shift__cpu_(TableFunctionManager& mgr,
                                           const double y,
                                           Column<GeoPoint>& shifted_points);
 
-EXTENSION_NOINLINE int32_t ct_pointn__cpu_(TableFunctionManager& mgr,
-                                           const Column<GeoLineString>& linestrings,
-                                           int64_t n,
-                                           Column<double>& xcoords,
-                                           Column<double>& ycoords);
+template <typename T>
+NEVER_INLINE HOST int32_t ct_pointn__cpu_template(TableFunctionManager& mgr,
+                                                  const Column<T>& points,
+                                                  int64_t n,
+                                                  Column<double>& xcoords,
+                                                  Column<double>& ycoords);
 
 template <typename T>
 NEVER_INLINE HOST int32_t ct_copy__cpu_template(TableFunctionManager& mgr,

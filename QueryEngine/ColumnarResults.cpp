@@ -250,6 +250,11 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                 countNumberOfValuesGeoType<GeoPolyTargetValue, GeoPolyTargetValuePtr>(
                     rows, ti, i);
             break;
+          case kMULTIPOINT:
+            values_count =
+                countNumberOfValuesGeoType<GeoMultiPointTargetValue,
+                                           GeoMultiPointTargetValuePtr>(rows, ti, i);
+            break;
           case kMULTILINESTRING:
             values_count =
                 countNumberOfValuesGeoType<GeoMultiLineStringTargetValue,
@@ -746,6 +751,16 @@ inline void ColumnarResults::writeBackCell(const TargetValue& col_val,
                                  GeoPolyTargetValue,
                                  GeoPolyTargetValuePtr,
                                  /*is_multi=*/false>(
+            column_buffers_[column_idx], row_idx, type_info, col_val, write_mutex);
+        break;
+      }
+      case kMULTIPOINT: {
+        CHECK(FlatBufferManager::isFlatBuffer(column_buffers_[column_idx]));
+        TargetValueToNestedArray<1,
+                                 Geospatial::GeoMultiPoint,
+                                 GeoMultiPointTargetValue,
+                                 GeoMultiPointTargetValuePtr,
+                                 /*is_multi=*/true>(
             column_buffers_[column_idx], row_idx, type_info, col_val, write_mutex);
         break;
       }
