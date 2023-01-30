@@ -326,7 +326,11 @@ class TableFunctions : public ::testing::Test {
           "l1 LINESTRING, "
           "l2 GEOMETRY(LINESTRING, 4326) ENCODING NONE, "
           "l3 GEOMETRY(LINESTRING, 4326) ENCODING NONE, "
-          "l4 GEOMETRY(LINESTRING, 900913));");
+          "l4 GEOMETRY(LINESTRING, 900913), "
+          "mp1 MULTIPOINT, "
+          "mp2 GEOMETRY(MULTIPOINT, 4326) ENCODING NONE, "
+          "mp3 GEOMETRY(MULTIPOINT, 4326) ENCODING NONE, "
+          "mp4 GEOMETRY(MULTIPOINT, 900913));");
 
       TestHelpers::ValuesGenerator gen("geo_point_test");
 
@@ -337,7 +341,11 @@ class TableFunctions : public ::testing::Test {
                            "'LINESTRING(1 2, 3 5)'",
                            "'LINESTRING(3 4, 5 7)'",
                            "'LINESTRING(5 6, 7 9)'",
-                           "'LINESTRING(7 8, 9 11)'"),
+                           "'LINESTRING(7 8, 9 11)'",
+                           "'MULTIPOINT(1 2, 3 5)'",
+                           "'MULTIPOINT(3 4, 5 7)'",
+                           "'MULTIPOINT(5 6, 7 9)'",
+                           "'MULTIPOINT(7 8, 9 11)'"),
                        ExecutorDeviceType::CPU);
       run_multiple_agg(gen("'POINT(9 8)'",
                            "'POINT(7 6)'",
@@ -346,11 +354,25 @@ class TableFunctions : public ::testing::Test {
                            "'LINESTRING(9 8, 11 11)'",
                            "'LINESTRING(7 6, 9 9)'",
                            "'LINESTRING(5 4, 7 7)'",
-                           "'LINESTRING(3 2, 5 5)'"),
+                           "'LINESTRING(3 2, 5 5)'",
+                           "'MULTIPOINT(9 8, 11 11)'",
+                           "'MULTIPOINT(7 6, 9 9)'",
+                           "'MULTIPOINT(5 4, 7 7)'",
+                           "'MULTIPOINT(3 2, 5 5)'"),
                        ExecutorDeviceType::CPU);
-      run_multiple_agg(
-          gen("NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"),
-          ExecutorDeviceType::CPU);
+      run_multiple_agg(gen("NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL"),
+                       ExecutorDeviceType::CPU);
     }
     {
       run_ddl_statement("DROP TABLE IF EXISTS geo_line_string_test;");
@@ -359,21 +381,40 @@ class TableFunctions : public ::testing::Test {
           "l1 LINESTRING, "
           "l2 GEOMETRY(LINESTRING, 4326), "  // uses geoint compression
           "l3 GEOMETRY(LINESTRING, 4326) ENCODING NONE, "
-          "l4 GEOMETRY(LINESTRING, 900913));");
+          "l4 GEOMETRY(LINESTRING, 900913), "
+          "mp1 MULTIPOINT, "
+          "mp2 GEOMETRY(MULTIPOINT, 4326), "  // uses geoint compression
+          "mp3 GEOMETRY(MULTIPOINT, 4326) ENCODING NONE, "
+          "mp4 GEOMETRY(MULTIPOINT, 900913));");
 
       TestHelpers::ValuesGenerator gen("geo_line_string_test");
 
       run_multiple_agg(gen("'LINESTRING(1 2, 3 4)'",
                            "'LINESTRING(3 4, 5 6)'",
                            "'LINESTRING(5 6, 7 8)'",
-                           "'LINESTRING(7 8, 9 0)'"),
+                           "'LINESTRING(7 8, 9 0)'",
+                           "'MULTIPOINT(1 2, 3 4)'",
+                           "'MULTIPOINT(3 4, 5 6)'",
+                           "'MULTIPOINT(5 6, 7 8)'",
+                           "'MULTIPOINT(7 8, 9 0)'"),
                        ExecutorDeviceType::CPU);
       run_multiple_agg(gen("'LINESTRING(2 1, 4 3, 7 8)'",
                            "'LINESTRING(4 3, 6 5, 5 6)'",
                            "'LINESTRING(6 5, 8 7, 3 4)'",
-                           "'LINESTRING(8 7, 0 9, 1 2)'"),
+                           "'LINESTRING(8 7, 0 9, 1 2)'",
+                           "'MULTIPOINT(2 1, 4 3, 7 8)'",
+                           "'MULTIPOINT(4 3, 6 5, 5 6)'",
+                           "'MULTIPOINT(6 5, 8 7, 3 4)'",
+                           "'MULTIPOINT(8 7, 0 9, 1 2)'"),
                        ExecutorDeviceType::CPU);
-      run_multiple_agg(gen("'NULL'", "'NULL'", "'NULL'", "'NULL'"),
+      run_multiple_agg(gen("'NULL'",
+                           "'NULL'",
+                           "'NULL'",
+                           "'NULL'",
+                           "'NULL'",
+                           "'NULL'",
+                           "'NULL'",
+                           "'NULL'"),
                        ExecutorDeviceType::CPU);
     }
     {
@@ -2986,6 +3027,15 @@ void assert_equal(const TargetValue& val1,
           gdal_wkt_poly2.getColumns(coords2, ring_sizes2, bounds2);
           break;
         }
+        case kMULTIPOINT: {
+          const auto gdal_wkt_ls1 = Geospatial::GeoMultiPoint(*s1);
+          gdal_wkt_ls1.getColumns(coords1, bounds1);
+          ring_sizes1.push_back(coords1.size() / 2);
+          const auto gdal_wkt_ls2 = Geospatial::GeoMultiPoint(*s2);
+          gdal_wkt_ls2.getColumns(coords2, bounds2);
+          ring_sizes2.push_back(coords2.size() / 2);
+          break;
+        }
         case kMULTILINESTRING: {
           const auto gdal_wkt_poly1 = Geospatial::GeoMultiLineString(*s1);
           gdal_wkt_poly1.getColumns(coords1, ring_sizes1, bounds1);
@@ -3850,6 +3900,45 @@ TEST_F(TableFunctions, ColumnGeoMultiPolygonInOutput) {
             "SELECT mpolygons FROM TABLE(CT_MAKE_MULTIPOLYGON("
             "CURSOR(SELECT polygons FROM TABLE(CT_POLYGONN(CURSOR(SELECT " +
             mpcol + " FROM geo_polygon_test), 1)))));";
+        const auto expected_rows = run_multiple_agg(q1, dt);
+        const auto rows = run_multiple_agg(q2, dt);
+        assert_equal<double>(rows, expected_rows);
+      }
+    }
+  }
+}
+
+TEST_F(TableFunctions, ColumnGeoMultiPointInput) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+    for (int i = 1; i <= 4; i++) {
+      std::string col1 =
+          "l" + std::to_string(i);  // ST_POINTN does not support multipoint
+      std::string col = "mp" + std::to_string(i);
+      {
+        // Test Column<GeoMultiPoint> input
+        std::string q1 = "SELECT ST_X(ST_POINTN(" + col1 + ", 1)), ST_Y(ST_POINTN(" +
+                         col1 + ", 1)) FROM geo_line_string_test;";
+        std::string q2 = "SELECT x, y FROM TABLE(CT_POINTN(CURSOR(SELECT " + col +
+                         " FROM geo_line_string_test), 1));";
+        const auto expected_rows = run_multiple_agg(q1, dt);
+        const auto rows = run_multiple_agg(q2, dt);
+        assert_equal<double>(rows, expected_rows);
+      }
+    }
+  }
+}
+
+TEST_F(TableFunctions, ColumnGeoMultiPointCopy) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+    for (int i = 1; i <= 4; i++) {
+      std::string col = "mp" + std::to_string(i);
+      {
+        // Test Column<GeoMultiPoint> input and output
+        std::string q1 = "SELECT " + col + " FROM geo_line_string_test;";
+        std::string q2 = "SELECT outputs FROM TABLE(CT_COPY(CURSOR(SELECT " + col +
+                         " FROM geo_line_string_test)))";
         const auto expected_rows = run_multiple_agg(q1, dt);
         const auto rows = run_multiple_agg(q2, dt);
         assert_equal<double>(rows, expected_rows);

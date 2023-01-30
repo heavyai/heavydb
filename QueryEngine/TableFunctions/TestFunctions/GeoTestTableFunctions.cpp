@@ -64,25 +64,41 @@ EXTENSION_NOINLINE int32_t ct_shift__cpu_(TableFunctionManager& mgr,
   return size;
 }
 
-EXTENSION_NOINLINE int32_t ct_pointn__cpu_(TableFunctionManager& mgr,
-                                           const Column<GeoLineString>& linestrings,
-                                           int64_t n,
-                                           Column<double>& xcoords,
-                                           Column<double>& ycoords) {
-  auto size = linestrings.size();
+template <typename T>
+NEVER_INLINE HOST int32_t ct_pointn__cpu_template(TableFunctionManager& mgr,
+                                                  const Column<T>& points,
+                                                  int64_t n,
+                                                  Column<double>& xcoords,
+                                                  Column<double>& ycoords) {
+  auto size = points.size();
   mgr.set_output_row_size(size);
   for (int64_t i = 0; i < size; i++) {
-    if (linestrings.isNull(i)) {
+    if (points.isNull(i)) {
       xcoords.setNull(i);
       ycoords.setNull(i);
     } else {
-      const auto point = linestrings[i][n - 1];  // n is one-based
+      const auto point = points[i][n - 1];  // n is one-based
       xcoords[i] = point.x;
       ycoords[i] = point.y;
     }
   }
   return size;
 }
+
+// explicit instantiations
+template NEVER_INLINE HOST int32_t
+ct_pointn__cpu_template(TableFunctionManager& mgr,
+                        const Column<GeoLineString>& points,
+                        int64_t n,
+                        Column<double>& xcoords,
+                        Column<double>& ycoords);
+
+template NEVER_INLINE HOST int32_t
+ct_pointn__cpu_template(TableFunctionManager& mgr,
+                        const Column<GeoMultiPoint>& points,
+                        int64_t n,
+                        Column<double>& xcoords,
+                        Column<double>& ycoords);
 
 template <typename T>
 NEVER_INLINE HOST int32_t ct_copy__cpu_template(TableFunctionManager& mgr,
@@ -106,6 +122,11 @@ template NEVER_INLINE HOST int32_t
 ct_copy__cpu_template(TableFunctionManager& mgr,
                       const Column<GeoLineString>& inputs,
                       Column<GeoLineString>& outputs);
+
+template NEVER_INLINE HOST int32_t
+ct_copy__cpu_template(TableFunctionManager& mgr,
+                      const Column<GeoMultiPoint>& inputs,
+                      Column<GeoMultiPoint>& outputs);
 
 template NEVER_INLINE HOST int32_t
 ct_copy__cpu_template(TableFunctionManager& mgr,

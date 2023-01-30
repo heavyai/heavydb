@@ -1800,6 +1800,16 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
             static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()));
       } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
         const auto& frag_col_buffers = getFragColBuffers();
+
+        auto ptr = frag_col_buffers[col_lazy_fetch->local_col_id];
+        if (FlatBufferManager::isFlatBuffer(ptr)) {
+          int64_t index = getCoordsDataPtr(geo_target_ptr);
+          return NestedArrayToGeoTargetValue<1,
+                                             Geospatial::GeoMultiPoint,
+                                             GeoMultiPointTargetValue,
+                                             GeoMultiPointTargetValuePtr>(
+              ptr, index, target_info.sql_type, geo_return_type_);
+        }
         return GeoTargetValueBuilder<kMULTIPOINT, GeoLazyFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
