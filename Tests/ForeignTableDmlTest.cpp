@@ -28,6 +28,8 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/program_options.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 #include "Catalog/OptionsContainer.h"
 #include "Catalog/RefreshTimeCalculator.h"
