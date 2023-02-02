@@ -142,10 +142,10 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   void clearTempChunkBufferMapEntriesForTable(const ChunkKey& table_key);
   void clearTempChunkBufferMapEntriesForTableUnlocked(const ChunkKey& table_key);
 
-  std::set<ChunkKey> getOptionalChunkKeySet(
+  std::set<ChunkKey> getOptionalChunkKeySetAndNormalizeCache(
       const ChunkKey& chunk_key,
       const std::set<ChunkKey>& required_chunk_keys,
-      const ForeignDataWrapper::ParallelismLevel parallelism_level) const;
+      const ForeignDataWrapper::ParallelismLevel parallelism_level);
 
   std::pair<std::set<ChunkKey, decltype(set_comp)*>,
             std::set<ChunkKey, decltype(set_comp)*>>
@@ -157,6 +157,10 @@ class ForeignStorageMgr : public AbstractBufferMgr {
       const ChunkKey& chunk_key,
       const std::set<ChunkKey, decltype(set_comp)*>& same_fragment_keys,
       const std::set<ChunkKey, decltype(set_comp)*>& diff_fragment_keys) const;
+
+  virtual bool isChunkCached(const ChunkKey& chunk_key) const;
+
+  virtual void evictChunkFromCache(const ChunkKey& chunk_key);
 
   static void checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key);
 

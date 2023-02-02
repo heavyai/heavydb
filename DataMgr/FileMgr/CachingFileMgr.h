@@ -30,6 +30,8 @@
 #pragma once
 
 #include <optional>
+#include <ostream>
+
 #include "DataMgr/ForeignStorage/CacheEvictionAlgorithms/LRUEvictionAlgorithm.h"
 #include "FileMgr.h"
 #include "Shared/File.h"
@@ -38,6 +40,9 @@
 namespace File_Namespace {
 
 enum class DiskCacheLevel { none, fsi, non_fsi, all };
+
+std::ostream& operator<<(std::ostream& os, DiskCacheLevel disk_cache_level);
+
 struct DiskCacheConfig {
   // Note the suffix UL is not portable. 'long' i a different size
   // on nix vs windows.  Hense the explicit cast to long.

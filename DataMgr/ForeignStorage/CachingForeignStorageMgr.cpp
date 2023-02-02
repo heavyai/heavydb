@@ -105,21 +105,15 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
     }
 
     auto column_keys = get_column_key_set(chunk_key);
+    // Avoid caching only a subset of the column key set.
+    for (const auto& key : column_keys) {
+      disk_cache_->eraseChunk(key);
+    }
 
     // Use hints to prefetch other chunks in fragment into cache
     auto& data_wrapper = *getDataWrapper(chunk_key);
-    auto optional_set = getOptionalChunkKeySet(
+    auto optional_set = getOptionalChunkKeySetAndNormalizeCache(
         chunk_key, column_keys, data_wrapper.getCachedParallelismLevel());
-
-    // Remove any chunks that are already cached.
-    // TODO(Misiu): Change to use std::erase_if when we get c++20
-    for (auto it = optional_set.begin(); it != optional_set.end();) {
-      if (disk_cache_->getCachedChunkIfExists(*it) != nullptr) {
-        it = optional_set.erase(it);
-      } else {
-        ++it;
-      }
-    }
 
     auto optional_buffers = disk_cache_->getChunkBuffersForCaching(optional_set);
     auto required_buffers = disk_cache_->getChunkBuffersForCaching(column_keys);
@@ -349,18 +343,9 @@ void CachingForeignStorageMgr::refreshChunksInCacheByFragment(
       }
       // Key may have been cached during scan
       if (disk_cache_->getCachedChunkIfExists(chunk_key) == nullptr) {
-        if (is_varlen_key(chunk_key)) {
-          CHECK(is_varlen_data_key(chunk_key));
-          ChunkKey index_chunk_key{chunk_key[CHUNK_KEY_DB_IDX],
-                                   chunk_key[CHUNK_KEY_TABLE_IDX],
-                                   chunk_key[CHUNK_KEY_COLUMN_IDX],
-                                   chunk_key[CHUNK_KEY_FRAGMENT_IDX],
-                                   2};
-          chunk_keys_in_fragment.emplace(index_chunk_key);
-          chunk_keys_to_be_cached.emplace(index_chunk_key);
-        }
-        chunk_keys_in_fragment.emplace(chunk_key);
-        chunk_keys_to_be_cached.emplace(chunk_key);
+        auto column_keys = get_column_key_set(chunk_key);
+        chunk_keys_in_fragment.insert(column_keys.begin(), column_keys.end());
+        chunk_keys_to_be_cached.insert(column_keys.begin(), column_keys.end());
       }
     }
   }
@@ -461,4 +446,11 @@ size_t CachingForeignStorageMgr::getBufferSize(const ChunkKey& key) const {
   return num_bytes;
 }
 
+bool CachingForeignStorageMgr::isChunkCached(const ChunkKey& chunk_key) const {
+  return disk_cache_->getCachedChunkIfExists(chunk_key) != nullptr;
+}
+
+void CachingForeignStorageMgr::evictChunkFromCache(const ChunkKey& chunk_key) {
+  disk_cache_->eraseChunk(chunk_key);
+}
 }  // namespace foreign_storage

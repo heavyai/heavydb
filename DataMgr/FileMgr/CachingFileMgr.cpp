@@ -842,4 +842,19 @@ bool TableFileMgr::hasWrapperFile() const {
   return bf::exists(wrapper_file_path_);
 }
 
+std::ostream& operator<<(std::ostream& os, DiskCacheLevel disk_cache_level) {
+  if (disk_cache_level == DiskCacheLevel::none) {
+    os << "None";
+  } else if (disk_cache_level == DiskCacheLevel::fsi) {
+    os << "ForeignTables";
+  } else if (disk_cache_level == DiskCacheLevel::non_fsi) {
+    os << "LocalTables";
+  } else if (disk_cache_level == DiskCacheLevel::all) {
+    os << "All";
+  } else {
+    UNREACHABLE() << "Unexpected disk cache level: "
+                  << static_cast<int32_t>(disk_cache_level);
+  }
+  return os;
+}
 }  // namespace File_Namespace

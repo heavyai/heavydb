@@ -141,20 +141,8 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
   ChunkToBufferMap optional_buffers;
 
   // Use hints to prefetch other chunks in fragment into cache
-  auto optional_keys = getOptionalChunkKeySet(
+  auto optional_keys = getOptionalChunkKeySetAndNormalizeCache(
       chunk_key, column_keys, getDataWrapper(chunk_key)->getNonCachedParallelismLevel());
-  if (optional_keys.size()) {
-    std::shared_lock temp_chunk_buffer_map_lock(temp_chunk_buffer_map_mutex_);
-    // Erase anything already in temp_chunk_buffer_map_
-    // TODO(Misiu): Change to use std::erase_if when we get c++20
-    for (auto it = optional_keys.begin(); it != optional_keys.end();) {
-      if (temp_chunk_buffer_map_.find(*it) != temp_chunk_buffer_map_.end()) {
-        it = optional_keys.erase(it);
-      } else {
-        ++it;
-      }
-    }
-  }
   if (optional_keys.size()) {
     optional_buffers = allocateTempBuffersForChunks(optional_keys);
   }
@@ -626,10 +614,10 @@ std::set<ChunkKey> ForeignStorageMgr::getOptionalKeysWithinSizeLimit(
   return optional_keys;
 }
 
-std::set<ChunkKey> ForeignStorageMgr::getOptionalChunkKeySet(
+std::set<ChunkKey> ForeignStorageMgr::getOptionalChunkKeySetAndNormalizeCache(
     const ChunkKey& chunk_key,
     const std::set<ChunkKey>& required_chunk_keys,
-    const ForeignDataWrapper::ParallelismLevel parallelism_level) const {
+    const ForeignDataWrapper::ParallelismLevel parallelism_level) {
   if (parallelism_level == ForeignDataWrapper::NONE) {
     return {};
   }
@@ -637,8 +625,32 @@ std::set<ChunkKey> ForeignStorageMgr::getOptionalChunkKeySet(
   auto [same_fragment_keys, diff_fragment_keys] =
       getPrefetchSets(chunk_key, required_chunk_keys, parallelism_level);
 
-  return getOptionalKeysWithinSizeLimit(
-      chunk_key, same_fragment_keys, diff_fragment_keys);
+  auto optional_keys =
+      getOptionalKeysWithinSizeLimit(chunk_key, same_fragment_keys, diff_fragment_keys);
+
+  std::set<ChunkKey> optional_keys_to_delete;
+  if (!optional_keys.empty()) {
+    for (const auto& key : optional_keys) {
+      if (!shared::contains(optional_keys_to_delete, key)) {
+        auto key_set = get_column_key_set(key);
+        auto all_keys_cached =
+            std::all_of(key_set.begin(), key_set.end(), [this](const ChunkKey& key) {
+              return isChunkCached(key);
+            });
+        // Avoid cases where the optional_keys set or cache only has a subset of the
+        // column key set.
+        if (all_keys_cached) {
+          optional_keys_to_delete.insert(key_set.begin(), key_set.end());
+        } else {
+          evictChunkFromCache(key);
+        }
+      }
+    }
+  }
+  for (const auto& key : optional_keys_to_delete) {
+    optional_keys.erase(key);
+  }
+  return optional_keys;
 }
 
 size_t ForeignStorageMgr::maxFetchSize(int32_t db_id) const {
@@ -647,6 +659,19 @@ size_t ForeignStorageMgr::maxFetchSize(int32_t db_id) const {
 
 bool ForeignStorageMgr::hasMaxFetchSize() const {
   return false;
+}
+
+bool ForeignStorageMgr::isChunkCached(const ChunkKey& chunk_key) const {
+  std::shared_lock temp_chunk_buffer_map_lock(temp_chunk_buffer_map_mutex_);
+  return temp_chunk_buffer_map_.find(chunk_key) != temp_chunk_buffer_map_.end();
+}
+
+void ForeignStorageMgr::evictChunkFromCache(const ChunkKey& chunk_key) {
+  std::unique_lock temp_chunk_buffer_map_lock(temp_chunk_buffer_map_mutex_);
+  auto it = temp_chunk_buffer_map_.find(chunk_key);
+  if (it != temp_chunk_buffer_map_.end()) {
+    temp_chunk_buffer_map_.erase(it);
+  }
 }
 
 // Determine if a wrapper is enabled on the current distributed node.

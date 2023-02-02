@@ -26,9 +26,6 @@
 #include "Shared/measure.h"
 
 namespace foreign_storage {
-using read_lock = heavyai::shared_lock<heavyai::shared_mutex>;
-using write_lock = heavyai::unique_lock<heavyai::shared_mutex>;
-
 namespace {
 template <typename Func, typename T>
 void iterate_over_matching_prefix(Func func,
@@ -278,5 +275,4 @@ bool ForeignStorageCache::hasStoredDataWrapperMetadata(int32_t db_id,
                                                        int32_t table_id) const {
   return caching_file_mgr_->hasWrapperFile(db_id, table_id);
 }
-
 }  // namespace foreign_storage
