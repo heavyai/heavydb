@@ -292,8 +292,7 @@ execute_process(
   COMMAND ${PYTHON_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_TableFunctionsFactory_init.py
     ${TABLE_FUNCTION_HEADERS}
-    ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
-    COMMAND_ECHO STDOUT)
+    ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp)
 
 # cpu files
 file(GLOB GENERATED_TF_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_cpu*.cpp)
