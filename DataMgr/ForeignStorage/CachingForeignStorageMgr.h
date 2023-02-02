@@ -77,6 +77,10 @@ class CachingForeignStorageMgr : public ForeignStorageMgr {
       const std::set<ChunkKey, decltype(set_comp)*>& same_fragment_keys,
       const std::set<ChunkKey, decltype(set_comp)*>& diff_fragment_keys) const override;
 
+  bool isChunkCached(const ChunkKey& chunk_key) const override;
+
+  void evictChunkFromCache(const ChunkKey& chunk_key) override;
+
   size_t getBufferSize(const ChunkKey& key) const;
 
   size_t getRequiredBuffersSize(const ChunkKey& chunk_key) const;

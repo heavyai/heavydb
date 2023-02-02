@@ -554,6 +554,35 @@ class ForeignTableTest : public DBHandlerTestFixture {
       result);
     // clang-format on
   }
+
+  void createForeignTableForGeoTypes(const std::string& data_wrapper_type,
+                                     const std::string& extension,
+                                     size_t fragment_size = DEFAULT_FRAGMENT_ROWS) {
+    // geotypes in odbc data wrappers are currently only supported by text data types
+    std::vector<NameTypePair> odbc_columns{};
+    if (isOdbc(data_wrapper_type)) {
+      odbc_columns = {{"id", "INT"},
+                      {"p", "TEXT"},
+                      {"l", "TEXT"},
+                      {"poly", "TEXT"},
+                      {"multipoly", "TEXT"}};
+    }
+    foreign_storage::OptionsMap options{{"FRAGMENT_SIZE", std::to_string(fragment_size)}};
+    if (data_wrapper_type == "regex_parser") {
+      options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_geo_regex(4);
+    }
+    sql(createForeignTableQuery({{"id", "INT"},
+                                 {"p", "POINT"},
+                                 {"l", "LINESTRING"},
+                                 {"poly", "POLYGON"},
+                                 {"multipoly", "MULTIPOLYGON"}},
+                                getDataFilesPath() + "geo_types_valid" + extension,
+                                data_wrapper_type,
+                                options,
+                                default_table_name,
+                                odbc_columns,
+                                isOdbc(data_wrapper_type) ? true : false));
+  }
 };
 
 class SelectQueryTest : public ForeignTableTest {
@@ -1178,6 +1207,45 @@ TEST_P(SqliteCacheControllingSelectQueryTest, NoDanglingChunkBuffersOnTableRecre
   }
   sql(drop_table);
 }
+
+using CacheAndDataWrapperParamType =
+    std::tuple<File_Namespace::DiskCacheLevel, WrapperType>;
+class CacheAndDataWrapperControllingSelectQueryTest
+    : public CacheControllingSelectQueryBaseTest,
+      public ::testing::WithParamInterface<CacheAndDataWrapperParamType> {
+ public:
+  CacheAndDataWrapperControllingSelectQueryTest()
+      : CacheControllingSelectQueryBaseTest(std::get<0>(GetParam())) {}
+
+  void SetUp() override {
+    wrapper_type_ = std::get<1>(GetParam());
+    CacheControllingSelectQueryBaseTest::SetUp();
+  }
+
+  static std::string getTestName(
+      const ::testing::TestParamInfo<CacheAndDataWrapperParamType>& info) {
+    const auto& [cache_level, wrapper_type] = info.param;
+    std::stringstream ss;
+    ss << "CacheLevel_" << cache_level << "_DataWrapper_" << wrapper_type;
+    return ss.str();
+  }
+};
+
+TEST_P(CacheAndDataWrapperControllingSelectQueryTest, RefreshGeoTypes) {
+  createForeignTableForGeoTypes(wrapper_type_, wrapper_ext(wrapper_type_));
+  queryAndAssertGeoTypesResult();
+
+  sql("REFRESH FOREIGN TABLES " + default_table_name + ";");
+  queryAndAssertGeoTypesResult();
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    DifferentCacheLevelsAndDataWrappers,
+    CacheAndDataWrapperControllingSelectQueryTest,
+    ::testing::Combine(::testing::Values(File_Namespace::DiskCacheLevel::none,
+                                         File_Namespace::DiskCacheLevel::fsi),
+                       ::testing::ValuesIn(local_wrappers)),
+    CacheAndDataWrapperControllingSelectQueryTest::getTestName);
 
 TEST_F(SelectQueryTest, ParquetStringsAllNullPlacementPermutations) {
   const auto& query = getCreateForeignTableQuery(
@@ -4961,31 +5029,45 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, FixedLengthArrayTypes) {
 }
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
-  auto [fragment_size, data_wrapper_type, extension] = GetParam();
-  // geotypes in odbc data wrappers are currently only supported by text data types
-  std::vector<NameTypePair> odbc_columns{};
-  if(isOdbc(data_wrapper_type)) {
-    odbc_columns ={{"id", "INT"},
-                  {"p", "TEXT"},
-                  {"l", "TEXT"},
-                  {"poly", "TEXT"},
-                  {"multipoly", "TEXT"}};
+  createForeignTableForGeoTypes(wrapper_type_, extension_, fragment_size_);
+  queryAndAssertGeoTypesResult();
+}
+
+TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypesEvictPhysicalColumn) {
+  SKIP_SETUP_IF_DISTRIBUTED("Test relies on disk cache");
+  
+  createForeignTableForGeoTypes(wrapper_type_, extension_, fragment_size_);
+  queryAndAssertGeoTypesResult();
+
+  const auto& catalog = getCatalog();
+  auto& data_mgr = catalog.getDataMgr();
+  auto storage_mgr = data_mgr.getPersistentStorageMgr();
+  CHECK(storage_mgr);
+  auto disk_cache = storage_mgr->getDiskCache();
+  CHECK(disk_cache);
+
+  auto db_id = catalog.getDatabaseId();
+  auto td = catalog.getMetadataForTable(default_table_name, false);
+  CHECK(td);
+  auto table_id = td->tableId;
+  bool physical_column_evicted{false};
+  for (auto cd : catalog.getAllColumnMetadataForTable(table_id, false, false, true)) {
+    if (cd->isGeoPhyCol) {
+      ChunkMetadataVector metadata_vector;
+      disk_cache->getCachedMetadataVecForKeyPrefix(metadata_vector, {db_id, table_id, cd->columnId});
+      for (const auto& [chunk_key, metadata] : metadata_vector) {
+        disk_cache->eraseChunk(chunk_key);
+        physical_column_evicted = true;
+      }
+      break;
+    }
   }
-  foreign_storage::OptionsMap options{{"FRAGMENT_SIZE", fragmentSizeStr()}};
-  if (data_wrapper_type == "regex_parser") {
-    options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_geo_regex(4);
-  }
-  sql(createForeignTableQuery({{"id", "INT"},
-                               {"p", "POINT"},
-                               {"l", "LINESTRING"},
-                               {"poly", "POLYGON"},
-                               {"multipoly", "MULTIPOLYGON"}},
-                              getDataFilesPath() + "geo_types_valid" + extension,
-                              data_wrapper_type,
-                              options,
-                              default_table_name,
-                              odbc_columns,
-                              isOdbc(data_wrapper_type) ? true : false));
+  ASSERT_TRUE(physical_column_evicted);
+
+  const ChunkKey table_key{db_id, table_id};
+  data_mgr.deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
+  data_mgr.deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
+
   queryAndAssertGeoTypesResult();
 }
 

@@ -97,15 +97,14 @@ class ForeignStorageCache {
 
   bool hasStoredDataWrapperMetadata(int32_t db_id, int32_t table_id) const;
 
+  void eraseChunk(const ChunkKey& chunk_key);
+
   // Used for unit testing
   inline void setDataSizeLimit(size_t max) const {
     caching_file_mgr_->setDataSizeLimit(max);
   }
 
  private:
-  // These methods are private and assume locks are already acquired when called.
-  std::set<ChunkKey>::iterator eraseChunk(const std::set<ChunkKey>::iterator&);
-  void eraseChunk(const ChunkKey& chunk_key);
   void validatePath(const std::string&) const;
 
   // Underlying storage is handled by a CachingFileMgr unique to the cache.
