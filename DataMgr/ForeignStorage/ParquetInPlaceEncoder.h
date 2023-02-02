@@ -316,7 +316,7 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
     auto parquet_column_descriptor =
         group_metadata->schema()->Column(parquet_column_index);
 
-    if (ParquetEncoder::validate_metadata_stats_) {
+    if (ParquetEncoder::validate_metadata_stats_ && group_metadata->num_rows() > 0) {
       auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
       if (stats->HasMinMax()) {
         // validate statistics if validation applicable as part of encoding

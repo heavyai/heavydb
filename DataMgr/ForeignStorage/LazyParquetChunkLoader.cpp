@@ -1055,7 +1055,7 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
   return encoder;
 }
 
-void validate_definition_levels(
+void validate_list_column_metadata_statistics(
     const parquet::ParquetFileReader* reader,
     const int row_group_index,
     const int column_index,
@@ -1069,6 +1069,10 @@ void validate_definition_levels(
   std::unique_ptr<parquet::RowGroupMetaData> group_metadata =
       reader->metadata()->RowGroup(row_group_index);
   auto column_metadata = group_metadata->ColumnChunk(column_index);
+  // In case of a empty row group do not validate
+  if (group_metadata->num_rows() == 0) {
+    return;
+  }
   auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
   if (!stats->HasMinMax()) {
     auto find_it = std::find_if(def_levels,
@@ -1873,13 +1877,6 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
                                      &values_read,
                                      col_reader.get());
 
-          validate_definition_levels(parquet_reader,
-                                     row_group_index,
-                                     parquet_column_index,
-                                     def_levels.data(),
-                                     levels_read,
-                                     parquet_column_descriptor);
-
           if (rejected_row_indices) {  // error tracking is enabled
             encoder->appendDataTrackErrors(def_levels.data(),
                                            rep_levels.data(),
@@ -1887,6 +1884,14 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
                                            levels_read,
                                            values.data());
           } else {  // no error tracking enabled
+            validate_list_column_metadata_statistics(
+                parquet_reader,  // this validation only in effect for foreign tables
+                row_group_index,
+                parquet_column_index,
+                def_levels.data(),
+                levels_read,
+                parquet_column_descriptor);
+
             encoder->appendData(def_levels.data(),
                                 rep_levels.data(),
                                 values_read,
@@ -2070,12 +2075,12 @@ class ParquetRowGroupReader {
       SQLTypeInfo column_type = column_descriptor_->columnType.is_array()
                                     ? column_descriptor_->columnType.get_subtype()
                                     : column_descriptor_->columnType;
-      validate_definition_levels(parquet_reader_,
-                                 row_group_index_,
-                                 parquet_column_index_,
-                                 batch_data.def_levels.data(),
-                                 batch_data.levels_read,
-                                 parquet_column_descriptor_);
+      validate_list_column_metadata_statistics(parquet_reader_,
+                                               row_group_index_,
+                                               parquet_column_index_,
+                                               batch_data.def_levels.data(),
+                                               batch_data.levels_read,
+                                               parquet_column_descriptor_);
       import_encoder->validateAndAppendData(batch_data.def_levels.data(),
                                             batch_data.rep_levels.data(),
                                             batch_data.values_read,
