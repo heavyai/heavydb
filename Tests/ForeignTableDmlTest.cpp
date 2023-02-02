@@ -2441,6 +2441,20 @@ TEST_F(SelectQueryTest, NoStatistics) {
           getDataFilesPath() + "no_stats.parquet");
 }
 
+TEST_F(SelectQueryTest, EmptyNoStatistics) {
+  const auto& query = getCreateForeignTableQuery(
+      "(a BIGINT, b BIGINT, c TEXT, d DOUBLE)", {}, "empty_no_stats", "parquet");
+  sql(query);
+  sqlAndCompareResult(default_select, {});
+}
+
+TEST_F(SelectQueryTest, EmptyRowGroup) {
+  const auto& query = getCreateForeignTableQuery(
+      "(a BIGINT, b BIGINT, c TEXT, d DOUBLE)", {}, "empty_rowgroup", "parquet");
+  sql(query);
+  sqlAndCompareResult(default_select, {{1L, 3L, "5", 7.1}});
+}
+
 TEST_F(SelectQueryTest, RowGroupSizeLargerThanFragmentSize) {
   const auto& query = getCreateForeignTableQuery("(a BIGINT, b BIGINT, c TEXT, d DOUBLE)",
                                                  {{"fragment_size", "1"}},
