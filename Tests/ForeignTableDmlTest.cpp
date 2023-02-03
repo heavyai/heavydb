@@ -583,6 +583,15 @@ class ForeignTableTest : public DBHandlerTestFixture {
                                 odbc_columns,
                                 isOdbc(data_wrapper_type) ? true : false));
   }
+
+  void queryAndAssertQuotedIdentifierPairs() {
+    TQueryResult result;
+    // clang-format off
+    sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY id;",{
+      {1L}
+      });
+    // clang-format on
+  }
 };
 
 class SelectQueryTest : public ForeignTableTest {
