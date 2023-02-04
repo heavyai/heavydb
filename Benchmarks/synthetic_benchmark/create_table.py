@@ -319,7 +319,7 @@ if __name__ == "__main__":
     required.add_argument(
         "--num_fragments", dest="num_fragments", default="128"
     )
-    required.add_argument("--name", dest="name", default="omnisci")
+    required.add_argument("--name", dest="name", default="heavyai")
     required.add_argument("--server", dest="server", default="localhost")
     required.add_argument("--port", dest="port", default="6274")
     required.add_argument(

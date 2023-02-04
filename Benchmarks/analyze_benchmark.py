@@ -302,8 +302,8 @@ def main(argv):
             elif opt in ("-p", "--print"):
                 to_print = True
 
-    assert dir_artifact_ref is not ""
-    assert dir_artifact_sample is not ""
+    assert dir_artifact_ref != ""
+    assert dir_artifact_sample != ""
     assert epsilon <= 1
 
     GPU_list_ref = listdir(dir_artifact_ref)

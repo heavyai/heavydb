@@ -8,12 +8,12 @@ import time
 import argparse
 
 def getOptions(args=None):
-    parser = argparse.ArgumentParser(description='Benchmark OmniSci batch and streaming table ingest')
-    parser.add_argument('-s','--host', help='OmniSci server address', default='localhost')
-    parser.add_argument('-p','--port', help='OmniSci server port', default='6273')
-    parser.add_argument('-d','--db', help='OmniSci database name', default='omnisci')
-    parser.add_argument('-u','--user', help='OmniSci user name', default='admin')
-    parser.add_argument('-w','--password', help='OmniSci password', default='HyperInteractive')
+    parser = argparse.ArgumentParser(description='Benchmark HEAVY.AI batch and streaming table ingest')
+    parser.add_argument('-s','--host', help='HEAVY.AI server address', default='localhost')
+    parser.add_argument('-p','--port', help='HEAVY.AI server port', default='6273')
+    parser.add_argument('-d','--db', help='HEAVY.AI database name', default='heavyai')
+    parser.add_argument('-u','--user', help='HEAVY.AI user name', default='admin')
+    parser.add_argument('-w','--password', help='HEAVY.AI password', default='HyperInteractive')
     parser.add_argument('-e','--max_rollback_epochs', help='Max Rollback Epochs', type=int, default=-1)
     parser.add_argument('-t','--temp_table', help='Use temporary table', type=bool, default=False)
     parser.add_argument('-r','--num_rows', help='Number of rows to benchmark with', type=int, default=10000)
