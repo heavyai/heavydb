@@ -2535,13 +2535,9 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
             // Importing from geo_string WKT resulted in empty coords: dealing with a NULL
             is_null = true;
           }
-          if (cd->columnType.get_type() != import_ti.get_type()) {
-            // allow POLYGON to be inserted into MULTIPOLYGON column
-            if (!(import_ti.get_type() == SQLTypes::kPOLYGON &&
-                  cd->columnType.get_type() == SQLTypes::kMULTIPOLYGON)) {
-              throw std::runtime_error(
-                  "Imported geometry doesn't match the type of column " + cd->columnName);
-            }
+          if (!geo_promoted_type_match(import_ti.get_type(), cd->columnType.get_type())) {
+            throw std::runtime_error(
+                "Imported geometry doesn't match the type of column " + cd->columnName);
           }
         } else {
           // Special case for NULL POINT, push NULL representation to coords
@@ -5140,8 +5136,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
                         coords,
                         bounds,
                         ring_sizes,
-                        poly_rings,
-                        false)) {
+                        poly_rings)) {
                   throw std::runtime_error("Bad geometry data: '" +
                                            cd->default_value.value_or("NULL") + "'");
                 }

@@ -2972,8 +2972,25 @@ namespace {
 const char* create_table_geo = R"(
     CREATE TABLE geospatial (
       p1 POINT,
-      l LINESTRING,
+      mpoint MULTIPOINT,
+      line LINESTRING,
+      mline MULTILINESTRING,
       poly POLYGON NOT NULL,
+      mpoly MULTIPOLYGON,
+      p2 GEOMETRY(POINT, 4326) ENCODING NONE,
+      p3 GEOMETRY(POINT, 4326) NOT NULL ENCODING NONE,
+      p4 GEOMETRY(POINT) NOT NULL,
+      trip_distance DOUBLE
+    ) WITH (FRAGMENT_SIZE=65000000);
+  )";
+
+const char* create_table_geo_promoted = R"(
+    CREATE TABLE geospatial_promoted (
+      p1 MULTIPOINT,
+      mpoint MULTIPOINT,
+      line MULTILINESTRING,
+      mline MULTILINESTRING,
+      poly MULTIPOLYGON NOT NULL,
       mpoly MULTIPOLYGON,
       p2 GEOMETRY(POINT, 4326) ENCODING NONE,
       p3 GEOMETRY(POINT, 4326) NOT NULL ENCODING NONE,
@@ -2998,13 +3015,15 @@ class ImportTestGeo : public ImportExportTestBase {
     import_export::delimited_parser::set_max_buffer_resize(max_buffer_resize_);
     sql("drop table if exists geospatial;");
     sql(create_table_geo);
+    sql("drop table if exists geospatial_promoted;");
+    sql(create_table_geo_promoted);
     sql("drop table if exists geospatial_transform;");
     sql(create_table_geo_transform);
   }
 
   void TearDown() override {
     sql("drop table if exists geospatial;");
-    sql("drop table if exists geospatial;");
+    sql("drop table if exists geospatial_promoted;");
     sql("drop table if exists geospatial_transform;");
     ImportExportTestBase::TearDown();
   }
@@ -3028,24 +3047,39 @@ class ImportTestGeo : public ImportExportTestBase {
   }
 
   void checkGeoNumRows(const std::string& project_columns,
-                       const size_t num_expected_rows) {
+                       const size_t num_expected_rows,
+                       const bool promoted = false) {
     TQueryResult result;
-    sql(result, "SELECT " + project_columns + " FROM geospatial");
+    const std::string table_name = promoted ? "geospatial_promoted" : "geospatial";
+    sql(result, "SELECT " + project_columns + " FROM " + table_name);
     ASSERT_EQ(getRowCount(result), num_expected_rows);
   }
 
-  void checkGeoImport(bool expect_nulls = false) {
-    const std::string select_query_str = R"(
-      SELECT p1, l, poly, mpoly, p2, p3, p4, trip_distance
-        FROM geospatial
-        WHERE trip_distance = 1.0;
-    )";
+  void checkGeoImport(const bool expect_nulls = false, const bool promoted = false) {
+    const std::string table_name = promoted ? "geospatial_promoted" : "geospatial";
+    const std::string select_query_str =
+        "SELECT p1, mpoint, line, mline, poly, mpoly, p2, p3, p4, trip_distance FROM " +
+        table_name + " WHERE trip_distance = 1.0;";
 
-    if (!expect_nulls) {
+    if (expect_nulls) {
       sqlAndCompareResult(select_query_str,
-                          {{"POINT (1 1)",
-                            "LINESTRING (1 0,2 2,3 3)",
+                          {{Null,
+                            "MULTIPOINT (1 0,2 2,3 3)",
+                            Null,
+                            "MULTILINESTRING ((0 0,2 0,0 2,0 0))",
                             "POLYGON ((0 0,2 0,0 2,0 0))",
+                            Null,
+                            Null,
+                            "POINT (1 1)",
+                            "POINT (1 1)",
+                            1.0f}});
+    } else if (promoted) {
+      sqlAndCompareResult(select_query_str,
+                          {{"MULTIPOINT (1 1)",
+                            "MULTIPOINT (1 0,2 2,3 3)",
+                            "MULTILINESTRING ((1 0,2 2,3 3))",
+                            "MULTILINESTRING ((0 0,2 0,0 2,0 0))",
+                            "MULTIPOLYGON (((0 0,2 0,0 2,0 0)))",
                             "MULTIPOLYGON (((0 0,2 0,0 2,0 0)))",
                             "POINT (1 1)",
                             "POINT (1 1)",
@@ -3053,11 +3087,13 @@ class ImportTestGeo : public ImportExportTestBase {
                             1.0f}});
     } else {
       sqlAndCompareResult(select_query_str,
-                          {{Null,
-                            Null,
+                          {{"POINT (1 1)",
+                            "MULTIPOINT (1 0,2 2,3 3)",
+                            "LINESTRING (1 0,2 2,3 3)",
+                            "MULTILINESTRING ((0 0,2 0,0 2,0 0))",
                             "POLYGON ((0 0,2 0,0 2,0 0))",
-                            Null,
-                            Null,
+                            "MULTIPOLYGON (((0 0,2 0,0 2,0 0)))",
+                            "POINT (1 1)",
                             "POINT (1 1)",
                             "POINT (1 1)",
                             1.0f}});
@@ -3070,7 +3106,16 @@ TEST_F(ImportTestGeo, CSV_Import) {
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
   sql("COPY geospatial FROM '" + file_path.string() + "';");
   checkGeoImport();
-  checkGeoNumRows("p1, l, poly, mpoly, p2, p3, p4, trip_distance", 10);
+  checkGeoNumRows("p1, mpoint, line, mline, poly, mpoly, p2, p3, p4, trip_distance", 10);
+}
+
+TEST_F(ImportTestGeo, CSV_Import_Promoted) {
+  const auto file_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
+  sql("COPY geospatial_promoted FROM '" + file_path.string() + "';");
+  checkGeoImport(false, true);
+  checkGeoNumRows(
+      "p1, mpoint, line, mline, poly, mpoly, p2, p3, p4, trip_distance", 10, true);
 }
 
 TEST_F(ImportTestGeo, CSV_Import_Buffer_Size_Less_Than_Row_Size) {
@@ -3078,11 +3123,13 @@ TEST_F(ImportTestGeo, CSV_Import_Buffer_Size_Less_Than_Row_Size) {
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
   sql("COPY geospatial FROM '" + file_path.string() + "' WITH (buffer_size = 80);");
   checkGeoImport();
-  checkGeoNumRows("p1, l, poly, mpoly, p2, p3, p4, trip_distance", 10);
+  checkGeoNumRows("p1, mpoint, line, mline, poly, mpoly, p2, p3, p4, trip_distance", 10);
 }
 
 TEST_F(ImportTestGeo, CSV_Import_Max_Buffer_Resize_Less_Than_Row_Size) {
-  import_export::delimited_parser::set_max_buffer_resize(168);
+  // this value must be the line length up to right before the open quote of
+  // "trip_distance" on row 10
+  import_export::delimited_parser::set_max_buffer_resize(242);
   const auto file_path =
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
 
@@ -3091,16 +3138,16 @@ TEST_F(ImportTestGeo, CSV_Import_Max_Buffer_Resize_Less_Than_Row_Size) {
   // adapt value based on which importer we're testing as they have different buffer size
   // management heuristics
   if (g_enable_legacy_delimited_import) {
-    expected_error_message += "168";
+    expected_error_message += "242";
   } else {
-    expected_error_message += "167";
+    expected_error_message += "241";
   }
   expected_error_message +=
       " characters. "
       "Please ensure that the correct \"line_delimiter\" option is specified "
       "or update the \"buffer_size\" option appropriately. Row number: 10. "
       "First few characters in row: "
-      "\"POINT(9 9)\", \"LINESTRING(9 0, 18 18, 19 19)\", \"PO";
+      "\"POINT(9 9)\", \"MULTIPOINT(9 0, 18 18, 19 19)\", \"LI";
   queryAndAssertException(
       "COPY geospatial FROM '" + file_path.string() + "' WITH (buffer_size = 80);",
       expected_error_message);
@@ -3111,8 +3158,8 @@ TEST_F(ImportTestGeo, CSV_Import_Empties) {
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial_empties.csv");
   sql("COPY geospatial FROM '" + file_path.string() + "';");
   checkGeoImport();
-  checkGeoNumRows("p1, l, poly, mpoly, p2, p3, p4, trip_distance",
-                  6);  // we expect it to drop the 4 rows containing 'EMPTY'
+  checkGeoNumRows("p1, mpoint, line, mline, poly, mpoly, p2, p3, p4, trip_distance",
+                  4);  // we expect it to drop the 6 rows containing 'EMPTY'
 }
 
 TEST_F(ImportTestGeo, CSV_Import_Nulls) {
@@ -3120,7 +3167,7 @@ TEST_F(ImportTestGeo, CSV_Import_Nulls) {
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial_nulls.csv");
   sql("COPY geospatial FROM '" + file_path.string() + "';");
   checkGeoImport(true);
-  checkGeoNumRows("p1, l, poly, mpoly, p2, p3, p4, trip_distance",
+  checkGeoNumRows("p1, mpoint, line, mline, poly, mpoly, p2, p3, p4, trip_distance",
                   7);  // drop 3 rows containing NULL geo for NOT NULL columns
 }
 
@@ -3129,7 +3176,7 @@ TEST_F(ImportTestGeo, CSV_Import_Degenerate) {
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial_degenerate.csv");
   sql("COPY geospatial FROM '" + file_path.string() + "';");
   checkGeoImport();
-  checkGeoNumRows("p1, l, poly, mpoly, p2, p3, p4, trip_distance",
+  checkGeoNumRows("p1, mpoint, line, mline, poly, mpoly, p2, p3, p4, trip_distance",
                   6);  // we expect it to drop the 4 rows containing degenerate polys
 }
 
@@ -3205,7 +3252,7 @@ TEST_F(ImportTestGeo, Geo_CSV_WKB) {
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial_wkb.csv");
   sql("COPY geospatial FROM '" + file_path.string() + "';");
   checkGeoImport();
-  checkGeoNumRows("p1, l, poly, mpoly, p2, p3, p4, trip_distance", 1);
+  checkGeoNumRows("p1, mpoint, line, mline, poly, mpoly, p2, p3, p4, trip_distance", 1);
 }
 
 class ImportTestGDAL : public ImportTestGeo {
@@ -3346,6 +3393,17 @@ TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
+  importTestGeofileImporter(file_path.string(), "geospatial", false, false);
+  checkGeoGdalPolyOrMpolyImport(true, false);  // mpoly, not exploded
+  checkGeoNumRows(Geospatial::kGeoColumnName + ", trip", 10);
+}
+
+TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Mixed_Import) {
+  SKIP_ALL_ON_AGGREGATOR();
+  // this file contains 5 MULTIPOLYGON and 5 POLYGON
+  // so is a test of automatic data promotion
+  const auto file_path =
+      boost::filesystem::path("geospatial_mpoly/geospatial_mixed.geojson");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
   checkGeoGdalPolyOrMpolyImport(true, false);  // mpoly, not exploded
   checkGeoNumRows(Geospatial::kGeoColumnName + ", trip", 10);
@@ -3540,6 +3598,7 @@ TEST_F(ImportTestGDAL, Geojson_Point_Import_Sort) {
 
 TEST_F(ImportTestGDAL, GeoJSON_MultiPoint_Import) {
   SKIP_ALL_ON_AGGREGATOR();
+  // second feature in this file is non-MULTI, hence this also tests auto data promotion
   const auto file_path = boost::filesystem::path("multipoint/multipoint.geojson.gz");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
   checkGeoNumRows(Geospatial::kGeoColumnName, 5);
@@ -3549,6 +3608,7 @@ TEST_F(ImportTestGDAL, GeoJSON_MultiPoint_Import) {
 
 TEST_F(ImportTestGDAL, GeoJSON_MultiLineString_Import) {
   SKIP_ALL_ON_AGGREGATOR();
+  // second feature in this file is non-MULTI, hence this also tests auto data promotion
   const auto file_path =
       boost::filesystem::path("multilinestring/multilinestring.geojson.gz");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
