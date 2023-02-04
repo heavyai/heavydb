@@ -199,18 +199,15 @@ class GeospatialEncoder {
                                                     coords_parse_buffer_,
                                                     bounds_parse_buffer_,
                                                     ring_or_line_sizes_parse_buffer_,
-                                                    poly_rings_parse_buffer_,
-                                                    PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+                                                    poly_rings_parse_buffer_)) {
       throwMalformedGeoElement(geo_column_descriptor_->columnName);
     }
 
     // validate types
-    if (geo_column_descriptor_->columnType.get_type() != import_ti.get_type()) {
-      if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
-          !(import_ti.get_type() == SQLTypes::kPOLYGON &&
-            geo_column_descriptor_->columnType.get_type() == SQLTypes::kMULTIPOLYGON)) {
-        throwMismatchedGeoElement(geo_column_descriptor_->columnName);
-      }
+
+    if (!geo_promoted_type_match(import_ti.get_type(),
+                                 geo_column_descriptor_->columnType.get_type())) {
+      throwMismatchedGeoElement(geo_column_descriptor_->columnName);
     }
 
     // append coords
@@ -242,8 +239,7 @@ class GeospatialEncoder {
                                                    coords_parse_buffer_,
                                                    bounds_parse_buffer_,
                                                    ring_or_line_sizes_parse_buffer_,
-                                                   poly_rings_parse_buffer_,
-                                                   PROMOTE_POLYGON_TO_MULTIPOLYGON);
+                                                   poly_rings_parse_buffer_);
     // POINT columns are represented using fixed length arrays and need
     // special treatment of nulls
     if (geo_column_descriptor_->columnType.get_type() == kPOINT) {
@@ -418,8 +414,6 @@ class GeospatialEncoder {
   }
 
   const ColumnDescriptor* geo_column_descriptor_;
-
-  constexpr static bool PROMOTE_POLYGON_TO_MULTIPOLYGON = true;
 
   StringNoneEncoder* base_column_encoder_;
   Encoder* coords_column_encoder_;

@@ -3137,8 +3137,7 @@ void DBHandler::fillGeoColumns(
                                                   coords_column,
                                                   bounds_column,
                                                   ring_sizes_column,
-                                                  poly_rings_column,
-                                                  true)) {
+                                                  poly_rings_column)) {
     std::ostringstream oss;
     oss << "Invalid geometry in column " << cd->columnName;
     THROW_DB_EXCEPTION(oss.str());

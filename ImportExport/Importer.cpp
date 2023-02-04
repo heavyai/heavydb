@@ -157,6 +157,10 @@ using FeaturePtrVector = std::vector<Geospatial::GDAL::FeatureUqPtr>;
 
 #define DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT 0
 
+// only auto-promote polygon column type
+// @TODO auto-promote linestring
+static constexpr bool PROMOTE_POINT_TO_MULTIPOINT = false;
+static constexpr bool PROMOTE_LINESTRING_TO_MULTILINESTRING = false;
 static constexpr bool PROMOTE_POLYGON_TO_MULTIPOLYGON = true;
 
 static heavyai::shared_mutex status_mutex;
@@ -805,16 +809,11 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
         SQLTypeInfo import_ti{ti};
         if (array.IsNull(row)) {
           Geospatial::GeoTypesFactory::getNullGeoColumns(
-              import_ti, coords, bounds, ring_sizes, poly_rings, false);
+              import_ti, coords, bounds, ring_sizes, poly_rings);
         } else {
           arrow_throw_if<GeoImportException>(
-              !Geospatial::GeoTypesFactory::getGeoColumns(geo_string_buffer_->back(),
-                                                          ti,
-                                                          coords,
-                                                          bounds,
-                                                          ring_sizes,
-                                                          poly_rings,
-                                                          false),
+              !Geospatial::GeoTypesFactory::getGeoColumns(
+                  geo_string_buffer_->back(), ti, coords, bounds, ring_sizes, poly_rings),
               error_context(cd, bad_rows_tracker) + "Invalid geometry");
           arrow_throw_if<GeoImportException>(
               cd->columnType.get_type() != ti.get_type(),
@@ -1602,6 +1601,7 @@ void TypedImportBuffer::addDefaultValues(const ColumnDescriptor* cd, size_t num_
 bool importGeoFromLonLat(double lon,
                          double lat,
                          std::vector<double>& coords,
+                         std::vector<double>& bounds,
                          SQLTypeInfo& ti) {
   if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon)) {
     return false;
@@ -1612,10 +1612,17 @@ bool importGeoFromLonLat(double lon,
       return false;
     }
     pt.getColumns(coords);
-    return true;
+  } else {
+    coords.push_back(lon);
+    coords.push_back(lat);
   }
-  coords.push_back(lon);
-  coords.push_back(lat);
+  // in case of promotion to MULTIPOINT
+  CHECK_EQ(coords.size(), 2u);
+  bounds.reserve(4);
+  bounds.push_back(coords[0]);
+  bounds.push_back(coords[1]);
+  bounds.push_back(coords[0]);
+  bounds.push_back(coords[1]);
   return true;
 }
 
@@ -2006,7 +2013,8 @@ static ImportStatus import_thread_delimited(
     for (const auto cd : col_descs) {
       const auto& col_ti = cd->columnType;
       phys_cols += col_ti.get_physical_cols();
-      if (cd->columnType.get_type() == kPOINT) {
+      if (cd->columnType.get_type() == kPOINT ||
+          cd->columnType.get_type() == kMULTIPOINT) {
         point_cols++;
       }
     }
@@ -2118,10 +2126,11 @@ static ImportStatus import_thread_delimited(
               std::vector<int> ring_sizes;
               std::vector<int> poly_rings;
 
-              // if this is a POINT column, and the field is not null, and
-              // looks like a scalar numeric value (and not a hex blob)
-              // attempt to import two columns as lon/lat (or lat/lon)
-              if (col_type == kPOINT && !is_null && geo_string.size() > 0 &&
+              // if this is a POINT or MULTIPOINT column, and the field is not null, and
+              // looks like a scalar numeric value (and not a hex blob) attempt to import
+              // two columns as lon/lat (or lat/lon)
+              if ((col_type == kPOINT || col_type == kMULTIPOINT) && !is_null &&
+                  geo_string.size() > 0 &&
                   (geo_string[0] == '.' || isdigit(geo_string[0]) ||
                    geo_string[0] == '-') &&
                   geo_string.find_first_of("ABCDEFabcdef") == std::string::npos) {
@@ -2137,8 +2146,8 @@ static ImportStatus import_thread_delimited(
                 if (!copy_params.lonlat) {
                   std::swap(lat, lon);
                 }
-                // TODO: should check if POINT column should have been declared with
-                // SRID WGS 84, EPSG 4326 ? if (col_ti.get_dimension() != 4326) {
+                // TODO: should check if POINT/MULTIPOINT column should have been declared
+                // with SRID WGS 84, EPSG 4326 ? if (col_ti.get_dimension() != 4326) {
                 //  throw std::runtime_error("POINT column " + cd->columnName + " is
                 //  not WGS84, cannot insert lon/lat");
                 // }
@@ -2152,9 +2161,9 @@ static ImportStatus import_thread_delimited(
                     import_ti.set_input_srid(srid0);
                   }
                 }
-                if (!importGeoFromLonLat(lon, lat, coords, import_ti)) {
+                if (!importGeoFromLonLat(lon, lat, coords, bounds, import_ti)) {
                   throw std::runtime_error(
-                      "Cannot read lon/lat to insert into POINT column " +
+                      "Cannot read lon/lat to insert into POINT/MULTIPOINT column " +
                       cd->columnName);
                 }
               } else {
@@ -2174,23 +2183,16 @@ static ImportStatus import_thread_delimited(
                     throw std::runtime_error("NULL geo for column " + cd->columnName);
                   }
                   Geospatial::GeoTypesFactory::getNullGeoColumns(
-                      import_ti,
-                      coords,
-                      bounds,
-                      ring_sizes,
-                      poly_rings,
-                      PROMOTE_POLYGON_TO_MULTIPOLYGON);
+                      import_ti, coords, bounds, ring_sizes, poly_rings);
                 } else {
                   if (import_geometry) {
                     // geometry already exploded
-                    if (!Geospatial::GeoTypesFactory::getGeoColumns(
-                            import_geometry,
-                            import_ti,
-                            coords,
-                            bounds,
-                            ring_sizes,
-                            poly_rings,
-                            PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+                    if (!Geospatial::GeoTypesFactory::getGeoColumns(import_geometry,
+                                                                    import_ti,
+                                                                    coords,
+                                                                    bounds,
+                                                                    ring_sizes,
+                                                                    poly_rings)) {
                       std::string msg =
                           "Failed to extract valid geometry from exploded row " +
                           std::to_string(first_row_index_this_buffer +
@@ -2206,8 +2208,7 @@ static ImportStatus import_thread_delimited(
                             coords,
                             bounds,
                             ring_sizes,
-                            poly_rings,
-                            PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+                            poly_rings)) {
                       std::string msg = "Failed to extract valid geometry from row " +
                                         std::to_string(first_row_index_this_buffer +
                                                        row_index_plus_one) +
@@ -2217,14 +2218,10 @@ static ImportStatus import_thread_delimited(
                   }
 
                   // validate types
-                  if (col_type != import_ti.get_type()) {
-                    if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
-                        !(import_ti.get_type() == SQLTypes::kPOLYGON &&
-                          col_type == SQLTypes::kMULTIPOLYGON)) {
-                      throw std::runtime_error(
-                          "Imported geometry doesn't match the type of column " +
-                          cd->columnName);
-                    }
+                  if (!geo_promoted_type_match(import_ti.get_type(), col_type)) {
+                    throw std::runtime_error(
+                        "Imported geometry doesn't match the type of column " +
+                        cd->columnName);
                   }
                 }
               }
@@ -2415,21 +2412,14 @@ static ImportStatus import_thread_shapefile(
                 throw std::runtime_error("NULL geo for column " + cd->columnName);
               }
               Geospatial::GeoTypesFactory::getNullGeoColumns(
-                  import_ti,
-                  coords,
-                  bounds,
-                  ring_sizes,
-                  poly_rings,
-                  PROMOTE_POLYGON_TO_MULTIPOLYGON);
+                  import_ti, coords, bounds, ring_sizes, poly_rings);
             } else {
-              if (!Geospatial::GeoTypesFactory::getGeoColumns(
-                      import_geometry,
-                      import_ti,
-                      coords,
-                      bounds,
-                      ring_sizes,
-                      poly_rings,
-                      PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+              if (!Geospatial::GeoTypesFactory::getGeoColumns(import_geometry,
+                                                              import_ti,
+                                                              coords,
+                                                              bounds,
+                                                              ring_sizes,
+                                                              poly_rings)) {
                 std::string msg = "Failed to extract valid geometry from feature " +
                                   std::to_string(firstFeature + iFeature + 1) +
                                   " for column " + cd->columnName;
@@ -2437,14 +2427,10 @@ static ImportStatus import_thread_shapefile(
               }
 
               // validate types
-              if (col_type != import_ti.get_type()) {
-                if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
-                    !(import_ti.get_type() == SQLTypes::kPOLYGON &&
-                      col_type == SQLTypes::kMULTIPOLYGON)) {
-                  throw std::runtime_error(
-                      "Imported geometry doesn't match the type of column " +
-                      cd->columnName);
-                }
+              if (!geo_promoted_type_match(import_ti.get_type(), col_type)) {
+                throw std::runtime_error(
+                    "Imported geometry doesn't match the type of column " +
+                    cd->columnName);
               }
             }
 
@@ -3242,19 +3228,18 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
 
     // then test for leading words
     if (str_upper_case.find("POINT") == 0) {
-      type = kPOINT;
+      // promote column type?
+      type = PROMOTE_POINT_TO_MULTIPOINT ? kMULTIPOINT : kPOINT;
     } else if (str_upper_case.find("MULTIPOINT") == 0) {
       type = kMULTIPOINT;
     } else if (str_upper_case.find("LINESTRING") == 0) {
-      type = kLINESTRING;
+      // promote column type?
+      type = PROMOTE_LINESTRING_TO_MULTILINESTRING ? kMULTILINESTRING : kLINESTRING;
     } else if (str_upper_case.find("MULTILINESTRING") == 0) {
       type = kMULTILINESTRING;
     } else if (str_upper_case.find("POLYGON") == 0) {
-      if (PROMOTE_POLYGON_TO_MULTIPOLYGON) {
-        type = kMULTIPOLYGON;
-      } else {
-        type = kPOLYGON;
-      }
+      // promote column type?
+      type = PROMOTE_POLYGON_TO_MULTIPOLYGON ? kMULTIPOLYGON : kPOLYGON;
     } else if (str_upper_case.find("MULTIPOLYGON") == 0) {
       type = kMULTIPOLYGON;
     } else if (str_upper_case.find_first_not_of("0123456789ABCDEF") ==
@@ -4956,14 +4941,10 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsGeo(
   // try getting the geo column type from the layer
   auto ogr_type = wkbFlatten(layer.GetGeomType());
   if (ogr_type == wkbUnknown) {
-    // layer geo type unknown, so try reading from the first feature
-    Geospatial::GDAL::FeatureUqPtr first_feature(layer.GetNextFeature());
-    CHECK(first_feature);
-    auto const* ogr_geometry = first_feature->GetGeometryRef();
+    // layer geo type unknown, so try the feature (that we already got)
+    auto const* ogr_geometry = poFeature->GetGeometryRef();
     if (ogr_geometry) {
       ogr_type = wkbFlatten(ogr_geometry->getGeometryType());
-    } else {
-      ogr_type = wkbNone;
     }
   }
   // do we have a geo column?
@@ -4987,9 +4968,15 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsGeo(
     // this will throw if the type is unsupported
     SQLTypes geoType = ogr_to_type(ogr_type);
 
-    // for now, we promote POLYGON to MULTIPOLYGON (unless exploding)
-    if (PROMOTE_POLYGON_TO_MULTIPOLYGON && !copy_params.geo_explode_collections) {
-      geoType = (geoType == kPOLYGON) ? kMULTIPOLYGON : geoType;
+    // promote column type? (unless exploding)
+    if (!copy_params.geo_explode_collections) {
+      if (PROMOTE_POINT_TO_MULTIPOINT && geoType == kPOINT) {
+        geoType = kMULTIPOINT;
+      } else if (PROMOTE_LINESTRING_TO_MULTILINESTRING && geoType == kLINESTRING) {
+        geoType = kMULTILINESTRING;
+      } else if (PROMOTE_POLYGON_TO_MULTIPOLYGON && geoType == kPOLYGON) {
+        geoType = kMULTIPOLYGON;
+      }
     }
 
     // build full internal type
@@ -6149,7 +6136,7 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
       std::vector<int> ring_sizes, poly_rings;
       SQLTypeInfo tinfo{cd->columnType};
       CHECK(Geospatial::GeoTypesFactory::getGeoColumns(
-          default_value, tinfo, coords, bounds, ring_sizes, poly_rings, false));
+          default_value, tinfo, coords, bounds, ring_sizes, poly_rings));
       // set physical columns starting with the following ID
       auto next_col = i + 1;
       import_export::Importer::set_geo_physical_import_buffer(

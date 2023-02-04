@@ -1201,6 +1201,65 @@ TEST(Insert, DISABLED_BatchInsertShardsProperly) {
   }
 }
 
+namespace {
+
+const std::string create_stmt = R"(
+  CREATE TABLE geo_insert (
+    pt1 POINT,
+    pt2 MULTIPOINT,
+    ls1 LINESTRING,
+    ls2 MULTILINESTRING,
+    py1 POLYGON,
+    py2 MULTIPOLYGON
+  );
+)";
+
+const std::string create_stmt_promote = R"(
+  CREATE TABLE geo_insert (
+    pt1 MULTIPOINT,
+    pt2 MULTIPOINT,
+    ls1 MULTILINESTRING,
+    ls2 MULTILINESTRING,
+    py1 MULTIPOLYGON,
+    py2 MULTIPOLYGON
+  );
+)";
+
+const std::string insert_stmt = R"(
+  INSERT INTO geo_insert(pt1, pt2, ls1, ls2, py1, py2) VALUES (
+    'POINT(0 0)',
+    'MULTIPOINT(0 0, 1 0, 2 0)',
+    'LINESTRING(0 0, 1 0, 1 1)',
+    'MULTILINESTRING((0 0, 1 0, 1 1), (0 1, 1 1, 1 2))',
+    'POLYGON((0 0, 1 0, 1 1))',
+    'MULTIPOLYGON(((0 0, 1 0, 1 1)), ((0 1, 1 1, 1 2)))'
+  );
+)";
+
+void GeoInsertTest(const bool promote) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS geo_insert");
+    if (promote) {
+      run_ddl_statement(create_stmt_promote);
+    } else {
+      run_ddl_statement(create_stmt);
+    }
+    EXPECT_NO_THROW(run_multiple_agg(boost::algorithm::trim_copy(insert_stmt), dt));
+    ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geo_insert", dt)));
+  }
+}
+
+}  // namespace
+
+TEST(Insert, GeoInsert) {
+  GeoInsertTest(false);
+}
+
+TEST(Insert, GeoInsertPromote) {
+  GeoInsertTest(true);
+}
+
 TEST(KeyForString, KeyForString) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
