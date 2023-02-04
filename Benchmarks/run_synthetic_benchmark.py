@@ -13,14 +13,14 @@ if __name__ == "__main__":
     required.add_argument(
         "--password", dest="password", default="HyperInteractive"
     )
-    required.add_argument("--name", dest="name", default="omnisci")
+    required.add_argument("--name", dest="name", default="heavyai")
     required.add_argument("--server", dest="server", default="localhost")
     required.add_argument("--port", dest="port", default="6274")
     required.add_argument("--dest_user", dest="dest_user", default="admin")
     required.add_argument(
         "--dest_password", dest="dest_password", default="HyperInteractive"
     )
-    required.add_argument("--dest_name", dest="dest_name", default="omnisci")
+    required.add_argument("--dest_name", dest="dest_name", default="heavyai")
     required.add_argument(
         "--dest_server", dest="dest_server", default="localhost"
     )
