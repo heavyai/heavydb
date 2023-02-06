@@ -30,6 +30,7 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <shared_mutex>
 
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/AbstractBufferMgr.h"
@@ -115,7 +116,6 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   std::string printMap();
   void printSegs();
   std::string printSeg(BufferList::iterator& seg_it);
-
   size_t getInUseSize() const override;
   size_t getMaxSize() const override;
   size_t getAllocated() const override;
@@ -132,6 +132,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
   /// Deletes the chunk with the specified key
   void deleteBuffer(const ChunkKey& key, const bool purge = true) override;
+
   void deleteBuffersWithPrefix(const ChunkKey& key_prefix,
                                const bool purge = true) override;
 
@@ -198,12 +199,16 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   void clear();
   void reinit();
   std::string keyToString(const ChunkKey& key);
+  AbstractBuffer* createBufferUnlocked(const ChunkKey& key,
+                                       const size_t page_size = 0,
+                                       const size_t initial_size = 0);
+  void deleteBufferUnlocked(const ChunkKey& key, const bool purge = true);
 
   std::mutex chunk_index_mutex_;
-  std::mutex sized_segs_mutex_;
+  mutable std::mutex sized_segs_mutex_;
   std::mutex unsized_segs_mutex_;
   std::mutex buffer_id_mutex_;
-  std::mutex global_mutex_;
+  mutable std::shared_mutex global_mutex_;
 
   std::map<ChunkKey, BufferList::iterator> chunk_index_;
   size_t max_buffer_pool_num_pages_;  // max number of pages for buffer pool
