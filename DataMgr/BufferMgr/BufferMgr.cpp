@@ -117,6 +117,13 @@ void BufferMgr::clear() {
 AbstractBuffer* BufferMgr::createBuffer(const ChunkKey& chunk_key,
                                         const size_t chunk_page_size,
                                         const size_t initial_size) {
+  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);
+  return createBufferUnlocked(chunk_key, chunk_page_size, initial_size);
+}
+
+AbstractBuffer* BufferMgr::createBufferUnlocked(const ChunkKey& chunk_key,
+                                                const size_t chunk_page_size,
+                                                const size_t initial_size) {
   // LOG(INFO) << printMap();
   size_t actual_chunk_page_size = chunk_page_size;
   if (actual_chunk_page_size == 0) {
@@ -147,7 +154,7 @@ AbstractBuffer* BufferMgr::createBuffer(const ChunkKey& chunk_key,
     buffer_it->second->buffer =
         nullptr;  // constructor failed for the buffer object so make sure to mark it null
                   // so deleteBuffer doesn't try to delete it
-    deleteBuffer(chunk_key);
+    deleteBufferUnlocked(chunk_key);
     throw;
   }
   CHECK(initial_size == 0 || chunk_index_[chunk_key]->buffer->getMemoryPtr());
@@ -205,7 +212,6 @@ BufferList::iterator BufferMgr::evict(BufferList::iterator& evict_start,
 BufferList::iterator BufferMgr::reserveBuffer(
     BufferList::iterator& seg_it,
     const size_t num_bytes) {  // assumes buffer is already pinned
-
   size_t num_pages_requested = (num_bytes + page_size_ - 1) / page_size_;
   size_t num_pages_extra_needed = num_pages_requested - seg_it->num_pages;
 
@@ -300,6 +306,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
     }
   }
 
+  // TODO: Move new slab creation to separate method
   // If we're here then we didn't find a free segment of sufficient size
   // First we see if we can add another slab
   while (!allocations_capped_ && num_pages_allocated_ < max_buffer_pool_num_pages_) {
@@ -365,6 +372,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
     throw FailedToCreateFirstSlab(num_bytes);
   }
 
+  // TODO: Move eviction to separate method
   // If here then we can't add a slab - so we need to evict
 
   size_t min_score = std::numeric_limits<size_t>::max();
@@ -487,14 +495,14 @@ std::string BufferMgr::printSlabs() {
 }
 
 void BufferMgr::clearSlabs() {
-  std::lock_guard<std::mutex> lock(global_mutex_);
+  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);
   bool pinned_exists = false;
   for (auto& segment_list : slab_segments_) {
     for (auto& segment : segment_list) {
       if (segment.mem_status == FREE) {
         // no need to free
       } else if (segment.buffer->getPinCount() < 1) {
-        deleteBuffer(segment.chunk_key, true);
+        deleteBufferUnlocked(segment.chunk_key, true);
       } else {
         pinned_exists = true;
       }
@@ -513,25 +521,31 @@ void BufferMgr::clearSlabs() {
 
 // return the maximum size this buffer can be in bytes
 size_t BufferMgr::getMaxSize() const {
+  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   return page_size_ * max_buffer_pool_num_pages_;
 }
 
 // return how large the buffer are currently allocated
 size_t BufferMgr::getAllocated() const {
+  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   return num_pages_allocated_ * page_size_;
 }
 
 //
 bool BufferMgr::isAllocationCapped() {
+  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   return allocations_capped_;
 }
 
 size_t BufferMgr::getPageSize() const {
+  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   return page_size_;
 }
 
 // return the size of the chunks in use in bytes
 size_t BufferMgr::getInUseSize() const {
+  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
+  std::unique_lock<std::mutex> sized_segs_lock(sized_segs_mutex_);
   size_t in_use = 0;
   for (const auto& segment_list : slab_segments_) {
     for (const auto& segment : segment_list) {
@@ -606,6 +620,7 @@ void BufferMgr::printSegs() {
 }
 
 bool BufferMgr::isBufferOnDevice(const ChunkKey& key) {
+  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   std::lock_guard<std::mutex> chunkIndexLock(chunk_index_mutex_);
   if (chunk_index_.find(key) == chunk_index_.end()) {
     return false;
@@ -616,6 +631,11 @@ bool BufferMgr::isBufferOnDevice(const ChunkKey& key) {
 
 /// This method throws a runtime_error when deleting a Chunk that does not exist.
 void BufferMgr::deleteBuffer(const ChunkKey& key, const bool) {
+  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);
+  deleteBufferUnlocked(key);
+}
+
+void BufferMgr::deleteBufferUnlocked(const ChunkKey& key, const bool) {
   // Note: purge is unused
   std::unique_lock<std::mutex> chunk_index_lock(chunk_index_mutex_);
 
@@ -634,6 +654,7 @@ void BufferMgr::deleteBuffer(const ChunkKey& key, const bool) {
 }
 
 void BufferMgr::deleteBuffersWithPrefix(const ChunkKey& key_prefix, const bool) {
+  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);
   // Note: purge is unused
   // lookup the buffer for the Chunk in chunk_index_
   std::lock_guard<std::mutex> sized_segs_lock(
@@ -694,7 +715,7 @@ void BufferMgr::removeSegment(BufferList::iterator& seg_it) {
 }
 
 void BufferMgr::checkpoint() {
-  std::lock_guard<std::mutex> lock(global_mutex_);  // granular lock
+  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);  // granular lock
   std::lock_guard<std::mutex> chunkIndexLock(chunk_index_mutex_);
 
   for (auto& chunk_itr : chunk_index_) {
@@ -708,7 +729,7 @@ void BufferMgr::checkpoint() {
 }
 
 void BufferMgr::checkpoint(const int db_id, const int tb_id) {
-  std::lock_guard<std::mutex> lock(global_mutex_);  // granular lock
+  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);  // granular lock
   std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
 
   ChunkKey key_prefix;
@@ -739,7 +760,7 @@ void BufferMgr::checkpoint(const int db_id, const int tb_id) {
 /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
 /// throws a runtime_error.
 AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes) {
-  std::lock_guard<std::mutex> lock(global_mutex_);  // granular lock
+  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);  // granular lock
 
   std::unique_lock<std::mutex> sized_segs_lock(sized_segs_mutex_);
   std::unique_lock<std::mutex> chunk_index_lock(chunk_index_mutex_);
@@ -762,12 +783,13 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
               << buffer_size << ", num bytes to fetch: " << num_bytes
               << ", chunk key: " << keyToString(key);
       parent_mgr_->fetchBuffer(key, buffer_it->second->buffer, num_bytes);
+      buffer_it->second->buffer->clearDirtyBits();
     }
     return buffer_it->second->buffer;
   } else {  // If wasn't in pool then we need to fetch it
     sized_segs_lock.unlock();
     // createChunk pins for us
-    AbstractBuffer* buffer = createBuffer(key, page_size_, num_bytes);
+    AbstractBuffer* buffer = createBufferUnlocked(key, page_size_, num_bytes);
     try {
       VLOG(1) << ToString(getMgrType())
               << ": Fetching buffer from parent manager. Reason: cache miss. Num bytes "
@@ -775,8 +797,9 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
               << num_bytes << ", chunk key: " << keyToString(key);
       parent_mgr_->fetchBuffer(
           key, buffer, num_bytes);  // this should put buffer in a BufferSegment
+      buffer->clearDirtyBits();
     } catch (const foreign_storage::ForeignStorageException& error) {
-      deleteBuffer(key);  // buffer failed to load, ensure it is cleaned up
+      deleteBufferUnlocked(key);  // buffer failed to load, ensure it is cleaned up
       LOG(WARNING) << "Get chunk - Could not load chunk " << keyToString(key)
                    << " from foreign storage. Error was " << error.what();
       throw;
@@ -791,7 +814,7 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
 void BufferMgr::fetchBuffer(const ChunkKey& key,
                             AbstractBuffer* dest_buffer,
                             const size_t num_bytes) {
-  std::unique_lock<std::mutex> lock(global_mutex_);  // granular lock
+  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);  // granular lock
   std::unique_lock<std::mutex> sized_segs_lock(sized_segs_mutex_);
   std::unique_lock<std::mutex> chunk_index_lock(chunk_index_mutex_);
 
@@ -802,15 +825,16 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
   if (!found_buffer) {
     sized_segs_lock.unlock();
     CHECK(parent_mgr_ != 0);
-    buffer = createBuffer(key, page_size_, num_bytes);  // will pin buffer
+    buffer = createBufferUnlocked(key, page_size_, num_bytes);  // will pin buffer
     try {
       VLOG(1) << ToString(getMgrType())
               << ": Fetching buffer from parent manager. Reason: cache miss. Num bytes "
                  "to fetch: "
               << num_bytes << ", chunk key: " << keyToString(key);
       parent_mgr_->fetchBuffer(key, buffer, num_bytes);
+      buffer->clearDirtyBits();
     } catch (const foreign_storage::ForeignStorageException& error) {
-      deleteBuffer(key);  // buffer failed to load, ensure it is cleaned up
+      deleteBufferUnlocked(key);  // buffer failed to load, ensure it is cleaned up
       LOG(WARNING) << "Could not fetch parent chunk " << keyToString(key)
                    << " from foreign storage. Error was " << error.what();
       throw;
@@ -830,6 +854,7 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
                 << buffer_size << ", num bytes to fetch: " << num_bytes
                 << ", chunk key: " << keyToString(key);
         parent_mgr_->fetchBuffer(key, buffer, num_bytes);
+        buffer->clearDirtyBits();
       } catch (const foreign_storage::ForeignStorageException& error) {
         LOG(WARNING) << "Could not fetch parent chunk " << keyToString(key)
                      << " from foreign storage. Error was " << error.what();
@@ -841,7 +866,9 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
     }
     sized_segs_lock.unlock();
   }
-  lock.unlock();
+  global_lock.unlock();
+
+  std::shared_lock<std::shared_mutex> global_read_lock(global_mutex_);
   buffer->copyTo(dest_buffer, num_bytes);
   buffer->unPin();
 }
@@ -849,13 +876,14 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
 AbstractBuffer* BufferMgr::putBuffer(const ChunkKey& key,
                                      AbstractBuffer* src_buffer,
                                      const size_t num_bytes) {
+  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);
   std::unique_lock<std::mutex> chunk_index_lock(chunk_index_mutex_);
   auto buffer_it = chunk_index_.find(key);
   bool found_buffer = buffer_it != chunk_index_.end();
   chunk_index_lock.unlock();
   AbstractBuffer* buffer;
   if (!found_buffer) {
-    buffer = createBuffer(key, page_size_);
+    buffer = createBufferUnlocked(key, page_size_);
   } else {
     buffer = buffer_it->second->buffer;
   }
@@ -892,34 +920,38 @@ int BufferMgr::getBufferId() {
 
 /// client is responsible for deleting memory allocated for b->mem_
 AbstractBuffer* BufferMgr::alloc(const size_t num_bytes) {
-  std::lock_guard<std::mutex> lock(global_mutex_);
+  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);
   ChunkKey chunk_key = {-1, getBufferId()};
-  return createBuffer(chunk_key, page_size_, num_bytes);
+  return createBufferUnlocked(chunk_key, page_size_, num_bytes);
 }
 
 void BufferMgr::free(AbstractBuffer* buffer) {
-  std::lock_guard<std::mutex> lock(global_mutex_);  // hack for now
+  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);  // hack for now
   Buffer* casted_buffer = dynamic_cast<Buffer*>(buffer);
   if (casted_buffer == 0) {
     LOG(FATAL) << "Wrong buffer type - expects base class pointer to Buffer type.";
   }
-  deleteBuffer(casted_buffer->seg_it_->chunk_key);
+  deleteBufferUnlocked(casted_buffer->seg_it_->chunk_key);
 }
 
 size_t BufferMgr::getNumChunks() {
+  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
   return chunk_index_.size();
 }
 
 size_t BufferMgr::size() const {
+  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   return num_pages_allocated_;
 }
 
 size_t BufferMgr::getMaxBufferSize() const {
+  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   return max_buffer_pool_size_;
 }
 
 size_t BufferMgr::getMaxSlabSize() const {
+  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   return max_slab_size_;
 }
 
@@ -929,6 +961,7 @@ void BufferMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metad
 }
 
 const std::vector<BufferList>& BufferMgr::getSlabSegments() {
+  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   return slab_segments_;
 }
 
