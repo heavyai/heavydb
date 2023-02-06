@@ -2265,6 +2265,174 @@ INSTANTIATE_TEST_SUITE_P(CpuAndGpuMgrs,
                            return ToString(param_info.param);
                          });
 
+class BufferMgrConcurrencyTest : public BufferMgrTest {
+ protected:
+  std::unique_ptr<Buffer_Namespace::BufferMgr> createBufferMgr() {
+    constexpr int32_t test_device_id{0};
+    constexpr size_t test_max_buffer_pool_size{400};
+    constexpr size_t test_min_slab_size{100};
+    constexpr size_t test_max_slab_size{200};
+    return BufferMgrTest::createBufferMgr(test_device_id,
+                                          test_max_buffer_pool_size,
+                                          test_min_slab_size,
+                                          test_max_slab_size,
+                                          test_max_slab_size,
+                                          page_size_);
+  }
+
+  void addThreadExecution(std::function<void()> func, size_t num_runs_per_thread = 100) {
+    futures_.emplace_back(std::async(std::launch::async, [func, num_runs_per_thread]() {
+      for (size_t i = 0; i < num_runs_per_thread; i++) {
+        func();
+      }
+    }));
+  }
+
+  void waitForAllThreads() {
+    for (auto& future : futures_) {
+      future.wait();
+    }
+  }
+
+  std::vector<std::future<void>> futures_;
+
+  static inline const ChunkKey test_chunk_key_4_{1, 1, 1, 4};
+};
+
+TEST_P(BufferMgrConcurrencyTest, AllPublicMethods) {
+  buffer_mgr_ = createBufferMgr();
+  mock_parent_mgr_.skipParamTracking();
+  mock_parent_mgr_.reserveTwiceBufferSize();
+  constexpr size_t num_threads_per_execution{10};
+
+  // The following two cases have to be run by the same thread.
+  addThreadExecution([this]() {
+    buffer_mgr_->createBuffer(test_chunk_key_, page_size_, test_buffer_size_);
+    buffer_mgr_->deleteBuffer(test_chunk_key_);
+  });
+
+  addThreadExecution([this]() {
+    std::vector<int8_t> source_content{1};
+    auto source_buffer = createTempBuffer(source_content);
+    source_buffer->setUpdated();
+    buffer_mgr_->putBuffer(test_chunk_key_4_, source_buffer.get(), source_buffer->size());
+    const auto [db_id, table_id] = get_table_prefix(test_chunk_key_4_);
+    buffer_mgr_->checkpoint(db_id, table_id);
+
+    source_content = {1, 2};
+    source_buffer = createTempBuffer(source_content);
+    source_buffer->setUpdated();
+    buffer_mgr_->putBuffer(test_chunk_key_4_, source_buffer.get(), source_buffer->size());
+    buffer_mgr_->checkpoint(db_id, table_id);
+
+    source_content = {1, 2, 3, 4};
+    source_buffer = createTempBuffer(source_content);
+    source_buffer->setAppended();
+    buffer_mgr_->putBuffer(test_chunk_key_4_, source_buffer.get(), source_buffer->size());
+    buffer_mgr_->checkpoint(db_id, table_id);
+
+    buffer_mgr_->deleteBuffer(test_chunk_key_4_);
+  });
+
+  addThreadExecution([this]() {
+    auto source_buffer = createTempBuffer({1, 2, 3, 4});
+    source_buffer->setUpdated();
+    buffer_mgr_->putBuffer(test_chunk_key_2_, source_buffer.get(), source_buffer->size());
+    const auto [db_id, table_id] = get_table_prefix(test_chunk_key_2_);
+    buffer_mgr_->checkpoint(db_id, table_id);
+  });
+
+  addThreadExecution([this]() {
+    auto source_buffer = createTempBuffer({1, 2});
+    source_buffer->setUpdated();
+    buffer_mgr_->putBuffer(test_chunk_key_3_, source_buffer.get(), source_buffer->size());
+    const auto [db_id, table_id] = get_table_prefix(test_chunk_key_3_);
+    buffer_mgr_->checkpoint(db_id, table_id);
+  });
+
+  for (size_t i = 0; i < num_threads_per_execution; i++) {
+    addThreadExecution([this]() {
+      auto buffer = buffer_mgr_->getBuffer(test_chunk_key_2_);
+      // TODO: Calling `reserve` outside the getBuffer/fetchBuffer method is currently
+      // unsafe. Enable below `reserve` call after BufferMgr locks are refactored.
+      // buffer->reserve(buffer->reservedSize() * 2);
+      buffer->unPin();
+    });
+
+    addThreadExecution([this]() {
+      auto buffer = buffer_mgr_->getBuffer(test_chunk_key_3_);
+      // TODO: Calling `reserve` outside the getBuffer/fetchBuffer method is currently
+      // unsafe. Enable below `reserve` call after BufferMgr locks are refactored.
+      // buffer->reserve(buffer->reservedSize() * 2);
+      buffer->unPin();
+    });
+
+    addThreadExecution([this]() {
+      auto buffer_1 = buffer_mgr_->getBuffer(test_chunk_key_2_);
+      auto buffer_2 = buffer_mgr_->getBuffer(test_chunk_key_3_);
+
+      buffer_1->unPin();
+      buffer_2->unPin();
+    });
+
+    addThreadExecution([this]() {
+      auto dest_buffer = std::make_unique<foreign_storage::ForeignStorageBuffer>();
+      buffer_mgr_->fetchBuffer(test_chunk_key_2_, dest_buffer.get());
+    });
+
+    addThreadExecution([this]() {
+      auto dest_buffer = std::make_unique<foreign_storage::ForeignStorageBuffer>();
+      buffer_mgr_->fetchBuffer(test_chunk_key_3_, dest_buffer.get());
+    });
+
+    addThreadExecution([this]() {
+      auto buffer = buffer_mgr_->alloc(test_buffer_size_);
+      buffer_mgr_->free(buffer);
+    });
+
+    addThreadExecution([this]() { buffer_mgr_->deleteBuffersWithPrefix({1, 1, 1}); });
+
+    // Delete with no buffer matching table prefix.
+    addThreadExecution([this]() { buffer_mgr_->deleteBuffersWithPrefix({1, 2, 1}); });
+
+    addThreadExecution([this]() { buffer_mgr_->clearSlabs(); });
+
+    addThreadExecution([this]() { buffer_mgr_->checkpoint(1, 1); });
+
+    // Checkpoint with no buffer matching table prefix.
+    addThreadExecution([this]() { buffer_mgr_->checkpoint(1, 2); });
+
+    addThreadExecution([this]() { buffer_mgr_->checkpoint(); });
+
+    // Read operations.
+    addThreadExecution([this]() { buffer_mgr_->getInUseSize(); });
+    addThreadExecution([this]() { buffer_mgr_->getMaxSize(); });
+    addThreadExecution([this]() { buffer_mgr_->getAllocated(); });
+    addThreadExecution([this]() { buffer_mgr_->getMaxBufferSize(); });
+    addThreadExecution([this]() { buffer_mgr_->getMaxSlabSize(); });
+    addThreadExecution([this]() { buffer_mgr_->getPageSize(); });
+    addThreadExecution([this]() { buffer_mgr_->isAllocationCapped(); });
+    addThreadExecution([this]() { buffer_mgr_->getSlabSegments(); });
+    addThreadExecution([this]() { buffer_mgr_->size(); });
+    addThreadExecution([this]() { buffer_mgr_->getNumChunks(); });
+    addThreadExecution([this]() { buffer_mgr_->isBufferOnDevice(test_chunk_key_); });
+    addThreadExecution([this]() { buffer_mgr_->isBufferOnDevice(test_chunk_key_2_); });
+    addThreadExecution([this]() { buffer_mgr_->isBufferOnDevice(test_chunk_key_3_); });
+  }
+  waitForAllThreads();
+}
+
+INSTANTIATE_TEST_SUITE_P(CpuAndGpuMgrs,
+                         BufferMgrConcurrencyTest,
+                         testing::Values(
+#ifdef HAVE_CUDA
+                             MgrType::GPU_MGR,
+#endif
+                             MgrType::CPU_MGR),
+                         [](const auto& param_info) {
+                           return ToString(param_info.param);
+                         });
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
