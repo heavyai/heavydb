@@ -1463,6 +1463,51 @@ INSTANTIATE_TEST_SUITE_P(DifferentImportTypes,
                          testing::Values("delimited", "parquet", "geo", "raster"),
                          [](const auto& param_info) { return param_info.param; });
 
+class ThriftDetectGeoFileTest : public DBHandlerTestFixture {
+ protected:
+  const TCopyParams getCopyParams() const {
+    TCopyParams copy_params;
+    copy_params.source_type = TSourceType::GEO_FILE;
+    return copy_params;
+  }
+
+  const std::string getTestFile() const {
+    return boost::filesystem::canonical(
+               "../../Tests/ImportGeoTableTest/datafiles/text_column.geojson")
+        .string();
+  }
+
+  void assertDetectResult(const TDetectResult& result) {
+    const auto& row_set = result.row_set;
+    ASSERT_EQ(row_set.row_desc.size(), static_cast<size_t>(3));
+    for (const auto& row : row_set.rows) {
+      ASSERT_EQ(row.cols.size(), static_cast<size_t>(3));
+    }
+
+    ASSERT_EQ(row_set.row_desc[0].col_name, "test");
+    ASSERT_EQ(row_set.row_desc[0].col_type.type, TDatumType::STR);
+    ASSERT_EQ(row_set.row_desc[0].col_type.encoding, TEncodingType::type::DICT);
+    ASSERT_EQ(row_set.row_desc[0].col_type.comp_param, 0);
+
+    ASSERT_EQ(row_set.row_desc[1].col_name, "test_mls");
+    ASSERT_EQ(row_set.row_desc[1].col_type.type, TDatumType::STR);
+    ASSERT_EQ(row_set.row_desc[1].col_type.encoding, TEncodingType::type::DICT);
+    ASSERT_EQ(row_set.row_desc[1].col_type.comp_param, 0);
+
+    ASSERT_EQ(row_set.row_desc[2].col_name, "geom");
+    ASSERT_EQ(row_set.row_desc[2].col_type.type, TDatumType::LINESTRING);
+    ASSERT_EQ(row_set.row_desc[2].col_type.encoding, TEncodingType::type::GEOINT);
+    ASSERT_EQ(row_set.row_desc[2].col_type.comp_param, 32);
+  }
+};
+
+TEST_F(ThriftDetectGeoFileTest, EncodedTextColumnUsesTransientDictionary) {
+  auto [db_handler, session_id] = getDbHandlerAndSessionId();
+  TDetectResult result;
+  db_handler->detect_column_types(result, session_id, getTestFile(), getCopyParams());
+  assertDetectResult(result);
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
