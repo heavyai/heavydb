@@ -529,10 +529,13 @@ class ForeignTableTest : public DBHandlerTestFixture {
   }
 
   void queryAndAssertGeoTypesResult() {
-    TQueryResult result;
-    sql(result, "SELECT * FROM " + default_table_name + " ORDER BY id;");
+    sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY id;",
+                        getExpectedGeoTypesResult());
+  }
+
+  std::vector<std::vector<NullableTargetValue>> getExpectedGeoTypesResult() {
     // clang-format off
-    assertResultSetEqual({
+    return {
       {
         i(1), "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
         "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
@@ -550,8 +553,8 @@ class ForeignTableTest : public DBHandlerTestFixture {
       },
       {
         i(5), Null, Null, Null, Null
-      }},
-      result);
+      }
+    };
     // clang-format on
   }
 
@@ -4018,16 +4021,19 @@ class DataWrapperAppendRefreshTest
     AppendRefreshBase::SetUp();
   }
 
-  void sqlCreateTestTable(const foreign_storage::OptionsMap& additional_options = {}) {
+  void sqlCreateTestTable(const foreign_storage::OptionsMap& additional_options = {},
+                          const std::vector<NameTypePair>& column_pairs = {{"i",
+                                                                            "BIGINT"}},
+                          const std::vector<NameTypePair>& odbc_columns = {}) {
     foreign_storage::OptionsMap options{{"FRAGMENT_SIZE", std::to_string(fragment_size_)},
                                         {"REFRESH_UPDATE_TYPE", "APPEND"}};
     options.insert(additional_options.begin(), additional_options.end());
-    sql(createForeignTableQuery({{"i", "BIGINT"}},
+    sql(createForeignTableQuery(column_pairs,
                                 test_temp_dir + file_name_,
                                 wrapper_type_,
                                 options,
                                 table_name_,
-                                {},
+                                odbc_columns,
                                 0));
   }
 
@@ -4053,6 +4059,38 @@ INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTests,
                            return DataWrapperAppendRefreshTest::testParamsToString(
                                info.param);
                          });
+
+TEST_P(DataWrapperAppendRefreshTest, AppendNothingGeo) {
+  SKIP_IF_DISTRIBUTED("Test relies on local cache access");
+
+  file_name_ = "geo_types_valid"s + wrapper_ext(wrapper_type_);
+  std::vector<NameTypePair> odbc_columns{};
+  if (isOdbc(wrapper_type_)) {
+    odbc_columns = {{"id", "INT"},
+                    {"p", "TEXT"},
+                    {"l", "TEXT"},
+                    {"poly", "TEXT"},
+                    {"multipoly", "TEXT"}};
+  }
+  foreign_storage::OptionsMap additional_options;
+  if (wrapper_type_ == "regex_parser") {
+    additional_options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_geo_regex(4);
+  }
+  sqlCreateTestTable(additional_options,
+                     {{"i", "INT"},
+                      {"p", "POINT"},
+                      {"l", "LINESTRING"},
+                      {"poly", "POLYGON"},
+                      {"mpoly", "MULTIPOLYGON"}},
+                     odbc_columns);
+  sqlAndCompareResult(select_query, getExpectedGeoTypesResult());
+
+  recoverCacheIfSpecified();
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, getExpectedGeoTypesResult());
+
+  ASSERT_EQ(recover_cache_, isTableDatawrapperRestored(table_name_));
+}
 
 TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
   SKIP_IF_DISTRIBUTED("Test relies on local cache access");

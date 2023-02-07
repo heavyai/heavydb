@@ -243,7 +243,7 @@ ParseFileRegionResult parse_file_regions(
     parse_file_request.file_offset = file_regions[i].first_row_file_offset;
     parse_file_request.process_row_count = file_regions[i].row_count;
 
-    result = parser.parseBuffer(parse_file_request, i == end_index);
+    result = parser.parseBuffer(parse_file_request, (i == end_index));
     CHECK_EQ(file_regions[i].row_count, result.row_count);
     for (const auto& rejected_row_index : result.rejected_rows) {
       load_file_region_result.rejected_row_indices.insert(
@@ -340,7 +340,6 @@ void AbstractTextFileDataWrapper::populateChunks(
     int fragment_id,
     AbstractBuffer* delete_buffer) {
   const auto copy_params = getFileBufferParser().validateAndGetCopyParams(foreign_table_);
-
   CHECK(!column_id_to_chunk_map.empty());
 
   // check to see if a iterative scan step is required
@@ -1480,11 +1479,12 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
       chunk_metadata->numBytes = column_type.get_size() * chunk_metadata->numElements;
     } else if (auto chunk_entry = cached_chunks.find(chunk_key);
                chunk_entry != cached_chunks.end()) {
-      auto buffer = chunk_entry->second.getBuffer();
-      CHECK(buffer);
-      chunk_metadata->numBytes = buffer->size();
+      auto cached_buffer = chunk_entry->second.getBuffer();
+      CHECK(cached_buffer);
+      chunk_metadata->numBytes = cached_buffer->size();
+      buffer->setSize(cached_buffer->size());
     } else {
-      CHECK_EQ(chunk_metadata->numBytes, static_cast<size_t>(0));
+      chunk_metadata->numBytes = buffer->size();
     }
     chunk_metadata_map_[chunk_key] = chunk_metadata;
   }
@@ -1508,7 +1508,7 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
   if (foreign_table_->isAppendMode()) {
     chunk_encoder_buffers_ = std::move(multi_threading_params.chunk_encoder_buffers);
   }
-}  // namespace foreign_storage
+}
 
 void AbstractTextFileDataWrapper::iterativeFileScan(
     ChunkMetadataVector& chunk_metadata_vector,

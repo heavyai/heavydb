@@ -304,6 +304,7 @@ void CachingForeignStorageMgr::refreshChunksInCacheByFragment(
   if (old_chunk_keys.empty()) {
     return;
   }
+
   // Iterate through previously cached chunks and re-cache them. Caching is
   // done one fragment at a time, for all applicable chunks in the fragment.
   ChunkToBufferMap optional_buffers;
