@@ -4932,7 +4932,7 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsGeo(
     }
     if (typePair.first == kTEXT) {
       ti.set_compression(kENCODING_DICT);
-      ti.set_comp_param(32);
+      ti.set_comp_param(0);
     }
     ti.set_fixed_size();
     cd.columnType = ti;
