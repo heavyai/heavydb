@@ -53,6 +53,7 @@ struct DiskCacheConfig {
   size_t num_reader_threads = 0;
   size_t size_limit = DEFAULT_MAX_SIZE;
   size_t page_size = DEFAULT_PAGE_SIZE;
+  size_t meta_page_size = DEFAULT_METADATA_PAGE_SIZE;
   inline bool isEnabledForMutableTables() const {
     return enabled_level == DiskCacheLevel::non_fsi ||
            enabled_level == DiskCacheLevel::all;
@@ -379,6 +380,12 @@ class CachingFileMgr : public FileMgr {
   std::set<ChunkKey> getKeysWithMetadata() const;
   void setDataSizeLimit(size_t max) { limit_data_size_ = max; }
 
+  /**
+   * @brief requests a free page similar to FileMgr, but this override will also evict
+   * existing pages to make space if there are none available.
+   **/
+  Page requestFreePage(size_t pagesize, const bool isMetadata) override;
+
  private:
   /**
    * @brief Increments epoch for the given table.
@@ -443,12 +450,6 @@ class CachingFileMgr : public FileMgr {
   void writeDirtyBuffers(int32_t db_id, int32_t tb_id);
 
   /**
-   * @brief requests a free page similar to FileMgr, but this override will also evict
-   * existing pages to make space if there are none available.
-   **/
-  Page requestFreePage(size_t pagesize, const bool isMetadata) override;
-
-  /**
    * @brief Used to track which tables/chunks were least recently used
    **/
   void touchKey(const ChunkKey& key) const;
@@ -489,9 +490,14 @@ class CachingFileMgr : public FileMgr {
 
   FileBuffer* getBufferUnlocked(const ChunkKey& key,
                                 const size_t numBytes = 0) const override;
+
   ChunkKeyToChunkMap::iterator deleteBufferUnlocked(
       const ChunkKeyToChunkMap::iterator chunk_it,
       const bool purge = true) override;
+
+  // CachingFileMgr is allowed to write in read-only mode, so override this function.
+  void readOnlyCheck(const std::string& action,
+                     const std::optional<std::string>& file_name = {}) const override{};
 
   mutable heavyai::shared_mutex table_dirs_mutex_;  // mutex for table_dirs_.
   // each table gest a separate epoch.  Uses pointers for move semantics.

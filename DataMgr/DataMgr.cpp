@@ -341,8 +341,8 @@ void DataMgr::createTopLevelMetadata()
   CHECK(gfm);
 
   auto fm_top = gfm->getFileMgr(chunkKey);
-  if (dynamic_cast<File_Namespace::FileMgr*>(fm_top)) {
-    static_cast<File_Namespace::FileMgr*>(fm_top)->createTopLevelMetadata();
+  if (auto fm = dynamic_cast<File_Namespace::FileMgr*>(fm_top)) {
+    fm->createOrMigrateTopLevelMetadata();
   }
 }
 

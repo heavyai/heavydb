@@ -19,11 +19,10 @@
  * @brief Unit tests for FileMgr class.
  */
 
-#include <fstream>
-
 #include <gtest/gtest.h>
-#include <boost/filesystem.hpp>
-
+#include <boost/filesystem.hpp>  // TODO(Misiu): Update FileMgr API to remove this.
+#include <filesystem>
+#include <fstream>
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
@@ -31,11 +30,130 @@
 #include "Shared/File.h"
 #include "TestHelpers.h"
 
+extern bool g_read_only;
+
+namespace fs = std::filesystem;
+namespace fn = File_Namespace;
 namespace bf = boost::filesystem;
+
+constexpr const char* kReadOnlyWriteError{"Error trying to write file"};
+constexpr const char* kReadOnlyCreateError{"Error trying to create file"};
+constexpr const char* kFileMgrPath{"./FileMgrTestDir"};
+constexpr const char* kTestDataDir{"./test_dir"};
+constexpr const char* kDataDir{"./test_dir/mapd_data"};
+constexpr const char* kTempFile{"./test_dir/mapd_data/temp.txt"};
+
+namespace {
+struct ExpectedException : public std::runtime_error {
+  ExpectedException(const std::string& msg) : std::runtime_error(msg) {}
+};
+
+// Wrapper that executes a given function with the expectation that it throws an exception
+// containing specific text.
+template <typename Func>
+void run_and_catch(Func func, const std::string& exception_text = kReadOnlyWriteError) {
+  try {
+    func();
+    throw ExpectedException("expected exception with text: '" + exception_text + "',");
+  } catch (const ExpectedException& e) {
+    // Need special handling for the exception this function throws if there are no
+    // uncaught exceptions in func because we want to wrap the expected exception text in
+    // the results but don't want it caught in the subsequent catch-block (hence a custom
+    // exception class).
+    throw;
+  } catch (const std::exception& e) {
+    std::string err_msg = e.what();
+    if (err_msg.find(exception_text) == std::string::npos) {
+      // If the caught exception does not match the intended exception text, then rethrow.
+      throw;
+    }
+  }
+}
+
+// Execute some function while temporarily disableing read-only mode (if it was enabled).
+template <typename Func>
+void run_in_write_mode(Func func) {
+  bool old_state = g_read_only;
+  g_read_only = false;
+  func();
+  g_read_only = old_state;
+}
+
+void compare_buffers(AbstractBuffer* left_buffer,
+                     AbstractBuffer* right_buffer,
+                     size_t num_bytes) {
+  std::vector<int8_t> left_array(num_bytes);
+  std::vector<int8_t> right_array(num_bytes);
+  left_buffer->read(left_array.data(), num_bytes);
+  right_buffer->read(right_array.data(), num_bytes);
+  ASSERT_EQ(left_array, right_array);
+  ASSERT_EQ(left_buffer->hasEncoder(), right_buffer->hasEncoder());
+}
+
+void compare_metadata(const std::shared_ptr<ChunkMetadata> lhs_metadata,
+                      const std::shared_ptr<ChunkMetadata> rhs_metadata) {
+  SQLTypeInfo lhs_sqltypeinfo = lhs_metadata->sqlType;
+  SQLTypeInfo rhs_sqltypeinfo = rhs_metadata->sqlType;
+  ASSERT_EQ(lhs_sqltypeinfo.get_type(), rhs_sqltypeinfo.get_type());
+  ASSERT_EQ(lhs_sqltypeinfo.get_subtype(), rhs_sqltypeinfo.get_subtype());
+  ASSERT_EQ(lhs_sqltypeinfo.get_dimension(), rhs_sqltypeinfo.get_dimension());
+  ASSERT_EQ(lhs_sqltypeinfo.get_scale(), rhs_sqltypeinfo.get_scale());
+  ASSERT_EQ(lhs_sqltypeinfo.get_notnull(), rhs_sqltypeinfo.get_notnull());
+  ASSERT_EQ(lhs_sqltypeinfo.get_comp_param(), rhs_sqltypeinfo.get_comp_param());
+  ASSERT_EQ(lhs_sqltypeinfo.get_size(), rhs_sqltypeinfo.get_size());
+
+  ASSERT_EQ(lhs_metadata->numBytes, rhs_metadata->numBytes);
+  ASSERT_EQ(lhs_metadata->numElements, rhs_metadata->numElements);
+
+  ChunkStats lhs_chunk_stats = lhs_metadata->chunkStats;
+  ChunkStats rhs_chunk_stats = rhs_metadata->chunkStats;
+  ASSERT_EQ(lhs_chunk_stats.min.intval, rhs_chunk_stats.min.intval);
+  ASSERT_EQ(lhs_chunk_stats.max.intval, rhs_chunk_stats.max.intval);
+  ASSERT_EQ(lhs_chunk_stats.has_nulls, rhs_chunk_stats.has_nulls);
+}
+
+std::shared_ptr<ChunkMetadata> get_metadata_for_buffer(AbstractBuffer* buffer) {
+  const std::shared_ptr<ChunkMetadata> metadata = std::make_shared<ChunkMetadata>();
+  buffer->getEncoder()->getMetadata(metadata);
+  return metadata;
+}
+
+void compare_buffers_and_metadata(AbstractBuffer* left_buffer,
+                                  AbstractBuffer* right_buffer) {
+  ASSERT_TRUE(left_buffer->hasEncoder());
+  ASSERT_TRUE(right_buffer->hasEncoder());
+  ASSERT_TRUE(left_buffer->getEncoder());
+  ASSERT_TRUE(right_buffer->getEncoder());
+  ASSERT_EQ(left_buffer->size(), get_metadata_for_buffer(left_buffer)->numBytes);
+  ASSERT_EQ(right_buffer->size(), get_metadata_for_buffer(right_buffer)->numBytes);
+  compare_metadata(get_metadata_for_buffer(left_buffer),
+                   get_metadata_for_buffer(right_buffer));
+  compare_buffers(left_buffer, right_buffer, left_buffer->size());
+}
+
+int8_t* get_data_ptr(std::vector<int32_t>& data_vector) {
+  return reinterpret_cast<int8_t*>(data_vector.data());
+}
+
+void write_data(AbstractBuffer* data_buffer,
+                std::vector<int32_t>& write_data,
+                const size_t offset) {
+  CHECK(data_buffer->hasEncoder());
+  auto sql_type_info = get_metadata_for_buffer(data_buffer)->sqlType;
+  auto write_ptr = get_data_ptr(write_data);
+  // appendData is a misnomer, with the offset we are overwriting part of the buffer
+  data_buffer->getEncoder()->appendData(
+      write_ptr, write_data.size(), sql_type_info, false /*replicating*/, offset);
+}
+
+void append_data(AbstractBuffer* data_buffer, std::vector<int32_t>& append_data) {
+  write_data(data_buffer, append_data, -1);
+}
+
+}  // namespace
 
 class FileInfoTest : public testing::Test {
  public:
-  constexpr static const char* test_data_dir = "./test_dir";
   constexpr static const char* data_file_name = "./test_dir/0.64.data";
   constexpr static const char* meta_file_name = "./test_dir/1.128.data";
   constexpr static const int32_t db = 1, tb = 1, data_file_id = 0, meta_file_id = 1;
@@ -43,39 +161,37 @@ class FileInfoTest : public testing::Test {
 
  protected:
   void SetUp() override {
-    bf::remove_all(test_data_dir);
-    bf::create_directory(test_data_dir);
+    fs::remove_all(kTestDataDir);
+    fs::create_directory(kTestDataDir);
 
     // Currently FileInfo has a dependency on having a parent FileMgr, so we generate them
     // here.  Other than openExistingFile() the parent FileMgr state will not affect the
     // FileInfo's method calls.  Future work is underway to remove this dependency
     // entirely (a FileInfo should not need access to a parent FileMgr).
     fsi_ = std::make_shared<ForeignStorageInterface>();
-    gfm_ = std::make_unique<File_Namespace::GlobalFileMgr>(
-        0, fsi_, test_data_dir, 0, page_size, meta_page_size);
-    fm_ptr_ = dynamic_cast<File_Namespace::FileMgr*>(gfm_->getFileMgr(1, 1));
+    gfm_ = std::make_unique<fn::GlobalFileMgr>(
+        0, fsi_, kTestDataDir, 0, page_size, meta_page_size);
+    fm_ptr_ = dynamic_cast<fn::FileMgr*>(gfm_->getFileMgr(db, tb));
 
-    auto [fd, file_path] =
-        File_Namespace::create(test_data_dir, data_file_id, page_size, num_pages);
-    file_info_ = std::make_unique<File_Namespace::FileInfo>(
+    auto [fd, file_path] = fn::create(kTestDataDir, data_file_id, page_size, num_pages);
+    file_info_ = std::make_unique<fn::FileInfo>(
         fm_ptr_, data_file_id, fd, page_size, num_pages, file_path);
   }
 
   void TearDown() override {
     file_info_ = nullptr;
-    bf::remove_all(test_data_dir);
+    fs::remove_all(kTestDataDir);
   }
 
   static void SetUpTestSuite() {
-    File_Namespace::FileMgr::setNumPagesPerDataFile(num_pages);
-    File_Namespace::FileMgr::setNumPagesPerMetadataFile(num_pages);
+    fn::FileMgr::setNumPagesPerDataFile(num_pages);
+    fn::FileMgr::setNumPagesPerMetadataFile(num_pages);
   }
 
   static void TearDownTestSute() {
-    File_Namespace::FileMgr::setNumPagesPerDataFile(
-        File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE);
-    File_Namespace::FileMgr::setNumPagesPerMetadataFile(
-        File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_METADATA_FILE);
+    fn::FileMgr::setNumPagesPerDataFile(fn::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE);
+    fn::FileMgr::setNumPagesPerMetadataFile(
+        fn::FileMgr::DEFAULT_NUM_PAGES_PER_METADATA_FILE);
   }
 
   template <class T>
@@ -83,7 +199,7 @@ class FileInfoTest : public testing::Test {
     CHECK(!file_info_) << "File desc must be closed before we read file directly.";
     auto fd = heavyai::fopen(file, "r");
     std::vector<T> buf(num_elems);
-    File_Namespace::read(
+    fn::read(
         fd, offset, num_elems * sizeof(T), reinterpret_cast<int8_t*>(buf.data()), file);
     fclose(fd);
     return buf;
@@ -106,9 +222,9 @@ class FileInfoTest : public testing::Test {
   }
 
   std::shared_ptr<ForeignStorageInterface> fsi_;
-  std::unique_ptr<File_Namespace::GlobalFileMgr> gfm_;
-  File_Namespace::FileMgr* fm_ptr_;
-  std::unique_ptr<File_Namespace::FileInfo> file_info_;
+  std::unique_ptr<fn::GlobalFileMgr> gfm_;
+  fn::FileMgr* fm_ptr_;
+  std::unique_ptr<fn::FileInfo> file_info_;
 };
 
 TEST_F(FileInfoTest, initNewFile) {
@@ -116,14 +232,14 @@ TEST_F(FileInfoTest, initNewFile) {
   EXPECT_EQ(file_info_->numFreePages(), num_pages);
   file_info_ = nullptr;  // close file descriptor;
 
-  ASSERT_TRUE(bf::exists(data_file_name));
-  ASSERT_EQ(bf::file_size(data_file_name), num_pages * page_size);
+  ASSERT_TRUE(fs::exists(data_file_name));
+  ASSERT_EQ(fs::file_size(data_file_name), num_pages * page_size);
 
   auto fd = heavyai::fopen(data_file_name, "r");
   int32_t header_size = 0;
   int8_t* buf = reinterpret_cast<int8_t*>(&header_size);
   for (size_t i = 0; i < page_size * num_pages; i += page_size) {
-    File_Namespace::read(fd, i, sizeof(int32_t), buf, data_file_name);
+    fn::read(fd, i, sizeof(int32_t), buf, data_file_name);
     // Check that all pages have zero-ed headers
     ASSERT_EQ(*(reinterpret_cast<int32_t*>(buf)), 0);
   }
@@ -402,13 +518,13 @@ class OpenExistingFileTest : public FileInfoTest {
       "../../Tests/FileMgrDataFiles/1.128.data";
 
   void SetUp() override {
-    bf::remove_all(test_data_dir);
-    bf::create_directory(test_data_dir);
+    fs::remove_all(kTestDataDir);
+    fs::create_directory(kTestDataDir);
 
     // Tests need a FileMgr to access epoch data.
     fsi_ = std::make_shared<ForeignStorageInterface>();
-    gfm_ = std::make_unique<File_Namespace::GlobalFileMgr>(
-        0, fsi_, test_data_dir, 0, page_size, meta_page_size);
+    gfm_ = std::make_unique<fn::GlobalFileMgr>(
+        0, fsi_, kTestDataDir, 0, page_size, meta_page_size);
 
     // The last checkpointed epoch for the pre-created files is actually "2", but the
     // FileMgr will automatically increment the epoch during initialization so we need to
@@ -418,21 +534,21 @@ class OpenExistingFileTest : public FileInfoTest {
     // the epoch would be read as "2", then we call openExistingFile(), then we increment.
     // But here we are pre-initializing a FM and calling the function after the epoch is
     // incremented (so as not to depend on any of the initialiation code).
-    fm_ = std::make_unique<File_Namespace::FileMgr>(
-        0, gfm_.get(), File_Namespace::TablePair{1, 1}, -1, 0, 1 /* epoch */);
+    fm_ = std::make_unique<fn::FileMgr>(
+        0, gfm_.get(), fn::TablePair{1, 1}, -1, 0, 1 /* epoch */);
   }
 
   // These methods were used to create the data files used for comparison purposes.
   void createTestingFiles(const std::string& gfm_path) const {
-    CHECK_NE(gfm_path, test_data_dir)
+    CHECK_NE(gfm_path, kTestDataDir)
         << "Can't create new test files in a directory that will be used.";
-    bf::remove_all(gfm_path);
+    fs::remove_all(gfm_path);
 
     // Need to setup a temporary FileMgr to create files.
     auto fsi = std::make_shared<ForeignStorageInterface>();
-    auto gfm = std::make_unique<File_Namespace::GlobalFileMgr>(
+    auto gfm = std::make_unique<fn::GlobalFileMgr>(
         0, fsi, gfm_path, 0, page_size, meta_page_size);
-    auto fm = dynamic_cast<File_Namespace::FileMgr*>(gfm->getFileMgr(1, 1));
+    auto fm = dynamic_cast<fn::FileMgr*>(gfm->getFileMgr(1, 1));
 
     // Data to write.
     auto sql_info = SQLTypeInfo{kINT};
@@ -474,21 +590,21 @@ class OpenExistingFileTest : public FileInfoTest {
   }
 
   std::shared_ptr<ForeignStorageInterface> fsi_;
-  std::unique_ptr<File_Namespace::GlobalFileMgr> gfm_;
-  std::unique_ptr<File_Namespace::FileMgr> fm_;
+  std::unique_ptr<fn::GlobalFileMgr> gfm_;
+  std::unique_ptr<fn::FileMgr> fm_;
 };
 
 TEST_F(OpenExistingFileTest, Data) {
   ASSERT_EQ(fm_->epoch(1, 1), 2) << "FM was not initialized correctly.";
 
   // Fetch source file.
-  bf::copy(source_data_file, data_file_name);
+  fs::copy(source_data_file, data_file_name);
 
   auto fd = heavyai::fopen(data_file_name, "r+w");
-  File_Namespace::FileInfo file_info(
+  fn::FileInfo file_info(
       fm_.get(), data_file_id, fd, page_size, num_pages, data_file_name);
 
-  std::vector<File_Namespace::HeaderInfo> headers;
+  std::vector<fn::HeaderInfo> headers;
   file_info.openExistingFile(headers);
 
   EXPECT_EQ(file_info.numFreePages(), 13U);
@@ -523,13 +639,13 @@ TEST_F(OpenExistingFileTest, Metadata) {
   ASSERT_EQ(fm_->epoch(1, 1), 2) << "FM was not initialized correctly.";
 
   // Fetch source file.
-  bf::copy(source_meta_file, meta_file_name);
+  fs::copy(source_meta_file, meta_file_name);
 
   auto fd = heavyai::fopen(meta_file_name, "r+w");
-  File_Namespace::FileInfo file_info(
+  fn::FileInfo file_info(
       fm_.get(), meta_file_id, fd, meta_page_size, num_pages, meta_file_name);
 
-  std::vector<File_Namespace::HeaderInfo> headers;
+  std::vector<fn::HeaderInfo> headers;
   file_info.openExistingFile(headers);
 
   ASSERT_EQ(headers.size(), 2U);
@@ -569,127 +685,69 @@ TEST_F(FileInfoTest, SyncToDisk) {
 
 // TODO(Misiu): Add concurrency tests for FileInfo.
 
-class FileMgrTest : public testing::Test {
- protected:
-  inline static const std::string TEST_DATA_DIR{"./test_dir"};
-  inline static const ChunkKey TEST_CHUNK_KEY{1, 1, 1, 0};
+class AbstractFileMgrTest : public testing::Test {
+ public:
+  static inline const std::string table_dir{std::string{kDataDir} + "/table_1_1"};
+  static inline const std::string version_file_name{
+      table_dir + "/" + fn::FileMgr::FILE_MGR_VERSION_FILENAME};
+  static constexpr const int32_t db_id = 1, tb_id = 1, empty_tb_id = 2, data_file_id = 0,
+                                 meta_file_id = 1;
+  static constexpr const size_t num_pages = 16, page_size = 64, meta_page_size = 128;
+  static inline const ChunkKey default_key{db_id, tb_id, 1, 0};
+  static inline const ChunkKey empty_key{db_id, empty_tb_id, 1, 0};
+  static inline const fn::TablePair table_pair{db_id, tb_id};
 
+  void SetUp() override {
+    fs::remove_all(kTestDataDir);
+    fs::create_directory(kTestDataDir);
+    fs::create_directory(kDataDir);
+  }
+
+  void TearDown() override { fs::remove_all(kTestDataDir); }
+};
+
+class FileMgrTest : public AbstractFileMgrTest {
+ protected:
   void SetUp() override {
     initializeGlobalFileMgr();
     initializeChunk(1);
   }
 
-  void TearDown() override { bf::remove_all(TEST_DATA_DIR); }
-
   void initializeGlobalFileMgr() {
-    bf::remove_all(TEST_DATA_DIR);
-    global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
-        0, std::make_shared<ForeignStorageInterface>(), TEST_DATA_DIR, 0);
+    fs::remove_all(kTestDataDir);
+    global_file_mgr_ = std::make_unique<fn::GlobalFileMgr>(
+        0, std::make_shared<ForeignStorageInterface>(), kTestDataDir, 0);
   }
 
-  File_Namespace::FileMgr* getFileMgr() {
-    auto file_mgr = global_file_mgr_->getFileMgr(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
-                                                 TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]);
-    return dynamic_cast<File_Namespace::FileMgr*>(file_mgr);
+  fn::FileMgr* getFileMgr() {
+    auto file_mgr = global_file_mgr_->getFileMgr(db_id, tb_id);
+    return dynamic_cast<fn::FileMgr*>(file_mgr);
   }
 
   void initializeChunk(int32_t value) {
     auto file_mgr = getFileMgr();
-    auto buffer = file_mgr->createBuffer(TEST_CHUNK_KEY);
+    auto buffer = file_mgr->createBuffer(default_key);
     buffer->initEncoder(SQLTypeInfo{kINT});
     std::vector<int32_t> data{value};
-    writeData(buffer, data, 0);
+    write_data(buffer, data, 0);
     file_mgr->checkpoint();
   }
 
   void setMaxRollbackEpochs(const int32_t max_rollback_epochs) {
-    File_Namespace::FileMgrParams file_mgr_params;
+    fn::FileMgrParams file_mgr_params;
     file_mgr_params.max_rollback_epochs = max_rollback_epochs;
-    global_file_mgr_->setFileMgrParams(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
-                                       TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX],
-                                       file_mgr_params);
+    global_file_mgr_->setFileMgrParams(db_id, tb_id, file_mgr_params);
   }
 
-  void compareBuffers(AbstractBuffer* left_buffer,
-                      AbstractBuffer* right_buffer,
-                      size_t num_bytes) {
-    std::vector<int8_t> left_array(num_bytes);
-    std::vector<int8_t> right_array(num_bytes);
-    left_buffer->read(left_array.data(), num_bytes);
-    right_buffer->read(right_array.data(), num_bytes);
-    ASSERT_EQ(left_array, right_array);
-    ASSERT_EQ(left_buffer->hasEncoder(), right_buffer->hasEncoder());
-  }
-
-  void compareMetadata(const std::shared_ptr<ChunkMetadata> lhs_metadata,
-                       const std::shared_ptr<ChunkMetadata> rhs_metadata) {
-    SQLTypeInfo lhs_sqltypeinfo = lhs_metadata->sqlType;
-    SQLTypeInfo rhs_sqltypeinfo = rhs_metadata->sqlType;
-    ASSERT_EQ(lhs_sqltypeinfo.get_type(), rhs_sqltypeinfo.get_type());
-    ASSERT_EQ(lhs_sqltypeinfo.get_subtype(), rhs_sqltypeinfo.get_subtype());
-    ASSERT_EQ(lhs_sqltypeinfo.get_dimension(), rhs_sqltypeinfo.get_dimension());
-    ASSERT_EQ(lhs_sqltypeinfo.get_scale(), rhs_sqltypeinfo.get_scale());
-    ASSERT_EQ(lhs_sqltypeinfo.get_notnull(), rhs_sqltypeinfo.get_notnull());
-    ASSERT_EQ(lhs_sqltypeinfo.get_comp_param(), rhs_sqltypeinfo.get_comp_param());
-    ASSERT_EQ(lhs_sqltypeinfo.get_size(), rhs_sqltypeinfo.get_size());
-
-    ASSERT_EQ(lhs_metadata->numBytes, rhs_metadata->numBytes);
-    ASSERT_EQ(lhs_metadata->numElements, rhs_metadata->numElements);
-
-    ChunkStats lhs_chunk_stats = lhs_metadata->chunkStats;
-    ChunkStats rhs_chunk_stats = rhs_metadata->chunkStats;
-    ASSERT_EQ(lhs_chunk_stats.min.intval, rhs_chunk_stats.min.intval);
-    ASSERT_EQ(lhs_chunk_stats.max.intval, rhs_chunk_stats.max.intval);
-    ASSERT_EQ(lhs_chunk_stats.has_nulls, rhs_chunk_stats.has_nulls);
-  }
-
-  std::shared_ptr<ChunkMetadata> getMetadataForBuffer(AbstractBuffer* buffer) {
-    const std::shared_ptr<ChunkMetadata> metadata = std::make_shared<ChunkMetadata>();
-    buffer->getEncoder()->getMetadata(metadata);
-    return metadata;
-  }
-
-  void compareBuffersAndMetadata(AbstractBuffer* left_buffer,
-                                 AbstractBuffer* right_buffer) {
-    ASSERT_TRUE(left_buffer->hasEncoder());
-    ASSERT_TRUE(right_buffer->hasEncoder());
-    ASSERT_TRUE(left_buffer->getEncoder());
-    ASSERT_TRUE(right_buffer->getEncoder());
-    ASSERT_EQ(left_buffer->size(), getMetadataForBuffer(left_buffer)->numBytes);
-    ASSERT_EQ(right_buffer->size(), getMetadataForBuffer(right_buffer)->numBytes);
-    compareMetadata(getMetadataForBuffer(left_buffer),
-                    getMetadataForBuffer(right_buffer));
-    compareBuffers(left_buffer, right_buffer, left_buffer->size());
-  }
-
-  int8_t* getDataPtr(std::vector<int32_t>& data_vector) {
-    return reinterpret_cast<int8_t*>(data_vector.data());
-  }
-
-  void appendData(AbstractBuffer* data_buffer, std::vector<int32_t>& append_data) {
-    writeData(data_buffer, append_data, -1);
-  }
-
-  void writeData(AbstractBuffer* data_buffer,
-                 std::vector<int32_t>& write_data,
-                 const size_t offset) {
-    CHECK(data_buffer->hasEncoder());
-    SQLTypeInfo sql_type_info = getMetadataForBuffer(data_buffer)->sqlType;
-    int8_t* write_ptr = getDataPtr(write_data);
-    // appendData is a misnomer, with the offset we are overwriting part of the buffer
-    data_buffer->getEncoder()->appendData(
-        write_ptr, write_data.size(), sql_type_info, false /*replicating*/, offset);
-  }
-
-  std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr_;
+  std::unique_ptr<fn::GlobalFileMgr> global_file_mgr_;
 };
 
 TEST_F(FileMgrTest, putBuffer_update) {
   TestHelpers::TestBuffer source_buffer{std::vector<int32_t>{1}};
   source_buffer.setUpdated();
   auto file_mgr = getFileMgr();
-  AbstractBuffer* file_buffer = file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 4);
-  compareBuffersAndMetadata(&source_buffer, file_buffer);
+  AbstractBuffer* file_buffer = file_mgr->putBuffer(default_key, &source_buffer, 4);
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
   ASSERT_FALSE(source_buffer.isAppended());
   ASSERT_FALSE(source_buffer.isUpdated());
   ASSERT_FALSE(source_buffer.isDirty());
@@ -700,8 +758,8 @@ TEST_F(FileMgrTest, putBuffer_subwrite) {
   int8_t temp_array[8] = {1, 2, 3, 4, 5, 6, 7, 8};
   source_buffer.write(temp_array, 8);
   auto file_mgr = getFileMgr();
-  AbstractBuffer* file_buffer = file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 4);
-  compareBuffers(&source_buffer, file_buffer, 4);
+  AbstractBuffer* file_buffer = file_mgr->putBuffer(default_key, &source_buffer, 4);
+  compare_buffers(&source_buffer, file_buffer, 4);
 }
 
 TEST_F(FileMgrTest, putBuffer_exists) {
@@ -709,11 +767,11 @@ TEST_F(FileMgrTest, putBuffer_exists) {
   int8_t temp_array[4] = {1, 2, 3, 4};
   source_buffer.write(temp_array, 4);
   auto file_mgr = getFileMgr();
-  file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 4);
+  file_mgr->putBuffer(default_key, &source_buffer, 4);
   file_mgr->checkpoint();
   source_buffer.write(temp_array, 4);
-  AbstractBuffer* file_buffer = file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 4);
-  compareBuffersAndMetadata(&source_buffer, file_buffer);
+  AbstractBuffer* file_buffer = file_mgr->putBuffer(default_key, &source_buffer, 4);
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
 }
 
 TEST_F(FileMgrTest, putBuffer_append) {
@@ -721,18 +779,17 @@ TEST_F(FileMgrTest, putBuffer_append) {
   int8_t temp_array[4] = {1, 2, 3, 4};
   source_buffer.append(temp_array, 4);
   auto file_mgr = getFileMgr();
-  AbstractBuffer* file_buffer = file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 8);
-  compareBuffersAndMetadata(&source_buffer, file_buffer);
+  AbstractBuffer* file_buffer = file_mgr->putBuffer(default_key, &source_buffer, 8);
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
 }
 
 TEST_F(FileMgrTest, put_checkpoint_get) {
   TestHelpers::TestBuffer source_buffer{std::vector<int32_t>{1}};
   std::vector<int32_t> data_v1 = {1, 2, 3, 5, 7};
-  appendData(&source_buffer, data_v1);
+  append_data(&source_buffer, data_v1);
   auto file_mgr = getFileMgr();
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 1);
-  AbstractBuffer* file_buffer_put =
-      file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 24);
+  AbstractBuffer* file_buffer_put = file_mgr->putBuffer(default_key, &source_buffer, 24);
   ASSERT_TRUE(file_buffer_put->isDirty());
   ASSERT_FALSE(file_buffer_put->isUpdated());
   ASSERT_TRUE(file_buffer_put->isAppended());
@@ -740,37 +797,37 @@ TEST_F(FileMgrTest, put_checkpoint_get) {
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 1);
   file_mgr->checkpoint();
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
-  AbstractBuffer* file_buffer_get = file_mgr->getBuffer(TEST_CHUNK_KEY, 24);
+  AbstractBuffer* file_buffer_get = file_mgr->getBuffer(default_key, 24);
   ASSERT_EQ(file_buffer_put, file_buffer_get);
   CHECK(!(file_buffer_get->isDirty()));
   CHECK(!(file_buffer_get->isUpdated()));
   CHECK(!(file_buffer_get->isAppended()));
   ASSERT_EQ(file_buffer_get->size(), static_cast<size_t>(24));
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
-  compareBuffersAndMetadata(&source_buffer, file_buffer_get);
+  compare_buffers_and_metadata(&source_buffer, file_buffer_get);
 }
 
 TEST_F(FileMgrTest, put_checkpoint_get_double_write) {
   TestHelpers::TestBuffer source_buffer{std::vector<int32_t>{1}};
   std::vector<int32_t> data_v1 = {1, 2, 3, 5, 7};
   std::vector<int32_t> data_v2 = {11, 13, 17, 19};
-  appendData(&source_buffer, data_v1);
+  append_data(&source_buffer, data_v1);
   auto file_mgr = getFileMgr();
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 1);
-  file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 24);
+  file_mgr->putBuffer(default_key, &source_buffer, 24);
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 1);
   file_mgr->checkpoint();
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
-  AbstractBuffer* file_buffer = file_mgr->getBuffer(TEST_CHUNK_KEY, 24);
+  AbstractBuffer* file_buffer = file_mgr->getBuffer(default_key, 24);
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
   ASSERT_FALSE(file_buffer->isDirty());
   ASSERT_EQ(file_buffer->size(), static_cast<size_t>(24));
-  compareBuffersAndMetadata(&source_buffer, file_buffer);
-  appendData(file_buffer, data_v2);
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+  append_data(file_buffer, data_v2);
   ASSERT_TRUE(file_buffer->isDirty());
   ASSERT_EQ(file_buffer->size(), static_cast<size_t>(40));
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
-  appendData(file_buffer, data_v2);
+  append_data(file_buffer, data_v2);
   CHECK(file_buffer->isDirty());
   ASSERT_EQ(file_buffer->size(), static_cast<size_t>(56));
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
@@ -778,65 +835,65 @@ TEST_F(FileMgrTest, put_checkpoint_get_double_write) {
   CHECK(!(file_buffer->isDirty()));
   ASSERT_EQ(file_buffer->size(), static_cast<size_t>(56));
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 3);
-  appendData(&source_buffer, data_v2);
-  appendData(&source_buffer, data_v2);
-  compareBuffersAndMetadata(&source_buffer, file_buffer);
+  append_data(&source_buffer, data_v2);
+  append_data(&source_buffer, data_v2);
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
 }
 
 TEST_F(FileMgrTest, buffer_append_and_recovery) {
   TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
   std::vector<int32_t> initial_value{1};
-  appendData(&source_buffer, initial_value);
-  ASSERT_EQ(getMetadataForBuffer(&source_buffer)->numElements, static_cast<size_t>(1));
+  append_data(&source_buffer, initial_value);
+  ASSERT_EQ(get_metadata_for_buffer(&source_buffer)->numElements, static_cast<size_t>(1));
 
   std::vector<int32_t> data_v1 = {1, 2, 3, 5, 7};
   std::vector<int32_t> data_v2 = {11, 13, 17, 19};
-  appendData(&source_buffer, data_v1);
+  append_data(&source_buffer, data_v1);
   {
     auto file_mgr = getFileMgr();
     ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 1);
-    AbstractBuffer* file_buffer = file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 24);
+    AbstractBuffer* file_buffer = file_mgr->putBuffer(default_key, &source_buffer, 24);
     file_mgr->checkpoint();
     ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
-    ASSERT_EQ(getMetadataForBuffer(&source_buffer)->numElements, static_cast<size_t>(6));
-    ASSERT_EQ(getMetadataForBuffer(file_buffer)->numElements, static_cast<size_t>(6));
+    ASSERT_EQ(get_metadata_for_buffer(&source_buffer)->numElements,
+              static_cast<size_t>(6));
+    ASSERT_EQ(get_metadata_for_buffer(file_buffer)->numElements, static_cast<size_t>(6));
     SCOPED_TRACE("Buffer Append and Recovery - Compare #1");
-    compareBuffersAndMetadata(&source_buffer, file_buffer);
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
 
     // Now write data we will not checkpoint
-    appendData(file_buffer, data_v1);
+    append_data(file_buffer, data_v1);
     ASSERT_EQ(file_buffer->size(), static_cast<size_t>(44));
     // Now close filemgr to test recovery
-    global_file_mgr_->closeFileMgr(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
-                                   TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]);
+    global_file_mgr_->closeFileMgr(db_id, tb_id);
   }
 
   {
     auto file_mgr = getFileMgr();
     ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
     ChunkMetadataVector chunkMetadataVector;
-    file_mgr->getChunkMetadataVecForKeyPrefix(chunkMetadataVector, TEST_CHUNK_KEY);
+    file_mgr->getChunkMetadataVecForKeyPrefix(chunkMetadataVector, default_key);
     ASSERT_EQ(chunkMetadataVector.size(), static_cast<size_t>(1));
-    ASSERT_EQ(std::memcmp(chunkMetadataVector[0].first.data(), TEST_CHUNK_KEY.data(), 16),
+    ASSERT_EQ(std::memcmp(chunkMetadataVector[0].first.data(), default_key.data(), 16),
               0);
-    ASSERT_EQ(chunkMetadataVector[0].first, TEST_CHUNK_KEY);
+    ASSERT_EQ(chunkMetadataVector[0].first, default_key);
     std::shared_ptr<ChunkMetadata> chunk_metadata = chunkMetadataVector[0].second;
     ASSERT_EQ(chunk_metadata->numBytes, static_cast<size_t>(24));
     ASSERT_EQ(chunk_metadata->numElements, static_cast<size_t>(6));
     AbstractBuffer* file_buffer =
-        file_mgr->getBuffer(TEST_CHUNK_KEY, chunk_metadata->numBytes);
+        file_mgr->getBuffer(default_key, chunk_metadata->numBytes);
     {
       SCOPED_TRACE("Buffer Append and Recovery - Compare #2");
-      compareBuffersAndMetadata(&source_buffer, file_buffer);
+      compare_buffers_and_metadata(&source_buffer, file_buffer);
     }
-    appendData(&source_buffer, data_v2);
-    appendData(file_buffer, data_v2);
+    append_data(&source_buffer, data_v2);
+    append_data(file_buffer, data_v2);
 
     file_mgr->checkpoint();
     ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 3);
     {
       SCOPED_TRACE("Buffer Append and Recovery - Compare #3");
-      compareBuffersAndMetadata(&source_buffer, file_buffer);
+      compare_buffers_and_metadata(&source_buffer, file_buffer);
     }
   }
 }
@@ -851,16 +908,14 @@ TEST_F(FileMgrTest, buffer_update_and_recovery) {
             // ensure updates and rollbacks show a change in col[0]
   std::vector<int32_t> data_v2 = {13, 17, 19, 23};
   {
-    EXPECT_EQ(global_file_mgr_->getTableEpoch(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
-                                              TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]),
-              std::size_t(1));
+    EXPECT_EQ(global_file_mgr_->getTableEpoch(db_id, tb_id), std::size_t(1));
     TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
     std::vector<int32_t> initial_value{1};
-    appendData(&source_buffer, initial_value);
+    append_data(&source_buffer, initial_value);
     source_buffer.clearDirtyBits();
 
     auto file_mgr = getFileMgr();
-    AbstractBuffer* file_buffer = file_mgr->getBuffer(TEST_CHUNK_KEY);
+    AbstractBuffer* file_buffer = file_mgr->getBuffer(default_key);
     ASSERT_FALSE(source_buffer.isDirty());
     ASSERT_FALSE(source_buffer.isUpdated());
     ASSERT_FALSE(source_buffer.isAppended());
@@ -870,9 +925,9 @@ TEST_F(FileMgrTest, buffer_update_and_recovery) {
     ASSERT_EQ(file_buffer->size(), static_cast<size_t>(4));
     {
       SCOPED_TRACE("Buffer Update and Recovery - Compare #1");
-      compareBuffersAndMetadata(file_buffer, &source_buffer);
+      compare_buffers_and_metadata(file_buffer, &source_buffer);
     }
-    writeData(file_buffer, data_v1, 0);
+    write_data(file_buffer, data_v1, 0);
     ASSERT_TRUE(file_buffer->isDirty());
     ASSERT_TRUE(file_buffer->isUpdated());
     ASSERT_TRUE(file_buffer->isAppended());
@@ -887,7 +942,7 @@ TEST_F(FileMgrTest, buffer_update_and_recovery) {
       ASSERT_EQ(file_buffer_data[3], 7);
       ASSERT_EQ(file_buffer_data[4], 11);
       std::shared_ptr<ChunkMetadata> file_chunk_metadata =
-          getMetadataForBuffer(file_buffer);
+          get_metadata_for_buffer(file_buffer);
       ASSERT_EQ(file_chunk_metadata->numElements, static_cast<size_t>(5));
       ASSERT_EQ(file_chunk_metadata->numBytes, static_cast<size_t>(20));
       ASSERT_EQ(file_chunk_metadata->chunkStats.min.intval, 2);
@@ -895,16 +950,14 @@ TEST_F(FileMgrTest, buffer_update_and_recovery) {
       ASSERT_EQ(file_chunk_metadata->chunkStats.has_nulls, false);
     }
     file_mgr->checkpoint();
-    EXPECT_EQ(global_file_mgr_->getTableEpoch(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
-                                              TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]),
-              std::size_t(2));
+    EXPECT_EQ(global_file_mgr_->getTableEpoch(db_id, tb_id), std::size_t(2));
     ASSERT_FALSE(file_buffer->isDirty());
     ASSERT_FALSE(file_buffer->isUpdated());
     ASSERT_FALSE(file_buffer->isAppended());
 
     source_buffer.reset();
     file_mgr->fetchBuffer(
-        TEST_CHUNK_KEY,
+        default_key,
         &source_buffer,
         20);  // Dragons here: if we didn't unpin andy flush the data, the first value
               // will be 1, and not 2, as we only fetch the portion of data we don't have
@@ -924,7 +977,7 @@ TEST_F(FileMgrTest, buffer_update_and_recovery) {
       ASSERT_EQ(source_buffer_data[3], 7);
       ASSERT_EQ(source_buffer_data[4], 11);
       std::shared_ptr<ChunkMetadata> cpu_chunk_metadata =
-          getMetadataForBuffer(&source_buffer);
+          get_metadata_for_buffer(&source_buffer);
       ASSERT_EQ(cpu_chunk_metadata->numElements, static_cast<size_t>(5));
       ASSERT_EQ(cpu_chunk_metadata->numBytes, static_cast<size_t>(20));
       ASSERT_EQ(cpu_chunk_metadata->chunkStats.min.intval, 2);
@@ -933,16 +986,14 @@ TEST_F(FileMgrTest, buffer_update_and_recovery) {
     }
     {
       SCOPED_TRACE("Buffer Update and Recovery - Compare #2");
-      compareBuffersAndMetadata(file_buffer, &source_buffer);
+      compare_buffers_and_metadata(file_buffer, &source_buffer);
     }
     // Now roll back to epoch 1
-    File_Namespace::FileMgrParams file_mgr_params;
+    fn::FileMgrParams file_mgr_params;
     file_mgr_params.epoch = 1;
-    global_file_mgr_->setFileMgrParams(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
-                                       TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX],
-                                       file_mgr_params);
+    global_file_mgr_->setFileMgrParams(db_id, tb_id, file_mgr_params);
     file_mgr = getFileMgr();
-    file_buffer = file_mgr->getBuffer(TEST_CHUNK_KEY);
+    file_buffer = file_mgr->getBuffer(default_key);
     ASSERT_FALSE(file_buffer->isDirty());
     ASSERT_FALSE(file_buffer->isUpdated());
     ASSERT_FALSE(file_buffer->isAppended());
@@ -953,7 +1004,7 @@ TEST_F(FileMgrTest, buffer_update_and_recovery) {
                         file_buffer->size());
       ASSERT_EQ(file_buffer_data[0], 1);
       std::shared_ptr<ChunkMetadata> file_chunk_metadata =
-          getMetadataForBuffer(file_buffer);
+          get_metadata_for_buffer(file_buffer);
       ASSERT_EQ(file_chunk_metadata->numElements, static_cast<size_t>(1));
       ASSERT_EQ(file_chunk_metadata->numBytes, static_cast<size_t>(4));
       ASSERT_EQ(file_chunk_metadata->chunkStats.min.intval, 1);
@@ -971,18 +1022,18 @@ TEST_F(FileMgrTest, capped_metadata) {
     initializeGlobalFileMgr();
     setMaxRollbackEpochs(max_rollback_epochs);
     initializeChunk(1);
-    const auto& capped_chunk_key = TEST_CHUNK_KEY;
+    const auto& capped_chunk_key = default_key;
     // Have one element already written to key -- epoch should be 2
     ASSERT_EQ(global_file_mgr_->getTableEpoch(capped_chunk_key[0], capped_chunk_key[1]),
               static_cast<size_t>(1));
-    File_Namespace::FileMgr* file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
+    fn::FileMgr* file_mgr = dynamic_cast<fn::FileMgr*>(
         global_file_mgr_->getFileMgr(capped_chunk_key[0], capped_chunk_key[1]));
     // buffer inside loop
     for (int data_write = 1; data_write <= num_data_writes; ++data_write) {
       std::vector<int32_t> data;
       data.emplace_back(data_write);
       AbstractBuffer* file_buffer = global_file_mgr_->getBuffer(capped_chunk_key);
-      appendData(file_buffer, data);
+      append_data(file_buffer, data);
       global_file_mgr_->checkpoint(capped_chunk_key[0], capped_chunk_key[1]);
       ASSERT_EQ(global_file_mgr_->getTableEpoch(capped_chunk_key[0], capped_chunk_key[1]),
                 static_cast<size_t>(data_write + 1));
@@ -994,6 +1045,15 @@ TEST_F(FileMgrTest, capped_metadata) {
   }
 }
 
+TEST_F(FileMgrTest, InitDoubleFileId) {
+  global_file_mgr_->closeFileMgr(1, 1);
+  // Illegal setup.  Data file and Metadata file have same fileId.
+  std::string existing_file = std::string{kTestDataDir} + "/table_1_1/1.4096.data";
+  std::string new_file = std::string{kTestDataDir} + "/table_1_1/0.4096.data";
+  fs::copy(existing_file, new_file);
+  ASSERT_DEATH(global_file_mgr_->getFileMgr(1, 1), "Attempting to re-open file");
+}
+
 class DataCompactionTest : public FileMgrTest {
  protected:
   void SetUp() override {
@@ -1002,15 +1062,14 @@ class DataCompactionTest : public FileMgrTest {
   }
 
   void TearDown() override {
-    File_Namespace::FileMgr::setNumPagesPerDataFile(
-        File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE);
-    File_Namespace::FileMgr::setNumPagesPerMetadataFile(
-        File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_METADATA_FILE);
+    fn::FileMgr::setNumPagesPerDataFile(fn::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE);
+    fn::FileMgr::setNumPagesPerMetadataFile(
+        fn::FileMgr::DEFAULT_NUM_PAGES_PER_METADATA_FILE);
     FileMgrTest::TearDown();
   }
 
   ChunkKey getChunkKey(int32_t column_id) {
-    auto chunk_key = TEST_CHUNK_KEY;
+    auto chunk_key = default_key;
     chunk_key[CHUNK_KEY_COLUMN_IDX] = column_id;
     return chunk_key;
   }
@@ -1019,8 +1078,7 @@ class DataCompactionTest : public FileMgrTest {
                           std::optional<uint64_t> free_metadata_page_count,
                           uint64_t data_file_count,
                           std::optional<uint64_t> free_data_page_count) {
-    auto stats = global_file_mgr_->getStorageStats(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
-                                                   TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]);
+    auto stats = global_file_mgr_->getStorageStats(db_id, tb_id);
     EXPECT_EQ(metadata_file_count, stats.metadata_file_count);
     ASSERT_EQ(free_metadata_page_count.has_value(),
               stats.total_free_metadata_page_count.has_value());
@@ -1038,7 +1096,7 @@ class DataCompactionTest : public FileMgrTest {
   }
 
   void assertChunkMetadata(AbstractBuffer* buffer, int32_t value) {
-    auto metadata = getMetadataForBuffer(buffer);
+    auto metadata = get_metadata_for_buffer(buffer);
     EXPECT_EQ(static_cast<size_t>(1), metadata->numElements);
     EXPECT_EQ(sizeof(int32_t), metadata->numBytes);
     EXPECT_FALSE(metadata->chunkStats.has_nulls);
@@ -1065,7 +1123,7 @@ class DataCompactionTest : public FileMgrTest {
 
   void writeValue(AbstractBuffer* buffer, int32_t value) {
     std::vector<int32_t> data{value};
-    writeData(buffer, data, 0);
+    write_data(buffer, data, 0);
     getFileMgr()->checkpoint();
   }
 
@@ -1075,15 +1133,9 @@ class DataCompactionTest : public FileMgrTest {
     }
   }
 
-  void compactDataFiles() {
-    global_file_mgr_->compactDataFiles(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
-                                       TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]);
-  }
+  void compactDataFiles() { global_file_mgr_->compactDataFiles(db_id, tb_id); }
 
-  void deleteFileMgr() {
-    global_file_mgr_->closeFileMgr(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
-                                   TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]);
-  }
+  void deleteFileMgr() { global_file_mgr_->closeFileMgr(db_id, tb_id); }
 
   void deleteBuffer(int32_t column_id) {
     auto chunk_key = getChunkKey(column_id);
@@ -1097,7 +1149,7 @@ TEST_F(DataCompactionTest, DataFileCompaction) {
   // One page per file for the data file (metadata file default
   // configuration of 4096 pages remains the same), so each
   // write creates a new data file.
-  File_Namespace::FileMgr::setNumPagesPerDataFile(1);
+  fn::FileMgr::setNumPagesPerDataFile(1);
 
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
@@ -1141,7 +1193,7 @@ TEST_F(DataCompactionTest, MetadataFileCompaction) {
   // One page per file for the metadata file (data file default
   // configuration of 256 pages remains the same), so each write
   // creates a new metadata file.
-  File_Namespace::FileMgr::setNumPagesPerMetadataFile(1);
+  fn::FileMgr::setNumPagesPerMetadataFile(1);
 
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
@@ -1184,8 +1236,8 @@ TEST_F(DataCompactionTest, MetadataFileCompaction) {
 TEST_F(DataCompactionTest, DataAndMetadataFileCompaction) {
   // One page per file for the data and metadata files, so each
   // write creates a new data and metadata file.
-  File_Namespace::FileMgr::setNumPagesPerDataFile(1);
-  File_Namespace::FileMgr::setNumPagesPerMetadataFile(1);
+  fn::FileMgr::setNumPagesPerDataFile(1);
+  fn::FileMgr::setNumPagesPerMetadataFile(1);
 
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
@@ -1225,7 +1277,7 @@ TEST_F(DataCompactionTest, DataAndMetadataFileCompaction) {
 }
 
 TEST_F(DataCompactionTest, MultipleChunksPerFile) {
-  File_Namespace::FileMgr::setNumPagesPerDataFile(4);
+  fn::FileMgr::setNumPagesPerDataFile(4);
 
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
@@ -1277,7 +1329,7 @@ TEST_F(DataCompactionTest, MultipleChunksPerFile) {
 }
 
 TEST_F(DataCompactionTest, SourceFilePagesCopiedOverMultipleDestinationFiles) {
-  File_Namespace::FileMgr::setNumPagesPerDataFile(4);
+  fn::FileMgr::setNumPagesPerDataFile(4);
 
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
@@ -1357,7 +1409,7 @@ TEST_F(DataCompactionTest, RecoveryFromCopyPageStatus) {
   // One page per file for the data file (metadata file default
   // configuration of 4096 pages remains the same), so each
   // write creates a new data file.
-  File_Namespace::FileMgr::setNumPagesPerDataFile(1);
+  fn::FileMgr::setNumPagesPerDataFile(1);
 
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
@@ -1380,8 +1432,7 @@ TEST_F(DataCompactionTest, RecoveryFromCopyPageStatus) {
   // Creating a "pending_data_compaction_0" status file and re-initializing
   // file mgr should result in (resumption of) data compaction and remove the
   // 2 files with free pages
-  auto status_file_path =
-      getFileMgr()->getFilePath(File_Namespace::FileMgr::COPY_PAGES_STATUS);
+  auto status_file_path = getFileMgr()->getFilePath(fn::FileMgr::COPY_PAGES_STATUS);
   deleteFileMgr();
   std::ofstream status_file{status_file_path.string(), std::ios::out | std::ios::binary};
   status_file.close();
@@ -1394,7 +1445,7 @@ TEST_F(DataCompactionTest, RecoveryFromCopyPageStatus) {
 }
 
 TEST_F(DataCompactionTest, RecoveryFromUpdatePageVisibiltyStatus) {
-  File_Namespace::FileMgr::setNumPagesPerDataFile(4);
+  fn::FileMgr::setNumPagesPerDataFile(4);
 
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
@@ -1425,8 +1476,7 @@ TEST_F(DataCompactionTest, RecoveryFromUpdatePageVisibiltyStatus) {
   // file mgr should result in (resumption of) data compaction,
   // movement of a page for the last data page file to the first data
   // page file, and deletion of the last data page file
-  auto status_file_path =
-      getFileMgr()->getFilePath(File_Namespace::FileMgr::COPY_PAGES_STATUS);
+  auto status_file_path = getFileMgr()->getFilePath(fn::FileMgr::COPY_PAGES_STATUS);
   std::ofstream status_file{status_file_path.string(), std::ios::out | std::ios::binary};
   status_file.close();
 
@@ -1438,18 +1488,17 @@ TEST_F(DataCompactionTest, RecoveryFromUpdatePageVisibiltyStatus) {
   auto source_file_info = file_mgr->getFileInfoForFileId(source_file_id);
   source_file_info->read(0, DEFAULT_PAGE_SIZE, buffer.get());
 
-  size_t offset{sizeof(File_Namespace::PageHeaderSizeType)};
+  size_t offset{sizeof(fn::PageHeaderSizeType)};
   auto destination_file_info = file_mgr->getFileInfoForFileId(dest_file_id);
   destination_file_info->write(offset, DEFAULT_PAGE_SIZE - offset, buffer.get() + offset);
   destination_file_info->syncToDisk();
 
-  File_Namespace::PageHeaderSizeType int_chunk_header_size{24};
-  std::vector<File_Namespace::PageMapping> page_mappings{
+  fn::PageHeaderSizeType int_chunk_header_size{24};
+  std::vector<fn::PageMapping> page_mappings{
       {source_file_id, 0, int_chunk_header_size, dest_file_id, 0}};
   file_mgr->writePageMappingsToStatusFile(page_mappings);
-  file_mgr->renameCompactionStatusFile(
-      File_Namespace::FileMgr::COPY_PAGES_STATUS,
-      File_Namespace::FileMgr::UPDATE_PAGE_VISIBILITY_STATUS);
+  file_mgr->renameCompactionStatusFile(fn::FileMgr::COPY_PAGES_STATUS,
+                                       fn::FileMgr::UPDATE_PAGE_VISIBILITY_STATUS);
   deleteFileMgr();
 
   getFileMgr();
@@ -1461,7 +1510,7 @@ TEST_F(DataCompactionTest, RecoveryFromUpdatePageVisibiltyStatus) {
 }
 
 TEST_F(DataCompactionTest, RecoveryFromDeleteEmptyFileStatus) {
-  File_Namespace::FileMgr::setNumPagesPerDataFile(4);
+  fn::FileMgr::setNumPagesPerDataFile(4);
 
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
@@ -1496,7 +1545,7 @@ TEST_F(DataCompactionTest, RecoveryFromDeleteEmptyFileStatus) {
   // file mgr should result in (resumption of) data compaction and deletion
   // of the last file that contains only free pages
   auto status_file_path =
-      getFileMgr()->getFilePath(File_Namespace::FileMgr::DELETE_EMPTY_FILES_STATUS);
+      getFileMgr()->getFilePath(fn::FileMgr::DELETE_EMPTY_FILES_STATUS);
   deleteFileMgr();
   std::ofstream status_file{status_file_path.string(), std::ios::out | std::ios::binary};
   status_file.close();
@@ -1513,7 +1562,7 @@ class MaxRollbackEpochTest : public FileMgrTest {
   void SetUp() override { initializeGlobalFileMgr(); }
 
   AbstractBuffer* createBuffer(size_t num_entries_per_page) {
-    const auto& chunk_key = TEST_CHUNK_KEY;
+    const auto& chunk_key = default_key;
     constexpr size_t reserved_header_size{32};
     auto buffer = getFileMgr()->createBuffer(
         chunk_key, reserved_header_size + (num_entries_per_page * sizeof(int32_t)), 0);
@@ -1522,14 +1571,13 @@ class MaxRollbackEpochTest : public FileMgrTest {
   }
 
   void setMaxRollbackEpochs(int32_t max_rollback_epochs) {
-    File_Namespace::FileMgrParams params;
+    fn::FileMgrParams params;
     params.max_rollback_epochs = max_rollback_epochs;
-    global_file_mgr_->setFileMgrParams(
-        TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX], TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX], params);
+    global_file_mgr_->setFileMgrParams(db_id, tb_id, params);
   }
 
   void updateData(std::vector<int32_t>& values) {
-    const auto& chunk_key = TEST_CHUNK_KEY;
+    const auto& chunk_key = default_key;
     auto buffer_size = values.size() * sizeof(int32_t);
     TestHelpers::TestBuffer buffer{std::vector<int32_t>{1}};
     buffer.reserve(buffer_size);
@@ -1548,7 +1596,7 @@ TEST_F(MaxRollbackEpochTest, WriteEmptyBufferAndSingleEpochVersion) {
   auto buffer = createBuffer(2);
 
   std::vector<int32_t> data{1, 2, 3, 4};
-  writeData(buffer, data, 0);
+  write_data(buffer, data, 0);
   file_mgr->checkpoint();
 
   // 2 pages should be used for the above 4 integers
@@ -1575,7 +1623,7 @@ TEST_F(MaxRollbackEpochTest, WriteEmptyBufferAndMultipleEpochVersions) {
   auto buffer = createBuffer(2);
 
   std::vector<int32_t> data{1, 2, 3, 4};
-  writeData(buffer, data, 0);
+  write_data(buffer, data, 0);
   file_mgr->checkpoint();
 
   // 2 pages should be used for the above 4 integers
@@ -1596,25 +1644,23 @@ TEST_F(MaxRollbackEpochTest, WriteEmptyBufferAndMultipleEpochVersions) {
   ASSERT_EQ(static_cast<uint64_t>(2), used_page_count);
 }
 
-constexpr char file_mgr_path[] = "./FileMgrTestDir";
-
 class FileMgrUnitTest : public testing::Test {
  protected:
   static constexpr size_t page_size_ = 64;
+
   void SetUp() override {
-    bf::remove_all(file_mgr_path);
-    bf::create_directory(file_mgr_path);
+    fs::remove_all(kFileMgrPath);
+    fs::create_directory(kFileMgrPath);
   }
 
-  void TearDown() override { bf::remove_all(file_mgr_path); }
+  void TearDown() override { fs::remove_all(kFileMgrPath); }
 
-  std::unique_ptr<File_Namespace::GlobalFileMgr> initializeGFM(
+  std::unique_ptr<fn::GlobalFileMgr> initializeGFM(
       std::shared_ptr<ForeignStorageInterface> fsi,
       size_t num_pages = 1) {
     std::vector<int8_t> write_buffer{1, 2, 3, 4};
-    auto gfm = std::make_unique<File_Namespace::GlobalFileMgr>(
-        0, fsi, file_mgr_path, 0, page_size_);
-    auto fm = dynamic_cast<File_Namespace::FileMgr*>(gfm->getFileMgr(1, 1));
+    auto gfm = std::make_unique<fn::GlobalFileMgr>(0, fsi, kFileMgrPath, 0, page_size_);
+    auto fm = dynamic_cast<fn::FileMgr*>(gfm->getFileMgr(1, 1));
     auto buffer = fm->createBuffer({1, 1, 1, 1});
     auto page_data_size = page_size_ - buffer->reservedHeaderSize();
     for (size_t i = 0; i < page_data_size * num_pages; i += 4) {
@@ -1629,11 +1675,10 @@ TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedFreedFirstPage) {
   auto fsi = std::make_shared<ForeignStorageInterface>();
   {
     auto temp_gfm = initializeGFM(fsi, 2);
-    auto buffer =
-        dynamic_cast<File_Namespace::FileBuffer*>(temp_gfm->getBuffer({1, 1, 1, 1}));
+    auto buffer = dynamic_cast<fn::FileBuffer*>(temp_gfm->getBuffer({1, 1, 1, 1}));
     buffer->freePage(buffer->getMultiPage().front().current().page);
   }
-  File_Namespace::GlobalFileMgr gfm(0, fsi, file_mgr_path, 0, page_size_);
+  fn::GlobalFileMgr gfm(0, fsi, kFileMgrPath, 0, page_size_);
   auto buffer = gfm.getBuffer({1, 1, 1, 1});
   ASSERT_EQ(buffer->pageCount(), 2U);
 }
@@ -1642,11 +1687,10 @@ TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedFreedLastPage) {
   auto fsi = std::make_shared<ForeignStorageInterface>();
   {
     auto temp_gfm = initializeGFM(fsi, 2);
-    auto buffer =
-        dynamic_cast<File_Namespace::FileBuffer*>(temp_gfm->getBuffer({1, 1, 1, 1}));
+    auto buffer = dynamic_cast<fn::FileBuffer*>(temp_gfm->getBuffer({1, 1, 1, 1}));
     buffer->freePage(buffer->getMultiPage().back().current().page);
   }
-  File_Namespace::GlobalFileMgr gfm(0, fsi, file_mgr_path, 0, page_size_);
+  fn::GlobalFileMgr gfm(0, fsi, kFileMgrPath, 0, page_size_);
   auto buffer = gfm.getBuffer({1, 1, 1, 1});
   ASSERT_EQ(buffer->pageCount(), 2U);
 }
@@ -1656,19 +1700,18 @@ TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedAppendPages) {
   std::vector<int8_t> write_buffer{1, 2, 3, 4};
   {
     auto temp_gfm = initializeGFM(fsi, 1);
-    auto buffer =
-        dynamic_cast<File_Namespace::FileBuffer*>(temp_gfm->getBuffer({1, 1, 1, 1}));
+    auto buffer = dynamic_cast<fn::FileBuffer*>(temp_gfm->getBuffer({1, 1, 1, 1}));
     buffer->append(write_buffer.data(), 4);
   }
-  File_Namespace::GlobalFileMgr gfm(0, fsi, file_mgr_path, 0, page_size_);
-  auto buffer = dynamic_cast<File_Namespace::FileBuffer*>(gfm.getBuffer({1, 1, 1, 1}));
+  fn::GlobalFileMgr gfm(0, fsi, kFileMgrPath, 0, page_size_);
+  auto buffer = dynamic_cast<fn::FileBuffer*>(gfm.getBuffer({1, 1, 1, 1}));
   ASSERT_EQ(buffer->pageCount(), 1U);
 }
 
 class RebrandMigrationTest : public FileMgrUnitTest {
  protected:
   void setFileMgrVersion(int32_t version_number) {
-    const auto table_data_dir = bf::path(file_mgr_path) / "table_1_1";
+    const auto table_data_dir = fs::path(kFileMgrPath) / "table_1_1";
     const auto filename = table_data_dir / "filemgr_version";
     std::ofstream version_file{filename.string()};
     version_file.write(reinterpret_cast<char*>(&version_number), sizeof(int32_t));
@@ -1676,7 +1719,7 @@ class RebrandMigrationTest : public FileMgrUnitTest {
   }
 
   int32_t getFileMgrVersion() {
-    const auto table_data_dir = bf::path(file_mgr_path) / "table_1_1";
+    const auto table_data_dir = fs::path(kFileMgrPath) / "table_1_1";
     const auto filename = table_data_dir / "filemgr_version";
     std::ifstream version_file{filename.string()};
     int32_t version_number;
@@ -1691,7 +1734,7 @@ TEST_F(RebrandMigrationTest, ExistingLegacyDataFiles) {
   constexpr int32_t db_id{1};
   constexpr int32_t table_id{1};
   global_file_mgr->closeFileMgr(db_id, table_id);
-  const auto table_data_dir = bf::path(file_mgr_path) / "table_1_1";
+  const auto table_data_dir = fs::path(kFileMgrPath) / "table_1_1";
   const auto legacy_data_file_path =
       table_data_dir / ("0." + std::to_string(page_size_) + ".mapd");
   const auto new_data_file_path =
@@ -1701,19 +1744,19 @@ TEST_F(RebrandMigrationTest, ExistingLegacyDataFiles) {
   const auto new_metadata_file_path =
       table_data_dir / ("1." + std::to_string(DEFAULT_METADATA_PAGE_SIZE) + ".data");
 
-  if (bf::exists(legacy_data_file_path)) {
-    bf::remove(legacy_data_file_path);
+  if (fs::exists(legacy_data_file_path)) {
+    fs::remove(legacy_data_file_path);
   }
 
-  if (bf::exists(legacy_metadata_file_path)) {
-    bf::remove(legacy_metadata_file_path);
+  if (fs::exists(legacy_metadata_file_path)) {
+    fs::remove(legacy_metadata_file_path);
   }
 
-  ASSERT_TRUE(bf::exists(new_data_file_path));
-  bf::rename(new_data_file_path, legacy_data_file_path);
+  ASSERT_TRUE(fs::exists(new_data_file_path));
+  fs::rename(new_data_file_path, legacy_data_file_path);
 
-  ASSERT_TRUE(bf::exists(new_metadata_file_path));
-  bf::rename(new_metadata_file_path, legacy_metadata_file_path);
+  ASSERT_TRUE(fs::exists(new_metadata_file_path));
+  fs::rename(new_metadata_file_path, legacy_metadata_file_path);
 
   setFileMgrVersion(1);
   ASSERT_EQ(getFileMgrVersion(), 1);
@@ -1721,24 +1764,24 @@ TEST_F(RebrandMigrationTest, ExistingLegacyDataFiles) {
   global_file_mgr->getFileMgr(db_id, table_id);
   ASSERT_EQ(getFileMgrVersion(), 2);
 
-  ASSERT_TRUE(bf::exists(new_data_file_path));
-  ASSERT_TRUE(bf::is_regular_file(new_data_file_path));
+  ASSERT_TRUE(fs::exists(new_data_file_path));
+  ASSERT_TRUE(fs::is_regular_file(new_data_file_path));
 
-  ASSERT_TRUE(bf::exists(new_metadata_file_path));
-  ASSERT_TRUE(bf::is_regular_file(new_metadata_file_path));
+  ASSERT_TRUE(fs::exists(new_metadata_file_path));
+  ASSERT_TRUE(fs::is_regular_file(new_metadata_file_path));
 
-  bf::canonical(legacy_data_file_path);
-  ASSERT_TRUE(bf::exists(legacy_data_file_path));
-  ASSERT_TRUE(bf::is_symlink(legacy_data_file_path));
+  fs::canonical(legacy_data_file_path);
+  ASSERT_TRUE(fs::exists(legacy_data_file_path));
+  ASSERT_TRUE(fs::is_symlink(legacy_data_file_path));
 
-  ASSERT_TRUE(bf::exists(legacy_metadata_file_path));
-  ASSERT_TRUE(bf::is_symlink(legacy_metadata_file_path));
+  ASSERT_TRUE(fs::exists(legacy_metadata_file_path));
+  ASSERT_TRUE(fs::is_symlink(legacy_metadata_file_path));
 }
 
 TEST_F(RebrandMigrationTest, NewDataFiles) {
   initializeGFM(std::make_shared<ForeignStorageInterface>(), 1);
 
-  const auto table_data_dir = bf::path(file_mgr_path) / "table_1_1";
+  const auto table_data_dir = fs::path(kFileMgrPath) / "table_1_1";
   const auto legacy_data_file_path =
       table_data_dir / ("0." + std::to_string(page_size_) + ".mapd");
   const auto new_data_file_path =
@@ -1748,22 +1791,781 @@ TEST_F(RebrandMigrationTest, NewDataFiles) {
   const auto new_metadata_file_path =
       table_data_dir / ("1." + std::to_string(DEFAULT_METADATA_PAGE_SIZE) + ".data");
 
-  ASSERT_TRUE(bf::exists(new_data_file_path));
-  ASSERT_TRUE(bf::is_regular_file(new_data_file_path));
+  ASSERT_TRUE(fs::exists(new_data_file_path));
+  ASSERT_TRUE(fs::is_regular_file(new_data_file_path));
 
-  ASSERT_TRUE(bf::exists(new_metadata_file_path));
-  ASSERT_TRUE(bf::is_regular_file(new_metadata_file_path));
+  ASSERT_TRUE(fs::exists(new_metadata_file_path));
+  ASSERT_TRUE(fs::is_regular_file(new_metadata_file_path));
 
-  ASSERT_TRUE(bf::exists(legacy_data_file_path));
-  ASSERT_TRUE(bf::is_symlink(legacy_data_file_path));
+  ASSERT_TRUE(fs::exists(legacy_data_file_path));
+  ASSERT_TRUE(fs::is_symlink(legacy_data_file_path));
 
-  ASSERT_TRUE(bf::exists(legacy_metadata_file_path));
-  ASSERT_TRUE(bf::is_symlink(legacy_metadata_file_path));
+  ASSERT_TRUE(fs::exists(legacy_metadata_file_path));
+  ASSERT_TRUE(fs::is_symlink(legacy_metadata_file_path));
+}
+
+enum class FileMgrType { FileMgr, CachingFileMgr };
+std::ostream& operator<<(std::ostream& os, const FileMgrType& type) {
+  if (type == FileMgrType::FileMgr) {
+    os << "FileMgr";
+  } else if (type == FileMgrType::CachingFileMgr) {
+    os << "CachingFileMgr";
+  } else {
+    os << "Unknown";
+  }
+  return os;
+}
+
+class ReadOnlyAbstractFileMgrUnitTest : public AbstractFileMgrTest {
+ public:
+  void initAsCachingFileMgr() {
+    fn::DiskCacheConfig config{kDataDir, fn::DiskCacheLevel::all};
+    config.page_size = page_size;
+    config.meta_page_size = meta_page_size;
+    parent_file_mgr_ = std::make_unique<fn::CachingFileMgr>(config);
+    file_mgr_ = static_cast<fn::FileMgr*>(parent_file_mgr_.get());
+  }
+
+  void initAsFileMgr() {
+    parent_file_mgr_ =
+        std::make_unique<fn::GlobalFileMgr>(0,
+                                            std::make_shared<ForeignStorageInterface>(),
+                                            kDataDir,
+                                            0,
+                                            page_size,
+                                            meta_page_size);
+    file_mgr_ =
+        static_cast<fn::FileMgr*>(static_cast<fn::GlobalFileMgr*>(parent_file_mgr_.get())
+                                      ->getFileMgr(db_id, tb_id));
+  }
+
+  void initMgrAsType(const FileMgrType& type) {
+    if (type == FileMgrType::FileMgr) {
+      initAsFileMgr();
+    } else if (type == FileMgrType::CachingFileMgr) {
+      initAsCachingFileMgr();
+    } else {
+      UNREACHABLE() << "Unknown FileMgrType";
+    }
+  }
+
+  fn::FileInfo createFileInfo() {
+    auto [fd, file_path] = fn::create(kDataDir, data_file_id, page_size, num_pages);
+    return fn::FileInfo(file_mgr_, 0, fd, page_size, num_pages, file_path);
+  }
+
+  void putData(const ChunkKey& key = default_key,
+               const std::vector<int32_t>& data = {1}) {
+    if (auto cfm = dynamic_cast<fn::CachingFileMgr*>(file_mgr_)) {
+      TestHelpers::TestBuffer in_buf{data};
+      in_buf.clearDirtyBits();
+      cfm->putBuffer(key, &in_buf);
+    } else if (auto fm = dynamic_cast<fn::FileMgr*>(file_mgr_)) {
+      TestHelpers::TestBuffer in_buf{data};
+      fm->putBuffer(key, &in_buf);
+      fm->checkpoint();
+    } else {
+      UNREACHABLE() << "Unknown file mgr type";
+    }
+  }
+
+  void writeVersionFile(int32_t version) {
+    fs::remove_all(version_file_name);
+    std::ofstream version_file(version_file_name);
+    version_file.write(reinterpret_cast<char*>(&version), sizeof(version));
+  }
+
+  fn::GlobalFileMgr* getGlobalFileMgr() {
+    return static_cast<fn::GlobalFileMgr*>(parent_file_mgr_.get());
+  }
+
+  fn::CachingFileMgr* getCachingFileMgr() {
+    return static_cast<fn::CachingFileMgr*>(parent_file_mgr_.get());
+  }
+
+  fn::FileMgr* file_mgr_;
+
+ private:
+  // This is the owner of the file_mgr_ pointer (either a CachingFileMgr or a
+  // GlobalFileMgr).  It should not need to be referenced outside if initialization.
+  std::unique_ptr<Data_Namespace::AbstractBufferMgr> parent_file_mgr_;
+};
+
+// Tests where CachingFileMgr/FileMgr functions will expect the same results.
+class ParamReadOnlyFileMgrUnitTest : public ReadOnlyAbstractFileMgrUnitTest,
+                                     public ::testing::WithParamInterface<FileMgrType> {
+ public:
+  void SetUp() override {
+    g_read_only = false;
+    ReadOnlyAbstractFileMgrUnitTest::SetUp();
+    initMgrAsType(GetParam());
+    g_read_only = true;
+  }
+};
+
+// Right now these tests just check to make sure we don't crash.  TODO(Misiu):
+// Validate the results of these tests (may require splitting some of them into
+// separate test fixures if expected results vary by type).
+TEST_P(ParamReadOnlyFileMgrUnitTest, getStorageStats) {
+  file_mgr_->getStorageStats();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, createBuffer) {
+  file_mgr_->createBuffer(default_key);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, createBufferWithData) {
+  run_in_write_mode([&] { putData(); });
+  ASSERT_DEATH(file_mgr_->createBuffer(default_key), "already exists");
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, isBufferOnDevice) {
+  file_mgr_->isBufferOnDevice(default_key);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getBuffer) {
+  ASSERT_DEATH(file_mgr_->getBuffer(default_key), "not exist");
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getBufferWithData) {
+  run_in_write_mode([&] { putData(); });
+  file_mgr_->getBuffer(default_key);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, fetchBuffer) {
+  TestHelpers::TestBuffer buf{SQLTypeInfo{kINT}};
+  ASSERT_DEATH(file_mgr_->fetchBuffer(default_key, &buf, 4), "not exist");
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, fetchBufferWithData) {
+  run_in_write_mode([&] { putData(); });
+  TestHelpers::TestBuffer buf{SQLTypeInfo{kINT}};
+  file_mgr_->fetchBuffer(default_key, &buf, 4);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getMgrType) {
+  file_mgr_->getMgrType();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getStringMgrType) {
+  file_mgr_->getStringMgrType();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, printSlabs) {
+  file_mgr_->printSlabs();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getMaxSize) {
+  file_mgr_->getMaxSize();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getInUseSize) {
+  file_mgr_->getInUseSize();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getAllocated) {
+  file_mgr_->getAllocated();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, isAllocationCapped) {
+  file_mgr_->isAllocationCapped();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getFileInfoForFileId) {
+  // The file info map should be empty for a FileMgr with no files, so this should throw
+  // with a generic out-of-range exception.
+  run_and_catch([&] { file_mgr_->getFileInfoForFileId(data_file_id); }, "map::at");
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getFileInfoForFileIdWithData) {
+  run_in_write_mode([&] { putData(); });
+  file_mgr_->getFileInfoForFileId(data_file_id);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getMetadataForFile) {
+  std::ofstream temp_file(kTempFile);
+  bf::path path(kDataDir);
+  bf::directory_iterator it(path);
+  file_mgr_->getMetadataForFile(it);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getChunkMetadataVecForKeyPrefix) {
+  ChunkMetadataVector meta_vec;
+  file_mgr_->getChunkMetadataVecForKeyPrefix(meta_vec, {db_id, tb_id});
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, hasChunkMetadataForKeyPrefix) {
+  file_mgr_->hasChunkMetadataForKeyPrefix({db_id, tb_id});
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, epoch) {
+  file_mgr_->epoch(1, 1);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, epochFloor) {
+  file_mgr_->epochFloor();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, incrementEpoch) {
+  file_mgr_->incrementEpoch();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, lastCheckpointedEpoch) {
+  file_mgr_->lastCheckpointedEpoch();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, resetEpochFloor) {
+  file_mgr_->resetEpochFloor();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, maxRollbackEpochs) {
+  file_mgr_->maxRollbackEpochs();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getNumReaderThreads) {
+  file_mgr_->getNumReaderThreads();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getFileForFileId) {
+  ASSERT_DEATH(file_mgr_->getFileForFileId(data_file_id), "not exist");
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getFileForFileIdWithData) {
+  run_in_write_mode([&] { putData(); });
+  file_mgr_->getFileForFileId(data_file_id);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getNumChunks) {
+  file_mgr_->getNumChunks();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getNumUsedMetadataPagesForChunkKey) {
+  run_and_catch([&] { file_mgr_->getNumUsedMetadataPagesForChunkKey(default_key); },
+                "not found");
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getNumUsedMetadataPagesForChunkKeyWithData) {
+  run_in_write_mode([&] { putData(); });
+  file_mgr_->getNumUsedMetadataPagesForChunkKey(default_key);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, createOrMigrateTopLevelMetadataWithData) {
+  run_in_write_mode([&] { file_mgr_->createOrMigrateTopLevelMetadata(); });
+  file_mgr_->createOrMigrateTopLevelMetadata();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getFileMgrBasePath) {
+  file_mgr_->getFileMgrBasePath();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, hasFileMgrKey) {
+  file_mgr_->hasFileMgrKey();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getFileMgrKey) {
+  file_mgr_->get_fileMgrKey();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getFilePath) {
+  file_mgr_->getFilePath("");
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, failOnReadError) {
+  file_mgr_->failOnReadError();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getPageSize) {
+  file_mgr_->getPageSize();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, getMetadataPageSize) {
+  file_mgr_->getMetadataPageSize();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, describeSelf) {
+  file_mgr_->describeSelf();
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, setNumPagesPerDataFile) {
+  file_mgr_->setNumPagesPerDataFile(256);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, setNumPagesPerMetadataFile) {
+  file_mgr_->setNumPagesPerMetadataFile(4096);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, renameAndSymlinkLegacyFiles) {
+  file_mgr_->renameAndSymlinkLegacyFiles(kDataDir);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, updatePageIfDeleted) {
+  auto [fd, file_path] = fn::create(kDataDir, data_file_id, page_size, num_pages);
+  auto file_info = fn::FileInfo(file_mgr_, 0, fd, page_size, num_pages, file_path);
+  ChunkKey key{1, 1, 1, 1};
+  file_mgr_->updatePageIfDeleted(&file_info, key, 0, 0, 0);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, deleteBuffer) {
+  ASSERT_DEATH(file_mgr_->deleteBuffer(default_key), "not exist");
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, deleteBuffersWithPrefix) {
+  // If there are no buffers then this does not throw.
+  file_mgr_->deleteBuffersWithPrefix({1, 1});
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, copyPage) {
+  fn::Page page1{data_file_id, 0}, page2{data_file_id, 1};
+  run_and_catch([&] { file_mgr_->copyPage(page1, file_mgr_, page2, 4, 0, 0); },
+                "map::at");
+}
+
+INSTANTIATE_TEST_SUITE_P(SharedReadOnlyFileMgrUnitTest,
+                         ParamReadOnlyFileMgrUnitTest,
+                         testing::Values(FileMgrType::FileMgr,
+                                         FileMgrType::CachingFileMgr),
+                         [](const auto& info) {
+                           std::stringstream ss;
+                           ss << info.param;
+                           return ss.str();
+                         });
+
+// Tests where FileMgr functions will expect different results.
+class ReadOnlyFileMgrUnitTest : public ReadOnlyAbstractFileMgrUnitTest {
+ public:
+  void SetUp() override {
+    g_read_only = false;
+    ReadOnlyAbstractFileMgrUnitTest::SetUp();
+    initAsFileMgr();
+    g_read_only = true;
+  }
+};
+
+TEST_F(ReadOnlyFileMgrUnitTest, ConstructorEmpty) {
+  // Constructor will create new files if file mgr did not exist.
+  ASSERT_FALSE(fs::exists(getGlobalFileMgr()->getBasePath() + "table_1_0"));
+  ASSERT_DEATH(fn::FileMgr(0, getGlobalFileMgr(), {1, 0}), kReadOnlyCreateError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, Constructor) {
+  run_in_write_mode([&] { putData(); });
+  fn::FileMgr(0, getGlobalFileMgr(), table_pair);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, ConstructorCoreInit) {
+  run_in_write_mode([&] { putData(); });
+  fn::FileMgr(0, getGlobalFileMgr(), table_pair, true);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, ConstructorCoreInitFalse) {
+  run_in_write_mode([&] { putData(); });
+  fn::FileMgr(0, getGlobalFileMgr(), table_pair, false);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, ConstructorInvalidMigrateMissingVersion) {
+  run_in_write_mode([&] { putData(); });
+  fs::remove_all(version_file_name);
+  ASSERT_DEATH(fn::FileMgr(0, getGlobalFileMgr(), table_pair, true), kReadOnlyWriteError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, ConstructorInvalidMigrateV0) {
+  run_in_write_mode([&] { putData(); });
+  writeVersionFile(0);
+  ASSERT_DEATH(fn::FileMgr(0, getGlobalFileMgr(), table_pair, true), "migrate epoch");
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, ConstructorInvalidMigrateV1) {
+  run_in_write_mode([&] { putData(); });
+  writeVersionFile(1);
+  ASSERT_DEATH(fn::FileMgr(0, getGlobalFileMgr(), table_pair, true),
+               "migrate file format");
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, ConstructorPath) {
+  run_in_write_mode([&] { putData(); });
+  ASSERT_DEATH(fn::FileMgr(getGlobalFileMgr(), table_dir), kReadOnlyCreateError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, createOrMigrateTopLevelMetadata) {
+  ASSERT_DEATH(file_mgr_->createOrMigrateTopLevelMetadata(), kReadOnlyWriteError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, freePage) {
+  file_mgr_->free_page(std::make_pair<fn::FileInfo*, int32_t>(nullptr, 0));
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, updatePageIfDeletedWithCheckpoint) {
+  auto file_info = createFileInfo();
+  ChunkKey key = default_key;
+  ASSERT_DEATH(
+      file_mgr_->updatePageIfDeleted(&file_info, key, fn::DELETE_CONTINGENT, 0, 0),
+      kReadOnlyWriteError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, updatePageIfDeletedWithoutCheckpoint) {
+  auto file_info = createFileInfo();
+  ChunkKey key = default_key;
+  ASSERT_DEATH(
+      file_mgr_->updatePageIfDeleted(&file_info, key, fn::DELETE_CONTINGENT, -1, 0),
+      kReadOnlyWriteError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, writePageMappingsToStatusFile) {
+  std::ofstream(file_mgr_->getFilePath(fn::FileMgr::COPY_PAGES_STATUS));
+  std::vector<fn::PageMapping> page_mappings;
+  ASSERT_DEATH(file_mgr_->writePageMappingsToStatusFile(page_mappings),
+               kReadOnlyWriteError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, renameCompactionStatusFile) {
+  std::ofstream(file_mgr_->getFilePath("from"));
+  ASSERT_DEATH(file_mgr_->renameCompactionStatusFile("from", "to"), kReadOnlyWriteError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, compactFiles) {
+  ASSERT_DEATH(file_mgr_->compactFiles(), "run file compaction");
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, closeRemovePhysical) {
+  ASSERT_DEATH(file_mgr_->closeRemovePhysical(), "Error trying to rename file");
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, copyPageWithData) {
+  run_in_write_mode([&] { putData(); });
+  fn::Page page1{data_file_id, 0}, page2{data_file_id, 1};
+  ASSERT_DEATH(file_mgr_->copyPage(page1, file_mgr_, page2, 4, 0, 0),
+               kReadOnlyWriteError);
+}
+
+// TODO(Misiu): This interface is unused (and may not work properly for CFM).  Look into
+// removing it during next FileMgr refactor.
+TEST_F(ReadOnlyFileMgrUnitTest, requestFreePages) {
+  // FileInfo does not exist, so we expect a create error.
+  std::vector<fn::Page> pages;
+  ASSERT_DEATH(file_mgr_->requestFreePages(1, page_size, pages, false),
+               kReadOnlyCreateError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, createFile) {
+  std::string path{"test_path"};
+  ASSERT_DEATH(file_mgr_->createFile(path, 64), "Error trying to create file");
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, writeFile) {
+  FILE* f = fn::create(kTempFile, 1);
+  int8_t buf[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+  ASSERT_DEATH(file_mgr_->writeFile(f, 0, 8, buf), kReadOnlyWriteError);
+  fclose(f);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, putBuffer) {
+  TestHelpers::TestBuffer buf{std::vector<int32_t>{1}};
+  buf.setUpdated();
+  ASSERT_DEATH(file_mgr_->putBuffer(default_key, &buf), kReadOnlyCreateError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, putBufferWithData) {
+  // If a file already exists we should get a different error.
+  run_in_write_mode([&] { putData(); });
+  TestHelpers::TestBuffer buf{std::vector<int32_t>{1}};
+  buf.setUpdated();
+  ASSERT_DEATH(file_mgr_->putBuffer(default_key, &buf), kReadOnlyWriteError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, checkpoint) {
+  ASSERT_DEATH(file_mgr_->checkpoint(), kReadOnlyWriteError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, requestFreePage) {
+  ASSERT_DEATH(file_mgr_->requestFreePage(page_size, false), kReadOnlyCreateError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, deleteBufferWithData) {
+  run_in_write_mode([&] { putData(); });
+  ASSERT_DEATH(file_mgr_->deleteBuffer(default_key), kReadOnlyWriteError);
+}
+
+TEST_F(ReadOnlyFileMgrUnitTest, deleteBuffersWithPrefixWithData) {
+  run_in_write_mode([&] { putData(); });
+  ASSERT_DEATH(file_mgr_->deleteBuffersWithPrefix({1, 1}), kReadOnlyWriteError);
+}
+
+// Tests where CachingFileMgr functions will expect different results.
+class ReadOnlyCachingFileMgrUnitTest : public ReadOnlyAbstractFileMgrUnitTest {
+ public:
+  void SetUp() override {
+    g_read_only = false;
+    AbstractFileMgrTest::SetUp();
+    initAsCachingFileMgr();
+    g_read_only = true;
+  }
+};
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, Constructor) {
+  fn::DiskCacheConfig config{kDataDir, fn::DiskCacheLevel::all};
+  config.page_size = page_size;
+  config.meta_page_size = meta_page_size;
+  auto cfm = fn::CachingFileMgr(config);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, createOrMigrateTopLevelMetadata) {
+  file_mgr_->createOrMigrateTopLevelMetadata();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, freePage) {
+  // CFM needs more setup for this tests because it dereferences the file_info.
+  auto file_info = createFileInfo();
+  file_mgr_->free_page(std::make_pair<fn::FileInfo*, int32_t>(&file_info, 0));
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, updatePageIfDeletedWithCheckpoint) {
+  auto file_info = createFileInfo();
+  ChunkKey key = default_key;
+  file_mgr_->updatePageIfDeleted(&file_info, key, fn::DELETE_CONTINGENT, 0, 0);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, updatePageIfDeletedWithoutCheckpoint) {
+  auto file_info = createFileInfo();
+  ChunkKey key = default_key;
+  file_mgr_->updatePageIfDeleted(&file_info, key, fn::DELETE_CONTINGENT, -1, 0);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, writePageMappingsToStatusFile) {
+  std::ofstream(file_mgr_->getFilePath(fn::FileMgr::COPY_PAGES_STATUS));
+  std::vector<fn::PageMapping> page_mappings;
+  file_mgr_->writePageMappingsToStatusFile(page_mappings);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, renameCompactionStatusFile) {
+  std::ofstream(file_mgr_->getFilePath("from"));
+  file_mgr_->renameCompactionStatusFile("from", "to");
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, compactFiles) {
+  file_mgr_->compactFiles();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, closeRemovePhysical) {
+  file_mgr_->closeRemovePhysical();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, copyPageWithData) {
+  run_in_write_mode([&] { putData(); });
+  fn::Page page1{data_file_id, 0}, page2{data_file_id, 1};
+  file_mgr_->copyPage(page1, file_mgr_, page2, 4, 0, 0);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, createFile) {
+  std::string path{"test_path"};
+  fclose(file_mgr_->createFile(path, 64));
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, writeFile) {
+  FILE* f = fn::create(kTempFile, 1);
+  int8_t buf[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+  file_mgr_->writeFile(f, 0, 8, buf);
+  fclose(f);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, putBuffer) {
+  TestHelpers::TestBuffer buf{std::vector<int32_t>{1}};
+  buf.clearDirtyBits();
+  file_mgr_->putBuffer(default_key, &buf);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, checkpoint) {
+  ASSERT_DEATH(file_mgr_->checkpoint(1, 1), "No data for table");
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, checkpointWithData) {
+  putData();
+  file_mgr_->checkpoint(1, 1);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, requestFreePage) {
+  file_mgr_->requestFreePage(page_size, false);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, deleteBufferWithData) {
+  run_in_write_mode([&] { putData(); });
+  file_mgr_->deleteBuffer(default_key);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, deleteBuffersWithPrefixWithData) {
+  run_in_write_mode([&] { putData(); });
+  file_mgr_->deleteBuffersWithPrefix({1, 1});
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getMinimumSize) {
+  fn::CachingFileMgr::getMinimumSize();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getMaxDataFiles) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getMaxDataFiles();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getMaxMetaFiles) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getMaxMetaFiles();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getMaxWrapperSize) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getMaxWrapperSize();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getDataFileSize) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getDataFileSize();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getMetadataFileSize) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getMetadataFileSize();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getNumDataFiles) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getNumDataFiles();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getNumMetaFiles) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getNumMetaFiles();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getAvailableSpace) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getAvailableSpace();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getAvailableWrapperSpaec) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getAvailableWrapperSpace();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getMaxDataFilesSize) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getMaxDataFilesSize();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, removeChunkKeepMetadata) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->removeChunkKeepMetadata(default_key);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, clearForTable) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->clearForTable(db_id, tb_id);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getChunkSpaceReservedByTable) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getChunkSpaceReservedByTable(db_id, tb_id);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getMetadataSpaceReservedByTable) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getMetadataSpaceReservedByTable(db_id,
+                                                                               tb_id);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getTableFileMgrSpaceReserved) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getTableFileMgrSpaceReserved(db_id, tb_id);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getSpaceReservedByTable) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getSpaceReservedByTable(db_id, tb_id);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, deleteBufferIfExists) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->deleteBufferIfExists(default_key);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getNumChunksWithMetadata) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getNumChunksWithMetadata();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getNumDataChunks) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getNumDataChunks();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getChunkKeysForPrefix) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getChunkKeysForPrefix({db_id, tb_id});
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, reconstruct) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->reconstruct();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, deleteWrapperFile) {
+  ASSERT_DEATH(
+      static_cast<fn::CachingFileMgr*>(file_mgr_)->deleteWrapperFile(db_id, tb_id),
+      "Wrapper does not exist");
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, deleteWrapperFileWithData) {
+  run_in_write_mode([&] { putData(); });
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->deleteWrapperFile(db_id, tb_id);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, writeWrapperFile) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->writeWrapperFile("file", db_id, tb_id);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, hasWrapperFile) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->hasWrapperFile(db_id, tb_id);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getTableFileMgrPath) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getTableFileMgrPath(db_id, tb_id);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getFilesSize) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getFilesSize();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getTableFileMgrsSize) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getTableFileMgrsSize();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getBufferIfExists) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getBufferIfExists(default_key);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, dumpKeysWithMetadata) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->dumpKeysWithMetadata();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, dumpKeysWithChunkData) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->dumpKeysWithChunkData();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, dumpTableQueue) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->dumpTableQueue();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, dumpEvictionQueue) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->dumpEvictionQueue();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, dump) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->dump();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, setMaxNumDataFiles) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->setMaxNumDataFiles(1);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, setMaxNumMetadataFiles) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->setMaxNumMetadataFiles(1);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, setMaxWrapperSpace) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->setMaxWrapperSpace(4096);
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, getKeysWithMetadata) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->getKeysWithMetadata();
+}
+
+TEST_F(ReadOnlyCachingFileMgrUnitTest, setDataSizeLimit) {
+  static_cast<fn::CachingFileMgr*>(file_mgr_)->setDataSizeLimit(1 << 16);
 }
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+  // This line can be replaced with 'GTEST_FLAG_SET(death_test_style, "threadsafe")' once
+  // we update to a version of GTEST that supports it.
+  (void)(::testing::GTEST_FLAG(death_test_style) = "threadsafe");
 
   int err{0};
   try {

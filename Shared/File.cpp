@@ -82,42 +82,30 @@ std::pair<FILE*, std::string> create(const std::string& basePath,
   return {f, path};
 }
 
-FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
-  if (g_read_only) {
-    LOG(FATAL) << "Error trying to create file '" << fullPath
-               << "', not allowed read only ";
-  }
-  FILE* f = heavyai::fopen(fullPath.c_str(), "w+b");
+FILE* create(const std::string& full_path, const size_t requested_file_size) {
+  FILE* f = heavyai::fopen(full_path.c_str(), "w+b");
   if (f == nullptr) {
-    LOG(FATAL) << "Error trying to create file '" << fullPath
+    LOG(FATAL) << "Error trying to create file '" << full_path
                << "', the error was:  " << std::strerror(errno);
-    ;
   }
-  fseek(f, static_cast<long>(requestedFileSize - 1), SEEK_SET);
+  fseek(f, static_cast<long>(requested_file_size - 1), SEEK_SET);
   fputc(EOF, f);
   fseek(f, 0, SEEK_SET);  // rewind
-  if (fileSize(f) != requestedFileSize) {
-    LOG(FATAL) << "Error trying to create file '" << fullPath << "', file size "
-               << fileSize(f) << " does not equal requestedFileSize "
-               << requestedFileSize;
+  if (fileSize(f) != requested_file_size) {
+    LOG(FATAL) << "Error trying to create file '" << full_path << "', file size "
+               << fileSize(f) << " does not equal requested_file_size "
+               << requested_file_size;
   }
   return f;
 }
 
-FILE* open(int fileId) {
-  std::string s(std::to_string(fileId) + std::string(DATA_FILE_EXT));
-  FILE* f = heavyai::fopen(
-      s.c_str(), g_read_only ? "rb" : "r+b");  // opens existing file for updates
-  if (f == nullptr) {
-    LOG(FATAL) << "Error trying to open file '" << s
-               << "', the error was: " << std::strerror(errno);
-  }
-  return f;
+FILE* open(int file_id) {
+  std::string s(std::to_string(file_id) + std::string(DATA_FILE_EXT));
+  return open(s);
 }
 
 FILE* open(const std::string& path) {
-  FILE* f = heavyai::fopen(
-      path.c_str(), g_read_only ? "rb" : "r+b");  // opens existing file for updates
+  FILE* f = heavyai::fopen(path.c_str(), "r+b");
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to open file '" << path
                << "', the errno was: " << std::strerror(errno);
@@ -131,12 +119,9 @@ void close(FILE* f) {
   CHECK_EQ(fclose(f), 0);
 }
 
-bool removeFile(const std::string basePath, const std::string filename) {
-  if (g_read_only) {
-    LOG(FATAL) << "Error trying to remove file '" << filename << "', running readonly";
-  }
-  const std::string filePath = basePath + filename;
-  return remove(filePath.c_str()) == 0;
+bool removeFile(const std::string& base_path, const std::string& filename) {
+  const std::string file_path = base_path + filename;
+  return remove(file_path.c_str()) == 0;
 }
 
 size_t read(FILE* f,
@@ -158,9 +143,6 @@ size_t read(FILE* f,
 }
 
 size_t write(FILE* f, const size_t offset, const size_t size, const int8_t* buf) {
-  if (g_read_only) {
-    LOG(FATAL) << "Error trying to write file '" << f << "', running readonly";
-  }
   // write size bytes from the buffer to the offset location in the file
   if (fseek(f, static_cast<long>(offset), SEEK_SET) != 0) {
     LOG(FATAL)
@@ -176,9 +158,6 @@ size_t write(FILE* f, const size_t offset, const size_t size, const int8_t* buf)
 }
 
 size_t append(FILE* f, const size_t size, const int8_t* buf) {
-  if (g_read_only) {
-    LOG(FATAL) << "Error trying to append file '" << f << "', running readonly";
-  }
   return write(f, fileSize(f), size, buf);
 }
 
@@ -201,9 +180,6 @@ size_t readPartialPage(FILE* f,
 }
 
 size_t writePage(FILE* f, const size_t pageSize, const size_t pageNum, int8_t* buf) {
-  if (g_read_only) {
-    LOG(FATAL) << "Error trying to writePage file '" << f << "', running readonly";
-  }
   return write(f, pageNum * pageSize, pageSize, buf);
 }
 
@@ -213,16 +189,10 @@ size_t writePartialPage(FILE* f,
                         const size_t writeSize,
                         const size_t pageNum,
                         int8_t* buf) {
-  if (g_read_only) {
-    LOG(FATAL) << "Error trying to writePartialPage file '" << f << "', running readonly";
-  }
   return write(f, pageNum * pageSize + offset, writeSize, buf);
 }
 
 size_t appendPage(FILE* f, const size_t pageSize, int8_t* buf) {
-  if (g_read_only) {
-    LOG(FATAL) << "Error trying to appendPage file '" << f << "', running readonly";
-  }
   return write(f, fileSize(f), pageSize, buf);
 }
 

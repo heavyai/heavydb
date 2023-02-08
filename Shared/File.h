@@ -46,16 +46,23 @@ std::pair<FILE*, std::string> create(const std::string& basePath,
                                      const size_t pageSize,
                                      const size_t npages);
 
-FILE* create(const std::string& fullPath, const size_t requestedFileSize);
+/**
+ * @brief Opens/creates a file with the given path and file size.  Fatal crash if file can
+ * not be created to required size.
+ *
+ * @param full_path Full path to file.
+ ^ @param requested_file_size File size file must be created with.
+ * @return FILE* A pointer to a FILE pointer; cannot be null.
+ */
+FILE* create(const std::string& full_path, const size_t requested_file_size);
 
 /**
- * @brief Opens/creates the file with the given id; returns NULL on error.
+ * @brief Opens the file with the given id; fatal crash on error.
  *
- * @param fileId The id of the file to open.
- * @return FILE* A pointer to a FILE pointer, or NULL on error.
+ * @param file_id The id of the file to open.
+ * @return FILE* A pointer to a FILE pointer; cannot be null.
  */
-FILE* open(int fileId);
-
+FILE* open(int file_id);
 FILE* open(const std::string& path);
 
 /**
@@ -72,7 +79,7 @@ void close(FILE* f);
  * @param f Pointer to the FILE.
  * @return mapd_err_t Returns an error code when unable to close the file properly.
  */
-bool removeFile(const std::string basePath, const std::string filename);
+bool removeFile(const std::string& basePath, const std::string& filename);
 
 /**
  * @brief Reads the specified number of bytes from the offset position in file f into buf.

@@ -53,7 +53,6 @@ GlobalFileMgr::GlobalFileMgr(const int32_t device_id,
                   // last checkpoint
     , page_size_(page_size)
     , metadata_page_size_(metadata_page_size) {
-  omnisci_db_version_ = 2;
   // DS changes also triggered by individual FileMgr per table project (release 2.1.0)
   dbConvert_ = false;
   init();

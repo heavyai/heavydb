@@ -21,15 +21,14 @@
  */
 
 #include "DataMgr/FileMgr/FileBuffer.h"
-
 #include <future>
 #include <map>
 #include <thread>
-#include <utility>  // std::pair
-
+#include <utility>
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "Shared/File.h"
 #include "Shared/checked_alloc.h"
+#include "Shared/scope.h"
 
 using namespace std;
 
@@ -159,6 +158,7 @@ void FileBuffer::freePage(const Page& page) {
 
 void FileBuffer::freePage(const Page& page, const bool isRolloff) {
   FileInfo* fileInfo = fm_->getFileInfoForFileId(page.fileId);
+  CHECK(fileInfo);
   fileInfo->freePage(page.pageNum, isRolloff, getFileMgrEpoch());
 }
 
@@ -307,7 +307,8 @@ void FileBuffer::read(int8_t* const dst,
   }
   */
 
-  CHECK(startPage + numPagesToRead <= multiPages_.size());
+  CHECK(startPage + numPagesToRead <= multiPages_.size())
+      << "Requested page out of bounds";
 
   size_t numPagesPerThread = 0;
   size_t numBytesCurrent = numBytes;  // total number of bytes still to be read
@@ -390,20 +391,18 @@ void FileBuffer::copyPage(Page& srcPage,
                           Page& destPage,
                           const size_t numBytes,
                           const size_t offset) {
-  // FILE *srcFile = fm_->files_[srcPage.fileId]->f;
-  // FILE *destFile = fm_->files_[destPage.fileId]->f;
   CHECK_LE(offset + numBytes, pageDataSize_);
   FileInfo* srcFileInfo = fm_->getFileInfoForFileId(srcPage.fileId);
   FileInfo* destFileInfo = fm_->getFileInfoForFileId(destPage.fileId);
 
   int8_t* buffer = reinterpret_cast<int8_t*>(checked_malloc(numBytes));
+  ScopeGuard guard = [&buffer] { free(buffer); };
   size_t bytesRead = srcFileInfo->read(
       srcPage.pageNum * pageSize_ + offset + reservedHeaderSize_, numBytes, buffer);
   CHECK(bytesRead == numBytes);
   size_t bytesWritten = destFileInfo->write(
       destPage.pageNum * pageSize_ + offset + reservedHeaderSize_, numBytes, buffer);
   CHECK(bytesWritten == numBytes);
-  free(buffer);
 }
 
 Page FileBuffer::addNewMultiPage(const int32_t epoch) {
