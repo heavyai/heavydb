@@ -195,7 +195,8 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
           for (RexNode n : curExpr.getOperands()) {
             if (n instanceof RexCall) {
               RexCall c = (RexCall) n;
-              if (isCandidateFilterPred(c)) {
+              if (isCandidateFilterPred(c)
+                      && c.getOperands().get(0) instanceof RexInputRef) {
                 RexInputRef col = (RexInputRef) c.getOperands().get(0);
                 int colId = col.getIndex();
                 boolean leftFilter = leftJoinCols.contains(colId);
@@ -216,7 +217,8 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
           }
         } else {
           if (curExpr instanceof RexCall) {
-            if (isCandidateFilterPred(curExpr)) {
+            if (isCandidateFilterPred(curExpr)
+                    && curExpr.getOperands().get(0) instanceof RexInputRef) {
               RexInputRef col = (RexInputRef) curExpr.getOperands().get(0);
               int colId = col.getIndex();
               boolean leftFilter = leftJoinCols.contains(colId);
@@ -246,25 +248,27 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
 
     if (!capturedFilterPredFromJoin.isEmpty()) {
       for (RexCall c : capturedFilterPredFromJoin) {
-        RexInputRef col = (RexInputRef) c.getOperands().get(0);
-        int colId = col.getIndex();
-        String colName = join.getRowType().getFieldNames().get(colId);
-        Boolean l = false;
-        Boolean r = false;
-        if (originalLeftJoinColToColNameMap.containsKey(colId)
-                && originalLeftJoinColToColNameMap.get(colId).equals(colName)) {
-          l = true;
-        }
-        if (originalRightJoinColToColNameMap.containsKey(colId)
-                && originalRightJoinColToColNameMap.get(colId).equals(colName)) {
-          r = true;
-        }
-        if (l && !r) {
-          nullRejectedLeftJoinCols.add(colId);
-        } else if (r && !l) {
-          nullRejectedRightJoinCols.add(colId);
-        } else if (r && l) {
-          return;
+        if (c.getOperands().get(0) instanceof RexInputRef) {
+          RexInputRef col = (RexInputRef) c.getOperands().get(0);
+          int colId = col.getIndex();
+          String colName = join.getRowType().getFieldNames().get(colId);
+          Boolean l = false;
+          Boolean r = false;
+          if (originalLeftJoinColToColNameMap.containsKey(colId)
+                  && originalLeftJoinColToColNameMap.get(colId).equals(colName)) {
+            l = true;
+          }
+          if (originalRightJoinColToColNameMap.containsKey(colId)
+                  && originalRightJoinColToColNameMap.get(colId).equals(colName)) {
+            r = true;
+          }
+          if (l && !r) {
+            nullRejectedLeftJoinCols.add(colId);
+          } else if (r && !l) {
+            nullRejectedRightJoinCols.add(colId);
+          } else if (r && l) {
+            return;
+          }
         }
       }
     }

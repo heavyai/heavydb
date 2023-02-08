@@ -13894,6 +13894,24 @@ TEST_F(Select, Joins_OuterJoin_OptBy_NullRejection) {
   }
 }
 
+TEST_F(Select, CalciteNullRejectionRuleCastIssue) {
+  run_ddl_statement("DROP TABLE IF EXISTS left_join_geo1;");
+  run_ddl_statement("CREATE TABLE left_join_geo1(x int, loc POINT);");
+  // If we run the query, "Projection type GEOMETRY(POINT) not supported for outer
+  // joins yet" exception is expected.
+  // Previously, the query throws a different exception from Calcite
+  std::string query{
+      "SELECT v FROM (SELECT R.a v FROM outer_join_foo R LEFT JOIN left_join_geo1 S "
+      "ON (R.a = S.x) WHERE ST_X(loc) IS NOT NULL);"};
+  auto const calcite_plan = QR::get()->getCalcitePlan(query, false, false);
+  EXPECT_EQ(size_t(1), calcite_plan->rowCount(false));
+  const auto crt_row = calcite_plan->getNextRow(true, false);
+  EXPECT_EQ(size_t(1), crt_row.size());
+  const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+  EXPECT_TRUE(explain_str.find("LogicalJoin") != std::string::npos);
+  run_ddl_statement("DROP TABLE IF EXISTS left_join_geo1;");
+}
+
 TEST_F(Select, Joins_MultiCompositeColumns) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
