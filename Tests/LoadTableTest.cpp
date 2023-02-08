@@ -1495,7 +1495,7 @@ class ThriftDetectGeoFileTest : public DBHandlerTestFixture {
     ASSERT_EQ(row_set.row_desc[1].col_type.comp_param, 0);
 
     ASSERT_EQ(row_set.row_desc[2].col_name, "geom");
-    ASSERT_EQ(row_set.row_desc[2].col_type.type, TDatumType::LINESTRING);
+    ASSERT_EQ(row_set.row_desc[2].col_type.type, TDatumType::MULTILINESTRING);
     ASSERT_EQ(row_set.row_desc[2].col_type.encoding, TEncodingType::type::GEOINT);
     ASSERT_EQ(row_set.row_desc[2].col_type.comp_param, 32);
   }
