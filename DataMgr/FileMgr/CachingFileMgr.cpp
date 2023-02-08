@@ -21,11 +21,9 @@
  */
 
 #include "DataMgr/FileMgr/CachingFileMgr.h"
-#include "Shared/misc.h"
-
 #include <boost/filesystem.hpp>
-
 #include <fstream>
+#include "Shared/misc.h"
 
 namespace bf = boost::filesystem;
 
@@ -71,7 +69,7 @@ std::string CachingFileMgr::dump() const {
 }
 
 CachingFileMgr::CachingFileMgr(const DiskCacheConfig& config)
-    : FileMgr(config.page_size, DEFAULT_METADATA_PAGE_SIZE) {
+    : FileMgr(config.page_size, config.meta_page_size) {
   fileMgrBasePath_ = config.path;
   maxRollbackEpochs_ = 0;
   nextFileId_ = 0;
@@ -248,7 +246,7 @@ std::string CachingFileMgr::describeSelf() const {
 void CachingFileMgr::checkpoint(const int32_t db_id, const int32_t tb_id) {
   {
     heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
-    CHECK(table_dirs_.find({db_id, tb_id}) != table_dirs_.end());
+    CHECK(table_dirs_.find({db_id, tb_id}) != table_dirs_.end()) << "No data for table";
   }
   VLOG(2) << "Checkpointing " << describeSelf() << " (" << db_id << ", " << tb_id
           << ") epoch: " << epoch(db_id, tb_id);
@@ -429,7 +427,7 @@ Page CachingFileMgr::requestFreePage(size_t pageSize, const bool isMetadata) {
   auto candidateFiles = fileIndex_.equal_range(pageSize);
   // Check if there is a free page in an existing file.
   for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
-    FileInfo* fileInfo = files_.at(fileIt->second);
+    FileInfo* fileInfo = getFileInfoForFileId(fileIt->second);
     pageNum = fileInfo->getFreePage();
     if (pageNum != -1) {
       return (Page(fileInfo->fileId, pageNum));
@@ -440,11 +438,11 @@ Page CachingFileMgr::requestFreePage(size_t pageSize, const bool isMetadata) {
   FileInfo* fileInfo = nullptr;
   if (isMetadata) {
     if (getMaxMetaFiles() > getNumMetaFiles()) {
-      fileInfo = createFile(pageSize, num_pages_per_metadata_file_);
+      fileInfo = createFileInfo(pageSize, num_pages_per_metadata_file_);
     }
   } else {
     if (getMaxDataFiles() > getNumDataFiles()) {
-      fileInfo = createFile(pageSize, num_pages_per_data_file_);
+      fileInfo = createFileInfo(pageSize, num_pages_per_data_file_);
     }
   }
 
@@ -556,7 +554,7 @@ void CachingFileMgr::removeKey(const ChunkKey& key) const {
 size_t CachingFileMgr::getFilesSize() const {
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(files_rw_mutex_);
   size_t sum = 0;
-  for (auto [id, file] : files_) {
+  for (const auto& [id, file] : files_) {
     sum += file->size();
   }
   return sum;
@@ -642,15 +640,19 @@ std::string CachingFileMgr::dumpKeysWithChunkData() const {
 }
 
 std::unique_ptr<CachingFileMgr> CachingFileMgr::reconstruct() const {
-  DiskCacheConfig config{
-      fileMgrBasePath_, DiskCacheLevel::none, num_reader_threads_, max_size_, page_size_};
+  DiskCacheConfig config{fileMgrBasePath_,
+                         DiskCacheLevel::none,
+                         num_reader_threads_,
+                         max_size_,
+                         page_size_,
+                         metadata_page_size_};
   return std::make_unique<CachingFileMgr>(config);
 }
 
 void CachingFileMgr::deleteWrapperFile(int32_t db, int32_t tb) {
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
   auto it = table_dirs_.find({db, tb});
-  CHECK(it != table_dirs_.end());
+  CHECK(it != table_dirs_.end()) << "Wrapper does not exist.";
   it->second->deleteWrapperFile();
 }
 

@@ -22,8 +22,8 @@
 #pragma once
 
 #include <boost/preprocessor.hpp>
-#include "../Shared/types.h"
 #include "AbstractBuffer.h"
+#include "Shared/types.h"
 
 #define X_DEFINE_ENUM_WITH_STRING_CONVERSIONS_TOSTRING_CASE(r, data, elem) \
   case elem:                                                               \

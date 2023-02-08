@@ -20,11 +20,8 @@
  *
  */
 
-#ifndef DATAMGR_H
-#define DATAMGR_H
+#pragma once
 
-#include "../Shared/SystemParameters.h"
-#include "../Shared/heavyai_shared_mutex.h"
 #include "AbstractBuffer.h"
 #include "AbstractBufferMgr.h"
 #include "BufferMgr/Buffer.h"
@@ -32,6 +29,8 @@
 #include "MemoryLevel.h"
 #include "OSDependent/heavyai_fs.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
+#include "Shared/SystemParameters.h"
+#include "Shared/heavyai_shared_mutex.h"
 
 #include <fstream>
 #include <iomanip>
@@ -283,5 +282,3 @@ class DataMgr {
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage&);
 
 }  // namespace Data_Namespace
-
-#endif  // DATAMGR_H

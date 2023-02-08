@@ -39,8 +39,11 @@
 #include "Shared/File.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/measure.h"
+#include "Shared/scope.h"
 
 using namespace std;
+
+extern bool g_read_only;
 
 namespace File_Namespace {
 
@@ -72,6 +75,7 @@ FileMgr::FileMgr(const int32_t device_id,
     , fileMgrKey_(file_mgr_key)
     , page_size_(gfm->getPageSize())
     , metadata_page_size_(gfm->getMetadataPageSize()) {
+  // TODO(Misiu): Standardize prefix and delim.
   const std::string fileMgrDirPrefix("table");
   const std::string fileMgrDirDelim("_");
   fileMgrBasePath_ = (gfm_->getBasePath() + fileMgrDirPrefix + fileMgrDirDelim +
@@ -115,9 +119,8 @@ FileMgr::~FileMgr() {
   for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
     delete chunkIt->second;
   }
-  for (auto file_info_entry : files_) {
-    delete file_info_entry.second;
-  }
+
+  files_.clear();
 
   if (epochFile_) {
     close(epochFile_);
@@ -241,14 +244,6 @@ OpenFilesResult FileMgr::openFiles() {
 }
 
 void FileMgr::clearFileInfos() {
-  for (auto file_info_entry : files_) {
-    auto file_info = file_info_entry.second;
-    if (file_info->f) {
-      close(file_info->f);
-      file_info->f = nullptr;
-    }
-    delete file_info;
-  }
   files_.clear();
   fileIndex_.clear();
 }
@@ -303,10 +298,11 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
     freePages();
   } else {
     boost::filesystem::path path(fileMgrBasePath_);
+    readOnlyCheck("create file", path.string());
     if (!boost::filesystem::create_directory(path)) {
       LOG(FATAL) << "Could not create data directory: " << path;
     }
-    fileMgrVersion_ = latestFileMgrVersion_;
+    fileMgrVersion_ = LATEST_FILE_MGR_VERSION;
     if (epochOverride != -1) {
       epoch_.floor(epochOverride);
       epoch_.ceiling(epochOverride);
@@ -386,7 +382,7 @@ void FileMgr::setDataAndMetadataFileStats(StorageStats& storage_stats) const {
     // We already initialized this table so take the faster path of walking through the
     // FileInfo objects and getting metadata from there
     for (const auto& file_info_entry : files_) {
-      const auto file_info = file_info_entry.second;
+      const auto file_info = file_info_entry.second.get();
       if (is_metadata_file(file_info->size(),
                            file_info->pageSize,
                            metadata_page_size_,
@@ -548,6 +544,7 @@ void FileMgr::init(const std::string& dataPathToConvertFrom,
     }
     nextFileId_ = maxFileId + 1;
   } else {
+    readOnlyCheck("create file", path.string());
     if (!boost::filesystem::create_directory(path)) {
       LOG(FATAL) << "Specified path does not exist: " << path;
     }
@@ -556,7 +553,7 @@ void FileMgr::init(const std::string& dataPathToConvertFrom,
 }
 
 void FileMgr::closePhysicalUnlocked() {
-  for (auto& [idx, file_info] : files_) {
+  for (const auto& [idx, file_info] : files_) {
     if (file_info->f) {
       close(file_info->f);
       file_info->f = nullptr;
@@ -576,11 +573,15 @@ void FileMgr::closePhysicalUnlocked() {
 
 void FileMgr::closeRemovePhysical() {
   heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
+  auto path = getFileMgrBasePath();
+  readOnlyCheck("rename file", path);
+
   closePhysicalUnlocked();
   /* rename for later deletion the directory containing table related data */
-  File_Namespace::renameForDelete(getFileMgrBasePath());
+  File_Namespace::renameForDelete(path);
 }
 
+// TODO(Misiu): This function is almost identical to FileInfo::copyPage.  Deduplicate.
 void FileMgr::copyPage(Page& srcPage,
                        FileMgr* destFileMgr,
                        Page& destPage,
@@ -591,6 +592,7 @@ void FileMgr::copyPage(Page& srcPage,
   FileInfo* srcFileInfo = getFileInfoForFileId(srcPage.fileId);
   FileInfo* destFileInfo = destFileMgr->getFileInfoForFileId(destPage.fileId);
   int8_t* buffer = reinterpret_cast<int8_t*>(checked_malloc(numBytes));
+  ScopeGuard guard = [&buffer] { ::free(buffer); };
 
   size_t bytesRead = srcFileInfo->read(
       srcPage.pageNum * page_size_ + offset + reservedHeaderSize, numBytes, buffer);
@@ -598,13 +600,13 @@ void FileMgr::copyPage(Page& srcPage,
   size_t bytesWritten = destFileInfo->write(
       destPage.pageNum * page_size_ + offset + reservedHeaderSize, numBytes, buffer);
   CHECK(bytesWritten == numBytes);
-  ::free(buffer);
 }
 
 void FileMgr::createEpochFile(const std::string& epochFileName) {
   std::string epochFilePath(fileMgrBasePath_ + "/" + epochFileName);
+  readOnlyCheck("create file", epochFilePath);
   if (boost::filesystem::exists(epochFilePath)) {
-    LOG(FATAL) << "Epoch file `" << epochFilePath << "` already exists";
+    LOG(FATAL) << "Epoch file '" << epochFilePath << "' already exists";
   }
   epochFile_ = create(epochFilePath, sizeof(Epoch::byte_size()));
   // Write out current epoch to file - which if this
@@ -655,7 +657,7 @@ void FileMgr::openAndReadEpochFile(const std::string& epochFileName) {
 
 void FileMgr::writeAndSyncEpochToDisk() {
   CHECK(epochFile_);
-  write(epochFile_, 0, Epoch::byte_size(), epoch_.storage_ptr());
+  writeFile(epochFile_, 0, Epoch::byte_size(), epoch_.storage_ptr());
   int32_t status = fflush(epochFile_);
   CHECK(status == 0) << "Could not flush epoch file to disk";
 #ifdef __APPLE__
@@ -715,7 +717,7 @@ FileBuffer* FileMgr::createBuffer(const ChunkKey& key,
                                   const size_t num_bytes) {
   heavyai::unique_lock<heavyai::shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   CHECK(chunkIndex_.find(key) == chunkIndex_.end())
-      << "Chunk already exists for key: " << show_chunk(key);
+      << "Chunk already exists: " + show_chunk(key);
   return createBufferUnlocked(key, page_size, num_bytes);
 }
 
@@ -750,8 +752,7 @@ bool FileMgr::isBufferOnDevice(const ChunkKey& key) {
 void FileMgr::deleteBuffer(const ChunkKey& key, const bool purge) {
   heavyai::unique_lock<heavyai::shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   auto chunk_it = chunkIndex_.find(key);
-  CHECK(chunk_it != chunkIndex_.end())
-      << "Chunk does not exist for key: " << show_chunk(key);
+  CHECK(chunk_it != chunkIndex_.end()) << "Chunk does not exist: " << show_chunk(key);
   deleteBufferUnlocked(chunk_it, purge);
 }
 
@@ -878,7 +879,7 @@ Page FileMgr::requestFreePage(size_t pageSize, const bool isMetadata) {
   auto candidateFiles = fileIndex_.equal_range(pageSize);
   int32_t pageNum = -1;
   for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
-    FileInfo* fileInfo = files_.at(fileIt->second);
+    FileInfo* fileInfo = getFileInfoForFileId(fileIt->second);
     pageNum = fileInfo->getFreePage();
     if (pageNum != -1) {
       return (Page(fileInfo->fileId, pageNum));
@@ -887,9 +888,9 @@ Page FileMgr::requestFreePage(size_t pageSize, const bool isMetadata) {
   // if here then we need to add a file
   FileInfo* fileInfo;
   if (isMetadata) {
-    fileInfo = createFile(pageSize, num_pages_per_metadata_file_);
+    fileInfo = createFileInfo(pageSize, num_pages_per_metadata_file_);
   } else {
-    fileInfo = createFile(pageSize, num_pages_per_data_file_);
+    fileInfo = createFileInfo(pageSize, num_pages_per_data_file_);
   }
   pageNum = fileInfo->getFreePage();
   CHECK(pageNum != -1);
@@ -906,7 +907,7 @@ void FileMgr::requestFreePages(size_t numPagesRequested,
   auto candidateFiles = fileIndex_.equal_range(pageSize);
   size_t numPagesNeeded = numPagesRequested;
   for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
-    FileInfo* fileInfo = files_.at(fileIt->second);
+    FileInfo* fileInfo = getFileInfoForFileId(fileIt->second);
     int32_t pageNum;
     do {
       pageNum = fileInfo->getFreePage();
@@ -922,9 +923,9 @@ void FileMgr::requestFreePages(size_t numPagesRequested,
   while (numPagesNeeded > 0) {
     FileInfo* fileInfo;
     if (isMetadata) {
-      fileInfo = createFile(pageSize, num_pages_per_metadata_file_);
+      fileInfo = createFileInfo(pageSize, num_pages_per_metadata_file_);
     } else {
-      fileInfo = createFile(pageSize, num_pages_per_data_file_);
+      fileInfo = createFileInfo(pageSize, num_pages_per_data_file_);
     }
     int32_t pageNum;
     do {
@@ -947,17 +948,25 @@ FileInfo* FileMgr::openExistingFile(const std::string& path,
                                     const size_t numPages,
                                     std::vector<HeaderInfo>& headerVec) {
   FILE* f = open(path);
-  FileInfo* fInfo = new FileInfo(
-      this, fileId, f, pageSize, numPages, path, false);  // false means don't init file
+  auto file_info = std::make_unique<FileInfo>(this,
+                                              fileId,
+                                              f,
+                                              pageSize,
+                                              numPages,
+                                              path,
+                                              false);  // false means don't init file
 
-  fInfo->openExistingFile(headerVec);
+  file_info->openExistingFile(headerVec);
   heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
-  files_[fileId] = fInfo;
+  CHECK(files_.find(fileId) == files_.end()) << "Attempting to re-open file";
+  files_.emplace(fileId, std::move(file_info));
   fileIndex_.insert(std::pair<size_t, int32_t>(pageSize, fileId));
-  return fInfo;
+  return getFileInfoForFileId(fileId);
 }
 
-FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
+FileInfo* FileMgr::createFileInfo(const size_t pageSize, const size_t numPages) {
+  readOnlyCheck("create file",
+                get_data_file_path(fileMgrBasePath_, nextFileId_, pageSize));
   // check arguments
   if (pageSize == 0 || numPages == 0) {
     LOG(FATAL) << "File creation failed: pageSize and numPages must be greater than 0.";
@@ -973,21 +982,26 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
 
   // instantiate a new FileInfo for the newly created file
   int32_t fileId = nextFileId_++;
-  FileInfo* fInfo = new FileInfo(
-      this, fileId, f, pageSize, numPages, file_path, true);  // true means init file
+  auto fInfo = std::make_unique<FileInfo>(this,
+                                          fileId,
+                                          f,
+                                          pageSize,
+                                          numPages,
+                                          file_path,
+                                          true);  // true means init file
   CHECK(fInfo);
 
   heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
   // update file manager data structures
-  files_[fileId] = fInfo;
+  files_[fileId] = std::move(fInfo);
   fileIndex_.insert(std::pair<size_t, int32_t>(pageSize, fileId));
 
-  return fInfo;
+  return getFileInfoForFileId(fileId);
 }
 
 FILE* FileMgr::getFileForFileId(const int32_t fileId) {
   CHECK(fileId >= 0);
-  CHECK(files_.find(fileId) != files_.end());
+  CHECK(files_.find(fileId) != files_.end()) << "File does not exist for id: " << fileId;
   return files_.at(fileId)->f;
 }
 
@@ -1034,40 +1048,33 @@ size_t FileMgr::getNumUsedMetadataPagesForChunkKey(const ChunkKey& chunkKey) con
   }
 }
 
-int32_t FileMgr::getDBVersion() const {
-  return gfm_->getDBVersion();
-}
-
 bool FileMgr::getDBConvert() const {
   return gfm_->getDBConvert();
 }
 
-void FileMgr::createTopLevelMetadata() {
-  db_version_ = readVersionFromDisk(DB_META_FILENAME);
+void FileMgr::createOrMigrateTopLevelMetadata() {
+  auto file_version = readVersionFromDisk(DB_META_FILENAME);
+  auto gfm_version = gfm_->db_version_;
 
-  if (db_version_ > getDBVersion()) {
+  if (file_version > gfm_version) {
     LOG(FATAL) << "DB forward compatibility is not supported. Version of HeavyDB "
                   "software used is older than the version of DB being read: "
-               << db_version_;
+               << file_version;
   }
-  if (db_version_ == INVALID_VERSION || db_version_ < getDBVersion()) {
+  if (file_version == INVALID_VERSION || file_version < gfm_version) {
     // new system, or we are moving forward versions
     // system wide migration would go here if required
-    writeAndSyncVersionToDisk(DB_META_FILENAME, getDBVersion());
+    writeAndSyncVersionToDisk(DB_META_FILENAME, gfm_version);
     return;
   }
 }
 
 int32_t FileMgr::readVersionFromDisk(const std::string& versionFileName) const {
   const std::string versionFilePath(fileMgrBasePath_ + "/" + versionFileName);
-  if (!boost::filesystem::exists(versionFilePath)) {
-    return -1;
-  }
-  if (!boost::filesystem::is_regular_file(versionFilePath)) {
-    return -1;
-  }
-  if (boost::filesystem::file_size(versionFilePath) < 4) {
-    return -1;
+  if (!boost::filesystem::exists(versionFilePath) ||
+      !boost::filesystem::is_regular_file(versionFilePath) ||
+      boost::filesystem::file_size(versionFilePath) < 4) {
+    return INVALID_VERSION;
   }
   FILE* versionFile = open(versionFilePath);
   int32_t version;
@@ -1079,6 +1086,7 @@ int32_t FileMgr::readVersionFromDisk(const std::string& versionFileName) const {
 void FileMgr::writeAndSyncVersionToDisk(const std::string& versionFileName,
                                         const int32_t version) {
   const std::string versionFilePath(fileMgrBasePath_ + "/" + versionFileName);
+  readOnlyCheck("write file", versionFilePath);
   FILE* versionFile;
   if (boost::filesystem::exists(versionFilePath)) {
     int32_t oldVersion = readVersionFromDisk(versionFileName);
@@ -1107,6 +1115,7 @@ void FileMgr::writeAndSyncVersionToDisk(const std::string& versionFileName,
 void FileMgr::migrateEpochFileV0() {
   const std::string versionFilePath(fileMgrBasePath_ + "/" + FILE_MGR_VERSION_FILENAME);
   LOG(INFO) << "Migrating file format version from 0 to 1 for  `" << versionFilePath;
+  readOnlyCheck("migrate epoch file", versionFilePath);
   epoch_.floor(Epoch::min_allowable_epoch());
   epoch_.ceiling(openAndReadLegacyEpochFile(LEGACY_EPOCH_FILENAME));
   createEpochFile(EPOCH_FILENAME);
@@ -1117,6 +1126,7 @@ void FileMgr::migrateEpochFileV0() {
 
 void FileMgr::migrateLegacyFilesV1() {
   LOG(INFO) << "Migrating file format version from 1 to 2";
+  readOnlyCheck("migrate file format version");
   renameAndSymlinkLegacyFiles(fileMgrBasePath_);
   constexpr int32_t migration_complete_version{2};
   writeAndSyncVersionToDisk(FILE_MGR_VERSION_FILENAME, migration_complete_version);
@@ -1148,30 +1158,28 @@ void FileMgr::migrateToLatestFileMgrVersion() {
   if (fileMgrVersion_ == INVALID_VERSION) {
     fileMgrVersion_ = 0;
     writeAndSyncVersionToDisk(FILE_MGR_VERSION_FILENAME, fileMgrVersion_);
-  } else if (fileMgrVersion_ > latestFileMgrVersion_) {
+  } else if (fileMgrVersion_ > LATEST_FILE_MGR_VERSION) {
     LOG(FATAL)
         << "Table storage forward compatibility is not supported. Version of HeavyDB "
            "software used is older than the version of table being read: "
         << fileMgrVersion_;
   }
 
-  if (fileMgrVersion_ < latestFileMgrVersion_) {
-    while (fileMgrVersion_ < latestFileMgrVersion_) {
-      switch (fileMgrVersion_) {
-        case 0: {
-          migrateEpochFileV0();
-          break;
-        }
-        case 1: {
-          migrateLegacyFilesV1();
-          break;
-        }
-        default: {
-          UNREACHABLE();
-        }
+  while (fileMgrVersion_ < LATEST_FILE_MGR_VERSION) {
+    switch (fileMgrVersion_) {
+      case 0: {
+        migrateEpochFileV0();
+        break;
       }
-      fileMgrVersion_++;
+      case 1: {
+        migrateLegacyFilesV1();
+        break;
+      }
+      default: {
+        UNREACHABLE();
+      }
     }
+    fileMgrVersion_++;
   }
 }
 
@@ -1213,6 +1221,8 @@ void FileMgr::removeTableRelatedDS(const int32_t db_id, const int32_t table_id) 
  * after a crash occurred in the middle of file compaction.
  */
 void FileMgr::resumeFileCompaction(const std::string& status_file_name) {
+  readOnlyCheck("resume file compaction", status_file_name);
+
   if (status_file_name == COPY_PAGES_STATUS) {
     // Delete status file and restart data compaction process
     auto file_path = getFilePath(status_file_name);
@@ -1264,6 +1274,9 @@ void FileMgr::resumeFileCompaction(const std::string& status_file_name) {
  */
 void FileMgr::compactFiles() {
   heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
+
+  readOnlyCheck("run file compaction");
+
   if (files_.empty()) {
     return;
   }
@@ -1277,7 +1290,7 @@ void FileMgr::compactFiles() {
   std::vector<PageMapping> page_mappings;
   std::set<Page> touched_pages;
   std::set<size_t> page_sizes;
-  for (auto [file_id, file_info] : files_) {
+  for (const auto& [file_id, file_info] : files_) {
     page_sizes.emplace(file_info->pageSize);
   }
   for (auto page_size : page_sizes) {
@@ -1305,7 +1318,7 @@ void FileMgr::sortAndCopyFilePagesForCompaction(size_t page_size,
   std::vector<FileInfo*> sorted_file_infos;
   auto range = fileIndex_.equal_range(page_size);
   for (auto it = range.first; it != range.second; it++) {
-    sorted_file_infos.emplace_back(files_.at(it->second));
+    sorted_file_infos.emplace_back(files_.at(it->second).get());
   }
   if (sorted_file_infos.empty()) {
     return;
@@ -1426,11 +1439,11 @@ void FileMgr::copySourcePageForCompaction(const Page& source_page,
  */
 int32_t FileMgr::copyPageWithoutHeaderSize(const Page& source_page,
                                            const Page& destination_page) {
-  FileInfo* source_file_info = files_.at(source_page.fileId);
+  FileInfo* source_file_info = getFileInfoForFileId(source_page.fileId);
   CHECK(source_file_info);
   CHECK_EQ(source_file_info->fileId, source_page.fileId);
 
-  FileInfo* destination_file_info = files_.at(destination_page.fileId);
+  FileInfo* destination_file_info = getFileInfoForFileId(destination_page.fileId);
   CHECK(destination_file_info);
   CHECK_EQ(destination_file_info->fileId, destination_page.fileId);
   CHECK_EQ(source_file_info->pageSize, destination_file_info->pageSize);
@@ -1456,7 +1469,7 @@ int32_t FileMgr::copyPageWithoutHeaderSize(const Page& source_page,
  */
 void FileMgr::updateMappedPagesVisibility(const std::vector<PageMapping>& page_mappings) {
   for (const auto& page_mapping : page_mappings) {
-    auto destination_file = files_.at(page_mapping.destination_file_id);
+    auto destination_file = getFileInfoForFileId(page_mapping.destination_file_id);
 
     // Set destination page header size
     auto header_size = page_mapping.source_page_header_size;
@@ -1465,7 +1478,7 @@ void FileMgr::updateMappedPagesVisibility(const std::vector<PageMapping>& page_m
         page_mapping.destination_page_num * destination_file->pageSize,
         sizeof(PageHeaderSizeType),
         reinterpret_cast<int8_t*>(&header_size));
-    auto source_file = files_.at(page_mapping.source_file_id);
+    auto source_file = getFileInfoForFileId(page_mapping.source_file_id);
 
     // Free source page
     PageHeaderSizeType free_page_header_size{0};
@@ -1475,7 +1488,7 @@ void FileMgr::updateMappedPagesVisibility(const std::vector<PageMapping>& page_m
     source_file->freePageDeferred(page_mapping.source_page_num);
   }
 
-  for (auto file_info_entry : files_) {
+  for (const auto& file_info_entry : files_) {
     int32_t status = file_info_entry.second->syncToDisk();
     if (status != 0) {
       LOG(FATAL) << "Could not sync file to disk";
@@ -1488,12 +1501,13 @@ void FileMgr::updateMappedPagesVisibility(const std::vector<PageMapping>& page_m
  * status file.
  */
 void FileMgr::deleteEmptyFiles() {
-  for (auto [file_id, file_info] : files_) {
+  for (const auto& [file_id, file_info] : files_) {
     CHECK_EQ(file_id, file_info->fileId);
     if (file_info->freePages.size() == file_info->numPages) {
       fclose(file_info->f);
       file_info->f = nullptr;
       auto file_path = get_data_file_path(fileMgrBasePath_, file_id, file_info->pageSize);
+      readOnlyCheck("delete file", file_path);
       boost::filesystem::remove(get_legacy_data_file_path(file_path));
       boost::filesystem::remove(file_path);
     }
@@ -1501,6 +1515,7 @@ void FileMgr::deleteEmptyFiles() {
 
   auto status_file_path = getFilePath(DELETE_EMPTY_FILES_STATUS);
   CHECK(boost::filesystem::exists(status_file_path));
+  readOnlyCheck("delete file", status_file_path.string());
   boost::filesystem::remove(status_file_path);
 }
 
@@ -1512,6 +1527,9 @@ void FileMgr::deleteEmptyFiles() {
 void FileMgr::writePageMappingsToStatusFile(
     const std::vector<PageMapping>& page_mappings) {
   auto file_path = getFilePath(COPY_PAGES_STATUS);
+
+  readOnlyCheck("write file", file_path.string());
+
   CHECK(boost::filesystem::exists(file_path));
   CHECK(boost::filesystem::is_empty(file_path));
   std::ofstream status_file{file_path.string(), std::ios::out | std::ios::binary};
@@ -1556,6 +1574,9 @@ void FileMgr::renameCompactionStatusFile(const char* const from_status,
                                          const char* const to_status) {
   auto from_status_file_path = getFilePath(from_status);
   auto to_status_file_path = getFilePath(to_status);
+
+  readOnlyCheck("write file", from_status_file_path.string());
+
   CHECK(boost::filesystem::exists(from_status_file_path));
   CHECK(!boost::filesystem::exists(to_status_file_path));
   boost::filesystem::rename(from_status_file_path, to_status_file_path);
@@ -1573,7 +1594,7 @@ void FileMgr::setNumPagesPerMetadataFile(size_t num_pages) {
 
 void FileMgr::syncFilesToDisk() {
   heavyai::shared_lock<heavyai::shared_mutex> files_read_lock(files_rw_mutex_);
-  for (auto file_info_entry : files_) {
+  for (const auto& file_info_entry : files_) {
     int32_t status = file_info_entry.second->syncToDisk();
     CHECK(status == 0) << "Could not sync file to disk";
   }
@@ -1666,6 +1687,35 @@ size_t FileMgr::getNumChunks() {
 
 boost::filesystem::path FileMgr::getFilePath(const std::string& file_name) const {
   return boost::filesystem::path(fileMgrBasePath_) / file_name;
+}
+
+FILE* FileMgr::createFile(const std::string& full_path,
+                          const size_t requested_file_size) const {
+  readOnlyCheck("create file", full_path);
+  return create(full_path, requested_file_size);
+}
+
+std::pair<FILE*, std::string> FileMgr::createFile(const std::string& base_path,
+                                                  const int file_id,
+                                                  const size_t page_size,
+                                                  const size_t num_pages) const {
+  readOnlyCheck("create file", get_data_file_path(base_path, file_id, page_size));
+  return create(base_path, file_id, page_size, num_pages);
+}
+
+size_t FileMgr::writeFile(FILE* f,
+                          const size_t offset,
+                          const size_t size,
+                          const int8_t* buf) const {
+  readOnlyCheck("write file");
+  return write(f, offset, size, buf);
+}
+
+void FileMgr::readOnlyCheck(const std::string& action,
+                            const std::optional<std::string>& file_name) const {
+  CHECK(!g_read_only) << "Error trying to " << action
+                      << (file_name.has_value() ? (": '" + file_name.value() + "'") : "")
+                      << ".  Not allowed in read only mode.";
 }
 
 size_t FileMgr::num_pages_per_data_file_{DEFAULT_NUM_PAGES_PER_DATA_FILE};

@@ -60,7 +60,7 @@ void FileInfo::initNewFile() {
   int32_t headerSize = 0;
   int8_t* headerSizePtr = (int8_t*)(&headerSize);
   for (size_t pageId = 0; pageId < numPages; ++pageId) {
-    File_Namespace::write(f, pageId * pageSize, sizeof(int32_t), headerSizePtr);
+    fileMgr->writeFile(f, pageId * pageSize, sizeof(int32_t), headerSizePtr);
     freePages.insert(pageId);
   }
   isDirty = true;
@@ -69,7 +69,7 @@ void FileInfo::initNewFile() {
 size_t FileInfo::write(const size_t offset, const size_t size, const int8_t* buf) {
   std::lock_guard<std::mutex> lock(readWriteMutex_);
   isDirty = true;
-  return File_Namespace::write(f, offset, size, buf);
+  return fileMgr->writeFile(f, offset, size, buf);
 }
 
 size_t FileInfo::read(const size_t offset, const size_t size, int8_t* buf) {
@@ -194,10 +194,10 @@ void FileInfo::freePage(int pageId, const bool isRolloff, int32_t epoch) {
   if (isRolloff) {
     epoch_freed_page[0] = ROLLOFF_CONTINGENT;
   }
-  File_Namespace::write(f,
-                        pageId * pageSize + sizeof(int32_t),
-                        sizeof(epoch_freed_page),
-                        reinterpret_cast<const int8_t*>(epoch_freed_page));
+  fileMgr->writeFile(f,
+                     pageId * pageSize + sizeof(int32_t),
+                     sizeof(epoch_freed_page),
+                     reinterpret_cast<const int8_t*>(epoch_freed_page));
   fileMgr->free_page(std::make_pair(this, pageId));
   isDirty = true;
 
@@ -250,12 +250,9 @@ int32_t FileInfo::syncToDisk() {
 }
 
 void FileInfo::freePageImmediate(int32_t page_num) {
-  // we should not get here but putting protection in place
-  // as it seems we are no guaranteed to have f/synced so
-  // protecting from RO trying to write
-  if (!g_read_only && !g_multi_instance) {
+  if (!g_multi_instance) {
     int32_t zero{0};
-    File_Namespace::write(
+    fileMgr->writeFile(
         f, page_num * pageSize, sizeof(int32_t), reinterpret_cast<const int8_t*>(&zero));
     freePageDeferred(page_num);
   }
@@ -263,14 +260,11 @@ void FileInfo::freePageImmediate(int32_t page_num) {
 
 // Overwrites delete/rollback contingents by re-writing chunk key to page.
 void FileInfo::recoverPage(const ChunkKey& chunk_key, int32_t page_num) {
-  // we should not get here but putting protection in place
-  // as it seems we are no guaranteed to have f/synced so
-  // protecting from RO trying to write
-  if (!g_read_only && !g_multi_instance) {
-    File_Namespace::write(f,
-                          page_num * pageSize + sizeof(int32_t),
-                          2 * sizeof(int32_t),
-                          reinterpret_cast<const int8_t*>(chunk_key.data()));
+  if (!g_multi_instance) {
+    fileMgr->writeFile(f,
+                       page_num * pageSize + sizeof(int32_t),
+                       2 * sizeof(int32_t),
+                       reinterpret_cast<const int8_t*>(chunk_key.data()));
   }
 }
 
