@@ -57,4 +57,76 @@ int32_t supported_ml_frameworks__cpu_(TableFunctionManager& mgr,
   return num_frameworks;
 }
 
+EXTENSION_NOINLINE_HOST int32_t
+linear_reg_coefs__cpu_1(TableFunctionManager& mgr,
+                        const TextEncodingNone& model_name,
+                        Column<int64_t>& output_coef_idx,
+                        Column<double>& output_coef) {
+  try {
+    auto model = linear_reg_models_.getModel(model_name);
+    const auto& coefs = model.coefs;
+    const auto num_coefs = static_cast<int64_t>(coefs.size());
+    mgr.set_output_row_size(num_coefs);
+    for (int64_t coef_idx = 0; coef_idx < num_coefs; ++coef_idx) {
+      output_coef_idx[coef_idx] = coef_idx;
+      output_coef[coef_idx] = coefs[coef_idx];
+    }
+    return num_coefs;
+  } catch (std::runtime_error& e) {
+    return mgr.ERROR_MESSAGE(e.what());
+  }
+}
+
+EXTENSION_NOINLINE_HOST int32_t
+linear_reg_coefs__cpu_2(TableFunctionManager& mgr,
+                        const Column<TextEncodingDict>& model_name,
+                        Column<int64_t>& output_coef_idx,
+                        Column<double>& output_coef) {
+  if (model_name.size() != 1) {
+    return mgr.ERROR_MESSAGE("Expected only one row in model name CURSOR.");
+  }
+  const std::string model_name_str{model_name.getString(0)};
+  return linear_reg_coefs__cpu_1(mgr, model_name_str, output_coef_idx, output_coef);
+}
+
+EXTENSION_NOINLINE_HOST int32_t
+random_forest_reg_var_importance__cpu_1(TableFunctionManager& mgr,
+                                        const TextEncodingNone& model_name,
+                                        Column<int64_t>& feature_id,
+                                        Column<double>& importance_score) {
+#ifndef HAVE_ONEDAL
+  return mgr.ERROR_MESSAGE(
+      "Only OneDAL framework supported for random forest regression.");
+#endif
+  try {
+#ifdef HAVE_ONEDAL
+    const auto variable_importance_scores =
+        onedal_random_forest_reg_var_importance_impl(model_name);
+    const int64_t num_features = variable_importance_scores.size();
+    mgr.set_output_row_size(num_features);
+    for (int64_t feature_idx = 0; feature_idx < num_features; ++feature_idx) {
+      // Make feature ids start at 1, not 0
+      feature_id[feature_idx] = feature_idx + 1;
+      importance_score[feature_idx] = variable_importance_scores[feature_idx];
+    }
+    return num_features;
+#endif
+  } catch (std::runtime_error& e) {
+    return mgr.ERROR_MESSAGE(e.what());
+  }
+}
+
+EXTENSION_NOINLINE_HOST int32_t
+random_forest_reg_var_importance__cpu_2(TableFunctionManager& mgr,
+                                        const Column<TextEncodingDict>& model_name,
+                                        Column<int64_t>& feature_id,
+                                        Column<double>& importance_score) {
+  if (model_name.size() != 1) {
+    return mgr.ERROR_MESSAGE("Expected only one row in model name CURSOR.");
+  }
+  const std::string model_name_str{model_name.getString(0)};
+  return random_forest_reg_var_importance__cpu_1(
+      mgr, model_name_str, feature_id, importance_score);
+}
+
 #endif  // #ifndef __CUDACC__

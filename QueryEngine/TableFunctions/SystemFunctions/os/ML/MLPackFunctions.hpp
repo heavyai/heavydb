@@ -154,8 +154,8 @@ template <typename T>
 NEVER_INLINE HOST int32_t
 mlpack_linear_reg_fit_impl(const T* input_labels,
                            const std::vector<const T*>& input_features,
-                           int32_t* output_coef_idxs,
-                           T* output_coefs,
+                           int64_t* output_coef_idxs,
+                           double* output_coefs,
                            const int64_t num_rows) {
   try {
     // Implement simple linear regression entirely in Armadillo
@@ -188,7 +188,7 @@ NEVER_INLINE HOST int32_t
 mlpack_linear_reg_predict_impl(const std::vector<const T*>& input_features,
                                T* output_predictions,
                                const int64_t num_rows,
-                               const T* coefs) {
+                               const double* coefs) {
   try {
     // Implement simple linear regression entirely in Armadillo
     // to avoid overhead of mlpack copies and extra matrix inversion
@@ -200,7 +200,11 @@ mlpack_linear_reg_predict_impl(const std::vector<const T*>& input_features,
       memcpy(
           X.colptr(feature_idx + 1), input_features[feature_idx], sizeof(T) * num_rows);
     }
-    const arma::Col<T> B(coefs, num_coefs);
+    std::vector<T> casted_coefs(num_coefs);
+    for (int64_t coef_idx = 0; coef_idx < num_coefs; ++coef_idx) {
+      casted_coefs[coef_idx] = coefs[coef_idx];
+    }
+    const arma::Col<T> B(casted_coefs.data(), num_coefs);
     const arma::Col<T> Y_hat = X * B;
     memcpy(output_predictions, Y_hat.colptr(0), sizeof(T) * num_rows);
     return num_rows;

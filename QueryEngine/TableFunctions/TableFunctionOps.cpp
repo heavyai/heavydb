@@ -149,6 +149,7 @@ extern "C" DEVICE RUNTIME_EXPORT int32_t table_function_error(const char* messag
   TableFunctionManager*& mgr = TableFunctionManager::get_singleton_internal();
   return TableFunctionManager_error_message(reinterpret_cast<int8_t*>(mgr), message);
 }
+
 /*
   TableFunctionManager_get_singleton is used internally to get the
   pointer to global singleton of TableFunctionManager, if initialized,

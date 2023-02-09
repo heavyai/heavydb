@@ -20,6 +20,43 @@
 
 #include <map>
 
+enum ModelType { LINEAR_REG, RANDOM_FOREST_REG };
+
+template <typename M>
+class ModelMap {
+ public:
+  void addModel(const std::string& model_name, M& model) {
+    std::lock_guard<std::shared_mutex> model_map_write_lock(model_map_mutex_);
+    model_map_[model_name] = model;
+  }
+
+  // Todo: consider making this a reference to save the copy
+  // of a potentially large model, but will need to enhance locking
+  // to ensure the model is not changed while being used by a consumer
+  M getModel(const std::string& model_name) const {
+    std::shared_lock<std::shared_mutex> model_map_read_lock(model_map_mutex_);
+    auto model_map_itr = model_map_.find(model_name);
+    if (model_map_itr != model_map_.end()) {
+      return model_map_itr->second;
+    }
+    throw std::runtime_error("Model does not exist.");
+  }
+
+  std::vector<std::string> getModelNames() const {
+    std::shared_lock<std::shared_mutex> model_map_read_lock(model_map_mutex_);
+    std::vector<std::string> model_names;
+    model_names.reserve(model_map_.size());
+    for (auto const& model : model_map_) {
+      model_names.emplace_back(model.first);
+    }
+    return model_names;
+  }
+
+ private:
+  std::map<std::string, M> model_map_;
+  mutable std::shared_mutex model_map_mutex_;
+};
+
 enum class MLFramework { DEFAULT, ONEDAL, MLPACK, INVALID };
 
 inline MLFramework get_ml_framework(const std::string& ml_framework_str) {
