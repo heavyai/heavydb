@@ -3,7 +3,7 @@
 thrift:
 	thrift -r -gen py ../heavy.thrift
 	rm -rf heavydb/thrift/*
-	cp -r ../gen-py/heavydb/thrift/ heavydb/thrift/
+	cp -r gen-py/heavydb/thrift/* heavydb/thrift/
 
 .PHONY: build
 build: thrift
@@ -12,3 +12,7 @@ build: thrift
 .PHONY: publish
 publish: build
 	flit publish
+
+.PHONY: clean
+clean:
+	rm -r heavydb/thrift/*

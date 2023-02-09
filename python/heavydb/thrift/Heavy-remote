@@ -90,7 +90,6 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('  string create_link(TSessionId session, string view_state, string view_metadata)')
     print('  void load_table_binary(TSessionId session, string table_name,  rows,  column_names)')
     print('  void load_table_binary_columnar(TSessionId session, string table_name,  cols,  column_names)')
-    print('  void load_table_binary_columnar_polys(TSessionId session, string table_name,  cols,  column_names, bool assign_render_groups)')
     print('  void load_table_binary_arrow(TSessionId session, string table_name, string arrow_stream, bool use_column_names)')
     print('  void load_table(TSessionId session, string table_name,  rows,  column_names)')
     print('  TDetectResult detect_column_types(TSessionId session, string file_name, TCopyParams copy_params)')
@@ -602,12 +601,6 @@ elif cmd == 'load_table_binary_columnar':
         print('load_table_binary_columnar requires 4 args')
         sys.exit(1)
     pp.pprint(client.load_table_binary_columnar(eval(args[0]), args[1], eval(args[2]), eval(args[3]),))
-
-elif cmd == 'load_table_binary_columnar_polys':
-    if len(args) != 5:
-        print('load_table_binary_columnar_polys requires 5 args')
-        sys.exit(1)
-    pp.pprint(client.load_table_binary_columnar_polys(eval(args[0]), args[1], eval(args[2]), eval(args[3]), eval(args[4]),))
 
 elif cmd == 'load_table_binary_arrow':
     if len(args) != 4:

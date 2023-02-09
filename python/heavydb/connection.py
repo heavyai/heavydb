@@ -388,11 +388,11 @@ class Connection:
         list.
         """
         try:
-            from rbc.omniscidb import RemoteOmnisci
+            from rbc.heavydb import RemoteHeavyDB
         except ImportError:
             raise ImportError("The 'rbc' package is required for `__call__`")
         if self._rbc is None:
-            self._rbc = RemoteOmnisci(
+            self._rbc = RemoteHeavyDB(
                 user=self._user,
                 password=self._password,
                 host=self._host,
