@@ -4006,7 +4006,12 @@ class LogsSystemTableTest : public SystemTablesTest,
          it++) {
       boost::filesystem::copy_file(it->path(),
                                    log_dir_path_ / it->path().filename(),
-                                   boost::filesystem::copy_option::overwrite_if_exists);
+#if 107400 <= BOOST_VERSION
+                                   boost::filesystem::copy_options::overwrite_existing
+#else
+                                   boost::filesystem::copy_option::overwrite_if_exists
+#endif
+      );
     }
   }
 

@@ -32,10 +32,8 @@ class PosixFileArchive : public Archive {
       : Archive(url, plain_text) {
     // some well-known file.exts imply plain text
     if (!this->plain_text) {
-      this->plain_text = boost::filesystem::extension(url_part(5)) == ".csv" ||
-                         boost::filesystem::extension(url_part(5)) == ".tsv" ||
-                         boost::filesystem::extension(url_part(5)) == ".txt" ||
-                         boost::filesystem::extension(url_part(5)) == "";
+      auto const ext = boost::filesystem::path(url_part(5)).extension();
+      this->plain_text = ext == ".csv" || ext == ".tsv" || ext == ".txt" || ext == "";
     }
 
     if (this->plain_text) {

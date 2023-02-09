@@ -5168,7 +5168,7 @@ void DBHandler::import_table(const TSessionId& session_id_or_json,
       // TODO(andrew): add delimiter detection to Importer
       if (copy_params.delimiter == '\0') {
         copy_params.delimiter = ',';
-        if (boost::filesystem::extension(file_path) == ".tsv") {
+        if (boost::filesystem::path(file_path).extension() == ".tsv") {
           copy_params.delimiter = '\t';
         }
       }

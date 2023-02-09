@@ -57,14 +57,17 @@ namespace {
 
 std::vector<std::string> glob_local_recursive_files(const std::string& file_path,
                                                     const bool recurse) {
+#if 107200 <= BOOST_VERSION
+  constexpr auto options = boost::filesystem::directory_options::follow_directory_symlink;
+#else
+  constexpr auto options = boost::filesystem::symlink_option::recurse;
+#endif
   std::vector<std::string> file_paths;
 
   if (boost::filesystem::is_regular_file(file_path)) {
     file_paths.emplace_back(file_path);
   } else if (recurse && boost::filesystem::is_directory(file_path)) {
-    for (boost::filesystem::recursive_directory_iterator
-             it(file_path, boost::filesystem::symlink_option::recurse),
-         eit;
+    for (boost::filesystem::recursive_directory_iterator it(file_path, options), eit;
          it != eit;
          ++it) {
       if (!boost::filesystem::is_directory(it->path())) {

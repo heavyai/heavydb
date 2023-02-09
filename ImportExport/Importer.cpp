@@ -3144,7 +3144,7 @@ void Detector::read_file() {
 void Detector::detect_row_delimiter() {
   if (copy_params.delimiter == '\0') {
     copy_params.delimiter = ',';
-    if (boost::filesystem::extension(file_path) == ".tsv") {
+    if (boost::filesystem::path(file_path).extension() == ".tsv") {
       copy_params.delimiter = '\t';
     }
   }
@@ -3361,7 +3361,7 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
     const CopyParams& copy_params) {
   if (raw_rows.size() < 1) {
     throw std::runtime_error("No rows found in: " +
-                             boost::filesystem::basename(file_path));
+                             boost::filesystem::path(file_path).stem().string());
   }
   auto end_time = std::chrono::steady_clock::now() + timeout;
   size_t num_cols = raw_rows.front().size();
@@ -3404,7 +3404,7 @@ std::vector<EncodingType> Detector::find_best_encodings(
     const std::vector<SQLTypes>& best_types) {
   if (raw_rows.size() < 1) {
     throw std::runtime_error("No rows found in: " +
-                             boost::filesystem::basename(file_path));
+                             boost::filesystem::path(file_path).stem().string());
   }
   size_t num_cols = best_types.size();
   std::vector<EncodingType> best_encodes(num_cols, kENCODING_NONE);
