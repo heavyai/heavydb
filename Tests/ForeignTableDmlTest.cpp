@@ -1154,8 +1154,12 @@ TEST_P(CacheControllingSelectQueryTest, CacheExists) {
 
 TEST_P(CacheControllingSelectQueryTest, RefreshDisabledCache) {
   std::string temp_file{getDataFilesPath() + "/.tmp.csv"};
-  bf::copy_file(
-      getDataFilesPath() + "0.csv", temp_file, bf::copy_option::overwrite_if_exists);
+#if 107400 <= BOOST_VERSION
+  constexpr auto copy_options = bf::copy_options::overwrite_existing;
+#else
+  constexpr auto copy_options = bf::copy_option::overwrite_if_exists;
+#endif
+  bf::copy_file(getDataFilesPath() + "0.csv", temp_file, copy_options);
   std::string query = "CREATE FOREIGN TABLE " + default_table_name + " (i INTEGER) "s +
                       "SERVER default_local_delimited WITH (file_path = '" + temp_file +
                       "');";
@@ -1163,9 +1167,7 @@ TEST_P(CacheControllingSelectQueryTest, RefreshDisabledCache) {
   TQueryResult pre_refresh_result;
   sql(pre_refresh_result, default_select);
   assertResultSetEqual({{i(0)}}, pre_refresh_result);
-  bf::copy_file(getDataFilesPath() + "two_row_3_4.csv",
-                temp_file,
-                bf::copy_option::overwrite_if_exists);
+  bf::copy_file(getDataFilesPath() + "two_row_3_4.csv", temp_file, copy_options);
 
   sql("REFRESH FOREIGN TABLES " + default_table_name + ";");
   TQueryResult post_refresh_result;
@@ -1886,7 +1888,12 @@ TEST_P(DataWrapperSelectQueryTest, MissingFileOnSelectQuery) {
   auto file_path = boost::filesystem::absolute("missing_file");
   boost::filesystem::copy_file(getDataFilesPath() + "0" + wrapper_ext(GetParam()),
                                file_path,
-                               boost::filesystem::copy_option::overwrite_if_exists);
+#if 107400 <= BOOST_VERSION
+                               boost::filesystem::copy_options::overwrite_existing
+#else
+                               boost::filesystem::copy_option::overwrite_if_exists
+#endif
+  );
   sql(createForeignTableQuery({{"i", "INTEGER"}}, file_path.string(), GetParam()));
   boost::filesystem::remove_all(file_path);
   queryAndAssertFileNotFoundException(file_path.string());
@@ -2913,7 +2920,12 @@ class RefreshTests : public ForeignTableTest, public TempDirManager {
       table_names_.emplace_back(default_table_name + std::to_string(i));
       bf::copy_file(getDataFilesPath() + file_names[i] + file_ext_,
                     tmp_file_names_[i],
-                    bf::copy_option::overwrite_if_exists);
+#if 107400 <= BOOST_VERSION
+                    bf::copy_options::overwrite_existing
+#else
+                    bf::copy_option::overwrite_if_exists
+#endif
+      );
       sql("DROP FOREIGN TABLE IF EXISTS " + table_names_[i] + ";");
       sql(createForeignTableQuery(column_pairs,
                                   tmp_file_names_[i],
@@ -2930,7 +2942,12 @@ class RefreshTests : public ForeignTableTest, public TempDirManager {
     for (size_t i = 0; i < file_names.size(); ++i) {
       bf::copy_file(getDataFilesPath() + file_names[i] + file_ext_,
                     tmp_file_names_[i],
-                    bf::copy_option::overwrite_if_exists);
+#if 107400 <= BOOST_VERSION
+                    bf::copy_options::overwrite_existing
+#else
+                    bf::copy_option::overwrite_if_exists
+#endif
+      );
       if (isOdbc(wrapper_type_)) {
         // If we are in ODBC we need to recreate the ODBC table as well.
         createODBCSourceTable(
@@ -5854,7 +5871,12 @@ class SchemaMismatchTest : public ForeignTableTest,
                            const std::vector<ColumnPair>& table_schema) {
     bf::copy_file(getDataFilesPath() + file_name + ext,
                   test_temp_dir + TEMP_FILE + ext,
-                  bf::copy_option::overwrite_if_exists);
+#if 107400 <= BOOST_VERSION
+                  bf::copy_options::overwrite_existing
+#else
+                  bf::copy_option::overwrite_if_exists
+#endif
+    );
   }
 
   void SetUp() override {

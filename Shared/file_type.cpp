@@ -49,7 +49,8 @@ bool is_compressed_mime_type(const std::string& mime_type) {
 bool is_compressed_file_extension(const std::string& location) {
   static const std::vector<std::string> compressed_exts = {
       ".7z", ".bz", ".bz2", ".gz", ".rar", ".tar", ".zip", ".tgz"};
-  return shared::contains(compressed_exts, boost::filesystem::extension(location));
+  return shared::contains(compressed_exts,
+                          boost::filesystem::path(location).extension().string());
 }
 
 }  // namespace shared

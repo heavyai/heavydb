@@ -76,7 +76,12 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
   void setServerConfig(const std::string& file_name) {
     boost::filesystem::copy_file("../../Tests/FilePathWhitelist/" + file_name,
                                  CONFIG_FILE_PATH,
-                                 boost::filesystem::copy_option::overwrite_if_exists);
+#if 107400 <= BOOST_VERSION
+                                 boost::filesystem::copy_options::overwrite_existing
+#else
+                                 boost::filesystem::copy_option::overwrite_if_exists
+#endif
+    );
   }
 
   std::string getQuery(const std::string& file_path) {
@@ -130,9 +135,12 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
     boost::filesystem::path destination_path = initDefaultImportOrExportDirectory();
 
     destination_path /= boost::filesystem::path(source_path).filename().string();
-    boost::filesystem::copy_file(source_path,
-                                 destination_path,
-                                 boost::filesystem::copy_option::overwrite_if_exists);
+#if 107400 <= BOOST_VERSION
+    constexpr auto options = boost::filesystem::copy_options::overwrite_existing;
+#else
+    constexpr auto options = boost::filesystem::copy_option::overwrite_if_exists;
+#endif
+    boost::filesystem::copy_file(source_path, destination_path, options);
     return boost::filesystem::canonical(destination_path).string();
   }
 
