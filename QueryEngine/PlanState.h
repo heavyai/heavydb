@@ -54,12 +54,8 @@ struct PlanState {
       , executor_(executor) {}
 
   std::vector<int64_t> init_agg_vals_;
-  std::vector<Analyzer::Expr*> target_exprs_;
   HoistedFiltersSet hoisted_filters_;
   std::unordered_map<InputColDescriptor, size_t> global_to_local_col_ids_;
-  std::unordered_set<shared::ColumnKey> columns_to_fetch_;
-  mutable std::unordered_set<shared::ColumnKey> columns_to_not_fetch_;
-  std::unordered_set<shared::ColumnKey> force_non_lazy_fetch_columns_;
   std::unordered_map<size_t, std::vector<std::shared_ptr<Analyzer::Expr>>>
       left_join_non_hashtable_quals_;
   bool allow_lazy_fetch_;
@@ -67,6 +63,7 @@ struct PlanState {
   const DeletedColumnsMap deleted_columns_;
   const std::vector<InputTableInfo>& query_infos_;
   std::list<std::shared_ptr<Analyzer::Expr>> simple_quals_;
+
   const Executor* executor_;
 
   void allocateLocalColumnIds(
@@ -100,7 +97,17 @@ struct PlanState {
     return simple_quals_;
   }
 
-  bool hasGeometryTargetExpr() const;
-
   void addNonHashtableQualForLeftJoin(size_t idx, std::shared_ptr<Analyzer::Expr> expr);
+
+  const std::unordered_set<shared::ColumnKey>& getColumnsToFetch() const;
+  const std::unordered_set<shared::ColumnKey>& getColumnsToNotFetch() const;
+  bool isColumnToFetch(const shared::ColumnKey& column_key) const;
+  bool isColumnToNotFetch(const shared::ColumnKey& column_key) const;
+  void addColumnToFetch(const shared::ColumnKey& column_key,
+                        bool unmark_lazy_fetch = false);
+  void addColumnToNotFetch(const shared::ColumnKey& column_key);
+
+ private:
+  std::unordered_set<shared::ColumnKey> columns_to_fetch_;
+  mutable std::unordered_set<shared::ColumnKey> columns_to_not_fetch_;
 };

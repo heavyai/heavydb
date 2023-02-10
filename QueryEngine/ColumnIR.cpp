@@ -134,13 +134,13 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
         const auto col = codegenColVar(col0_var.get(), fetch_column, false, co);
         cols.insert(cols.end(), col.begin(), col.end());
         if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
-          plan_state_->columns_to_not_fetch_.insert(temp_column_key);
+          plan_state_->addColumnToNotFetch(temp_column_key);
         }
       }
       if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
-        plan_state_->columns_to_not_fetch_.insert(column_key);
+        plan_state_->addColumnToNotFetch(column_key);
       } else {
-        plan_state_->columns_to_fetch_.insert(column_key);
+        plan_state_->addColumnToFetch(column_key);
       }
       return cols;
     }
@@ -178,7 +178,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   // Currently, types can only be different because of different underlying dictionaries.
   if (hash_join_lhs && hash_join_lhs->get_type_info() == col_var->get_type_info()) {
     if (plan_state_->isLazyFetchColumn(col_var)) {
-      plan_state_->columns_to_fetch_.insert(col_var->getColumnKey());
+      plan_state_->addColumnToFetch(col_var->getColumnKey(), true);
     }
     return codegen(hash_join_lhs.get(), fetch_column, co);
   }
@@ -189,7 +189,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
   if (plan_state_->isLazyFetchColumn(col_var)) {
     if (update_query_plan) {
-      plan_state_->columns_to_not_fetch_.insert(col_var->getColumnKey());
+      plan_state_->addColumnToNotFetch(col_var->getColumnKey());
     }
     if (rte_idx > 0) {
       const auto offset = cgen_state_->frag_offsets_[rte_idx];

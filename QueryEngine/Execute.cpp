@@ -744,7 +744,7 @@ std::map<shared::ColumnKey, size_t> Executor::getColumnByteWidthMap(
     const bool include_lazy_fetched_cols) const {
   std::map<shared::ColumnKey, size_t> col_byte_width_map;
 
-  for (const auto& fetched_col : plan_state_->columns_to_fetch_) {
+  for (const auto& fetched_col : plan_state_->getColumnsToFetch()) {
     if (table_ids_to_fetch.count({fetched_col.db_id, fetched_col.table_id}) == 0) {
       continue;
     }
@@ -752,7 +752,7 @@ std::map<shared::ColumnKey, size_t> Executor::getColumnByteWidthMap(
     CHECK(col_byte_width_map.insert({fetched_col, col_byte_width}).second);
   }
   if (include_lazy_fetched_cols) {
-    for (const auto& lazy_fetched_col : plan_state_->columns_to_not_fetch_) {
+    for (const auto& lazy_fetched_col : plan_state_->getColumnsToNotFetch()) {
       if (table_ids_to_fetch.count({lazy_fetched_col.db_id, lazy_fetched_col.table_id}) ==
           0) {
         continue;
@@ -770,7 +770,7 @@ size_t Executor::getNumBytesForFetchedRow(
   if (!plan_state_) {
     return 0;
   }
-  for (const auto& fetched_col : plan_state_->columns_to_fetch_) {
+  for (const auto& fetched_col : plan_state_->getColumnsToFetch()) {
     if (table_ids_to_fetch.count({fetched_col.db_id, fetched_col.table_id}) == 0) {
       continue;
     }
@@ -3367,8 +3367,7 @@ FetchResult Executor::fetchChunks(
       auto memory_level_for_column = memory_level;
       const shared::ColumnKey tbl_col_key{col_id->getScanDesc().getTableKey(),
                                           col_id->getColId()};
-      if (plan_state_->columns_to_fetch_.find(tbl_col_key) ==
-          plan_state_->columns_to_fetch_.end()) {
+      if (!plan_state_->isColumnToFetch(tbl_col_key)) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
       if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
@@ -3387,8 +3386,7 @@ FetchResult Executor::fetchChunks(
           if (needLinearizeAllFragments(
                   cd, *col_id, ra_exe_unit, selected_fragments, memory_level)) {
             bool for_lazy_fetch = false;
-            if (plan_state_->columns_to_not_fetch_.find(tbl_col_key) !=
-                plan_state_->columns_to_not_fetch_.end()) {
+            if (plan_state_->isColumnToNotFetch(tbl_col_key)) {
               for_lazy_fetch = true;
               VLOG(2) << "Try to linearize lazy fetch column (col_id: " << cd->columnId
                       << ", col_name: " << cd->columnName << ")";
@@ -3559,7 +3557,7 @@ FetchResult Executor::fetchUnionChunks(
       return {};
     }
     MemoryLevel const memory_level_for_column =
-        plan_state_->columns_to_fetch_.count({selected_table_key, col_id->getColId()})
+        plan_state_->isColumnToFetch({selected_table_key, col_id->getColId()})
             ? memory_level
             : Data_Namespace::CPU_LEVEL;
     int8_t const* ptr;

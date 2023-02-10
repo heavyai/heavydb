@@ -25774,6 +25774,30 @@ TEST_F(Select, VarlenLazyFetch) {
   }
 }
 
+TEST_F(Select, ProjectVarlenColWithLazyFetching) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_rows = run_multiple_agg(
+        "SELECT col_multipolygon_1, ST_CENTROID(col_multipolygon_1) FROM "
+        "data_types_basic3;",
+        dt);
+    EXPECT_TRUE(!result_rows->isEmpty());
+    auto crt_row = result_rows->getNextRow(true, true);
+    EXPECT_EQ(size_t(2), crt_row.size());
+    EXPECT_TRUE(
+        boost::get<std::string>(v<NullableString>(crt_row[0])).find("MULTIPOLYGON") !=
+        std::string::npos);
+
+    auto result_rows2 = run_multiple_agg(
+        "SELECT col_integer_var_array_1, array_append(col_integer_var_array_1, 1) FROM "
+        "data_types_basic3;",
+        dt);
+    EXPECT_TRUE(!result_rows2->isEmpty());
+    auto crt_row2 = result_rows2->getNextRow(true, true);
+    EXPECT_EQ(size_t(2), crt_row2.size());
+  }
+}
+
 TEST_F(Select, SampleRatio) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
