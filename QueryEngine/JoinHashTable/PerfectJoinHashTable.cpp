@@ -243,15 +243,6 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     throw TooManyHashEntries(oss.str());
   }
 
-  auto const shard_count = get_shard_count(qual_bin_oper.get(), executor);
-  if (device_count > 1 && shard_count > 1) {
-    // use baseline hash join to compute this case until resolving related hash join logic
-    // todd(yoonmin): relax this after fixing related hashtable build/probe logic is fixed
-    throw TooManyHashEntries(
-        "Use baseline hash join: multiple GPUs process the input sharded table via "
-        "perfect hash can cause a wrong result");
-  }
-
   if (qual_bin_oper->get_optype() == kBW_EQ &&
       col_range.getIntMax() >= std::numeric_limits<int64_t>::max()) {
     throw HashJoinFail("Cannot translate null value for kBW_EQ");

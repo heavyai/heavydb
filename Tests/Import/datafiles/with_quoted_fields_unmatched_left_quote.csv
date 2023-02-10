@@ -1,0 +1,4 @@
+"id","str1","bool1","smallint1"
+"1",      "  test1   ", "true"       ,  "1"
+             "2","test2,"false","2"   
+"3", "", "true", "3"

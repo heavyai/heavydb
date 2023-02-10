@@ -46,13 +46,18 @@ inline void trim_space(const char*& field_begin, const char*& field_end) {
 inline void trim_quotes(const char*& field_begin,
                         const char*& field_end,
                         const import_export::CopyParams& copy_params) {
-  if (copy_params.quoted && field_end - field_begin > 0 &&
-      *field_begin == copy_params.quote) {
-    ++field_begin;
+  auto quote_begin = field_begin, quote_end = field_end;
+  if (copy_params.quoted) {
+    trim_space(quote_begin, quote_end);
   }
-  if (copy_params.quoted && field_end - field_begin > 0 &&
-      *(field_end - 1) == copy_params.quote) {
-    --field_end;
+  if (copy_params.quoted && quote_end - quote_begin > 0) {
+    if (*quote_begin == copy_params.quote && *(quote_end - 1) == copy_params.quote) {
+      field_begin = ++quote_begin;
+      field_end = (quote_begin == quote_end) ? quote_end : --quote_end;
+    } else {
+      throw import_export::delimited_parser::DelimitedParserException(
+          "Unable to trim quotes.");
+    }
   }
 }
 }  // namespace
@@ -123,13 +128,26 @@ size_t find_end(const char* buffer,
   if (last_line_delim_pos <= 0) {
     size_t excerpt_length = std::min<size_t>(50, size);
     std::string buffer_excerpt{buffer, buffer + excerpt_length};
-    std::string error_message =
-        "Unable to find an end of line character after reading " + std::to_string(size) +
-        " characters. Please ensure that the correct \"line_delimiter\" option is "
-        "specified or update the \"buffer_size\" option appropriately. Row number: " +
-        std::to_string(buffer_first_row_index + 1) +
-        ". First few characters in row: " + buffer_excerpt;
-    throw InsufficientBufferSizeException{error_message};
+    if (in_quote) {
+      std::string quote(1, copy_params.quote);
+      std::string error_message =
+          "Unable to find a matching end quote for the quote character '" + quote +
+          "' after reading " + std::to_string(size) +
+          " characters. Please ensure that all data fields are correctly formatted "
+          "or update the \"buffer_size\" option appropriately. Row number: " +
+          std::to_string(buffer_first_row_index + 1) +
+          ". First few characters in row: " + buffer_excerpt;
+      throw InsufficientBufferSizeException{error_message};
+    } else {
+      std::string error_message =
+          "Unable to find an end of line character after reading " +
+          std::to_string(size) +
+          " characters. Please ensure that the correct \"line_delimiter\" option is "
+          "specified or update the \"buffer_size\" option appropriately. Row number: " +
+          std::to_string(buffer_first_row_index + 1) +
+          ". First few characters in row: " + buffer_excerpt;
+      throw InsufficientBufferSizeException{error_message};
+    }
   }
 
   return last_line_delim_pos + 1;
@@ -244,10 +262,10 @@ const char* get_row(const char* buf,
           }
           const char* field_begin = field_buf;
           const char* field_end = field_buf + j;
+          trim_quotes(field_begin, field_end, copy_params);
           if (copy_params.trim_spaces) {
             trim_space(field_begin, field_end);
           }
-          trim_quotes(field_begin, field_end, copy_params);
           row.emplace_back(field_begin, field_end - field_begin);
         }
         field = p + 1;

@@ -2020,6 +2020,7 @@ static ImportStatus import_thread_delimited(
       row.clear();
       std::vector<std::unique_ptr<char[]>>
           tmp_buffers;  // holds string w/ removed escape chars, etc
+      row_index_plus_one++;
       if (DEBUG_TIMING) {
         us = measure<std::chrono::microseconds>::execution([&]() {
           p = import_export::delimited_parser::get_row(p,
@@ -2044,7 +2045,6 @@ static ImportStatus import_thread_delimited(
                                                      try_single_thread,
                                                      true);
       }
-      row_index_plus_one++;
       // Each POINT could consume two separate coords instead of a single WKT
       if (row.size() < num_cols || (num_cols + point_cols) < row.size()) {
         thread_import_status.rows_rejected++;
