@@ -15,7 +15,9 @@
  */
 
 #include "PlanState.h"
+
 #include "Execute.h"
+#include "Shared/misc.h"
 
 bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) const {
   if (!allow_lazy_fetch_) {
@@ -30,24 +32,6 @@ bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) const {
     const auto cd = get_column_descriptor(column_key);
     if (cd->isVirtualCol) {
       return false;
-    }
-  }
-
-  if (!shared::is_unordered_set_intersection_empty(columns_to_fetch_,
-                                                   columns_to_not_fetch_)) {
-    if (columns_to_fetch_.count(column_key) && columns_to_not_fetch_.count(column_key) &&
-        hasGeometryTargetExpr()) {
-      // when a query having a projection expression of the non-point geometry type,
-      // we must avoid throwing a false `CompilationRetryNoLazyFetch` exception
-      // because the non-point geometry projection expression must be lazy fetched
-      // this can be achieved by making an expression as non-lazy fetched column iff
-      // it is included as both lazy and non-lazy fetched column simultaneously
-      // (we throw the exception for that case; see the previous code of this function)
-      VLOG(2) << "Set a column " << do_not_fetch_column->toString()
-              << " as non-lazy fetching column";
-      columns_to_not_fetch_.erase(column_key);
-    } else {
-      throw CompilationRetryNoLazyFetch();
     }
   }
   return columns_to_fetch_.find(column_key) == columns_to_fetch_.end();
@@ -100,7 +84,7 @@ int PlanState::getLocalColumnId(const Analyzer::ColumnVar* col_var,
   }
   if (col_id && *col_id >= 0) {
     if (fetch_column) {
-      columns_to_fetch_.insert(global_col_key);
+      addColumnToFetch(global_col_key);
     }
     return *col_id;
   }
@@ -119,9 +103,43 @@ void PlanState::addNonHashtableQualForLeftJoin(size_t idx,
   }
 }
 
-bool PlanState::hasGeometryTargetExpr() const {
-  return std::any_of(
-      target_exprs_.begin(), target_exprs_.end(), [=](Analyzer::Expr const* expr) {
-        return expr->get_type_info().is_geometry();
-      });
+const std::unordered_set<shared::ColumnKey>& PlanState::getColumnsToFetch() const {
+  return columns_to_fetch_;
+}
+
+const std::unordered_set<shared::ColumnKey>& PlanState::getColumnsToNotFetch() const {
+  return columns_to_not_fetch_;
+}
+
+bool PlanState::isColumnToFetch(const shared::ColumnKey& column_key) const {
+  return shared::contains(columns_to_fetch_, column_key);
+}
+
+bool PlanState::isColumnToNotFetch(const shared::ColumnKey& column_key) const {
+  return shared::contains(columns_to_not_fetch_, column_key);
+}
+
+void PlanState::addColumnToFetch(const shared::ColumnKey& column_key,
+                                 bool unmark_lazy_fetch) {
+  if (unmark_lazy_fetch) {
+    // This column was previously marked for lazy fetch but we now intentionally
+    // makr it as non-lazy fetch column
+    auto it = columns_to_not_fetch_.find(column_key);
+    if (it != columns_to_not_fetch_.end()) {
+      columns_to_not_fetch_.erase(it);
+    }
+  } else {
+    if (shared::contains(columns_to_not_fetch_, column_key)) {
+      // This column was previously marked for lazy fetch due to incomplete information.
+      // Throw an exception in this case to restart the compilation step.
+      throw CompilationRetryNoLazyFetch();
+    }
+  }
+  CHECK(!isColumnToNotFetch(column_key)) << column_key;
+  columns_to_fetch_.emplace(column_key);
+}
+
+void PlanState::addColumnToNotFetch(const shared::ColumnKey& column_key) {
+  CHECK(!isColumnToFetch(column_key)) << column_key;
+  columns_to_not_fetch_.emplace(column_key);
 }

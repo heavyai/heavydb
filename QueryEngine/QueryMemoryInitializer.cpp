@@ -212,9 +212,9 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   }
 
   if (render_allocator_map || !query_mem_desc.isGroupBy()) {
-    allocateCountDistinctBuffers(query_mem_desc, false, executor);
-    allocateModes(query_mem_desc, false, executor);
-    allocateTDigests(query_mem_desc, false, executor);
+    allocateCountDistinctBuffers(query_mem_desc, false, executor, ra_exe_unit);
+    allocateModes(query_mem_desc, false, executor, ra_exe_unit);
+    allocateTDigests(query_mem_desc, false, executor, ra_exe_unit);
     if (render_info && render_info->useCudaBuffers()) {
       return;
     }
@@ -447,7 +447,7 @@ void QueryMemoryInitializer::initGroupByBuffer(
     const bool output_columnar,
     const Executor* executor) {
   if (output_columnar) {
-    initColumnarGroups(query_mem_desc, buffer, init_agg_vals_, executor);
+    initColumnarGroups(query_mem_desc, buffer, init_agg_vals_, executor, ra_exe_unit);
   } else {
     auto rows_ptr = buffer;
     auto actual_entry_count = query_mem_desc.getEntryCount();
@@ -471,7 +471,8 @@ void QueryMemoryInitializer::initGroupByBuffer(
                   init_agg_vals_,
                   actual_entry_count,
                   warp_size,
-                  executor);
+                  executor,
+                  ra_exe_unit);
   }
 }
 
@@ -480,14 +481,16 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
                                            const std::vector<int64_t>& init_vals,
                                            const int32_t groups_buffer_entry_count,
                                            const size_t warp_size,
-                                           const Executor* executor) {
+                                           const Executor* executor,
+                                           const RelAlgExecutionUnit& ra_exe_unit) {
   const size_t key_count{query_mem_desc.getGroupbyColCount()};
   const size_t row_size{query_mem_desc.getRowSize()};
   const size_t col_base_off{query_mem_desc.getColOffInBytes(0)};
 
-  auto agg_bitmap_size = allocateCountDistinctBuffers(query_mem_desc, true, executor);
-  auto mode_index_set = allocateModes(query_mem_desc, true, executor);
-  auto quantile_params = allocateTDigests(query_mem_desc, true, executor);
+  auto agg_bitmap_size =
+      allocateCountDistinctBuffers(query_mem_desc, true, executor, ra_exe_unit);
+  auto mode_index_set = allocateModes(query_mem_desc, true, executor, ra_exe_unit);
+  auto quantile_params = allocateTDigests(query_mem_desc, true, executor, ra_exe_unit);
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
 
   const auto query_mem_desc_fixedup =
@@ -575,10 +578,11 @@ void QueryMemoryInitializer::initColumnarGroups(
     const QueryMemoryDescriptor& query_mem_desc,
     int64_t* groups_buffer,
     const std::vector<int64_t>& init_vals,
-    const Executor* executor) {
+    const Executor* executor,
+    const RelAlgExecutionUnit& ra_exe_unit) {
   CHECK(groups_buffer);
 
-  for (const auto target_expr : executor->plan_state_->target_exprs_) {
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
     CHECK(!is_distinct_target(agg_info));
   }
@@ -726,14 +730,15 @@ void QueryMemoryInitializer::allocateCountDistinctGpuMem(
 std::vector<int64_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
     const QueryMemoryDescriptor& query_mem_desc,
     const bool deferred,
-    const Executor* executor) {
+    const Executor* executor,
+    const RelAlgExecutionUnit& ra_exe_unit) {
   const size_t agg_col_count{query_mem_desc.getSlotCount()};
   std::vector<int64_t> agg_bitmap_size(deferred ? agg_col_count : 0);
 
-  CHECK_GE(agg_col_count, executor->plan_state_->target_exprs_.size());
-  for (size_t target_idx = 0; target_idx < executor->plan_state_->target_exprs_.size();
+  CHECK_GE(agg_col_count, ra_exe_unit.target_exprs.size());
+  for (size_t target_idx = 0; target_idx < ra_exe_unit.target_exprs.size();
        ++target_idx) {
-    const auto target_expr = executor->plan_state_->target_exprs_[target_idx];
+    const auto target_expr = ra_exe_unit.target_exprs[target_idx];
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
     if (is_distinct_target(agg_info)) {
       CHECK(agg_info.is_agg &&
@@ -810,13 +815,14 @@ void eachAggregateTargetIdxOfType(
 QueryMemoryInitializer::ModeIndexSet QueryMemoryInitializer::allocateModes(
     const QueryMemoryDescriptor& query_mem_desc,
     const bool deferred,
-    const Executor* executor) {
+    const Executor* executor,
+    const RelAlgExecutionUnit& ra_exe_unit) {
   size_t const slot_count = query_mem_desc.getSlotCount();
-  CHECK_LE(executor->plan_state_->target_exprs_.size(), slot_count);
+  CHECK_LE(ra_exe_unit.target_exprs.size(), slot_count);
   ModeIndexSet mode_index_set;
 
   eachAggregateTargetIdxOfType(
-      executor->plan_state_->target_exprs_,
+      ra_exe_unit.target_exprs,
       kMODE,
       [&](Analyzer::AggExpr const*, size_t const target_idx) {
         size_t const agg_col_idx =
@@ -835,13 +841,14 @@ QueryMemoryInitializer::ModeIndexSet QueryMemoryInitializer::allocateModes(
 std::vector<QueryMemoryInitializer::QuantileParam>
 QueryMemoryInitializer::allocateTDigests(const QueryMemoryDescriptor& query_mem_desc,
                                          const bool deferred,
-                                         const Executor* executor) {
+                                         const Executor* executor,
+                                         const RelAlgExecutionUnit& ra_exe_unit) {
   size_t const slot_count = query_mem_desc.getSlotCount();
-  CHECK_LE(executor->plan_state_->target_exprs_.size(), slot_count);
+  CHECK_LE(ra_exe_unit.target_exprs.size(), slot_count);
   std::vector<QuantileParam> quantile_params(deferred ? slot_count : 0);
 
   eachAggregateTargetIdxOfType(
-      executor->plan_state_->target_exprs_,
+      ra_exe_unit.target_exprs,
       kAPPROX_QUANTILE,
       [&](Analyzer::AggExpr const* const agg_expr, size_t const target_idx) {
         size_t const agg_col_idx =

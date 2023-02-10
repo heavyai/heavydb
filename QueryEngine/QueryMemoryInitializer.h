@@ -147,12 +147,14 @@ class QueryMemoryInitializer {
                      const std::vector<int64_t>& init_vals,
                      const int32_t groups_buffer_entry_count,
                      const size_t warp_size,
-                     const Executor* executor);
+                     const Executor* executor,
+                     const RelAlgExecutionUnit& ra_exe_unit);
 
   void initColumnarGroups(const QueryMemoryDescriptor& query_mem_desc,
                           int64_t* groups_buffer,
                           const std::vector<int64_t>& init_vals,
-                          const Executor* executor);
+                          const Executor* executor,
+                          const RelAlgExecutionUnit& ra_exe_unit);
 
   using ModeIndexSet = robin_hood::unordered_set<size_t>;
   using QuantileParam = std::optional<double>;
@@ -168,7 +170,8 @@ class QueryMemoryInitializer {
   std::vector<int64_t> allocateCountDistinctBuffers(
       const QueryMemoryDescriptor& query_mem_desc,
       const bool deferred,
-      const Executor* executor);
+      const Executor* executor,
+      const RelAlgExecutionUnit& ra_exe_unit);
 
   int64_t allocateCountDistinctBitmap(const size_t bitmap_byte_sz);
 
@@ -176,11 +179,13 @@ class QueryMemoryInitializer {
 
   ModeIndexSet allocateModes(const QueryMemoryDescriptor& query_mem_desc,
                              const bool deferred,
-                             const Executor* executor);
+                             const Executor* executor,
+                             const RelAlgExecutionUnit& ra_exe_unit);
 
   std::vector<QuantileParam> allocateTDigests(const QueryMemoryDescriptor& query_mem_desc,
                                               const bool deferred,
-                                              const Executor* executor);
+                                              const Executor* executor,
+                                              const RelAlgExecutionUnit& ra_exe_unit);
 
   GpuGroupByBuffers prepareTopNHeapsDevBuffer(const QueryMemoryDescriptor& query_mem_desc,
                                               const int8_t* init_agg_vals_dev_ptr,
