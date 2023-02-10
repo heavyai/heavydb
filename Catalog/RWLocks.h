@@ -20,6 +20,9 @@
 #include "OSDependent/heavyai_locks.h"
 #include "Shared/heavyai_shared_mutex.h"
 
+#include <atomic>
+#include <thread>
+
 namespace Catalog_Namespace {
 
 /*
