@@ -1207,7 +1207,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
                                   : std::nullopt);
   }
 
-  // Accessors for poly bounds and render group for in-situ poly render queries
+  // Accessor for poly bounds for in-situ poly render queries
   if (func_resolve(rex_function->getName(), "HeavyDB_Geo_PolyBoundsPtr"sv)) {
     SQLTypeInfo arg_ti;
     // get geo column plus bounds only (not expanded)
@@ -1223,85 +1223,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     // done
     return makeExpr<Analyzer::FunctionOper>(
         rex_function->getType(), specialized_geofunc, geoargs);
-  } else if (func_resolve(rex_function->getName(), "HeavyDB_Geo_PolyCoordsArray"sv)) {
-    // get geo column only (expanded)
-    SQLTypeInfo arg_ti;
-    auto geoargs =
-        translateGeoFunctionArg(rex_function->getOperand(0), arg_ti, false, true);
-
-    // this function only works on polys
-    if (!IS_GEO_POLY(arg_ti.get_type())) {
-      throw QueryNotSupported(rex_function->getName() +
-                              " expects a POLYGON or MULTIPOLYGON");
-    }
-
-    // build args
-    std::vector<std::shared_ptr<Analyzer::Expr>> args;
-
-    // first just the coords (first geoarg)
-    args.insert(args.end(), geoargs.begin(), geoargs.begin() + 1);
-
-    // add compression arg (get from geo compression type)
-    Datum input_compression;
-    input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
-    args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
-
-    // force output array subtype to DOUBLE
-    // @TODO(se) fix the EF parser to do this automatically
-    auto rex_function_type = rex_function->getType();
-    rex_function_type.set_subtype(kDOUBLE);
-
-    // done
-    return makeExpr<Analyzer::FunctionOper>(rex_function_type, specialized_geofunc, args);
-  } else if (func_resolve(rex_function->getName(), "HeavyDB_Geo_PolyRingSizesArray"sv)) {
-    SQLTypeInfo arg_ti;
-    // get geo column only (expanded)
-    auto geoargs =
-        translateGeoFunctionArg(rex_function->getOperand(0), arg_ti, false, true);
-    // this function only works on polys
-    if (!IS_GEO_POLY(arg_ti.get_type())) {
-      throw QueryNotSupported(rex_function->getName() +
-                              " expects a POLYGON or MULTIPOLYGON");
-    }
-    // only need the ring_sizes argument
-    // if it's a MULTI, erase the third
-    // then erase the first
-    if (geoargs.size() == 3) {
-      geoargs.erase(geoargs.end() - 1);
-    }
-    geoargs.erase(geoargs.begin());
-
-    // force output array subtype to INT
-    // @TODO(se) fix the EF parser to do this automatically
-    auto rex_function_type = rex_function->getType();
-    rex_function_type.set_subtype(kINT);
-
-    // done
-    return makeExpr<Analyzer::FunctionOper>(
-        rex_function_type, specialized_geofunc, geoargs);
-  } else if (func_resolve(rex_function->getName(), "HeavyDB_Geo_PolyPolyRingsArray"sv)) {
-    SQLTypeInfo arg_ti;
-    // get geo column only (expanded)
-    auto geoargs =
-        translateGeoFunctionArg(rex_function->getOperand(0), arg_ti, false, true);
-    // this function only works on multipolys
-    if (arg_ti.get_type() != kMULTIPOLYGON) {
-      throw QueryNotSupported(rex_function->getName() + " expects a MULTIPOLYGON");
-    }
-    // only need the poly_rings argument
-    // we know it's a MULTI, so erase the first two
-    // @TODO(se) do this in a single erase
-    geoargs.erase(geoargs.begin());
-    geoargs.erase(geoargs.begin());
-
-    // force output array subtype to INT
-    // @TODO(se) fix the EF parser to do this automatically
-    auto rex_function_type = rex_function->getType();
-    rex_function_type.set_subtype(kINT);
-
-    // done
-    return makeExpr<Analyzer::FunctionOper>(
-        rex_function_type, specialized_geofunc, geoargs);
   }
 
   // start to move geo expressions above the generic translation call, as geo expression
