@@ -4988,45 +4988,9 @@ bool ST_Intersects_MultiPolygon_MultiPolygon(int8_t* mpoly1_coords,
                                                         0.0));
 }
 
-//
-// Temporary accessors for passing poly data into UDTFs
-//
-
 EXTENSION_INLINE
 int64_t HeavyDB_Geo_PolyBoundsPtr(double* bounds, int64_t size) {
   return reinterpret_cast<int64_t>(bounds);
-}
-
-EXTENSION_INLINE
-Array<double> HeavyDB_Geo_PolyCoordsArray(int8_t* mpoly_coords,
-                                          int64_t mpoly_coords_size,
-                                          const int32_t ic) {
-  auto const num_coords = mpoly_coords_size / compression_unit_size(ic);
-  Array<double> coords_array(num_coords);
-  double* p_coords = coords_array.ptr;
-  for (int64_t i = 0; i < num_coords; i += 2) {
-    Point2D const decompressed{decompress_coord<X>(mpoly_coords, i, ic),
-                               decompress_coord<Y>(mpoly_coords, i, ic)};
-    *p_coords++ = decompressed.x;
-    *p_coords++ = decompressed.y;
-  }
-  return coords_array;
-}
-
-EXTENSION_INLINE
-Array<int32_t> HeavyDB_Geo_PolyRingSizesArray(int32_t* mpoly_ring_sizes,
-                                              int64_t mpoly_num_rings) {
-  Array<int32_t> ring_sizes_array(mpoly_num_rings);
-  std::memcpy(ring_sizes_array.ptr, mpoly_ring_sizes, mpoly_num_rings * sizeof(int32_t));
-  return ring_sizes_array;
-}
-
-EXTENSION_INLINE
-Array<int32_t> HeavyDB_Geo_PolyPolyRingsArray(int32_t* mpoly_poly_sizes,
-                                              int64_t mpoly_num_polys) {
-  Array<int32_t> poly_rings_array(mpoly_num_polys);
-  std::memcpy(poly_rings_array.ptr, mpoly_poly_sizes, mpoly_num_polys * sizeof(int32_t));
-  return poly_rings_array;
 }
 
 // TODO Update for UTM. This assumes x and y are independent, which is not true for UTM.
