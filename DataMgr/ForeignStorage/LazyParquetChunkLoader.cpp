@@ -1832,8 +1832,9 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
   CHECK(encoder.get());
 
   if (rejected_row_indices) {  // error tracking is enabled
-    encoder->initializeErrorTracking(column_descriptor->columnType);
+    encoder->initializeErrorTracking();
   }
+  encoder->initializeColumnType(column_descriptor->columnType);
 
   bool early_exit = false;
   int64_t total_levels_read = 0;

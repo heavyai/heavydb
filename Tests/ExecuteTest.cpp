@@ -1059,6 +1059,38 @@ TEST(Insert, InconsistentValuesLists) {
 }
 
 namespace {
+std::string repeat(std::string const& str, unsigned const dup) {
+  std::string retval;
+  retval.reserve(dup * str.size());
+  for (unsigned i = 0; i < dup; ++i) {
+    retval += str;
+  }
+  return retval;
+}
+}  // namespace
+
+TEST(Insert, DISABLED_LongStrings) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // clang-format off
+    //std::string str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#";
+    //unsigned const dup = 1025u;  // number of times to duplicate str
+    // clang-format on
+    std::string str = "x";
+    // unsigned const dup = 32767;  // works
+    unsigned const dup = 32768;  // fails
+    std::string long_str = repeat(str, dup);
+    recreate_inserts_test_table();
+    run_multiple_agg("INSERT INTO inserts_test_table (i, t, b) VALUES(1, '" + long_str +
+                         "', 'False');",
+                     dt);
+    auto const query = "SELECT REPEAT('" + str + "'," + std::to_string(dup) +
+                       ")=t FROM inserts_test_table;";
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(query, dt)));
+  }
+}
+
+namespace {
 void BatchInsertsTest(bool sharded = false) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

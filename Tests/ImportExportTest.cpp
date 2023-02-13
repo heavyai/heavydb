@@ -1039,7 +1039,7 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
 
   TQueryResult createTableCopyFromAndSelect(
       const std::string& in_schema,
-      const std::string& file_name_base,
+      const std::string& file_id,
       const std::string& select_query,
       const std::string& line_regex,
       const int64_t max_byte_size_per_element,
@@ -1075,19 +1075,24 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     query += " WITH (" + query_table_options + ")";
     query += ";";
 
-    std::string extension =
-        isOdbc(import_type) || import_type == "regex_parser" ? "csv" : import_type;
-    std::string base_name = file_name_base + "." + extension;
-    if (is_dir) {
-      base_name = file_name_base + "_" + extension + "_dir";
-    }
     std::string file_path;
-    if (data_source_type == "local") {
-      file_path = "../../Tests/FsiDataFiles/" + base_name;
-    } else if (data_source_type == "s3_private") {
-      file_path = "s3://omnisci-fsi-test/FsiDataFiles/" + base_name;
-    } else if (data_source_type == "s3_public") {
-      file_path = "s3://omnisci-fsi-test-public/FsiDataFiles/" + base_name;
+    if (boost::filesystem::path(file_id).is_absolute()) {
+      file_path = file_id;
+    } else {
+      std::string extension =
+          isOdbc(import_type) || import_type == "regex_parser" ? "csv" : import_type;
+      std::string base_name = file_id + "." + extension;
+      if (is_dir) {
+        base_name = file_id + "_" + extension + "_dir";
+      }
+
+      if (data_source_type == "local") {
+        file_path = "../../Tests/FsiDataFiles/" + base_name;
+      } else if (data_source_type == "s3_private") {
+        file_path = "s3://omnisci-fsi-test/FsiDataFiles/" + base_name;
+      } else if (data_source_type == "s3_public") {
+        file_path = "s3://omnisci-fsi-test-public/FsiDataFiles/" + base_name;
+      }
     }
 
     auto copy_from_source = "'" + file_path + "'";
@@ -1211,7 +1216,25 @@ class ImportAndSelectTest
     : public ImportAndSelectTestBase,
       public ::testing::WithParamInterface<ImportAndSelectTestParameters> {
  protected:
+  static void SetUpTestSuite() {
+    ImportAndSelectTestBase::SetUpTestSuite();
+    std::string dir_path{"./import_test_files"};
+    if (!boost::filesystem::exists(dir_path)) {
+      boost::filesystem::create_directory(dir_path);
+    }
+    generated_files_dir_ = boost::filesystem::canonical(dir_path);
+  }
+
+  static void TearDownTestSuite() {
+    if (boost::filesystem::exists(generated_files_dir_)) {
+      boost::filesystem::remove_all(generated_files_dir_);
+    }
+    ImportAndSelectTestBase::TearDownTestSuite();
+  }
+
   ImportAndSelectTestParameters TestParam() override { return GetParam(); }
+
+  static inline boost::filesystem::path generated_files_dir_;
 };
 
 TEST_P(ImportAndSelectTest, GeoTypes) {
@@ -1776,6 +1799,50 @@ TEST_P(ImportAndSelectTest, MaxRejectReached) {
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{};
 
   validateImportStatus(0, 0, true);
+  assertResultSetEqual(expected_values, query);
+}
+
+namespace {
+std::string duplicate(unsigned const dup, std::string const& str) {
+  std::string retval;
+  retval.reserve(dup * str.size());
+  for (unsigned i = 0; i < dup; ++i) {
+    retval += str;
+  }
+  return retval;
+}
+}  // namespace
+
+// Test TEXT ENCODING NONE columns can import strings longer than 32k.
+TEST_P(ImportAndSelectTest, LongerNoneEncodedString) {
+  if (isOdbc(param_.import_type)) {
+    GTEST_SKIP() << " this test is currently not checked to work with ODBC";
+  }
+
+  if (param_.data_source_type != "local") {
+    GTEST_SKIP();
+  }
+
+  std::string str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#";
+  std::string long_str = duplicate(1025u, str);  // number of times to duplicate str
+
+  std::string file_id{"long_string"};
+  if (param_.import_type != "parquet") {
+    file_id = (generated_files_dir_ / "long_string.csv").string();
+    if (!boost::filesystem::exists(file_id)) {
+      ofstream csv_file(file_id);
+      csv_file << "txt_2\n" << long_str;
+    }
+  }
+  auto query = createTableCopyFromAndSelect("txt_2 TEXT ENCODING NONE",
+                                            file_id,
+                                            "SELECT * FROM import_test_new;",
+                                            "(.+)",
+                                            long_str.size());
+
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{{long_str}};
+
+  validateImportStatus(1, 0, false);
   assertResultSetEqual(expected_values, query);
 }
 

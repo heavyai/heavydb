@@ -75,9 +75,10 @@ class ParquetEncoder {
 
   virtual void disableMetadataStatsValidation() { validate_metadata_stats_ = false; }
 
-  virtual void initializeErrorTracking(const SQLTypeInfo& column_type) {
+  virtual void initializeErrorTracking() { is_error_tracking_enabled_ = true; }
+
+  virtual void initializeColumnType(const SQLTypeInfo& column_type) {
     column_type_ = column_type;
-    is_error_tracking_enabled_ = true;
   }
 
  protected:
