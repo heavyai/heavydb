@@ -107,12 +107,16 @@ DEVICE inline int64_t floor_div(int64_t const dividend, int64_t const divisor) {
 
 // Return remainer r of dividend / divisor, where 0 <= r < divisor.
 // Assumes 0 < divisor.
+// The uint64_t casts are potential optimizations, since unsigned integer division is
+// faster on some architectures than signed division. However in the case when
+// dividend == std::numeric_limits<int64_t>::min() then it is uniquely required.
+// Additionally this avoids architecture-dependent behavior of % when numerator < 0.
 DEVICE inline int64_t unsigned_mod(int64_t const dividend, int64_t const divisor) {
-  int64_t mod = dividend % divisor;
-  if (mod < 0) {
-    mod += divisor;
+  if (dividend < 0) {
+    int64_t const mod = static_cast<int64_t>(uint64_t(-dividend) % uint64_t(divisor));
+    return mod ? divisor - mod : int64_t(0);
   }
-  return mod;
+  return static_cast<int64_t>(uint64_t(dividend) % uint64_t(divisor));
 }
 
 #endif  // QUERYENGINE_EXTRACTFROMTIME_H
