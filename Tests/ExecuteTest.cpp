@@ -5758,6 +5758,11 @@ TEST_F(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT EXTRACT(ISODOW FROM CAST('2008-03-02 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
+    // Wednesday
+    ASSERT_EQ(3LL,
+              v<int64_t>(run_simple_agg("SELECT EXTRACT('isodow' FROM o - INTERVAL 40 "
+                                        "years) dow FROM test ORDER BY dow LIMIT 1;",
+                                        dt)));
     ASSERT_EQ(15000000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(nanosecond from m) FROM test limit 1;", dt)));
@@ -19248,6 +19253,49 @@ TEST_F(Select, WeekOne) {
         2L,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2003-01-11 00:00:00');", dt)));
+  }
+}
+
+TEST_F(Select, IsoDow) {
+  run_ddl_statement("DROP TABLE IF EXISTS test_isodow;");
+  run_ddl_statement("CREATE TABLE test_isodow (expected INT, d TIMESTAMP);");
+  run_multiple_agg("INSERT INTO test_isodow values(4, '1969-12-18 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(5, '1969-12-19 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(6, '1969-12-20 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(7, '1969-12-21 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(1, '1969-12-22 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(2, '1969-12-23 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(3, '1969-12-24 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(4, '1969-12-25 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(5, '1969-12-26 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(6, '1969-12-27 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(7, '1969-12-28 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(1, '1969-12-29 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(2, '1969-12-30 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_isodow values(3, '1969-12-31 12:00:00');",
+                   ExecutorDeviceType::CPU);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT MIN(expected=EXTRACT('isodow' FROM d)) FROM test_isodow;", dt)))
+        << dt;
+  }
+  if (!g_keep_test_data) {
+    run_ddl_statement("DROP TABLE test_isodow;");
   }
 }
 
