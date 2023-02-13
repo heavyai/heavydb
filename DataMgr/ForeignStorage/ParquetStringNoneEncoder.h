@@ -39,6 +39,7 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
                   const int64_t levels_read,
                   int8_t* values) override {
     CHECK(levels_read > 0);
+    CHECK(ParquetEncoder::column_type_.is_string());
     writeInitialOffsetIfApplicable();
 
     auto parquet_data_ptr = reinterpret_cast<const parquet::ByteArray*>(values);
@@ -50,7 +51,8 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
       if (def_levels[i]) {
         CHECK(j < values_read);
         auto& byte_array = parquet_data_ptr[j++];
-        if (is_error_tracking_enabled_ && byte_array.len > StringDictionary::MAX_STRLEN) {
+        if (is_error_tracking_enabled_ &&
+            byte_array.len > ParquetEncoder::column_type_.get_max_strlen()) {
           // no-op, or effectively inserting a null: total_len += 0;
         } else {
           total_len += byte_array.len;
@@ -67,7 +69,8 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
       if (def_levels[i]) {
         CHECK(j < values_read);
         auto& byte_array = parquet_data_ptr[j++];
-        if (is_error_tracking_enabled_ && byte_array.len > StringDictionary::MAX_STRLEN) {
+        if (is_error_tracking_enabled_ &&
+            byte_array.len > ParquetEncoder::column_type_.get_max_strlen()) {
           ParquetEncoder::invalid_indices_.insert(ParquetEncoder::current_chunk_offset_ +
                                                   i);
         } else {

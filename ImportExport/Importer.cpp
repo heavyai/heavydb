@@ -644,10 +644,10 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         }
         addString(std::string());
       } else {
-        if (val.length() > StringDictionary::MAX_STRLEN) {
+        if (val.length() > cd->columnType.get_max_strlen()) {
           throw std::runtime_error("String too long for column " + cd->columnName +
                                    " was " + std::to_string(val.length()) + " max is " +
-                                   std::to_string(StringDictionary::MAX_STRLEN));
+                                   std::to_string(cd->columnType.get_max_strlen()));
         }
         addString(val);
       }
@@ -1518,10 +1518,10 @@ void TypedImportBuffer::addDefaultValues(const ColumnDescriptor* cd, size_t num_
       if (is_null) {
         string_buffer_->resize(num_rows, "");
       } else {
-        if (val.length() > StringDictionary::MAX_STRLEN) {
+        if (val.length() > ti.get_max_strlen()) {
           throw std::runtime_error("String too long for column " + cd->columnName +
                                    " was " + std::to_string(val.length()) + " max is " +
-                                   std::to_string(StringDictionary::MAX_STRLEN));
+                                   std::to_string(ti.get_max_strlen()));
         }
         string_buffer_->resize(num_rows, val);
       }

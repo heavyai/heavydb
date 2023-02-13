@@ -556,10 +556,10 @@ void validate_literal(const std::string& val,
     case kTEXT:
     case kVARCHAR:
     case kCHAR:
-      if (val.length() > StringDictionary::MAX_STRLEN) {
+      if (column_type.get_max_strlen() < val.length()) {
         throw std::runtime_error("String too long for column " + column_name + " was " +
                                  std::to_string(val.length()) + " max is " +
-                                 std::to_string(StringDictionary::MAX_STRLEN));
+                                 std::to_string(column_type.get_max_strlen()));
       }
       break;
     case kARRAY: {

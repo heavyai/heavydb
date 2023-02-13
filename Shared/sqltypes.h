@@ -396,6 +396,12 @@ class SQLTypeInfo {
   // dict_key should be used uniformly for dictionary ID.
   HOST DEVICE inline int get_comp_param() const { return comp_param; }
   HOST DEVICE inline int get_size() const { return size; }
+  // Valid only for IS_STRING(T) types
+  HOST DEVICE inline size_t get_max_strlen() const {
+    return compression == kENCODING_DICT
+               ? ~(~size_t(0) << 15)  // std::numeric_limits<int16_t>::max()
+               : ~size_t(0);          // std::numeric_limits<size_t>::max()
+  }
 
   inline int is_logical_geo_type() const {
     if (type == kPOINT || type == kLINESTRING || type == kMULTILINESTRING ||

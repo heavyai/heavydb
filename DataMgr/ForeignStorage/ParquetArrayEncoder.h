@@ -97,9 +97,14 @@ class ParquetArrayEncoder : public ParquetEncoder {
     scalar_encoder_->disableMetadataStatsValidation();
   }
 
-  virtual void initializeErrorTracking(const SQLTypeInfo& column_type) override {
-    ParquetEncoder::initializeErrorTracking(column_type);
-    scalar_encoder_->initializeErrorTracking(column_type.get_elem_type());
+  virtual void initializeErrorTracking() override {
+    ParquetEncoder::initializeErrorTracking();
+    scalar_encoder_->initializeErrorTracking();
+  }
+
+  virtual void initializeColumnType(const SQLTypeInfo& column_type) override {
+    ParquetEncoder::initializeColumnType(column_type);
+    scalar_encoder_->initializeColumnType(column_type.get_elem_type());
   }
 
  protected:
