@@ -1770,7 +1770,6 @@ TEST_F(RebrandMigrationTest, ExistingLegacyDataFiles) {
   ASSERT_TRUE(fs::exists(new_metadata_file_path));
   ASSERT_TRUE(fs::is_regular_file(new_metadata_file_path));
 
-  fs::canonical(legacy_data_file_path);
   ASSERT_TRUE(fs::exists(legacy_data_file_path));
   ASSERT_TRUE(fs::is_symlink(legacy_data_file_path));
 
