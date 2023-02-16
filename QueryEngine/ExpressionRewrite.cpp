@@ -88,6 +88,11 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
     return nullptr;
   }
 
+  std::shared_ptr<Analyzer::InValues> visitMLPredict(
+      const Analyzer::MLPredictExpr*) const override {
+    return nullptr;
+  }
+
   std::shared_ptr<Analyzer::InValues> visitCardinality(
       const Analyzer::CardinalityExpr*) const override {
     return nullptr;

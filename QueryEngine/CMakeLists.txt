@@ -83,6 +83,7 @@ set(query_engine_source_files
   LLVMFunctionAttributesUtil.cpp
   LLVMGlobalContext.cpp
   MaxwellCodegenPatch.cpp
+  MLPredictCodegen.cpp
   MurmurHash.cpp
   NativeCodegen.cpp
   NvidiaKernel.cpp
@@ -135,6 +136,7 @@ set(query_engine_source_files
   TableGenerations.cpp
   TableOptimizer.cpp
   TargetExprBuilder.cpp
+  TreeModelPredictionMgr.cpp
   Utils/DiamondCodegen.cpp
   StringDictionaryTranslationMgr.cpp
   StringFunctions.cpp

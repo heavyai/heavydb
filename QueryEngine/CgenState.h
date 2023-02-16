@@ -21,6 +21,7 @@
 #include "InputMetadata.h"
 #include "LLVMGlobalContext.h"
 #include "StringDictionaryTranslationMgr.h"
+#include "TreeModelPredictionMgr.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Shared/InsertionOrderedMap.h"
@@ -199,6 +200,12 @@ struct CgenState {
       std::unique_ptr<const StringDictionaryTranslationMgr>&& str_dict_translation_mgr) {
     str_dict_translation_mgrs_.emplace_back(std::move(str_dict_translation_mgr));
     return str_dict_translation_mgrs_.back().get();
+  }
+
+  const TreeModelPredictionMgr* moveTreeModelPredictionMgr(
+      std::unique_ptr<const TreeModelPredictionMgr>&& tree_model_prediction_mgr) {
+    tree_model_prediction_mgrs_.emplace_back(std::move(tree_model_prediction_mgr));
+    return tree_model_prediction_mgrs_.back().get();
   }
 
   const InValuesBitmap* addInValuesBitmap(
@@ -389,6 +396,7 @@ struct CgenState {
   std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
   InsertionOrderedMap filter_func_args_;
   std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
+  std::vector<std::unique_ptr<const TreeModelPredictionMgr>> tree_model_prediction_mgrs_;
   std::vector<std::unique_ptr<const StringDictionaryTranslationMgr>>
       str_dict_translation_mgrs_;
   std::map<std::pair<llvm::Value*, llvm::Value*>, ArrayLoadCodegen>

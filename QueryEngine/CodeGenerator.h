@@ -226,6 +226,16 @@ class CodeGenerator {
   llvm::Value* codegenWidthBucketExpr(const Analyzer::WidthBucketExpr*,
                                       const CompilationOptions&);
 
+  llvm::Value* codegen(const Analyzer::MLPredictExpr*, const CompilationOptions&);
+
+  llvm::Value* codegenLinRegPredict(const Analyzer::MLPredictExpr*,
+                                    const std::string& model_name,
+                                    const CompilationOptions&);
+
+  llvm::Value* codegenRandForestRegPredict(const Analyzer::MLPredictExpr*,
+                                           const std::string& model_name,
+                                           const CompilationOptions&);
+
   llvm::Value* codegen(const Analyzer::StringOper*, const CompilationOptions&);
 
   llvm::Value* codegen(const Analyzer::LikeExpr*, const CompilationOptions&);

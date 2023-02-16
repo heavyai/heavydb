@@ -133,6 +133,14 @@ std::shared_ptr<Analyzer::Expr> InValues::deep_copy() const {
   return makeExpr<InValues>(arg->deep_copy(), new_value_list);
 }
 
+std::shared_ptr<Analyzer::Expr> MLPredictExpr::deep_copy() const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> regressors_copy;
+  for (auto r : regressor_values_) {
+    regressors_copy.emplace_back(r->deep_copy());
+  }
+  return makeExpr<MLPredictExpr>(model_value_->deep_copy(), regressor_values_);
+}
+
 std::shared_ptr<Analyzer::Expr> CharLengthExpr::deep_copy() const {
   return makeExpr<CharLengthExpr>(arg->deep_copy(), calc_encoded_length);
 }
@@ -1713,6 +1721,22 @@ void KeyForStringExpr::group_predicates(std::list<const Expr*>& scan_predicates,
   }
 }
 
+void MLPredictExpr::group_predicates(std::list<const Expr*>& scan_predicates,
+                                     std::list<const Expr*>& join_predicates,
+                                     std::list<const Expr*>& const_predicates) const {
+  std::set<int> rte_idx_set;
+  for (const auto& regressor_value : regressor_values_) {
+    regressor_value->collect_rte_idx(rte_idx_set);
+  }
+  if (rte_idx_set.size() > 1) {
+    join_predicates.push_back(this);
+  } else if (rte_idx_set.size() == 1) {
+    scan_predicates.push_back(this);
+  } else {
+    const_predicates.push_back(this);
+  }
+}
+
 void SampleRatioExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                        std::list<const Expr*>& join_predicates,
                                        std::list<const Expr*>& const_predicates) const {
@@ -2355,6 +2379,27 @@ bool SampleRatioExpr::operator==(const Expr& rhs) const {
   return true;
 }
 
+bool MLPredictExpr::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(MLPredictExpr)) {
+    return false;
+  }
+  const MLPredictExpr& rhs_cl = dynamic_cast<const MLPredictExpr&>(rhs);
+  if (!(*model_value_ == *rhs_cl.get_model_value())) {
+    return false;
+  }
+  auto rhs_regressor_values = rhs_cl.get_regressor_values();
+  if (regressor_values_.size() != rhs_regressor_values.size()) {
+    return false;
+  }
+  for (size_t regressor_idx = 0; regressor_idx < regressor_values_.size();
+       ++regressor_idx) {
+    if (!(*regressor_values_[regressor_idx] == *rhs_regressor_values[regressor_idx])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool CardinalityExpr::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(CardinalityExpr)) {
     return false;
@@ -2753,6 +2798,18 @@ std::string RangeOper::toString() const {
   const std::string rhs = right_inclusive_ ? "]" : ")";
   return "(RangeOper " + lhs + " " + left_operand_->toString() + " , " +
          right_operand_->toString() + " " + rhs + " )";
+}
+
+std::string MLPredictExpr::toString() const {
+  std::stringstream ss;
+  ss << "ML_PREDICT(Model: ";
+  ss << model_value_->toString();
+  ss << " Regressors: ";
+  for (const auto& regressor_value : regressor_values_) {
+    ss << regressor_value->toString() << " ";
+  }
+  ss << ") ";
+  return ss.str();
 }
 
 std::string Subquery::toString() const {
@@ -3155,6 +3212,17 @@ void InValues::find_expr(std::function<bool(const Expr*)> f,
   arg->find_expr(f, expr_list);
   for (auto e : value_list) {
     e->find_expr(f, expr_list);
+  }
+}
+
+void MLPredictExpr::find_expr(std::function<bool(const Expr*)> f,
+                              std::list<const Expr*>& expr_list) const {
+  if (f(this)) {
+    add_unique(expr_list);
+    return;
+  }
+  for (auto& r : regressor_values_) {
+    r->find_expr(f, expr_list);
   }
 }
 

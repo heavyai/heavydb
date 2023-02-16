@@ -86,6 +86,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -311,6 +312,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new is_point_size_in_view());
     addOperator(new usTimestamp());
     addOperator(new nsTimestamp());
+
+    addOperator(new MLPredict());
 
     if (extSigs == null) {
       return;
@@ -737,6 +740,78 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       families.add(SqlTypeFamily.NUMERIC);
       families.add(SqlTypeFamily.INTEGER);
       return families;
+    }
+  }
+
+  public static class MLPredict extends SqlFunction {
+    public MLPredict() {
+      super("ML_PREDICT",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              null,
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.DOUBLE), /*nullable=*/true);
+      // typeFactory.createSqlType(opBinding.getOperandType(1).getSqlTypeName()),
+      // true);
+    }
+
+    @Override
+    public SqlOperandCountRange getOperandCountRange() {
+      return SqlOperandCountRanges.from(2);
+    }
+
+    protected boolean throwValidationSignatureErrorOrReturnFalse(
+            SqlCallBinding callBinding, boolean throwOnFailure) {
+      if (throwOnFailure) {
+        throw callBinding.newValidationSignatureError();
+      } else {
+        return false;
+      }
+    }
+
+    @Override
+    public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
+      // SqlCall sql_call = callBinding.getCall();
+      final SqlValidator validator = callBinding.getValidator();
+      // final RelDataTypeFactory type_factory = callBinding.getTypeFactory();
+
+      final int num_operands = callBinding.getOperandCount();
+      if (num_operands < 2) {
+        return throwValidationSignatureErrorOrReturnFalse(callBinding, throwOnFailure);
+      }
+      for (int operand_idx = 0; operand_idx < num_operands; operand_idx++) {
+        final SqlNode operand = callBinding.operand(operand_idx);
+        final SqlTypeName operand_type =
+                validator.getValidatedNodeType(operand).getSqlTypeName();
+        final SqlTypeFamily operand_type_family = operand_type.getFamily();
+        if (operand_idx == 0) {
+          if (!operand.isA(EnumSet.of(SqlKind.LITERAL))) {
+            return throwValidationSignatureErrorOrReturnFalse(
+                    callBinding, throwOnFailure);
+          }
+          if (operand_type_family != SqlTypeFamily.CHARACTER) {
+            return throwValidationSignatureErrorOrReturnFalse(
+                    callBinding, throwOnFailure);
+          }
+        } else {
+          if (operand.isA(EnumSet.of(SqlKind.LITERAL))) {
+            return throwValidationSignatureErrorOrReturnFalse(
+                    callBinding, throwOnFailure);
+          }
+          if (operand_type_family != SqlTypeFamily.NUMERIC) {
+            return throwValidationSignatureErrorOrReturnFalse(
+                    callBinding, throwOnFailure);
+          }
+        }
+      }
+      return true;
     }
   }
 
