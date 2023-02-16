@@ -22,6 +22,8 @@
 #include "QueryEngine/TableFunctions/SystemFunctions/os/Shared/NullRowsRemoval.h"
 #include "QueryEngine/heavydbTypes.h"
 
+#include "QueryEngine/TableFunctions/SystemFunctions/os/ML/MLModel.h"
+
 #ifdef HAVE_ONEDAL
 #include "QueryEngine/TableFunctions/SystemFunctions/os/ML/OneDalFunctions.hpp"
 #endif
@@ -34,20 +36,6 @@
 #include <tbb/task_arena.h>
 
 using namespace TableFunctions_Namespace;
-
-struct LinearRegressionModel {
-  std::vector<double> coefs;
-
-  LinearRegressionModel() {}
-
-  LinearRegressionModel(const std::vector<double>& coefs) : coefs(coefs) {}
-};
-
-inline ModelMap<ModelType> model_types_;
-inline ModelMap<LinearRegressionModel> linear_reg_models_;
-inline int64_t temp_model_idx{0};
-
-inline std::string temp_model_prefix{"__temp_model__"};
 
 template <typename T>
 std::vector<const T*> pluck_ptrs(const std::vector<std::vector<T>>& data,

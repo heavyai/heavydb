@@ -136,6 +136,12 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (width_bucket_expr) {
     return {codegen(width_bucket_expr, co)};
   }
+
+  auto ml_predict_expr = dynamic_cast<const Analyzer::MLPredictExpr*>(expr);
+  if (ml_predict_expr) {
+    return {codegen(ml_predict_expr, co)};
+  }
+
   auto likelihood_expr = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
   if (likelihood_expr) {
     return {codegen(likelihood_expr->get_arg(), fetch_columns, co)};

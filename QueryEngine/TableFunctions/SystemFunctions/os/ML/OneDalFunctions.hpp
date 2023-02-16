@@ -19,29 +19,13 @@
 #ifndef __CUDACC__
 #ifdef HAVE_ONEDAL
 
+#include "MLModel.h"
 #include "QueryEngine/TableFunctions/SystemFunctions/os/ML/MLTableFunctionsCommon.h"
 #include "QueryEngine/heavydbTypes.h"
 #include "daal.h"
 
 using namespace daal::algorithms;
 using namespace daal::data_management;
-
-struct RandomForestRegressionModel {
-  decision_forest::regression::interface1::ModelPtr model_ptr;
-  std::vector<double> variable_importance;
-  double out_of_bag_error;
-
-  RandomForestRegressionModel() {}
-
-  RandomForestRegressionModel(
-      decision_forest::regression::interface1::ModelPtr& model_ptr,
-      const std::vector<double>& variable_importance,
-      const double out_of_bag_error)
-      : model_ptr(model_ptr)
-      , variable_importance(variable_importance)
-      , out_of_bag_error(out_of_bag_error) {}
-};
-inline ModelMap<RandomForestRegressionModel> random_forest_models_;
 
 template <typename T>
 const NumericTablePtr prepare_data_table(const T* data,

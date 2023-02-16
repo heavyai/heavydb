@@ -100,6 +100,8 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateWidthBucket(const RexFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateMLPredict(const RexFunctionOperator*) const;
+
   std::shared_ptr<Analyzer::Expr> translateLike(const RexFunctionOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateRegexp(const RexFunctionOperator*) const;

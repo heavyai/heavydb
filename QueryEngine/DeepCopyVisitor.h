@@ -83,6 +83,10 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
     return makeExpr<Analyzer::SampleRatioExpr>(visit(expr->get_arg()));
   }
 
+  RetType visitMLPredict(const Analyzer::MLPredictExpr* expr) const override {
+    return expr->deep_copy();
+  }
+
   RetType visitCardinality(const Analyzer::CardinalityExpr* cardinality) const override {
     return makeExpr<Analyzer::CardinalityExpr>(visit(cardinality->get_arg()));
   }

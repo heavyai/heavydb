@@ -20,6 +20,7 @@
 
 #include "RuntimeFunctions.h"
 #include "BufferCompaction.h"
+#include "DecisionTreeEntry.h"
 #include "HyperLogLogRank.h"
 #include "MurmurHash.h"
 #include "Shared/Datum.h"
@@ -2148,6 +2149,40 @@ map_string_dict_id(const int32_t string_id,
   const int32_t* translation_map =
       reinterpret_cast<const int32_t*>(translation_map_handle);
   return translation_map[string_id - min_source_id];
+}
+
+extern "C" ALWAYS_INLINE DEVICE double tree_model_reg_predict(
+    const double* regressor_inputs,
+    const int64_t decision_tree_table_handle,
+    const int64_t decision_tree_offsets_handle,
+    const int32_t num_regressors,
+    const int32_t num_trees,
+    const double null_value) {
+  for (int32_t regressor_idx = 0; regressor_idx < num_regressors; ++regressor_idx) {
+    if (regressor_inputs[regressor_idx] == null_value) {
+      return null_value;
+    }
+  }
+  const DecisionTreeEntry* decision_tree_table =
+      reinterpret_cast<const DecisionTreeEntry*>(decision_tree_table_handle);
+  const int64_t* decision_tree_offsets =
+      reinterpret_cast<const int64_t*>(decision_tree_offsets_handle);
+  double sum_tree_results{0};
+  for (int32_t tree_idx = 0; tree_idx < num_trees; ++tree_idx) {
+    int64_t row_idx = decision_tree_offsets[tree_idx];
+    while (true) {
+      const DecisionTreeEntry& current_entry = decision_tree_table[row_idx];
+      if (!current_entry.isSplitNode()) {
+        sum_tree_results += current_entry.value;
+        break;
+      }
+      const auto regressor_input = regressor_inputs[current_entry.feature_index];
+      row_idx = regressor_input <= current_entry.value
+                    ? current_entry.left_child_row_idx
+                    : current_entry.right_child_row_idx;
+    }
+  }
+  return sum_tree_results / num_trees;
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE bool sample_ratio(
