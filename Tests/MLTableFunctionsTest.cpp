@@ -876,6 +876,7 @@ TEST_F(SystemTFs, LinearRegFitPredict) {
   }
 }
 
+#ifdef HAVE_ONEDAL
 TEST_F(SystemTFs, RandomForestRegFit) {
   const std::string data_table_name{"ml_iris"};
   const std::string id_col{""};  // No id column allowed for Fit calls
@@ -993,7 +994,9 @@ TEST_F(SystemTFs, RandomForestRegFit) {
     }
   }
 }
+#endif  // HAVE_ONEDAL
 
+#ifdef HAVE_ONEDAL
 TEST_F(SystemTFs, RandomForestRegPredict) {
   const auto supported_ml_frameworks = get_supported_ml_frameworks();
   for (auto& ml_framework : supported_ml_frameworks) {
@@ -1052,6 +1055,7 @@ TEST_F(SystemTFs, RandomForestRegPredict) {
     }
   }
 }
+#endif  // HAVE_ONEDAL
 
 TEST_F(SystemTFs, R2_SCORE) {
   const std::string data_table_name{"ml_iris"};
@@ -1106,49 +1110,234 @@ TEST_F(SystemTFs, R2_SCORE) {
           const double expected_min_r2{0.95};
           EXPECT_GE(actual_r2, expected_min_r2);
         }
-        // Random Forest Regression
-        {
-          const std::string quoted_model_name("'random_forest_reg'");
-          const std::string model_name("random_forest_reg");
-          if (ml_framework == "'onedal'") {
-            const auto fit_query =
-                generate_query("RANDOM_FOREST_REG_FIT",
-                               {{"model", quoted_model_name},
-                                {"data", train_cursor_query},
-                                {"preferred_ml_framework", ml_framework},
-                                {"max_tree_depth", "20"},
-                                {"num_trees", "10"},
-                                {"min_obs_per_leaf_node", "2"},
-                                {"use_histogram", "false"}},
-                               {"model"},
-                               make_args_named);
-
-            const auto fit_rows = run_multiple_agg(fit_query, dt);
-            EXPECT_EQ(fit_rows->rowCount(), 1UL);
-            EXPECT_EQ(fit_rows->colCount(), 1UL);
-            auto model_row = fit_rows->getNextRow(true, true);
-            EXPECT_EQ(
-                boost::get<std::string>(TestHelpers::v<NullableString>(model_row[0])),
-                model_name);
-
-            const auto r2_query = generate_query(
-                "R2_SCORE",
-                {{"model", quoted_model_name}, {"data", test_cursor_query}},
-                {"r2"},
-                make_args_named);
-            const auto r2_rows = run_multiple_agg(r2_query, dt);
-            EXPECT_EQ(r2_rows->rowCount(), 1UL);
-            EXPECT_EQ(r2_rows->colCount(), 1UL);
-            auto r2_row = r2_rows->getNextRow(true, true);
-            const double actual_r2 = TestHelpers::v<double>(r2_row[0]);
-            const double expected_min_r2{0.98};
-            EXPECT_GE(actual_r2, expected_min_r2);
-          }
-        }
       }
+#ifdef HAVE_ONEDAL
+      // Random Forest Regression
+      {
+        const std::string quoted_model_name("'random_forest_reg'");
+        const std::string model_name("random_forest_reg");
+        const std::string ml_framework("'onedal'");
+        const auto fit_query = generate_query("RANDOM_FOREST_REG_FIT",
+                                              {{"model", quoted_model_name},
+                                               {"data", train_cursor_query},
+                                               {"preferred_ml_framework", ml_framework},
+                                               {"max_tree_depth", "20"},
+                                               {"num_trees", "10"},
+                                               {"min_obs_per_leaf_node", "2"},
+                                               {"use_histogram", "false"}},
+                                              {"model"},
+                                              make_args_named);
+
+        const auto fit_rows = run_multiple_agg(fit_query, dt);
+        EXPECT_EQ(fit_rows->rowCount(), 1UL);
+        EXPECT_EQ(fit_rows->colCount(), 1UL);
+        auto model_row = fit_rows->getNextRow(true, true);
+        EXPECT_EQ(boost::get<std::string>(TestHelpers::v<NullableString>(model_row[0])),
+                  model_name);
+
+        const auto r2_query =
+            generate_query("R2_SCORE",
+                           {{"model", quoted_model_name}, {"data", test_cursor_query}},
+                           {"r2"},
+                           make_args_named);
+        const auto r2_rows = run_multiple_agg(r2_query, dt);
+        EXPECT_EQ(r2_rows->rowCount(), 1UL);
+        EXPECT_EQ(r2_rows->colCount(), 1UL);
+        auto r2_row = r2_rows->getNextRow(true, true);
+        const double actual_r2 = TestHelpers::v<double>(r2_row[0]);
+        const double expected_min_r2{0.98};
+        EXPECT_GE(actual_r2, expected_min_r2);
+      }
+#endif  // HAVE_ONEDAL
     }
   }
 }
+
+TEST_F(SystemTFs, ML_PREDICT_MISSING_MODEL) {
+  const std::string query = std::string(
+      "SELECT ML_PREDICT('missing_model', petal_length_cm, petal_width_cm) as prediction "
+      "FROM ml_iris;");
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_THROW(run_multiple_agg(query, dt), std::runtime_error);
+  }
+}
+
+TEST_F(SystemTFs, ML_PREDICT_LIN_REG_WRONG_NUM_REGRESSORS) {
+  const std::string train_query(
+      "SELECT * FROM TABLE(linear_reg_fit(model=>'iris_model', data=>CURSOR(select "
+      "petal_length_cm, petal_width_cm FROM ml_iris)));");
+  const std::string predict_query(
+      "SELECT ML_PREDICT('iris_model', petal_width_cm, "
+      "sepal_width_cm) as prediction FROM ml_iris;");
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
+    EXPECT_THROW(run_multiple_agg(predict_query, dt), std::runtime_error);
+  }
+}
+
+#ifdef HAVE_ONEDAL
+TEST_F(SystemTFs, ML_PREDICT_RANDOM_FOREST_REG_WRONG_NUM_REGRESSORS) {
+  const std::string train_query(
+      "SELECT * FROM TABLE(random_forest_reg_fit(model=>'iris_model', "
+      "data=>CURSOR(select "
+      "petal_length_cm, petal_width_cm FROM ml_iris)));");
+  const std::string predict_query(
+      "SELECT ML_PREDICT('iris_model',petal_width_cm, "
+      "sepal_width_cm) as prediction FROM ml_iris;");
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
+    EXPECT_THROW(run_multiple_agg(predict_query, dt), std::runtime_error);
+  }
+}
+#endif
+
+TEST_F(SystemTFs, ML_PREDICT_LIN_REG) {
+  const std::string train_query(
+      "SELECT * FROM TABLE(linear_reg_fit(model=>'iris_lin_reg_model', "
+      "data=>CURSOR(select "
+      "petal_length_cm, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
+      "ml_iris)));");
+  const std::string row_wise_predict_query(
+      "SELECT AVG(ML_PREDICT('iris_lin_reg_model', petal_width_cm, "
+      "sepal_length_cm, sepal_width_cm)) FROM ml_iris;");
+  const std::string tf_predict_query(
+      "SELECT AVG(prediction) FROM TABLE(linear_reg_predict(model=>'iris_lin_reg_model', "
+      "data=>CURSOR(SELECT rowid, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
+      "ml_iris)));");
+  const double allowed_epsilon{0.1};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
+    const auto row_wise_prediction_avg =
+        TestHelpers::v<double>(run_simple_agg(row_wise_predict_query, dt));
+    const auto tf_prediction_avg =
+        TestHelpers::v<double>(run_simple_agg(tf_predict_query, dt));
+    EXPECT_GE(row_wise_prediction_avg, tf_prediction_avg - allowed_epsilon);
+    EXPECT_LE(row_wise_prediction_avg, tf_prediction_avg + allowed_epsilon);
+  }
+}
+
+TEST_F(SystemTFs, ML_PREDICT_LIN_REG_NULLS) {
+  const std::string train_query(
+      "SELECT * FROM TABLE(linear_reg_fit(model=>'iris_lin_reg_model', "
+      "data=>CURSOR(select "
+      "petal_length_cm, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
+      "ml_iris)));");
+  const std::string row_wise_predict_query(
+      "SELECT AVG(ML_PREDICT('iris_lin_reg_model', petal_width_cm, "
+      "CASE WHEN MOD(rowid, 2) = 0 THEN sepal_length_cm ELSE NULL END, sepal_width_cm)) "
+      "AS avg_result,"
+      "COUNT(ML_PREDICT('iris_lin_reg_model', petal_width_cm, CASE WHEN MOD(rowid, 2) = "
+      "0 "
+      "THEN sepal_length_cm ELSE NULL END, sepal_width_cm)) AS num_not_null FROM "
+      "ml_iris;");
+  const std::string tf_predict_query(
+      "SELECT AVG(prediction) as avg_result, COUNT(prediction) AS num_not_null FROM "
+      "TABLE( "
+      "linear_reg_predict(model=>'iris_lin_reg_model', "
+      "data=>CURSOR(SELECT rowid, petal_width_cm, CASE WHEN MOD(rowid, 2) = 0 THEN "
+      "sepal_length_cm ELSE NULL END, sepal_width_cm FROM "
+      "ml_iris)));");
+  const double allowed_epsilon{0.01};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
+    const auto row_wise_prediction_result = run_multiple_agg(row_wise_predict_query, dt);
+    EXPECT_EQ(row_wise_prediction_result->rowCount(), size_t(1));
+    EXPECT_EQ(row_wise_prediction_result->colCount(), size_t(2));
+    const auto tf_prediction_result = run_multiple_agg(tf_predict_query, dt);
+    EXPECT_EQ(tf_prediction_result->rowCount(), size_t(1));
+    EXPECT_EQ(tf_prediction_result->colCount(), size_t(2));
+    auto row_wise_row = row_wise_prediction_result->getNextRow(true, true);
+    auto tf_row = tf_prediction_result->getNextRow(true, true);
+    const double row_wise_avg = TestHelpers::v<double>(row_wise_row[0]);
+    const double tf_avg = TestHelpers::v<double>(tf_row[0]);
+    EXPECT_GE(row_wise_avg, tf_avg - allowed_epsilon);
+    EXPECT_LE(row_wise_avg, tf_avg + allowed_epsilon);
+    const int64_t row_wise_non_null_count = TestHelpers::v<int64_t>(row_wise_row[1]);
+    const int64_t tf_non_null_count = TestHelpers::v<int64_t>(tf_row[1]);
+    EXPECT_EQ(row_wise_non_null_count, tf_non_null_count);
+    EXPECT_EQ(row_wise_non_null_count, int64_t(75));
+  }
+}
+
+#ifdef HAVE_ONEDAL
+TEST_F(SystemTFs, ML_PREDICT_RANDOM_FOREST_REG) {
+  const std::string train_query(
+      "SELECT * FROM TABLE(random_forest_reg_fit(model=>'iris_rand_forest_reg_model', "
+      "data=>CURSOR(select "
+      "petal_length_cm, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
+      "ml_iris)));");
+  const std::string row_wise_predict_query(
+      "SELECT AVG(ML_PREDICT('iris_rand_forest_reg_model', petal_width_cm, "
+      "sepal_length_cm, sepal_width_cm)) FROM ml_iris;");
+  const std::string tf_predict_query(
+      "SELECT AVG(prediction) FROM "
+      "TABLE(random_forest_reg_predict(model=>'iris_rand_forest_reg_model', "
+      "data=>CURSOR(SELECT rowid, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
+      "ml_iris)));");
+  const double allowed_epsilon{0.01};
+  // Add CPU execution after determine cause of crash on CPU
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
+    const auto row_wise_prediction_avg =
+        TestHelpers::v<double>(run_simple_agg(row_wise_predict_query, dt));
+    const auto tf_prediction_avg =
+        TestHelpers::v<double>(run_simple_agg(tf_predict_query, dt));
+    EXPECT_GE(row_wise_prediction_avg, tf_prediction_avg - allowed_epsilon);
+    EXPECT_LE(row_wise_prediction_avg, tf_prediction_avg + allowed_epsilon);
+  }
+}
+
+TEST_F(SystemTFs, ML_PREDICT_RAND_FOREST_REG_NULLS) {
+  const std::string train_query(
+      "SELECT * FROM "
+      "TABLE(random_forest_reg_fit(model=>'iris_rand_forest_reg_model', "
+      "data=>CURSOR(select "
+      "petal_length_cm, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
+      "ml_iris)));");
+  const std::string row_wise_predict_query(
+      "SELECT AVG(ML_PREDICT('iris_rand_forest_reg_model', petal_width_cm, "
+      "CASE WHEN MOD(rowid, 2) = 0 THEN sepal_length_cm ELSE NULL END, sepal_width_cm)) "
+      "AS avg_result,"
+      "COUNT(ML_PREDICT('iris_rand_forest_reg_model', petal_width_cm, CASE WHEN "
+      "MOD(rowid, 2) = 0 "
+      "THEN sepal_length_cm ELSE NULL END, sepal_width_cm)) AS num_not_null FROM "
+      "ml_iris;");
+  const std::string tf_predict_query(
+      "SELECT AVG(prediction) as avg_result, COUNT(prediction) AS num_not_null FROM "
+      "TABLE( "
+      "random_forest_reg_predict(model=>'iris_rand_forest_reg_model', "
+      "data=>CURSOR(SELECT rowid, petal_width_cm, CASE WHEN MOD(rowid, 2) = 0 THEN "
+      "sepal_length_cm ELSE NULL END, sepal_width_cm FROM "
+      "ml_iris)));");
+  const double allowed_epsilon{0.01};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
+    const auto row_wise_prediction_result = run_multiple_agg(row_wise_predict_query, dt);
+    EXPECT_EQ(row_wise_prediction_result->rowCount(), size_t(1));
+    EXPECT_EQ(row_wise_prediction_result->colCount(), size_t(2));
+    const auto tf_prediction_result = run_multiple_agg(tf_predict_query, dt);
+    EXPECT_EQ(tf_prediction_result->rowCount(), size_t(1));
+    EXPECT_EQ(tf_prediction_result->colCount(), size_t(2));
+    auto row_wise_row = row_wise_prediction_result->getNextRow(true, true);
+    auto tf_row = tf_prediction_result->getNextRow(true, true);
+    const double row_wise_avg = TestHelpers::v<double>(row_wise_row[0]);
+    const double tf_avg = TestHelpers::v<double>(tf_row[0]);
+    EXPECT_GE(row_wise_avg, tf_avg - allowed_epsilon);
+    EXPECT_LE(row_wise_avg, tf_avg + allowed_epsilon);
+    const int64_t row_wise_non_null_count = TestHelpers::v<int64_t>(row_wise_row[1]);
+    const int64_t tf_non_null_count = TestHelpers::v<int64_t>(tf_row[1]);
+    EXPECT_EQ(row_wise_non_null_count, tf_non_null_count);
+    EXPECT_EQ(row_wise_non_null_count, int64_t(75));
+  }
+}
+#endif
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);

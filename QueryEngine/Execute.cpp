@@ -1026,7 +1026,7 @@ std::vector<int8_t> Executor::serializeLiterals(
       }
     }
   }
-  if (lit_buf_size > static_cast<size_t>(std::numeric_limits<int16_t>::max())) {
+  if (lit_buf_size > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
     throw TooManyLiterals();
   }
   int16_t crt_real_str_off = lit_buf_size;

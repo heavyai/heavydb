@@ -77,6 +77,10 @@ class ScalarExprVisitor {
     if (width_bucket) {
       return visitWidthBucket(width_bucket);
     }
+    const auto ml_predict = dynamic_cast<const Analyzer::MLPredictExpr*>(expr);
+    if (ml_predict) {
+      return visitMLPredict(ml_predict);
+    }
     const auto string_oper = dynamic_cast<const Analyzer::StringOper*>(expr);
     if (string_oper) {
       return visitStringOper(string_oper);
@@ -261,6 +265,16 @@ class ScalarExprVisitor {
     result = aggregateResult(result, visit(width_bucket_expr->get_lower_bound()));
     result = aggregateResult(result, visit(width_bucket_expr->get_upper_bound()));
     result = aggregateResult(result, visit(width_bucket_expr->get_partition_count()));
+    return result;
+  }
+
+  virtual T visitMLPredict(const Analyzer::MLPredictExpr* ml_predict_expr) const {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(ml_predict_expr->get_model_value()));
+    const auto& regressor_values = ml_predict_expr->get_regressor_values();
+    for (const auto& regressor_value : regressor_values) {
+      result = aggregateResult(result, visit(regressor_value.get()));
+    }
     return result;
   }
 

@@ -704,6 +704,77 @@ class InIntegerSet : public Expr {
   const std::vector<int64_t> value_list;            // the list of values right of IN
 };
 
+class MLPredictExpr : public Expr {
+ public:
+  MLPredictExpr(const std::shared_ptr<Analyzer::Expr>& model,
+                const std::vector<std::shared_ptr<Analyzer::Expr>>& regressors)
+      : Expr(kDOUBLE, false), model_value_(model), regressor_values_(regressors) {}
+
+  const Expr* get_model_value() const { return model_value_.get(); }
+  const std::vector<std::shared_ptr<Analyzer::Expr>>& get_regressor_values() const {
+    return regressor_values_;
+  }
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  void group_predicates(std::list<const Expr*>& scan_predicates,
+                        std::list<const Expr*>& join_predicates,
+                        std::list<const Expr*>& const_predicates) const override;
+
+  void collect_rte_idx(std::set<int>& rte_idx_set) const override {
+    for (const auto& regressor_value : regressor_values_) {
+      regressor_value->collect_rte_idx(rte_idx_set);
+    }
+  }
+
+  void collect_column_var(
+      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
+          colvar_set,
+      bool include_agg) const override {
+    for (const auto& regressor_value : regressor_values_) {
+      regressor_value->collect_column_var(colvar_set, include_agg);
+    }
+  }
+
+  std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    std::vector<std::shared_ptr<Analyzer::Expr>> new_regressor_values;
+    for (auto& r : regressor_values_) {
+      new_regressor_values.push_back(r->deep_copy());
+    }
+    return makeExpr<MLPredictExpr>(model_value_->rewrite_with_targetlist(tlist),
+                                   new_regressor_values);
+  }
+
+  std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    std::vector<std::shared_ptr<Analyzer::Expr>> new_regressor_values;
+    for (auto& r : regressor_values_) {
+      new_regressor_values.push_back(r->deep_copy());
+    }
+    return makeExpr<MLPredictExpr>(model_value_->rewrite_with_child_targetlist(tlist),
+                                   new_regressor_values);
+  }
+
+  std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    std::vector<std::shared_ptr<Analyzer::Expr>> new_regressor_values;
+    for (auto& r : regressor_values_) {
+      new_regressor_values.push_back(r->deep_copy());
+    }
+    return makeExpr<MLPredictExpr>(model_value_->rewrite_agg_to_var(tlist),
+                                   new_regressor_values);
+  }
+
+  bool operator==(const Expr& rhs) const override;
+  std::string toString() const override;
+  void find_expr(std::function<bool(const Expr*)> f,
+                 std::list<const Expr*>& expr_list) const override;
+
+ private:
+  std::shared_ptr<Analyzer::Expr> model_value_;
+  std::vector<std::shared_ptr<Analyzer::Expr>> regressor_values_;
+};
+
 /*
  * @type CharLengthExpr
  * @brief expression for the CHAR_LENGTH expression.

@@ -1077,6 +1077,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
   return Parser::CaseExpr::normalize(expr_list, else_expr, executor_);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateMLPredict(
+    const RexFunctionOperator* rex_function) const {
+  const auto num_operands = rex_function->size();
+  CHECK_GE(num_operands, 2UL);
+  auto model_value = translateScalarRex(rex_function->getOperand(0));
+  std::vector<std::shared_ptr<Analyzer::Expr>> regressor_values;
+  for (size_t regressor_idx = 1; regressor_idx < num_operands; ++regressor_idx) {
+    regressor_values.emplace_back(
+        translateScalarRex(rex_function->getOperand(regressor_idx)));
+  }
+  return makeExpr<Analyzer::MLPredictExpr>(model_value, regressor_values);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(
     const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 4);
@@ -1706,6 +1719,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
   if (rex_function->getName() == "CURRENT_USER"sv) {
     return translateCurrentUser(rex_function);
+  }
+  if (rex_function->getName() == "ML_PREDICT"sv) {
+    return translateMLPredict(rex_function);
   }
   if (func_resolve(rex_function->getName(),
                    "LOWER"sv,
