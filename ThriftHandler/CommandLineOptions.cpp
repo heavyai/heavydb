@@ -633,18 +633,6 @@ void CommandLineOptions::fillOptions() {
                      po::value<size_t>(&(disk_cache_config.size_limit)),
                      "Specify a maximum size for the disk cache in bytes.");
 
-#ifdef HAVE_AWS_S3
-  desc.add_options()(
-      "allow-s3-server-privileges",
-      po::value<bool>(&g_allow_s3_server_privileges)
-          ->default_value(g_allow_s3_server_privileges)
-          ->implicit_value(true),
-      "Allow S3 server privileges, if IAM user credentials are not provided. Credentials "
-      "may be specified with "
-      "environment variables (such as AWS_ACCESS_KEY_ID,  AWS_SECRET_ACCESS_KEY, etc), "
-      "an AWS credentials file, or when running on an EC2 instance, with an IAM role "
-      "that is attached to the instance.");
-#endif  // defined(HAVE_AWS_S3)
   desc.add_options()(
       "enable-interoperability",
       po::value<bool>(&g_enable_interop)
