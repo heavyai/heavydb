@@ -14,6 +14,7 @@ require 'set'
 
 # Tasks should be idempotent. Add tests if needed.
 
+PARALLEL = ENV['PARALLEL'] && 1 < ENV['PARALLEL'].to_i ? ENV['PARALLEL'].to_i : nil
 SCALE = ENV['SCALE'] || '1'
 RNGSEED = ENV['RNGSEED']
 SKIP_PG = ENV['SKIP_PG'] && ENV['SKIP_PG'] != '0' # Skip PostgreSQL tasks. Requires *-pg.* and *.lz4 files.
@@ -26,6 +27,9 @@ namespace :tpcds do
   input_dir = input_zip.sub(/\.zip$/, '')
   output_dir = "#{input_dir}_#{SCALE}GB"
   dbname = "tpcds_#{SCALE}gb"  # PostgreSQL username and database to generate query results
+  tables = %w(call_center catalog_page catalog_returns catalog_sales customer customer_address
+    customer_demographics date_dim dbgen_version household_demographics income_band inventory item promotion
+    reason ship_mode store store_returns store_sales time_dim warehouse web_page web_returns web_sales web_site)
   skip_queries = [47, 57].to_set # Skip queries that take too long
   supported = (1..99)
 
@@ -74,13 +78,22 @@ namespace :tpcds do
         n = query_num.call f
         sedrules = if n == 2 # Fix ERROR:  subquery in FROM must have an alias
           [ 's/))/) x)/', 's/round(\(...\).*/\0 \1/' ]
+        elsif n == 8 # No match found for function signature substr(<CHARACTER>, <NUMERIC>, <NUMERIC>)
+          # Expression 'customer_address.ca_zip' is not being grouped
+          # Node LogicalIntersect not supported yet
+          [ 's/substr(/substring(/g', 's/\(V1\.\| \)ca_zip/\1ca_zip_prefix/' ]
         elsif n == 13 # Columns must have unique names in order to create a view based on the query.
           [ 's/avg(ss_ext_sales_price)/\0 avg_price/', 's/avg(ss_ext_wholesale_cost)/\0 avg_cost/' ]
         elsif n == 14 # query14.tpl has 2 separate queries. Delete the 1st.
           [ '39,140d' ]
+        elsif n == 15 # No match found for function signature substr(<CHARACTER>, <NUMERIC>, <NUMERIC>)
+          [ 's/substr(/substring(/' ]
+        elsif n == 19 # No match found for function signature substr(<CHARACTER>, <NUMERIC>, <NUMERIC>)
+          [ 's/substr(/substring(/g' ]
         elsif n == 23 # query23.tpl has 2 separate queries. Delete the 1st.
           # Fix ERROR:  subquery in FROM must have an alias
-          [ '40,89d', 's/c_customer_sk)/\0 x/', 's/c_first_name)/\0 y/' ]
+          # No match found for function signature substr(<CHARACTER>, <NUMERIC>, <NUMERIC>)
+          [ '40,89d', 's/c_customer_sk)/\0 x/', 's/c_first_name)/\0 y/', 's/substr(/substring(/' ]
         elsif n == 24 # query24.tpl has 2 separate queries. Delete the 1st.
           #[ '/^;/,$ { /^\([^;]\|$\)/,$d }' ]
           [ 's/MARKET=random(5,10,uniform)/MARKET=3/', '40,92d' ]
@@ -89,20 +102,30 @@ namespace :tpcds do
         elsif n == 31 # Make order unique.
           [ '/define AGG=/s/text(.*);/text({"ss1.ca_county",1});/' ]
         elsif n == 35 # ERROR:  column "avg" specified more than once
-          [ 's/\[\(AGG\w+\)\](cd_dep\(_\w+\))/\0 \1\2/' ]
+          [ 's/\[\(AGG\w\+\)\](cd_dep\(_\w\+\))/\0 \1\2/' ]
+        elsif n == 45 # No match found for function signature substr(<CHARACTER>, <NUMERIC>, <NUMERIC>)
+          [ 's/substr(/substring(/' ]
         elsif n == 59 # Name unnamed columns for view.
           [ 's/\(..._sales\)1\/\12/\0 \1_ratio/g' ]
         elsif n == 64 # Avoid duplicate column names
           [ 's/\(cs1\.\(cnt\|syear\)\)$/\1 s1\2/' ]
+        elsif n == 72 # Cannot apply '+' to arguments of type '<DATE> + <INTEGER>'.
+          [ 's/\(d1.d_date\) + \([0-9]\+\)/\1 + interval \'\2\' day/' ]
         elsif n == 77 # Fix ERROR:  syntax error at or near "returns"
+          # SQL Error: Encountered "returns" at line 1, column 363.
           [ 's/\(coalesce(returns, 0)\) \(returns\)/\1 as \2/',
-            's/\([0-9]\{1,\}\) days)/interval \'\1\' day)/' ]
+            's/\([0-9]\+\) days)/interval \'\1\' day)/',
+            's/\([( ]\)returns/\1return_sum/g' ]
+        elsif n == 84 # Error instantiating SqlStringOpKind operator. Currently string operations cannot be run on output of a case statement.
+          [ 's/coalesce(\([^,]\+\),\'\')/\1/g' ]
         elsif n == 85 # Give columns unique names for CREATE VIEW
           [ '0,/ws_quantity/s/\(avg(\(ws_quantity\))\)/\1 as avg_\2/',
             '0,/wr_refunded_cash/s/\(avg(\(wr_refunded_cash\))\)/\1 as avg_\2/',
             '0,/wr_fee/s/\(avg(\(wr_fee\))\)/\1 as avg_\2/' ]
+        elsif n == 90 # SQL Error: Encountered "at" at line 1, column 439.
+          [ 's/ at,/ amt,/' ]
         else # Make date arithmetic compatible with PostgreSQL and HeavyDB.
-          [ 's/\([0-9]\{1,\}\) days)/interval \'\1\' day)/' ]
+          [ 's/\([0-9]\+\) days)/interval \'\1\' day)/' ]
         end
         # Use IO.popen to avoid complexities with quoting+escaping sed rules.
         IO.popen ['sed'] + sedrules.map { |rule| ['-e', rule] }.flatten + [f] do |sed|
@@ -162,7 +185,7 @@ namespace :tpcds do
     # Generate SQL query files
     rule %r{#{output_dir}/query\d+\.sql} => [queries_patch, "#{input_dir}/tools/dsqgen", output_dir] do |f|
       # Lowest positive RNGSEED for query to not produce empty result for SCALE=1.
-      rngseed = { '25' => '2', '29' => '2', '37' => '4', '41' => '10' }
+      rngseed = { '23' => '9', '25' => '2', '29' => '2', '37' => '4', '41' => '10' }
       rngseed.default = '1'
       cd "#{input_dir}/tools" do
         sh './dsqgen', '-DIALECT', 'netezza',
@@ -177,14 +200,31 @@ namespace :tpcds do
   end
 
   # desc 'Generate table data files: call_center.dat, catalog_page.dat, ..., web_site.dat'
-  table_data = "#{output_dir}/web_site.dat"
+  table_data = PARALLEL ? "#{output_dir}/web_site_1_#{PARALLEL}.dat" : "#{output_dir}/web_site.dat"
   file table_data => [ "#{input_dir}/tools/dsqgen", output_dir ] do
     cd "#{input_dir}/tools" do
-      sh './dsdgen', '-DIR', "../../#{output_dir}",
+      dsdgen = [ './dsdgen', '-DIR', "../../#{output_dir}",
          '-RNGSEED', RNGSEED || '1',
          '-SCALE', SCALE,
          '-TERMINATE', 'N',  # exclude terminating delimiter from each line
-         '-VERBOSE', 'Y'
+         '-VERBOSE', 'Y' ]
+      if PARALLEL # 1 < PARALLEL or dsdgen emits an error
+        idx = dsdgen.index '-TERMINATE'
+        cmd = dsdgen[0...idx] + [ '-TABLE', nil ] + dsdgen[idx..-1] + [ '-PARALLEL', "#{PARALLEL}", '-CHILD' ]
+        table_idx = idx + 1
+        # *_returns tables are generated with their respective *_sales tables.
+        # dsdgen is smart enough to not split up smaller tables into PARALLEL files.
+        tables.reject { |t| t.match?(/_returns$/) }.each do |table|
+          cmd[table_idx] = table
+          threads = []
+          (1..PARALLEL).each do |child|
+            threads << Thread.new(child) { |child| sh(*cmd, "#{child}") }
+          end
+          threads.each &:join
+        end
+      else
+        sh(*dsdgen)
+      end
     end
   end
 
@@ -235,7 +275,8 @@ namespace :tpcds do
     if `#{test}`.to_i != 1
       file_size = lambda { |f| File.size f }
       Dir.glob("#{output_dir}/*.dat").sort_by(&file_size).each do |f|
-        table = File.basename f, '.dat'
+        md = File.basename(f).match(/^(\w+?)(_\d+_\d+)?\.dat$/) or raise "Unexpected filename(#{f})."
+        table = md[1]
         file = File.absolute_path f
         query = "COPY #{table} FROM '#{file}' WITH (DELIMITER='|', HEADER='false');"
         sh "echo \"#{query}\" | #{HEAVYSQL} #{dbname}"
@@ -349,6 +390,9 @@ namespace :tpcds do
 
   desc 'Generate SELECT query files: query1.sql, query2.sql, ..., query99.sql'
   task queries: supported.map { |n| "#{output_dir}/query#{n}.sql" }
+
+  desc 'Generate query files and table data - set PARALLEL for faster data generation.'
+  task files: [:queries, table_data, "#{output_dir}/tpcds-hv.sql"]
 
   desc 'Capture output of SELECT query files into query1-hv.txt, query2-hv.txt, ..., query99-hv.txt'
   task hv_capture: [ :hv_import ] + supported.map { |n| "#{output_dir}/query#{n}-hv.txt" }
@@ -564,7 +608,8 @@ task :pg_setup do |task,dbname|
     if !ok
       sh(*%W{createuser -U postgres #{dbname}}) do end
       sh(*%W{dropdb -U postgres #{dbname}}) do end
-      sh(*%W{createdb -U postgres -O #{dbname} #{dbname}})
+      # Use LC_COLLATE=C otherwise spaces are ignored when sorting text.
+      sh(*%W{createdb -U postgres -O #{dbname} -l C -T template0 #{dbname}})
       sh "#{PSQL} #{dbname} -c '\\q'"
     end
   end
@@ -694,8 +739,8 @@ class Reporter
   def format message
     message.gsub('<','&lt;').gsub("\n","<br/>\n").gsub('\n',"<br/>\n")
   end
-  def write_to ouput
-    ouput.puts <<-HTML
+  def write_to output
+    output.puts <<-HTML
 <html>
 <head>
 <style>
@@ -719,30 +764,40 @@ table.failed td:nth-child(2) { text-align: left; }
 <table>
 <tr><th>Query #</th><th>Time (ms)</th><th>Rows</th></tr>
 HTML
+    count = 0
     @json_files.each do |filename|
       n = filename[/query(\d+)\.json$/,1].to_i
       json = File.open(filename) { |file| JSON.load file }
       if json['success']
-        ouput.puts '<tr><td>%s</td><td>%s</td><td>%s</td></tr>' % [ n, json['time_ms'], json['nrows'] ]
+        count += 1
+        output.puts '<tr><td>%s</td><td>%s</td><td>%s</td></tr>' % [ n, json['time_ms'], json['nrows'] ]
       end
     end
-    ouput.puts <<-HTML
+    output.puts <<-HTML
 </table>
+HTML
+    output.puts "<p>Number of successful queries: #{count}</p>"
+    output.puts <<-HTML
 
 <h3>Failed Queries</h3>
 
 <table class="failed">
 <tr><th>Query #</th><th>Message</th></tr>
 HTML
+    count = 0
     @json_files.each do |filename|
       n = filename[/query(\d+)\.json$/,1].to_i
       json = File.open(filename) { |file| JSON.load file }
       if !json['success']
-        ouput.puts '<tr><td>%s</td><td>%s</td></tr>' % [ n, format(json['message']) ]
+        count += 1
+        output.puts '<tr><td>%s</td><td>%s</td></tr>' % [ n, format(json['message']) ]
       end
     end
-    ouput.puts <<-HTML
+    output.puts <<-HTML
 </table>
+HTML
+    output.puts "<p>Number of failed queries: #{count}</p>"
+    output.puts <<-HTML
 
 </body>
 </html>
