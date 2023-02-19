@@ -1308,6 +1308,11 @@ struct FlatBufferManager {
                        int32_t sizes_lengths[NDIM],
                        int32_t& nof_sizes,
                        bool& is_null) {
+    values = nullptr;
+    nof_values = 0;
+    nof_sizes = 0;
+    is_null = true;
+
     if (format() != NestedArrayFormatId) {
       RETURN_ERROR(NotSupportedFormatError);
     }
@@ -1364,10 +1369,6 @@ struct FlatBufferManager {
     const auto* values_offsets = get_values_offsets();
     const auto values_offset = values_offsets[storage_index];
     if (values_offset < 0) {
-      values = nullptr;
-      nof_values = 0;
-      nof_sizes = 0;
-      is_null = true;
       return Success;
     }
     is_null = false;
