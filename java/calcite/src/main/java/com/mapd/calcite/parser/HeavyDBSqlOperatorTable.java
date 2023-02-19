@@ -3053,19 +3053,14 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public String toString() {
-      return new String(getName() + "("
-              + String.join(",",
-                      this.arg_types.stream()
-                              .map(s -> s.toString())
-                              .collect(Collectors.toList()))
-              + ")");
+      return getExtendedSignature();
     }
 
-    Map<String, List<ExtArgumentType>> getCursorFieldTypes() {
+    public Map<String, List<ExtArgumentType>> getCursorFieldTypes() {
       return cursor_field_types;
     }
 
-    List<ExtArgumentType> getArgTypes() {
+    public List<ExtArgumentType> getArgTypes() {
       return arg_types;
     }
 

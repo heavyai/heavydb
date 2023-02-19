@@ -16,6 +16,11 @@
 
 package com.mapd.parser.server;
 
+import org.apache.calcite.avatica.util.TimeUnit;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.sql.SqlIntervalQualifier;
+import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.slf4j.Logger;
@@ -579,31 +584,24 @@ public class ExtensionFunction {
       case ColumnTimestamp:
         return ExtArgumentType.Timestamp;
       case ColumnArrayInt8:
-        return ExtArgumentType.ArrayInt8;
-      case ColumnArrayInt16:
-        return ExtArgumentType.ArrayInt16;
-      case ColumnArrayInt32:
-        return ExtArgumentType.ArrayInt32;
-      case ColumnArrayInt64:
-        return ExtArgumentType.ArrayInt64;
-      case ColumnArrayFloat:
-        return ExtArgumentType.ArrayFloat;
-      case ColumnArrayDouble:
-        return ExtArgumentType.ArrayDouble;
-      case ColumnArrayBool:
-        return ExtArgumentType.ArrayBool;
       case ColumnListArrayInt8:
         return ExtArgumentType.ArrayInt8;
+      case ColumnArrayInt16:
       case ColumnListArrayInt16:
         return ExtArgumentType.ArrayInt16;
+      case ColumnArrayInt32:
       case ColumnListArrayInt32:
         return ExtArgumentType.ArrayInt32;
+      case ColumnArrayInt64:
       case ColumnListArrayInt64:
         return ExtArgumentType.ArrayInt64;
+      case ColumnArrayFloat:
       case ColumnListArrayFloat:
         return ExtArgumentType.ArrayFloat;
+      case ColumnArrayDouble:
       case ColumnListArrayDouble:
         return ExtArgumentType.ArrayDouble;
+      case ColumnArrayBool:
       case ColumnListArrayBool:
         return ExtArgumentType.ArrayBool;
       case ColumnGeoPoint:
@@ -632,6 +630,52 @@ public class ExtensionFunction {
 
   public static ExtArgumentType toSqlTypeName(final String type) {
     return ExtArgumentType.valueOf(type);
+  }
+
+  public static RelDataType toRelDataType(
+          final ExtArgumentType type, RelDataTypeFactory factory) {
+    switch (type) {
+      case ArrayInt8:
+      case ArrayInt16:
+      case ArrayInt32:
+      case ArrayInt64:
+      case ArrayFloat:
+      case ArrayDouble:
+      case ArrayBool:
+      case ArrayTextEncodingDict:
+        return factory.createTypeWithNullability(
+                factory.createArrayType(toRelDataType(getValueType(type), factory), -1),
+                true);
+      case ColumnArrayInt8:
+      case ColumnArrayInt16:
+      case ColumnArrayInt32:
+      case ColumnArrayInt64:
+      case ColumnArrayFloat:
+      case ColumnArrayDouble:
+      case ColumnArrayBool:
+      case ColumnArrayTextEncodingDict:
+        return factory.createTypeWithNullability(
+                factory.createArrayType(
+                        toRelDataType(getValueType(getValueType(type)), factory), -1),
+                true);
+      case Timestamp:
+        return factory.createTypeWithNullability(
+                factory.createSqlType(toSqlTypeName(type), 9), true);
+      case ColumnTimestamp:
+        return factory.createTypeWithNullability(
+                toRelDataType(getValueType(type), factory), true);
+      case YearMonthTimeInterval:
+        SqlIntervalQualifier yearMonthIntervalQualifier =
+                new SqlIntervalQualifier(TimeUnit.MONTH, null, SqlParserPos.ZERO);
+        return factory.createSqlIntervalType(yearMonthIntervalQualifier);
+      case DayTimeInterval:
+        SqlIntervalQualifier dayTimeIntervalQualifier =
+                new SqlIntervalQualifier(TimeUnit.DAY, null, SqlParserPos.ZERO);
+        return factory.createSqlIntervalType(dayTimeIntervalQualifier);
+      default:
+        return factory.createTypeWithNullability(
+                factory.createSqlType(toSqlTypeName(type)), true);
+    }
   }
 
   public static SqlTypeName toSqlTypeName(final ExtArgumentType type) {

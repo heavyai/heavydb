@@ -83,7 +83,7 @@ int32_t supported_ml_frameworks__cpu_(TableFunctionManager& mgr,
    TextEncodingNone preferred_ml_framework) ->
    Column<K> id | input_id=args<0>,
    Column<int32_t> cluster_id,
-   K=[int32_t, int64_t, TextEncodingDict], T=[float, double]
+   K=[int64_t, TextEncodingDict], T=[float, double]
 */
 // clang-format on
 
@@ -176,7 +176,7 @@ kmeans__cpu_template(TableFunctionManager& mgr,
    TextEncodingNone init_type) ->
    Column<K> id | input_id=args<0>,
    Column<int32_t> cluster_id,
-   K=[int32_t, int64_t, TextEncodingDict], T=[float, double]
+   K=[int64_t, TextEncodingDict], T=[float, double]
 */
 // clang-format on
 
@@ -209,7 +209,7 @@ NEVER_INLINE HOST int32_t kmeans__cpu_template(TableFunctionManager& mgr,
    int32_t num_iterations | require="num_iterations > 0") ->
    Column<K> id | input_id=args<0>,
    Column<int32_t> cluster_id,
-   K=[int32_t, int64_t, TextEncodingDict], T=[float, double]
+   K=[int64_t, TextEncodingDict], T=[float, double]
 */
 // clang-format on
 
@@ -242,7 +242,7 @@ NEVER_INLINE HOST int32_t kmeans__cpu_template(TableFunctionManager& mgr,
    int32_t min_observations | require="min_observations > 0",
    TextEncodingNone preferred_ml_framework) ->
    Column<K> id | input_id=args<0>, Column<int32_t> cluster_id,
-   K=[int32_t, int64_t, TextEncodingDict], T=[float, double]
+   K=[int64_t, TextEncodingDict], T=[float, double]
  */
 // clang-format on
 
@@ -319,7 +319,7 @@ dbscan__cpu_template(TableFunctionManager& mgr,
    double epsilon | require="epsilon > 0.0",
    int32_t min_observations | require="min_observations > 0") ->
    Column<K> id | input_id=args<0>, Column<int32_t> cluster_id,
-   K=[int32_t, int64_t, TextEncodingDict], T=[float, double]
+   K=[int64_t, TextEncodingDict], T=[float, double]
  */
 // clang-format on
 
@@ -445,7 +445,7 @@ std::vector<T> sort_coefs(const Column<int32_t>& coef_idxs, const Column<T>& coe
    Cursor<Column<int32_t> coef_idx, Column<T> coef> params | require="coef_idx.size() == features.numCols() + 1",
    TextEncodingNone preferred_ml_framework) ->
    Column<K> id | input_id=args<0>, Column<T> prediction,
-   K=[int32_t, int64_t, TextEncodingDict], T=[float, double]
+   K=[int64_t, TextEncodingDict], T=[float, double]
  */
 // clang-format on
 
@@ -520,7 +520,7 @@ linear_reg_predict__cpu_template(TableFunctionManager& mgr,
    Cursor<Column<K> id, ColumnList<T> features> data,
    Cursor<Column<int32_t> coef_idx, Column<T> coef> params | require="coef_idx.size() == features.numCols() + 1") ->
    Column<K> id | input_id=args<0>, Column<T> prediction,
-   K=[int32_t, int64_t, TextEncodingDict], T=[float, double]
+   K=[int64_t, TextEncodingDict], T=[float, double]
  */
 // clang-format on
 
@@ -556,7 +556,7 @@ Column<T> create_wrapper_col(std::vector<T>& col_vec) {
    Cursor<Column<K> id, Column<T> labels, ColumnList<T> features> data,
    TextEncodingNone preferred_ml_framework) ->
    Column<K> id | input_id=args<0>, Column<T> prediction,
-   K=[int32_t, int64_t, TextEncodingDict], T=[float, double]
+   K=[int64_t, TextEncodingDict], T=[float, double]
  */
 // clang-format on
 
@@ -600,7 +600,7 @@ linear_reg_fit_predict__cpu_template(TableFunctionManager& mgr,
   UDTF: linear_reg_fit_predict__cpu_template(TableFunctionManager,
    Cursor<Column<K> id, Column<T> labels, ColumnList<T> features> data) ->
    Column<K> id | input_id=args<0>, Column<T> prediction,
-   K=[int32_t, int64_t, TextEncodingDict], T=[float, double]
+   K=[int64_t, TextEncodingDict], T=[float, double]
  */
 // clang-format on
 

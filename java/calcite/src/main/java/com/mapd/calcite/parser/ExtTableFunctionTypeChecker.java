@@ -33,9 +33,12 @@ import org.apache.calcite.sql.validate.SqlValidatorException;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -49,60 +52,10 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
 
   /*
    * This function is meant to check optionality when typechecking single
-   * operators. Since
-   * we perform type checking of all possible overloads of an operator, we use
-   * each UDTF's
-   * isArgumentOptional() method instead.
+   * operators. Since we perform type checking of all possible overloads
+   * of an operator, we use each UDTF's isArgumentOptional() method instead.
    */
   public boolean isOptional(int argIndex) {
-    return false;
-  }
-
-  public boolean doesOperandTypeMatch(ExtTableFunction tf,
-          SqlCallBinding callBinding,
-          SqlNode node,
-          int iFormalOperand) {
-    SqlCall permutedCall = callBinding.permutedCall();
-    SqlNode permutedOperand = permutedCall.operand(iFormalOperand);
-    RelDataType actualType;
-
-    // For candidate calls to incompatible operators, type inference of operands may
-    // fail.
-    // In that case, we just catch the exception and invalidade the candidate.
-    try {
-      actualType = callBinding.getValidator().deriveType(
-              callBinding.getScope(), permutedOperand);
-    } catch (Exception e) {
-      return false;
-    }
-
-    SqlTypeName typeName = actualType.getSqlTypeName();
-    SqlTypeFamily formalTypeFamily =
-            toSqlTypeName(tf.getArgTypes().get(iFormalOperand)).getFamily();
-
-    if (typeName == SqlTypeName.CURSOR) {
-      SqlCall cursorCall = (SqlCall) permutedOperand;
-      RelDataType cursorType = callBinding.getValidator().deriveType(
-              callBinding.getScope(), cursorCall.operand(0));
-      if (checkCursorOperandTypes(tf, iFormalOperand, cursorType)) {
-        return true;
-      }
-    } else {
-      if (formalTypeFamily.getTypeNames().contains(typeName)) {
-        return true;
-      }
-    }
-
-    /*
-     * If actual operand is a DEFAULT clause, and the candidate table function accepts a
-     * default value, the operand should typecheck (processing of the DEFAULT value will
-     * be handled later).
-     */
-    if (permutedOperand.getKind() == SqlKind.DEFAULT
-            && tf.isArgumentOptional(iFormalOperand)) {
-      return true;
-    }
-
     return false;
   }
 
@@ -164,100 +117,40 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
                                                == SqlKind.DEFAULT
                                        && !tf.isArgumentOptional(idx)));
 
-    // Typecheck each operand of the candidate call
-    candidateOverloads.removeIf(tf
-            -> IntStream.range(0, candidateBindings.get(tf).getOperandCount())
-                       .anyMatch(idx
-                               -> !doesOperandTypeMatch(tf,
-                                       candidateBindings.get(tf),
-                                       operandArray[idx],
-                                       idx)));
+    // Compute a typechecking score for each candidate, taking into account type promotion
+    HeavyDBTypeCoercion tc =
+            (HeavyDBTypeCoercion) callBinding.getValidator().getTypeCoercion();
+    Map<ExtTableFunction, Integer> scoredCandidates =
+            new HashMap<ExtTableFunction, Integer>();
+    candidateOverloads.stream().forEach(udtf
+            -> scoredCandidates.put(udtf,
+                    tc.calculateTypeCoercionScore(candidateBindings.get(udtf), udtf)));
 
-    // If there are no candidates left, the call is invalid.
-    if (candidateOverloads.size() == 0) {
+    // Use the candidate with minimum cost
+    ExtTableFunction minCandidate;
+    try {
+      minCandidate = Collections
+                             .min(scoredCandidates.entrySet()
+                                             .stream()
+                                             .filter(entry -> entry.getValue() >= 0)
+                                             .collect(Collectors.toSet()),
+                                     Map.Entry.comparingByValue())
+                             .getKey();
+    } catch (NoSuchElementException e) {
+      // If there are no candidates left, the call is invalid.
       if (throwOnFailure) {
         throw(newExtTableFunctionSignatureError(callBinding));
       }
       return false;
     }
 
+    if (scoredCandidates.get(minCandidate) > 0) {
+      tc.extTableFunctionTypeCoercion(candidateBindings.get(minCandidate), minCandidate);
+    }
+
     // If there are candidates left, and the current bound operator
     // is not one of them, rewrite the call to use a better binding.
-    if (!candidateOverloads.isEmpty()
-            && !candidateOverloads.contains(callBinding.getOperator())) {
-      ExtTableFunction optimal = candidateOverloads.iterator().next();
-      ((SqlBasicCall) callBinding.getCall()).setOperator(optimal);
-    }
-
-    return true;
-  }
-
-  public boolean checkCursorOperandTypes(
-          ExtTableFunction tf, int iFormalOperand, RelDataType actualOperand) {
-    String formalOperandName = tf.getExtendedParamNames().get(iFormalOperand);
-    List<ExtArgumentType> formalFieldTypes =
-            tf.getCursorFieldTypes().get(formalOperandName);
-    List<RelDataTypeField> actualFieldList = actualOperand.getFieldList();
-
-    // runtime functions may not have CURSOR field type information, so we default
-    // to old behavior of assuming they typecheck
-    if (formalFieldTypes == null || formalFieldTypes.size() == 0) {
-      System.out.println(
-              "Warning: UDTF has no CURSOR field subtype data. Proceeding assuming CURSOR typechecks.");
-      return true;
-    }
-
-    int iFormal = 0;
-    int iActual = 0;
-    while (iActual < actualFieldList.size() && iFormal < formalFieldTypes.size()) {
-      ExtArgumentType extType = formalFieldTypes.get(iFormal);
-      SqlTypeName formalType = toSqlTypeName(extType);
-      SqlTypeName actualType = actualFieldList.get(iActual).getValue().getSqlTypeName();
-
-      if (formalType == SqlTypeName.COLUMN_LIST) {
-        ExtArgumentType colListSubtype = getValueType(extType);
-        SqlTypeName colListType = toSqlTypeName(colListSubtype);
-
-        if (actualType != colListType) {
-          return false;
-        }
-
-        int colListSize = 0;
-        int numFormalArgumentsLeft = (formalFieldTypes.size() - 1) - iFormal;
-        while (iActual + colListSize
-                < (actualFieldList.size() - numFormalArgumentsLeft)) {
-          actualType =
-                  actualFieldList.get(iActual + colListSize).getValue().getSqlTypeName();
-          if (actualType != colListType) {
-            break;
-          }
-          colListSize++;
-        }
-        iActual += colListSize - 1;
-      } else if (formalType == SqlTypeName.ARRAY) {
-        if (actualType != SqlTypeName.ARRAY) {
-          return false;
-        }
-
-        SqlTypeName formalArraySubtype =
-                toSqlTypeName(getValueType(getValueType(extType)));
-        SqlTypeName actualArraySubtype = actualFieldList.get(iActual)
-                                                 .getValue()
-                                                 .getComponentType()
-                                                 .getSqlTypeName();
-        if (formalArraySubtype != actualArraySubtype) {
-          return false;
-        }
-      } else if (formalType != actualType) {
-        return false;
-      }
-      iFormal++;
-      iActual++;
-    }
-
-    if (iActual < actualFieldList.size()) {
-      return false;
-    }
+    ((SqlBasicCall) callBinding.getCall()).setOperator(minCandidate);
 
     return true;
   }
@@ -310,8 +203,7 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
   }
 
   // Returns a call signature with detailed CURSOR type information, to emit
-  // better error
-  // messages
+  // better error messages
   public String getCallSignature(
           SqlCallBinding callBinding, SqlValidator validator, SqlValidatorScope scope) {
     List<String> signatureList = new ArrayList<>();

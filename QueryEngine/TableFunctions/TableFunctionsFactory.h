@@ -224,16 +224,6 @@ class TableFunction {
     return output_sizer_.type == OutputBufferSizeType::kUserSpecifiedRowMultiplier;
   }
 
-  bool mayRequireCastingInputTypes() const {
-    for (auto& input : input_args_) {
-      if (input == ExtArgumentType::Timestamp ||
-          input == ExtArgumentType::ColumnTimestamp) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   OutputBufferSizeType getOutputRowSizeType() const { return output_sizer_.type; }
 
   size_t getOutputRowSizeParameter() const { return output_sizer_.val; }

@@ -272,133 +272,6 @@ llvm::Value* alloc_column_list(std::string col_list_name,
   return col_list_ptr;
 }
 
-static bool columnTypeRequiresCasting(const SQLTypeInfo& ti) {
-  /*
-  Returns whether a column requires casting before table function execution based on its
-  underlying SQL type
-  */
-
-  if (!ti.is_column()) {
-    return false;
-  }
-
-  // TIMESTAMP columns should always have nanosecond precision
-  if (ti.get_subtype() == kTIMESTAMP && ti.get_precision() != 9) {
-    return true;
-  }
-
-  return false;
-}
-
-llvm::Value* cast_value(llvm::Value* value,
-                        SQLTypeInfo& orig_ti,
-                        SQLTypeInfo& dest_ti,
-                        bool nullable,
-                        CodeGenerator& codeGenerator) {
-  /*
-  Codegens a cast of a value from a given origin type to a given destination type, if such
-  implementation is available. Errors for unsupported casts.
-  */
-  if (orig_ti.is_timestamp() && dest_ti.is_timestamp()) {
-    return codeGenerator.codegenCastBetweenTimestamps(
-        value, orig_ti, dest_ti, !dest_ti.get_notnull());
-  } else {
-    throw std::runtime_error("Unsupported cast from " + orig_ti.get_type_name() + " to " +
-                             dest_ti.get_type_name() + " during UDTF code generation.");
-  }
-}
-
-void cast_column(llvm::Value* col_base_ptr,
-                 llvm::Function* func,
-                 SQLTypeInfo& orig_ti,
-                 SQLTypeInfo& dest_ti,
-                 std::string index,
-                 llvm::IRBuilder<>& ir_builder,
-                 llvm::LLVMContext& ctx,
-                 CodeGenerator& codeGenerator) {
-  /*
-  Generates code to cast a Column instance from a given origin
-  SQLType to a new destinaton SQLType. To do so, it generates a
-  loop with the following overall structure:
-
-     --------------
-     | pre_header |
-     |   i = 0    |
-     --------------
-           |
-           v
-    ----------------              ----------------
-    |    cond      |              |     body     |
-    | i < col.size |   (True) ->  | cast(col[i]) |
-    ----------------              |     i++      |
-        (False) ^                 ----------------
-           |     \____________________/
-           |
-           v
-    ---------------
-    |     end     |
-    ---------------
-
-  The correctness of the cast as well as error handling/early
-  exiting in case of cast failures are left to the CodeGenerator
-  which generates the code for the cast operation itself.
- */
-
-  llvm::BasicBlock* for_pre =
-      llvm::BasicBlock::Create(ctx, "for_pre_cast." + index, func);
-  llvm::BasicBlock* for_cond =
-      llvm::BasicBlock::Create(ctx, "for_cond_cast." + index, func);
-  llvm::BasicBlock* for_body =
-      llvm::BasicBlock::Create(ctx, "for_body_cast." + index, func);
-  llvm::BasicBlock* for_end =
-      llvm::BasicBlock::Create(ctx, "for_end_cast." + index, func);
-  ir_builder.CreateBr(for_pre);
-
-  // pre-header: load column ptr and size
-  ir_builder.SetInsertPoint(for_pre);
-  llvm::Type* data_type = get_llvm_type_from_sql_column_type(orig_ti, ctx);
-  llvm::StructType* col_struct_type =
-      llvm::StructType::get(ctx, {data_type, ir_builder.getInt64Ty()});
-  llvm::Value* struct_cast = ir_builder.CreateBitCast(
-      col_base_ptr, col_struct_type->getPointerTo(), "col_struct." + index);
-  llvm::Value* gep_ptr = ir_builder.CreateStructGEP(
-      col_struct_type, struct_cast, 0, "col_ptr_addr." + index);
-  llvm::Value* col_ptr = ir_builder.CreateLoad(data_type, gep_ptr, "col_ptr." + index);
-  llvm::Value* gep_sz =
-      ir_builder.CreateStructGEP(col_struct_type, struct_cast, 1, "col_sz_addr." + index);
-  llvm::Value* col_sz =
-      ir_builder.CreateLoad(ir_builder.getInt64Ty(), gep_sz, "col_sz." + index);
-  ir_builder.CreateBr(for_cond);
-
-  // condition: check induction variable against loop predicate
-  ir_builder.SetInsertPoint(for_cond);
-  llvm::PHINode* for_ind_var =
-      ir_builder.CreatePHI(ir_builder.getInt64Ty(), 2, "for_ind_var." + index);
-  for_ind_var->addIncoming(ir_builder.getInt64(0), for_pre);
-  llvm::Value* for_pred =
-      ir_builder.CreateICmpSLT(for_ind_var, col_sz, "for_pred." + index);
-  ir_builder.CreateCondBr(for_pred, for_body, for_end);
-
-  // body: perform value cast, increment induction variable
-  ir_builder.SetInsertPoint(for_body);
-  ;
-  llvm::Value* val_gep = ir_builder.CreateInBoundsGEP(
-      ir_builder.getInt64Ty(), col_ptr, for_ind_var, "val_gep." + index);
-  llvm::Value* val_load =
-      ir_builder.CreateLoad(ir_builder.getInt64Ty(), val_gep, "val_load." + index);
-  llvm::Value* cast_result = cast_value(val_load, orig_ti, dest_ti, false, codeGenerator);
-  cast_result->setName("cast_result." + index);
-  ir_builder.CreateStore(cast_result, val_gep);
-  llvm::Value* for_inc =
-      ir_builder.CreateAdd(for_ind_var, ir_builder.getInt64(1), "for_inc." + index);
-  ir_builder.CreateBr(for_cond);
-  // the cast codegening may have generated extra blocks, so for_body does not necessarily
-  // jump to for_cond directly
-  llvm::Instruction* inc_as_inst = llvm::cast<llvm::Instruction>(for_inc);
-  for_ind_var->addIncoming(for_inc, inc_as_inst->getParent());
-  ir_builder.SetInsertPoint(for_end);
-}
-
 std::string exprsKey(const std::vector<Analyzer::Expr*>& exprs) {
   std::string result;
   for (const auto& expr : exprs) {
@@ -554,7 +427,6 @@ void TableFunctionCompilationContext::generateEntryPoint(
   // passed by reference, see rbc issues 200 and 289.
   auto pass_column_by_value = passColumnsByValue(exe_unit);
   std::vector<llvm::Value*> func_args;
-  std::vector<std::pair<llvm::Value*, const SQLTypeInfo>> columns_to_cast;
   size_t func_arg_index = 0;
   if (exe_unit.table_func.usesManager()) {
     func_args.push_back(mgr_ptr);
@@ -625,11 +497,6 @@ void TableFunctionCompilationContext::generateEntryPoint(
                                ? cgen_state->ir_builder_.CreateLoad(
                                      col->getType()->getPointerElementType(), col)
                                : col_ptr));
-
-      if (columnTypeRequiresCasting(ti) &&
-          exe_unit.table_func.mayRequireCastingInputTypes()) {
-        columns_to_cast.emplace_back(col_ptr, ti);
-      }
       CHECK_EQ(col_index, -1);
     } else if (ti.is_column_list()) {
       if (col_index == -1) {
@@ -722,10 +589,6 @@ void TableFunctionCompilationContext::generateEntryPoint(
     }
   }
 
-  if (exe_unit.table_func.mayRequireCastingInputTypes() && !emit_only_preflight_fn) {
-    generateCastsForInputTypes(exe_unit, columns_to_cast, mgr_ptr);
-  }
-
   generateTableFunctionCall(
       exe_unit, func_args, bb_exit, output_row_count_ptr, emit_only_preflight_fn);
 
@@ -734,87 +597,6 @@ void TableFunctionCompilationContext::generateEntryPoint(
   // std::cout << "=================================" << std::endl;
 
   verify_function_ir(entry_point_func_);
-}
-
-void TableFunctionCompilationContext::generateCastsForInputTypes(
-    const TableFunctionExecutionUnit& exe_unit,
-    const std::vector<std::pair<llvm::Value*, const SQLTypeInfo>>& columns_to_cast,
-    llvm::Value* mgr_ptr) {
-  auto* cgen_state = executor_->getCgenStatePtr();
-  llvm::LLVMContext& ctx = cgen_state->context_;
-  llvm::IRBuilder<>* ir_builder = &cgen_state->ir_builder_;
-  CodeGenerator codeGenerator = CodeGenerator(cgen_state, executor_->getPlanStatePtr());
-  llvm::Function* old_func = cgen_state->current_func_;
-  cgen_state->current_func_ =
-      entry_point_func_;  // update cgen_state current func for CodeGenerator
-
-  for (unsigned i = 0; i < columns_to_cast.size(); ++i) {
-    auto [col_ptr, ti] = columns_to_cast[i];
-
-    if (ti.is_column() && ti.get_subtype() == kTIMESTAMP && ti.get_precision() != 9) {
-      // TIMESTAMP columns should always have nanosecond precision
-      SQLTypeInfo orig_ti = SQLTypeInfo(
-          ti.get_subtype(), ti.get_precision(), ti.get_dimension(), ti.get_notnull());
-      SQLTypeInfo dest_ti =
-          SQLTypeInfo(kTIMESTAMP, 9, ti.get_dimension(), ti.get_notnull());
-      cast_column(col_ptr,
-                  entry_point_func_,
-                  orig_ti,
-                  dest_ti,
-                  std::to_string(i + 1),
-                  *ir_builder,
-                  ctx,
-                  codeGenerator);
-    }
-  }
-
-  // The QueryEngine CodeGenerator will codegen return values corresponding to
-  // QueryExecutionError codes. Since at the table function level we'd like error handling
-  // to be done by the TableFunctionManager, we replace the codegen'd returns by calls to
-  // the appropriate Manager functions.
-  if (co_.device_type == ExecutorDeviceType::GPU) {
-    // TableFunctionManager is not supported on GPU, so leave the QueryExecutionError code
-    return;
-  }
-
-  std::vector<llvm::ReturnInst*> rets_to_replace;
-  for (llvm::BasicBlock& BB : *entry_point_func_) {
-    for (llvm::Instruction& I : BB) {
-      if (!llvm::isa<llvm::ReturnInst>(&I)) {
-        continue;
-      }
-      llvm::ReturnInst* RI = llvm::cast<llvm::ReturnInst>(&I);
-      llvm::Value* retValue = RI->getReturnValue();
-      if (!retValue || !llvm::isa<llvm::ConstantInt>(retValue)) {
-        continue;
-      }
-      llvm::ConstantInt* retConst = llvm::cast<llvm::ConstantInt>(retValue);
-      if (retConst->getValue() == 7) {
-        // ret 7 = underflow/overflow during casting attempt
-        rets_to_replace.push_back(RI);
-      }
-    }
-  }
-
-  auto prev_insert_point = ir_builder->saveIP();
-  for (llvm::ReturnInst* RI : rets_to_replace) {
-    ir_builder->SetInsertPoint(RI);
-    llvm::Value* err_msg = ir_builder->CreateGlobalStringPtr(
-        "Underflow or overflow during casting of input types!", "cast_err_str");
-    llvm::Value* error_call;
-    if (exe_unit.table_func.usesManager()) {
-      error_call = cgen_state->emitExternalCall("TableFunctionManager_error_message",
-                                                ir_builder->getInt32Ty(),
-                                                {mgr_ptr, err_msg});
-    } else {
-      error_call = cgen_state->emitExternalCall(
-          "table_function_error", ir_builder->getInt32Ty(), {err_msg});
-    }
-    llvm::ReplaceInstWithInst(RI, llvm::ReturnInst::Create(ctx, error_call));
-  }
-  ir_builder->restoreIP(prev_insert_point);
-
-  cgen_state->current_func_ = old_func;
 }
 
 void TableFunctionCompilationContext::generateGpuKernel() {

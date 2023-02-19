@@ -732,4 +732,52 @@ ct_test_string_default_arg__cpu_(TableFunctionManager& mgr,
   return size;
 }
 
+EXTENSION_NOINLINE int32_t
+ct_test_calcite_casting_char__cpu_(TableFunctionManager& mgr,
+                                   const Column<TextEncodingDict>& input1,
+                                   Column<TextEncodingDict>& out) {
+  int32_t size = input1.size();
+  mgr.set_output_row_size(size);
+  for (int i = 0; i < size; ++i) {
+    out[i] = input1[i];
+  }
+  return size;
+}
+
+EXTENSION_NOINLINE int32_t
+ct_test_calcite_casting_bigint__cpu_(TableFunctionManager& mgr,
+                                     const Column<int64_t>& input1,
+                                     Column<int64_t>& out) {
+  int32_t size = input1.size();
+  mgr.set_output_row_size(size);
+  for (int i = 0; i < size; ++i) {
+    out[i] = input1[i];
+  }
+  return size;
+}
+
+EXTENSION_NOINLINE int32_t
+ct_test_calcite_casting_double__cpu_(TableFunctionManager& mgr,
+                                     const Column<double>& input1,
+                                     Column<double>& out) {
+  int32_t size = input1.size();
+  mgr.set_output_row_size(size);
+  for (int i = 0; i < size; ++i) {
+    out[i] = input1[i];
+  }
+  return size;
+}
+
+EXTENSION_NOINLINE int32_t
+ct_test_calcite_casting_timestamp__cpu_(TableFunctionManager& mgr,
+                                        const Column<Timestamp>& input1,
+                                        Column<Timestamp>& out) {
+  int32_t size = input1.size();
+  mgr.set_output_row_size(size);
+  for (int i = 0; i < size; ++i) {
+    out[i] = input1[i];
+  }
+  return size;
+}
+
 #endif
