@@ -80,684 +80,6 @@ ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
   return 1;
 }
 
-// explicit instantiations
-
-// 000
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<int32_t>& input_x,
-                                const Column<int32_t>& input_y,
-                                const Column<int32_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<int32_t>& output_x,
-                                Column<int32_t>& output_y,
-                                Column<int32_t>& output_z);
-
-// 001
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<int32_t>& input_x,
-                                const Column<int32_t>& input_y,
-                                const Column<int64_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<int32_t>& output_x,
-                                Column<int32_t>& output_y,
-                                Column<int64_t>& output_z);
-
-// 002
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<int32_t>& input_x,
-                                const Column<int32_t>& input_y,
-                                const Column<float>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<int32_t>& output_x,
-                                Column<int32_t>& output_y,
-                                Column<float>& output_z);
-
-// 003
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<int32_t>& input_x,
-                                const Column<int32_t>& input_y,
-                                const Column<double>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<int32_t>& output_x,
-                                Column<int32_t>& output_y,
-                                Column<double>& output_z);
-
-// 010
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<int64_t>& input_x,
-                                const Column<int64_t>& input_y,
-                                const Column<int32_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<int64_t>& output_x,
-                                Column<int64_t>& output_y,
-                                Column<int32_t>& output_z);
-
-// 011
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<int64_t>& input_x,
-                                const Column<int64_t>& input_y,
-                                const Column<int64_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<int64_t>& output_x,
-                                Column<int64_t>& output_y,
-                                Column<int64_t>& output_z);
-
-// 012
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<int64_t>& input_x,
-                                const Column<int64_t>& input_y,
-                                const Column<float>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<int64_t>& output_x,
-                                Column<int64_t>& output_y,
-                                Column<float>& output_z);
-
-// 013
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<int64_t>& input_x,
-                                const Column<int64_t>& input_y,
-                                const Column<double>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<int64_t>& output_x,
-                                Column<int64_t>& output_y,
-                                Column<double>& output_z);
-
-// 020
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<float>& input_x,
-                                const Column<float>& input_y,
-                                const Column<int32_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<float>& output_x,
-                                Column<float>& output_y,
-                                Column<int32_t>& output_z);
-
-// 021
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<float>& input_x,
-                                const Column<float>& input_y,
-                                const Column<int64_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<float>& output_x,
-                                Column<float>& output_y,
-                                Column<int64_t>& output_z);
-
-// 022
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<float>& input_x,
-                                const Column<float>& input_y,
-                                const Column<float>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<float>& output_x,
-                                Column<float>& output_y,
-                                Column<float>& output_z);
-
-// 023
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<float>& input_x,
-                                const Column<float>& input_y,
-                                const Column<double>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<float>& output_x,
-                                Column<float>& output_y,
-                                Column<double>& output_z);
-
-// 030
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<double>& input_x,
-                                const Column<double>& input_y,
-                                const Column<int32_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<double>& output_x,
-                                Column<double>& output_y,
-                                Column<int32_t>& output_z);
-
-// 031
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<double>& input_x,
-                                const Column<double>& input_y,
-                                const Column<int64_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<double>& output_x,
-                                Column<double>& output_y,
-                                Column<int64_t>& output_z);
-
-// 032
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<double>& input_x,
-                                const Column<double>& input_y,
-                                const Column<float>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<double>& output_x,
-                                Column<double>& output_y,
-                                Column<float>& output_z);
-
-// 033
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int32_t>& input_id,
-                                const Column<double>& input_x,
-                                const Column<double>& input_y,
-                                const Column<double>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int32_t>& output_id,
-                                Column<double>& output_x,
-                                Column<double>& output_y,
-                                Column<double>& output_z);
-
-// 100
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<int32_t>& input_x,
-                                const Column<int32_t>& input_y,
-                                const Column<int32_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<int32_t>& output_x,
-                                Column<int32_t>& output_y,
-                                Column<int32_t>& output_z);
-
-// 101
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<int32_t>& input_x,
-                                const Column<int32_t>& input_y,
-                                const Column<int64_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<int32_t>& output_x,
-                                Column<int32_t>& output_y,
-                                Column<int64_t>& output_z);
-
-// 102
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<int32_t>& input_x,
-                                const Column<int32_t>& input_y,
-                                const Column<float>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<int32_t>& output_x,
-                                Column<int32_t>& output_y,
-                                Column<float>& output_z);
-
-// 103
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<int32_t>& input_x,
-                                const Column<int32_t>& input_y,
-                                const Column<double>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<int32_t>& output_x,
-                                Column<int32_t>& output_y,
-                                Column<double>& output_z);
-
-// 110
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<int64_t>& input_x,
-                                const Column<int64_t>& input_y,
-                                const Column<int32_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<int64_t>& output_x,
-                                Column<int64_t>& output_y,
-                                Column<int32_t>& output_z);
-
-// 111
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<int64_t>& input_x,
-                                const Column<int64_t>& input_y,
-                                const Column<int64_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<int64_t>& output_x,
-                                Column<int64_t>& output_y,
-                                Column<int64_t>& output_z);
-
-// 112
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<int64_t>& input_x,
-                                const Column<int64_t>& input_y,
-                                const Column<float>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<int64_t>& output_x,
-                                Column<int64_t>& output_y,
-                                Column<float>& output_z);
-
-// 113
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<int64_t>& input_x,
-                                const Column<int64_t>& input_y,
-                                const Column<double>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<int64_t>& output_x,
-                                Column<int64_t>& output_y,
-                                Column<double>& output_z);
-
-// 120
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<float>& input_x,
-                                const Column<float>& input_y,
-                                const Column<int32_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<float>& output_x,
-                                Column<float>& output_y,
-                                Column<int32_t>& output_z);
-
-// 121
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<float>& input_x,
-                                const Column<float>& input_y,
-                                const Column<int64_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<float>& output_x,
-                                Column<float>& output_y,
-                                Column<int64_t>& output_z);
-
-// 122
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<float>& input_x,
-                                const Column<float>& input_y,
-                                const Column<float>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<float>& output_x,
-                                Column<float>& output_y,
-                                Column<float>& output_z);
-
-// 123
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<float>& input_x,
-                                const Column<float>& input_y,
-                                const Column<double>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<float>& output_x,
-                                Column<float>& output_y,
-                                Column<double>& output_z);
-
-// 130
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<double>& input_x,
-                                const Column<double>& input_y,
-                                const Column<int32_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<double>& output_x,
-                                Column<double>& output_y,
-                                Column<int32_t>& output_z);
-
-// 131
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<double>& input_x,
-                                const Column<double>& input_y,
-                                const Column<int64_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<double>& output_x,
-                                Column<double>& output_y,
-                                Column<int64_t>& output_z);
-
-// 132
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<double>& input_x,
-                                const Column<double>& input_y,
-                                const Column<float>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<double>& output_x,
-                                Column<double>& output_y,
-                                Column<float>& output_z);
-
-// 133
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<int64_t>& input_id,
-                                const Column<double>& input_x,
-                                const Column<double>& input_y,
-                                const Column<double>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<int64_t>& output_id,
-                                Column<double>& output_x,
-                                Column<double>& output_y,
-                                Column<double>& output_z);
-
-// 200
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<int32_t>& input_x,
-                                const Column<int32_t>& input_y,
-                                const Column<int32_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<int32_t>& output_x,
-                                Column<int32_t>& output_y,
-                                Column<int32_t>& output_z);
-
-// 201
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<int32_t>& input_x,
-                                const Column<int32_t>& input_y,
-                                const Column<int64_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<int32_t>& output_x,
-                                Column<int32_t>& output_y,
-                                Column<int64_t>& output_z);
-
-// 202
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<int32_t>& input_x,
-                                const Column<int32_t>& input_y,
-                                const Column<float>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<int32_t>& output_x,
-                                Column<int32_t>& output_y,
-                                Column<float>& output_z);
-
-// 203
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<int32_t>& input_x,
-                                const Column<int32_t>& input_y,
-                                const Column<double>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<int32_t>& output_x,
-                                Column<int32_t>& output_y,
-                                Column<double>& output_z);
-
-// 210
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<int64_t>& input_x,
-                                const Column<int64_t>& input_y,
-                                const Column<int32_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<int64_t>& output_x,
-                                Column<int64_t>& output_y,
-                                Column<int32_t>& output_z);
-
-// 211
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<int64_t>& input_x,
-                                const Column<int64_t>& input_y,
-                                const Column<int64_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<int64_t>& output_x,
-                                Column<int64_t>& output_y,
-                                Column<int64_t>& output_z);
-
-// 212
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<int64_t>& input_x,
-                                const Column<int64_t>& input_y,
-                                const Column<float>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<int64_t>& output_x,
-                                Column<int64_t>& output_y,
-                                Column<float>& output_z);
-
-// 213
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<int64_t>& input_x,
-                                const Column<int64_t>& input_y,
-                                const Column<double>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<int64_t>& output_x,
-                                Column<int64_t>& output_y,
-                                Column<double>& output_z);
-
-// 220
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<float>& input_x,
-                                const Column<float>& input_y,
-                                const Column<int32_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<float>& output_x,
-                                Column<float>& output_y,
-                                Column<int32_t>& output_z);
-
-// 221
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<float>& input_x,
-                                const Column<float>& input_y,
-                                const Column<int64_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<float>& output_x,
-                                Column<float>& output_y,
-                                Column<int64_t>& output_z);
-
-// 222
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<float>& input_x,
-                                const Column<float>& input_y,
-                                const Column<float>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<float>& output_x,
-                                Column<float>& output_y,
-                                Column<float>& output_z);
-
-// 223
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<float>& input_x,
-                                const Column<float>& input_y,
-                                const Column<double>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<float>& output_x,
-                                Column<float>& output_y,
-                                Column<double>& output_z);
-
-// 230
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<double>& input_x,
-                                const Column<double>& input_y,
-                                const Column<int32_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<double>& output_x,
-                                Column<double>& output_y,
-                                Column<int32_t>& output_z);
-
-// 231
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<double>& input_x,
-                                const Column<double>& input_y,
-                                const Column<int64_t>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<double>& output_x,
-                                Column<double>& output_y,
-                                Column<int64_t>& output_z);
-
-// 232
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<double>& input_x,
-                                const Column<double>& input_y,
-                                const Column<float>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<double>& output_x,
-                                Column<double>& output_y,
-                                Column<float>& output_z);
-
-// 233
-template NEVER_INLINE HOST int32_t
-ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                const TextEncodingNone& agg_type,
-                                const Column<TextEncodingDict>& input_id,
-                                const Column<double>& input_x,
-                                const Column<double>& input_y,
-                                const Column<double>& input_z,
-                                Column<int32_t>& output_row_count,
-                                Column<TextEncodingDict>& output_id,
-                                Column<double>& output_x,
-                                Column<double>& output_y,
-                                Column<double>& output_z);
-
-#endif  // #ifndef __CUDACC__
-
-#ifndef __CUDACC__
-
 template <typename K, typename T, typename Z>
 NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
                                                                const Column<K>& input_id,
@@ -778,588 +100,6 @@ NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(TableFunctionMana
   }
   return input_size;
 }
-
-// explicit instantiations
-
-// 000
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<int32_t>& input_x,
-                                     const Column<int32_t>& input_y,
-                                     const Column<int32_t>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<int32_t>& output_x,
-                                     Column<int32_t>& output_y,
-                                     Column<int32_t>& output_z);
-
-// 001
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<int32_t>& input_x,
-                                     const Column<int32_t>& input_y,
-                                     const Column<int64_t>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<int32_t>& output_x,
-                                     Column<int32_t>& output_y,
-                                     Column<int64_t>& output_z);
-
-// 002
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<int32_t>& input_x,
-                                     const Column<int32_t>& input_y,
-                                     const Column<float>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<int32_t>& output_x,
-                                     Column<int32_t>& output_y,
-                                     Column<float>& output_z);
-
-// 003
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<int32_t>& input_x,
-                                     const Column<int32_t>& input_y,
-                                     const Column<double>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<int32_t>& output_x,
-                                     Column<int32_t>& output_y,
-                                     Column<double>& output_z);
-
-// 010
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<int64_t>& input_x,
-                                     const Column<int64_t>& input_y,
-                                     const Column<int32_t>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<int64_t>& output_x,
-                                     Column<int64_t>& output_y,
-                                     Column<int32_t>& output_z);
-
-// 011
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<int64_t>& input_x,
-                                     const Column<int64_t>& input_y,
-                                     const Column<int64_t>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<int64_t>& output_x,
-                                     Column<int64_t>& output_y,
-                                     Column<int64_t>& output_z);
-
-// 012
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<int64_t>& input_x,
-                                     const Column<int64_t>& input_y,
-                                     const Column<float>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<int64_t>& output_x,
-                                     Column<int64_t>& output_y,
-                                     Column<float>& output_z);
-
-// 013
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<int64_t>& input_x,
-                                     const Column<int64_t>& input_y,
-                                     const Column<double>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<int64_t>& output_x,
-                                     Column<int64_t>& output_y,
-                                     Column<double>& output_z);
-
-// 020
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<float>& input_x,
-                                     const Column<float>& input_y,
-                                     const Column<int32_t>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<float>& output_x,
-                                     Column<float>& output_y,
-                                     Column<int32_t>& output_z);
-
-// 021
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<float>& input_x,
-                                     const Column<float>& input_y,
-                                     const Column<int64_t>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<float>& output_x,
-                                     Column<float>& output_y,
-                                     Column<int64_t>& output_z);
-
-// 022
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<float>& input_x,
-                                     const Column<float>& input_y,
-                                     const Column<float>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<float>& output_x,
-                                     Column<float>& output_y,
-                                     Column<float>& output_z);
-
-// 023
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<float>& input_x,
-                                     const Column<float>& input_y,
-                                     const Column<double>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<float>& output_x,
-                                     Column<float>& output_y,
-                                     Column<double>& output_z);
-
-// 030
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<double>& input_x,
-                                     const Column<double>& input_y,
-                                     const Column<int32_t>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<double>& output_x,
-                                     Column<double>& output_y,
-                                     Column<int32_t>& output_z);
-
-// 031
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<double>& input_x,
-                                     const Column<double>& input_y,
-                                     const Column<int64_t>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<double>& output_x,
-                                     Column<double>& output_y,
-                                     Column<int64_t>& output_z);
-
-// 032
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<double>& input_x,
-                                     const Column<double>& input_y,
-                                     const Column<float>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<double>& output_x,
-                                     Column<double>& output_y,
-                                     Column<float>& output_z);
-
-// 033
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int32_t>& input_id,
-                                     const Column<double>& input_x,
-                                     const Column<double>& input_y,
-                                     const Column<double>& input_z,
-                                     Column<int32_t>& output_id,
-                                     Column<double>& output_x,
-                                     Column<double>& output_y,
-                                     Column<double>& output_z);
-
-// 100
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<int32_t>& input_x,
-                                     const Column<int32_t>& input_y,
-                                     const Column<int32_t>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<int32_t>& output_x,
-                                     Column<int32_t>& output_y,
-                                     Column<int32_t>& output_z);
-
-// 101
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<int32_t>& input_x,
-                                     const Column<int32_t>& input_y,
-                                     const Column<int64_t>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<int32_t>& output_x,
-                                     Column<int32_t>& output_y,
-                                     Column<int64_t>& output_z);
-
-// 102
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<int32_t>& input_x,
-                                     const Column<int32_t>& input_y,
-                                     const Column<float>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<int32_t>& output_x,
-                                     Column<int32_t>& output_y,
-                                     Column<float>& output_z);
-
-// 103
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<int32_t>& input_x,
-                                     const Column<int32_t>& input_y,
-                                     const Column<double>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<int32_t>& output_x,
-                                     Column<int32_t>& output_y,
-                                     Column<double>& output_z);
-
-// 110
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<int64_t>& input_x,
-                                     const Column<int64_t>& input_y,
-                                     const Column<int32_t>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<int64_t>& output_x,
-                                     Column<int64_t>& output_y,
-                                     Column<int32_t>& output_z);
-
-// 111
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<int64_t>& input_x,
-                                     const Column<int64_t>& input_y,
-                                     const Column<int64_t>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<int64_t>& output_x,
-                                     Column<int64_t>& output_y,
-                                     Column<int64_t>& output_z);
-
-// 112
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<int64_t>& input_x,
-                                     const Column<int64_t>& input_y,
-                                     const Column<float>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<int64_t>& output_x,
-                                     Column<int64_t>& output_y,
-                                     Column<float>& output_z);
-
-// 113
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<int64_t>& input_x,
-                                     const Column<int64_t>& input_y,
-                                     const Column<double>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<int64_t>& output_x,
-                                     Column<int64_t>& output_y,
-                                     Column<double>& output_z);
-
-// 120
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<float>& input_x,
-                                     const Column<float>& input_y,
-                                     const Column<int32_t>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<float>& output_x,
-                                     Column<float>& output_y,
-                                     Column<int32_t>& output_z);
-
-// 121
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<float>& input_x,
-                                     const Column<float>& input_y,
-                                     const Column<int64_t>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<float>& output_x,
-                                     Column<float>& output_y,
-                                     Column<int64_t>& output_z);
-
-// 122
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<float>& input_x,
-                                     const Column<float>& input_y,
-                                     const Column<float>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<float>& output_x,
-                                     Column<float>& output_y,
-                                     Column<float>& output_z);
-
-// 123
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<float>& input_x,
-                                     const Column<float>& input_y,
-                                     const Column<double>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<float>& output_x,
-                                     Column<float>& output_y,
-                                     Column<double>& output_z);
-
-// 130
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<double>& input_x,
-                                     const Column<double>& input_y,
-                                     const Column<int32_t>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<double>& output_x,
-                                     Column<double>& output_y,
-                                     Column<int32_t>& output_z);
-
-// 131
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<double>& input_x,
-                                     const Column<double>& input_y,
-                                     const Column<int64_t>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<double>& output_x,
-                                     Column<double>& output_y,
-                                     Column<int64_t>& output_z);
-
-// 132
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<double>& input_x,
-                                     const Column<double>& input_y,
-                                     const Column<float>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<double>& output_x,
-                                     Column<double>& output_y,
-                                     Column<float>& output_z);
-
-// 133
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<int64_t>& input_id,
-                                     const Column<double>& input_x,
-                                     const Column<double>& input_y,
-                                     const Column<double>& input_z,
-                                     Column<int64_t>& output_id,
-                                     Column<double>& output_x,
-                                     Column<double>& output_y,
-                                     Column<double>& output_z);
-
-// 200
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<int32_t>& input_x,
-                                     const Column<int32_t>& input_y,
-                                     const Column<int32_t>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<int32_t>& output_x,
-                                     Column<int32_t>& output_y,
-                                     Column<int32_t>& output_z);
-
-// 201
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<int32_t>& input_x,
-                                     const Column<int32_t>& input_y,
-                                     const Column<int64_t>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<int32_t>& output_x,
-                                     Column<int32_t>& output_y,
-                                     Column<int64_t>& output_z);
-
-// 202
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<int32_t>& input_x,
-                                     const Column<int32_t>& input_y,
-                                     const Column<float>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<int32_t>& output_x,
-                                     Column<int32_t>& output_y,
-                                     Column<float>& output_z);
-
-// 203
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<int32_t>& input_x,
-                                     const Column<int32_t>& input_y,
-                                     const Column<double>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<int32_t>& output_x,
-                                     Column<int32_t>& output_y,
-                                     Column<double>& output_z);
-
-// 210
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<int64_t>& input_x,
-                                     const Column<int64_t>& input_y,
-                                     const Column<int32_t>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<int64_t>& output_x,
-                                     Column<int64_t>& output_y,
-                                     Column<int32_t>& output_z);
-
-// 211
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<int64_t>& input_x,
-                                     const Column<int64_t>& input_y,
-                                     const Column<int64_t>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<int64_t>& output_x,
-                                     Column<int64_t>& output_y,
-                                     Column<int64_t>& output_z);
-
-// 212
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<int64_t>& input_x,
-                                     const Column<int64_t>& input_y,
-                                     const Column<float>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<int64_t>& output_x,
-                                     Column<int64_t>& output_y,
-                                     Column<float>& output_z);
-
-// 213
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<int64_t>& input_x,
-                                     const Column<int64_t>& input_y,
-                                     const Column<double>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<int64_t>& output_x,
-                                     Column<int64_t>& output_y,
-                                     Column<double>& output_z);
-
-// 220
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<float>& input_x,
-                                     const Column<float>& input_y,
-                                     const Column<int32_t>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<float>& output_x,
-                                     Column<float>& output_y,
-                                     Column<int32_t>& output_z);
-
-// 221
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<float>& input_x,
-                                     const Column<float>& input_y,
-                                     const Column<int64_t>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<float>& output_x,
-                                     Column<float>& output_y,
-                                     Column<int64_t>& output_z);
-
-// 222
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<float>& input_x,
-                                     const Column<float>& input_y,
-                                     const Column<float>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<float>& output_x,
-                                     Column<float>& output_y,
-                                     Column<float>& output_z);
-
-// 223
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<float>& input_x,
-                                     const Column<float>& input_y,
-                                     const Column<double>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<float>& output_x,
-                                     Column<float>& output_y,
-                                     Column<double>& output_z);
-
-// 230
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<double>& input_x,
-                                     const Column<double>& input_y,
-                                     const Column<int32_t>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<double>& output_x,
-                                     Column<double>& output_y,
-                                     Column<int32_t>& output_z);
-
-// 231
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<double>& input_x,
-                                     const Column<double>& input_y,
-                                     const Column<int64_t>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<double>& output_x,
-                                     Column<double>& output_y,
-                                     Column<int64_t>& output_z);
-
-// 232
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<double>& input_x,
-                                     const Column<double>& input_y,
-                                     const Column<float>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<double>& output_x,
-                                     Column<double>& output_y,
-                                     Column<float>& output_z);
-
-// 233
-template NEVER_INLINE HOST int32_t
-ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                     const Column<TextEncodingDict>& input_id,
-                                     const Column<double>& input_x,
-                                     const Column<double>& input_y,
-                                     const Column<double>& input_z,
-                                     Column<TextEncodingDict>& output_id,
-                                     Column<double>& output_x,
-                                     Column<double>& output_y,
-                                     Column<double>& output_z);
-
-#endif  // #ifndef __CUDACC__
-
-#ifndef __CUDACC__
 
 template <typename K, typename T, typename Z>
 NEVER_INLINE HOST int32_t
@@ -1396,972 +136,6 @@ ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
   }
   return 1;
 }
-
-// explicit instantiations
-
-// 000
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<int32_t>& input1_x,
-                                      const Column<int32_t>& input1_y,
-                                      const Column<int32_t>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<int32_t>& input2_x,
-                                      const Column<int32_t>& input2_y,
-                                      const Column<int32_t>& input2_z,
-                                      const Column<int32_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<int32_t>& output_x,
-                                      Column<int32_t>& output_y,
-                                      Column<int32_t>& output_z,
-                                      Column<int32_t>& output_w);
-
-// 001
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<int32_t>& input1_x,
-                                      const Column<int32_t>& input1_y,
-                                      const Column<int64_t>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<int32_t>& input2_x,
-                                      const Column<int32_t>& input2_y,
-                                      const Column<int64_t>& input2_z,
-                                      const Column<int32_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<int32_t>& output_x,
-                                      Column<int32_t>& output_y,
-                                      Column<int64_t>& output_z,
-                                      Column<int32_t>& output_w);
-
-// 002
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<int32_t>& input1_x,
-                                      const Column<int32_t>& input1_y,
-                                      const Column<float>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<int32_t>& input2_x,
-                                      const Column<int32_t>& input2_y,
-                                      const Column<float>& input2_z,
-                                      const Column<int32_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<int32_t>& output_x,
-                                      Column<int32_t>& output_y,
-                                      Column<float>& output_z,
-                                      Column<int32_t>& output_w);
-
-// 003
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<int32_t>& input1_x,
-                                      const Column<int32_t>& input1_y,
-                                      const Column<double>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<int32_t>& input2_x,
-                                      const Column<int32_t>& input2_y,
-                                      const Column<double>& input2_z,
-                                      const Column<int32_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<int32_t>& output_x,
-                                      Column<int32_t>& output_y,
-                                      Column<double>& output_z,
-                                      Column<int32_t>& output_w);
-
-// 010
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<int64_t>& input1_x,
-                                      const Column<int64_t>& input1_y,
-                                      const Column<int32_t>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<int64_t>& input2_x,
-                                      const Column<int64_t>& input2_y,
-                                      const Column<int32_t>& input2_z,
-                                      const Column<int64_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<int64_t>& output_x,
-                                      Column<int64_t>& output_y,
-                                      Column<int32_t>& output_z,
-                                      Column<int64_t>& output_w);
-
-// 011
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<int64_t>& input1_x,
-                                      const Column<int64_t>& input1_y,
-                                      const Column<int64_t>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<int64_t>& input2_x,
-                                      const Column<int64_t>& input2_y,
-                                      const Column<int64_t>& input2_z,
-                                      const Column<int64_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<int64_t>& output_x,
-                                      Column<int64_t>& output_y,
-                                      Column<int64_t>& output_z,
-                                      Column<int64_t>& output_w);
-
-// 012
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<int64_t>& input1_x,
-                                      const Column<int64_t>& input1_y,
-                                      const Column<float>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<int64_t>& input2_x,
-                                      const Column<int64_t>& input2_y,
-                                      const Column<float>& input2_z,
-                                      const Column<int64_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<int64_t>& output_x,
-                                      Column<int64_t>& output_y,
-                                      Column<float>& output_z,
-                                      Column<int64_t>& output_w);
-
-// 013
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<int64_t>& input1_x,
-                                      const Column<int64_t>& input1_y,
-                                      const Column<double>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<int64_t>& input2_x,
-                                      const Column<int64_t>& input2_y,
-                                      const Column<double>& input2_z,
-                                      const Column<int64_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<int64_t>& output_x,
-                                      Column<int64_t>& output_y,
-                                      Column<double>& output_z,
-                                      Column<int64_t>& output_w);
-
-// 020
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<float>& input1_x,
-                                      const Column<float>& input1_y,
-                                      const Column<int32_t>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<float>& input2_x,
-                                      const Column<float>& input2_y,
-                                      const Column<int32_t>& input2_z,
-                                      const Column<float>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<float>& output_x,
-                                      Column<float>& output_y,
-                                      Column<int32_t>& output_z,
-                                      Column<float>& output_w);
-
-// 021
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<float>& input1_x,
-                                      const Column<float>& input1_y,
-                                      const Column<int64_t>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<float>& input2_x,
-                                      const Column<float>& input2_y,
-                                      const Column<int64_t>& input2_z,
-                                      const Column<float>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<float>& output_x,
-                                      Column<float>& output_y,
-                                      Column<int64_t>& output_z,
-                                      Column<float>& output_w);
-
-// 022
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<float>& input1_x,
-                                      const Column<float>& input1_y,
-                                      const Column<float>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<float>& input2_x,
-                                      const Column<float>& input2_y,
-                                      const Column<float>& input2_z,
-                                      const Column<float>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<float>& output_x,
-                                      Column<float>& output_y,
-                                      Column<float>& output_z,
-                                      Column<float>& output_w);
-
-// 023
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<float>& input1_x,
-                                      const Column<float>& input1_y,
-                                      const Column<double>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<float>& input2_x,
-                                      const Column<float>& input2_y,
-                                      const Column<double>& input2_z,
-                                      const Column<float>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<float>& output_x,
-                                      Column<float>& output_y,
-                                      Column<double>& output_z,
-                                      Column<float>& output_w);
-
-// 030
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<double>& input1_x,
-                                      const Column<double>& input1_y,
-                                      const Column<int32_t>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<double>& input2_x,
-                                      const Column<double>& input2_y,
-                                      const Column<int32_t>& input2_z,
-                                      const Column<double>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<double>& output_x,
-                                      Column<double>& output_y,
-                                      Column<int32_t>& output_z,
-                                      Column<double>& output_w);
-
-// 031
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<double>& input1_x,
-                                      const Column<double>& input1_y,
-                                      const Column<int64_t>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<double>& input2_x,
-                                      const Column<double>& input2_y,
-                                      const Column<int64_t>& input2_z,
-                                      const Column<double>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<double>& output_x,
-                                      Column<double>& output_y,
-                                      Column<int64_t>& output_z,
-                                      Column<double>& output_w);
-
-// 032
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<double>& input1_x,
-                                      const Column<double>& input1_y,
-                                      const Column<float>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<double>& input2_x,
-                                      const Column<double>& input2_y,
-                                      const Column<float>& input2_z,
-                                      const Column<double>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<double>& output_x,
-                                      Column<double>& output_y,
-                                      Column<float>& output_z,
-                                      Column<double>& output_w);
-
-// 033
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int32_t>& input1_id,
-                                      const Column<double>& input1_x,
-                                      const Column<double>& input1_y,
-                                      const Column<double>& input1_z,
-                                      const Column<int32_t>& input2_id,
-                                      const Column<double>& input2_x,
-                                      const Column<double>& input2_y,
-                                      const Column<double>& input2_z,
-                                      const Column<double>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int32_t>& output_id,
-                                      Column<double>& output_x,
-                                      Column<double>& output_y,
-                                      Column<double>& output_z,
-                                      Column<double>& output_w);
-
-// 100
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<int32_t>& input1_x,
-                                      const Column<int32_t>& input1_y,
-                                      const Column<int32_t>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<int32_t>& input2_x,
-                                      const Column<int32_t>& input2_y,
-                                      const Column<int32_t>& input2_z,
-                                      const Column<int32_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<int32_t>& output_x,
-                                      Column<int32_t>& output_y,
-                                      Column<int32_t>& output_z,
-                                      Column<int32_t>& output_w);
-
-// 101
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<int32_t>& input1_x,
-                                      const Column<int32_t>& input1_y,
-                                      const Column<int64_t>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<int32_t>& input2_x,
-                                      const Column<int32_t>& input2_y,
-                                      const Column<int64_t>& input2_z,
-                                      const Column<int32_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<int32_t>& output_x,
-                                      Column<int32_t>& output_y,
-                                      Column<int64_t>& output_z,
-                                      Column<int32_t>& output_w);
-
-// 102
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<int32_t>& input1_x,
-                                      const Column<int32_t>& input1_y,
-                                      const Column<float>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<int32_t>& input2_x,
-                                      const Column<int32_t>& input2_y,
-                                      const Column<float>& input2_z,
-                                      const Column<int32_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<int32_t>& output_x,
-                                      Column<int32_t>& output_y,
-                                      Column<float>& output_z,
-                                      Column<int32_t>& output_w);
-
-// 103
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<int32_t>& input1_x,
-                                      const Column<int32_t>& input1_y,
-                                      const Column<double>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<int32_t>& input2_x,
-                                      const Column<int32_t>& input2_y,
-                                      const Column<double>& input2_z,
-                                      const Column<int32_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<int32_t>& output_x,
-                                      Column<int32_t>& output_y,
-                                      Column<double>& output_z,
-                                      Column<int32_t>& output_w);
-
-// 110
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<int64_t>& input1_x,
-                                      const Column<int64_t>& input1_y,
-                                      const Column<int32_t>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<int64_t>& input2_x,
-                                      const Column<int64_t>& input2_y,
-                                      const Column<int32_t>& input2_z,
-                                      const Column<int64_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<int64_t>& output_x,
-                                      Column<int64_t>& output_y,
-                                      Column<int32_t>& output_z,
-                                      Column<int64_t>& output_w);
-
-// 111
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<int64_t>& input1_x,
-                                      const Column<int64_t>& input1_y,
-                                      const Column<int64_t>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<int64_t>& input2_x,
-                                      const Column<int64_t>& input2_y,
-                                      const Column<int64_t>& input2_z,
-                                      const Column<int64_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<int64_t>& output_x,
-                                      Column<int64_t>& output_y,
-                                      Column<int64_t>& output_z,
-                                      Column<int64_t>& output_w);
-
-// 112
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<int64_t>& input1_x,
-                                      const Column<int64_t>& input1_y,
-                                      const Column<float>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<int64_t>& input2_x,
-                                      const Column<int64_t>& input2_y,
-                                      const Column<float>& input2_z,
-                                      const Column<int64_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<int64_t>& output_x,
-                                      Column<int64_t>& output_y,
-                                      Column<float>& output_z,
-                                      Column<int64_t>& output_w);
-
-// 113
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<int64_t>& input1_x,
-                                      const Column<int64_t>& input1_y,
-                                      const Column<double>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<int64_t>& input2_x,
-                                      const Column<int64_t>& input2_y,
-                                      const Column<double>& input2_z,
-                                      const Column<int64_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<int64_t>& output_x,
-                                      Column<int64_t>& output_y,
-                                      Column<double>& output_z,
-                                      Column<int64_t>& output_w);
-
-// 120
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<float>& input1_x,
-                                      const Column<float>& input1_y,
-                                      const Column<int32_t>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<float>& input2_x,
-                                      const Column<float>& input2_y,
-                                      const Column<int32_t>& input2_z,
-                                      const Column<float>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<float>& output_x,
-                                      Column<float>& output_y,
-                                      Column<int32_t>& output_z,
-                                      Column<float>& output_w);
-
-// 121
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<float>& input1_x,
-                                      const Column<float>& input1_y,
-                                      const Column<int64_t>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<float>& input2_x,
-                                      const Column<float>& input2_y,
-                                      const Column<int64_t>& input2_z,
-                                      const Column<float>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<float>& output_x,
-                                      Column<float>& output_y,
-                                      Column<int64_t>& output_z,
-                                      Column<float>& output_w);
-
-// 122
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<float>& input1_x,
-                                      const Column<float>& input1_y,
-                                      const Column<float>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<float>& input2_x,
-                                      const Column<float>& input2_y,
-                                      const Column<float>& input2_z,
-                                      const Column<float>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<float>& output_x,
-                                      Column<float>& output_y,
-                                      Column<float>& output_z,
-                                      Column<float>& output_w);
-
-// 123
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<float>& input1_x,
-                                      const Column<float>& input1_y,
-                                      const Column<double>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<float>& input2_x,
-                                      const Column<float>& input2_y,
-                                      const Column<double>& input2_z,
-                                      const Column<float>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<float>& output_x,
-                                      Column<float>& output_y,
-                                      Column<double>& output_z,
-                                      Column<float>& output_w);
-
-// 130
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<double>& input1_x,
-                                      const Column<double>& input1_y,
-                                      const Column<int32_t>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<double>& input2_x,
-                                      const Column<double>& input2_y,
-                                      const Column<int32_t>& input2_z,
-                                      const Column<double>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<double>& output_x,
-                                      Column<double>& output_y,
-                                      Column<int32_t>& output_z,
-                                      Column<double>& output_w);
-
-// 131
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<double>& input1_x,
-                                      const Column<double>& input1_y,
-                                      const Column<int64_t>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<double>& input2_x,
-                                      const Column<double>& input2_y,
-                                      const Column<int64_t>& input2_z,
-                                      const Column<double>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<double>& output_x,
-                                      Column<double>& output_y,
-                                      Column<int64_t>& output_z,
-                                      Column<double>& output_w);
-
-// 132
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<double>& input1_x,
-                                      const Column<double>& input1_y,
-                                      const Column<float>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<double>& input2_x,
-                                      const Column<double>& input2_y,
-                                      const Column<float>& input2_z,
-                                      const Column<double>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<double>& output_x,
-                                      Column<double>& output_y,
-                                      Column<float>& output_z,
-                                      Column<double>& output_w);
-
-// 133
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<int64_t>& input1_id,
-                                      const Column<double>& input1_x,
-                                      const Column<double>& input1_y,
-                                      const Column<double>& input1_z,
-                                      const Column<int64_t>& input2_id,
-                                      const Column<double>& input2_x,
-                                      const Column<double>& input2_y,
-                                      const Column<double>& input2_z,
-                                      const Column<double>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<int64_t>& output_id,
-                                      Column<double>& output_x,
-                                      Column<double>& output_y,
-                                      Column<double>& output_z,
-                                      Column<double>& output_w);
-
-// 200
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<int32_t>& input1_x,
-                                      const Column<int32_t>& input1_y,
-                                      const Column<int32_t>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<int32_t>& input2_x,
-                                      const Column<int32_t>& input2_y,
-                                      const Column<int32_t>& input2_z,
-                                      const Column<int32_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<int32_t>& output_x,
-                                      Column<int32_t>& output_y,
-                                      Column<int32_t>& output_z,
-                                      Column<int32_t>& output_w);
-
-// 201
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<int32_t>& input1_x,
-                                      const Column<int32_t>& input1_y,
-                                      const Column<int64_t>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<int32_t>& input2_x,
-                                      const Column<int32_t>& input2_y,
-                                      const Column<int64_t>& input2_z,
-                                      const Column<int32_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<int32_t>& output_x,
-                                      Column<int32_t>& output_y,
-                                      Column<int64_t>& output_z,
-                                      Column<int32_t>& output_w);
-
-// 202
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<int32_t>& input1_x,
-                                      const Column<int32_t>& input1_y,
-                                      const Column<float>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<int32_t>& input2_x,
-                                      const Column<int32_t>& input2_y,
-                                      const Column<float>& input2_z,
-                                      const Column<int32_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<int32_t>& output_x,
-                                      Column<int32_t>& output_y,
-                                      Column<float>& output_z,
-                                      Column<int32_t>& output_w);
-
-// 203
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<int32_t>& input1_x,
-                                      const Column<int32_t>& input1_y,
-                                      const Column<double>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<int32_t>& input2_x,
-                                      const Column<int32_t>& input2_y,
-                                      const Column<double>& input2_z,
-                                      const Column<int32_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<int32_t>& output_x,
-                                      Column<int32_t>& output_y,
-                                      Column<double>& output_z,
-                                      Column<int32_t>& output_w);
-
-// 210
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<int64_t>& input1_x,
-                                      const Column<int64_t>& input1_y,
-                                      const Column<int32_t>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<int64_t>& input2_x,
-                                      const Column<int64_t>& input2_y,
-                                      const Column<int32_t>& input2_z,
-                                      const Column<int64_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<int64_t>& output_x,
-                                      Column<int64_t>& output_y,
-                                      Column<int32_t>& output_z,
-                                      Column<int64_t>& output_w);
-
-// 211
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<int64_t>& input1_x,
-                                      const Column<int64_t>& input1_y,
-                                      const Column<int64_t>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<int64_t>& input2_x,
-                                      const Column<int64_t>& input2_y,
-                                      const Column<int64_t>& input2_z,
-                                      const Column<int64_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<int64_t>& output_x,
-                                      Column<int64_t>& output_y,
-                                      Column<int64_t>& output_z,
-                                      Column<int64_t>& output_w);
-
-// 212
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<int64_t>& input1_x,
-                                      const Column<int64_t>& input1_y,
-                                      const Column<float>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<int64_t>& input2_x,
-                                      const Column<int64_t>& input2_y,
-                                      const Column<float>& input2_z,
-                                      const Column<int64_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<int64_t>& output_x,
-                                      Column<int64_t>& output_y,
-                                      Column<float>& output_z,
-                                      Column<int64_t>& output_w);
-
-// 213
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<int64_t>& input1_x,
-                                      const Column<int64_t>& input1_y,
-                                      const Column<double>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<int64_t>& input2_x,
-                                      const Column<int64_t>& input2_y,
-                                      const Column<double>& input2_z,
-                                      const Column<int64_t>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<int64_t>& output_x,
-                                      Column<int64_t>& output_y,
-                                      Column<double>& output_z,
-                                      Column<int64_t>& output_w);
-
-// 220
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<float>& input1_x,
-                                      const Column<float>& input1_y,
-                                      const Column<int32_t>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<float>& input2_x,
-                                      const Column<float>& input2_y,
-                                      const Column<int32_t>& input2_z,
-                                      const Column<float>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<float>& output_x,
-                                      Column<float>& output_y,
-                                      Column<int32_t>& output_z,
-                                      Column<float>& output_w);
-
-// 221
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<float>& input1_x,
-                                      const Column<float>& input1_y,
-                                      const Column<int64_t>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<float>& input2_x,
-                                      const Column<float>& input2_y,
-                                      const Column<int64_t>& input2_z,
-                                      const Column<float>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<float>& output_x,
-                                      Column<float>& output_y,
-                                      Column<int64_t>& output_z,
-                                      Column<float>& output_w);
-
-// 222
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<float>& input1_x,
-                                      const Column<float>& input1_y,
-                                      const Column<float>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<float>& input2_x,
-                                      const Column<float>& input2_y,
-                                      const Column<float>& input2_z,
-                                      const Column<float>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<float>& output_x,
-                                      Column<float>& output_y,
-                                      Column<float>& output_z,
-                                      Column<float>& output_w);
-
-// 223
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<float>& input1_x,
-                                      const Column<float>& input1_y,
-                                      const Column<double>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<float>& input2_x,
-                                      const Column<float>& input2_y,
-                                      const Column<double>& input2_z,
-                                      const Column<float>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<float>& output_x,
-                                      Column<float>& output_y,
-                                      Column<double>& output_z,
-                                      Column<float>& output_w);
-
-// 230
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<double>& input1_x,
-                                      const Column<double>& input1_y,
-                                      const Column<int32_t>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<double>& input2_x,
-                                      const Column<double>& input2_y,
-                                      const Column<int32_t>& input2_z,
-                                      const Column<double>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<double>& output_x,
-                                      Column<double>& output_y,
-                                      Column<int32_t>& output_z,
-                                      Column<double>& output_w);
-
-// 231
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<double>& input1_x,
-                                      const Column<double>& input1_y,
-                                      const Column<int64_t>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<double>& input2_x,
-                                      const Column<double>& input2_y,
-                                      const Column<int64_t>& input2_z,
-                                      const Column<double>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<double>& output_x,
-                                      Column<double>& output_y,
-                                      Column<int64_t>& output_z,
-                                      Column<double>& output_w);
-
-// 232
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<double>& input1_x,
-                                      const Column<double>& input1_y,
-                                      const Column<float>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<double>& input2_x,
-                                      const Column<double>& input2_y,
-                                      const Column<float>& input2_z,
-                                      const Column<double>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<double>& output_x,
-                                      Column<double>& output_y,
-                                      Column<float>& output_z,
-                                      Column<double>& output_w);
-
-// 233
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
-                                      const TextEncodingNone& agg_type,
-                                      const Column<TextEncodingDict>& input1_id,
-                                      const Column<double>& input1_x,
-                                      const Column<double>& input1_y,
-                                      const Column<double>& input1_z,
-                                      const Column<TextEncodingDict>& input2_id,
-                                      const Column<double>& input2_x,
-                                      const Column<double>& input2_y,
-                                      const Column<double>& input2_z,
-                                      const Column<double>& input2_w,
-                                      Column<int32_t>& output_row_count,
-                                      Column<TextEncodingDict>& output_id,
-                                      Column<double>& output_x,
-                                      Column<double>& output_y,
-                                      Column<double>& output_z,
-                                      Column<double>& output_w);
-
-#endif  // #ifndef __CUDACC__
-
-#ifndef __CUDACC__
 
 template <typename K, typename T, typename Z>
 NEVER_INLINE HOST int32_t
@@ -2404,852 +178,484 @@ ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
 // explicit instantiations
 
 // 000
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<int32_t>& input1_x,
-                                           const Column<int32_t>& input1_y,
-                                           const Column<int32_t>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<int32_t>& input2_x,
-                                           const Column<int32_t>& input2_y,
-                                           const Column<int32_t>& input2_z,
-                                           const Column<int32_t>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<int32_t>& output_x,
-                                           Column<int32_t>& output_y,
-                                           Column<int32_t>& output_z,
-                                           Column<int32_t>& output_w);
 
-// 001
 template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<int32_t>& input1_x,
-                                           const Column<int32_t>& input1_y,
-                                           const Column<int64_t>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<int32_t>& input2_x,
-                                           const Column<int32_t>& input2_y,
-                                           const Column<int64_t>& input2_z,
-                                           const Column<int32_t>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<int32_t>& output_x,
-                                           Column<int32_t>& output_y,
-                                           Column<int64_t>& output_z,
-                                           Column<int32_t>& output_w);
+ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                const TextEncodingNone& agg_type,
+                                const Column<int64_t>& input_id,
+                                const Column<int64_t>& input_x,
+                                const Column<int64_t>& input_y,
+                                const Column<int64_t>& input_z,
+                                Column<int32_t>& output_row_count,
+                                Column<int64_t>& output_id,
+                                Column<int64_t>& output_x,
+                                Column<int64_t>& output_y,
+                                Column<int64_t>& output_z);
 
-// 002
 template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<int32_t>& input1_x,
-                                           const Column<int32_t>& input1_y,
-                                           const Column<float>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<int32_t>& input2_x,
-                                           const Column<int32_t>& input2_y,
-                                           const Column<float>& input2_z,
-                                           const Column<int32_t>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<int32_t>& output_x,
-                                           Column<int32_t>& output_y,
-                                           Column<float>& output_z,
-                                           Column<int32_t>& output_w);
+ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+                                     const Column<int64_t>& input_id,
+                                     const Column<int64_t>& input_x,
+                                     const Column<int64_t>& input_y,
+                                     const Column<int64_t>& input_z,
+                                     Column<int64_t>& output_id,
+                                     Column<int64_t>& output_x,
+                                     Column<int64_t>& output_y,
+                                     Column<int64_t>& output_z);
 
-// 003
 template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<int32_t>& input1_x,
-                                           const Column<int32_t>& input1_y,
-                                           const Column<double>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<int32_t>& input2_x,
-                                           const Column<int32_t>& input2_y,
-                                           const Column<double>& input2_z,
-                                           const Column<int32_t>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<int32_t>& output_x,
-                                           Column<int32_t>& output_y,
-                                           Column<double>& output_z,
-                                           Column<int32_t>& output_w);
+ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                      const TextEncodingNone& agg_type,
+                                      const Column<int64_t>& input1_id,
+                                      const Column<int64_t>& input1_x,
+                                      const Column<int64_t>& input1_y,
+                                      const Column<int64_t>& input1_z,
+                                      const Column<int64_t>& input2_id,
+                                      const Column<int64_t>& input2_x,
+                                      const Column<int64_t>& input2_y,
+                                      const Column<int64_t>& input2_z,
+                                      const Column<int64_t>& input2_w,
+                                      Column<int32_t>& output_row_count,
+                                      Column<int64_t>& output_id,
+                                      Column<int64_t>& output_x,
+                                      Column<int64_t>& output_y,
+                                      Column<int64_t>& output_z,
+                                      Column<int64_t>& output_w);
 
-// 010
 template NEVER_INLINE HOST int32_t
 ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
+                                           const Column<int64_t>& input1_id,
                                            const Column<int64_t>& input1_x,
                                            const Column<int64_t>& input1_y,
-                                           const Column<int32_t>& input1_z,
-                                           const Column<int32_t>& input2_id,
+                                           const Column<int64_t>& input1_z,
+                                           const Column<int64_t>& input2_id,
                                            const Column<int64_t>& input2_x,
                                            const Column<int64_t>& input2_y,
-                                           const Column<int32_t>& input2_z,
+                                           const Column<int64_t>& input2_z,
                                            const Column<int64_t>& input2_w,
-                                           Column<int32_t>& output_id,
+                                           Column<int64_t>& output_id,
                                            Column<int64_t>& output_x,
                                            Column<int64_t>& output_y,
-                                           Column<int32_t>& output_z,
+                                           Column<int64_t>& output_z,
+                                           Column<int64_t>& output_w);
+
+// 001
+
+template NEVER_INLINE HOST int32_t
+ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                const TextEncodingNone& agg_type,
+                                const Column<int64_t>& input_id,
+                                const Column<int64_t>& input_x,
+                                const Column<int64_t>& input_y,
+                                const Column<double>& input_z,
+                                Column<int32_t>& output_row_count,
+                                Column<int64_t>& output_id,
+                                Column<int64_t>& output_x,
+                                Column<int64_t>& output_y,
+                                Column<double>& output_z);
+
+template NEVER_INLINE HOST int32_t
+ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+                                     const Column<int64_t>& input_id,
+                                     const Column<int64_t>& input_x,
+                                     const Column<int64_t>& input_y,
+                                     const Column<double>& input_z,
+                                     Column<int64_t>& output_id,
+                                     Column<int64_t>& output_x,
+                                     Column<int64_t>& output_y,
+                                     Column<double>& output_z);
+
+template NEVER_INLINE HOST int32_t
+ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                      const TextEncodingNone& agg_type,
+                                      const Column<int64_t>& input1_id,
+                                      const Column<int64_t>& input1_x,
+                                      const Column<int64_t>& input1_y,
+                                      const Column<double>& input1_z,
+                                      const Column<int64_t>& input2_id,
+                                      const Column<int64_t>& input2_x,
+                                      const Column<int64_t>& input2_y,
+                                      const Column<double>& input2_z,
+                                      const Column<int64_t>& input2_w,
+                                      Column<int32_t>& output_row_count,
+                                      Column<int64_t>& output_id,
+                                      Column<int64_t>& output_x,
+                                      Column<int64_t>& output_y,
+                                      Column<double>& output_z,
+                                      Column<int64_t>& output_w);
+
+template NEVER_INLINE HOST int32_t
+ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+                                           const Column<int64_t>& input1_id,
+                                           const Column<int64_t>& input1_x,
+                                           const Column<int64_t>& input1_y,
+                                           const Column<double>& input1_z,
+                                           const Column<int64_t>& input2_id,
+                                           const Column<int64_t>& input2_x,
+                                           const Column<int64_t>& input2_y,
+                                           const Column<double>& input2_z,
+                                           const Column<int64_t>& input2_w,
+                                           Column<int64_t>& output_id,
+                                           Column<int64_t>& output_x,
+                                           Column<int64_t>& output_y,
+                                           Column<double>& output_z,
+                                           Column<int64_t>& output_w);
+
+// 010
+
+template NEVER_INLINE HOST int32_t
+ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                const TextEncodingNone& agg_type,
+                                const Column<TextEncodingDict>& input_id,
+                                const Column<int64_t>& input_x,
+                                const Column<int64_t>& input_y,
+                                const Column<int64_t>& input_z,
+                                Column<int32_t>& output_row_count,
+                                Column<TextEncodingDict>& output_id,
+                                Column<int64_t>& output_x,
+                                Column<int64_t>& output_y,
+                                Column<int64_t>& output_z);
+
+template NEVER_INLINE HOST int32_t
+ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+                                     const Column<TextEncodingDict>& input_id,
+                                     const Column<int64_t>& input_x,
+                                     const Column<int64_t>& input_y,
+                                     const Column<int64_t>& input_z,
+                                     Column<TextEncodingDict>& output_id,
+                                     Column<int64_t>& output_x,
+                                     Column<int64_t>& output_y,
+                                     Column<int64_t>& output_z);
+
+template NEVER_INLINE HOST int32_t
+ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                      const TextEncodingNone& agg_type,
+                                      const Column<TextEncodingDict>& input1_id,
+                                      const Column<int64_t>& input1_x,
+                                      const Column<int64_t>& input1_y,
+                                      const Column<int64_t>& input1_z,
+                                      const Column<TextEncodingDict>& input2_id,
+                                      const Column<int64_t>& input2_x,
+                                      const Column<int64_t>& input2_y,
+                                      const Column<int64_t>& input2_z,
+                                      const Column<int64_t>& input2_w,
+                                      Column<int32_t>& output_row_count,
+                                      Column<TextEncodingDict>& output_id,
+                                      Column<int64_t>& output_x,
+                                      Column<int64_t>& output_y,
+                                      Column<int64_t>& output_z,
+                                      Column<int64_t>& output_w);
+
+template NEVER_INLINE HOST int32_t
+ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+                                           const Column<TextEncodingDict>& input1_id,
+                                           const Column<int64_t>& input1_x,
+                                           const Column<int64_t>& input1_y,
+                                           const Column<int64_t>& input1_z,
+                                           const Column<TextEncodingDict>& input2_id,
+                                           const Column<int64_t>& input2_x,
+                                           const Column<int64_t>& input2_y,
+                                           const Column<int64_t>& input2_z,
+                                           const Column<int64_t>& input2_w,
+                                           Column<TextEncodingDict>& output_id,
+                                           Column<int64_t>& output_x,
+                                           Column<int64_t>& output_y,
+                                           Column<int64_t>& output_z,
                                            Column<int64_t>& output_w);
 
 // 011
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<int64_t>& input1_x,
-                                           const Column<int64_t>& input1_y,
-                                           const Column<int64_t>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<int64_t>& input2_x,
-                                           const Column<int64_t>& input2_y,
-                                           const Column<int64_t>& input2_z,
-                                           const Column<int64_t>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<int64_t>& output_x,
-                                           Column<int64_t>& output_y,
-                                           Column<int64_t>& output_z,
-                                           Column<int64_t>& output_w);
 
-// 012
 template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<int64_t>& input1_x,
-                                           const Column<int64_t>& input1_y,
-                                           const Column<float>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<int64_t>& input2_x,
-                                           const Column<int64_t>& input2_y,
-                                           const Column<float>& input2_z,
-                                           const Column<int64_t>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<int64_t>& output_x,
-                                           Column<int64_t>& output_y,
-                                           Column<float>& output_z,
-                                           Column<int64_t>& output_w);
+ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                const TextEncodingNone& agg_type,
+                                const Column<TextEncodingDict>& input_id,
+                                const Column<int64_t>& input_x,
+                                const Column<int64_t>& input_y,
+                                const Column<double>& input_z,
+                                Column<int32_t>& output_row_count,
+                                Column<TextEncodingDict>& output_id,
+                                Column<int64_t>& output_x,
+                                Column<int64_t>& output_y,
+                                Column<double>& output_z);
 
-// 013
+template NEVER_INLINE HOST int32_t
+ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+                                     const Column<TextEncodingDict>& input_id,
+                                     const Column<int64_t>& input_x,
+                                     const Column<int64_t>& input_y,
+                                     const Column<double>& input_z,
+                                     Column<TextEncodingDict>& output_id,
+                                     Column<int64_t>& output_x,
+                                     Column<int64_t>& output_y,
+                                     Column<double>& output_z);
+
+template NEVER_INLINE HOST int32_t
+ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                      const TextEncodingNone& agg_type,
+                                      const Column<TextEncodingDict>& input1_id,
+                                      const Column<int64_t>& input1_x,
+                                      const Column<int64_t>& input1_y,
+                                      const Column<double>& input1_z,
+                                      const Column<TextEncodingDict>& input2_id,
+                                      const Column<int64_t>& input2_x,
+                                      const Column<int64_t>& input2_y,
+                                      const Column<double>& input2_z,
+                                      const Column<int64_t>& input2_w,
+                                      Column<int32_t>& output_row_count,
+                                      Column<TextEncodingDict>& output_id,
+                                      Column<int64_t>& output_x,
+                                      Column<int64_t>& output_y,
+                                      Column<double>& output_z,
+                                      Column<int64_t>& output_w);
+
 template NEVER_INLINE HOST int32_t
 ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
+                                           const Column<TextEncodingDict>& input1_id,
                                            const Column<int64_t>& input1_x,
                                            const Column<int64_t>& input1_y,
                                            const Column<double>& input1_z,
-                                           const Column<int32_t>& input2_id,
+                                           const Column<TextEncodingDict>& input2_id,
                                            const Column<int64_t>& input2_x,
                                            const Column<int64_t>& input2_y,
                                            const Column<double>& input2_z,
                                            const Column<int64_t>& input2_w,
-                                           Column<int32_t>& output_id,
+                                           Column<TextEncodingDict>& output_id,
                                            Column<int64_t>& output_x,
                                            Column<int64_t>& output_y,
                                            Column<double>& output_z,
                                            Column<int64_t>& output_w);
-
-// 020
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<float>& input1_x,
-                                           const Column<float>& input1_y,
-                                           const Column<int32_t>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<float>& input2_x,
-                                           const Column<float>& input2_y,
-                                           const Column<int32_t>& input2_z,
-                                           const Column<float>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<float>& output_x,
-                                           Column<float>& output_y,
-                                           Column<int32_t>& output_z,
-                                           Column<float>& output_w);
-
-// 021
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<float>& input1_x,
-                                           const Column<float>& input1_y,
-                                           const Column<int64_t>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<float>& input2_x,
-                                           const Column<float>& input2_y,
-                                           const Column<int64_t>& input2_z,
-                                           const Column<float>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<float>& output_x,
-                                           Column<float>& output_y,
-                                           Column<int64_t>& output_z,
-                                           Column<float>& output_w);
-
-// 022
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<float>& input1_x,
-                                           const Column<float>& input1_y,
-                                           const Column<float>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<float>& input2_x,
-                                           const Column<float>& input2_y,
-                                           const Column<float>& input2_z,
-                                           const Column<float>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<float>& output_x,
-                                           Column<float>& output_y,
-                                           Column<float>& output_z,
-                                           Column<float>& output_w);
-
-// 023
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<float>& input1_x,
-                                           const Column<float>& input1_y,
-                                           const Column<double>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<float>& input2_x,
-                                           const Column<float>& input2_y,
-                                           const Column<double>& input2_z,
-                                           const Column<float>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<float>& output_x,
-                                           Column<float>& output_y,
-                                           Column<double>& output_z,
-                                           Column<float>& output_w);
-
-// 030
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<double>& input1_x,
-                                           const Column<double>& input1_y,
-                                           const Column<int32_t>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<double>& input2_x,
-                                           const Column<double>& input2_y,
-                                           const Column<int32_t>& input2_z,
-                                           const Column<double>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<double>& output_x,
-                                           Column<double>& output_y,
-                                           Column<int32_t>& output_z,
-                                           Column<double>& output_w);
-
-// 031
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<double>& input1_x,
-                                           const Column<double>& input1_y,
-                                           const Column<int64_t>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<double>& input2_x,
-                                           const Column<double>& input2_y,
-                                           const Column<int64_t>& input2_z,
-                                           const Column<double>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<double>& output_x,
-                                           Column<double>& output_y,
-                                           Column<int64_t>& output_z,
-                                           Column<double>& output_w);
-
-// 032
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<double>& input1_x,
-                                           const Column<double>& input1_y,
-                                           const Column<float>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<double>& input2_x,
-                                           const Column<double>& input2_y,
-                                           const Column<float>& input2_z,
-                                           const Column<double>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<double>& output_x,
-                                           Column<double>& output_y,
-                                           Column<float>& output_z,
-                                           Column<double>& output_w);
-
-// 033
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int32_t>& input1_id,
-                                           const Column<double>& input1_x,
-                                           const Column<double>& input1_y,
-                                           const Column<double>& input1_z,
-                                           const Column<int32_t>& input2_id,
-                                           const Column<double>& input2_x,
-                                           const Column<double>& input2_y,
-                                           const Column<double>& input2_z,
-                                           const Column<double>& input2_w,
-                                           Column<int32_t>& output_id,
-                                           Column<double>& output_x,
-                                           Column<double>& output_y,
-                                           Column<double>& output_z,
-                                           Column<double>& output_w);
 
 // 100
+
+template NEVER_INLINE HOST int32_t
+ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                const TextEncodingNone& agg_type,
+                                const Column<int64_t>& input_id,
+                                const Column<double>& input_x,
+                                const Column<double>& input_y,
+                                const Column<int64_t>& input_z,
+                                Column<int32_t>& output_row_count,
+                                Column<int64_t>& output_id,
+                                Column<double>& output_x,
+                                Column<double>& output_y,
+                                Column<int64_t>& output_z);
+
+template NEVER_INLINE HOST int32_t
+ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+                                     const Column<int64_t>& input_id,
+                                     const Column<double>& input_x,
+                                     const Column<double>& input_y,
+                                     const Column<int64_t>& input_z,
+                                     Column<int64_t>& output_id,
+                                     Column<double>& output_x,
+                                     Column<double>& output_y,
+                                     Column<int64_t>& output_z);
+
+template NEVER_INLINE HOST int32_t
+ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                      const TextEncodingNone& agg_type,
+                                      const Column<int64_t>& input1_id,
+                                      const Column<double>& input1_x,
+                                      const Column<double>& input1_y,
+                                      const Column<int64_t>& input1_z,
+                                      const Column<int64_t>& input2_id,
+                                      const Column<double>& input2_x,
+                                      const Column<double>& input2_y,
+                                      const Column<int64_t>& input2_z,
+                                      const Column<double>& input2_w,
+                                      Column<int32_t>& output_row_count,
+                                      Column<int64_t>& output_id,
+                                      Column<double>& output_x,
+                                      Column<double>& output_y,
+                                      Column<int64_t>& output_z,
+                                      Column<double>& output_w);
+
 template NEVER_INLINE HOST int32_t
 ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
                                            const Column<int64_t>& input1_id,
-                                           const Column<int32_t>& input1_x,
-                                           const Column<int32_t>& input1_y,
-                                           const Column<int32_t>& input1_z,
+                                           const Column<double>& input1_x,
+                                           const Column<double>& input1_y,
+                                           const Column<int64_t>& input1_z,
                                            const Column<int64_t>& input2_id,
-                                           const Column<int32_t>& input2_x,
-                                           const Column<int32_t>& input2_y,
-                                           const Column<int32_t>& input2_z,
-                                           const Column<int32_t>& input2_w,
+                                           const Column<double>& input2_x,
+                                           const Column<double>& input2_y,
+                                           const Column<int64_t>& input2_z,
+                                           const Column<double>& input2_w,
                                            Column<int64_t>& output_id,
-                                           Column<int32_t>& output_x,
-                                           Column<int32_t>& output_y,
-                                           Column<int32_t>& output_z,
-                                           Column<int32_t>& output_w);
+                                           Column<double>& output_x,
+                                           Column<double>& output_y,
+                                           Column<int64_t>& output_z,
+                                           Column<double>& output_w);
 
 // 101
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<int32_t>& input1_x,
-                                           const Column<int32_t>& input1_y,
-                                           const Column<int64_t>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<int32_t>& input2_x,
-                                           const Column<int32_t>& input2_y,
-                                           const Column<int64_t>& input2_z,
-                                           const Column<int32_t>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<int32_t>& output_x,
-                                           Column<int32_t>& output_y,
-                                           Column<int64_t>& output_z,
-                                           Column<int32_t>& output_w);
 
-// 102
 template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<int32_t>& input1_x,
-                                           const Column<int32_t>& input1_y,
-                                           const Column<float>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<int32_t>& input2_x,
-                                           const Column<int32_t>& input2_y,
-                                           const Column<float>& input2_z,
-                                           const Column<int32_t>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<int32_t>& output_x,
-                                           Column<int32_t>& output_y,
-                                           Column<float>& output_z,
-                                           Column<int32_t>& output_w);
+ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                const TextEncodingNone& agg_type,
+                                const Column<int64_t>& input_id,
+                                const Column<double>& input_x,
+                                const Column<double>& input_y,
+                                const Column<double>& input_z,
+                                Column<int32_t>& output_row_count,
+                                Column<int64_t>& output_id,
+                                Column<double>& output_x,
+                                Column<double>& output_y,
+                                Column<double>& output_z);
 
-// 103
+template NEVER_INLINE HOST int32_t
+ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+                                     const Column<int64_t>& input_id,
+                                     const Column<double>& input_x,
+                                     const Column<double>& input_y,
+                                     const Column<double>& input_z,
+                                     Column<int64_t>& output_id,
+                                     Column<double>& output_x,
+                                     Column<double>& output_y,
+                                     Column<double>& output_z);
+
+template NEVER_INLINE HOST int32_t
+ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                      const TextEncodingNone& agg_type,
+                                      const Column<int64_t>& input1_id,
+                                      const Column<double>& input1_x,
+                                      const Column<double>& input1_y,
+                                      const Column<double>& input1_z,
+                                      const Column<int64_t>& input2_id,
+                                      const Column<double>& input2_x,
+                                      const Column<double>& input2_y,
+                                      const Column<double>& input2_z,
+                                      const Column<double>& input2_w,
+                                      Column<int32_t>& output_row_count,
+                                      Column<int64_t>& output_id,
+                                      Column<double>& output_x,
+                                      Column<double>& output_y,
+                                      Column<double>& output_z,
+                                      Column<double>& output_w);
+
 template NEVER_INLINE HOST int32_t
 ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
                                            const Column<int64_t>& input1_id,
-                                           const Column<int32_t>& input1_x,
-                                           const Column<int32_t>& input1_y,
+                                           const Column<double>& input1_x,
+                                           const Column<double>& input1_y,
                                            const Column<double>& input1_z,
                                            const Column<int64_t>& input2_id,
-                                           const Column<int32_t>& input2_x,
-                                           const Column<int32_t>& input2_y,
+                                           const Column<double>& input2_x,
+                                           const Column<double>& input2_y,
                                            const Column<double>& input2_z,
-                                           const Column<int32_t>& input2_w,
+                                           const Column<double>& input2_w,
                                            Column<int64_t>& output_id,
-                                           Column<int32_t>& output_x,
-                                           Column<int32_t>& output_y,
+                                           Column<double>& output_x,
+                                           Column<double>& output_y,
                                            Column<double>& output_z,
-                                           Column<int32_t>& output_w);
+                                           Column<double>& output_w);
 
 // 110
+
+template NEVER_INLINE HOST int32_t
+ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                const TextEncodingNone& agg_type,
+                                const Column<TextEncodingDict>& input_id,
+                                const Column<double>& input_x,
+                                const Column<double>& input_y,
+                                const Column<int64_t>& input_z,
+                                Column<int32_t>& output_row_count,
+                                Column<TextEncodingDict>& output_id,
+                                Column<double>& output_x,
+                                Column<double>& output_y,
+                                Column<int64_t>& output_z);
+
+template NEVER_INLINE HOST int32_t
+ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+                                     const Column<TextEncodingDict>& input_id,
+                                     const Column<double>& input_x,
+                                     const Column<double>& input_y,
+                                     const Column<int64_t>& input_z,
+                                     Column<TextEncodingDict>& output_id,
+                                     Column<double>& output_x,
+                                     Column<double>& output_y,
+                                     Column<int64_t>& output_z);
+
+template NEVER_INLINE HOST int32_t
+ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                      const TextEncodingNone& agg_type,
+                                      const Column<TextEncodingDict>& input1_id,
+                                      const Column<double>& input1_x,
+                                      const Column<double>& input1_y,
+                                      const Column<int64_t>& input1_z,
+                                      const Column<TextEncodingDict>& input2_id,
+                                      const Column<double>& input2_x,
+                                      const Column<double>& input2_y,
+                                      const Column<int64_t>& input2_z,
+                                      const Column<double>& input2_w,
+                                      Column<int32_t>& output_row_count,
+                                      Column<TextEncodingDict>& output_id,
+                                      Column<double>& output_x,
+                                      Column<double>& output_y,
+                                      Column<int64_t>& output_z,
+                                      Column<double>& output_w);
+
 template NEVER_INLINE HOST int32_t
 ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<int64_t>& input1_x,
-                                           const Column<int64_t>& input1_y,
-                                           const Column<int32_t>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<int64_t>& input2_x,
-                                           const Column<int64_t>& input2_y,
-                                           const Column<int32_t>& input2_z,
-                                           const Column<int64_t>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<int64_t>& output_x,
-                                           Column<int64_t>& output_y,
-                                           Column<int32_t>& output_z,
-                                           Column<int64_t>& output_w);
+                                           const Column<TextEncodingDict>& input1_id,
+                                           const Column<double>& input1_x,
+                                           const Column<double>& input1_y,
+                                           const Column<int64_t>& input1_z,
+                                           const Column<TextEncodingDict>& input2_id,
+                                           const Column<double>& input2_x,
+                                           const Column<double>& input2_y,
+                                           const Column<int64_t>& input2_z,
+                                           const Column<double>& input2_w,
+                                           Column<TextEncodingDict>& output_id,
+                                           Column<double>& output_x,
+                                           Column<double>& output_y,
+                                           Column<int64_t>& output_z,
+                                           Column<double>& output_w);
 
 // 111
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<int64_t>& input1_x,
-                                           const Column<int64_t>& input1_y,
-                                           const Column<int64_t>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<int64_t>& input2_x,
-                                           const Column<int64_t>& input2_y,
-                                           const Column<int64_t>& input2_z,
-                                           const Column<int64_t>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<int64_t>& output_x,
-                                           Column<int64_t>& output_y,
-                                           Column<int64_t>& output_z,
-                                           Column<int64_t>& output_w);
 
-// 112
 template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<int64_t>& input1_x,
-                                           const Column<int64_t>& input1_y,
-                                           const Column<float>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<int64_t>& input2_x,
-                                           const Column<int64_t>& input2_y,
-                                           const Column<float>& input2_z,
-                                           const Column<int64_t>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<int64_t>& output_x,
-                                           Column<int64_t>& output_y,
-                                           Column<float>& output_z,
-                                           Column<int64_t>& output_w);
+ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                const TextEncodingNone& agg_type,
+                                const Column<TextEncodingDict>& input_id,
+                                const Column<double>& input_x,
+                                const Column<double>& input_y,
+                                const Column<double>& input_z,
+                                Column<int32_t>& output_row_count,
+                                Column<TextEncodingDict>& output_id,
+                                Column<double>& output_x,
+                                Column<double>& output_y,
+                                Column<double>& output_z);
 
-// 113
 template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<int64_t>& input1_x,
-                                           const Column<int64_t>& input1_y,
-                                           const Column<double>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<int64_t>& input2_x,
-                                           const Column<int64_t>& input2_y,
-                                           const Column<double>& input2_z,
-                                           const Column<int64_t>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<int64_t>& output_x,
-                                           Column<int64_t>& output_y,
-                                           Column<double>& output_z,
-                                           Column<int64_t>& output_w);
+ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+                                     const Column<TextEncodingDict>& input_id,
+                                     const Column<double>& input_x,
+                                     const Column<double>& input_y,
+                                     const Column<double>& input_z,
+                                     Column<TextEncodingDict>& output_id,
+                                     Column<double>& output_x,
+                                     Column<double>& output_y,
+                                     Column<double>& output_z);
 
-// 120
 template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<float>& input1_x,
-                                           const Column<float>& input1_y,
-                                           const Column<int32_t>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<float>& input2_x,
-                                           const Column<float>& input2_y,
-                                           const Column<int32_t>& input2_z,
-                                           const Column<float>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<float>& output_x,
-                                           Column<float>& output_y,
-                                           Column<int32_t>& output_z,
-                                           Column<float>& output_w);
+ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                      const TextEncodingNone& agg_type,
+                                      const Column<TextEncodingDict>& input1_id,
+                                      const Column<double>& input1_x,
+                                      const Column<double>& input1_y,
+                                      const Column<double>& input1_z,
+                                      const Column<TextEncodingDict>& input2_id,
+                                      const Column<double>& input2_x,
+                                      const Column<double>& input2_y,
+                                      const Column<double>& input2_z,
+                                      const Column<double>& input2_w,
+                                      Column<int32_t>& output_row_count,
+                                      Column<TextEncodingDict>& output_id,
+                                      Column<double>& output_x,
+                                      Column<double>& output_y,
+                                      Column<double>& output_z,
+                                      Column<double>& output_w);
 
-// 121
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<float>& input1_x,
-                                           const Column<float>& input1_y,
-                                           const Column<int64_t>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<float>& input2_x,
-                                           const Column<float>& input2_y,
-                                           const Column<int64_t>& input2_z,
-                                           const Column<float>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<float>& output_x,
-                                           Column<float>& output_y,
-                                           Column<int64_t>& output_z,
-                                           Column<float>& output_w);
-
-// 122
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<float>& input1_x,
-                                           const Column<float>& input1_y,
-                                           const Column<float>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<float>& input2_x,
-                                           const Column<float>& input2_y,
-                                           const Column<float>& input2_z,
-                                           const Column<float>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<float>& output_x,
-                                           Column<float>& output_y,
-                                           Column<float>& output_z,
-                                           Column<float>& output_w);
-
-// 123
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<float>& input1_x,
-                                           const Column<float>& input1_y,
-                                           const Column<double>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<float>& input2_x,
-                                           const Column<float>& input2_y,
-                                           const Column<double>& input2_z,
-                                           const Column<float>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<float>& output_x,
-                                           Column<float>& output_y,
-                                           Column<double>& output_z,
-                                           Column<float>& output_w);
-
-// 130
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<double>& input1_x,
-                                           const Column<double>& input1_y,
-                                           const Column<int32_t>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<double>& input2_x,
-                                           const Column<double>& input2_y,
-                                           const Column<int32_t>& input2_z,
-                                           const Column<double>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<double>& output_x,
-                                           Column<double>& output_y,
-                                           Column<int32_t>& output_z,
-                                           Column<double>& output_w);
-
-// 131
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<double>& input1_x,
-                                           const Column<double>& input1_y,
-                                           const Column<int64_t>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<double>& input2_x,
-                                           const Column<double>& input2_y,
-                                           const Column<int64_t>& input2_z,
-                                           const Column<double>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<double>& output_x,
-                                           Column<double>& output_y,
-                                           Column<int64_t>& output_z,
-                                           Column<double>& output_w);
-
-// 132
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<double>& input1_x,
-                                           const Column<double>& input1_y,
-                                           const Column<float>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<double>& input2_x,
-                                           const Column<double>& input2_y,
-                                           const Column<float>& input2_z,
-                                           const Column<double>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<double>& output_x,
-                                           Column<double>& output_y,
-                                           Column<float>& output_z,
-                                           Column<double>& output_w);
-
-// 133
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<int64_t>& input1_id,
-                                           const Column<double>& input1_x,
-                                           const Column<double>& input1_y,
-                                           const Column<double>& input1_z,
-                                           const Column<int64_t>& input2_id,
-                                           const Column<double>& input2_x,
-                                           const Column<double>& input2_y,
-                                           const Column<double>& input2_z,
-                                           const Column<double>& input2_w,
-                                           Column<int64_t>& output_id,
-                                           Column<double>& output_x,
-                                           Column<double>& output_y,
-                                           Column<double>& output_z,
-                                           Column<double>& output_w);
-
-// 200
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<int32_t>& input1_x,
-                                           const Column<int32_t>& input1_y,
-                                           const Column<int32_t>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<int32_t>& input2_x,
-                                           const Column<int32_t>& input2_y,
-                                           const Column<int32_t>& input2_z,
-                                           const Column<int32_t>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<int32_t>& output_x,
-                                           Column<int32_t>& output_y,
-                                           Column<int32_t>& output_z,
-                                           Column<int32_t>& output_w);
-
-// 201
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<int32_t>& input1_x,
-                                           const Column<int32_t>& input1_y,
-                                           const Column<int64_t>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<int32_t>& input2_x,
-                                           const Column<int32_t>& input2_y,
-                                           const Column<int64_t>& input2_z,
-                                           const Column<int32_t>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<int32_t>& output_x,
-                                           Column<int32_t>& output_y,
-                                           Column<int64_t>& output_z,
-                                           Column<int32_t>& output_w);
-
-// 202
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<int32_t>& input1_x,
-                                           const Column<int32_t>& input1_y,
-                                           const Column<float>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<int32_t>& input2_x,
-                                           const Column<int32_t>& input2_y,
-                                           const Column<float>& input2_z,
-                                           const Column<int32_t>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<int32_t>& output_x,
-                                           Column<int32_t>& output_y,
-                                           Column<float>& output_z,
-                                           Column<int32_t>& output_w);
-
-// 203
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<int32_t>& input1_x,
-                                           const Column<int32_t>& input1_y,
-                                           const Column<double>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<int32_t>& input2_x,
-                                           const Column<int32_t>& input2_y,
-                                           const Column<double>& input2_z,
-                                           const Column<int32_t>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<int32_t>& output_x,
-                                           Column<int32_t>& output_y,
-                                           Column<double>& output_z,
-                                           Column<int32_t>& output_w);
-
-// 210
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<int64_t>& input1_x,
-                                           const Column<int64_t>& input1_y,
-                                           const Column<int32_t>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<int64_t>& input2_x,
-                                           const Column<int64_t>& input2_y,
-                                           const Column<int32_t>& input2_z,
-                                           const Column<int64_t>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<int64_t>& output_x,
-                                           Column<int64_t>& output_y,
-                                           Column<int32_t>& output_z,
-                                           Column<int64_t>& output_w);
-
-// 211
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<int64_t>& input1_x,
-                                           const Column<int64_t>& input1_y,
-                                           const Column<int64_t>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<int64_t>& input2_x,
-                                           const Column<int64_t>& input2_y,
-                                           const Column<int64_t>& input2_z,
-                                           const Column<int64_t>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<int64_t>& output_x,
-                                           Column<int64_t>& output_y,
-                                           Column<int64_t>& output_z,
-                                           Column<int64_t>& output_w);
-
-// 212
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<int64_t>& input1_x,
-                                           const Column<int64_t>& input1_y,
-                                           const Column<float>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<int64_t>& input2_x,
-                                           const Column<int64_t>& input2_y,
-                                           const Column<float>& input2_z,
-                                           const Column<int64_t>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<int64_t>& output_x,
-                                           Column<int64_t>& output_y,
-                                           Column<float>& output_z,
-                                           Column<int64_t>& output_w);
-
-// 213
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<int64_t>& input1_x,
-                                           const Column<int64_t>& input1_y,
-                                           const Column<double>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<int64_t>& input2_x,
-                                           const Column<int64_t>& input2_y,
-                                           const Column<double>& input2_z,
-                                           const Column<int64_t>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<int64_t>& output_x,
-                                           Column<int64_t>& output_y,
-                                           Column<double>& output_z,
-                                           Column<int64_t>& output_w);
-
-// 220
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<float>& input1_x,
-                                           const Column<float>& input1_y,
-                                           const Column<int32_t>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<float>& input2_x,
-                                           const Column<float>& input2_y,
-                                           const Column<int32_t>& input2_z,
-                                           const Column<float>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<float>& output_x,
-                                           Column<float>& output_y,
-                                           Column<int32_t>& output_z,
-                                           Column<float>& output_w);
-
-// 221
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<float>& input1_x,
-                                           const Column<float>& input1_y,
-                                           const Column<int64_t>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<float>& input2_x,
-                                           const Column<float>& input2_y,
-                                           const Column<int64_t>& input2_z,
-                                           const Column<float>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<float>& output_x,
-                                           Column<float>& output_y,
-                                           Column<int64_t>& output_z,
-                                           Column<float>& output_w);
-
-// 222
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<float>& input1_x,
-                                           const Column<float>& input1_y,
-                                           const Column<float>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<float>& input2_x,
-                                           const Column<float>& input2_y,
-                                           const Column<float>& input2_z,
-                                           const Column<float>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<float>& output_x,
-                                           Column<float>& output_y,
-                                           Column<float>& output_z,
-                                           Column<float>& output_w);
-
-// 223
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<float>& input1_x,
-                                           const Column<float>& input1_y,
-                                           const Column<double>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<float>& input2_x,
-                                           const Column<float>& input2_y,
-                                           const Column<double>& input2_z,
-                                           const Column<float>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<float>& output_x,
-                                           Column<float>& output_y,
-                                           Column<double>& output_z,
-                                           Column<float>& output_w);
-
-// 230
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<double>& input1_x,
-                                           const Column<double>& input1_y,
-                                           const Column<int32_t>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<double>& input2_x,
-                                           const Column<double>& input2_y,
-                                           const Column<int32_t>& input2_z,
-                                           const Column<double>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<double>& output_x,
-                                           Column<double>& output_y,
-                                           Column<int32_t>& output_z,
-                                           Column<double>& output_w);
-
-// 231
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<double>& input1_x,
-                                           const Column<double>& input1_y,
-                                           const Column<int64_t>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<double>& input2_x,
-                                           const Column<double>& input2_y,
-                                           const Column<int64_t>& input2_z,
-                                           const Column<double>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<double>& output_x,
-                                           Column<double>& output_y,
-                                           Column<int64_t>& output_z,
-                                           Column<double>& output_w);
-
-// 232
-template NEVER_INLINE HOST int32_t
-ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
-                                           const Column<TextEncodingDict>& input1_id,
-                                           const Column<double>& input1_x,
-                                           const Column<double>& input1_y,
-                                           const Column<float>& input1_z,
-                                           const Column<TextEncodingDict>& input2_id,
-                                           const Column<double>& input2_x,
-                                           const Column<double>& input2_y,
-                                           const Column<float>& input2_z,
-                                           const Column<double>& input2_w,
-                                           Column<TextEncodingDict>& output_id,
-                                           Column<double>& output_x,
-                                           Column<double>& output_y,
-                                           Column<float>& output_z,
-                                           Column<double>& output_w);
-
-// 233
 template NEVER_INLINE HOST int32_t
 ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
                                            const Column<TextEncodingDict>& input1_id,

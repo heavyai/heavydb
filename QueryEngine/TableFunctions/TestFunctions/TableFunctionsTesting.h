@@ -817,7 +817,7 @@ EXTENSION_NOINLINE_HOST int32_t ct_sparse_add(TableFunctionManager& mgr,
 
 // clang-format off
 /*
-  UDTF: ct_pushdown_stats__cpu_template(TableFunctionManager, TextEncodingNone agg_type, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>) | filter_table_function_transpose=on -> Column<int32_t> row_count, Column<K> id | input_id=args<0>, Column<T> x, Column<T> y, Column<Z> z, K=[int32_t, int64_t, TextEncodingDict], T=[int32_t, int64_t, float, double], Z=[int32_t, int64_t, float, double]
+  UDTF: ct_pushdown_stats__cpu_template(TableFunctionManager, TextEncodingNone agg_type, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>) | filter_table_function_transpose=on -> Column<int32_t> row_count, Column<K> id | input_id=args<0>, Column<T> x, Column<T> y, Column<Z> z, K=[int64_t, TextEncodingDict], T=[int64_t, double], Z=[int64_t, double]
 */
 // clang-format on
 
@@ -841,7 +841,7 @@ ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
 
 // clang-format off
 /*
-  UDTF: ct_pushdown_projection__cpu_template(TableFunctionManager, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>) | filter_table_function_transpose=on -> Column<K> id | input_id=args<0>, Column<T> x, Column<T> y, Column<Z> z, K=[int32_t, int64_t, TextEncodingDict], T=[int32_t, int64_t, float, double], Z=[int32_t, int64_t, float, double]
+  UDTF: ct_pushdown_projection__cpu_template(TableFunctionManager, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>) | filter_table_function_transpose=on -> Column<K> id | input_id=args<0>, Column<T> x, Column<T> y, Column<Z> z, K=[int64_t, TextEncodingDict], T=[int64_t, double], Z=[int64_t, double]
 */
 // clang-format on
 
@@ -862,7 +862,7 @@ NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(TableFunctionMana
 
 // clang-format off
 /*
-  UDTF: ct_union_pushdown_stats__cpu_template(TableFunctionManager, TextEncodingNone agg_type, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z, Column<T> w>) | filter_table_function_transpose=on -> Column<int32_t> row_count, Column<K> id | input_id=args<0, 0>, Column<T> x, Column<T> y, Column<Z> z, Column<T> w, K=[int32_t, int64_t, TextEncodingDict], T=[int32_t, int64_t, float, double], Z=[int32_t, int64_t, float, double]
+  UDTF: ct_union_pushdown_stats__cpu_template(TableFunctionManager, TextEncodingNone agg_type, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z, Column<T> w>) | filter_table_function_transpose=on -> Column<int32_t> row_count, Column<K> id | input_id=args<0, 0>, Column<T> x, Column<T> y, Column<Z> z, Column<T> w, K=[int64_t, TextEncodingDict], T=[int64_t, double], Z=[int64_t, double]
 */
 // clang-format on
 
@@ -892,7 +892,7 @@ ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
 
 // clang-format off
 /*
-  UDTF: ct_union_pushdown_projection__cpu_template(TableFunctionManager, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z, Column<T> w>) | filter_table_function_transpose=on -> Column<K> id | input_id=args<0, 0>, Column<T> x, Column<T> y, Column<Z> z, Column<T> w, K=[int32_t, int64_t, TextEncodingDict], T=[int32_t, int64_t, float, double], Z=[int32_t, int64_t, float, double]
+  UDTF: ct_union_pushdown_projection__cpu_template(TableFunctionManager, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z, Column<T> w>) | filter_table_function_transpose=on -> Column<K> id | input_id=args<0, 0>, Column<T> x, Column<T> y, Column<Z> z, Column<T> w, K=[int64_t, TextEncodingDict], T=[int64_t, double], Z=[int64_t, double]
 */
 // clang-format on
 
@@ -1533,4 +1533,31 @@ EXTENSION_NOINLINE int32_t ct_test_func__cpu_2(const Column<int32_t>& input1,
                                                const Column<int32_t>& input2,
                                                const int32_t multiplier,
                                                Column<int32_t>& out);
+
+// clang-format off
+/*
+  UDTF: ct_test_calcite_casting_char__cpu_(TableFunctionManager, Cursor<TextEncodingDict>) -> Column<TextEncodingDict> | input_id=args<0>
+  UDTF: ct_test_calcite_casting_bigint__cpu_(TableFunctionManager, Cursor<int64_t>) -> Column<int64_t>
+  UDTF: ct_test_calcite_casting_double__cpu_(TableFunctionManager, Cursor<double>) -> Column<double>
+  UDTF: ct_test_calcite_casting_timestamp__cpu_(TableFunctionManager, Cursor<Timestamp>) -> Column<Timestamp>
+*/
+// clang-format on
+// functions to test calcite auto casting
+
+EXTENSION_NOINLINE int32_t
+ct_test_calcite_casting_char__cpu_(TableFunctionManager& mgr,
+                                   const Column<TextEncodingDict>& input1,
+                                   Column<TextEncodingDict>& out);
+EXTENSION_NOINLINE int32_t
+ct_test_calcite_casting_bigint__cpu_(TableFunctionManager& mgr,
+                                     const Column<int64_t>& input1,
+                                     Column<int64_t>& out);
+EXTENSION_NOINLINE int32_t
+ct_test_calcite_casting_double__cpu_(TableFunctionManager& mgr,
+                                     const Column<double>& input1,
+                                     Column<double>& out);
+EXTENSION_NOINLINE int32_t
+ct_test_calcite_casting_timestamp__cpu_(TableFunctionManager& mgr,
+                                        const Column<Timestamp>& input1,
+                                        Column<Timestamp>& out);
 #endif

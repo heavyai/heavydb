@@ -123,6 +123,7 @@ import org.apache.calcite.sql.util.SqlBasicVisitor;
 import org.apache.calcite.sql.util.SqlShuttle;
 import org.apache.calcite.sql.util.SqlVisitor;
 import org.apache.calcite.sql.validate.implicit.TypeCoercion;
+import org.apache.calcite.sql.validate.implicit.TypeCoercions;
 import org.apache.calcite.util.BitString;
 import org.apache.calcite.util.Bug;
 import org.apache.calcite.util.ImmutableBitSet;
@@ -139,6 +140,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
+import com.mapd.calcite.parser.HeavyDBTypeCoercion;
 
 import org.slf4j.Logger;
 
@@ -316,7 +318,8 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     groupFinder = new AggFinder(opTab, false, false, true, null, nameMatcher);
     aggOrOverOrGroupFinder = new AggFinder(opTab, true, true, true, null,
         nameMatcher);
-    this.typeCoercion = config.typeCoercionFactory().create(typeFactory, this);
+    // this.typeCoercion = config.typeCoercionFactory().create(typeFactory, this); // HEAVY.AI original
+    this.typeCoercion = TypeCoercions.createHeavyDBTypeCoercion(typeFactory, this); // HEAVY.AI new
     if (config.typeCoercionRules() != null) {
       SqlTypeCoercionRule.THREAD_PROVIDERS.set(config.typeCoercionRules());
     }

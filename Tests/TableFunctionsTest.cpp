@@ -2071,11 +2071,11 @@ std::string gen_grid_values(const int32_t num_x_bins,
                             const bool add_w_val,
                             const bool merge_with_w_null,
                             const std::string& aliased_table = "") {
-  const std::string project_w_sql = add_w_val ? ", CAST(w AS INT) as w" : "";
+  const std::string project_w_sql = add_w_val ? ", CAST(w AS BIGINT) as w" : "";
   std::string values_sql =
-      "SELECT CAST(id AS INT) as id, CAST(x AS INT) AS x, "
-      "CAST(y AS INT) AS y, CAST(z AS "
-      "INT) AS z" +
+      "SELECT CAST(id AS BIGINT) as id, CAST(x AS BIGINT) AS x, "
+      "CAST(y AS BIGINT) AS y, CAST(z AS "
+      "BIGINT) AS z" +
       project_w_sql + " FROM (VALUES ";
   auto gen_values = [](const int32_t num_x_bins,
                        const int32_t num_y_bins,
@@ -2290,7 +2290,7 @@ TEST_F(TableFunctions, TimestampTests) {
                                     "TABLE(ct_timestamp_extract(cursor(SELECT t1 "
                                     "FROM time_test_uncastable)));",
                                     dt),
-                   UserTableFunctionError);
+                   std::runtime_error);
     }
 
     // TIMESTAMP scalar inputs
@@ -3230,46 +3230,6 @@ TEST_F(TableFunctions, CalciteOverloading) {
           dt);
       ASSERT_EQ(result->rowCount(), size_t(1));
     }
-    // Query should fail, first column is BIGINT. Next three columns are of
-    // non-consecutive types, meaning they can't be aggregated in a column list
-    {
-      EXPECT_ANY_THROW(
-          run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test(CURSOR("
-                           "SELECT y, y, d, y FROM err_test)));",
-                           dt));
-    }
-    // Query should fail, first column is BIGINT. Two leftover BIGINT columns whereas
-    // signature only takes one column after the column list of DOUBLEs.
-    {
-      EXPECT_ANY_THROW(
-          run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test(CURSOR("
-                           "SELECT y, d, d, d, y, y FROM err_test)));",
-                           dt));
-    }
-    // Query should fail, unsupported type INT for the first column (even though the rest
-    // match)
-    {
-      EXPECT_ANY_THROW(
-          run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test(CURSOR("
-                           "SELECT x, d, d, y FROM err_test)));",
-                           dt));
-    }
-    // Query should fail, unsupported type INT for the last column (even though the rest
-    // match)
-    {
-      EXPECT_ANY_THROW(
-          run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test(CURSOR("
-                           "SELECT y, d, d, x FROM err_test)));",
-                           dt));
-    }
-    // Query should fail, although the first and last BIGINT scalars type match, the
-    // COLUMN_LIST subtype FLOAT does not match neither DOUBLE nor BIGINT
-    {
-      EXPECT_ANY_THROW(
-          run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test(CURSOR("
-                           "SELECT x, f, f, x FROM err_test)));",
-                           dt));
-    }
     // Query should fail, missing a last BIGINT input column after the column list of
     // DOUBLEs
     {
@@ -3303,6 +3263,175 @@ TEST_F(TableFunctions, CalciteOverloading) {
           run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test2(CURSOR("
                            "SELECT d, d, d, d FROM err_test)));",
                            dt));
+    }
+  }
+}
+
+TEST_F(TableFunctions, CalciteAutoCasting) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // These tests were taken from the 'CalciteOverloading' tests. Before auto-casting
+    // from Calcite was available, these would fail due to type mismatches. With
+    // auto-casting, these queries become valid since input types can be promoted. Query
+    // should succeed, first column is BIGINT. The second BIGINT column can be promoted to
+    // DOUBLE and be aggregated in a COLUMNLIST with the third DOUBLE argument. The last
+    // BIGINT column matches normally.
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_list_test(CURSOR(SELECT y, y, d, y "
+          "FROM err_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+    }
+    // Query should succeed, first column is BIGINT. The second to last BIGINT column can
+    // be promoted to DOUBLE and be aggregated in the COLUMNLIST. Last BIGINT column
+    // matches normally.
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+          "SELECT y, d, d, d, y, y FROM err_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+    }
+    // Query should succeed, the first INT column can be promoted to BIGINT. The rest
+    // match normally.
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+          "SELECT x, d, d, y FROM err_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+    }
+    // Query should succeed, the last INT column can be promoted to BIGINT. The rest match
+    // normally.
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+          "SELECT y, d, d, x FROM err_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+    }
+    // Query should succeed, first and last BIGINT columns match. The two intermediate
+    // FLOAT columns can be promoted to DOUBLE and match with the DOUBLE COLUMNLIST
+    // argument.
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+          "SELECT x, f, f, x FROM err_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+    }
+    // Tests for promoting smaller integer types to BIGINT
+    if (dt == ExecutorDeviceType::CPU) {
+      {
+        const auto result_tinyint = run_multiple_agg(
+            "SELECT out0 FROM table(ct_test_calcite_casting_bigint(CURSOR(SELECT CAST (x "
+            "AS TINYINT) from tf_test)));",
+            dt);
+        const auto result_smallint = run_multiple_agg(
+            "SELECT out0 FROM table(ct_test_calcite_casting_bigint(CURSOR(SELECT CAST (x "
+            "AS SMALLINT) from tf_test)));",
+            dt);
+        const auto result_integer = run_multiple_agg(
+            "SELECT out0 FROM table(ct_test_calcite_casting_bigint(CURSOR(SELECT CAST (x "
+            "AS INTEGER) from tf_test)));",
+            dt);
+        const auto result_bigint =
+            run_multiple_agg("SELECT CAST(x as BIGINT) from tf_test;", dt);
+        assert_equal<int64_t>(result_tinyint, result_bigint);
+        assert_equal<int64_t>(result_smallint, result_bigint);
+        assert_equal<int64_t>(result_integer, result_bigint);
+      }
+      {
+        const auto result_float = run_multiple_agg(
+            "SELECT out0 FROM table(ct_test_calcite_casting_double(CURSOR(SELECT f from "
+            "tf_test)));",
+            dt);
+        const auto result_tinyint = run_multiple_agg(
+            "SELECT out0 FROM table(ct_test_calcite_casting_double(CURSOR(SELECT cast (x "
+            "as TINYINT) from tf_test)));",
+            dt);
+        const auto result_smallint = run_multiple_agg(
+            "SELECT out0 FROM table(ct_test_calcite_casting_double(CURSOR(SELECT cast (x "
+            "as SMALLINT) from tf_test)));",
+            dt);
+        const auto result_integer = run_multiple_agg(
+            "SELECT out0 FROM table(ct_test_calcite_casting_double(CURSOR(SELECT cast (x "
+            "as INTEGER) from tf_test)));",
+            dt);
+        const auto result_bigint = run_multiple_agg(
+            "SELECT out0 FROM table(ct_test_calcite_casting_double(CURSOR(SELECT cast (x "
+            "as BIGINT) from tf_test)));",
+            dt);
+        const auto result_int_to_double =
+            run_multiple_agg("SELECT CAST (x as DOUBLE) from tf_test;", dt);
+        const auto result_double =
+            run_multiple_agg("SELECT CAST(f as DOUBLE) from tf_test;", dt);
+        assert_equal<double>(result_tinyint, result_int_to_double);
+        assert_equal<double>(result_smallint, result_int_to_double);
+        assert_equal<double>(result_integer, result_int_to_double);
+        assert_equal<double>(result_bigint, result_int_to_double);
+        assert_equal<double>(result_float, result_double);
+      }
+    }
+    {
+      const auto result_float = run_multiple_agg(
+          "SELECT out0 FROM table(ct_test_calcite_casting_char(CURSOR(SELECT f from "
+          "tf_test)));",
+          dt);
+      const auto result_integer = run_multiple_agg(
+          "SELECT out0 FROM table(ct_test_calcite_casting_char(CURSOR(SELECT x from "
+          "tf_test)));",
+          dt);
+      const auto result_timestamp = run_multiple_agg(
+          "SELECT out0 FROM table(ct_test_calcite_casting_char(CURSOR(SELECT t1 from "
+          "time_test)));",
+          dt);
+      const auto result_float_as_varchar =
+          run_multiple_agg("SELECT CAST (f as VARCHAR) from tf_test;", dt);
+      const auto result_int_as_varchar =
+          run_multiple_agg("SELECT CAST (x as VARCHAR) from tf_test;", dt);
+      const auto result_timestamp_as_varchar =
+          run_multiple_agg("SELECT CAST(t1 as VARCHAR) from time_test;", dt);
+      for (int i = 0; i < 3; ++i) {
+        auto float_row = result_float->getNextRow(true, false);
+        auto integer_row = result_integer->getNextRow(true, false);
+        auto timestamp_row = result_timestamp->getNextRow(true, false);
+        auto float_as_varchar_row = result_float_as_varchar->getNextRow(true, false);
+        auto int_as_varchar_row = result_int_as_varchar->getNextRow(true, false);
+        auto timestamp_as_varchar = result_timestamp_as_varchar->getNextRow(true, false);
+        auto string_float =
+            boost::get<std::string>(TestHelpers::v<NullableString>(float_row[0]));
+        auto string_integer =
+            boost::get<std::string>(TestHelpers::v<NullableString>(integer_row[0]));
+        auto string_timestamp =
+            boost::get<std::string>(TestHelpers::v<NullableString>(timestamp_row[0]));
+        auto string_expected_float = boost::get<std::string>(
+            TestHelpers::v<NullableString>(float_as_varchar_row[0]));
+        auto string_expected_integer = boost::get<std::string>(
+            TestHelpers::v<NullableString>(int_as_varchar_row[0]));
+        auto string_expected_timestamp = boost::get<std::string>(
+            TestHelpers::v<NullableString>(timestamp_as_varchar[0]));
+        ASSERT_EQ(string_float, string_expected_float);
+        ASSERT_EQ(string_integer, string_expected_integer);
+        ASSERT_EQ(string_timestamp, string_expected_timestamp);
+      }
+    }
+    {
+      const auto result_timestamp = run_multiple_agg(
+          "SELECT out0 FROM table(ct_test_calcite_casting_timestamp(CURSOR(SELECT t1 "
+          "from time_test_castable)));",
+          dt);
+      std::vector<std::string> expected_result_set({"1971-01-01 01:01:01.001001000",
+                                                    "1972-02-02 02:02:02.002002000",
+                                                    "1973-03-03 03:03:03.003003000"});
+      for (int i = 0; i < 3; ++i) {
+        const auto row = result_timestamp->getNextRow(true, false);
+        Datum d;
+        d.bigintval = TestHelpers::v<int64_t>(row[0]);
+        std::string asString = DatumToString(d, SQLTypeInfo(kTIMESTAMP, 9, 0, false));
+        ASSERT_EQ(asString, expected_result_set[i]);
+      }
     }
   }
 }
