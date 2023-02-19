@@ -521,24 +521,24 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
   const auto& null_ti = col_var->get_type_info();
-  if ((null_ti.is_string() && null_ti.get_compression() == kENCODING_NONE) ||
-      null_ti.is_array() || null_ti.is_geometry()) {
+  // todo (yoonmin) : allow projection for array and geometry
+  if (null_ti.is_array() || null_ti.is_geometry()) {
     throw std::runtime_error("Projection type " + null_ti.get_type_name() +
                              " not supported for outer joins yet");
   }
+  // since this represents a null constant, what value the datum object contains is
+  // meaningless we need to know what type we need to create a null constant and `null_ti`
+  // contains it
   const auto null_constant = makeExpr<Analyzer::Constant>(null_ti, true, Datum{0});
-  const auto null_target_lvs =
-      codegen(null_constant.get(),
-              false,
-              CompilationOptions{
-                  ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false});
+  auto const null_target_lvs = codegen(null_constant.get(), fetch_column, co);
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   CHECK_EQ(orig_lvs.size(), null_target_lvs.size());
   cgen_state_->ir_builder_.SetInsertPoint(phi_bb);
   std::vector<llvm::Value*> target_lvs;
   for (size_t i = 0; i < orig_lvs.size(); ++i) {
     const auto target_type = orig_lvs[i]->getType();
-    CHECK_EQ(target_type, null_target_lvs[i]->getType());
+    const auto null_type = null_target_lvs[i]->getType();
+    CHECK_EQ(target_type, null_type);
     auto target_phi = cgen_state_->ir_builder_.CreatePHI(target_type, 2);
     const auto orig_lvs_bb = needs_casting_col_var ? cast_bb : outer_join_args_bb;
     target_phi->addIncoming(orig_lvs[i], orig_lvs_bb);

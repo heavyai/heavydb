@@ -9876,6 +9876,35 @@ void import_join_test(bool with_delete_support) {
   }
 }
 
+void import_left_join_varlen_proj_test() {
+  const std::string drop_1{"DROP TABLE IF EXISTS left_join_varlen_proj1;"};
+  run_ddl_statement(drop_1);
+  g_sqlite_comparator.query(drop_1);
+
+  const std::string drop_2{"DROP TABLE IF EXISTS left_join_varlen_proj2;"};
+  run_ddl_statement(drop_2);
+  g_sqlite_comparator.query(drop_2);
+
+  run_ddl_statement("CREATE TABLE left_join_varlen_proj1 (v INT, t TEXT ENCODING NONE)");
+  g_sqlite_comparator.query("CREATE TABLE left_join_varlen_proj1 (v INT, t TEXT)");
+  std::string tbl2_ddl{
+      "CREATE TABLE left_join_varlen_proj2 (v INT, t TEXT ENCODING NONE)"};
+  std::string replicated_dec{!g_aggregator ? "" : " WITH(PARTITIONS='REPLICATED');"};
+  tbl2_ddl += replicated_dec;
+  run_ddl_statement(tbl2_ddl);
+  g_sqlite_comparator.query("CREATE TABLE left_join_varlen_proj2 (v INT, t TEXT);");
+
+  std::vector<std::string> rows{"INSERT INTO left_join_varlen_proj1 VALUES(1, NULL);",
+                                "INSERT INTO left_join_varlen_proj1 VALUES(2, 'a');",
+                                "INSERT INTO left_join_varlen_proj1 VALUES(3, 'b');",
+                                "INSERT INTO left_join_varlen_proj2 VALUES(1, NULL);",
+                                "INSERT INTO left_join_varlen_proj2 VALUES(2, 'b');"};
+  for (auto const& row : rows) {
+    run_multiple_agg(row, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(row);
+  }
+}
+
 void import_hash_join_test() {
   const std::string drop_old_test{"DROP TABLE IF EXISTS hash_join_test;"};
   run_ddl_statement(drop_old_test);
@@ -13374,6 +13403,15 @@ TEST_F(Select, Joins_LeftJoin_Filters) {
       EXPECT_EQ(result->rowCount(), size_t(0));
     }
     c(R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_empty b ON a.o1 = b.o1 WHERE (a.o1 >= CAST('1990-01-01' AS DATE)) GROUP BY 1 ORDER BY 2;)",
+      dt);
+  }
+}
+
+TEST_F(Select, Joins_LeftJoin_Projection) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("select R.v, S.t from left_join_varlen_proj1 R left join left_join_varlen_proj2 S "
+      "on R.v = S.v ORDER BY 1;",
       dt);
   }
 }
@@ -27928,6 +27966,12 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return -EEXIST;
   }
   try {
+    import_left_join_varlen_proj_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'left_join_varlen_proj'";
+    return -EEXIST;
+  }
+  try {
     import_hash_join_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'hash_join_test'";
@@ -28299,6 +28343,14 @@ void drop_tables() {
   const std::string drop_join_test{"DROP TABLE join_test;"};
   run_ddl_statement(drop_join_test);
   g_sqlite_comparator.query(drop_join_test);
+  const std::string drop_left_join_varlen_proj1{
+      "DROP TABLE IF EXISTS left_join_varlen_proj1;"};
+  run_ddl_statement(drop_left_join_varlen_proj1);
+  g_sqlite_comparator.query(drop_left_join_varlen_proj1);
+  const std::string drop_left_join_varlen_proj2{
+      "DROP TABLE IF EXISTS left_join_varlen_proj2;"};
+  run_ddl_statement(drop_left_join_varlen_proj2);
+  g_sqlite_comparator.query(drop_left_join_varlen_proj2);
   const std::string drop_hash_join_test{"DROP TABLE hash_join_test;"};
   run_ddl_statement(drop_hash_join_test);
   g_sqlite_comparator.query(drop_hash_join_test);

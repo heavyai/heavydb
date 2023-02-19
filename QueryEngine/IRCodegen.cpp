@@ -59,6 +59,19 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
           "NULL type literals are not currently supported in this context.");
     }
     if (constant->get_is_null()) {
+      if (ti.is_string() && ti.get_compression() == kENCODING_NONE) {
+        std::vector<llvm::Value*> null_target_lvs;
+        llvm::StructType* str_view_ty = createStringViewStructType();
+        auto null_str_view_struct_lv = cgen_state_->ir_builder_.CreateAlloca(str_view_ty);
+        // we do not need to fill the values of the string_view struct representing null
+        // string
+        null_target_lvs.push_back(
+            cgen_state_->ir_builder_.CreateLoad(str_view_ty, null_str_view_struct_lv));
+        null_target_lvs.push_back(llvm::ConstantPointerNull::get(
+            llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, 8), 0)));
+        null_target_lvs.push_back(cgen_state_->llInt((int32_t)0));
+        return null_target_lvs;
+      }
       return {ti.is_fp()
                   ? static_cast<llvm::Value*>(executor_->cgen_state_->inlineFpNull(ti))
                   : static_cast<llvm::Value*>(executor_->cgen_state_->inlineIntNull(ti))};
