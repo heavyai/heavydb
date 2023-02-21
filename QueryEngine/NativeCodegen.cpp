@@ -1313,6 +1313,12 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     add_intrinsics_to_module(llvm_module);
   }
 
+  if (!llvm_module->getModuleFlag("Debug Info Version")) {
+    // Fixes QE-705
+    llvm_module->addModuleFlag(
+        llvm::Module::Error, "Debug Info Version", llvm::DEBUG_METADATA_VERSION);
+  }
+
   llvm_module->print(os, nullptr);
   os.flush();
 
