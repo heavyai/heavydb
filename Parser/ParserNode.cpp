@@ -3025,6 +3025,62 @@ void get_dataframe_definitions(DataframeTableDescriptor& df_td,
   return it->second(df_td, p.get(), columns);
 }
 
+void parse_elements(const rapidjson::Value& payload,
+                    std::string element_name,
+                    std::string& table_name,
+                    std::list<std::unique_ptr<TableElement>>& table_element_list) {
+  const auto elements = payload[element_name].GetArray();
+  for (const auto& element : elements) {
+    CHECK(element.IsObject());
+    CHECK(element.HasMember("type"));
+    if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
+      auto col_def = column_from_json(element);
+      table_element_list.emplace_back(std::move(col_def));
+    } else if (json_str(element["type"]) == "SQL_COLUMN_CONSTRAINT") {
+      CHECK(element.HasMember("name"));
+      if (json_str(element["name"]) == "SHARD_KEY") {
+        CHECK(element.HasMember("columns"));
+        CHECK(element["columns"].IsArray());
+        const auto& columns = element["columns"].GetArray();
+        if (columns.Size() != size_t(1)) {
+          throw std::runtime_error("Only one shard column is currently supported.");
+        }
+        auto shard_key_def = std::make_unique<ShardKeyDef>(json_str(columns[0]));
+        table_element_list.emplace_back(std::move(shard_key_def));
+      } else if (json_str(element["name"]) == "SHARED_DICT") {
+        CHECK(element.HasMember("columns"));
+        CHECK(element["columns"].IsArray());
+        const auto& columns = element["columns"].GetArray();
+        if (columns.Size() != size_t(1)) {
+          throw std::runtime_error(
+              R"(Only one column per shared dictionary entry is currently supported. Use multiple SHARED DICT statements to share dictionaries from multiple columns.)");
+        }
+        CHECK(element.HasMember("references") && element["references"].IsObject());
+        const auto& references = element["references"].GetObject();
+        std::string references_table_name;
+        if (references.HasMember("table")) {
+          references_table_name = json_str(references["table"]);
+        } else {
+          references_table_name = table_name;
+        }
+        CHECK(references.HasMember("column"));
+
+        auto shared_dict_def = std::make_unique<SharedDictionaryDef>(
+            json_str(columns[0]), references_table_name, json_str(references["column"]));
+        table_element_list.emplace_back(std::move(shared_dict_def));
+
+      } else {
+        LOG(FATAL) << "Unsupported type for SQL_COLUMN_CONSTRAINT: "
+                   << json_str(element["name"]);
+      }
+    } else {
+      LOG(FATAL) << "Unsupported element type for CREATE TABLE: "
+                 << element["type"].GetString();
+    }
+  }
+}
+}  // namespace
+
 std::unique_ptr<ColumnDef> column_from_json(const rapidjson::Value& element) {
   CHECK(element.HasMember("name"));
   auto col_name = std::make_unique<std::string>(json_str(element["name"]));
@@ -3102,61 +3158,25 @@ std::unique_ptr<ColumnDef> column_from_json(const rapidjson::Value& element) {
                                      constraint_def ? constraint_def.release() : nullptr);
 }
 
-void parse_elements(const rapidjson::Value& payload,
-                    std::string element_name,
-                    std::string& table_name,
-                    std::list<std::unique_ptr<TableElement>>& table_element_list) {
-  const auto elements = payload[element_name].GetArray();
+std::list<ColumnDef> get_columns_from_json_payload(const std::string& payload_key,
+                                                   const rapidjson::Value& payload) {
+  std::list<ColumnDef> table_element_list;
+  CHECK(payload[payload_key].IsArray());
+
+  const auto elements = payload[payload_key].GetArray();
   for (const auto& element : elements) {
     CHECK(element.IsObject());
     CHECK(element.HasMember("type"));
     if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
       auto col_def = column_from_json(element);
-      table_element_list.emplace_back(std::move(col_def));
-    } else if (json_str(element["type"]) == "SQL_COLUMN_CONSTRAINT") {
-      CHECK(element.HasMember("name"));
-      if (json_str(element["name"]) == "SHARD_KEY") {
-        CHECK(element.HasMember("columns"));
-        CHECK(element["columns"].IsArray());
-        const auto& columns = element["columns"].GetArray();
-        if (columns.Size() != size_t(1)) {
-          throw std::runtime_error("Only one shard column is currently supported.");
-        }
-        auto shard_key_def = std::make_unique<ShardKeyDef>(json_str(columns[0]));
-        table_element_list.emplace_back(std::move(shard_key_def));
-      } else if (json_str(element["name"]) == "SHARED_DICT") {
-        CHECK(element.HasMember("columns"));
-        CHECK(element["columns"].IsArray());
-        const auto& columns = element["columns"].GetArray();
-        if (columns.Size() != size_t(1)) {
-          throw std::runtime_error(
-              R"(Only one column per shared dictionary entry is currently supported. Use multiple SHARED DICT statements to share dictionaries from multiple columns.)");
-        }
-        CHECK(element.HasMember("references") && element["references"].IsObject());
-        const auto& references = element["references"].GetObject();
-        std::string references_table_name;
-        if (references.HasMember("table")) {
-          references_table_name = json_str(references["table"]);
-        } else {
-          references_table_name = table_name;
-        }
-        CHECK(references.HasMember("column"));
-
-        auto shared_dict_def = std::make_unique<SharedDictionaryDef>(
-            json_str(columns[0]), references_table_name, json_str(references["column"]));
-        table_element_list.emplace_back(std::move(shared_dict_def));
-
-      } else {
-        LOG(FATAL) << "Unsupported type for SQL_COLUMN_CONSTRAINT: "
-                   << json_str(element["name"]);
-      }
+      table_element_list.emplace_back(std::move(*col_def));
     } else {
-      LOG(FATAL) << "Unsupported element type for CREATE TABLE: "
+      LOG(FATAL) << "Unsupported element type for ALTER TABLE: "
                  << element["type"].GetString();
     }
   }
+  return table_element_list;
 }
-}  // namespace
 
 CreateTableStmt::CreateTableStmt(const rapidjson::Value& payload) {
   CHECK(payload.HasMember("name"));
@@ -4451,116 +4471,6 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   catalog.dropTable(td);
 }
 
-void AlterTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
-                             bool read_only_mode) {}
-
-std::unique_ptr<DDLStmt> AlterTableStmt::delegate(const rapidjson::Value& payload) {
-  CHECK(payload.HasMember("tableName"));
-  auto tableName = json_str(payload["tableName"]);
-
-  CHECK(payload.HasMember("alterType"));
-  auto type = json_str(payload["alterType"]);
-
-  if (type == "RENAME_TABLE") {
-    CHECK(payload.HasMember("newTableName"));
-    auto newTableName = json_str(payload["newTableName"]);
-    return std::unique_ptr<DDLStmt>(new Parser::RenameTableStmt(
-        new std::string(tableName), new std::string(newTableName)));
-
-  } else if (type == "RENAME_COLUMN") {
-    CHECK(payload.HasMember("columnName"));
-    auto columnName = json_str(payload["columnName"]);
-    CHECK(payload.HasMember("newColumnName"));
-    auto newColumnName = json_str(payload["newColumnName"]);
-    return std::unique_ptr<DDLStmt>(
-        new Parser::RenameColumnStmt(new std::string(tableName),
-                                     new std::string(columnName),
-                                     new std::string(newColumnName)));
-
-  } else if (type == "ALTER_COLUMN") {
-    CHECK(payload.HasMember("alterData"));
-    CHECK(payload["alterData"].IsArray());
-    throw std::runtime_error("ALTER TABLE ALTER COLUMN is not implemented.");
-  } else if (type == "ADD_COLUMN") {
-    CHECK(payload.HasMember("columnData"));
-    CHECK(payload["columnData"].IsArray());
-
-    // New Columns go into this list
-    std::list<ColumnDef*>* table_element_list_ = new std::list<ColumnDef*>;
-
-    const auto elements = payload["columnData"].GetArray();
-    for (const auto& element : elements) {
-      CHECK(element.IsObject());
-      CHECK(element.HasMember("type"));
-      if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
-        auto col_def = column_from_json(element);
-        table_element_list_->emplace_back(col_def.release());
-      } else {
-        LOG(FATAL) << "Unsupported element type for ALTER TABLE: "
-                   << element["type"].GetString();
-      }
-    }
-
-    return std::unique_ptr<DDLStmt>(
-        new Parser::AddColumnStmt(new std::string(tableName), table_element_list_));
-
-  } else if (type == "DROP_COLUMN") {
-    CHECK(payload.HasMember("columnData"));
-    auto columnData = json_str(payload["columnData"]);
-    // Convert columnData to std::list<std::string*>*
-    //    allocate std::list<> as DropColumnStmt will delete it;
-    std::list<std::string*>* cols = new std::list<std::string*>;
-    std::vector<std::string> cols1;
-    boost::split(cols1, columnData, boost::is_any_of(","));
-    for (auto s : cols1) {
-      // strip leading/trailing spaces/quotes/single quotes
-      boost::algorithm::trim_if(s, boost::is_any_of(" \"'`"));
-      std::string* str = new std::string(s);
-      cols->emplace_back(str);
-    }
-
-    return std::unique_ptr<DDLStmt>(
-        new Parser::DropColumnStmt(new std::string(tableName), cols));
-
-  } else if (type == "ALTER_OPTIONS") {
-    CHECK(payload.HasMember("options"));
-    const auto& options = payload["options"];
-    if (options.IsObject()) {
-      for (auto itr = options.MemberBegin(); itr != options.MemberEnd(); ++itr) {
-        std::string* option_name = new std::string(json_str(itr->name));
-        Literal* literal_value;
-        if (itr->value.IsString()) {
-          std::string literal_string = json_str(itr->value);
-
-          // iff this string can be converted to INT
-          //   ... do so because it is necessary for AlterTableParamStmt
-          std::size_t sz;
-          int iVal = std::stoi(literal_string, &sz);
-          if (sz == literal_string.size()) {
-            literal_value = new IntLiteral(iVal);
-          } else {
-            literal_value = new StringLiteral(&literal_string);
-          }
-        } else if (itr->value.IsInt() || itr->value.IsInt64()) {
-          literal_value = new IntLiteral(json_i64(itr->value));
-        } else if (itr->value.IsNull()) {
-          literal_value = new NullLiteral();
-        } else {
-          throw std::runtime_error("Unable to handle literal for " + *option_name);
-        }
-        CHECK(literal_value);
-
-        NameValueAssign* nv = new NameValueAssign(option_name, literal_value);
-        return std::unique_ptr<DDLStmt>(
-            new Parser::AlterTableParamStmt(new std::string(tableName), nv));
-      }
-    } else {
-      CHECK(options.IsNull());
-    }
-  }
-  return nullptr;
-}
-
 TruncateTableStmt::TruncateTableStmt(const rapidjson::Value& payload) {
   CHECK(payload.HasMember("tableName"));
   table_ = std::make_unique<std::string>(json_str(payload["tableName"]));
@@ -4960,7 +4870,7 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
 }  // namespace Parser
 
-void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef) {
+void set_column_descriptor(ColumnDescriptor& cd, const ColumnDef* coldef) {
   bool not_null;
   const ColumnConstraintDef* cc = coldef->get_column_constraint();
   if (cc == nullptr) {
@@ -4992,6 +4902,10 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
                                    not_null,
                                    coldef->get_compression(),
                                    default_value_ptr);
+}
+
+void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef) {
+  set_column_descriptor(cd, coldef);
 }
 
 void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& session,
@@ -5162,12 +5076,12 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
     if (!loader->loadNoCheckpoint(import_buffers, nrows, &session)) {
       throw std::runtime_error("loadNoCheckpoint failed!");
     }
-    catalog.roll(true);
+    catalog.rollLegacy(true);
     catalog.resetTableEpochFloor(td->tableId);
     loader->checkpoint();
     catalog.getSqliteConnector().query("END TRANSACTION");
   } catch (...) {
-    catalog.roll(false);
+    catalog.rollLegacy(false);
     catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
     throw;
   }
@@ -5241,7 +5155,7 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
     if (g_test_drop_column_rollback) {
       throw std::runtime_error("lol!");
     }
-    catalog.roll(true);
+    catalog.rollLegacy(true);
     if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
       catalog.resetTableEpochFloor(td->tableId);
       catalog.checkpoint(td->tableId);
@@ -5249,7 +5163,7 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
     catalog.getSqliteConnector().query("END TRANSACTION");
   } catch (...) {
     catalog.setForReload(td->tableId);
-    catalog.roll(false);
+    catalog.rollLegacy(false);
     catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
     throw;
   }
@@ -6975,12 +6889,7 @@ std::unique_ptr<Parser::Stmt> create_stmt_for_json(const std::string& query_json
   } else if (ddl_command == "RENAME_TABLE") {
     stmt = new Parser::RenameTableStmt(payload);
   } else if (ddl_command == "ALTER_TABLE") {
-    std::unique_ptr<Parser::DDLStmt> ddlStmt;
-    ddlStmt = Parser::AlterTableStmt::delegate(payload);
-    if (ddlStmt != nullptr) {
-      stmt = ddlStmt.get();
-      ddlStmt.release();
-    }
+    // no-op: fall-back to DdlCommandExecutor by returning a nullptr
   } else if (ddl_command == "TRUNCATE_TABLE") {
     stmt = new Parser::TruncateTableStmt(payload);
   } else if (ddl_command == "DUMP_TABLE") {

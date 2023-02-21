@@ -170,4 +170,19 @@ std::string table_type_enum_to_string(const TableType table_type);
 void validate_allowed_file_path(const std::string& file_path,
                                 const DataTransferType data_transfer_type,
                                 const bool allow_wildcards = false);
+
+namespace alter_column_utils {
+bool compare_sql_type_infos(const SQLTypeInfo& lhs, const SQLTypeInfo& rhs);
+
+struct CompareResult {
+  bool defaults_match;
+  bool sql_types_match;
+  bool remainder_match;
+  bool exact_match;
+};
+
+CompareResult compare_column_descriptors(const ColumnDescriptor* lhs,
+                                         const ColumnDescriptor* rhs);
+}  // namespace alter_column_utils
+
 }  // namespace ddl_utils

@@ -16,4 +16,5 @@ set(bcrypt_hdr
     include/bcrypt.h
 )
 
-add_library(bcrypt ${bcrypt_src} ${bcrypt_hdr})
+#The library name has been changed to rg3_bcrypt to prevent a library name conflict on ms windows
+add_library(rg3_bcrypt ${bcrypt_src} ${bcrypt_hdr})

@@ -136,6 +136,13 @@ if(NOT "${USE_ALTERNATE_LINKER}" STREQUAL "")
   set_alternate_linker(${USE_ALTERNATE_LINKER})
 endif()
 
+# Ensure that boost's uuid implementation links bcrypt correctly under windows;
+# see issue described here: https://github.com/microsoft/vcpkg/issues/4481
+if(WIN32)
+  message(STATUS "Defining BOOST_UUID_FORCE_AUTO_LINK")
+  add_definitions(-DBOOST_UUID_FORCE_AUTO_LINK)
+endif()
+
 option(PREFER_STATIC_LIBS "Prefer linking against static libraries" OFF)
 if(PREFER_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})

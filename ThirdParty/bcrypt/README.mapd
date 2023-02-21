@@ -15,3 +15,4 @@ The following unnecessary files were removed:
 │   ├── PERFORMANCE
 ├── Makefile
 
+Generated library name changed to prevent clashes with Microsofts system32 bcrypt library

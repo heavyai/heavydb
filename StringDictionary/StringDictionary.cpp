@@ -773,9 +773,21 @@ std::string StringDictionary::getString(int32_t string_id) const {
   return getStringUnlocked(string_id);
 }
 
+std::string_view StringDictionary::getStringView(int32_t string_id) const {
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+  CHECK(!isClient()) << "use of this function is unsupported in distributed";
+  return getStringViewUnlocked(string_id);
+}
+
 std::string StringDictionary::getStringUnlocked(int32_t string_id) const noexcept {
   CHECK_LT(string_id, static_cast<int32_t>(str_count_));
   return getStringChecked(string_id);
+}
+
+std::string_view StringDictionary::getStringViewUnlocked(int32_t string_id) const
+    noexcept {
+  CHECK_LT(string_id, static_cast<int32_t>(str_count_));
+  return getStringViewChecked(string_id);
 }
 
 std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) const
@@ -1297,6 +1309,13 @@ std::string StringDictionary::getStringChecked(const int string_id) const noexce
   const auto str_canary = getStringFromStorage(string_id);
   CHECK(!str_canary.canary);
   return std::string(str_canary.c_str_ptr, str_canary.size);
+}
+
+std::string_view StringDictionary::getStringViewChecked(const int string_id) const
+    noexcept {
+  const auto str_canary = getStringFromStorage(string_id);
+  CHECK(!str_canary.canary);
+  return std::string_view{str_canary.c_str_ptr, str_canary.size};
 }
 
 std::pair<char*, size_t> StringDictionary::getStringBytesChecked(

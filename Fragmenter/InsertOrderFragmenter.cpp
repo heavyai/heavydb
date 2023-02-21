@@ -27,12 +27,15 @@
 #include <type_traits>
 
 #include "DataMgr/AbstractBuffer.h"
+#include "DataMgr/DataConversion/ConversionFactory.h"
 #include "DataMgr/DataMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
+#include "Utils/DdlUtils.h"
 
 #include "Shared/checked_alloc.h"
+#include "Shared/scope.h"
 #include "Shared/thread_count.h"
 
 #define DROP_FRAGMENT_FACTOR \
@@ -95,6 +98,334 @@ InsertOrderFragmenter::InsertOrderFragmenter(
 InsertOrderFragmenter::~InsertOrderFragmenter() {}
 
 namespace {
+
+ChunkKey get_chunk_key(const ChunkKey& prefix, int column_id, int fragment_id) {
+  ChunkKey key = prefix;  // database_id and table_id
+  key.push_back(column_id);
+  key.push_back(fragment_id);  // fragment id
+  return key;
+}
+
+struct ArrayElemTypeChunk {
+  ColumnDescriptor temp_cd;
+  Chunk_NS::Chunk chunk;
+};
+
+void create_array_elem_type_chunk(ArrayElemTypeChunk& array_chunk,
+                                  const ColumnDescriptor* array_cd) {
+  array_chunk.temp_cd = *array_cd;
+  array_chunk.temp_cd.columnType = array_cd->columnType.get_elem_type();
+  array_chunk.chunk = Chunk_NS::Chunk{&array_chunk.temp_cd, true};
+}
+
+class BaseAlterColumnContext {
+ public:
+  BaseAlterColumnContext(int device_id,
+                         const ChunkKey& chunk_key_prefix,
+                         Fragmenter_Namespace::FragmentInfo* fragment_info,
+                         const ColumnDescriptor* src_cd,
+                         const ColumnDescriptor* dst_cd,
+                         const size_t num_elements,
+                         Data_Namespace::DataMgr* data_mgr,
+                         Catalog_Namespace::Catalog* catalog,
+                         std::map<int, Chunk_NS::Chunk>& column_map)
+      : device_id_(device_id)
+      , chunk_key_prefix_(chunk_key_prefix)
+      , fragment_info_(fragment_info)
+      , src_cd_(src_cd)
+      , dst_cd_(dst_cd)
+      , num_elements_(num_elements)
+      , data_mgr_(data_mgr)
+      , catalog_(catalog)
+      , column_map_(column_map)
+      , buffer_(nullptr)
+      , index_buffer_(nullptr)
+      , disk_level_src_chunk_{src_cd}
+      , mem_level_src_chunk_{src_cd} {
+    key_ = get_chunk_key(chunk_key_prefix, src_cd->columnId, fragment_info->fragmentId);
+  }
+
+  static void unpinChunk(Chunk& chunk) {
+    auto buffer = chunk.getBuffer();
+    if (buffer) {
+      buffer->unPin();
+      chunk.setBuffer(nullptr);
+    }
+
+    auto index_buffer = chunk.getIndexBuf();
+    if (index_buffer) {
+      index_buffer->unPin();
+      chunk.setIndexBuffer(nullptr);
+    }
+  }
+
+  void readSourceData() {
+    disk_level_src_chunk_.getChunkBuffer(
+        data_mgr_, key_, Data_Namespace::MemoryLevel::DISK_LEVEL, device_id_);
+    // FIXME: there appears to be a bug where if the `num_elements` is not specified
+    // below, the wrong byte count is returned for index buffers
+    mem_level_src_chunk_.getChunkBuffer(data_mgr_,
+                                        key_,
+                                        MemoryLevel::CPU_LEVEL,
+                                        0,
+                                        disk_level_src_chunk_.getBuffer()->size(),
+                                        num_elements_);
+    CHECK_EQ(num_elements_,
+             mem_level_src_chunk_.getBuffer()->getEncoder()->getNumElems());
+
+    auto db_id = catalog_->getDatabaseId();
+    source = data_conversion::create_source(mem_level_src_chunk_, db_id);
+
+    try {
+      std::tie(src_data_, std::ignore) = source->getSourceData();
+    } catch (std::exception& except) {
+      src_data_ = nullptr;
+      throw std::runtime_error("Column " + src_cd_->columnName + ": " + except.what());
+    }
+  }
+
+ protected:
+  void createChunkScratchBuffer(Chunk_NS::Chunk& chunk) {
+    chunk.setBuffer(data_mgr_->alloc(MemoryLevel::CPU_LEVEL, 0, 0));
+    if (chunk.getColumnDesc()->columnType.is_varlen_indeed()) {
+      chunk.setIndexBuffer(data_mgr_->alloc(MemoryLevel::CPU_LEVEL, 0, 0));
+    }
+  }
+
+  void freeChunkScratchBuffer(Chunk_NS::Chunk& chunk) {
+    data_mgr_->free(chunk.getBuffer());
+    chunk.setBuffer(nullptr);
+    if (chunk.getColumnDesc()->columnType.is_varlen_indeed()) {
+      data_mgr_->free(chunk.getIndexBuf());
+      chunk.setIndexBuffer(nullptr);
+    }
+  }
+
+  int device_id_;
+  const ChunkKey& chunk_key_prefix_;
+  Fragmenter_Namespace::FragmentInfo* fragment_info_;
+  const ColumnDescriptor* src_cd_;
+  const ColumnDescriptor* dst_cd_;
+  const size_t num_elements_;
+  Data_Namespace::DataMgr* data_mgr_;
+  Catalog_Namespace::Catalog* catalog_;
+  std::map<int, Chunk_NS::Chunk>& column_map_;
+
+  data_conversion::ConversionFactoryParam param_;
+  std::unique_ptr<data_conversion::BaseSource> source;
+  AbstractBuffer* buffer_;
+  AbstractBuffer* index_buffer_;
+  Chunk_NS::Chunk disk_level_src_chunk_;
+  Chunk_NS::Chunk mem_level_src_chunk_;
+  ChunkKey key_;
+  const int8_t* src_data_;
+  ArrayElemTypeChunk scalar_temp_chunk_;
+};
+
+class GeoAlterColumnContext : public BaseAlterColumnContext {
+ public:
+  GeoAlterColumnContext(int device_id,
+                        const ChunkKey& chunk_key_prefix,
+                        Fragmenter_Namespace::FragmentInfo* fragment_info,
+                        const ColumnDescriptor* src_cd,
+                        const ColumnDescriptor* dst_cd,
+                        const size_t num_elements,
+                        Data_Namespace::DataMgr* data_mgr,
+                        Catalog_Namespace::Catalog* catalog,
+                        std::map<int, Chunk_NS::Chunk>& column_map,
+                        const std::list<const ColumnDescriptor*>& columns)
+      : BaseAlterColumnContext(device_id,
+                               chunk_key_prefix,
+                               fragment_info,
+                               src_cd,
+                               dst_cd,
+                               num_elements,
+                               data_mgr,
+                               catalog,
+                               column_map)
+      , dst_columns_(columns) {}
+
+  void createScratchBuffers() {
+    std::list<Chunk_NS::Chunk>& geo_chunks = param_.geo_chunks;
+    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata = param_.geo_chunk_metadata;
+    // create all geo chunk buffers
+    for (auto dst_cd : dst_columns_) {
+      geo_chunks.emplace_back(dst_cd, true);
+      auto& dst_chunk = geo_chunks.back();
+
+      createChunkScratchBuffer(dst_chunk);
+      dst_chunk.initEncoder();
+
+      chunk_metadata.push_back(std::make_unique<ChunkMetadata>());
+    }
+  }
+
+  void deleteScratchBuffers() {
+    for (auto& dst_chunk : param_.geo_chunks) {
+      freeChunkScratchBuffer(dst_chunk);
+    }
+  }
+
+  void encodeData() {
+    auto convert_encoder = data_conversion::create_string_view_encoder(param_);
+    try {
+      convert_encoder->encodeAndAppendData(src_data_, num_elements_);
+      convert_encoder->finalize(num_elements_);
+    } catch (std::exception& except) {
+      throw std::runtime_error("Column " + (*dst_columns_.begin())->columnName + ": " +
+                               except.what());
+    }
+  }
+
+  void putBuffersToDisk() {
+    auto metadata_it = param_.geo_chunk_metadata.begin();
+    auto chunk_it = param_.geo_chunks.begin();
+    for (auto dst_cd : dst_columns_) {
+      auto& chunk = *chunk_it;
+      auto& metadata = *metadata_it;
+
+      auto encoder = chunk.getBuffer()->getEncoder();
+      CHECK(encoder);
+      encoder->resetChunkStats(metadata->chunkStats);
+      encoder->setNumElems(num_elements_);
+
+      ChunkKey dst_key =
+          get_chunk_key(chunk_key_prefix_, dst_cd->columnId, fragment_info_->fragmentId);
+
+      if (dst_cd->columnType.is_varlen_indeed()) {
+        auto data_key = dst_key;
+        data_key.push_back(1);
+        auto index_key = dst_key;
+        index_key.push_back(2);
+
+        chunk.getBuffer()->setUpdated();
+        chunk.getIndexBuf()->setUpdated();
+
+        Chunk fragmenter_chunk{dst_cd, false};
+        fragmenter_chunk.setBuffer(
+            data_mgr_->getGlobalFileMgr()->putBuffer(data_key, chunk.getBuffer()));
+        fragmenter_chunk.setIndexBuffer(
+            data_mgr_->getGlobalFileMgr()->putBuffer(index_key, chunk.getIndexBuf()));
+        column_map_[src_cd_->columnId] = fragmenter_chunk;
+
+      } else {
+        chunk.getBuffer()->setUpdated();
+
+        Chunk fragmenter_chunk{dst_cd, false};
+        fragmenter_chunk.setBuffer(
+            data_mgr_->getGlobalFileMgr()->putBuffer(dst_key, chunk.getBuffer()));
+        column_map_[src_cd_->columnId] = fragmenter_chunk;
+      }
+
+      chunk_it++;
+      metadata_it++;
+    }
+  }
+
+ private:
+  const std::list<const ColumnDescriptor*>& dst_columns_;
+};
+
+class NonGeoAlterColumnContext : public BaseAlterColumnContext {
+ public:
+  NonGeoAlterColumnContext(int device_id,
+                           const ChunkKey& chunk_key_prefix,
+                           Fragmenter_Namespace::FragmentInfo* fragment_info,
+                           const ColumnDescriptor* src_cd,
+                           const ColumnDescriptor* dst_cd,
+                           const size_t num_elements,
+                           Data_Namespace::DataMgr* data_mgr,
+                           Catalog_Namespace::Catalog* catalog_,
+                           std::map<int, Chunk_NS::Chunk>& column_map)
+      : BaseAlterColumnContext(device_id,
+                               chunk_key_prefix,
+                               fragment_info,
+                               src_cd,
+                               dst_cd,
+                               num_elements,
+                               data_mgr,
+                               catalog_,
+                               column_map) {}
+
+  void createScratchBuffers() {
+    auto db_id = catalog_->getDatabaseId();
+    param_.db_id = db_id;
+    param_.dst_chunk = Chunk_NS::Chunk{dst_cd_, true};
+    if (dst_cd_->columnType.is_array()) {
+      create_array_elem_type_chunk(scalar_temp_chunk_, dst_cd_);
+      param_.scalar_temp_chunk = scalar_temp_chunk_.chunk;
+    }
+
+    auto& dst_chunk = param_.dst_chunk;
+
+    createChunkScratchBuffer(dst_chunk);
+
+    if (dst_cd_->columnType.is_array()) {
+      createChunkScratchBuffer(param_.scalar_temp_chunk);
+    }
+
+    buffer_ = dst_chunk.getBuffer();
+    index_buffer_ = dst_chunk.getIndexBuf();  // nullptr for non-varlen types
+  }
+
+  void deleteScratchBuffers() {
+    freeChunkScratchBuffer(param_.dst_chunk);
+    if (dst_cd_->columnType.is_array()) {
+      freeChunkScratchBuffer(param_.scalar_temp_chunk);
+    }
+  }
+
+  void reencodeData() {
+    auto& dst_chunk = param_.dst_chunk;
+    disk_level_src_chunk_.getBuffer()->syncEncoder(dst_chunk.getBuffer());
+    if (disk_level_src_chunk_.getIndexBuf() && dst_chunk.getIndexBuf()) {
+      disk_level_src_chunk_.getIndexBuf()->syncEncoder(dst_chunk.getIndexBuf());
+    }
+
+    dst_chunk.initEncoder();
+
+    auto convert_encoder = data_conversion::create_string_view_encoder(param_);
+
+    try {
+      convert_encoder->encodeAndAppendData(src_data_, num_elements_);
+      convert_encoder->finalize(num_elements_);
+    } catch (std::exception& except) {
+      throw std::runtime_error("Column " + src_cd_->columnName + ": " + except.what());
+    }
+
+    auto metadata = convert_encoder->getMetadata(
+        dst_cd_->columnType.is_array() ? param_.scalar_temp_chunk : dst_chunk);
+
+    buffer_->getEncoder()->resetChunkStats(metadata->chunkStats);
+    buffer_->getEncoder()->setNumElems(num_elements_);
+
+    buffer_->setUpdated();
+    if (index_buffer_) {
+      index_buffer_->setUpdated();
+    }
+  }
+
+  void putBuffersToDisk() {
+    if (dst_cd_->columnType.is_varlen_indeed()) {
+      auto data_key = key_;
+      data_key.push_back(1);
+      auto index_key = key_;
+      index_key.push_back(2);
+
+      Chunk fragmenter_chunk{dst_cd_, false};
+      fragmenter_chunk.setBuffer(
+          data_mgr_->getGlobalFileMgr()->putBuffer(data_key, buffer_));
+      fragmenter_chunk.setIndexBuffer(
+          data_mgr_->getGlobalFileMgr()->putBuffer(index_key, index_buffer_));
+      column_map_[src_cd_->columnId] = fragmenter_chunk;
+
+    } else {
+      Chunk fragmenter_chunk{dst_cd_, false};
+      fragmenter_chunk.setBuffer(data_mgr_->getGlobalFileMgr()->putBuffer(key_, buffer_));
+      column_map_[src_cd_->columnId] = fragmenter_chunk;
+    }
+  }
+};
 
 /**
  * Offset the fragment ID by the table ID, meaning single fragment tables end up balanced
@@ -1040,6 +1371,101 @@ void InsertOrderFragmenter::resetSizesFromFragments() {
     numTuples_ += fragment_info->getPhysicalNumTuples();
   }
   setLastFragmentVarLenColumnSizes();
+}
+
+void InsertOrderFragmenter::alterColumnGeoType(
+    const std::list<
+        std::pair<const ColumnDescriptor*, std::list<const ColumnDescriptor*>>>&
+        src_dst_column_pairs) {
+  CHECK(defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL &&
+        !uses_foreign_storage_)
+      << "`alterColumnTypeTransactional` only supported for regular tables";
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(fragmentInfoMutex_);
+
+  for (const auto& [src_cd, dst_columns] : src_dst_column_pairs) {
+    auto logical_geo_column = *dst_columns.begin();
+    CHECK(logical_geo_column->columnType.is_geometry());
+
+    columnMap_.erase(
+        src_cd->columnId);  // NOTE: Necessary to prevent unpinning issues with these
+                            // chunks when fragmenter is destroyed later.
+
+    for (const auto& fragment_info : fragmentInfoVec_) {
+      int device_id = fragment_info->deviceIds[static_cast<int>(defaultInsertLevel_)];
+      auto num_elements = fragment_info->chunkMetadataMap[src_cd->columnId]->numElements;
+
+      CHECK_GE(dst_columns.size(), 1UL);
+
+      std::list<const ColumnDescriptor*> columns = dst_columns;
+      GeoAlterColumnContext alter_column_context{device_id,
+                                                 chunkKeyPrefix_,
+                                                 fragment_info.get(),
+                                                 src_cd,
+                                                 *dst_columns.begin(),
+                                                 num_elements,
+                                                 dataMgr_,
+                                                 catalog_,
+                                                 columnMap_,
+                                                 columns};
+
+      alter_column_context.readSourceData();
+
+      alter_column_context.createScratchBuffers();
+
+      ScopeGuard delete_temp_chunk = [&] { alter_column_context.deleteScratchBuffers(); };
+
+      alter_column_context.encodeData();
+
+      alter_column_context.putBuffersToDisk();
+    }
+  }
+}
+
+void InsertOrderFragmenter::alterNonGeoColumnType(
+    const std::list<const ColumnDescriptor*>& columns) {
+  CHECK(defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL &&
+        !uses_foreign_storage_)
+      << "`alterColumnTypeTransactional` only supported for regular tables";
+
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(fragmentInfoMutex_);
+
+  for (const auto dst_cd : columns) {
+    auto col_it = columnMap_.find(dst_cd->columnId);
+    CHECK(col_it != columnMap_.end());
+
+    auto src_cd = col_it->second.getColumnDesc();
+    CHECK_EQ(col_it->first, src_cd->columnId);
+
+    if (ddl_utils::alter_column_utils::compare_column_descriptors(src_cd, dst_cd)
+            .sql_types_match) {
+      continue;
+    }
+
+    for (const auto& fragment_info : fragmentInfoVec_) {
+      int device_id = fragment_info->deviceIds[static_cast<int>(defaultInsertLevel_)];
+      auto num_elements = fragment_info->chunkMetadataMap[src_cd->columnId]->numElements;
+
+      NonGeoAlterColumnContext alter_column_context{device_id,
+                                                    chunkKeyPrefix_,
+                                                    fragment_info.get(),
+                                                    src_cd,
+                                                    dst_cd,
+                                                    num_elements,
+                                                    dataMgr_,
+                                                    catalog_,
+                                                    columnMap_};
+
+      alter_column_context.readSourceData();
+
+      alter_column_context.createScratchBuffers();
+
+      ScopeGuard delete_temp_chunk = [&] { alter_column_context.deleteScratchBuffers(); };
+
+      alter_column_context.reencodeData();
+
+      alter_column_context.putBuffersToDisk();
+    }
+  }
 }
 
 void InsertOrderFragmenter::setLastFragmentVarLenColumnSizes() {

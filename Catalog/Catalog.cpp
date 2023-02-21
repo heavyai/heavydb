@@ -2324,7 +2324,22 @@ std::vector<DashboardDescriptor> Catalog::getAllDashboardsMetadataCopy() const {
   return dashboards;
 }
 
-DictRef Catalog::addDictionary(ColumnDescriptor& cd) {
+DictRef Catalog::addDictionaryTransactional(ColumnDescriptor& cd) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  DictRef ref{};
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    ref = addDictionaryNontransactional(cd);
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+  return ref;
+}
+
+DictRef Catalog::addDictionaryNontransactional(ColumnDescriptor& cd) {
   cat_write_lock write_lock(this);
   const auto& td = *tableDescriptorMapById_[cd.tableId];
   list<DictDescriptor> dds;
@@ -2349,7 +2364,20 @@ DictRef Catalog::addDictionary(ColumnDescriptor& cd) {
   return dd.dictRef;
 }
 
-void Catalog::delDictionary(const ColumnDescriptor& cd) {
+void Catalog::delDictionaryTransactional(const ColumnDescriptor& cd) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    delDictionaryNontransactional(cd);
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
+void Catalog::delDictionaryNontransactional(const ColumnDescriptor& cd) {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(getObjForLock());
   if (!(cd.columnType.is_string() || cd.columnType.is_string_array())) {
@@ -2392,6 +2420,25 @@ void Catalog::delDictionary(const ColumnDescriptor& cd) {
   dictDescriptorMapByRef_.erase(dictRef);
 }
 
+std::list<const DictDescriptor*> Catalog::getAllDictionariesWithColumnInName(
+    const ColumnDescriptor* cd) {
+  cat_read_lock read_lock(this);
+  std::list<const DictDescriptor*> dds;
+
+  auto table_name_opt = getTableName(cd->tableId);
+  CHECK(table_name_opt.has_value());
+  auto table_name = table_name_opt.value();
+
+  for (const auto& [dkey, dd] : dictDescriptorMapByRef_) {
+    if (dd->dictName.find(table_name + "_" + cd->columnName + "_dict") !=
+        std::string::npos) {
+      dds.push_back(dd.get());
+    }
+  }
+
+  return dds;
+}
+
 void Catalog::getDictionary(const ColumnDescriptor& cd,
                             std::map<int, StringDictionary*>& stringDicts) {
   // learn 'committed' ColumnDescriptor of this column
@@ -2420,6 +2467,151 @@ void Catalog::getDictionary(const ColumnDescriptor& cd,
   stringDicts[ccd.columnId] = dit->second.get()->stringDict.get();
 }
 
+void Catalog::alterColumnTypeTransactional(const ColumnDescriptor& cd) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    const auto table_id = cd.tableId;
+
+    auto catalog_cd = getMetadataForColumn(table_id, cd.columnId);
+
+    CHECK(catalog_cd) << " can not alter non existing column";
+
+    using BindType = SqliteConnector::BindType;
+    std::vector<BindType> types(11, BindType::TEXT);
+    if (!cd.default_value.has_value()) {
+      types[8] = BindType::NULL_TYPE;
+    }
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_columns SET "
+        "coltype = ?,"
+        "colsubtype = ?,"
+        "coldim = ?,"
+        "colscale = ?,"
+        "is_notnull = ?,"
+        "compression = ?,"
+        "comp_param = ?,"
+        "size = ?,"
+        "default_value = ? "
+        "WHERE tableid = ? and columnid = ?",
+        std::vector<std::string>{std::to_string(cd.columnType.get_type()),
+                                 std::to_string(cd.columnType.get_subtype()),
+                                 std::to_string(cd.columnType.get_dimension()),
+                                 std::to_string(cd.columnType.get_scale()),
+                                 std::to_string(cd.columnType.get_notnull()),
+                                 std::to_string(cd.columnType.get_compression()),
+                                 std::to_string(cd.columnType.get_comp_param()),
+                                 std::to_string(cd.columnType.get_size()),
+                                 cd.default_value.value_or("NULL"),
+                                 std::to_string(table_id),
+                                 std::to_string(cd.columnId)},
+
+        types);
+
+    auto ncd = new ColumnDescriptor(cd);
+
+    ColumnDescriptorMap::iterator columnDescIt =
+        columnDescriptorMap_.find(ColumnKey(cd.tableId, to_upper(cd.columnName)));
+    CHECK(columnDescIt != columnDescriptorMap_.end());
+    auto ocd = columnDescIt->second;
+
+    updateInColumnMap(ncd, ocd);
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
+int Catalog::getNextAddedColumnId(const TableDescriptor& td) {
+  cat_read_lock read_lock(this);
+  sqliteConnector_.query_with_text_params(
+      "SELECT max(columnid) + 1 FROM mapd_columns WHERE tableid = ?",
+      std::vector<std::string>{std::to_string(td.tableId)});
+  return sqliteConnector_.getData<int>(0, 0);
+}
+
+void Catalog::addColumnTransactional(const TableDescriptor& td, ColumnDescriptor& cd) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    addColumnNontransactional(td, cd);
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
+void Catalog::addColumnNontransactional(const TableDescriptor& td, ColumnDescriptor& cd) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  cd.tableId = td.tableId;
+  cd.db_id = getDatabaseId();
+  if (td.nShards > 0 && td.shard < 0) {
+    for (const auto shard : getPhysicalTablesDescriptors(&td)) {
+      auto shard_cd = cd;
+      addColumnNontransactional(*shard, shard_cd);
+    }
+  }
+  if (cd.columnType.get_compression() == kENCODING_DICT) {
+    addDictionaryNontransactional(cd);
+  }
+
+  using BindType = SqliteConnector::BindType;
+  std::vector<BindType> types(17, BindType::TEXT);
+  if (!cd.default_value.has_value()) {
+    types[16] = BindType::NULL_TYPE;
+  }
+  sqliteConnector_.query_with_text_params(
+      "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, "
+      "colscale, is_notnull, "
+      "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, "
+      "is_deletedcol, default_value) "
+      "VALUES (?, "
+      "(SELECT max(columnid) + 1 FROM mapd_columns WHERE tableid = ?), "
+      "?, ?, ?, "
+      "?, "
+      "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      std::vector<std::string>{std::to_string(td.tableId),
+                               std::to_string(td.tableId),
+                               cd.columnName,
+                               std::to_string(cd.columnType.get_type()),
+                               std::to_string(cd.columnType.get_subtype()),
+                               std::to_string(cd.columnType.get_dimension()),
+                               std::to_string(cd.columnType.get_scale()),
+                               std::to_string(cd.columnType.get_notnull()),
+                               std::to_string(cd.columnType.get_compression()),
+                               std::to_string(cd.columnType.get_comp_param()),
+                               std::to_string(cd.columnType.get_size()),
+                               "",
+                               std::to_string(cd.isSystemCol),
+                               std::to_string(cd.isVirtualCol),
+                               cd.virtualExpr,
+                               std::to_string(cd.isDeletedCol),
+                               cd.default_value.value_or("NULL")},
+      types);
+
+  sqliteConnector_.query_with_text_params(
+      "UPDATE mapd_tables SET ncolumns = ncolumns + 1 WHERE tableid = ?",
+      std::vector<std::string>{std::to_string(td.tableId)});
+
+  sqliteConnector_.query_with_text_params(
+      "SELECT columnid FROM mapd_columns WHERE tableid = ? AND name = ?",
+      std::vector<std::string>{std::to_string(td.tableId), cd.columnName});
+  cd.columnId = sqliteConnector_.getData<int>(0, 0);
+
+  ++tableDescriptorMapById_[td.tableId]->nColumns;
+  auto ncd = new ColumnDescriptor(cd);
+  addToColumnMap(ncd);
+  addColumnDescriptor(ncd);
+  calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
+}
+
+// NOTE: this function is deprecated
 void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
   // caller must handle sqlite/chunk transaction TOGETHER
   cd.tableId = td.tableId;
@@ -2431,7 +2623,7 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
     }
   }
   if (cd.columnType.get_compression() == kENCODING_DICT) {
-    addDictionary(cd);
+    addDictionaryNontransactional(cd);
   }
 
   using BindType = SqliteConnector::BindType;
@@ -2483,6 +2675,68 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
   columnDescriptorsForRoll.emplace_back(nullptr, ncd);
 }
 
+void Catalog::dropColumnTransactional(const TableDescriptor& td,
+                                      const ColumnDescriptor& cd) {
+  dropColumnPolicies(td, cd);
+
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    dropColumnNontransactional(td, cd);
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
+void Catalog::dropColumnNontransactional(const TableDescriptor& td,
+                                         const ColumnDescriptor& cd) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+
+  sqliteConnector_.query_with_text_params(
+      "DELETE FROM mapd_columns where tableid = ? and columnid = ?",
+      std::vector<std::string>{std::to_string(td.tableId), std::to_string(cd.columnId)});
+
+  sqliteConnector_.query_with_text_params(
+      "UPDATE mapd_tables SET ncolumns = ncolumns - 1 WHERE tableid = ?",
+      std::vector<std::string>{std::to_string(td.tableId)});
+
+  ColumnDescriptorMap::iterator columnDescIt =
+      columnDescriptorMap_.find(ColumnKey(cd.tableId, to_upper(cd.columnName)));
+  CHECK(columnDescIt != columnDescriptorMap_.end());
+
+  auto ocd = columnDescIt->second;
+  removeFromColumnMap(ocd);
+  --tableDescriptorMapById_[td.tableId]->nColumns;
+  removeColumnDescriptor(ocd);
+  calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
+
+  // for each shard
+  if (td.nShards > 0 && td.shard < 0) {
+    for (const auto shard : getPhysicalTablesDescriptors(&td)) {
+      const auto shard_cd = getMetadataForColumn(shard->tableId, cd.columnId);
+      CHECK(shard_cd);
+      dropColumnNontransactional(*shard, *shard_cd);
+    }
+  }
+}
+
+void Catalog::dropColumnPolicies(const TableDescriptor& td, const ColumnDescriptor& cd) {
+
+  // for each shard
+  if (td.nShards > 0 && td.shard < 0) {
+    for (const auto shard : getPhysicalTablesDescriptors(&td)) {
+      const auto shard_cd = getMetadataForColumn(shard->tableId, cd.columnId);
+      CHECK(shard_cd);
+      dropColumnPolicies(*shard, *shard_cd);
+    }
+  }
+}
+
+// NOTE: this function is deprecated
 void Catalog::dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd) {
   {
     cat_write_lock write_lock(this);
@@ -2516,7 +2770,39 @@ void Catalog::dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd) 
   }
 }
 
-void Catalog::roll(const bool forward) {
+void Catalog::removeColumnDescriptor(const ColumnDescriptor* cd) {
+  if (!cd) {
+    return;
+  }
+
+  auto tabDescIt = tableDescriptorMapById_.find(cd->tableId);
+  CHECK(tableDescriptorMapById_.end() != tabDescIt);
+  auto td = tabDescIt->second;
+  auto& cd_by_spi = td->columnIdBySpi_;
+  cd_by_spi.erase(std::remove(cd_by_spi.begin(), cd_by_spi.end(), cd->columnId),
+                  cd_by_spi.end());
+  delete cd;
+  std::sort(cd_by_spi.begin(), cd_by_spi.end());
+}
+
+void Catalog::addColumnDescriptor(const ColumnDescriptor* cd) {
+  if (!cd || cd->isGeoPhyCol) {
+    return;
+  }
+
+  auto tabDescIt = tableDescriptorMapById_.find(cd->tableId);
+  CHECK(tableDescriptorMapById_.end() != tabDescIt);
+  auto td = tabDescIt->second;
+  auto& cd_by_spi = td->columnIdBySpi_;
+
+  if (cd_by_spi.end() == std::find(cd_by_spi.begin(), cd_by_spi.end(), cd->columnId)) {
+    cd_by_spi.push_back(cd->columnId);
+  }
+  std::sort(cd_by_spi.begin(), cd_by_spi.end());
+}
+
+// NOTE: this function is deprecated
+void Catalog::rollLegacy(const bool forward) {
   cat_write_lock write_lock(this);
   std::set<const TableDescriptor*> tds;
 
@@ -2532,7 +2818,7 @@ void Catalog::roll(const bool forward) {
       if (ocd) {
         if (nullptr == ncd ||
             ncd->columnType.get_comp_param() != ocd->columnType.get_comp_param()) {
-          delDictionary(*ocd);
+          delDictionaryNontransactional(*ocd);
         }
 
         vc.erase(std::remove(vc.begin(), vc.end(), ocd->columnId), vc.end());
@@ -2557,7 +2843,7 @@ void Catalog::roll(const bool forward) {
         removeFromColumnMap(ncd);
         if (nullptr == ocd ||
             ocd->columnType.get_comp_param() != ncd->columnType.get_comp_param()) {
-          delDictionary(*ncd);
+          delDictionaryNontransactional(*ncd);
         }
         delete ncd;
       }
@@ -6578,6 +6864,38 @@ bool Catalog::recreateSystemTableIfUpdated(foreign_storage::ForeignTable& foreig
     createTable(foreign_table, columns, {}, true);
   }
   return should_recreate;
+}
+
+namespace {
+std::string get_checked_table_name(const Catalog* catalog, const ColumnDescriptor* cd) {
+  auto table_name_opt = catalog->getTableName(cd->tableId);
+  CHECK(table_name_opt.has_value());
+  return table_name_opt.value();
+}
+}  // namespace
+
+void Catalog::updateInColumnMap(ColumnDescriptor* cd, ColumnDescriptor* old_cd) {
+  shared::get_from_map(columnDescriptorMap_,
+                       ColumnKey{cd->tableId, to_upper(cd->columnName)}) = cd;
+  shared::get_from_map(columnDescriptorMapById_, ColumnIdKey{cd->tableId, cd->columnId}) =
+      cd;
+  auto dict_it = dict_columns_by_table_id_.find(cd->tableId);
+  if (dict_it != dict_columns_by_table_id_.end()) {
+    auto& set = dict_it->second;
+    for (auto it = set.begin(); it != set.end(); ++it) {
+      if ((*it)->columnId == cd->columnId) {
+        set.erase(it);
+        break;
+      }
+    }
+  }
+  if (cd->columnType.is_dict_encoded_type()) {
+    dict_columns_by_table_id_[cd->tableId].emplace(cd);
+  }
+
+  removeColumnDescriptor(old_cd);
+  addColumnDescriptor(cd);
+  calciteMgr_->updateMetadata(currentDB_.dbName, get_checked_table_name(this, cd));
 }
 
 void Catalog::addToColumnMap(ColumnDescriptor* cd) {

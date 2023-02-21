@@ -331,7 +331,7 @@ void MigrationMgr::dropRenderGroupColumns(
         }
         physical_td->fragmenter->dropColumns(column_ids);
       }
-      catalog.roll(true);
+      catalog.rollLegacy(true);
       if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
         catalog.resetTableEpochFloor(td->tableId);
         catalog.checkpoint(td->tableId);
@@ -339,7 +339,7 @@ void MigrationMgr::dropRenderGroupColumns(
       catalog.getSqliteConnector().query("END TRANSACTION");
     } catch (std::exception& e) {
       catalog.setForReload(td->tableId);
-      catalog.roll(false);
+      catalog.rollLegacy(false);
       catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
       LOG(ERROR) << "MigrationMgr: dropRenderGroupColumns:   Failed to drop render group "
                     "columns for table '"

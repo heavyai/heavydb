@@ -68,6 +68,12 @@ class StringNoneEncoder : public Encoder {
                                                    const size_t num_elements) override;
 
   template <typename StringType>
+  std::shared_ptr<ChunkMetadata> appendData(const StringType* srcData,
+                                            const int start_idx,
+                                            const size_t numAppendElems,
+                                            const bool replicating = false);
+
+  template <typename StringType>
   std::shared_ptr<ChunkMetadata> appendData(const std::vector<StringType>* srcData,
                                             const int start_idx,
                                             const size_t numAppendElems,
@@ -128,14 +134,16 @@ class StringNoneEncoder : public Encoder {
 
   void resetChunkStats() override { has_nulls = false; }
 
- private:
-  std::pair<StringOffsetT, StringOffsetT> getStringOffsets(const int8_t* index_data,
-                                                           size_t index);
+  static std::string_view getStringAtIndex(const int8_t* index_data,
+                                           const int8_t* data,
+                                           size_t index);
 
-  size_t getStringSizeAtIndex(const int8_t* index_data, size_t index);
-  std::string_view getStringAtIndex(const int8_t* index_data,
-                                    const int8_t* data,
-                                    size_t index);
+ private:
+  static std::pair<StringOffsetT, StringOffsetT> getStringOffsets(
+      const int8_t* index_data,
+      size_t index);
+
+  static size_t getStringSizeAtIndex(const int8_t* index_data, size_t index);
 
   AbstractBuffer* index_buf;
   StringOffsetT last_offset;

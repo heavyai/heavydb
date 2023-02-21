@@ -188,6 +188,13 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 
   void resetSizesFromFragments() override;
 
+  void alterNonGeoColumnType(const std::list<const ColumnDescriptor*>& columns);
+
+  void alterColumnGeoType(
+      const std::list<
+          std::pair<const ColumnDescriptor*, std::list<const ColumnDescriptor*>>>&
+          src_dst_column_pairs);
+
  protected:
   std::vector<int> chunkKeyPrefix_;
   std::map<int, Chunk_NS::Chunk>

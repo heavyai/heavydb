@@ -95,6 +95,7 @@ class StringDictionary {
   template <class String>
   int32_t getIdOfString(const String&) const;
   std::string getString(int32_t string_id) const;
+  std::string_view getStringView(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const;
 
@@ -216,7 +217,9 @@ class StringDictionary {
 
   int32_t getUnlocked(const std::string_view sv) const noexcept;
   std::string getStringUnlocked(int32_t string_id) const noexcept;
+  std::string_view getStringViewUnlocked(int32_t string_id) const noexcept;
   std::string getStringChecked(const int string_id) const noexcept;
+  std::string_view getStringViewChecked(const int string_id) const noexcept;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
   template <class String>
   uint32_t computeBucket(
