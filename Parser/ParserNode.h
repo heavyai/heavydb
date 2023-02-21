@@ -1201,20 +1201,6 @@ class CreateTableAsSelectStmt : public InsertIntoTableAsSelectStmt {
  * handle the execution.
  */
 
-class AlterTableStmt : public DDLStmt {
- public:
-  static std::unique_ptr<Parser::DDLStmt> delegate(const rapidjson::Value& payload);
-
-  const std::string* get_table() const { return table_.get(); }
-
-  void execute(const Catalog_Namespace::SessionInfo& session,
-               bool read_only_mode) override;
-
- private:
-  std::unique_ptr<std::string> table_;
-  const rapidjson::Value payload_;
-};
-
 /*
  * @type DropTableStmt
  * @brief DROP TABLE statement
@@ -2230,6 +2216,16 @@ void execute_stmt_for_json(
     const std::string& query_json,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr,
     bool read_only_mode);
+
+std::list<ColumnDef> get_columns_from_json_payload(const std::string& payload_key,
+                                                   const rapidjson::Value& payload);
+
+void set_column_descriptor(ColumnDescriptor& cd, const ColumnDef* coldef);
+
+std::unique_ptr<ColumnDef> column_from_json(const rapidjson::Value& element);
+
+void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
+                                 const TableDescriptor* td);
 
 }  // namespace Parser
 

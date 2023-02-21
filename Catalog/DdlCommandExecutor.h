@@ -110,6 +110,84 @@ class DropForeignTableCommand : public DdlCommand {
   ExecutionResult execute(bool read_only_mode) override;
 };
 
+class AlterTableAlterColumnCommand : public DdlCommand {
+ public:
+  AlterTableAlterColumnCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+
+  using AlterColumnTypePairs =
+      std::list<std::pair<const ColumnDescriptor*, ColumnDescriptor*>>;
+
+ private:
+  void alterColumn();
+
+  void alterColumnTypes(const TableDescriptor* td,
+                        const AlterColumnTypePairs& src_dst_cds);
+
+  void rollback(const TableDescriptor* td, const AlterColumnTypePairs& src_dst_cds);
+
+  void collectExpectedCatalogChanges(const TableDescriptor* td,
+                                     const AlterColumnTypePairs& src_dst_cds);
+
+  std::list<std::list<ColumnDescriptor>> prepareGeoColumns(
+      const TableDescriptor* td,
+      const AlterColumnTypePairs& src_dst_cds);
+
+  std::list<const ColumnDescriptor*> prepareColumns(
+      const TableDescriptor* td,
+      const AlterColumnTypePairs& src_dst_cds);
+
+  void alterColumns(const TableDescriptor* td, const AlterColumnTypePairs& src_dst_cds);
+
+  void alterNonGeoColumnData(const TableDescriptor* td,
+                             const std::list<const ColumnDescriptor*>& cds);
+
+  void alterGeoColumnData(
+      const TableDescriptor* td,
+      const std::list<std::pair<const ColumnDescriptor*,
+                                std::list<const ColumnDescriptor*>>>& geo_src_dst_cds);
+
+  void clearChunk(Catalog_Namespace::Catalog* catalog,
+                  const ChunkKey& key,
+                  const MemoryLevel mem_level);
+
+  void clearChunk(Catalog_Namespace::Catalog* catalog, const ChunkKey& key);
+
+  void clearRemainingChunks(const TableDescriptor* td,
+                            const AlterColumnTypePairs& src_dst_cds);
+
+  void dropSourceGeoColumns(const TableDescriptor* td,
+                            const AlterColumnTypePairs& src_dst_cds);
+
+  void checkpoint(const TableDescriptor* td, const AlterColumnTypePairs& src_dst_cds);
+
+  void clearInMemoryData(const TableDescriptor* td,
+                         const AlterColumnTypePairs& src_dst_cds);
+
+  void deleteDictionaries(const TableDescriptor* td,
+                          const AlterColumnTypePairs& src_dst_cds);
+
+  struct ColumnAltered {
+    ColumnDescriptor old_cd;
+    ColumnDescriptor new_cd;
+  };
+
+  std::list<ColumnDescriptor> renamed_columns_;
+  std::list<ColumnDescriptor> added_columns_;
+  std::list<ColumnAltered> altered_columns_;
+  std::list<ColumnDescriptor> updated_dict_cds_;
+};
+
+class AlterTableCommand : public DdlCommand {
+ public:
+  AlterTableCommand(const DdlCommandData& ddl_data,
+                    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
 class AlterForeignTableCommand : public DdlCommand {
  public:
   AlterForeignTableCommand(

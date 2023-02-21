@@ -19,6 +19,8 @@
 #include <algorithm>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 #include "rapidjson/document.h"
 
@@ -32,13 +34,161 @@
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 
+#include "Fragmenter/InsertOrderFragmenter.h"
 #include "QueryEngine/Execute.h"  // Executor::getArenaBlockSize()
 #include "QueryEngine/ExternalCacheInvalidators.h"
+#include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/ResultSetBuilder.h"
 
 extern bool g_enable_fsi;
 
 namespace {
+
+void validate_alter_type_allowed(const std::string& colname,
+                                 const SQLTypeInfo& src,
+                                 const SQLTypeInfo& dst) {
+  if (!src.is_string()) {
+    throw std::runtime_error("Altering column " + colname +
+                             " type not allowed. Column type must be TEXT.");
+  }
+}
+
+void validate_alter_type_metadata(const Catalog_Namespace::Catalog& catalog,
+                                  const TableDescriptor* td,
+                                  const ColumnDescriptor& cd) {
+  ChunkMetadataVector column_metadata;
+  catalog.getDataMgr().getChunkMetadataVecForKeyPrefix(
+      column_metadata, {catalog.getDatabaseId(), td->tableId, cd.columnId});
+
+  const bool is_not_null = cd.columnType.get_notnull();
+  // check for non nulls
+  for (const auto& [key, metadata] : column_metadata) {
+    if (is_not_null && metadata->chunkStats.has_nulls) {
+      throw std::runtime_error("Alter column type: Column " + cd.columnName +
+                               ": NULL value not allowed in NOT NULL column");
+    }
+  }
+
+  if (td->nShards > 0) {
+    throw std::runtime_error("Alter column type: Column " + cd.columnName +
+                             ": altering a sharded table is unsupported");
+  }
+  // further checks on metadata can be done to prevent late exceptions
+}
+
+std::list<std::pair<const ColumnDescriptor*, std::list<const ColumnDescriptor*>>>
+get_alter_column_geo_pairs_from_src_dst_pairs_phys_cds(
+    const AlterTableAlterColumnCommand::AlterColumnTypePairs& src_dst_cds,
+    const std::list<std::list<ColumnDescriptor>>& phys_cds) {
+  std::list<std::pair<const ColumnDescriptor*, std::list<const ColumnDescriptor*>>>
+      geo_src_dst_column_pairs;
+
+  auto phys_cds_it = phys_cds.begin();
+  for (auto& [src_cd, dst_cd] : src_dst_cds) {
+    if (dst_cd->columnType.is_geometry()) {
+      geo_src_dst_column_pairs.emplace_back();
+      auto& pair = geo_src_dst_column_pairs.back();
+      pair.first = src_cd;
+
+      std::list<const ColumnDescriptor*> geo_dst_cds;
+      CHECK(phys_cds_it != phys_cds.end());
+      auto& phy_geo_columns = *phys_cds_it;
+      geo_dst_cds.push_back(dst_cd);
+      for (const auto& cd : phy_geo_columns) {
+        geo_dst_cds.push_back(&cd);
+      }
+      pair.second = geo_dst_cds;
+
+      phys_cds_it++;
+    }
+  }
+
+  return geo_src_dst_column_pairs;
+}
+
+AlterTableAlterColumnCommand::AlterColumnTypePairs
+get_alter_column_pairs_from_src_dst_cds(std::list<ColumnDescriptor>& src_cds,
+                                        std::list<ColumnDescriptor>& dst_cds) {
+  CHECK_EQ(src_cds.size(), dst_cds.size());
+  AlterTableAlterColumnCommand::AlterColumnTypePairs src_dst_column_pairs;
+  auto src_cd_it = src_cds.begin();
+  auto dst_cd_it = dst_cds.begin();
+  for (; src_cd_it != src_cds.end(); ++src_cd_it, ++dst_cd_it) {
+    src_dst_column_pairs.emplace_back(&(*src_cd_it), &(*dst_cd_it));
+  }
+  return src_dst_column_pairs;
+}
+
+std::pair<std::list<ColumnDescriptor>, std::list<ColumnDescriptor>>
+get_alter_column_src_dst_cds(const std::list<Parser::ColumnDef>& columns,
+                             Catalog_Namespace::Catalog& catalog,
+                             const TableDescriptor* td) {
+  std::list<ColumnDescriptor> src_cds;
+  std::list<ColumnDescriptor> dst_cds;
+  for (const auto& coldef : columns) {
+    dst_cds.emplace_back();
+    ColumnDescriptor& dst_cd = dst_cds.back();
+    set_column_descriptor(dst_cd, &coldef);
+
+    // update kENCODING_DICT column descriptors to reflect correct sizing based on comp
+    // param
+    if (dst_cd.columnType.is_dict_encoded_string()) {
+      switch (dst_cd.columnType.get_comp_param()) {
+        case 8:
+          dst_cd.columnType.set_size(1);
+          break;
+        case 16:
+          dst_cd.columnType.set_size(2);
+          break;
+        case 32:
+          dst_cd.columnType.set_size(4);
+          break;
+        default:
+          UNREACHABLE();
+      }
+    }
+
+    auto catalog_cd = catalog.getMetadataForColumn(td->tableId, dst_cd.columnName);
+    CHECK(catalog_cd);
+
+    validate_alter_type_allowed(
+        dst_cd.columnName, catalog_cd->columnType, dst_cd.columnType);
+
+    // Set remaining values in column descriptor that must be obtained from catalog
+    dst_cd.columnId = catalog_cd->columnId;
+    dst_cd.tableId = catalog_cd->tableId;
+    dst_cd.sourceName = catalog_cd->sourceName;
+    dst_cd.chunks = catalog_cd->chunks;
+    dst_cd.db_id = catalog_cd->db_id;
+
+    // This branch handles the special case where a string dictionary column
+    // type is not changed, but altering is required (for example default
+    // changes)
+    if (catalog_cd->columnType.is_dict_encoded_type() &&
+        dst_cd.columnType.is_dict_encoded_type() &&
+        ddl_utils::alter_column_utils::compare_column_descriptors(catalog_cd, &dst_cd)
+            .sql_types_match) {
+      dst_cd.columnType.set_comp_param(catalog_cd->columnType.get_comp_param());
+      dst_cd.columnType.setStringDictKey(catalog_cd->columnType.getStringDictKey());
+    }
+
+    if (ddl_utils::alter_column_utils::compare_column_descriptors(catalog_cd, &dst_cd)
+            .exact_match) {
+      throw std::runtime_error("Altering column " + dst_cd.columnName +
+                               " results in no change to column, please review command.");
+    }
+
+    validate_alter_type_metadata(catalog, td, dst_cd);
+
+    // A copy of the catalog column descriptor is stored for the source because
+    // the catalog may delete its version of the source descriptor in progress
+    // of the alter column command
+    src_cds.emplace_back();
+    src_cds.back() = *catalog_cd;
+  }
+  return {src_cds, dst_cds};
+}
+
 template <class LockType>
 std::tuple<const TableDescriptor*,
            std::unique_ptr<lockmgr::TableSchemaLockContainer<LockType>>>
@@ -356,11 +506,9 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     rename_table_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "ALTER_TABLE") {
-    auto stmt = Parser::AlterTableStmt::delegate(extractPayload(*ddl_data_));
-    if (stmt != nullptr) {
-      stmt->execute(*session_ptr_, read_only_mode);
-    }
-    return result;
+    // ALTER TABLE uses the parser node locking partially as well as the global locking
+    // scheme for some cases
+    return AlterTableCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "TRUNCATE_TABLE") {
     auto truncate_table_stmt = Parser::TruncateTableStmt(extractPayload(*ddl_data_));
     truncate_table_stmt.execute(*session_ptr_, read_only_mode);
@@ -2019,6 +2167,666 @@ ExecutionResult RefreshForeignTablesCommand::execute(bool read_only_mode) {
 
   // todo(yoonmin) : allow per-table cache invalidation for the foreign table
   UpdateTriggeredCacheInvalidator::invalidateCaches();
+
+  return ExecutionResult();
+}
+
+void AlterTableAlterColumnCommand::clearChunk(Catalog_Namespace::Catalog* catalog,
+                                              const ChunkKey& key,
+                                              const MemoryLevel mem_level) {
+  auto& data_mgr = catalog->getDataMgr();
+  if (mem_level >= data_mgr.levelSizes_.size()) {
+    return;
+  }
+  for (int device = 0; device < data_mgr.levelSizes_[mem_level]; ++device) {
+    if (data_mgr.isBufferOnDevice(key, mem_level, device)) {
+      data_mgr.deleteChunk(key, mem_level, device);
+    }
+  }
+}
+
+void AlterTableAlterColumnCommand::clearChunk(Catalog_Namespace::Catalog* catalog,
+                                              const ChunkKey& key) {
+  clearChunk(catalog, key, MemoryLevel::GPU_LEVEL);
+  clearChunk(catalog, key, MemoryLevel::CPU_LEVEL);
+  clearChunk(catalog, key, MemoryLevel::DISK_LEVEL);
+}
+
+void AlterTableAlterColumnCommand::clearRemainingChunks(
+    const TableDescriptor* td,
+    const AlterColumnTypePairs& src_dst_cds) {
+  auto catalog = &session_ptr_->getCatalog();
+  // for (non-geo) cases where the chunk keys change, chunks that remain with old chunk
+  // key must be removed
+  for (auto& [src_cd, dst_cd] : src_dst_cds) {
+    if (src_cd->columnType.is_varlen_indeed() != dst_cd->columnType.is_varlen_indeed()) {
+      auto fragments = td->fragmenter->getFragmentsForQuery().fragments;
+      for (const auto& fragment : fragments) {
+        ChunkKey key = {
+            catalog->getDatabaseId(), td->tableId, src_cd->columnId, fragment.fragmentId};
+        if (src_cd->columnType.is_varlen_indeed()) {
+          auto data_key = key;
+          data_key.push_back(1);
+          clearChunk(catalog, data_key);
+          auto index_key = key;
+          index_key.push_back(2);
+          clearChunk(catalog, index_key);
+        } else {  // no varlen case
+          clearChunk(catalog, key);
+        }
+      }
+    }
+  }
+}
+
+AlterTableCommand::AlterTableCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
+
+  CHECK(ddl_payload.HasMember("tableName"));
+  CHECK(ddl_payload["tableName"].IsString());
+
+  CHECK(ddl_payload.HasMember("alterType"));
+  CHECK(ddl_payload["alterType"].IsString());
+}
+
+AlterTableAlterColumnCommand::AlterTableAlterColumnCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
+
+  CHECK_EQ(std::string(ddl_payload["alterType"].GetString()), "ALTER_COLUMN");
+
+  CHECK(ddl_payload.HasMember("alterData"));
+  CHECK(ddl_payload["alterData"].IsArray());
+
+  const auto elements = ddl_payload["alterData"].GetArray();
+  for (const auto& element : elements) {
+    CHECK(element.HasMember("type"));
+    CHECK(element["type"].IsString());
+    CHECK_EQ(std::string(element["type"].GetString()), "SQL_COLUMN_DECLARATION");
+
+    CHECK(element.HasMember("name"));
+    CHECK(element["name"].IsString());
+
+    CHECK(element.HasMember("default"));
+
+    CHECK(element.HasMember("nullable"));
+    CHECK(element["nullable"].IsBool());
+
+    CHECK(element.HasMember("encodingType"));
+    CHECK(element.HasMember("encodingSize"));
+
+    CHECK(element.HasMember("sqltype"));
+    CHECK(element["sqltype"].IsString());
+  }
+}
+
+void AlterTableAlterColumnCommand::alterColumns(const TableDescriptor* td,
+                                                const AlterColumnTypePairs& src_dst_cds) {
+  auto& catalog = session_ptr_->getCatalog();
+
+  for (auto& [src_cd, dst_cd] : src_dst_cds) {
+    if (dst_cd->columnType.is_geometry()) {
+      continue;
+    }
+    auto compare_result =
+        ddl_utils::alter_column_utils::compare_column_descriptors(src_cd, dst_cd);
+    CHECK(!compare_result.sql_types_match || !compare_result.defaults_match);
+
+    catalog.alterColumnTypeTransactional(*dst_cd);
+  }
+}
+
+std::list<const ColumnDescriptor*> AlterTableAlterColumnCommand::prepareColumns(
+    const TableDescriptor* td,
+    const AlterColumnTypePairs& src_dst_cds) {
+  auto& catalog = session_ptr_->getCatalog();
+
+  std::list<const ColumnDescriptor*> non_geo_cds;
+  for (auto& [src_cd, dst_cd] : src_dst_cds) {
+    if (dst_cd->columnType.is_geometry()) {
+      continue;
+    }
+    non_geo_cds.emplace_back(dst_cd);
+
+    auto compare_result =
+        ddl_utils::alter_column_utils::compare_column_descriptors(src_cd, dst_cd);
+    if (compare_result.sql_types_match) {
+      continue;
+    }
+
+    if (dst_cd->columnType.is_dict_encoded_type()) {
+      catalog.addDictionaryTransactional(*dst_cd);
+    }
+  }
+
+  return non_geo_cds;
+}
+
+std::list<std::list<ColumnDescriptor>> AlterTableAlterColumnCommand::prepareGeoColumns(
+    const TableDescriptor* td,
+    const AlterColumnTypePairs& src_dst_cds) {
+  auto& catalog = session_ptr_->getCatalog();
+  std::list<std::list<ColumnDescriptor>> physical_geo_columns;
+
+  for (auto& [src_cd, dst_cd] : src_dst_cds) {
+    if (dst_cd->columnType.is_geometry()) {
+      std::string col_name = src_cd->columnName;
+      auto uuid = boost::uuids::random_generator()();
+      catalog.renameColumn(td, src_cd, col_name + "_" + boost::uuids::to_string(uuid));
+
+      physical_geo_columns.emplace_back();
+      std::list<ColumnDescriptor>& phy_geo_columns = physical_geo_columns.back();
+      catalog.expandGeoColumn(*dst_cd, phy_geo_columns);
+
+      catalog.addColumnTransactional(*td, *dst_cd);
+
+      for (auto& cd : phy_geo_columns) {
+        catalog.addColumnTransactional(*td, cd);
+      }
+    }
+  }
+
+  return physical_geo_columns;
+}
+
+void AlterTableAlterColumnCommand::dropSourceGeoColumns(
+    const TableDescriptor* td,
+    const AlterColumnTypePairs& src_dst_cds) {
+  auto& catalog = session_ptr_->getCatalog();
+  for (auto& [src_cd, dst_cd] : src_dst_cds) {
+    if (!dst_cd->columnType.is_geometry()) {
+      continue;
+    }
+    auto catalog_cd = catalog.getMetadataForColumn(src_cd->tableId, src_cd->columnId);
+    catalog.dropColumnTransactional(*td, *catalog_cd);
+    ChunkKey col_key{catalog.getCurrentDB().dbId, td->tableId, src_cd->columnId};
+    auto& data_mgr = catalog.getDataMgr();
+    data_mgr.deleteChunksWithPrefix(col_key, MemoryLevel::GPU_LEVEL);
+    data_mgr.deleteChunksWithPrefix(col_key, MemoryLevel::CPU_LEVEL);
+    data_mgr.deleteChunksWithPrefix(col_key, MemoryLevel::DISK_LEVEL);
+  }
+}
+
+void AlterTableAlterColumnCommand::alterNonGeoColumnData(
+    const TableDescriptor* td,
+    const std::list<const ColumnDescriptor*>& cds) {
+  if (cds.empty()) {
+    return;
+  }
+  auto fragmenter = td->fragmenter;
+  CHECK(fragmenter);
+  auto io_fragmenter =
+      dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(fragmenter.get());
+  CHECK(io_fragmenter);
+  io_fragmenter->alterNonGeoColumnType(cds);
+}
+
+void AlterTableAlterColumnCommand::alterGeoColumnData(
+    const TableDescriptor* td,
+    const std::list<std::pair<const ColumnDescriptor*,
+                              std::list<const ColumnDescriptor*>>>& geo_src_dst_cds) {
+  if (geo_src_dst_cds.empty()) {
+    return;
+  }
+  auto fragmenter = td->fragmenter;
+  CHECK(fragmenter);
+  auto io_fragmenter =
+      dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(fragmenter.get());
+  CHECK(io_fragmenter);
+  io_fragmenter->alterColumnGeoType(geo_src_dst_cds);
+}
+
+void AlterTableAlterColumnCommand::clearInMemoryData(
+    const TableDescriptor* td,
+    const AlterColumnTypePairs& src_dst_cds) {
+  auto& catalog = session_ptr_->getCatalog();
+
+  ChunkKey table_key{catalog.getCurrentDB().dbId, td->tableId};
+  UpdateTriggeredCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
+  for (auto& [src_cd, _] : src_dst_cds) {
+    auto column_key = table_key;
+    column_key.push_back(src_cd->columnId);
+    catalog.getDataMgr().deleteChunksWithPrefix(column_key, MemoryLevel::GPU_LEVEL);
+    catalog.getDataMgr().deleteChunksWithPrefix(column_key, MemoryLevel::CPU_LEVEL);
+  }
+
+  catalog.removeFragmenterForTable(td->tableId);
+}
+
+void AlterTableAlterColumnCommand::deleteDictionaries(
+    const TableDescriptor* td,
+    const AlterColumnTypePairs& src_dst_cds) {
+  auto& catalog = session_ptr_->getCatalog();
+  for (auto& [src_cd, dst_cd] : src_dst_cds) {
+    if (!src_cd->columnType.is_dict_encoded_type()) {
+      continue;
+    }
+    if (!ddl_utils::alter_column_utils::compare_column_descriptors(src_cd, dst_cd)
+             .sql_types_match) {
+      catalog.delDictionaryTransactional(*src_cd);
+    }
+  }
+}
+
+void AlterTableAlterColumnCommand::checkpoint(const TableDescriptor* td,
+                                              const AlterColumnTypePairs& src_dst_cds) {
+  auto& catalog = session_ptr_->getCatalog();
+  for (auto& [src_cd, dst_cd] : src_dst_cds) {
+    if (!dst_cd->columnType.is_dict_encoded_type()) {
+      continue;
+    }
+    if (ddl_utils::alter_column_utils::compare_column_descriptors(src_cd, dst_cd)
+            .sql_types_match) {
+      continue;
+    }
+    auto string_dictionary =
+        catalog.getMetadataForDict(dst_cd->columnType.get_comp_param(), true)
+            ->stringDict.get();
+    if (!string_dictionary->checkpoint()) {
+      throw std::runtime_error("Failed to checkpoint dictionary while altering column " +
+                               dst_cd->columnName + ".");
+    }
+  }
+  catalog.checkpointWithAutoRollback(td->tableId);
+}
+
+void AlterTableAlterColumnCommand::collectExpectedCatalogChanges(
+    const TableDescriptor* td,
+    const AlterTableAlterColumnCommand::AlterColumnTypePairs& src_dst_cds) {
+  auto& catalog = session_ptr_->getCatalog();
+
+  auto column_id_start = catalog.getNextAddedColumnId(*td);
+  auto current_column_id = column_id_start;
+
+  // Simulate operations required for geo changes
+  for (auto& [src_cd, dst_cd] : src_dst_cds) {
+    if (dst_cd->columnType.is_geometry()) {
+      renamed_columns_.push_back(*src_cd);
+
+      std::list<ColumnDescriptor> phy_geo_columns;
+      catalog.expandGeoColumn(*dst_cd, phy_geo_columns);
+
+      auto col_to_add = *dst_cd;
+      col_to_add.tableId = td->tableId;
+      col_to_add.columnId = current_column_id++;
+      added_columns_.push_back(col_to_add);
+
+      for (auto& cd : phy_geo_columns) {
+        ColumnDescriptor phys_col_to_add = cd;
+        phys_col_to_add.tableId = td->tableId;
+        phys_col_to_add.columnId = current_column_id++;
+        added_columns_.push_back(phys_col_to_add);
+      }
+    } else if (dst_cd->columnType.is_dict_encoded_type()) {
+      if (!ddl_utils::alter_column_utils::compare_column_descriptors(src_cd, dst_cd)
+               .sql_types_match) {
+        updated_dict_cds_.push_back(*src_cd);
+      }
+    }
+  }
+
+  for (auto& [src_cd, dst_cd] : src_dst_cds) {
+    if (dst_cd->columnType.is_geometry()) {
+      continue;
+    }
+    auto compare_result =
+        ddl_utils::alter_column_utils::compare_column_descriptors(src_cd, dst_cd);
+    CHECK(!compare_result.sql_types_match || !compare_result.defaults_match);
+    altered_columns_.push_back(ColumnAltered{*src_cd, *dst_cd});
+  }
+}
+
+void AlterTableAlterColumnCommand::rollback(
+    const TableDescriptor* td,
+    const AlterTableAlterColumnCommand::AlterColumnTypePairs& src_dst_cds) {
+  auto& catalog = session_ptr_->getCatalog();
+  auto cds = catalog.getAllColumnMetadataForTable(td->tableId, false, false, true);
+
+  // Drop any columns that were added
+  std::list<const ColumnDescriptor*> added_columns_to_drop;
+  for (auto& added_column : added_columns_) {
+    auto cd_it =
+        std::find_if(cds.begin(), cds.end(), [&added_column](const ColumnDescriptor* cd) {
+          return added_column.columnId == cd->columnId;
+        });
+    if (cd_it != cds.end()) {
+      added_columns_to_drop.emplace_back(*cd_it);
+    }
+  }
+  for (const auto& cd : added_columns_to_drop) {
+    ChunkKey col_key{catalog.getCurrentDB().dbId, td->tableId, cd->columnId};
+    catalog.dropColumnTransactional(*td, *cd);
+    auto& data_mgr = catalog.getDataMgr();
+    data_mgr.deleteChunksWithPrefix(col_key, MemoryLevel::GPU_LEVEL);
+    data_mgr.deleteChunksWithPrefix(col_key, MemoryLevel::CPU_LEVEL);
+  }
+
+  // Rename any columns back to original name
+  for (auto& renamed_column : renamed_columns_) {
+    auto cd_it = std::find_if(
+        cds.begin(), cds.end(), [&renamed_column](const ColumnDescriptor* cd) {
+          return renamed_column.columnId == cd->columnId;
+        });
+    if (cd_it != cds.end()) {
+      auto cd = *cd_it;
+      auto old_name = renamed_column.columnName;
+      if (cd->columnName != old_name) {
+        catalog.renameColumn(td, cd, old_name);
+      }
+    }
+  }
+
+  // Remove any added dictionary
+  for (auto& added_dict : updated_dict_cds_) {
+    auto cd_it =
+        std::find_if(cds.begin(), cds.end(), [&added_dict](const ColumnDescriptor* cd) {
+          return added_dict.columnId == cd->columnId;
+        });
+    if (cd_it != cds.end()) {
+      auto cd = *cd_it;
+
+      // Find all dictionaries, delete dictionaries which are defunct
+      auto dds = catalog.getAllDictionariesWithColumnInName(cd);
+      for (const auto& dd : dds) {
+        if (!added_dict.columnType.is_dict_encoded_type() ||
+            dd->dictRef.dictId != added_dict.columnType.get_comp_param()) {
+          auto temp_cd = *cd;
+          temp_cd.columnType.set_comp_param(dd->dictRef.dictId);
+          catalog.delDictionaryTransactional(temp_cd);
+        }
+      }
+    }
+  }
+
+  // Undo any altered column
+  for (auto& altered_column : altered_columns_) {
+    auto cd_it = std::find_if(
+        cds.begin(), cds.end(), [&altered_column](const ColumnDescriptor* cd) {
+          return altered_column.new_cd.columnId == cd->columnId;
+        });
+    if (cd_it != cds.end()) {
+      catalog.alterColumnTypeTransactional(altered_column.old_cd);
+    }
+  }
+}
+
+void AlterTableAlterColumnCommand::alterColumnTypes(
+    const TableDescriptor* td,
+    const AlterColumnTypePairs& src_dst_cds) {
+  auto& catalog = session_ptr_->getCatalog();
+
+  // Store information necessary to rollback changes for both data and catalog
+  auto table_epochs = catalog.getTableEpochs(catalog.getDatabaseId(), td->tableId);
+  collectExpectedCatalogChanges(td, src_dst_cds);
+
+  try {
+    auto physical_columns = prepareGeoColumns(td, src_dst_cds);
+    auto geo_src_dst_column_pairs =
+        get_alter_column_geo_pairs_from_src_dst_pairs_phys_cds(src_dst_cds,
+                                                               physical_columns);
+
+    auto non_geo_cds = prepareColumns(td, src_dst_cds);
+
+    alterGeoColumnData(td, geo_src_dst_column_pairs);
+    alterNonGeoColumnData(td, non_geo_cds);
+
+    alterColumns(td, src_dst_cds);
+
+    // First checkpoint is for added/altered data, rollback is possible
+    checkpoint(td, src_dst_cds);
+
+  } catch (std::exception& except) {
+    catalog.setTableEpochs(catalog.getDatabaseId(), table_epochs);
+    clearInMemoryData(td, src_dst_cds);
+    rollback(td, src_dst_cds);
+    throw std::runtime_error("Alter column type: " + std::string(except.what()));
+  }
+
+  // After the last checkpoint, the following operations are non-reversible,
+  // when recovering from a crash will be required to finish
+  try {
+    try {
+      deleteDictionaries(td, src_dst_cds);
+    } catch (std::exception& except) {
+      LOG(WARNING) << "Alter column type: failed to clear source dictionaries: "
+                   << except.what();
+      throw;
+    }
+
+    try {
+      clearRemainingChunks(td, src_dst_cds);
+    } catch (std::exception& except) {
+      LOG(WARNING) << "Alter column type: failed to clear remaining chunks: "
+                   << except.what();
+      throw;
+    }
+
+    try {
+      dropSourceGeoColumns(td, src_dst_cds);
+    } catch (std::exception& except) {
+      LOG(WARNING) << "Alter column type: failed to remove geo's source column : "
+                   << except.what();
+      throw;
+    }
+
+    // Second checkpoint is for removed data, rollback no longer possible
+    checkpoint(td, src_dst_cds);
+    catalog.resetTableEpochFloor(td->tableId);
+
+  } catch (std::exception& except) {
+    // Any exception encountered during the last steps is unexpected and will cause a
+    // crash, relying on the recovery process to fix resulting issues
+    LOG(FATAL) << "Alter column type: encountered fatal error during finalizing: "
+               << except.what();
+  }
+
+  clearInMemoryData(td, src_dst_cds);
+}
+
+void AlterTableAlterColumnCommand::alterColumn() {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  const auto tableName = std::string(ddl_payload["tableName"].GetString());
+
+  auto columns = Parser::get_columns_from_json_payload("alterData", ddl_payload);
+
+  auto& catalog = session_ptr_->getCatalog();
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, tableName, true);
+  const auto td = td_with_lock();
+
+  if (!td) {
+    throw std::runtime_error("Table " + tableName + " does not exist.");
+  } else {
+    if (td->isView) {
+      throw std::runtime_error("Altering columns in a view is not supported.");
+    }
+    validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
+    if (table_is_temporary(td)) {
+      throw std::runtime_error("Altering columns in temporary tables is not supported.");
+    }
+  }
+
+  Parser::check_alter_table_privilege(*session_ptr_, td);
+
+  for (const auto& coldef : columns) {
+    const auto& column_name = *coldef.get_column_name();
+    if (catalog.getMetadataForColumn(td->tableId, column_name) == nullptr) {
+      throw std::runtime_error("Column " + column_name + " does not exist.");
+    }
+  }
+
+  CHECK(td->fragmenter);
+  if (td->sortedColumnId) {
+    throw std::runtime_error(
+        "Altering columns to a table is not supported when using the \"sort_column\" "
+        "option.");
+  }
+
+  auto [src_cds, dst_cds] = get_alter_column_src_dst_cds(columns, catalog, td);
+  alterColumnTypes(td, get_alter_column_pairs_from_src_dst_cds(src_cds, dst_cds));
+}
+
+ExecutionResult AlterTableAlterColumnCommand::execute(bool read_only_mode) {
+  if (g_cluster) {
+    throw std::runtime_error(
+        "ALTER TABLE ALTER COLUMN is unsupported in distributed mode.");
+  }
+
+  // NOTE: read_only_mode is validated at a higher level in AlterTableCommand
+
+  // TODO: Refactor this lock when refactoring other ALTER TABLE commands
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
+
+  // There are a few major cases to consider when alter column is invoked.
+  // Below non variable length column is abbreviated as NVL and a variable
+  // length column is abbreviated as VL.
+  //
+  // 1. A NVL -> NVL or VL -> VL column conversion.
+  //
+  // 2. A NVL -> VL or VL -> NVL column conversion.
+  //
+  // 3. A VL/NVL column converted to a Geo column.
+  //
+  // Case (1) is the simplest since chunks do not change their chunk keys.
+  //
+  // Case (2) requires that the chunk keys are added or removed (typically the
+  // index chunk), and this requires special treatment.
+  //
+  // Case (3) requires temporarily renaming the source column, creating new Geo
+  // columns, populating the destination Geo columns and dropping the source
+  // column.
+
+  alterColumn();
+  return {};
+}
+
+ExecutionResult AlterTableCommand::execute(bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("ALTER TABLE invalid in read only mode.");
+  }
+
+  auto& ddl_payload = extractPayload(ddl_data_);
+  const auto tableName = std::string(ddl_payload["tableName"].GetString());
+
+  CHECK(ddl_payload.HasMember("alterType"));
+  auto type = json_str(ddl_payload["alterType"]);
+
+  if (type == "RENAME_TABLE") {
+    CHECK(ddl_payload.HasMember("newTableName"));
+    auto newTableName = json_str(ddl_payload["newTableName"]);
+    std::unique_ptr<Parser::DDLStmt>(
+        new Parser::RenameTableStmt(new std::string(tableName),
+                                    new std::string(newTableName)))
+        ->execute(*session_ptr_, read_only_mode);
+    return {};
+
+  } else if (type == "RENAME_COLUMN") {
+    CHECK(ddl_payload.HasMember("columnName"));
+    auto columnName = json_str(ddl_payload["columnName"]);
+    CHECK(ddl_payload.HasMember("newColumnName"));
+    auto newColumnName = json_str(ddl_payload["newColumnName"]);
+    std::unique_ptr<Parser::DDLStmt>(
+        new Parser::RenameColumnStmt(new std::string(tableName),
+                                     new std::string(columnName),
+                                     new std::string(newColumnName)))
+        ->execute(*session_ptr_, read_only_mode);
+    return {};
+
+  } else if (type == "ALTER_COLUMN") {
+    return AlterTableAlterColumnCommand{ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (type == "ADD_COLUMN") {
+    CHECK(ddl_payload.HasMember("columnData"));
+    CHECK(ddl_payload["columnData"].IsArray());
+
+    // New Columns go into this list
+    std::list<Parser::ColumnDef*>* table_element_list_ =
+        new std::list<Parser::ColumnDef*>;
+
+    const auto elements = ddl_payload["columnData"].GetArray();
+    for (const auto& element : elements) {
+      CHECK(element.IsObject());
+      CHECK(element.HasMember("type"));
+      if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
+        auto col_def = Parser::column_from_json(element);
+        table_element_list_->emplace_back(col_def.release());
+      } else {
+        LOG(FATAL) << "Unsupported element type for ALTER TABLE: "
+                   << element["type"].GetString();
+      }
+    }
+
+    std::unique_ptr<Parser::DDLStmt>(
+        new Parser::AddColumnStmt(new std::string(tableName), table_element_list_))
+        ->execute(*session_ptr_, read_only_mode);
+    return {};
+
+  } else if (type == "DROP_COLUMN") {
+    CHECK(ddl_payload.HasMember("columnData"));
+    auto columnData = json_str(ddl_payload["columnData"]);
+    // Convert columnData to std::list<std::string*>*
+    //    allocate std::list<> as DropColumnStmt will delete it;
+    std::list<std::string*>* cols = new std::list<std::string*>;
+    std::vector<std::string> cols1;
+    boost::split(cols1, columnData, boost::is_any_of(","));
+    for (auto s : cols1) {
+      // strip leading/trailing spaces/quotes/single quotes
+      boost::algorithm::trim_if(s, boost::is_any_of(" \"'`"));
+      std::string* str = new std::string(s);
+      cols->emplace_back(str);
+    }
+
+    std::unique_ptr<Parser::DDLStmt>(
+        new Parser::DropColumnStmt(new std::string(tableName), cols))
+        ->execute(*session_ptr_, read_only_mode);
+    return {};
+
+  } else if (type == "ALTER_OPTIONS") {
+    CHECK(ddl_payload.HasMember("options"));
+    const auto& options = ddl_payload["options"];
+    if (options.IsObject()) {
+      for (auto itr = options.MemberBegin(); itr != options.MemberEnd(); ++itr) {
+        std::string* option_name = new std::string(json_str(itr->name));
+        Parser::Literal* literal_value;
+        if (itr->value.IsString()) {
+          std::string literal_string = json_str(itr->value);
+
+          // iff this string can be converted to INT
+          //   ... do so because it is necessary for AlterTableParamStmt
+          std::size_t sz;
+          int iVal = std::stoi(literal_string, &sz);
+          if (sz == literal_string.size()) {
+            literal_value = new Parser::IntLiteral(iVal);
+          } else {
+            literal_value = new Parser::StringLiteral(&literal_string);
+          }
+        } else if (itr->value.IsInt() || itr->value.IsInt64()) {
+          literal_value = new Parser::IntLiteral(json_i64(itr->value));
+        } else if (itr->value.IsNull()) {
+          literal_value = new Parser::NullLiteral();
+        } else {
+          throw std::runtime_error("Unable to handle literal for " + *option_name);
+        }
+        CHECK(literal_value);
+        Parser::NameValueAssign* nv =
+            new Parser::NameValueAssign(option_name, literal_value);
+        std::unique_ptr<Parser::DDLStmt>(
+            new Parser::AlterTableParamStmt(new std::string(tableName), nv))
+            ->execute(*session_ptr_, read_only_mode);
+        return {};
+      }
+    } else {
+      CHECK(options.IsNull());
+    }
+  }
 
   return ExecutionResult();
 }

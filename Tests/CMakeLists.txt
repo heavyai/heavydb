@@ -720,7 +720,7 @@ endif()
 ##########
 
 add_executable(RunQueryLoop RunQueryLoop.cpp)
-target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
+target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} rg3_bcrypt)
 add_test(RunQueryLoop RunQueryLoop ${TEST_ARGS})
 
 ##########

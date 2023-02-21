@@ -51,9 +51,9 @@ ExecutionResult::ExecutionResult(const ExecutionResult& that)
     : targets_meta_(that.targets_meta_)
     , pushed_down_filter_info_(that.pushed_down_filter_info_)
     , filter_push_down_enabled_(that.filter_push_down_enabled_)
-    , success_(true)
-    , execution_time_ms_(0)
-    , type_(QueryResult) {
+    , success_(that.success_)
+    , execution_time_ms_(that.execution_time_ms_)
+    , type_(that.type_) {
   if (!pushed_down_filter_info_.empty() ||
       (filter_push_down_enabled_ && pushed_down_filter_info_.empty())) {
     return;
@@ -65,9 +65,9 @@ ExecutionResult::ExecutionResult(ExecutionResult&& that)
     : targets_meta_(std::move(that.targets_meta_))
     , pushed_down_filter_info_(std::move(that.pushed_down_filter_info_))
     , filter_push_down_enabled_(std::move(that.filter_push_down_enabled_))
-    , success_(true)
-    , execution_time_ms_(0)
-    , type_(QueryResult) {
+    , success_(that.success_)
+    , execution_time_ms_(that.execution_time_ms_)
+    , type_(that.type_) {
   if (!pushed_down_filter_info_.empty() ||
       (filter_push_down_enabled_ && pushed_down_filter_info_.empty())) {
     return;

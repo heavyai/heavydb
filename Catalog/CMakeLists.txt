@@ -26,11 +26,16 @@ endif()
 add_library(Catalog ${catalog_source_files})
 add_dependencies(Catalog Calcite StringDictionary thrift_gen)
 
+if(WIN32)
+  message(STATUS "Defining BOOST_UUID_FORCE_AUTO_LINK for Catalog")
+  target_compile_definitions(Catalog PRIVATE BOOST_UUID_FORCE_AUTO_LINK)
+endif()
+
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   add_subdirectory(ee)
 endif()
 
-target_link_libraries(Catalog SqliteConnector StringDictionary Fragmenter MigrationMgr ${AUTH_LIBRARIES} Calcite bcrypt)
+target_link_libraries(Catalog SqliteConnector StringDictionary Fragmenter MigrationMgr ${AUTH_LIBRARIES} Calcite rg3_bcrypt)
 if(ENABLE_KRB5)
   target_link_libraries(Catalog krb5_gss)
 endif()

@@ -35,6 +35,41 @@
 bool g_use_date_in_days_default_encoding{true};
 
 namespace ddl_utils {
+
+namespace alter_column_utils {
+bool compare_sql_type_infos(const SQLTypeInfo& lhs, const SQLTypeInfo& rhs) {
+  return lhs.get_type() == rhs.get_type() && lhs.get_subtype() == rhs.get_subtype() &&
+         lhs.get_dimension() == rhs.get_dimension() &&
+         lhs.get_scale() == rhs.get_scale() &&
+         lhs.get_compression() == rhs.get_compression() &&
+         (lhs.get_compression() == kENCODING_NONE ||
+          lhs.get_comp_param() == rhs.get_comp_param() ||
+          (lhs.get_compression() == kENCODING_DICT &&
+           lhs.get_size() == rhs.get_size())) &&
+         lhs.get_notnull() == rhs.get_notnull();
+}
+
+CompareResult compare_column_descriptors(const ColumnDescriptor* lhs,
+                                         const ColumnDescriptor* rhs) {
+  CompareResult result;
+  result.defaults_match =
+      (!lhs->default_value.has_value() && !rhs->default_value.has_value()) ||
+      (lhs->default_value.has_value() && rhs->default_value.has_value() &&
+       lhs->default_value.value() == rhs->default_value.value());
+  result.sql_types_match = compare_sql_type_infos(lhs->columnType, rhs->columnType);
+  result.remainder_match =
+      lhs->tableId == rhs->tableId && lhs->columnId == rhs->columnId &&
+      lhs->columnName == rhs->columnName && lhs->sourceName == rhs->sourceName &&
+      lhs->chunks == rhs->chunks && lhs->isSystemCol == rhs->isSystemCol &&
+      lhs->isVirtualCol == rhs->isVirtualCol && lhs->virtualExpr == rhs->virtualExpr &&
+      lhs->isDeletedCol == rhs->isDeletedCol && lhs->isGeoPhyCol == rhs->isGeoPhyCol;
+  result.exact_match =
+      result.defaults_match && result.sql_types_match && result.remainder_match;
+  return result;
+}
+
+}  // namespace alter_column_utils
+
 SqlType::SqlType(SQLTypes type, int param1, int param2, bool is_array, int array_size)
     : type(type)
     , param1(param1)

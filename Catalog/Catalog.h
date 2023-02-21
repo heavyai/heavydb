@@ -182,8 +182,14 @@ class Catalog final {
   void renameColumn(const TableDescriptor* td,
                     const ColumnDescriptor* cd,
                     const std::string& newColumnName);
+  int getNextAddedColumnId(const TableDescriptor& td);
   void addColumn(const TableDescriptor& td, ColumnDescriptor& cd);
+  void addColumnTransactional(const TableDescriptor& td, ColumnDescriptor& cd);
+  void alterColumnTypeTransactional(const ColumnDescriptor& cd);
+  void dropColumnTransactional(const TableDescriptor& td, const ColumnDescriptor& cd);
+  void dropColumnNontransactional(const TableDescriptor& td, const ColumnDescriptor& cd);
   void dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd);
+  void dropColumnPolicies(const TableDescriptor& td, const ColumnDescriptor& cd);
   void invalidateCachesForTable(const int table_id);
   void removeFragmenterForTable(const int table_id) const;
 
@@ -305,11 +311,15 @@ class Catalog final {
 
   int getDatabaseId() const { return currentDB_.dbId; }
   SqliteConnector& getSqliteConnector() { return sqliteConnector_; }
-  void roll(const bool forward);
-  DictRef addDictionary(ColumnDescriptor& cd);
-  void delDictionary(const ColumnDescriptor& cd);
+  void rollLegacy(const bool forward);
   void getDictionary(const ColumnDescriptor& cd,
                      std::map<int, StringDictionary*>& stringDicts);
+
+  DictRef addDictionaryTransactional(ColumnDescriptor& cd);
+  void delDictionaryTransactional(const ColumnDescriptor& cd);
+
+  std::list<const DictDescriptor*> getAllDictionariesWithColumnInName(
+      const ColumnDescriptor* cd);
 
   const bool checkMetadataForDeletedRecs(const TableDescriptor* td, int column_id) const;
   const ColumnDescriptor* getDeletedColumn(const TableDescriptor* td) const;
@@ -714,6 +724,11 @@ class Catalog final {
   ColumnDescriptorsForRoll columnDescriptorsForRoll;
 
  private:
+  void addColumnDescriptor(const ColumnDescriptor* cd);
+  void removeColumnDescriptor(const ColumnDescriptor* cd);
+  void delDictionaryNontransactional(const ColumnDescriptor& cd);
+  void addColumnNontransactional(const TableDescriptor& td, ColumnDescriptor& cd);
+  DictRef addDictionaryNontransactional(ColumnDescriptor& cd);
   void buildDictionaryMapUnlocked();
   void reloadTableMetadata(int table_id);
   template <class T>
@@ -827,6 +842,7 @@ class Catalog final {
 
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
 
+  void updateInColumnMap(ColumnDescriptor* cd, ColumnDescriptor* old_cd);
   void addToColumnMap(ColumnDescriptor* cd);
   void removeFromColumnMap(ColumnDescriptor* cd);
 

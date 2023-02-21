@@ -95,6 +95,14 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
     const int start_idx,
     const size_t numAppendElems,
     const bool replicating) {
+  return appendData(srcData->data(), start_idx, numAppendElems, replicating);
+}
+
+template <typename StringType>
+std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(const StringType* srcData,
+                                                             const int start_idx,
+                                                             const size_t numAppendElems,
+                                                             const bool replicating) {
   CHECK(index_buf);  // index_buf must be set before this.
   size_t append_index_size = numAppendElems * sizeof(StringOffsetT);
   if (num_elems_ == 0) {
@@ -118,7 +126,7 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
   }
   size_t append_data_size = 0;
   for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
-    size_t len = (*srcData)[replicating ? 0 : n].length();
+    size_t len = (srcData)[replicating ? 0 : n].length();
     append_data_size += len;
   }
   buffer_->reserve(buffer_->size() + append_data_size);
@@ -131,8 +139,7 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
     size_t i;
     for (i = 0; num_appended < numAppendElems && i < inbuf_size / sizeof(StringOffsetT);
          i++, num_appended++) {
-      p[i] =
-          last_offset + (*srcData)[replicating ? 0 : num_appended + start_idx].length();
+      p[i] = last_offset + (srcData)[replicating ? 0 : num_appended + start_idx].length();
       last_offset = p[i];
     }
     index_buf->append(inbuf.get(), i * sizeof(StringOffsetT));
@@ -143,14 +150,14 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
     for (int i = start_idx + num_appended;
          num_appended < numAppendElems && size < inbuf_size;
          i++, num_appended++) {
-      size_t len = (*srcData)[replicating ? 0 : i].length();
+      size_t len = (srcData)[replicating ? 0 : i].length();
       if (len > inbuf_size) {
         // for large strings, append on its own
         if (size > 0) {
           buffer_->append(inbuf.get(), size);
         }
         size = 0;
-        buffer_->append((int8_t*)(*srcData)[replicating ? 0 : i].data(), len);
+        buffer_->append((int8_t*)(srcData)[replicating ? 0 : i].data(), len);
         num_appended++;
         break;
       } else if (size + len > inbuf_size) {
@@ -158,10 +165,10 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
       }
       char* dest = reinterpret_cast<char*>(inbuf.get()) + size;
       if (len > 0) {
-        (*srcData)[replicating ? 0 : i].copy(dest, len);
+        (srcData)[replicating ? 0 : i].copy(dest, len);
         size += len;
       }
-      update_elem_stats((*srcData)[replicating ? 0 : i]);
+      update_elem_stats((srcData)[replicating ? 0 : i]);
     }
     if (size > 0) {
       buffer_->append(inbuf.get(), size);
@@ -232,6 +239,18 @@ template std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData<std::strin
 
 template std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData<std::string_view>(
     const std::vector<std::string_view>* srcData,
+    const int start_idx,
+    const size_t numAppendElems,
+    const bool replicating);
+
+template std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData<std::string>(
+    const std::string* srcData,
+    const int start_idx,
+    const size_t numAppendElems,
+    const bool replicating);
+
+template std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData<std::string_view>(
+    const std::string_view* srcData,
     const int start_idx,
     const size_t numAppendElems,
     const bool replicating);

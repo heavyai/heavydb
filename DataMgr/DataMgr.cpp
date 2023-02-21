@@ -513,6 +513,15 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix,
   }
 }
 
+// only deletes the chunks at the given memory level
+void DataMgr::deleteChunk(const ChunkKey& key,
+                          const MemoryLevel memLevel,
+                          const int device_id) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+  CHECK_LT(memLevel, bufferMgrs_.size());
+  bufferMgrs_[memLevel][device_id]->deleteBuffer(key);
+}
+
 AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel,
                                const int deviceId,
                                const size_t numBytes) {
