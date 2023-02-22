@@ -595,6 +595,7 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   int8_t* dst = reinterpret_cast<int8_t*>(output_buffers_ptr);
   // Todo (todd): Consolidate this column byte offset logic that occurs in at least 4
   // places
+
   for (size_t col_idx = 0; col_idx < num_out_columns; col_idx++) {
     auto ti = exe_unit.target_exprs[col_idx]->get_type_info();
     if (ti.supports_flatbuffer()) {
@@ -609,12 +610,10 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
       src = align_to_int64(src + allocated_column_size);
       dst = align_to_int64(dst + actual_column_size);
       if (ti.is_text_encoding_dict_array()) {
-        CHECK_EQ(
-            m.getVarlenArrayMetadata()->params[FlatBufferManager::VarlenArrayParamDictId],
-            ti.getStringDictKey().dict_id);  // ensure that dict_id is preserved
-        CHECK_EQ(
-            m.getVarlenArrayMetadata()->params[FlatBufferManager::VarlenArrayParamDbId],
-            ti.getStringDictKey().db_id);  // ensure that db_id is preserved
+        const auto* ti_lite =
+            reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+        CHECK(ti_lite);
+        CHECK_EQ(*ti_lite, ti.toLite());  // ensure dict/db_id are preserved
       }
     } else {
       const size_t target_width = ti.get_size();

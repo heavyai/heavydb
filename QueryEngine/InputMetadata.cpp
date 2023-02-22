@@ -259,32 +259,35 @@ ChunkMetadataMap synthesize_metadata_table_function(const ResultSet* rows) {
     chunk_metadata->sqlType = col_type_info;
     chunk_metadata->numElements = row_count;
 
-    const int8_t* values_buffer;
-    size_t values_count;
+    const int8_t* values_buffer{nullptr};
+    size_t values_count{0};
     if (FlatBufferManager::isFlatBuffer(columnar_buffer)) {
       CHECK(FlatBufferManager::isFlatBuffer(columnar_buffer));
       FlatBufferManager m{const_cast<int8_t*>(columnar_buffer)};
       chunk_metadata->numBytes = m.getBufferSize();
       if (is_geometry) {
         switch (col_sql_type_info.get_type()) {
+          case kPOINT:
+            // a geometry value is a pair of coordinates but its element
+            // type value is a int or double, hence multiplication by 2:
+            values_count = row_count * 2;
+            values_buffer = m.get_values();
+            break;
           case kLINESTRING:
           case kPOLYGON:
           case kMULTILINESTRING:
           case kMULTIPOLYGON: {
             values_count = m.getValuesCount();
-            values_buffer = m.get_values_buffer();
+            values_buffer = m.getValuesBuffer();
           } break;
-          default: {
-            // a geometry value is a pair of coordinates but its element
-            // type value is a int or double, hence multiplication by 2:
-            values_count = m.get_nof_values() * 2;
-            values_buffer = m.get_values();
-          }
+          default:
+            UNREACHABLE();
         }
       } else {
         CHECK(is_array);
-        values_count = m.get_nof_values();
-        values_buffer = m.get_values();
+        CHECK(m.isNestedArray());
+        values_count = m.getValuesCount();
+        values_buffer = m.getValuesBuffer();
       }
     } else {
       chunk_metadata->numBytes = row_count * col_type_info.get_size();

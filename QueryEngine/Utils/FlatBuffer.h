@@ -59,18 +59,6 @@
     |<-- 8-bytes-->|<-- 8-bytes ------>|<-- metadata buffer size -->|<-- worker buffer size -->|<-- row data size -->|<-- 8-bytes -->|
     |<------------------------ flatbuffer size ------------------------------------------------------------------------------------->|
 
-
-  VarlenArray format specification
-  --------------------------------
-
-  The VarlenArray format metadata and worker buffers memory layout is
-  described by VarlenArray and VarlenArrayWorker struct definitions
-  below. The raw data buffer memory layout is a follows:
-
-    | <values>                         | <compressed indices>           | <storage indices>          |
-    =
-    |<-- (max nof values) * 8 bytes -->|<-- (num items + 1) * 8 bytes-->|<-- (num items) * 8 bytes-->|
-
   GeoPoint format specification
   -----------------------------
 
@@ -176,6 +164,7 @@
 
     int8_t* .get_user_data_buffer()
     int8_t* .get_values_buffer()
+    int8_t* .getValuesBuffer()
     sizes_t* .get_sizes_buffer()
     offsets_t* .get_values_offsets()
     offsets_t* .get_sizes_offsets()
@@ -310,27 +299,27 @@
 
 #include <float.h>
 #ifdef HAVE_TOSTRING
-#include <ostream>
 #include <string.h>
+#include <ostream>
 #endif
 #include <vector>
 
 #include "../../Shared/funcannotations.h"
 
+#ifdef __CUDACC__
+#define FLATBUFFER_UNREACHABLE() \
+  { asm("trap;"); }
+#else
 #define FLATBUFFER_UNREACHABLE() \
   { abort(); }
+#endif
 
 // Notice that the format value is used to recognize if a memory
 // buffer uses some flat buffer format or not. To minimize chances for
 // false positive test results, use a non-trival integer value when
 // introducing new formats.
 enum FlatBufferFormat {
-  VarlenArrayFormatId = 0x7661726c65634152,  // hex repr of 'varlenAR'
-  GeoPointFormatId = 0x67656f706f696e74,     // hex repr of 'geopoint'
-  // GeoLineStringFormatId = 0x676c696e65737472,  // hex repr of 'glinestr'
-  // GeoPolygonFormatId = 0x67706f6c79676f6e,     // hex repr of 'gpolygon'
-  // GeoMultiPointFormatId      = 0x47656f706f696e74,  // hex repr of 'Geopoint'
-  // GeoMultiLineStringFormatId = 0x476c696e65737472,  // hex repr of 'Glinestr'
+  GeoPointFormatId = 0x67656f706f696e74,    // hex repr of 'geopoint'
   NestedArrayFormatId = 0x6e65737465644152  // hex repr of 'nestedAR'
 };
 
@@ -414,55 +403,6 @@ struct FlatBufferManager {
       result += ",\n    flatbuffer_size=" + std::to_string(flatbuffer_size);
       result += ",\n    format_metadata_offset=" + std::to_string(format_metadata_offset);
       result += ",\n    format_worker_offset=" + std::to_string(format_worker_offset);
-      result += "}";
-      return result;
-    }
-#endif
-  };
-
-#define VARLENARRAY_NOFPARAMS 2
-
-  enum VarlenArrayParamValues {
-    VarlenArrayParamDictId = 0,
-    VarlenArrayParamDbId = 1,
-    VarlenArrayParamsCount = 2
-  };
-
-  struct VarlenArray {
-    int64_t total_items_count;               // the total number of items
-    int64_t max_nof_values;                  // the maximum number of values in all items
-    size_t dtype_size;                       // the size of item dtype in bytes
-    int32_t params[VarlenArrayParamsCount];  // dtype parameters (e.g. [dict_id, db_id])
-#ifdef HAVE_TOSTRING
-    std::string toString() const {
-      std::string result = ::typeName(this) + "{";
-      result += "total_items_count=" + std::to_string(total_items_count);
-      result += ", max_nof_values=" + std::to_string(max_nof_values);
-      result += ", dtype_size=" + std::to_string(dtype_size);
-      result += ", params=[";
-      for (int i = 0; i < VarlenArrayParamsCount; i++) {
-        result += (i > 0 ? ", " : " ");
-        result += std::to_string(params[i]);
-      }
-      result += "]}";
-      return result;
-    }
-#endif
-  };
-
-  struct VarlenArrayWorker {
-    int64_t items_count;    // the number of specified items
-    int64_t values_offset;  // the offset of values buffer within the flatbuffer memory
-    int64_t compressed_indices_offset;  // the offset of compressed_indices buffer
-    int64_t storage_indices_offset;     // the offset of storage_indices buffer
-#ifdef HAVE_TOSTRING
-    std::string toString() const {
-      std::string result = ::typeName(this) + "{";
-      result += "items_count=" + std::to_string(items_count);
-      result += ", values_offset=" + std::to_string(values_offset);
-      result +=
-          ", compressed_indices_offset=" + std::to_string(compressed_indices_offset);
-      result += ", storage_indices_offset=" + std::to_string(storage_indices_offset);
       result += "}";
       return result;
     }
@@ -583,7 +523,6 @@ struct FlatBufferManager {
       FlatBufferFormat header_format = base->format_id;
       switch (header_format) {
         case NestedArrayFormatId:
-        case VarlenArrayFormatId:
         case GeoPointFormatId: {
           int64_t flatbuffer_size = base->flatbuffer_size;
           if (flatbuffer_size > 0) {
@@ -616,14 +555,23 @@ struct FlatBufferManager {
     return reinterpret_cast<const BaseWorker*>(buffer)->flatbuffer_size;
   }
 
-  inline bool isNestedArray() const { return format() == NestedArrayFormatId; }
+  HOST DEVICE inline bool isNestedArray() const {
+    return format() == NestedArrayFormatId;
+  }
 
-  inline size_t getValueSize() const { return getNestedArrayWorker()->value_size; }
+  HOST DEVICE inline size_t getValueSize() const {
+    return getNestedArrayWorker()->value_size;
+  }
 
-  inline size_t getValuesBufferSize() const {
+  HOST DEVICE inline size_t getValuesBufferSize() const {
     const auto* metadata = getNestedArrayMetadata();
     const auto* worker = getNestedArrayWorker();
     return worker->value_size * metadata->total_values_count;
+  }
+
+  HOST DEVICE inline const int8_t* getValuesBuffer() const {
+    const auto offset = getNestedArrayWorker()->values_buffer_offset;
+    return reinterpret_cast<const int8_t*>(buffer + offset);
   }
 
   inline size_t getValuesCount() const {
@@ -646,8 +594,6 @@ struct FlatBufferManager {
   // Return the number of items
   HOST DEVICE inline int64_t itemsCount() const {
     switch (format()) {
-      case VarlenArrayFormatId:
-        return getVarlenArrayMetadata()->total_items_count;
       case GeoPointFormatId:
         return getGeoPointMetadata()->total_items_count;
       case NestedArrayFormatId:
@@ -661,8 +607,6 @@ struct FlatBufferManager {
   // To be deprecated in favor of NestedArray format
   HOST DEVICE inline int64_t valueByteSize() const {
     switch (format()) {
-      case VarlenArrayFormatId:
-        return getVarlenArrayMetadata()->dtype_size;
       case GeoPointFormatId:
         return 2 * (getGeoPointMetadata()->is_geoint ? sizeof(int32_t) : sizeof(double));
       default:
@@ -674,8 +618,6 @@ struct FlatBufferManager {
   // To be deprecated in favor of NestedArray format
   HOST DEVICE inline int64_t dtypeSize() const {  // TODO: use valueByteSize instead
     switch (format()) {
-      case VarlenArrayFormatId:
-        return getVarlenArrayMetadata()->dtype_size;
       case GeoPointFormatId:
         return 2 * (getGeoPointMetadata()->is_geoint ? sizeof(int32_t) : sizeof(double));
       default:
@@ -684,29 +626,11 @@ struct FlatBufferManager {
     return -1;
   }
 
-  // VarlenArray support:
-
   // To be deprecated in favor of NestedArray format
   static int64_t compute_flatbuffer_size(FlatBufferFormat format_id,
                                          const int8_t* format_metadata_ptr) {
     int64_t flatbuffer_size = _align_to_int64(sizeof(FlatBufferManager::BaseWorker));
     switch (format_id) {
-      case VarlenArrayFormatId: {
-        const auto format_metadata =
-            reinterpret_cast<const VarlenArray*>(format_metadata_ptr);
-        flatbuffer_size += _align_to_int64(sizeof(VarlenArray));
-        flatbuffer_size += _align_to_int64(sizeof(VarlenArrayWorker));
-        flatbuffer_size +=
-            _align_to_int64(format_metadata->dtype_size *
-                            format_metadata->max_nof_values);  // values buffer size
-        flatbuffer_size +=
-            _align_to_int64(sizeof(int64_t) * (format_metadata->total_items_count +
-                                               1));  // compressed_indices buffer size
-        flatbuffer_size += _align_to_int64(
-            sizeof(int64_t) *
-            (format_metadata->total_items_count));  // storage_indices buffer size
-        break;
-      }
       case GeoPointFormatId: {
         const auto format_metadata =
             reinterpret_cast<const GeoPoint*>(format_metadata_ptr);
@@ -752,7 +676,6 @@ struct FlatBufferManager {
   }
 
   // To be deprecated in favor of NestedArray format
-  FLATBUFFER_MANAGER_FORMAT_TOOLS(VarlenArray);
   FLATBUFFER_MANAGER_FORMAT_TOOLS(GeoPoint);
 
 #define FLATBUFFER_MANAGER_FORMAT_TOOLS_NEW(TYPENAME)                                 \
@@ -907,44 +830,6 @@ struct FlatBufferManager {
       case NestedArrayFormatId:
         FLATBUFFER_UNREACHABLE();
         break;
-      case VarlenArrayFormatId: {
-        base->format_worker_offset =
-            base->format_metadata_offset +
-            _align_to_int64(sizeof(FlatBufferManager::VarlenArray));
-
-        const auto* format_metadata =
-            reinterpret_cast<const VarlenArray*>(format_metadata_ptr);
-        auto* this_metadata = getVarlenArrayMetadata();
-        this_metadata->total_items_count = format_metadata->total_items_count;
-        this_metadata->max_nof_values = format_metadata->max_nof_values;
-        this_metadata->dtype_size = format_metadata->dtype_size;
-        for (int i = 0; i < VarlenArrayParamsCount; i++) {
-          this_metadata->params[i] = format_metadata->params[i];
-        }
-
-        auto* this_worker = getVarlenArrayWorker();
-        this_worker->items_count = 0;
-        this_worker->values_offset =
-            base->format_worker_offset + _align_to_int64(sizeof(VarlenArrayWorker));
-        this_worker->compressed_indices_offset =
-            this_worker->values_offset +
-            _align_to_int64(this_metadata->dtype_size * this_metadata->max_nof_values);
-        ;
-        this_worker->storage_indices_offset =
-            this_worker->compressed_indices_offset +
-            _align_to_int64(sizeof(int64_t) * (this_metadata->total_items_count + 1));
-
-        int64_t* compressed_indices =
-            reinterpret_cast<int64_t*>(buffer + this_worker->compressed_indices_offset);
-        int64_t* storage_indices =
-            reinterpret_cast<int64_t*>(buffer + this_worker->storage_indices_offset);
-        for (int i = 0; i < this_metadata->total_items_count; i++) {
-          compressed_indices[i] = 0;
-          storage_indices[i] = -1;
-        }
-        compressed_indices[this_metadata->total_items_count] = 0;
-        break;
-      }
       case GeoPointFormatId: {
         base->format_worker_offset =
             base->format_metadata_offset + _align_to_int64(sizeof(GeoPoint));
@@ -969,7 +854,7 @@ struct FlatBufferManager {
 
   // Low-level API
 
-  inline size_t getNDims() const {
+  HOST DEVICE inline size_t getNDims() const {
     if (isNestedArray()) {
       return getNestedArrayMetadata()->ndims;
     }
@@ -981,8 +866,6 @@ struct FlatBufferManager {
   // To be deprecated in favor of NestedArray format
   inline int64_t get_max_nof_values() const {
     switch (format()) {
-      case VarlenArrayFormatId:
-        return getVarlenArrayMetadata()->max_nof_values;
       case GeoPointFormatId:
         return getGeoPointMetadata()->total_items_count;
       default:
@@ -991,28 +874,10 @@ struct FlatBufferManager {
     return -1;
   }
 
-  // Return the total number of values in all specified items
-  // To be deprecated in favor of NestedArray format
-  inline int64_t get_nof_values() const {
-    switch (format()) {
-      case NestedArrayFormatId: {
-        FLATBUFFER_UNREACHABLE();
-        break;
-      }
-      default: {
-        const int64_t storage_count = get_storage_count();
-        const int64_t* compressed_indices = get_compressed_indices();
-        return compressed_indices[storage_count];
-      }
-    }
-  }
-
   // Return the number of specified items
   // To be deprecated in favor of NestedArray format
   HOST DEVICE inline int64_t& get_storage_count() {
     switch (format()) {
-      case VarlenArrayFormatId:
-        return getVarlenArrayWorker()->items_count;
       case GeoPointFormatId:
         return getGeoPointMetadata()->total_items_count;
       default:
@@ -1025,8 +890,6 @@ struct FlatBufferManager {
   // To be deprecated in favor of NestedArray format
   inline const int64_t& get_storage_count() const {
     switch (format()) {
-      case VarlenArrayFormatId:
-        return getVarlenArrayWorker()->items_count;
       case GeoPointFormatId:
         return getGeoPointMetadata()->total_items_count;
       default:
@@ -1040,10 +903,6 @@ struct FlatBufferManager {
   // To be deprecated in favor of NestedArray format
   inline int64_t get_values_buffer_size() const {
     switch (format()) {
-      case VarlenArrayFormatId: {
-        const auto* worker = getVarlenArrayWorker();
-        return worker->compressed_indices_offset - worker->values_offset;
-      }
       case GeoPointFormatId: {
         const auto* metadata = getGeoPointMetadata();
         const auto itemsize =
@@ -1062,9 +921,6 @@ struct FlatBufferManager {
   HOST DEVICE inline int8_t* get_values() {
     int64_t offset = 0;
     switch (format()) {
-      case VarlenArrayFormatId:
-        offset = getVarlenArrayWorker()->values_offset;
-        break;
       case GeoPointFormatId:
         offset = getGeoPointWorker()->values_offset;
         break;
@@ -1075,12 +931,9 @@ struct FlatBufferManager {
   }
 
   // To be deprecated in favor of NestedArray format
-  inline const int8_t* get_values() const {
+  HOST DEVICE inline const int8_t* get_values() const {
     int64_t offset = 0;
     switch (format()) {
-      case VarlenArrayFormatId:
-        offset = getVarlenArrayWorker()->values_offset;
-        break;
       case GeoPointFormatId:
         offset = getGeoPointWorker()->values_offset;
         break;
@@ -1090,55 +943,28 @@ struct FlatBufferManager {
     return buffer + offset;
   }
 
-  // Return the pointer to compressed indices buffer
-  // To be deprecated in favor of NestedArray format
-  HOST DEVICE inline int64_t* get_compressed_indices() {
-    int64_t offset = 0;
-    switch (format()) {
-      case VarlenArrayFormatId:
-        offset = getVarlenArrayWorker()->compressed_indices_offset;
-        break;
-      default:
-        return nullptr;
-    }
-    return reinterpret_cast<int64_t*>(buffer + offset);
-  }
-
-  // To be deprecated in favor of NestedArray format
-  inline const int64_t* get_compressed_indices() const {
-    int64_t offset = 0;
-    switch (format()) {
-      case VarlenArrayFormatId:
-        offset = getVarlenArrayWorker()->compressed_indices_offset;
-        break;
-      default:
-        return nullptr;
-    }
-    return reinterpret_cast<int64_t*>(buffer + offset);
-  }
-
-#define FLATBUFFER_GET_BUFFER_METHODS(BUFFERNAME, BUFFERTYPE) \
-  HOST DEVICE inline BUFFERTYPE* get_##BUFFERNAME() {         \
-    int64_t offset = 0;                                       \
-    switch (format()) {                                       \
-      case NestedArrayFormatId:                               \
-        offset = getNestedArrayWorker()->BUFFERNAME##_offset; \
-        break;                                                \
-      default:                                                \
-        return nullptr;                                       \
-    }                                                         \
-    return reinterpret_cast<BUFFERTYPE*>(buffer + offset);    \
-  }                                                           \
-  inline const BUFFERTYPE* get_##BUFFERNAME() const {         \
-    int64_t offset = 0;                                       \
-    switch (format()) {                                       \
-      case NestedArrayFormatId:                               \
-        offset = getNestedArrayWorker()->BUFFERNAME##_offset; \
-        break;                                                \
-      default:                                                \
-        return nullptr;                                       \
-    }                                                         \
-    return reinterpret_cast<BUFFERTYPE*>(buffer + offset);    \
+#define FLATBUFFER_GET_BUFFER_METHODS(BUFFERNAME, BUFFERTYPE)     \
+  HOST DEVICE inline BUFFERTYPE* get_##BUFFERNAME() {             \
+    int64_t offset = 0;                                           \
+    switch (format()) {                                           \
+      case NestedArrayFormatId:                                   \
+        offset = getNestedArrayWorker()->BUFFERNAME##_offset;     \
+        break;                                                    \
+      default:                                                    \
+        return nullptr;                                           \
+    }                                                             \
+    return reinterpret_cast<BUFFERTYPE*>(buffer + offset);        \
+  }                                                               \
+  HOST DEVICE inline const BUFFERTYPE* get_##BUFFERNAME() const { \
+    int64_t offset = 0;                                           \
+    switch (format()) {                                           \
+      case NestedArrayFormatId:                                   \
+        offset = getNestedArrayWorker()->BUFFERNAME##_offset;     \
+        break;                                                    \
+      default:                                                    \
+        return nullptr;                                           \
+    }                                                             \
+    return reinterpret_cast<BUFFERTYPE*>(buffer + offset);        \
   }
 
   FLATBUFFER_GET_BUFFER_METHODS(user_data_buffer, int8_t);
@@ -1149,14 +975,14 @@ struct FlatBufferManager {
 
 #undef FLATBUFFER_GET_BUFFER_METHODS
 
-  inline const int8_t* getNullValuePtr() const {
+  HOST DEVICE inline const int8_t* getNullValuePtr() const {
     if (isNestedArray()) {
       return get_values_buffer() + getValuesBufferSize();
     }
     return nullptr;
   }
 
-  inline bool containsNullValue(const int8_t* value_ptr) const {
+  HOST DEVICE inline bool containsNullValue(const int8_t* value_ptr) const {
     const int8_t* null_value_ptr = getNullValuePtr();
     if (null_value_ptr != nullptr) {
       switch (getValueSize()) {
@@ -1183,32 +1009,6 @@ struct FlatBufferManager {
     return false;
   }
 
-  // To be deprecated in favor of NestedArray format
-  HOST DEVICE inline int64_t* get_storage_indices_old() {
-    int64_t offset = 0;
-    switch (format()) {
-      case VarlenArrayFormatId:
-        offset = getVarlenArrayWorker()->storage_indices_offset;
-        break;
-      default:
-        return nullptr;
-    }
-    return reinterpret_cast<int64_t*>(buffer + offset);
-  }
-
-  // To be deprecated in favor of NestedArray format
-  inline const int64_t* get_storage_indices_old() const {
-    int64_t offset = 0;
-    switch (format()) {
-      case VarlenArrayFormatId:
-        offset = getVarlenArrayWorker()->storage_indices_offset;
-        break;
-      default:
-        return nullptr;
-    }
-    return reinterpret_cast<int64_t*>(buffer + offset);
-  }
-
   HOST DEVICE inline sizes_t* get_storage_indices() {
     offsets_t offset = 0;
     switch (format()) {
@@ -1221,7 +1021,7 @@ struct FlatBufferManager {
     return reinterpret_cast<sizes_t*>(buffer + offset);
   }
 
-  inline const sizes_t* get_storage_indices() const {
+  HOST DEVICE inline const sizes_t* get_storage_indices() const {
     offsets_t offset = 0;
     switch (format()) {
       case NestedArrayFormatId:
@@ -1233,7 +1033,7 @@ struct FlatBufferManager {
     return reinterpret_cast<sizes_t*>(buffer + offset);
   }
 
-  inline sizes_t get_storage_index(const int64_t index) const {
+  HOST DEVICE inline sizes_t get_storage_index(const int64_t index) const {
     return get_storage_indices()[index];
   }
 
@@ -1242,7 +1042,9 @@ struct FlatBufferManager {
   // This getLength method is a worker method of accessing the
   // flatbuffer content.
   template <size_t NDIM>
-  Status getLength(const int64_t index[NDIM], const size_t n, size_t& length) const {
+  HOST DEVICE Status getLength(const int64_t index[NDIM],
+                               const size_t n,
+                               size_t& length) const {
     if (!isNestedArray()) {
       RETURN_ERROR(NotSupportedFormatError);
     }
@@ -1300,20 +1102,20 @@ struct FlatBufferManager {
   // This getItem method is a worker method of accessing the
   // flatbuffer content.
   template <size_t NDIM>
-  Status getItemWorker(const int64_t index[NDIM],
-                       const size_t n,
-                       int8_t*& values,
-                       int32_t& nof_values,
-                       int32_t* sizes_buffers[NDIM],
-                       int32_t sizes_lengths[NDIM],
-                       int32_t& nof_sizes,
-                       bool& is_null) {
+  HOST DEVICE Status getItemWorker(const int64_t index[NDIM],
+                                   const size_t n,
+                                   int8_t*& values,
+                                   int32_t& nof_values,
+                                   int32_t* sizes_buffers[NDIM],
+                                   int32_t sizes_lengths[NDIM],
+                                   int32_t& nof_sizes,
+                                   bool& is_null) {
     values = nullptr;
     nof_values = 0;
     nof_sizes = 0;
     is_null = true;
 
-    if (format() != NestedArrayFormatId) {
+    if (!isNestedArray()) {
       RETURN_ERROR(NotSupportedFormatError);
     }
 
@@ -1362,10 +1164,16 @@ struct FlatBufferManager {
           len(values)
 
         n == 2 means return a point: value, getLength returns 0 [NOTIMPL]
-
     */
     // clang-format off
+    if (index[0] < 0 || index[0] >= itemsCount()) {
+      // Callers may interpret the IndexError as a NULL value return
+      return IndexError;
+    }
     const auto storage_index = get_storage_index(index[0]);
+    if (storage_index < 0) {
+      return ItemUnspecifiedError;
+    }
     const auto* values_offsets = get_values_offsets();
     const auto values_offset = values_offsets[storage_index];
     if (values_offset < 0) {
@@ -1495,13 +1303,13 @@ struct FlatBufferManager {
   };
 
   template <size_t NDIM>
-  Status getItem(const int64_t index, NestedArrayItem<NDIM>& result) {
+  HOST DEVICE Status getItem(const int64_t index, NestedArrayItem<NDIM>& result) {
     const int64_t index_[NDIM] = {index};
     return getItem<NDIM>(index_, 1, result);
   }
 
   template <size_t NDIM>
-  Status getItem(const int64_t index[NDIM], const size_t n, NestedArrayItem<NDIM>& result) {
+  HOST DEVICE Status getItem(const int64_t index[NDIM], const size_t n, NestedArrayItem<NDIM>& result) {
     return getItemWorker<NDIM>(index, n,
                          result.values,
                          result.nof_values,
@@ -1514,7 +1322,7 @@ struct FlatBufferManager {
   // This setItem method is a worker method of initializing the
   // flatbuffer content. It can be called once per index value.
   template <size_t NDIM, bool check_sizes=true>
-  Status setItemWorker(const int64_t index,
+  HOST DEVICE Status setItemWorker(const int64_t index,
                  const int8_t* values,
                  const int32_t nof_values,
                  const int32_t* const sizes_buffers[NDIM],
@@ -1639,22 +1447,121 @@ struct FlatBufferManager {
     return Success;
   }
 
+  // This concatItem method is a worker method of initializing the
+  // flatbuffer content. It can be called once per index value, or
+  // multiple times but only if the index is the last specified item
+  // index.
+  template <size_t NDIM, bool check_sizes=true>
+  HOST DEVICE Status concatItemWorker(const int64_t index,
+                 const int8_t* values,
+                 const int32_t nof_values,
+                 const int32_t* const sizes_buffers[NDIM],
+                 const int32_t sizes_lengths[NDIM],
+                 const int32_t nof_sizes) {
+    if (format() != NestedArrayFormatId) {
+      RETURN_ERROR(NotSupportedFormatError);
+    }
+    if (index < 0 || index >= itemsCount()) {
+      RETURN_ERROR(IndexError);
+    }
+    const int32_t ndims = getNDims();
+    if (nof_sizes + 1 != ndims) {
+      RETURN_ERROR(DimensionalityError);
+    }
+    auto* storage_indices = get_storage_indices();
+    auto storage_index = storage_indices[index];
+    if (storage_index == -1) {  // unspecified, so setting the item
+      return setItemWorker<NDIM, check_sizes>(index,
+                                              values,
+                                              nof_values,
+                                              sizes_buffers,
+                                              sizes_lengths,
+                                              nof_sizes);
+    }
+    auto* worker = getNestedArrayWorker();
+    if (storage_index != worker->specified_items_count - 1) {
+      // index does not correspond to the last item, only the last
+      // item can be concatenated atm.
+      // TODO: to support intermediate item concatenation, we'll need
+      // to move the content of sizes and values buffers of the
+      // following items to make extra room for the to-be concatenated
+      // item buffers.
+      RETURN_ERROR(NotImplementedError);
+    }
+    auto* values_offsets = get_values_offsets();
+    auto values_offset = values_offsets[storage_index];
+    if (values_offset < 0) {
+      // TODO: support concat to null
+      RETURN_ERROR(NotImplementedError);
+    }
+    auto* values_buffer = get_values_buffer();
+    auto* sizes_offsets = get_sizes_offsets();
+    auto* sizes_buffer = get_sizes_buffer();
+    const auto sizes_offset = sizes_offsets[storage_index * ndims];
+    const auto* metadata = getNestedArrayMetadata();
+    const auto valuesize = getValueSize();
+    values_offset += sizes_buffer[sizes_offset];
+    if (values_offset + nof_values > metadata->total_values_count) {
+      RETURN_ERROR(ValuesBufferTooSmallError);
+    }
+    switch (ndims) {
+    case 1:
+      sizes_buffer[sizes_offset] += nof_values;
+      break;
+    case 2: {
+      const auto sizes2_offset = sizes_offset + 1;
+      if (sizes2_offset + sizes_buffer[sizes_offset] + sizes_lengths[0] > metadata->total_sizes_count) {
+        RETURN_ERROR(SizesBufferTooSmallError);
+      }
+      if constexpr (check_sizes) {
+        // check consistency of sizes and nof_values
+        int32_t sum_of_sizes = 0;
+        for (int32_t i=0; i < sizes_lengths[0]; i++) {
+          sum_of_sizes += sizes_buffers[0][i];
+        }
+        if (nof_values != sum_of_sizes) {
+          RETURN_ERROR(InconsistentSizesError);
+        }
+      }
+      if (memcpy(sizes_buffer + sizes2_offset + sizes_buffer[sizes_offset],
+                 sizes_buffers[0],
+                 sizes_lengths[0] * sizeof(sizes_t)) == nullptr) {
+        RETURN_ERROR(MemoryError);
+      }
+      sizes_buffer[sizes_offset] += sizes_lengths[0];
+      sizes_offsets[storage_index * ndims + 2] += sizes_lengths[0];
+    }
+      break;
+    case 3: // TODO: concat multipolygons
+      RETURN_ERROR(NotImplementedError);
+    default:
+      FLATBUFFER_UNREACHABLE();
+      break;
+    }
+    if (nof_values > 0 && values != nullptr &&
+        memcpy(values_buffer + values_offset * valuesize, values, nof_values * valuesize) == nullptr) {
+      RETURN_ERROR(MemoryError);
+    }
+    values_offsets[storage_index + 1] += nof_values;
+    return Success;
+  }
+
   template <size_t NDIM=0, bool check_sizes=true>
-  Status setItem(const int64_t index,
+  HOST DEVICE Status setItem(const int64_t index,
                  const int8_t* values_buf,
                  const int32_t nof_values) {
     const int32_t* const sizes_buffers[1] = {nullptr};
     int32_t sizes_lengths[1] = {0};
     return setItemWorker<1, check_sizes>(index,
-                                            values_buf,
-                                            nof_values,
-                                            sizes_buffers,
-                                            sizes_lengths,
-                                            0);
+                                         values_buf,
+                                         nof_values,
+                                         sizes_buffers,
+                                         sizes_lengths,
+                                         0);
   }
 
   template <size_t NDIM=1, bool check_sizes=true>
-  Status setItem(const int64_t index,
+  HOST DEVICE Status setItem(const int64_t index,
                  const int8_t* values_buf,
                  const int32_t nof_values,
                  const int32_t* sizes_buf,
@@ -1670,7 +1577,7 @@ struct FlatBufferManager {
   }
 
   template <size_t NDIM=2, bool check_sizes=true>
-  Status setItem(const int64_t index,
+  HOST DEVICE Status setItem(const int64_t index,
                  const int8_t* values_buf,
                  const int32_t nof_values,
                  const int32_t* sizes_buf,
@@ -1685,6 +1592,20 @@ struct FlatBufferManager {
                                             sizes_buffers,
                                             sizes_lengths,
                                             static_cast<int32_t>(NDIM));
+  }
+
+  template <size_t NDIM=0, bool check_sizes=true>
+  HOST DEVICE Status concatItem(const int64_t index,
+                    const int8_t* values_buf,
+                    const int32_t nof_values) {
+    const int32_t* const sizes_buffers[1] = {nullptr};
+    int32_t sizes_lengths[1] = {0};
+    return concatItemWorker<1, check_sizes>(index,
+                                         values_buf,
+                                         nof_values,
+                                         sizes_buffers,
+                                         sizes_lengths,
+                                         0);
   }
 
   template <typename CT>
@@ -1940,33 +1861,13 @@ struct FlatBufferManager {
   // then the item's buffer pointer will be stored in *dest.
   // To be deprecated in favor of NestedArray format
   Status setItemOld(const int64_t index,
-                 const int8_t* src,
-                 const int64_t size,
-                 int8_t** dest = nullptr) {
+                    const int8_t* src,
+                    const int64_t size,
+                    int8_t** dest = nullptr) {
     if (index < 0 || index >= itemsCount()) {
       RETURN_ERROR(IndexError);
     }
     switch (format()) {
-      case VarlenArrayFormatId: {
-        int64_t& storage_count = get_storage_count();
-        int64_t* compressed_indices = get_compressed_indices();
-        int64_t* storage_indices = get_storage_indices_old();
-        const int64_t itemsize = dtypeSize();
-        if (size % itemsize != 0) {
-          return SizeError;  // size must be multiple of itemsize. Perhaps size is not in
-          // bytes?
-        }
-        if (storage_indices[index] >= 0) {
-          RETURN_ERROR(ItemAlreadySpecifiedError);
-        }
-        const int64_t cindex = compressed_indices[storage_count];
-        const int64_t values_buffer_size = get_values_buffer_size();
-        const int64_t csize = cindex * itemsize;
-        if (csize + size > values_buffer_size) {
-          RETURN_ERROR(ValuesBufferTooSmallError);
-        }
-        break;
-      }
       case GeoPointFormatId: {
         const int64_t itemsize = dtypeSize();
         if (size != itemsize) {
@@ -1987,26 +1888,6 @@ struct FlatBufferManager {
                              const int64_t size,
                              int8_t** dest) {
     switch (format()) {
-      case VarlenArrayFormatId: {
-        int64_t& storage_count = get_storage_count();
-        int64_t* storage_indices = get_storage_indices_old();
-        int64_t* compressed_indices = get_compressed_indices();
-        int8_t* values = get_values();
-        const int64_t itemsize = dtypeSize();
-        const int64_t values_count = size / itemsize;
-        const int64_t cindex = compressed_indices[storage_count];
-        const int64_t csize = cindex * itemsize;
-        storage_indices[index] = storage_count;
-        compressed_indices[storage_count + 1] = cindex + values_count;
-        if (size > 0 && src != nullptr && memcpy(values + csize, src, size) == nullptr) {
-          RETURN_ERROR(MemoryError);
-        }
-        if (dest != nullptr) {
-          *dest = values + csize;
-        }
-        storage_count++;
-        break;
-      }
       case GeoPointFormatId: {
         int8_t* values = get_values();
         const int64_t itemsize = dtypeSize();
@@ -2033,52 +1914,19 @@ struct FlatBufferManager {
     return setItemNoValidation(index, nullptr, size, dest);
   }
 
-  // To be deprecated in favor of NestedArray format
-  Status concatItem(int64_t index, const int8_t* src, int64_t size) {
+  HOST DEVICE bool isSpecified(int64_t index) const {
     if (index < 0 || index >= itemsCount()) {
-      RETURN_ERROR(IndexError);
+      return false;
     }
-    switch (format()) {
-      case VarlenArrayFormatId: {
-        int64_t next_storage_count = get_storage_count();
-        int64_t storage_count = next_storage_count - 1;
-        int64_t* compressed_indices = get_compressed_indices();
-        int64_t* storage_indices = get_storage_indices_old();
-        int8_t* values = get_values();
-        int64_t itemsize = dtypeSize();
-        int64_t storage_index = storage_indices[index];
-        if (storage_index == -1) {  // unspecified, so setting the item
-          return setItemOld(index, src, size, nullptr);
-        }
-        if (size % itemsize != 0) {
-          RETURN_ERROR(SizeError);
-        }
-        if (storage_index != storage_count) {
-          RETURN_ERROR(IndexError);  // index does not correspond to the last set
-                                     // item, only the last item can be
-                                     // concatenated
-        }
-        if (compressed_indices[storage_index] < 0) {
-          RETURN_ERROR(NotImplementedError);  // todo: support concat to null when last
-        }
-        int64_t values_count =
-            compressed_indices[next_storage_count] - compressed_indices[storage_index];
-        int64_t extra_values_count = size / itemsize;
-        compressed_indices[next_storage_count] += extra_values_count;
-        int8_t* ptr = values + compressed_indices[storage_index] * itemsize;
-        if (size > 0 && src != nullptr &&
-            memcpy(ptr + values_count * itemsize, src, size) == nullptr) {
-          RETURN_ERROR(MemoryError);
-        }
-        return Success;
-      }
-      default:;
+    if (isNestedArray()) {
+      auto* storage_indices = get_storage_indices();
+      return storage_indices[index] >= 0;
     }
-    RETURN_ERROR(UnknownFormatError);
+    return false;
   }
 
   // Set item with index as a null item
-  Status setNull(int64_t index) {
+  HOST DEVICE Status setNull(int64_t index) {
     if (index < 0 || index >= itemsCount()) {
       RETURN_ERROR(IndexError);
     }
@@ -2111,13 +1959,6 @@ struct FlatBufferManager {
     }
 
     switch (format()) {
-      case VarlenArrayFormatId: {
-        int64_t* storage_indices = get_storage_indices_old();
-        if (storage_indices[index] >= 0) {
-          return ItemAlreadySpecifiedError;
-        }
-        return setNullNoValidation(index);
-      }
       case GeoPointFormatId: {
         return setNullNoValidation(index);
       }
@@ -2129,19 +1970,8 @@ struct FlatBufferManager {
 
   // Same as setNull but performs no input validation
   // To be deprecated in favor of NestedArray format
-  Status setNullNoValidation(int64_t index) {
+  HOST DEVICE Status setNullNoValidation(int64_t index) {
     switch (format()) {
-      case VarlenArrayFormatId: {
-        int64_t& storage_count = get_storage_count();
-        int64_t* storage_indices = get_storage_indices_old();
-        int64_t* compressed_indices = get_compressed_indices();
-        const int64_t cindex = compressed_indices[storage_count];
-        storage_indices[index] = storage_count;
-        compressed_indices[storage_count] = -(cindex + 1);
-        compressed_indices[storage_count + 1] = cindex;
-        storage_count++;
-        break;
-      }
       case GeoPointFormatId: {
         int8_t* values = get_values();
         int64_t itemsize = dtypeSize();
@@ -2166,7 +1996,7 @@ struct FlatBufferManager {
   }
 
   // Check if the item is unspecified or null.
-  Status isNull(int64_t index, bool& is_null) const {
+  HOST DEVICE Status isNull(int64_t index, bool& is_null) const {
     if (index < 0 || index >= itemsCount()) {
       RETURN_ERROR(IndexError);
     }
@@ -2182,16 +2012,6 @@ struct FlatBufferManager {
     }
     // To be deprecated in favor of NestedArray format:
     switch (format()) {
-      case VarlenArrayFormatId: {
-        const int64_t* compressed_indices = get_compressed_indices();
-        const int64_t* storage_indices = get_storage_indices_old();
-        const int64_t storage_index = storage_indices[index];
-        if (storage_index < 0) {
-          RETURN_ERROR(ItemUnspecifiedError);
-        }
-        is_null = (compressed_indices[storage_index] < 0);
-        return Success;
-      }
       case GeoPointFormatId: {
         const int8_t* values = get_values();
         const auto* metadata = getGeoPointMetadata();
@@ -2217,36 +2037,11 @@ struct FlatBufferManager {
   // and nullity information to the corresponding pointer
   // arguments.
   // To be deprecated in favor of NestedArray format
-  HOST DEVICE Status getItem(int64_t index, int64_t& size, int8_t*& dest, bool& is_null) {
+  HOST DEVICE Status getItemOld(int64_t index, int64_t& size, int8_t*& dest, bool& is_null) {
     if (index < 0 || index >= itemsCount()) {
       RETURN_ERROR(IndexError);
     }
     switch (format()) {
-      case VarlenArrayFormatId: {
-        int8_t* values = get_values();
-        const int64_t* compressed_indices = get_compressed_indices();
-        const int64_t* storage_indices = get_storage_indices_old();
-        const int64_t storage_index = storage_indices[index];
-        if (storage_index < 0) {
-          return ItemUnspecifiedError;
-        }
-        const int64_t cindex = compressed_indices[storage_index];
-        if (cindex < 0) {
-          // null varlen array
-          size = 0;
-          dest = nullptr;
-          is_null = true;
-        } else {
-          const int64_t dtypesize = dtypeSize();
-          const int64_t next_cindex = compressed_indices[storage_index + 1];
-          const int64_t length =
-              (next_cindex < 0 ? -(next_cindex + 1) - cindex : next_cindex - cindex);
-          size = length * dtypesize;
-          dest = values + cindex * dtypesize;
-          is_null = false;
-        }
-        return Success;
-      }
       case GeoPointFormatId: {
         int8_t* values = get_values();
         int64_t itemsize = dtypeSize();
@@ -2262,41 +2057,11 @@ struct FlatBufferManager {
   }
 
   // To be deprecated in favor of NestedArray format
-  HOST DEVICE Status getItem(int64_t index, size_t& size, int8_t*& dest, bool& is_null) {
+  HOST DEVICE Status getItemOld(int64_t index, size_t& size, int8_t*& dest, bool& is_null) {
     int64_t sz{0};
-    Status status = getItem(index, sz, dest, is_null);
+    Status status = getItemOld(index, sz, dest, is_null);
     size = sz;
     return status;
-  }
-
-  // To be deprecated in favor of NestedArray format
-  Status getItemLength(const int64_t index, int64_t& length) const {
-    if (index < 0 || index >= itemsCount()) {
-      RETURN_ERROR(IndexError);
-    }
-    switch (format()) {
-      case GeoPointFormatId:
-        break;
-      case VarlenArrayFormatId: {
-        const int64_t* compressed_indices = get_compressed_indices();
-        const int64_t* storage_indices = get_storage_indices_old();
-        const int64_t storage_index = storage_indices[index];
-        if (storage_index < 0) {
-          RETURN_ERROR(ItemUnspecifiedError);
-        }
-        const int64_t cindex = compressed_indices[storage_index];
-        if (cindex < 0) {
-          length = 0;
-        } else {
-          const int64_t next_cindex = compressed_indices[storage_index + 1];
-          length = (next_cindex < 0 ? -(next_cindex + 1) - cindex : next_cindex - cindex);
-        }
-        return Success;
-      }
-      default:
-        break;
-    }
-    RETURN_ERROR(UnknownFormatError);
   }
 
 #ifdef HAVE_TOSTRING
@@ -2424,11 +2189,6 @@ struct FlatBufferManager {
 
     std::cout << "fmt=" << static_cast<int64_t>(fmt) << ", " << sizeof(fmt) << std::endl;
     switch (fmt) {
-      case VarlenArrayFormatId: {
-        result += ", " + getVarlenArrayMetadata()->toString();
-        result += ", " + getVarlenArrayWorker()->toString();
-        break;
-      }
       case GeoPointFormatId: {
         result += ", " + getGeoPointMetadata()->toString();
         result += ", " + getGeoPointWorker()->toString();
@@ -2439,47 +2199,6 @@ struct FlatBufferManager {
     }
 
     switch (fmt) {
-      case VarlenArrayFormatId: {
-        result += ", values=";
-        const int64_t numvalues = get_nof_values();
-        const int64_t itemsize = dtypeSize();
-        switch (itemsize) {
-          case 1: {
-            const int8_t* values_buf = get_values();
-            std::vector<int8_t> values(values_buf, values_buf + numvalues);
-            result += ::toString(values);
-          } break;
-          case 2: {
-            const int16_t* values_buf = reinterpret_cast<const int16_t*>(get_values());
-            std::vector<int16_t> values(values_buf, values_buf + numvalues);
-            result += ::toString(values);
-          } break;
-          case 4: {
-            const int32_t* values_buf = reinterpret_cast<const int32_t*>(get_values());
-            std::vector<int32_t> values(values_buf, values_buf + numvalues);
-            result += ::toString(values);
-          } break;
-          case 8: {
-            const int64_t* values_buf = reinterpret_cast<const int64_t*>(get_values());
-            std::vector<int64_t> values(values_buf, values_buf + numvalues);
-            result += ::toString(values);
-          } break;
-          default:
-            result += "[UNEXPECTED ITEMSIZE:" + std::to_string(itemsize) + "]";
-        }
-
-        const int64_t numitems = itemsCount();
-        const int64_t* compressed_indices_buf = get_compressed_indices();
-        std::vector<int64_t> compressed_indices(compressed_indices_buf,
-                                                compressed_indices_buf + numitems + 1);
-        result += ", compressed_indices=" + ::toString(compressed_indices);
-
-        const int64_t* storage_indices_buf = get_storage_indices_old();
-        std::vector<int64_t> storage_indices(storage_indices_buf,
-                                             storage_indices_buf + numitems);
-        result += ", storage_indices=" + ::toString(storage_indices);
-        return result + ")";
-      }
       case GeoPointFormatId: {
         const auto* metadata = getGeoPointMetadata();
         result += ", point data=";

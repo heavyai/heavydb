@@ -162,17 +162,37 @@ EXTENSION_NOINLINE_HOST int32_t RowFunctionManager_getOrAddTransient(int8_t* mgr
   Column<Array<T>> methods
 */
 
-EXTENSION_NOINLINE_HOST void ColumnArray_getItem(int8_t* flatbuffer,
-                                                 const int64_t index,
-                                                 const int64_t expected_numel,
-                                                 int8_t*& ptr,
-                                                 int64_t& size,
-                                                 bool& is_null,
-                                                 int64_t sizeof_T);
+EXTENSION_NOINLINE_HOST void ColumnArray_getArray(int8_t* flatbuffer,
+                                                  const int64_t index,
+                                                  const int64_t expected_numel,
+                                                  int8_t*& ptr,
+                                                  int64_t& size,  // items count
+                                                  bool& is_null);
 
 EXTENSION_NOINLINE_HOST bool ColumnArray_isNull(int8_t* flatbuffer, int64_t index);
 
 EXTENSION_NOINLINE_HOST void ColumnArray_setNull(int8_t* flatbuffer, int64_t index);
+
+EXTENSION_NOINLINE_HOST void ColumnArray_setArray(int8_t* flatbuffer,
+                                                  int64_t index,
+                                                  const int8_t* ptr,
+                                                  int64_t size,
+                                                  bool is_null);
+
+EXTENSION_NOINLINE_HOST void ColumnArray_concatArray(int8_t* flatbuffer,
+                                                     int64_t index,
+                                                     const int8_t* ptr,
+                                                     int64_t size,
+                                                     bool is_null);
+
+// For BC:
+EXTENSION_NOINLINE_HOST void ColumnArray_getItem(int8_t* flatbuffer,
+                                                 const int64_t index,
+                                                 const int64_t expected_numel,
+                                                 int8_t*& ptr,
+                                                 int64_t& size,  // in bytes
+                                                 bool& is_null,
+                                                 int64_t sizeof_T);
 
 EXTENSION_NOINLINE_HOST void ColumnArray_setItem(int8_t* flatbuffer,
                                                  int64_t index,
@@ -1656,7 +1676,7 @@ struct Column<GeoPoint> {
     int8_t* ptr;
     int64_t size;
     bool is_null;
-    auto status = m.getItem(index, size, ptr, is_null);
+    auto status = m.getItemOld(index, size, ptr, is_null);
     if (status != FlatBufferManager::Status::Success) {
 #ifndef __CUDACC__
       throw std::runtime_error("getItem failed: " + ::toString(status));
@@ -1754,20 +1774,12 @@ struct Column<Array<T>> {
       : flatbuffer_(flatbuffer), num_rows_(num_rows) {}
 
   DEVICE Array<T> getItem(const int64_t index, const int64_t expected_numel = -1) const {
-    int8_t* ptr;
+    int8_t* ptr = nullptr;
     int64_t size = 0;
     bool is_null = false;
 
-    ColumnArray_getItem(flatbuffer_,
-                        index,
-                        expected_numel,
-                        ptr,
-                        size,
-                        is_null,
-                        static_cast<int64_t>(sizeof(T)));
-
-    Array<T> result(
-        reinterpret_cast<T*>(ptr), size / static_cast<int64_t>(sizeof(T)), is_null);
+    ColumnArray_getArray(flatbuffer_, index, expected_numel, ptr, size, is_null);
+    Array<T> result(reinterpret_cast<T*>(ptr), size, is_null);
     return result;
   }
 
@@ -1784,31 +1796,49 @@ struct Column<Array<T>> {
   DEVICE inline void setNull(int64_t index) { ColumnArray_setNull(flatbuffer_, index); }
 
   DEVICE inline void setItem(int64_t index, const Array<T>& other) {
-    ColumnArray_setItem(flatbuffer_,
-                        index,
-                        reinterpret_cast<const int8_t*>(&(other[0])),
-                        other.getSize(),
-                        other.isNull(),
-                        sizeof(T));
+    ColumnArray_setArray(flatbuffer_,
+                         index,
+                         reinterpret_cast<const int8_t*>(&(other[0])),
+                         other.getSize(),
+                         other.isNull());
   }
 
   DEVICE inline void concatItem(int64_t index, const Array<T>& other) {
-    ColumnArray_concatItem(flatbuffer_,
-                           index,
-                           reinterpret_cast<const int8_t*>(&(other[0])),
-                           other.getSize(),
-                           other.isNull(),
-                           sizeof(T));
+    ColumnArray_concatArray(flatbuffer_,
+                            index,
+                            reinterpret_cast<const int8_t*>(&(other[0])),
+                            other.getSize(),
+                            other.isNull());
   }
 
   DEVICE inline int32_t getDictDbId() const {
     FlatBufferManager m{flatbuffer_};
-    return m.getVarlenArrayMetadata()->params[FlatBufferManager::VarlenArrayParamDbId];
+    const auto* ti = reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+    if (ti == nullptr) {
+#ifndef __CUDACC__
+      throw std::runtime_error(
+          "Column<Array<T>> getDictId failed: unspecified type info");
+#else
+      return 0;
+#endif
+    } else {
+      return ti->db_id;
+    }
   }
 
   DEVICE inline int32_t getDictId() const {
     FlatBufferManager m{flatbuffer_};
-    return m.getVarlenArrayMetadata()->params[FlatBufferManager::VarlenArrayParamDictId];
+    const auto* ti = reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+    if (ti == nullptr) {
+#ifndef __CUDACC__
+      throw std::runtime_error(
+          "Column<Array<T>> getDictId failed: unspecified type info");
+#else
+      return 0;
+#endif
+    } else {
+      return ti->dict_id;
+    }
   }
 
 #ifdef HAVE_FLATBUFFER_TOSTRING

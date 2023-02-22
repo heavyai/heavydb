@@ -101,7 +101,7 @@ int64_t toBuffer(const TargetValue& col_val, const SQLTypeInfo& type_info, int8_
         return 8;
       }
       default:
-        CHECK(false);
+        UNREACHABLE();
     }
   } else {
     const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
@@ -235,7 +235,13 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
         int64_t values_count = -1;
         switch (ti.get_type()) {
           case kARRAY:
-            values_count = countNumberOfValues(rows, i);
+            if (ti.get_subtype() == kTEXT && ti.get_compression() == kENCODING_NONE) {
+              throw std::runtime_error(
+                  "Column<Array<TextEncodedNone>> support not implemented yet "
+                  "(ColumnarResults)");
+            } else {
+              values_count = countNumberOfValues(rows, i);
+            }
             break;
           case kPOINT:
             values_count = num_rows_;
@@ -367,24 +373,44 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
   return merged_results;
 }
 
+std::vector<bool> ColumnarResults::isFlatBufferColumns(const size_t num_columns) const {
+  std::vector<bool> result;
+  result.reserve(num_columns);
+  for (size_t column_idx = 0; column_idx < num_columns; ++column_idx) {
+    auto& type_info = target_types_[column_idx];
+    int8_t* buf = column_buffers_[column_idx];
+    result.push_back(buf && type_info.supports_flatbuffer() &&
+                     FlatBufferManager::isFlatBuffer(buf));
+  }
+  return result;
+}
+
 /**
  * This function iterates through the result set (using the getRowAtNoTranslation and
  * getNextRow family of functions) and writes back the results into output column buffers.
  */
 void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& rows,
                                                             const size_t num_columns) {
-  std::atomic<size_t> row_idx{0};
+  auto column_buf_is_flatbuffer = isFlatBufferColumns(num_columns);
   if (isParallelConversion()) {
+    std::atomic<size_t> row_idx{0};
     const size_t worker_count = cpu_threads();
     std::vector<std::future<void>> conversion_threads;
     std::mutex write_mutex;
     const auto do_work =
-        [num_columns, &rows, &row_idx, &write_mutex, this](const size_t i) {
+        [num_columns, &rows, &row_idx, &column_buf_is_flatbuffer, &write_mutex, this](
+            const size_t i) {
           const auto crt_row = rows.getRowAtNoTranslations(i);
           if (!crt_row.empty()) {
             auto cur_row_idx = row_idx.fetch_add(1);
             for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
-              writeBackCell(crt_row[col_idx], cur_row_idx, col_idx, &write_mutex);
+              auto& type_info = target_types_[col_idx];
+              writeBackCell(crt_row[col_idx],
+                            cur_row_idx,
+                            type_info,
+                            column_buf_is_flatbuffer[col_idx],
+                            column_buffers_[col_idx],
+                            &write_mutex);
             }
           }
         };
@@ -429,17 +455,24 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
     return;
   }
   bool done = false;
-  const auto do_work = [num_columns, &row_idx, &rows, &done, this]() {
-    const auto crt_row = rows.getNextRow(false, false);
-    if (crt_row.empty()) {
-      done = true;
-      return;
-    }
-    for (size_t i = 0; i < num_columns; ++i) {
-      writeBackCell(crt_row[i], row_idx, i);
-    }
-    ++row_idx;
-  };
+  size_t row_idx = 0;
+  const auto do_work =
+      [num_columns, &row_idx, &rows, &column_buf_is_flatbuffer, &done, this]() {
+        const auto crt_row = rows.getNextRow(false, false);
+        if (crt_row.empty()) {
+          done = true;
+          return;
+        }
+        for (size_t i = 0; i < num_columns; ++i) {
+          auto& type_info = target_types_[i];
+          writeBackCell(crt_row[i],
+                        row_idx,
+                        type_info,
+                        column_buf_is_flatbuffer[i],
+                        column_buffers_[i]);
+        }
+        ++row_idx;
+      };
   if (g_enable_non_kernel_time_query_interrupt) {
     while (!done) {
       if (UNLIKELY((row_idx & 0xFFFF) == 0 &&
@@ -470,6 +503,7 @@ void TargetValueToNestedArray(int8_t* buf,
   FlatBufferManager m{buf};
   const SQLTypeInfoLite* ti_lite =
       reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+  CHECK(ti_lite);
   if (ti_lite->is_geoint()) {
     CHECK_EQ(ti.get_compression(), kENCODING_GEOINT);
   } else {
@@ -634,46 +668,93 @@ void TargetValueToNestedArray(int8_t* buf,
  */
 inline void ColumnarResults::writeBackCell(const TargetValue& col_val,
                                            const size_t row_idx,
-                                           const size_t column_idx,
+                                           const SQLTypeInfo& type_info,
+                                           const bool is_flatbuffer,
+                                           int8_t* column_buf,
                                            std::mutex* write_mutex) {
-  auto& type_info = target_types_[column_idx];
+  if (!is_flatbuffer) {
+    toBuffer(col_val, type_info, column_buf + type_info.get_size() * row_idx);
+    return;
+  }
+  FlatBufferManager::Status status{};
+  FlatBufferManager m{column_buf};
   if (type_info.is_array()) {
-    CHECK(FlatBufferManager::isFlatBuffer(column_buffers_[column_idx]));
-    FlatBufferManager m{column_buffers_[column_idx]};
+    const SQLTypeInfoLite* ti_lite =
+        reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+    CHECK(ti_lite);
     const auto arr_tv = boost::get<ArrayTargetValue>(&col_val);
     CHECK(arr_tv);
     if (arr_tv->is_initialized()) {
-      const auto& vec = arr_tv->get();
-      auto array_item_size = type_info.get_elem_type().get_size();
-      // setEmptyItem reserves a buffer in FlatBuffer instance
-      // that corresponds to varlen array at row_idx row
-      // index. The pointer value to the corresponding buffer is
-      // stored in buf:
-      int8_t* buf = nullptr;
-      FlatBufferManager::Status status{};
+      if (type_info.get_subtype() == kTEXT &&
+          type_info.get_compression() == kENCODING_NONE) {
+        throw std::runtime_error(
+            "Column<Array<TextEncodedNone>> support not implemented yet (writeBackCell)");
+      } else {
+        const auto& vec = arr_tv->get();
+        {
+          auto lock_scope =
+              (write_mutex == nullptr ? std::unique_lock<std::mutex>()
+                                      : std::unique_lock<std::mutex>(*write_mutex));
+          status = m.setItem<1, false>(row_idx, nullptr, vec.size());
+        }
+        CHECK_EQ(status, FlatBufferManager::Status::Success);
+        FlatBufferManager::NestedArrayItem<1> item;
+        status = m.getItem(row_idx, item);
+        CHECK_EQ(status, FlatBufferManager::Status::Success);
+        CHECK_EQ(item.nof_sizes, 0);
+        size_t count = 0;
+        for (const TargetValue val : vec) {
+          const auto& scalar_val = boost::get<ScalarTargetValue>(&val);
+          switch (ti_lite->subtype) {
+            case SQLTypeInfoLite::DOUBLE:
+              reinterpret_cast<double*>(item.values)[count] =
+                  static_cast<double>(*boost::get<double>(scalar_val));
+              break;
+            case SQLTypeInfoLite::FLOAT:
+              reinterpret_cast<float*>(item.values)[count] =
+                  static_cast<float>(*boost::get<float>(scalar_val));
+              break;
+            case SQLTypeInfoLite::BOOLEAN:
+            case SQLTypeInfoLite::TINYINT:
+              reinterpret_cast<int8_t*>(item.values)[count] =
+                  static_cast<int8_t>(*boost::get<int64_t>(scalar_val));
+              break;
+            case SQLTypeInfoLite::SMALLINT:
+              reinterpret_cast<int16_t*>(item.values)[count] =
+                  static_cast<int16_t>(*boost::get<int64_t>(scalar_val));
+              break;
+            case SQLTypeInfoLite::INT:
+              reinterpret_cast<int32_t*>(item.values)[count] =
+                  static_cast<int32_t>(*boost::get<int64_t>(scalar_val));
+              break;
+            case SQLTypeInfoLite::BIGINT:
+              reinterpret_cast<int64_t*>(item.values)[count] =
+                  *boost::get<int64_t>(scalar_val);
+              break;
+            case SQLTypeInfoLite::TEXT: {
+              reinterpret_cast<int32_t*>(item.values)[count] =
+                  static_cast<int32_t>(*boost::get<int64_t>(scalar_val));
+            } break;
+            default:
+              UNREACHABLE();
+          }
+          count++;
+        }
+        CHECK_EQ(item.nof_values, count);
+      }
+    } else {
       {
         auto lock_scope =
             (write_mutex == nullptr ? std::unique_lock<std::mutex>()
                                     : std::unique_lock<std::mutex>(*write_mutex));
-        status = m.setEmptyItemNoValidation(row_idx, vec.size() * array_item_size, &buf);
+        status = m.setNull(row_idx);
       }
       CHECK_EQ(status, FlatBufferManager::Status::Success);
-      CHECK(buf);
-      // toBuffer initializes varlen array buffer buf using the
-      // result set row with row_idx row index:
-      toBuffer(col_val, type_info, buf);
-    } else {
-      auto lock_scope =
-          (write_mutex == nullptr ? std::unique_lock<std::mutex>()
-                                  : std::unique_lock<std::mutex>(*write_mutex));
-      m.setNullNoValidation(row_idx);
     }
   } else if (type_info.is_geometry() && type_info.supports_flatbuffer()) {
-    CHECK(FlatBufferManager::isFlatBuffer(column_buffers_[column_idx]));
-    FlatBufferManager m{column_buffers_[column_idx]};
-    FlatBufferManager::Status status{};
     switch (type_info.get_type()) {
       case kPOINT: {
+        // to be deprecated
         if (const auto tv = boost::get<ScalarTargetValue>(&col_val)) {
           const auto ns = boost::get<NullableString>(tv);
           CHECK(ns);
@@ -735,61 +816,55 @@ inline void ColumnarResults::writeBackCell(const TargetValue& col_val,
         break;
       }
       case kLINESTRING: {
-        CHECK(FlatBufferManager::isFlatBuffer(column_buffers_[column_idx]));
         TargetValueToNestedArray<1,
                                  Geospatial::GeoLineString,
                                  GeoLineStringTargetValue,
                                  GeoLineStringTargetValuePtr,
                                  /*is_multi=*/false>(
-            column_buffers_[column_idx], row_idx, type_info, col_val, write_mutex);
+            column_buf, row_idx, type_info, col_val, write_mutex);
         break;
       }
       case kPOLYGON: {
-        CHECK(FlatBufferManager::isFlatBuffer(column_buffers_[column_idx]));
         TargetValueToNestedArray<2,
                                  Geospatial::GeoPolygon,
                                  GeoPolyTargetValue,
                                  GeoPolyTargetValuePtr,
                                  /*is_multi=*/false>(
-            column_buffers_[column_idx], row_idx, type_info, col_val, write_mutex);
+            column_buf, row_idx, type_info, col_val, write_mutex);
         break;
       }
       case kMULTIPOINT: {
-        CHECK(FlatBufferManager::isFlatBuffer(column_buffers_[column_idx]));
         TargetValueToNestedArray<1,
                                  Geospatial::GeoMultiPoint,
                                  GeoMultiPointTargetValue,
                                  GeoMultiPointTargetValuePtr,
                                  /*is_multi=*/true>(
-            column_buffers_[column_idx], row_idx, type_info, col_val, write_mutex);
+            column_buf, row_idx, type_info, col_val, write_mutex);
         break;
       }
       case kMULTILINESTRING: {
-        CHECK(FlatBufferManager::isFlatBuffer(column_buffers_[column_idx]));
         TargetValueToNestedArray<2,
                                  Geospatial::GeoMultiLineString,
                                  GeoMultiLineStringTargetValue,
                                  GeoMultiLineStringTargetValuePtr,
                                  /*is_multi=*/true>(
-            column_buffers_[column_idx], row_idx, type_info, col_val, write_mutex);
+            column_buf, row_idx, type_info, col_val, write_mutex);
         break;
       }
       case kMULTIPOLYGON: {
-        CHECK(FlatBufferManager::isFlatBuffer(column_buffers_[column_idx]));
         TargetValueToNestedArray<3,
                                  Geospatial::GeoMultiPolygon,
                                  GeoMultiPolyTargetValue,
                                  GeoMultiPolyTargetValuePtr,
                                  /*is_true=*/false>(
-            column_buffers_[column_idx], row_idx, type_info, col_val, write_mutex);
+            column_buf, row_idx, type_info, col_val, write_mutex);
         break;
       }
       default:
         UNREACHABLE() << "writeBackCell not implemented for " << type_info.toString();
     }
   } else {
-    int8_t* buf = column_buffers_[column_idx];
-    toBuffer(col_val, type_info, buf + type_info.get_size() * row_idx);
+    UNREACHABLE();
   }
 }
 
@@ -973,16 +1048,23 @@ void ColumnarResults::materializeAllLazyColumns(
   CHECK(!(rows.query_mem_desc_.getQueryDescriptionType() ==
           QueryDescriptionType::TableFunction));
   std::mutex write_mutex;
-  const auto do_work_just_lazy_columns = [num_columns, &rows, &write_mutex, this](
-                                             const size_t row_idx,
-                                             const std::vector<bool>& targets_to_skip) {
-    const auto crt_row = rows.getRowAtNoTranslations(row_idx, targets_to_skip);
-    for (size_t i = 0; i < num_columns; ++i) {
-      if (!targets_to_skip.empty() && !targets_to_skip[i]) {
-        writeBackCell(crt_row[i], row_idx, i, &write_mutex);
-      }
-    }
-  };
+  auto column_buf_is_flatbuffer = isFlatBufferColumns(num_columns);
+  const auto do_work_just_lazy_columns =
+      [num_columns, &rows, &column_buf_is_flatbuffer, &write_mutex, this](
+          const size_t row_idx, const std::vector<bool>& targets_to_skip) {
+        const auto crt_row = rows.getRowAtNoTranslations(row_idx, targets_to_skip);
+        for (size_t i = 0; i < num_columns; ++i) {
+          if (!targets_to_skip.empty() && !targets_to_skip[i]) {
+            auto& type_info = target_types_[i];
+            writeBackCell(crt_row[i],
+                          row_idx,
+                          type_info,
+                          column_buf_is_flatbuffer[i],
+                          column_buffers_[i],
+                          &write_mutex);
+          }
+        }
+      };
 
   const auto contains_lazy_fetched_column =
       [](const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info) {
@@ -1237,6 +1319,7 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
   CHECK_EQ(write_functions.size(), num_columns);
   CHECK_EQ(read_functions.size(), num_columns);
   std::mutex write_mutex;
+  auto column_buf_is_flatbuffer = isFlatBufferColumns(num_columns);
   auto do_work = [this,
                   &bitmap,
                   &rows,
@@ -1244,6 +1327,7 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
                   &global_offsets,
                   &targets_to_skip,
                   &num_columns,
+                  &column_buf_is_flatbuffer,
                   &write_mutex,
                   &write_functions = write_functions,
                   &read_functions = read_functions](size_t& non_empty_idx,
@@ -1262,8 +1346,13 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
       const auto crt_row = rows.getRowAtNoTranslations(entry_idx, targets_to_skip);
       for (size_t column_idx = 0; column_idx < num_columns; ++column_idx) {
         if (!targets_to_skip.empty() && !targets_to_skip[column_idx]) {
-          writeBackCell(
-              crt_row[column_idx], output_buffer_row_idx, column_idx, &write_mutex);
+          auto& type_info = target_types_[column_idx];
+          writeBackCell(crt_row[column_idx],
+                        output_buffer_row_idx,
+                        type_info,
+                        column_buf_is_flatbuffer[column_idx],
+                        column_buffers_[column_idx],
+                        &write_mutex);
         }
       }
       // targets that are copied directly without any translation/decoding from
