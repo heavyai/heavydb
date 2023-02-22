@@ -181,12 +181,8 @@ std::pair<int64_t, std::vector<std::shared_ptr<LidarMetadata>>> filter_files_by_
     const double y_min,
     const double y_max) {
   std::vector<std::shared_ptr<LidarMetadata>> filtered_lidar_metadata_vec;
-  int64_t unfiltered_num_points = 0;
   int64_t filtered_num_points = 0;
-
   for (const auto& lidar_metadata : lidar_metadata_vec) {
-    unfiltered_num_points += lidar_metadata->num_points;
-
     if (x_max < lidar_metadata->transformed_x_bounds.first ||
         x_min > lidar_metadata->transformed_x_bounds.second ||
         y_max < lidar_metadata->transformed_y_bounds.first ||

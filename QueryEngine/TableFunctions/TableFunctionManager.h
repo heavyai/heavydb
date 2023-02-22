@@ -301,13 +301,6 @@ struct TableFunctionManager {
     return proxy->getString(string_id);
   }
 
-  inline const char* getCString(int32_t db_id, int32_t dict_id, int32_t string_id) {
-    const auto proxy =
-        executor_->getStringDictionaryProxy({db_id, dict_id}, row_set_mem_owner_, true);
-    auto [c_str, len] = proxy->getStringBytes(string_id);
-    return c_str;
-  }
-
   inline const int32_t getOrAddTransient(int32_t db_id,
                                          int32_t dict_id,
                                          const std::string& str) {
