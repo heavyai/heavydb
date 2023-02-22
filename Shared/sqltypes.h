@@ -623,7 +623,7 @@ class SQLTypeInfo {
     if ((is_column() || is_column_list()) &&
         (other.is_column() || other.is_column_list())) {
       return subtype == other.get_subtype() &&
-             ((compression != kENCODING_ARRAY || compression != kENCODING_ARRAY_DICT) ||
+             ((compression != kENCODING_ARRAY && compression != kENCODING_ARRAY_DICT) ||
               compression == other.get_compression());
     }
     return subtype == other.get_subtype();

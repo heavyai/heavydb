@@ -121,11 +121,6 @@ std::string TableFunctionManager_getString(int8_t* mgr_ptr,
                                            int32_t dict_id,
                                            int32_t string_id);
 
-EXTENSION_NOINLINE_HOST const char* TableFunctionManager_getCString(int8_t* mgr_ptr,
-                                                                    int32_t db_id,
-                                                                    int32_t dict_id,
-                                                                    int32_t string_id);
-
 EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getOrAddTransient(int8_t* mgr_ptr,
                                                                        int32_t db_id,
                                                                        int32_t dict_id,
@@ -371,7 +366,6 @@ struct TextEncodingNone {
   }
   operator std::string() const { return std::string(ptr_, size_); }
   std::string getString() const { return std::string(ptr_, size_); }
-  const char* getCString() const { return ptr_; }
 #endif
 
   DEVICE ALWAYS_INLINE char& operator[](const unsigned int index) {
@@ -1909,13 +1903,6 @@ struct Column<TextEncodingDict> {
   DEVICE inline const std::string getString(int64_t index) const {
     return isNull(index) ? "" : string_dict_proxy_->getString(ptr_[index].value);
   }
-  DEVICE inline const char* getCString(int64_t index) const {
-    if (isNull(index)) {
-      return nullptr;
-    }
-    auto [c_str, len] = string_dict_proxy_->getStringBytes(ptr_[index].value);
-    return c_str;
-  }
   DEVICE inline const TextEncodingDict getOrAddTransient(const std::string& str) {
     return string_dict_proxy_->getOrAddTransient(str);
   }
@@ -2223,10 +2210,6 @@ struct TableFunctionManager {
   }
   std::string getString(int32_t db_id, int32_t dict_id, int32_t string_id) {
     return TableFunctionManager_getString(
-        reinterpret_cast<int8_t*>(this), db_id, dict_id, string_id);
-  }
-  const char* getCString(int32_t db_id, int32_t dict_id, int32_t string_id) {
-    return TableFunctionManager_getCString(
         reinterpret_cast<int8_t*>(this), db_id, dict_id, string_id);
   }
   int32_t getOrAddTransient(int32_t db_id, int32_t dict_id, std::string str) {

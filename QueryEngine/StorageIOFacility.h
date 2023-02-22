@@ -435,10 +435,8 @@ class StorageIOFacility {
                            partial_row_block_size));
           }
 
-          uint64_t entries_processed(0);
           for (auto& t : entry_processing_futures) {
             t.wait();
-            entries_processed += t.get();
           }
 
           CHECK(row_idx == rows_per_column);
@@ -617,10 +615,8 @@ class StorageIOFacility {
                          partial_row_block_size));
         }
 
-        uint64_t rows_processed(0);
         for (auto& t : row_processing_futures) {
           t.wait();
-          rows_processed += t.get();
         }
 
         const auto& catalog = delete_parameters.getCatalog();

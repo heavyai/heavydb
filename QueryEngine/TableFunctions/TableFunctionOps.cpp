@@ -216,16 +216,6 @@ DEVICE RUNTIME_EXPORT std::string TableFunctionManager_getString(int8_t* mgr_ptr
   return mgr->getString(db_id, dict_id, string_id);
 }
 
-extern "C" DEVICE RUNTIME_EXPORT const char* TableFunctionManager_getCString(
-    int8_t* mgr_ptr,
-    int32_t db_id,
-    int32_t dict_id,
-    int32_t string_id) {
-  auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
-  CHECK(mgr);
-  return mgr->getString(db_id, dict_id, string_id).c_str();
-}
-
 extern "C" DEVICE RUNTIME_EXPORT int32_t
 TableFunctionManager_getOrAddTransient(int8_t* mgr_ptr,
                                        int32_t db_id,

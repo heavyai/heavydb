@@ -1206,7 +1206,6 @@ auto InsertOrderFragmenter::vacuum_varlen_rows(
   auto index_array = (StringOffsetT*)indices_addr;
   int64_t irow_of_blk_to_keep = 0;  // head of next row block to keep
   int64_t irow_of_blk_to_fill = 0;  // row offset to fit the kept block
-  size_t nbytes_fix_data_to_keep = 0;
   auto nrows_in_fragment = fragment.getPhysicalNumTuples();
   size_t null_padding =
       get_null_padding(is_varlen_array, frag_offsets, index_array, nrows_in_fragment);
@@ -1256,7 +1255,6 @@ auto InsertOrderFragmenter::vacuum_varlen_rows(
                 nbytes_to_keep);
       }
       irow_of_blk_to_fill += nrows_to_keep;
-      nbytes_fix_data_to_keep += nbytes_to_keep;
     }
     irow_of_blk_to_keep = irow_to_vacuum + 1;
   }
