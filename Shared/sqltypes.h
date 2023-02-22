@@ -27,6 +27,7 @@
 #endif
 
 #include "../Logger/Logger.h"
+#include "../QueryEngine/Utils/FlatBuffer.h"
 #include "Datum.h"
 #include "funcannotations.h"
 #include "sqltypes_lite.h"
@@ -1127,6 +1128,18 @@ class SQLTypeInfo {
       ti_lite.db_id = dict_key_.db_id;
       ti_lite.dict_id = dict_key_.dict_id;
     } else if (type == kARRAY) {
+      if (subtype == kTEXT) {
+        switch (get_compression()) {
+          case kENCODING_NONE:
+            ti_lite.compression = SQLTypeInfoLite::NONE;
+            break;
+          case kENCODING_DICT:
+            ti_lite.compression = SQLTypeInfoLite::DICT;
+            break;
+          default:
+            UNREACHABLE();
+        }
+      }
       ti_lite.dimension = 0;  // unused
       ti_lite.scale = 0;      // unused
       ti_lite.db_id = dict_key_.db_id;
@@ -1135,6 +1148,48 @@ class SQLTypeInfo {
       UNREACHABLE();
     }
     return ti_lite;
+  }
+
+  FlatBufferManager::ValueType toValueType() const {
+    SQLTypes sql_value_type =
+        ((type == kCOLUMN || type == kCOLUMN_LIST || type == kARRAY) ? subtype : type);
+    switch (sql_value_type) {
+      case kPOINT:
+      case kLINESTRING:
+      case kPOLYGON:
+      case kMULTIPOINT:
+      case kMULTILINESTRING:
+      case kMULTIPOLYGON:
+        return (get_compression() == kENCODING_GEOINT ? FlatBufferManager::PointInt32
+                                                      : FlatBufferManager::PointFloat64);
+      case kBOOLEAN:
+        return FlatBufferManager::Bool8;
+      case kTINYINT:
+        return FlatBufferManager::Int8;
+      case kSMALLINT:
+        return FlatBufferManager::Int16;
+      case kINT:
+        return FlatBufferManager::Int32;
+      case kBIGINT:
+        return FlatBufferManager::Int64;
+      case kFLOAT:
+        return FlatBufferManager::Float32;
+      case kDOUBLE:
+        return FlatBufferManager::Float64;
+      case kTEXT: {
+        switch (get_compression()) {
+          case kENCODING_NONE:
+            return FlatBufferManager::Int8;
+          case kENCODING_DICT:
+            return FlatBufferManager::Int32;
+          default:
+            UNREACHABLE();
+        }
+      } break;
+      default:
+        UNREACHABLE();
+    }
+    return {};
   }
 
  private:
@@ -1582,256 +1637,280 @@ inline auto generate_column_list_type(const SQLTypeInfo& elem_ti) {
 
 // SQLTypeInfo-friendly interface to FlatBuffer:
 
-#include "../QueryEngine/Utils/FlatBuffer.h"
-
 // ChunkIter_get_nth variant for array buffers using FlatBuffer storage schema:
 DEVICE inline void VarlenArray_get_nth(int8_t* buf,
                                        int n,
                                        ArrayDatum* result,
                                        bool* is_end) {
   FlatBufferManager m{buf};
-  auto status = m.getItem(n, result->length, result->pointer, result->is_null);
-  if (status == FlatBufferManager::Status::IndexError) {
-    *is_end = true;
-    result->length = 0;
-    result->pointer = NULL;
-    result->is_null = true;
-  } else {
-    *is_end = false;
+  FlatBufferManager::Status status{};
+  if (m.isNestedArray()) {
+    FlatBufferManager::NestedArrayItem<1> item;
+    status = m.getItem(n, item);
+    if (status == FlatBufferManager::Status::Success) {
+      result->length = item.nof_values * m.getValueSize();
+      result->pointer = item.values;
+      result->is_null = item.is_null;
+      *is_end = false;
+    } else {
+      result->length = 0;
+      result->pointer = NULL;
+      result->is_null = true;
+      *is_end = true;
 #ifndef __CUDACC__
-    CHECK_EQ(status, FlatBufferManager::Status::Success);
+      // out of range indexing is equivalent to returning NULL (SQL AT)
+      CHECK_EQ(status, FlatBufferManager::Status::IndexError);
 #endif
+    }
+  } else {
+    // to be deprecated
+    auto status = m.getItemOld(n, result->length, result->pointer, result->is_null);
+    if (status == FlatBufferManager::Status::IndexError) {
+      *is_end = true;
+      result->length = 0;
+      result->pointer = NULL;
+      result->is_null = true;
+    } else {
+      *is_end = false;
+#ifndef __CUDACC__
+      CHECK_EQ(status, FlatBufferManager::Status::Success);
+#endif
+    }
+  }
+}
+
+inline void getFlatBufferNDimsAndSizes(const int64_t items_count,
+                                       const int64_t max_nof_values,
+                                       const SQLTypeInfo& ti,
+                                       size_t& ndims,
+                                       int64_t& max_nof_sizes) {
+  ndims = 0;
+  max_nof_sizes = 0;
+  switch (ti.get_type()) {
+    case kPOINT:
+      ndims = 0;
+      break;
+    case kARRAY:
+      if (ti.get_subtype() == kTEXT && ti.get_compression() == kENCODING_NONE) {
+        ndims = 2;
+        max_nof_sizes = items_count + 2 * max_nof_values / 3;
+      } else {
+        ndims = 1;
+        max_nof_sizes = items_count + max_nof_values / 3;
+      }
+      break;
+    case kLINESTRING:
+    case kMULTIPOINT:
+      ndims = 1;
+      max_nof_sizes = items_count + max_nof_values / 3;
+      break;
+    case kPOLYGON:
+    case kMULTILINESTRING:
+      ndims = 2;
+      max_nof_sizes = items_count + 2 * max_nof_values / 3;
+      break;
+    case kMULTIPOLYGON:
+      ndims = 3;
+      max_nof_sizes = items_count + max_nof_values;
+      break;
+    case kTEXT:
+      switch (ti.get_compression()) {
+        case kENCODING_NONE:
+          ndims = 1;
+          max_nof_sizes = items_count + max_nof_values / 3;
+        case kENCODING_DICT:
+          ndims = 0;
+          break;
+        default:
+          UNREACHABLE();
+      }
+      break;
+    default:
+      UNREACHABLE();
   }
 }
 
 inline int64_t getFlatBufferSize(int64_t items_count,
                                  int64_t max_nof_values,
                                  const SQLTypeInfo& ti) {
-  size_t ndims = 0;
-  FlatBufferManager::ValueType value_type;
-  int64_t max_nof_sizes = 0;
-  switch (ti.get_type()) {
-    case kPOINT:
-      ndims = 0;
-      break;
-    case kLINESTRING:
-    case kMULTIPOINT:
-    case kARRAY:
-      ndims = 1;
-      max_nof_sizes = items_count + max_nof_values / 3;
-      break;
-    case kPOLYGON:
-    case kMULTILINESTRING:
-      ndims = 2;
-      max_nof_sizes = items_count + 2 * max_nof_values / 3;
-      break;
-    case kMULTIPOLYGON:
-      ndims = 3;
-      max_nof_sizes = items_count + max_nof_values;
-      break;
-    default:
-      UNREACHABLE();
-  }
-
-  if (ti.is_geometry()) {
-    if (ti.get_compression() == kENCODING_GEOINT) {
-      value_type = FlatBufferManager::PointInt32;
-    } else {
-      value_type = FlatBufferManager::PointFloat64;
-    }
-  } else if (ti.is_array()) {
-    switch (ti.get_subtype()) {
-      case kBOOLEAN:
-        value_type = FlatBufferManager::Bool8;
-        break;
-      case kTINYINT:
-        value_type = FlatBufferManager::Int8;
-        break;
-      case kSMALLINT:
-        value_type = FlatBufferManager::Int16;
-        break;
-      case kINT:
-        value_type = FlatBufferManager::Int32;
-        break;
-      case kTEXT:
-        CHECK_EQ(ti.get_compression(), kENCODING_DICT);
-        value_type = FlatBufferManager::Int32;
-        break;
-      case kBIGINT:
-        value_type = FlatBufferManager::Int64;
-        break;
-      case kFLOAT:
-        value_type = FlatBufferManager::Float32;
-        break;
-      case kDOUBLE:
-        value_type = FlatBufferManager::Float64;
-        break;
-      default:
-        UNREACHABLE();
-        break;
-    }
+  if (ti.get_type() == kPOINT) {
+    // to be deprecated
+    FlatBufferManager::GeoPoint metadata{items_count,
+                                         ti.get_input_srid(),
+                                         ti.get_output_srid(),
+                                         ti.get_compression() == kENCODING_GEOINT};
+    return FlatBufferManager::compute_flatbuffer_size(
+        GeoPointFormatId, reinterpret_cast<const int8_t*>(&metadata));
   } else {
-    UNREACHABLE();
+    size_t ndims = 0;
+    int64_t max_nof_sizes = 0;
+    getFlatBufferNDimsAndSizes(items_count, max_nof_values, ti, ndims, max_nof_sizes);
+    return FlatBufferManager::computeBufferSizeNestedArray(
+        /* ndims= */ ndims,
+        /* total_items_count= */ items_count,
+        /* total sizes count= */ max_nof_sizes,
+        /* total values count= */ max_nof_values,
+        ti.toValueType(),
+        /* user data size= */ sizeof(SQLTypeInfoLite));
   }
+}
 
+typedef union {
+  struct {
+    int8_t i8;
+  };
+  struct {
+    int16_t i16;
+  };
+  struct {
+    int32_t i32;
+  };
+  struct {
+    int64_t i64;
+  };
+  struct {
+    float f32;
+  };
+  struct {
+    double f64;
+  };
+  struct {
+    uint32_t geoint[2];
+  };
+  struct {
+    double geodouble[2];
+  };
+} null_value_t;
+
+inline null_value_t get_null_value(const SQLTypeInfo& ti) {
+  null_value_t null_value{};
   switch (ti.get_type()) {
-    case kPOINT: {
-      FlatBufferManager::GeoPoint metadata{items_count,
-                                           ti.get_input_srid(),
-                                           ti.get_output_srid(),
-                                           ti.get_compression() == kENCODING_GEOINT};
-      return FlatBufferManager::compute_flatbuffer_size(
-          GeoPointFormatId, reinterpret_cast<const int8_t*>(&metadata));
-    }
-    case kLINESTRING:
-    case kPOLYGON:
+    case kBOOLEAN:
+      null_value.i8 = NULL_BOOLEAN;
+      break;
+    case kTINYINT:
+      null_value.i8 = NULL_TINYINT;
+      break;
+    case kSMALLINT:
+      null_value.i16 = NULL_SMALLINT;
+      break;
+    case kINT:
+      null_value.i32 = NULL_INT;
+      break;
+    case kBIGINT:
+      null_value.i64 = NULL_BIGINT;
+      break;
+    case kFLOAT:
+      null_value.f32 = NULL_FLOAT;
+      break;
+    case kDOUBLE:
+      null_value.f64 = NULL_DOUBLE;
+      break;
+    case kPOINT:
     case kMULTIPOINT:
+    case kLINESTRING:
     case kMULTILINESTRING:
-    case kMULTIPOLYGON: {
-      return FlatBufferManager::computeBufferSizeNestedArray(
-          /* ndims= */ ndims,
-          /* total_items_count= */ items_count,
-          /* total sizes count= */ max_nof_sizes,
-          /* total values count= */ max_nof_values,
-          value_type,
-          /* user data size= */ sizeof(SQLTypeInfoLite));
-    }
-    case kARRAY: {
-      const size_t array_item_size = ti.get_elem_type().get_size();
-      const auto dict_key = ti.getStringDictKey();
-      FlatBufferManager::VarlenArray metadata{
-          items_count, max_nof_values, array_item_size, {}};
-      metadata.params[FlatBufferManager::VarlenArrayParamDictId] = ti.get_comp_param();
-      metadata.params[FlatBufferManager::VarlenArrayParamDbId] = dict_key.db_id;
-      return FlatBufferManager::compute_flatbuffer_size(
-          VarlenArrayFormatId, reinterpret_cast<const int8_t*>(&metadata));
-    }
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      if (ti.get_compression() == kENCODING_GEOINT) {
+        null_value.geoint[0] = null_value.geoint[1] = NULL_ARRAY_COMPRESSED_32;
+      } else if (ti.get_compression() == kENCODING_NONE) {
+        null_value.geodouble[0] = null_value.geodouble[1] = NULL_ARRAY_DOUBLE;
+      } else {
+        UNREACHABLE();
+      }
+      break;
+    case kARRAY:
+      switch (ti.get_subtype()) {
+        case kBOOLEAN:
+          null_value.i8 = NULL_ARRAY_BOOLEAN;
+          break;
+        case kTINYINT:
+          null_value.i8 = NULL_ARRAY_TINYINT;
+          break;
+        case kSMALLINT:
+          null_value.i16 = NULL_ARRAY_SMALLINT;
+          break;
+        case kINT:
+          null_value.i32 = NULL_ARRAY_INT;
+          break;
+        case kTIMESTAMP:
+        case kTIME:
+        case kDATE:
+        case kINTERVAL_DAY_TIME:
+        case kINTERVAL_YEAR_MONTH:
+        case kDECIMAL:
+        case kNUMERIC:
+        case kBIGINT:
+          null_value.i64 = NULL_ARRAY_BIGINT;
+          break;
+        case kFLOAT:
+          null_value.f32 = NULL_ARRAY_FLOAT;
+          break;
+        case kDOUBLE:
+          null_value.f64 = NULL_ARRAY_FLOAT;
+          break;
+        case kTEXT:
+          if (ti.get_compression() == kENCODING_DICT) {
+            CHECK_EQ(ti.get_logical_size(), 4);
+            null_value.i32 = NULL_ARRAY_COMPRESSED_32;
+          } else if (ti.get_compression() == kENCODING_NONE) {
+            null_value.i8 = NULL_ARRAY_TINYINT;
+          } else {
+            UNREACHABLE();
+          }
+          break;
+        default:
+          UNREACHABLE();
+          break;
+      }
+      break;
+    case kTEXT:
+      if (ti.get_compression() == kENCODING_DICT) {
+        CHECK_EQ(ti.get_logical_size(), 4);
+        null_value.i32 = NULL_INT;
+      } else if (ti.get_compression() == kENCODING_NONE) {
+        null_value.i32 = NULL_TINYINT;
+      } else {
+        UNREACHABLE();
+      }
+      break;
     default:
       UNREACHABLE();
+      break;
   }
-  return 0;
+  return null_value;
 }
 
 inline void initializeFlatBuffer(FlatBufferManager& m,
                                  int64_t items_count,
                                  int64_t max_nof_values,
                                  const SQLTypeInfo& ti) {
-  size_t ndims = 0;
-  FlatBufferManager::ValueType value_type;
-  int64_t max_nof_sizes = 0;
-  switch (ti.get_type()) {
-    case kPOINT:
-      ndims = 0;
-      break;
-    case kLINESTRING:
-    case kMULTIPOINT:
-    case kARRAY:
-      ndims = 1;
-      max_nof_sizes = items_count + max_nof_values / 3;
-      break;
-    case kPOLYGON:
-    case kMULTILINESTRING:
-      ndims = 2;
-      max_nof_sizes = items_count + 2 * max_nof_values / 3;
-      break;
-    case kMULTIPOLYGON:
-      ndims = 3;
-      max_nof_sizes = items_count + max_nof_values;
-      break;
-    default:
-      UNREACHABLE();
-  }
-
-  if (ti.is_geometry()) {
-    if (ti.get_compression() == kENCODING_GEOINT) {
-      value_type = FlatBufferManager::PointInt32;
-    } else {
-      value_type = FlatBufferManager::PointFloat64;
-    }
-  } else if (ti.is_array()) {
-    switch (ti.get_subtype()) {
-      case kBOOLEAN:
-        value_type = FlatBufferManager::Bool8;
-        break;
-      case kTINYINT:
-        value_type = FlatBufferManager::Int8;
-        break;
-      case kSMALLINT:
-        value_type = FlatBufferManager::Int16;
-        break;
-      case kINT:
-        value_type = FlatBufferManager::Int32;
-        break;
-      case kTEXT:
-        CHECK_EQ(ti.get_compression(), kENCODING_DICT);
-        value_type = FlatBufferManager::Int32;
-        break;
-      case kBIGINT:
-        value_type = FlatBufferManager::Int64;
-        break;
-      case kFLOAT:
-        value_type = FlatBufferManager::Float32;
-        break;
-      case kDOUBLE:
-        value_type = FlatBufferManager::Float64;
-        break;
-      default:
-        UNREACHABLE();
-        break;
-    }
+  if (ti.get_type() == kPOINT) {
+    // to be deprecated
+    FlatBufferManager::GeoPoint metadata{items_count,
+                                         ti.get_input_srid(),
+                                         ti.get_output_srid(),
+                                         ti.get_compression() == kENCODING_GEOINT};
+    m.initialize(GeoPointFormatId, reinterpret_cast<const int8_t*>(&metadata));
   } else {
-    UNREACHABLE();
-  }
-
-  SQLTypeInfoLite ti_lite = ti.toLite();
-
-  switch (ti.get_type()) {
-    case kPOINT: {
-      FlatBufferManager::GeoPoint metadata{items_count,
-                                           ti.get_input_srid(),
-                                           ti.get_output_srid(),
-                                           ti.get_compression() == kENCODING_GEOINT};
-      m.initialize(GeoPointFormatId, reinterpret_cast<const int8_t*>(&metadata));
-      break;
-    }
-    case kLINESTRING:
-    case kPOLYGON:
-    case kMULTIPOINT:
-    case kMULTILINESTRING:
-    case kMULTIPOLYGON: {
-      int8_t* null_value_ptr = nullptr;
-      uint32_t geoint_null_value[2] = {0x80000000U, 0x80000000U};
-      double null_point[2] = {2 * DBL_MIN, 2 * DBL_MIN};
-      if (ti.get_compression() == kENCODING_GEOINT) {
-        null_value_ptr = reinterpret_cast<int8_t*>(geoint_null_value);
-      } else {
-        null_value_ptr = reinterpret_cast<int8_t*>(null_point);
-      }
-      auto status = m.initializeNestedArray(
-          /* ndims= */ ndims,
-          /* total_items_count= */ items_count,
-          /* total_sizes_count= */ max_nof_sizes,
-          /* total_values_count= */ max_nof_values,
-          value_type,
-          /* null value buffer=*/null_value_ptr,  // null value buffer size
-                                                  // is defined by value type
-          /* user data buffer=*/reinterpret_cast<const int8_t*>(&ti_lite),
-          /* user data buffer size=*/sizeof(SQLTypeInfoLite));
-      CHECK_EQ(status, FlatBufferManager::Success);
-      break;
-    }
-    case kARRAY: {
-      const size_t array_item_size = ti.get_elem_type().get_size();
-      const auto dict_key = ti.getStringDictKey();
-      FlatBufferManager::VarlenArray metadata{
-          items_count, max_nof_values, array_item_size, {}};
-      metadata.params[FlatBufferManager::VarlenArrayParamDictId] = ti.get_comp_param();
-      metadata.params[FlatBufferManager::VarlenArrayParamDbId] = dict_key.db_id;
-      m.initialize(VarlenArrayFormatId, reinterpret_cast<const int8_t*>(&metadata));
-      break;
-    }
-    default:
-      UNREACHABLE();
+    size_t ndims = 0;
+    int64_t max_nof_sizes = 0;
+    getFlatBufferNDimsAndSizes(items_count, max_nof_values, ti, ndims, max_nof_sizes);
+    SQLTypeInfoLite ti_lite = ti.toLite();
+    null_value_t null_value = get_null_value(ti);
+    int8_t* null_value_ptr = &null_value.i8;
+    auto status = m.initializeNestedArray(
+        /* ndims= */ ndims,
+        /* total_items_count= */ items_count,
+        /* total_sizes_count= */ max_nof_sizes,
+        /* total_values_count= */ max_nof_values,
+        ti.toValueType(),
+        /* null value buffer=*/null_value_ptr,  // null value buffer size
+                                                // is defined by value type
+        /* user data buffer=*/reinterpret_cast<const int8_t*>(&ti_lite),
+        /* user data buffer size=*/sizeof(SQLTypeInfoLite));
+    CHECK_EQ(status, FlatBufferManager::Success);
   }
 }
 

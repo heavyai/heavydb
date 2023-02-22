@@ -236,6 +236,54 @@ TableFunctionManager_getOrAddTransient(int8_t* mgr_ptr,
   return mgr->getOrAddTransient(db_id, dict_id, str);
 }
 
+extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_getArray(int8_t* flatbuffer,
+                                                           const int64_t index,
+                                                           const int64_t expected_numel,
+                                                           int8_t*& ptr,
+                                                           int64_t& size,
+                                                           bool& is_null) {
+  FlatBufferManager m{flatbuffer};
+  FlatBufferManager::Status status{};
+  if (m.isNestedArray()) {
+    FlatBufferManager::NestedArrayItem<1> item;
+    if (!m.isSpecified(index)) {
+      if (expected_numel < 0) {
+#ifndef __CUDACC__
+        throw std::runtime_error("getArray failed: " + ::toString(status));
+#endif
+      }
+      status = m.setItem(index, nullptr, expected_numel);
+      if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+        throw std::runtime_error("getArray failed[setItem]: " + ::toString(status));
+#endif
+      }
+    }
+    status = m.getItem(index, item);
+    if (status == FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+      CHECK_EQ(item.nof_sizes, 0);
+#endif
+      ptr = item.values;
+      size = item.nof_values;
+      is_null = item.is_null;
+      if (expected_numel >= 0 && expected_numel != item.nof_values) {
+#ifndef __CUDACC__
+        throw std::runtime_error("getArray failed: unexpected size " +
+                                 ::toString(item.nof_values) + ", expected " +
+                                 ::toString(expected_numel));
+#endif
+      }
+
+    } else {
+#ifndef __CUDACC__
+      throw std::runtime_error("getArray failed: " + ::toString(status));
+#endif
+    }
+  }
+}
+
+// For BC (rbc <= 0.9):
 extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_getItem(int8_t* flatbuffer,
                                                           const int64_t index,
                                                           const int64_t expected_numel,
@@ -243,36 +291,8 @@ extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_getItem(int8_t* flatbuffer,
                                                           int64_t& size,
                                                           bool& is_null,
                                                           int64_t sizeof_T) {
-  FlatBufferManager m{flatbuffer};
-  auto status = m.getItem(index, size, ptr, is_null);
-  if (status == FlatBufferManager::Status::ItemUnspecifiedError) {
-    if (expected_numel < 0) {
-#ifndef __CUDACC__
-      throw std::runtime_error("getItem failed: " + ::toString(status));
-#endif
-    }
-    status = m.setItemOld(index,
-                          nullptr,
-                          expected_numel * sizeof_T,
-                          nullptr);  // reserves a junk in array buffer
-    if (status != FlatBufferManager::Status::Success) {
-#ifndef __CUDACC__
-      throw std::runtime_error("getItem failed[setItem]: " + ::toString(status));
-#endif
-    }
-    status = m.getItem(index, size, ptr, is_null);
-  }
-  if (status == FlatBufferManager::Status::Success) {
-    if (expected_numel >= 0 && expected_numel * sizeof_T != size) {
-#ifndef __CUDACC__
-      throw std::runtime_error("getItem failed: unexpected size");
-#endif
-    }
-  } else {
-#ifndef __CUDACC__
-    throw std::runtime_error("getItem failed: " + ::toString(status));
-#endif
-  }
+  ColumnArray_getArray(flatbuffer, index, expected_numel, ptr, size, is_null);
+  size *= sizeof_T;
 }
 
 extern "C" DEVICE RUNTIME_EXPORT bool ColumnArray_isNull(int8_t* flatbuffer,
@@ -299,18 +319,17 @@ extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_setNull(int8_t* flatbuffer,
 #endif
 }
 
-extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_setItem(int8_t* flatbuffer,
-                                                          int64_t index,
-                                                          const int8_t* ptr,
-                                                          int64_t size,
-                                                          bool is_null,
-                                                          int64_t sizeof_T) {
+extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_setArray(int8_t* flatbuffer,
+                                                           int64_t index,
+                                                           const int8_t* ptr,
+                                                           int64_t size,
+                                                           bool is_null) {
   FlatBufferManager m{flatbuffer};
   FlatBufferManager::Status status;
   if (is_null) {
     status = m.setNull(index);
   } else {
-    status = m.setItemOld(index, ptr, size * sizeof_T);
+    status = m.setItem(index, ptr, size);
   }
 #ifndef __CUDACC__
   if (status != FlatBufferManager::Status::Success) {
@@ -319,6 +338,44 @@ extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_setItem(int8_t* flatbuffer,
 #endif
 }
 
+// For BC (rbc <= 0.9):
+extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_setItem(int8_t* flatbuffer,
+                                                          int64_t index,
+                                                          const int8_t* ptr,
+                                                          int64_t size,
+                                                          bool is_null,
+                                                          int64_t sizeof_T) {
+  FlatBufferManager m{flatbuffer};
+  CHECK_EQ(sizeof_T, m.getValueSize());
+  ColumnArray_setArray(flatbuffer, index, ptr, size, is_null);
+}
+
+extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_concatArray(int8_t* flatbuffer,
+                                                              int64_t index,
+                                                              const int8_t* ptr,
+                                                              int64_t size,
+                                                              bool is_null) {
+  FlatBufferManager m{flatbuffer};
+  FlatBufferManager::Status status;
+  if (is_null) {
+    if (m.isSpecified(index)) {
+      // concat(item, null) -> item
+      status = FlatBufferManager::Status::Success;
+    } else {
+      // concat(unspecified, null) -> null
+      status = m.setNull(index);
+    }
+  } else {
+    status = m.concatItem(index, ptr, size);
+  }
+#ifndef __CUDACC__
+  if (status != FlatBufferManager::Status::Success) {
+    throw std::runtime_error("concatItem failed: " + ::toString(status));
+  }
+#endif
+}
+
+// For BC (rbc <= 0.9):
 extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_concatItem(int8_t* flatbuffer,
                                                              int64_t index,
                                                              const int8_t* ptr,
@@ -326,17 +383,8 @@ extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_concatItem(int8_t* flatbuffer,
                                                              bool is_null,
                                                              int64_t sizeof_T) {
   FlatBufferManager m{flatbuffer};
-  FlatBufferManager::Status status;
-  if (is_null) {
-    status = m.setNull(index);
-  } else {
-    status = m.concatItem(index, ptr, size * sizeof_T);
-#ifndef __CUDACC__
-    if (status != FlatBufferManager::Status::Success) {
-      throw std::runtime_error("concatItem failed: " + ::toString(status));
-    }
-#endif
-  }
+  CHECK_EQ(sizeof_T, m.getValueSize());
+  ColumnArray_concatArray(flatbuffer, index, ptr, size, is_null);
 }
 
 #endif  // EXECUTE_INCLUDE
