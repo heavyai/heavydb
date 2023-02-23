@@ -523,10 +523,15 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
           if (!func) {
             return true;
           }
-          return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
-                  func->getLinkage() ==
-                      llvm::GlobalValue::LinkageTypes::InternalLinkage ||
-                  func->getLinkage() == llvm::GlobalValue::LinkageTypes::ExternalLinkage);
+          switch (func->getLinkage()) {
+            case llvm::GlobalValue::LinkageTypes::InternalLinkage:
+            case llvm::GlobalValue::LinkageTypes::PrivateLinkage:
+            case llvm::GlobalValue::LinkageTypes::ExternalLinkage:
+            case llvm::GlobalValue::LinkageTypes::LinkOnceODRLinkage:
+              return true;
+            default:
+              return false;
+          }
         });
     CodeGenerator::link_udf_module(rt_geos_module_copy,
                                    *llvm_module,
@@ -3126,7 +3131,6 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 #else
   LOG(IR) << serialize_llvm_object(cgen_state_->module_) << "\nEnd of IR";
 #endif
-
   // Insert calls to "register_buffer_with_executor_rsm" for allocations
   // in runtime functions (i.e. from RBC) without it
   AutoTrackBuffersInRuntimeIR();
