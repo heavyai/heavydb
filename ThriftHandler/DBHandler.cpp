@@ -6081,10 +6081,11 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
       g_running_query_interrupt_freq,
       g_pending_query_interrupt_freq,
       g_optimize_cuda_block_and_grid_sizes};
-  auto execution_time_ms = _return.getExecutionTime() + measure<>::execution([&]() {
-                             _return = ra_executor.executeRelAlgQuery(
-                                 co, eo, explain_info.isPlanExplain(), nullptr);
-                           });
+  auto execution_time_ms =
+      _return.getExecutionTime() + measure<>::execution([&]() {
+        _return = ra_executor.executeRelAlgQuery(
+            co, eo, explain_info.isPlanExplain(), explain_info.isVerbose(), nullptr);
+      });
   // reduce execution time by the time spent during queue waiting
   const auto rs = _return.getRows();
   if (rs) {
@@ -6451,6 +6452,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
 
   } else if (pw.is_other_explain) {
     // does nothing
+    throw std::runtime_error("EXPLAIN not yet supported for DDL or DML commands.");
     return;
 
   } else {
