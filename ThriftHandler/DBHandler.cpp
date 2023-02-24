@@ -2586,7 +2586,12 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
     _return.view_sql =
         (have_privileges_on_view_sources ? td->viewSQL
                                          : "[Not enough privileges to see the view SQL]");
-    _return.shard_count = td->nShards;
+    _return.shard_count = td->nShards * std::max(g_leaf_count, size_t(1));
+    if (td->nShards > 0) {
+      auto cd = cat->getMetadataForColumn(td->tableId, td->shardedColumnId);
+      CHECK(cd);
+      _return.sharded_column_name = cd->columnName;
+    }
     _return.key_metainfo = td->keyMetainfo;
     _return.is_temporary = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
     _return.partition_detail =

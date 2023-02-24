@@ -4283,28 +4283,34 @@ class GetTableDetailsTest : public DBHandlerTestFixture {
     sql("DROP FOREIGN TABLE IF EXISTS test_table_3;");
     sql("DROP FOREIGN TABLE IF EXISTS test_table_4;");
     sql("DROP VIEW IF EXISTS test_view_1;");
+    sql("DROP TABLE IF EXISTS test_sharded_table;");
   }
 
   void assertExpectedTableDetails(const std::string& table_name,
                                   TTableType::type table_type,
-                                  const TTableRefreshInfo* refresh_info = nullptr) {
+                                  const TTableRefreshInfo* refresh_info = nullptr,
+                                  int64_t shard_count = 0) {
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
     TTableDetails table_details;
     db_handler->get_table_details(table_details, session_id, table_name);
-    ASSERT_EQ(static_cast<int64_t>(DEFAULT_FRAGMENT_ROWS), table_details.fragment_size);
-    ASSERT_EQ(static_cast<int64_t>(DEFAULT_MAX_ROWS), table_details.max_rows);
-    ASSERT_EQ(static_cast<int64_t>(DEFAULT_PAGE_SIZE), table_details.page_size);
+    EXPECT_EQ(static_cast<int64_t>(DEFAULT_FRAGMENT_ROWS), table_details.fragment_size);
+    EXPECT_EQ(static_cast<int64_t>(DEFAULT_MAX_ROWS), table_details.max_rows);
+    EXPECT_EQ(static_cast<int64_t>(DEFAULT_PAGE_SIZE), table_details.page_size);
     ASSERT_EQ(static_cast<size_t>(1), table_details.row_desc.size());
-    ASSERT_EQ("i", table_details.row_desc[0].col_name);
-    ASSERT_EQ(TDatumType::INT, table_details.row_desc[0].col_type.type);
-    ASSERT_EQ(table_type, table_details.table_type);
+    EXPECT_EQ("i", table_details.row_desc[0].col_name);
+    EXPECT_EQ(TDatumType::INT, table_details.row_desc[0].col_type.type);
+    EXPECT_EQ(table_type, table_details.table_type);
     if (table_details.table_type == TTableType::TEMPORARY) {
-      ASSERT_TRUE(table_details.is_temporary);
+      EXPECT_TRUE(table_details.is_temporary);
     } else if (table_details.table_type == TTableType::VIEW) {
-      ASSERT_EQ("SELECT * FROM test_table_1;", table_details.view_sql);
+      EXPECT_EQ("SELECT * FROM test_table_1;", table_details.view_sql);
     }
     if (refresh_info) {
-      ASSERT_EQ(*refresh_info, table_details.refresh_info);
+      EXPECT_EQ(*refresh_info, table_details.refresh_info);
+    }
+    EXPECT_EQ(shard_count, table_details.shard_count);
+    if (shard_count > 0) {
+      EXPECT_EQ("i", table_details.sharded_column_name);
     }
   }
 
@@ -4326,11 +4332,28 @@ class GetTableDetailsTest : public DBHandlerTestFixture {
   }
 };
 
-TEST_F(GetTableDetailsTest, DifferentTableTypes) {
+TEST_F(GetTableDetailsTest, DefaultTable) {
   assertExpectedTableDetails("test_table_1", TTableType::DEFAULT);
+}
+
+TEST_F(GetTableDetailsTest, TemporaryTable) {
   assertExpectedTableDetails("test_table_2", TTableType::TEMPORARY);
+}
+
+TEST_F(GetTableDetailsTest, ForeignTable) {
   assertExpectedTableDetails("test_table_3", TTableType::FOREIGN);
+}
+
+TEST_F(GetTableDetailsTest, View) {
   assertExpectedTableDetails("test_view_1", TTableType::VIEW);
+}
+
+TEST_F(GetTableDetailsTest, ShardedTable) {
+  constexpr int64_t shard_count{10};
+  sql("CREATE TABLE test_sharded_table (i INTEGER, SHARD KEY (i)) WITH (shard_count = " +
+      std::to_string(shard_count) + ");");
+  assertExpectedTableDetails(
+      "test_sharded_table", TTableType::DEFAULT, nullptr, shard_count);
 }
 
 TEST_F(GetTableDetailsTest, DefaultRefreshOptions) {

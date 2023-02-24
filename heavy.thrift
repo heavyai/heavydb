@@ -386,6 +386,7 @@ struct TTableDetails {
   9: TPartitionDetail partition_detail;
   10: TTableType table_type;
   11: TTableRefreshInfo refresh_info;
+  12: string sharded_column_name;
 }
 
 enum TExpressionRangeType {
