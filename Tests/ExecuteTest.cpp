@@ -23704,7 +23704,7 @@ TEST_F(Select, WindowFunctionFraming) {
   // thus different systems may have different aggregation result over a window frame
   // on a table having peers (i.e., Postgres, SQLite and SQLServer have different results)
 
-  // 1) check the correctness of various aggregation function over window framing
+  // check the correctness of various aggregation function over window framing
   for (std::string table_name :
        {"test_window_framing", "test_window_framing_multi_frag"}) {
     for (std::string frame_mode : {"ROWS", "RANGE"}) {
@@ -23730,7 +23730,7 @@ TEST_F(Select, WindowFunctionFraming) {
     }
   }
 
-  // 2) check the correctness while varying window frame bounds
+  // check the correctness while varying window frame bounds
   std::vector<std::string> test_frame_bounds{
       " BETWEEN UNBOUNDED PRECEDING AND 3 PRECEDING",
       " BETWEEN UNBOUNDED PRECEDING AND 3 FOLLOWING",
@@ -23756,7 +23756,7 @@ TEST_F(Select, WindowFunctionFraming) {
     }
   }
 
-  // 3) row mode: check various ordering types / single and multiple ordering cols
+  // row mode: check various ordering types / single and multiple ordering cols
   std::unordered_map<int, std::string> col_id_maps = {{1, "oc"},
                                                       {2, "oc2"},
                                                       {3, "dc"},
@@ -23795,7 +23795,7 @@ TEST_F(Select, WindowFunctionFraming) {
     }
   }
 
-  // 4) invalid ordering columns
+  // invalid ordering columns
   EXPECT_ANY_THROW(run_multiple_agg(
       "SELECT oc, oc2, MIN(i) OVER (PARTITION BY pc ORDER BY oc, oc2 ROWS BETWEEN "
       "UNBOUNDED "
@@ -23824,7 +23824,7 @@ TEST_F(Select, WindowFunctionFraming) {
       "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY d2;",
       dt));
 
-  // 5) invalid frame bounds (the condition is checked regardless of a type of frame
+  // invalid frame bounds (the condition is checked regardless of a type of frame
   // bound)
   EXPECT_ANY_THROW(run_multiple_agg(
       "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN UNBOUNDED "
@@ -23893,8 +23893,8 @@ TEST_F(Select, WindowFunctionFraming) {
       "-3.3 FOLLOWING) FROM test_window_framing ORDER BY oc;",
       dt));
 
-  // 6) frame without ordering key(s)
-  // 6.a) in row mode, we ignore user-given frame bound if order-by clause is missing
+  // frame without ordering key(s)
+  // a) in row mode, we ignore user-given frame bound if order-by clause is missing
   c("SELECT oc, MIN(i) OVER (ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM "
     "test_window_framing ORDER BY oc;",
     "SELECT oc, MIN(i) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) "
@@ -23906,7 +23906,7 @@ TEST_F(Select, WindowFunctionFraming) {
     "UNBOUNDED FOLLOWING) "
     "FROM test_window_framing ORDER BY oc;",
     dt);
-  // 6.b) in range mode, we throw an exception
+  // b) in range mode, we throw an exception
   EXPECT_ANY_THROW(
       run_multiple_agg("SELECT oc, MIN(i) OVER (RANGE BETWEEN 1 PRECEDING AND 1 "
                        "FOLLOWING) FROM test_window_framing ORDER BY oc;",
@@ -23916,7 +23916,7 @@ TEST_F(Select, WindowFunctionFraming) {
                        "PRECEDING AND 1 FOLLOWING) FROM test_window_framing ORDER BY oc;",
                        dt));
 
-  // 7. throw an exception when using window framing on first / last values
+  // throw an exception when using window framing on first / last values
   EXPECT_ANY_THROW(
       run_multiple_agg("SELECT oc, FIRST_VALUE(i) OVER (RANGE BETWEEN 1 PRECEDING AND 1 "
                        "FOLLOWING) FROM test_window_framing ORDER BY oc;",
@@ -23925,7 +23925,7 @@ TEST_F(Select, WindowFunctionFraming) {
       run_multiple_agg("SELECT oc, LAST_VALUE(i) OVER (RANGE BETWEEN 1 PRECEDING AND 1 "
                        "FOLLOWING) FROM test_window_framing ORDER BY oc;",
                        dt));
-  // 8. use multiple window aggregate functions over the window frame
+  // use multiple window aggregate functions over the window frame
   {
     std::vector<std::string> test_query;
     test_query.emplace_back(
@@ -23950,7 +23950,7 @@ TEST_F(Select, WindowFunctionFraming) {
     }
   }
 
-  // 7. throw an exception when using non literal expression as window framing found
+  // throw an exception when using non literal expression as window framing found
   EXPECT_ANY_THROW(
       run_multiple_agg("SELECT oc, SUM(i) OVER (RANGE BETWEEN pc * 2 PRECEDING AND 1 "
                        "FOLLOWING) FROM test_window_framing ORDER BY oc;",
@@ -24050,6 +24050,17 @@ TEST_F(Select, WindowFunctionFraming) {
       dt);
   CHECK_EQ(res->rowCount(), (size_t)0);
   run_ddl_statement("DROP TABLE test_frame_empty;");
+
+  // aggregation over the encoded date column
+  for (std::string col_name : {"dt16", "dt32"}) {
+    for (std::string agg_op : {"MIN", "MAX", "COUNT"}) {
+      std::string query =
+          "SELECT " + agg_op + "(" + col_name +
+          ") OVER (PARTITION BY pc ORDER BY oc RANGE BETWEEN 1 PRECEDING "
+          "AND 1 FOLLOWING) res FROM test_frame_nav ORDER BY res ASC NULLS LAST;";
+      c(query, query, dt);
+    }
+  }
 }
 
 TEST_F(Select, WindowFunctionFramingWithDateAndTimeColumn) {

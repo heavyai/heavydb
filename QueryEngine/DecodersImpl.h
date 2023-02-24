@@ -162,6 +162,13 @@ SUFFIX(fixed_width_date_encode)(const int64_t cur_col_val,
   return cur_col_val == null_val ? ret_null_val : cur_col_val / kSecsPerDay;
 }
 
+extern "C" DEVICE ALWAYS_INLINE int64_t
+SUFFIX(fixed_width_date_decode)(const int64_t cur_col_val,
+                                const int32_t ret_null_val,
+                                const int64_t null_val) {
+  return cur_col_val == null_val ? ret_null_val : cur_col_val * kSecsPerDay;
+}
+
 extern "C" DEVICE NEVER_INLINE int64_t
 SUFFIX(fixed_width_date_encode_noinline)(const int64_t cur_col_val,
                                          const int32_t ret_null_val,
