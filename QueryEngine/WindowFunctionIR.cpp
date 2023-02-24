@@ -168,6 +168,14 @@ llvm::Value* get_null_value_by_size(CgenState* cgen_state, SQLTypeInfo col_ti) {
       CHECK_EQ(col_ti.get_size(), 4);
       return cgen_state->llInt((int32_t)inline_int_null_value<int32_t>());
     }
+  } else if (col_ti.is_date()) {
+    if (col_ti.get_comp_param() == 16) {
+      return cgen_state->llInt((int16_t)inline_int_null_value<int16_t>());
+    } else if (col_ti.get_comp_param() == 32) {
+      return cgen_state->llInt((int32_t)inline_int_null_value<int32_t>());
+    } else {
+      return cgen_state->llInt((int64_t)inline_int_null_value<int64_t>());
+    }
   } else {
     switch (col_ti.get_type()) {
       case kBOOLEAN:
@@ -183,7 +191,6 @@ llvm::Value* get_null_value_by_size(CgenState* cgen_state, SQLTypeInfo col_ti) {
           return cgen_state->llInt((int64_t)(inline_fixed_encoding_null_val(col_ti)));
         }
       case kBIGINT:
-      case kDATE:
       case kINTERVAL_DAY_TIME:
       case kINTERVAL_YEAR_MONTH:
       case kDECIMAL:
@@ -1367,6 +1374,15 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     if (window_func->getKind() == SqlWindowFunctionKind::COUNT && agg_expr_ti.is_fp()) {
       return cgen_state_->ir_builder_.CreateFPToSI(
           res_lv, get_int_type(64, cgen_state_->context_));
+    } else if (window_func->getKind() != SqlWindowFunctionKind::COUNT &&
+               agg_expr_ti.is_date_in_days()) {
+      // we need to decode the "encoded" date column value
+      auto date_null_val = get_null_value_by_size(cgen_state_.get(), agg_expr_ti);
+      if (date_null_val->getType()->getScalarSizeInBits() != 32) {
+        date_null_val = cgen_state_->castToTypeIn(date_null_val, 32);
+      }
+      return cgen_state_->emitCall("fixed_width_date_decode",
+                                   {res_lv, date_null_val, null_val_lv});
     }
     return res_lv;
   } else {
