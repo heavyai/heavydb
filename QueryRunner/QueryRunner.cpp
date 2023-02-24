@@ -756,7 +756,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
         }
         auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
         result = std::make_shared<ExecutionResult>(
-            ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
+            ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
       });
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   executor->enrollQuerySession(session_id,
@@ -842,7 +842,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                             .plan_result;
   auto ra_executor = RelAlgExecutor(executor.get(), query_ra);
   auto result = std::make_shared<ExecutionResult>(
-      ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
+      ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
   const auto& filter_push_down_requests = result->getPushedDownFilterInfo();
   if (!filter_push_down_requests.empty()) {
     std::vector<TFilterPushDownInfo> filter_push_down_info;
@@ -865,7 +865,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
     eo_modified.just_calcite_explain = false;
     auto new_ra_executor = RelAlgExecutor(executor.get(), new_query_ra);
     return std::make_shared<ExecutionResult>(
-        new_ra_executor.executeRelAlgQuery(co, eo_modified, false, nullptr));
+        new_ra_executor.executeRelAlgQuery(co, eo_modified, false, false, nullptr));
   } else {
     return result;
   }
@@ -964,7 +964,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
                                   .plan_result;
         auto ra_executor = RelAlgExecutor(executor.get(), query_ra);
         result = std::make_shared<ExecutionResult>(
-            ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
+            ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
       });
   CHECK(dispatch_queue_);
   dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);

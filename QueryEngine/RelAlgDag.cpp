@@ -19,6 +19,7 @@
 #include "Catalog/Catalog.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "JsonAccessors.h"
+#include "QueryEngine/Visitors/RelAlgDagViewer.h"
 #include "RelAlgOptimizer.h"
 #include "RelLeftDeepInnerJoin.h"
 #include "RexVisitor.h"
@@ -3381,7 +3382,11 @@ std::string tree_string(const RelAlgNode* ra, const size_t depth) {
 }
 
 std::string RexSubQuery::toString(RelRexToStringConfig config) const {
-  return cat(::typeName(this), "(", ra_->toString(config), ")");
+  if (!config.attributes_only) {
+    return cat(::typeName(this), "(", ra_->toString(config), ")");
+  } else {
+    return cat(::typeName(this), "()");
+  }
 }
 
 size_t RexSubQuery::toHash() const {
@@ -3417,29 +3422,40 @@ size_t RexInput::toHash() const {
 }
 
 std::string RelCompound::toString(RelRexToStringConfig config) const {
-  auto ret = cat(::typeName(this),
-                 ", filter_expr=",
-                 (filter_expr_ ? filter_expr_->toString(config) : "null"),
-                 ", target_exprs=");
-  for (auto& expr : target_exprs_) {
-    ret += expr->toString(config) + " ";
+  if (!config.attributes_only) {
+    auto ret = cat(::typeName(this),
+                   ", filter_expr=",
+                   (filter_expr_ ? filter_expr_->toString(config) : "null"),
+                   ", target_exprs=");
+    for (auto& expr : target_exprs_) {
+      ret += expr->toString(config) + " ";
+    }
+    ret += ", agg_exps=";
+    for (auto& expr : agg_exprs_) {
+      ret += expr->toString(config) + " ";
+    }
+    ret += ", scalar_sources=";
+    for (auto& expr : scalar_sources_) {
+      ret += expr->toString(config) + " ";
+    }
+    return cat(ret,
+               ", ",
+               std::to_string(groupby_count_),
+               ", ",
+               ", fields=",
+               ::toString(fields_),
+               ", is_agg=",
+               std::to_string(is_agg_));
+  } else {
+    return cat(::typeName(this),
+               "(",
+               std::to_string(groupby_count_),
+               ", fields=",
+               ::toString(fields_),
+               ", is_agg=",
+               std::to_string(is_agg_),
+               ")");
   }
-  ret += ", agg_exps=";
-  for (auto& expr : agg_exprs_) {
-    ret += expr->toString(config) + " ";
-  }
-  ret += ", scalar_sources=";
-  for (auto& expr : scalar_sources_) {
-    ret += expr->toString(config) + " ";
-  }
-  return cat(ret,
-             ", ",
-             std::to_string(groupby_count_),
-             ", ",
-             ", fields=",
-             ::toString(fields_),
-             ", is_agg=",
-             std::to_string(is_agg_));
 }
 
 size_t RelCompound::toHash() const {

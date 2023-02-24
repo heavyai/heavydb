@@ -33,6 +33,7 @@ const std::string explain_str = {"explain"};
 const std::string calcite_explain_str = {"explain calcite"};
 const std::string optimized_explain_str = {"explain optimized"};
 const std::string plan_explain_str = {"explain plan"};
+const std::string plan_explain_detailed_str = {"explain plan detailed"};
 
 }  // namespace
 
@@ -49,7 +50,13 @@ ExplainInfo::ExplainInfo(std::string query_string) {
       actual_query_ = boost::trim_copy(query_string.substr(optimized_explain_str.size()));
       explain_type_ = ExplainType::OptimizedIR;
     } else if (boost::istarts_with(query_string, plan_explain_str)) {
-      actual_query_ = boost::trim_copy(query_string.substr(plan_explain_str.size()));
+      if (boost::istarts_with(query_string, plan_explain_detailed_str)) {
+        actual_query_ =
+            boost::trim_copy(query_string.substr(plan_explain_detailed_str.size()));
+        verbose_ = true;
+      } else {
+        actual_query_ = boost::trim_copy(query_string.substr(plan_explain_str.size()));
+      }
       explain_type_ = ExplainType::ExecutionPlan;
     } else {
       actual_query_ = boost::trim_copy(query_string.substr(explain_str.size()));

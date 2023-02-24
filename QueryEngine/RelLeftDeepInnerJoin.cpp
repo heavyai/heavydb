@@ -108,21 +108,25 @@ const JoinType RelLeftDeepInnerJoin::getJoinType(const size_t nesting_level) con
 }
 
 std::string RelLeftDeepInnerJoin::toString(RelRexToStringConfig config) const {
-  std::string ret = ::typeName(this) + "(";
-  ret += condition_->toString(config);
-  if (!config.skip_input_nodes) {
-    for (const auto& input : inputs_) {
-      ret += " " + input->toString(config);
+  if (!config.attributes_only) {
+    std::string ret = ::typeName(this) + "(";
+    ret += condition_->toString(config);
+    if (!config.skip_input_nodes) {
+      for (const auto& input : inputs_) {
+        ret += " " + input->toString(config);
+      }
+    } else {
+      ret += ", input node id={";
+      for (auto& input : inputs_) {
+        ret += std::to_string(input->getId()) + " ";
+      }
+      ret += "}";
     }
+    ret += ")";
+    return ret;
   } else {
-    ret += ", input node id={";
-    for (auto& input : inputs_) {
-      ret += std::to_string(input->getId()) + " ";
-    }
-    ret += "}";
+    return ::typeName(this) + "()";
   }
-  ret += ")";
-  return ret;
 }
 
 size_t RelLeftDeepInnerJoin::toHash() const {
@@ -146,6 +150,10 @@ size_t RelLeftDeepInnerJoin::size() const {
     total_size += input->size();
   }
   return total_size;
+}
+
+size_t RelLeftDeepInnerJoin::getOuterConditionsSize() const {
+  return outer_conditions_per_level_.size();
 }
 
 std::shared_ptr<RelAlgNode> RelLeftDeepInnerJoin::deepCopy() const {

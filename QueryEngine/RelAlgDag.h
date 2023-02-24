@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
+ * Copyright 2023 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,18 +45,104 @@ static auto const HASH_N = boost::hash_value("n");
 
 struct RelRexToStringConfig {
   bool skip_input_nodes{false};
+  bool attributes_only{false};
 
-  static RelRexToStringConfig defaults() { return RelRexToStringConfig{false}; }
+  static RelRexToStringConfig defaults() { return RelRexToStringConfig(); }
 };
 
-class Rex {
- public:
-  virtual std::string toString(RelRexToStringConfig config) const = 0;
+class RelAggregate;
+class RelCompound;
+class RelFilter;
+class RelJoin;
+class RelLeftDeepInnerJoin;
+class RelLogicalUnion;
+class RelLogicalValues;
+class RelModify;
+class RelProject;
+class RelScan;
+class RelSort;
+class RelTableFunction;
+class RelTranslatedJoin;
+class RexAbstractInput;
+class RexCase;
+class RexFunctionOperator;
+class RexInput;
+class RexLiteral;
+class RexOperator;
+class RexRef;
+class RexAgg;
+class RexSubQuery;
+class RexWindowFunctionOperator;
 
+class RelAlgDagNode {
+ public:
+  class Visitor {
+   public:
+    virtual ~Visitor() {}
+    virtual bool visit(RelAggregate const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RelCompound const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RelFilter const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RelJoin const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RelLeftDeepInnerJoin const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RelLogicalUnion const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RelLogicalValues const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RelModify const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RelProject const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RelScan const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RelSort const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RelTableFunction const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RelTranslatedJoin const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RexAbstractInput const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RexCase const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RexFunctionOperator const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RexInput const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RexLiteral const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RexOperator const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RexRef const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RexAgg const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RexSubQuery const* n, std::string s) { return v(n, s); }
+    virtual bool visit(RexWindowFunctionOperator const* n, std::string s) {
+      return v(n, s);
+    }
+
+   protected:
+    virtual bool visitAny(RelAlgDagNode const* n, std::string s) {
+      return /*recurse=*/true;
+    }
+
+   private:
+    template <typename T>
+    bool v(T const* n, std::string s) {
+      return visitAny(static_cast<RelAlgDagNode const*>(n), s);
+    }
+  };
+
+  RelAlgDagNode() : id_in_plan_tree_(std::nullopt) {}
+
+  virtual void accept(Visitor& v, std::string name) const = 0;
+  virtual void acceptChildren(Visitor& v) const = 0;
+  virtual std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const = 0;
+
+  virtual size_t getStepNumber() const { return step_; }
+  virtual void setStepNumber(size_t step) const { step_ = step; }
+
+  std::optional<size_t> getIdInPlanTree() const { return id_in_plan_tree_; }
+  void setIdInPlanTree(size_t id) const { id_in_plan_tree_ = id; }
+
+ protected:
+  mutable size_t step_{0};
+  mutable std::optional<size_t> id_in_plan_tree_;
+};
+
+class Rex : public RelAlgDagNode {
+ public:
   // return hashed value of string representation of this rex
   virtual size_t toHash() const = 0;
 
   virtual ~Rex() {}
+
+  virtual size_t getStepNumber() const { return 0; }
 
  protected:
   mutable std::optional<size_t> hash_;
@@ -73,6 +159,13 @@ class RexAbstractInput : public RexScalar {
   RexAbstractInput() : in_index_{0} {};
 
   RexAbstractInput(const unsigned in_index) : in_index_(in_index) {}
+
+  virtual void acceptChildren(Visitor& v) const override {}
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
 
   unsigned getIndex() const { return in_index_; }
 
@@ -182,6 +275,13 @@ class RexLiteral : public RexScalar {
       , target_scale_(0)
       , target_precision_(0) {}
 
+  virtual void acceptChildren(Visitor& v) const override {}
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   template <class T>
   T getVal() const {
     const auto ptr = boost::get<T>(&literal_);
@@ -262,6 +362,19 @@ class RexOperator : public RexScalar {
               const SQLTypeInfo& type)
       : op_(op), operands_(std::move(operands)), type_(type) {}
 
+  virtual void acceptChildren(Visitor& v) const override {
+    for (size_t i = 0; i < size(); ++i) {
+      if (getOperand(i)) {
+        getOperand(i)->accept(v, "operand");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   virtual std::unique_ptr<const RexOperator> getDisambiguated(
       std::vector<std::unique_ptr<const RexScalar>>& operands) const {
     return std::unique_ptr<const RexOperator>(new RexOperator(op_, operands, type_));
@@ -285,11 +398,16 @@ class RexOperator : public RexScalar {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    auto ret = cat(::typeName(this), "(", std::to_string(op_), ", operands=");
-    for (auto& operand : operands_) {
-      ret += operand->toString(config) + " ";
+    if (!config.attributes_only) {
+      auto ret = cat(::typeName(this), "(", std::to_string(op_), ", operands=");
+      for (auto& operand : operands_) {
+        ret += operand->toString(config) + " ";
+      }
+      return cat(ret, ", type=", type_.to_string(), ")");
+    } else {
+      return cat(
+          ::typeName(this), "(", ::toString(op_), ", type=", type_.get_type(), ")");
     }
-    return cat(ret, ", type=", type_.to_string(), ")");
   };
 
   size_t toHash() const override {
@@ -315,112 +433,6 @@ class RexOperator : public RexScalar {
 class RelAlgNode;
 using RelAlgInputs = std::vector<std::shared_ptr<const RelAlgNode>>;
 
-class ExecutionResult;
-
-class RexSubQuery : public RexScalar {
- public:
-  using ExecutionResultShPtr = std::shared_ptr<const ExecutionResult>;
-
-  // default constructor used for deserialization only
-  // NOTE: the result_ member needs to be pointing to a shared_ptr
-  RexSubQuery() : result_(new ExecutionResultShPtr(nullptr)) {}
-
-  RexSubQuery(const std::shared_ptr<const RelAlgNode> ra)
-      : type_(new SQLTypeInfo(kNULLT, false))
-      , result_(new ExecutionResultShPtr(nullptr))
-      , ra_(ra) {}
-
-  // for deep copy
-  RexSubQuery(std::shared_ptr<SQLTypeInfo> type,
-              std::shared_ptr<ExecutionResultShPtr> result,
-              const std::shared_ptr<const RelAlgNode> ra)
-      : type_(type), result_(result), ra_(ra) {}
-
-  RexSubQuery(const RexSubQuery&) = delete;
-
-  RexSubQuery& operator=(const RexSubQuery&) = delete;
-
-  RexSubQuery(RexSubQuery&&) = delete;
-
-  RexSubQuery& operator=(RexSubQuery&&) = delete;
-
-  const SQLTypeInfo& getType() const {
-    CHECK_NE(kNULLT, type_->get_type());
-    return *(type_.get());
-  }
-
-  ExecutionResultShPtr getExecutionResult() const {
-    CHECK(result_);
-    CHECK(result_.get());
-    return *(result_.get());
-  }
-
-  unsigned getId() const;
-
-  const RelAlgNode* getRelAlg() const { return ra_.get(); }
-
-  std::string toString(
-      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
-
-  size_t toHash() const override;
-
-  std::unique_ptr<RexSubQuery> deepCopy() const;
-
-  void setExecutionResult(const ExecutionResultShPtr result);
-
- private:
-  std::shared_ptr<SQLTypeInfo> type_;
-  std::shared_ptr<ExecutionResultShPtr> result_;
-  std::shared_ptr<const RelAlgNode> ra_;
-
-  friend struct RelAlgDagSerializer;
-};
-
-// The actual input node understood by the Executor.
-// The in_index_ is relative to the output of node_.
-class RexInput : public RexAbstractInput {
- public:
-  // default constructor used for deserialization only
-  RexInput() : node_{nullptr} {}
-
-  RexInput(const RelAlgNode* node, const unsigned in_index)
-      : RexAbstractInput(in_index), node_(node) {}
-
-  const RelAlgNode* getSourceNode() const { return node_; }
-
-  // This isn't great, but we need it for coalescing nodes to Compound since
-  // RexInput in descendents need to be rebound to the newly created Compound.
-  // Maybe create a fresh RA tree with the required changes after each coalescing?
-  void setSourceNode(const RelAlgNode* node) const { node_ = node; }
-
-  bool operator==(const RexInput& that) const {
-    return getSourceNode() == that.getSourceNode() && getIndex() == that.getIndex();
-  }
-
-  std::string toString(
-      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
-
-  size_t toHash() const override;
-
-  std::unique_ptr<RexInput> deepCopy() const {
-    return std::make_unique<RexInput>(node_, getIndex());
-  }
-
- private:
-  mutable const RelAlgNode* node_;
-
-  friend struct RelAlgDagSerializer;
-};
-
-namespace std {
-
-template <>
-struct hash<RexInput> {
-  size_t operator()(const RexInput& rex_in) const { return rex_in.toHash(); }
-};
-
-}  // namespace std
-
 // Not a real node created by Calcite. Created by us because CaseExpr is a node in our
 // Analyzer.
 class RexCase : public RexScalar {
@@ -432,6 +444,21 @@ class RexCase : public RexScalar {
                                 std::unique_ptr<const RexScalar>>>& expr_pair_list,
           std::unique_ptr<const RexScalar>& else_expr)
       : expr_pair_list_(std::move(expr_pair_list)), else_expr_(std::move(else_expr)) {}
+
+  virtual void acceptChildren(Visitor& v) const override {
+    for (size_t i = 0; i < branchCount(); ++i) {
+      getWhen(i)->accept(v, "when");
+      getThen(i)->accept(v, "then");
+    }
+    if (getElse()) {
+      getElse()->accept(v, "else");
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
 
   size_t branchCount() const { return expr_pair_list_.size(); }
 
@@ -449,12 +476,16 @@ class RexCase : public RexScalar {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    auto ret = cat(::typeName(this), "(expr_pair_list=");
-    for (auto& expr : expr_pair_list_) {
-      ret += expr.first->toString(config) + " " + expr.second->toString(config) + " ";
+    if (!config.attributes_only) {
+      auto ret = cat(::typeName(this), "(expr_pair_list=");
+      for (auto& expr : expr_pair_list_) {
+        ret += expr.first->toString(config) + " " + expr.second->toString(config) + " ";
+      }
+      return cat(
+          ret, ", else_expr=", (else_expr_ ? else_expr_->toString(config) : "null"), ")");
+    } else {
+      return ::typeName(this);
     }
-    return cat(
-        ret, ", else_expr=", (else_expr_ ? else_expr_->toString(config) : "null"), ")");
   }
 
   size_t toHash() const override {
@@ -497,15 +528,32 @@ class RexFunctionOperator : public RexOperator {
         new RexFunctionOperator(name_, operands, getType()));
   }
 
+  virtual void acceptChildren(Visitor& v) const override {
+    for (size_t i = 0; i < size(); ++i) {
+      if (getOperand(i)) {
+        getOperand(i)->accept(v, "operand");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   const std::string& getName() const { return name_; }
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    auto ret = cat(::typeName(this), "(", name_, ", operands=");
-    for (auto& operand : operands_) {
-      ret += operand->toString(config) + " ";
+    if (!config.attributes_only) {
+      auto ret = cat(::typeName(this), "(", name_, ", operands=");
+      for (auto& operand : operands_) {
+        ret += operand->toString(config) + " ";
+      }
+      return cat(ret, ")");
+    } else {
+      return cat(::typeName(this), "(", name_, ")");
     }
-    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -622,6 +670,24 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
       , frame_end_bound_(frame_end_bound)
       , is_rows_(is_rows) {}
 
+  virtual void acceptChildren(Visitor& v) const override {
+    for (auto const& partition_key : getPartitionKeys()) {
+      if (partition_key) {
+        partition_key->accept(v, "partition");
+      }
+    }
+    for (auto const& order_key : getOrderKeys()) {
+      if (order_key) {
+        order_key->accept(v, "order");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   SqlWindowFunctionKind getKind() const { return kind_; }
 
   const ConstRexScalarPtrVector& getPartitionKeys() const { return partition_keys_; }
@@ -678,19 +744,23 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    auto ret = cat(::typeName(this), "(", getName(), ", operands=");
-    for (auto& operand : operands_) {
-      ret += operand->toString(config) + " ";
+    if (!config.attributes_only) {
+      auto ret = cat(::typeName(this), "(", getName(), ", operands=");
+      for (auto& operand : operands_) {
+        ret += operand->toString(config) + " ";
+      }
+      ret += ", partition_keys=";
+      for (auto& key : partition_keys_) {
+        ret += key->toString(config) + " ";
+      }
+      ret += ", order_keys=";
+      for (auto& key : order_keys_) {
+        ret += key->toString(config) + " ";
+      }
+      return cat(ret, ")");
+    } else {
+      return cat(::typeName(this), "(", getName(), ")");
     }
-    ret += ", partition_keys=";
-    for (auto& key : partition_keys_) {
-      ret += key->toString(config) + " ";
-    }
-    ret += ", order_keys=";
-    for (auto& key : order_keys_) {
-      ret += key->toString(config) + " ";
-    }
-    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -751,6 +821,13 @@ class RexRef : public RexScalar {
 
   size_t getIndex() const { return index_; }
 
+  virtual void acceptChildren(Visitor& v) const override {}
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
     return cat(::typeName(this), "(", std::to_string(index_), ")");
@@ -782,6 +859,13 @@ class RexAgg : public Rex {
          const SQLTypeInfo& type,
          const std::vector<size_t>& operands)
       : agg_(agg), distinct_(distinct), type_(type), operands_(operands) {}
+
+  virtual void acceptChildren(Visitor& v) const override {}
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
@@ -835,12 +919,11 @@ class RexAgg : public Rex {
 
 class RaExecutionDesc;
 
-class RelAlgNode {
+class RelAlgNode : public RelAlgDagNode {
  public:
   RelAlgNode(RelAlgInputs inputs = {})
       : inputs_(std::move(inputs))
       , id_(crt_id_++)
-      , id_in_plan_tree_(std::nullopt)
       , context_data_(nullptr)
       , is_nop_(false)
       , query_plan_dag_("")
@@ -879,10 +962,6 @@ class RelAlgNode {
 
   unsigned getId() const { return id_; }
 
-  void setIdInPlanTree(size_t id) const { id_in_plan_tree_ = id; }
-
-  std::optional<size_t> getIdInPlanTree() const { return id_in_plan_tree_; }
-
   bool hasContextData() const { return !(context_data_ == nullptr); }
 
   const RaExecutionDesc* getContextData() const { return context_data_; }
@@ -892,6 +971,14 @@ class RelAlgNode {
   const RelAlgNode* getInput(const size_t idx) const {
     CHECK_LT(idx, inputs_.size());
     return inputs_[idx].get();
+  }
+
+  const std::vector<RelAlgNode const*> getInputs() const {
+    std::vector<RelAlgNode const*> ret;
+    for (auto& n : inputs_) {
+      ret.push_back(n.get());
+    }
+    return ret;
   }
 
   std::shared_ptr<const RelAlgNode> getAndOwnInput(const size_t idx) const {
@@ -931,7 +1018,8 @@ class RelAlgNode {
 
   void markAsNop() { is_nop_ = true; }
 
-  virtual std::string toString(RelRexToStringConfig config) const = 0;
+  virtual std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const = 0;
 
   // return hashed value of a string representation of this rel node
   virtual size_t toHash() const = 0;
@@ -951,7 +1039,6 @@ class RelAlgNode {
  protected:
   RelAlgInputs inputs_;
   unsigned id_;
-  mutable std::optional<size_t> id_in_plan_tree_;
   mutable std::optional<size_t> hash_;
 
  private:
@@ -965,6 +1052,134 @@ class RelAlgNode {
 
   friend struct RelAlgDagSerializer;
 };
+
+class ExecutionResult;
+
+class RexSubQuery : public RexScalar {
+ public:
+  using ExecutionResultShPtr = std::shared_ptr<const ExecutionResult>;
+
+  // default constructor used for deserialization only
+  // NOTE: the result_ member needs to be pointing to a shared_ptr
+  RexSubQuery() : result_(new ExecutionResultShPtr(nullptr)) {}
+
+  RexSubQuery(const std::shared_ptr<const RelAlgNode> ra)
+      : type_(new SQLTypeInfo(kNULLT, false))
+      , result_(new ExecutionResultShPtr(nullptr))
+      , ra_(ra) {}
+
+  // for deep copy
+  RexSubQuery(std::shared_ptr<SQLTypeInfo> type,
+              std::shared_ptr<ExecutionResultShPtr> result,
+              const std::shared_ptr<const RelAlgNode> ra)
+      : type_(type), result_(result), ra_(ra) {}
+
+  RexSubQuery(const RexSubQuery&) = delete;
+
+  RexSubQuery& operator=(const RexSubQuery&) = delete;
+
+  RexSubQuery(RexSubQuery&&) = delete;
+
+  RexSubQuery& operator=(RexSubQuery&&) = delete;
+
+  virtual void acceptChildren(Visitor& v) const override {
+    if (getRelAlg()) {
+      getRelAlg()->accept(v, "node");
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
+  const SQLTypeInfo& getType() const {
+    CHECK_NE(kNULLT, type_->get_type());
+    return *(type_.get());
+  }
+
+  ExecutionResultShPtr getExecutionResult() const {
+    CHECK(result_);
+    CHECK(result_.get());
+    return *(result_.get());
+  }
+
+  unsigned getId() const;
+
+  const RelAlgNode* getRelAlg() const { return ra_.get(); }
+
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
+
+  size_t toHash() const override;
+
+  std::unique_ptr<RexSubQuery> deepCopy() const;
+
+  void setExecutionResult(const ExecutionResultShPtr result);
+
+ private:
+  std::shared_ptr<SQLTypeInfo> type_;
+  std::shared_ptr<ExecutionResultShPtr> result_;
+  std::shared_ptr<const RelAlgNode> ra_;
+
+  friend struct RelAlgDagSerializer;
+};
+
+// The actual input node understood by the Executor.
+// The in_index_ is relative to the output of node_.
+class RexInput : public RexAbstractInput {
+ public:
+  // default constructor used for deserialization only
+  RexInput() : node_{nullptr} {}
+
+  RexInput(const RelAlgNode* node, const unsigned in_index)
+      : RexAbstractInput(in_index), node_(node) {}
+
+  virtual void acceptChildren(Visitor& v) const override {
+    if (getSourceNode()) {
+      getSourceNode()->accept(v, "source");
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
+  const RelAlgNode* getSourceNode() const { return node_; }
+
+  // This isn't great, but we need it for coalescing nodes to Compound since
+  // RexInput in descendents need to be rebound to the newly created Compound.
+  // Maybe create a fresh RA tree with the required changes after each coalescing?
+  void setSourceNode(const RelAlgNode* node) const { node_ = node; }
+
+  bool operator==(const RexInput& that) const {
+    return getSourceNode() == that.getSourceNode() && getIndex() == that.getIndex();
+  }
+
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
+
+  size_t toHash() const override;
+
+  std::unique_ptr<RexInput> deepCopy() const {
+    return std::make_unique<RexInput>(node_, getIndex());
+  }
+
+ private:
+  mutable const RelAlgNode* node_;
+
+  friend struct RelAlgDagSerializer;
+};
+
+namespace std {
+
+template <>
+struct hash<RexInput> {
+  size_t operator()(const RexInput& rex_in) const { return rex_in.toHash(); }
+};
+
+}  // namespace std
 
 class RelScan : public RelAlgNode {
  public:
@@ -980,6 +1195,13 @@ class RelScan : public RelAlgNode {
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>())
       , catalog_(catalog) {}
+
+  virtual void acceptChildren(Visitor& v) const override {}
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
 
   size_t size() const override { return field_names_.size(); }
 
@@ -997,8 +1219,12 @@ class RelScan : public RelAlgNode {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    return cat(
-        ::typeName(this), "(", td_->tableName, ", ", ::toString(field_names_), ")");
+    if (!config.attributes_only) {
+      return cat(
+          ::typeName(this), "(", td_->tableName, ", ", ::toString(field_names_), ")");
+    } else {
+      return cat(::typeName(this), "(", td_->tableName, ")");
+    }
   }
 
   size_t toHash() const override {
@@ -1144,10 +1370,29 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>())
       , has_pushed_down_window_expr_(false) {
+    CHECK_EQ(scalar_exprs_.size(), fields_.size());
     inputs_.push_back(input);
   }
 
   RelProject(RelProject const&);
+
+  virtual void acceptChildren(Visitor& v) const override {
+    for (size_t i = 0; i < size(); ++i) {
+      if (getProjectAt(i)) {
+        getProjectAt(i)->accept(v, "\"" + getFieldName(i) + "\"");
+      }
+    }
+    for (auto& n : getInputs()) {
+      if (n) {
+        n->accept(v, "input");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
 
   void setExpressions(std::vector<std::unique_ptr<const RexScalar>>& exprs) const {
     scalar_exprs_ = std::move(exprs);
@@ -1218,7 +1463,10 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   const std::vector<std::string>& getFields() const { return fields_; }
   void setFields(std::vector<std::string>&& fields) { fields_ = std::move(fields); }
 
-  const std::string getFieldName(const size_t i) const { return fields_[i]; }
+  const std::string getFieldName(const size_t idx) const {
+    CHECK(idx < fields_.size());
+    return fields_[idx];
+  }
 
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                     std::shared_ptr<const RelAlgNode> input) override {
@@ -1235,11 +1483,15 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    auto ret = cat(::typeName(this), "(");
-    for (auto& expr : scalar_exprs_) {
-      ret += expr->toString(config) + " ";
+    if (!config.attributes_only) {
+      auto ret = cat(::typeName(this), "(");
+      for (auto& expr : scalar_exprs_) {
+        ret += expr->toString(config) + " ";
+      }
+      return cat(ret, ", ", ::toString(fields_), ")");
+    } else {
+      return cat(::typeName(this), "(", ::toString(fields_), ")");
     }
-    return cat(ret, ", ", ::toString(fields_), ")");
   }
 
   size_t toHash() const override {
@@ -1337,6 +1589,24 @@ class RelAggregate : public RelAlgNode {
 
   RelAggregate(RelAggregate const&);
 
+  virtual void acceptChildren(Visitor& v) const override {
+    for (auto const& n : getAggExprs()) {
+      if (n) {
+        n.get()->accept(v, "aggregate");
+      }
+    }
+    for (auto& n : getInputs()) {
+      if (n) {
+        n->accept(v, "input");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   size_t size() const override { return groupby_count_ + agg_exprs_.size(); }
 
   const size_t getGroupByCount() const { return groupby_count_; }
@@ -1372,26 +1642,35 @@ class RelAggregate : public RelAlgNode {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    auto ret = cat(::typeName(this),
-                   "(",
-                   std::to_string(groupby_count_),
-                   ", agg_exprs=",
-                   ::toString(agg_exprs_),
-                   ", fields=",
-                   ::toString(fields_));
-    if (!config.skip_input_nodes) {
-      ret += ::toString(inputs_);
-    } else {
-      ret += ", input node id={";
-      for (auto& input : inputs_) {
-        auto node_id_in_plan = input->getIdInPlanTree();
-        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
-                                           : std::to_string(input->getId());
-        ret += node_id_str + " ";
+    if (!config.attributes_only) {
+      auto ret = cat(::typeName(this),
+                     "(",
+                     std::to_string(groupby_count_),
+                     ", agg_exprs=",
+                     ::toString(agg_exprs_),
+                     ", fields=",
+                     ::toString(fields_));
+      if (!config.skip_input_nodes) {
+        ret += ::toString(inputs_);
+      } else {
+        ret += ", input node id={";
+        for (auto& input : inputs_) {
+          auto node_id_in_plan = input->getIdInPlanTree();
+          auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                             : std::to_string(input->getId());
+          ret += node_id_str + " ";
+        }
+        ret += "}";
       }
-      ret += "}";
+      return cat(ret, ")");
+    } else {
+      return cat(::typeName(this),
+                 "(",
+                 std::to_string(groupby_count_),
+                 ", fields=",
+                 ::toString(fields_),
+                 ")");
     }
-    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -1467,6 +1746,22 @@ class RelJoin : public RelAlgNode {
 
   RelJoin(RelJoin const&);
 
+  virtual void acceptChildren(Visitor& v) const override {
+    if (getCondition()) {
+      getCondition()->accept(v, "condition");
+    }
+    for (auto& n : getInputs()) {
+      if (n) {
+        n->accept(v, "input");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   JoinType getJoinType() const { return join_type_; }
 
   const RexScalar* getCondition() const { return condition_.get(); }
@@ -1483,24 +1778,33 @@ class RelJoin : public RelAlgNode {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    auto ret = cat(::typeName(this), "(");
-    if (!config.skip_input_nodes) {
-      ret += ::toString(inputs_);
-    } else {
-      ret += ", input node id={";
-      for (auto& input : inputs_) {
-        auto node_id_in_plan = input->getIdInPlanTree();
-        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
-                                           : std::to_string(input->getId());
-        ret += node_id_str + " ";
+    if (!config.attributes_only) {
+      auto ret = cat(::typeName(this), "(");
+      if (!config.skip_input_nodes) {
+        ret += ::toString(inputs_);
+      } else {
+        ret += ", input node id={";
+        for (auto& input : inputs_) {
+          auto node_id_in_plan = input->getIdInPlanTree();
+          auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                             : std::to_string(input->getId());
+          ret += node_id_str + " ";
+        }
+        ret += "}";
       }
-      ret += "}";
+      return cat(ret,
+                 ", condition=",
+                 (condition_ ? condition_->toString(config) : "null"),
+                 ", join_type=",
+                 ::toString(join_type_));
+    } else {
+      return cat(::typeName(this),
+                 "(condition=",
+                 (condition_ ? condition_->toString(config) : "null"),
+                 ", join_type=",
+                 ::toString(join_type_),
+                 ")");
     }
-    return cat(ret,
-               ", condition=",
-               (condition_ ? condition_->toString(config) : "null"),
-               ", join_type=",
-               ::toString(join_type_));
   }
 
   size_t toHash() const override {
@@ -1582,28 +1886,71 @@ class RelTranslatedJoin : public RelAlgNode {
       , qualifier_(qualifier)
       , op_typeinfo_(op_typeinfo) {}
 
+  virtual void acceptChildren(Visitor& v) const override {
+    if (getLHS()) {
+      getLHS()->accept(v, "left");
+    }
+    if (getRHS()) {
+      getRHS()->accept(v, "right");
+    }
+    if (getOuterJoinCond()) {
+      getOuterJoinCond()->accept(v, "outer condition");
+    }
+    for (auto& n : getInputs()) {
+      if (n) {
+        n->accept(v, "input");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    return cat(::typeName(this),
-               "( join_quals { lhs: ",
-               ::toString(lhs_join_cols_),
-               ", rhs: ",
-               ::toString(rhs_join_cols_),
-               " }, filter_quals: { ",
-               ::toString(filter_ops_),
-               " }, outer_join_cond: { ",
-               outer_join_cond_->toString(config),
-               " }, loop_join: ",
-               ::toString(nested_loop_),
-               ", join_type: ",
-               ::toString(join_type_),
-               ", op_type: ",
-               ::toString(op_type_),
-               ", qualifier: ",
-               ::toString(qualifier_),
-               ", op_type_info: ",
-               ::toString(op_typeinfo_),
-               ")");
+    if (!config.attributes_only) {
+      return cat(::typeName(this),
+                 "( join_quals { lhs: ",
+                 ::toString(lhs_join_cols_),
+                 ", rhs: ",
+                 ::toString(rhs_join_cols_),
+                 " }, filter_quals: { ",
+                 ::toString(filter_ops_),
+                 " }, outer_join_cond: { ",
+                 outer_join_cond_->toString(config),
+                 " }, loop_join: ",
+                 ::toString(nested_loop_),
+                 ", join_type: ",
+                 ::toString(join_type_),
+                 ", op_type: ",
+                 ::toString(op_type_),
+                 ", qualifier: ",
+                 ::toString(qualifier_),
+                 ", op_type_info: ",
+                 ::toString(op_typeinfo_),
+                 ")");
+    } else {
+      return cat(::typeName(this),
+                 "( join_quals { lhs: ",
+                 ::toString(lhs_join_cols_),
+                 ", rhs: ",
+                 ::toString(rhs_join_cols_),
+                 " }, filter_quals: { ",
+                 ::toString(filter_ops_),
+                 " }, loop_join: ",
+                 ::toString(nested_loop_),
+                 ", join_type: ",
+                 ::toString(join_type_),
+                 ", op_type: ",
+                 ::toString(op_type_),
+                 ", qualifier: ",
+                 ::toString(qualifier_),
+                 ", op_type_info: ",
+                 ::toString(op_typeinfo_),
+                 ")");
+    }
   }
   size_t toHash() const override {
     if (!hash_) {
@@ -1693,6 +2040,22 @@ class RelFilter : public RelAlgNode {
 
   RelFilter(RelFilter const&);
 
+  virtual void acceptChildren(Visitor& v) const override {
+    if (getCondition()) {
+      getCondition()->accept(v, "condition");
+    }
+    for (auto& n : getInputs()) {
+      if (n) {
+        n->accept(v, "input");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   const RexScalar* getCondition() const { return filter_.get(); }
 
   const RexScalar* getAndReleaseCondition() { return filter_.release(); }
@@ -1709,21 +2072,26 @@ class RelFilter : public RelAlgNode {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    auto ret =
-        cat(::typeName(this), "(", (filter_ ? filter_->toString(config) : "null"), ", ");
-    if (!config.skip_input_nodes) {
-      ret += ::toString(inputs_);
-    } else {
-      ret += ", input node id={";
-      for (auto& input : inputs_) {
-        auto node_id_in_plan = input->getIdInPlanTree();
-        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
-                                           : std::to_string(input->getId());
-        ret += node_id_str + " ";
+    if (!config.attributes_only) {
+      auto ret = cat(
+          ::typeName(this), "(", (filter_ ? filter_->toString(config) : "null"), ", ");
+      if (!config.skip_input_nodes) {
+        ret += ::toString(inputs_);
+      } else {
+        ret += ", input node id={";
+        for (auto& input : inputs_) {
+          auto node_id_in_plan = input->getIdInPlanTree();
+          auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                             : std::to_string(input->getId());
+          ret += node_id_str + " ";
+        }
+        ret += "}";
       }
-      ret += "}";
+      return cat(ret, ")");
+    } else {
+      return cat(
+          ::typeName(this), "(", (filter_ ? filter_->toString(config) : "null"), ")");
     }
-    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -1757,6 +2125,27 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
                        RelAlgInputs inputs,
                        std::vector<std::shared_ptr<const RelJoin>>& original_joins);
 
+  virtual void acceptChildren(Visitor& v) const override {
+    if (getInnerCondition()) {
+      getInnerCondition()->accept(v, "inner condition");
+    }
+    for (size_t level = 1; level <= getOuterConditionsSize(); ++level) {
+      if (getOuterCondition(level)) {
+        getOuterCondition(level)->accept(v, "outer condition");
+      }
+    }
+    for (auto& n : getInputs()) {
+      if (n) {
+        n->accept(v, "input");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   const RexScalar* getInnerCondition() const;
 
   const RexScalar* getOuterCondition(const size_t nesting_level) const;
@@ -1769,6 +2158,7 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
   size_t toHash() const override;
 
   size_t size() const override;
+  virtual size_t getOuterConditionsSize() const;
 
   std::shared_ptr<RelAlgNode> deepCopy() const override;
 
@@ -1837,6 +2227,32 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
   }
 
   RelCompound(RelCompound const&);
+
+  virtual void acceptChildren(Visitor& v) const override {
+    if (getFilterExpr()) {
+      getFilterExpr()->accept(v, "filter");
+    }
+    for (size_t i = 0; i < getScalarSourcesSize(); ++i) {
+      if (getScalarSource(i)) {
+        getScalarSource(i)->accept(v, "scalar");
+      }
+    }
+    for (size_t i = 0; i < getAggExprSize(); ++i) {
+      if (getAggExpr(i)) {
+        getAggExpr(i)->accept(v, "aggregate");
+      }
+    }
+    for (auto& n : getInputs()) {
+      if (n) {
+        n->accept(v, "input");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
 
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                     std::shared_ptr<const RelAlgNode> input) override;
@@ -1943,6 +2359,19 @@ class RelSort : public RelAlgNode {
     inputs_.push_back(input);
   }
 
+  virtual void acceptChildren(Visitor& v) const override {
+    for (auto& n : getInputs()) {
+      if (n) {
+        n->accept(v, "input");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   bool operator==(const RelSort& that) const {
     return limit_ == that.limit_ && offset_ == that.offset_ &&
            empty_result_ == that.empty_result_ &&
@@ -1972,30 +2401,45 @@ class RelSort : public RelAlgNode {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    const std::string limit_info = limit_delivered_ ? std::to_string(limit_) : "N/A";
-    auto ret = cat(::typeName(this),
-                   "(",
-                   "empty_result: ",
-                   ::toString(empty_result_),
-                   ", collation=",
-                   ::toString(collation_),
-                   ", limit=",
-                   limit_info,
-                   ", offset",
-                   std::to_string(offset_));
-    if (!config.skip_input_nodes) {
-      ret += ", inputs=", ::toString(inputs_);
-    } else {
-      ret += ", input node id={";
-      for (auto& input : inputs_) {
-        auto node_id_in_plan = input->getIdInPlanTree();
-        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
-                                           : std::to_string(input->getId());
-        ret += node_id_str + " ";
+    if (!config.attributes_only) {
+      const std::string limit_info = limit_delivered_ ? std::to_string(limit_) : "N/A";
+      auto ret = cat(::typeName(this),
+                     "(",
+                     "empty_result: ",
+                     ::toString(empty_result_),
+                     ", collation=",
+                     ::toString(collation_),
+                     ", limit=",
+                     limit_info,
+                     ", offset",
+                     std::to_string(offset_));
+      if (!config.skip_input_nodes) {
+        ret += ", inputs=", ::toString(inputs_);
+      } else {
+        ret += ", input node id={";
+        for (auto& input : inputs_) {
+          auto node_id_in_plan = input->getIdInPlanTree();
+          auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                             : std::to_string(input->getId());
+          ret += node_id_str + " ";
+        }
+        ret += "}";
       }
-      ret += "}";
+      return cat(ret, ")");
+    } else {
+      const std::string limit_info = limit_delivered_ ? std::to_string(limit_) : "N/A";
+      return cat(::typeName(this),
+                 "(",
+                 "empty_result: ",
+                 ::toString(empty_result_),
+                 ", collation=",
+                 ::toString(collation_),
+                 ", limit=",
+                 limit_info,
+                 ", offset",
+                 std::to_string(offset_),
+                 ")");
     }
-    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -2105,6 +2549,19 @@ class RelModify : public RelAlgNode {
     inputs_.push_back(input);
   }
 
+  virtual void acceptChildren(Visitor& v) const override {
+    for (auto& n : getInputs()) {
+      if (n) {
+        n->accept(v, "input");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   TableDescriptor const* const getTableDescriptor() const { return table_descriptor_; }
 
   const Catalog_Namespace::Catalog& getCatalog() const { return catalog_; }
@@ -2121,28 +2578,41 @@ class RelModify : public RelAlgNode {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    auto ret = cat(::typeName(this),
-                   "(",
-                   table_descriptor_->tableName,
-                   ", flattened=",
-                   std::to_string(flattened_),
-                   ", op=",
-                   yieldModifyOperationString(operation_),
-                   ", target_column_list=",
-                   ::toString(target_column_list_));
-    if (!config.skip_input_nodes) {
-      ret += ", inputs=", ::toString(inputs_);
-    } else {
-      ret += ", input node id={";
-      for (auto& input : inputs_) {
-        auto node_id_in_plan = input->getIdInPlanTree();
-        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
-                                           : std::to_string(input->getId());
-        ret += node_id_str + " ";
+    if (!config.attributes_only) {
+      auto ret = cat(::typeName(this),
+                     "(",
+                     table_descriptor_->tableName,
+                     ", flattened=",
+                     std::to_string(flattened_),
+                     ", op=",
+                     yieldModifyOperationString(operation_),
+                     ", target_column_list=",
+                     ::toString(target_column_list_));
+      if (!config.skip_input_nodes) {
+        ret += ", inputs=", ::toString(inputs_);
+      } else {
+        ret += ", input node id={";
+        for (auto& input : inputs_) {
+          auto node_id_in_plan = input->getIdInPlanTree();
+          auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                             : std::to_string(input->getId());
+          ret += node_id_str + " ";
+        }
+        ret += "}";
       }
-      ret += "}";
+      return cat(ret, ")");
+    } else {
+      return cat(::typeName(this),
+                 "(",
+                 table_descriptor_->tableName,
+                 ", flattened=",
+                 std::to_string(flattened_),
+                 ", op=",
+                 yieldModifyOperationString(operation_),
+                 ", target_column_list=",
+                 ::toString(target_column_list_),
+                 ")");
     }
-    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -2269,6 +2739,29 @@ class RelTableFunction : public RelAlgNode {
 
   RelTableFunction(RelTableFunction const&);
 
+  virtual void acceptChildren(Visitor& v) const override {
+    for (size_t i = 0; i < getTableFuncInputsSize(); ++i) {
+      if (getTableFuncInputAt(i)) {
+        getTableFuncInputAt(i)->accept(v, "argument");
+      }
+    }
+    for (size_t i = 0; i < size(); ++i) {
+      if (getTargetExpr(i)) {
+        getTargetExpr(i)->accept(v, "target");
+      }
+    }
+    for (auto& n : getInputs()) {
+      if (n) {
+        n->accept(v, "input");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                     std::shared_ptr<const RelAlgNode> input) override;
 
@@ -2321,33 +2814,38 @@ class RelTableFunction : public RelAlgNode {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    auto ret = cat(::typeName(this), "(", function_name_);
-    if (!config.skip_input_nodes) {
-      ret += ", inputs=", ::toString(inputs_);
-    } else {
-      ret += ", input node id={";
-      for (auto& input : inputs_) {
-        auto node_id_in_plan = input->getIdInPlanTree();
-        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
-                                           : std::to_string(input->getId());
-        ret += node_id_str + " ";
+    if (!config.attributes_only) {
+      auto ret = cat(::typeName(this), "(", function_name_);
+      if (!config.skip_input_nodes) {
+        ret += ", inputs=", ::toString(inputs_);
+      } else {
+        ret += ", input node id={";
+        for (auto& input : inputs_) {
+          auto node_id_in_plan = input->getIdInPlanTree();
+          auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                             : std::to_string(input->getId());
+          ret += node_id_str + " ";
+        }
+        ret += "}";
       }
-      ret += "}";
-    }
-    ret +=
-        cat(", fields=", ::toString(fields_), ", col_inputs=...", ", table_func_inputs=");
-    if (!config.skip_input_nodes) {
-      ret += ::toString(table_func_inputs_);
-    } else {
-      for (auto& expr : table_func_inputs_) {
+      ret += cat(
+          ", fields=", ::toString(fields_), ", col_inputs=...", ", table_func_inputs=");
+      if (!config.skip_input_nodes) {
+        ret += ::toString(table_func_inputs_);
+      } else {
+        for (auto& expr : table_func_inputs_) {
+          ret += expr->toString(config) + " ";
+        }
+      }
+      ret += ", target_exprs=";
+      for (auto& expr : target_exprs_) {
         ret += expr->toString(config) + " ";
       }
+      return cat(ret, ")");
+    } else {
+      return cat(
+          ::typeName(this), "(", function_name_, ", fields=", ::toString(fields_), ")");
     }
-    ret += ", target_exprs=";
-    for (auto& expr : target_exprs_) {
-      ret += expr->toString(config) + " ";
-    }
-    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -2397,13 +2895,33 @@ class RelLogicalValues : public RelAlgNode {
 
   RelLogicalValues(RelLogicalValues const&);
 
+  virtual void acceptChildren(Visitor& v) const override {
+    for (size_t row_idx = 0; row_idx < getNumRows(); ++row_idx) {
+      for (size_t col_idx = 0; col_idx < getRowsSize(); ++col_idx) {
+        if (getValueAt(row_idx, col_idx)) {
+          getValueAt(row_idx, col_idx)->accept(v, "value");
+        }
+      }
+    }
+    for (auto& n : getInputs()) {
+      if (n) {
+        n->accept(v, "input");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   const std::vector<TargetMetaInfo> getTupleType() const { return tuple_type_; }
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
     std::string ret = ::typeName(this) + "(";
     for (const auto& target_meta_info : tuple_type_) {
-      ret += " (" + target_meta_info.get_resname() + " " +
+      ret += "(" + target_meta_info.get_resname() + " " +
              target_meta_info.get_type_info().get_type_name() + ")";
     }
     ret += ")";
@@ -2464,6 +2982,20 @@ class RelLogicalUnion : public RelAlgNode {
   RelLogicalUnion() : is_all_{false} {}
 
   RelLogicalUnion(RelAlgInputs, bool is_all);
+
+  virtual void acceptChildren(Visitor& v) const override {
+    for (auto& n : getInputs()) {
+      if (n) {
+        n->accept(v, "input");
+      }
+    }
+  }
+  virtual void accept(Visitor& v, std::string name) const override {
+    if (v.visit(this, std::move(name))) {
+      acceptChildren(v);
+    }
+  }
+
   std::shared_ptr<RelAlgNode> deepCopy() const override {
     return std::make_shared<RelLogicalUnion>(*this);
   }
@@ -2522,6 +3054,8 @@ class RelAlgDag : public boost::noncopyable {
     CHECK(nodes_.size());
     return nodes_.back();
   }
+
+  std::vector<std::shared_ptr<RelAlgNode>>& getNodes() { return nodes_; }
 
   /**
    * Registers a subquery with a root DAG builder. Should only be called during DAG

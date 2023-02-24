@@ -37,6 +37,7 @@
 #include "QueryEngine/ResultSetBuilder.h"
 #include "QueryEngine/RexVisitor.h"
 #include "QueryEngine/TableOptimizer.h"
+#include "QueryEngine/Visitors/RelAlgDagViewer.h"
 #include "QueryEngine/WindowContext.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/measure.h"
@@ -573,6 +574,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
 ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
                                                    const bool just_explain_plan,
+                                                   const bool explain_verbose,
                                                    RenderInfo* render_info) {
   CHECK(query_dag_);
   CHECK(query_dag_->getBuildState() == RelAlgDag::BuildState::kBuiltOptimized)
@@ -582,8 +584,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
   INJECT_TIMER(executeRelAlgQuery);
 
   auto run_query = [&](const CompilationOptions& co_in) {
-    auto execution_result =
-        executeRelAlgQueryNoRetry(co_in, eo, just_explain_plan, render_info);
+    auto execution_result = executeRelAlgQueryNoRetry(
+        co_in, eo, just_explain_plan, explain_verbose, render_info);
 
     constexpr bool vlog_result_set_summary{false};
     if constexpr (vlog_result_set_summary) {
@@ -616,6 +618,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
 ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                                           const ExecutionOptions& eo,
                                                           const bool just_explain_plan,
+                                                          const bool explain_verbose,
                                                           RenderInfo* render_info) {
   INJECT_TIMER(executeRelAlgQueryNoRetry);
   auto timer = DEBUG_TIMER(__func__);
@@ -708,46 +711,18 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   auto ed_seq = RaExecutionSequence(&ra, executor_);
 
   if (just_explain_plan) {
-    std::stringstream ss;
-    std::vector<const RelAlgNode*> nodes;
+    const auto& ra = getRootRelAlgNode();
+    auto ed_seq = RaExecutionSequence(&ra, executor_);
+    std::vector<const RelAlgNode*> steps;
     for (size_t i = 0; i < ed_seq.size(); i++) {
-      nodes.emplace_back(ed_seq.getDescriptor(i)->getBody());
+      steps.emplace_back(ed_seq.getDescriptor(i)->getBody());
+      steps.back()->setStepNumber(i + 1);
     }
-    size_t ctr_node_id_in_plan = nodes.size();
-    for (auto& body : boost::adaptors::reverse(nodes)) {
-      // we set each node's id in the query plan in advance before calling toString
-      // method to properly represent the query plan
-      auto node_id_in_plan_tree = ctr_node_id_in_plan--;
-      body->setIdInPlanTree(node_id_in_plan_tree);
-    }
-    size_t ctr = nodes.size();
-    size_t tab_ctr = 0;
-    RelRexToStringConfig config;
-    config.skip_input_nodes = true;
-    for (auto& body : boost::adaptors::reverse(nodes)) {
-      const auto index = ctr--;
-      const auto tabs = std::string(tab_ctr++, '\t');
-      CHECK(body);
-      ss << tabs << std::to_string(index) << " : " << body->toString(config) << "\n";
-      if (auto sort = dynamic_cast<const RelSort*>(body)) {
-        ss << tabs << "  : " << sort->getInput(0)->toString(config) << "\n";
-      }
-      if (dynamic_cast<const RelProject*>(body) ||
-          dynamic_cast<const RelCompound*>(body)) {
-        if (auto join = dynamic_cast<const RelLeftDeepInnerJoin*>(body->getInput(0))) {
-          ss << tabs << "  : " << join->toString(config) << "\n";
-        }
-      }
-    }
-    const auto& subqueries = getSubqueries();
-    if (!subqueries.empty()) {
-      ss << "Subqueries: "
-         << "\n";
-      for (const auto& subquery : subqueries) {
-        const auto ra = subquery->getRelAlg();
-        ss << "\t" << ra->toString(config) << "\n";
-      }
-    }
+    std::stringstream ss;
+    auto& nodes = getRelAlgDag()->getNodes();
+    RelAlgDagViewer dagv(false, explain_verbose);
+    dagv.handleQueryEngineVector(nodes);
+    ss << dagv;
     auto rs = std::make_shared<ResultSet>(ss.str());
     return {rs, {}};
   }

@@ -20,6 +20,10 @@
  *
  */
 
+// TODO(sy): We already use Calcite, which is a powerful general-purpose parser tool, so
+// ParserWrapper has no good reason to exist. Any work happening in here should be moved
+// into our Java Calcite classes and ParserWrapper should be removed from HeavyDB.
+
 #pragma once
 
 #include <string>
@@ -61,9 +65,12 @@ class ExplainInfo {
 
   std::string ActualQuery() { return actual_query_; }
 
+  bool isVerbose() const { return verbose_; }
+
  private:
   ExplainType explain_type_ = ExplainType::None;
   std::string actual_query_ = "";
+  bool verbose_{false};
 };
 
 class ParserWrapper {
