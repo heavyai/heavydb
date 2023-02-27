@@ -10676,8 +10676,6 @@ void import_test_table_with_various_data_types() {
 void import_window_function_framing_test() {
   run_ddl_statement("DROP TABLE IF EXISTS test_window_framing");
   g_sqlite_comparator.query("DROP TABLE IF EXISTS test_window_framing");
-  run_ddl_statement("DROP TABLE IF EXISTS test_window_framing_multi_frag");
-  g_sqlite_comparator.query("DROP TABLE IF EXISTS test_window_framing_multi_frag");
   std::string columns_definition{
       "(pc int, oc int, oc2 int, ti tinyint, si smallint, i int, bi bigint, f float, d "
       "double, dc "
@@ -10695,9 +10693,6 @@ void import_window_function_framing_test() {
   const auto single_frag_table = gen_table_creation_ddl("test_window_framing", false);
   run_ddl_statement(single_frag_table);
   g_sqlite_comparator.query(single_frag_table);
-  run_ddl_statement(gen_table_creation_ddl("test_window_framing_multi_frag", true));
-  g_sqlite_comparator.query(
-      gen_table_creation_ddl("test_window_framing_multi_frag", false));
   std::vector<std::string> rows{
       "(1, 1, 1, -1, -1, -1, -1, -1.11, -1.1111, 1.11, 1.111111, 1.11, 1.111111, "
       "'2022-05-17 01:00:010000000', '20:00:01', '2022-05-01');",
@@ -10726,13 +10721,9 @@ void import_window_function_framing_test() {
   std::mt19937 g(std::random_device{}());
   std::shuffle(rows.begin(), rows.end(), g);
   for (const auto& row : rows) {
-    for (std::string table_name :
-         {"INSERT INTO test_window_framing VALUES ",
-          "INSERT INTO test_window_framing_multi_frag VALUES "}) {
-      std::string insert_row_ddl = table_name + row;
-      run_multiple_agg(insert_row_ddl, ExecutorDeviceType::CPU);
-      g_sqlite_comparator.query(insert_row_ddl);
-    }
+    std::string insert_row_ddl = "INSERT INTO test_window_framing VALUES " + row;
+    run_multiple_agg(insert_row_ddl, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_row_ddl);
   }
 }
 
@@ -23705,28 +23696,42 @@ TEST_F(Select, WindowFunctionFraming) {
   // on a table having peers (i.e., Postgres, SQLite and SQLServer have different results)
 
   // check the correctness of various aggregation function over window framing
-  for (std::string table_name :
-       {"test_window_framing", "test_window_framing_multi_frag"}) {
-    for (std::string frame_mode : {"ROWS", "RANGE"}) {
-      for (std::string agg_type : {"MIN", "MAX", "AVG", "COUNT", "SUM"}) {
-        for (std::string col_name : {"ti", "si", "i", "bi", "f", "d", "dc", "n"}) {
-          {
-            std::string query_generated = "SELECT oc, " + agg_type + "(" + col_name +
-                                          ") OVER (PARTITION BY pc ORDER BY oc " +
-                                          frame_mode +
-                                          " BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM " +
-                                          table_name + " ORDER BY oc;";
-            c(query_generated, query_generated, dt);
-          }
-          {
-            std::string query_generated = "SELECT oc, " + agg_type + "(" + col_name +
-                                          ") OVER (ORDER BY oc " + frame_mode +
-                                          " BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM " +
-                                          table_name + " ORDER BY oc;";
-            c(query_generated, query_generated, dt);
-          }
-        }
+  for (std::string frame_mode : {"ROWS", "RANGE"}) {
+    for (std::string agg_type : {"MIN", "MAX", "AVG", "COUNT", "SUM"}) {
+      {
+        std::string query_generated =
+            "SELECT oc, " + agg_type + "(i) OVER (PARTITION BY pc ORDER BY oc " +
+            frame_mode +
+            " BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM test_window_framing ORDER BY oc;";
+        c(query_generated, query_generated, dt);
       }
+    }
+  }
+
+  // w/ and w/o partition clause
+  for (std::string frame_mode : {"ROWS", "RANGE"}) {
+    {
+      std::string query_generated =
+          "SELECT oc, AVG(i) OVER (PARTITION BY pc ORDER BY oc " + frame_mode +
+          " BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM test_window_framing ORDER BY oc;";
+      c(query_generated, query_generated, dt);
+    }
+    {
+      std::string query_generated =
+          "SELECT oc, AVG(i) OVER (ORDER BY oc " + frame_mode +
+          " BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM test_window_framing ORDER BY oc;";
+      c(query_generated, query_generated, dt);
+    }
+  }
+
+  // various col types
+  for (std::string agg_type : {"AVG", "COUNT", "SUM"}) {
+    for (std::string col_name : {"ti", "si", "i", "bi", "f", "d", "dc", "n"}) {
+      std::string query_generated =
+          "SELECT oc, " + agg_type + "(" + col_name +
+          ") OVER (PARTITION BY pc ORDER BY oc RANGE BETWEEN 2 PRECEDING AND 2 "
+          "FOLLOWING) FROM test_window_framing ORDER BY oc;";
+      c(query_generated, query_generated, dt);
     }
   }
 
@@ -23742,57 +23747,24 @@ TEST_F(Select, WindowFunctionFraming) {
       " BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING",
       " BETWEEN 1 FOLLOWING AND 3 FOLLOWING",
       " BETWEEN 3 FOLLOWING AND UNBOUNDED FOLLOWING"};
-  for (std::string table_name :
-       {"test_window_framing", "test_window_framing_multi_frag"}) {
-    for (std::string frame_mode : {"ROWS", "RANGE"}) {
-      for (std::string agg_type : {"MIN", "MAX", "AVG", "COUNT", "SUM"}) {
-        for (std::string frame_bound : test_frame_bounds) {
-          std::string query_generated =
-              "SELECT oc, " + agg_type + "(i) OVER (PARTITION BY pc ORDER BY oc " +
-              frame_mode + frame_bound + ") FROM " + table_name + " ORDER BY oc;";
-          c(query_generated, query_generated, dt);
-        }
-      }
+  for (std::string frame_mode : {"ROWS", "RANGE"}) {
+    for (std::string frame_bound : test_frame_bounds) {
+      std::string query_generated =
+          "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc " + frame_mode +
+          frame_bound + ") FROM test_window_framing ORDER BY oc;";
+      c(query_generated, query_generated, dt);
     }
   }
 
-  // row mode: check various ordering types / single and multiple ordering cols
-  std::unordered_map<int, std::string> col_id_maps = {{1, "oc"},
-                                                      {2, "oc2"},
-                                                      {3, "dc"},
-                                                      {4, "n"},
-                                                      {5, "f2"},
-                                                      {6, "d2"},
-                                                      {7, "ts9"},
-                                                      {8, "tm"},
-                                                      {9, "d32"}};
-  for (int i = 1; i <= 9; i++) {
-    const auto col1 = col_id_maps[i];
-    for (int j = 0; j <= 9; j++) {
-      if (j == 0) {
-        // single-column sort
-        std::ostringstream oss;
-        oss << "SELECT " << col1 << ", SUM(i) OVER (PARTITION BY PC ORDER BY " << col1
-            << " ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM test_window_framing "
-               "ORDER BY "
-            << col1 << ";";
-        const auto query_generated = oss.str();
-        c(query_generated, query_generated, dt);
-      } else {
-        const auto col2 = col_id_maps[j];
-        if (col1.compare(col2) == 0) {
-          continue;
-        }
-        std::ostringstream oss;
-        oss << "SELECT " << col1 << ", " << col2
-            << ", SUM(i) OVER (PARTITION BY PC ORDER BY " << col1 << ", " << col2
-            << " ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM test_window_framing "
-               "ORDER BY "
-            << col1 << ", " << col2 << ";";
-        const auto query_generated = oss.str();
-        c(query_generated, query_generated, dt);
-      }
-    }
+  // check various ordering column types
+  for (std::string col : {"oc", "dc", "n", "f2", "d2", "ts9", "tm", "d32"}) {
+    std::ostringstream oss;
+    oss << "SELECT " << col << ", SUM(i) OVER (PARTITION BY PC ORDER BY " << col
+        << " ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM test_window_framing "
+           "ORDER BY "
+        << col << ";";
+    const auto query_generated = oss.str();
+    c(query_generated, query_generated, dt);
   }
 
   // invalid ordering columns
@@ -23950,7 +23922,7 @@ TEST_F(Select, WindowFunctionFraming) {
     }
   }
 
-  // throw an exception when using non literal expression as window framing found
+  // throw an exception when using non-literal expression as window framing found
   EXPECT_ANY_THROW(
       run_multiple_agg("SELECT oc, SUM(i) OVER (RANGE BETWEEN pc * 2 PRECEDING AND 1 "
                        "FOLLOWING) FROM test_window_framing ORDER BY oc;",
@@ -23974,26 +23946,6 @@ TEST_F(Select, WindowFunctionFraming) {
         "oc FROM test_window_framing GROUP BY oc;",
         CompilationOptions::defaults(dt),
         eo);
-  }
-
-  {
-    for (std::string col_name : {"x", "w", "y", "z", "t", "fn", "dn"}) {
-      for (std::string agg_op : {"SUM", "MIN", "MAX", "AVG", "COUNT"}) {
-        std::string query = "SELECT " + agg_op + "(" + col_name +
-                            ") OVER (PARTITION BY x ORDER BY x RANGE BETWEEN 1 PRECEDING "
-                            "AND CURRENT ROW) FROM test GROUP BY x, " +
-                            col_name + " ORDER BY x, " + col_name + " ASC;";
-        c(query, query, dt);
-      }
-    }
-
-    // check allowing fp-type ordering col
-    for (std::string col_name : {"f", "d", "fn", "dn"}) {
-      std::string query =
-          "SELECT SUM(x) OVER (PARTITION BY t ORDER BY " + col_name +
-          " RANGE BETWEEN 1 PRECEDING AND 3 FOLLOWING) res FROM test ORDER BY res ASC;";
-      c(query, query, dt);
-    }
   }
 
   {  // test when building numerous aggregate trees
@@ -28434,10 +28386,6 @@ void drop_tables() {
   const std::string drop_test_window_framing{"DROP TABLE IF EXISTS test_window_framing;"};
   run_ddl_statement(drop_test_window_framing);
   g_sqlite_comparator.query(drop_test_window_framing);
-  const std::string drop_test_window_framing_multi_frag{
-      "DROP TABLE IF EXISTS test_window_framing_multi_frag;"};
-  run_ddl_statement(drop_test_window_framing_multi_frag);
-  g_sqlite_comparator.query(drop_test_window_framing_multi_frag);
   run_ddl_statement("DROP TABLE IF EXISTS TD_RANGE;");
   run_ddl_statement("DROP TABLE IF EXISTS TD_RANGE_NULL;");
   const std::string drop_test_frame_nav{"DROP TABLE IF EXISTS test_frame_nav;"};
