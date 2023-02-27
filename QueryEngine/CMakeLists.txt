@@ -46,6 +46,7 @@ set(query_engine_source_files
   Execute.cpp
   ExecuteUpdate.cpp
   ExecutionKernel.cpp
+  ExecutorDeviceType.cpp
   ExecutorResourceMgr/ExecutorResourcePool.cpp
   ExecutorResourceMgr/ExecutorResourceMgr.cpp
   ExecutorResourceMgr/ResourceGrantPolicy.cpp

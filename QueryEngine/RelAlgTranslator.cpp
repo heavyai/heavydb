@@ -431,6 +431,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
         target_ti.set_subtype(kBOOLEAN);
         return makeExpr<Analyzer::ArrayExpr>(target_ti, args, true);
       }
+      if (target_ti.get_type() == kGEOMETRY) {
+        // Specific geo type will be set in a normalization step if needed.
+        return makeExpr<Analyzer::Constant>(kNULLT, true, Datum{0});
+      }
       return makeExpr<Analyzer::Constant>(rex_literal->getTargetType(), true, Datum{0});
     }
     default: {

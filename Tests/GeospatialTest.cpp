@@ -3261,6 +3261,67 @@ INSTANTIATE_TEST_SUITE_P(GeospatialMultiFragExecutionTests,
                          GeoSpatialMultiFragTestTablesFixture,
                          ::testing::Values(true, false));
 
+class GeoSpatialConditionalExpressionTest : public ExecutorDeviceParameterizedTest {
+ public:
+  static void SetUpTestSuite() { import_geospatial_test(false); }
+
+  static void TearDownTestSuite() {
+    if (!g_keep_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS geospatial_test;");
+    }
+  }
+
+  void queryAndAssertGeoExprError(const std::string& query) {
+    try {
+      run_multiple_agg(query, device_type_);
+      FAIL() << "An exception should have been thrown for this test case";
+    } catch (const TDBException& e) {
+      assertGeoExprErrorMessage(e.error_msg);
+    } catch (const std::exception& e) {
+      assertGeoExprErrorMessage(e.what());
+    }
+  }
+
+  void assertGeoExprErrorMessage(const std::string& error_message) {
+    ASSERT_TRUE(
+        error_message.find("Geospatial column projections are currently not supported in "
+                           "conditional expressions.") != std::string::npos);
+  }
+
+  bool gpusPresent() override { return QR::get()->gpusPresent(); }
+};
+
+TEST_P(GeoSpatialConditionalExpressionTest, Coalesce) {
+  queryAndAssertGeoExprError("SELECT coalesce(p_null, p) FROM geospatial_test;");
+}
+
+TEST_P(GeoSpatialConditionalExpressionTest, CaseExpr) {
+  queryAndAssertGeoExprError(
+      "SELECT CASE WHEN MOD(id, 2) = 1 THEN p ELSE p_null END FROM geospatial_test;");
+}
+
+TEST_P(GeoSpatialConditionalExpressionTest, CaseExprNullWhenCondition) {
+  queryAndAssertGeoExprError(
+      "SELECT CASE WHEN MOD(id, 2) = 1 THEN NULL ELSE p END FROM geospatial_test;");
+}
+
+TEST_P(GeoSpatialConditionalExpressionTest, CaseExprNullElseCondition) {
+  queryAndAssertGeoExprError(
+      "SELECT CASE WHEN MOD(id, 2) = 1 THEN p ELSE NULL END FROM geospatial_test;");
+}
+
+TEST_P(GeoSpatialConditionalExpressionTest, CaseExprNullBetweenThenAndElseCondition) {
+  queryAndAssertGeoExprError(
+      "SELECT CASE WHEN MOD(id, 2) = 1 THEN p WHEN id = 1 THEN NULL ELSE p_null END FROM "
+      "geospatial_test;");
+}
+
+INSTANTIATE_TEST_SUITE_P(CpuAndGpuExecutorDevices,
+                         GeoSpatialConditionalExpressionTest,
+                         ::testing::Values(ExecutorDeviceType::CPU,
+                                           ExecutorDeviceType::GPU),
+                         ::testing::PrintToStringParamName());
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 
