@@ -173,10 +173,6 @@ class RelAlgDagViewer : public RelAlgDagNode::Visitor {
     }
 
     if (!t) {
-      if (debug_) {
-        beginNextLine(t->getStepNumber());
-        out_ << "(null)";
-      }
       return /*recurse=*/false;
     }
     id_map::iterator it = emplace(t);  // Needs the original top_call_ setting.
@@ -312,12 +308,6 @@ class RelAlgDagViewer : public RelAlgDagNode::Visitor {
   bool already_indented_{false};
   bool needs_newline_{false};
   bool needs_colon_{false};
-  // std::optional<std::string> child_key_;
-#ifndef NDEBUG
-  bool debug_{true};
-#else
-  bool debug_{false};
-#endif  // NDEBUG
   bool verbose_{false};
 
   static constexpr size_t indent_spaces_{4};
