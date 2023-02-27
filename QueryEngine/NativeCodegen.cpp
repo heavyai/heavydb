@@ -877,6 +877,8 @@ declare double @decompress_x_coord_geoint(i32);
 declare double @decompress_y_coord_geoint(i32);
 declare i32 @compress_x_coord_geoint(double);
 declare i32 @compress_y_coord_geoint(double);
+declare i64 @fixed_width_date_encode(i64, i32, i64);
+declare i64 @fixed_width_date_decode(i64, i32, i64);
 )" + gen_array_any_all_sigs() +
     gen_translate_null_key_sigs();
 
@@ -1533,23 +1535,32 @@ void Executor::initializeNVPTXBackend() const {
 
 // A small number of runtime functions don't get through CgenState::emitCall. List them
 // explicitly here and always clone their implementation from the runtime module.
+constexpr std::array<std::string_view, 18> TARGET_RUNTIME_FUNCTIONS_FOR_MODULE_CLONING{
+    {"query_stub_hoisted_literals",
+     "multifrag_query_hoisted_literals",
+     "query_stub",
+     "multifrag_query",
+     "fixed_width_int_decode",
+     "fixed_width_unsigned_decode",
+     "diff_fixed_width_int_decode",
+     "fixed_width_double_decode",
+     "fixed_width_float_decode",
+     "fixed_width_small_date_decode",
+     "record_error_code",
+     "get_error_code",
+     "pos_start_impl",
+     "pos_step_impl",
+     "group_buff_idx_impl",
+     "init_shared_mem",
+     "init_shared_mem_nop",
+     "write_back_nop"}};
 bool CodeGenerator::alwaysCloneRuntimeFunction(const llvm::Function* func) {
-  return func->getName() == "query_stub_hoisted_literals" ||
-         func->getName() == "multifrag_query_hoisted_literals" ||
-         func->getName() == "query_stub" || func->getName() == "multifrag_query" ||
-         func->getName() == "fixed_width_int_decode" ||
-         func->getName() == "fixed_width_unsigned_decode" ||
-         func->getName() == "diff_fixed_width_int_decode" ||
-         func->getName() == "fixed_width_double_decode" ||
-         func->getName() == "fixed_width_float_decode" ||
-         func->getName() == "fixed_width_small_date_decode" ||
-         func->getName() == "fixed_width_date_encode" ||
-         func->getName() == "fixed_width_date_decode" ||
-         func->getName() == "record_error_code" || func->getName() == "get_error_code" ||
-         func->getName() == "pos_start_impl" || func->getName() == "pos_step_impl" ||
-         func->getName() == "group_buff_idx_impl" ||
-         func->getName() == "init_shared_mem" ||
-         func->getName() == "init_shared_mem_nop" || func->getName() == "write_back_nop";
+  auto const candidate_func_name = func->getName().str();
+  return std::any_of(TARGET_RUNTIME_FUNCTIONS_FOR_MODULE_CLONING.begin(),
+                     TARGET_RUNTIME_FUNCTIONS_FOR_MODULE_CLONING.end(),
+                     [candidate_func_name](std::string_view func_name) {
+                       return candidate_func_name == func_name;
+                     });
 }
 
 std::unique_ptr<llvm::Module> read_llvm_module_from_bc_file(
