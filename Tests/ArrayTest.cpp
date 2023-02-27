@@ -1363,6 +1363,69 @@ TEST_F(MultiFragArrayParallelLinearizationTest, IndexedArrayJoin) {
   }
 }
 
+class ArrayConditionalExpressionTest : public ExecutorDeviceParameterizedTest {
+ public:
+  static void SetUpTestSuite() {
+    run_ddl_statement(
+        "CREATE TABLE array_test (id INTEGER, i1 INTEGER[], i2 INTEGER[]);");
+    run_multiple_agg(
+        "INSERT INTO array_test VALUES (1, {1, 2, 3}, NULL), (1, NULL, {4, 5, 6}), (1, "
+        "{1, 2}, {3, 4});",
+        ExecutorDeviceType::CPU);
+  }
+
+  static void TearDownTestSuite() {
+    if (!g_keep_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS array_test;");
+    }
+  }
+
+  void queryAndAssertArrayExprError(const std::string& query) {
+    try {
+      run_multiple_agg(query, device_type_);
+      FAIL() << "An exception should have been thrown for this test case";
+    } catch (const std::exception& e) {
+      ASSERT_STREQ(
+          "Array column projections are currently not supported in conditional "
+          "expressions.",
+          e.what());
+    }
+  }
+
+  bool gpusPresent() override { return QR::get()->gpusPresent(); }
+};
+
+TEST_P(ArrayConditionalExpressionTest, Coalesce) {
+  queryAndAssertArrayExprError("SELECT coalesce(i1, i2) FROM array_test;");
+}
+
+TEST_P(ArrayConditionalExpressionTest, CaseExpr) {
+  queryAndAssertArrayExprError(
+      "SELECT CASE WHEN MOD(id, 2) = 1 THEN i1 ELSE i2 END FROM array_test;");
+}
+
+TEST_P(ArrayConditionalExpressionTest, CaseExprNullWhenCondition) {
+  queryAndAssertArrayExprError(
+      "SELECT CASE WHEN MOD(id, 2) = 1 THEN NULL ELSE i2 END FROM array_test;");
+}
+
+TEST_P(ArrayConditionalExpressionTest, CaseExprNullElseCondition) {
+  queryAndAssertArrayExprError(
+      "SELECT CASE WHEN MOD(id, 2) = 1 THEN i1 ELSE NULL END FROM array_test;");
+}
+
+TEST_P(ArrayConditionalExpressionTest, CaseExprNullBetweenThenAndElseCondition) {
+  queryAndAssertArrayExprError(
+      "SELECT CASE WHEN MOD(id, 2) = 1 THEN i1 WHEN id = 1 THEN NULL ELSE i2 END FROM "
+      "array_test;");
+}
+
+INSTANTIATE_TEST_SUITE_P(CpuAndGpuExecutorDevices,
+                         ArrayConditionalExpressionTest,
+                         ::testing::Values(ExecutorDeviceType::CPU,
+                                           ExecutorDeviceType::GPU),
+                         ::testing::PrintToStringParamName());
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 

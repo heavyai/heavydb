@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
+ * Copyright 2023 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,20 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "ExecutorDeviceType.h"
 
-#ifndef __CUDACC__
-#include <ostream>
-#endif
+#include <sstream>
 
-enum class ExecutorDeviceType { CPU, GPU };
+std::ostream& operator<<(std::ostream& os, ExecutorDeviceType device_type) {
+  constexpr size_t array_size{2};
+  constexpr char const* strings[array_size]{"CPU", "GPU"};
+  auto index = static_cast<size_t>(device_type);
+  CHECK_LT(index, array_size);
+  return os << strings[index];
+}
 
-#ifndef __CUDACC__
-std::ostream& operator<<(std::ostream& os, const ExecutorDeviceType device_type);
-std::string toString(const ExecutorDeviceType device_type);
-#endif
+std::string toString(ExecutorDeviceType device_type) {
+  std::stringstream ss;
+  ss << device_type;
+  return ss.str();
+}

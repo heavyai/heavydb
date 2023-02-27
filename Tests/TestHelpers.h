@@ -18,6 +18,7 @@
 
 #include "LeafHostInfo.h"
 #include "Logger/Logger.h"
+#include "QueryEngine/ExecutorDeviceType.h"
 #include "QueryEngine/TargetValue.h"
 
 #include <gtest/gtest.h>
@@ -73,6 +74,26 @@ class TbbPrivateServerKiller : public ::testing::Test {
 #endif
   }
 #endif
+};
+
+class ExecutorDeviceParameterizedTest
+    : public ::testing::TestWithParam<ExecutorDeviceType> {
+ protected:
+  void SetUp() override {
+    device_type_ = GetParam();
+#ifdef HAVE_CUDA
+    bool skip_test = (device_type_ == ExecutorDeviceType::GPU && !gpusPresent());
+#else
+    bool skip_test = (device_type_ == ExecutorDeviceType::GPU);
+#endif
+    if (skip_test) {
+      GTEST_SKIP() << "Unsupported device type: " << device_type_;
+    }
+  }
+
+  virtual bool gpusPresent() = 0;
+
+  ExecutorDeviceType device_type_;
 };
 
 template <class T>

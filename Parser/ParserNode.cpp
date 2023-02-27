@@ -1619,6 +1619,10 @@ bool expr_is_null(const Analyzer::Expr* expr) {
   if (expr->get_type_info().get_type() == kNULLT) {
     return true;
   }
+  auto array_expr = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
+  if (array_expr && array_expr->isNull()) {
+    return true;
+  }
   const auto const_expr = dynamic_cast<const Analyzer::Constant*>(expr);
   return const_expr && const_expr->get_is_null();
 }
@@ -1660,8 +1664,10 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
       continue;
     }
     if (ti.get_type() == kNULLT) {
-      ti = e2_ti;
-    } else if (e2_ti.get_type() == kNULLT) {
+      if (!expr_is_null(e2.get())) {
+        ti = e2_ti;
+      }
+    } else if (expr_is_null(e2.get())) {
       ti.set_notnull(false);
       e2->set_type_info(ti);
     } else if (ti != e2_ti) {

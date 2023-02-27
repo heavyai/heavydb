@@ -39,6 +39,14 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::CaseExpr* case_
     }
   } else if (case_ti.is_boolean()) {
     case_llvm_type = get_int_type(8 * case_ti.get_logical_size(), cgen_state_->context_);
+  } else if (case_ti.is_geometry()) {
+    throw std::runtime_error(
+        "Geospatial column projections are currently not supported in conditional "
+        "expressions.");
+  } else if (case_ti.is_array()) {
+    throw std::runtime_error(
+        "Array column projections are currently not supported in conditional "
+        "expressions.");
   }
   CHECK(case_llvm_type);
   const auto& else_ti = case_expr->get_else_expr()->get_type_info();
