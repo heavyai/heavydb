@@ -24013,6 +24013,18 @@ TEST_F(Select, WindowFunctionFraming) {
       c(query, query, dt);
     }
   }
+
+  // check if we can run window frame navigation function and non-frame navigation
+  // function simultaneously when they can share window partition and sorted window
+  // partition
+  {
+    std::string query{
+        "SELECT LAG(ti, 2) OVER (PARTITION BY p1 ORDER BY o1), LAG_IN_FRAME(ti, 1) OVER "
+        "(PARTITION BY p1 ORDER BY o1 RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING), "
+        "LAG(ti, 2) OVER (PARTITION BY p1 ORDER BY o1) FROM "
+        "test_nvf;"};
+    run_multiple_agg(query, dt);
+  }
 }
 
 TEST_F(Select, WindowFunctionFramingWithDateAndTimeColumn) {
