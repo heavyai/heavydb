@@ -2593,10 +2593,14 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                 : MemoryLevel::CPU_LEVEL;
   std::unique_ptr<WindowFunctionContext> context;
   auto partition_cache_key = work_unit.body->getQueryPlanDagHash();
+  JoinType window_partition_type = window_func->isFrameNavigateWindowFunction()
+                                       ? JoinType::WINDOW_FUNCTION_FRAMING
+                                       : JoinType::WINDOW_FUNCTION;
   if (partition_key_cond) {
     auto partition_cond_str = partition_key_cond->toString();
     auto partition_key_hash = boost::hash_value(partition_cond_str);
     boost::hash_combine(partition_cache_key, partition_key_hash);
+    boost::hash_combine(partition_cache_key, static_cast<int>(window_partition_type));
     std::shared_ptr<HashJoin> partition_ptr;
     auto cached_hash_table_it = partition_cache.find(partition_cache_key);
     if (cached_hash_table_it != partition_cache.end()) {
@@ -2605,9 +2609,6 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
               << partition_cache_key << ", partition condition: " << partition_cond_str
               << ")";
     } else {
-      JoinType window_partition_type = window_func->isFrameNavigateWindowFunction()
-                                           ? JoinType::WINDOW_FUNCTION_FRAMING
-                                           : JoinType::WINDOW_FUNCTION;
       const auto hash_table_or_err = executor_->buildHashTableForQualifier(
           partition_key_cond,
           query_infos,
