@@ -1,4 +1,4 @@
-FROM docker-internal.mapd.com/mapd/core-build-ubuntu2004-cuda11.4
+FROM docker-internal.mapd.com/mapd/core-build-ubuntu2004-cuda11.8
 
 RUN ln -snf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
 RUN echo America/Los_Angeles > /etc/timezone

@@ -1,6 +1,5 @@
-# Build libglvnd for libGL, libEGL, libOpenGL
-# Not currently pulled in by nvidia-docker2
-FROM nvidia/cudagl:11.4.2-devel-centos7
+# cudagl required to expose cuda and graphics (vulkan)
+FROM docker-internal.mapd.com/cudagl:11.8.0-devel-centos7
 
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
 

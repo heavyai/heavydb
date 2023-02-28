@@ -1,5 +1,5 @@
 # cudagl required to expose cuda and graphics (vulkan)
-FROM nvidia/cudagl:11.4.2-devel-ubuntu18.04
+FROM docker-internal.mapd.com/cudagl:11.8.0-devel-ubuntu18.04
 
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
 
