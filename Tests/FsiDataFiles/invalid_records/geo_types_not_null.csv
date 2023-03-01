@@ -1,6 +1,8 @@
-index,point,linestring,polygon,multipolygon
-1, "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
-2,NULL, "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
-3, "POINT (0 0)",NULL, "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
-4, "POINT (0 0)", "LINESTRING (0 0,1 1)",NULL, "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
-5, "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",NULL
+index,point,multipoint,linestring,mlinestring,polygon,multipolygon
+1, "POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,1 1)", "MULTILINESTRING((0 0,1 1))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
+2,NULL, "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,1 1)", "MULTILINESTRING((0 0,1 1))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
+3, "POINT (0 0)",NULL, "LINESTRING (0 0,1 1)", "MULTILINESTRING((0 0,1 1))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
+4, "POINT (0 0)", "MULTIPOINT (0 0,1 1)",NULL, "MULTILINESTRING((0 0,1 1))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
+5, "POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,1 1)",NULL, "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
+6, "POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,1 1)", "MULTILINESTRING((0 0,1 1))",NULL, "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
+7, "POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,1 1)", "MULTILINESTRING((0 0,1 1))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",NULL

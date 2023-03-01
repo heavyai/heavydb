@@ -24,7 +24,8 @@ std::optional<SQLTypes> detect_geo_type(const SampleRows& sample_rows,
   std::optional<SQLTypes> tentative_geo_type{};
   for (const auto& row : sample_rows) {
     static std::regex geo_regex{
-        "\\s*(POINT|LINESTRING|POLYGON|MULTIPOLYGON)\\s*\\(.+\\)\\s*"};
+        "\\s*(POINT|MULTIPOINT|LINESTRING|MULTILINESTRING|POLYGON|MULTIPOLYGON)\\s*\\(.+"
+        "\\)\\s*"};
     std::smatch match;
     CHECK_LT(column_index, row.size());
     if (std::regex_match(row[column_index], match, geo_regex)) {
@@ -33,8 +34,12 @@ std::optional<SQLTypes> detect_geo_type(const SampleRows& sample_rows,
       const auto& geo_type_str = match[1];
       if (geo_type_str == "POINT") {
         geo_type = kPOINT;
+      } else if (geo_type_str == "MULTIPOINT") {
+        geo_type = kMULTIPOINT;
       } else if (geo_type_str == "LINESTRING") {
         geo_type = kLINESTRING;
+      } else if (geo_type_str == "MULTILINESTRING") {
+        geo_type = kMULTILINESTRING;
       } else if (geo_type_str == "POLYGON") {
         geo_type = kPOLYGON;
       } else if (geo_type_str == "MULTIPOLYGON") {

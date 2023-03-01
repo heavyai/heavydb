@@ -96,7 +96,8 @@ std::string get_line_array_regex(size_t column_count) {
 
 std::string get_line_geo_regex(size_t column_count) {
   return repeat_regex(column_count,
-                      "\"?((?:POINT|LINESTRING|POLYGON|MULTIPOLYGON)[^\"]+|\\\\N)\"?");
+                      "\"?((?:POINT|MULTIPOINT|LINESTRING|MULTILINESTRING|POLYGON|"
+                      "MULTIPOLYGON)[^\"]+|\\\\N)\"?");
 }
 }  // namespace
 
@@ -1244,10 +1245,12 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
 
   std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
-      "index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON",
-      param_.data_source_type == "local" ? "geo_types_valid" : "geo_types_2",
+      "index int, p POINT, mp MULTIPOINT, l LINESTRING, mlinestring MULTILINESTRING, "
+      "poly POLYGON, "
+      "multipoly MULTIPOLYGON",
+      param_.data_source_type == "local" ? "geo_types_valid" : "geo_types_3",
       "SELECT * FROM import_test_new ORDER BY index;",
-      "(\\d+),\\s*" + get_line_geo_regex(4),
+      "(\\d+),\\s*" + get_line_geo_regex(6),
       256,
       sql_select_stmt,
       "index",
@@ -1256,24 +1259,28 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
   // clang-format off
     assertResultSetEqual({
     {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+      i(1), "POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,1 1)", "MULTILINESTRING ((0 0,1 1),(5 5,2 2))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
     },
     {
-      i(2), Null, Null, Null, Null
+      i(2), Null, Null, Null, Null, Null, Null
     },
     {
-      i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
+      i(3), "POINT (1 1)", "MULTIPOINT (0 0,1 2,3 2,0 4)", "LINESTRING (1 1,2 2,3 3)", "MULTILINESTRING ((1 1,2 2),(3 3,4 4))", "POLYGON ((5 4,7 4,6 5,5 4))",
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2),(2.1 2.1,2.1 2.9,2.9 2.1,2.1 2.1)))"
     },
     {
-      i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+      i(4), "POINT (2 2)", 
+      param_.import_type == "bigquery" 
+        ? "MULTIPOINT (1 0,2 2,5 5)" 
+        : "MULTIPOINT (5 5,2 2,1 0)",
+      "LINESTRING (2 2,3 3)", "MULTILINESTRING ((2 2,3 3),(4 4,5 5))", "POLYGON ((1 1,3 1,2 3,1 1))",
       param_.import_type == "bigquery" 
         ? "MULTIPOLYGON (((11 11,10 12,10 10,11 11)),((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)))"
         : "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"
     },
     {
-      i(5), Null, Null, Null, Null
+      i(5), Null, Null, Null, Null, Null, Null
     }},
     query);
   // clang-format on
@@ -1459,35 +1466,41 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
   }
   std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
-      "index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON",
+      "index int, p POINT, mp MULTIPOINT, l LINESTRING, mlinestring MULTILINESTRING, "
+      "poly POLYGON, "
+      "multipoly MULTIPOLYGON",
       param_.data_source_type == "local" ? "invalid_records/geo_types"
-                                         : "invalid_records/geo_types_2",
+                                         : "invalid_records/geo_types_3",
       "SELECT * FROM import_test_new ORDER BY index;",
-      "(\\d+),\\s*" + get_line_geo_regex(4),
+      "(\\d+),\\s*" + get_line_geo_regex(6),
       256,
       sql_select_stmt,
       "index",
       {},
       false,
       std::nullopt,
-      {{"LINESTRING", "TEXT"}});
+      {{"(MULTI)?LINESTRING", "TEXT"}});
   // clang-format off
     assertResultSetEqual({
     {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+      i(1), "POINT (0 0)", "MULTIPOINT (0 0,1 1)","LINESTRING (0 0,1 1)", "MULTILINESTRING ((0 0,1 1),(5 5,2 2))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
     },
     {
-      i(2), Null, Null, Null, Null
+      i(2), Null, Null, Null, Null, Null, Null
     },
     {
-      i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+      i(4), "POINT (2 2)", 
+      param_.import_type == "bigquery" 
+        ? "MULTIPOINT (1 0,2 2,5 5)" 
+        : "MULTIPOINT (5 5,2 2,1 0)",
+      "LINESTRING (2 2,3 3)", "MULTILINESTRING ((2 2,3 3),(4 4,5 5))", "POLYGON ((1 1,3 1,2 3,1 1))",
       param_.import_type == "bigquery" 
         ? "MULTIPOLYGON (((11 11,10 12,10 10,11 11)),((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)))"
         : "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"
     },
     {
-      i(5), Null, Null, Null, Null
+      i(5), Null, Null, Null, Null. Null, Null
     }},
     query);
   // clang-format on
@@ -1505,27 +1518,29 @@ TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
   }
   std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
-      "index int, p POINT NOT NULL, l LINESTRING NOT NULL, poly POLYGON NOT NULL, "
+      "index int, p POINT NOT NULL, mp MULTIPOINT NOT NULL, l LINESTRING NOT NULL, "
+      "mlinestring MULTILINESTRING "
+      "NOT NULL, poly POLYGON NOT NULL, "
       "multipoly MULTIPOLYGON NOT NULL",
       "invalid_records/geo_types_not_null",
       "SELECT * FROM import_test_new ORDER BY index;",
-      "(\\d+),\\s*" + get_line_geo_regex(4),
+      "(\\d+),\\s*" + get_line_geo_regex(6),
       256,
       sql_select_stmt,
       "index",
       {},
       false,
       std::nullopt,
-      {{"LINESTRING", "TEXT"}});
+      {{"(MULTI)?LINESTRING", "TEXT"}});
   // clang-format off
     assertResultSetEqual({
     {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+      i(1), "POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,1 1)", "MULTILINESTRING ((0 0,1 1))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
     }},
     query);
   // clang-format on
-  validateImportStatus(1, 4, false);
+  validateImportStatus(1, 6, false);
 }
 
 TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
@@ -2278,9 +2293,13 @@ const char* create_table_example_2 = R"(
 class ImportTest : public ImportExportTestBase {
  protected:
 #ifdef HAVE_AWS_S3
-  static void SetUpTestSuite() { heavydb_aws_sdk::init_sdk(); }
+  static void SetUpTestSuite() {
+    heavydb_aws_sdk::init_sdk();
+  }
 
-  static void TearDownTestSuite() { heavydb_aws_sdk::shutdown_sdk(); }
+  static void TearDownTestSuite() {
+    heavydb_aws_sdk::shutdown_sdk();
+  }
 #endif
 
   void SetUp() override {
@@ -3981,9 +4000,13 @@ class SortedImportTest
       public testing::WithParamInterface<std::tuple<std::string, std::string>> {
  public:
 #ifdef HAVE_AWS_S3
-  static void SetUpTestSuite() { heavydb_aws_sdk::init_sdk(); }
+  static void SetUpTestSuite() {
+    heavydb_aws_sdk::init_sdk();
+  }
 
-  static void TearDownTestSuite() { heavydb_aws_sdk::shutdown_sdk(); }
+  static void TearDownTestSuite() {
+    heavydb_aws_sdk::shutdown_sdk();
+  }
 #endif
 
   void SetUp() override {

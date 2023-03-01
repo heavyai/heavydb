@@ -833,45 +833,49 @@ TEST_F(AlterTableAlterColumnTest, FixedLengthArrayTypes) {
 TEST_F(AlterTableAlterColumnTest, GeoTypes) {
   // clang-format off
   createTextTable(
-      {"p", "l", "poly", "multipoly"},
-      {{"POINT (0 0)", "LINESTRING (0 0,0 0)",
-        "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+      {"p", "mpoint", "l", "mlinestring", "poly", "multipoly"},
+      {{"POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,0 0)",
+        "MULTILINESTRING ((0 0,1 1),(2 2,3 3))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))", 
         "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"},
-       {"NULL", "NULL", "NULL", "NULL"},
-       {"POINT (1 1)", "LINESTRING (1 1,2 2,3 3)",
-        "POLYGON ((5 4,7 4,6 5,5 4))",
+       {"NULL", "NULL", "NULL", "NULL", "NULL", "NULL"},
+       {"POINT (1 1)", "MULTIPOINT (1 1,2 2)", "LINESTRING (1 1,2 2,3 3)",
+        "MULTILINESTRING ((1 1,2 2),(3 3,4 4))", "POLYGON ((5 4,7 4,6 5,5 4))",
         "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"},
-       {"POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+       {"POINT (2 2)", "MULTIPOINT (3 4,4 3,0 0)", "LINESTRING (2 2,3 3)", "MULTILINESTRING ((2 2,3 3),(4 4,5 5))", "POLYGON ((1 1,3 1,2 3,1 1))",
         "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 "
         "0)))"},
-       {"NULL", "NULL", "NULL", "NULL"}});
+       {"NULL", "NULL", "NULL", "NULL", "NULL", "NULL"}});
   // clang-format on
   std::string alter_column_command =
       "ALTER TABLE test_table"
       " ALTER COLUMN p TYPE POINT"
+      ", ALTER COLUMN mpoint TYPE MULTIPOINT"
       ", ALTER COLUMN l TYPE LINESTRING"
+      ", ALTER COLUMN mlinestring TYPE MULTILINESTRING"
       ", ALTER COLUMN poly TYPE POLYGON"
       ", ALTER COLUMN multipoly TYPE MULTIPOLYGON;";
   sql(alter_column_command);
   // clang-format off
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
-      {i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)",
+      {i(1), "POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,0 0)", "MULTILINESTRING ((0 0,1 1),(2 2,3 3))",
        "POLYGON ((0 0,1 0,1 1,0 1,0 0))", "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"},
-      {i(2), Null, Null, Null, Null},
-      {i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)",
+      {i(2), Null, Null, Null, Null, Null, Null},
+      {i(3), "POINT (1 1)", "MULTIPOINT (1 1,2 2)", "LINESTRING (1 1,2 2,3 3)", "MULTILINESTRING ((1 1,2 2),(3 3,4 4))",
        "POLYGON ((5 4,7 4,6 5,5 4))",
        "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"},
-      {i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)",
+      {i(4), "POINT (2 2)", "MULTIPOINT (3 4,4 3,0 0)", "LINESTRING (2 2,3 3)", "MULTILINESTRING ((2 2,3 3),(4 4,5 5))",
        "POLYGON ((1 1,3 1,2 3,1 1))",
        "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 "
        "0)))"},
-      {i(5), Null, Null, Null, Null}};
+      {i(5), Null, Null, Null, Null, Null, Null}};
   // clang-format on
   sqlAndCompareResult("SELECT * FROM test_table ORDER BY index;", expected_values);
   auto reference_schema = std::vector<std::pair<std::string, std::string>>{
       {"index", "INT"},
       {"p", "POINT"},
+      {"mpoint", "MULTIPOINT"},
       {"l", "LINESTRING"},
+      {"mlinestring", "MULTILINESTRING"},
       {"poly", "POLYGON"},
       {"multipoly", "MULTIPOLYGON"},
   };

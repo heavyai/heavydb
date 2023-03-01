@@ -220,7 +220,7 @@ std::string get_line_array_regex(size_t column_count) {
 
 std::string get_line_geo_regex(size_t column_count) {
   return repeat_regex(column_count,
-                      "\"?((?:POINT|LINESTRING|POLYGON|MULTIPOLYGON)[^\"]+|\\\\N)\"?");
+                      "\"?((?:MULTI)?(?:POINT|LINESTRING|POLYGON)[^\"]+|\\\\N)\"?");
 }
 
 std::string get_default_server(const std::string& data_wrapper_type) {
@@ -537,22 +537,22 @@ class ForeignTableTest : public DBHandlerTestFixture {
     // clang-format off
     return {
       {
-        i(1), "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+        i(1), "POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,1 1)", "MULTILINESTRING ((0 0,1 1),(5 5,2 2))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
         "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
       },
       {
-        i(2), Null, Null, Null, Null
+        i(2), Null, Null, Null, Null, Null, Null
       },
       {
-        i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
+        i(3), "POINT (1 1)", "MULTIPOINT (0 0,1 2,3 2,0 4)", "LINESTRING (1 1,2 2,3 3)", "MULTILINESTRING ((1 1,2 2),(3 3,4 4))", "POLYGON ((5 4,7 4,6 5,5 4))",
         "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2),(2.1 2.1,2.1 2.9,2.9 2.1,2.1 2.1)))"
       },
       {
-        i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+        i(4), "POINT (2 2)", "MULTIPOINT (5 5,2 2,1 0)", "LINESTRING (2 2,3 3)", "MULTILINESTRING ((2 2,3 3),(4 4,5 5))", "POLYGON ((1 1,3 1,2 3,1 1))",
         "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"
       },
       {
-        i(5), Null, Null, Null, Null
+        i(5), Null, Null, Null, Null, Null, Null
       }
     };
     // clang-format on
@@ -566,17 +566,21 @@ class ForeignTableTest : public DBHandlerTestFixture {
     if (isOdbc(data_wrapper_type)) {
       odbc_columns = {{"id", "INT"},
                       {"p", "TEXT"},
+                      {"mp", "TEXT"},
                       {"l", "TEXT"},
+                      {"ml", "TEXT"},
                       {"poly", "TEXT"},
                       {"multipoly", "TEXT"}};
     }
     foreign_storage::OptionsMap options{{"FRAGMENT_SIZE", std::to_string(fragment_size)}};
     if (data_wrapper_type == "regex_parser") {
-      options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_geo_regex(4);
+      options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_geo_regex(6);
     }
     sql(createForeignTableQuery({{"id", "INT"},
                                  {"p", "POINT"},
+                                 {"mp", "MULTIPOINT"},
                                  {"l", "LINESTRING"},
+                                 {"ml", "MULTILINESTRING"},
                                  {"poly", "POLYGON"},
                                  {"multipoly", "MULTIPOLYGON"}},
                                 getDataFilesPath() + "geo_types_valid" + extension,
@@ -2971,7 +2975,9 @@ class RefreshTests : public ForeignTableTest, public TempDirManager {
     return {foreign_table->last_refresh_time, foreign_table->next_refresh_time};
   }
 
-  void assertNullRefreshTime(int64_t refresh_time) { ASSERT_EQ(-1, refresh_time); }
+  void assertNullRefreshTime(int64_t refresh_time) {
+    ASSERT_EQ(-1, refresh_time);
+  }
 
   void assertRefreshTimeBetween(int64_t refresh_time,
                                 int64_t start_time,
@@ -3119,7 +3125,8 @@ TEST_F(RefreshMetadataTypeTest, ArrayTypes) {
 
 TEST_F(RefreshMetadataTypeTest, GeoTypes) {
   const auto& query = getCreateForeignTableQuery(
-      "(index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
+      "(index int, p POINT, mp MULTIPOINT, l LINESTRING, ml MULTILINESTRING, "
+      "poly POLYGON, multipoly MULTIPOLYGON)",
       {},
       "geo_types_valid",
       "csv",
@@ -4085,18 +4092,22 @@ TEST_P(DataWrapperAppendRefreshTest, AppendNothingGeo) {
   if (isOdbc(wrapper_type_)) {
     odbc_columns = {{"id", "INT"},
                     {"p", "TEXT"},
+                    {"mp", "TEXT"},
                     {"l", "TEXT"},
+                    {"mlinestring", "TEXT"},
                     {"poly", "TEXT"},
                     {"multipoly", "TEXT"}};
   }
   foreign_storage::OptionsMap additional_options;
   if (wrapper_type_ == "regex_parser") {
-    additional_options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_geo_regex(4);
+    additional_options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_geo_regex(6);
   }
   sqlCreateTestTable(additional_options,
                      {{"i", "INT"},
                       {"p", "POINT"},
+                      {"mp", "MULTIPOINT"},
                       {"l", "LINESTRING"},
+                      {"mlinestring", "MULTILINESTRING"},
                       {"poly", "POLYGON"},
                       {"mpoly", "MULTIPOLYGON"}},
                      odbc_columns);
@@ -4822,10 +4833,12 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayDateTimeTypes) {
 
 TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
   const auto& query = getCreateForeignTableQuery(
-      "( index INT, p GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), l "
-      "GEOMETRY(LINESTRING,4326) ENCODING COMPRESSED(32), poly GEOMETRY(POLYGON,4326) "
-      "ENCODING COMPRESSED(32), mpoly GEOMETRY(MULTIPOLYGON,4326) ENCODING "
-      "COMPRESSED(32) )",
+      "( index INT, p GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), mp "
+      "GEOMETRY(MULTIPOINT,4326) ENCODING COMPRESSED(32), "
+      "l GEOMETRY(LINESTRING,4326) ENCODING COMPRESSED(32), "
+      "ml GEOMETRY(MULTILINESTRING,4326) ENCODING COMPRESSED(32), "
+      "poly GEOMETRY(POLYGON,4326) ENCODING COMPRESSED(32), "
+      "mpoly GEOMETRY(MULTIPOLYGON,4326) ENCODING COMPRESSED(32) )",
       "geo_types_valid",
       "parquet");
   sql(query);
@@ -4839,17 +4852,21 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
       {
         i(1),
         "POINT (0 0)",
+        "MULTIPOINT (0 0,0.999999940861017 0.999999982770532)",
         "LINESTRING (0 0,0.999999940861017 0.999999982770532)",
+        "MULTILINESTRING ((0 0,0.999999940861017 0.999999982770532),(4.99999995576218 4.99999999767169,1.99999996554106 1.99999996554106))",
         "POLYGON ((0 0,0.999999940861017 0.0,0.999999940861017 0.999999982770532,0.0 0.999999982770532,0 0))",
         "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)),((1.99999996554106 1.99999996554106,2.99999999022111 1.99999996554106,1.99999996554106 2.99999999022111,1.99999996554106 1.99999996554106)))"},
       {
-        i(2), Null, Null, Null, Null
+        i(2), Null, Null, Null, Null, Null, Null
       },
       {
         i(3),
         "POINT (0.999999940861017 0.999999982770532)",
+        "MULTIPOINT (0 0,0.999999940861017 1.99999996554106,2.99999999022111 1.99999996554106,0.0 3.99999997299165)",
         "LINESTRING (0.999999940861017 0.999999982770532,1.99999996554106 "
         "1.99999996554106,2.99999999022111 2.99999999022111)",
+        "MULTILINESTRING ((0.999999940861017 0.999999982770532,1.99999996554106 1.99999996554106),(2.99999999022111 2.99999999022111,3.99999993108213 3.99999997299165))",
         "POLYGON ((4.99999995576218 3.99999997299165,6.99999992130324 "
         "3.99999997299165,5.99999998044223 4.99999999767169,4.99999995576218 "
         "3.99999997299165))",
@@ -4858,15 +4875,17 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
       {
         i(4),
         "POINT (1.99999996554106 1.99999996554106)",
+        "MULTIPOINT (4.99999995576218 4.99999999767169,1.99999996554106 1.99999996554106,0.999999940861017 0.0)",
         "LINESTRING (1.99999996554106 1.99999996554106,2.99999999022111 "
         "2.99999999022111)",
+        "MULTILINESTRING ((1.99999996554106 1.99999996554106,2.99999999022111 2.99999999022111),(3.99999993108213 3.99999997299165,4.99999995576218 4.99999999767169))",
         "POLYGON ((0.999999940861017 0.999999982770532,2.99999999022111 "
         "0.999999982770532,1.99999996554106 2.99999999022111,0.999999940861017 "
         "0.999999982770532))",
         "MULTIPOLYGON (((4.99999995576218 4.99999999767169,7.99999994598329 7.99999998789281,4.99999995576218 7.99999998789281,4.99999995576218 4.99999999767169)),((0 0,2.99999999022111 0.0,0.0 2.99999999022111,0 0)),((10.9999999362044 10.9999999781139,9.99999999534339 11.9999999608845,9.99999999534339 9.99999999534339,10.9999999362044 10.9999999781139)))",
       },
       {
-        i(5), Null, Null, Null, Null
+        i(5), Null, Null, Null, Null, Null, Null
       },
   },
   result);
@@ -4880,7 +4899,9 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
 
   const auto& query = getCreateForeignTableQuery(
-      "( index INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON )",
+      "( index INT, p POINT, mp MULTIPOINT, l LINESTRING, ml MULTILINESTRING, poly "
+      "POLYGON, mpoly "
+      "MULTIPOLYGON )",
       "geo_types_valid",
       "parquet");
   sql(query);
@@ -4890,24 +4911,40 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
 
   std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>> test_chunk_metadata_map;
   test_chunk_metadata_map[{0, 1}] = createChunkMetadata<int32_t>(1, 20, 5, 1, 5, false);
+
   test_chunk_metadata_map[{0, 2}] = createChunkMetadata(2, 0, 5, true);
   test_chunk_metadata_map[{0, 3}] = createChunkMetadata<int8_t>(3, 80, 5, -16, 64, false);
+
   test_chunk_metadata_map[{0, 4}] = createChunkMetadata(4, 0, 5, true);
-  test_chunk_metadata_map[{0, 5}] = createChunkMetadata<int8_t>(5, 112, 5, -16, 64, true);
+  test_chunk_metadata_map[{0, 5}] = createChunkMetadata<int8_t>(5, 144, 5, -16, 64, true);
   test_chunk_metadata_map[{0, 6}] =
-      createChunkMetadata<double>(6, 160, 5, 0.000000, 3.000000, true);
+      createChunkMetadata<double>(6, 160, 5, 0.000000, 5.000000, true);
+
   test_chunk_metadata_map[{0, 7}] = createChunkMetadata(7, 0, 5, true);
-  test_chunk_metadata_map[{0, 8}] = createChunkMetadata<int8_t>(8, 160, 5, -16, 64, true);
-  test_chunk_metadata_map[{0, 9}] = createChunkMetadata<int32_t>(9, 12, 5, 3, 4, true);
-  test_chunk_metadata_map[{0, 10}] =
-      createChunkMetadata<double>(10, 160, 5, 0.000000, 7.000000, true);
-  test_chunk_metadata_map[{0, 11}] = createChunkMetadata(11, 0, 5, true);
-  test_chunk_metadata_map[{0, 12}] =
-      createChunkMetadata<int8_t>(12, 384, 5, -52, 64, true);
-  test_chunk_metadata_map[{0, 13}] = createChunkMetadata<int32_t>(13, 32, 5, 3, 3, true);
-  test_chunk_metadata_map[{0, 14}] = createChunkMetadata<int32_t>(14, 28, 5, 1, 2, true);
+  test_chunk_metadata_map[{0, 8}] = createChunkMetadata<int8_t>(8, 112, 5, -16, 64, true);
+  test_chunk_metadata_map[{0, 9}] =
+      createChunkMetadata<double>(9, 160, 5, 0.000000, 3.000000, true);
+
+  test_chunk_metadata_map[{0, 10}] = createChunkMetadata(10, 0, 5, true);
+  test_chunk_metadata_map[{0, 11}] =
+      createChunkMetadata<int8_t>(11, 192, 5, -16, 64, true);
+  test_chunk_metadata_map[{0, 12}] = createChunkMetadata<int32_t>(12, 24, 5, 2, 2, true);
+  test_chunk_metadata_map[{0, 13}] =
+      createChunkMetadata<double>(13, 160, 5, 0.000000, 5.000000, true);
+
+  test_chunk_metadata_map[{0, 14}] = createChunkMetadata(14, 0, 5, true);
   test_chunk_metadata_map[{0, 15}] =
-      createChunkMetadata<double>(15, 160, 5, 0.000000, 12.000000, true);
+      createChunkMetadata<int8_t>(15, 160, 5, -16, 64, true);
+  test_chunk_metadata_map[{0, 16}] = createChunkMetadata<int32_t>(16, 12, 5, 3, 4, true);
+  test_chunk_metadata_map[{0, 17}] =
+      createChunkMetadata<double>(17, 160, 5, 0.000000, 7.000000, true);
+  test_chunk_metadata_map[{0, 18}] = createChunkMetadata(18, 0, 5, true);
+  test_chunk_metadata_map[{0, 19}] =
+      createChunkMetadata<int8_t>(19, 384, 5, -52, 64, true);
+  test_chunk_metadata_map[{0, 20}] = createChunkMetadata<int32_t>(20, 32, 5, 3, 3, true);
+  test_chunk_metadata_map[{0, 21}] = createChunkMetadata<int32_t>(21, 28, 5, 1, 2, true);
+  test_chunk_metadata_map[{0, 22}] =
+      createChunkMetadata<double>(22, 160, 5, 0.000000, 12.000000, true);
   assertExpectedChunkMetadata(test_chunk_metadata_map);
 }
 
@@ -5164,19 +5201,23 @@ TEST_F(PostGisSelectQueryTest, GeometryFromPostGisAsText) {
   sql(createForeignTableQuery(
       {{"id", "INT"},
        {"p", "POINT"},
+       {"mp", "MULTIPOINT"},
        {"l", "LINESTRING"},
+       {"ml", "MULTILINESTRING"},
        {"poly", "POLYGON"},
        {"multipoly", "MULTIPOLYGON"}},
       getDataFilesPath() + "geo_types_valid.csv",
       "postgres",
       {{"sql_select",
-        "select id, ST_AsText(p) as p, ST_AsText(l) as l, ST_AsText(poly) as poly, "
-        "ST_AsText(multipoly) as multipoly from "s +
+        "select id, ST_AsText(p) as p, ST_AsText(mp) as mp, ST_AsText(l) as l, ST_AsText(ml) as ml, "
+        "ST_AsText(poly) as poly, ST_AsText(multipoly) as multipoly from "s +
             getOdbcTableName(default_table_name, wrapper_type_)}},
       default_table_name,
       {{"id", "INT"},
        {"p", "TEXT"},
+       {"mp", "TEXT"},
        {"l", "TEXT"},
+       {"ml", "TEXT"},
        {"poly", "TEXT"},
        {"multipoly", "TEXT"}},
       true));
@@ -5186,22 +5227,22 @@ TEST_F(PostGisSelectQueryTest, GeometryFromPostGisAsText) {
   // clang-format off
   assertResultSetEqual({
     {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,1 1)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+      i(1), "POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,1 1)", "MULTILINESTRING ((0 0,1 1),(5 5,2 2))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
     },
     {
-      i(2), Null, Null, Null, Null
+      i(2), Null, Null, Null, Null, Null, Null
     },
     {
-      i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
+      i(3), "POINT (1 1)", "MULTIPOINT (0 0,1 2,3 2,0 4)", "LINESTRING (1 1,2 2,3 3)", "MULTILINESTRING ((1 1,2 2),(3 3,4 4))", "POLYGON ((5 4,7 4,6 5,5 4))",
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2),(2.1 2.1,2.1 2.9,2.9 2.1,2.1 2.1)))"
     },
     {
-      i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+      i(4), "POINT (2 2)", "MULTIPOINT (5 5,2 2,1 0)", "LINESTRING (2 2,3 3)", "MULTILINESTRING ((2 2,3 3),(4 4,5 5))", "POLYGON ((1 1,3 1,2 3,1 1))",
       "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"
     },
     {
-      i(5), Null, Null, Null, Null
+      i(5), Null, Null, Null, Null, Null, Null
     }},
     result);
   // clang-format on
@@ -7172,6 +7213,30 @@ TEST_F(PrefetchLimitTest, PartialFragmentLimitPoint) {
                       {{"POINT (0 0)"}, {"POINT (1 1)"}, {"POINT (2 2)"}});
 }
 
+// This multipoint is compsoed of 5 physical chunks
+TEST_F(PrefetchLimitTest, PartialFragmentLimitMultipoint) {
+  // 2 fragments (2 varlen data + 2 varlen index + 1 empty) + 1 varlen data.
+  size_t size_limit =
+      (max_buffer_size_ * 2U + index_buffer_size_ * 2U) * 2U + max_buffer_size_;
+  cache_->setDataSizeLimit(size_limit);
+
+  sql(createForeignTableQuery({{"mp", "MULTIPOINT"}},
+                              getDataFilesPath() + "GeoTypes/multipoint.parquet",
+                              wrapper_type_,
+                              {{"fragment_size", "1"}}));
+  sql("SELECT COUNT(*) FROM " + default_table_name);
+
+  // Despite having room for part of a third fragment we should only store 2, because
+  // caching a geo-column should be atomic.
+  auto mock_data_wrapper = std::make_shared<CountChunksMockWrapper>(10);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{"MULTIPOINT (0 0,1 1)"},
+                       {"MULTIPOINT (0 0,1 2,3 2,0 4)"},
+                       {"MULTIPOINT (5 5,2 2,1 0)"}});
+}
+
 // This linestring is composed of 5 physical chunks
 TEST_F(PrefetchLimitTest, PartialFragmentLimitLinestring) {
   // 2 fragments (2 varlen data + 2 varlen index + 1 empty) + 1 varlen data.
@@ -7194,6 +7259,30 @@ TEST_F(PrefetchLimitTest, PartialFragmentLimitLinestring) {
       "SELECT * FROM " + default_table_name + ";",
       {{"LINESTRING (0 0,0 0)"}, {"LINESTRING (1 1,2 2,3 3)"}, {"LINESTRING (2 2,3 3)"}});
 }
+
+// This multilinestring is composed of 7 physical chunks
+TEST_F(PrefetchLimitTest, PartialFragmentLimitMultiLinestring) {
+  // 2 fragments (3 varlen data + 3 varlen index + 1 empty) + 1 varlen data.
+  size_t size_limit =
+      (max_buffer_size_ * 3U + index_buffer_size_ * 3U) * 2U + max_buffer_size_;
+  cache_->setDataSizeLimit(size_limit);
+
+  sql(createForeignTableQuery({{"mlinestring", "MULTILINESTRING"}},
+                              getDataFilesPath() + "GeoTypes/multilinestring.parquet",
+                              wrapper_type_,
+                              {{"fragment_size", "1"}}));
+  sql("SELECT COUNT(*) FROM " + default_table_name + ";");
+
+  // Despite having room for part of a third fragment we should only store 2, because
+  // caching a geo-column should be atomic.
+  auto mock_data_wrapper = std::make_shared<CountChunksMockWrapper>(14);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{"MULTILINESTRING ((0 0,0 0))"},
+                       {"MULTILINESTRING ((0 0,1 1),(1 1,2 2))"},
+                       {"MULTILINESTRING ((3 3,4 4))"}});
+};
 
 // This polygon is composed of 8 physical chunks
 TEST_F(PrefetchLimitTest, PartialFragmentLimitPolygon) {
