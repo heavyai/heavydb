@@ -442,6 +442,9 @@ void TableArchiver::dumpTable(const TableDescriptor* td,
   if (td->is_system_table) {
     throw std::runtime_error("Dumping a system table is not supported.");
   }
+  if (td->isForeignTable()) {
+    throw std::runtime_error("Dumping a foreign table is not supported.");
+  }
   ddl_utils::validate_allowed_file_path(archive_path,
                                         ddl_utils::DataTransferType::EXPORT);
   if (g_cluster) {
