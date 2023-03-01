@@ -2157,6 +2157,7 @@ extern "C" ALWAYS_INLINE DEVICE double tree_model_reg_predict(
     const int64_t decision_tree_offsets_handle,
     const int32_t num_regressors,
     const int32_t num_trees,
+    const bool compute_avg,
     const double null_value) {
   for (int32_t regressor_idx = 0; regressor_idx < num_regressors; ++regressor_idx) {
     if (regressor_inputs[regressor_idx] == null_value) {
@@ -2182,7 +2183,7 @@ extern "C" ALWAYS_INLINE DEVICE double tree_model_reg_predict(
                     : current_entry.right_child_row_idx;
     }
   }
-  return sum_tree_results / num_trees;
+  return compute_avg ? sum_tree_results / num_trees : sum_tree_results;
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE bool sample_ratio(

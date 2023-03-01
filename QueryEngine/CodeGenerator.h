@@ -22,6 +22,8 @@
 #include "Execute.h"
 #include "Shared/DbObjectKeys.h"
 
+class AbstractMLModel;
+
 // Code generation utility to be used for queries and scalar expressions.
 class CodeGenerator {
  public:
@@ -230,11 +232,13 @@ class CodeGenerator {
 
   llvm::Value* codegenLinRegPredict(const Analyzer::MLPredictExpr*,
                                     const std::string& model_name,
+                                    const std::shared_ptr<AbstractMLModel>& model,
                                     const CompilationOptions&);
 
-  llvm::Value* codegenRandForestRegPredict(const Analyzer::MLPredictExpr*,
-                                           const std::string& model_name,
-                                           const CompilationOptions&);
+  llvm::Value* codegenTreeRegPredict(const Analyzer::MLPredictExpr*,
+                                     const std::string& model_name,
+                                     const std::shared_ptr<AbstractMLModel>& model,
+                                     const CompilationOptions&);
 
   llvm::Value* codegen(const Analyzer::StringOper*, const CompilationOptions&);
 

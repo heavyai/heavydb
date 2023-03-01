@@ -38,25 +38,10 @@ class TreeModelPredictionMgr {
  public:
   TreeModelPredictionMgr(
       const Data_Namespace::MemoryLevel memory_level,
-      const int device_count,
       Executor* executor,
-      Data_Namespace::DataMgr* data_mgr,
       const std::vector<std::vector<DecisionTreeEntry>>& decision_trees,
-      const std::vector<int64_t>& decision_tree_offsets)
-      : memory_level_(memory_level)
-      , device_count_(device_count)
-      , executor_(executor)
-      , data_mgr_(data_mgr)
-      , num_trees_(decision_trees.size()) {
-#ifdef HAVE_CUDA
-    CHECK(memory_level_ == Data_Namespace::CPU_LEVEL ||
-          memory_level_ == Data_Namespace::GPU_LEVEL);
-#else
-    CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
-#endif  // HAVE_CUDA
-    allocateAndPopulateHostBuffers(decision_trees, decision_tree_offsets);
-    createKernelBuffers();
-  }
+      const std::vector<int64_t>& decision_tree_offsets,
+      const bool compute_avg);
 
   llvm::Value* codegen(const std::vector<llvm::Value*>& regressor_inputs,
                        const CompilationOptions& co) const;
@@ -68,10 +53,11 @@ class TreeModelPredictionMgr {
   void createKernelBuffers();
 
   const Data_Namespace::MemoryLevel memory_level_;
-  const int device_count_;
   Executor* executor_;
   Data_Namespace::DataMgr* data_mgr_;
+  const int device_count_;
   const int32_t num_trees_;
+  const bool compute_avg_;
   int8_t* host_decision_tree_table_;
   int8_t* host_decision_tree_offsets_;
   int64_t decision_tree_table_size_bytes_;

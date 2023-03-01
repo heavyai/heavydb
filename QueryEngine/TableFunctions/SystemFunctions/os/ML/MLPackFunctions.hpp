@@ -185,11 +185,16 @@ mlpack_linear_reg_fit_impl(const T* input_labels,
 
 template <typename T>
 NEVER_INLINE HOST int32_t
-mlpack_linear_reg_predict_impl(const std::vector<const T*>& input_features,
+mlpack_linear_reg_predict_impl(const std::shared_ptr<LinearRegressionModel>& model,
+                               const std::vector<const T*>& input_features,
                                T* output_predictions,
-                               const int64_t num_rows,
-                               const double* coefs) {
+                               const int64_t num_rows) {
+  CHECK(model->getModelType() == MLModelType::LINEAR_REG);
   try {
+    if (model->getNumFeatures() != static_cast<int64_t>(input_features.size())) {
+      throw std::runtime_error(
+          "Number of model coefficients does not match number of input features.");
+    }
     // Implement simple linear regression entirely in Armadillo
     // to avoid overhead of mlpack copies and extra matrix inversion
     const int64_t num_features = input_features.size();
@@ -201,6 +206,7 @@ mlpack_linear_reg_predict_impl(const std::vector<const T*>& input_features,
           X.colptr(feature_idx + 1), input_features[feature_idx], sizeof(T) * num_rows);
     }
     std::vector<T> casted_coefs(num_coefs);
+    const auto& coefs = model->getCoefs();
     for (int64_t coef_idx = 0; coef_idx < num_coefs; ++coef_idx) {
       casted_coefs[coef_idx] = coefs[coef_idx];
     }

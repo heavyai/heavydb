@@ -249,13 +249,19 @@ NEVER_INLINE HOST linear_regression::ModelPtr build_linear_reg_model(
 
 template <typename T>
 NEVER_INLINE HOST int32_t
-onedal_linear_reg_predict_impl(const std::vector<const T*>& input_features,
+onedal_linear_reg_predict_impl(const std::shared_ptr<LinearRegressionModel>& model,
+                               const std::vector<const T*>& input_features,
                                T* output_predictions,
-                               const int64_t num_rows,
-                               const double* coefs) {
+                               const int64_t num_rows) {
+  CHECK(model->getModelType() == MLModelType::LINEAR_REG);
   try {
+    if (model->getNumFeatures() != static_cast<int64_t>(input_features.size())) {
+      throw std::runtime_error(
+          "Number of model coefficients does not match number of input features.");
+    }
     const auto features_table = prepare_data_table(input_features, num_rows);
-    const auto model_ptr = build_linear_reg_model<T>(coefs, input_features.size() + 1);
+    const auto model_ptr =
+        build_linear_reg_model<T>(model->getCoefs().data(), input_features.size() + 1);
 
     linear_regression::prediction::Batch<> algorithm;
     algorithm.input.set(linear_regression::prediction::data, features_table);
@@ -275,6 +281,109 @@ onedal_linear_reg_predict_impl(const std::vector<const T*>& input_features,
   }
 }
 
+template <typename T>
+NEVER_INLINE HOST void onedal_decision_tree_reg_fit_impl(
+    const std::string& model_name,
+    const T* input_labels,
+    const std::vector<const T*>& input_features,
+    const int64_t num_rows,
+    const int64_t max_tree_depth,
+    const int64_t min_observations_per_leaf_node) {
+  try {
+    const auto labels_table = prepare_data_table(input_labels, num_rows);
+    const auto features_table = prepare_data_table(input_features, num_rows);
+    decision_tree::regression::training::Batch<T> algorithm;
+    algorithm.input.set(decision_tree::regression::training::data, features_table);
+    algorithm.input.set(decision_tree::regression::training::dependentVariables,
+                        labels_table);
+
+    algorithm.parameter.pruning = decision_tree::Pruning::none;
+    algorithm.parameter.maxTreeDepth = max_tree_depth;
+    algorithm.parameter.minObservationsInLeafNodes = min_observations_per_leaf_node;
+    algorithm.compute();
+    /* Retrieve the algorithm results */
+    decision_tree::regression::training::ResultPtr training_result =
+        algorithm.getResult();
+
+    auto model_ptr = training_result->get(decision_tree::regression::training::model);
+    auto model = std::make_shared<DecisionTreeRegressionModel>(model_ptr);
+    ml_models_.addModel(model_name, model);
+  } catch (std::exception& e) {
+    throw std::runtime_error(e.what());
+  }
+}
+
+template <typename T>
+NEVER_INLINE HOST void onedal_gbt_reg_fit_impl(
+    const std::string& model_name,
+    const T* input_labels,
+    const std::vector<const T*>& input_features,
+    const int64_t num_rows,
+    const int64_t max_iterations,
+    const int64_t max_tree_depth,
+    const double shrinkage,
+    const double min_split_loss,
+    const double lambda,
+    const double obs_per_tree_fraction,
+    const int64_t features_per_node,
+    const int64_t min_observations_per_leaf_node,
+    const int64_t max_bins,
+    const int64_t min_bin_size) {
+  try {
+    const auto labels_table = prepare_data_table(input_labels, num_rows);
+    const auto features_table = prepare_data_table(input_features, num_rows);
+    gbt::regression::training::Batch<T> algorithm;
+    algorithm.input.set(gbt::regression::training::data, features_table);
+    algorithm.input.set(gbt::regression::training::dependentVariable, labels_table);
+
+    algorithm.parameter().maxIterations = max_iterations;
+    algorithm.parameter().maxTreeDepth = max_tree_depth;
+    algorithm.parameter().shrinkage = shrinkage;
+    algorithm.parameter().minSplitLoss = min_split_loss;
+    algorithm.parameter().lambda = lambda;
+    algorithm.parameter().observationsPerTreeFraction = obs_per_tree_fraction;
+    algorithm.parameter().featuresPerNode = features_per_node;
+    algorithm.parameter().minObservationsInLeafNode = min_observations_per_leaf_node;
+    algorithm.parameter().maxBins = max_bins;
+    algorithm.parameter().minBinSize = min_bin_size;
+    algorithm.compute();
+    /* Retrieve the algorithm results */
+    gbt::regression::training::ResultPtr training_result = algorithm.getResult();
+
+    auto model_ptr = training_result->get(gbt::regression::training::model);
+    auto model = std::make_shared<GbtRegressionModel>(model_ptr);
+    ml_models_.addModel(model_name, model);
+  } catch (std::exception& e) {
+    throw std::runtime_error(e.what());
+  }
+}
+
+inline decision_forest::training::VariableImportanceMode get_var_importance_metric_type(
+    const VarImportanceMetric var_importance_metric) {
+  const static std::map<VarImportanceMetric,
+                        decision_forest::training::VariableImportanceMode>
+      var_importance_mode_type_map = {
+          {VarImportanceMetric::DEFAULT,
+           decision_forest::training::VariableImportanceMode::MDI},
+          {VarImportanceMetric::NONE,
+           decision_forest::training::VariableImportanceMode::none},
+          {VarImportanceMetric::MDI,
+           decision_forest::training::VariableImportanceMode::MDI},
+          {VarImportanceMetric::MDA,
+           decision_forest::training::VariableImportanceMode::MDA_Raw},
+          {VarImportanceMetric::MDA_SCALED,
+           decision_forest::training::VariableImportanceMode::MDA_Scaled}};
+
+  const auto itr = var_importance_mode_type_map.find(var_importance_metric);
+  if (itr == var_importance_mode_type_map.end()) {
+    std::ostringstream oss;
+    oss << "Invalid variable importance mode type. "
+        << "Was expecting one of DEFAULT, NONE, MDI, MDA, or MDA_SCALED.";
+    throw std::runtime_error(oss.str());
+  }
+  return itr->second;
+}
+
 template <typename T, decision_forest::regression::training::Method M>
 NEVER_INLINE HOST void onedal_random_forest_reg_fit_impl(
     const std::string& model_name,
@@ -282,9 +391,18 @@ NEVER_INLINE HOST void onedal_random_forest_reg_fit_impl(
     const std::vector<const T*>& input_features,
     const int64_t num_rows,
     const int64_t num_trees,
+    const double obs_per_tree_fraction,
     const int64_t max_tree_depth,
-    const int64_t min_observations_per_leaf_node,
-    const int64_t min_observations_per_split_node) {
+    const int64_t features_per_node,
+    const double impurity_threshold,
+    const bool bootstrap,
+    const int64_t min_obs_per_leaf_node,
+    const int64_t min_obs_per_split_node,
+    const double min_weight_fraction_in_leaf_node,
+    const double min_impurity_decrease_in_split_node,
+    const int64_t max_leaf_nodes,
+    const VarImportanceMetric var_importance_metric) {
+  constexpr bool compute_out_of_bag_error{false};
   try {
     const auto labels_table = prepare_data_table(input_labels, num_rows);
     const auto features_table = prepare_data_table(input_features, num_rows);
@@ -294,12 +412,20 @@ NEVER_INLINE HOST void onedal_random_forest_reg_fit_impl(
                         labels_table);
 
     algorithm.parameter().nTrees = num_trees;
+    algorithm.parameter().observationsPerTreeFraction = obs_per_tree_fraction;
     algorithm.parameter().maxTreeDepth = max_tree_depth;
-    algorithm.parameter().minObservationsInLeafNode = min_observations_per_leaf_node;
-    algorithm.parameter().minObservationsInSplitNode = min_observations_per_split_node;
-    algorithm.parameter().varImportance = decision_forest::training::MDA_Raw;
+    algorithm.parameter().featuresPerNode = features_per_node;
+    algorithm.parameter().impurityThreshold = impurity_threshold;
+    algorithm.parameter().bootstrap = bootstrap;
+    algorithm.parameter().minObservationsInLeafNode = min_obs_per_leaf_node;
+    algorithm.parameter().minObservationsInSplitNode = min_obs_per_split_node;
+    algorithm.parameter().minWeightFractionInLeafNode = min_weight_fraction_in_leaf_node;
+    algorithm.parameter().minImpurityDecreaseInSplitNode =
+        min_impurity_decrease_in_split_node;
+    algorithm.parameter().varImportance =
+        get_var_importance_metric_type(var_importance_metric);
     algorithm.parameter().resultsToCompute =
-        decision_forest::training::computeOutOfBagError;
+        compute_out_of_bag_error ? decision_forest::training::computeOutOfBagError : 0;
     algorithm.compute();
     /* Retrieve the algorithm results */
     decision_forest::regression::training::ResultPtr training_result =
@@ -309,19 +435,55 @@ NEVER_INLINE HOST void onedal_random_forest_reg_fit_impl(
     auto variable_importance_table =
         training_result->get(decision_forest::regression::training::variableImportance);
     const size_t num_features = input_features.size();
-    std::vector<double> variable_importance(num_features);
-    for (size_t feature_idx = 0; feature_idx < num_features; ++feature_idx) {
-      variable_importance[feature_idx] =
-          variable_importance_table->NumericTable::getValue<T>(feature_idx, size_t(0));
+    std::vector<double> variable_importance(
+        var_importance_metric != VarImportanceMetric::NONE ? num_features : 0);
+    if (var_importance_metric != VarImportanceMetric::NONE) {
+      for (size_t feature_idx = 0; feature_idx < num_features; ++feature_idx) {
+        variable_importance[feature_idx] =
+            variable_importance_table->NumericTable::getValue<T>(feature_idx, size_t(0));
+      }
     }
+    double out_of_bag_error{0};
+    if (compute_out_of_bag_error) {
+      auto out_of_bag_error_table =
+          training_result->get(decision_forest::regression::training::outOfBagError);
+      out_of_bag_error =
+          out_of_bag_error_table->NumericTable::getValue<T>(0, static_cast<size_t>(0));
+    }
+    auto model = std::make_shared<RandomForestRegressionModel>(
+        model_ptr, variable_importance, out_of_bag_error);
+    ml_models_.addModel(model_name, model);
+  } catch (std::exception& e) {
+    throw std::runtime_error(e.what());
+  }
+}
 
-    auto out_of_bag_error_table =
-        training_result->get(decision_forest::regression::training::outOfBagError);
-    const auto out_of_bag_error =
-        out_of_bag_error_table->NumericTable::getValue<T>(0, static_cast<size_t>(0));
-    auto model =
-        RandomForestRegressionModel(model_ptr, variable_importance, out_of_bag_error);
-    random_forest_models_.addModel(model_name, model);
+template <typename T>
+NEVER_INLINE HOST int32_t onedal_decision_tree_reg_predict_impl(
+    const std::shared_ptr<DecisionTreeRegressionModel>& model,
+    const std::vector<const T*>& input_features,
+    T* output_predictions,
+    const int64_t num_rows) {
+  CHECK(model->getModelType() == MLModelType::DECISION_TREE_REG);
+  try {
+    if (model->getNumFeatures() != static_cast<int64_t>(input_features.size())) {
+      throw std::runtime_error("Number of provided features does not match model.");
+    }
+    const auto features_table = prepare_data_table(input_features, num_rows);
+    decision_tree::regression::prediction::Batch<T> algorithm;
+    algorithm.input.set(decision_tree::regression::prediction::data, features_table);
+    algorithm.input.set(decision_tree::regression::prediction::model,
+                        model->getModelPtr());
+
+    const auto predictions_table =
+        HomogenNumericTable<T>::create(output_predictions, 1, num_rows);
+
+    const decision_tree::regression::prediction::ResultPtr result(
+        new decision_tree::regression::prediction::Result);
+    result->set(decision_tree::regression::prediction::prediction, predictions_table);
+    algorithm.setResult(result);
+    algorithm.compute();
+    return num_rows;
   } catch (std::exception& e) {
     throw std::runtime_error(e.what());
   }
@@ -329,20 +491,50 @@ NEVER_INLINE HOST void onedal_random_forest_reg_fit_impl(
 
 template <typename T>
 NEVER_INLINE HOST int32_t
-onedal_random_forest_reg_predict_impl(const std::string& model_name,
-                                      const std::vector<const T*>& input_features,
-                                      T* output_predictions,
-                                      const int64_t num_rows) {
+onedal_gbt_reg_predict_impl(const std::shared_ptr<GbtRegressionModel>& model,
+                            const std::vector<const T*>& input_features,
+                            T* output_predictions,
+                            const int64_t num_rows) {
+  CHECK(model->getModelType() == MLModelType::GBT_REG);
   try {
-    auto random_forest_model = random_forest_models_.getModel(model_name);
-    if (random_forest_model.model_ptr->getNumberOfFeatures() != input_features.size()) {
+    if (model->getNumFeatures() != static_cast<int64_t>(input_features.size())) {
+      throw std::runtime_error("Number of provided features does not match model.");
+    }
+    const auto features_table = prepare_data_table(input_features, num_rows);
+    gbt::regression::prediction::Batch<T> algorithm;
+    algorithm.input.set(gbt::regression::prediction::data, features_table);
+    algorithm.input.set(gbt::regression::prediction::model, model->getModelPtr());
+
+    const auto predictions_table =
+        HomogenNumericTable<T>::create(output_predictions, 1, num_rows);
+
+    const gbt::regression::prediction::ResultPtr result(
+        new gbt::regression::prediction::Result);
+    result->set(gbt::regression::prediction::prediction, predictions_table);
+    algorithm.setResult(result);
+    algorithm.compute();
+    return num_rows;
+  } catch (std::exception& e) {
+    throw std::runtime_error(e.what());
+  }
+}
+
+template <typename T>
+NEVER_INLINE HOST int32_t onedal_random_forest_reg_predict_impl(
+    const std::shared_ptr<RandomForestRegressionModel>& model,
+    const std::vector<const T*>& input_features,
+    T* output_predictions,
+    const int64_t num_rows) {
+  CHECK(model->getModelType() == MLModelType::RANDOM_FOREST_REG);
+  try {
+    if (model->getNumFeatures() != static_cast<int64_t>(input_features.size())) {
       throw std::runtime_error("Number of provided features does not match model.");
     }
     const auto features_table = prepare_data_table(input_features, num_rows);
     decision_forest::regression::prediction::Batch<T> algorithm;
     algorithm.input.set(decision_forest::regression::prediction::data, features_table);
     algorithm.input.set(decision_forest::regression::prediction::model,
-                        random_forest_model.model_ptr);
+                        model->getModelPtr());
 
     const auto predictions_table =
         HomogenNumericTable<T>::create(output_predictions, 1, num_rows);
@@ -358,10 +550,15 @@ onedal_random_forest_reg_predict_impl(const std::string& model_name,
   }
 }
 
-inline std::vector<double> onedal_random_forest_reg_var_importance_impl(
+inline const std::vector<double>& onedal_random_forest_reg_var_importance_impl(
     const std::string& model_name) {
-  auto random_forest_model = random_forest_models_.getModel(model_name);
-  return random_forest_model.variable_importance;
+  const auto base_model = ml_models_.getModel(model_name);
+  const auto rand_forest_model =
+      std::dynamic_pointer_cast<RandomForestRegressionModel>(base_model);
+  if (!rand_forest_model) {
+    throw std::runtime_error("Model is not of type random forest.");
+  }
+  return rand_forest_model->getVariableImportanceScores();
 }
 
 #endif  // #ifdef HAVE_ONEDAL
