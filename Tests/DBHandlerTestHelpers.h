@@ -74,37 +74,33 @@ const std::map<std::string, std::map<boost::regex, std::string>>
           {make_regex("TIME\\b"), "time(0)"},
           {make_regex("TIMESTAMP"), "timestamp(0)"},
           {make_regex("TIMESTAMP\\s*\\(6\\)"), "timestamp"},
-          {make_regex("POINT"), "geometry"},
-          {make_regex("LINESTRING"), "geometry"},
-          {make_regex("POLYGON"), "geometry"},
-          {make_regex("MULTIPOLYGON"), "geometry"}}},
+          {make_regex("(MULTI)?POINT"), "geometry"},
+          {make_regex("(MULTI)?LINESTRING"), "geometry"},
+          {make_regex("(MULTI)?POLYGON"), "geometry"}}},
         {"redshift",
          {{make_regex("TEXT.*"), "text"},
           {make_regex("FLOAT"), "real"},
           {make_regex("DOUBLE"), "double precision"},
           {make_regex("TIMESTAMP\\s*\\(\\d+\\)"), "timestamp"},
           {make_regex("TINYINT"), "smallint"},
-          {make_regex("POINT"), "geometry"},
-          {make_regex("LINESTRING"), "geometry"},
-          {make_regex("POLYGON"), "geometry"},
-          {make_regex("MULTIPOLYGON"), "geometry"}}},
+          {make_regex("(MULTI)?POINT"), "geometry"},
+          {make_regex("(MULTI)?LINESTRING"), "geometry"},
+          {make_regex("(MULTI)?POLYGON"), "geometry"}}},
         {"snowflake",
          {{make_regex("TEXT.*"), "text"},
           {make_regex("TIME\\b"), "time(0)"},
-          {make_regex("POINT"), "geography"},
-          {make_regex("LINESTRING"), "geography"},
-          {make_regex("POLYGON"), "geography"},
-          {make_regex("MULTIPOLYGON"), "geography"}}},
+          {make_regex("(MULTI)?POINT"), "geography"},
+          {make_regex("(MULTI)?LINESTRING"), "geography"},
+          {make_regex("(MULTI)?POLYGON"), "geography"}}},
         {"bigquery",
          {{make_regex("TEXT.*"), "string"},
           {make_regex("TIMESTAMP\\s*\\(\\d+\\)"), "timestamp"},
           {make_regex("TIME\\s*\\(\\d+\\)"), "time"},
           {make_regex("FLOAT"), "float64"},
           {make_regex("DOUBLE"), "float64"},
-          {make_regex("POINT"), "geography"},
-          {make_regex("LINESTRING"), "geography"},
-          {make_regex("POLYGON"), "geography"},
-          {make_regex("MULTIPOLYGON"), "geography"}}}};
+          {make_regex("(MULTI)?POINT"), "geography"},
+          {make_regex("(MULTI)?LINESTRING"), "geography"},
+          {make_regex("(MULTI)?POLYGON"), "geography"}}}};
 
 const std::map<std::string, std::map<boost::regex, std::string>>
     k_rdms_column_type_prepend = {
@@ -222,7 +218,9 @@ class AssertValueEqualsVisitor : public boost::static_visitor<> {
 
  private:
   bool isGeo(const TDatumType::type type) const {
-    return (type == TDatumType::type::POINT || type == TDatumType::type::LINESTRING ||
+    return (type == TDatumType::type::POINT || type == TDatumType::type::MULTIPOINT ||
+            type == TDatumType::type::LINESTRING ||
+            type == TDatumType::type::MULTILINESTRING ||
             type == TDatumType::type::POLYGON || type == TDatumType::type::MULTIPOLYGON);
   }
 
