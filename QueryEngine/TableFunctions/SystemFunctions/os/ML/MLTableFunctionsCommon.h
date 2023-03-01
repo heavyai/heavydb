@@ -50,3 +50,21 @@ inline KMeansInitStrategy get_kmeans_init_type(const std::string& init_type_str)
   }
   return itr->second;
 }
+
+enum class VarImportanceMetric { DEFAULT, NONE, MDI, MDA, MDA_SCALED, INVALID };
+
+inline VarImportanceMetric get_var_importance_metric(
+    const std::string& var_importance_metric_str) {
+  const auto upper_var_importance_metric_str = to_upper(var_importance_metric_str);
+  const static std::map<std::string, VarImportanceMetric> var_importance_metric_map = {
+      {"DEFAULT", VarImportanceMetric::DEFAULT},
+      {"NONE", VarImportanceMetric::NONE},
+      {"MDI", VarImportanceMetric::MDI},
+      {"MDA", VarImportanceMetric::MDA},
+      {"MDA_SCALED", VarImportanceMetric::MDA_SCALED}};
+  const auto itr = var_importance_metric_map.find(upper_var_importance_metric_str);
+  if (itr == var_importance_metric_map.end()) {
+    return VarImportanceMetric::INVALID;
+  }
+  return itr->second;
+}

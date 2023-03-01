@@ -758,8 +758,6 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createTypeWithNullability(
               typeFactory.createSqlType(SqlTypeName.DOUBLE), /*nullable=*/true);
-      // typeFactory.createSqlType(opBinding.getOperandType(1).getSqlTypeName()),
-      // true);
     }
 
     @Override
@@ -778,9 +776,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
-      // SqlCall sql_call = callBinding.getCall();
       final SqlValidator validator = callBinding.getValidator();
-      // final RelDataTypeFactory type_factory = callBinding.getTypeFactory();
 
       final int num_operands = callBinding.getOperandCount();
       if (num_operands < 2) {
