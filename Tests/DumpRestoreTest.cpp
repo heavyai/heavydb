@@ -261,6 +261,16 @@ class DumpAndRestoreTest : public ::testing::Test {
     run_ddl_statement("DROP TABLE IF EXISTS render_groups;");
   }
 
+  void queryAndAssertException(const std::string& query,
+                               const std::string& error_message) {
+    try {
+      run_ddl_statement(query);
+      FAIL() << "An exception should have been thrown for this test case";
+    } catch (const std::exception& e) {
+      ASSERT_STREQ(error_message.c_str(), e.what());
+    }
+  }
+
   void sqlAndCompareResult(const std::string& sql,
                            const std::vector<std::string>& expected_result) {
     auto result = run_multiple_agg(sql);
@@ -305,6 +315,14 @@ class DumpAndRestoreTest : public ::testing::Test {
     }
   }
 };
+
+TEST_F(DumpAndRestoreTest, ForeignTableDump) {
+  run_ddl_statement(
+      "CREATE FOREIGN TABLE test_foreign_table (a INT) SERVER default_local_delimited "
+      "WITH (file_path='../../Tests/FsiDataFiles/1.csv');");
+  queryAndAssertException("DUMP TABLE test_foreign_table TO '" + tar_ball_path + "';",
+                          "Dumping a foreign table is not supported.");
+}
 
 TEST_F(DumpAndRestoreTest, Geo_DifferentEncodings) {
   run_ddl_statement(
@@ -626,16 +644,6 @@ class S3RestoreTest : public DumpAndRestoreTest {
 
   bool insufficientPrivateCredentials() const {
     return !is_valid_aws_key(get_aws_keys_from_env());
-  }
-
-  void queryAndAssertException(const std::string& query,
-                               const std::string& error_message) {
-    try {
-      run_ddl_statement(query);
-      FAIL() << "An exception should have been thrown for this test case";
-    } catch (const std::exception& e) {
-      ASSERT_STREQ(error_message.c_str(), e.what());
-    }
   }
 
   void queryAndAssertPartialException(const std::string& query,
