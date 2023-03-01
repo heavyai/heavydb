@@ -313,138 +313,13 @@ linear_reg_fit__cpu_template(TableFunctionManager& mgr,
   } catch (std::runtime_error& e) {
     return mgr.ERROR_MESSAGE(e.what());
   }
-  auto model = LinearRegressionModel(coefs);
-  linear_reg_models_.addModel(model_name, model);
-  auto model_type{ModelType::LINEAR_REG};
-  model_types_.addModel(model_name, model_type);
+  auto model = std::make_shared<LinearRegressionModel>(coefs);
+  ml_models_.addModel(model_name, model);
   const std::string model_name_str = model_name.getString();
-  if (model_name_str.rfind(temp_model_prefix) != 0) {
-    // model_name does not start with temp model prefix,
-    // which would be the case if we called this method from
-    // lienar_reg_fit_predict, which in turn means that
-    // output_model_name is not safe to write to.
-    // Yes a bit hacky, but was considered the least invasive
-    // solution in the face of issues synthesizing string
-    // dictionary proxies on the fly for dummy string columns
-    const TextEncodingDict model_name_str_id =
-        output_model_name.getOrAddTransient(model_name);
-    output_model_name[0] = model_name_str_id;
-  }
+  const TextEncodingDict model_name_str_id =
+      output_model_name.getOrAddTransient(model_name);
+  output_model_name[0] = model_name_str_id;
   return 1;
-}
-
-// clang-format off
-/*
-  UDTF: linear_reg_predict__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
-   Cursor<Column<K> id, ColumnList<T> features> data,
-   TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
-   Column<K> id | input_id=args<0>, Column<T> prediction,
-   K=[int64_t, TextEncodingDict], T=[float, double]
- */
-// clang-format on
-
-template <typename T, typename K>
-NEVER_INLINE HOST int32_t
-linear_reg_predict__cpu_template(TableFunctionManager& mgr,
-                                 const TextEncodingNone& model_name,
-                                 const Column<K>& input_ids,
-                                 const ColumnList<T>& input_features,
-                                 const TextEncodingNone& preferred_ml_framework_str,
-                                 Column<K>& output_ids,
-                                 Column<T>& output_predictions) {
-  const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
-  if (preferred_ml_framework == MLFramework::INVALID) {
-    return mgr.ERROR_MESSAGE("Invalid ML Framework: " +
-                             preferred_ml_framework_str.getString());
-  }
-  try {
-    auto model = linear_reg_models_.getModel(model_name);
-    if (static_cast<int64_t>(model.coefs.size()) != input_features.numCols() + 1) {
-      mgr.enable_output_allocations();
-      return mgr.ERROR_MESSAGE(
-          "Number of model coefficients does not match number of input features.");
-    }
-
-    mgr.set_output_row_size(input_ids.size());
-    const auto denulled_data = denull_data(input_features);
-    const int64_t num_rows = denulled_data.masked_num_rows;
-    const bool data_is_masked =
-        denulled_data.masked_num_rows < denulled_data.unmasked_num_rows;
-    std::vector<T> denulled_output_allocation(data_is_masked ? num_rows : 0);
-    T* denulled_output =
-        data_is_masked ? denulled_output_allocation.data() : output_predictions.ptr_;
-
-    const auto features_ptrs =
-        pluck_ptrs(denulled_data.data, 0L, input_features.numCols());
-
-    bool did_execute = false;
-#ifdef HAVE_ONEDAL
-    if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
-                         preferred_ml_framework == MLFramework::DEFAULT)) {
-      onedal_linear_reg_predict_impl(
-          features_ptrs, denulled_output, num_rows, model.coefs.data());
-      did_execute = true;
-    }
-#endif
-#ifdef HAVE_MLPACK
-    if (!did_execute && (preferred_ml_framework == MLFramework::MLPACK ||
-                         preferred_ml_framework == MLFramework::DEFAULT)) {
-      mlpack_linear_reg_predict_impl(
-          features_ptrs, denulled_output, num_rows, model.coefs.data());
-      did_execute = true;
-    }
-#endif
-    if (!did_execute) {
-      return mgr.ERROR_MESSAGE("Cannot find " + preferred_ml_framework_str.getString() +
-                               " ML library to support kmeans implementation.");
-    }
-    output_ids = input_ids;
-    if (data_is_masked) {
-      unmask_data(denulled_output,
-                  denulled_data.reverse_index_map,
-                  output_predictions.ptr_,
-                  denulled_data.unmasked_num_rows,
-                  inline_null_value<T>());
-    }
-    return input_ids.size();
-  } catch (std::runtime_error& e) {
-    mgr.enable_output_allocations();
-    return mgr.ERROR_MESSAGE(e.what());
-  }
-}
-
-// clang-format off
-/*
-  UDTF: linear_reg_predict__cpu_template(TableFunctionManager,
-   Cursor<Column<TextEncodingDict> model_name> model,
-   Cursor<Column<K> id, ColumnList<T> features> data,
-   TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
-   Column<K> id | input_id=args<0>, Column<T> prediction,
-   K=[int64_t, TextEncodingDict], T=[float, double]
- */
-// clang-format on
-
-template <typename T, typename K>
-NEVER_INLINE HOST int32_t
-linear_reg_predict__cpu_template(TableFunctionManager& mgr,
-                                 const Column<TextEncodingDict>& model_name,
-                                 const Column<K>& input_ids,
-                                 const ColumnList<T>& input_features,
-                                 const TextEncodingNone& preferred_ml_framework_str,
-                                 Column<K>& output_ids,
-                                 Column<T>& output_predictions) {
-  if (model_name.size() != 1) {
-    return mgr.ERROR_MESSAGE("Expected only one row in model CURSOR.");
-  }
-  const std::string model_name_str{model_name.getString(0)};
-  return linear_reg_predict__cpu_template(mgr,
-                                          model_name_str,
-                                          input_ids,
-                                          input_features,
-                                          preferred_ml_framework_str,
-                                          output_ids,
-                                          output_predictions);
 }
 
 template <typename T>
@@ -483,50 +358,161 @@ linear_reg_coefs__cpu_2(TableFunctionManager& mgr,
 
 // clang-format off
 /*
-  UDTF: linear_reg_fit_predict__cpu_template(TableFunctionManager,
-   Cursor<Column<K> id, Column<T> labels, ColumnList<T> features> data,
+  UDTF: decision_tree_reg_fit__cpu_template(TableFunctionManager,
+   TextEncodingNone model,
+   Cursor<Column<T> labels, ColumnList<T> features> data,
+   int64_t max_tree_depth | require="max_tree_depth >= 0" | default=0,
+   int64_t min_obs_per_leaf_node | require="min_obs_per_leaf_node >= 0" | default=5,
    TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
-   Column<K> id | input_id=args<0>, Column<T> prediction,
-   K=[int64_t, TextEncodingDict], T=[float, double]
+   Column<TextEncodingDict> model | input_id=args<>, T=[float, double]
  */
 // clang-format on
 
-template <typename T, typename K>
+template <typename T>
 NEVER_INLINE HOST int32_t
-linear_reg_fit_predict__cpu_template(TableFunctionManager& mgr,
-                                     const Column<K>& input_ids,
-                                     const Column<T>& input_labels,
-                                     const ColumnList<T>& input_features,
-                                     const TextEncodingNone& preferred_ml_framework_str,
-                                     Column<K>& output_ids,
-                                     Column<T>& output_predictions) {
-  mgr.disable_output_allocations();
-  const std::string model_name_str = temp_model_prefix + std::to_string(temp_model_idx++);
-  TextEncodingNone model_name(model_name_str);
-  std::vector<TextEncodingDict> output_model_name_vec(1);
-  Column<TextEncodingDict> output_model_name(output_model_name_vec);
-  // Use the transient proxy
-  // Todo: create version of linear_reg_fit that takes in the model
-  // parameters so has to avoid the need to do this
-  // output_model_name.string_dict_proxy_ = mgr.getStringDictionaryProxy(1, 0);
-
-  const auto fit_ret = linear_reg_fit__cpu_template(mgr,
-                                                    model_name,
-                                                    input_labels,
-                                                    input_features,
-                                                    preferred_ml_framework_str,
-                                                    output_model_name);
-  mgr.enable_output_allocations();
-  if (fit_ret < 0) {
-    return fit_ret;
+decision_tree_reg_fit__cpu_template(TableFunctionManager& mgr,
+                                    const TextEncodingNone& model_name,
+                                    const Column<T>& input_labels,
+                                    const ColumnList<T>& input_features,
+                                    const int64_t max_tree_depth,
+                                    const int64_t min_observations_per_leaf_node,
+                                    const TextEncodingNone& preferred_ml_framework_str,
+                                    Column<TextEncodingDict>& output_model_name) {
+  const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
+  if (preferred_ml_framework == MLFramework::INVALID) {
+    return mgr.ERROR_MESSAGE("Invalid ML Framework: " +
+                             preferred_ml_framework_str.getString());
   }
-  return linear_reg_predict__cpu_template(mgr,
-                                          model_name,
-                                          input_ids,
-                                          input_features,
-                                          preferred_ml_framework_str,
-                                          output_ids,
-                                          output_predictions);
+  if (preferred_ml_framework == MLFramework::MLPACK) {
+    return mgr.ERROR_MESSAGE(
+        "Only OneDAL framework supported for decision tree regression.");
+  }
+#ifndef HAVE_ONEDAL
+  return mgr.ERROR_MESSAGE(
+      "Only OneDAL framework supported for decision tree regression.");
+#endif
+
+  const auto denulled_data = denull_data(input_labels, input_features);
+  const auto labels_ptrs = pluck_ptrs(denulled_data.data, 0L, 1L);
+  const auto features_ptrs =
+      pluck_ptrs(denulled_data.data, 1L, input_features.numCols() + 1);
+  mgr.set_output_row_size(1);
+  try {
+    bool did_execute = false;
+#ifdef HAVE_ONEDAL
+    if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
+                         preferred_ml_framework == MLFramework::DEFAULT)) {
+      onedal_decision_tree_reg_fit_impl<T>(model_name,
+                                           labels_ptrs[0],
+                                           features_ptrs,
+                                           denulled_data.masked_num_rows,
+                                           max_tree_depth,
+                                           min_observations_per_leaf_node);
+      const TextEncodingDict model_name_str_id =
+          output_model_name.getOrAddTransient(model_name);
+      output_model_name[0] = model_name_str_id;
+      did_execute = true;
+    }
+#endif
+    if (!did_execute) {
+      return mgr.ERROR_MESSAGE(
+          "Cannot find " + preferred_ml_framework_str.getString() +
+          " ML library to support decision tree regression implementation.");
+    }
+  } catch (std::runtime_error& e) {
+    return mgr.ERROR_MESSAGE(e.what());
+  }
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: gbt_reg_fit__cpu_template(TableFunctionManager,
+   TextEncodingNone model,
+   Cursor<Column<T> labels, ColumnList<T> features> data,
+   int64_t max_iterations | require="max_iterations > 0" | default=50,
+   int64_t max_tree_depth | require="max_tree_depth > 0" | default=6,
+   double shrinkage | require="shrinkage > 0.0" | require="shrinkage <= 1.0" | default=0.3,
+   double min_split_loss | require="min_split_loss >= 0.0" | default=0.0,
+   double lambda | require="lambda >= 0.0" | default=1.0,
+   double obs_per_tree_fraction | require="obs_per_tree_fraction > 0.0" | require="obs_per_tree_fraction <= 1.0" | default=1.0,
+   int64_t features_per_node | require="features_per_node >= 0" | default=0,
+   int64_t min_obs_per_leaf_node | require="min_obs_per_leaf_node > 0" | default=5,
+   int64_t max_bins | require="max_bins > 0" | default=256,
+   int64_t min_bin_size | require="min_bin_size >= 0" | default=5,
+   TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
+   Column<TextEncodingDict> model | input_id=args<>, T=[float, double]
+ */
+// clang-format on
+
+template <typename T>
+NEVER_INLINE HOST int32_t
+gbt_reg_fit__cpu_template(TableFunctionManager& mgr,
+                          const TextEncodingNone& model_name,
+                          const Column<T>& input_labels,
+                          const ColumnList<T>& input_features,
+                          const int64_t max_iterations,
+                          const int64_t max_tree_depth,
+                          const double shrinkage,
+                          const double min_split_loss,
+                          const double lambda,
+                          const double obs_per_tree_fraction,
+                          const int64_t features_per_node,
+                          const int64_t min_observations_per_leaf_node,
+                          const int64_t max_bins,
+                          const int64_t min_bin_size,
+                          const TextEncodingNone& preferred_ml_framework_str,
+                          Column<TextEncodingDict>& output_model_name) {
+  const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
+  if (preferred_ml_framework == MLFramework::INVALID) {
+    return mgr.ERROR_MESSAGE("Invalid ML Framework: " +
+                             preferred_ml_framework_str.getString());
+  }
+  if (preferred_ml_framework == MLFramework::MLPACK) {
+    return mgr.ERROR_MESSAGE("Only OneDAL framework supported for GBT regression.");
+  }
+#ifndef HAVE_ONEDAL
+  return mgr.ERROR_MESSAGE("Only OneDAL framework supported for GBT regression.");
+#endif
+
+  const auto denulled_data = denull_data(input_labels, input_features);
+  const auto labels_ptrs = pluck_ptrs(denulled_data.data, 0L, 1L);
+  const auto features_ptrs =
+      pluck_ptrs(denulled_data.data, 1L, input_features.numCols() + 1);
+  mgr.set_output_row_size(1);
+  try {
+    bool did_execute = false;
+#ifdef HAVE_ONEDAL
+    if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
+                         preferred_ml_framework == MLFramework::DEFAULT)) {
+      onedal_gbt_reg_fit_impl<T>(model_name,
+                                 labels_ptrs[0],
+                                 features_ptrs,
+                                 denulled_data.masked_num_rows,
+                                 max_iterations,
+                                 max_tree_depth,
+                                 shrinkage,
+                                 min_split_loss,
+                                 lambda,
+                                 obs_per_tree_fraction,
+                                 features_per_node,
+                                 min_observations_per_leaf_node,
+                                 max_bins,
+                                 min_bin_size);
+      const TextEncodingDict model_name_str_id =
+          output_model_name.getOrAddTransient(model_name);
+      output_model_name[0] = model_name_str_id;
+      did_execute = true;
+    }
+#endif
+    if (!did_execute) {
+      return mgr.ERROR_MESSAGE("Cannot find " + preferred_ml_framework_str.getString() +
+                               " ML library to support GBT regression implementation.");
+    }
+  } catch (std::runtime_error& e) {
+    return mgr.ERROR_MESSAGE(e.what());
+  }
+  return 1;
 }
 
 // clang-format off
@@ -535,10 +521,18 @@ linear_reg_fit_predict__cpu_template(TableFunctionManager& mgr,
    TextEncodingNone model,
    Cursor<Column<T> labels, ColumnList<T> features> data,
    int64_t num_trees | require="num_trees > 0" | default=10,
+   double obs_per_tree_fraction | require="obs_per_tree_fraction > 0.0" | require="obs_per_tree_fraction <= 1.0" | default=1.0,
    int64_t max_tree_depth | require="max_tree_depth >= 0" | default=0,
+   int64_t features_per_node | require="features_per_node >= 0" | default=0,
+   double impurity_threshold | require="impurity_threshold >= 0.0" | default=0.0,
+   bool bootstrap | default=true,
    int64_t min_obs_per_leaf_node | require="min_obs_per_leaf_node > 0" | default=5,
    int64_t min_obs_per_split_node | require="min_obs_per_leaf_node > 0" | default=2,
+   double min_weight_fraction_in_leaf_node | require="min_weight_fraction_in_leaf_node >= 0.0" | default=0.0,
+   double min_impurity_decrease_in_split_node | require="min_impurity_decrease_in_split_node >= 0.0" | default=0.0,
+   int64_t max_leaf_nodes | require="max_leaf_nodes >=0" | default=0,
    bool use_histogram | default=false,
+   TextEncodingNone var_importance_metric | default="MDI",
    TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
    Column<TextEncodingDict> model | input_id=args<>, T=[float, double]
  */
@@ -551,10 +545,18 @@ random_forest_reg_fit__cpu_template(TableFunctionManager& mgr,
                                     const Column<T>& input_labels,
                                     const ColumnList<T>& input_features,
                                     const int64_t num_trees,
+                                    const double obs_per_tree_fraction,
                                     const int64_t max_tree_depth,
-                                    const int64_t min_observations_per_leaf_node,
-                                    const int64_t min_observations_per_split_node,
+                                    const int64_t features_per_node,
+                                    const double impurity_threshold,
+                                    const bool bootstrap,
+                                    const int64_t min_obs_per_leaf_node,
+                                    const int64_t min_obs_per_split_node,
+                                    const double min_weight_fraction_in_leaf_node,
+                                    const double min_impurity_decrease_in_split_node,
+                                    const int64_t max_leaf_nodes,
                                     const bool use_histogram,
+                                    const TextEncodingNone& var_importance_metric_str,
                                     const TextEncodingNone& preferred_ml_framework_str,
                                     Column<TextEncodingDict>& output_model_name) {
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
@@ -578,6 +580,12 @@ random_forest_reg_fit__cpu_template(TableFunctionManager& mgr,
   mgr.set_output_row_size(1);
   try {
     bool did_execute = false;
+    const auto var_importance_metric =
+        get_var_importance_metric(var_importance_metric_str);
+    if (var_importance_metric == VarImportanceMetric::INVALID) {
+      return mgr.ERROR_MESSAGE("Invalid variable importance metric: " +
+                               var_importance_metric_str.getString());
+    }
 #ifdef HAVE_ONEDAL
     if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
                          preferred_ml_framework == MLFramework::DEFAULT)) {
@@ -588,9 +596,17 @@ random_forest_reg_fit__cpu_template(TableFunctionManager& mgr,
             features_ptrs,
             denulled_data.masked_num_rows,
             num_trees,
+            obs_per_tree_fraction,
             max_tree_depth,
-            min_observations_per_leaf_node,
-            min_observations_per_split_node);
+            features_per_node,
+            impurity_threshold,
+            bootstrap,
+            min_obs_per_leaf_node,
+            min_obs_per_split_node,
+            min_weight_fraction_in_leaf_node,
+            min_impurity_decrease_in_split_node,
+            max_leaf_nodes,
+            var_importance_metric);
       } else {
         onedal_random_forest_reg_fit_impl<
             T,
@@ -600,16 +616,22 @@ random_forest_reg_fit__cpu_template(TableFunctionManager& mgr,
             features_ptrs,
             denulled_data.masked_num_rows,
             num_trees,
+            obs_per_tree_fraction,
             max_tree_depth,
-            min_observations_per_leaf_node,
-            min_observations_per_split_node);
+            features_per_node,
+            impurity_threshold,
+            bootstrap,
+            min_obs_per_leaf_node,
+            min_obs_per_split_node,
+            min_weight_fraction_in_leaf_node,
+            min_impurity_decrease_in_split_node,
+            max_leaf_nodes,
+            var_importance_metric);
       }
       const TextEncodingDict model_name_str_id =
           output_model_name.getOrAddTransient(model_name);
       output_model_name[0] = model_name_str_id;
       did_execute = true;
-      auto model_type{ModelType::RANDOM_FOREST_REG};
-      model_types_.addModel(model_name, model_type);
     }
 #endif
     if (!did_execute) {
@@ -625,7 +647,7 @@ random_forest_reg_fit__cpu_template(TableFunctionManager& mgr,
 
 // clang-format off
 /*
-  UDTF: random_forest_reg_predict__cpu_template(TableFunctionManager,
+  UDTF: ml_reg_predict__cpu_template(TableFunctionManager,
    TextEncodingNone model,
    Cursor<Column<K> id, ColumnList<T> features> data,
    TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
@@ -635,27 +657,19 @@ random_forest_reg_fit__cpu_template(TableFunctionManager& mgr,
 // clang-format on
 
 template <typename T, typename K>
-NEVER_INLINE HOST int32_t random_forest_reg_predict__cpu_template(
-    TableFunctionManager& mgr,
-    const TextEncodingNone& model_name,
-    const Column<K>& input_ids,
-    const ColumnList<T>& input_features,
-    const TextEncodingNone& preferred_ml_framework_str,
-    Column<K>& output_ids,
-    Column<T>& output_predictions) {
+NEVER_INLINE HOST int32_t
+ml_reg_predict__cpu_template(TableFunctionManager& mgr,
+                             const TextEncodingNone& model_name,
+                             const Column<K>& input_ids,
+                             const ColumnList<T>& input_features,
+                             const TextEncodingNone& preferred_ml_framework_str,
+                             Column<K>& output_ids,
+                             Column<T>& output_predictions) {
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
     return mgr.ERROR_MESSAGE("Invalid ML Framework: " +
                              preferred_ml_framework_str.getString());
   }
-  if (preferred_ml_framework == MLFramework::MLPACK) {
-    return mgr.ERROR_MESSAGE(
-        "Only OneDAL framework supported for random forest regression.");
-  }
-#ifndef HAVE_ONEDAL
-  return mgr.ERROR_MESSAGE(
-      "Only OneDAL framework supported for random forest regression.");
-#endif
 
   mgr.set_output_row_size(input_ids.size());
   const auto denulled_data = denull_data(input_features);
@@ -670,21 +684,80 @@ NEVER_INLINE HOST int32_t random_forest_reg_predict__cpu_template(
 
   try {
     bool did_execute = false;
+    const auto model = ml_models_.getModel(model_name);
+    const auto model_type = model->getModelType();
+    switch (model_type) {
+      case MLModelType::LINEAR_REG: {
+        const auto linear_reg_model =
+            std::dynamic_pointer_cast<LinearRegressionModel>(model);
+        CHECK(linear_reg_model);
 #ifdef HAVE_ONEDAL
-    if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
-                         preferred_ml_framework == MLFramework::DEFAULT)) {
-      onedal_random_forest_reg_predict_impl(
-          model_name, features_ptrs, denulled_output, num_rows);
-      did_execute = true;
-    }
+        if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
+                             preferred_ml_framework == MLFramework::DEFAULT)) {
+          onedal_linear_reg_predict_impl(
+              linear_reg_model, features_ptrs, denulled_output, num_rows);
+          did_execute = true;
+        }
 #endif
+#ifdef HAVE_MLPACK
+        if (!did_execute && (preferred_ml_framework == MLFramework::MLPACK ||
+                             preferred_ml_framework == MLFramework::DEFAULT)) {
+          mlpack_linear_reg_predict_impl(
+              linear_reg_model, features_ptrs, denulled_output, num_rows);
+          did_execute = true;
+        }
+#endif
+        break;
+      }
+      case MLModelType::DECISION_TREE_REG: {
+#ifdef HAVE_ONEDAL
+        const auto decision_tree_reg_model =
+            std::dynamic_pointer_cast<DecisionTreeRegressionModel>(model);
+        CHECK(decision_tree_reg_model);
+        if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
+                             preferred_ml_framework == MLFramework::DEFAULT)) {
+          onedal_decision_tree_reg_predict_impl(
+              decision_tree_reg_model, features_ptrs, denulled_output, num_rows);
+          did_execute = true;
+        }
+#endif
+        break;
+      }
+      case MLModelType::GBT_REG: {
+#ifdef HAVE_ONEDAL
+        const auto gbt_reg_model = std::dynamic_pointer_cast<GbtRegressionModel>(model);
+        CHECK(gbt_reg_model);
+        if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
+                             preferred_ml_framework == MLFramework::DEFAULT)) {
+          onedal_gbt_reg_predict_impl(
+              gbt_reg_model, features_ptrs, denulled_output, num_rows);
+          did_execute = true;
+        }
+#endif
+        break;
+      }
+      case MLModelType::RANDOM_FOREST_REG: {
+#ifdef HAVE_ONEDAL
+        const auto random_forest_reg_model =
+            std::dynamic_pointer_cast<RandomForestRegressionModel>(model);
+        CHECK(random_forest_reg_model);
+        if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
+                             preferred_ml_framework == MLFramework::DEFAULT)) {
+          onedal_random_forest_reg_predict_impl(
+              random_forest_reg_model, features_ptrs, denulled_output, num_rows);
+          did_execute = true;
+        }
+#endif
+        break;
+      }
+    }
     if (!did_execute) {
       return mgr.ERROR_MESSAGE("Cannot find " + preferred_ml_framework_str.getString() +
-                               " ML library to support kmeans implementation.");
+                               " ML library to support model implementation.");
     }
   } catch (std::runtime_error& e) {
-    mgr.enable_output_allocations();
-    return mgr.ERROR_MESSAGE(e.what());
+    const std::string error_str(e.what());
+    return mgr.ERROR_MESSAGE(error_str);
   }
   output_ids = input_ids;
   if (data_is_masked) {
@@ -699,7 +772,7 @@ NEVER_INLINE HOST int32_t random_forest_reg_predict__cpu_template(
 
 // clang-format off
 /*
-  UDTF: random_forest_reg_predict__cpu_template(TableFunctionManager,
+  UDTF: ml_reg_predict__cpu_template(TableFunctionManager,
    Cursor<Column<TextEncodingDict> model_name> model,
    Cursor<Column<K> id, ColumnList<T> features> data,
    TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
@@ -709,25 +782,25 @@ NEVER_INLINE HOST int32_t random_forest_reg_predict__cpu_template(
 // clang-format on
 
 template <typename T, typename K>
-NEVER_INLINE HOST int32_t random_forest_reg_predict__cpu_template(
-    TableFunctionManager& mgr,
-    const Column<TextEncodingDict>& model_name,
-    const Column<K>& input_ids,
-    const ColumnList<T>& input_features,
-    const TextEncodingNone& preferred_ml_framework_str,
-    Column<K>& output_ids,
-    Column<T>& output_predictions) {
+NEVER_INLINE HOST int32_t
+ml_reg_predict__cpu_template(TableFunctionManager& mgr,
+                             const Column<TextEncodingDict>& model_name,
+                             const Column<K>& input_ids,
+                             const ColumnList<T>& input_features,
+                             const TextEncodingNone& preferred_ml_framework_str,
+                             Column<K>& output_ids,
+                             Column<T>& output_predictions) {
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model CURSOR.");
   }
   const std::string model_name_str{model_name.getString(0)};
-  return random_forest_reg_predict__cpu_template(mgr,
-                                                 model_name_str,
-                                                 input_ids,
-                                                 input_features,
-                                                 preferred_ml_framework_str,
-                                                 output_ids,
-                                                 output_predictions);
+  return ml_reg_predict__cpu_template(mgr,
+                                      model_name_str,
+                                      input_ids,
+                                      input_features,
+                                      preferred_ml_framework_str,
+                                      output_ids,
+                                      output_predictions);
 }
 
 // clang-format off
@@ -758,30 +831,14 @@ NEVER_INLINE HOST int32_t r2_score__cpu_template(TableFunctionManager& mgr,
   TextEncodingNone ml_framework_encoding_none(ml_framework);
 
   try {
-    const auto model_type = model_types_.getModel(model_name);
-    int32_t ret{0};
-    switch (model_type) {
-      case ModelType::LINEAR_REG: {
-        ret = linear_reg_predict__cpu_template(mgr,
-                                               model_name_encoding_none,
-                                               input_ids,
-                                               input_features,
-                                               ml_framework_encoding_none,
-                                               output_ids,
-                                               output_predictions);
-        break;
-      }
-      case ModelType::RANDOM_FOREST_REG: {
-        ret = random_forest_reg_predict__cpu_template(mgr,
-                                                      model_name_encoding_none,
-                                                      input_ids,
-                                                      input_features,
-                                                      ml_framework_encoding_none,
-                                                      output_ids,
-                                                      output_predictions);
-        break;
-      }
-    }
+    auto ret = ml_reg_predict__cpu_template(mgr,
+                                            model_name_encoding_none,
+                                            input_ids,
+                                            input_features,
+                                            ml_framework_encoding_none,
+                                            output_ids,
+                                            output_predictions);
+
     if (ret < 0) {
       // A return of less than 0 symbolizes an error
       return ret;
@@ -814,7 +871,7 @@ NEVER_INLINE HOST int32_t r2_score__cpu_template(TableFunctionManager& mgr,
           double local_sum_squared_regression{0.0};
           double local_sum_square{0.0};
           for (int64_t row_idx = start_idx; row_idx < end_idx; ++row_idx) {
-            if (output_predictions[row_idx] != inline_null_value<int32_t>()) {
+            if (output_predictions[row_idx] != inline_null_value<T>()) {
               local_sum_squared_regression +=
                   (input_labels[row_idx] - output_predictions[row_idx]) *
                   (input_labels[row_idx] - output_predictions[row_idx]);
@@ -888,4 +945,55 @@ random_forest_reg_var_importance__cpu_2(TableFunctionManager& mgr,
                                         const Column<TextEncodingDict>& model_name,
                                         Column<int64_t>& feature_id,
                                         Column<double>& importance_score);
+
+// clang-format off
+/*
+  UDTF: get_decision_trees__cpu_1(TableFunctionManager,
+   TextEncodingNone model) ->
+   Column<int64_t> tree_id,
+   Column<int64_t> entry_id,
+   Column<bool> is_split_node,
+   Column<int64_t> feature_id,
+   Column<int64_t> left_child,
+   Column<int64_t> right_child,
+   Column<double> value
+ */
+// clang-format on
+
+EXTENSION_NOINLINE_HOST
+int32_t get_decision_trees__cpu_1(TableFunctionManager& mgr,
+                                  const TextEncodingNone& model_name,
+                                  Column<int64_t>& tree_id,
+                                  Column<int64_t>& entry_id,
+                                  Column<bool>& is_split_node,
+                                  Column<int64_t>& feature_id,
+                                  Column<int64_t>& left_child,
+                                  Column<int64_t>& right_child,
+                                  Column<double>& value);
+
+// clang-format off
+/*
+  UDTF: get_decision_trees__cpu_2(TableFunctionManager,
+   Cursor<Column<TextEncodingDict> model_name> model) ->
+   Column<int64_t> tree_id,
+   Column<int64_t> entry_id,
+   Column<bool> is_split_node,
+   Column<int64_t> feature_id,
+   Column<int64_t> left_child,
+   Column<int64_t> right_child,
+   Column<double> value
+ */
+// clang-format on
+
+EXTENSION_NOINLINE_HOST
+int32_t get_decision_trees__cpu_2(TableFunctionManager& mgr,
+                                  const Column<TextEncodingDict>& model_name,
+                                  Column<int64_t>& tree_id,
+                                  Column<int64_t>& entry_id,
+                                  Column<bool>& is_split_node,
+                                  Column<int64_t>& feature_id,
+                                  Column<int64_t>& left_child,
+                                  Column<int64_t>& right_child,
+                                  Column<double>& value);
+
 #endif  // #ifndef __CUDACC__

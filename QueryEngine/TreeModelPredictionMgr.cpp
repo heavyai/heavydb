@@ -25,9 +25,34 @@
 
 #include <tbb/parallel_for.h>
 
+TreeModelPredictionMgr::TreeModelPredictionMgr(
+    const Data_Namespace::MemoryLevel memory_level,
+    Executor* executor,
+    const std::vector<std::vector<DecisionTreeEntry>>& decision_trees,
+    const std::vector<int64_t>& decision_tree_offsets,
+    const bool compute_avg)
+    : memory_level_(memory_level)
+    , executor_(executor)
+    , data_mgr_(executor->getDataMgr())
+    , device_count_(executor->deviceCount(memory_level == Data_Namespace::GPU_LEVEL
+                                              ? ExecutorDeviceType::GPU
+                                              : ExecutorDeviceType::CPU))
+    , num_trees_(decision_trees.size())
+    , compute_avg_(compute_avg) {
+#ifdef HAVE_CUDA
+  CHECK(memory_level_ == Data_Namespace::CPU_LEVEL ||
+        memory_level_ == Data_Namespace::GPU_LEVEL);
+#else
+  CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
+#endif  // HAVE_CUDA
+  allocateAndPopulateHostBuffers(decision_trees, decision_tree_offsets);
+  createKernelBuffers();
+}
+
 void TreeModelPredictionMgr::allocateAndPopulateHostBuffers(
     const std::vector<std::vector<DecisionTreeEntry>>& decision_trees,
     const std::vector<int64_t>& decision_tree_offsets) {
+  auto timer = DEBUG_TIMER(__func__);
   const size_t num_trees = decision_trees.size();
   CHECK_EQ(num_trees, static_cast<size_t>(num_trees_));
   CHECK_EQ(num_trees, decision_tree_offsets.size() - 1);
@@ -57,6 +82,7 @@ void TreeModelPredictionMgr::allocateAndPopulateHostBuffers(
 }
 
 void TreeModelPredictionMgr::createKernelBuffers() {
+  auto timer = DEBUG_TIMER(__func__);
 #ifdef HAVE_CUDA
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
@@ -178,14 +204,13 @@ llvm::Value* TreeModelPredictionMgr::codegen(
   }
   const double translated_null_value = inline_fp_null_value<double>();
 
-  llvm::Value* ret;
-  ret = cgen_state_ptr->emitCall(
+  return cgen_state_ptr->emitCall(
       "tree_model_reg_predict",
       {regressor_local_storage_gep,
        cgen_state_ptr->castToTypeIn(decision_tree_table_handle_lvs.front(), 64),
        cgen_state_ptr->castToTypeIn(decision_tree_offsets_handle_lvs.front(), 64),
        cgen_state_ptr->llInt(num_regressors),
        cgen_state_ptr->llInt(num_trees_),
+       cgen_state_ptr->llBool(compute_avg_),
        cgen_state_ptr->llFp(translated_null_value)});
-  return ret;
 }

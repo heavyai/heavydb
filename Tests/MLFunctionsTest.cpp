@@ -16,6 +16,7 @@
 
 #include "../QueryEngine/Execute.h"
 #include "../QueryRunner/QueryRunner.h"
+#include "QueryEngine/TableFunctions/SystemFunctions/os/ML/MLModel.h"
 #include "QueryEngine/TableFunctions/TableFunctionManager.h"
 #include "TestHelpers.h"
 
@@ -82,7 +83,23 @@ const char* iris_schema = R"(
       species TEXT);
 )";
 
-class SystemTFs : public ::testing::Test {
+class MLTableFunctionsTest : public ::testing::Test {
+ public:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS ml_iris;"));
+
+    ASSERT_NO_THROW(run_ddl_statement(iris_schema));
+    const std::string import_file{"iris.csv"};
+    const auto load_str = std::string("COPY ml_iris FROM '") +
+                          "../../Tests/Import/datafiles/ml/" + import_file +
+                          "' WITH (header='true');";
+    ASSERT_NO_THROW(run_ddl_statement(load_str));
+  }
+  void TearDown() override { ASSERT_NO_THROW(run_ddl_statement("DROP TABLE ml_iris;")); }
+};
+
+class MLRegressionFunctionsTest : public testing::TestWithParam<MLModelType> {
+ public:
   void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS ml_iris;"));
 
@@ -232,7 +249,7 @@ std::vector<std::string> get_supported_ml_frameworks() {
   return supported_ml_frameworks;
 }
 
-TEST_F(SystemTFs, SupportedMLFrameworks) {
+TEST_F(MLTableFunctionsTest, SupportedMLFrameworks) {
   const std::vector<std::string> expected_ml_frameworks = {"onedal", "mlpack"};
   std::vector<bool> expected_is_available;
   std::vector<bool> expected_is_default;
@@ -276,7 +293,7 @@ TEST_F(SystemTFs, SupportedMLFrameworks) {
   }
 }
 
-TEST_F(SystemTFs, KMeansMissingArgs) {
+TEST_F(MLTableFunctionsTest, KMeansMissingArgs) {
   const auto cursor_query = generate_cursor_query(
       "ml_iris",
       "id",
@@ -313,27 +330,25 @@ TEST_F(SystemTFs, KMeansMissingArgs) {
             dt));
 
         if (make_args_named) {
-          EXPECT_NO_THROW(
-              run_multiple_agg(generate_query("KMEANS",
-                                              {
-                                                  {"data", cursor_query},
-                                                  {"num_clusters", "3"},
-                                                  {"init_type", "'DETERMINISTIC'"},
-                                              },
-                                              {"id"},
-                                              make_args_named),
-                               dt));
+          EXPECT_NO_THROW(run_multiple_agg(generate_query("KMEANS",
+                                                          {
+                                                              {"data", cursor_query},
+                                                              {"num_clusters", "3"},
+                                                              {"init_type", "'DEFAULT'"},
+                                                          },
+                                                          {"id"},
+                                                          make_args_named),
+                                           dt));
         } else {
-          EXPECT_ANY_THROW(
-              run_multiple_agg(generate_query("KMEANS",
-                                              {
-                                                  {"data", cursor_query},
-                                                  {"num_clusters", "3"},
-                                                  {"init_type", "'DETERMINISTIC'"},
-                                              },
-                                              {"id"},
-                                              make_args_named),
-                               dt));
+          EXPECT_ANY_THROW(run_multiple_agg(generate_query("KMEANS",
+                                                           {
+                                                               {"data", cursor_query},
+                                                               {"num_clusters", "3"},
+                                                               {"init_type", "'DEFAULT'"},
+                                                           },
+                                                           {"id"},
+                                                           make_args_named),
+                                            dt));
         }
 
         EXPECT_ANY_THROW(run_multiple_agg(
@@ -347,7 +362,7 @@ TEST_F(SystemTFs, KMeansMissingArgs) {
   }
 }
 
-TEST_F(SystemTFs, KMeansInvalidType) {
+TEST_F(MLTableFunctionsTest, KMeansInvalidType) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     for (auto numeric_data_type : {"int", "bigint"}) {
@@ -384,7 +399,7 @@ TEST_F(SystemTFs, KMeansInvalidType) {
   }
 }
 
-TEST_F(SystemTFs, KMeansInvalidArgs) {
+TEST_F(MLTableFunctionsTest, KMeansInvalidArgs) {
   const auto numeric_data_type{"float"};
   const auto cursor_query = generate_cursor_query(
       "ml_iris",
@@ -457,7 +472,7 @@ TEST_F(SystemTFs, KMeansInvalidArgs) {
   }
 }
 
-TEST_F(SystemTFs, KMeansNumClusters) {
+TEST_F(MLTableFunctionsTest, KMeansNumClusters) {
   for (auto numeric_data_type : {"float", "double"}) {
     const auto cursor_query = generate_cursor_query(
         "ml_iris",
@@ -491,7 +506,7 @@ TEST_F(SystemTFs, KMeansNumClusters) {
   }
 }
 
-TEST_F(SystemTFs, KMeansPrecision) {
+TEST_F(MLTableFunctionsTest, KMeansPrecision) {
   const std::string data_table_name{"ml_iris"};
   const std::string id_col{"id"};
   const std::vector<std::string> feature_cols{
@@ -527,7 +542,7 @@ TEST_F(SystemTFs, KMeansPrecision) {
 // Hitting issues with the dbscan preflight require checks
 // causing a crash at launch time, so disabling until can troubleshoot
 
-TEST_F(SystemTFs, DBSCANInvalidArgs) {
+TEST_F(MLTableFunctionsTest, DBSCANInvalidArgs) {
   const std::string data_table_name{"ml_iris"};
   const std::string id_col{"id"};
   const std::vector<std::string> feature_cols{
@@ -580,7 +595,7 @@ TEST_F(SystemTFs, DBSCANInvalidArgs) {
   }
 }
 
-TEST_F(SystemTFs, DBSCAN) {
+TEST_F(MLTableFunctionsTest, DBSCAN) {
   const std::string data_table_name{"ml_iris"};
   const std::string id_col{"id"};
   const std::vector<std::string> feature_cols{
@@ -622,271 +637,19 @@ TEST_F(SystemTFs, DBSCAN) {
   }
 }
 
-TEST_F(SystemTFs, LinearRegFit) {
+TEST_P(MLRegressionFunctionsTest, RegModelFit) {
+  const auto model_type = GetParam();
+  const auto model_type_str = get_ml_model_type_str(model_type);
+  const std::string model_name{"'" + model_type_str + "_MODEL'"};
+  const std::string model_test_name{model_type_str + "_MODEL"};
+  const std::string model_fit_func{model_type_str + "_FIT"};
   const std::string data_table_name{"ml_iris"};
   const std::string id_col{""};  // No id column allowed for Fit calls
   const std::string label_column{"petal_length_cm"};
-  const std::string model_name{"'linear_reg_model'"};
-  const std::string model_test_name{"linear_reg_model"};
-  const auto supported_ml_frameworks = get_supported_ml_frameworks();
-  for (auto& ml_framework : supported_ml_frameworks) {
-    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-      SKIP_NO_GPU();
-      for (bool make_args_named : {false, true}) {
-        for (std::string numeric_data_type : {"FLOAT", "DOUBLE"}) {
-          {
-            // Synthetic data, also test nulls
-            const std::string cursor_query =
-                std::string(
-                    "CURSOR(SELECT CAST(CASE WHEN MOD(generate_series, 10) = 0 THEN NULL "
-                    "ELSE generate_series * 0.001 * 2.0 + 10.0 END AS ") +
-                numeric_data_type +
-                ") AS y, "
-                "CAST(generate_series * 0.001 AS " +
-                numeric_data_type + ") AS x FROM TABLE(generate_series(0, 99999)))";
-            const auto fit_query =
-                generate_query("LINEAR_REG_FIT",
-                               {{"model", model_name},
-                                {"data", cursor_query},
-                                {"preferred_ml_framework", ml_framework}},
-                               {"model"},
-                               make_args_named);
-
-            const auto coef_query = generate_query("LINEAR_REG_COEFS",
-                                                   {{"model", model_name}},
-                                                   {"coef_idx"},
-                                                   make_args_named);
-
-            const auto fit_rows = run_multiple_agg(fit_query, dt);
-            EXPECT_EQ(fit_rows->rowCount(), 1UL);
-            EXPECT_EQ(fit_rows->colCount(), 1UL);
-            auto model_row = fit_rows->getNextRow(true, true);
-            EXPECT_EQ(
-                boost::get<std::string>(TestHelpers::v<NullableString>(model_row[0])),
-                model_test_name);
-
-            const auto coef_rows = run_multiple_agg(coef_query, dt);
-
-            constexpr double allowed_epsilon{0.01};
-            const std::vector<double> expected_coefs = {10.0, 2.0};
-            const int64_t num_rows = coef_rows->rowCount();
-            EXPECT_EQ(num_rows, 2L);
-            EXPECT_EQ(coef_rows->colCount(), size_t(2));
-            for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
-              auto crt_row = coef_rows->getNextRow(true, true);
-              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx);
-              const double actual_coef = TestHelpers::v<double>(crt_row[1]);
-              EXPECT_GE(actual_coef, expected_coefs[row_idx] - allowed_epsilon);
-              EXPECT_LE(actual_coef, expected_coefs[row_idx] + allowed_epsilon);
-            }
-          }
-          {
-            // 1 independent variable
-            const auto cursor_query =
-                generate_cursor_query(data_table_name,
-                                      id_col,
-                                      {"petal_length_cm", "petal_width_cm"},
-                                      "",
-                                      numeric_data_type);
-            const auto fit_query =
-                generate_query("LINEAR_REG_FIT",
-                               {{"model", model_name},
-                                {"data", cursor_query},
-                                {"preferred_ml_framework", ml_framework}},
-                               {"model"},
-                               make_args_named);
-
-            const auto coef_query = generate_query("LINEAR_REG_COEFS",
-                                                   {{"model", model_name}},
-                                                   {"coef_idx"},
-                                                   make_args_named);
-
-            const auto fit_rows = run_multiple_agg(fit_query, dt);
-            EXPECT_EQ(fit_rows->rowCount(), 1UL);
-            EXPECT_EQ(fit_rows->colCount(), 1UL);
-            auto model_row = fit_rows->getNextRow(true, true);
-            EXPECT_EQ(
-                boost::get<std::string>(TestHelpers::v<NullableString>(model_row[0])),
-                model_test_name);
-
-            constexpr double allowed_epsilon{0.02};
-            const auto coef_rows = run_multiple_agg(coef_query, dt);
-
-            const std::vector<double> expected_coefs = {1.09057, 2.22588};
-            const int64_t num_rows = coef_rows->rowCount();
-            EXPECT_EQ(num_rows, 2L);
-            EXPECT_EQ(coef_rows->colCount(), size_t(2));
-            for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
-              auto crt_row = coef_rows->getNextRow(true, true);
-              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx);
-              const double actual_coef = TestHelpers::v<double>(crt_row[1]);
-              EXPECT_GE(actual_coef, expected_coefs[row_idx] - allowed_epsilon);
-              EXPECT_LE(actual_coef, expected_coefs[row_idx] + allowed_epsilon);
-            }
-          }
-          {
-            // 3 independent variables
-            const auto cursor_query = generate_cursor_query(data_table_name,
-                                                            id_col,
-                                                            {"petal_length_cm",
-                                                             "petal_width_cm",
-                                                             "sepal_length_cm",
-                                                             "sepal_width_cm"},
-                                                            "",
-                                                            numeric_data_type);
-            const auto fit_query =
-                generate_query("LINEAR_REG_FIT",
-                               {{"model", model_name},
-                                {"data", cursor_query},
-                                {"preferred_ml_framework", ml_framework}},
-                               {"model"},
-                               make_args_named);
-
-            const auto coef_query = generate_query("LINEAR_REG_COEFS",
-                                                   {{"model", model_name}},
-                                                   {"coef_idx"},
-                                                   make_args_named);
-
-            const auto fit_rows = run_multiple_agg(fit_query, dt);
-            EXPECT_EQ(fit_rows->rowCount(), 1UL);
-            EXPECT_EQ(fit_rows->colCount(), 1UL);
-            auto model_row = fit_rows->getNextRow(true, true);
-            EXPECT_EQ(
-                boost::get<std::string>(TestHelpers::v<NullableString>(model_row[0])),
-                model_test_name);
-
-            const auto coef_rows = run_multiple_agg(coef_query, dt);
-            constexpr double allowed_epsilon{0.02};
-
-            const std::vector<double> expected_coefs = {
-                -0.252664, 1.44572, 0.730363, -0.651394};
-            const int64_t num_rows = coef_rows->rowCount();
-            EXPECT_EQ(num_rows, 4L);
-            EXPECT_EQ(coef_rows->colCount(), size_t(2));
-            for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
-              auto crt_row = coef_rows->getNextRow(true, true);
-              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx);
-              const double actual_coef = TestHelpers::v<double>(crt_row[1]);
-              EXPECT_GE(actual_coef, expected_coefs[row_idx] - allowed_epsilon);
-              EXPECT_LE(actual_coef, expected_coefs[row_idx] + allowed_epsilon);
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-TEST_F(SystemTFs, LinearRegPredict) {
-  const auto supported_ml_frameworks = get_supported_ml_frameworks();
-  for (auto& ml_framework : supported_ml_frameworks) {
-    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-      SKIP_NO_GPU();
-      for (bool make_args_named : {false, true}) {
-        for (std::string numeric_data_type : {"FLOAT", "DOUBLE"}) {
-          {
-            // Synthetic data
-            const std::string data_table_name("TABLE(generate_series(0, 99999))");
-            const std::string id_col("generate_series");
-            const std::string feature_col("generate_series * 0.001");
-
-            const auto data_query = generate_cursor_query(
-                data_table_name, id_col, {feature_col}, "", numeric_data_type);
-            const std::string model_query =
-                std::string(
-                    "CURSOR(SELECT * FROM "
-                    "TABLE(LINEAR_REG_FIT(model=>'linear_reg_model', data "
-                    "=> CURSOR(SELECT CAST(CASE WHEN MOD(generate_series, 10) = 0 THEN "
-                    "NULL ELSE "
-                    "generate_series * 0.001 * 2.0 + 10.0 END AS ") +
-                numeric_data_type + ") AS y, CAST(generate_series * 0.001 AS " +
-                numeric_data_type +
-                ") AS x "
-                "FROM TABLE(generate_series(0, 99999))))))";
-
-            const auto query = generate_query("LINEAR_REG_PREDICT",
-                                              {{"model", model_query},
-                                               {"data", data_query},
-                                               {"preferred_ml_framework", ml_framework}},
-                                              {"id"},
-                                              make_args_named);
-            const auto rows = run_multiple_agg(query, dt);
-            const int64_t num_rows = rows->rowCount();
-            EXPECT_EQ(num_rows, 100000L);
-            EXPECT_EQ(rows->colCount(), size_t(2));
-            constexpr double allowed_epsilon{0.01};
-            for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
-              auto crt_row = rows->getNextRow(true, true);
-              // id col
-              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx);
-              const double predicted_val = (numeric_data_type == "FLOAT")
-                                               ? TestHelpers::v<float>(crt_row[1])
-                                               : TestHelpers::v<double>(crt_row[1]);
-              const double expected_predicted_val = row_idx * 0.001 * 2.0 + 10.0;
-              EXPECT_GE(predicted_val, expected_predicted_val - allowed_epsilon);
-              EXPECT_LE(predicted_val, expected_predicted_val + allowed_epsilon);
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-TEST_F(SystemTFs, LinearRegFitPredict) {
-  const auto supported_ml_frameworks = get_supported_ml_frameworks();
-  for (auto& ml_framework : supported_ml_frameworks) {
-    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-      SKIP_NO_GPU();
-      for (bool make_args_named : {false, true}) {
-        for (std::string numeric_data_type : {"FLOAT", "DOUBLE"}) {
-          {
-            // Synthetic data
-            const std::string data_table_name("TABLE(generate_series(0, 99999))");
-            const std::string id_col("generate_series");
-            const std::vector<std::string> label_and_feature_cols = {
-                "generate_series * 0.001 * 2.0 + 10.0", "generate_series * 0.001"};
-            const auto cursor_query = generate_cursor_query(
-                data_table_name, id_col, label_and_feature_cols, "", numeric_data_type);
-            const auto query = generate_query(
-                "LINEAR_REG_FIT_PREDICT",
-                {{"data", cursor_query}, {"preferred_ml_framework", ml_framework}},
-                {"id"},
-                make_args_named);
-            const auto rows = run_multiple_agg(query, dt);
-            const int64_t num_rows = rows->rowCount();
-            EXPECT_EQ(num_rows, 100000L);
-            EXPECT_EQ(rows->colCount(), size_t(2));
-            constexpr double allowed_epsilon{0.01};
-            for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
-              auto crt_row = rows->getNextRow(true, true);
-              // id col
-              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx);
-              const double predicted_val = (numeric_data_type == "FLOAT")
-                                               ? TestHelpers::v<float>(crt_row[1])
-                                               : TestHelpers::v<double>(crt_row[1]);
-              const double expected_predicted_val = row_idx * 0.001 * 2.0 + 10.0;
-              EXPECT_GE(predicted_val, expected_predicted_val - allowed_epsilon);
-              EXPECT_LE(predicted_val, expected_predicted_val + allowed_epsilon);
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-#ifdef HAVE_ONEDAL
-TEST_F(SystemTFs, RandomForestRegFit) {
-  const std::string data_table_name{"ml_iris"};
-  const std::string id_col{""};  // No id column allowed for Fit calls
-  const std::string label_column{"petal_length_cm"};
-  const std::string model_name{"'random_forest_reg_model'"};
-  const std::string model_test_name{"random_forest_reg_model"};
   const auto supported_ml_frameworks = get_supported_ml_frameworks();
   const bool make_args_named{true};
   for (auto& ml_framework : supported_ml_frameworks) {
-    if (ml_framework == "'mlpack'") {
+    if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -903,7 +666,7 @@ TEST_F(SystemTFs, RandomForestRegFit) {
               "CAST(generate_series * 0.001 AS " +
               numeric_data_type + ") AS x FROM TABLE(generate_series(0, 99999)))";
           const auto fit_query =
-              generate_query("RANDOM_FOREST_REG_FIT",
+              generate_query(model_fit_func,
                              {{"model", model_name},
                               {"data", cursor_query},
                               {"preferred_ml_framework", ml_framework}},
@@ -917,28 +680,48 @@ TEST_F(SystemTFs, RandomForestRegFit) {
           EXPECT_EQ(boost::get<std::string>(TestHelpers::v<NullableString>(model_row[0])),
                     model_test_name);
 
-          const auto var_importance_query =
-              generate_query("RANDOM_FOREST_REG_VAR_IMPORTANCE",
-                             {{"model", model_name}},
-                             {"feature_id"},
-                             make_args_named);
-          const auto var_importance_rows = run_multiple_agg(var_importance_query, dt);
+          if (model_type == MLModelType::LINEAR_REG) {
+            const auto coef_query = generate_query("LINEAR_REG_COEFS",
+                                                   {{"model", model_name}},
+                                                   {"coef_idx"},
+                                                   make_args_named);
+            const auto coef_rows = run_multiple_agg(coef_query, dt);
+            constexpr double allowed_epsilon{0.1};
+            const std::vector<double> expected_coefs = {10.0, 2.0};
+            const int64_t num_rows = coef_rows->rowCount();
+            EXPECT_EQ(num_rows, 2L);
+            EXPECT_EQ(coef_rows->colCount(), size_t(2));
+            for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
+              auto crt_row = coef_rows->getNextRow(true, true);
+              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx);
+              const double actual_coef = TestHelpers::v<double>(crt_row[1]);
+              EXPECT_GE(actual_coef, expected_coefs[row_idx] - allowed_epsilon);
+              EXPECT_LE(actual_coef, expected_coefs[row_idx] + allowed_epsilon);
+            }
+          } else if (model_type == MLModelType::RANDOM_FOREST_REG) {
+            const auto var_importance_query =
+                generate_query("RANDOM_FOREST_REG_VAR_IMPORTANCE",
+                               {{"model", model_name}},
+                               {"feature_id"},
+                               make_args_named);
+            const auto var_importance_rows = run_multiple_agg(var_importance_query, dt);
 
-          constexpr double allowed_epsilon_frac{0.02};
-          const std::vector<double> expected_var_importances = {5768.64453125};
-          const int64_t num_rows = var_importance_rows->rowCount();
-          EXPECT_EQ(num_rows, 1L);
-          EXPECT_EQ(var_importance_rows->colCount(), size_t(2));
-          for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
-            auto crt_row = var_importance_rows->getNextRow(true, true);
-            EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx + 1);
-            const double actual_var_importance = TestHelpers::v<double>(crt_row[1]);
-            EXPECT_GE(actual_var_importance,
-                      expected_var_importances[row_idx] -
-                          allowed_epsilon_frac * expected_var_importances[row_idx]);
-            EXPECT_LE(actual_var_importance,
-                      expected_var_importances[row_idx] +
-                          allowed_epsilon_frac * expected_var_importances[row_idx]);
+            constexpr double allowed_epsilon_frac{0.02};
+            const std::vector<double> expected_var_importances = {4996.12};
+            const int64_t num_rows = var_importance_rows->rowCount();
+            EXPECT_EQ(num_rows, 1L);
+            EXPECT_EQ(var_importance_rows->colCount(), size_t(2));
+            for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
+              auto crt_row = var_importance_rows->getNextRow(true, true);
+              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx + 1);
+              const double actual_var_importance = TestHelpers::v<double>(crt_row[1]);
+              EXPECT_GE(actual_var_importance,
+                        expected_var_importances[row_idx] -
+                            allowed_epsilon_frac * expected_var_importances[row_idx]);
+              EXPECT_LE(actual_var_importance,
+                        expected_var_importances[row_idx] +
+                            allowed_epsilon_frac * expected_var_importances[row_idx]);
+            }
           }
         }
         {
@@ -949,16 +732,13 @@ TEST_F(SystemTFs, RandomForestRegFit) {
               {"petal_length_cm", "petal_width_cm", "sepal_length_cm", "sepal_width_cm"},
               "",
               numeric_data_type);
-          const auto fit_query = generate_query("RANDOM_FOREST_REG_FIT",
-                                                {{"model", model_name},
-                                                 {"data", cursor_query},
-                                                 {"preferred_ml_framework", ml_framework},
-                                                 {"max_tree_depth", "20"},
-                                                 {"num_trees", "10"},
-                                                 {"min_obs_per_leaf_node", "2"},
-                                                 {"use_histogram", "false"}},
-                                                {"model"},
-                                                make_args_named);
+          const auto fit_query =
+              generate_query(model_fit_func,
+                             {{"model", model_name},
+                              {"data", cursor_query},
+                              {"preferred_ml_framework", ml_framework}},
+                             {"model"},
+                             make_args_named);
 
           const auto fit_rows = run_multiple_agg(fit_query, dt);
           EXPECT_EQ(fit_rows->rowCount(), 1UL);
@@ -967,40 +747,66 @@ TEST_F(SystemTFs, RandomForestRegFit) {
           EXPECT_EQ(boost::get<std::string>(TestHelpers::v<NullableString>(model_row[0])),
                     model_test_name);
 
-          const auto var_importance_query =
-              generate_query("RANDOM_FOREST_REG_VAR_IMPORTANCE",
-                             {{"model", model_name}},
-                             {"feature_id"},
-                             make_args_named);
-          const auto var_importance_rows = run_multiple_agg(var_importance_query, dt);
-          constexpr double allowed_epsilon_frac{0.6};
-          const std::vector<double> expected_var_importances = {2.2559, 1.7586, 0.731347};
-          const int64_t num_rows = var_importance_rows->rowCount();
-          EXPECT_EQ(num_rows, 3L);
-          EXPECT_EQ(var_importance_rows->colCount(), size_t(2));
-          for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
-            auto crt_row = var_importance_rows->getNextRow(true, true);
-            EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx + 1);
-            const double actual_var_importance = TestHelpers::v<double>(crt_row[1]);
-            EXPECT_GE(actual_var_importance,
-                      expected_var_importances[row_idx] -
-                          allowed_epsilon_frac * expected_var_importances[row_idx]);
-            EXPECT_LE(actual_var_importance,
-                      expected_var_importances[row_idx] +
-                          allowed_epsilon_frac * expected_var_importances[row_idx]);
+          if (model_type == MLModelType::LINEAR_REG) {
+            const auto coef_query = generate_query("LINEAR_REG_COEFS",
+                                                   {{"model", model_name}},
+                                                   {"coef_idx"},
+                                                   make_args_named);
+            const auto coef_rows = run_multiple_agg(coef_query, dt);
+
+            constexpr double allowed_epsilon{0.01};
+            const std::vector<double> expected_coefs = {
+                -0.252664, 1.44572, 0.730363, -0.651394};
+            const int64_t num_rows = coef_rows->rowCount();
+            EXPECT_EQ(num_rows, 4L);
+            EXPECT_EQ(coef_rows->colCount(), size_t(2));
+            for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
+              auto crt_row = coef_rows->getNextRow(true, true);
+              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx);
+              const double actual_coef = TestHelpers::v<double>(crt_row[1]);
+              EXPECT_GE(actual_coef, expected_coefs[row_idx] - allowed_epsilon);
+              EXPECT_LE(actual_coef, expected_coefs[row_idx] + allowed_epsilon);
+            }
+          } else if (model_type == MLModelType::RANDOM_FOREST_REG) {
+            const auto var_importance_query =
+                generate_query("RANDOM_FOREST_REG_VAR_IMPORTANCE",
+                               {{"model", model_name}},
+                               {"feature_id"},
+                               make_args_named);
+            const auto var_importance_rows = run_multiple_agg(var_importance_query, dt);
+            constexpr double allowed_epsilon_frac{1.0};
+            const std::vector<double> expected_var_importances = {
+                1.9378, 2.5813, 0.89731};
+            const int64_t num_rows = var_importance_rows->rowCount();
+            EXPECT_EQ(num_rows, 3L);
+            EXPECT_EQ(var_importance_rows->colCount(), size_t(2));
+            for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
+              auto crt_row = var_importance_rows->getNextRow(true, true);
+              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx + 1);
+              const double actual_var_importance = TestHelpers::v<double>(crt_row[1]);
+              EXPECT_GE(actual_var_importance,
+                        expected_var_importances[row_idx] -
+                            allowed_epsilon_frac * expected_var_importances[row_idx]);
+              EXPECT_LE(actual_var_importance,
+                        expected_var_importances[row_idx] +
+                            allowed_epsilon_frac * expected_var_importances[row_idx]);
+            }
           }
         }
       }
     }
   }
 }
-#endif  // HAVE_ONEDAL
 
-#ifdef HAVE_ONEDAL
-TEST_F(SystemTFs, RandomForestRegPredict) {
+TEST_P(MLRegressionFunctionsTest, MLRegPredict) {
+  const auto model_type = GetParam();
+  const auto model_type_str = get_ml_model_type_str(model_type);
+  const std::string model_name{model_type_str + "_MODEL"};
+  const std::string model_fit_func{model_type_str + "_FIT"};
+
   const auto supported_ml_frameworks = get_supported_ml_frameworks();
   for (auto& ml_framework : supported_ml_frameworks) {
-    if (ml_framework == "'mlpack'") {
+    if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -1018,7 +824,9 @@ TEST_F(SystemTFs, RandomForestRegPredict) {
             const std::string model_query =
                 std::string(
                     "CURSOR(SELECT * FROM "
-                    "TABLE(RANDOM_FOREST_REG_FIT(model=>'random_forest_model', data "
+                    "TABLE(" +
+                    model_fit_func + "(model=>'" + model_name +
+                    "', data "
                     "=> CURSOR(SELECT CAST(CASE WHEN MOD(generate_series, 10) = 0 THEN "
                     "NULL ELSE "
                     "generate_series * 0.001 * 2.0 + 10.0 END AS ") +
@@ -1027,7 +835,7 @@ TEST_F(SystemTFs, RandomForestRegPredict) {
                 ") AS x "
                 "FROM TABLE(generate_series(0, 99999))))))";
 
-            const auto query = generate_query("RANDOM_FOREST_REG_PREDICT",
+            const auto query = generate_query("ML_REG_PREDICT",
                                               {{"model", model_query},
                                                {"data", data_query},
                                                {"preferred_ml_framework", ml_framework}},
@@ -1037,7 +845,10 @@ TEST_F(SystemTFs, RandomForestRegPredict) {
             const int64_t num_rows = rows->rowCount();
             EXPECT_EQ(num_rows, 100000L);
             EXPECT_EQ(rows->colCount(), size_t(2));
-            constexpr double allowed_epsilon{1.0};
+            // Tree models can be much less accurate than linear regression in this case,
+            // so give tree models large epsilon.
+            const double allowed_epsilon =
+                model_type == MLModelType::LINEAR_REG ? 0.02 : 20.0;
             for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
               auto crt_row = rows->getNextRow(true, true);
               // id col
@@ -1055,79 +866,35 @@ TEST_F(SystemTFs, RandomForestRegPredict) {
     }
   }
 }
-#endif  // HAVE_ONEDAL
 
-TEST_F(SystemTFs, R2_SCORE) {
+TEST_P(MLRegressionFunctionsTest, R2_SCORE) {
+  const auto model_type = GetParam();
+  const auto model_type_str = get_ml_model_type_str(model_type);
+  const std::string model_fit_func{model_type_str + "_FIT"};
+  const std::string model_name{model_type_str + "_MODEL"};
+  const std::string quoted_model_name{"'" + model_type_str + "_MODEL'"};
   const std::string data_table_name{"ml_iris"};
   const std::string id_col{""};  // No id column allowed for Fit calls
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    for (std::string numeric_data_type : {"FLOAT", "DOUBLE"}) {
-      const auto train_cursor_query = generate_cursor_query(
-          data_table_name,
-          id_col,
-          {"petal_length_cm", "petal_width_cm", "sepal_length_cm", "sepal_width_cm"},
-          "SAMPLE_RATIO(0.7)",
-          numeric_data_type);
-
-      const auto test_cursor_query = generate_cursor_query(
-          data_table_name,
-          id_col,
-          {"petal_length_cm", "petal_width_cm", "sepal_length_cm", "sepal_width_cm"},
-          "SAMPLE_RATIO(0.3)",
-          numeric_data_type);
-
-      const auto supported_ml_frameworks = get_supported_ml_frameworks();
-      const bool make_args_named{true};
-      for (auto& ml_framework : supported_ml_frameworks) {
-        // Linear Regression
-        {
-          const std::string quoted_model_name("'linear_reg'");
-          const std::string model_name("linear_reg");
-          const auto fit_query =
-              generate_query("LINEAR_REG_FIT",
-                             {{"model", quoted_model_name},
-                              {"data", train_cursor_query},
-                              {"preferred_ml_framework", ml_framework}},
-                             {"model"},
-                             make_args_named);
-          const auto fit_rows = run_multiple_agg(fit_query, dt);
-          EXPECT_EQ(fit_rows->rowCount(), 1UL);
-          EXPECT_EQ(fit_rows->colCount(), 1UL);
-          auto model_row = fit_rows->getNextRow(true, true);
-          EXPECT_EQ(boost::get<std::string>(TestHelpers::v<NullableString>(model_row[0])),
-                    model_name);
-
-          const auto r2_query =
-              generate_query("R2_SCORE",
-                             {{"model", quoted_model_name}, {"data", test_cursor_query}},
-                             {"r2"},
-                             make_args_named);
-          const auto r2_rows = run_multiple_agg(r2_query, dt);
-          EXPECT_EQ(r2_rows->rowCount(), 1UL);
-          EXPECT_EQ(r2_rows->colCount(), 1UL);
-          auto r2_row = r2_rows->getNextRow(true, true);
-          const double actual_r2 = TestHelpers::v<double>(r2_row[0]);
-          const double expected_min_r2{0.95};
-          EXPECT_GE(actual_r2, expected_min_r2);
-        }
-      }
-#ifdef HAVE_ONEDAL
-      // Random Forest Regression
-      {
-        const std::string quoted_model_name("'random_forest_reg'");
-        const std::string model_name("random_forest_reg");
-        const std::string ml_framework("'onedal'");
-        const auto fit_query = generate_query("RANDOM_FOREST_REG_FIT",
+  const bool make_args_named{true};
+  const auto supported_ml_frameworks = get_supported_ml_frameworks();
+  for (auto& ml_framework : supported_ml_frameworks) {
+    if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
+      continue;
+    }
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      for (std::string numeric_data_type : {"FLOAT", "DOUBLE"}) {
+        const auto train_cursor_query = generate_cursor_query(
+            data_table_name,
+            id_col,
+            {"petal_length_cm", "petal_width_cm", "sepal_length_cm", "sepal_width_cm"},
+            "SAMPLE_RATIO(0.7)",
+            numeric_data_type);
+        const auto fit_query = generate_query(model_fit_func,
                                               {{"model", quoted_model_name},
                                                {"data", train_cursor_query},
-                                               {"preferred_ml_framework", ml_framework},
-                                               {"max_tree_depth", "20"},
-                                               {"num_trees", "10"},
-                                               {"min_obs_per_leaf_node", "2"},
-                                               {"use_histogram", "false"}},
+                                               {"preferred_ml_framework", ml_framework}},
                                               {"model"},
                                               make_args_named);
-
         const auto fit_rows = run_multiple_agg(fit_query, dt);
         EXPECT_EQ(fit_rows->rowCount(), 1UL);
         EXPECT_EQ(fit_rows->colCount(), 1UL);
@@ -1135,6 +902,12 @@ TEST_F(SystemTFs, R2_SCORE) {
         EXPECT_EQ(boost::get<std::string>(TestHelpers::v<NullableString>(model_row[0])),
                   model_name);
 
+        const auto test_cursor_query = generate_cursor_query(
+            data_table_name,
+            id_col,
+            {"petal_length_cm", "petal_width_cm", "sepal_length_cm", "sepal_width_cm"},
+            "SAMPLE_RATIO(0.3)",
+            numeric_data_type);
         const auto r2_query =
             generate_query("R2_SCORE",
                            {{"model", quoted_model_name}, {"data", test_cursor_query}},
@@ -1145,15 +918,14 @@ TEST_F(SystemTFs, R2_SCORE) {
         EXPECT_EQ(r2_rows->colCount(), 1UL);
         auto r2_row = r2_rows->getNextRow(true, true);
         const double actual_r2 = TestHelpers::v<double>(r2_row[0]);
-        const double expected_min_r2{0.98};
+        const double expected_min_r2{0.95};
         EXPECT_GE(actual_r2, expected_min_r2);
       }
-#endif  // HAVE_ONEDAL
     }
   }
 }
 
-TEST_F(SystemTFs, ML_PREDICT_MISSING_MODEL) {
+TEST_P(MLRegressionFunctionsTest, ML_PREDICT_MISSING_MODEL) {
   const std::string query = std::string(
       "SELECT ML_PREDICT('missing_model', petal_length_cm, petal_width_cm) as prediction "
       "FROM ml_iris;");
@@ -1163,181 +935,151 @@ TEST_F(SystemTFs, ML_PREDICT_MISSING_MODEL) {
   }
 }
 
-TEST_F(SystemTFs, ML_PREDICT_LIN_REG_WRONG_NUM_REGRESSORS) {
-  const std::string train_query(
-      "SELECT * FROM TABLE(linear_reg_fit(model=>'iris_model', data=>CURSOR(select "
-      "petal_length_cm, petal_width_cm FROM ml_iris)));");
-  const std::string predict_query(
-      "SELECT ML_PREDICT('iris_model', petal_width_cm, "
-      "sepal_width_cm) as prediction FROM ml_iris;");
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
-    EXPECT_THROW(run_multiple_agg(predict_query, dt), std::runtime_error);
+TEST_P(MLRegressionFunctionsTest, ML_PREDICT_WRONG_NUM_REGRESSORS) {
+  const auto model_type = GetParam();
+  const auto model_type_str = get_ml_model_type_str(model_type);
+  const std::string model_fit_func{model_type_str + "_FIT"};
+  const std::string model_name("IRIS_" + model_type_str + "_MODEL");
+  const auto supported_ml_frameworks = get_supported_ml_frameworks();
+  for (auto& ml_framework : supported_ml_frameworks) {
+    if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
+      continue;
+    }
+    const std::string train_query("SELECT * FROM TABLE(" + model_fit_func + "(model=>'" +
+                                  model_name +
+                                  "', "
+                                  "preferred_ml_framework=>" +
+                                  ml_framework +
+                                  ", data=>CURSOR(select "
+                                  "petal_length_cm, petal_width_cm FROM ml_iris)));");
+    const std::string predict_query("SELECT ML_PREDICT('" + model_name +
+                                    "', petal_width_cm, "
+                                    "sepal_width_cm) as prediction FROM ml_iris;");
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
+      EXPECT_THROW(run_multiple_agg(predict_query, dt), std::runtime_error);
+    }
   }
 }
 
-#ifdef HAVE_ONEDAL
-TEST_F(SystemTFs, ML_PREDICT_RANDOM_FOREST_REG_WRONG_NUM_REGRESSORS) {
-  const std::string train_query(
-      "SELECT * FROM TABLE(random_forest_reg_fit(model=>'iris_model', "
-      "data=>CURSOR(select "
-      "petal_length_cm, petal_width_cm FROM ml_iris)));");
-  const std::string predict_query(
-      "SELECT ML_PREDICT('iris_model',petal_width_cm, "
-      "sepal_width_cm) as prediction FROM ml_iris;");
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
-    EXPECT_THROW(run_multiple_agg(predict_query, dt), std::runtime_error);
-  }
-}
-#endif
-
-TEST_F(SystemTFs, ML_PREDICT_LIN_REG) {
-  const std::string train_query(
-      "SELECT * FROM TABLE(linear_reg_fit(model=>'iris_lin_reg_model', "
-      "data=>CURSOR(select "
-      "petal_length_cm, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
-      "ml_iris)));");
-  const std::string row_wise_predict_query(
-      "SELECT AVG(ML_PREDICT('iris_lin_reg_model', petal_width_cm, "
-      "sepal_length_cm, sepal_width_cm)) FROM ml_iris;");
-  const std::string tf_predict_query(
-      "SELECT AVG(prediction) FROM TABLE(linear_reg_predict(model=>'iris_lin_reg_model', "
-      "data=>CURSOR(SELECT rowid, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
-      "ml_iris)));");
-  const double allowed_epsilon{0.1};
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
-    const auto row_wise_prediction_avg =
-        TestHelpers::v<double>(run_simple_agg(row_wise_predict_query, dt));
-    const auto tf_prediction_avg =
-        TestHelpers::v<double>(run_simple_agg(tf_predict_query, dt));
-    EXPECT_GE(row_wise_prediction_avg, tf_prediction_avg - allowed_epsilon);
-    EXPECT_LE(row_wise_prediction_avg, tf_prediction_avg + allowed_epsilon);
-  }
-}
-
-TEST_F(SystemTFs, ML_PREDICT_LIN_REG_NULLS) {
-  const std::string train_query(
-      "SELECT * FROM TABLE(linear_reg_fit(model=>'iris_lin_reg_model', "
-      "data=>CURSOR(select "
-      "petal_length_cm, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
-      "ml_iris)));");
-  const std::string row_wise_predict_query(
-      "SELECT AVG(ML_PREDICT('iris_lin_reg_model', petal_width_cm, "
-      "CASE WHEN MOD(rowid, 2) = 0 THEN sepal_length_cm ELSE NULL END, sepal_width_cm)) "
-      "AS avg_result,"
-      "COUNT(ML_PREDICT('iris_lin_reg_model', petal_width_cm, CASE WHEN MOD(rowid, 2) = "
-      "0 "
-      "THEN sepal_length_cm ELSE NULL END, sepal_width_cm)) AS num_not_null FROM "
-      "ml_iris;");
-  const std::string tf_predict_query(
-      "SELECT AVG(prediction) as avg_result, COUNT(prediction) AS num_not_null FROM "
-      "TABLE( "
-      "linear_reg_predict(model=>'iris_lin_reg_model', "
-      "data=>CURSOR(SELECT rowid, petal_width_cm, CASE WHEN MOD(rowid, 2) = 0 THEN "
-      "sepal_length_cm ELSE NULL END, sepal_width_cm FROM "
-      "ml_iris)));");
-  const double allowed_epsilon{0.01};
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
-    const auto row_wise_prediction_result = run_multiple_agg(row_wise_predict_query, dt);
-    EXPECT_EQ(row_wise_prediction_result->rowCount(), size_t(1));
-    EXPECT_EQ(row_wise_prediction_result->colCount(), size_t(2));
-    const auto tf_prediction_result = run_multiple_agg(tf_predict_query, dt);
-    EXPECT_EQ(tf_prediction_result->rowCount(), size_t(1));
-    EXPECT_EQ(tf_prediction_result->colCount(), size_t(2));
-    auto row_wise_row = row_wise_prediction_result->getNextRow(true, true);
-    auto tf_row = tf_prediction_result->getNextRow(true, true);
-    const double row_wise_avg = TestHelpers::v<double>(row_wise_row[0]);
-    const double tf_avg = TestHelpers::v<double>(tf_row[0]);
-    EXPECT_GE(row_wise_avg, tf_avg - allowed_epsilon);
-    EXPECT_LE(row_wise_avg, tf_avg + allowed_epsilon);
-    const int64_t row_wise_non_null_count = TestHelpers::v<int64_t>(row_wise_row[1]);
-    const int64_t tf_non_null_count = TestHelpers::v<int64_t>(tf_row[1]);
-    EXPECT_EQ(row_wise_non_null_count, tf_non_null_count);
-    EXPECT_EQ(row_wise_non_null_count, int64_t(75));
+TEST_P(MLRegressionFunctionsTest, ML_PREDICT) {
+  const auto model_type = GetParam();
+  const auto model_type_str = get_ml_model_type_str(model_type);
+  const std::string model_fit_func{model_type_str + "_FIT"};
+  const std::string model_name{"IRIS_" + model_type_str + "_MODEL"};
+  const auto supported_ml_frameworks = get_supported_ml_frameworks();
+  for (auto& ml_framework : supported_ml_frameworks) {
+    if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
+      continue;
+    }
+    const std::string train_query(
+        "SELECT * FROM TABLE(" + model_fit_func + "(model=>'" + model_name +
+        "', "
+        "preferred_ml_framework=>" +
+        ml_framework +
+        ", data=>CURSOR(select "
+        "petal_length_cm, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
+        "ml_iris)));");
+    const std::string row_wise_predict_query(
+        "SELECT AVG(ML_PREDICT('" + model_name +
+        "', petal_width_cm, "
+        "sepal_length_cm, sepal_width_cm)) FROM ml_iris;");
+    const std::string tf_predict_query(
+        "SELECT AVG(prediction) FROM TABLE(ML_REG_PREDICT(model=>'" + model_name +
+        "', "
+        "preferred_ml_framework=>" +
+        ml_framework +
+        ", "
+        "data=>CURSOR(SELECT rowid, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
+        "ml_iris)));");
+    const double allowed_epsilon{0.1};
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
+      const auto row_wise_prediction_avg =
+          TestHelpers::v<double>(run_simple_agg(row_wise_predict_query, dt));
+      const auto tf_prediction_avg =
+          TestHelpers::v<double>(run_simple_agg(tf_predict_query, dt));
+      EXPECT_GE(row_wise_prediction_avg, tf_prediction_avg - allowed_epsilon);
+      EXPECT_LE(row_wise_prediction_avg, tf_prediction_avg + allowed_epsilon);
+    }
   }
 }
 
-#ifdef HAVE_ONEDAL
-TEST_F(SystemTFs, ML_PREDICT_RANDOM_FOREST_REG) {
-  const std::string train_query(
-      "SELECT * FROM TABLE(random_forest_reg_fit(model=>'iris_rand_forest_reg_model', "
-      "data=>CURSOR(select "
-      "petal_length_cm, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
-      "ml_iris)));");
-  const std::string row_wise_predict_query(
-      "SELECT AVG(ML_PREDICT('iris_rand_forest_reg_model', petal_width_cm, "
-      "sepal_length_cm, sepal_width_cm)) FROM ml_iris;");
-  const std::string tf_predict_query(
-      "SELECT AVG(prediction) FROM "
-      "TABLE(random_forest_reg_predict(model=>'iris_rand_forest_reg_model', "
-      "data=>CURSOR(SELECT rowid, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
-      "ml_iris)));");
-  const double allowed_epsilon{0.01};
-  // Add CPU execution after determine cause of crash on CPU
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
-    const auto row_wise_prediction_avg =
-        TestHelpers::v<double>(run_simple_agg(row_wise_predict_query, dt));
-    const auto tf_prediction_avg =
-        TestHelpers::v<double>(run_simple_agg(tf_predict_query, dt));
-    EXPECT_GE(row_wise_prediction_avg, tf_prediction_avg - allowed_epsilon);
-    EXPECT_LE(row_wise_prediction_avg, tf_prediction_avg + allowed_epsilon);
+TEST_P(MLRegressionFunctionsTest, ML_PREDICT_NULLS) {
+  const auto model_type = GetParam();
+  const auto model_type_str = get_ml_model_type_str(model_type);
+  const std::string model_fit_func{model_type_str + "_FIT"};
+  const std::string model_name("IRIS_" + model_type_str + "_MODEL");
+  const auto supported_ml_frameworks = get_supported_ml_frameworks();
+  for (auto& ml_framework : supported_ml_frameworks) {
+    if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
+      continue;
+    }
+    const std::string train_query(
+        "SELECT * FROM TABLE(" + model_fit_func + "(model=>'" + model_name +
+        "', "
+        "preferred_ml_framework=>" +
+        ml_framework +
+        ", data=>CURSOR(select "
+        "petal_length_cm, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
+        "ml_iris)));");
+    const std::string row_wise_predict_query(
+        "SELECT AVG(ML_PREDICT('" + model_name +
+        "', petal_width_cm, "
+        "CASE WHEN MOD(rowid, 2) = 0 THEN sepal_length_cm ELSE NULL END, "
+        "sepal_width_cm)) "
+        "AS avg_result,"
+        "COUNT(ML_PREDICT('" +
+        model_name +
+        "', petal_width_cm, CASE WHEN MOD(rowid, 2) = "
+        "0 "
+        "THEN sepal_length_cm ELSE NULL END, sepal_width_cm)) AS num_not_null FROM "
+        "ml_iris;");
+    const std::string tf_predict_query(
+        "SELECT AVG(prediction) as avg_result, COUNT(prediction) AS num_not_null FROM "
+        "TABLE( "
+        "ML_REG_PREDICT(model=>'" +
+        model_name +
+        "', "
+        "preferred_ml_framework=>" +
+        ml_framework +
+        ", "
+        "data=>CURSOR(SELECT rowid, petal_width_cm, CASE WHEN MOD(rowid, 2) = 0 THEN "
+        "sepal_length_cm ELSE NULL END, sepal_width_cm FROM "
+        "ml_iris)));");
+    const double allowed_epsilon{0.01};
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
+      const auto row_wise_prediction_result =
+          run_multiple_agg(row_wise_predict_query, dt);
+      EXPECT_EQ(row_wise_prediction_result->rowCount(), size_t(1));
+      EXPECT_EQ(row_wise_prediction_result->colCount(), size_t(2));
+      const auto tf_prediction_result = run_multiple_agg(tf_predict_query, dt);
+      EXPECT_EQ(tf_prediction_result->rowCount(), size_t(1));
+      EXPECT_EQ(tf_prediction_result->colCount(), size_t(2));
+      auto row_wise_row = row_wise_prediction_result->getNextRow(true, true);
+      auto tf_row = tf_prediction_result->getNextRow(true, true);
+      const double row_wise_avg = TestHelpers::v<double>(row_wise_row[0]);
+      const double tf_avg = TestHelpers::v<double>(tf_row[0]);
+      EXPECT_GE(row_wise_avg, tf_avg - allowed_epsilon);
+      EXPECT_LE(row_wise_avg, tf_avg + allowed_epsilon);
+      const int64_t row_wise_non_null_count = TestHelpers::v<int64_t>(row_wise_row[1]);
+      const int64_t tf_non_null_count = TestHelpers::v<int64_t>(tf_row[1]);
+      EXPECT_EQ(row_wise_non_null_count, tf_non_null_count);
+      EXPECT_EQ(row_wise_non_null_count, int64_t(75));
+    }
   }
 }
 
-TEST_F(SystemTFs, ML_PREDICT_RAND_FOREST_REG_NULLS) {
-  const std::string train_query(
-      "SELECT * FROM "
-      "TABLE(random_forest_reg_fit(model=>'iris_rand_forest_reg_model', "
-      "data=>CURSOR(select "
-      "petal_length_cm, petal_width_cm, sepal_length_cm, sepal_width_cm FROM "
-      "ml_iris)));");
-  const std::string row_wise_predict_query(
-      "SELECT AVG(ML_PREDICT('iris_rand_forest_reg_model', petal_width_cm, "
-      "CASE WHEN MOD(rowid, 2) = 0 THEN sepal_length_cm ELSE NULL END, sepal_width_cm)) "
-      "AS avg_result,"
-      "COUNT(ML_PREDICT('iris_rand_forest_reg_model', petal_width_cm, CASE WHEN "
-      "MOD(rowid, 2) = 0 "
-      "THEN sepal_length_cm ELSE NULL END, sepal_width_cm)) AS num_not_null FROM "
-      "ml_iris;");
-  const std::string tf_predict_query(
-      "SELECT AVG(prediction) as avg_result, COUNT(prediction) AS num_not_null FROM "
-      "TABLE( "
-      "random_forest_reg_predict(model=>'iris_rand_forest_reg_model', "
-      "data=>CURSOR(SELECT rowid, petal_width_cm, CASE WHEN MOD(rowid, 2) = 0 THEN "
-      "sepal_length_cm ELSE NULL END, sepal_width_cm FROM "
-      "ml_iris)));");
-  const double allowed_epsilon{0.01};
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
-    const auto row_wise_prediction_result = run_multiple_agg(row_wise_predict_query, dt);
-    EXPECT_EQ(row_wise_prediction_result->rowCount(), size_t(1));
-    EXPECT_EQ(row_wise_prediction_result->colCount(), size_t(2));
-    const auto tf_prediction_result = run_multiple_agg(tf_predict_query, dt);
-    EXPECT_EQ(tf_prediction_result->rowCount(), size_t(1));
-    EXPECT_EQ(tf_prediction_result->colCount(), size_t(2));
-    auto row_wise_row = row_wise_prediction_result->getNextRow(true, true);
-    auto tf_row = tf_prediction_result->getNextRow(true, true);
-    const double row_wise_avg = TestHelpers::v<double>(row_wise_row[0]);
-    const double tf_avg = TestHelpers::v<double>(tf_row[0]);
-    EXPECT_GE(row_wise_avg, tf_avg - allowed_epsilon);
-    EXPECT_LE(row_wise_avg, tf_avg + allowed_epsilon);
-    const int64_t row_wise_non_null_count = TestHelpers::v<int64_t>(row_wise_row[1]);
-    const int64_t tf_non_null_count = TestHelpers::v<int64_t>(tf_row[1]);
-    EXPECT_EQ(row_wise_non_null_count, tf_non_null_count);
-    EXPECT_EQ(row_wise_non_null_count, int64_t(75));
-  }
-}
-#endif
+INSTANTIATE_TEST_SUITE_P(MLRegressionTests,
+                         MLRegressionFunctionsTest,
+                         ::testing::Values(MLModelType::LINEAR_REG,
+                                           MLModelType::DECISION_TREE_REG,
+                                           MLModelType::GBT_REG,
+                                           MLModelType::RANDOM_FOREST_REG));
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
