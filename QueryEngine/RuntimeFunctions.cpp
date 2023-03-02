@@ -2220,14 +2220,16 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t
 width_bucket_no_oob_check(const double target_value,
                           const double lower_bound,
                           const double scale_factor) {
-  return ((target_value - lower_bound) * scale_factor) + 1;
+  int32_t calc = (target_value - lower_bound) * scale_factor;
+  return calc + 1;
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t
 width_bucket_reversed_no_oob_check(const double target_value,
                                    const double lower_bound,
                                    const double scale_factor) {
-  return ((lower_bound - target_value) * scale_factor) + 1;
+  int32_t calc = (lower_bound - target_value) * scale_factor;
+  return calc + 1;
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t

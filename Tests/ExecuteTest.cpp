@@ -2831,6 +2831,21 @@ TEST_F(Select, ConstantWidthBucketExpr) {
                   "SELECT COUNT(*) FROM (SELECT WIDTH_BUCKET(st_x(p), 0, 254, 255) x, "
                   "WIDTH_BUCKET(st_y(p), 0, 254, 255) y FROM varlen_table GROUP BY x,y);",
                   dt)));
+    EXPECT_EQ(
+        int64_t(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT WIDTH_BUCKET(25.888660, 25.888650, 51.046306, 12) FROM wb_test;",
+            dt)));
+    EXPECT_EQ(
+        int64_t(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT WIDTH_BUCKET(25.888660, 25.888660, 51.046306, 12) FROM wb_test;",
+            dt)));
+    EXPECT_EQ(
+        int64_t(0),
+        v<int64_t>(run_simple_agg(
+            "SELECT WIDTH_BUCKET(25.888660, 25.888670, 51.046306, 12) FROM wb_test;",
+            dt)));
   }
   run_ddl_statement(drop);
   g_sqlite_comparator.query(drop);

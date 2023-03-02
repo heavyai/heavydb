@@ -1083,37 +1083,7 @@ class WidthBucketExpr : public Expr {
   }
   double get_bound_val(const Analyzer::Expr* bound_expr) const;
   int32_t get_partition_count_val() const;
-  template <typename T>
-  int32_t compute_bucket(T target_const_val, SQLTypeInfo& ti) const {
-    // this utility function is useful for optimizing expression range decision
-    // for an expression depending on width_bucket expr
-    T null_val = ti.is_integer() ? inline_int_null_val(ti) : inline_fp_null_val(ti);
-    double lower_bound_val = get_bound_val(lower_bound_.get());
-    double upper_bound_val = get_bound_val(upper_bound_.get());
-    auto partition_count_val = get_partition_count_val();
-    if (target_const_val == null_val) {
-      return INT32_MIN;
-    }
-    float res;
-    if (lower_bound_val < upper_bound_val) {
-      if (target_const_val < lower_bound_val) {
-        return 0;
-      } else if (target_const_val >= upper_bound_val) {
-        return partition_count_val + 1;
-      }
-      double dividend = upper_bound_val - lower_bound_val;
-      res = ((partition_count_val * (target_const_val - lower_bound_val)) / dividend) + 1;
-    } else {
-      if (target_const_val > lower_bound_val) {
-        return 0;
-      } else if (target_const_val <= upper_bound_val) {
-        return partition_count_val + 1;
-      }
-      double dividend = lower_bound_val - upper_bound_val;
-      res = ((partition_count_val * (lower_bound_val - target_const_val)) / dividend) + 1;
-    }
-    return res;
-  }
+  int32_t compute_bucket(double target_const_val) const;
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
   void find_expr(std::function<bool(const Expr*)> f,
