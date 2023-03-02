@@ -85,10 +85,6 @@ class ScalarExprVisitor {
     if (cardinality) {
       return visitCardinality(cardinality);
     }
-    const auto width_bucket_expr = dynamic_cast<const Analyzer::WidthBucketExpr*>(expr);
-    if (width_bucket_expr) {
-      return visitWidthBucket(width_bucket_expr);
-    }
     const auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
     if (like_expr) {
       return visitLikeExpr(like_expr);
