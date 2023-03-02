@@ -163,11 +163,21 @@ class ProcBuddyinfoParser {
     fragmentationPercent_ = (scaled * 100) / total;
   }
 
-  auto operator[](size_t order) { return orders_[order]; }
-  auto begin() { return orders_.begin(); }
-  auto end() { return orders_.end(); }
-  auto getFragmentationPercent() { return fragmentationPercent_; }
-  auto getInputText() { return inputText_; }
+  auto operator[](size_t order) {
+    return orders_[order];
+  }
+  auto begin() {
+    return orders_.begin();
+  }
+  auto end() {
+    return orders_.end();
+  }
+  auto getFragmentationPercent() {
+    return fragmentationPercent_;
+  }
+  auto getInputText() {
+    return inputText_;
+  }
 };
 
 class DataMgr {

@@ -43,14 +43,22 @@ class SharedKernelContext {
 
   std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& getFragmentResults();
 
-  const std::vector<InputTableInfo>& getQueryInfos() const { return query_infos_; }
+  const std::vector<InputTableInfo>& getQueryInfos() const {
+    return query_infos_;
+  }
 
   std::atomic_flag dynamic_watchdog_set = ATOMIC_FLAG_INIT;
 
 #ifdef HAVE_TBB
-  auto getThreadPool() { return task_group_; }
-  void setThreadPool(threading::task_group* tg) { task_group_ = tg; }
-  auto& getTlsExecutionContext() { return tls_execution_context_; }
+  auto getThreadPool() {
+    return task_group_;
+  }
+  void setThreadPool(threading::task_group* tg) {
+    task_group_ = tg;
+  }
+  auto& getTlsExecutionContext() {
+    return tls_execution_context_;
+  }
 #endif  // HAVE_TBB
 
  private:

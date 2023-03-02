@@ -124,11 +124,17 @@ class PerfectHashTable : public HashTable {
     hash_entry_info_ = hash_entry_info;
   }
 
-  void setColumnNumElems(size_t elem) { column_num_elems_ = elem; }
+  void setColumnNumElems(size_t elem) {
+    column_num_elems_ = elem;
+  }
 
-  BucketizedHashEntryInfo getHashEntryInfo() const { return hash_entry_info_; }
+  BucketizedHashEntryInfo getHashEntryInfo() const {
+    return hash_entry_info_;
+  }
 
-  size_t getColumnNumElems() const { return column_num_elems_; }
+  size_t getColumnNumElems() const {
+    return column_num_elems_;
+  }
 
   PerfectHashTableEntryInfo getHashTableEntryInfo() const {
     return hash_table_entry_info_;

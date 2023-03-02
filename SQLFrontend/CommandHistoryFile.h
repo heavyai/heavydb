@@ -49,7 +49,9 @@ class DefaultEnvResolver {
   }
 
 #ifndef _WIN32
-  auto const* getpwuid(uid_t uid) const { return ::getpwuid(uid); }
+  auto const* getpwuid(uid_t uid) const {
+    return ::getpwuid(uid);
+  }
 #endif
 
   const char* getpwdir(uid_t uid) const {
@@ -78,7 +80,9 @@ class DefaultEnvResolver {
   }
 
 #if defined(__APPLE__) || defined(_WIN32)
-  auto const* getenv(char const* env_var_name) const { return ::getenv(env_var_name); }
+  auto const* getenv(char const* env_var_name) const {
+    return ::getenv(env_var_name);
+  }
 #else
   auto const* getenv(char const* env_var_name) const {
     return ::secure_getenv(env_var_name);

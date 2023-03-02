@@ -211,8 +211,12 @@ class CudaMgr {
 
   void printDeviceProperties() const;
 
-  const std::vector<CUcontext>& getDeviceContexts() const { return device_contexts_; }
-  const int getGpuDriverVersion() const { return gpu_driver_version_; }
+  const std::vector<CUcontext>& getDeviceContexts() const {
+    return device_contexts_;
+  }
+  const int getGpuDriverVersion() const {
+    return gpu_driver_version_;
+  }
 
   void loadGpuModuleData(CUmodule* module,
                          const void* image,

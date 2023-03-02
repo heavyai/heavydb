@@ -88,7 +88,7 @@ auto check_column_metadata =
     };
 
 template <typename... Args>
-auto check_fragment_metadata(Args&&... args) -> auto {
+auto check_fragment_metadata(Args&&... args) -> auto{
   static_assert(sizeof...(Args) % 4 == 0,
                 "check_fragment_metadata expects arguments to be a multiple of 4");
   return std::make_tuple(check_column_metadata<Args...>,

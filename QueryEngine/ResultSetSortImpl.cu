@@ -155,7 +155,7 @@ std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
 
   auto is_negative =
       float_argument_input ? [](const int64_t v) -> bool { return (v & (1 << 31)) != 0; }
-  : [](const int64_t v) -> bool { return v < 0; };
+                           : [](const int64_t v) -> bool { return v < 0; };
 
   for (size_t i = start; i < layout.entry_count; i += step, ++oe_col_buffer_idx) {
     if (!is_empty_entry<K>(i, groupby_buffer, layout.row_bytes) &&

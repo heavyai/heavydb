@@ -211,7 +211,9 @@ struct JoinColumnTupleIterator {
     return *this;
   }
 
-  DEVICE FORCE_INLINE JoinColumnTupleIterator& operator*() { return *this; }
+  DEVICE FORCE_INLINE JoinColumnTupleIterator& operator*() {
+    return *this;
+  }
 };  // struct JoinColumnTupleIterator
 
 //! Helper class for viewing multiple JoinColumns and their matching JoinColumnTypeInfos

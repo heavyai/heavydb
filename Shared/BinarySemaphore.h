@@ -41,7 +41,7 @@ class BinarySemaphore {
 
   inline void try_acquire() {
     std::unique_lock<std::mutex> state_lock(state_mutex_);
-    condition_.wait(state_lock, [& is_ready = is_ready_] { return is_ready; });
+    condition_.wait(state_lock, [&is_ready = is_ready_] { return is_ready; });
   }
 
   /**

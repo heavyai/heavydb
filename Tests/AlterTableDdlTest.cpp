@@ -282,7 +282,7 @@ void drop_columns(const bool rollback, const std::vector<std::string>&& dropped_
       dropped_columns.begin(),
       dropped_columns.end(),
       std::back_inserter(drop_column_phrases),
-      [](const auto& dropped_column) -> auto {
+      [](const auto& dropped_column) -> auto{
         using namespace std::string_literals;
         return dropped_column;
       });

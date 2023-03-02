@@ -513,8 +513,12 @@ class SQLTypeInfo {
     }
     return type_name[static_cast<int>(type)] + ps;
   }
-  inline std::string get_compression_name() const { return comp_name[(int)compression]; }
-  std::string toString() const { return to_string(); }  // for PRINT macro
+  inline std::string get_compression_name() const {
+    return comp_name[(int)compression];
+  }
+  std::string toString() const {
+    return to_string();
+  }  // for PRINT macro
   inline std::string to_string() const {
     std::ostringstream oss;
     oss << "(type=" << type_name[static_cast<int>(type)]
@@ -548,21 +552,51 @@ class SQLTypeInfo {
   bool is_any() const {
     return (... || (types == type));
   }
-  inline bool is_string() const { return IS_STRING(type); }
-  inline bool is_string_array() const { return (type == kARRAY) && IS_STRING(subtype); }
-  inline bool is_integer() const { return IS_INTEGER(type); }
-  inline bool is_decimal() const { return type == kDECIMAL || type == kNUMERIC; }
-  inline bool is_fp() const { return type == kFLOAT || type == kDOUBLE; }
-  inline bool is_number() const { return IS_NUMBER(type); }
-  inline bool is_time() const { return is_datetime(type); }
-  inline bool is_boolean() const { return type == kBOOLEAN; }
-  inline bool is_array() const { return type == kARRAY; }  // Array
-  inline bool is_varlen_array() const { return type == kARRAY && size <= 0; }
-  inline bool is_fixlen_array() const { return type == kARRAY && size > 0; }
-  inline bool is_timeinterval() const { return IS_INTERVAL(type); }
-  inline bool is_geometry() const { return IS_GEO(type); }
-  inline bool is_column() const { return type == kCOLUMN; }            // Column
-  inline bool is_column_list() const { return type == kCOLUMN_LIST; }  // ColumnList
+  inline bool is_string() const {
+    return IS_STRING(type);
+  }
+  inline bool is_string_array() const {
+    return (type == kARRAY) && IS_STRING(subtype);
+  }
+  inline bool is_integer() const {
+    return IS_INTEGER(type);
+  }
+  inline bool is_decimal() const {
+    return type == kDECIMAL || type == kNUMERIC;
+  }
+  inline bool is_fp() const {
+    return type == kFLOAT || type == kDOUBLE;
+  }
+  inline bool is_number() const {
+    return IS_NUMBER(type);
+  }
+  inline bool is_time() const {
+    return is_datetime(type);
+  }
+  inline bool is_boolean() const {
+    return type == kBOOLEAN;
+  }
+  inline bool is_array() const {
+    return type == kARRAY;
+  }  // Array
+  inline bool is_varlen_array() const {
+    return type == kARRAY && size <= 0;
+  }
+  inline bool is_fixlen_array() const {
+    return type == kARRAY && size > 0;
+  }
+  inline bool is_timeinterval() const {
+    return IS_INTERVAL(type);
+  }
+  inline bool is_geometry() const {
+    return IS_GEO(type);
+  }
+  inline bool is_column() const {
+    return type == kCOLUMN;
+  }  // Column
+  inline bool is_column_list() const {
+    return type == kCOLUMN_LIST;
+  }  // ColumnList
   inline bool is_column_array() const {
     const auto c = get_compression();
     return type == kCOLUMN && (c == kENCODING_ARRAY || c == kENCODING_ARRAY_DICT);
@@ -617,7 +651,9 @@ class SQLTypeInfo {
            (is_array() && get_elem_type().is_dict_encoded_string());
   }
 
-  inline bool is_dict_intersection() const { return dict_intersection; }
+  inline bool is_dict_intersection() const {
+    return dict_intersection;
+  }
 
   inline bool has_same_itemtype(const SQLTypeInfo& other) const {
     if ((is_column() || is_column_list()) &&
@@ -981,7 +1017,9 @@ class SQLTypeInfo {
     return false;
   }
 
-  inline bool is_date() const { return type == kDATE; }
+  inline bool is_date() const {
+    return type == kDATE;
+  }
 
   inline bool is_time_or_date() const {
     return type == kDATE || type == kTIME || type == kTIMESTAMP;
@@ -997,12 +1035,16 @@ class SQLTypeInfo {
     return false;
   }
 
-  inline bool is_timestamp() const { return type == kTIMESTAMP; }
+  inline bool is_timestamp() const {
+    return type == kTIMESTAMP;
+  }
   inline bool is_encoded_timestamp() const {
     return is_timestamp() && compression == kENCODING_FIXED;
   }
 
-  void setStorageSize() { size = get_storage_size(); }
+  void setStorageSize() {
+    size = get_storage_size();
+  }
 
   const shared::StringDictKey& getStringDictKey() const {
     // If comp_param is set, it should equal dict_id.

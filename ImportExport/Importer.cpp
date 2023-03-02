@@ -3843,7 +3843,7 @@ void Importer::import_local_parquet(const std::string& file_path,
   size_t nrow_completed{0};
   file_offsets.push_back(0);
   // map logic column index to physical column index
-  auto get_physical_col_idx = [&cds](const int logic_col_idx) -> auto {
+  auto get_physical_col_idx = [&cds](const int logic_col_idx) -> auto{
     int physical_col_idx = 0;
     for (int i = 0; i < logic_col_idx; ++i) {
       physical_col_idx += 1 + cds[physical_col_idx]->columnType.get_physical_cols();

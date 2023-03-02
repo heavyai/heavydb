@@ -480,12 +480,16 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
-  static void destroyDBHandler() { db_handler_.reset(); }
+  static void destroyDBHandler() {
+    db_handler_.reset();
+  }
 
  protected:
   friend class DBHandlerTestEnvironment;
 
-  void SetUp() override { switchToAdmin(); }
+  void SetUp() override {
+    switchToAdmin();
+  }
 
   void TearDown() override {}
 
@@ -535,11 +539,19 @@ class DBHandlerTestFixture : public testing::Test {
     login(default_user_, "HyperInteractive", default_db_name_, session_id_);
     admin_session_id_ = session_id_;
   }
-  static bool isDistributedMode() { return system_parameters_.aggregator; }
-  static SystemParameters getSystemParameters() { return system_parameters_; }
-  static void switchToAdmin() { session_id_ = admin_session_id_; }
+  static bool isDistributedMode() {
+    return system_parameters_.aggregator;
+  }
+  static SystemParameters getSystemParameters() {
+    return system_parameters_;
+  }
+  static void switchToAdmin() {
+    session_id_ = admin_session_id_;
+  }
 
-  static void logout(const TSessionId& id) { db_handler_->disconnect(id); }
+  static void logout(const TSessionId& id) {
+    db_handler_->disconnect(id);
+  }
 
   static void login(const std::string& user,
                     const std::string& pass,
@@ -561,7 +573,9 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
-  static void setSessionId(const std::string& session_id) { session_id_ = session_id; }
+  static void setSessionId(const std::string& session_id) {
+    session_id_ = session_id;
+  }
 
   static std::vector<ColumnPair> schema_string_to_column_pairs(
       const std::string& schema) {
@@ -608,7 +622,9 @@ class DBHandlerTestFixture : public testing::Test {
                                     const std::string& data_wrapper_type,
                                     const bool is_odbc_geo = false) {}
 
-  static const std::vector<LeafHostInfo>& getDbLeaves() { return db_leaves_; }
+  static const std::vector<LeafHostInfo>& getDbLeaves() {
+    return db_leaves_;
+  }
 
   template <typename Lambda>
   void executeLambdaAndAssertException(Lambda lambda,
@@ -690,7 +706,9 @@ class DBHandlerTestFixture : public testing::Test {
    * Helper method used to cast an integer literal to an int64_t (in order to
    * avoid compiler ambiguity).
    */
-  constexpr int64_t i(int64_t i) { return i; }
+  constexpr int64_t i(int64_t i) {
+    return i;
+  }
 
   bool setExecuteMode(const TExecuteMode::type mode) {
     if (db_handler_->cpu_mode_only_ && TExecuteMode::GPU) {
@@ -708,7 +726,9 @@ class DBHandlerTestFixture : public testing::Test {
     db_handler_->resizeDispatchQueue(queue_size);
   }
 
-  size_t getRowCount(const TQueryResult& result) { return getRowCount(result.row_set); }
+  size_t getRowCount(const TQueryResult& result) {
+    return getRowCount(result.row_set);
+  }
 
  private:
   static size_t getRowCount(const TRowSet& row_set) {

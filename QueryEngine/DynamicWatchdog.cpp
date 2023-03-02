@@ -40,9 +40,7 @@ extern "C" RUNTIME_EXPORT uint64_t dynamic_watchdog_init(unsigned ms_budget) {
 
   if (ms_budget == static_cast<unsigned>(DW_DEADLINE)) {
     if (dw_abort.load()) {
-      {
-        return 0LL;
-      }
+      { return 0LL; }
     }
     return dw_cycle_start + dw_cycle_budget;
   }

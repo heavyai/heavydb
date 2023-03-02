@@ -93,23 +93,22 @@ class ProxyTHttpClient : public THttpClient {
                    std::string host,
                    std::string path)
 #ifdef HAVE_THRIFT_MESSAGE_LIMIT
-      : THttpClient(transport, host, path, shared::default_tconfig()) {
-  }
+      : THttpClient(transport, host, path, shared::default_tconfig()){}
 #else
       : THttpClient(transport, host, path) {
   }
 #endif
 
-  ProxyTHttpClient(std::string host, int port, std::string path)
+      ProxyTHttpClient(std::string host, int port, std::string path)
 #ifdef HAVE_THRIFT_MESSAGE_LIMIT
-      : THttpClient(host, port, path, shared::default_tconfig()) {
-  }
+      : THttpClient(host, port, path, shared::default_tconfig()){}
 #else
       : THttpClient(host, port, path) {
   }
 #endif
 
-  ~ProxyTHttpClient() override {}
+      ~ProxyTHttpClient() override {
+  }
   // thrift parseHeader d and call the super constructor.
   void parseHeader(char* header) override {
     //  note boost::istarts_with is case insensitive

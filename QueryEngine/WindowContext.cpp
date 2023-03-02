@@ -1491,11 +1491,10 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
         ::toString(input_col_ti.get_type()) +
         " must use one of the following window aggregate function: MIN / MAX / COUNT");
   }
-  const auto type = input_col_ti.is_decimal()
-                        ? decimal_to_int_type(input_col_ti)
-                        : input_col_ti.is_time_or_date()
-                              ? get_int_type_by_size(input_col_ti.get_size())
-                              : input_col_ti.get_type();
+  const auto type = input_col_ti.is_decimal() ? decimal_to_int_type(input_col_ti)
+                    : input_col_ti.is_time_or_date()
+                        ? get_int_type_by_size(input_col_ti.get_size())
+                        : input_col_ti.get_type();
   if (partition_size > 0) {
     IndexPair order_col_null_range{ordered_partition_null_start_pos_[partition_idx],
                                    ordered_partition_null_end_pos_[partition_idx]};

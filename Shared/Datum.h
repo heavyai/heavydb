@@ -41,7 +41,9 @@ struct StringView {
   uint64_t len_;
 
 #ifndef __CUDACC__
-  std::string_view stringView() const { return {ptr_, len_}; }
+  std::string_view stringView() const {
+    return {ptr_, len_};
+  }
 #endif
 };
 

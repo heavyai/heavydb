@@ -1489,16 +1489,16 @@ int main(int argc, char** argv) {
         copy_params.source_type = TSourceType::PARQUET_FILE;
       } else
 #endif
-          // allow force interpretation as geo or raster file
-          if (boost::iequals(token, "geo")) {
-        copy_params.source_type = TSourceType::GEO_FILE;
-      } else if (boost::iequals(token, "raster")) {
-        copy_params.source_type = TSourceType::RASTER_FILE;
-      } else if (boost::iequals(token, "odbc")) {
-        copy_params.source_type = TSourceType::ODBC;
-      } else {
-        file_path = token;
-      }
+        // allow force interpretation as geo or raster file
+        if (boost::iequals(token, "geo")) {
+          copy_params.source_type = TSourceType::GEO_FILE;
+        } else if (boost::iequals(token, "raster")) {
+          copy_params.source_type = TSourceType::RASTER_FILE;
+        } else if (boost::iequals(token, "odbc")) {
+          copy_params.source_type = TSourceType::ODBC;
+        } else {
+          file_path = token;
+        }
       if (copy_params.source_type == TSourceType::ODBC) {
         auto sql_select_start = strtok(0, "'");
         auto sql_select_end = strtok(0, "'");

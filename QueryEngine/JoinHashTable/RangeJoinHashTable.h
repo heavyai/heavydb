@@ -87,7 +87,9 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
       const size_t device_id);
 #endif
 
-  HashType getHashType() const noexcept override { return HashType::OneToMany; }
+  HashType getHashType() const noexcept override {
+    return HashType::OneToMany;
+  }
 
   std::pair<size_t, size_t> approximateTupleCount(
       const std::vector<double>& inverse_bucket_sizes_for_dimension,

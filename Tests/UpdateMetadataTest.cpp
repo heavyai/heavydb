@@ -109,7 +109,7 @@ auto query = [](std::string query_str) {
 };
 
 auto get_metadata_vec =
-    [](std::string table_name, std::string column_name = "x"s) -> auto {
+    [](std::string table_name, std::string column_name = "x"s) -> auto{
   auto cat = QR::get()->getCatalog();
   auto& data_manager = cat->getDataMgr();
 

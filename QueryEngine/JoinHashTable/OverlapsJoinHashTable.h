@@ -204,7 +204,9 @@ class OverlapsJoinHashTable : public HashJoin {
     return nullptr;
   }
 
-  const RegisteredQueryHint& getRegisteredQueryHint() { return query_hints_; }
+  const RegisteredQueryHint& getRegisteredQueryHint() {
+    return query_hints_;
+  }
 
   size_t getEntryCount() const {
     auto hash_table = getHashTableForDevice(0);
@@ -255,7 +257,9 @@ class OverlapsJoinHashTable : public HashJoin {
     }
   }
 
-  size_t offsetBufferOff() const noexcept override { return getKeyBufferSize(); }
+  size_t offsetBufferOff() const noexcept override {
+    return getKeyBufferSize();
+  }
 
   size_t countBufferOff() const noexcept override {
     if (layoutRequiresAdditionalBuffers(getHashType())) {
@@ -273,7 +277,9 @@ class OverlapsJoinHashTable : public HashJoin {
     }
   }
 
-  std::string getHashJoinType() const final { return "Overlaps"; }
+  std::string getHashJoinType() const final {
+    return "Overlaps";
+  }
 
   bool isBitwiseEq() const override;
 
@@ -352,7 +358,9 @@ class OverlapsJoinHashTable : public HashJoin {
     return hashtable_cache_key_[device_id];
   }
 
-  const std::vector<InnerOuter>& getInnerOuterPairs() const { return inner_outer_pairs_; }
+  const std::vector<InnerOuter>& getInnerOuterPairs() const {
+    return inner_outer_pairs_;
+  }
 
   void setOverlapsHashtableMetaInfo(size_t max_table_size_bytes,
                                     double bucket_threshold,
