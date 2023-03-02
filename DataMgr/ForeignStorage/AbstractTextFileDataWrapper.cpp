@@ -395,7 +395,6 @@ void AbstractTextFileDataWrapper::populateChunks(
 
   std::vector<ParseBufferRequest> parse_file_requests{};
   parse_file_requests.reserve(thread_count);
-  std::vector<std::future<ParseFileRegionResult>> futures{};
   std::set<int> column_filter_set;
   for (const auto& pair : column_id_to_chunk_map) {
     column_filter_set.insert(pair.first);
@@ -408,6 +407,7 @@ void AbstractTextFileDataWrapper::populateChunks(
   file_reader_->serialize(reader_metadata, d.GetAllocator());
   const auto file_path = getFullFilePath(foreign_table_);
   auto& parser = getFileBufferParser();
+  std::vector<size_t> start_indices, end_indices;
 
   for (size_t i = 0; i < file_regions.size(); i += batch_size) {
     parse_file_requests.emplace_back(buffer_size,
@@ -418,8 +418,9 @@ void AbstractTextFileDataWrapper::populateChunks(
                                      file_path,
                                      delete_buffer != nullptr);
     auto start_index = i;
-    auto end_index =
-        std::min<size_t>(start_index + batch_size - 1, file_regions.size() - 1);
+    start_indices.emplace_back(start_index);
+    end_indices.emplace_back(
+        std::min<size_t>(start_index + batch_size - 1, file_regions.size() - 1));
 
     if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       file_readers.emplace_back(std::make_unique<LocalMultiFileReader>(
@@ -427,14 +428,24 @@ void AbstractTextFileDataWrapper::populateChunks(
     } else {
       UNREACHABLE();
     }
+  }
 
+  CHECK_EQ(start_indices.size(), file_readers.size());
+  CHECK_EQ(start_indices.size(), parse_file_requests.size());
+  CHECK_EQ(start_indices.size(), end_indices.size());
+
+  // All objects that futures depend on and/or that are passed by reference
+  // should be defined and/or instantiated before the loop that creates the
+  // futures (below) to avoid possible issues related to exception propagation
+  std::vector<std::future<ParseFileRegionResult>> futures{};
+  for (size_t i = 0; i < file_readers.size(); i++) {
     futures.emplace_back(std::async(std::launch::async,
                                     parse_file_regions,
                                     std::ref(file_regions),
-                                    start_index,
-                                    end_index,
-                                    std::ref(*(file_readers.back())),
-                                    std::ref(parse_file_requests.back()),
+                                    start_indices[i],
+                                    end_indices[i],
+                                    std::ref(*(file_readers[i])),
+                                    std::ref(parse_file_requests[i]),
                                     std::ref(column_id_to_chunk_map),
                                     std::ref(parser)));
   }
