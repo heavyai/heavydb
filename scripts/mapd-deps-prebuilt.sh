@@ -84,8 +84,8 @@ fi
 if [ "$ID" == "ubuntu" ] ; then
   sudo $PACKAGER update
 
-  # required for gcc-9 on Ubuntu 18.04
-  if [ "$VERSION_ID" == "18.04" ]; then
+  # required for gcc-11 on Ubuntu < 22.04
+  if [ "$VERSION_ID" == "20.04" ] || [ "$VERSION_ID" == "19.10" ] || [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ]; then
     DEBIAN_FRONTEND=noninteractive sudo apt install -y software-properties-common
     DEBIAN_FRONTEND=noninteractive sudo add-apt-repository ppa:ubuntu-toolchain-r/test
   fi
@@ -94,13 +94,11 @@ if [ "$ID" == "ubuntu" ] ; then
       software-properties-common \
       build-essential \
       ccache \
-      cmake \
-      cmake-curses-gui \
       git \
       wget \
       curl \
-      gcc-9 \
-      g++-9 \
+      gcc-11 \
+      g++-11 \
       libboost-all-dev \
       libgoogle-glog-dev \
       golang \
@@ -121,7 +119,6 @@ if [ "$ID" == "ubuntu" ] ; then
       libgoogle-perftools-dev \
       libiberty-dev \
       libjemalloc-dev \
-      libglu1-mesa-dev \
       liblz4-dev \
       liblzma-dev \
       libbz2-dev \
@@ -145,16 +142,22 @@ if [ "$ID" == "ubuntu" ] ; then
       libxerces-c-dev \
       swig
 
-# Set up gcc-9 as default gcc
+# Set up gcc-11 as default gcc
 sudo update-alternatives \
-  --install /usr/bin/gcc gcc /usr/bin/gcc-9 900 \
-  --slave /usr/bin/g++ g++ /usr/bin/g++-9
+  --install /usr/bin/gcc gcc /usr/bin/gcc-11 1100 \
+  --slave /usr/bin/g++ g++ /usr/bin/g++-11
+sudo update-alternatives --auto gcc
 
-  if [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ] ; then
-    sudo $PACKAGER install \
-      libxerces-c-dev \
-      libxmlsec1-dev
-  fi
+if [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ] ; then
+  sudo $PACKAGER install -y \
+    libxerces-c-dev \
+    libxmlsec1-dev \
+    libegl1-mesa-dev
+fi
+
+if [ "$VERSION_ID" == "20.04" ] ; then
+  sudo $PACKAGER install -y libegl-dev
+fi
 
   sudo mkdir -p $PREFIX
   pushd $PREFIX
@@ -211,7 +214,6 @@ elif [ "$ID" == "centos" ] ; then
     curl \
     python-yaml \
     libX11-devel \
-    mesa-libGL-devel \
     environment-modules \
     valgrind \
     openldap-devel \

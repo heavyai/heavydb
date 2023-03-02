@@ -55,8 +55,8 @@ DEBIAN_FRONTEND=noninteractive sudo apt-key adv --fetch-keys https://developer.d
 
 DEBIAN_FRONTEND=noninteractive sudo apt update
 
-# required for gcc-9 on Ubuntu 18.04
-if [ "$VERSION_ID" == "18.04" ]; then
+# required for gcc-11 on Ubuntu < 22.04
+if [ "$VERSION_ID" == "20.04" ] || [ "$VERSION_ID" == "19.10" ] || [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ]; then
   DEBIAN_FRONTEND=noninteractive sudo apt install -y software-properties-common
   DEBIAN_FRONTEND=noninteractive sudo add-apt-repository ppa:ubuntu-toolchain-r/test
 fi
@@ -68,8 +68,8 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     git \
     wget \
     curl \
-    gcc-9 \
-    g++-9 \
+    gcc-11 \
+    g++-11 \
     libboost-all-dev \
     libgoogle-glog-dev \
     libssl-dev \
@@ -80,7 +80,6 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     default-jdk-headless \
     libncurses5-dev \
     libldap2-dev \
-    binutils-dev \
     google-perftools \
     libdouble-conversion-dev \
     libevent-dev \
@@ -120,14 +119,21 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     libxcursor-dev \
     libxi-dev
 
-# Set up gcc-8 as default gcc
+# Set up gcc-11 as default gcc
 sudo update-alternatives \
-  --install /usr/bin/gcc gcc /usr/bin/gcc-9 900 \
-  --slave /usr/bin/g++ g++ /usr/bin/g++-9
+  --install /usr/bin/gcc gcc /usr/bin/gcc-11 1100 \
+  --slave /usr/bin/g++ g++ /usr/bin/g++-11
 
 # Needed to find sqlite3, xmltooling, xml_security_c, and LLVM (for iwyu)
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
 export PATH=$PREFIX/bin:$PATH
+
+if [ "$VERSION_ID" == "18.04" ]; then
+  # Required for TBB
+  download_make_install https://mirrors.sarata.com/gnu/binutils/binutils-2.32.tar.xz
+else
+  DEBIAN_FRONTEND=noninteractive sudo apt install -y binutils-dev
+fi
 
 install_ninja
 
@@ -289,7 +295,7 @@ popd # vulkan
 # OpenSAML
 download_make_install ${HTTP_DEPS}/xml-security-c-2.0.2.tar.gz "" "--without-xalan"
 download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz
-download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz
+CXXFLAGS="-std=c++14" download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz
 
 cat > $PREFIX/mapd-deps.sh <<EOF
 HEAVY_PREFIX=$PREFIX

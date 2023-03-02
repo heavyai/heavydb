@@ -78,7 +78,7 @@ download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "
 download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.16.1.tar.xz
 
 # gcc
-VERS=9.4.0
+VERS=11.1.0
 download ftp://ftp.gnu.org/gnu/gcc/gcc-$VERS/gcc-$VERS.tar.xz
 extract gcc-$VERS.tar.xz
 pushd gcc-$VERS
@@ -175,7 +175,7 @@ make install
 popd
 
 VERS=0.3.5
-CXXFLAGS="-fPIC" download_make_install https://github.com/google/glog/archive/v$VERS.tar.gz glog-$VERS "--enable-shared=no" # --build=powerpc64le-unknown-linux-gnu"
+CXXFLAGS="-fPIC -std=c++11" download_make_install https://github.com/google/glog/archive/v$VERS.tar.gz glog-$VERS "--enable-shared=no" # --build=powerpc64le-unknown-linux-gnu"
 
 # Libevent needed for folly
 VERS=2.1.10
@@ -218,6 +218,8 @@ install_blosc
 install_gdal
 install_geos
 install_pdal
+
+download_make_install https://mirrors.sarata.com/gnu/binutils/binutils-2.32.tar.xz
 
 # TBB
 install_tbb static
@@ -305,7 +307,7 @@ popd
 
 download_make_install ${HTTP_DEPS}/xml-security-c-2.0.2.tar.gz "" "--without-xalan --enable-static --disable-shared"
 download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz "" "--enable-static --disable-shared"
-download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz "" "--enable-static --disable-shared"
+CXXFLAGS="-std=c++14" download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz "" "--enable-static --disable-shared"
 
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.modulefile.in > mapd-deps-$SUFFIX.modulefile
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.sh.in > mapd-deps-$SUFFIX.sh

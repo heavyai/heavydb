@@ -74,7 +74,7 @@ function install_cmake() {
   CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
 }
 
-ARROW_VERSION=apache-arrow-5.0.0
+ARROW_VERSION=apache-arrow-9.0.0
 
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
@@ -142,11 +142,14 @@ function install_awscpp() {
     download https://github.com/aws/aws-sdk-cpp/archive/${AWSCPP_VERSION}.tar.gz
     tar xvfz ${AWSCPP_VERSION}.tar.gz
     pushd aws-sdk-cpp-${AWSCPP_VERSION}
-    #./prefetch_crt_dependency.sh
+    # ./prefetch_crt_dependency.sh
+    sed -i 's/CMAKE_ARGS/CMAKE_ARGS -DBUILD_TESTING=off -DCMAKE_C_FLAGS="-Wno-error"/g' third-party/cmake/BuildAwsCCommon.cmake
+    sed -i 's/-Werror//g' cmake/compiler_settings.cmake
     mkdir build
     cd build
     cmake \
         -GNinja \
+        -DAUTORUN_UNIT_TESTS=off \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=$PREFIX \
         -DBUILD_ONLY="s3;transfer;config;sts;cognito-identity;identity-management" \
@@ -159,41 +162,23 @@ function install_awscpp() {
     popd
 }
 
-LLVM_VERSION=9.0.1
+LLVM_VERSION=14.0.6
 
 function install_llvm() {
     VERS=${LLVM_VERSION}
     download ${HTTP_DEPS}/llvm/$VERS/llvm-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/clang-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/compiler-rt-$VERS.src.tar.xz
-    download ${HTTP_DEPS}/llvm/$VERS/lldb-$VERS.src.tar.xz
-    download ${HTTP_DEPS}/llvm/$VERS/lld-$VERS.src.tar.xz
-    download ${HTTP_DEPS}/llvm/$VERS/libcxx-$VERS.src.tar.xz
-    download ${HTTP_DEPS}/llvm/$VERS/libcxxabi-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/clang-tools-extra-$VERS.src.tar.xz
     rm -rf llvm-$VERS.src
     extract llvm-$VERS.src.tar.xz
     extract clang-$VERS.src.tar.xz
     extract compiler-rt-$VERS.src.tar.xz
-    extract lld-$VERS.src.tar.xz
-    extract lldb-$VERS.src.tar.xz
-    extract libcxx-$VERS.src.tar.xz
-    extract libcxxabi-$VERS.src.tar.xz
     extract clang-tools-extra-$VERS.src.tar.xz
     mv clang-$VERS.src llvm-$VERS.src/tools/clang
     mv compiler-rt-$VERS.src llvm-$VERS.src/projects/compiler-rt
-    mv lld-$VERS.src llvm-$VERS.src/tools/lld
-    mv lldb-$VERS.src llvm-$VERS.src/tools/lldb
-    mv libcxx-$VERS.src llvm-$VERS.src/projects/libcxx
-    mv libcxxabi-$VERS.src llvm-$VERS.src/projects/libcxxabi
     mkdir -p llvm-$VERS.src/tools/clang/tools
     mv clang-tools-extra-$VERS.src llvm-$VERS.src/tools/clang/tools/extra
-
-    # Patch llvm 9 for glibc 2.31+ support
-    # from: https://bugs.gentoo.org/708430
-    pushd llvm-$VERS.src/projects/
-    sudo patch -p0 < $SCRIPTS_DIR/llvm-9-glibc-2.31-708430-remove-cyclades.patch
-    popd
 
     rm -rf build.llvm-$VERS
     mkdir build.llvm-$VERS
@@ -204,7 +189,18 @@ function install_llvm() {
       LLVM_SHARED="-DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON"
     fi
 
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on -DLLVM_USE_INTEL_JITEVENTS=on $LLVM_SHARED ../llvm-$VERS.src
+    cmake \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=$PREFIX \
+      -DLLVM_ENABLE_RTTI=on \
+      -DLLVM_USE_INTEL_JITEVENTS=on \
+      -DLLVM_ENABLE_LIBEDIT=off \
+      -DLLVM_ENABLE_ZLIB=off \
+      -DLLVM_INCLUDE_BENCHMARKS=off \
+      -DLLVM_ENABLE_LIBXML2=off \
+      -DLLVM_TARGETS_TO_BUILD="X86;AArch64;PowerPC;NVPTX" \
+      $LLVM_SHARED \
+      ../llvm-$VERS.src
     makej
     make install
     popd
@@ -336,8 +332,8 @@ function install_folly() {
   popd
 }
 
-IWYU_VERSION=0.13
-LLVM_VERSION_USED_FOR_IWYU=9.0.1
+IWYU_VERSION=0.18
+LLVM_VERSION_USED_FOR_IWYU=14.0.6
 if [ "$LLVM_VERSION" != "$LLVM_VERSION_USED_FOR_IWYU" ]; then
   # NOTE: If you get this error, somebody upgraded LLVM, but they need to go
   # to https://include-what-you-use.org/ then scroll down, figure out which
@@ -461,7 +457,7 @@ function install_tbb() {
   download https://github.com/oneapi-src/oneTBB/archive/v${TBB_VERSION}.tar.gz
   extract v${TBB_VERSION}.tar.gz
   pushd oneTBB-${TBB_VERSION}
-  mkdir build
+  mkdir -p build
   pushd build
   if [ "$1" == "static" ]; then
     cmake \
