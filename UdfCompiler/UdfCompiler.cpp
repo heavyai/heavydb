@@ -19,6 +19,7 @@
 #include <clang/AST/AST.h>
 #include <clang/AST/ASTConsumer.h>
 #include <clang/AST/RecursiveASTVisitor.h>
+#include <clang/Basic/DiagnosticDriver.h>
 #include <clang/Driver/Compilation.h>
 #include <clang/Driver/Driver.h>
 #include <clang/Frontend/CompilerInstance.h>
@@ -264,6 +265,24 @@ UdfClangDriver::UdfClangDriver(
                  << " (was " << the_driver.ResourceDir << ")";
     the_driver.ResourceDir = clang_resource_dir;
   }
+
+  // QE-720
+#if LLVM_VERSION_MAJOR >= 10
+  diags.setSeverity(
+#if LLVM_VERSION_MAJOR >= 14
+      clang::diag::warn_drv_new_cuda_version,
+#else
+      clang::diag::warn_drv_unknown_cuda_version,
+#endif
+      clang::diag::Severity::Ignored,
+      clang::SourceLocation());
+#endif
+
+  // Ignore `error: cannot find libdevice for sm_75` as irrelevant for
+  // astparser as well as for LLVM IR generation
+  diags.setSeverity(clang::diag::err_drv_no_cuda_libdevice,
+                    clang::diag::Severity::Ignored,
+                    clang::SourceLocation());
 }
 
 std::string get_clang_path(const std::string& clang_path_override) {
