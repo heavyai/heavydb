@@ -3790,6 +3790,39 @@ int32_t WidthBucketExpr::get_partition_count_val() const {
 }
 
 namespace {
+// Assumes lower_bound <= upper_bound
+int32_t ordered_bucket(double const lower_bound,
+                       double const upper_bound,
+                       int32_t const partition_count,
+                       double const value) {
+  if (value < lower_bound) {
+    return 0;
+  } else if (upper_bound <= value) {
+    return partition_count + 1;
+  } else {  // There is no division by 0 since a previous return would have occurred.
+    double const width = upper_bound - lower_bound;
+    return static_cast<int32_t>(partition_count * (value - lower_bound) / width) + 1;
+  }
+}
+}  // namespace
+
+// this utility function is useful for optimizing expression range decision
+// for an expression depending on width_bucket expr
+int32_t WidthBucketExpr::compute_bucket(double target_const) const {
+  if (target_const == inline_fp_null_val(SQLTypeInfo(kDOUBLE))) {
+    return INT32_MIN;
+  }
+  double const lower_bound = get_bound_val(lower_bound_.get());
+  double const upper_bound = get_bound_val(upper_bound_.get());
+  int32_t const partition_count = get_partition_count_val();
+  if (lower_bound <= upper_bound) {
+    return ordered_bucket(lower_bound, upper_bound, partition_count, target_const);
+  } else {
+    return ordered_bucket(-lower_bound, -upper_bound, partition_count, -target_const);
+  }
+}
+
+namespace {
 
 SQLTypes get_ti_from_geo(const Geospatial::GeoBase* geo) {
   CHECK(geo);

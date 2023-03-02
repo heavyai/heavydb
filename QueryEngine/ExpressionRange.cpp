@@ -1059,7 +1059,7 @@ ExpressionRange getExpressionRange(
       } else {
         CHECK(target_value_range.getFpMax() == target_value_range.getFpMin());
         auto target_value_bucket =
-            width_bucket_expr->compute_bucket(target_value_range.getFpMax(), target_ti);
+            width_bucket_expr->compute_bucket(target_value_range.getFpMax());
         return ExpressionRange::makeIntRange(
             target_value_bucket, target_value_bucket, 0, target_value_range.hasNulls());
       }
@@ -1072,9 +1072,9 @@ ExpressionRange getExpressionRange(
                                                      SQLTypeInfo ti) {
       // we casted bucket bound exprs to double
       auto lower_bound_bucket =
-          width_bucket_expr->compute_bucket<double>(target_range.getFpMin(), ti);
+          width_bucket_expr->compute_bucket(target_range.getFpMin());
       auto upper_bound_bucket =
-          width_bucket_expr->compute_bucket<double>(target_range.getFpMax(), ti);
+          width_bucket_expr->compute_bucket(target_range.getFpMax());
       return ExpressionRange::makeIntRange(
           lower_bound_bucket, upper_bound_bucket, 0, target_range.hasNulls());
     };
