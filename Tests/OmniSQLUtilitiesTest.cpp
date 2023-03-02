@@ -45,7 +45,9 @@ class DefaultUnitTestResolver {
   const char* getpwdir(ARGS&&...) const {
     return nullptr;
   }
-  auto getuid() const { return ::getuid(); }
+  auto getuid() const {
+    return ::getuid();
+  }
 };
 
 class NoHomeNoPWEntResolver : public DefaultUnitTestResolver {};

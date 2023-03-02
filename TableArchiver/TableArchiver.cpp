@@ -124,30 +124,30 @@ inline std::string run(const std::string& cmd,
       LOG(ERROR) << "tar error ignored on osx for --fast-read";
     } else
 #endif
-        // circumvent tar warning on reading file that is "changed as we read it".
-        // this warning results from reading a table file under concurrent inserts
-        if (1 == rcode && errors.find("changed as we read") != std::string::npos) {
-      LOG(ERROR) << "tar error ignored under concurrent inserts";
-    } else {
-      int error_code;
-      std::string error_message;
-      if (ec) {
-        error_code = ec.value();
-        error_message = ec.message();
+      // circumvent tar warning on reading file that is "changed as we read it".
+      // this warning results from reading a table file under concurrent inserts
+      if (1 == rcode && errors.find("changed as we read") != std::string::npos) {
+        LOG(ERROR) << "tar error ignored under concurrent inserts";
       } else {
-        error_code = rcode;
-        // Show a more concise message for permission errors instead of the default
-        // verbose message. Error logs will still contain all details.
-        if (to_lower(errors).find("permission denied") != std::string::npos) {
-          error_message = "Insufficient file read/write permission.";
+        int error_code;
+        std::string error_message;
+        if (ec) {
+          error_code = ec.value();
+          error_message = ec.message();
         } else {
-          error_message = errors;
+          error_code = rcode;
+          // Show a more concise message for permission errors instead of the default
+          // verbose message. Error logs will still contain all details.
+          if (to_lower(errors).find("permission denied") != std::string::npos) {
+            error_message = "Insufficient file read/write permission.";
+          } else {
+            error_message = errors;
+          }
         }
+        throw std::runtime_error(
+            "An error occurred while executing an internal command. Error code: " +
+            std::to_string(error_code) + ", message: " + error_message);
       }
-      throw std::runtime_error(
-          "An error occurred while executing an internal command. Error code: " +
-          std::to_string(error_code) + ", message: " + error_message);
-    }
   } else {
     VLOG(3) << "finished cmd: " << cmd;
     VLOG(3) << "time: " << time_ms << " ms";
@@ -674,7 +674,7 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
       src_oldinfo_strs.begin(),
       src_oldinfo_strs.end(),
       std::back_inserter(src_oldinfo_tokens),
-      [](const auto& src_oldinfo_str) -> auto {
+      [](const auto& src_oldinfo_str) -> auto{
         std::vector<std::string> tokens;
         boost::algorithm::split(
             tokens, src_oldinfo_str, boost::is_any_of(":"), boost::token_compress_on);

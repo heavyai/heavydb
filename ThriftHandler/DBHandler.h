@@ -199,7 +199,9 @@ class DBHandler : public HeavyIf {
   void initialize(const bool is_new_db);
   ~DBHandler() override;
 
-  static inline size_t max_bytes_for_thrift() { return 2 * 1000 * 1000 * 1000LL; }
+  static inline size_t max_bytes_for_thrift() {
+    return 2 * 1000 * 1000 * 1000LL;
+  }
 
   // Important ****
   //         This block must be keep in sync with mapd.thrift and HAHandler.h

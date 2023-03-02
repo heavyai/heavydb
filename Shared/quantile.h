@@ -199,8 +199,12 @@ class TDigest {
   IndexType const buf_allocate_{0};
   IndexType const centroids_allocate_{0};
 
-  DEVICE RealType max() const { return centroids_.max_; }
-  DEVICE RealType min() const { return centroids_.min_; }
+  DEVICE RealType max() const {
+    return centroids_.max_;
+  }
+  DEVICE RealType min() const {
+    return centroids_.min_;
+  }
 
   DEVICE IndexType maxCardinality(IndexType const sum,
                                   IndexType const total_weight,
@@ -238,7 +242,9 @@ class TDigest {
       , buf_allocate_(buf_allocate)
       , centroids_allocate_(centroids_allocate) {}
 
-  DEVICE Centroids<RealType, IndexType>& centroids() { return centroids_; }
+  DEVICE Centroids<RealType, IndexType>& centroids() {
+    return centroids_;
+  }
 
   // Store value to buf_, and merge when full.
   DEVICE void add(RealType value);
@@ -271,7 +277,9 @@ class TDigest {
     return quantile({buf_.counts_.data(), centroids_.size()}, q);
   }
 
-  DEVICE RealType quantile() { return q_ ? quantile(*q_) : centroids_.nan; }
+  DEVICE RealType quantile() {
+    return q_ ? quantile(*q_) : centroids_.nan;
+  }
 
   // Assumes mem is externally managed.
   DEVICE void setBuffer(Memory& mem) {
@@ -294,7 +302,9 @@ class TDigest {
   }
 
   // Total number of data points in centroids_.
-  DEVICE IndexType totalWeight() const { return centroids_.totalWeight(); }
+  DEVICE IndexType totalWeight() const {
+    return centroids_.totalWeight();
+  }
 };
 
 // Class template member definitions
@@ -498,7 +508,9 @@ class Skipped {
       ++data_[idx].count_merged_;
     }
   }
-  DEVICE operator bool() const { return data_[0].centroid_; }
+  DEVICE operator bool() const {
+    return data_[0].centroid_;
+  }
   // Shift skipped centroids over merged centroids, and rewind next_idx_.
   DEVICE void shiftCentroidsAndSetNext() {
     shiftCentroids(data_[0]);

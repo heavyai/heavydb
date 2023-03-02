@@ -118,7 +118,9 @@ class Archive {
     throw std::runtime_error(archive_error(rc));
   }
 
-  virtual int64_t get_position_compressed() const { return archive_filter_bytes(ar, -1); }
+  virtual int64_t get_position_compressed() const {
+    return archive_filter_bytes(ar, -1);
+  }
 
   /*  !!!
       7z files can't work with streaming model. Only local 7z files work.
@@ -131,9 +133,15 @@ class Archive {
          c) customize init_for_read() which uses archive_read_open
 
    */
-  virtual int open() { return ARCHIVE_OK; }                // nop
-  virtual int close() { return ARCHIVE_OK; }               // nop
-  virtual ptrdiff_t read(const void** buff) { return 0; }  // nop
+  virtual int open() {
+    return ARCHIVE_OK;
+  }  // nop
+  virtual int close() {
+    return ARCHIVE_OK;
+  }  // nop
+  virtual ptrdiff_t read(const void** buff) {
+    return 0;
+  }  // nop
 
   virtual void init_for_read() {
     // set libarchive callbacks
@@ -182,9 +190,13 @@ class Archive {
     }
   }
 
-  const std::string url_part(const int i) { return url_parts[i]; }
+  const std::string url_part(const int i) {
+    return url_parts[i];
+  }
 
-  std::string entryName() { return std::string(archive_entry_pathname(entry)); }
+  std::string entryName() {
+    return std::string(archive_entry_pathname(entry));
+  }
 
  protected:
   std::string url;

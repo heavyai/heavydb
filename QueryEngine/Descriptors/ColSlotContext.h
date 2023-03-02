@@ -109,13 +109,17 @@ class ColSlotContext {
                       that.col_to_slot_map_.cbegin());
   }
 
-  bool operator!=(const ColSlotContext& that) const { return !(*this == that); }
+  bool operator!=(const ColSlotContext& that) const {
+    return !(*this == that);
+  }
 
   void alignPaddedSlots(const bool sort_on_gpu);
 
   int64_t varlenOutputElementSize(const size_t slot_idx) const;
 
-  bool hasVarlenOutput() const { return !varlen_output_slot_map_.empty(); }
+  bool hasVarlenOutput() const {
+    return !varlen_output_slot_map_.empty();
+  }
 
   bool slotIsVarlen(const size_t slot_idx) const {
     return varlen_output_slot_map_.count(slot_idx) > 0;

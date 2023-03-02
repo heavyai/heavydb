@@ -1075,7 +1075,7 @@ TEST(Insert, DISABLED_LongStrings) {
     // clang-format off
     //std::string str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#";
     //unsigned const dup = 1025u;  // number of times to duplicate str
-    // clang-format on
+    //  clang-format on
     std::string str = "x";
     // unsigned const dup = 32767;  // works
     unsigned const dup = 32768;  // fails

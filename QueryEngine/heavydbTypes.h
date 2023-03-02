@@ -212,7 +212,9 @@ struct TextEncodingDict {
   TextEncodingDict() : value(0) {}
 #endif
 
-  operator int32_t() const { return value; }
+  operator int32_t() const {
+    return value;
+  }
 
   TextEncodingDict operator=(const int32_t other) {
     value = other;
@@ -364,8 +366,12 @@ struct TextEncodingNone {
       strncpy(ptr_, str.c_str(), (size_ + 1));
     }
   }
-  operator std::string() const { return std::string(ptr_, size_); }
-  std::string getString() const { return std::string(ptr_, size_); }
+  operator std::string() const {
+    return std::string(ptr_, size_);
+  }
+  std::string getString() const {
+    return std::string(ptr_, size_);
+  }
 #endif
 
   DEVICE ALWAYS_INLINE char& operator[](const unsigned int index) {
@@ -386,9 +392,15 @@ struct TextEncodingNone {
   DEVICE ALWAYS_INLINE bool operator!=(const char* rhs) const {
     return !(this->operator==(rhs));
   }
-  DEVICE ALWAYS_INLINE operator char*() const { return ptr_; }
-  DEVICE ALWAYS_INLINE int64_t size() const { return size_; }
-  DEVICE ALWAYS_INLINE bool isNull() const { return size_ == 0; }
+  DEVICE ALWAYS_INLINE operator char*() const {
+    return ptr_;
+  }
+  DEVICE ALWAYS_INLINE int64_t size() const {
+    return size_;
+  }
+  DEVICE ALWAYS_INLINE bool isNull() const {
+    return size_ == 0;
+  }
 };
 
 struct DayTimeInterval;
@@ -815,12 +827,22 @@ struct Column {
     }
     return ptr_[index];
   }
-  DEVICE inline T* getPtr() const { return ptr_; }
-  DEVICE inline int64_t size() const { return num_rows_; }
-  DEVICE inline void setSize(int64_t num_rows) { num_rows_ = num_rows; }
+  DEVICE inline T* getPtr() const {
+    return ptr_;
+  }
+  DEVICE inline int64_t size() const {
+    return num_rows_;
+  }
+  DEVICE inline void setSize(int64_t num_rows) {
+    num_rows_ = num_rows;
+  }
 
-  DEVICE inline bool isNull(int64_t index) const { return is_null(ptr_[index]); }
-  DEVICE inline void setNull(int64_t index) { set_null(ptr_[index]); }
+  DEVICE inline bool isNull(int64_t index) const {
+    return is_null(ptr_[index]);
+  }
+  DEVICE inline void setNull(int64_t index) {
+    set_null(ptr_[index]);
+  }
   DEVICE Column<T>& operator=(const Column<T>& other) {
 #ifndef __CUDACC__
     if (size() == other.size()) {
@@ -877,7 +899,9 @@ struct NestedArray {
     return length;
   }
 
-  size_t size(const int64_t index) const { return getItem(index).size(); }
+  size_t size(const int64_t index) const {
+    return getItem(index).size();
+  }
 
   // non-nested array items must implement its own getItem method
   ItemType getItem(const int64_t index) {
@@ -1442,7 +1466,9 @@ struct LineString : public GeoNestedArray<Point2D, false> {
     return result;
   }
 
-  std::vector<double> toCoords() const { return toCoords<double>(); }
+  std::vector<double> toCoords() const {
+    return toCoords<double>();
+  }
 
 #endif
 };
@@ -1504,7 +1530,9 @@ struct MultiPoint : public GeoNestedArray<Point2D, false> {
     return result;
   }
 
-  std::vector<double> toCoords() const { return toCoords<double>(); }
+  std::vector<double> toCoords() const {
+    return toCoords<double>();
+  }
 
 #endif
 };
@@ -1524,7 +1552,9 @@ struct MultiLineString : public GeoNestedArray<LineString> {
     return result;
   }
 
-  std::vector<std::vector<double>> toCoords() const { return toCoords<double>(); }
+  std::vector<std::vector<double>> toCoords() const {
+    return toCoords<double>();
+  }
 
 #endif
 };
@@ -1544,7 +1574,9 @@ struct Polygon : public GeoNestedArray<LineString> {
     return result;
   }
 
-  std::vector<std::vector<double>> toCoords() const { return toCoords<double>(); }
+  std::vector<std::vector<double>> toCoords() const {
+    return toCoords<double>();
+  }
 
 #endif
 };
@@ -1592,7 +1624,9 @@ struct ColumnFlatBuffer {
   }
 
   // Return the number of rows.
-  DEVICE int64_t size() const { return num_rows_; }
+  DEVICE int64_t size() const {
+    return num_rows_;
+  }
 
   // Set the index-th row to NULL. Can be called once per row.
   DEVICE inline void setNull(int64_t index) {
@@ -1692,7 +1726,9 @@ struct Column<GeoPoint> {
     return getItem(static_cast<int64_t>(index), /*output_srid=*/0);
   }
 
-  DEVICE int64_t size() const { return num_rows_; }
+  DEVICE int64_t size() const {
+    return num_rows_;
+  }
 
   DEVICE inline bool isNull(int64_t index) const {
     FlatBufferManager m{flatbuffer_};
@@ -1884,13 +1920,23 @@ struct Column<TextEncodingDict> {
     }
     return ptr_[index];
   }
-  DEVICE inline TextEncodingDict* getPtr() const { return ptr_; }
-  DEVICE inline int64_t size() const { return num_rows_; }
-  DEVICE inline void setSize(int64_t num_rows) { num_rows_ = num_rows; }
+  DEVICE inline TextEncodingDict* getPtr() const {
+    return ptr_;
+  }
+  DEVICE inline int64_t size() const {
+    return num_rows_;
+  }
+  DEVICE inline void setSize(int64_t num_rows) {
+    num_rows_ = num_rows;
+  }
 
-  DEVICE inline bool isNull(int64_t index) const { return is_null(ptr_[index].value); }
+  DEVICE inline bool isNull(int64_t index) const {
+    return is_null(ptr_[index].value);
+  }
 
-  DEVICE inline void setNull(int64_t index) { set_null(ptr_[index].value); }
+  DEVICE inline void setNull(int64_t index) {
+    set_null(ptr_[index].value);
+  }
 
 #ifndef __CUDACC__
 #ifndef UDF_COMPILED
@@ -2044,8 +2090,12 @@ struct ColumnList<TextEncodingDict> {
       : ptrs_(ptrs), num_cols_(num_cols), num_rows_(num_rows) {}
 #endif  // #ifndef __CUDACC__
 
-  DEVICE int64_t size() const { return num_rows_; }
-  DEVICE int64_t numCols() const { return num_cols_; }
+  DEVICE int64_t size() const {
+    return num_rows_;
+  }
+  DEVICE int64_t numCols() const {
+    return num_cols_;
+  }
   DEVICE Column<TextEncodingDict> operator[](const int index) const {
     if (index >= 0 && index < num_cols_) {
       Column<TextEncodingDict> result(reinterpret_cast<TextEncodingDict*>(ptrs_[index]),

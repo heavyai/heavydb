@@ -700,7 +700,9 @@ class DataStreamSink {
       const std::string& file_path,
       const Catalog_Namespace::SessionInfo* session_info) = 0;
 #endif
-  const CopyParams& get_copy_params() const { return copy_params; }
+  const CopyParams& get_copy_params() const {
+    return copy_params;
+  }
   void import_compressed(std::vector<std::string>& file_paths,
                          const Catalog_Namespace::SessionInfo* session_info);
 
@@ -835,7 +837,9 @@ class Importer : public DataStreamSink, public AbstractImporter {
   static std::vector<GeoFileLayerInfo> gdalGetLayersInGeoFile(
       const std::string& file_name,
       const CopyParams& copy_params);
-  Catalog_Namespace::Catalog& getCatalog() { return loader->getCatalog(); }
+  Catalog_Namespace::Catalog& getCatalog() {
+    return loader->getCatalog();
+  }
   static void set_geo_physical_import_buffer(
       const Catalog_Namespace::Catalog& catalog,
       const ColumnDescriptor* cd,
@@ -856,7 +860,9 @@ class Importer : public DataStreamSink, public AbstractImporter {
       std::vector<std::vector<int>>& ring_sizes_column,
       std::vector<std::vector<int>>& poly_rings_column);
   void checkpoint(const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs);
-  auto getLoader() const { return loader.get(); }
+  auto getLoader() const {
+    return loader.get();
+  }
 
  private:
   static bool gdalStatInternal(const std::string& path,

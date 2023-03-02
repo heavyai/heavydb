@@ -59,9 +59,9 @@ class SegmentTree {
       , null_val_(inline_null_value<AGG_TYPE>())
       , invalid_val_(agg_type_ == SqlWindowFunctionKind::MIN
                          ? std::numeric_limits<INPUT_TYPE>::max()
-                         : agg_type_ == SqlWindowFunctionKind::MAX
-                               ? std::numeric_limits<INPUT_TYPE>::min()
-                               : 0) {
+                     : agg_type_ == SqlWindowFunctionKind::MAX
+                         ? std::numeric_limits<INPUT_TYPE>::min()
+                         : 0) {
     CHECK_GT(num_elems_, (int64_t)0);
     auto max_tree_height_and_leaf_range = findMaxTreeHeight(num_elems_, fan_out_);
     leaf_depth_ = max_tree_height_and_leaf_range.first;

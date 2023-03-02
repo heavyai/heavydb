@@ -110,7 +110,9 @@ class S3Archive : public Archive {
     throw std::runtime_error("AWS S3 support not available");
   }
 #endif
-  const std::vector<std::string>& get_objkeys() { return objkeys; }
+  const std::vector<std::string>& get_objkeys() {
+    return objkeys;
+  }
 #ifdef HAVE_AWS_S3
   const std::string land(const std::string& objkey,
                          std::exception_ptr& teptr,
@@ -128,7 +130,9 @@ class S3Archive : public Archive {
     throw std::runtime_error("AWS S3 support not available");
   }
 #endif  // HAVE_AWS_S3
-  size_t get_total_file_size() const { return total_file_size; }
+  size_t get_total_file_size() const {
+    return total_file_size;
+  }
 
  private:
 #ifdef HAVE_AWS_S3

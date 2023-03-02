@@ -260,9 +260,9 @@ class PerfectJoinHashTableBuilder {
                                   : 0,  // 0 is dummy value
         hash_entry_info.bucket_normalization};
     decltype(&fill_hash_join_buff) const hash_table_fill_func =
-        use_bucketization
-            ? fill_hash_join_buff_bucketized
-            : type_info.uses_bw_eq ? fill_hash_join_buff_bitwise_eq : fill_hash_join_buff;
+        use_bucketization      ? fill_hash_join_buff_bucketized
+        : type_info.uses_bw_eq ? fill_hash_join_buff_bitwise_eq
+                               : fill_hash_join_buff;
 
     std::vector<std::future<int>> fill_threads;
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
@@ -360,7 +360,9 @@ class PerfectJoinHashTableBuilder {
     hash_table_fill_func(args, thread_count);
   }
 
-  std::unique_ptr<PerfectHashTable> getHashTable() { return std::move(hash_table_); }
+  std::unique_ptr<PerfectHashTable> getHashTable() {
+    return std::move(hash_table_);
+  }
 
   static size_t get_entries_per_shard(const size_t total_entry_count,
                                       const size_t shard_count) {

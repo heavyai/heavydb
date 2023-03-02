@@ -127,7 +127,9 @@ class BaselineHashTable : public HashTable {
     return hash_table_entry_info_.computeHashTableSize();
   }
 
-  int8_t* getCpuBuffer() override { return cpu_hash_table_buff_.get(); }
+  int8_t* getCpuBuffer() override {
+    return cpu_hash_table_buff_.get();
+  }
 
   HashType getLayout() const override {
     return hash_table_entry_info_.getHashTableLayout();

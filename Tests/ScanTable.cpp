@@ -56,16 +56,12 @@ void scan_chunk(const std::shared_ptr<ChunkMetadata>& chunk_metadata,
   int nth = 0;
   while (true) {
     if (use_iter) {
-      {
-        ChunkIter_get_next(&cit, true, &vd, &is_end);
-      }
+      { ChunkIter_get_next(&cit, true, &vd, &is_end); }
     } else {
       { ChunkIter_get_nth(&cit, nth++, true, &vd, &is_end); }
     }
     if (is_end) {
-      {
-        break;
-      }
+      { break; }
     }
     switch (cd->columnType.get_type()) {
       case kSMALLINT:

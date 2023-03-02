@@ -120,9 +120,7 @@ size_t random_fill_string(std::vector<std::string>& stringVec,
     int len = len_dist(gen);
     std::string s(len, ' ');
     for (int i = 0; i < len; i++) {
-      {
-        s[i] = chars[char_dist(gen)];
-      }
+      { s[i] = chars[char_dist(gen)]; }
     }
     stringVec[n] = s;
     boost::hash_combine(hash, string_hash(s));

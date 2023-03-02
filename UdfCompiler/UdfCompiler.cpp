@@ -152,7 +152,9 @@ class ToolFactory : public FrontendActionFactory {
 
   ToolFactory(llvm::raw_fd_ostream& ast_file) : ast_file_(ast_file) {}
 
-  FrontendActionPtr create() override { return CREATE_FRONTEND_ACTION(ast_file_); }
+  FrontendActionPtr create() override {
+    return CREATE_FRONTEND_ACTION(ast_file_);
+  }
 
  private:
   llvm::raw_fd_ostream& ast_file_;

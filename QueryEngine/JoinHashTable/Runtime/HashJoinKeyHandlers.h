@@ -106,11 +106,17 @@ struct GenericKeyHandler {
     return 0;
   }
 
-  DEVICE size_t get_number_of_columns() const { return key_component_count_; }
+  DEVICE size_t get_number_of_columns() const {
+    return key_component_count_;
+  }
 
-  DEVICE size_t get_key_component_count() const { return key_component_count_; }
+  DEVICE size_t get_key_component_count() const {
+    return key_component_count_;
+  }
 
-  DEVICE const JoinColumn* get_join_columns() const { return join_column_per_key_; }
+  DEVICE const JoinColumn* get_join_columns() const {
+    return join_column_per_key_;
+  }
 
   DEVICE const JoinColumnTypeInfo* get_join_column_type_infos() const {
     return type_info_per_key_;

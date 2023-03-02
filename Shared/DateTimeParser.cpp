@@ -206,9 +206,11 @@ std::optional<int64_t> dateTimeParseOptional<kDATE>(std::string_view str,
 // Return number of (s,ms,us,ns) since epoch based on dim in (0,3,6,9) resp.
 int64_t DateTimeParser::DateTime::getTime(unsigned const dim) const {
   int64_t const days = daysFromCivil(Y, m, d);
-  int const seconds =
-      static_cast<int>(3600 * H + 60 * M + S) - z +
-      (p ? *p && H != 12 ? 12 * 3600 : !*p && H == 12 ? -12 * 3600 : 0 : 0);
+  int const seconds = static_cast<int>(3600 * H + 60 * M + S) - z +
+                      (p ? *p && H != 12    ? 12 * 3600
+                           : !*p && H == 12 ? -12 * 3600
+                                            : 0
+                         : 0);
   return (24 * 3600 * days + seconds) * pow_10[dim] + n / pow_10[9 - dim];
 }
 

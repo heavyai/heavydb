@@ -84,8 +84,12 @@ struct Value {
     return *this;
   }
 #endif
-  DEVICE T0 value0() const { return ref_ ? *v0_.ptr_ : v0_.value_; }
-  DEVICE T1 value1() const { return ref_ ? *v1_.ptr_ : v1_.value_; }
+  DEVICE T0 value0() const {
+    return ref_ ? *v0_.ptr_ : v0_.value_;
+  }
+  DEVICE T1 value1() const {
+    return ref_ ? *v1_.ptr_ : v1_.value_;
+  }
 };
 
 #ifndef __CUDACC__

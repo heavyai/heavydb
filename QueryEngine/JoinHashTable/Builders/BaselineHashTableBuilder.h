@@ -634,11 +634,17 @@ class BaselineJoinHashTableBuilder {
     return err;
   }
 
-  std::unique_ptr<BaselineHashTable> getHashTable() { return std::move(hash_table_); }
+  std::unique_ptr<BaselineHashTable> getHashTable() {
+    return std::move(hash_table_);
+  }
 
-  void setHashLayout(HashType layout) { layout_ = layout; }
+  void setHashLayout(HashType layout) {
+    layout_ = layout;
+  }
 
-  HashType getHashLayout() const { return layout_; }
+  HashType getHashLayout() const {
+    return layout_;
+  }
 
  private:
   std::unique_ptr<BaselineHashTable> hash_table_;

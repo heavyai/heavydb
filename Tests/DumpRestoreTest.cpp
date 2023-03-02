@@ -203,7 +203,9 @@ using DumpRestoreTest_Sharded = DumpRestoreTest<2>;
 
 #define BODY_F(test_class, test_name) test_class##_##test_name##_body()
 #define TEST_F1(test_class, test_name, sharded_or_not) \
-  TEST_F(test_class##_##sharded_or_not, test_name) { BODY_F(test_class, test_name); }
+  TEST_F(test_class##_##sharded_or_not, test_name) {   \
+    BODY_F(test_class, test_name);                     \
+  }
 #define TEST_UNSHARDED_AND_SHARDED(test_class, test_name) \
   TEST_F1(test_class, test_name, Unsharded)               \
   TEST_F1(test_class, test_name, Sharded)

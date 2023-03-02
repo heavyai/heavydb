@@ -108,7 +108,9 @@ class ConcurrencyTestEnv : public DBHandlerTestFixture {
         .count();
   }
 
-  void SetUp() override { buildTable("test_concurrency"); }
+  void SetUp() override {
+    buildTable("test_concurrency");
+  }
 
   void TearDown() override {
     if (!g_keep_data) {
