@@ -12,6 +12,18 @@
    fun:_ZN14File_Namespace7FileMgr17writeDirtyBuffersEv
 }
 {
+   filemgr_checkpoint2
+   Memcheck:Param
+   write(buf)
+   ...
+   fun:fseek
+   fun:_ZN14File_Namespace5writeEP8_IO_FILEmmPKa
+   fun:_ZN14File_Namespace8FileInfo5writeEmmPKa
+   fun:_ZN14File_Namespace10FileBuffer11writeHeaderERNS_4PageEiib
+   fun:_ZN14File_Namespace10FileBuffer13writeMetadataEi
+   fun:_ZN14File_Namespace7FileMgr17writeDirtyBuffersEv
+}
+{
    go_runtime_cond
    Memcheck:Cond
    ...
