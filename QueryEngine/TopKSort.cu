@@ -47,7 +47,7 @@ struct is_taken_entry {
 
 template <class K, class I = int32_t>
 struct is_null_order_entry {
-  typedef I argument_type;
+  using argument_type = I;
   is_null_order_entry(const int8_t* base, const size_t stride, const int64_t nul)
       : oe_base(base), oe_stride(stride), null_val(nul) {}
   __host__ __device__ bool operator()(const I index) {
