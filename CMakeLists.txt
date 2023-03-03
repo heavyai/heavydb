@@ -567,6 +567,10 @@ else()
     if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
       # Allow maybe-uninitialized warnings with GCC at it is prone to false positives
       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=maybe-uninitialized")
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      # Disable warnings as errors for misleading-indentation due to a boost header issue
+      # This can be removed once the boost fix is in our deps https://github.com/boostorg/serialization/pull/262/files
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=misleading-indentation")
     endif()
   endif()
   if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
