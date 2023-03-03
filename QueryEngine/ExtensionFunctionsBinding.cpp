@@ -753,9 +753,11 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
       message += "\n  Existing extension function implementations:";
       for (const auto& ext_func : ext_funcs) {
         // Do not show functions missing the sizer argument
-        if constexpr (std::is_same_v<T, table_functions::TableFunction>)
-          if (ext_func.useDefaultSizer())
+        if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
+          if (ext_func.useDefaultSizer()) {
             continue;
+          }
+        }
         message += "\n    " + ext_func.toStringSQL();
       }
     }
