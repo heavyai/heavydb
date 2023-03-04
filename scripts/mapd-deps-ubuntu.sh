@@ -230,6 +230,9 @@ popd # build
 popd # SPIRV-Cross-$VERS
 popd # spirv-cross
 
+# Vulkan
+install_vulkan
+
 # GLM (GL Mathematics)
 install_glm
 
@@ -280,17 +283,6 @@ mkdir -p $PREFIX/include
 mkdir -p $PREFIX/include/implot
 rsync -av implot.$VERS/* $PREFIX/include/implot
 popd #implot
-
-# Vulkan
-# Custom tarball which excludes the spir-v toolchain
-VERS=1.2.198.1 # stable 12/3/21
-rm -rf vulkan
-mkdir -p vulkan
-pushd vulkan
-wget --continue ${HTTP_DEPS}/vulkansdk-linux-x86_64-no-spirv-$VERS.tar.gz -O vulkansdk-linux-x86_64-no-spirv-$VERS.tar.gz
-tar xvf vulkansdk-linux-x86_64-no-spirv-$VERS.tar.gz
-rsync -av $VERS/x86_64/* $PREFIX
-popd # vulkan
 
 # OpenSAML
 download_make_install ${HTTP_DEPS}/xml-security-c-2.0.2.tar.gz "" "--without-xalan"
