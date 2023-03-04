@@ -522,6 +522,19 @@ function install_memkind() {
   popd
 }
 
+VULKAN_VERSION=1.3.239.0 # 1/30/23
+
+function install_vulkan() {
+  rm -rf vulkan
+  mkdir -p vulkan
+  pushd vulkan
+  # Custom tarball which excludes the spir-v toolchain
+  wget --continue ${HTTP_DEPS}/vulkansdk-linux-x86_64-no-spirv-$VULKAN_VERSION.tar.gz -O vulkansdk-linux-x86_64-no-spirv-$VULKAN_VERSION.tar.gz
+  tar xvf vulkansdk-linux-x86_64-no-spirv-$VULKAN_VERSION.tar.gz
+  rsync -av $VULKAN_VERSION/x86_64/* $PREFIX
+  popd # vulkan
+}
+
 GLM_VERSION=0.9.9.8
 
 function install_glm() {
