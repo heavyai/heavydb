@@ -61,7 +61,7 @@ class TbbPrivateServerKiller : public ::testing::Test {
 #if TBB_VERSION_MAJOR == 2021 && TBB_VERSION_MINOR < 6
     auto handle = tbb::task_scheduler_handle::get();
 #else
-    auto handle = oneapi::tbb::task_scheduler_handle{oneapi::tbb::attach{}};
+    auto handle = oneapi::tbb::task_scheduler_handle{oneapi::tbb::attach {}};
 #endif
 #if PRINT_TBB_TASK_SCHEDULER_HANDLE_DIAGNOSTICS
     bool const handle_as_bool = static_cast<bool>(handle);
