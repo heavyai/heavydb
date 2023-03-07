@@ -5,10 +5,8 @@ SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 if [ "$TSAN" = "true" ]; then
   ARROW_TSAN="-DARROW_JEMALLOC=OFF -DARROW_USE_TSAN=ON"
-  TBB_TSAN="-fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
 elif [ "$TSAN" = "false" ]; then
   ARROW_TSAN="-DARROW_JEMALLOC=BUNDLED"
-  TBB_TSAN=""
 fi
 
 ARROW_USE_CUDA="-DARROW_CUDA=ON"
@@ -292,8 +290,8 @@ function install_geos() {
 
 }
 
-FOLLY_VERSION=2021.02.01.00
-FMT_VERSION=7.1.3
+FOLLY_VERSION=2023.02.20.00
+FMT_VERSION=9.1.0
 function install_folly() {
   # Folly depends on fmt
   download https://github.com/fmtlib/fmt/archive/$FMT_VERSION.tar.gz
@@ -325,6 +323,7 @@ function install_folly() {
   cmake -GNinja \
         -DCMAKE_CXX_FLAGS="-fPIC -pthread" \
         -DFOLLY_USE_JEMALLOC=OFF \
+        -DFOLLY_NO_EXCEPTION_TRACER=ON \
         -DBUILD_SHARED_LIBS=${FOLLY_SHARED} \
         -DCMAKE_INSTALL_PREFIX=$PREFIX ..
   cmake_build_and_install
@@ -397,7 +396,7 @@ function install_go() {
     mv go $PREFIX
 }
 
-NINJA_VERSION=1.10.0
+NINJA_VERSION=1.11.1
 
 function install_ninja() {
   download https://github.com/ninja-build/ninja/releases/download/v${NINJA_VERSION}/ninja-linux.zip
@@ -450,7 +449,7 @@ EOF
   fi
 }
 
-TBB_VERSION=2021.3.0
+TBB_VERSION=2021.8.0
 
 function install_tbb() {
   patch_old_thrust_tbb
@@ -459,14 +458,26 @@ function install_tbb() {
   pushd oneTBB-${TBB_VERSION}
   mkdir -p build
   pushd build
+  if [ "$TSAN" == "false" ]; then
+    TBB_CFLAGS=""
+    TBB_CXXFLAGS=""
+    TBB_TSAN=""
+  elif [ "$TSAN" = "true" ]; then
+    TBB_CFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
+    TBB_CXXFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
+    TBB_TSAN="-DTBB_SANITIZE=thread"
+  fi
   if [ "$1" == "static" ]; then
+    cmake -E env CFLAGS="$TBB_CFLAGS" CXXFLAGS="$TBB_CXXFLAGS" \
     cmake \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=$PREFIX \
-      -DTBB_TEST=off -DBUILD_SHARED_LIBS=off \
+      -DTBB_TEST=off \
+      -DBUILD_SHARED_LIBS=off \
       ${TBB_TSAN} \
       ..
   else
+    cmake -E env CFLAGS="$TBB_CFLAGS" CXXFLAGS="$TBB_CXXFLAGS" \
     cmake \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=$PREFIX \
@@ -544,7 +555,7 @@ function install_glm() {
   mv glm-${GLM_VERSION}/glm $PREFIX/include/
 }
 
-BLOSC_VERSION=1.21.1
+BLOSC_VERSION=1.21.2
 
 function install_blosc() {
   wget --continue https://github.com/Blosc/c-blosc/archive/v${BLOSC_VERSION}.tar.gz
