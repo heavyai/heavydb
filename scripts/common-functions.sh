@@ -605,3 +605,10 @@ function install_pdal() {
   popd
   popd
 }
+
+MOLD_VERSION=1.10.1
+
+function install_mold_precompiled_x86_64() {
+  download https://github.com/rui314/mold/releases/download/v${MOLD_VERSION}/mold-${MOLD_VERSION}-x86_64-linux.tar.gz
+  tar --strip-components=1 -xvf mold-${MOLD_VERSION}-x86_64-linux.tar.gz -C ${PREFIX}
+}

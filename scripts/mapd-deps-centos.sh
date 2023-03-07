@@ -65,6 +65,9 @@ sudo yum install -y \
     jq \
     pxz
 
+# mold fast linker
+install_mold_precompiled_x86_64
+
 # gmp, mpc, mpfr, autoconf, automake
 # note: if gmp fails on POWER8:
 # wget https://gmplib.org/repo/gmp/raw-rev/4a6d258b467f

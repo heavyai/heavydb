@@ -135,6 +135,9 @@ else
   DEBIAN_FRONTEND=noninteractive sudo apt install -y binutils-dev
 fi
 
+# mold fast linker
+install_mold_precompiled_x86_64
+
 install_ninja
 
 install_maven
