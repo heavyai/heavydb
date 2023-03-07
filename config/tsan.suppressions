@@ -15,6 +15,3 @@ race:^tbb*
 # mktime in libarchive uses tzset
 race:^tzset
 race:^testing::internal::TestEventRepeater::OnTestIterationEnd
-# QE-722 This should not be a permanent suppression.
-# Remove this line as part of QE-718.
-race:ParallelExecutorsTest
