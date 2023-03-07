@@ -49,6 +49,7 @@ libexpat | [MIT](<https://github.com/LuaDist/libexpat/blob/master/COPYING>) | GD
 libkml | [BSD](<https://github.com/google/libkml/blob/master/LICENSE>) | GDAL, KML import |
 minizip | [zlib](<http://zlib.net/zlib_license.html>) | GDAL, zip support |
 netcdf-c | [BSD](<https://github.com/Unidata/netcdf-c/blob/main/COPYRIGHT>) | GDAL, netcdf import |
+oneDAL | [Apache-2.0](https://github.com/oneapi-src/oneDAL/blob/master/LICENSE) | ML support
 pcre | [BSD](<http://www.pcre.org/licence.txt>) | GDAL, KML import |
 proj4 | [MIT](<http://proj4.org/license.html>) | GDAL, Geospatial reprojection |
 shapelib | [MIT](<http://shapelib.maptools.org/license.html>) | GDAL, Shapefile import |

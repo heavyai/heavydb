@@ -227,6 +227,9 @@ download_make_install https://mirrors.sarata.com/gnu/binutils/binutils-2.32.tar.
 # TBB
 install_tbb static
 
+# OneDAL
+install_onedal
+
 # Go
 install_go
 
