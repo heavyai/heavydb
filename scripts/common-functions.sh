@@ -578,17 +578,41 @@ function install_blosc() {
   popd
 }
 
-oneDAL_VERSION=2021.5
-# Todo(todd): Still hitting in TBB linker issues, solve before adding oneDAL as a dep
+oneDAL_VERSION=2023.0.1
 function install_onedal() {
   download https://github.com/oneapi-src/oneDAL/archive/refs/tags/${oneDAL_VERSION}.tar.gz
   extract ${oneDAL_VERSION}.tar.gz
   pushd oneDAL-${oneDAL_VERSION}
   ./dev/download_micromkl.sh
-  make -f makefile _daal PLAT=lnx32e REQCPU="avx2 avx" COMPILER=gnu -j
+  if [ "$ID" == "ubuntu"  ] ; then
+    ONEDAL_LIBDIR="lib"
+  else
+    ONEDAL_LIBDIR="lib64"
+    # oneDAL makefile only detects libTBB built as shared lib, so we hack it to allow static built
+    sed -i -E s/libtbb.so\(\.[1-9]+\)?/libtbb\.a/g makefile
+    sed -i -E s/libtbbmalloc.so\(\.[1-9]+\)?/libtbbmalloc\.a/g makefile
+
+    # oneDAL always builds static and shared versions of its libraries by default, so hack the
+    # makefile again to remove shared library building
+    sed -i 's/$(WORKDIR\.lib)\/$(core_y)//g' makefile
+    sed -i 's/$(WORKDIR\.lib)\/$(thr_tbb_y)//g' makefile
+    sed -i 's/\?= a y/\?= a/g' makefile
+  fi
+
+  # these exports will only be valid in the subshell that builds oneDAL
+  (export TBBROOT=${PREFIX}; \
+   export LD_LIBRARY_PATH="${PREFIX}/${ONEDAL_LIBDIR}:${LD_LIBRARY_PATH}"; \
+   export LIBRARY_PATH="${PREFIX}/${ONEDAL_LIBDIR}:${LIBRARY_PATH}"; \
+   export CPATH="${PREFIX}/include:${CPATH}"; \
+   export PATH="${PREFIX}/bin:${PATH}"; \
+   make -f makefile _daal PLAT=lnx32e REQCPU="avx2 avx" COMPILER=gnu -j)
+
   mkdir -p $PREFIX/include
   cp -r __release_lnx_gnu/daal/latest/include/* $PREFIX/include
-  cp -r __release_lnx_gnu/daal/latest/lib/* $PREFIX/lib
+  cp -r __work_gnu/md/lnx32e/daal/lib/* $PREFIX/lib
+  cmake -P cmake/scripts/generate_config.cmake
+  mkdir -p ${PREFIX}/lib/cmake/oneDAL
+  cp cmake/*.cmake ${PREFIX}/lib/cmake/oneDAL/.
   popd
 }
 
