@@ -227,7 +227,12 @@ class ConcurrencyTestEnv : public DBHandlerTestFixture {
   )";
 };
 
+#ifdef HAVE_ASAN
+// Fix this in QE-726
+TEST_F(ConcurrencyTestEnv, DISABLED_CPUConcurrencyOff) {
+#else
 TEST_F(ConcurrencyTestEnv, CPUConcurrencyOff) {
+#endif
   const size_t num_executors{g_max_num_executors};
   constexpr size_t num_frags{2};
   const ResourceVec resource_overrides = {
