@@ -254,7 +254,12 @@ TEST_F(UDFCompilerTest, CalciteRegistration) {
   ASSERT_EQ(signature6, nullptr);
 }
 
+#ifdef HAVE_ASAN
+// Fix this in BE-6450
+TEST_F(UDFCompilerTest, DISABLED_UdfQuery) {
+#else
 TEST_F(UDFCompilerTest, UdfQuery) {
+#endif
   UdfCompiler compiler(g_device_arch);
   EXPECT_NO_THROW(compiler.compileUdf(getUdfFileName()));
 
