@@ -17,3 +17,5 @@ race:^tzset
 race:^testing::internal::TestEventRepeater::OnTestIterationEnd
 # 2023-03-06 Suppress race in SystemTableFunctionsTest pending investigation
 race:osgeo::proj::io::DatabaseContext::Private::closeDB
+# 2023-03-08 Suppress race in arrow::csv pending investigation see SIO-1443
+race:arrow::csv::*::AsyncThreadedTableReader::ReadAsync
