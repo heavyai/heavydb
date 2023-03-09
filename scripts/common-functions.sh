@@ -607,6 +607,10 @@ function install_onedal() {
    export PATH="${PREFIX}/bin:${PATH}"; \
    make -f makefile _daal PLAT=lnx32e REQCPU="avx2 avx" COMPILER=gnu -j)
 
+  # remove deprecated compression methods as they generate DEPRECATED warnings/errors
+  sed -i '/bzip2compression\.h/d' __release_lnx_gnu/daal/latest/include/daal.h
+  sed -i '/zlibcompression\.h/d' __release_lnx_gnu/daal/latest/include/daal.h
+
   mkdir -p $PREFIX/include
   cp -r __release_lnx_gnu/daal/latest/include/* $PREFIX/include
   cp -r __work_gnu/md/lnx32e/daal/lib/* $PREFIX/lib
