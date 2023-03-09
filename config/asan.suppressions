@@ -1,2 +1,4 @@
 # required for gdal3 in debug mode
 leak:__cxa_thread_atexit
+# Resolve in SIO-1441
+leak:CRYPTO_zalloc
