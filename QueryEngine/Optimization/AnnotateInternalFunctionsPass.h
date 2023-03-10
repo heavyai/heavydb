@@ -124,4 +124,4 @@ const std::set<std::string> AnnotateInternalFunctionsPass::math_builtins =
     std::set<std::string>{"Acos",  "Asin",    "Atan", "Atan2",    "Ceil",    "Cos",
                           "Cot",   "degrees", "Exp",  "Floor",    "ln",      "Log",
                           "Log10", "log",     "pi",   "power",    "radians", "Round",
-                          "Sin",   "Tan",     "tan",  "Truncate", "isNan"};
+                          "Sin",   "Tan",     "tan",  "Truncate", "is_nan",  "is_inf"};

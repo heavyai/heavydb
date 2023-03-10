@@ -379,13 +379,23 @@ int64_t Truncate__3(const int64_t x, const int32_t y) {
 }
 
 EXTENSION_NOINLINE
-bool isNan(const double x) {
+bool is_nan(const double x) {
   return std::isnan(x);
 }
 
 EXTENSION_NOINLINE
-bool isNan__(const float x) {
+bool is_nan__(const float x) {
   return std::isnan(x);
+}
+
+EXTENSION_NOINLINE
+bool is_inf(const double x) {
+  return std::isinf(x);
+}
+
+EXTENSION_NOINLINE
+bool is_inf__(const float x) {
+  return std::isinf(x);
 }
 
 EXTENSION_NOINLINE

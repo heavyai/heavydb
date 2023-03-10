@@ -43,32 +43,38 @@ NEVER_INLINE HOST std::pair<T, T> get_column_min_max(const Column<T>& col) {
   tbb::task_arena limited_arena(num_threads);
 
   limited_arena.execute([&] {
-    tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
-                      [&](const tbb::blocked_range<int64_t>& r) {
-                        const int64_t start_idx = r.begin();
-                        const int64_t end_idx = r.end();
-                        T local_col_min = std::numeric_limits<T>::max();
-                        T local_col_max = std::numeric_limits<T>::lowest();
-                        for (int64_t r = start_idx; r < end_idx; ++r) {
-                          const T val = col[r];
-                          if (val == inline_null_value<T>()) {
-                            continue;
-                          }
-                          if (val < local_col_min) {
-                            local_col_min = val;
-                          }
-                          if (val > local_col_max) {
-                            local_col_max = val;
-                          }
-                        }
-                        size_t thread_idx = tbb::this_task_arena::current_thread_index();
-                        if (local_col_min < local_col_mins[thread_idx]) {
-                          local_col_mins[thread_idx] = local_col_min;
-                        }
-                        if (local_col_max > local_col_maxes[thread_idx]) {
-                          local_col_maxes[thread_idx] = local_col_max;
-                        }
-                      });
+    tbb::parallel_for(
+        tbb::blocked_range<int64_t>(0, num_rows),
+        [&](const tbb::blocked_range<int64_t>& r) {
+          const int64_t start_idx = r.begin();
+          const int64_t end_idx = r.end();
+          T local_col_min = std::numeric_limits<T>::max();
+          T local_col_max = std::numeric_limits<T>::lowest();
+          for (int64_t r = start_idx; r < end_idx; ++r) {
+            const T val = col[r];
+            if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
+              if (std::isnan(val) || std::isinf(val)) {
+                continue;
+              }
+            }
+            if (val == inline_null_value<T>()) {
+              continue;
+            }
+            if (val < local_col_min) {
+              local_col_min = val;
+            }
+            if (val > local_col_max) {
+              local_col_max = val;
+            }
+          }
+          size_t thread_idx = tbb::this_task_arena::current_thread_index();
+          if (local_col_min < local_col_mins[thread_idx]) {
+            local_col_mins[thread_idx] = local_col_min;
+          }
+          if (local_col_max > local_col_maxes[thread_idx]) {
+            local_col_maxes[thread_idx] = local_col_max;
+          }
+        });
   });
 
   for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
@@ -118,24 +124,30 @@ NEVER_INLINE HOST double get_column_mean(const T* data, const int64_t num_rows) 
   std::vector<int64_t> local_col_non_null_counts(num_threads, 0L);
   tbb::task_arena limited_arena(num_threads);
   limited_arena.execute([&] {
-    tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
-                      [&](const tbb::blocked_range<int64_t>& r) {
-                        const int64_t start_idx = r.begin();
-                        const int64_t end_idx = r.end();
-                        double local_col_sum = 0.;
-                        int64_t local_col_non_null_count = 0;
-                        for (int64_t r = start_idx; r < end_idx; ++r) {
-                          const T val = data[r];
-                          if (val == inline_null_value<T>()) {
-                            continue;
-                          }
-                          local_col_sum += data[r];
-                          local_col_non_null_count++;
-                        }
-                        size_t thread_idx = tbb::this_task_arena::current_thread_index();
-                        local_col_sums[thread_idx] += local_col_sum;
-                        local_col_non_null_counts[thread_idx] += local_col_non_null_count;
-                      });
+    tbb::parallel_for(
+        tbb::blocked_range<int64_t>(0, num_rows),
+        [&](const tbb::blocked_range<int64_t>& r) {
+          const int64_t start_idx = r.begin();
+          const int64_t end_idx = r.end();
+          double local_col_sum = 0.;
+          int64_t local_col_non_null_count = 0;
+          for (int64_t r = start_idx; r < end_idx; ++r) {
+            const T val = data[r];
+            if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
+              if (std::isnan(val) || std::isinf(val)) {
+                continue;
+              }
+            }
+            if (val == inline_null_value<T>()) {
+              continue;
+            }
+            local_col_sum += data[r];
+            local_col_non_null_count++;
+          }
+          size_t thread_idx = tbb::this_task_arena::current_thread_index();
+          local_col_sums[thread_idx] += local_col_sum;
+          local_col_non_null_counts[thread_idx] += local_col_non_null_count;
+        });
   });
 
   double col_sum = 0.0;
@@ -208,26 +220,31 @@ NEVER_INLINE HOST double get_column_std_dev(const T* data,
   tbb::task_arena limited_arena(num_threads);
 
   limited_arena.execute([&] {
-    tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
-                      [&](const tbb::blocked_range<int64_t>& r) {
-                        const int64_t start_idx = r.begin();
-                        const int64_t end_idx = r.end();
-                        double local_col_squared_residual = 0.;
-                        int64_t local_col_non_null_count = 0;
-                        for (int64_t r = start_idx; r < end_idx; ++r) {
-                          const T val = data[r];
-                          if (val == inline_null_value<T>()) {
-                            continue;
-                          }
-                          const double residual = val - mean;
-                          local_col_squared_residual += (residual * residual);
-                          local_col_non_null_count++;
-                        }
-                        size_t thread_idx = tbb::this_task_arena::current_thread_index();
-                        local_col_squared_residuals[thread_idx] +=
-                            local_col_squared_residual;
-                        local_col_non_null_counts[thread_idx] += local_col_non_null_count;
-                      });
+    tbb::parallel_for(
+        tbb::blocked_range<int64_t>(0, num_rows),
+        [&](const tbb::blocked_range<int64_t>& r) {
+          const int64_t start_idx = r.begin();
+          const int64_t end_idx = r.end();
+          double local_col_squared_residual = 0.;
+          int64_t local_col_non_null_count = 0;
+          for (int64_t r = start_idx; r < end_idx; ++r) {
+            const T val = data[r];
+            if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
+              if (std::isnan(val) || std::isinf(val)) {
+                continue;
+              }
+            }
+            if (val == inline_null_value<T>()) {
+              continue;
+            }
+            const double residual = val - mean;
+            local_col_squared_residual += (residual * residual);
+            local_col_non_null_count++;
+          }
+          size_t thread_idx = tbb::this_task_arena::current_thread_index();
+          local_col_squared_residuals[thread_idx] += local_col_squared_residual;
+          local_col_non_null_counts[thread_idx] += local_col_non_null_count;
+        });
   });
 
   double col_sum_squared_residual = 0.0;
@@ -272,37 +289,43 @@ NEVER_INLINE HOST std::tuple<T, T, bool> get_column_metadata(const Column<T>& co
   tbb::task_arena limited_arena(num_threads);
 
   limited_arena.execute([&] {
-    tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
-                      [&](const tbb::blocked_range<int64_t>& r) {
-                        const int64_t start_idx = r.begin();
-                        const int64_t end_idx = r.end();
-                        T local_col_min = std::numeric_limits<T>::max();
-                        T local_col_max = std::numeric_limits<T>::lowest();
-                        bool local_has_nulls = false;
-                        for (int64_t r = start_idx; r < end_idx; ++r) {
-                          if (col.isNull(r)) {
-                            local_has_nulls = true;
-                            continue;
-                          }
-                          if (col[r] < local_col_min) {
-                            local_col_min = col[r];
-                          }
-                          if (col[r] > local_col_max) {
-                            local_col_max = col[r];
-                          }
-                        }
-                        const size_t thread_idx =
-                            tbb::this_task_arena::current_thread_index();
-                        if (local_has_nulls) {
-                          local_col_has_nulls[thread_idx] = true;
-                        }
-                        if (local_col_min < local_col_mins[thread_idx]) {
-                          local_col_mins[thread_idx] = local_col_min;
-                        }
-                        if (local_col_max > local_col_maxes[thread_idx]) {
-                          local_col_maxes[thread_idx] = local_col_max;
-                        }
-                      });
+    tbb::parallel_for(
+        tbb::blocked_range<int64_t>(0, num_rows),
+        [&](const tbb::blocked_range<int64_t>& r) {
+          const int64_t start_idx = r.begin();
+          const int64_t end_idx = r.end();
+          T local_col_min = std::numeric_limits<T>::max();
+          T local_col_max = std::numeric_limits<T>::lowest();
+          bool local_has_nulls = false;
+          for (int64_t r = start_idx; r < end_idx; ++r) {
+            const T val = col[r];
+            if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
+              if (std::isnan(val) || std::isinf(val)) {
+                continue;
+              }
+            }
+            if (col.isNull(r)) {
+              local_has_nulls = true;
+              continue;
+            }
+            if (val < local_col_min) {
+              local_col_min = val;
+            }
+            if (val > local_col_max) {
+              local_col_max = val;
+            }
+          }
+          const size_t thread_idx = tbb::this_task_arena::current_thread_index();
+          if (local_has_nulls) {
+            local_col_has_nulls[thread_idx] = true;
+          }
+          if (local_col_min < local_col_mins[thread_idx]) {
+            local_col_mins[thread_idx] = local_col_min;
+          }
+          if (local_col_max > local_col_maxes[thread_idx]) {
+            local_col_maxes[thread_idx] = local_col_max;
+          }
+        });
   });
 
   for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
