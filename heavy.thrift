@@ -249,7 +249,8 @@ struct TCopyParams {
   38: string odbc_password;
   39: string odbc_credential_string;
   40: string add_metadata_columns;
-  41: bool trim_spaces;
+  41: bool trim_spaces=true;
+  42: bool geo_validate_geometry=false;
 }
 
 struct TCreateParams {

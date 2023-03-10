@@ -132,8 +132,14 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
   std::vector<int> ring_sizes;
   std::vector<int> poly_rings;
   int32_t srid = ti.get_output_srid();
-  if (!Geospatial::GeoTypesFactory::getGeoColumns(
-          *wkt->get_constval().stringval, ti, coords, bounds, ring_sizes, poly_rings)) {
+  const bool validate_with_geos_if_available = false;
+  if (!Geospatial::GeoTypesFactory::getGeoColumns(*wkt->get_constval().stringval,
+                                                  ti,
+                                                  coords,
+                                                  bounds,
+                                                  ring_sizes,
+                                                  poly_rings,
+                                                  validate_with_geos_if_available)) {
     throw QueryNotSupported("Could not read geometry from text");
   }
   ti.set_subtype(kGEOMETRY);
@@ -855,7 +861,9 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       }
       const auto& datum = constant_expr->get_constval();
       CHECK(datum.stringval);
-      auto geospatial_base = Geospatial::GeoTypesFactory::createGeoType(*datum.stringval);
+      const bool validate_with_geos_if_available = false;
+      auto geospatial_base = Geospatial::GeoTypesFactory::createGeoType(
+          *datum.stringval, validate_with_geos_if_available);
       CHECK(geospatial_base);
       SQLTypeInfo ti;
       ti.set_type(get_ti_from_geo(geospatial_base.get()));

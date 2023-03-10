@@ -84,11 +84,9 @@ float g_fraction_code_cache_to_evict = 0.2;
 
 #include <llvm/Support/DynamicLibrary.h>
 
-#ifndef GEOS_LIBRARY_FILENAME
-#error Configuration should include GEOS library file name
-#endif
-std::unique_ptr<std::string> g_libgeos_so_filename(
-    new std::string(GEOS_LIBRARY_FILENAME));
+// from Geospatial/GeosValidation.cpp
+extern std::unique_ptr<std::string> g_libgeos_so_filename;
+
 static llvm::sys::DynamicLibrary geos_dynamic_library;
 static std::mutex geos_init_mutex;
 

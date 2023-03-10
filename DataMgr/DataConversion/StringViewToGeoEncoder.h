@@ -28,9 +28,12 @@ class StringViewToGeoEncoder : public BaseConvertEncoder,
  public:
   StringViewToGeoEncoder(std::list<Chunk_NS::Chunk>& chunks,
                          std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
-                         const bool error_tracking_enabled)
+                         const bool error_tracking_enabled,
+                         const bool geo_validate_geometry)
       : BaseConvertEncoder(error_tracking_enabled)
-      , foreign_storage::GeospatialEncoder(chunks, chunk_metadata) {}
+      , foreign_storage::GeospatialEncoder(chunks,
+                                           chunk_metadata,
+                                           geo_validate_geometry) {}
 
   void encodeAndAppendData(const int8_t* data, const size_t num_elements) override {
     auto geo_strings = reinterpret_cast<const std::string_view*>(data);

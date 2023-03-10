@@ -330,7 +330,7 @@ std::unique_ptr<import_export::ImportBatchResult> ParquetImporter::getNextImport
   }
 
   LazyParquetChunkLoader chunk_loader(
-      file_system_, file_reader_cache_.get(), foreign_table_->tableName);
+      file_system_, file_reader_cache_.get(), foreign_table_);
 
   std::optional<RowGroupInterval> next_row_group;
   {

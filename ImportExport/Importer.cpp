@@ -811,9 +811,16 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
           Geospatial::GeoTypesFactory::getNullGeoColumns(
               import_ti, coords, bounds, ring_sizes, poly_rings);
         } else {
+          const bool validate_with_geos_if_available = false;
           arrow_throw_if<GeoImportException>(
               !Geospatial::GeoTypesFactory::getGeoColumns(
-                  geo_string_buffer_->back(), ti, coords, bounds, ring_sizes, poly_rings),
+                  geo_string_buffer_->back(),
+                  ti,
+                  coords,
+                  bounds,
+                  ring_sizes,
+                  poly_rings,
+                  validate_with_geos_if_available),
               error_context(cd, bad_rows_tracker) + "Invalid geometry");
           arrow_throw_if<GeoImportException>(
               cd->columnType.get_type() != ti.get_type(),
@@ -2187,12 +2194,14 @@ static ImportStatus import_thread_delimited(
                 } else {
                   if (import_geometry) {
                     // geometry already exploded
-                    if (!Geospatial::GeoTypesFactory::getGeoColumns(import_geometry,
-                                                                    import_ti,
-                                                                    coords,
-                                                                    bounds,
-                                                                    ring_sizes,
-                                                                    poly_rings)) {
+                    if (!Geospatial::GeoTypesFactory::getGeoColumns(
+                            import_geometry,
+                            import_ti,
+                            coords,
+                            bounds,
+                            ring_sizes,
+                            poly_rings,
+                            copy_params.geo_validate_geometry)) {
                       std::string msg =
                           "Failed to extract valid geometry from exploded row " +
                           std::to_string(first_row_index_this_buffer +
@@ -2208,7 +2217,8 @@ static ImportStatus import_thread_delimited(
                             coords,
                             bounds,
                             ring_sizes,
-                            poly_rings)) {
+                            poly_rings,
+                            copy_params.geo_validate_geometry)) {
                       std::string msg = "Failed to extract valid geometry from row " +
                                         std::to_string(first_row_index_this_buffer +
                                                        row_index_plus_one) +
@@ -2281,7 +2291,7 @@ static ImportStatus import_thread_delimited(
           }
         };
         ogr_geometry = Geospatial::GeoTypesFactory::createOGRGeometry(
-            std::string(collection_geo_string));
+            std::string(collection_geo_string), copy_params.geo_validate_geometry);
         // do the explode and import
         us = explode_collections_step2(ogr_geometry,
                                        collection_child_type,
@@ -2414,12 +2424,14 @@ static ImportStatus import_thread_shapefile(
               Geospatial::GeoTypesFactory::getNullGeoColumns(
                   import_ti, coords, bounds, ring_sizes, poly_rings);
             } else {
-              if (!Geospatial::GeoTypesFactory::getGeoColumns(import_geometry,
-                                                              import_ti,
-                                                              coords,
-                                                              bounds,
-                                                              ring_sizes,
-                                                              poly_rings)) {
+              if (!Geospatial::GeoTypesFactory::getGeoColumns(
+                      import_geometry,
+                      import_ti,
+                      coords,
+                      bounds,
+                      ring_sizes,
+                      poly_rings,
+                      copy_params.geo_validate_geometry)) {
                 std::string msg = "Failed to extract valid geometry from feature " +
                                   std::to_string(firstFeature + iFeature + 1) +
                                   " for column " + cd->columnName;
@@ -6135,8 +6147,14 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
       std::vector<double> coords, bounds;
       std::vector<int> ring_sizes, poly_rings;
       SQLTypeInfo tinfo{cd->columnType};
-      CHECK(Geospatial::GeoTypesFactory::getGeoColumns(
-          default_value, tinfo, coords, bounds, ring_sizes, poly_rings));
+      const bool validate_with_geos_if_available = false;
+      CHECK(Geospatial::GeoTypesFactory::getGeoColumns(default_value,
+                                                       tinfo,
+                                                       coords,
+                                                       bounds,
+                                                       ring_sizes,
+                                                       poly_rings,
+                                                       validate_with_geos_if_available));
       // set physical columns starting with the following ID
       auto next_col = i + 1;
       import_export::Importer::set_geo_physical_import_buffer(

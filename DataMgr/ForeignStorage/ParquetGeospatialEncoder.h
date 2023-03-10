@@ -25,12 +25,15 @@ namespace foreign_storage {
 
 class ParquetGeospatialEncoder : public ParquetEncoder, public GeospatialEncoder {
  public:
-  ParquetGeospatialEncoder() : ParquetEncoder(nullptr), GeospatialEncoder() {}
+  ParquetGeospatialEncoder(const bool geo_validate_geometry)
+      : ParquetEncoder(nullptr), GeospatialEncoder(geo_validate_geometry) {}
 
   ParquetGeospatialEncoder(const parquet::ColumnDescriptor* parquet_column_descriptor,
                            std::list<Chunk_NS::Chunk>& chunks,
-                           std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata)
-      : ParquetEncoder(nullptr), GeospatialEncoder(chunks, chunk_metadata) {}
+                           std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
+                           const bool geo_validate_geometry)
+      : ParquetEncoder(nullptr)
+      , GeospatialEncoder(chunks, chunk_metadata, geo_validate_geometry) {}
 
   void appendData(const int16_t* def_levels,
                   const int16_t* rep_levels,

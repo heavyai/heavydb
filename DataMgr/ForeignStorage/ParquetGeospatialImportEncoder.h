@@ -28,15 +28,16 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
                                        public GeospatialEncoder,
                                        public ParquetImportEncoder {
  public:
-  ParquetGeospatialImportEncoder()
+  ParquetGeospatialImportEncoder(const bool geo_validate_geometry)
       : ParquetEncoder(nullptr)
-      , GeospatialEncoder()
+      , GeospatialEncoder(geo_validate_geometry)
       , current_batch_offset_(0)
       , invalid_indices_(nullptr) {}
 
-  ParquetGeospatialImportEncoder(std::list<Chunk_NS::Chunk>& chunks)
+  ParquetGeospatialImportEncoder(std::list<Chunk_NS::Chunk>& chunks,
+                                 const bool geo_validate_geometry)
       : ParquetEncoder(nullptr)
-      , GeospatialEncoder(chunks)
+      , GeospatialEncoder(chunks, geo_validate_geometry)
       , current_batch_offset_(0)
       , invalid_indices_(nullptr)
       , base_column_buffer_(nullptr)
