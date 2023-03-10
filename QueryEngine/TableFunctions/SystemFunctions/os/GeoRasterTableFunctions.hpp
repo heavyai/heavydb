@@ -530,13 +530,19 @@ void GeoRaster<T, Z>::computeSerialImpl(const Column<T2>& input_x,
   output_z.resize(num_bins_, agg_sentinel);
   ComputeAgg<AggType> compute_agg;
   for (int64_t sparse_idx = 0; sparse_idx != input_size; ++sparse_idx) {
+    auto const z = input_z[sparse_idx];
+    if constexpr (std::is_same_v<Z2, float> || std::is_same_v<Z2, double>) {
+      if (std::isnan(z) || std::isinf(z)) {
+        continue;
+      }
+    }
     const int64_t x_bin = get_x_bin(input_x[sparse_idx]);
     const int64_t y_bin = get_y_bin(input_y[sparse_idx]);
     if (x_bin < 0 || x_bin >= num_x_bins_ || y_bin < 0 || y_bin >= num_y_bins_) {
       continue;
     }
     const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
-    compute_agg(input_z[sparse_idx], output_z[bin_idx], inline_null_value<Z2>());
+    compute_agg(z, output_z[bin_idx], inline_null_value<Z2>());
   }
   for (int64_t bin_idx = 0; bin_idx != num_bins_; ++bin_idx) {
     if (output_z[bin_idx] == agg_sentinel) {
@@ -624,15 +630,19 @@ void GeoRaster<T, Z>::computeParallelImpl(const Column<T2>& input_x,
           std::vector<Z>& this_thread_z_output = per_thread_z_outputs[thread_idx];
 
           for (int64_t sparse_idx = start_idx; sparse_idx != end_idx; ++sparse_idx) {
+            auto const z = input_z[sparse_idx];
+            if constexpr (std::is_same_v<Z2, float> || std::is_same_v<Z2, double>) {
+              if (std::isnan(z) || std::isinf(z)) {
+                continue;
+              }
+            }
             const int64_t x_bin = get_x_bin(input_x[sparse_idx]);
             const int64_t y_bin = get_y_bin(input_y[sparse_idx]);
             if (x_bin < 0 || x_bin >= num_x_bins_ || y_bin < 0 || y_bin >= num_y_bins_) {
               continue;
             }
             const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
-            compute_agg(input_z[sparse_idx],
-                        this_thread_z_output[bin_idx],
-                        inline_null_value<Z2>());
+            compute_agg(z, this_thread_z_output[bin_idx], inline_null_value<Z2>());
           }
         });
   });

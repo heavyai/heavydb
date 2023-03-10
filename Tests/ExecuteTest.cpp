@@ -14603,9 +14603,9 @@ TEST_F(Select, RuntimeFunctions) {
         v<float>(run_simple_agg(
             "SELECT FLOOR(fn / 1e-13) FROM test WHERE fn IS NULL LIMIT 1;", dt)));
     {
-      auto result = run_multiple_agg("SELECT fn, isnan(fn) FROM test;", dt);
+      auto result = run_multiple_agg("SELECT fn, is_nan(fn) FROM test;", dt);
       ASSERT_EQ(result->rowCount(), size_t(2 * g_num_rows));
-      // Ensure the type for `isnan` is nullable
+      // Ensure the type for `is_nan` is nullable
       const auto func_ti = result->getColType(1);
       ASSERT_FALSE(func_ti.get_notnull());
       for (size_t i = 0; i < g_num_rows; i++) {
@@ -26618,6 +26618,29 @@ TEST_F(Select, ProjectMoreThan1MVarlenTypeColumn) {
     g_enable_columnar_output = flag;  // let's force columnar output for testing
     run_multiple_agg("SELECT st_point(f1, f2) FROM largeTestTable;",
                      ExecutorDeviceType::CPU);
+  }
+}
+
+TEST_F(Select, InfNanTest) {
+  SKIP_ALL_ON_AGGREGATOR();
+  static constexpr std::array<std::string_view, 10> queries = {
+      "SELECT is_inf(CAST(0.0 AS FLOAT));",
+      "SELECT is_nan(CAST(0.0 AS FLOAT));",
+      "SELECT is_inf(CAST('inf' AS FLOAT));",
+      "SELECT is_inf(CAST('-inf' AS FLOAT));",
+      "SELECT is_nan(CAST('nan' AS FLOAT));",
+      "SELECT is_inf(CAST(0.0 AS DOUBLE));",
+      "SELECT is_nan(CAST(0.0 AS DOUBLE));",
+      "SELECT is_inf(CAST('inf' AS DOUBLE));",
+      "SELECT is_inf(CAST('-inf' AS DOUBLE));",
+      "SELECT is_nan(CAST('nan' AS DOUBLE));"};
+  static constexpr std::array<int64_t, 10> results = {0, 0, 1, 1, 1, 0, 0, 1, 1, 1};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (int i = 0; i < 10; i++) {
+      auto const result = run_simple_agg(std::string(queries[i]), dt);
+      EXPECT_EQ(v<int64_t>(result), results[i]);
+    }
   }
 }
 
