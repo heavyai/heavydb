@@ -379,6 +379,9 @@ import_export::CopyParams RegexFileBufferParser::validateAndGetCopyParams(
       it != foreign_table->options.end()) {
     copy_params.threads = std::stoi(it->second);
   }
+  copy_params.geo_validate_geometry =
+      validate_and_get_bool_value(foreign_table, ForeignTable::GEO_VALIDATE_GEOMETRY_KEY)
+          .value_or(copy_params.geo_validate_geometry);
   return copy_params;
 }
 

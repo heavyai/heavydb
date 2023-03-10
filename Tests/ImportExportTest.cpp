@@ -1044,6 +1044,7 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
       const std::string& select_query,
       const std::string& line_regex,
       const int64_t max_byte_size_per_element,
+      const bool geo_validate_geometry = false,
       const std::string& odbc_select = {},
       const std::string& odbc_order_by = {},
       const std::string& table_options = {},
@@ -1109,19 +1110,20 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
       import_id_ = get_import_id(import_id_);
     }
 
-    EXPECT_NO_THROW(sql(query));
+    sql(query);
 
     TQueryResult copy_from_result;
-    EXPECT_NO_THROW(sql(copy_from_result,
-                        "COPY import_test_new FROM " + copy_from_source +
-                            getCopyFromOptions(import_type,
-                                               data_source_type,
-                                               line_regex,
-                                               max_reject,
-                                               odbc_order_by,
-                                               threads,
-                                               buffer_size) +
-                            ";"));
+    sql(copy_from_result,
+        "COPY import_test_new FROM " + copy_from_source +
+            getCopyFromOptions(import_type,
+                               data_source_type,
+                               line_regex,
+                               max_reject,
+                               odbc_order_by,
+                               threads,
+                               buffer_size,
+                               geo_validate_geometry) +
+            ";");
     copy_from_result_ = get_copy_from_result_str(copy_from_result);
 
     TQueryResult result;
@@ -1130,13 +1132,15 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     return result;
   }
 
-  std::string getCopyFromOptions(const std::string& import_type,
-                                 const std::string& data_source_type,
-                                 const std::string& line_regex,
-                                 const std::optional<int64_t> max_reject = {},
-                                 const std::optional<std::string> odbc_order_by = {},
-                                 const std::optional<int> threads = std::nullopt,
-                                 const std::optional<size_t> buffer_size = std::nullopt) {
+  std::string getCopyFromOptions(
+      const std::string& import_type,
+      const std::string& data_source_type,
+      const std::string& line_regex,
+      const std::optional<int64_t> max_reject = {},
+      const std::optional<std::string> odbc_order_by = {},
+      const std::optional<int> threads = std::nullopt,
+      const std::optional<size_t> buffer_size = std::nullopt,
+      const std::optional<bool> geo_validate_geometry = std::nullopt) {
     std::vector<std::string> options;
     if (buffer_size.has_value()) {
       options.emplace_back("buffer_size=" + std::to_string(buffer_size.value()) + "");
@@ -1160,6 +1164,11 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     }
     if (odbc_order_by.has_value()) {
       options.emplace_back("sql_order_by='" + odbc_order_by.value() + "'");
+    }
+    if (geo_validate_geometry.has_value()) {
+      options.emplace_back("geo_validate_geometry='" +
+                           std::string(geo_validate_geometry.value() ? "true" : "false") +
+                           "'");
     }
     if (options.empty()) {
       return {};
@@ -1252,6 +1261,7 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_geo_regex(6),
       256,
+      false,
       sql_select_stmt,
       "index",
       {},
@@ -1371,6 +1381,7 @@ TEST_P(ImportAndSelectTest, ScalarTypes) {
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
       14,
+      false,
       sql_select_stmt,
       "s");
 
@@ -1405,6 +1416,7 @@ TEST_P(ImportAndSelectTest, Sharded) {
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
       14,
+      false,
       sql_select_stmt,
       "s",
       "SHARD_COUNT=2");
@@ -1442,6 +1454,7 @@ TEST_P(ImportAndSelectTest, Multifile) {
                                             "SELECT * FROM import_test_new ORDER BY i,t;",
                                             get_line_regex(3),
                                             4,
+                                            false,
                                             "",  // unused select
                                             "",  // unused order_by
                                             /*table_options=*/{},
@@ -1474,6 +1487,7 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_geo_regex(6),
       256,
+      false,
       sql_select_stmt,
       "index",
       {},
@@ -1507,6 +1521,48 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
   validateImportStatus(4, 1, false);
 }
 
+TEST_P(ImportAndSelectTest, GeoValidateGeometryPolygon) {
+  if (param_.import_type == "sqlite") {
+    GTEST_SKIP() << "sqlite does not support geometry types";
+  }
+  std::string sql_select_stmt =
+      "";
+  createTableCopyFromAndSelect("index INT, p POLYGON",
+                               "invalid_polygon",
+                               "SELECT * FROM import_test_new;",
+                               "(\\d+),\\s*" + get_line_geo_regex(1),
+                               256,
+                               true,
+                               sql_select_stmt,
+                               "index",
+                               {},
+                               false,
+                               std::nullopt,
+                               {{"POLYGON", "TEXT"}});
+  validateImportStatus(1, 1, false);  // expect 1 good, 1 rejected
+}
+
+TEST_P(ImportAndSelectTest, GeoValidateGeometryMultiPolygon) {
+  if (param_.import_type == "sqlite") {
+    GTEST_SKIP() << "sqlite does not support geometry types";
+  }
+  std::string sql_select_stmt =
+      "";
+  createTableCopyFromAndSelect("index INT, mp MULTIPOLYGON",
+                               "invalid_multipolygon",
+                               "SELECT * FROM import_test_new;",
+                               "(\\d+),\\s*" + get_line_geo_regex(1),
+                               256,
+                               true,
+                               sql_select_stmt,
+                               "index",
+                               {},
+                               false,
+                               std::nullopt,
+                               {{"MULTIPOLYGON", "TEXT"}});
+  validateImportStatus(1, 1, false);  // expect 1 good, 1 rejected
+}
+
 TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
   // Skip non local test cases for NOT NULL columns since other cases add no additional
   // coverage
@@ -1526,6 +1582,7 @@ TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_geo_regex(6),
       256,
+      false,
       sql_select_stmt,
       "index",
       {},
@@ -1700,6 +1757,7 @@ TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
       14,
+      false,
       sql_select_stmt,
       "s",
       {},
@@ -1738,6 +1796,7 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
       14,
+      false,
       sql_select_stmt,
       "s",
       {},
@@ -1773,6 +1832,7 @@ TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
       14,
+      false,
       sql_select_stmt,
       "s",
       "SHARD_COUNT=2",
@@ -1804,6 +1864,7 @@ TEST_P(ImportAndSelectTest, MaxRejectReached) {
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
       14,
+      false,
       sql_select_stmt,
       "s",
       {},
@@ -1961,6 +2022,7 @@ TEST_P(LowProxyForeignTableFragmentSizeImportTest, LargeNumberOfFragments) {
       "SELECT count(*) FROM import_test_new;",
       get_line_regex(12),
       14,
+      false,
       {},
       {},
       {},
@@ -3266,6 +3328,23 @@ TEST_F(ImportTestGeo, CSV_Import_Degenerate) {
                   6);  // we expect it to drop the 4 rows containing degenerate polys
 }
 
+TEST_F(ImportTestGeo, CSV_Import_Invalid_Disabled) {
+  const auto file_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/geospatial_invalid.csv");
+  sql("COPY geospatial FROM '" + file_path.string() + "';");
+  checkGeoNumRows("p1, mpoint, line, mline, poly, mpoly, p2, p3, p4, trip_distance",
+                  4);  // we expect it to keep all the rows
+}
+
+TEST_F(ImportTestGeo, CSV_Import_Invalid_Enabled) {
+  const auto file_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/geospatial_invalid.csv");
+  sql("COPY geospatial FROM '" + file_path.string() +
+      "' WITH (geo_validate_geometry='true');");
+  checkGeoNumRows("p1, mpoint, line, mline, poly, mpoly, p2, p3, p4, trip_distance",
+                  2);  // we expect it to reject the two rows with invalid geo
+}
+
 TEST_F(ImportTestGeo, CSV_Import_Transform_Point_2263) {
   const auto file_path = boost::filesystem::path(
       "../../Tests/Import/datafiles/geospatial_transform/point_2263.csv");
@@ -3701,6 +3780,36 @@ TEST_F(ImportTestGDAL, GeoJSON_MultiLineString_Import) {
   checkGeoNumRows(Geospatial::kGeoColumnName, 98);
   EXPECT_NO_THROW(sqlAndCompareResult(
       "SELECT ST_NPoints(geom) FROM geospatial WHERE rowid=0", {{i(76)}}));
+}
+
+TEST_F(ImportTestGDAL, GeoJSON_Polygon_Import_Invalid_Disabled) {
+  const auto file_path = boost::filesystem::weakly_canonical(
+      "../../Tests/Import/datafiles/geospatial_invalid_polygon.geojson");
+  sql("COPY geospatial FROM '" + file_path.string() + "' WITH (source_type='geo_file');");
+  checkGeoNumRows("geom", 2);  // we expect it to keep both rows
+}
+
+TEST_F(ImportTestGDAL, GeoJSON_Polygon_Import_Invalid_Enabled) {
+  const auto file_path = boost::filesystem::weakly_canonical(
+      "../../Tests/Import/datafiles/geospatial_invalid_polygon.geojson");
+  sql("COPY geospatial FROM '" + file_path.string() +
+      "' WITH (source_type='geo_file', geo_validate_geometry='true');");
+  checkGeoNumRows("geom", 1);  // we expect it to reject the row with invalid geo
+}
+
+TEST_F(ImportTestGDAL, GeoJSON_MultiPolygon_Import_Invalid_Disabled) {
+  const auto file_path = boost::filesystem::weakly_canonical(
+      "../../Tests/Import/datafiles/geospatial_invalid_multipolygon.geojson");
+  sql("COPY geospatial FROM '" + file_path.string() + "' WITH (source_type='geo_file');");
+  checkGeoNumRows("geom", 2);  // we expect it to keep both rows
+}
+
+TEST_F(ImportTestGDAL, GeoJSON_MultiPolygon_Import_Invalid_Enabled) {
+  const auto file_path = boost::filesystem::weakly_canonical(
+      "../../Tests/Import/datafiles/geospatial_invalid_multipolygon.geojson");
+  sql("COPY geospatial FROM '" + file_path.string() +
+      "' WITH (source_type='geo_file', geo_validate_geometry='true');");
+  checkGeoNumRows("geom", 1);  // we expect it to reject the row with invalid geo
 }
 
 #ifdef HAVE_AWS_S3

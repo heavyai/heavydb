@@ -46,6 +46,7 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
   static constexpr const char* REFRESH_UPDATE_TYPE_KEY = "REFRESH_UPDATE_TYPE";
   static constexpr const char* BUFFER_SIZE_KEY = "BUFFER_SIZE";
   static constexpr const char* PARTITIONS_KEY = "PARTITIONS";
+  static constexpr const char* GEO_VALIDATE_GEOMETRY_KEY = "GEO_VALIDATE_GEOMETRY";
   // Option values
   static constexpr const char* ALL_REFRESH_UPDATE_TYPE = "ALL";
   static constexpr const char* APPEND_REFRESH_UPDATE_TYPE = "APPEND";
@@ -62,7 +63,8 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
                                                               REFRESH_START_DATE_TIME_KEY,
                                                               REFRESH_INTERVAL_KEY,
                                                               REFRESH_UPDATE_TYPE_KEY,
-                                                              PARTITIONS_KEY};
+                                                              PARTITIONS_KEY,
+                                                              GEO_VALIDATE_GEOMETRY_KEY};
 
   inline static const std::set<const char*> upper_case_options{
       REFRESH_TIMING_TYPE_KEY,
@@ -75,7 +77,8 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
                                                               REFRESH_START_DATE_TIME_KEY,
                                                               REFRESH_INTERVAL_KEY,
                                                               REFRESH_UPDATE_TYPE_KEY,
-                                                              BUFFER_SIZE_KEY};
+                                                              BUFFER_SIZE_KEY,
+                                                              GEO_VALIDATE_GEOMETRY_KEY};
 
   /**
     @brief Verifies the values for mapped options are valid.

@@ -35,7 +35,8 @@ struct ConversionFactoryParam {
 
 std::unique_ptr<BaseConvertEncoder> create_string_view_encoder(
     ConversionFactoryParam& param,
-    const bool error_tracking_enabled = false) {
+    const bool error_tracking_enabled,
+    const bool geo_validate_geometry) {
   auto dst_type_info = param.geo_chunks.size()
                            ? param.geo_chunks.begin()->getColumnDesc()->columnType
                            : param.dst_chunk.getColumnDesc()->columnType;
@@ -246,8 +247,10 @@ std::unique_ptr<BaseConvertEncoder> create_string_view_encoder(
       }
     }
   } else if (dst_type_info.is_geometry()) {
-    return std::make_unique<StringViewToGeoEncoder>(
-        param.geo_chunks, param.geo_chunk_metadata, error_tracking_enabled);
+    return std::make_unique<StringViewToGeoEncoder>(param.geo_chunks,
+                                                    param.geo_chunk_metadata,
+                                                    error_tracking_enabled,
+                                                    geo_validate_geometry);
   }
 
   UNREACHABLE() << "could not find appropriate encoder to create, conversion use case is "

@@ -25,8 +25,9 @@ class OdbcGeospatialEncoder : public GeospatialEncoder {
   OdbcGeospatialEncoder(std::list<Chunk_NS::Chunk>& chunks,
                         std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
                         const bool is_error_tracking_enabled,
-                        const SQLTypeInfo& sql_type_info)
-      : GeospatialEncoder(chunks, chunk_metadata)
+                        const SQLTypeInfo& sql_type_info,
+                        const bool geo_validate_geometry)
+      : GeospatialEncoder(chunks, chunk_metadata, geo_validate_geometry)
       , type_info_(sql_type_info)
       , is_error_tracking_enabled_(is_error_tracking_enabled) {}
 

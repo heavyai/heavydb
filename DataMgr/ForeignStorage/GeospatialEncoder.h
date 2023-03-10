@@ -40,9 +40,10 @@ class GeospatialEncoder {
  public:
   virtual ~GeospatialEncoder() = default;
 
-  GeospatialEncoder() {}
+  GeospatialEncoder(const bool geo_validate_geometry)
+      : geo_validate_geometry_{geo_validate_geometry} {}
 
-  GeospatialEncoder(std::list<Chunk_NS::Chunk>& chunks)
+  GeospatialEncoder(std::list<Chunk_NS::Chunk>& chunks, const bool geo_validate_geometry)
       : geo_column_descriptor_(chunks.begin()->getColumnDesc())
       , base_column_encoder_(nullptr)
       , coords_column_encoder_(nullptr)
@@ -53,7 +54,8 @@ class GeospatialEncoder {
       , coords_column_metadata_(nullptr)
       , bounds_column_metadata_(nullptr)
       , ring_or_line_sizes_column_metadata_(nullptr)
-      , poly_rings_column_metadata_(nullptr) {
+      , poly_rings_column_metadata_(nullptr)
+      , geo_validate_geometry_{geo_validate_geometry} {
     CHECK(geo_column_descriptor_->columnType.is_geometry());
     validateChunksSizing(chunks);
     const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
@@ -80,7 +82,8 @@ class GeospatialEncoder {
   }
 
   GeospatialEncoder(std::list<Chunk_NS::Chunk>& chunks,
-                    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata)
+                    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
+                    const bool geo_validate_geometry)
       : geo_column_descriptor_(chunks.begin()->getColumnDesc())
       , base_column_encoder_(nullptr)
       , coords_column_encoder_(nullptr)
@@ -91,7 +94,8 @@ class GeospatialEncoder {
       , coords_column_metadata_(nullptr)
       , bounds_column_metadata_(nullptr)
       , ring_or_line_sizes_column_metadata_(nullptr)
-      , poly_rings_column_metadata_(nullptr) {
+      , poly_rings_column_metadata_(nullptr)
+      , geo_validate_geometry_{geo_validate_geometry} {
     CHECK(geo_column_descriptor_->columnType.is_geometry());
 
     validateChunksSizing(chunks);
@@ -199,7 +203,8 @@ class GeospatialEncoder {
                                                     coords_parse_buffer_,
                                                     bounds_parse_buffer_,
                                                     ring_or_line_sizes_parse_buffer_,
-                                                    poly_rings_parse_buffer_)) {
+                                                    poly_rings_parse_buffer_,
+                                                    geo_validate_geometry_)) {
       throwMalformedGeoElement(geo_column_descriptor_->columnName);
     }
 
@@ -446,6 +451,9 @@ class GeospatialEncoder {
   std::vector<ArrayDatum> bounds_datum_buffer_;
   std::vector<ArrayDatum> ring_or_line_sizes_datum_buffer_;
   std::vector<ArrayDatum> poly_rings_datum_buffer_;
+
+  // CopyParams
+  bool geo_validate_geometry_;
 };
 
 }  // namespace foreign_storage

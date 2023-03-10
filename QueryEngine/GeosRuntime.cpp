@@ -232,7 +232,7 @@ bool fromWkb(WkbView const wkb_view,
              int32_t result_srid_in,
              int32_t result_srid_out,
              int32_t* best_planar_srid_ptr) {
-  auto result = GeoTypesFactory::createGeoType(wkb_view);
+  auto result = GeoTypesFactory::createGeoType(wkb_view, false);
   if (!result->isEmpty()) {
     if (best_planar_srid_ptr) {
       // If original geometry has previously been projected to planar srid,

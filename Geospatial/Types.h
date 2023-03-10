@@ -290,39 +290,50 @@ class GeoGeometryCollection : public GeoBase {
 
 class GeoTypesFactory {
  public:
-  static OGRGeometry* createOGRGeometry(const std::string& wkt_or_wkb_hex);
+  static OGRGeometry* createOGRGeometry(const std::string& wkt_or_wkb_hex,
+                                        const bool validate_with_geos_if_available);
 
-  static std::unique_ptr<GeoBase> createGeoType(const std::string& wkt_or_wkb_hex);
-  static std::unique_ptr<GeoBase> createGeoType(const WkbView);
-  static std::unique_ptr<GeoBase> createGeoType(OGRGeometry* geom);
+  static std::unique_ptr<GeoBase> createGeoType(
+      const std::string& wkt_or_wkb_hex,
+      const bool validate_with_geos_if_available);
+  static std::unique_ptr<GeoBase> createGeoType(
+      const WkbView,
+      const bool validate_with_geos_if_available);
+  static std::unique_ptr<GeoBase> createGeoType(
+      OGRGeometry* geom,
+      const bool validate_with_geos_if_available);
 
   static bool getGeoColumns(const std::string& wkt_or_wkb_hex,
                             SQLTypeInfo& ti,
                             std::vector<double>& coords,
                             std::vector<double>& bounds,
                             std::vector<int>& ring_sizes,
-                            std::vector<int>& poly_rings);
+                            std::vector<int>& poly_rings,
+                            const bool validate_with_geos_if_available);
 
   static bool getGeoColumns(const std::vector<uint8_t>& wkb,
                             SQLTypeInfo& ti,
                             std::vector<double>& coords,
                             std::vector<double>& bounds,
                             std::vector<int>& ring_sizes,
-                            std::vector<int>& poly_rings);
+                            std::vector<int>& poly_rings,
+                            const bool validate_with_geos_if_available);
 
   static bool getGeoColumns(OGRGeometry* geom,
                             SQLTypeInfo& ti,
                             std::vector<double>& coords,
                             std::vector<double>& bounds,
                             std::vector<int>& ring_sizes,
-                            std::vector<int>& poly_rings);
+                            std::vector<int>& poly_rings,
+                            const bool validate_with_geos_if_available);
 
   static bool getGeoColumns(const std::vector<std::string>* wkt_or_wkb_hex_column,
                             SQLTypeInfo& ti,
                             std::vector<std::vector<double>>& coords_column,
                             std::vector<std::vector<double>>& bounds_column,
                             std::vector<std::vector<int>>& ring_sizes_column,
-                            std::vector<std::vector<int>>& poly_rings_column);
+                            std::vector<std::vector<int>>& poly_rings_column,
+                            const bool validate_with_geos_if_available);
 
   static void getNullGeoColumns(SQLTypeInfo& ti,
                                 std::vector<double>& coords,
