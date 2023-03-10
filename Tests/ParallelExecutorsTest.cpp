@@ -24,7 +24,7 @@
 
 #include <array>
 #include <future>
-#include <string>
+#include <sstream>
 #include <vector>
 
 #ifdef TBB_PREVIEW_WAITING_FOR_WORKERS
@@ -69,7 +69,7 @@ enum ParamName { DT = 0, NUM_EXECUTORS };
 // Return false on error
 bool finalize_tbb_private_server_threads() {
 #ifdef TBB_PREVIEW_WAITING_FOR_WORKERS  // set when ENABLE_TSAN
-#if 2021006 <= 1000 * TBB_VERSION_MAJOR + TBB_VERSION_MINOR
+#if 2021006 <= TBB_VERSION_MAJOR * 1000 + TBB_VERSION_MINOR
   auto handle = oneapi::tbb::task_scheduler_handle{oneapi::tbb::attach{}};
 #else
   auto handle = tbb::task_scheduler_handle::get();
@@ -187,6 +187,19 @@ class BaseTestFixture : public DBHandlerTestFixture,
   }
 };
 
+struct TestNameSuffix {
+  // NOTE: test names must be non-empty, unique, and may only contain ASCII alphanumeric
+  // characters. [Use of underscore must follow specific restrictions. See url for info.]
+  // https://google.github.io/googletest/advanced.html#specifying-names-for-value-parameterized-test-parameters
+  std::string operator()(
+      ::testing::TestParamInfo<BaseTestFixture::ParamType> const& info) const {
+    std::ostringstream oss;
+    oss << std::get<DT>(info.param) << "_executors_"
+        << std::get<NUM_EXECUTORS>(info.param);
+    return oss.str();
+  }
+};
+
 class SingleTableTestEnv : public BaseTestFixture {
  protected:
   void SetUp() override {
@@ -209,13 +222,11 @@ class SingleTableTestEnv : public BaseTestFixture {
 };
 
 TEST_P(SingleTableTestEnv, SingleTableTest) {
-  auto const num_executors = DBHandlerTestFixture::system_parameters_.num_executors;
+  auto const num_executors = std::get<NUM_EXECUTORS>(param_);
   TExecuteMode::type const dt = std::get<DT>(param_);
   {
     SKIP_NO_GPU();
     setExecuteMode(dt);
-    LOG(ERROR) << "Starting execution with " << num_executors
-               << " executors with device_type: " << dt;
     std::vector<std::future<void>> worker_threads;
     auto execution_time = measure<>::execution([&]() {
       for (NumExecutors w = 0; w < num_executors; w++) {
@@ -262,14 +273,11 @@ class MultiTableTestEnv : public BaseTestFixture {
 };
 
 TEST_P(MultiTableTestEnv, MultiTableTest) {
-  auto const num_executors = DBHandlerTestFixture::system_parameters_.num_executors;
+  auto const num_executors = std::get<NUM_EXECUTORS>(param_);
   TExecuteMode::type const dt = std::get<DT>(param_);
   {
     SKIP_NO_GPU();
     setExecuteMode(dt);
-    LOG(ERROR) << "Starting execution with " << num_executors
-               << " executors with device_type: " << dt;
-
     std::vector<std::future<void>> worker_threads;
 
     // use fewer tables on CPU, as speedup isn't as large
@@ -577,20 +585,23 @@ INSTANTIATE_TEST_SUITE_P(
     SingleTableTestEnv,
     ::testing::Combine(::testing::Values(TExecuteMode::type::CPU,
                                          TExecuteMode::type::GPU),
-                       ::testing::ValuesIn(num_executors_vec(g_max_num_executors))));
+                       ::testing::ValuesIn(num_executors_vec(g_max_num_executors))),
+    TestNameSuffix{});
 
 INSTANTIATE_TEST_SUITE_P(
     MultiTableTest,
     MultiTableTestEnv,
     ::testing::Combine(::testing::Values(TExecuteMode::type::CPU,
                                          TExecuteMode::type::GPU),
-                       ::testing::ValuesIn(num_executors_vec(g_max_num_executors))));
+                       ::testing::ValuesIn(num_executors_vec(g_max_num_executors))),
+    TestNameSuffix{});
 
 INSTANTIATE_TEST_SUITE_P(UpdateDeleteTest,
                          UpdateDeleteTestEnv,
                          ::testing::Combine(::testing::Values(TExecuteMode::type::CPU,
                                                               TExecuteMode::type::GPU),
-                                            ::testing::Values(g_max_num_executors)));
+                                            ::testing::Values(g_max_num_executors)),
+                         TestNameSuffix{});
 
 int main(int argc, char* argv[]) {
   g_is_test_env = true;
