@@ -230,7 +230,7 @@ UdfClangDriver UdfClangDriver::init(const std::string& clang_path) {
         "Failed to initialize UDF compiler diagnostic options. Aborting UDF compiler "
         "initialization. Is clang/clang++ installed?");
   }
-  return UdfClangDriver(clang_path, diag_options);
+  return UdfClangDriver(clang_path, std::move(diag_options));
 }
 
 UdfClangDriver::UdfClangDriver(
