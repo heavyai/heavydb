@@ -2386,11 +2386,12 @@ void AlterTableAlterColumnCommand::clearInMemoryData(
     const AlterColumnTypePairs& src_dst_cds) {
   auto& catalog = session_ptr_->getCatalog();
 
-  ChunkKey table_key{catalog.getCurrentDB().dbId, td->tableId};
-  UpdateTriggeredCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
+  ChunkKey column_key{catalog.getCurrentDB().dbId, td->tableId, 0};
+  column_key.resize(2);
+  UpdateTriggeredCacheInvalidator::invalidateCachesByTable(boost::hash_value(column_key));
+  column_key.resize(3);
   for (auto& [src_cd, _] : src_dst_cds) {
-    auto column_key = table_key;
-    column_key.push_back(src_cd->columnId);
+    column_key[2] = src_cd->columnId;
     catalog.getDataMgr().deleteChunksWithPrefix(column_key, MemoryLevel::GPU_LEVEL);
     catalog.getDataMgr().deleteChunksWithPrefix(column_key, MemoryLevel::CPU_LEVEL);
   }
