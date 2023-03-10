@@ -49,6 +49,7 @@
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "Fragmenter/TargetValueConvertersFactories.h"
 #include "Geospatial/Compression.h"
+#include "Geospatial/GeosValidation.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/ForeignDataImporter.h"
 #include "ImportExport/Importer.h"
@@ -1489,6 +1490,21 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
           throw std::runtime_error("geo_explode_collections option must be a boolean.");
         }
         copy_params.geo_explode_collections = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "geo_validate_geometry")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("geo_validate_geometry option must be a boolean.");
+        }
+        copy_params.geo_validate_geometry = false;
+        auto const value = bool_from_string_literal(str_literal);
+        if (value) {
+          if (Geospatial::geos_validation_available()) {
+            copy_params.geo_validate_geometry = true;
+          } else {
+            throw std::runtime_error("GEOS geometry validation is not available.");
+          }
+        }
       } else if (boost::iequals(*p->get_name(), "source_srid")) {
         const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
         if (int_literal == nullptr) {
@@ -2532,8 +2548,15 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
         std::vector<int> poly_rings;
         SQLTypeInfo import_ti{cd->columnType};
         if (!is_null) {
+          const bool validate_with_geos_if_available = false;
           if (!Geospatial::GeoTypesFactory::getGeoColumns(
-                  *geo_string, import_ti, coords, bounds, ring_sizes, poly_rings)) {
+                  *geo_string,
+                  import_ti,
+                  coords,
+                  bounds,
+                  ring_sizes,
+                  poly_rings,
+                  validate_with_geos_if_available)) {
             throw std::runtime_error("Cannot read geometry to insert into column " +
                                      cd->columnName);
           }
@@ -5050,13 +5073,15 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
                 std::vector<double> coords, bounds;
                 std::vector<int> ring_sizes, poly_rings;
                 SQLTypeInfo tinfo{cd->columnType};
+                const bool validate_with_geos_if_available = false;
                 if (!Geospatial::GeoTypesFactory::getGeoColumns(
                         cd->default_value.value_or("NULL"),
                         tinfo,
                         coords,
                         bounds,
                         ring_sizes,
-                        poly_rings)) {
+                        poly_rings,
+                        validate_with_geos_if_available)) {
                   throw std::runtime_error("Bad geometry data: '" +
                                            cd->default_value.value_or("NULL") + "'");
                 }

@@ -631,7 +631,9 @@ void validate_literal(const std::string& val,
         return;
       }
       try {
-        auto geo = Geospatial::GeoTypesFactory::createGeoType(val);
+        const bool validate_with_geos_if_available = false;
+        auto geo = Geospatial::GeoTypesFactory::createGeoType(
+            val, validate_with_geos_if_available);
         if (!geo) {
           throw std::runtime_error("Unexpected geo literal '" + val + "' for column " +
                                    column_name);

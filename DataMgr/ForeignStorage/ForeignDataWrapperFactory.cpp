@@ -250,6 +250,15 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
   CHECK(server);
   foreign_table->foreign_server = server;
 
+  // enable geo validation in most/all source types
+  if (copy_params.source_type == import_export::SourceType::kRegexParsedFile ||
+      copy_params.source_type == import_export::SourceType::kDelimitedFile ||
+      copy_params.source_type == import_export::SourceType::kParquetFile ||
+      copy_params.source_type == import_export::SourceType::kOdbc) {
+    foreign_table->options[ForeignTable::GEO_VALIDATE_GEOMETRY_KEY] =
+        bool_to_option_value(copy_params.geo_validate_geometry);
+  }
+
   // populate options for regex filtering of file-paths in supported data types
   if (copy_params.source_type == import_export::SourceType::kRegexParsedFile ||
       copy_params.source_type == import_export::SourceType::kDelimitedFile ||

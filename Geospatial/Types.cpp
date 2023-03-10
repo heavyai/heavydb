@@ -15,6 +15,7 @@
  */
 
 #include "Geospatial/Types.h"
+#include "Geospatial/GeosValidation.h"
 
 #include <limits>
 #include <mutex>
@@ -429,10 +430,10 @@ std::unique_ptr<GeoBase> GeoBase::run(GeoBase::GeoOp op, const GeoBase& other) c
     //                    "Currenly don't support invalid or empty result");
     // return GeoTypesFactory::createGeoType("POLYGON EMPTY");
     // Not supporting EMPTY polygons, return a dot polygon
-    return GeoTypesFactory::createGeoType(
-        "MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))");
+    return GeoTypesFactory::createGeoType("MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))",
+                                          false);
   }
-  return GeoTypesFactory::createGeoType(result);
+  return GeoTypesFactory::createGeoType(result, false);
 }
 
 // Run a specific geo operation on this and other geometries
@@ -487,10 +488,10 @@ std::unique_ptr<GeoBase> GeoBase::optimized_run(GeoBase::GeoOp op,
     //                    "Currenly don't support invalid or empty result");
     // return GeoTypesFactory::createGeoType("POLYGON EMPTY");
     // Not supporting EMPTY polygons, return a dot polygon
-    return GeoTypesFactory::createGeoType(
-        "MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))");
+    return GeoTypesFactory::createGeoType("MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))",
+                                          false);
   }
-  return GeoTypesFactory::createGeoType(result);
+  return GeoTypesFactory::createGeoType(result, false);
 }
 
 // Run a specific geo operation on this geometry and a double param
@@ -511,10 +512,10 @@ std::unique_ptr<GeoBase> GeoBase::run(GeoBase::GeoOp op, double param) const {
     //                    "Currenly don't support invalid or empty result");
     // return GeoTypesFactory::createGeoType("POLYGON EMPTY");
     // Not supporting EMPTY polygons, return a dot polygon
-    return GeoTypesFactory::createGeoType(
-        "MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))");
+    return GeoTypesFactory::createGeoType("MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))",
+                                          false);
   }
-  return GeoTypesFactory::createGeoType(result);
+  return GeoTypesFactory::createGeoType(result, false);
 }
 
 // Run a specific predicate operation on this geometry
@@ -1039,9 +1040,29 @@ std::vector<uint8_t> hex_string_to_binary_vector(const std::string& wkb_hex) {
   return wkb;
 }
 
+bool validation_enabled_for_type(const OGRGeometry* geom) {
+  auto const wkb_type = wkbFlatten(geom->getGeometryType());
+  // only POLYGON and MULTIPOLYGON for now
+  return (wkb_type == wkbPolygon) || (wkb_type == wkbMultiPolygon);
+}
+
+void validate_ogr(const OGRGeometry* geom) {
+  CHECK(geom);
+  if (validation_enabled_for_type(geom) && geos_validation_available()) {
+    auto const wkb_size = geom->WkbSize();
+    std::vector<unsigned char> wkb(wkb_size);
+    auto const err = geom->exportToWkb(wkbNDR, wkb.data());
+    if (err == OGRERR_NONE && !geos_validate_wkb(wkb.data(), wkb_size)) {
+      throw GeoTypesError("GeoFactory", "Geometry is invalid");
+    }
+  }
+}
+
 }  // namespace
 
-OGRGeometry* GeoTypesFactory::createOGRGeometry(const std::string& wkt_or_wkb_hex) {
+OGRGeometry* GeoTypesFactory::createOGRGeometry(
+    const std::string& wkt_or_wkb_hex,
+    const bool validate_with_geos_if_available) {
   OGRGeometry* geom = nullptr;
   OGRErr err = OGRERR_NONE;
   if (wkt_or_wkb_hex.empty()) {
@@ -1055,25 +1076,46 @@ OGRGeometry* GeoTypesFactory::createOGRGeometry(const std::string& wkt_or_wkb_he
   if (err != OGRERR_NONE) {
     throw GeoTypesError("GeoFactory", err);
   }
+  if (validate_with_geos_if_available) {
+    validate_ogr(geom);
+  }
   return geom;
 }
 
 std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(
-    const std::string& wkt_or_wkb_hex) {
-  return GeoTypesFactory::createGeoTypeImpl(createOGRGeometry(wkt_or_wkb_hex));
+    const std::string& wkt_or_wkb_hex,
+    const bool validate_with_geos_if_available) {
+  auto g = GeoTypesFactory::createGeoTypeImpl(
+      createOGRGeometry(wkt_or_wkb_hex, false));  // validate next
+  if (validate_with_geos_if_available) {
+    validate_ogr(g->getOGRGeometry());
+  }
+  return g;
 }
 
-std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(const WkbView wkb_view) {
+std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(
+    const WkbView wkb_view,
+    const bool validate_with_geos_if_available) {
   OGRGeometry* geom = nullptr;
   const auto err = GeoBase::createFromWkbView(&geom, wkb_view);
   if (err != OGRERR_NONE) {
     throw GeoTypesError("GeoFactory", err);
   }
-  return GeoTypesFactory::createGeoTypeImpl(geom);
+  auto g = GeoTypesFactory::createGeoTypeImpl(geom);
+  if (validate_with_geos_if_available) {
+    validate_ogr(g->getOGRGeometry());
+  }
+  return g;
 }
 
-std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(OGRGeometry* geom) {
-  return GeoTypesFactory::createGeoTypeImpl(geom, false);
+std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(
+    OGRGeometry* geom,
+    const bool validate_with_geos_if_available) {
+  auto g = GeoTypesFactory::createGeoTypeImpl(geom, false);
+  if (validate_with_geos_if_available) {
+    validate_ogr(g->getOGRGeometry());
+  }
+  return g;
 }
 
 bool GeoTypesFactory::getGeoColumns(const std::string& wkt_or_wkb_hex,
@@ -1081,14 +1123,16 @@ bool GeoTypesFactory::getGeoColumns(const std::string& wkt_or_wkb_hex,
                                     std::vector<double>& coords,
                                     std::vector<double>& bounds,
                                     std::vector<int>& ring_sizes,
-                                    std::vector<int>& poly_rings) {
+                                    std::vector<int>& poly_rings,
+                                    const bool validate_with_geos_if_available) {
   try {
     if (wkt_or_wkb_hex.empty() || wkt_or_wkb_hex == "NULL") {
       getNullGeoColumns(ti, coords, bounds, ring_sizes, poly_rings);
       return true;
     }
 
-    const auto geospatial_base = GeoTypesFactory::createGeoType(wkt_or_wkb_hex);
+    const auto geospatial_base =
+        GeoTypesFactory::createGeoType(wkt_or_wkb_hex, validate_with_geos_if_available);
 
     if (!geospatial_base || !geospatial_base->transform(ti)) {
       return false;
@@ -1109,9 +1153,11 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<uint8_t>& wkb,
                                     std::vector<double>& coords,
                                     std::vector<double>& bounds,
                                     std::vector<int>& ring_sizes,
-                                    std::vector<int>& poly_rings) {
+                                    std::vector<int>& poly_rings,
+                                    const bool validate_with_geos_if_available) {
   try {
-    const auto geospatial_base = GeoTypesFactory::createGeoType({wkb.data(), wkb.size()});
+    const auto geospatial_base = GeoTypesFactory::createGeoType(
+        {wkb.data(), wkb.size()}, validate_with_geos_if_available);
 
     if (!geospatial_base || !geospatial_base->transform(ti)) {
       return false;
@@ -1132,9 +1178,11 @@ bool GeoTypesFactory::getGeoColumns(OGRGeometry* geom,
                                     std::vector<double>& coords,
                                     std::vector<double>& bounds,
                                     std::vector<int>& ring_sizes,
-                                    std::vector<int>& poly_rings) {
+                                    std::vector<int>& poly_rings,
+                                    const bool validate_with_geos_if_available) {
   try {
-    const auto geospatial_base = GeoTypesFactory::createGeoType(geom);
+    const auto geospatial_base =
+        GeoTypesFactory::createGeoType(geom, validate_with_geos_if_available);
 
     if (!geospatial_base || !geospatial_base->transform(ti)) {
       return false;
@@ -1155,7 +1203,8 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_or_wkb_h
                                     std::vector<std::vector<double>>& coords_column,
                                     std::vector<std::vector<double>>& bounds_column,
                                     std::vector<std::vector<int>>& ring_sizes_column,
-                                    std::vector<std::vector<int>>& poly_rings_column) {
+                                    std::vector<std::vector<int>>& poly_rings_column,
+                                    const bool validate_with_geos_if_available) {
   try {
     for (const auto& wkt_or_wkb_hex : *wkt_or_wkb_hex_column) {
       std::vector<double> coords;
@@ -1164,7 +1213,13 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_or_wkb_h
       std::vector<int> poly_rings;
 
       SQLTypeInfo row_ti{ti};
-      getGeoColumns(wkt_or_wkb_hex, row_ti, coords, bounds, ring_sizes, poly_rings);
+      getGeoColumns(wkt_or_wkb_hex,
+                    row_ti,
+                    coords,
+                    bounds,
+                    ring_sizes,
+                    poly_rings,
+                    validate_with_geos_if_available);
 
       if (!geo_promoted_type_match(row_ti.get_type(), ti.get_type())) {
         throw GeoTypesError("GeoFactory", "Columnar: Geometry type mismatch");

@@ -266,8 +266,9 @@ class GeoAlterColumnContext : public BaseAlterColumnContext {
     }
   }
 
-  void encodeData() {
-    auto convert_encoder = data_conversion::create_string_view_encoder(param_);
+  void encodeData(const bool geo_validate_geometry) {
+    auto convert_encoder =
+        data_conversion::create_string_view_encoder(param_, false, geo_validate_geometry);
     try {
       convert_encoder->encodeAndAppendData(src_data_, num_elements_);
       convert_encoder->finalize(num_elements_);
@@ -384,7 +385,8 @@ class NonGeoAlterColumnContext : public BaseAlterColumnContext {
 
     dst_chunk.initEncoder();
 
-    auto convert_encoder = data_conversion::create_string_view_encoder(param_);
+    auto convert_encoder =
+        data_conversion::create_string_view_encoder(param_, false, false);  // not geo
 
     try {
       convert_encoder->encodeAndAppendData(src_data_, num_elements_);
@@ -1414,7 +1416,8 @@ void InsertOrderFragmenter::alterColumnGeoType(
 
       ScopeGuard delete_temp_chunk = [&] { alter_column_context.deleteScratchBuffers(); };
 
-      alter_column_context.encodeData();
+      const bool geo_validate_geometry = false;
+      alter_column_context.encodeData(geo_validate_geometry);
 
       alter_column_context.putBuffersToDisk();
     }

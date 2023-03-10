@@ -80,6 +80,7 @@ struct CopyParams {
   bool sanitize_column_names;
   std::string geo_layer_name;
   bool geo_explode_collections;
+  bool geo_validate_geometry;
   int32_t source_srid;
   std::optional<std::string> regex_path_filter;
   std::optional<std::string> file_sort_order_by;
@@ -132,6 +133,7 @@ struct CopyParams {
       , geo_coords_srid(4326)
       , sanitize_column_names(true)
       , geo_explode_collections(false)
+      , geo_validate_geometry{false}
       , source_srid(0)
       , raster_point_type(RasterPointType::kAuto)
       , raster_scanlines_per_thread(32)
@@ -165,6 +167,7 @@ struct CopyParams {
       , geo_coords_srid(4326)
       , sanitize_column_names(true)
       , geo_explode_collections(false)
+      , geo_validate_geometry{false}
       , source_srid(0)
       , raster_point_type(RasterPointType::kAuto)
       , raster_scanlines_per_thread(32)

@@ -2169,6 +2169,96 @@ TEST_P(DataWrapperSelectQueryTest, OutOfRange) {
   }
 }
 
+TEST_P(DataWrapperSelectQueryTest, InvalidPolygon) {
+  if (GetParam() == "sqlite") {
+    GTEST_SKIP() << "sqlite does not support geometry types";
+  }
+  foreign_storage::OptionsMap options{{"GEO_VALIDATE_GEOMETRY", "TRUE"}};
+  if (GetParam() == "csv" || GetParam() == "regex_parser" || GetParam() == "parquet") {
+    if (GetParam() == "regex_parser") {
+      options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_geo_regex(1);
+    }
+    sql(createForeignTableQuery(
+        {{"index", "INT"}, {"p", "GEOMETRY(POLYGON, 4326)"}},
+        getDataFilesPath() + "invalid_polygon" + wrapper_ext(GetParam()),
+        GetParam(),
+        options));
+    if (GetParam() == "csv" || GetParam() == "regex_parser") {
+      queryAndAssertException(
+          "SELECT p FROM "s + default_table_name,
+          "Parsing failure \"Failed to extract valid geometry from row 2 "
+          "for column p\" in row \"2,\"POLYGON((0 0, 3 0, 3 3, 0 3, 0 0), "
+          "(0 1, 0 2, 1 2, 1 1, 0 1))\"\" in file \"" +
+              getDataFilesPath() + "invalid_polygon.csv\"");
+    } else if (GetParam() == "parquet") {
+      queryAndAssertException(
+          "SELECT p FROM "s + default_table_name,
+          "Failed to extract valid geometry in HeavyDB column 'p'. Row "
+          "group: 1, Parquet column: 'polygon', Parquet file: '" +
+              getDataFilesPath() + "invalid_polygon.parquet'");
+    }
+  } else {
+    // all other ODBC, or just postgres?
+    options["sql_select"] = "SELECT index, ST_AsText(p) AS p FROM "s +
+                            getOdbcTableName(default_table_name, wrapper_type_);
+    sql(createForeignTableQuery(
+        {{"index", "INT"}, {"p", "GEOMETRY(POLYGON, 4326)"}},
+        getDataFilesPath() + "invalid_polygon" + wrapper_ext(GetParam()),
+        GetParam(),
+        options,
+        default_table_name,
+        {{"index", "INT"}, {"p", "TEXT"}},
+        0));
+    queryAndAssertException("SELECT * FROM "s + default_table_name,
+                            "Failed to extract valid geometry in HeavyDB column 'p'.");
+  }
+}
+
+TEST_P(DataWrapperSelectQueryTest, InvalidMultiPolygon) {
+  if (GetParam() == "sqlite") {
+    GTEST_SKIP() << "sqlite does not support geometry types";
+  }
+  foreign_storage::OptionsMap options{{"GEO_VALIDATE_GEOMETRY", "TRUE"}};
+  if (GetParam() == "csv" || GetParam() == "regex_parser" || GetParam() == "parquet") {
+    if (GetParam() == "regex_parser") {
+      options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_geo_regex(1);
+    }
+    sql(createForeignTableQuery(
+        {{"index", "INT"}, {"mp", "GEOMETRY(MULTIPOLYGON, 4326)"}},
+        getDataFilesPath() + "invalid_multipolygon" + wrapper_ext(GetParam()),
+        GetParam(),
+        options));
+    if (GetParam() == "csv" || GetParam() == "regex_parser") {
+      queryAndAssertException(
+          "SELECT mp FROM "s + default_table_name,
+          "Parsing failure \"Failed to extract valid geometry from row 2 "
+          "for column mp\" in row \"2,\"MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, "
+          "0 0), (0 1, 0 2, 1 2, 1 1, 0 1)))\"\" in file \"" +
+              getDataFilesPath() + "invalid_multipolygon.csv\"");
+    } else if (GetParam() == "parquet") {
+      queryAndAssertException(
+          "SELECT mp FROM "s + default_table_name,
+          "Failed to extract valid geometry in HeavyDB column 'mp'. Row "
+          "group: 1, Parquet column: 'multipolygon', Parquet file: '" +
+              getDataFilesPath() + "invalid_multipolygon.parquet'");
+    }
+  } else {
+    // all other ODBC, or just postgres?
+    options["sql_select"] = "SELECT index, ST_AsText(mp) AS mp FROM "s +
+                            getOdbcTableName(default_table_name, wrapper_type_);
+    sql(createForeignTableQuery(
+        {{"index", "INT"}, {"mp", "GEOMETRY(MULTIPOLYGON, 4326)"}},
+        getDataFilesPath() + "invalid_multipolygon" + wrapper_ext(GetParam()),
+        GetParam(),
+        options,
+        default_table_name,
+        {{"index", "INT"}, {"mp", "TEXT"}},
+        0));
+    queryAndAssertException("SELECT * FROM "s + default_table_name,
+                            "Failed to extract valid geometry in HeavyDB column 'mp'.");
+  }
+}
+
 TEST_P(DataWrapperSelectQueryTest, NullTextArray) {
   if (isOdbc(GetParam())) {
     GTEST_SKIP()

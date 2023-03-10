@@ -158,6 +158,7 @@ struct ForceDisconnect : public std::runtime_error {
 }  // namespace
 
 #ifdef ENABLE_GEOS
+// from Geospatial/GeosValidation.cpp
 extern std::unique_ptr<std::string> g_libgeos_so_filename;
 #endif
 
@@ -3136,13 +3137,15 @@ void DBHandler::fillGeoColumns(
   std::vector<std::vector<double>> coords_column, bounds_column;
   std::vector<std::vector<int>> ring_sizes_column, poly_rings_column;
   SQLTypeInfo ti = cd->columnType;
+  const bool validate_with_geos_if_available = false;
   if (num_rows != wkt_or_wkb_hex_column->size() ||
       !Geospatial::GeoTypesFactory::getGeoColumns(wkt_or_wkb_hex_column,
                                                   ti,
                                                   coords_column,
                                                   bounds_column,
                                                   ring_sizes_column,
-                                                  poly_rings_column)) {
+                                                  poly_rings_column,
+                                                  validate_with_geos_if_available)) {
     std::ostringstream oss;
     oss << "Invalid geometry in column " << cd->columnName;
     THROW_DB_EXCEPTION(oss.str());
@@ -3875,6 +3878,7 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
   copy_params.credential_string = cp.odbc_credential_string;
   copy_params.add_metadata_columns = cp.add_metadata_columns;
   copy_params.trim_spaces = cp.trim_spaces;
+  copy_params.geo_validate_geometry = cp.geo_validate_geometry;
   return copy_params;
 }
 
@@ -4006,6 +4010,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   copy_params.odbc_credential_string = cp.credential_string;
   copy_params.add_metadata_columns = cp.add_metadata_columns;
   copy_params.trim_spaces = cp.trim_spaces;
+  copy_params.geo_validate_geometry = cp.geo_validate_geometry;
   return copy_params;
 }
 

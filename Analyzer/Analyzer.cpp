@@ -3917,8 +3917,14 @@ std::shared_ptr<Analyzer::Constant> GeoConstant::makePhysicalConstant(
   std::vector<int> ring_sizes;  // also linestring_sizes
   std::vector<int> poly_rings;
 
-  Geospatial::GeoTypesFactory::getGeoColumns(
-      geo_->getWktString(), ti, coords, bounds, ring_sizes, poly_rings);
+  const bool validate_with_geos_if_available = false;
+  Geospatial::GeoTypesFactory::getGeoColumns(geo_->getWktString(),
+                                             ti,
+                                             coords,
+                                             bounds,
+                                             ring_sizes,
+                                             poly_rings,
+                                             validate_with_geos_if_available);
 
   switch (index) {
     case 0:  // coords

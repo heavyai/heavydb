@@ -292,12 +292,14 @@ void TextFileBufferParser::processGeoColumn(
       is_null = true;
     } else {
       // extract geometry directly from WKT
-      if (!Geospatial::GeoTypesFactory::getGeoColumns(std::string(geo_string),
-                                                      import_ti,
-                                                      coords,
-                                                      bounds,
-                                                      ring_sizes,
-                                                      poly_rings)) {
+      if (!Geospatial::GeoTypesFactory::getGeoColumns(
+              std::string(geo_string),
+              import_ti,
+              coords,
+              bounds,
+              ring_sizes,
+              poly_rings,
+              copy_params.geo_validate_geometry)) {
         std::string msg = "Failed to extract valid geometry from row " +
                           std::to_string(first_row_index + row_index_plus_one) +
                           " for column " + cd->columnName;
