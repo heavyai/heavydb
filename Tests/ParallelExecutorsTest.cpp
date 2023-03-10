@@ -14,25 +14,31 @@
  * limitations under the License.
  */
 
+#include "DBHandlerTestHelpers.h"
+#include "Logger/Logger.h"
+#include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
+#include "QueryEngine/Execute.h"
+#include "QueryRunner/QueryRunner.h"
 #include "TestHelpers.h"
+#include "gen-cpp/heavy_types.h"
 
 #include <array>
 #include <future>
 #include <string>
 #include <vector>
 
-#include "DBHandlerTestHelpers.h"
-#include "Logger/Logger.h"
-#include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
-#include "QueryEngine/Execute.h"
-#include "QueryRunner/QueryRunner.h"
+#ifdef TBB_PREVIEW_WAITING_FOR_WORKERS
+#include <tbb/global_control.h>
+#endif
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
 
+using NumExecutors = int;
+
 bool g_keep_data{false};
-size_t g_max_num_executors{4};
+NumExecutors g_max_num_executors{4};
 size_t g_num_tables{25};
 
 extern bool g_is_test_env;
@@ -44,11 +50,50 @@ using namespace TestHelpers;
   if (skipTests(dt)) {                                       \
     CHECK(dt == TExecuteMode::type::GPU);                    \
     LOG(WARNING) << "GPU not available, skipping GPU tests"; \
-    continue;                                                \
+    return;                                                  \
   }
 
-class BaseTestFixture : public DBHandlerTestFixture {
+namespace {
+// Return vector of powers of 2 up to max_num_executors.
+std::vector<NumExecutors> num_executors_vec(NumExecutors const max_num_executors) {
+  std::vector<NumExecutors> vec;
+  for (NumExecutors i = 1; i <= max_num_executors; i *= 2) {
+    vec.push_back(i);
+  }
+  return vec;
+}
+
+using Param = std::tuple<TExecuteMode::type, NumExecutors>;
+enum ParamName { DT = 0, NUM_EXECUTORS };
+
+// Return false on error
+bool finalize_tbb_private_server_threads() {
+#ifdef TBB_PREVIEW_WAITING_FOR_WORKERS  // set when ENABLE_TSAN
+#if 2021006 <= 1000 * TBB_VERSION_MAJOR + TBB_VERSION_MINOR
+  auto handle = oneapi::tbb::task_scheduler_handle{oneapi::tbb::attach{}};
+#else
+  auto handle = tbb::task_scheduler_handle::get();
+#endif
+  return tbb::finalize(handle, std::nothrow_t{});
+#else
+  return true;
+#endif
+}
+}  // namespace
+
+class BaseTestFixture : public DBHandlerTestFixture,
+                        public ::testing::WithParamInterface<Param> {
  protected:
+  Param param_;
+
+  void SetUp() override {
+    param_ = GetParam();
+    Executor::nukeCacheOfExecutors();
+    resizeDispatchQueue(std::get<NUM_EXECUTORS>(param_));
+  }
+
+  void TearDown() override { finalize_tbb_private_server_threads(); }
+
   bool skipTests(const TExecuteMode::type device_type) {
 #ifdef HAVE_CUDA
     return device_type == TExecuteMode::type::GPU &&
@@ -145,6 +190,7 @@ class BaseTestFixture : public DBHandlerTestFixture {
 class SingleTableTestEnv : public BaseTestFixture {
  protected:
   void SetUp() override {
+    BaseTestFixture::SetUp();
     buildTable("test_parallel");
 
     if (!skipTests(TExecuteMode::type::GPU)) {
@@ -158,40 +204,42 @@ class SingleTableTestEnv : public BaseTestFixture {
     if (!g_keep_data) {
       sql("DROP TABLE IF EXISTS test_parallel;");
     }
+    BaseTestFixture::TearDown();
   }
 };
 
-TEST_F(SingleTableTestEnv, AllTables) {
-  for (auto dt : {TExecuteMode::type::CPU, TExecuteMode::type::GPU}) {
+TEST_P(SingleTableTestEnv, SingleTableTest) {
+  auto const num_executors = DBHandlerTestFixture::system_parameters_.num_executors;
+  TExecuteMode::type const dt = std::get<DT>(param_);
+  {
     SKIP_NO_GPU();
     setExecuteMode(dt);
-
-    for (size_t i = 1; i <= g_max_num_executors; i *= 2) {
-      resizeDispatchQueue(i);
-      std::vector<std::future<void>> worker_threads;
-      auto execution_time = measure<>::execution([&]() {
-        for (size_t w = 0; w < i; w++) {
-          worker_threads.push_back(std::async(
-              std::launch::async,
-              [this](const std::string& table_name, const TExecuteMode::type dt) {
-                runSqlExecuteTest(table_name, dt);
-              },
-              "test_parallel",
-              dt));
-        }
-        for (auto& t : worker_threads) {
-          t.get();
-        }
-      });
-      LOG(ERROR) << "Finished execution with " << i << " executors, " << execution_time
-                 << " ms.";
-    }
+    LOG(ERROR) << "Starting execution with " << num_executors
+               << " executors with device_type: " << dt;
+    std::vector<std::future<void>> worker_threads;
+    auto execution_time = measure<>::execution([&]() {
+      for (NumExecutors w = 0; w < num_executors; w++) {
+        worker_threads.push_back(std::async(
+            std::launch::async,
+            [this](const std::string& table_name, const TExecuteMode::type dt) {
+              runSqlExecuteTest(table_name, dt);
+            },
+            "test_parallel",
+            dt));
+      }
+      for (auto& t : worker_threads) {
+        t.get();
+      }
+    });
+    LOG(ERROR) << "Finished execution with " << num_executors << " executors, "
+               << execution_time << " ms.";
   }
 }
 
 class MultiTableTestEnv : public BaseTestFixture {
  protected:
   void SetUp() override {
+    BaseTestFixture::SetUp();
     for (size_t i = 0; i < g_num_tables; i++) {
       buildTable("test_parallel_" + std::to_string(i));
     }
@@ -209,44 +257,47 @@ class MultiTableTestEnv : public BaseTestFixture {
         sql("DROP TABLE IF EXISTS test_parallel_" + std::to_string(i) + ";");
       }
     }
+    BaseTestFixture::TearDown();
   }
 };
 
-TEST_F(MultiTableTestEnv, AllTables) {
-  for (auto dt : {TExecuteMode::type::CPU, TExecuteMode::type::GPU}) {
+TEST_P(MultiTableTestEnv, MultiTableTest) {
+  auto const num_executors = DBHandlerTestFixture::system_parameters_.num_executors;
+  TExecuteMode::type const dt = std::get<DT>(param_);
+  {
     SKIP_NO_GPU();
     setExecuteMode(dt);
+    LOG(ERROR) << "Starting execution with " << num_executors
+               << " executors with device_type: " << dt;
 
-    for (size_t i = 1; i <= g_max_num_executors; i *= 2) {
-      resizeDispatchQueue(i);
-      std::vector<std::future<void>> worker_threads;
+    std::vector<std::future<void>> worker_threads;
 
-      // use fewer tables on CPU, as speedup isn't as large
-      auto num_tables = dt == TExecuteMode::type::CPU ? 2 : g_num_tables;
-      auto execution_time = measure<>::execution([&]() {
-        for (size_t w = 0; w < num_tables; w++) {
-          worker_threads.push_back(std::async(
-              std::launch::async,
-              [this](const std::string& table_name, const TExecuteMode::type dt) {
-                runSqlExecuteTest(table_name, dt);
-              },
-              "test_parallel_" + std::to_string(w),
-              dt));
-        }
-        for (auto& t : worker_threads) {
-          t.get();
-        }
-      });
-      LOG(ERROR) << "Finished execution with " << g_num_tables << " tables, " << i
-                 << " executors, " << execution_time << " ms.";
-    }
+    // use fewer tables on CPU, as speedup isn't as large
+    auto num_tables = dt == TExecuteMode::type::CPU ? 2 : g_num_tables;
+    auto execution_time = measure<>::execution([&]() {
+      for (size_t w = 0; w < num_tables; w++) {
+        worker_threads.push_back(std::async(
+            std::launch::async,
+            [this](const std::string& table_name, const TExecuteMode::type dt) {
+              runSqlExecuteTest(table_name, dt);
+            },
+            "test_parallel_" + std::to_string(w),
+            dt));
+      }
+      for (auto& t : worker_threads) {
+        t.get();
+      }
+    });
+    LOG(ERROR) << "Finished execution with " << g_num_tables << " tables, "
+               << num_executors << " executors, " << execution_time << " ms.";
   }
 }
 
 class UpdateDeleteTestEnv : public BaseTestFixture {
  protected:
   void SetUp() override {
-    for (size_t i = 0; i < g_max_num_executors * 2; i++) {
+    BaseTestFixture::SetUp();
+    for (int i = 0; i < num_tables; i++) {
       buildTable("test_parallel_" + std::to_string(i));
     }
 
@@ -259,21 +310,22 @@ class UpdateDeleteTestEnv : public BaseTestFixture {
 
   void TearDown() override {
     if (!g_keep_data) {
-      for (size_t i = 0; i < g_max_num_executors * 2; i++) {
+      for (int i = 0; i < num_tables; i++) {
         sql("DROP TABLE IF EXISTS test_parallel_" + std::to_string(i) + ";");
       }
     }
+    BaseTestFixture::TearDown();
   }
 
  public:
-  size_t num_tables{g_max_num_executors * 2};
+  int num_tables{g_max_num_executors * 2};
 };
 
-TEST_F(UpdateDeleteTestEnv, Delete_OneTable) {
+TEST_P(UpdateDeleteTestEnv, Delete_OneTable) {
   const size_t iterations = 5;
-  resizeDispatchQueue(g_max_num_executors);
 
-  for (auto dt : {TExecuteMode::type::CPU, TExecuteMode::type::GPU}) {
+  TExecuteMode::type const dt = std::get<DT>(param_);
+  {
     SKIP_NO_GPU();
     setExecuteMode(dt);
 
@@ -313,10 +365,9 @@ TEST_F(UpdateDeleteTestEnv, Delete_OneTable) {
   }
 }
 
-TEST_F(UpdateDeleteTestEnv, Delete_TwoTables) {
-  resizeDispatchQueue(g_max_num_executors);
-
-  for (auto dt : {TExecuteMode::type::CPU, TExecuteMode::type::GPU}) {
+TEST_P(UpdateDeleteTestEnv, Delete_TwoTables) {
+  TExecuteMode::type const dt = std::get<DT>(param_);
+  {
     SKIP_NO_GPU();
     setExecuteMode(dt);
 
@@ -351,11 +402,11 @@ TEST_F(UpdateDeleteTestEnv, Delete_TwoTables) {
   }
 }
 
-TEST_F(UpdateDeleteTestEnv, Update_OneTable) {
+TEST_P(UpdateDeleteTestEnv, Update_OneTable) {
   const size_t iterations = 5;
-  resizeDispatchQueue(g_max_num_executors);
 
-  for (auto dt : {TExecuteMode::type::CPU, TExecuteMode::type::GPU}) {
+  TExecuteMode::type const dt = std::get<DT>(param_);
+  {
     SKIP_NO_GPU();
     setExecuteMode(dt);
 
@@ -395,11 +446,11 @@ TEST_F(UpdateDeleteTestEnv, Update_OneTable) {
   }
 }
 
-TEST_F(UpdateDeleteTestEnv, Update_OneTableVarlen) {
+TEST_P(UpdateDeleteTestEnv, Update_OneTableVarlen) {
   const size_t iterations = 5;
-  resizeDispatchQueue(g_max_num_executors);
 
-  for (auto dt : {TExecuteMode::type::CPU, TExecuteMode::type::GPU}) {
+  TExecuteMode::type const dt = std::get<DT>(param_);
+  {
     SKIP_NO_GPU();
     setExecuteMode(dt);
 
@@ -443,10 +494,9 @@ TEST_F(UpdateDeleteTestEnv, Update_OneTableVarlen) {
   }
 }
 
-TEST_F(UpdateDeleteTestEnv, Update_TwoTables) {
-  resizeDispatchQueue(g_max_num_executors);
-
-  for (auto dt : {TExecuteMode::type::CPU, TExecuteMode::type::GPU}) {
+TEST_P(UpdateDeleteTestEnv, Update_TwoTables) {
+  TExecuteMode::type const dt = std::get<DT>(param_);
+  {
     SKIP_NO_GPU();
     setExecuteMode(dt);
 
@@ -481,10 +531,9 @@ TEST_F(UpdateDeleteTestEnv, Update_TwoTables) {
   }
 }
 
-TEST_F(UpdateDeleteTestEnv, UpdateDelete_TwoTables) {
-  resizeDispatchQueue(g_max_num_executors);
-
-  for (auto dt : {TExecuteMode::type::CPU, TExecuteMode::type::GPU}) {
+TEST_P(UpdateDeleteTestEnv, UpdateDelete_TwoTables) {
+  TExecuteMode::type const dt = std::get<DT>(param_);
+  {
     SKIP_NO_GPU();
     setExecuteMode(dt);
 
@@ -523,18 +572,38 @@ TEST_F(UpdateDeleteTestEnv, UpdateDelete_TwoTables) {
   }
 }
 
+INSTANTIATE_TEST_SUITE_P(
+    SingleTableTest,
+    SingleTableTestEnv,
+    ::testing::Combine(::testing::Values(TExecuteMode::type::CPU,
+                                         TExecuteMode::type::GPU),
+                       ::testing::ValuesIn(num_executors_vec(g_max_num_executors))));
+
+INSTANTIATE_TEST_SUITE_P(
+    MultiTableTest,
+    MultiTableTestEnv,
+    ::testing::Combine(::testing::Values(TExecuteMode::type::CPU,
+                                         TExecuteMode::type::GPU),
+                       ::testing::ValuesIn(num_executors_vec(g_max_num_executors))));
+
+INSTANTIATE_TEST_SUITE_P(UpdateDeleteTest,
+                         UpdateDeleteTestEnv,
+                         ::testing::Combine(::testing::Values(TExecuteMode::type::CPU,
+                                                              TExecuteMode::type::GPU),
+                                            ::testing::Values(g_max_num_executors)));
+
 int main(int argc, char* argv[]) {
   g_is_test_env = true;
+  g_enable_executor_resource_mgr = false;
 
   TestHelpers::init_logger_stderr_only(argc, argv);
-  testing::InitGoogleTest(&argc, argv);
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
   desc.add_options()(
       "num-executors",
-      po::value<size_t>(&g_max_num_executors)->default_value(g_max_num_executors),
+      po::value<NumExecutors>(&g_max_num_executors)->default_value(g_max_num_executors),
       "Maximum number of parallel executors to test (most tests will start with 1 "
       "executor and increase by doubling until max is reached).");
 
@@ -549,7 +618,8 @@ int main(int argc, char* argv[]) {
   desc.add(log_options.get_options());
 
   po::variables_map vm;
-  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::store(po::command_line_parser(argc, argv).options(desc).allow_unregistered().run(),
+            vm);
   po::notify(vm);
 
   if (vm.count("keep-data")) {
@@ -567,12 +637,13 @@ int main(int argc, char* argv[]) {
     // to run this test under TSAN as well.
     // Todo(todd): Find way to run this test with parallel kernel execution on
     // and TSAN enabled
-    g_enable_executor_resource_mgr = false;
+    return 0;
 #endif
   }
 
   int err{0};
   try {
+    testing::InitGoogleTest(&argc, argv);
     testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {

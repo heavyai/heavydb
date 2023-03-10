@@ -827,7 +827,6 @@ class DBHandlerTestFixture : public testing::Test {
   static std::vector<LeafHostInfo> db_leaves_;
   static std::vector<LeafHostInfo> string_leaves_;
   static AuthMetadata auth_metadata_;
-  static SystemParameters system_parameters_;
   static std::string udf_filename_;
   static std::string udf_compiler_path_;
   static std::string default_user_;
@@ -851,6 +850,7 @@ class DBHandlerTestFixture : public testing::Test {
 
   static std::string cluster_config_file_path_;
   static File_Namespace::DiskCacheLevel disk_cache_level_;
+  static SystemParameters system_parameters_;
 };
 
 // https://google.github.io/googletest/advanced.html#global-set-up-and-tear-down
