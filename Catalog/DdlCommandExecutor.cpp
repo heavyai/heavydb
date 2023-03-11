@@ -206,6 +206,25 @@ get_table_descriptor_with_lock(Catalog_Namespace::Catalog& cat,
   return std::make_tuple(td, std::move(td_with_lock));
 }
 
+// There are cases where we may query a catalog for a list of table names and then perform
+// some action on those tables without acquiring a lock, which means the tables could have
+// been dropped in between the query and the action.  In such cases, sometimes we want to
+// skip that action if the table no longer exists without throwing an error.
+template <class Func>
+void exec_for_tables_which_exist(const std::vector<std::string>& table_names,
+                                 Catalog_Namespace::Catalog* cat_ptr,
+                                 Func func) {
+  for (const auto& table_name : table_names) {
+    try {
+      auto [td, td_with_lock] =
+          get_table_descriptor_with_lock<lockmgr::ReadLock>(*cat_ptr, table_name, false);
+      func(td, table_name);
+    } catch (const Catalog_Namespace::TableNotFoundException& e) {
+      continue;
+    }
+  }
+}
+
 struct AggregratedStorageStats : public File_Namespace::StorageStats {
   int32_t min_epoch;
   int32_t max_epoch;
@@ -454,7 +473,6 @@ const rapidjson::Value* extractFilters(const rapidjson::Value& payload) {
   }
   return filters;
 }
-
 }  // namespace
 
 DdlCommandExecutor::DdlCommandExecutor(
@@ -593,17 +611,7 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     result =
         RefreshForeignTablesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
     return result;
-  }
-
-  // the following commands require a global unique lock until proper table locking has
-  // been implemented and/or verified
-  auto execute_write_lock =
-      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
-          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-              legacylockmgr::ExecutorOuterLock, true));
-  // TODO(vancouver): add appropriate table locking
-
-  if (ddl_command_ == "CREATE_SERVER") {
+  } else if (ddl_command_ == "CREATE_SERVER") {
     result = CreateForeignServerCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "DROP_SERVER") {
     result = DropForeignServerCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
@@ -837,11 +845,14 @@ CreateForeignServerCommand::CreateForeignServerCommand(
 }
 
 ExecutionResult CreateForeignServerCommand::execute(bool read_only_mode) {
+  auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+
   ExecutionResult result;
 
   if (read_only_mode) {
     throw std::runtime_error("CREATE FOREIGN SERVER invalid in read only mode.");
   }
+
   auto& ddl_payload = extractPayload(ddl_data_);
   std::string server_name = ddl_payload["serverName"].GetString();
   if (is_default_server(server_name)) {
@@ -903,6 +914,8 @@ AlterDatabaseCommand::AlterDatabaseCommand(
 }
 
 ExecutionResult AlterDatabaseCommand::execute(bool read_only_mode) {
+  auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+
   if (read_only_mode) {
     throw std::runtime_error("ALTER DATABASE invalid in read only mode.");
   }
@@ -988,6 +1001,8 @@ AlterForeignServerCommand::AlterForeignServerCommand(
 }
 
 ExecutionResult AlterForeignServerCommand::execute(bool read_only_mode) {
+  auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+
   if (read_only_mode) {
     throw std::runtime_error("ALTER FOREIGN SERVER invalid in read only mode.");
   }
@@ -1130,9 +1145,12 @@ DropForeignServerCommand::DropForeignServerCommand(
 }
 
 ExecutionResult DropForeignServerCommand::execute(bool read_only_mode) {
+  auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+
   if (read_only_mode) {
     throw std::runtime_error("DROP FOREIGN SERVER invalid in read only mode.");
   }
+
   auto& ddl_payload = extractPayload(ddl_data_);
   std::string server_name = ddl_payload["serverName"].GetString();
   if (is_default_server(server_name)) {
@@ -1330,12 +1348,15 @@ CreateForeignTableCommand::CreateForeignTableCommand(
 }
 
 ExecutionResult CreateForeignTableCommand::execute(bool read_only_mode) {
+  auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+
   auto& catalog = session_ptr_->getCatalog();
   auto& ddl_payload = extractPayload(ddl_data_);
 
   if (read_only_mode) {
     throw std::runtime_error("CREATE FOREIGN TABLE invalid in read only mode.");
   }
+
   const std::string& table_name = ddl_payload["tableName"].GetString();
   if (!session_ptr_->checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                              AccessPrivileges::CREATE_TABLE)) {
@@ -1476,6 +1497,8 @@ DropForeignTableCommand::DropForeignTableCommand(
 }
 
 ExecutionResult DropForeignTableCommand::execute(bool read_only_mode) {
+  auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+
   auto& catalog = session_ptr_->getCatalog();
   auto& ddl_payload = extractPayload(ddl_data_);
 
@@ -1529,6 +1552,8 @@ ShowTablesCommand::ShowTablesCommand(
     : DdlCommand(ddl_data, session_ptr) {}
 
 ExecutionResult ShowTablesCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
   // Get all table names in the same way as OmniSql \t command
 
   // valid in read_only_mode
@@ -1573,6 +1598,8 @@ ShowTableDetailsCommand::ShowTableDetailsCommand(
 }
 
 ExecutionResult ShowTableDetailsCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
   const auto catalog = session_ptr_->get_catalog_ptr();
   std::vector<std::string> filtered_table_names = getFilteredTableNames();
 
@@ -1603,12 +1630,14 @@ ExecutionResult ShowTableDetailsCommand::execute(bool read_only_mode) {
                          {"total_free_data_page_count", kBIGINT, false}});
 
   std::vector<RelLogicalValues::RowValues> logical_values;
-  for (const auto& table_name : filtered_table_names) {
-    auto [td, td_with_lock] =
-        get_table_descriptor_with_lock<lockmgr::ReadLock>(*catalog, table_name, false);
-    auto agg_storage_stats = get_agg_storage_stats(td, catalog.get());
-    add_table_details(logical_values, td, agg_storage_stats);
-  }
+  exec_for_tables_which_exist(filtered_table_names,
+                              catalog.get(),
+                              [&logical_values, &catalog](const TableDescriptor* td,
+                                                          const std::string& table_name) {
+                                auto agg_storage_stats =
+                                    get_agg_storage_stats(td, catalog.get());
+                                add_table_details(logical_values, td, agg_storage_stats);
+                              });
 
   // Create ResultSet
   std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
@@ -1651,14 +1680,15 @@ std::vector<std::string> ShowTableDetailsCommand::getFilteredTableNames() {
       filtered_table_names.emplace_back(table_name);
     }
   } else {
-    for (const auto& table_name : all_table_names) {
-      auto [td, td_with_lock] =
-          get_table_descriptor_with_lock<lockmgr::ReadLock>(*catalog, table_name, false);
-      if (td->isForeignTable() || td->isTemporaryTable()) {
-        continue;
-      }
-      filtered_table_names.emplace_back(table_name);
-    }
+    exec_for_tables_which_exist(all_table_names,
+                                catalog.get(),
+                                [&filtered_table_names](const TableDescriptor* td,
+                                                        const std::string& table_name) {
+                                  if (td->isForeignTable() || td->isTemporaryTable()) {
+                                    return;
+                                  }
+                                  filtered_table_names.emplace_back(table_name);
+                                });
   }
   return filtered_table_names;
 }
@@ -1669,6 +1699,8 @@ ShowCreateTableCommand::ShowCreateTableCommand(
     : DdlCommand(ddl_data, session_ptr) {}
 
 ExecutionResult ShowCreateTableCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
   // valid in read_only_mode
 
   auto& ddl_payload = extractPayload(ddl_data_);
@@ -1727,6 +1759,8 @@ ShowDatabasesCommand::ShowDatabasesCommand(
     : DdlCommand(ddl_data, session_ptr) {}
 
 ExecutionResult ShowDatabasesCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
   // valid in read_only_mode
 
   // label_infos -> column labels
@@ -1762,6 +1796,8 @@ ShowFunctionsCommand::ShowFunctionsCommand(
     : DdlCommand(ddl_data, session_ptr) {}
 
 ExecutionResult ShowFunctionsCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
   // Get all row-wise functions
   auto& ddl_payload = extractPayload(ddl_data_);
   std::vector<TargetMetaInfo> label_infos;
@@ -1820,6 +1856,8 @@ ShowRuntimeFunctionsCommand::ShowRuntimeFunctionsCommand(
     : DdlCommand(ddl_data, session_ptr) {}
 
 ExecutionResult ShowRuntimeFunctionsCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
   // Get all runtime row-wise functions
   std::vector<TargetMetaInfo> label_infos;
   std::vector<RelLogicalValues::RowValues> logical_values;
@@ -1848,6 +1886,8 @@ ShowTableFunctionsCommand::ShowTableFunctionsCommand(
     : DdlCommand(ddl_data, session_ptr) {}
 
 ExecutionResult ShowTableFunctionsCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
   // valid in read_only_mode
 
   // Get all table functions
@@ -1936,6 +1976,8 @@ ShowRuntimeTableFunctionsCommand::ShowRuntimeTableFunctionsCommand(
     : DdlCommand(ddl_data, session_ptr) {}
 
 ExecutionResult ShowRuntimeTableFunctionsCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
   // valid in read_only_mode
 
   // Get all runtime table functions
@@ -1999,6 +2041,8 @@ ShowForeignServersCommand::ShowForeignServersCommand(
 }
 
 ExecutionResult ShowForeignServersCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
   // valid in read_only_mode
 
   std::vector<TargetMetaInfo> label_infos;
@@ -2051,6 +2095,7 @@ ShowCreateServerCommand::ShowCreateServerCommand(
 }
 
 ExecutionResult ShowCreateServerCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
   // valid in read_only_mode
 
   using namespace Catalog_Namespace;
@@ -2102,10 +2147,7 @@ ExecutionResult RefreshForeignTablesCommand::execute(bool read_only_mode) {
     throw std::runtime_error("REFRESH FOREIGN TABLE invalid in read only mode.");
   }
 
-  const auto execute_read_lock =
-      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
-          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-              legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock = legacylockmgr::getExecuteReadLock();
 
   bool evict_cached_entries{false};
   foreign_storage::OptionsContainer opt;
@@ -2867,6 +2909,17 @@ ExecutionResult AlterForeignTableCommand::execute(bool read_only_mode) {
   }
 
   auto& ddl_payload = extractPayload(ddl_data_);
+  std::string alter_type = ddl_payload["alterType"].GetString();
+
+  // We only need a write lock if we are renaming a table, otherwise a read lock will do.
+  heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>> write_lock;
+  heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>> read_lock;
+  if (alter_type == "RENAME_TABLE") {
+    write_lock = legacylockmgr::getExecuteWriteLock();
+  } else {
+    read_lock = legacylockmgr::getExecuteReadLock();
+  }
+
   auto& catalog = session_ptr_->getCatalog();
   const std::string& table_name = ddl_payload["tableName"].GetString();
   auto [td, td_with_lock] =
@@ -2885,7 +2938,7 @@ ExecutionResult AlterForeignTableCommand::execute(bool read_only_mode) {
   auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
   CHECK(foreign_table);
 
-  std::string alter_type = ddl_payload["alterType"].GetString();
+  // std::string alter_type = ddl_payload["alterType"].GetString();
   if (alter_type == "RENAME_TABLE") {
     renameTable(foreign_table);
   } else if (alter_type == "RENAME_COLUMN") {
@@ -2983,6 +3036,8 @@ std::vector<std::string> ShowDiskCacheUsageCommand::getFilteredTableNames() {
 }
 
 ExecutionResult ShowDiskCacheUsageCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
   // valid in read_only_mode
 
   auto cat_ptr = session_ptr_->get_catalog_ptr();
@@ -3001,18 +3056,18 @@ ExecutionResult ShowDiskCacheUsageCommand::execute(bool read_only_mode) {
 
   std::vector<RelLogicalValues::RowValues> logical_values;
 
-  for (auto& table_name : table_names) {
-    auto [td, td_with_lock] =
-        get_table_descriptor_with_lock<lockmgr::ReadLock>(*cat_ptr, table_name, false);
-
-    auto table_cache_size =
-        disk_cache->getSpaceReservedByTable(cat_ptr->getDatabaseId(), td->tableId);
-
-    // logical_values -> table data
-    logical_values.emplace_back(RelLogicalValues::RowValues{});
-    logical_values.back().emplace_back(genLiteralStr(table_name));
-    logical_values.back().emplace_back(genLiteralBigInt(table_cache_size));
-  }
+  exec_for_tables_which_exist(
+      table_names,
+      cat_ptr.get(),
+      [&logical_values, &disk_cache, &cat_ptr](const TableDescriptor* td,
+                                               const std::string& table_name) {
+        auto table_cache_size =
+            disk_cache->getSpaceReservedByTable(cat_ptr->getDatabaseId(), td->tableId);
+        // logical_values -> table data
+        logical_values.emplace_back(RelLogicalValues::RowValues{});
+        logical_values.back().emplace_back(genLiteralStr(table_name));
+        logical_values.back().emplace_back(genLiteralBigInt(table_cache_size));
+      });
 
   std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
       ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
@@ -3036,6 +3091,8 @@ ShowUserDetailsCommand::ShowUserDetailsCommand(
 }
 
 ExecutionResult ShowUserDetailsCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
   // valid in read_only_mode
 
   auto& ddl_payload = extractPayload(ddl_data_);
@@ -3144,6 +3201,8 @@ ShowRolesCommand::ShowRolesCommand(
 }
 
 ExecutionResult ShowRolesCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
   // valid in read_only_mode
 
   auto& ddl_payload = extractPayload(ddl_data_);
@@ -3219,6 +3278,8 @@ ReassignOwnedCommand::ReassignOwnedCommand(
 }
 
 ExecutionResult ReassignOwnedCommand::execute(bool read_only_mode) {
+  auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+
   if (read_only_mode) {
     throw std::runtime_error("REASSIGN OWNER invalid in read only mode.");
   }

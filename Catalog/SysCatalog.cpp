@@ -1115,7 +1115,7 @@ void SysCatalog::dropUserUnchecked(const std::string& name, const UserMetadata& 
   sqliteConnector_->query("END TRANSACTION");
 }
 
-void SysCatalog::dropUser(const string& name) {
+void SysCatalog::dropUser(const string& name, bool if_exists) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
 
@@ -1123,7 +1123,11 @@ void SysCatalog::dropUser(const string& name) {
 
   UserMetadata user;
   if (!getMetadataForUser(name, user)) {
-    throw runtime_error("Cannot drop user. User " + loggable + "does not exist.");
+    if (if_exists) {
+      return;
+    } else {
+      throw runtime_error("Cannot drop user. User " + loggable + "does not exist.");
+    }
   }
 
   if (user.userId == shared::kRootUserId) {
