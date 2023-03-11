@@ -190,7 +190,7 @@ class SysCatalog : private CommonFileOperations {
   UserMetadata createUser(std::string const& name,
                           UserAlterations alts,
                           bool is_temporary);
-  void dropUser(const std::string& name);
+  void dropUser(const std::string& name, bool if_exists = false);
   // TODO(Misiu): This method is needed only by tests and should otherwise be private and
   // accessed via friendship.
   void dropUserUnchecked(const std::string& name, const UserMetadata& user);

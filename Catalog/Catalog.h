@@ -101,6 +101,14 @@ struct TableEpochInfo {
       , leaf_index(leaf_index_param) {}
 };
 
+struct TableNotFoundException : public std::runtime_error {
+  TableNotFoundException(const std::string& table_name,
+                         const std::string& db_name,
+                         const std::string& context_msg = {})
+      : std::runtime_error("Table/View " + table_name + " for catalog " + db_name +
+                           " does not exist." + context_msg) {}
+};
+
 static constexpr const char* USERS_SYS_TABLE_NAME{"users"};
 static constexpr const char* TABLES_SYS_TABLE_NAME{"tables"};
 static constexpr const char* DASHBOARDS_SYS_TABLE_NAME{"dashboards"};

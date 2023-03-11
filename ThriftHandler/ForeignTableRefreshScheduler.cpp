@@ -25,10 +25,7 @@ bool g_enable_foreign_table_scheduled_refresh{true};
 namespace foreign_storage {
 
 void ForeignTableRefreshScheduler::invalidateQueryEngineCaches() {
-  auto execute_write_lock =
-      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
-          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-              legacylockmgr::ExecutorOuterLock, true));
+  auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
   // todo (yoonmin): support per-table invalidation
   UpdateTriggeredCacheInvalidator::invalidateCaches();
   ResultSetCacheInvalidator::invalidateCaches();

@@ -102,17 +102,18 @@ inline void validate_table_descriptor_after_lock(const TableDescriptor* td_prelo
   auto td_postlock = cat.getMetadataForTable(table_name, populate_fragmenter);
   if (td_prelock != td_postlock) {
     if (td_postlock == nullptr) {
-      throw std::runtime_error("Table/View ID " + table_name + " for catalog " +
-                               cat.getCurrentDB().dbName + " does not exist");
+      throw Catalog_Namespace::TableNotFoundException(table_name,
+                                                      cat.getCurrentDB().dbName);
     } else {
       // This should be very unusual case where a table has moved
       // read DROP, CREATE kind of pattern
       // but kept same name
       // it is not safe to proceed here as the locking was based on the old
       // chunk attributes of the table, which could belong to a different table now
-      throw std::runtime_error("Table/View ID " + table_name + " for catalog " +
-                               cat.getCurrentDB().dbName +
-                               " changed whilst attempting to acquire table lock");
+      throw Catalog_Namespace::TableNotFoundException(
+          table_name,
+          cat.getCurrentDB().dbName,
+          " Changed whilst attempting to acquire table lock");
     }
   }
 }
@@ -136,9 +137,9 @@ class TableSchemaLockContainer<ReadLock>
                                      const int table_id) {
     const auto table_name = cat.getTableName(table_id);
     if (!table_name.has_value()) {
-      throw std::runtime_error("Table/View ID " + std::to_string(table_id) +
-                               " for catalog " + cat.getCurrentDB().dbName +
-                               " does not exist. Cannot aquire read lock");
+      throw Catalog_Namespace::TableNotFoundException(std::to_string(table_id),
+                                                      cat.getCurrentDB().dbName,
+                                                      " Cannot acquire read lock");
     }
     return acquireTableDescriptor(cat, table_name.value());
   }
@@ -167,9 +168,9 @@ class TableSchemaLockContainer<WriteLock>
                                      const int table_id) {
     const auto table_name = cat.getTableName(table_id);
     if (!table_name.has_value()) {
-      throw std::runtime_error("Table/View ID " + std::to_string(table_id) +
-                               " for catalog " + cat.getCurrentDB().dbName +
-                               " does not exist. Cannot aquire write lock");
+      throw Catalog_Namespace::TableNotFoundException(std::to_string(table_id),
+                                                      cat.getCurrentDB().dbName,
+                                                      " Cannot acquire write lock");
     }
     return acquireTableDescriptor(cat, table_name.value());
   }

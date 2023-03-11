@@ -1596,7 +1596,7 @@ TEST_P(DropTableTest, NonExistentTableWithoutIfExists) {
   std::string query = getDropTableQuery(GetParam(), "test_table_2");
   queryAndAssertException(query,
                           "Table/View test_table_2 for catalog " +
-                              shared::kDefaultDbName + " does not exist");
+                              shared::kDefaultDbName + " does not exist.");
 }
 
 TEST_P(DropTableTest, UnauthorizedUser) {

@@ -1704,7 +1704,7 @@ void Catalog::removeTableFromMap(const string& tableName,
   cat_write_lock write_lock(this);
   TableDescriptorMapById::iterator tableDescIt = tableDescriptorMapById_.find(tableId);
   if (tableDescIt == tableDescriptorMapById_.end()) {
-    throw runtime_error("Table " + tableName + " does not exist.");
+    throw TableNotFoundException(tableName, currentDB_.dbName, " Cannot remove.");
   }
 
   TableDescriptor* td = tableDescIt->second;
