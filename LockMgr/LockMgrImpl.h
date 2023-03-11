@@ -374,8 +374,7 @@ class TableLockMgrImpl {
                                                const std::string& table_name) {
     auto table_id = catalog.getTableId(table_name);
     if (!table_id.has_value()) {
-      throw std::runtime_error("Table/View " + table_name + " for catalog " +
-                               catalog.name() + " does not exist");
+      throw Catalog_Namespace::TableNotFoundException(table_name, catalog.name());
     }
     return table_id.value();
   }

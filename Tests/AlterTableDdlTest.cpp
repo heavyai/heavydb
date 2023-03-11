@@ -1180,7 +1180,7 @@ TEST_F(AlterTableAlterColumnTest, DefaultValues) {
 TEST_F(AlterTableAlterColumnTest, NonExistentTable) {
   queryAndAssertException(
       "ALTER TABLE non_existent_table ALTER COLUMN txt TYPE TEXT;",
-      "Table/View non_existent_table for catalog heavyai does not exist");
+      "Table/View non_existent_table for catalog heavyai does not exist.");
 }
 
 TEST_F(AlterTableAlterColumnTest, NonExistentColumn) {

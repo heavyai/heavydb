@@ -533,7 +533,7 @@ TEST_F(CrossDatabaseWriteQueryTest, InsertIntoTableFromAnotherDb) {
   switchToAdmin();
   queryAndAssertException(
       "INSERT INTO db_1.test_table VALUES (1000, 'abc', 'abc');",
-      "Table/View db_1.test_table for catalog heavyai does not exist");
+      "Table/View db_1.test_table for catalog heavyai does not exist.");
 }
 
 TEST_F(CrossDatabaseWriteQueryTest, CreateTableInAnotherDb) {
@@ -552,19 +552,19 @@ TEST_F(CrossDatabaseWriteQueryTest, CreateForeignTableInAnotherDb) {
 TEST_F(CrossDatabaseWriteQueryTest, DropTableInAnotherDb) {
   queryAndAssertException(
       "DROP TABLE db_2.db_2_table;",
-      "Table/View db_2.db_2_table for catalog heavyai does not exist");
+      "Table/View db_2.db_2_table for catalog heavyai does not exist.");
 }
 
 TEST_F(CrossDatabaseWriteQueryTest, TruncateTableInAnotherDb) {
   queryAndAssertException(
       "TRUNCATE TABLE db_2.db_2_table;",
-      "Table/View db_2.db_2_table for catalog heavyai does not exist");
+      "Table/View db_2.db_2_table for catalog heavyai does not exist.");
 }
 
 TEST_F(CrossDatabaseWriteQueryTest, AlterTableInAnotherDb) {
   queryAndAssertException(
       "ALTER TABLE db_2.db_2_table RENAME COLUMN i TO i2;",
-      "Table/View db_2.db_2_table for catalog heavyai does not exist");
+      "Table/View db_2.db_2_table for catalog heavyai does not exist.");
 }
 
 TEST_F(CrossDatabaseWriteQueryTest, DumpTableInAnotherDb) {
@@ -573,7 +573,7 @@ TEST_F(CrossDatabaseWriteQueryTest, DumpTableInAnotherDb) {
   }
   queryAndAssertException(
       "DUMP TABLE db_2.db_2_table TO '" + dump_path_ + "';",
-      "Table/View db_2.db_2_table for catalog heavyai does not exist");
+      "Table/View db_2.db_2_table for catalog heavyai does not exist.");
 }
 
 TEST_F(CrossDatabaseWriteQueryTest, RestoreTableInAnotherDb) {
@@ -596,7 +596,7 @@ TEST_F(CrossDatabaseWriteQueryTest, RenameTableInAnotherDb) {
 TEST_F(CrossDatabaseWriteQueryTest, OptimizeTableInAnotherDb) {
   queryAndAssertException(
       "OPTIMIZE TABLE db_2.db_2_table;",
-      "Table/View db_2.db_2_table for catalog heavyai does not exist");
+      "Table/View db_2.db_2_table for catalog heavyai does not exist.");
 }
 
 // TODO: Setup distributed tests
