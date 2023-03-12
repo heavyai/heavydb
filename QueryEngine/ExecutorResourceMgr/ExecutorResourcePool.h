@@ -545,7 +545,7 @@ class ExecutorResourcePool {
   BufferPoolChunkMap allocated_cpu_buffer_pool_chunks_;
   BufferPoolChunkMap allocated_gpu_buffer_pool_chunks_;
 
-  const bool sanity_check_pool_state_on_deallocations_{true};
+  const bool sanity_check_pool_state_on_deallocations_{false};
   mutable std::shared_mutex resource_mutex_;
 };
 
