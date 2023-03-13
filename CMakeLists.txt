@@ -298,8 +298,10 @@ if(ENABLE_CUDA)
     ProcessorCount(N)
     if(CMAKE_CUDA_COMPILER_VERSION GREATER_EQUAL 11.3 AND NOT N EQUAL 0)
       message(STATUS "Enabling NVCC multi-threaded compilation with ${N} threads.")
-      list(APPEND MAPD_CUDA_OPTIONS --threads ${N})
-      set(NVCC_THREADS --threads ${N})
+      # Adding to MAPD_CUDA_OPTIONS ensures that code that is compiled via generator expression (eg thrust) uses threads
+      # This breaks the VSCode language server with CMake versions > 16.5, so disable this for now
+      # list(APPEND MAPD_CUDA_OPTIONS --threads ${N})
+      set(NVCC_THREADS --threads ${N}) # used in explicit custom build steps which is most kernel compilation
     endif()
   endif()
 
