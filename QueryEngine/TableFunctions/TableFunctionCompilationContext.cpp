@@ -417,7 +417,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
       exe_unit.input_exprs.size(), input_row_counts_arg, cgen_state->ir_builder_, ctx);
 
   auto input_str_dict_proxy_heads = std::vector<llvm::Value*>();
-  if (!emit_only_preflight_fn and co_.device_type == ExecutorDeviceType::CPU) {
+  if (co_.device_type == ExecutorDeviceType::CPU) {
     input_str_dict_proxy_heads = generate_column_heads_load(exe_unit.input_exprs.size(),
                                                             input_str_dict_proxies_arg,
                                                             cgen_state->ir_builder_,
@@ -488,9 +488,8 @@ void TableFunctionCompilationContext::generateEntryPoint(
           ti.get_elem_type(),
           col_heads[i],
           row_count_heads[i],
-          (co_.device_type != ExecutorDeviceType::CPU || emit_only_preflight_fn)
-              ? nullptr
-              : input_str_dict_proxy_heads[i],
+          co_.device_type != ExecutorDeviceType::CPU ? nullptr
+                                                     : input_str_dict_proxy_heads[i],
           ctx,
           cgen_state->ir_builder_);
       func_args.push_back((pass_column_by_value
@@ -506,7 +505,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
             col_heads[i],
             ti.get_dimension(),
             row_count_heads[i],
-            (emit_only_preflight_fn) ? nullptr : input_str_dict_proxy_heads[i],
+            input_str_dict_proxy_heads[i],
             ctx,
             cgen_state->ir_builder_);
         func_args.push_back(col_list);

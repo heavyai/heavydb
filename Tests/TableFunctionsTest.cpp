@@ -863,6 +863,16 @@ TEST_F(TableFunctions, BasicProjection) {
       ASSERT_EQ(v, 10);
     }
     {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_require_text_collist_enc_dict(cursor(SELECT t2, t2, t2"
+          " FROM sd_test), 2));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto row = rows->getNextRow(true, false);
+      auto v = TestHelpers::v<int64_t>(row[0]);
+      ASSERT_EQ(v, 11);
+    }
+    {
       if (dt == ExecutorDeviceType::GPU) {
         const auto rows = run_multiple_agg(
             "SELECT * FROM TABLE(ct_require_device_cuda(cursor(SELECT x"
@@ -1991,6 +2001,14 @@ TEST_F(TableFunctions, ThrowingTests) {
                            " FROM sd_test), 0));",
                            dt),
           TableFunctionError);
+    }
+    {
+      EXPECT_THROW(run_multiple_agg(
+                       "SELECT * FROM "
+                       "TABLE(ct_require_text_collist_enc_dict(cursor(SELECT t2, t2, t2"
+                       " FROM sd_test), 0));",
+                       dt),
+                   TableFunctionError);
     }
     {
       if (dt == ExecutorDeviceType::GPU) {

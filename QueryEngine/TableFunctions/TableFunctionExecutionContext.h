@@ -47,6 +47,7 @@ class TableFunctionExecutionContext {
       const std::shared_ptr<CpuCompilationContext>& compilation_context,
       std::vector<const int8_t*>& col_buf_ptrs,
       std::vector<int64_t>& col_sizes,
+      std::vector<const int8_t*>& input_str_dict_proxy_ptrs,
       const size_t elem_count,
       Executor* executor);
 
