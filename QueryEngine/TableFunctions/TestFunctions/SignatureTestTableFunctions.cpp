@@ -404,6 +404,15 @@ ct_require_text_enc_dict__cpu_(const Column<TextEncodingDict>& input,
   return 1;
 }
 
+EXTENSION_NOINLINE_HOST int32_t
+ct_require_text_collist_enc_dict__cpu_(const ColumnList<TextEncodingDict>& input,
+                                       const int64_t x,
+                                       Column<int64_t>& out) {
+  set_output_row_size(1);
+  out[0] = 11;
+  return 1;
+}
+
 #endif  // #ifndef __CUDACC__
 
 #ifdef __CUDACC__

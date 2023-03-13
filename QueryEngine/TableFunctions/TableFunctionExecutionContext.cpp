@@ -313,6 +313,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
         std::dynamic_pointer_cast<CpuCompilationContext>(compilation_context),
         col_buf_ptrs,
         col_sizes,
+        input_str_dict_proxy_ptrs,
         *input_num_rows,
         executor);
     return nullptr;
@@ -352,6 +353,7 @@ void TableFunctionExecutionContext::launchPreCodeOnCpu(
     const std::shared_ptr<CpuCompilationContext>& compilation_context,
     std::vector<const int8_t*>& col_buf_ptrs,
     std::vector<int64_t>& col_sizes,
+    std::vector<const int8_t*>& input_str_dict_proxy_ptrs,
     const size_t elem_count,  // taken from first source only currently
     Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
@@ -380,13 +382,17 @@ void TableFunctionExecutionContext::launchPreCodeOnCpu(
   if (!col_sizes.empty()) {
     CHECK(col_sizes_ptr);
   }
+  const auto input_str_dict_proxy_byte_stream_ptr =
+      !input_str_dict_proxy_ptrs.empty()
+          ? reinterpret_cast<const int8_t**>(input_str_dict_proxy_ptrs.data())
+          : nullptr;
 
   // execute
   const auto err = compilation_context->table_function_entry_point()(
       reinterpret_cast<const int8_t*>(mgr.get()),
-      byte_stream_ptr,  // input columns buffer
-      col_sizes_ptr,    // input column sizes
-      nullptr,  // input string dictionary proxy ptrs - not supported for pre-flights yet
+      byte_stream_ptr,                       // input columns buffer
+      col_sizes_ptr,                         // input column sizes
+      input_str_dict_proxy_byte_stream_ptr,  // input string dictionary proxy ptrs
       nullptr,
       nullptr,  // output string dictionary proxy ptrs - not supported for pre-flights yet
       &output_row_count);
