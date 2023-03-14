@@ -123,7 +123,7 @@ void PlanState::addColumnToFetch(const shared::ColumnKey& column_key,
                                  bool unmark_lazy_fetch) {
   if (unmark_lazy_fetch) {
     // This column was previously marked for lazy fetch but we now intentionally
-    // makr it as non-lazy fetch column
+    // mark it as non-lazy fetch column
     auto it = columns_to_not_fetch_.find(column_key);
     if (it != columns_to_not_fetch_.end()) {
       columns_to_not_fetch_.erase(it);
@@ -142,4 +142,26 @@ void PlanState::addColumnToFetch(const shared::ColumnKey& column_key,
 void PlanState::addColumnToNotFetch(const shared::ColumnKey& column_key) {
   CHECK(!isColumnToFetch(column_key)) << column_key;
   columns_to_not_fetch_.emplace(column_key);
+}
+
+bool PlanState::hasExpressionNeedsLazyFetch(
+    const std::vector<TargetExprCodegen>& target_exprs_to_codegen) const {
+  return std::any_of(target_exprs_to_codegen.begin(),
+                     target_exprs_to_codegen.end(),
+                     [](const TargetExprCodegen& target_expr) {
+                       return target_expr.target_info.sql_type.supports_flatbuffer();
+                     });
+}
+
+void PlanState::registerNonLazyFetchExpression(
+    const std::vector<TargetExprCodegen>& target_exprs_to_codegen) {
+  auto const needs_lazy_fetch = hasExpressionNeedsLazyFetch(target_exprs_to_codegen);
+  for (const auto& expr : target_exprs_to_codegen) {
+    if (needs_lazy_fetch && !expr.target_info.sql_type.supports_flatbuffer()) {
+      if (auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr.target_expr)) {
+        // force non-lazy fetch on all other columns that don't support flatbuffer
+        addColumnToFetch(col_var->getColumnKey(), /*unmark_lazy_fetch=*/true);
+      }
+    }
+  }
 }

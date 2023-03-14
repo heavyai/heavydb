@@ -22,6 +22,7 @@
 #include "QueryEngine/Descriptors/InputDescriptors.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "Shared/DbObjectKeys.h"
+#include "TargetExprBuilder.h"
 
 class Executor;
 
@@ -106,6 +107,10 @@ struct PlanState {
   void addColumnToFetch(const shared::ColumnKey& column_key,
                         bool unmark_lazy_fetch = false);
   void addColumnToNotFetch(const shared::ColumnKey& column_key);
+  bool hasExpressionNeedsLazyFetch(
+      const std::vector<TargetExprCodegen>& target_exprs_to_codegen) const;
+  void registerNonLazyFetchExpression(
+      const std::vector<TargetExprCodegen>& target_exprs_to_codegen);
 
  private:
   std::unordered_set<shared::ColumnKey> columns_to_fetch_;
