@@ -5526,9 +5526,7 @@ void DBHandler::importGeoTableSingle(const TSessionId& session_id,
     }
 
     // match locking sequence for CopyTableStmt::execute
-    heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>
-        execute_read_lock(*legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-            legacylockmgr::ExecutorOuterLock, true));
+    auto execute_read_lock = legacylockmgr::getExecuteReadLock();
 
     const TableDescriptor* td{nullptr};
     std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>> td_with_lock;
@@ -6267,9 +6265,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   // Call to DistributedValidate() below may change cat.
   auto& cat = session_ptr->getCatalog();
 
-  heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>
-      executeWriteLock;
-  heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>> executeReadLock;
+  legacylockmgr::ExecutorWriteLock execute_write_lock;
+  legacylockmgr::ExecutorReadLock execute_read_lock;
 
   ParserWrapper pw{query_str};
 
@@ -6362,7 +6359,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     auto validate_stmt = Parser::ValidateStmt(ddl_query["payload"].GetObject());
     _return.addExecutionTime(measure<>::execution([&]() {
       // Prevent any other query from running while doing validate
-      executeWriteLock = legacylockmgr::getExecuteWriteLock();
+      execute_write_lock = legacylockmgr::getExecuteWriteLock();
 
       std::string output{"Result for validate"};
       if (g_cluster) {
@@ -6446,7 +6443,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       check_read_only("modify");
     }
 
-    executeReadLock = legacylockmgr::getExecuteReadLock();
+    execute_read_lock = legacylockmgr::getExecuteReadLock();
 
     std::string query_ra = query_str;
     if (use_calcite) {

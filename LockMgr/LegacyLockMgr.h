@@ -124,16 +124,17 @@ std::shared_ptr<WrapperType<MutexType>> LockMgr<MutexType, KeyType>::getMutex(
   return tMutex;
 }
 
+using ExecutorWriteLock = std::unique_lock<WrapperType<std::shared_mutex>>;
+using ExecutorReadLock = std::shared_lock<WrapperType<std::shared_mutex>>;
+
 inline auto getExecuteWriteLock() {
-  return heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  return ExecutorWriteLock(
+      *LockMgr<std::shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
 }
 
 inline auto getExecuteReadLock() {
-  return heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  return ExecutorReadLock(
+      *LockMgr<std::shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
 }
 
 }  // namespace legacylockmgr
