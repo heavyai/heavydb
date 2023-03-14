@@ -492,21 +492,6 @@ function install_tbb() {
   popd
 }
 
-LIBUV_VERSION=1.41.0
-
-function install_libuv() {
-  download https://dist.libuv.org/dist/v${LIBUV_VERSION}/libuv-v${LIBUV_VERSION}.tar.gz
-  extract libuv-v${LIBUV_VERSION}.tar.gz
-  pushd libuv-v${LIBUV_VERSION}
-  mkdir -p build
-  pushd build
-  cmake -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=$PREFIX ..
-  makej
-  make_install
-  popd
-  popd
-}
-
 LIBNUMA_VERSION=2.0.14
 MEMKIND_VERSION=1.11.0
 

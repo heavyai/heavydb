@@ -127,9 +127,6 @@ install_go
 # librdkafka
 install_rdkafka
 
-# libuv
-install_libuv
-
 # OpenSAML
 VERS=3.2.2
 download_make_install ${HTTP_DEPS}/xerces-c-3.2.2.tar.gz
