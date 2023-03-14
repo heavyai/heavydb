@@ -2724,10 +2724,7 @@ ExecutionResult AlterTableAlterColumnCommand::execute(bool read_only_mode) {
   // NOTE: read_only_mode is validated at a higher level in AlterTableCommand
 
   // TODO: Refactor this lock when refactoring other ALTER TABLE commands
-  const auto execute_read_lock =
-      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
-          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-              legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock = legacylockmgr::getExecuteReadLock();
 
   // There are a few major cases to consider when alter column is invoked.
   // Below non variable length column is abbreviated as NVL and a variable
@@ -2912,8 +2909,9 @@ ExecutionResult AlterForeignTableCommand::execute(bool read_only_mode) {
   std::string alter_type = ddl_payload["alterType"].GetString();
 
   // We only need a write lock if we are renaming a table, otherwise a read lock will do.
-  heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>> write_lock;
-  heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>> read_lock;
+  legacylockmgr::ExecutorWriteLock write_lock;
+  legacylockmgr::ExecutorReadLock read_lock;
+
   if (alter_type == "RENAME_TABLE") {
     write_lock = legacylockmgr::getExecuteWriteLock();
   } else {
