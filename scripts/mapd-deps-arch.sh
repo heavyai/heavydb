@@ -56,7 +56,6 @@ yay -Suy \
     jdk-openjdk \
     libiodbc \
     librdkafka \
-    libuv \
     llvm \
     lz4 \
     maven \

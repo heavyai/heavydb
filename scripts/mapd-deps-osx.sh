@@ -26,7 +26,6 @@ brew install ninja
 brew install snappy
 brew install double-conversion
 brew install llvm
-brew install libuv
 brew install libiodbc
 
 function build_pin_dep {
