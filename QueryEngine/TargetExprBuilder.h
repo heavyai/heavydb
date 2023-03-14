@@ -67,6 +67,9 @@ struct TargetExprCodegen {
                         llvm::Value* varlen_output_buffer,
                         int32_t slot_index) const;
 
+  friend std::ostream& operator<<(std::ostream& os,
+                                  const TargetExprCodegen& target_expr_codegen);
+
   const Analyzer::Expr* target_expr;
   TargetInfo target_info;
 

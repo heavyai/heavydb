@@ -177,6 +177,17 @@ struct has_printTo<T,
 template <class T>
 inline constexpr bool has_printTo_v = has_printTo<T>::value;
 
+#ifndef _WIN32
+template <typename T, typename = void>
+struct has_operator_lshift : std::false_type {};
+template <typename T>
+struct has_operator_lshift<T,
+                           decltype(std::declval<std::ostream&>() << std::declval<T>(),
+                                    void())> : std::true_type {};
+template <class T>
+inline constexpr bool has_operator_lshift_v = has_operator_lshift<T>::value;
+#endif
+
 }  // namespace
 
 template <typename T>
@@ -319,6 +330,12 @@ std::string toString(const T& v) {
     std::ostringstream ss;
     v.printTo(ss);
     return ss.str();
+#ifndef _WIN32
+  } else if constexpr (has_operator_lshift_v<T>) {
+    std::stringstream stream;
+    stream << v;
+    return stream.str();
+#endif
   } else {
     return typeName(&v);
   }

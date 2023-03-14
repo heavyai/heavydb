@@ -765,6 +765,12 @@ void TargetExprCodegenBuilder::codegen(
   CHECK(executor);
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
 
+  // check the target_exprs and find a set of exprs need non-lazy fetch before entering
+  // the expr compilation to avoid a crash during the codegen due to a wrong
+  // classification of expr fetch type (lazy vs. non-lazy), and also we can avoid
+  // unnecessary query recompilation due to `CompilationRetryNoLazyFetch` exception
+  executor->plan_state_->registerNonLazyFetchExpression(target_exprs_to_codegen);
+
   for (const auto& target_expr_codegen : target_exprs_to_codegen) {
     target_expr_codegen.codegen(group_by_and_agg,
                                 executor,
@@ -990,4 +996,13 @@ llvm::Value* TargetExprCodegenBuilder::codegenSlotEmptyKey(
       llvm::Type::getInt1Ty(executor->cgen_state_->context_),
       {agg_col_ptr, target_lv_casted, init_val_lv});
   return sample_cas_lv;
+}
+
+std::ostream& operator<<(std::ostream& os, const TargetExprCodegen& target_expr_codegen) {
+  os << "(target_expr: " << target_expr_codegen.target_expr->toString()
+     << ", target_info: " << target_expr_codegen.target_info.toString()
+     << ", base_slot_index: " << target_expr_codegen.base_slot_index
+     << ", target_idx:" << target_expr_codegen.target_idx
+     << ", is_group_by: " << target_expr_codegen.is_group_by << ")";
+  return os;
 }
