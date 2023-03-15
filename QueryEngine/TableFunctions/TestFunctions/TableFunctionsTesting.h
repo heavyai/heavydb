@@ -974,6 +974,15 @@ ct_require_text_collist_enc_dict__cpu_(const ColumnList<TextEncodingDict>& input
                                        const int64_t x,
                                        Column<int64_t>& out);
 
+/*
+  UDTF: ct_test_allocator(TableFunctionManager, Column<int32_t>, TextEncodingNone) ->
+  Column<int32_t>
+*/
+EXTENSION_NOINLINE_HOST int32_t ct_test_allocator(TableFunctionManager& mgr,
+                                                  const Column<int32_t>& input,
+                                                  const TextEncodingNone& t,
+                                                  Column<int32_t>& out);
+
 #endif  // #ifndef __CUDACC__
 
 #ifdef __CUDACC__

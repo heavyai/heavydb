@@ -126,6 +126,8 @@ EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getOrAddTransient(int8_t* m
                                                                        int32_t dict_id,
                                                                        std::string str);
 
+EXTENSION_NOINLINE_HOST void TableFunctionManager_addVarlenBuffer(int8_t* mgr_ptr,
+                                                                  int8_t* buffer);
 /*
   Row function management functions and macros:
  */
@@ -353,7 +355,10 @@ struct TextEncodingNone {
 
 #ifndef __CUDACC__
   TextEncodingNone() = default;
-  TextEncodingNone(const std::string& str) {
+  // Requires external ownership.
+  explicit TextEncodingNone(char const* const c_str)
+      : ptr_(const_cast<char*>(c_str)), size_(strlen(c_str)) {}
+  explicit TextEncodingNone(const std::string& str) {
     size_ = str.length();
     if (str.empty()) {
       ptr_ = nullptr;
@@ -2265,6 +2270,9 @@ struct TableFunctionManager {
   int32_t getOrAddTransient(int32_t db_id, int32_t dict_id, std::string str) {
     return TableFunctionManager_getOrAddTransient(
         reinterpret_cast<int8_t*>(this), db_id, dict_id, str);
+  }
+  void addVarlenBuffer(int8_t* buffer) {
+    TableFunctionManager_addVarlenBuffer(reinterpret_cast<int8_t*>(this), buffer);
   }
 
 #ifdef HAVE_TOSTRING
