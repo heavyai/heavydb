@@ -793,9 +793,10 @@ ml_reg_predict__cpu_template(TableFunctionManager& mgr,
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model CURSOR.");
   }
-  const std::string model_name_str{model_name.getString(0)};
+  TextEncodingNone model_name_text_enc_none(model_name.getString(0));
+  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
   return ml_reg_predict__cpu_template(mgr,
-                                      model_name_str,
+                                      model_name_text_enc_none,
                                       input_ids,
                                       input_features,
                                       preferred_ml_framework_str,
@@ -826,13 +827,11 @@ NEVER_INLINE HOST int32_t r2_score__cpu_template(TableFunctionManager& mgr,
   Column<int64_t> input_ids(input_ids_vec);
   Column<int64_t> output_ids(output_ids_vec);
   mgr.disable_output_allocations();
-  TextEncodingNone model_name_encoding_none(model_name);
-  const std::string ml_framework("DEFAULT");
-  TextEncodingNone ml_framework_encoding_none(ml_framework);
+  TextEncodingNone ml_framework_encoding_none("DEFAULT");
 
   try {
     auto ret = ml_reg_predict__cpu_template(mgr,
-                                            model_name_encoding_none,
+                                            model_name,
                                             input_ids,
                                             input_features,
                                             ml_framework_encoding_none,
@@ -913,9 +912,10 @@ r2_score__cpu_template(TableFunctionManager& mgr,
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model name CURSOR.");
   }
-  const std::string model_name_str{model_name.getString(0)};
+  TextEncodingNone model_name_text_enc_none(model_name.getString(0));
+  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
   return r2_score__cpu_template(
-      mgr, model_name_str, input_labels, input_features, output_r2);
+      mgr, model_name_text_enc_none, input_labels, input_features, output_r2);
 }
 
 // clang-format off
