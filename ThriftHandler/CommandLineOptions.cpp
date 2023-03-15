@@ -1141,14 +1141,6 @@ void CommandLineOptions::fillDeveloperOptions() {
           ->default_value(g_allow_invalid_literal_buffer_reads)
           ->implicit_value(true),
       "For backwards compatibility. Enabling may cause invalid query results.");
-
-  desc.add_options()(
-      "enable-drop-render-group-columns-migration",
-      po::value<bool>(&enable_drop_render_group_columns_migration)
-          ->default_value(false)
-          ->implicit_value(true),
-      "Enable automatic database migration to drop any render group columns at startup "
-      "(ENABLE ONLY ON SYSTEMS WHICH WILL NOT NEED TO BE ROLLED BACK TO 6.4.x!)");
 }
 
 namespace {
@@ -1946,9 +1938,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       UNREACHABLE() << "Unrecognized option for Runtime UDF/UDTF registration policy.";
     }
   }
-
-  LOG(INFO) << "Drop-Render-Group-Columns Migration: "
-            << (enable_drop_render_group_columns_migration ? "enabled" : "disabled");
 
   boost::algorithm::trim_if(authMetadata.distinguishedName, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.uri, boost::is_any_of("\"'"));

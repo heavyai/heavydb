@@ -928,9 +928,9 @@ void Catalog::checkDateInDaysColumnMigration() {
       tableDescriptorMapById_, getCurrentDB().dbId, this, sqliteConnector_);
 }
 
-void Catalog::checkDropRenderGroupColumnsMigration() {
+bool Catalog::checkDropRenderGroupColumnsMigration() {
   // do not take cat_sqlite_lock here as Catalog functions do that themselves
-  migrations::MigrationMgr::dropRenderGroupColumns(tableDescriptorMapById_, this);
+  return migrations::MigrationMgr::dropRenderGroupColumns(tableDescriptorMapById_, this);
 }
 
 void Catalog::createDashboardSystemRoles() {
