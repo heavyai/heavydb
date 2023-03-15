@@ -122,9 +122,6 @@ class CommandLineOptions {
   std::string libgeos_so_filename = {"libgeos_c.so"};
 #endif
 
-  // @TODO(se) consider whether or not to remove before 6.5 release
-  bool enable_drop_render_group_columns_migration = false;
-
   void fillOptions();
   void fillDeveloperOptions();
 

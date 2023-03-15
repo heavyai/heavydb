@@ -36,7 +36,7 @@ class MigrationMgr {
       Catalog_Namespace::Catalog* cat,
       SqliteConnector& sqlite);
 
-  static void dropRenderGroupColumns(
+  static bool dropRenderGroupColumns(
       const Catalog_Namespace::TableDescriptorMapById& table_descriptors_by_id,
       Catalog_Namespace::Catalog* cat);
 

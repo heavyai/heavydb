@@ -620,7 +620,7 @@ class Catalog final {
                       const std::string& new_owner);
 
   bool isInfoSchemaDb() const;
-  void checkDropRenderGroupColumnsMigration();
+  bool checkDropRenderGroupColumnsMigration();
 
  protected:
   void CheckAndExecuteMigrations();
