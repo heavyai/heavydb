@@ -58,6 +58,7 @@
 #ifdef HAVE_AWS_S3
 #include "DataMgr/HeavyDbAwsSdk.h"
 #endif
+#include "Catalog/AlterColumnRecovery.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "Shared/Compressor.h"
 #include "Shared/SystemParameters.h"
@@ -494,6 +495,10 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
   // do the drop render group columns migration here too
   // @TODO make a single entry point in MigrationMgr that will do these two and futures
   Catalog_Namespace::SysCatalog::instance().checkDropRenderGroupColumnsMigration();
+
+  // Recover from any partially complete alter table alter column commands
+  AlterTableAlterColumnCommandRecoveryMgr::
+      resolveIncompleteAlterColumnCommandsForAllCatalogs();
 
   if (g_enable_fsi && g_enable_foreign_table_scheduled_refresh) {
     foreign_storage::ForeignTableRefreshScheduler::start(g_running);

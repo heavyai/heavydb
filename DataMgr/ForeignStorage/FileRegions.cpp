@@ -16,7 +16,7 @@
 
 #include "FileRegions.h"
 
-#include "DataMgr/ForeignStorage/FsiJsonUtils.h"
+#include "Shared/JsonUtils.h"
 
 namespace foreign_storage {
 // Serialization functions for FileRegion

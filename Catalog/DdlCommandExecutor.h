@@ -20,6 +20,7 @@
 
 // Note: avoid adding #include(s) that require thrift
 
+#include "Catalog/AlterColumnRecovery.h"
 #include "Catalog/ColumnDescriptor.h"
 #include "Catalog/SessionInfo.h"
 #include "Catalog/TableDescriptor.h"
@@ -118,29 +119,28 @@ class AlterTableAlterColumnCommand : public DdlCommand {
 
   ExecutionResult execute(bool read_only_mode) override;
 
-  using AlterColumnTypePairs =
-      std::list<std::pair<const ColumnDescriptor*, ColumnDescriptor*>>;
+  using TypePairs = alter_column_shared::TypePairs;
 
  private:
   void alterColumn();
 
-  void alterColumnTypes(const TableDescriptor* td,
-                        const AlterColumnTypePairs& src_dst_cds);
+  void populateAndWriteRecoveryInfo(const TableDescriptor* td,
+                                    const TypePairs& src_dst_cds);
 
-  void rollback(const TableDescriptor* td, const AlterColumnTypePairs& src_dst_cds);
+  void cleanupRecoveryInfo(const TableDescriptor* td);
+
+  void alterColumnTypes(const TableDescriptor* td, const TypePairs& src_dst_cds);
 
   void collectExpectedCatalogChanges(const TableDescriptor* td,
-                                     const AlterColumnTypePairs& src_dst_cds);
+                                     const TypePairs& src_dst_cds);
 
-  std::list<std::list<ColumnDescriptor>> prepareGeoColumns(
-      const TableDescriptor* td,
-      const AlterColumnTypePairs& src_dst_cds);
+  std::list<std::list<ColumnDescriptor>> prepareGeoColumns(const TableDescriptor* td,
+                                                           const TypePairs& src_dst_cds);
 
-  std::list<const ColumnDescriptor*> prepareColumns(
-      const TableDescriptor* td,
-      const AlterColumnTypePairs& src_dst_cds);
+  std::list<const ColumnDescriptor*> prepareColumns(const TableDescriptor* td,
+                                                    const TypePairs& src_dst_cds);
 
-  void alterColumns(const TableDescriptor* td, const AlterColumnTypePairs& src_dst_cds);
+  void alterColumns(const TableDescriptor* td, const TypePairs& src_dst_cds);
 
   void alterNonGeoColumnData(const TableDescriptor* td,
                              const std::list<const ColumnDescriptor*>& cds);
@@ -150,35 +150,10 @@ class AlterTableAlterColumnCommand : public DdlCommand {
       const std::list<std::pair<const ColumnDescriptor*,
                                 std::list<const ColumnDescriptor*>>>& geo_src_dst_cds);
 
-  void clearChunk(Catalog_Namespace::Catalog* catalog,
-                  const ChunkKey& key,
-                  const MemoryLevel mem_level);
+  void clearInMemoryData(const TableDescriptor* td, const TypePairs& src_dst_cds);
 
-  void clearChunk(Catalog_Namespace::Catalog* catalog, const ChunkKey& key);
-
-  void clearRemainingChunks(const TableDescriptor* td,
-                            const AlterColumnTypePairs& src_dst_cds);
-
-  void dropSourceGeoColumns(const TableDescriptor* td,
-                            const AlterColumnTypePairs& src_dst_cds);
-
-  void checkpoint(const TableDescriptor* td, const AlterColumnTypePairs& src_dst_cds);
-
-  void clearInMemoryData(const TableDescriptor* td,
-                         const AlterColumnTypePairs& src_dst_cds);
-
-  void deleteDictionaries(const TableDescriptor* td,
-                          const AlterColumnTypePairs& src_dst_cds);
-
-  struct ColumnAltered {
-    ColumnDescriptor old_cd;
-    ColumnDescriptor new_cd;
-  };
-
-  std::list<ColumnDescriptor> renamed_columns_;
-  std::list<ColumnDescriptor> added_columns_;
-  std::list<ColumnAltered> altered_columns_;
-  std::list<ColumnDescriptor> updated_dict_cds_;
+  AlterTableAlterColumnCommandRecoveryMgr::RecoveryInfo recovery_info_;
+  AlterTableAlterColumnCommandRecoveryMgr recovery_mgr_;
 };
 
 class AlterTableCommand : public DdlCommand {

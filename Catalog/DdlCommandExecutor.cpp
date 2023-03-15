@@ -78,7 +78,7 @@ void validate_alter_type_metadata(const Catalog_Namespace::Catalog& catalog,
 
 std::list<std::pair<const ColumnDescriptor*, std::list<const ColumnDescriptor*>>>
 get_alter_column_geo_pairs_from_src_dst_pairs_phys_cds(
-    const AlterTableAlterColumnCommand::AlterColumnTypePairs& src_dst_cds,
+    const AlterTableAlterColumnCommand::TypePairs& src_dst_cds,
     const std::list<std::list<ColumnDescriptor>>& phys_cds) {
   std::list<std::pair<const ColumnDescriptor*, std::list<const ColumnDescriptor*>>>
       geo_src_dst_column_pairs;
@@ -106,11 +106,11 @@ get_alter_column_geo_pairs_from_src_dst_pairs_phys_cds(
   return geo_src_dst_column_pairs;
 }
 
-AlterTableAlterColumnCommand::AlterColumnTypePairs
-get_alter_column_pairs_from_src_dst_cds(std::list<ColumnDescriptor>& src_cds,
-                                        std::list<ColumnDescriptor>& dst_cds) {
+AlterTableAlterColumnCommand::TypePairs get_alter_column_pairs_from_src_dst_cds(
+    std::list<ColumnDescriptor>& src_cds,
+    std::list<ColumnDescriptor>& dst_cds) {
   CHECK_EQ(src_cds.size(), dst_cds.size());
-  AlterTableAlterColumnCommand::AlterColumnTypePairs src_dst_column_pairs;
+  AlterTableAlterColumnCommand::TypePairs src_dst_column_pairs;
   auto src_cd_it = src_cds.begin();
   auto dst_cd_it = dst_cds.begin();
   for (; src_cd_it != src_cds.end(); ++src_cd_it, ++dst_cd_it) {
@@ -2277,7 +2277,10 @@ AlterTableCommand::AlterTableCommand(
 AlterTableAlterColumnCommand::AlterTableAlterColumnCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr)
-    : DdlCommand(ddl_data, session_ptr) {
+    : DdlCommand(ddl_data, session_ptr)
+    , recovery_mgr_(session_ptr->getCatalog())
+
+{
   auto& ddl_payload = extractPayload(ddl_data_);
 
   CHECK_EQ(std::string(ddl_payload["alterType"].GetString()), "ALTER_COLUMN");
@@ -2308,7 +2311,7 @@ AlterTableAlterColumnCommand::AlterTableAlterColumnCommand(
 }
 
 void AlterTableAlterColumnCommand::alterColumns(const TableDescriptor* td,
-                                                const AlterColumnTypePairs& src_dst_cds) {
+                                                const TypePairs& src_dst_cds) {
   auto& catalog = session_ptr_->getCatalog();
 
   for (auto& [src_cd, dst_cd] : src_dst_cds) {
@@ -2325,7 +2328,7 @@ void AlterTableAlterColumnCommand::alterColumns(const TableDescriptor* td,
 
 std::list<const ColumnDescriptor*> AlterTableAlterColumnCommand::prepareColumns(
     const TableDescriptor* td,
-    const AlterColumnTypePairs& src_dst_cds) {
+    const TypePairs& src_dst_cds) {
   auto& catalog = session_ptr_->getCatalog();
 
   std::list<const ColumnDescriptor*> non_geo_cds;
@@ -2351,7 +2354,7 @@ std::list<const ColumnDescriptor*> AlterTableAlterColumnCommand::prepareColumns(
 
 std::list<std::list<ColumnDescriptor>> AlterTableAlterColumnCommand::prepareGeoColumns(
     const TableDescriptor* td,
-    const AlterColumnTypePairs& src_dst_cds) {
+    const TypePairs& src_dst_cds) {
   auto& catalog = session_ptr_->getCatalog();
   std::list<std::list<ColumnDescriptor>> physical_geo_columns;
 
@@ -2374,24 +2377,6 @@ std::list<std::list<ColumnDescriptor>> AlterTableAlterColumnCommand::prepareGeoC
   }
 
   return physical_geo_columns;
-}
-
-void AlterTableAlterColumnCommand::dropSourceGeoColumns(
-    const TableDescriptor* td,
-    const AlterColumnTypePairs& src_dst_cds) {
-  auto& catalog = session_ptr_->getCatalog();
-  for (auto& [src_cd, dst_cd] : src_dst_cds) {
-    if (!dst_cd->columnType.is_geometry()) {
-      continue;
-    }
-    auto catalog_cd = catalog.getMetadataForColumn(src_cd->tableId, src_cd->columnId);
-    catalog.dropColumnTransactional(*td, *catalog_cd);
-    ChunkKey col_key{catalog.getCurrentDB().dbId, td->tableId, src_cd->columnId};
-    auto& data_mgr = catalog.getDataMgr();
-    data_mgr.deleteChunksWithPrefix(col_key, MemoryLevel::GPU_LEVEL);
-    data_mgr.deleteChunksWithPrefix(col_key, MemoryLevel::CPU_LEVEL);
-    data_mgr.deleteChunksWithPrefix(col_key, MemoryLevel::DISK_LEVEL);
-  }
 }
 
 void AlterTableAlterColumnCommand::alterNonGeoColumnData(
@@ -2423,9 +2408,8 @@ void AlterTableAlterColumnCommand::alterGeoColumnData(
   io_fragmenter->alterColumnGeoType(geo_src_dst_cds);
 }
 
-void AlterTableAlterColumnCommand::clearInMemoryData(
-    const TableDescriptor* td,
-    const AlterColumnTypePairs& src_dst_cds) {
+void AlterTableAlterColumnCommand::clearInMemoryData(const TableDescriptor* td,
+                                                     const TypePairs& src_dst_cds) {
   auto& catalog = session_ptr_->getCatalog();
 
   ChunkKey column_key{catalog.getCurrentDB().dbId, td->tableId, 0};
@@ -2441,46 +2425,9 @@ void AlterTableAlterColumnCommand::clearInMemoryData(
   catalog.removeFragmenterForTable(td->tableId);
 }
 
-void AlterTableAlterColumnCommand::deleteDictionaries(
-    const TableDescriptor* td,
-    const AlterColumnTypePairs& src_dst_cds) {
-  auto& catalog = session_ptr_->getCatalog();
-  for (auto& [src_cd, dst_cd] : src_dst_cds) {
-    if (!src_cd->columnType.is_dict_encoded_type()) {
-      continue;
-    }
-    if (!ddl_utils::alter_column_utils::compare_column_descriptors(src_cd, dst_cd)
-             .sql_types_match) {
-      catalog.delDictionaryTransactional(*src_cd);
-    }
-  }
-}
-
-void AlterTableAlterColumnCommand::checkpoint(const TableDescriptor* td,
-                                              const AlterColumnTypePairs& src_dst_cds) {
-  auto& catalog = session_ptr_->getCatalog();
-  for (auto& [src_cd, dst_cd] : src_dst_cds) {
-    if (!dst_cd->columnType.is_dict_encoded_type()) {
-      continue;
-    }
-    if (ddl_utils::alter_column_utils::compare_column_descriptors(src_cd, dst_cd)
-            .sql_types_match) {
-      continue;
-    }
-    auto string_dictionary =
-        catalog.getMetadataForDict(dst_cd->columnType.get_comp_param(), true)
-            ->stringDict.get();
-    if (!string_dictionary->checkpoint()) {
-      throw std::runtime_error("Failed to checkpoint dictionary while altering column " +
-                               dst_cd->columnName + ".");
-    }
-  }
-  catalog.checkpointWithAutoRollback(td->tableId);
-}
-
 void AlterTableAlterColumnCommand::collectExpectedCatalogChanges(
     const TableDescriptor* td,
-    const AlterTableAlterColumnCommand::AlterColumnTypePairs& src_dst_cds) {
+    const AlterTableAlterColumnCommand::TypePairs& src_dst_cds) {
   auto& catalog = session_ptr_->getCatalog();
 
   auto column_id_start = catalog.getNextAddedColumnId(*td);
@@ -2489,7 +2436,7 @@ void AlterTableAlterColumnCommand::collectExpectedCatalogChanges(
   // Simulate operations required for geo changes
   for (auto& [src_cd, dst_cd] : src_dst_cds) {
     if (dst_cd->columnType.is_geometry()) {
-      renamed_columns_.push_back(*src_cd);
+      recovery_info_.renamed_columns.push_back(*src_cd);
 
       std::list<ColumnDescriptor> phy_geo_columns;
       catalog.expandGeoColumn(*dst_cd, phy_geo_columns);
@@ -2497,18 +2444,18 @@ void AlterTableAlterColumnCommand::collectExpectedCatalogChanges(
       auto col_to_add = *dst_cd;
       col_to_add.tableId = td->tableId;
       col_to_add.columnId = current_column_id++;
-      added_columns_.push_back(col_to_add);
+      recovery_info_.added_columns.push_back(col_to_add);
 
       for (auto& cd : phy_geo_columns) {
         ColumnDescriptor phys_col_to_add = cd;
         phys_col_to_add.tableId = td->tableId;
         phys_col_to_add.columnId = current_column_id++;
-        added_columns_.push_back(phys_col_to_add);
+        recovery_info_.added_columns.push_back(phys_col_to_add);
       }
     } else if (dst_cd->columnType.is_dict_encoded_type()) {
       if (!ddl_utils::alter_column_utils::compare_column_descriptors(src_cd, dst_cd)
                .sql_types_match) {
-        updated_dict_cds_.push_back(*src_cd);
+        recovery_info_.updated_dict_cds.push_back(*src_cd);
       }
     }
   }
@@ -2520,92 +2467,46 @@ void AlterTableAlterColumnCommand::collectExpectedCatalogChanges(
     auto compare_result =
         ddl_utils::alter_column_utils::compare_column_descriptors(src_cd, dst_cd);
     CHECK(!compare_result.sql_types_match || !compare_result.defaults_match);
-    altered_columns_.push_back(ColumnAltered{*src_cd, *dst_cd});
+    recovery_info_.altered_columns.emplace_back(*src_cd, *dst_cd);
   }
 }
 
-void AlterTableAlterColumnCommand::rollback(
-    const TableDescriptor* td,
-    const AlterTableAlterColumnCommand::AlterColumnTypePairs& src_dst_cds) {
-  auto& catalog = session_ptr_->getCatalog();
-  auto cds = catalog.getAllColumnMetadataForTable(td->tableId, false, false, true);
+void AlterTableAlterColumnCommand::cleanupRecoveryInfo(const TableDescriptor* td) {
+  auto recovery_file_info = recovery_mgr_.getRecoveryFilepathInfo(td->tableId);
+  auto recovery_filepath = recovery_mgr_.recoveryFilepath(recovery_file_info);
 
-  // Drop any columns that were added
-  std::list<const ColumnDescriptor*> added_columns_to_drop;
-  for (auto& added_column : added_columns_) {
-    auto cd_it =
-        std::find_if(cds.begin(), cds.end(), [&added_column](const ColumnDescriptor* cd) {
-          return added_column.columnId == cd->columnId;
-        });
-    if (cd_it != cds.end()) {
-      added_columns_to_drop.emplace_back(*cd_it);
-    }
-  }
-  for (const auto& cd : added_columns_to_drop) {
-    ChunkKey col_key{catalog.getCurrentDB().dbId, td->tableId, cd->columnId};
-    catalog.dropColumnTransactional(*td, *cd);
-    auto& data_mgr = catalog.getDataMgr();
-    data_mgr.deleteChunksWithPrefix(col_key, MemoryLevel::GPU_LEVEL);
-    data_mgr.deleteChunksWithPrefix(col_key, MemoryLevel::CPU_LEVEL);
-  }
-
-  // Rename any columns back to original name
-  for (auto& renamed_column : renamed_columns_) {
-    auto cd_it = std::find_if(
-        cds.begin(), cds.end(), [&renamed_column](const ColumnDescriptor* cd) {
-          return renamed_column.columnId == cd->columnId;
-        });
-    if (cd_it != cds.end()) {
-      auto cd = *cd_it;
-      auto old_name = renamed_column.columnName;
-      if (cd->columnName != old_name) {
-        catalog.renameColumn(td, cd, old_name);
-      }
-    }
-  }
-
-  // Remove any added dictionary
-  for (auto& added_dict : updated_dict_cds_) {
-    auto cd_it =
-        std::find_if(cds.begin(), cds.end(), [&added_dict](const ColumnDescriptor* cd) {
-          return added_dict.columnId == cd->columnId;
-        });
-    if (cd_it != cds.end()) {
-      auto cd = *cd_it;
-
-      // Find all dictionaries, delete dictionaries which are defunct
-      auto dds = catalog.getAllDictionariesWithColumnInName(cd);
-      for (const auto& dd : dds) {
-        if (!added_dict.columnType.is_dict_encoded_type() ||
-            dd->dictRef.dictId != added_dict.columnType.get_comp_param()) {
-          auto temp_cd = *cd;
-          temp_cd.columnType.set_comp_param(dd->dictRef.dictId);
-          catalog.delDictionaryTransactional(temp_cd);
-        }
-      }
-    }
-  }
-
-  // Undo any altered column
-  for (auto& altered_column : altered_columns_) {
-    auto cd_it = std::find_if(
-        cds.begin(), cds.end(), [&altered_column](const ColumnDescriptor* cd) {
-          return altered_column.new_cd.columnId == cd->columnId;
-        });
-    if (cd_it != cds.end()) {
-      catalog.alterColumnTypeTransactional(altered_column.old_cd);
-    }
+  if (std::filesystem::exists(recovery_filepath)) {
+    std::filesystem::remove(recovery_filepath);
   }
 }
 
-void AlterTableAlterColumnCommand::alterColumnTypes(
+void AlterTableAlterColumnCommand::populateAndWriteRecoveryInfo(
     const TableDescriptor* td,
-    const AlterColumnTypePairs& src_dst_cds) {
+    const TypePairs& src_dst_cds) {
   auto& catalog = session_ptr_->getCatalog();
 
-  // Store information necessary to rollback changes for both data and catalog
   auto table_epochs = catalog.getTableEpochs(catalog.getDatabaseId(), td->tableId);
+  CHECK_GT(table_epochs.size(), 0UL);
+  recovery_info_.table_epoch = table_epochs[0].table_epoch;
+
   collectExpectedCatalogChanges(td, src_dst_cds);
+
+  for (const auto& [src_cd, dst_cd] : src_dst_cds) {
+    recovery_info_.src_dst_cds.emplace_back(*src_cd, *dst_cd);
+  }
+
+  auto recovery_file_info = recovery_mgr_.getRecoveryFilepathInfo(td->tableId);
+  auto recovery_filepath = recovery_mgr_.recoveryFilepath(recovery_file_info);
+  recovery_mgr_.writeSerializedRecoveryInformation(recovery_info_, recovery_file_info);
+}
+
+void AlterTableAlterColumnCommand::alterColumnTypes(const TableDescriptor* td,
+                                                    const TypePairs& src_dst_cds) {
+  auto& catalog = session_ptr_->getCatalog();
+
+  auto table_epochs = catalog.getTableEpochs(catalog.getDatabaseId(), td->tableId);
+
+  populateAndWriteRecoveryInfo(td, src_dst_cds);
 
   try {
     auto physical_columns = prepareGeoColumns(td, src_dst_cds);
@@ -2621,46 +2522,20 @@ void AlterTableAlterColumnCommand::alterColumnTypes(
     alterColumns(td, src_dst_cds);
 
     // First checkpoint is for added/altered data, rollback is possible
-    checkpoint(td, src_dst_cds);
+    recovery_mgr_.checkpoint(td, src_dst_cds);
 
   } catch (std::exception& except) {
     catalog.setTableEpochs(catalog.getDatabaseId(), table_epochs);
     clearInMemoryData(td, src_dst_cds);
-    rollback(td, src_dst_cds);
+    recovery_mgr_.rollback(td, recovery_info_);
+    cleanupRecoveryInfo(td);
     throw std::runtime_error("Alter column type: " + std::string(except.what()));
   }
 
   // After the last checkpoint, the following operations are non-reversible,
   // when recovering from a crash will be required to finish
   try {
-    try {
-      deleteDictionaries(td, src_dst_cds);
-    } catch (std::exception& except) {
-      LOG(WARNING) << "Alter column type: failed to clear source dictionaries: "
-                   << except.what();
-      throw;
-    }
-
-    try {
-      clearRemainingChunks(td, src_dst_cds);
-    } catch (std::exception& except) {
-      LOG(WARNING) << "Alter column type: failed to clear remaining chunks: "
-                   << except.what();
-      throw;
-    }
-
-    try {
-      dropSourceGeoColumns(td, src_dst_cds);
-    } catch (std::exception& except) {
-      LOG(WARNING) << "Alter column type: failed to remove geo's source column : "
-                   << except.what();
-      throw;
-    }
-
-    // Second checkpoint is for removed data, rollback no longer possible
-    checkpoint(td, src_dst_cds);
-    catalog.resetTableEpochFloor(td->tableId);
-
+    recovery_mgr_.cleanup(td, src_dst_cds);
   } catch (std::exception& except) {
     // Any exception encountered during the last steps is unexpected and will cause a
     // crash, relying on the recovery process to fix resulting issues
@@ -2669,6 +2544,7 @@ void AlterTableAlterColumnCommand::alterColumnTypes(
   }
 
   clearInMemoryData(td, src_dst_cds);
+  cleanupRecoveryInfo(td);
 }
 
 void AlterTableAlterColumnCommand::alterColumn() {
