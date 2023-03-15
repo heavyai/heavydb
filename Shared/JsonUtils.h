@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
+ * Copyright 2023 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,7 @@
 #include <rapidjson/document.h>
 
 #include "Logger/Logger.h"
-
-namespace foreign_storage {
+#include "Shared/sqltypes.h"
 
 // helper functions for serializing/deserializing objects to rapidjson value
 namespace json_utils {
@@ -69,6 +68,52 @@ void set_value(rapidjson::Value& json_val,
 
 void get_value(const rapidjson::Value& json_val, int64_t& value);
 
+// bool
+void set_value(rapidjson::Value& json_val,
+               const bool& value,
+               rapidjson::Document::AllocatorType& allocator);
+
+void get_value(const rapidjson::Value& json_val, bool& value);
+
+// SQLTypes
+void set_value(rapidjson::Value& json_val,
+               const SQLTypes& value,
+               rapidjson::Document::AllocatorType& allocator);
+
+void get_value(const rapidjson::Value& json_val, SQLTypes& value);
+
+// EncodingType
+void set_value(rapidjson::Value& json_val,
+               const EncodingType& column_desc,
+               rapidjson::Document::AllocatorType& allocator);
+
+void get_value(const rapidjson::Value& json_val, EncodingType& column_desc);
+
+// StringDictKey
+void set_value(rapidjson::Value& json_val,
+               const shared::StringDictKey& dict_key,
+               rapidjson::Document::AllocatorType& allocator);
+
+void get_value(const rapidjson::Value& json_val, shared::StringDictKey& dict_key);
+
+// SQLTypeInfo
+void set_value(rapidjson::Value& json_val,
+               const SQLTypeInfo& type_info,
+               rapidjson::Document::AllocatorType& allocator);
+
+template <typename T, typename MemberFunc>
+void get_value_from_object(const rapidjson::Value& json_val,
+                           MemberFunc mem_fn,
+                           SQLTypeInfo& type_info,
+                           const std::string& key) {
+  T value;
+  auto setter = std::bind(mem_fn, &type_info, std::placeholders::_1);
+  get_value_from_object(json_val, value, key);
+  setter(value);
+}
+
+void get_value(const rapidjson::Value& json_val, SQLTypeInfo& type_info);
+
 // std::vector
 template <class T>
 void set_value(rapidjson::Value& json_val,
@@ -85,11 +130,35 @@ void set_value(rapidjson::Value& json_val,
 template <class T>
 void get_value(const rapidjson::Value& json_val, std::vector<T>& vector_value) {
   CHECK(json_val.IsArray());
-  CHECK(vector_value.size() == 0);
+  CHECK_EQ(vector_value.size(), size_t(0));
   for (const auto& json_obj : json_val.GetArray()) {
     T val;
     get_value(json_obj, val);
     vector_value.push_back(val);
+  }
+}
+
+// std::list
+template <class T>
+void set_value(rapidjson::Value& json_val,
+               const std::list<T>& list_value,
+               rapidjson::Document::AllocatorType& allocator) {
+  json_val.SetArray();
+  for (const auto& value : list_value) {
+    rapidjson::Value json_obj;
+    set_value(json_obj, value, allocator);
+    json_val.PushBack(json_obj, allocator);
+  }
+}
+
+template <class T>
+void get_value(const rapidjson::Value& json_val, std::list<T>& list_value) {
+  CHECK(json_val.IsArray());
+  CHECK_EQ(list_value.size(), size_t(0));
+  for (const auto& json_obj : json_val.GetArray()) {
+    T val;
+    get_value(json_obj, val);
+    list_value.push_back(val);
   }
 }
 
@@ -112,7 +181,7 @@ template <class T, class V>
 void get_value(const rapidjson::Value& json_val,
                std::vector<std::pair<T, V>>& vector_value) {
   CHECK(json_val.IsArray());
-  CHECK(vector_value.size() == 0);
+  CHECK_EQ(vector_value.size(), size_t(0));
   for (const auto& json_obj : json_val.GetArray()) {
     CHECK(json_obj.IsObject());
     T key;
@@ -120,6 +189,35 @@ void get_value(const rapidjson::Value& json_val,
     get_value_from_object(json_obj, key, "key");
     get_value_from_object(json_obj, value, "value");
     vector_value.emplace_back(std::make_pair(key, value));
+  }
+}
+
+// std::list<std::pair>
+template <class T, class V>
+void set_value(rapidjson::Value& json_val,
+               const std::list<std::pair<T, V>>& list_value,
+               rapidjson::Document::AllocatorType& allocator) {
+  json_val.SetArray();
+  for (const auto& pair : list_value) {
+    rapidjson::Value pair_obj;
+    pair_obj.SetObject();
+    add_value_to_object(pair_obj, pair.first, "key", allocator);
+    add_value_to_object(pair_obj, pair.second, "value", allocator);
+    json_val.PushBack(pair_obj, allocator);
+  }
+}
+
+template <class T, class V>
+void get_value(const rapidjson::Value& json_val, std::list<std::pair<T, V>>& list_value) {
+  CHECK(json_val.IsArray());
+  CHECK_EQ(list_value.size(), size_t(0));
+  for (const auto& json_obj : json_val.GetArray()) {
+    CHECK(json_obj.IsObject());
+    T key;
+    V value;
+    get_value_from_object(json_obj, key, "key");
+    get_value_from_object(json_obj, value, "value");
+    list_value.emplace_back(std::make_pair(key, value));
   }
 }
 
@@ -141,7 +239,7 @@ void set_value(rapidjson::Value& json_val,
 template <class T, class V>
 void get_value(const rapidjson::Value& json_val, std::map<T, V>& map_value) {
   CHECK(json_val.IsArray());
-  CHECK(map_value.size() == 0);
+  CHECK_EQ(map_value.size(), size_t(0));
   for (const auto& json_obj : json_val.GetArray()) {
     CHECK(json_obj.IsObject());
     T key;
@@ -186,4 +284,3 @@ void write_to_file(const rapidjson::Document& document, const std::string& file_
 std::string write_to_string(const rapidjson::Document& document);
 
 }  // namespace json_utils
-}  // namespace foreign_storage

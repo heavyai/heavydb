@@ -13,6 +13,7 @@ set(shared_source_files
     file_type.cpp
     distributed.cpp
     TargetInfo.cpp
+    JsonUtils.cpp
     DbObjectKeys.cpp
     FullyQualifiedTableName.cpp)
 

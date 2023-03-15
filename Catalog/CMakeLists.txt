@@ -13,6 +13,8 @@ set(catalog_source_files
     ForeignTable.cpp
     DdlCommandExecutor.cpp
     DdlCommandExecutor.h
+    AlterColumnRecovery.cpp
+    AlterColumnRecovery.h
     RefreshTimeCalculator.cpp
 )
 

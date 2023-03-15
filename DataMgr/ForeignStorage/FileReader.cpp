@@ -17,7 +17,7 @@
 #include "DataMgr/ForeignStorage/FileReader.h"
 
 #include "ForeignStorageException.h"
-#include "FsiJsonUtils.h"
+#include "Shared/JsonUtils.h"
 #include "Shared/file_path_util.h"
 #include "Shared/file_type.h"
 #include "Shared/misc.h"
