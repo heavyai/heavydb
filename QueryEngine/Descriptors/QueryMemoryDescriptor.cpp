@@ -657,7 +657,7 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
   if (has_nulls_ != other.has_nulls_) {
     return false;
   }
-  if (count_distinct_descriptors_.size() != count_distinct_descriptors_.size()) {
+  if (count_distinct_descriptors_.size() != other.count_distinct_descriptors_.size()) {
     return false;
   } else {
     // Count distinct descriptors can legitimately differ in device only.
