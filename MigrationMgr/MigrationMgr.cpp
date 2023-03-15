@@ -203,7 +203,7 @@ void MigrationMgr::migrateDateInDaysMetadata(
   LOG(INFO) << "Successfully migrated all date in days column metadata.";
 }
 
-void MigrationMgr::dropRenderGroupColumns(
+bool MigrationMgr::dropRenderGroupColumns(
     const Catalog_Namespace::TableDescriptorMapById& table_descriptors_by_id,
     Catalog_Namespace::Catalog* cat) {
   // for this catalog...
@@ -212,7 +212,7 @@ void MigrationMgr::dropRenderGroupColumns(
 
   // skip info schema catalog
   if (catalog.isInfoSchemaDb()) {
-    return;
+    return true;
   }
 
   // report catalog
@@ -222,6 +222,8 @@ void MigrationMgr::dropRenderGroupColumns(
   // HeavyConnect cache
   auto* heavyconnect_cache =
       catalog.getDataMgr().getPersistentStorageMgr()->getDiskCache();
+
+  bool all_tables_migrated = true;
 
   // all tables...
   for (auto itr = table_descriptors_by_id.begin(); itr != table_descriptors_by_id.end();
@@ -287,16 +289,16 @@ void MigrationMgr::dropRenderGroupColumns(
               // restart with the column after the one we identified
               itr++;
             } else {
-              LOG(WARNING) << "MigrationMgr: dropRenderGroupColumns:   Expected render "
-                              "group column '"
-                           << next_name << "' has wrong ID (" << next_id << "/"
-                           << expected_next_id << "), skipping...";
+              LOG(ERROR) << "MigrationMgr: dropRenderGroupColumns:   Expected render "
+                            "group column '"
+                         << next_name << "' has wrong ID (" << next_id << "/"
+                         << expected_next_id << "), skipping...";
             }
           } else {
-            LOG(WARNING) << "MigrationMgr: dropRenderGroupColumns:   Expected render "
-                            "group column '"
-                         << next_name << "' has wrong type (" << to_string(next_type)
-                         << "), skipping...";
+            LOG(ERROR) << "MigrationMgr: dropRenderGroupColumns:   Expected render "
+                          "group column '"
+                       << next_name << "' has wrong type (" << to_string(next_type)
+                       << "), skipping...";
           }
         }
       }
@@ -342,8 +344,13 @@ void MigrationMgr::dropRenderGroupColumns(
       catalog.rollLegacy(false);
       catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
       LOG(ERROR) << "MigrationMgr: dropRenderGroupColumns:   Failed to drop render group "
-                    "columns for table '"
-                 << td->tableName << "' (" << e.what() << ")";
+                    "columns for Table '"
+                 << td->tableName << "' in Database '" << catalog.name() << "' ("
+                 << e.what() << ")";
+
+      // trigger overall failure
+      all_tables_migrated = false;
+
       // don't do anything else for this table
       continue;
     }
@@ -360,6 +367,8 @@ void MigrationMgr::dropRenderGroupColumns(
       }
     }
   }
+
+  return all_tables_migrated;
 }
 
 namespace {

@@ -493,9 +493,7 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
 
   // do the drop render group columns migration here too
   // @TODO make a single entry point in MigrationMgr that will do these two and futures
-  if (prog_config_opts.enable_drop_render_group_columns_migration) {
-    Catalog_Namespace::SysCatalog::instance().checkDropRenderGroupColumnsMigration();
-  }
+  Catalog_Namespace::SysCatalog::instance().checkDropRenderGroupColumnsMigration();
 
   if (g_enable_fsi && g_enable_foreign_table_scheduled_refresh) {
     foreign_storage::ForeignTableRefreshScheduler::start(g_running);

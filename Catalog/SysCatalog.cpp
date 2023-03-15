@@ -3199,11 +3199,25 @@ void SysCatalog::checkDropRenderGroupColumnsMigration() const {
   sys_sqlite_lock sqlite_lock(this);
   static const std::string drop_render_groups_migration{"drop_render_groups"};
   if (!hasExecutedMigration(drop_render_groups_migration)) {
+    bool all_catalogs_migrated = true;
+
     auto cats = Catalog_Namespace::SysCatalog::instance().getCatalogsForAllDbs();
     for (auto& cat : cats) {
-      cat->checkDropRenderGroupColumnsMigration();
+      if (!cat->checkDropRenderGroupColumnsMigration()) {
+        all_catalogs_migrated = false;
+      }
     }
     recordExecutedMigration(drop_render_groups_migration);
+
+    if (!all_catalogs_migrated) {
+      // we have marked the migration as having been attempted, but one or more tables did
+      // not correctly migrate, so we fail here in order to alert the admin that they need
+      // to be manually repaired or dropped on next startup
+      LOG(FATAL) << "One or more tables in one or more databases failed "
+                    "drop-render-group-columns migration. Check INFO and ERROR logs for "
+                    "more details. This message will not be repeated unless the "
+                    "migration record is manually reset.";
+    }
   }
 }
 
