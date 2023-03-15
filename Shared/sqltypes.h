@@ -1058,6 +1058,15 @@ class SQLTypeInfo {
     CHECK(dict_key_.dict_id == comp_param || comp_param == 0);
   }
 
+  // TODO: Remove below *SkipCompParamCheck methods as part of comp_param refactor
+  const shared::StringDictKey& getStringDictKeySkipCompParamCheck() const {
+    return dict_key_;
+  }
+
+  void setStringDictKeySkipCompParamCheck(const shared::StringDictKey& dict_key) {
+    dict_key_ = dict_key;
+  }
+
   // column of this type can use FlatBuffer storage
   inline bool supports_flatbuffer() const {
     switch (type) {

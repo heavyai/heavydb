@@ -15,7 +15,6 @@
  */
 
 #include "ForeignDataWrapperFactory.h"
-#include "FsiJsonUtils.h"
 
 #include "CsvDataWrapper.h"
 #include "ForeignDataWrapper.h"
@@ -30,6 +29,7 @@
 #endif
 #include "Catalog/os/UserMapping.h"
 #include "RegexParserDataWrapper.h"
+#include "Shared/JsonUtils.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/file_path_util.h"
 #include "Shared/misc.h"

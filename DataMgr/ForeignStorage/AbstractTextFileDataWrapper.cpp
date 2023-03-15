@@ -29,7 +29,7 @@
 #include "DataMgr/ForeignStorage/ForeignTableSchema.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "ForeignStorageException.h"
-#include "FsiJsonUtils.h"
+#include "Shared/JsonUtils.h"
 #include "Shared/misc.h"
 
 namespace foreign_storage {
