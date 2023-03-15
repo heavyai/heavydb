@@ -95,6 +95,8 @@ struct TableFunctionManager {
     }
   }
 
+  void add_varlen_buffer(int8_t* buffer) { row_set_mem_owner_->addVarlenBuffer(buffer); }
+
   // Store the pointer to output Column instance
   void set_output_column(int32_t index, int8_t* ptr) {
     check_thread_id();

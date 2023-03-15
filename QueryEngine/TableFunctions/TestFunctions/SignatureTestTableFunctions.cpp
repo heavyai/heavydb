@@ -413,6 +413,18 @@ ct_require_text_collist_enc_dict__cpu_(const ColumnList<TextEncodingDict>& input
   return 1;
 }
 
+EXTENSION_NOINLINE_HOST int32_t ct_test_allocator(TableFunctionManager& mgr,
+                                                  const Column<int32_t>& input,
+                                                  const TextEncodingNone& t,
+                                                  Column<int32_t>& out) {
+  mgr.enable_output_allocations();
+  mgr.set_output_row_size(1);
+  TextEncodingNone t2(t.getString());
+  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(t2.ptr_));
+  out[0] = 11;
+  return 1;
+}
+
 #endif  // #ifndef __CUDACC__
 
 #ifdef __CUDACC__

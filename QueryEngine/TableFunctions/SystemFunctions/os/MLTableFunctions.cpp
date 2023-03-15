@@ -89,8 +89,10 @@ linear_reg_coefs__cpu_2(TableFunctionManager& mgr,
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model name CURSOR.");
   }
-  const std::string model_name_str{model_name.getString(0)};
-  return linear_reg_coefs__cpu_1(mgr, model_name_str, output_coef_idx, output_coef);
+  TextEncodingNone model_name_text_enc_none(model_name.getString(0));
+  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
+  return linear_reg_coefs__cpu_1(
+      mgr, model_name_text_enc_none, output_coef_idx, output_coef);
 }
 
 EXTENSION_NOINLINE_HOST int32_t
@@ -131,9 +133,10 @@ random_forest_reg_var_importance__cpu_2(TableFunctionManager& mgr,
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model name CURSOR.");
   }
-  const std::string model_name_str{model_name.getString(0)};
+  TextEncodingNone model_name_text_enc_none(model_name.getString(0));
+  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
   return random_forest_reg_var_importance__cpu_1(
-      mgr, model_name_str, feature_id, importance_score);
+      mgr, model_name_text_enc_none, feature_id, importance_score);
 }
 
 EXTENSION_NOINLINE_HOST
@@ -211,9 +214,10 @@ int32_t get_decision_trees__cpu_2(TableFunctionManager& mgr,
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model name CURSOR.");
   }
-  const std::string model_name_str{model_name.getString(0)};
+  TextEncodingNone model_name_text_enc_none(model_name.getString(0));
+  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
   return get_decision_trees__cpu_1(mgr,
-                                   model_name_str,
+                                   model_name_text_enc_none,
                                    tree_id,
                                    entry_id,
                                    is_split_node,
