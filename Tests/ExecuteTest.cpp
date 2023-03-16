@@ -3040,7 +3040,7 @@ TEST_F(Select, WidthBucketNullability) {
     {
       // no results
       auto result = run_multiple_agg(
-          R"(SELECT WIDTH_BUCKET(x, 1, 20, 3) AS w, COUNT(*) AS n FROM test GROUP BY w HAVING (w IS null);)",
+          R"(SELECT WIDTH_BUCKET(x, 1, 20, 3) AS wb, COUNT(*) AS n FROM test GROUP BY wb HAVING (wb IS null);)",
           dt);
       EXPECT_EQ(result->rowCount(), size_t(0));
     }
@@ -3049,7 +3049,7 @@ TEST_F(Select, WidthBucketNullability) {
       // one null row
       // no results
       auto result = run_multiple_agg(
-          R"(SELECT WIDTH_BUCKET(ofd, 1, 20, 3) AS w, COUNT(*) AS n FROM test GROUP BY w HAVING (w IS null);)",
+          R"(SELECT WIDTH_BUCKET(ofd, 1, 20, 3) AS wb, COUNT(*) AS n FROM test GROUP BY wb HAVING (wb IS null);)",
           dt);
       EXPECT_EQ(result->rowCount(), size_t(1));
     }
@@ -6667,9 +6667,8 @@ TEST_F(Select, Time) {
         dt);
     check_date_trunc_groups(*rows);
     const auto one_row = run_multiple_agg(
-        "SELECT DATE_TRUNC(year, CASE WHEN str = 'foo' THEN m END) d FROM test GROUP BY "
-        "d "
-        "HAVING d IS NOT NULL;",
+        "SELECT DATE_TRUNC(year, CASE WHEN str = 'foo' THEN m END) dt FROM test GROUP BY "
+        "dt HAVING dt IS NOT NULL;",
         dt);
     check_one_date_trunc_group(*one_row, 1388534400);
     ASSERT_EQ(0,
@@ -11598,6 +11597,20 @@ TEST_F(Select, RedundantGroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT DISTINCT(x) from test where y < 10 and z > 30 GROUP BY x;", dt);
+  }
+}
+
+TEST_F(Select, GroupByAliasMatchingColumnName) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT x / x AS x, count(*) FROM test GROUP BY x;", dt);
+  }
+}
+
+TEST_F(Select, GroupByAliasMatchingColumnNameInSubquery) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT x / x AS x, count(*) FROM (SELECT x + y AS x FROM test) GROUP BY x;", dt);
   }
 }
 
