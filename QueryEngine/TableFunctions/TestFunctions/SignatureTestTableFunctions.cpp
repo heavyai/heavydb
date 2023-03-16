@@ -801,4 +801,31 @@ ct_test_calcite_casting_timestamp__cpu_(TableFunctionManager& mgr,
   return size;
 }
 
+template <typename T>
+TEMPLATE_NOINLINE int32_t
+ct_test_calcite_casting_columnlist__template_cpu_(TableFunctionManager& mgr,
+                                                  const Column<T>& first,
+                                                  const ColumnList<T>& list,
+                                                  Column<T>& out) {
+  mgr.set_output_row_size(list.numCols() + 1);
+  out[0] = first[0];
+  for (int i = 0; i < list.numCols(); i++) {
+    out[i + 1] = list[i][0];
+  }
+  return out.size();
+}
+
+// explicit instantiations
+template TEMPLATE_NOINLINE int32_t
+ct_test_calcite_casting_columnlist__template_cpu_(TableFunctionManager& mgr,
+                                                  const Column<float>& first,
+                                                  const ColumnList<float>& list,
+                                                  Column<float>& out);
+
+template TEMPLATE_NOINLINE int32_t
+ct_test_calcite_casting_columnlist__template_cpu_(TableFunctionManager& mgr,
+                                                  const Column<double>& first,
+                                                  const ColumnList<double>& list,
+                                                  Column<double>& out);
+
 #endif

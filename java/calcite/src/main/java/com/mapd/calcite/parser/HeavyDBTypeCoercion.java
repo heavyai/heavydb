@@ -75,7 +75,7 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
             return -1;
           }
         }
-        RelDataType widerType = getWiderTypeForTwo(actualRelType, formalRelType, true);
+        RelDataType widerType = getWiderTypeForTwo(actualRelType, formalRelType, false);
         if (widerType == null) {
           return -1;
         } else if (!SqlTypeUtil.isTimestamp(widerType)
@@ -146,10 +146,10 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
             }
 
             RelDataType widerType =
-                    getWiderTypeForTwo(actualRelType, formalSubtype, true);
+                    getWiderTypeForTwo(actualRelType, formalSubtype, false);
             if (!SqlTypeUtil.sameNamedType(actualRelType, formalSubtype)) {
-              // no common type, or actual type is wider than formal
               if (widerType == null || widerType == actualRelType) {
+                // no common type, or actual type is wider than formal
                 return -1;
               }
             }
@@ -161,12 +161,17 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
             while (colListSize < maxColListSize) {
               SqlNode curOperand = selectNode.getSelectList().get(iActual + colListSize);
               actualRelType = scope.getValidator().deriveType(scope, curOperand);
-              widerType = getWiderTypeForTwo(formalSubtype, actualRelType, true);
+              widerType = getWiderTypeForTwo(formalSubtype, actualRelType, false);
               if (!SqlTypeUtil.sameNamedType(actualRelType, formalSubtype)) {
-                // no common type, or actual type is wider than formal
-                if (widerType == null || widerType == actualRelType) {
+                if (widerType == null
+                        || !SqlTypeUtil.sameNamedType(widerType, formalSubtype)) {
+                  // no common type, or actual type is wider than formal
                   break;
-                } else if (actualRelType != widerType) {
+                } else if (widerType != formalSubtype) {
+                  // formal subtype is narrower than widerType, we do not support
+                  // downcasting
+                  break;
+                } else {
                   score += getScoreForTypes(widerType, actualRelType, true);
                 }
               }
@@ -175,15 +180,19 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
             iActual += colListSize - 1;
           } else if (actualRelType != formalRelType) {
             RelDataType widerType =
-                    getWiderTypeForTwo(formalRelType, actualRelType, true);
+                    getWiderTypeForTwo(formalRelType, actualRelType, false);
             if (widerType == null) {
+              // no common wider type
               return -1;
             } else if (!SqlTypeUtil.isTimestamp(widerType)
                     && SqlTypeUtil.sameNamedType(formalRelType, actualRelType)) {
               // TIMESTAMPs of different precision need coercion, but other structurally
               // equal types do not (i.e VARCHAR(1) and VARCHAR(10))
               continue;
-            } else if (actualRelType == widerType) {
+            } else if (actualRelType == widerType
+                    || !SqlTypeUtil.sameNamedType(widerType, formalRelType)) {
+              // formal type is narrower than widerType or the provided actualType, we do
+              // not support downcasting
               return -1;
             } else {
               score += getScoreForTypes(widerType, actualRelType, true);
@@ -259,7 +268,7 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
             continue;
           }
         }
-        RelDataType widerType = getWiderTypeForTwo(actualRelType, formalRelType, true);
+        RelDataType widerType = getWiderTypeForTwo(actualRelType, formalRelType, false);
         if (!SqlTypeUtil.isTimestamp(widerType)
                 && SqlTypeUtil.sameNamedType(formalRelType, actualRelType)) {
           // TIMESTAMPs of different precision need coercion, but other structurally equal
@@ -308,7 +317,7 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
             ExtArgumentType colListSubtype = getValueType(extType);
             RelDataType formalSubtype = toRelDataType(colListSubtype, factory);
             RelDataType widerType =
-                    getWiderTypeForTwo(actualRelType, formalSubtype, true);
+                    getWiderTypeForTwo(actualRelType, formalSubtype, false);
 
             int colListSize = 0;
             int numFormalArgumentsLeft = (formalFieldTypes.size() - 1) - iFormal;
@@ -317,7 +326,7 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
             while (colListSize < maxColListSize) {
               SqlNode curOperand = selectNode.getSelectList().get(iActual + colListSize);
               actualRelType = scope.getValidator().deriveType(scope, curOperand);
-              widerType = getWiderTypeForTwo(formalSubtype, actualRelType, true);
+              widerType = getWiderTypeForTwo(formalSubtype, actualRelType, false);
               if (!SqlTypeUtil.sameNamedType(actualRelType, formalSubtype)) {
                 if (widerType == null) {
                   break;
@@ -335,7 +344,7 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
             iActual += colListSize - 1;
           } else if (actualRelType != formalRelType) {
             RelDataType widerType =
-                    getWiderTypeForTwo(formalRelType, actualRelType, true);
+                    getWiderTypeForTwo(formalRelType, actualRelType, false);
             if (!SqlTypeUtil.isTimestamp(widerType)
                     && SqlTypeUtil.sameNamedType(actualRelType, formalRelType)) {
               updateValidatedType(newValidatedTypeList, selectNode, iActual);
@@ -442,16 +451,19 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
         if (SqlTypeUtil.isApproximateNumeric(targetType)) {
           // should favor keeping integer types over promoting to floating point
           multiplier = 10;
-        } else if (SqlTypeUtil.inCharFamily(targetType)) {
-          // promoting to char types should be a last resort
-          multiplier = 1000;
-        }
+        } /* TODO: Re-enable cast to string types after ColumnList binding is resolved
+         else if (SqlTypeUtil.inCharFamily(targetType)) {
+           // promoting to char types should be a last resort
+           multiplier = 1000;
+         }*/
         return baseScore * multiplier;
       }
       default: {
         // promoting to char types should be a last resort
+        /* TODO: Re-enable cast to string types after ColumnList binding is resolved
         int multiplier = (SqlTypeUtil.inCharFamily(targetType) ? 1000 : 1);
-        return baseScore * multiplier;
+        */
+        return baseScore /** multiplier*/;
       }
     }
   }
