@@ -1555,6 +1555,7 @@ EXTENSION_NOINLINE int32_t ct_test_func__cpu_2(const Column<int32_t>& input1,
   UDTF: ct_test_calcite_casting_bigint__cpu_(TableFunctionManager, Cursor<int64_t>) -> Column<int64_t>
   UDTF: ct_test_calcite_casting_double__cpu_(TableFunctionManager, Cursor<double>) -> Column<double>
   UDTF: ct_test_calcite_casting_timestamp__cpu_(TableFunctionManager, Cursor<Timestamp>) -> Column<Timestamp>
+  UDTF: ct_test_calcite_casting_columnlist__template_cpu_(TableFunctionManager, Cursor<Column<T> first, ColumnList<T> list> data) -> Column<T>, T=[float, double]
 */
 // clang-format on
 // functions to test calcite auto casting
@@ -1575,4 +1576,11 @@ EXTENSION_NOINLINE int32_t
 ct_test_calcite_casting_timestamp__cpu_(TableFunctionManager& mgr,
                                         const Column<Timestamp>& input1,
                                         Column<Timestamp>& out);
+
+template <typename T>
+TEMPLATE_NOINLINE int32_t
+ct_test_calcite_casting_columnlist__template_cpu_(TableFunctionManager& mgr,
+                                                  const Column<T>& first,
+                                                  const ColumnList<T>& list,
+                                                  Column<T>& out);
 #endif
