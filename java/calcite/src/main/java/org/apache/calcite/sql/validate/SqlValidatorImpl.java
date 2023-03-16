@@ -6130,6 +6130,14 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     }
 
     @Override public SqlNode visit(SqlIdentifier id) {
+      if (id.isSimple() && getScope() instanceof GroupByScope) {                  // HEAVY.AI new
+        RelDataType dataType = getScope().resolveColumn(id.names.get(0), id);     // HEAVY.AI new
+        // Ensure that column names take precedence over aliases in               // HEAVY.AI new
+        // GROUP BY clauses.                                                      // HEAVY.AI new
+        if (dataType != null) {                                                   // HEAVY.AI new
+          return super.visit(id);                                                 // HEAVY.AI new
+        }                                                                         // HEAVY.AI new
+      }                                                                           // HEAVY.AI new
       if (id.isSimple()
           && (havingExpr
               ? validator.config().sqlConformance().isHavingAlias()
