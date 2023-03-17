@@ -21,7 +21,7 @@
 #include "Shared/distributed.h"
 #include "Shared/misc.h"
 
-#include "QueryEngine/ExternalCacheInvalidators.h"
+#include "QueryEngine/Execute.h"
 
 namespace foreign_storage {
 namespace {
@@ -38,7 +38,7 @@ void refresh_foreign_table_unlocked(Catalog_Namespace::Catalog& catalog,
   LOG(INFO) << "Starting refresh for table: " << td.tableName;
   auto& data_mgr = catalog.getDataMgr();
   ChunkKey table_key{catalog.getCurrentDB().dbId, td.tableId};
-  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
+  Executor::clearExternalCaches(true, &td, catalog.getDatabaseId());
   catalog.removeFragmenterForTable(td.tableId);
 
   auto fsm = data_mgr.getPersistentStorageMgr()->getForeignStorageMgr();
