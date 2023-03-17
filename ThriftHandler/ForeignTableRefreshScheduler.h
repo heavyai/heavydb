@@ -35,7 +35,6 @@ class ForeignTableRefreshScheduler {
   static void resetHasRefreshedTable();
 
  private:
-  static void invalidateQueryEngineCaches();
   static std::atomic<bool> is_scheduler_running_;
   static std::chrono::seconds thread_wait_duration_;
   static std::thread scheduler_thread_;

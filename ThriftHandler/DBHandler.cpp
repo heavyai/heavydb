@@ -7302,8 +7302,9 @@ void DBHandler::set_table_epochs(const TSessionId& session_id_or_json,
   }
 
   const auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+  Executor::clearExternalCaches(
+      true, cat.getMetadataForTable(logical_table_id, false), db_id);
   ChunkKey table_key{db_id, logical_table_id};
-  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
   auto table_write_lock = lockmgr::TableSchemaLockMgr::getWriteLockForTable(table_key);
   auto table_data_write_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(table_key);
   cat.setTableEpochs(db_id, table_epochs_vector);

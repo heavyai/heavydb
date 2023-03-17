@@ -1538,10 +1538,8 @@ ExecutionResult DropForeignTableCommand::execute(bool read_only_mode) {
   ddl_utils::validate_table_type(td, ddl_utils::TableType::FOREIGN_TABLE, "DROP");
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, table_name);
+  Executor::clearExternalCaches(false, td, catalog.getDatabaseId());
   catalog.dropTable(td);
-
-  // TODO(Misiu): Implement per-table cache invalidation.
-  DeleteTriggeredCacheInvalidator::invalidateCaches();
 
   return ExecutionResult();
 }
@@ -2206,59 +2204,7 @@ ExecutionResult RefreshForeignTablesCommand::execute(bool read_only_mode) {
     }
     foreign_storage::refresh_foreign_table(cat, table_name, evict_cached_entries);
   }
-
-  // todo(yoonmin) : allow per-table cache invalidation for the foreign table
-  UpdateTriggeredCacheInvalidator::invalidateCaches();
-
   return ExecutionResult();
-}
-
-void AlterTableAlterColumnCommand::clearChunk(Catalog_Namespace::Catalog* catalog,
-                                              const ChunkKey& key,
-                                              const MemoryLevel mem_level) {
-  auto& data_mgr = catalog->getDataMgr();
-  if (mem_level >= data_mgr.levelSizes_.size()) {
-    return;
-  }
-  for (int device = 0; device < data_mgr.levelSizes_[mem_level]; ++device) {
-    if (data_mgr.isBufferOnDevice(key, mem_level, device)) {
-      data_mgr.deleteChunk(key, mem_level, device);
-    }
-  }
-}
-
-void AlterTableAlterColumnCommand::clearChunk(Catalog_Namespace::Catalog* catalog,
-                                              const ChunkKey& key) {
-  clearChunk(catalog, key, MemoryLevel::GPU_LEVEL);
-  clearChunk(catalog, key, MemoryLevel::CPU_LEVEL);
-  clearChunk(catalog, key, MemoryLevel::DISK_LEVEL);
-}
-
-void AlterTableAlterColumnCommand::clearRemainingChunks(
-    const TableDescriptor* td,
-    const AlterColumnTypePairs& src_dst_cds) {
-  auto catalog = &session_ptr_->getCatalog();
-  // for (non-geo) cases where the chunk keys change, chunks that remain with old chunk
-  // key must be removed
-  for (auto& [src_cd, dst_cd] : src_dst_cds) {
-    if (src_cd->columnType.is_varlen_indeed() != dst_cd->columnType.is_varlen_indeed()) {
-      auto fragments = td->fragmenter->getFragmentsForQuery().fragments;
-      for (const auto& fragment : fragments) {
-        ChunkKey key = {
-            catalog->getDatabaseId(), td->tableId, src_cd->columnId, fragment.fragmentId};
-        if (src_cd->columnType.is_varlen_indeed()) {
-          auto data_key = key;
-          data_key.push_back(1);
-          clearChunk(catalog, data_key);
-          auto index_key = key;
-          index_key.push_back(2);
-          clearChunk(catalog, index_key);
-        } else {  // no varlen case
-          clearChunk(catalog, key);
-        }
-      }
-    }
-  }
 }
 
 AlterTableCommand::AlterTableCommand(
@@ -2413,8 +2359,7 @@ void AlterTableAlterColumnCommand::clearInMemoryData(const TableDescriptor* td,
   auto& catalog = session_ptr_->getCatalog();
 
   ChunkKey column_key{catalog.getCurrentDB().dbId, td->tableId, 0};
-  column_key.resize(2);
-  UpdateTriggeredCacheInvalidator::invalidateCachesByTable(boost::hash_value(column_key));
+  Executor::clearExternalCaches(true, td, catalog.getDatabaseId());
   column_key.resize(3);
   for (auto& [src_cd, _] : src_dst_cds) {
     column_key[2] = src_cd->columnId;

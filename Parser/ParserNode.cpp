@@ -4573,8 +4573,7 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
 
   // invalidate cached item
-  std::vector<int> table_key{catalog.getCurrentDB().dbId, td->tableId};
-  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
+  Executor::clearExternalCaches(true, td, catalog.getDatabaseId());
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   const TableOptimizer optimizer(td, executor, catalog);
@@ -4958,8 +4957,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
 
   // invalidate cached item
-  std::vector<int> table_key{catalog.getCurrentDB().dbId, td->tableId};
-  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
+  Executor::clearExternalCaches(true, td, catalog.getDatabaseId());
 
   // Do not take a data write lock, as the fragmenter may call `deleteFragments`
   // during a cap operation. Note that the schema write lock will prevent concurrent
@@ -5217,8 +5215,7 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session,
   check_alter_table_privilege(session, td);
 
   // invalidate cached item
-  std::vector<int> table_key{catalog.getCurrentDB().dbId, td->tableId};
-  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
+  Executor::clearExternalCaches(true, td, catalog.getDatabaseId());
 
   std::string param_name(*param_->get_name());
   boost::algorithm::to_lower(param_name);

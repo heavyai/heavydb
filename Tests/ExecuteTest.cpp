@@ -11563,6 +11563,37 @@ TEST_F(Select, GroupByConstrainedByInQueryRewrite) {
   }
 }
 
+TEST_F(Select, GroupByCardinalityCacheInvalidation) {
+  ScopeGuard reset_flag_and_drop_table = [orig = g_big_group_threshold] {
+    g_big_group_threshold = orig;
+    run_ddl_statement("drop table if exists cardinality_cache_test;");
+  };
+  g_big_group_threshold = 1;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("drop table if exists cardinality_cache_test;");
+    run_ddl_statement("create table cardinality_cache_test (i integer, t text);");
+    run_multiple_agg(
+        "insert into cardinality_cache_test values (1, 'a'), (200000000, 'a');",
+        ExecutorDeviceType::CPU);
+    EXPECT_EQ(
+        int64_t(0),
+        v<int64_t>(run_simple_agg("select count(*) from (select i from "
+                                  "cardinality_cache_test where t = 'b' group by i);",
+                                  dt)));
+    run_multiple_agg(
+        "insert into cardinality_cache_test values (1, 'b'), (2, 'b'), (3, 'b'), "
+        "(4, 'b');",
+        ExecutorDeviceType::CPU);
+    EXPECT_EQ(
+        int64_t(4),
+        v<int64_t>(run_simple_agg("select count(*) from (select i from "
+                                  "cardinality_cache_test where t = 'b' group by i);",
+                                  dt)));
+  }
+}
+
 TEST_F(Select, RedundantGroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
