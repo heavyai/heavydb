@@ -27,6 +27,7 @@
 #include "ParquetDataWrapper.h"
 #endif
 #include "Shared/distributed.h"
+#include "Shared/misc.h"
 
 namespace foreign_storage {
 
@@ -126,6 +127,14 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
   }
 }
 
+namespace {
+class RestoreDataWrapperException : public std::runtime_error {
+ public:
+  RestoreDataWrapperException(const std::string& error_message)
+      : std::runtime_error(error_message) {}
+};
+}  // namespace
+
 void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
     const ChunkKey& key_prefix) {
@@ -148,11 +157,21 @@ void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
       }
     }
 
-    // If the data in cache was restored from disk then it is possible that the wrapper
-    // does not exist yet.  In this case the wrapper will be restored from disk if
-    // possible.
-    createDataWrapperIfNotExists(key_prefix);
-    return;
+    try {
+      // If the data in cache was restored from disk then it is possible that the wrapper
+      // does not exist yet.  In this case the wrapper will be restored from disk if
+      // possible.
+      createDataWrapperIfNotExists(key_prefix);
+      return;
+    } catch (RestoreDataWrapperException& e) {
+      auto [db_id, table_id] = get_table_prefix(key_prefix);
+      LOG(ERROR) << "An error occurred while attempting to restore data wrapper using "
+                    "disk cached metadata. Clearing cached data for table and proceeding "
+                    "with a new data wrapper instance. Database ID: "
+                 << db_id << ", table ID: " << table_id << ", error: " << e.what();
+      chunk_metadata.clear();
+      clearTable({db_id, table_id});
+    }
   } else if (dist::is_distributed() &&
              disk_cache_->hasStoredDataWrapperMetadata(key_prefix[CHUNK_KEY_DB_IDX],
                                                        key_prefix[CHUNK_KEY_TABLE_IDX])) {
@@ -371,8 +390,13 @@ bool CachingForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chun
   if (boost::filesystem::exists(wrapper_file)) {
     ChunkMetadataVector chunk_metadata;
     disk_cache_->getCachedMetadataVecForKeyPrefix(chunk_metadata, table_key);
-    data_wrapper_map_.at(table_key)->restoreDataWrapperInternals(
-        disk_cache_->getSerializedWrapperPath(db, tb), chunk_metadata);
+    try {
+      auto data_wrapper = shared::get_from_map(data_wrapper_map_, table_key);
+      data_wrapper->restoreDataWrapperInternals(
+          disk_cache_->getSerializedWrapperPath(db, tb), chunk_metadata);
+    } catch (std::exception& e) {
+      throw RestoreDataWrapperException(e.what());
+    }
   }
   return true;
 }
