@@ -528,9 +528,10 @@ void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level) {
         // future, we should manage these allocations with the buffer manager directly.
         // For now, assume the user wants to purge the hash table cache when they clear
         // CPU memory (currently used in ExecuteTest to lower memory pressure)
+        // TODO: Move JoinHashTableCacheInvalidator to Executor::clearExternalCaches();
         JoinHashTableCacheInvalidator::invalidateCaches();
       }
-      ResultSetCacheInvalidator::invalidateCaches();
+      Executor::clearExternalCaches(true, nullptr, 0);
       Catalog_Namespace::SysCatalog::instance().getDataMgr().clearMemory(memory_level);
       break;
     }
@@ -1848,7 +1849,7 @@ std::string sort_algorithm_to_string(const SortAlgorithm algorithm) {
 
 }  // namespace
 
-std::string ra_exec_unit_desc_for_caching(const RelAlgExecutionUnit& ra_exe_unit) {
+CardinalityCacheKey::CardinalityCacheKey(const RelAlgExecutionUnit& ra_exe_unit) {
   // todo(yoonmin): replace a cache key as a DAG representation of a query plan
   // instead of ra_exec_unit description if possible
   std::ostringstream os;
@@ -1856,6 +1857,7 @@ std::string ra_exec_unit_desc_for_caching(const RelAlgExecutionUnit& ra_exe_unit
     const auto& scan_desc = input_col_desc->getScanDesc();
     os << scan_desc.getTableKey() << "," << input_col_desc->getColId() << ","
        << scan_desc.getNestLevel();
+    table_keys.emplace(scan_desc.getTableKey());
   }
   if (!ra_exe_unit.simple_quals.empty()) {
     for (const auto& qual : ra_exe_unit.simple_quals) {
@@ -1896,7 +1898,19 @@ std::string ra_exec_unit_desc_for_caching(const RelAlgExecutionUnit& ra_exe_unit
   }
   os << ::toString(ra_exe_unit.estimator == nullptr);
   os << std::to_string(ra_exe_unit.scan_limit);
-  return os.str();
+  key = os.str();
+}
+
+bool CardinalityCacheKey::operator==(const CardinalityCacheKey& other) const {
+  return key == other.key;
+}
+
+size_t CardinalityCacheKey::hash() const {
+  return boost::hash_value(key);
+}
+
+bool CardinalityCacheKey::containsTableKey(const shared::TableKey& table_key) const {
+  return table_keys.find(table_key) != table_keys.end();
 }
 
 std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_unit) {
@@ -5125,7 +5139,7 @@ void Executor::enableRuntimeQueryInterrupt(
   }
 }
 
-void Executor::addToCardinalityCache(const std::string& cache_key,
+void Executor::addToCardinalityCache(const CardinalityCacheKey& cache_key,
                                      const size_t cache_value) {
   if (g_use_estimator_result_cache) {
     heavyai::unique_lock<heavyai::shared_mutex> lock(recycler_mutex_);
@@ -5134,7 +5148,8 @@ void Executor::addToCardinalityCache(const std::string& cache_key,
   }
 }
 
-Executor::CachedCardinality Executor::getCachedCardinality(const std::string& cache_key) {
+Executor::CachedCardinality Executor::getCachedCardinality(
+    const CardinalityCacheKey& cache_key) {
   heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
   if (g_use_estimator_result_cache &&
       cardinality_cache_.find(cache_key) != cardinality_cache_.end()) {
@@ -5142,6 +5157,26 @@ Executor::CachedCardinality Executor::getCachedCardinality(const std::string& ca
     return {true, cardinality_cache_[cache_key]};
   }
   return {false, -1};
+}
+
+void Executor::clearCardinalityCache() {
+  if (g_use_estimator_result_cache) {
+    heavyai::unique_lock<heavyai::shared_mutex> lock(recycler_mutex_);
+    cardinality_cache_.clear();
+  }
+}
+
+void Executor::invalidateCardinalityCacheForTable(const shared::TableKey& table_key) {
+  if (g_use_estimator_result_cache) {
+    heavyai::unique_lock<heavyai::shared_mutex> lock(recycler_mutex_);
+    for (auto it = cardinality_cache_.begin(); it != cardinality_cache_.end();) {
+      if (it->first.containsTableKey(table_key)) {
+        it = cardinality_cache_.erase(it);
+      } else {
+        it++;
+      }
+    }
+  }
 }
 
 std::vector<QuerySessionStatus> Executor::getQuerySessionInfo(
@@ -5328,7 +5363,7 @@ std::shared_ptr<ExecutorResourceMgr_Namespace::ExecutorResourceMgr>
 
 QueryPlanDagCache Executor::query_plan_dag_cache_;
 heavyai::shared_mutex Executor::recycler_mutex_;
-std::unordered_map<std::string, size_t> Executor::cardinality_cache_;
+std::unordered_map<CardinalityCacheKey, size_t> Executor::cardinality_cache_;
 // Executor has a single global result set recycler holder
 // which contains two recyclers related to query resultset
 ResultSetRecyclerHolder Executor::resultset_recycler_holder_;

@@ -389,6 +389,29 @@ struct ChunkRequestInfo;
 struct ResourcePoolInfo;
 };  // namespace ExecutorResourceMgr_Namespace
 
+struct CardinalityCacheKey {
+  CardinalityCacheKey(const RelAlgExecutionUnit& ra_exe_unit);
+
+  bool operator==(const CardinalityCacheKey& other) const;
+
+  size_t hash() const;
+
+  bool containsTableKey(const shared::TableKey& table_key) const;
+
+ private:
+  std::string key;
+  std::unordered_set<shared::TableKey> table_keys;
+};
+
+namespace std {
+template <>
+struct hash<CardinalityCacheKey> {
+  size_t operator()(const CardinalityCacheKey& cache_key) const {
+    return cache_key.hash();
+  }
+};
+}  // namespace std
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -426,6 +449,7 @@ class Executor {
         } else {
           DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
         }
+        Executor::invalidateCardinalityCacheForTable({current_db_id, td->tableId});
         clearEntireCache = false;
       }
     }
@@ -436,6 +460,7 @@ class Executor {
       } else {
         DeleteTriggeredCacheInvalidator::invalidateCaches();
       }
+      Executor::clearCardinalityCache();
     }
   }
 
@@ -1373,8 +1398,11 @@ class Executor {
 
   // true when we have matched cardinality, and false otherwise
   using CachedCardinality = std::pair<bool, size_t>;
-  void addToCardinalityCache(const std::string& cache_key, const size_t cache_value);
-  CachedCardinality getCachedCardinality(const std::string& cache_key);
+  void addToCardinalityCache(const CardinalityCacheKey& cache_key,
+                             const size_t cache_value);
+  CachedCardinality getCachedCardinality(const CardinalityCacheKey& cache_key);
+  static void clearCardinalityCache();
+  static void invalidateCardinalityCacheForTable(const shared::TableKey& table_key);
 
   heavyai::shared_mutex& getDataRecyclerLock();
   QueryPlanDagCache& getQueryPlanDagCache();
@@ -1572,7 +1600,8 @@ class Executor {
 
   static QueryPlanDagCache query_plan_dag_cache_;
   static heavyai::shared_mutex recycler_mutex_;
-  static std::unordered_map<std::string, size_t> cardinality_cache_;
+
+  static std::unordered_map<CardinalityCacheKey, size_t> cardinality_cache_;
   static ResultSetRecyclerHolder resultset_recycler_holder_;
 
   // a variable used for testing query plan DAG extractor when a query has a table

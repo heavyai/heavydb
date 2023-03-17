@@ -2957,11 +2957,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(
     col_ids.push_back(col_id);
   }
 
-  // mark the target table's cached item as dirty
-  std::vector<int> table_chunk_key_prefix{catalog.getCurrentDB().dbId, table_id};
-  auto table_key = boost::hash_value(table_chunk_key_prefix);
-  ResultSetCacheInvalidator::invalidateCachesByTable(table_key);
-  UpdateTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
+  Executor::clearExternalCaches(true, td, catalog.getDatabaseId());
 
   size_t start_row = 0;
   size_t rows_left = rows_number;
@@ -3877,7 +3873,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     }
   }
 
-  auto cache_key = ra_exec_unit_desc_for_caching(ra_exe_unit);
+  CardinalityCacheKey cache_key{ra_exe_unit};
   try {
     auto cached_cardinality = executor_->getCachedCardinality(cache_key);
     auto card = cached_cardinality.second;
