@@ -330,6 +330,7 @@ bool no_deferred_requests(MetadataScanMultiThreadingParams& multi_threading_para
 
 bool is_file_scan_finished(const FileReader* file_reader,
                            MetadataScanMultiThreadingParams& multi_threading_params) {
+  CHECK(file_reader);
   return file_reader->isScanFinished() && no_deferred_requests(multi_threading_params);
 }
 
@@ -404,6 +405,7 @@ void AbstractTextFileDataWrapper::populateChunks(
   rapidjson::Value reader_metadata(rapidjson::kObjectType);
   rapidjson::Document d;
   auto& server_options = foreign_table_->foreign_server->options;
+  CHECK(file_reader_);
   file_reader_->serialize(reader_metadata, d.GetAllocator());
   const auto file_path = getFullFilePath(foreign_table_);
   auto& parser = getFileBufferParser();
@@ -1432,6 +1434,7 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
 
   // Track where scan started for appends
   int start_row = num_rows_;
+  CHECK(file_reader_);
   if (!file_reader_->isScanFinished()) {
     auto buffer_size = get_buffer_size(copy_params,
                                        file_reader_->isRemainingSizeKnown(),
