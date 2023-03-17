@@ -925,7 +925,84 @@ class RecoverCacheQueryTest : public ForeignTableTest {
     }
     ForeignTableTest::TearDown();
   }
+
+  inline static boost::filesystem::path test_dir_{test_temp_dir + "recover_test_dir"};
 };
+
+TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
+  SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
+
+  std::string query = "CREATE FOREIGN TABLE " + default_table_name +
+                      " (t TEXT, i BIGINT[]) "s +
+                      "SERVER default_local_delimited WITH (file_path = '" +
+                      getDataFilesPath() + "/" + "example_1_dir_archives/');";
+  sql(query);
+  auto td = cat_->getMetadataForTable(default_table_name, false);
+  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
+  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
+                      {{"a", array({i(1), i(1), i(1)})},
+                       {"aa", array({NULL_BIGINT, i(2), i(2)})},
+                       {"aaa", array({i(3), NULL_BIGINT, i(3)})}});
+
+  // Reset cache and clear memory representations.
+  resetStorageManagerAndClearTableMemory(table_key);
+  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
+                      {{"a", array({i(1), i(1), i(1)})},
+                       {"aa", array({NULL_BIGINT, i(2), i(2)})},
+                       {"aaa", array({i(3), NULL_BIGINT, i(3)})}});
+
+  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);    // 2 data + 1 index chunk
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);  // Only 2 metadata
+  ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
+}
+
+TEST_F(RecoverCacheQueryTest, ErrorDuringRecovery) {
+  SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
+
+  boost::filesystem::create_directory(test_dir_);
+  boost::filesystem::copy_file(getDataFilesPath() + "0.csv", test_dir_ / "0.csv");
+  boost::filesystem::copy_file(getDataFilesPath() + "1.csv", test_dir_ / "1.csv");
+
+  std::string query = "CREATE FOREIGN TABLE " + default_table_name +
+                      " (i INTEGER) SERVER default_local_delimited "
+                      "WITH (file_path = '" +
+                      test_dir_.string() + "');";
+  sql(query);
+  auto td = cat_->getMetadataForTable(default_table_name, false);
+  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY i;",
+                      {{i(0)}, {i(1)}});
+
+  // Clear cached table chunks and reset cache.
+  ChunkMetadataVector metadata_vector;
+  cache_->getCachedMetadataVecForKeyPrefix(metadata_vector, table_key);
+  for (const auto& [chunk_key, metadata] : metadata_vector) {
+    cache_->eraseChunk(chunk_key);
+  }
+  resetStorageManagerAndClearTableMemory(table_key);
+  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
+
+  // Removing one of the referenced files should cause an error during cache recovery.
+  // Error should be gracefully handled without interrupting the query.
+  auto deleted_file_path = test_dir_ / "0.csv";
+  boost::filesystem::remove_all(deleted_file_path);
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
+
+  ASSERT_EQ(cache_->getNumCachedChunks(), size_t(1));
+  ASSERT_EQ(cache_->getNumCachedMetadata(), size_t(1));
+  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
+
+  // Subsequent query after cache recovery error would previously cause a crash.
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
+
+  ASSERT_EQ(cache_->getNumCachedChunks(), size_t(1));
+  ASSERT_EQ(cache_->getNumCachedMetadata(), size_t(1));
+}
 
 class DataTypeFragmentSizeAndDataWrapperTest
     : public SelectQueryTest,
@@ -952,6 +1029,9 @@ class DataTypeFragmentSizeAndDataWrapperTest
   }
 
   void TearDown() override {
+    if (boost::filesystem::exists(test_dir_)) {
+      boost::filesystem::remove_all(test_dir_);
+    }
     if (skip_teardown_) {
       return;
     }
@@ -5686,37 +5766,6 @@ TEST_F(CacheDefaultTest, Path) {
   auto cache = cat->getDataMgr().getPersistentStorageMgr()->getDiskCache();
   ASSERT_EQ(cache->getCacheDirectory(),
             to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName);
-}
-
-TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
-  SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
-
-  std::string query = "CREATE FOREIGN TABLE " + default_table_name +
-                      " (t TEXT, i BIGINT[]) "s +
-                      "SERVER default_local_delimited WITH (file_path = '" +
-                      getDataFilesPath() + "/" + "example_1_dir_archives/');";
-  sql(query);
-  auto td = cat_->getMetadataForTable(default_table_name, false);
-  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
-  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
-
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
-                      {{"a", array({i(1), i(1), i(1)})},
-                       {"aa", array({NULL_BIGINT, i(2), i(2)})},
-                       {"aaa", array({i(3), NULL_BIGINT, i(3)})}});
-
-  // Reset cache and clear memory representations.
-  resetStorageManagerAndClearTableMemory(table_key);
-  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
-
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
-                      {{"a", array({i(1), i(1), i(1)})},
-                       {"aa", array({NULL_BIGINT, i(2), i(2)})},
-                       {"aaa", array({i(3), NULL_BIGINT, i(3)})}});
-
-  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);    // 2 data + 1 index chunk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);  // Only 2 metadata
-  ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
 }
 
 class RecoverCacheTest : public RecoverCacheQueryTest,
