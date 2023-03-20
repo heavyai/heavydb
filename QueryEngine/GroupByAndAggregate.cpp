@@ -2143,7 +2143,11 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
                 "fast_fixlen_array_buff",
                 i8p_ty,
                 {target_lv, code_generator.posArg(selected_target_expr)}));
-            coords.push_back(executor_->cgen_state_->llInt(int64_t(fixlen)));
+            auto fixed_len_lv = executor_->cgen_state_->emitExternalCall(
+                "determine_fixed_array_len",
+                llvm::IntegerType::get(code_generator.cgen_state_->context_, 64),
+                {target_lv, executor_->cgen_state_->llInt(int64_t(fixlen))});
+            coords.push_back(fixed_len_lv);
             continue;
           }
           coords.push_back(executor_->cgen_state_->emitExternalCall(

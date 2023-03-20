@@ -71,6 +71,39 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
             llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, 8), 0)));
         null_target_lvs.push_back(cgen_state_->llInt((int32_t)0));
         return null_target_lvs;
+      } else if (ti.is_geometry()) {
+        const auto i8p_ty =
+            llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
+        std::vector<llvm::Value*> ret_lvs;
+        // we classify whether the geo col value is null from the rhs of the left-join
+        // qual i.e., table S in the qual: R left join S on R.v = S.v by checking 1)
+        // nulled chunk_iter and 2) its col buffer w/ the size 0 for instance, we consider
+        // the size of col buffer for point as 16 and for other types we use `array_size`
+        // function to determine it, and they all assume valid geos have their buf size >
+        // 0 thus, by returning all bufs' ptr as nullptr we can return 0 as the length of
+        // the nulled geos' col val, and remaining logic can exploit this to finally
+        // return "null" as the col value of the corresponding row in the resultset
+        switch (ti.get_type()) {
+          // outer join's phi node in the generated code expects the # returned lvs'
+          // is the same as `col_ti.get_physical_coord_cols()`
+          // now we have necessary logic to deal with these nullptr and can conclude
+          // it as nulled geo val, i.e., see ResultSetIteration::991
+          case kPOINT:
+          case kMULTIPOINT:
+          case kLINESTRING:
+            return {llvm::ConstantPointerNull::get(i8p_ty)};
+          case kMULTILINESTRING:
+          case kPOLYGON:
+            return {llvm::ConstantPointerNull::get(i8p_ty),
+                    llvm::ConstantPointerNull::get(i8p_ty)};
+          case kMULTIPOLYGON:
+            return {llvm::ConstantPointerNull::get(i8p_ty),
+                    llvm::ConstantPointerNull::get(i8p_ty),
+                    llvm::ConstantPointerNull::get(i8p_ty)};
+          default:
+            CHECK(false);
+            return {nullptr};
+        }
       }
       return {ti.is_fp()
                   ? static_cast<llvm::Value*>(executor_->cgen_state_->inlineFpNull(ti))

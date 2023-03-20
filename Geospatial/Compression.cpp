@@ -185,7 +185,11 @@ bool is_null_point(const SQLTypeInfo& geo_ti,
       }
     } else {
       CHECK_EQ(geo_ti.get_compression(), kENCODING_NONE);
-      return *((double*)coords) == NULL_ARRAY_DOUBLE;
+      auto coords_ptr = (double*)coords;
+      if (!coords_ptr) {
+        return true;
+      }
+      return *coords_ptr == NULL_ARRAY_DOUBLE;
     }
   }
   return false;
