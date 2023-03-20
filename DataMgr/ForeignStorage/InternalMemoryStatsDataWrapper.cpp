@@ -48,7 +48,7 @@ void populate_import_buffers_for_memory_summary(
         import_buffers["device_id"]->addInt(device_id);
       }
       if (import_buffers.find("device_type") != import_buffers.end()) {
-        import_buffers["device_type"]->addString(device_type);
+        import_buffers["device_type"]->addDictStringWithTruncation(device_type);
       }
       if (import_buffers.find("max_page_count") != import_buffers.end()) {
         import_buffers["max_page_count"]->addBigint(memory_info.maxNumPages);
@@ -112,7 +112,8 @@ void populate_import_buffers_for_memory_details(
         if (import_buffers.find("database_name") != import_buffers.end()) {
           auto import_buffer = import_buffers["database_name"];
           if (is_table_chunk(chunk_key)) {
-            import_buffer->addString(get_db_name(chunk_key[CHUNK_KEY_DB_IDX]));
+            import_buffer->addDictStringWithTruncation(
+                get_db_name(chunk_key[CHUNK_KEY_DB_IDX]));
           } else {
             set_null(import_buffer);
           }
@@ -128,8 +129,8 @@ void populate_import_buffers_for_memory_details(
         if (import_buffers.find("table_name") != import_buffers.end()) {
           auto import_buffer = import_buffers["table_name"];
           if (is_table_chunk(chunk_key)) {
-            import_buffer->addString(get_table_name(chunk_key[CHUNK_KEY_DB_IDX],
-                                                    chunk_key[CHUNK_KEY_TABLE_IDX]));
+            import_buffer->addDictStringWithTruncation(get_table_name(
+                chunk_key[CHUNK_KEY_DB_IDX], chunk_key[CHUNK_KEY_TABLE_IDX]));
           } else {
             set_null(import_buffer);
           }
@@ -145,9 +146,10 @@ void populate_import_buffers_for_memory_details(
         if (import_buffers.find("column_name") != import_buffers.end()) {
           auto import_buffer = import_buffers["column_name"];
           if (is_table_chunk(chunk_key)) {
-            import_buffer->addString(get_column_name(chunk_key[CHUNK_KEY_DB_IDX],
-                                                     chunk_key[CHUNK_KEY_TABLE_IDX],
-                                                     chunk_key[CHUNK_KEY_COLUMN_IDX]));
+            import_buffer->addDictStringWithTruncation(
+                get_column_name(chunk_key[CHUNK_KEY_DB_IDX],
+                                chunk_key[CHUNK_KEY_TABLE_IDX],
+                                chunk_key[CHUNK_KEY_COLUMN_IDX]));
           } else {
             set_null(import_buffer);
           }
@@ -162,13 +164,13 @@ void populate_import_buffers_for_memory_details(
           import_buffers["device_id"]->addInt(device_id);
         }
         if (import_buffers.find("device_type") != import_buffers.end()) {
-          import_buffers["device_type"]->addString(device_type);
+          import_buffers["device_type"]->addDictStringWithTruncation(device_type);
         }
         if (import_buffers.find("memory_status") != import_buffers.end()) {
           auto memory_status =
               (memory_data.memStatus == Buffer_Namespace::MemStatus::FREE ? "FREE"
                                                                           : "USED");
-          import_buffers["memory_status"]->addString(memory_status);
+          import_buffers["memory_status"]->addDictStringWithTruncation(memory_status);
         }
         if (import_buffers.find("page_count") != import_buffers.end()) {
           import_buffers["page_count"]->addBigint(memory_data.numPages);
