@@ -44,13 +44,14 @@ void populate_import_buffers_for_storage_details(
       import_buffers["database_id"]->addInt(storage_detail.database_id);
     }
     if (import_buffers.find("database_name") != import_buffers.end()) {
-      import_buffers["database_name"]->addString(get_db_name(storage_detail.database_id));
+      import_buffers["database_name"]->addDictStringWithTruncation(
+          get_db_name(storage_detail.database_id));
     }
     if (import_buffers.find("table_id") != import_buffers.end()) {
       import_buffers["table_id"]->addInt(storage_detail.table_id);
     }
     if (import_buffers.find("table_name") != import_buffers.end()) {
-      import_buffers["table_name"]->addString(
+      import_buffers["table_name"]->addDictStringWithTruncation(
           get_table_name(storage_detail.database_id, storage_detail.table_id));
     }
     if (import_buffers.find("epoch") != import_buffers.end()) {

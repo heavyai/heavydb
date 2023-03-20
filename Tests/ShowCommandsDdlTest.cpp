@@ -3284,6 +3284,35 @@ TEST_F(SystemTablesTest, TablesSystemTableDeletedOwner) {
   // clang-format on
 }
 
+TEST_F(SystemTablesTest, TablesSystemTableLongDdl) {
+  switchToAdmin();
+  const std::string db_name{"test_db_1"};
+  sql("CREATE DATABASE " + db_name + ";");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, db_name);
+  const std::string table_name{"test_table_1"};
+  std::string create_table_sql{"CREATE TABLE " + table_name + " ("};
+  std::string column_name(100, 'a');
+  constexpr int32_t column_count{1000};
+  for (int32_t i = 1; i <= column_count; i++) {
+    create_table_sql += "\n  " + column_name + std::to_string(i) + " INTEGER";
+    if (i == column_count) {
+      create_table_sql += ");";
+    } else {
+      create_table_sql += ",";
+    }
+  }
+  sql(create_table_sql);
+  ASSERT_GT(create_table_sql.size(), StringDictionary::MAX_STRLEN);
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult("SELECT ddl_statement FROM tables WHERE database_name = '" +
+                      db_name + "' AND table_name = '" + table_name + "';",
+                      {{create_table_sql.substr(0, StringDictionary::MAX_STRLEN)}});
+  // clang-format on
+}
+
 TEST_F(SystemTablesTest, DatabasesSystemTable) {
   switchToAdmin();
   sql("CREATE DATABASE test_db_1;");

@@ -250,6 +250,13 @@ class TypedImportBuffer : boost::noncopyable {
 
   void addString(const std::string_view v) { string_buffer_->emplace_back(v); }
 
+  void addDictStringWithTruncation(std::string_view v) {
+    if (v.size() > StringDictionary::MAX_STRLEN) {
+      v = v.substr(0, StringDictionary::MAX_STRLEN);
+    }
+    string_buffer_->emplace_back(v);
+  }
+
   void addGeoString(const std::string_view v) { geo_string_buffer_->emplace_back(v); }
 
   void addArray(const ArrayDatum& v) { array_buffer_->push_back(v); }
