@@ -57,9 +57,9 @@ void set_node_name(
   if (import_buffers.find("node") != import_buffers.end()) {
     if (dist::is_leaf_node()) {
       std::string leaf_string{"Leaf " + to_string(g_distributed_leaf_idx)};
-      import_buffers["node"]->addString(leaf_string);
+      import_buffers["node"]->addDictStringWithTruncation(leaf_string);
     } else {
-      import_buffers["node"]->addString("Server");
+      import_buffers["node"]->addDictStringWithTruncation("Server");
     }
   }
 }

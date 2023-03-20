@@ -47,7 +47,7 @@ void populate_import_buffers_for_catalog_users(
       import_buffers["user_id"]->addInt(user.userId);
     }
     if (import_buffers.find("user_name") != import_buffers.end()) {
-      import_buffers["user_name"]->addString(user.userName);
+      import_buffers["user_name"]->addDictStringWithTruncation(user.userName);
     }
     if (import_buffers.find("is_super_user") != import_buffers.end()) {
       import_buffers["is_super_user"]->addBoolean(user.isSuper);
@@ -57,7 +57,8 @@ void populate_import_buffers_for_catalog_users(
     }
     if (import_buffers.find("default_db_name") != import_buffers.end()) {
       if (user.defaultDbId > 0) {
-        import_buffers["default_db_name"]->addString(get_db_name(user.defaultDbId));
+        import_buffers["default_db_name"]->addDictStringWithTruncation(
+            get_db_name(user.defaultDbId));
       } else {
         set_null(import_buffers["default_db_name"]);
       }
@@ -112,28 +113,29 @@ void populate_import_buffers_for_catalog_tables(
         import_buffers["database_id"]->addInt(db_id);
       }
       if (import_buffers.find("database_name") != import_buffers.end()) {
-        import_buffers["database_name"]->addString(get_db_name(db_id));
+        import_buffers["database_name"]->addDictStringWithTruncation(get_db_name(db_id));
       }
       if (import_buffers.find("table_id") != import_buffers.end()) {
         import_buffers["table_id"]->addInt(table.tableId);
       }
       if (import_buffers.find("table_name") != import_buffers.end()) {
-        import_buffers["table_name"]->addString(table.tableName);
+        import_buffers["table_name"]->addDictStringWithTruncation(table.tableName);
       }
       if (import_buffers.find("owner_id") != import_buffers.end()) {
         import_buffers["owner_id"]->addInt(table.userId);
       }
       if (import_buffers.find("owner_user_name") != import_buffers.end()) {
-        import_buffers["owner_user_name"]->addString(get_user_name(table.userId));
+        import_buffers["owner_user_name"]->addDictStringWithTruncation(
+            get_user_name(table.userId));
       }
       if (import_buffers.find("column_count") != import_buffers.end()) {
         import_buffers["column_count"]->addInt(table.nColumns);
       }
       if (import_buffers.find("table_type") != import_buffers.end()) {
-        import_buffers["table_type"]->addString(get_table_type(table));
+        import_buffers["table_type"]->addDictStringWithTruncation(get_table_type(table));
       }
       if (import_buffers.find("view_sql") != import_buffers.end()) {
-        import_buffers["view_sql"]->addString(table.viewSQL);
+        import_buffers["view_sql"]->addDictStringWithTruncation(table.viewSQL);
       }
       if (import_buffers.find("max_fragment_size") != import_buffers.end()) {
         import_buffers["max_fragment_size"]->addInt(table.maxFragRows);
@@ -154,7 +156,8 @@ void populate_import_buffers_for_catalog_tables(
         import_buffers["shard_count"]->addInt(table.nShards);
       }
       if (import_buffers.find("ddl_statement") != import_buffers.end()) {
-        import_buffers["ddl_statement"]->addString(get_table_ddl(db_id, table));
+        import_buffers["ddl_statement"]->addDictStringWithTruncation(
+            get_table_ddl(db_id, table));
       }
     }
   }
@@ -194,19 +197,21 @@ void populate_import_buffers_for_catalog_dashboards(
         import_buffers["database_id"]->addInt(db_id);
       }
       if (import_buffers.find("database_name") != import_buffers.end()) {
-        import_buffers["database_name"]->addString(get_db_name(db_id));
+        import_buffers["database_name"]->addDictStringWithTruncation(get_db_name(db_id));
       }
       if (import_buffers.find("dashboard_id") != import_buffers.end()) {
         import_buffers["dashboard_id"]->addInt(dashboard.dashboardId);
       }
       if (import_buffers.find("dashboard_name") != import_buffers.end()) {
-        import_buffers["dashboard_name"]->addString(dashboard.dashboardName);
+        import_buffers["dashboard_name"]->addDictStringWithTruncation(
+            dashboard.dashboardName);
       }
       if (import_buffers.find("owner_id") != import_buffers.end()) {
         import_buffers["owner_id"]->addInt(dashboard.userId);
       }
       if (import_buffers.find("owner_user_name") != import_buffers.end()) {
-        import_buffers["owner_user_name"]->addString(get_user_name(dashboard.userId));
+        import_buffers["owner_user_name"]->addDictStringWithTruncation(
+            get_user_name(dashboard.userId));
       }
       if (import_buffers.find("last_updated_at") != import_buffers.end()) {
         auto& buffer = import_buffers["last_updated_at"];
@@ -360,7 +365,7 @@ void populate_import_buffers_for_catalog_permissions(
     std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
   for (const auto& permission : object_permissions) {
     if (import_buffers.find("role_name") != import_buffers.end()) {
-      import_buffers["role_name"]->addString(permission.roleName);
+      import_buffers["role_name"]->addDictStringWithTruncation(permission.roleName);
     }
     if (import_buffers.find("is_user_role") != import_buffers.end()) {
       import_buffers["is_user_role"]->addBoolean(permission.roleType);
@@ -369,10 +374,11 @@ void populate_import_buffers_for_catalog_permissions(
       import_buffers["database_id"]->addInt(permission.dbId);
     }
     if (import_buffers.find("database_name") != import_buffers.end()) {
-      import_buffers["database_name"]->addString(get_db_name(permission.dbId));
+      import_buffers["database_name"]->addDictStringWithTruncation(
+          get_db_name(permission.dbId));
     }
     if (import_buffers.find("object_name") != import_buffers.end()) {
-      import_buffers["object_name"]->addString(permission.objectName);
+      import_buffers["object_name"]->addDictStringWithTruncation(permission.objectName);
     }
     if (import_buffers.find("object_id") != import_buffers.end()) {
       import_buffers["object_id"]->addInt(permission.objectId);
@@ -381,11 +387,11 @@ void populate_import_buffers_for_catalog_permissions(
       import_buffers["object_owner_id"]->addInt(permission.objectOwnerId);
     }
     if (import_buffers.find("object_owner_user_name") != import_buffers.end()) {
-      import_buffers["object_owner_user_name"]->addString(
+      import_buffers["object_owner_user_name"]->addDictStringWithTruncation(
           get_user_name(permission.objectOwnerId));
     }
     if (import_buffers.find("object_permission_type") != import_buffers.end()) {
-      import_buffers["object_permission_type"]->addString(
+      import_buffers["object_permission_type"]->addDictStringWithTruncation(
           get_object_type_str(permission.objectType));
     }
     if (import_buffers.find("object_permissions") != import_buffers.end()) {
@@ -404,13 +410,14 @@ void populate_import_buffers_for_catalog_databases(
       import_buffers["database_id"]->addInt(db.dbId);
     }
     if (import_buffers.find("database_name") != import_buffers.end()) {
-      import_buffers["database_name"]->addString(db.dbName);
+      import_buffers["database_name"]->addDictStringWithTruncation(db.dbName);
     }
     if (import_buffers.find("owner_id") != import_buffers.end()) {
       import_buffers["owner_id"]->addInt(db.dbOwner);
     }
     if (import_buffers.find("owner_user_name") != import_buffers.end()) {
-      import_buffers["owner_user_name"]->addString(get_user_name(db.dbOwner));
+      import_buffers["owner_user_name"]->addDictStringWithTruncation(
+          get_user_name(db.dbOwner));
     }
   }
 }
@@ -420,7 +427,7 @@ void populate_import_buffers_for_catalog_roles(
     std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
   for (const auto& role : roles) {
     CHECK(import_buffers.find("role_name") != import_buffers.end());
-    import_buffers["role_name"]->addString(role);
+    import_buffers["role_name"]->addDictStringWithTruncation(role);
   }
 }
 
@@ -430,10 +437,10 @@ void populate_import_buffers_for_catalog_role_assignments(
   for (const auto& [role, user_names] : user_names_by_role_) {
     for (const auto& user_name : user_names) {
       if (import_buffers.find("role_name") != import_buffers.end()) {
-        import_buffers["role_name"]->addString(role);
+        import_buffers["role_name"]->addDictStringWithTruncation(role);
       }
       if (import_buffers.find("user_name") != import_buffers.end()) {
-        import_buffers["user_name"]->addString(user_name);
+        import_buffers["user_name"]->addDictStringWithTruncation(user_name);
       }
     }
   }
