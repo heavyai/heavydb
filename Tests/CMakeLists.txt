@@ -409,7 +409,7 @@ list(APPEND SANITY_TEST_PROGRAMS LoadTableTest)
 ##########
 
 add_executable(MigrationMgrTest MigrationMgrTest.cpp)
-target_link_libraries(MigrationMgrTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(MigrationMgrTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 add_test(MigrationMgrTest MigrationMgrTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS MigrationMgrTest)
 

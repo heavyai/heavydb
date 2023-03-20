@@ -226,10 +226,11 @@ bool MigrationMgr::dropRenderGroupColumns(
   bool all_tables_migrated = true;
 
   // all tables...
-  for (auto itr = table_descriptors_by_id.begin(); itr != table_descriptors_by_id.end();
-       itr++) {
+  for (auto td_itr = table_descriptors_by_id.begin();
+       td_itr != table_descriptors_by_id.end();
+       td_itr++) {
     // the table...
-    auto const* td = itr->second;
+    auto const* td = td_itr->second;
     CHECK(td);
 
     // skip views and temps
@@ -253,14 +254,14 @@ bool MigrationMgr::dropRenderGroupColumns(
     // prepare to capture names
     std::vector<std::string> columns_to_drop;
     // iterate all columns
-    for (auto itr = logical_cds.begin(); itr != logical_cds.end(); itr++) {
-      auto const* cd = *itr;
+    for (auto cd_itr = logical_cds.begin(); cd_itr != logical_cds.end(); cd_itr++) {
+      auto const* cd = *cd_itr;
       CHECK(cd);
       // poly or multipoly column?
       auto const cd_type = cd->columnType.get_type();
       if (cd_type == kPOLYGON || cd_type == kMULTIPOLYGON) {
         // next logical column
-        auto const next_itr = std::next(itr);
+        auto const next_itr = std::next(cd_itr);
         if (next_itr == logical_cds.end()) {
           // no next column, perhaps table already migrated
           break;
@@ -281,13 +282,13 @@ bool MigrationMgr::dropRenderGroupColumns(
                 cd->columnId + cd->columnType.get_physical_cols() + 1;
             if (next_id == expected_next_id) {
               // report
-              LOG(INFO) << "MigrationMgr: dropRenderGroupColumns:   Removing render "
+              LOG(INFO) << "MigrationMgr: dropRenderGroupColumns:   Found render "
                            "group column '"
                         << next_name << "'";
               // capture name
               columns_to_drop.emplace_back(next_name);
               // restart with the column after the one we identified
-              itr++;
+              cd_itr++;
             } else {
               LOG(ERROR) << "MigrationMgr: dropRenderGroupColumns:   Expected render "
                             "group column '"
@@ -318,29 +319,38 @@ bool MigrationMgr::dropRenderGroupColumns(
       for (auto const& column : columns_to_drop) {
         auto const* cd = catalog.getMetadataForColumn(td->tableId, column);
         CHECK(cd);
+        LOG(INFO) << "MigrationMgr: dropRenderGroupColumns:   Removing render "
+                     "group column '"
+                  << cd->columnName << "'";
         catalog.dropColumn(*td, *cd);
         column_ids.push_back(cd->columnId);
       }
-      for (auto const* physical_td : catalog.getPhysicalTablesDescriptors(td)) {
-        CHECK(physical_td);
-        // getMetadataForTable() may not have been called on this table, so
-        // the table may not yet have a fragmenter (which that function lazy
-        // creates by default) so call it manually here to force creation of
-        // the fragmenter so we can use it to actually drop the columns
-        if (physical_td->fragmenter == nullptr) {
-          catalog.getMetadataForTable(physical_td->tableId, true);
-          CHECK(physical_td->fragmenter);
+      if (!td->isForeignTable()) {
+        for (auto const* physical_td : catalog.getPhysicalTablesDescriptors(td)) {
+          CHECK(physical_td);
+          // getMetadataForTable() may not have been called on this table, so
+          // the table may not yet have a fragmenter (which that function lazy
+          // creates by default) so call it manually here to force creation of
+          // the fragmenter so we can use it to actually drop the columns
+          if (physical_td->fragmenter == nullptr) {
+            catalog.getMetadataForTable(physical_td->tableId, true);
+            CHECK(physical_td->fragmenter);
+          }
+          physical_td->fragmenter->dropColumns(column_ids);
         }
-        physical_td->fragmenter->dropColumns(column_ids);
       }
       catalog.rollLegacy(true);
-      if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
-        catalog.resetTableEpochFloor(td->tableId);
-        catalog.checkpoint(td->tableId);
+      if (!td->isForeignTable()) {
+        if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+          catalog.resetTableEpochFloor(td->tableId);
+          catalog.checkpoint(td->tableId);
+        }
       }
       catalog.getSqliteConnector().query("END TRANSACTION");
     } catch (std::exception& e) {
-      catalog.setForReload(td->tableId);
+      if (!td->isForeignTable()) {
+        catalog.setForReload(td->tableId);
+      }
       catalog.rollLegacy(false);
       catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
       LOG(ERROR) << "MigrationMgr: dropRenderGroupColumns:   Failed to drop render group "
@@ -355,8 +365,8 @@ bool MigrationMgr::dropRenderGroupColumns(
       continue;
     }
 
-    // flush any HeavyConnect foreign table cache for the physical tables
-    if (heavyconnect_cache) {
+    // flush any HeavyConnect foreign table cache
+    if (heavyconnect_cache && td->isForeignTable()) {
       for (auto const* physical_td : catalog.getPhysicalTablesDescriptors(td)) {
         CHECK(physical_td);
         LOG(INFO) << "MigrationMgr: dropRenderGroupColumns:   Flushing HeavyConnect "
