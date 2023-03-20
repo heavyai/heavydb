@@ -3322,6 +3322,127 @@ INSTANTIATE_TEST_SUITE_P(CpuAndGpuExecutorDevices,
                                            ExecutorDeviceType::GPU),
                          ::testing::PrintToStringParamName());
 
+TEST(GeoSpatial, ProjectGeoColAfterLeftJoin) {
+  auto drop_tables_ddl = []() {
+    run_ddl_statement("DROP TABLE IF EXISTS LFJ;");
+    run_ddl_statement("DROP TABLE IF EXISTS AllGeoTypes;");
+  };
+  drop_tables_ddl();
+  run_ddl_statement("CREATE TABLE LFJ (v INT);");
+  std::string all_geo_types_ddl =
+      "CREATE TABLE AllGeoTypes (\n"
+      "v int,\n"
+      "pt point,\n"
+      "gpt geometry(point),\n"
+      "gpt4 geometry(point, 4326),\n"
+      "gpt4e geometry(point, 4326) encoding compressed (32),\n"
+      "gpt4n geometry(point, 4326) encoding none,\n"
+      "gpt9 geometry(point, 900913),\n"
+      "mpt multipoint,\n"
+      "gmpt geometry(multipoint),\n"
+      "gmpt4 geometry(multipoint, 4326),\n"
+      "gmpt4e geometry(multipoint, 4326) encoding compressed (32),\n"
+      "gmpt4n geometry(multipoint, 4326) encoding none,\n"
+      "gmpt9 geometry(multipoint, 900913),\n"
+      "l linestring,\n"
+      "gl geometry(linestring),\n"
+      "gl4 geometry(linestring, 4326),\n"
+      "gl4e geometry(linestring, 4326) encoding compressed (32),\n"
+      "gl4n geometry(linestring, 4326) encoding none,\n"
+      "gl9 geometry(linestring, 900913),\n"
+      "gl9n geometry(linestring, 900913) encoding none,\n"
+      "ml multilinestring,\n"
+      "gml geometry(multilinestring),\n"
+      "gml4 geometry(multilinestring, 4326),\n"
+      "gml4e geometry(multilinestring, 4326) encoding compressed (32),\n"
+      "gml4n geometry(multilinestring, 4326) encoding none,\n"
+      "gml9 geometry(multilinestring, 900913),\n"
+      "gml9n geometry(multilinestring, 900913) encoding none,\n"
+      "p polygon,\n"
+      "gp geometry(polygon),\n"
+      "gp4 geometry(polygon, 4326),\n"
+      "gp4e geometry(polygon, 4326) encoding compressed (32),\n"
+      "gp4n geometry(polygon, 4326) encoding none,\n"
+      "gp9 geometry(polygon, 900913),\n"
+      "gp9n geometry(polygon, 900913) encoding none,\n"
+      "mp multipolygon,\n"
+      "gmp geometry(multipolygon),\n"
+      "gmp4 geometry(multipolygon, 4326),\n"
+      "gmp4e geometry(multipolygon, 4326) encoding compressed (32),\n"
+      "gmp4n geometry(multipolygon, 4326) encoding none,\n"
+      "gmp9 geometry(multipolygon, 900913),\n"
+      "gmp9n geometry(multipolygon, 900913) encoding none)";
+  std::string replicated_dec{!g_cluster ? "" : " WITH(PARTITIONS='REPLICATED');"};
+  all_geo_types_ddl += replicated_dec;
+  run_ddl_statement(all_geo_types_ddl);
+
+  run_multiple_agg("INSERT INTO LFJ VALUES (1);", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO LFJ VALUES (2);", ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "insert into AllGeoTypes values (\n"
+      "1,\n"
+      "'POINT(3 3)', 'POINT(3 3)', 'POINT(3 3)', 'POINT(3 3)', 'POINT(3 3)', 'POINT(3 "
+      "3)',\n"
+      "'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)', "
+      "'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)',\n"
+      "'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 6, 7 "
+      "7)', 'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 "
+      "6, 7 7)', 'LINESTRING(3 0, 6 6, 7 7)',\n"
+      "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, "
+      "7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', "
+      "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, "
+      "7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', "
+      "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))',\n"
+      "'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, "
+      "4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 "
+      "0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))',\n"
+      "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', 'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', "
+      "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', 'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', "
+      "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', 'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', "
+      "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))'\n"
+      ");",
+      ExecutorDeviceType::CPU);
+
+  auto query1_gen = [](const std::string& col_name) {
+    std::ostringstream oss;
+    oss << "SELECT COUNT(1) FROM LFJ R LEFT JOIN AllGeoTypes S ON R.v = S.v WHERE S."
+        << col_name << " IS NULL";
+    return oss.str();
+  };
+
+  auto query2_gen = [](const std::string& col_name) {
+    std::ostringstream oss;
+    oss << "SELECT R.v, S." << col_name
+        << " FROM LFJ R LEFT JOIN AllGeoTypes S ON R.v = S.v";
+    return oss.str();
+  };
+
+  for (std::string col_name :
+       {"pt",    "gpt",    "gpt4",   "gpt4e", "gpt4n", "gpt9",  "mpt",   "gmpt",
+        "gmpt4", "gmpt4e", "gmpt4n", "gmpt9", "l",     "gl",    "gl4",   "gl4e",
+        "gl4n",  "gl9",    "gl9n",   "ml",    "gml",   "gml4",  "gml4n", "gml4e",
+        "gml9",  "gml9n",  "p",      "gp",    "gp4",   "gp4e",  "gp4n",  "gp9",
+        "gp9n",  "mp",     "gmp",    "gmp4",  "gmp4n", "gmp4e", "gmp9",  "gmp9n"}) {
+    for (auto const dt : {ExecutorDeviceType::GPU, ExecutorDeviceType::CPU}) {
+      SKIP_NO_GPU();
+      {
+        EXPECT_EQ(static_cast<int64_t>(1),
+                  v<int64_t>(run_simple_agg(query1_gen(col_name), dt)));
+        const auto rows = run_multiple_agg(query2_gen(col_name), dt);
+        EXPECT_EQ(rows->rowCount(), (size_t)2);
+        const auto row1 = rows->getNextRow(false, false);
+        const auto row2 = rows->getNextRow(false, false);
+        EXPECT_EQ(row1.size(), size_t(2));
+        EXPECT_EQ(row2.size(), size_t(2));
+      }
+    }
+  }
+
+  if (!g_keep_data) {
+    drop_tables_ddl();
+  }
+}
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 

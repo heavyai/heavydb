@@ -664,7 +664,6 @@ class CodeGenerator {
 
   CgenState* cgen_state_;
   PlanState* plan_state_;
-
   friend class GroupByAndAggregate;
 
  private:

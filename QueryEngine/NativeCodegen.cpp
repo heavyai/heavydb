@@ -794,6 +794,7 @@ declare i1 @array_is_null(i8*, i64);
 declare i1 @point_coord_array_is_null(i8*, i64);
 declare i8* @array_buff(i8*, i64);
 declare i8* @fast_fixlen_array_buff(i8*, i64);
+declare i64 @determine_fixed_array_len(i8*, i64);
 declare i8 @array_at_int8_t(i8*, i64, i32);
 declare i16 @array_at_int16_t(i8*, i64, i32);
 declare i32 @array_at_int32_t(i8*, i64, i32);
