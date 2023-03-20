@@ -3201,12 +3201,15 @@ void SysCatalog::checkDropRenderGroupColumnsMigration() const {
   if (!hasExecutedMigration(drop_render_groups_migration)) {
     bool all_catalogs_migrated = true;
 
+    LOG(INFO) << "Starting Drop-Render-Group-Columns Migration...";
     auto cats = Catalog_Namespace::SysCatalog::instance().getCatalogsForAllDbs();
     for (auto& cat : cats) {
       if (!cat->checkDropRenderGroupColumnsMigration()) {
         all_catalogs_migrated = false;
       }
     }
+    LOG(INFO) << "Drop-Render-Group-Columns Migration complete";
+
     recordExecutedMigration(drop_render_groups_migration);
 
     if (!all_catalogs_migrated) {
