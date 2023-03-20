@@ -30,6 +30,9 @@
 extern "C" DEVICE RUNTIME_EXPORT int32_t array_size(int8_t* chunk_iter_,
                                                     const uint64_t row_pos,
                                                     const uint32_t elem_log_sz) {
+  if (!chunk_iter_) {
+    return 0;
+  }
   ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   ArrayDatum ad;
   bool is_end;
@@ -281,14 +284,25 @@ fast_fixlen_array_size(int8_t* chunk_iter_, const uint32_t elem_log_sz) {
 extern "C" DEVICE RUNTIME_EXPORT ALWAYS_INLINE int8_t* fast_fixlen_array_buff(
     int8_t* chunk_iter_,
     const uint64_t row_pos) {
+  if (!chunk_iter_) {
+    return nullptr;
+  }
   ChunkIter* it = reinterpret_cast<ChunkIter*>(chunk_iter_);
   auto n = static_cast<int>(row_pos);
   int8_t* current_pos = it->start_pos + n * it->skip_size;
   return current_pos;
 }
 
+extern "C" DEVICE RUNTIME_EXPORT ALWAYS_INLINE int64_t
+determine_fixed_array_len(int8_t* chunk_iter, int64_t valid_len) {
+  return chunk_iter ? valid_len : 0;
+}
+
 extern "C" DEVICE RUNTIME_EXPORT int8_t* array_buff(int8_t* chunk_iter_,
                                                     const uint64_t row_pos) {
+  if (!chunk_iter_) {
+    return nullptr;
+  }
   ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   ArrayDatum ad;
   bool is_end;
