@@ -49,6 +49,10 @@
 #include <boost/make_shared.hpp>
 #include <boost/program_options.hpp>
 
+#ifdef ENABLE_TBB
+#include <tbb/global_control.h>
+#endif
+
 #include <csignal>
 #include <cstdlib>
 #include <sstream>
@@ -384,8 +388,11 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
   LOG(INFO) << "HeavyDB starting up";
   register_signal_handlers();
 #ifdef ENABLE_TBB
-  LOG(INFO) << "Initializing TBB with " << cpu_threads() << " threads.";
-  threading_tbb::g_tbb_arena.initialize(cpu_threads());
+  auto num_cpu_threads = cpu_threads();
+  LOG(INFO) << "Initializing TBB with " << num_cpu_threads << " threads.";
+  tbb::global_control tbb_control(tbb::global_control::max_allowed_parallelism,
+                                  num_cpu_threads);
+  threading_tbb::g_tbb_arena.initialize(num_cpu_threads);
   const int32_t tbb_max_concurrency{threading_tbb::g_tbb_arena.max_concurrency()};
   LOG(INFO) << "TBB max concurrency: " << tbb_max_concurrency << " threads.";
 #endif  // ENABLE_TBB
