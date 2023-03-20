@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import ai.heavy.thrift.server.TColumnType;
 import ai.heavy.thrift.server.TCopyParams;
@@ -291,8 +293,10 @@ public class ImportAlterValidateSelectConcurrencyTest {
     try {
       function.call();
     } catch (TDBException e) {
-      if (e.error_msg.matches("(Table/View\\s+" + tableName
-                  + ".+does not exist|.+Object\\s+'" + tableName + "'\\s+not found)")) {
+      Pattern pattern = Pattern.compile("(Table/View\\s+" + tableName
+              + ".+does not exist|.+Object\\s+'" + tableName + "'\\s+not found)");
+      Matcher matcher = pattern.matcher(e.error_msg);
+      if (matcher.find()) {
         logger.info("Ignoring missing table error: " + e.error_msg);
       } else {
         throw e;
