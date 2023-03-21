@@ -616,6 +616,8 @@ SqlDdl SqlCustomDrop(Span s) :
         |
         LOOKAHEAD(1) drop = SqlDropView(s)
         |
+        LOOKAHEAD(1) drop = SqlDropModel(s)
+        |
         LOOKAHEAD(1) drop = SqlDropServer(s)
         |
         LOOKAHEAD(1) drop = SqlDropForeignTable(s)
@@ -927,6 +929,44 @@ SqlDdl SqlDropView(Span s) :
     viewName = CompoundIdentifier()
     {
         return new SqlDropView(s.end(this), ifExists, viewName.toString());
+    }
+}
+
+SqlCreate SqlCreateModel(Span s, boolean replace) :
+{
+    final boolean ifNotExists;
+    final SqlIdentifier modelType;
+    final SqlIdentifier id;
+    HeavyDBOptionsMap withOptions = null;   
+    SqlNode query = null;
+}
+{
+    <MODEL> ifNotExists = IfNotExistsOpt() id = CompoundIdentifier()
+    <OF> <TYPE> modelType = CompoundIdentifier()
+    <AS> query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
+    [ <WITH> withOptions = OptionsOpt() ]
+    {
+        return SqlDdlNodes.createModel(s.end(this), replace, ifNotExists, modelType, id,
+            withOptions, query);
+    }
+}
+
+/*
+ * Drop a model using the following syntax:
+ *
+ * DROP MODEL [ IF EXISTS ] <model_name>
+ */
+SqlDdl SqlDropModel(Span s) :
+{
+    final boolean ifExists;
+    final SqlIdentifier modelName;
+}
+{
+    <MODEL>
+    ifExists = IfExistsOpt()
+    modelName = CompoundIdentifier()
+    {
+        return new SqlDropModel(s.end(this), ifExists, modelName.toString());
     }
 }
 
@@ -1327,6 +1367,7 @@ SqlNode Privilege(Span s) :
     |   LOOKAHEAD(2) <CREATE> <SERVER> { type = "CREATE SERVER"; }
     |   LOOKAHEAD(2) <CREATE> <TABLE> { type = "CREATE TABLE"; }
     |   LOOKAHEAD(2) <CREATE> <VIEW> { type = "CREATE VIEW"; }
+    |   LOOKAHEAD(2) <CREATE> <MODEL> { type = "CREATE MODEL"; }
     |   LOOKAHEAD(2) <SELECT> <VIEW> { type = "SELECT VIEW"; }
     |   LOOKAHEAD(2) <DROP> <VIEW> { type = "DROP VIEW"; }
     |   LOOKAHEAD(2) <DROP> <SERVER> { type = "DROP SERVER"; }

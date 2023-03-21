@@ -604,6 +604,14 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     auto create_dataframe_stmt = Parser::CreateDataframeStmt(extractPayload(*ddl_data_));
     create_dataframe_stmt.execute(*session_ptr_, read_only_mode);
     return result;
+  } else if (ddl_command_ == "CREATE_MODEL") {
+    auto create_model_stmt = Parser::CreateModelStmt(extractPayload(*ddl_data_));
+    create_model_stmt.execute(*session_ptr_, read_only_mode);
+    return result;
+  } else if (ddl_command_ == "DROP_MODEL") {
+    auto drop_model_stmt = Parser::DropModelStmt(extractPayload(*ddl_data_));
+    drop_model_stmt.execute(*session_ptr_, read_only_mode);
+    return result;
   } else if (ddl_command_ == "VALIDATE_SYSTEM") {
     // VALIDATE should have been excuted in outer context before it reaches here
     UNREACHABLE();

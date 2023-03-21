@@ -47,6 +47,7 @@ set(datamgr_source_files
     ForeignStorage/ForeignDataWrapperFactory.cpp
     ForeignStorage/InternalCatalogDataWrapper.cpp
     ForeignStorage/InternalExecutorStatsDataWrapper.cpp
+    ForeignStorage/InternalMLModelMetadataDataWrapper.cpp
     ForeignStorage/InternalMemoryStatsDataWrapper.cpp
     ForeignStorage/InternalStorageStatsDataWrapper.cpp
     ForeignStorage/InternalSystemDataWrapper.cpp

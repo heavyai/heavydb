@@ -57,6 +57,18 @@ public class SqlDdlNodes {
     return new SqlCreateView(pos, replace, ifNotExists, name, columnList, query);
   }
 
+  /** Creates a CREATE MODEL. */
+  public static SqlCreateModel createModel(SqlParserPos pos,
+          boolean replace,
+          boolean ifNotExists,
+          SqlIdentifier modelType,
+          SqlIdentifier name,
+          HeavyDBOptionsMap withOptions,
+          SqlNode query) {
+    return new SqlCreateModel(
+            pos, replace, ifNotExists, modelType, name, withOptions, query);
+  }
+
   /** Creates a column declaration. */
   public static SqlNode column(SqlParserPos pos,
           SqlIdentifier name,
