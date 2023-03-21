@@ -17,9 +17,12 @@
 #pragma once
 
 #include "AbstractMLModel.h"
+#include "MLModelMetadata.h"
+#include "QueryEngine/DecisionTreeEntry.h"
 
 #include <map>
 #include <memory>
+#include <stack>
 #include <vector>
 
 #ifndef __CUDACC__
@@ -36,6 +39,13 @@ class MLModelMap {
     model_map_[upper_model_name] = model;
   }
 
+  bool modelExists(const std::string& model_name) const {
+    const auto upper_model_name = to_upper(model_name);
+    std::shared_lock<std::shared_mutex> model_map_read_lock(model_map_mutex_);
+    auto model_map_itr = model_map_.find(upper_model_name);
+    return model_map_itr != model_map_.end();
+  }
+
   std::shared_ptr<AbstractMLModel> getModel(const std::string& model_name) const {
     const auto upper_model_name = to_upper(model_name);
     std::shared_lock<std::shared_mutex> model_map_read_lock(model_map_mutex_);
@@ -47,6 +57,19 @@ class MLModelMap {
     throw std::runtime_error(error_str);
   }
 
+  void deleteModel(const std::string& model_name) {
+    const auto upper_model_name = to_upper(model_name);
+    std::lock_guard<std::shared_mutex> model_map_write_lock(model_map_mutex_);
+    auto const model_it = model_map_.find(upper_model_name);
+    if (model_it == model_map_.end()) {
+      std::ostringstream error_oss;
+      error_oss << "Cannot erase model " << upper_model_name
+                << ". No model by that name was found.";
+      throw std::runtime_error(error_oss.str());
+    }
+    model_map_.erase(model_it);
+  }
+
   std::vector<std::string> getModelNames() const {
     std::shared_lock<std::shared_mutex> model_map_read_lock(model_map_mutex_);
     std::vector<std::string> model_names;
@@ -55,6 +78,22 @@ class MLModelMap {
       model_names.emplace_back(model.first);
     }
     return model_names;
+  }
+  std::vector<MLModelMetadata> getModelMetadata() const {
+    std::shared_lock<std::shared_mutex> model_map_read_lock(model_map_mutex_);
+    std::vector<MLModelMetadata> model_metadata;
+    model_metadata.reserve(model_map_.size());
+    for (auto const& model : model_map_) {
+      model_metadata.emplace_back(MLModelMetadata(
+          model.first,
+          model.second->getModelTypeString(),
+          model.second->getNumLogicalFeatures(),
+          model.second->getNumFeatures(),
+          model.second->getNumCatFeatures(),
+          model.second->getNumLogicalFeatures() - model.second->getNumCatFeatures(),
+          model.second->getModelMetadata()));
+    }
+    return model_metadata;
   }
 
  private:
@@ -66,11 +105,14 @@ inline MLModelMap ml_models_;
 
 class LinearRegressionModel : public AbstractMLModel {
  public:
-  LinearRegressionModel(const std::vector<double>& coefs) : coefs_(coefs) {}
+  LinearRegressionModel(const std::vector<double>& coefs,
+                        const std::string& model_metadata)
+      : AbstractMLModel(model_metadata), coefs_(coefs) {}
 
   LinearRegressionModel(const std::vector<double>& coefs,
+                        const std::string& model_metadata,
                         const std::vector<std::vector<std::string>>& cat_feature_keys)
-      : AbstractMLModel(cat_feature_keys), coefs_(coefs) {}
+      : AbstractMLModel(model_metadata, cat_feature_keys), coefs_(coefs) {}
 
   virtual MLModelType getModelType() const override { return MLModelType::LINEAR_REG; }
 
@@ -145,12 +187,14 @@ class AbstractTreeModel : public virtual AbstractMLModel {
 
 class DecisionTreeRegressionModel : public virtual AbstractTreeModel {
  public:
-  DecisionTreeRegressionModel(decision_tree::regression::interface1::ModelPtr& model_ptr)
-      : model_ptr_(model_ptr) {}
+  DecisionTreeRegressionModel(decision_tree::regression::interface1::ModelPtr& model_ptr,
+                              const std::string& model_metadata)
+      : AbstractMLModel(model_metadata), model_ptr_(model_ptr) {}
   DecisionTreeRegressionModel(
       decision_tree::regression::interface1::ModelPtr& model_ptr,
+      const std::string& model_metadata,
       const std::vector<std::vector<std::string>>& cat_feature_keys)
-      : AbstractMLModel(cat_feature_keys), model_ptr_(model_ptr) {}
+      : AbstractMLModel(model_metadata, cat_feature_keys), model_ptr_(model_ptr) {}
 
   virtual MLModelType getModelType() const override {
     return MLModelType::DECISION_TREE_REG;
@@ -179,12 +223,14 @@ class DecisionTreeRegressionModel : public virtual AbstractTreeModel {
 
 class GbtRegressionModel : public virtual AbstractTreeModel {
  public:
-  GbtRegressionModel(gbt::regression::interface1::ModelPtr& model_ptr)
-      : model_ptr_(model_ptr) {}
+  GbtRegressionModel(gbt::regression::interface1::ModelPtr& model_ptr,
+                     const std::string& model_metadata)
+      : AbstractMLModel(model_metadata), model_ptr_(model_ptr) {}
 
   GbtRegressionModel(gbt::regression::interface1::ModelPtr& model_ptr,
+                     const std::string& model_metadata,
                      const std::vector<std::vector<std::string>>& cat_feature_keys)
-      : AbstractMLModel(cat_feature_keys), model_ptr_(model_ptr) {}
+      : AbstractMLModel(model_metadata, cat_feature_keys), model_ptr_(model_ptr) {}
 
   virtual MLModelType getModelType() const override { return MLModelType::GBT_REG; }
 
@@ -210,18 +256,21 @@ class RandomForestRegressionModel : public virtual AbstractTreeModel {
  public:
   RandomForestRegressionModel(
       decision_forest::regression::interface1::ModelPtr& model_ptr,
+      const std::string& model_metadata,
       const std::vector<double>& variable_importance,
       const double out_of_bag_error)
-      : model_ptr_(model_ptr)
+      : AbstractMLModel(model_metadata)
+      , model_ptr_(model_ptr)
       , variable_importance_(variable_importance)
       , out_of_bag_error_(out_of_bag_error) {}
 
   RandomForestRegressionModel(
       decision_forest::regression::interface1::ModelPtr& model_ptr,
+      const std::string& model_metadata,
       const std::vector<std::vector<std::string>>& cat_feature_keys,
       const std::vector<double>& variable_importance,
       const double out_of_bag_error)
-      : AbstractMLModel(cat_feature_keys)
+      : AbstractMLModel(model_metadata, cat_feature_keys)
       , model_ptr_(model_ptr)
       , variable_importance_(variable_importance)
       , out_of_bag_error_(out_of_bag_error) {}

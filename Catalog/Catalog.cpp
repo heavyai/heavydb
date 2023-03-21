@@ -6343,6 +6343,8 @@ void Catalog::initializeSystemServers() {
                           foreign_storage::DataWrapperType::INTERNAL_STORAGE_STATS);
   createSystemTableServer(EXECUTOR_STATS_SERVER_NAME,
                           foreign_storage::DataWrapperType::INTERNAL_EXECUTOR_STATS);
+  createSystemTableServer(ML_METADATA_SERVER_NAME,
+                          foreign_storage::DataWrapperType::INTERNAL_ML_MODEL_METADATA);
 
   if (g_enable_logs_system_tables) {
     foreign_storage::OptionsMap log_server_options;
@@ -6426,6 +6428,8 @@ void Catalog::initializeSystemTables() {
   initializeMemorySummarySystemTable();
   initializeMemoryDetailsSystemTable();
   initializeStorageDetailsSystemTable();
+  initializeExecutorResourcePoolSummarySystemTable();
+  initializeMLModelMetadataSystemTable();
 
   if (g_enable_logs_system_tables) {
     initializeServerLogsSystemTables();
@@ -6608,8 +6612,10 @@ void Catalog::initializeStorageDetailsSystemTable() {
                             {"total_dictionary_data_file_size", {kBIGINT}}},
                            true);
   recreateSystemTableIfUpdated(foreign_table, columns);
+}
 
-  std::tie(foreign_table, columns) =
+void Catalog::initializeExecutorResourcePoolSummarySystemTable() {
+  auto [foreign_table, columns] =
       getSystemTableSchema(EXECUTOR_RESOURCE_POOL_SUMMARY_SYS_TABLE_NAME,
                            EXECUTOR_STATS_SERVER_NAME,
                            {{"total_cpu_slots", {kINT}},
@@ -6633,6 +6639,23 @@ void Catalog::initializeStorageDetailsSystemTable() {
                             {"outstanding_cpu_result_mem_requests", {kINT}},
                             {"outstanding_cpu_buffer_pool_mem_requests", {kINT}},
                             {"outstanding_gpu_buffer_pool_mem_requests", {kINT}}},
+                           true);
+  recreateSystemTableIfUpdated(foreign_table, columns);
+}
+
+void Catalog::initializeMLModelMetadataSystemTable() {
+  auto [foreign_table, columns] =
+      getSystemTableSchema(ML_MODEL_METADATA_SYS_TABLE_NAME,
+                           ML_METADATA_SERVER_NAME,
+                           {{"model_name", get_encoded_text_type()},
+                            {"model_type", get_encoded_text_type()},
+                            {"predicted", get_encoded_text_type()},
+                            {"predictors", get_var_encoded_text_array_type()},
+                            {"training_query", get_encoded_text_type()},
+                            {"num_logical_features", {kBIGINT}},
+                            {"num_physical_features", {kBIGINT}},
+                            {"num_categorical_features", {kBIGINT}},
+                            {"num_numeric_features", {kBIGINT}}},
                            true);
   recreateSystemTableIfUpdated(foreign_table, columns);
 }

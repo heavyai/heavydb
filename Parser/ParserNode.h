@@ -35,6 +35,7 @@
 #include "Catalog/Catalog.h"
 #include "Distributed/AggregatedResult.h"
 #include "Fragmenter/InsertDataLoader.h"
+#include "QueryEngine/TableFunctions/SystemFunctions/os/ML/AbstractMLModel.h"
 #include "Shared/sqldefs.h"
 #include "Shared/sqltypes.h"
 #include "TableArchiver/TableArchiver.h"
@@ -1947,6 +1948,44 @@ class DropDBStmt : public DDLStmt {
 
  private:
   std::unique_ptr<std::string> db_name_;
+  bool if_exists_;
+};
+
+/*
+ * @type CreateModelStmt
+ * @brief CREATE MODEL statement
+ */
+class CreateModelStmt : public DDLStmt {
+ public:
+  CreateModelStmt(const rapidjson::Value& payload);
+
+  const std::string& get_model_name() const { return model_name_; }
+  const std::string& get_select_query() const { return select_query_; }
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
+  void train_model(const Catalog_Namespace::SessionInfo& session);
+
+ private:
+  MLModelType model_type_;
+  std::string model_name_;
+  std::string select_query_;
+  bool replace_;
+  bool if_not_exists_;
+  std::list<std::unique_ptr<NameValueAssign>> model_options_;
+};
+
+/* @type DropModelStmt
+ * @brief DROP MODEL statement
+ */
+class DropModelStmt : public DDLStmt {
+ public:
+  DropModelStmt(const rapidjson::Value& payload);
+  auto const& getModelName() { return model_name_; }
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
+
+ private:
+  std::string model_name_;
   bool if_exists_;
 };
 

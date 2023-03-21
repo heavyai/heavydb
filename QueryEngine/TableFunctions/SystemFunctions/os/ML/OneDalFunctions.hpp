@@ -286,6 +286,7 @@ NEVER_INLINE HOST void onedal_decision_tree_reg_fit_impl(
     const std::string& model_name,
     const T* input_labels,
     const std::vector<const T*>& input_features,
+    const std::string& model_metadata,
     const std::vector<std::vector<std::string>>& cat_feature_keys,
     const int64_t num_rows,
     const int64_t max_tree_depth,
@@ -307,8 +308,8 @@ NEVER_INLINE HOST void onedal_decision_tree_reg_fit_impl(
         algorithm.getResult();
 
     auto model_ptr = training_result->get(decision_tree::regression::training::model);
-    auto model =
-        std::make_shared<DecisionTreeRegressionModel>(model_ptr, cat_feature_keys);
+    auto model = std::make_shared<DecisionTreeRegressionModel>(
+        model_ptr, model_metadata, cat_feature_keys);
     ml_models_.addModel(model_name, model);
   } catch (std::exception& e) {
     throw std::runtime_error(e.what());
@@ -320,6 +321,7 @@ NEVER_INLINE HOST void onedal_gbt_reg_fit_impl(
     const std::string& model_name,
     const T* input_labels,
     const std::vector<const T*>& input_features,
+    const std::string& model_metadata,
     const std::vector<std::vector<std::string>>& cat_feature_keys,
     const int64_t num_rows,
     const int64_t max_iterations,
@@ -354,7 +356,8 @@ NEVER_INLINE HOST void onedal_gbt_reg_fit_impl(
     gbt::regression::training::ResultPtr training_result = algorithm.getResult();
 
     auto model_ptr = training_result->get(gbt::regression::training::model);
-    auto model = std::make_shared<GbtRegressionModel>(model_ptr, cat_feature_keys);
+    auto model =
+        std::make_shared<GbtRegressionModel>(model_ptr, model_metadata, cat_feature_keys);
     ml_models_.addModel(model_name, model);
   } catch (std::exception& e) {
     throw std::runtime_error(e.what());
@@ -392,6 +395,7 @@ NEVER_INLINE HOST void onedal_random_forest_reg_fit_impl(
     const std::string& model_name,
     const T* input_labels,
     const std::vector<const T*>& input_features,
+    const std::string& model_metadata,
     const std::vector<std::vector<std::string>>& cat_feature_keys,
     const int64_t num_rows,
     const int64_t num_trees,
@@ -454,8 +458,11 @@ NEVER_INLINE HOST void onedal_random_forest_reg_fit_impl(
       out_of_bag_error =
           out_of_bag_error_table->NumericTable::getValue<T>(0, static_cast<size_t>(0));
     }
-    auto model = std::make_shared<RandomForestRegressionModel>(
-        model_ptr, cat_feature_keys, variable_importance, out_of_bag_error);
+    auto model = std::make_shared<RandomForestRegressionModel>(model_ptr,
+                                                               model_metadata,
+                                                               cat_feature_keys,
+                                                               variable_importance,
+                                                               out_of_bag_error);
     ml_models_.addModel(model_name, model);
   } catch (std::exception& e) {
     throw std::runtime_error(e.what());

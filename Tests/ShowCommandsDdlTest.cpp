@@ -1702,6 +1702,35 @@ TEST_F(SystemTablesShowCreateTableTest, StorageDetails) {
         "BIGINT);"}});
 }
 
+TEST_F(SystemTablesShowCreateTableTest, ExecutorPoolSummary) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE executor_pool_summary;",
+      {{"CREATE TABLE executor_pool_summary (\n  total_cpu_slots INTEGER,\n  "
+        "total_gpu_slots INTEGER,\n  total_cpu_result_mem BIGINT,\n  "
+        "total_cpu_buffer_pool_mem BIGINT,\n  total_gpu_buffer_pool_mem BIGINT,\n  "
+        "allocated_cpu_slots INTEGER,\n  allocated_gpu_slots INTEGER,\n  "
+        "allocated_cpu_result_mem BIGINT,\n  allocated_cpu_buffer_pool_mem BIGINT,\n  "
+        "allocated_gpu_buffer_pool_mem BIGINT,\n  allocated_cpu_buffers INTEGER,\n  "
+        "allocated_gpu_buffers INTEGER,\n  allocated_temp_cpu_buffer_pool_mem BIGINT,\n  "
+        "allocated_temp_gpu_buffer_pool_mem BIGINT,\n  total_requests BIGINT,\n  "
+        "outstanding_requests INTEGER,\n  outstanding_cpu_slots_requests INTEGER,\n  "
+        "outstanding_gpu_slots_requests INTEGER,\n  "
+        "outstanding_cpu_result_mem_requests INTEGER,\n  "
+        "outstanding_cpu_buffer_pool_mem_requests INTEGER,\n  "
+        "outstanding_gpu_buffer_pool_mem_requests INTEGER);"}});
+}
+
+TEST_F(SystemTablesShowCreateTableTest, MLModels) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE ml_models;",
+      {{"CREATE TABLE ml_models (\n  model_name TEXT ENCODING DICT(32),\n  "
+        "model_type TEXT ENCODING DICT(32),\n  predicted TEXT ENCODING DICT(32),\n  "
+        "predictors TEXT[] ENCODING DICT(32),\n  training_query TEXT ENCODING "
+        "DICT(32),\n  "
+        "num_logical_features BIGINT,\n  num_physical_features BIGINT,\n  "
+        "num_categorical_features BIGINT,\n  num_numeric_features BIGINT);"}});
+}
+
 TEST_F(SystemTablesShowCreateTableTest, ServerLogs) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE server_logs;",
@@ -3664,6 +3693,144 @@ TEST_F(SystemTablesTest, SystemTablesJoin) {
                         "information_schema", "information_schema", i(-1),
                         getUserId(shared::kRootUsername), shared::kRootUsername, "database", array({"access"})}});
   // clang-format on
+}
+
+TEST_F(SystemTablesTest, CreateOrReplaceModel) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "CREATE MODEL not supported in distributed mode.";
+  }
+  const std::string model_type = "LINEAR_REG";
+  const std::string model_name = "LINEAR_REG_MODEL";
+#ifdef HAVE_ONEDAL
+  const std::string ml_framework = "onedal";
+#elif HAVE_MLPACK
+  const std::string ml_framework = "mlpack";
+#else
+  return;
+#endif
+  switchToAdmin();
+  // Create new model
+  const std::string create_model1_stmt =
+      "CREATE MODEL model_test OF TYPE LINEAR_REG AS SELECT generate_series * 2.0 AS y, "
+      "generate_series AS x FROM TABLE(generate_series(1, 100)) WITH "
+      "(preferred_ml_framework='" +
+      ml_framework + "');";
+  sql(create_model1_stmt);
+  loginInformationSchema();
+  sqlAndCompareResult("SELECT * FROM ml_models;",
+                      {{"MODEL_TEST",
+                        "Linear Regression",
+                        "y",
+                        array({"x"}),
+                        "SELECT generate_series * 2.0 AS y, generate_series AS x FROM "
+                        "TABLE(generate_series(1, 100))",
+                        i(1),
+                        i(1),
+                        i(0),
+                        i(1)}});
+  switchToAdmin();
+
+  // Create a different model by the same name, but use IF NOT EXISTS clause
+  // Model should not be changed, but no error should be thrown
+  const std::string create_model2_if_not_exists_stmt =
+      "CREATE MODEL IF NOT EXISTS model_test OF TYPE LINEAR_REG AS SELECT "
+      "generate_series * "
+      "6.0 AS y2, "
+      "generate_series * 2.0 AS x2 FROM TABLE(generate_series(1, 100)) WITH "
+      "(preferred_ml_framework='" +
+      ml_framework + "');";
+  sql(create_model2_if_not_exists_stmt);
+  loginInformationSchema();
+  sqlAndCompareResult("SELECT * FROM ml_models;",
+                      {{"MODEL_TEST",
+                        "Linear Regression",
+                        "y",
+                        array({"x"}),
+                        "SELECT generate_series * 2.0 AS y, generate_series AS x FROM "
+                        "TABLE(generate_series(1, 100))",
+                        i(1),
+                        i(1),
+                        i(0),
+                        i(1)}});
+
+  switchToAdmin();
+  // Now create model by same name without IF NOT EXISTS clause, should throw
+  const std::string create_model2_stmt =
+      "CREATE MODEL model_test OF TYPE LINEAR_REG AS SELECT generate_series * "
+      "6.0 AS y2, "
+      "generate_series * 2.0 AS x2 FROM TABLE(generate_series(1, 100)) WITH "
+      "(preferred_ml_framework='" +
+      ml_framework + "');";
+  EXPECT_THROW(sql(create_model2_stmt), TDBException);
+  loginInformationSchema();
+
+  // Model info should be the same as before as new model was not created
+  sqlAndCompareResult("SELECT * FROM ml_models;",
+                      {{"MODEL_TEST",
+                        "Linear Regression",
+                        "y",
+                        array({"x"}),
+                        "SELECT generate_series * 2.0 AS y, generate_series AS x FROM "
+                        "TABLE(generate_series(1, 100))",
+                        i(1),
+                        i(1),
+                        i(0),
+                        i(1)}});
+  switchToAdmin();
+  // Now create or replace model by same name but without projection aliases, should throw
+  const std::string create_or_replace_no_aliases_model2_stmt =
+      "CREATE OR REPLACE MODEL model_test OF TYPE LINEAR_REG AS SELECT generate_series * "
+      "6.0 AS y2, "
+      "generate_series * 2.0 FROM TABLE(generate_series(1, 100)) WITH "
+      "(preferred_ml_framework='" +
+      ml_framework + "');";
+  EXPECT_THROW(sql(create_or_replace_no_aliases_model2_stmt), TDBException);
+  loginInformationSchema();
+
+  // Model info should be the same as before as new model was not created
+  sqlAndCompareResult("SELECT * FROM ml_models;",
+                      {{"MODEL_TEST",
+                        "Linear Regression",
+                        "y",
+                        array({"x"}),
+                        "SELECT generate_series * 2.0 AS y, generate_series AS x FROM "
+                        "TABLE(generate_series(1, 100))",
+                        i(1),
+                        i(1),
+                        i(0),
+                        i(1)}});
+
+  switchToAdmin();
+  // Now run same create statement but with CREATE OR REPLACE, which should replace
+  // previous model
+  const std::string create_or_replace_model2_stmt =
+      "CREATE OR REPLACE MODEL model_test OF TYPE LINEAR_REG AS SELECT generate_series * "
+      "6.0 AS y2, "
+      "generate_series * 2.0 AS x2 FROM TABLE(generate_series(1, 100)) WITH "
+      "(preferred_ml_framework='" +
+      ml_framework + "');";
+  sql(create_or_replace_model2_stmt);
+  loginInformationSchema();
+  sqlAndCompareResult(
+      "SELECT * FROM ml_models;",
+      {{"MODEL_TEST",
+        "Linear Regression",
+        "y2",
+        array({"x2"}),
+        "SELECT generate_series * 6.0 AS y2, generate_series * 2.0 AS x2 FROM "
+        "TABLE(generate_series(1, 100))",
+        i(1),
+        i(1),
+        i(0),
+        i(1)}});
+
+  switchToAdmin();
+  const std::string drop_model_stmt = "DROP MODEL model_test;";
+  sql(drop_model_stmt);
+  loginInformationSchema();
+  sqlAndCompareResult("SELECT * FROM ml_models;", {});
 }
 
 struct StorageDetailsResult {
