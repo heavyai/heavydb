@@ -976,12 +976,12 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
 #endif
 
   bool testShouldBeSkipped() {
-    if (!g_run_odbc && isOdbc(param_.import_type)) {
+    if (!g_run_odbc && is_odbc(param_.import_type)) {
       return true;
     }
     if (param_.data_source_type != "local" &&
-        isOdbc(param_.import_type)) {  // ODBC tests only support populating tables from
-                                       // local files
+        is_odbc(param_.import_type)) {  // ODBC tests only support populating tables from
+                                        // local files
       return true;
     }
     if (param_.data_source_type == "s3_private") {
@@ -1082,7 +1082,7 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
       file_path = file_id;
     } else {
       std::string extension =
-          isOdbc(import_type) || import_type == "regex_parser" ? "csv" : import_type;
+          is_odbc(import_type) || import_type == "regex_parser" ? "csv" : import_type;
       std::string base_name = file_id + "." + extension;
       if (is_dir) {
         base_name = file_id + "_" + extension + "_dir";
@@ -1248,8 +1248,8 @@ class ImportAndSelectTest
 };
 
 TEST_P(ImportAndSelectTest, GeoTypes) {
-  if (param_.import_type == "sqlite") {
-    GTEST_SKIP() << "sqlite does not support geometry types";
+  if (!does_wrapper_support_geo_type(param_.import_type)) {
+    GTEST_SKIP() << param_.import_type << " does not support geometry types";
   }
 
   std::string sql_select_stmt = "";
@@ -1298,7 +1298,7 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
 }
 
 TEST_P(ImportAndSelectTest, ArrayTypes) {
-  if (isOdbc(param_.import_type)) {
+  if (is_odbc(param_.import_type)) {
     GTEST_SKIP() << " array types are not supported for ODBC";
   }
   auto query = createTableCopyFromAndSelect(
@@ -1335,7 +1335,7 @@ TEST_P(ImportAndSelectTest, ArrayTypes) {
 }
 
 TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
-  if (isOdbc(param_.import_type)) {
+  if (is_odbc(param_.import_type)) {
     GTEST_SKIP() << " array types are not supported for ODBC";
   }
   auto query = createTableCopyFromAndSelect(
@@ -1373,17 +1373,19 @@ TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
 
 TEST_P(ImportAndSelectTest, ScalarTypes) {
   std::string sql_select_stmt = "";
-  auto query = createTableCopyFromAndSelect(
-      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
-      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
-      "txt_2 TEXT ENCODING NONE",
-      "scalar_types",
-      "SELECT * FROM import_test_new ORDER BY s;",
-      get_line_regex(12),
-      14,
-      false,
-      sql_select_stmt,
-      "s");
+  std::string schema =
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
+      "DECIMAL(10,5), tm " +
+      std::string(param_.import_type == "hive" ? "TEXT" : "TIME") +
+      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE, shard key(txt)";
+  auto query = createTableCopyFromAndSelect(schema,
+                                            "scalar_types",
+                                            "SELECT * FROM import_test_new ORDER BY s;",
+                                            get_line_regex(12),
+                                            14,
+                                            false,
+                                            sql_select_stmt,
+                                            "s");
 
   // clang-format off
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
@@ -1446,7 +1448,7 @@ TEST_P(ImportAndSelectTest, Sharded) {
 }
 
 TEST_P(ImportAndSelectTest, Multifile) {
-  if (isOdbc(param_.import_type)) {
+  if (is_odbc(param_.import_type)) {
     GTEST_SKIP() << " multifile support not tested for ODBC";
   }
   auto query = createTableCopyFromAndSelect("t TEXT, i INT, f FLOAT",
@@ -1474,8 +1476,8 @@ TEST_P(ImportAndSelectTest, Multifile) {
 }
 
 TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
-  if (param_.import_type == "sqlite") {
-    GTEST_SKIP() << "sqlite does not support geometry types";
+  if (!does_wrapper_support_geo_type(param_.import_type)) {
+    GTEST_SKIP() << param_.import_type << " does not support geometry types";
   }
   std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
@@ -1569,8 +1571,8 @@ TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
   if (param_.data_source_type != "local") {
     GTEST_SKIP();
   }
-  if (param_.import_type == "sqlite") {
-    GTEST_SKIP() << "sqlite does not support geometry types";
+  if (!does_wrapper_support_geo_type(param_.import_type)) {
+    GTEST_SKIP() << param_.import_type << " does not support geometry types";
   }
   std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
@@ -1601,7 +1603,7 @@ TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
 }
 
 TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
-  if (isOdbc(param_.import_type)) {
+  if (is_odbc(param_.import_type)) {
     GTEST_SKIP() << " array types are not supported for ODBC";
   }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
@@ -1675,7 +1677,7 @@ TEST_P(ImportAndSelectTest, NotNullArrayTypeColumns) {
 }
 
 TEST_P(ImportAndSelectTest, InvalidFixedLengthArrayTypesRecord) {
-  if (isOdbc(param_.import_type)) {
+  if (is_odbc(param_.import_type)) {
     GTEST_SKIP() << " array types are not supported for ODBC";
   }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
@@ -1749,21 +1751,23 @@ TEST_P(ImportAndSelectTest, NotNullFixedLengthArrayTypeColumns) {
 
 TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
   std::string sql_select_stmt = "";
-  auto query = createTableCopyFromAndSelect(
-      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
-      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
-      "txt_2 TEXT ENCODING NONE",
-      "invalid_records/scalar_types",
-      "SELECT * FROM import_test_new ORDER BY s;",
-      get_line_regex(12),
-      14,
-      false,
-      sql_select_stmt,
-      "s",
-      {},
-      false,
-      std::nullopt,
-      {{"INTEGER", "BIGINT"}});
+  std::string schema =
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
+      "DECIMAL(10,5), tm " +
+      std::string(param_.import_type == "hive" ? "TEXT" : "TIME") +
+      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE";
+  auto query = createTableCopyFromAndSelect(schema,
+                                            "invalid_records/scalar_types",
+                                            "SELECT * FROM import_test_new ORDER BY s;",
+                                            get_line_regex(12),
+                                            14,
+                                            false,
+                                            sql_select_stmt,
+                                            "s",
+                                            {},
+                                            false,
+                                            std::nullopt,
+                                            {{"INTEGER", "BIGINT"}});
 
   // clang-format off
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
@@ -1786,23 +1790,25 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
     GTEST_SKIP();
   }
   std::string sql_select_stmt = "";
-  auto query = createTableCopyFromAndSelect(
+  std::string schema =
       "b BOOLEAN NOT NULL, t TINYINT NOT NULL, s SMALLINT NOT NULL, i INTEGER NOT NULL, "
-      "bi BIGINT NOT NULL, f FLOAT NOT NULL, "
-      "dc DECIMAL(10,5) NOT NULL, tm TIME NOT NULL, tp TIMESTAMP NOT NULL, d DATE NOT "
-      "NULL, txt TEXT NOT NULL, "
-      "txt_2 TEXT NOT NULL ENCODING NONE",
-      "invalid_records/scalar_types_not_null",
-      "SELECT * FROM import_test_new ORDER BY s;",
-      get_line_regex(12),
-      14,
-      false,
-      sql_select_stmt,
-      "s",
-      {},
-      false,
-      std::nullopt,
-      {{"INTEGER", "BIGINT"}});
+      "bi BIGINT NOT NULL, f FLOAT NOT NULL, dc "
+      "DECIMAL(10,5) NOT NULL, tm " +
+      std::string(param_.import_type == "hive" ? "TEXT" : "TIME") +
+      " NOT NULL, tp TIMESTAMP NOT NULL, d DATE NOT NULL, txt TEXT NOT NULL, txt_2 TEXT "
+      "NOT NULL ENCODING NONE";
+  auto query = createTableCopyFromAndSelect(schema,
+                                            "invalid_records/scalar_types_not_null",
+                                            "SELECT * FROM import_test_new ORDER BY s;",
+                                            get_line_regex(12),
+                                            14,
+                                            false,
+                                            sql_select_stmt,
+                                            "s",
+                                            {},
+                                            false,
+                                            std::nullopt,
+                                            {{"INTEGER", "BIGINT"}});
 
   auto expected_values =
       std::vector<std::vector<NullableTargetValue>>{{True,
@@ -1824,21 +1830,23 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
 
 TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
   std::string sql_select_stmt = "";
-  auto query = createTableCopyFromAndSelect(
-      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
-      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
-      "txt_2 TEXT ENCODING NONE, shard key(txt)",
-      "invalid_records/scalar_types",
-      "SELECT * FROM import_test_new ORDER BY s;",
-      get_line_regex(12),
-      14,
-      false,
-      sql_select_stmt,
-      "s",
-      "SHARD_COUNT=2",
-      false,
-      std::nullopt,
-      {{"INTEGER", "BIGINT"}});
+  std::string schema =
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
+      "DECIMAL(10,5), tm " +
+      std::string(param_.import_type == "hive" ? "TEXT" : "TIME") +
+      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE, shard key(txt)";
+  auto query = createTableCopyFromAndSelect(schema,
+                                            "invalid_records/scalar_types",
+                                            "SELECT * FROM import_test_new ORDER BY s;",
+                                            get_line_regex(12),
+                                            14,
+                                            false,
+                                            sql_select_stmt,
+                                            "s",
+                                            {},
+                                            false,
+                                            /*max_reject*/0,
+                                            {{"INTEGER", "BIGINT"}});
 
   // clang-format off
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
@@ -1891,7 +1899,7 @@ std::string duplicate(unsigned const dup, std::string const& str) {
 
 // Test TEXT ENCODING NONE columns can import strings longer than 32k.
 TEST_P(ImportAndSelectTest, LongerNoneEncodedString) {
-  if (isOdbc(param_.import_type)) {
+  if (is_odbc(param_.import_type)) {
     GTEST_SKIP() << " this test is currently not checked to work with ODBC";
   }
 

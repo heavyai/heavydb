@@ -47,7 +47,6 @@ extern bool g_enable_system_tables;
 extern bool g_read_only;
 
 namespace {
-using ColumnPair = std::pair<std::string, std::string>;
 
 std::vector<std::string> split_on_regex(const std::string& in, const std::string& regex) {
   std::vector<std::string> tokens;
@@ -76,31 +75,7 @@ const std::map<std::string, std::map<boost::regex, std::string>>
           {make_regex("TIMESTAMP\\s*\\(6\\)"), "timestamp"},
           {make_regex("(MULTI)?POINT"), "geometry"},
           {make_regex("(MULTI)?LINESTRING"), "geometry"},
-          {make_regex("(MULTI)?POLYGON"), "geometry"}}},
-        {"redshift",
-         {{make_regex("TEXT.*"), "text"},
-          {make_regex("FLOAT"), "real"},
-          {make_regex("DOUBLE"), "double precision"},
-          {make_regex("TIMESTAMP\\s*\\(\\d+\\)"), "timestamp"},
-          {make_regex("TINYINT"), "smallint"},
-          {make_regex("(MULTI)?POINT"), "geometry"},
-          {make_regex("(MULTI)?LINESTRING"), "geometry"},
-          {make_regex("(MULTI)?POLYGON"), "geometry"}}},
-        {"snowflake",
-         {{make_regex("TEXT.*"), "text"},
-          {make_regex("TIME\\b"), "time(0)"},
-          {make_regex("(MULTI)?POINT"), "geography"},
-          {make_regex("(MULTI)?LINESTRING"), "geography"},
-          {make_regex("(MULTI)?POLYGON"), "geography"}}},
-        {"bigquery",
-         {{make_regex("TEXT.*"), "string"},
-          {make_regex("TIMESTAMP\\s*\\(\\d+\\)"), "timestamp"},
-          {make_regex("TIME\\s*\\(\\d+\\)"), "time"},
-          {make_regex("FLOAT"), "float64"},
-          {make_regex("DOUBLE"), "float64"},
-          {make_regex("(MULTI)?POINT"), "geography"},
-          {make_regex("(MULTI)?LINESTRING"), "geography"},
-          {make_regex("(MULTI)?POLYGON"), "geography"}}}};
+          {make_regex("(MULTI)?POLYGON"), "geometry"}}}};
 
 const std::map<std::string, std::map<boost::regex, std::string>>
     k_rdms_column_type_prepend = {
@@ -303,13 +278,6 @@ class DBHandlerTestFixture : public testing::Test {
                            const std::vector<LeafHostInfo>& leaf_servers) {
     string_leaves_ = string_servers;
     db_leaves_ = leaf_servers;
-  }
-
-  static bool isOdbc(const std::string& data_wrapper_type) {
-    static const std::vector<std::string> odbc_wrappers{
-        "sqlite", "postgres", "redshift", "snowflake", "bigquery"};
-    return std::find(odbc_wrappers.begin(), odbc_wrappers.end(), data_wrapper_type) !=
-           odbc_wrappers.end();
   }
 
   static bool isFileBased(const std::string& data_wrapper_type) {

@@ -98,7 +98,8 @@ static const std::vector<WrapperType> odbc_wrappers{"snowflake",
                                                     "sqlite",
                                                     "postgres",
                                                     "redshift",
-                                                    "bigquery"};
+                                                    "bigquery",
+                                                    "hive"};
 
 static const std::string default_table_name = "test_foreign_table";
 static const std::string default_table_name_2 = "test_foreign_table_2";
@@ -129,9 +130,7 @@ bool is_regex(const std::string& wrapper_type) {
 }
 
 std::string wrapper_file_type(const std::string& wrapper_type) {
-  return (DBHandlerTestFixture::isOdbc(wrapper_type) || wrapper_type == "regex_parser")
-             ? "csv"
-             : wrapper_type;
+  return (is_odbc(wrapper_type) || wrapper_type == "regex_parser") ? "csv" : wrapper_type;
 }
 
 FileExtType wrapper_ext(const std::string& wrapper_type) {
@@ -245,7 +244,7 @@ std::string get_data_wrapper_name(const std::string& data_wrapper_type) {
     data_wrapper = "delimited_file";
   } else if (data_wrapper_type == "parquet") {
     data_wrapper = "parquet_file";
-  } else if (DBHandlerTestFixture::isOdbc(data_wrapper_type)) {
+  } else if (is_odbc(data_wrapper_type)) {
     data_wrapper = "odbc";
   } else {
     UNREACHABLE() << "Unexpected data wrapper type: " << data_wrapper_type;
@@ -283,7 +282,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
   bool skip_teardown_ = false;
 
   void SetUp() override {
-    if (isOdbc(wrapper_type_)) {
+    if (is_odbc(wrapper_type_)) {
       SKIP_SETUP_IF_ODBC_DISABLED();
     }
     g_enable_fsi = true;
@@ -408,7 +407,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
     const auto& stored_column_pairs =
         (db_specific_column_pairs.empty()) ? column_pairs : db_specific_column_pairs;
 
-    if (isOdbc(data_wrapper_type)) {
+    if (is_odbc(data_wrapper_type)) {
       createODBCSourceTable(table_name, stored_column_pairs, src_path, data_wrapper_type);
     } else {
       ss << "SERVER " + get_default_server(data_wrapper_type);
@@ -563,7 +562,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
                                      size_t fragment_size = DEFAULT_FRAGMENT_ROWS) {
     // geotypes in odbc data wrappers are currently only supported by text data types
     std::vector<NameTypePair> odbc_columns{};
-    if (isOdbc(data_wrapper_type)) {
+    if (is_odbc(data_wrapper_type)) {
       odbc_columns = {{"id", "INT"},
                       {"p", "TEXT"},
                       {"mp", "TEXT"},
@@ -588,7 +587,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
                                 options,
                                 default_table_name,
                                 odbc_columns,
-                                isOdbc(data_wrapper_type) ? true : false));
+                                is_odbc(data_wrapper_type) ? true : false));
   }
 
   void queryAndAssertQuotedIdentifierPairs() {
@@ -1044,15 +1043,8 @@ class DataTypeFragmentSizeAndDataWrapperTest
 
     size_t num_elems = 4;
 
-    // sqlite does not encode NULL boolean
-    if (wrapper_type_ == "sqlite" && !data_loaded) {
-      // sqlite does not cast boolean to integer correctly
-      test_chunk_metadata_map[{0, 1}] =
-          createChunkMetadata<int8_t>(1, num_elems, num_elems, 0, 0, true);
-    } else {
-      test_chunk_metadata_map[{0, 1}] =
-          createChunkMetadata<int8_t>(1, num_elems, num_elems, 0, 1, true);
-    }
+    test_chunk_metadata_map[{0, 1}] =
+        createChunkMetadata<int8_t>(1, num_elems, num_elems, 0, 1, true);
     if (wrapper_type_ == "postgres") {
       // Postgres does not support tinyint
       test_chunk_metadata_map[{0, 2}] =
@@ -1720,7 +1712,7 @@ TEST_P(DataWrapperSelectQueryTest, SelectCount) {
 
 TEST_P(DataWrapperSelectQueryTest, Int8EmptyAndNullArrayPermutations) {
   auto wrapper_type = GetParam();
-  if (isOdbc(wrapper_type)) {
+  if (is_odbc(wrapper_type)) {
     GTEST_SKIP()
         << "Sqlite does not support array types; Postgres arrays currently unsupported";
   }
@@ -1932,7 +1924,7 @@ TEST_P(DataWrapperSelectQueryTest, null_values_for_non_encoded_types) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, ArrayWithNullValues) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP()
         << "Sqlite does notsupport array types; Postgres arrays currently unsupported";
   }
@@ -1957,7 +1949,7 @@ TEST_P(DataWrapperSelectQueryTest, ArrayWithNullValues) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, MissingFileOnCreateTable) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   auto file_path = getDataFilesPath() + "missing_file" + wrapper_ext(GetParam());
@@ -1966,7 +1958,7 @@ TEST_P(DataWrapperSelectQueryTest, MissingFileOnCreateTable) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, MissingFileOnSelectQuery) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   auto file_path = boost::filesystem::absolute("missing_file");
@@ -1984,7 +1976,7 @@ TEST_P(DataWrapperSelectQueryTest, MissingFileOnSelectQuery) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, EmptyDirectory) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   auto dir_path = boost::filesystem::absolute("empty_dir");
@@ -1997,7 +1989,7 @@ TEST_P(DataWrapperSelectQueryTest, EmptyDirectory) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, RecursiveDirectory) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   sql(createForeignTableQuery(
@@ -2009,7 +2001,7 @@ TEST_P(DataWrapperSelectQueryTest, RecursiveDirectory) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, FilePathWithLeadingSlash) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid test case for ODBC wrappers";
   }
   sql("CREATE SERVER test_server FOREIGN DATA WRAPPER " +
@@ -2025,7 +2017,7 @@ TEST_P(DataWrapperSelectQueryTest, FilePathWithLeadingSlash) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, NoMatchWildcard) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   queryAndAssertException(
@@ -2035,7 +2027,7 @@ TEST_P(DataWrapperSelectQueryTest, NoMatchWildcard) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, WildcardOnFiles) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   sql(createForeignTableQuery(
@@ -2054,7 +2046,7 @@ TEST_P(DataWrapperSelectQueryTest, WildcardOnFiles) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, WildcardOnDirectory) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   sql(createForeignTableQuery(
@@ -2065,7 +2057,7 @@ TEST_P(DataWrapperSelectQueryTest, WildcardOnDirectory) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, NoMatchRegexPathFilter) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   sql(createForeignTableQuery({{"i1", "INT"}},
@@ -2078,7 +2070,7 @@ TEST_P(DataWrapperSelectQueryTest, NoMatchRegexPathFilter) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, RegexPathFilterOnFiles) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   sql(createForeignTableQuery(
@@ -2098,7 +2090,7 @@ TEST_P(DataWrapperSelectQueryTest, RegexPathFilterOnFiles) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, SortedOnPathname) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   sql(createForeignTableQuery(
@@ -2112,7 +2104,7 @@ TEST_P(DataWrapperSelectQueryTest, SortedOnPathname) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, SortedOnDateModified) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   auto source_dir =
@@ -2150,7 +2142,7 @@ TEST_P(DataWrapperSelectQueryTest, SortedOnDateModified) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, SortedOnRegex) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   sql(createForeignTableQuery(
@@ -2163,7 +2155,7 @@ TEST_P(DataWrapperSelectQueryTest, SortedOnRegex) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, SortedOnRegexDate) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   sql(createForeignTableQuery(
@@ -2177,7 +2169,7 @@ TEST_P(DataWrapperSelectQueryTest, SortedOnRegexDate) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, SortedOnRegexNumberAndMultiCaptureGroup) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   sql(createForeignTableQuery(
@@ -2191,7 +2183,7 @@ TEST_P(DataWrapperSelectQueryTest, SortedOnRegexNumberAndMultiCaptureGroup) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, SortedOnNonRegexWithSortRegex) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   queryAndAssertException(
@@ -2205,7 +2197,7 @@ TEST_P(DataWrapperSelectQueryTest, SortedOnNonRegexWithSortRegex) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, SortedOnRegexWithoutSortRegex) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   queryAndAssertException(createForeignTableQuery({{"i", "INT"}},
@@ -2340,7 +2332,7 @@ TEST_P(DataWrapperSelectQueryTest, InvalidMultiPolygon) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, NullTextArray) {
-  if (isOdbc(GetParam())) {
+  if (is_odbc(GetParam())) {
     GTEST_SKIP()
         << "Sqlite does not support array types; Postgres arrays currently unsupported";
   }
@@ -3122,7 +3114,7 @@ class RefreshTests : public ForeignTableTest, public TempDirManager {
                     bf::copy_option::overwrite_if_exists
 #endif
       );
-      if (isOdbc(wrapper_type_)) {
+      if (is_odbc(wrapper_type_)) {
         // If we are in ODBC we need to recreate the ODBC table as well.
         createODBCSourceTable(
             table_names_[i], column_pairs, tmp_file_names_[i], wrapper_type_);
@@ -3183,7 +3175,7 @@ class AlteredSourceTest : public RefreshTests,
     if (wrapper_type_ == "csv" || wrapper_type_ == "parquet") {
       file_ext_ = wrapper_type_;
     } else {
-      CHECK(wrapper_type_ == "regex_parser" || isOdbc(wrapper_type_));
+      CHECK(wrapper_type_ == "regex_parser" || is_odbc(wrapper_type_));
       file_ext_ = "csv";
     }
     auto cat = &getCatalog();
@@ -3238,7 +3230,7 @@ TEST_P(AlteredSourceTest, FragmentRemoved) {
         "change of source. Please use the \"REFRESH FOREIGN TABLES\" command on the "
         "foreign table if data source has been updated. Foreign table: "
         "test_foreign_table0";
-  } else if (isOdbc(wrapper_type_)) {
+  } else if (is_odbc(wrapper_type_)) {
     expected_exception =
         "Unexpected number of records while loading from foreign data source: "
         "expected 1 , obtained 0 records. Please use the \"REFRESH FOREIGN TABLES\" "
@@ -3515,7 +3507,7 @@ TEST_P(RefreshParamTests, ChangeSchema) {
   ASSERT_TRUE(isChunkAndMetadataCached(orig_key));
 
   // Refresh command
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     // ODBC can handle this case fine, since it can select individual columns.
     sql("REFRESH FOREIGN TABLES " + table_names_[0] + ";");
   } else if (is_regex(wrapper_type_)) {
@@ -3826,7 +3818,7 @@ class AppendRefreshBase : public RecoverCacheQueryTest, public TempDirManager {
 
   void overwriteSourceDir(const std::vector<ColumnPair>& column_pairs) {
     overwriteTempDir(getDataFilesPath() + "append_after");
-    if (isOdbc(wrapper_type_)) {
+    if (is_odbc(wrapper_type_)) {
       createODBCSourceTable(
           table_name_, column_pairs, test_temp_dir + file_name_, wrapper_type_);
     }
@@ -4179,7 +4171,7 @@ TEST_P(StringDictAppendTest, AppendStringDictJoin) {
   overwriteSourceDir(table_schema);
   // Need an extra createODBCSourceTable() call as only the first table is handled by
   // overwriteSourceDir()
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     createODBCSourceTable(
         name_2, table_schema, test_temp_dir + file_name_, wrapper_type_);
   }
@@ -4259,7 +4251,7 @@ TEST_P(DataWrapperAppendRefreshTest, AppendNothingGeo) {
 
   file_name_ = "geo_types_valid"s + wrapper_ext(wrapper_type_);
   std::vector<NameTypePair> odbc_columns{};
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     odbc_columns = {{"id", "INT"},
                     {"p", "TEXT"},
                     {"mp", "TEXT"},
@@ -4312,7 +4304,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
   overwriteSourceDir({{"i", "BIGINT"}});
 
   // Refresh command
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     auto schema_name_table_name = getOdbcTableName(table_name_, wrapper_type_);
     queryAndAssertException("REFRESH FOREIGN TABLES " + table_name_ + ";",
                             "Refresh of foreign table created with \"APPEND\" update "
@@ -4338,7 +4330,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRowsEvict) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_missing_file";
@@ -4350,7 +4342,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, MissingFileAlterFromAppendToAll) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_missing_file";
@@ -4365,7 +4357,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFileAlterFromAppendToAll) {
 // This tests the use case where there are multiple files in a
 // directory but an update is made to only one of the files.
 TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_multi_bad_append";
@@ -4377,7 +4369,7 @@ TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, SortedFiles) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This test case is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file";
@@ -4390,7 +4382,7 @@ TEST_P(DataWrapperAppendRefreshTest, SortedFiles) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, FilteredFiles) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This test case is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file";
@@ -4402,7 +4394,7 @@ TEST_P(DataWrapperAppendRefreshTest, FilteredFiles) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, FileRollOffOnly) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
@@ -4416,7 +4408,7 @@ TEST_P(DataWrapperAppendRefreshTest, FileRollOffOnly) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, FileRollOffAppend) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
@@ -4430,7 +4422,7 @@ TEST_P(DataWrapperAppendRefreshTest, FileRollOffAppend) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, AllFilesRolledOff) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
@@ -4444,7 +4436,7 @@ TEST_P(DataWrapperAppendRefreshTest, AllFilesRolledOff) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, AllFilesRolledOffAndNewFiles) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
@@ -4458,7 +4450,7 @@ TEST_P(DataWrapperAppendRefreshTest, AllFilesRolledOffAndNewFiles) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, FileRollOffMultipleFragments) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
@@ -4472,7 +4464,7 @@ TEST_P(DataWrapperAppendRefreshTest, FileRollOffMultipleFragments) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, FileRollOffOptionSetAndRegularAppend) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_multi";
@@ -4485,7 +4477,7 @@ TEST_P(DataWrapperAppendRefreshTest, FileRollOffOptionSetAndRegularAppend) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, FileRollOffOptionSetAndOldestFileNotRemoved) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
@@ -4498,7 +4490,7 @@ TEST_P(DataWrapperAppendRefreshTest, FileRollOffOptionSetAndOldestFileNotRemoved
 }
 
 TEST_P(DataWrapperAppendRefreshTest, AlterAddFileRollOff) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
@@ -4514,7 +4506,7 @@ TEST_P(DataWrapperAppendRefreshTest, AlterAddFileRollOff) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, AlterRemoveFileRollOff) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
@@ -4528,7 +4520,7 @@ TEST_P(DataWrapperAppendRefreshTest, AlterRemoveFileRollOff) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, AppendToLastFile) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_last_file_append";
@@ -4541,7 +4533,7 @@ TEST_P(DataWrapperAppendRefreshTest, AppendToLastFile) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileThatSpansMultipleFragments) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_last_file_append_multi_fragment";
@@ -4554,7 +4546,7 @@ TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileThatSpansMultipleFragments)
 }
 
 TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileAndNewFileAdded) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_last_file_append";
@@ -4568,7 +4560,7 @@ TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileAndNewFileAdded) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileAndRollOff) {
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_last_file_append";
@@ -5211,7 +5203,7 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayUnsignedIntegerTypes) {
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
   auto [fragment_size, data_wrapper_type, extension] = GetParam();
-  if (isOdbc(data_wrapper_type)) {
+  if (is_odbc(data_wrapper_type)) {
     GTEST_SKIP()
         << "Sqlite does notsupport array types; Postgres arrays currently unsupported";
   }
@@ -5263,7 +5255,7 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, FixedLengthArrayTypes) {
   auto [fragment_size, data_wrapper_type, extension] = GetParam();
-  if (isOdbc(data_wrapper_type)) {
+  if (is_odbc(data_wrapper_type)) {
     GTEST_SKIP()
         << "Sqlite does notsupport array types; Postgres arrays currently unsupported";
   }
@@ -5927,7 +5919,7 @@ TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
   bf::remove_all(getDataFilesPath() + "append_tmp");
   recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
   // Recreate table for ODBC data wrappers
-  if (isOdbc(wrapper_type_)) {
+  if (is_odbc(wrapper_type_)) {
     createODBCSourceTable(
         default_table_name, {{"i", "BIGINT"}}, file_path, wrapper_type_);
   }
