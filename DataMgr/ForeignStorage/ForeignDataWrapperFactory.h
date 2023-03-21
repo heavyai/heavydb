@@ -74,22 +74,25 @@ struct DataWrapperType {
   static constexpr char const* INTERNAL_MEMORY_STATS = "INTERNAL_MEMORY_STATS";
   static constexpr char const* INTERNAL_STORAGE_STATS = "INTERNAL_STORAGE_STATS";
   static constexpr char const* INTERNAL_EXECUTOR_STATS = "INTERNAL_EXECUTOR_STATS";
+  static constexpr char const* INTERNAL_ML_MODEL_METADATA = "INTERNAL_ML_MODEL_METADATA";
   static constexpr char const* INTERNAL_LOGS = "INTERNAL_LOGS";
 
-  static constexpr std::array<char const*, 5> INTERNAL_DATA_WRAPPERS{
+  static constexpr std::array<char const*, 6> INTERNAL_DATA_WRAPPERS{
       INTERNAL_CATALOG,
       INTERNAL_MEMORY_STATS,
       INTERNAL_STORAGE_STATS,
       INTERNAL_EXECUTOR_STATS,
+      INTERNAL_ML_MODEL_METADATA,
       INTERNAL_LOGS};
 
-  static constexpr std::array<char const*, 4> IN_MEMORY_DATA_WRAPPERS{
+  static constexpr std::array<char const*, 5> IN_MEMORY_DATA_WRAPPERS{
       INTERNAL_CATALOG,
       INTERNAL_MEMORY_STATS,
       INTERNAL_STORAGE_STATS,
-      INTERNAL_EXECUTOR_STATS};
+      INTERNAL_EXECUTOR_STATS,
+      INTERNAL_ML_MODEL_METADATA};
 
-  static constexpr std::array<std::string_view, 8> supported_data_wrapper_types{
+  static constexpr std::array<std::string_view, 9> supported_data_wrapper_types{
       PARQUET,
       CSV,
       REGEX_PARSER,
@@ -97,6 +100,7 @@ struct DataWrapperType {
       INTERNAL_MEMORY_STATS,
       INTERNAL_STORAGE_STATS,
       INTERNAL_EXECUTOR_STATS,
+      INTERNAL_ML_MODEL_METADATA,
       INTERNAL_LOGS};
 };
 

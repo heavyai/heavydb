@@ -121,6 +121,7 @@ static constexpr const char* MEMORY_DETAILS_SYS_TABLE_NAME{"memory_details"};
 static constexpr const char* STORAGE_DETAILS_SYS_TABLE_NAME{"storage_details"};
 static constexpr const char* EXECUTOR_RESOURCE_POOL_SUMMARY_SYS_TABLE_NAME{
     "executor_pool_summary"};
+static constexpr const char* ML_MODEL_METADATA_SYS_TABLE_NAME{"ml_models"};
 static constexpr const char* SERVER_LOGS_SYS_TABLE_NAME{"server_logs"};
 static constexpr const char* REQUEST_LOGS_SYS_TABLE_NAME{"request_logs"};
 static constexpr const char* WS_SERVER_LOGS_SYS_TABLE_NAME{"web_server_logs"};
@@ -830,6 +831,8 @@ class Catalog final {
   void initializeMemorySummarySystemTable();
   void initializeMemoryDetailsSystemTable();
   void initializeStorageDetailsSystemTable();
+  void initializeExecutorResourcePoolSummarySystemTable();
+  void initializeMLModelMetadataSystemTable();
   void initializeServerLogsSystemTables();
   void initializeRequestLogsSystemTables();
   void initializeWebServerLogsSystemTables();
@@ -866,11 +869,13 @@ class Catalog final {
   static constexpr const char* MEMORY_STATS_SERVER_NAME{"system_memory_stats_server"};
   static constexpr const char* STORAGE_STATS_SERVER_NAME{"system_storage_stats_server"};
   static constexpr const char* EXECUTOR_STATS_SERVER_NAME{"system_executor_stats_server"};
+  static constexpr const char* ML_METADATA_SERVER_NAME{"ml_metadata_server"};
   static constexpr const char* LOGS_SERVER_NAME{"system_logs_server"};
-  static constexpr std::array<const char*, 5> INTERNAL_SERVERS{CATALOG_SERVER_NAME,
+  static constexpr std::array<const char*, 6> INTERNAL_SERVERS{CATALOG_SERVER_NAME,
                                                                MEMORY_STATS_SERVER_NAME,
                                                                STORAGE_STATS_SERVER_NAME,
                                                                EXECUTOR_STATS_SERVER_NAME,
+                                                               ML_METADATA_SERVER_NAME,
                                                                LOGS_SERVER_NAME};
 
  public:

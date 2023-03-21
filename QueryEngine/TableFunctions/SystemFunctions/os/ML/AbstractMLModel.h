@@ -42,15 +42,32 @@ inline std::string get_ml_model_type_str(const MLModelType model_type) {
   }
 }
 
+inline MLModelType get_ml_model_type_from_str(const std::string& model_type_str) {
+  const auto upper_model_type_str = to_upper(model_type_str);
+  if (upper_model_type_str == "LINEAR_REG") {
+    return MLModelType::LINEAR_REG;
+  } else if (upper_model_type_str == "DECISION_TREE_REG") {
+    return MLModelType::DECISION_TREE_REG;
+  } else if (upper_model_type_str == "GBT_REG") {
+    return MLModelType::GBT_REG;
+  } else if (upper_model_type_str == "RANDOM_FOREST_REG") {
+    return MLModelType::RANDOM_FOREST_REG;
+  } else {
+    throw std::invalid_argument("Unknown model type: " + upper_model_type_str);
+  }
+}
+
 class AbstractMLModel {
  public:
-  AbstractMLModel() {}
-  AbstractMLModel(const std::vector<std::vector<std::string>>& cat_feature_keys)
-      : cat_feature_keys_(cat_feature_keys) {}
+  AbstractMLModel(const std::string& model_metadata) : model_metadata_(model_metadata) {}
+  AbstractMLModel(const std::string& model_metadata,
+                  const std::vector<std::vector<std::string>>& cat_feature_keys)
+      : model_metadata_(model_metadata), cat_feature_keys_(cat_feature_keys) {}
   virtual MLModelType getModelType() const = 0;
   virtual std::string getModelTypeString() const = 0;
   virtual int64_t getNumFeatures() const = 0;
   virtual ~AbstractMLModel() = default;
+  const std::string& getModelMetadata() const { return model_metadata_; }
   const std::vector<std::vector<std::string>>& getCatFeatureKeys() const {
     return cat_feature_keys_;
   }
@@ -69,5 +86,6 @@ class AbstractMLModel {
   }
 
  protected:
+  std::string model_metadata_;
   std::vector<std::vector<std::string>> cat_feature_keys_;
 };

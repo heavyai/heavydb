@@ -263,6 +263,7 @@ linear_reg_fit_impl(TableFunctionManager& mgr,
                     const ColumnList<T>& input_features,
                     const std::vector<std::vector<std::string>>& cat_feature_keys,
                     const TextEncodingNone& preferred_ml_framework_str,
+                    const TextEncodingNone& model_metadata,
                     Column<TextEncodingDict>& output_model_name) {
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
@@ -309,7 +310,8 @@ linear_reg_fit_impl(TableFunctionManager& mgr,
   } catch (std::runtime_error& e) {
     return mgr.ERROR_MESSAGE(e.what());
   }
-  auto model = std::make_shared<LinearRegressionModel>(coefs, cat_feature_keys);
+  auto model =
+      std::make_shared<LinearRegressionModel>(coefs, model_metadata, cat_feature_keys);
   ml_models_.addModel(model_name, model);
   const std::string model_name_str = model_name.getString();
   const TextEncodingDict model_name_str_id =
@@ -321,10 +323,11 @@ linear_reg_fit_impl(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: linear_reg_fit__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
+   TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<T> features> data,
-   TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
-   Column<TextEncodingDict> model | input_id=args<>, T=[double]
+   TextEncodingNone preferred_ml_framework | default="DEFAULT",
+   TextEncodingNone model_metadata | default="{}") ->
+   Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
 
@@ -335,6 +338,7 @@ linear_reg_fit__cpu_template(TableFunctionManager& mgr,
                              const Column<T>& input_labels,
                              const ColumnList<T>& input_features,
                              const TextEncodingNone& preferred_ml_framework_str,
+                             const TextEncodingNone& model_metadata,
                              Column<TextEncodingDict>& output_model_name) {
   std::vector<std::vector<std::string>> empty_cat_feature_keys;
   return linear_reg_fit_impl(mgr,
@@ -343,6 +347,7 @@ linear_reg_fit__cpu_template(TableFunctionManager& mgr,
                              input_features,
                              empty_cat_feature_keys,
                              preferred_ml_framework_str,
+                             model_metadata,
                              output_model_name);
 }
 
@@ -431,13 +436,14 @@ struct CategoricalFeaturesBuilder {
 // clang-format off
 /*
   UDTF: linear_reg_fit__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
+   TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<TextEncodingDict> cat_features, 
    ColumnList<T> numeric_features> data,
    int32_t top_k_cat_attrs | require="top_k_cat_attrs >= 1" | default=10,
    float min_cat_attr_proportion | require="min_cat_attr_proportion > 0.0" | require="min_cat_attr_proportion <= 1.0" | default=0.01,
-   TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
-   Column<TextEncodingDict> model | input_id=args<>, T=[double]
+   TextEncodingNone preferred_ml_framework | default="DEFAULT",
+   TextEncodingNone model_metadata | default="{}") ->
+   Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
 
@@ -451,6 +457,7 @@ linear_reg_fit__cpu_template(TableFunctionManager& mgr,
                              const int32_t top_k_cat_attrs,
                              const float min_cat_attr_proportion,
                              const TextEncodingNone& preferred_ml_framework_str,
+                             const TextEncodingNone& model_metadata,
                              Column<TextEncodingDict>& output_model_name) {
   CategoricalFeaturesBuilder<T> cat_features_builder(input_cat_features,
                                                      input_numeric_features,
@@ -464,6 +471,7 @@ linear_reg_fit__cpu_template(TableFunctionManager& mgr,
                              cat_features_builder.getFeatures(),
                              cat_features_builder.getCatFeatureKeys(),
                              preferred_ml_framework_str,
+                             model_metadata,
                              output_model_name);
 }
 
@@ -476,8 +484,9 @@ Column<T> create_wrapper_col(std::vector<T>& col_vec) {
 // clang-format off
 /*
   UDTF: linear_reg_coefs__cpu_1(TableFunctionManager,
-  TextEncodingNone model) ->
-  Column<int64_t> coef_idx, Column<int64_t> sub_coef_idx ,Column<TextEncodingDict> sub_coef_attr | input_id=args<>,
+  TextEncodingNone model_name) ->
+  Column<int64_t> coef_idx, Column<TextEncodingDict> feature | input_id=args<>, 
+  Column<int64_t> sub_coef_idx, Column<TextEncodingDict> sub_feature | input_id=args<>,
   Column<double> coef
  */
 // clang-format on
@@ -486,15 +495,17 @@ EXTENSION_NOINLINE_HOST int32_t
 linear_reg_coefs__cpu_1(TableFunctionManager& mgr,
                         const TextEncodingNone& model_name,
                         Column<int64_t>& output_coef_idx,
+                        Column<TextEncodingDict>& output_feature,
                         Column<int64_t>& output_sub_coef_idx,
-                        Column<TextEncodingDict>& output_sub_attr,
+                        Column<TextEncodingDict>& output_sub_feature,
                         Column<double>& output_coef);
 
 // clang-format off
 /*
   UDTF: linear_reg_coefs__cpu_2(TableFunctionManager,
-  Cursor<Column<TextEncodingDict> model_name> model) ->
-  Column<int64_t> coef_idx, Column<int64_t> sub_coef_idx, Column<TextEncodingDict> sub_coef_attr | input_id=args<>,
+  Cursor<Column<TextEncodingDict> name> model_name) ->
+  Column<int64_t> coef_idx, Column<TextEncodingDict> feature | input_id=args<>, 
+  Column<int64_t> sub_coef_idx, Column<TextEncodingDict> sub_feature | input_id=args<>,
   Column<double> coef
  */
 // clang-format on
@@ -503,8 +514,9 @@ EXTENSION_NOINLINE_HOST int32_t
 linear_reg_coefs__cpu_2(TableFunctionManager& mgr,
                         const Column<TextEncodingDict>& model_name,
                         Column<int64_t>& output_coef_idx,
+                        Column<TextEncodingDict>& output_feature,
                         Column<int64_t>& output_sub_coef_idx,
-                        Column<TextEncodingDict>& output_sub_attr,
+                        Column<TextEncodingDict>& output_sub_feature,
                         Column<double>& output_coef);
 
 template <typename T>
@@ -517,6 +529,7 @@ decision_tree_reg_impl(TableFunctionManager& mgr,
                        const int64_t max_tree_depth,
                        const int64_t min_observations_per_leaf_node,
                        const TextEncodingNone& preferred_ml_framework_str,
+                       const TextEncodingNone& model_metadata,
                        Column<TextEncodingDict>& output_model_name) {
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
@@ -545,6 +558,7 @@ decision_tree_reg_impl(TableFunctionManager& mgr,
       onedal_decision_tree_reg_fit_impl<T>(model_name,
                                            labels_ptrs[0],
                                            features_ptrs,
+                                           model_metadata,
                                            cat_feature_keys,
                                            denulled_data.masked_num_rows,
                                            max_tree_depth,
@@ -569,12 +583,13 @@ decision_tree_reg_impl(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: decision_tree_reg_fit__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
+   TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<T> features> data,
    int64_t max_tree_depth | require="max_tree_depth >= 0" | default=0,
    int64_t min_obs_per_leaf_node | require="min_obs_per_leaf_node >= 0" | default=5,
-   TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
-   Column<TextEncodingDict> model | input_id=args<>, T=[double]
+   TextEncodingNone preferred_ml_framework | default="DEFAULT",
+   TextEncodingNone model_metadata | default="{}") ->
+   Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
 
@@ -587,6 +602,7 @@ decision_tree_reg_fit__cpu_template(TableFunctionManager& mgr,
                                     const int64_t max_tree_depth,
                                     const int64_t min_observations_per_leaf_node,
                                     const TextEncodingNone& preferred_ml_framework_str,
+                                    const TextEncodingNone& model_metadata,
                                     Column<TextEncodingDict>& output_model_name) {
   std::vector<std::vector<std::string>> empty_cat_feature_keys;
   return decision_tree_reg_impl(mgr,
@@ -597,20 +613,22 @@ decision_tree_reg_fit__cpu_template(TableFunctionManager& mgr,
                                 max_tree_depth,
                                 min_observations_per_leaf_node,
                                 preferred_ml_framework_str,
+                                model_metadata,
                                 output_model_name);
 }
 
 // clang-format off
 /*
   UDTF: decision_tree_reg_fit__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
+   TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<TextEncodingDict> cat_features, ColumnList<T> numeric_features> data,
    int64_t max_tree_depth | require="max_tree_depth >= 0" | default=0,
    int64_t min_obs_per_leaf_node | require="min_obs_per_leaf_node >= 0" | default=5,
    int32_t top_k_cat_attrs | require="top_k_cat_attrs >= 1" | default=10,
    float min_cat_attr_proportion | require="min_cat_attr_proportion > 0.0" | require="min_cat_attr_proportion <= 1.0" | default=0.01,
-   TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
-   Column<TextEncodingDict> model | input_id=args<>, T=[double]
+   TextEncodingNone preferred_ml_framework | default="DEFAULT",
+   TextEncodingNone model_metadata | default="{}") ->
+   Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
 
@@ -626,6 +644,7 @@ NEVER_INLINE HOST int32_t decision_tree_reg_fit__cpu_template(
     const int32_t top_k_cat_attrs,
     const float min_cat_attr_proportion,
     const TextEncodingNone& preferred_ml_framework_str,
+    const TextEncodingNone& model_metadata,
     Column<TextEncodingDict>& output_model_name) {
   std::vector<std::vector<std::string>> empty_cat_feature_keys;
   CategoricalFeaturesBuilder<T> cat_features_builder(input_cat_features,
@@ -641,6 +660,7 @@ NEVER_INLINE HOST int32_t decision_tree_reg_fit__cpu_template(
                                 max_tree_depth,
                                 min_observations_per_leaf_node,
                                 preferred_ml_framework_str,
+                                model_metadata,
                                 output_model_name);
 }
 
@@ -662,6 +682,7 @@ gbt_reg_fit_impl(TableFunctionManager& mgr,
                  const int64_t max_bins,
                  const int64_t min_bin_size,
                  const TextEncodingNone& preferred_ml_framework_str,
+                 const TextEncodingNone& model_metadata,
                  Column<TextEncodingDict>& output_model_name) {
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
@@ -688,6 +709,7 @@ gbt_reg_fit_impl(TableFunctionManager& mgr,
       onedal_gbt_reg_fit_impl<T>(model_name,
                                  labels_ptrs[0],
                                  features_ptrs,
+                                 model_metadata,
                                  cat_feature_keys,
                                  denulled_data.masked_num_rows,
                                  max_iterations,
@@ -719,7 +741,7 @@ gbt_reg_fit_impl(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: gbt_reg_fit__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
+   TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<T> features> data,
    int64_t max_iterations | require="max_iterations > 0" | default=50,
    int64_t max_tree_depth | require="max_tree_depth > 0" | default=6,
@@ -731,8 +753,9 @@ gbt_reg_fit_impl(TableFunctionManager& mgr,
    int64_t min_obs_per_leaf_node | require="min_obs_per_leaf_node > 0" | default=5,
    int64_t max_bins | require="max_bins > 0" | default=256,
    int64_t min_bin_size | require="min_bin_size >= 0" | default=5,
-   TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
-   Column<TextEncodingDict> model | input_id=args<>, T=[double]
+   TextEncodingNone preferred_ml_framework | default="DEFAULT",
+   TextEncodingNone model_metadata | default="DEFAULT") ->
+   Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
 
@@ -753,6 +776,7 @@ gbt_reg_fit__cpu_template(TableFunctionManager& mgr,
                           const int64_t max_bins,
                           const int64_t min_bin_size,
                           const TextEncodingNone& preferred_ml_framework_str,
+                          const TextEncodingNone& model_metadata,
                           Column<TextEncodingDict>& output_model_name) {
   std::vector<std::vector<std::string>> empty_cat_feature_keys;
   return gbt_reg_fit_impl(mgr,
@@ -771,13 +795,14 @@ gbt_reg_fit__cpu_template(TableFunctionManager& mgr,
                           max_bins,
                           min_bin_size,
                           preferred_ml_framework_str,
+                          model_metadata,
                           output_model_name);
 }
 
 // clang-format off
 /*
   UDTF: gbt_reg_fit__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
+   TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<TextEncodingDict> cat_features, ColumnList<T> numeric_features> data,
    int64_t max_iterations | require="max_iterations > 0" | default=50,
    int64_t max_tree_depth | require="max_tree_depth > 0" | default=6,
@@ -791,8 +816,9 @@ gbt_reg_fit__cpu_template(TableFunctionManager& mgr,
    int64_t min_bin_size | require="min_bin_size >= 0" | default=5,
    int32_t top_k_cat_attrs | require="top_k_cat_attrs >= 1" | default=10,
    float min_cat_attr_proportion | require="min_cat_attr_proportion > 0.0" | require="min_cat_attr_proportion <= 1.0" | default=0.01,
-   TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
-   Column<TextEncodingDict> model | input_id=args<>, T=[double]
+   TextEncodingNone preferred_ml_framework | default="DEFAULT",
+   TextEncodingNone model_metadata | default="{}") ->
+   Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
 
@@ -816,6 +842,7 @@ gbt_reg_fit__cpu_template(TableFunctionManager& mgr,
                           const int32_t top_k_cat_attrs,
                           const float min_cat_attr_proportion,
                           const TextEncodingNone& preferred_ml_framework_str,
+                          const TextEncodingNone& model_metadata,
                           Column<TextEncodingDict>& output_model_name) {
   CategoricalFeaturesBuilder<T> cat_features_builder(input_cat_features,
                                                      input_numeric_features,
@@ -838,6 +865,7 @@ gbt_reg_fit__cpu_template(TableFunctionManager& mgr,
                           max_bins,
                           min_bin_size,
                           preferred_ml_framework_str,
+                          model_metadata,
                           output_model_name);
 }
 
@@ -862,6 +890,7 @@ random_forest_reg_fit_impl(TableFunctionManager& mgr,
                            const bool use_histogram,
                            const TextEncodingNone& var_importance_metric_str,
                            const TextEncodingNone& preferred_ml_framework_str,
+                           const TextEncodingNone& model_metadata,
                            Column<TextEncodingDict>& output_model_name) {
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
@@ -898,6 +927,7 @@ random_forest_reg_fit_impl(TableFunctionManager& mgr,
             model_name,
             labels_ptrs[0],
             features_ptrs,
+            model_metadata,
             cat_feature_keys,
             denulled_data.masked_num_rows,
             num_trees,
@@ -919,6 +949,7 @@ random_forest_reg_fit_impl(TableFunctionManager& mgr,
             model_name,
             labels_ptrs[0],
             features_ptrs,
+            model_metadata,
             cat_feature_keys,
             denulled_data.masked_num_rows,
             num_trees,
@@ -954,7 +985,7 @@ random_forest_reg_fit_impl(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: random_forest_reg_fit__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
+   TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<T> features> data,
    int64_t num_trees | require="num_trees > 0" | default=10,
    double obs_per_tree_fraction | require="obs_per_tree_fraction > 0.0" | require="obs_per_tree_fraction <= 1.0" | default=1.0,
@@ -969,8 +1000,9 @@ random_forest_reg_fit_impl(TableFunctionManager& mgr,
    int64_t max_leaf_nodes | require="max_leaf_nodes >=0" | default=0,
    bool use_histogram | default=false,
    TextEncodingNone var_importance_metric | default="MDI",
-   TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
-   Column<TextEncodingDict> model | input_id=args<>, T=[double]
+   TextEncodingNone preferred_ml_framework | default="DEFAULT",
+   TextEncodingNone model_metadata | default="{}") ->
+   Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
 
@@ -994,6 +1026,7 @@ random_forest_reg_fit__cpu_template(TableFunctionManager& mgr,
                                     const bool use_histogram,
                                     const TextEncodingNone& var_importance_metric_str,
                                     const TextEncodingNone& preferred_ml_framework_str,
+                                    const TextEncodingNone& model_metadata,
                                     Column<TextEncodingDict>& output_model_name) {
   std::vector<std::vector<std::string>> empty_cat_feature_keys;
   return random_forest_reg_fit_impl(mgr,
@@ -1015,13 +1048,14 @@ random_forest_reg_fit__cpu_template(TableFunctionManager& mgr,
                                     use_histogram,
                                     var_importance_metric_str,
                                     preferred_ml_framework_str,
+                                    model_metadata,
                                     output_model_name);
 }
 
 // clang-format off
 /*
   UDTF: random_forest_reg_fit__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
+   TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<TextEncodingDict> cat_features, ColumnList<T> numeric_features> data,
    int64_t num_trees | require="num_trees > 0" | default=10,
    double obs_per_tree_fraction | require="obs_per_tree_fraction > 0.0" | require="obs_per_tree_fraction <= 1.0" | default=1.0,
@@ -1038,8 +1072,9 @@ random_forest_reg_fit__cpu_template(TableFunctionManager& mgr,
    TextEncodingNone var_importance_metric | default="MDI",
    int32_t top_k_cat_attrs | require="top_k_cat_attrs >= 1" | default=10,
    float min_cat_attr_proportion | require="min_cat_attr_proportion > 0.0" | require="min_cat_attr_proportion <= 1.0" | default=0.01,
-   TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
-   Column<TextEncodingDict> model | input_id=args<>, T=[double]
+   TextEncodingNone preferred_ml_framework | default="DEFAULT",
+   TextEncodingNone model_metadata | default="{}") ->
+   Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
 
@@ -1066,6 +1101,7 @@ NEVER_INLINE HOST int32_t random_forest_reg_fit__cpu_template(
     const int32_t top_k_cat_attrs,
     const float min_cat_attr_proportion,
     const TextEncodingNone& preferred_ml_framework_str,
+    const TextEncodingNone& model_metadata,
     Column<TextEncodingDict>& output_model_name) {
   CategoricalFeaturesBuilder<T> cat_features_builder(input_cat_features,
                                                      input_numeric_features,
@@ -1091,6 +1127,7 @@ NEVER_INLINE HOST int32_t random_forest_reg_fit__cpu_template(
                                     use_histogram,
                                     var_importance_metric_str,
                                     preferred_ml_framework_str,
+                                    model_metadata,
                                     output_model_name);
 }
 
@@ -1208,7 +1245,7 @@ ml_reg_predict_impl(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: ml_reg_predict__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
+   TextEncodingNone model_name,
    Cursor<Column<K> id, ColumnList<T> features> data,
    TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
    Column<K> id | input_id=args<0>, Column<T> prediction,
@@ -1244,7 +1281,7 @@ ml_reg_predict__cpu_template(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: ml_reg_predict__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
+   TextEncodingNone model_name,
    Cursor<Column<K> id, ColumnList<TextEncodingDict> cat_features, ColumnList<T> features> data,
    TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
    Column<K> id | input_id=args<0>, Column<T> prediction,
@@ -1284,7 +1321,7 @@ ml_reg_predict__cpu_template(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: ml_reg_predict__cpu_template(TableFunctionManager,
-   Cursor<Column<TextEncodingDict> model_name> model,
+   Cursor<Column<TextEncodingDict> name> model_name,
    Cursor<Column<K> id, ColumnList<T> features> data,
    TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
    Column<K> id | input_id=args<0>, Column<T> prediction,
@@ -1318,7 +1355,7 @@ ml_reg_predict__cpu_template(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: ml_reg_predict__cpu_template(TableFunctionManager,
-   Cursor<Column<TextEncodingDict> model_name> model,
+   Cursor<Column<TextEncodingDict> name> model_name,
    Cursor<Column<K> id, ColumnList<TextEncodingDict> cat_features, ColumnList<T> features> data,
    TextEncodingNone preferred_ml_framework | default="DEFAULT") ->
    Column<K> id | input_id=args<0>, Column<T> prediction,
@@ -1435,7 +1472,7 @@ NEVER_INLINE HOST int32_t r2_score_impl(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: r2_score__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
+   TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<T> features> data) ->
    Column<double> r2, T=[double]
  */
@@ -1460,7 +1497,7 @@ NEVER_INLINE HOST int32_t r2_score__cpu_template(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: r2_score__cpu_template(TableFunctionManager,
-   Cursor<Column<TextEncodingDict> model_name> model,
+   Cursor<Column<TextEncodingDict> name> model_name,
    Cursor<Column<T> labels, ColumnList<T> features> data) ->
    Column<double> r2, T=[double]
  */
@@ -1485,7 +1522,7 @@ r2_score__cpu_template(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: r2_score__cpu_template(TableFunctionManager,
-   TextEncodingNone model,
+   TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<TextEncodingDict> cat_features, ColumnList<T> numeric_features> data) -> Column<double> r2, T=[double]
  */
 // clang-format on
@@ -1515,7 +1552,7 @@ r2_score__cpu_template(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: r2_score__cpu_template(TableFunctionManager,
-   Cursor<Column<TextEncodingDict> model_name> model,
+   Cursor<Column<TextEncodingDict> name> model_name,
    Cursor<Column<T> labels, ColumnList<TextEncodingDict> cat_features, ColumnList<T> numeric_features> data) -> Column<double> r2, T=[double]
  */
 // clang-format on
@@ -1549,8 +1586,9 @@ r2_score__cpu_template(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: random_forest_reg_var_importance__cpu_1(TableFunctionManager,
-   TextEncodingNone model) ->
-   Column<int64_t> feature_id, Column<int64_t> sub_feature_id, Column<TextEncodingDict> sub_feature | input_id=args<>, Column<double> importance_score
+   TextEncodingNone model_name) ->
+   Column<int64_t> feature_id, Column<TextEncodingDict> feature | input_id=args<>,
+   Column<int64_t> sub_feature_id, Column<TextEncodingDict> sub_feature | input_id=args<>, Column<double> importance_score
  */
 // clang-format on
 
@@ -1558,6 +1596,7 @@ EXTENSION_NOINLINE_HOST int32_t
 random_forest_reg_var_importance__cpu_1(TableFunctionManager& mgr,
                                         const TextEncodingNone& model_name,
                                         Column<int64_t>& feature_id,
+                                        Column<TextEncodingDict>& feature,
                                         Column<int64_t>& sub_feature_id,
                                         Column<TextEncodingDict>& sub_feature,
                                         Column<double>& importance_score);
@@ -1565,8 +1604,9 @@ random_forest_reg_var_importance__cpu_1(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: random_forest_reg_var_importance__cpu_2(TableFunctionManager,
-   Cursor<Column<TextEncodingDict> model_name> model) ->
-   Column<int64_t> feature_id, Column<int64_t> sub_feature_id, Column<TextEncodingDict> sub_feature | input_id=args<>, Column<double> importance_score
+   Cursor<Column<TextEncodingDict> name> model_name) ->
+   Column<int64_t> feature_id, Column<TextEncodingDict> feature | input_id=args<>,
+   Column<int64_t> sub_feature_id, Column<TextEncodingDict> sub_feature | input_id=args<>, Column<double> importance_score
  */
 // clang-format on
 
@@ -1574,6 +1614,7 @@ EXTENSION_NOINLINE_HOST int32_t
 random_forest_reg_var_importance__cpu_2(TableFunctionManager& mgr,
                                         const Column<TextEncodingDict>& model_name,
                                         Column<int64_t>& feature_id,
+                                        Column<TextEncodingDict>& feature,
                                         Column<int64_t>& sub_feature_id,
                                         Column<TextEncodingDict>& sub_feature,
                                         Column<double>& importance_score);
@@ -1581,7 +1622,7 @@ random_forest_reg_var_importance__cpu_2(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: get_decision_trees__cpu_1(TableFunctionManager,
-   TextEncodingNone model) ->
+   TextEncodingNone model_name) ->
    Column<int64_t> tree_id,
    Column<int64_t> entry_id,
    Column<bool> is_split_node,
@@ -1606,7 +1647,7 @@ int32_t get_decision_trees__cpu_1(TableFunctionManager& mgr,
 // clang-format off
 /*
   UDTF: get_decision_trees__cpu_2(TableFunctionManager,
-   Cursor<Column<TextEncodingDict> model_name> model) ->
+   Cursor<Column<TextEncodingDict> name> model_name) ->
    Column<int64_t> tree_id,
    Column<int64_t> entry_id,
    Column<bool> is_split_node,

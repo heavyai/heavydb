@@ -61,6 +61,7 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/RelAlgExecutor.h"
+#include "QueryEngine/TableFunctions/SystemFunctions/os/ML/MLModel.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "ReservedKeywords.h"
 #include "Shared/DbObjectKeys.h"
@@ -2035,6 +2036,8 @@ void parse_options(const rapidjson::Value& payload,
         }
       } else if (itr->value.IsInt() || itr->value.IsInt64()) {
         literal_value = std::make_unique<IntLiteral>(json_i64(itr->value));
+      } else if (itr->value.IsDouble()) {
+        literal_value = std::make_unique<DoubleLiteral>(json_double(itr->value));
       } else if (itr->value.IsNull()) {
         literal_value = std::make_unique<NullLiteral>();
       } else {
@@ -3407,6 +3410,210 @@ void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session,
   // privileges
   SysCatalog::instance().createDBObject(
       session.get_currentUser(), df_td.tableName, TableDBObjectType, catalog);
+}
+
+CreateModelStmt::CreateModelStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("name"));
+  const std::string model_type_str = json_str(payload["type"]);
+  model_type_ = get_ml_model_type_from_str(model_type_str);
+  model_name_ = json_str(payload["name"]);
+  replace_ = false;
+  if (payload.HasMember("replace")) {
+    replace_ = json_bool(payload["replace"]);
+  }
+
+  if_not_exists_ = false;
+  if (payload.HasMember("ifNotExists")) {
+    if_not_exists_ = json_bool(payload["ifNotExists"]);
+  }
+
+  CHECK(payload.HasMember("query"));
+  select_query_ = json_str(payload["query"]);
+  std::regex newline_re("\\n");
+  std::regex backtick_re("`");
+  select_query_ = std::regex_replace(select_query_, newline_re, " ");
+  select_query_ = std::regex_replace(select_query_, backtick_re, "");
+
+  // No need to ensure trailing semicolon as we will wrap this select statement
+  // in a CURSOR as input to the train model table function
+  parse_options(payload, model_options_);
+}
+
+std::string write_model_params_to_json(const std::string& predicted,
+                                       const std::vector<std::string>& predictors,
+                                       const std::string& training_query) {
+  // Create a RapidJSON document
+  rapidjson::Document doc;
+  doc.SetObject();
+
+  // Add the fields to the document
+  rapidjson::Value predicted_value;
+  predicted_value.SetString(predicted.c_str(), predicted.length(), doc.GetAllocator());
+  doc.AddMember("predicted", predicted_value, doc.GetAllocator());
+
+  rapidjson::Value predictors_array(rapidjson::kArrayType);
+  for (const auto& predictor : predictors) {
+    rapidjson::Value predictor_value;
+    predictor_value.SetString(predictor.c_str(), predictor.length(), doc.GetAllocator());
+    predictors_array.PushBack(predictor_value, doc.GetAllocator());
+  }
+  doc.AddMember("predictors", predictors_array, doc.GetAllocator());
+
+  rapidjson::Value training_query_value;
+  training_query_value.SetString(
+      training_query.c_str(), training_query.length(), doc.GetAllocator());
+  doc.AddMember("training_query", training_query_value, doc.GetAllocator());
+
+  // Convert the document to a JSON string
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  doc.Accept(writer);
+
+  return buffer.GetString();
+}
+
+void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session) {
+  if (ml_models_.modelExists(get_model_name())) {
+    if (if_not_exists_) {
+      return;
+    }
+    if (!replace_) {
+      std::ostringstream error_oss;
+      error_oss << "Model " << get_model_name() << " already exists.";
+      throw std::runtime_error(error_oss.str());
+    }
+  }
+
+  const std::string model_train_func = get_ml_model_type_str(model_type_) + "_FIT";
+  std::ostringstream options_oss;
+
+  bool first_options_arg = true;
+
+  if (!model_options_.empty()) {
+    for (auto& p : model_options_) {
+      if (!first_options_arg) {
+        options_oss << ", ";
+      } else {
+        first_options_arg = false;
+      }
+      const auto key = boost::to_lower_copy<std::string>(*p->get_name());
+      options_oss << key << " => ";
+      const StringLiteral* str_literal =
+          dynamic_cast<const StringLiteral*>(p->get_value());
+      if (str_literal != nullptr) {
+        options_oss << "'"
+                    << boost::to_lower_copy<std::string>(*str_literal->get_stringval())
+                    << "'";
+        continue;
+      }
+      const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+      if (int_literal != nullptr) {
+        options_oss << int_literal->get_intval();
+        continue;
+      }
+      const DoubleLiteral* fp_literal =
+          dynamic_cast<const DoubleLiteral*>(p->get_value());
+      if (fp_literal != nullptr) {
+        options_oss << fp_literal->get_doubleval();
+        continue;
+      }
+      throw std::runtime_error("Error parsing value.");
+    }
+  }
+
+  auto session_copy = session;
+  auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
+      &session_copy, boost::null_deleter());
+
+  auto query_state = query_state::QueryState::create(session_ptr, select_query_);
+
+  LocalQueryConnector local_connector;
+
+  auto validate_result = local_connector.query(
+      query_state->createQueryStateProxy(), select_query_, {}, true, false);
+
+  auto column_descriptors_for_model_create =
+      local_connector.getColumnDescriptors(validate_result, true);
+
+  std::string model_predicted_var;
+  std::vector<std::string> model_predictor_vars;
+  model_predictor_vars.reserve(column_descriptors_for_model_create.size() - 1);
+  bool is_predicted = true;
+  for (auto& cd : column_descriptors_for_model_create) {
+    // Check to see if the projected column is an expression without a user-provided
+    // alias, as we don't allow this.
+    if (cd.columnName.rfind("EXPR$", 0) == 0) {
+      throw std::runtime_error("All projected column expressions must be aliased.");
+    }
+    if (is_predicted) {
+      model_predicted_var = cd.columnName;
+      is_predicted = false;
+    } else {
+      model_predictor_vars.emplace_back(cd.columnName);
+    }
+  }
+  const auto model_metadata = write_model_params_to_json(
+      model_predicted_var, model_predictor_vars, select_query_);
+
+  if (!first_options_arg) {
+    options_oss << ", ";
+  }
+  options_oss << "model_metadata => '" << model_metadata << "'";
+
+  const std::string options_str = options_oss.str();
+
+  std::ostringstream model_query_oss;
+  model_query_oss << "SELECT * FROM TABLE(" << model_train_func << "(model_name=>'"
+                  << get_model_name() << "', data=>CURSOR(" << select_query_ << ")";
+  if (!options_str.empty()) {
+    model_query_oss << ", " << options_str;
+  }
+  model_query_oss << "))";
+
+  std::string wrapped_model_query = model_query_oss.str();
+  auto result = local_connector.query(
+      query_state->createQueryStateProxy(), wrapped_model_query, {}, false);
+}
+
+void CreateModelStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                              bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE MODEL invalid in read only mode.");
+  }
+
+  try {
+    train_model(session);
+    // catalog.createModel(md);
+  } catch (std::runtime_error& e) {
+    std::ostringstream error_oss;
+    error_oss << "Could not create model " << model_name_ << ". " << e.what();
+    throw std::runtime_error(error_oss.str());
+  }
+}
+
+DropModelStmt::DropModelStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("modelName"));
+  model_name_ = json_str(payload["modelName"]);
+
+  if_exists_ = false;
+  if (payload.HasMember("ifExists")) {
+    if_exists_ = json_bool(payload["ifExists"]);
+  }
+}
+
+void DropModelStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP MODEL invalid in read only mode.");
+  }
+  try {
+    ml_models_.deleteModel(model_name_);
+  } catch (std::runtime_error& e) {
+    if (!if_exists_) {
+      throw e;
+    }
+    // If NOT EXISTS is set, ignore the error
+  }
 }
 
 std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
@@ -6891,6 +7098,10 @@ std::unique_ptr<Parser::Stmt> create_stmt_for_json(const std::string& query_json
     stmt = new Parser::RevokePrivilegesStmt(payload);
   } else if (ddl_command == "CREATE_DATAFRAME") {
     stmt = new Parser::CreateDataframeStmt(payload);
+  } else if (ddl_command == "CREATE_MODEL") {
+    stmt = new Parser::CreateModelStmt(payload);
+  } else if (ddl_command == "DROP_MODEL") {
+    stmt = new Parser::DropModelStmt(payload);
   } else if (ddl_command == "VALIDATE_SYSTEM") {
     // VALIDATE should have been excuted in outer context before it reaches here
     UNREACHABLE();  // not-implemented alterType
