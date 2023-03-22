@@ -12735,6 +12735,11 @@ TEST_F(Select, Joins_InnerJoin_TwoTables) {
     c("SELECT test.*, test_inner.* from test join test_inner on test.x = test_inner.x "
       "order by test.z;",
       dt);
+    EXPECT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(1) FROM data_types_basic3 WHERE col_date_1 IN (select "
+                  "col_date_1 from data_types_basic3 where col_big_1 < 0);",
+                  dt)));
 
     const auto watchdog_state = g_enable_watchdog;
     ScopeGuard reset = [watchdog_state] { g_enable_watchdog = watchdog_state; };

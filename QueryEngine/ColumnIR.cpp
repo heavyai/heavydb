@@ -612,6 +612,8 @@ llvm::Value* CodeGenerator::posArg(const Analyzer::Expr* expr) const {
   abort();
 }
 
+// todo (yoonmin) : we have to revisit this logic and its usage
+// when supporting join between more types beyond integer-like types, i.e., float
 const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr) {
   const auto uoper = dynamic_cast<const Analyzer::UOper*>(expr);
   if (!uoper || uoper->get_optype() != kCAST) {
@@ -667,8 +669,18 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
           if (dynamic_cast<const Analyzer::FunctionOper*>(eq_left_op)) {
             return nullptr;
           }
+          auto const cast_expr = dynamic_cast<const Analyzer::UOper*>(eq_left_op);
+          if (cast_expr && cast_expr->get_type_info().is_date()) {
+            // sometimes we add cast operator explicitly when dealing w/ a join between
+            // (encoded) date types. And we have necessary casting logic for hash join
+            // depending on encoding types for date column.
+            // Therefore, we can just pass the column variable it is originated from
+            eq_left_op_col =
+                dynamic_cast<const Analyzer::ColumnVar*>(cast_expr->get_operand());
+          }
         }
-        CHECK(eq_left_op_col);
+        CHECK(eq_left_op_col) << "Expect Analyzer::ColumnVar* type expression: "
+                              << eq_left_op->toString();
         if (eq_left_op_col->get_rte_idx() != 0) {
           return nullptr;
         }
