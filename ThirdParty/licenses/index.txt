@@ -37,6 +37,7 @@
   glslang                                   [BSD BSD-like MIT](https://github.com/KhronosGroup/glslang/blob/master/LICENSE.txt)                Rendering support
   spirv-tools                               [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Tools/blob/master/LICENSE)                      Rendering support
   spirv-cross                               [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Cross/blob/master/LICENSE)                      Rendering support
+  Vulkan Loader                             [Apache-2.0](https://github.com/KhronosGroup/Vulkan-Loader/blob/main/LICENSE.txt)                  Rendering support
   Vulkan Memory Allocator                   [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt)   Rendering support
   GLM                                       [MIT](https://github.com/g-truc/glm/blob/master/copying.txt)                                       Rendering support
   GLFW                                      [zlib](https://github.com/glfw/glfw/blob/master/LICENSE.md)                                        Rendering tools
@@ -49,7 +50,7 @@
   libkml                                    [BSD](https://github.com/google/libkml/blob/master/LICENSE)                                        GDAL, KML import
   minizip                                   [zlib](http://zlib.net/zlib_license.html)                                                          GDAL, zip support
   netcdf-c                                  [BSD](https://github.com/Unidata/netcdf-c/blob/main/COPYRIGHT)                                     GDAL, netcdf import
-  oneDAL                                    [Apache](https://github.com/oneapi-src/oneDAL/blob/master/LICENSE)
+  oneDAL                                    [Apache-2.0](https://github.com/oneapi-src/oneDAL/blob/master/LICENSE)                             ML support
   pcre                                      [BSD](http://www.pcre.org/licence.txt)                                                             GDAL, KML import
   proj4                                     [MIT](http://proj4.org/license.html)                                                               GDAL, Geospatial reprojection
   shapelib                                  [MIT](http://shapelib.maptools.org/license.html)                                                   GDAL, Shapefile import
