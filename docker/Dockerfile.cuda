@@ -19,7 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libopengl0 \
         wget \
         curl \
-        libvulkan1 \
         clang-9 \
         liblz4-tool \
         libgeos-dev \
