@@ -68,6 +68,10 @@ class LinearRegressionModel : public AbstractMLModel {
  public:
   LinearRegressionModel(const std::vector<double>& coefs) : coefs_(coefs) {}
 
+  LinearRegressionModel(const std::vector<double>& coefs,
+                        const std::vector<std::vector<std::string>>& cat_feature_keys)
+      : AbstractMLModel(cat_feature_keys), coefs_(coefs) {}
+
   virtual MLModelType getModelType() const override { return MLModelType::LINEAR_REG; }
 
   virtual std::string getModelTypeString() const override { return "Linear Regression"; }
@@ -143,6 +147,10 @@ class DecisionTreeRegressionModel : public virtual AbstractTreeModel {
  public:
   DecisionTreeRegressionModel(decision_tree::regression::interface1::ModelPtr& model_ptr)
       : model_ptr_(model_ptr) {}
+  DecisionTreeRegressionModel(
+      decision_tree::regression::interface1::ModelPtr& model_ptr,
+      const std::vector<std::vector<std::string>>& cat_feature_keys)
+      : AbstractMLModel(cat_feature_keys), model_ptr_(model_ptr) {}
 
   virtual MLModelType getModelType() const override {
     return MLModelType::DECISION_TREE_REG;
@@ -174,6 +182,10 @@ class GbtRegressionModel : public virtual AbstractTreeModel {
   GbtRegressionModel(gbt::regression::interface1::ModelPtr& model_ptr)
       : model_ptr_(model_ptr) {}
 
+  GbtRegressionModel(gbt::regression::interface1::ModelPtr& model_ptr,
+                     const std::vector<std::vector<std::string>>& cat_feature_keys)
+      : AbstractMLModel(cat_feature_keys), model_ptr_(model_ptr) {}
+
   virtual MLModelType getModelType() const override { return MLModelType::GBT_REG; }
 
   virtual std::string getModelTypeString() const override {
@@ -201,6 +213,16 @@ class RandomForestRegressionModel : public virtual AbstractTreeModel {
       const std::vector<double>& variable_importance,
       const double out_of_bag_error)
       : model_ptr_(model_ptr)
+      , variable_importance_(variable_importance)
+      , out_of_bag_error_(out_of_bag_error) {}
+
+  RandomForestRegressionModel(
+      decision_forest::regression::interface1::ModelPtr& model_ptr,
+      const std::vector<std::vector<std::string>>& cat_feature_keys,
+      const std::vector<double>& variable_importance,
+      const double out_of_bag_error)
+      : AbstractMLModel(cat_feature_keys)
+      , model_ptr_(model_ptr)
       , variable_importance_(variable_importance)
       , out_of_bag_error_(out_of_bag_error) {}
 

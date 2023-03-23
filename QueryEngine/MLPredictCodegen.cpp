@@ -27,6 +27,90 @@
 #include <stack>
 #include <vector>
 
+std::vector<std::shared_ptr<Analyzer::Expr>> generated_encoded_and_casted_regressors(
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& regressor_exprs,
+    const std::vector<std::vector<std::string>>& cat_feature_keys,
+    Executor* executor) {
+  std::vector<std::shared_ptr<Analyzer::Expr>> casted_regressor_exprs;
+  const size_t num_regressor_exprs = regressor_exprs.size();
+  const size_t num_cat_regressors = cat_feature_keys.size();
+
+  if (num_cat_regressors > num_regressor_exprs) {
+    throw std::runtime_error("More categorical keys than regressors.");
+  }
+
+  auto get_int_constant_expr = [](int32_t const_val) {
+    Datum d;
+    d.intval = const_val;
+    return makeExpr<Analyzer::Constant>(SQLTypeInfo(kINT, false), false, d);
+  };
+
+  for (size_t regressor_idx = 0; regressor_idx < num_regressor_exprs; ++regressor_idx) {
+    auto& regressor_expr = regressor_exprs[regressor_idx];
+    const auto& regressor_ti = regressor_expr->get_type_info();
+    if (regressor_ti.is_number()) {
+      // Don't conditionally cast to double iff type is not double
+      // as this was causing issues for the random forest function with
+      // mixed types. Need to troubleshoot more but always casting to double
+      // regardless of the underlying type always seems to be safe
+      casted_regressor_exprs.emplace_back(makeExpr<Analyzer::UOper>(
+          SQLTypeInfo(kDOUBLE, false), false, kCAST, regressor_expr));
+    } else {
+      CHECK(regressor_ti.is_string()) << "Expected text type";
+      if (!regressor_ti.is_text_encoding_dict()) {
+        throw std::runtime_error("Expected dictionary-encoded text column.");
+      }
+      if (regressor_idx >= num_cat_regressors) {
+        throw std::runtime_error("Model not trained on text type for column.");
+      }
+      const auto& str_dict_key = regressor_ti.getStringDictKey();
+      const auto str_dict_proxy = executor->getStringDictionaryProxy(str_dict_key, true);
+      for (const auto& cat_feature_key : cat_feature_keys[regressor_idx]) {
+        // For one-hot encoded columns, null values will translate as a 0.0 and not a null
+        // We are computing the following:
+        // CASE WHEN str_val is NULL then 0.0 ELSE
+        // CAST(str_id = one_hot_encoded_str_id AS DOUBLE) END
+
+        // Check if the expression is null
+        auto is_null_expr = makeExpr<Analyzer::UOper>(
+            SQLTypeInfo(kBOOLEAN, false), false, kISNULL, regressor_expr);
+        Datum zero_datum;
+        zero_datum.doubleval = 0.0;
+        // If null then emit a 0.0 double constant as the THEN expr
+        auto is_null_then_expr =
+            makeExpr<Analyzer::Constant>(SQLTypeInfo(kDOUBLE, false), false, zero_datum);
+        std::list<
+            std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
+            when_then_exprs;
+        when_then_exprs.emplace_back(std::make_pair(is_null_expr, is_null_then_expr));
+        // The rest of/core string test logic goes in the ELSE statement
+        // Get the string id of the one-hot feature
+        const auto str_id = str_dict_proxy->getIdOfString(cat_feature_key);
+        auto str_id_expr = get_int_constant_expr(str_id);
+        // Get integer id for this row's string
+        auto key_for_string_expr = makeExpr<Analyzer::KeyForStringExpr>(regressor_expr);
+
+        // Check if this row's string id is equal to the search one-hot encoded id
+        std::shared_ptr<Analyzer::Expr> str_equality_expr =
+            makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false),
+                                        false,
+                                        kEQ,
+                                        kONE,
+                                        key_for_string_expr,
+                                        str_id_expr);
+        // Cast the above boolean results to a double, 0.0 or 1.0
+        auto cast_expr = makeExpr<Analyzer::UOper>(
+            SQLTypeInfo(kDOUBLE, false), false, kCAST, str_equality_expr);
+
+        // Generate the full CASE statement and add to the casted regressor exprssions
+        casted_regressor_exprs.emplace_back(makeExpr<Analyzer::CaseExpr>(
+            SQLTypeInfo(kDOUBLE, false), false, when_then_exprs, cast_expr));
+      }
+    }
+  }
+  return casted_regressor_exprs;
+}
+
 llvm::Value* CodeGenerator::codegenLinRegPredict(
     const Analyzer::MLPredictExpr* expr,
     const std::string& model_name,
@@ -40,6 +124,12 @@ llvm::Value* CodeGenerator::codegenLinRegPredict(
   // check
   CHECK(linear_reg_model);
   const auto& model_coefs = linear_reg_model->getCoefs();
+  const auto& cat_feature_keys = linear_reg_model->getCatFeatureKeys();
+
+  const auto& regressor_exprs = expr->get_regressor_values();
+
+  const auto casted_regressor_exprs = generated_encoded_and_casted_regressors(
+      regressor_exprs, cat_feature_keys, executor());
 
   auto get_double_constant_expr = [](double const_val) {
     Datum d;
@@ -47,16 +137,6 @@ llvm::Value* CodeGenerator::codegenLinRegPredict(
     return makeExpr<Analyzer::Constant>(SQLTypeInfo(kDOUBLE, false), false, d);
   };
 
-  const auto& regressor_exprs = expr->get_regressor_values();
-  if (linear_reg_model->getNumFeatures() !=
-      static_cast<int64_t>(regressor_exprs.size())) {
-    std::ostringstream error_oss;
-    error_oss << "ML_PREDICT: Linear regression model '" << model_name
-              << "' expects different number of predictor variables ("
-              << linear_reg_model->getNumFeatures() << ") than provided ("
-              << regressor_exprs.size() << ").";
-    throw std::runtime_error(error_oss.str());
-  }
   std::shared_ptr<Analyzer::Expr> result;
 
   // Linear regression models are of the form
@@ -72,29 +152,20 @@ llvm::Value* CodeGenerator::codegenLinRegPredict(
       result = coef_value_expr;
     } else {
       // We have a term with a regressor (xi) and regression coefficient (bi)
-
-      // First get the regressor and cast to double
-      auto& regressor_expr = regressor_exprs[model_coef_idx - 1];
-
-      // Don't conditionally cast to double iff type is not double
-      // as this was causing issues for the random forest function with
-      // mixed types. Need to troubleshoot more but always casting to double
-      // regardless of the underlying type always seems to be safe
-      std::shared_ptr<Analyzer::Expr> casted_regressor_expr = makeExpr<Analyzer::UOper>(
-          SQLTypeInfo(kDOUBLE, false), false, kCAST, regressor_expr);
-
-      // Now multiplie by the constant regression coefficient
+      const auto& casted_regressor_expr = casted_regressor_exprs[model_coef_idx - 1];
+      // Multiply regressor by coefficient
       auto mul_expr = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kDOUBLE, false),
                                                   false,
                                                   kMULTIPLY,
                                                   kONE,
                                                   coef_value_expr,
                                                   casted_regressor_expr);
-      // Now add to the running result
+      // Add term to result
       result = makeExpr<Analyzer::BinOper>(
           SQLTypeInfo(kDOUBLE, false), false, kPLUS, kONE, result, mul_expr);
     }
   }
+
   // The following will codegen the expression tree we just created modeling
   // the linear regression formula
   return codegenArith(dynamic_cast<Analyzer::BinOper*>(result.get()), co);
@@ -113,27 +184,14 @@ llvm::Value* CodeGenerator::codegenTreeRegPredict(
   CHECK(tree_model);
   const int64_t num_trees = static_cast<int64_t>(tree_model->getNumTrees());
   const auto& regressor_exprs = expr->get_regressor_values();
-  if (static_cast<int64_t>(regressor_exprs.size()) != tree_model->getNumFeatures()) {
-    std::ostringstream error_oss;
-    error_oss << "ML_PREDICT: " << model->getModelTypeString() << " model '" << model_name
-              << "' expects different number of predictor variables ("
-              << tree_model->getNumFeatures() << ") than provided ("
-              << regressor_exprs.size() << ").";
-    throw std::runtime_error(error_oss.str());
-  }
-  std::vector<std::shared_ptr<Analyzer::Expr>> casted_regressor_exprs;
+  const auto& cat_feature_keys = tree_model->getCatFeatureKeys();
+  const auto casted_regressor_exprs = generated_encoded_and_casted_regressors(
+      regressor_exprs, cat_feature_keys, executor());
   // We cast all regressors to double for simplicity and to match
   // how feature filters are stored in the tree model.
   // Null checks are handled further down in the generated kernel
   // in the runtime function itself
 
-  // When we only casted those expressions that weren't doubles,
-  // we crashed in codegen, so for now just casting all expressions
-  // to double
-  for (const auto& regressor_expr : regressor_exprs) {
-    casted_regressor_exprs.emplace_back(makeExpr<Analyzer::UOper>(
-        SQLTypeInfo(kDOUBLE, false), false, kCAST, regressor_expr));
-  }
   std::vector<llvm::Value*> regressor_values;
   for (const auto& casted_regressor_expr : casted_regressor_exprs) {
     regressor_values.emplace_back(codegen(casted_regressor_expr.get(), false, co)[0]);
@@ -236,6 +294,16 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::MLPredictExpr* expr,
   const auto model_name = *model_name_ptr;
   const auto abstract_model = ml_models_.getModel(model_name);
   const auto model_type = abstract_model->getModelType();
+  const auto& regressor_exprs = expr->get_regressor_values();
+  if (abstract_model->getNumLogicalFeatures() !=
+      static_cast<int64_t>(regressor_exprs.size())) {
+    std::ostringstream error_oss;
+    error_oss << "ML_PREDICT: Model '" << model_name
+              << "' expects different number of predictor variables ("
+              << abstract_model->getNumLogicalFeatures() << ") than provided ("
+              << regressor_exprs.size() << ").";
+    throw std::runtime_error(error_oss.str());
+  }
 
   switch (model_type) {
     case MLModelType::LINEAR_REG: {

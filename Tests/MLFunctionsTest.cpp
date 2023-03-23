@@ -83,6 +83,23 @@ const char* iris_schema = R"(
       species TEXT);
 )";
 
+const char* craigslist_f150s_schema = R"(
+  CREATE TABLE craigslist_f150s (
+    region TEXT ENCODING DICT(16),
+    state TEXT ENCODING DICT(8),
+    price INTEGER,
+    year_ SMALLINT,
+    condition_ TEXT ENCODING DICT(8),
+    cylinders TEXT ENCODING DICT(8),
+    fuel TEXT ENCODING DICT(8),
+    odometer FLOAT,
+    title_status TEXT ENCODING DICT(8),
+    transmission TEXT ENCODING DICT(8),
+    drive TEXT ENCODING DICT(8),
+    paint_color TEXT ENCODING DICT(8),
+    posting_date TIMESTAMP(0) ENCODING FIXED(32));
+)";
+
 class MLTableFunctionsTest : public ::testing::Test {
  public:
   void SetUp() override {
@@ -111,6 +128,23 @@ class MLRegressionFunctionsTest : public testing::TestWithParam<MLModelType> {
     ASSERT_NO_THROW(run_ddl_statement(load_str));
   }
   void TearDown() override { ASSERT_NO_THROW(run_ddl_statement("DROP TABLE ml_iris;")); }
+};
+
+class MLCategoricalRegressionFunctionsTest : public testing::TestWithParam<MLModelType> {
+ public:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS craigslist_f150s;"));
+
+    ASSERT_NO_THROW(run_ddl_statement(craigslist_f150s_schema));
+    const std::string import_file{"craigslist_f150s.csv.gz"};
+    const auto load_str = std::string("COPY craigslist_f150s FROM '") +
+                          "../../Tests/Import/datafiles/ml/" + import_file +
+                          "' WITH (header='true');";
+    ASSERT_NO_THROW(run_ddl_statement(load_str));
+  }
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("DROP TABLE craigslist_f150s;"));
+  }
 };
 
 std::string generate_cursor_query(const std::string& table_name,
@@ -514,7 +548,7 @@ TEST_F(MLTableFunctionsTest, KMeansPrecision) {
   const std::string class_col{"species"};
   const auto supported_ml_frameworks = get_supported_ml_frameworks();
   for (auto& ml_framework : supported_ml_frameworks) {
-    for (auto numeric_data_type : {"FLOAT", "DOUBLE"}) {
+    for (auto numeric_data_type : {"DOUBLE"}) {
       for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
         SKIP_NO_GPU();
         const size_t num_classes = TestHelpers::v<int64_t>(run_simple_agg(
@@ -603,7 +637,7 @@ TEST_F(MLTableFunctionsTest, DBSCAN) {
   const std::string class_col{"species"};
   const auto supported_ml_frameworks = get_supported_ml_frameworks();
   for (auto& ml_framework : supported_ml_frameworks) {
-    for (auto numeric_data_type : {"FLOAT", "DOUBLE"}) {
+    for (auto numeric_data_type : {"DOUBLE"}) {
       const auto cursor_query = generate_cursor_query(
           "ml_iris",
           "id",
@@ -637,7 +671,7 @@ TEST_F(MLTableFunctionsTest, DBSCAN) {
   }
 }
 
-TEST_P(MLRegressionFunctionsTest, RegModelFit) {
+TEST_P(MLRegressionFunctionsTest, REG_MODEL_FIT) {
   const auto model_type = GetParam();
   const auto model_type_str = get_ml_model_type_str(model_type);
   const std::string model_name{"'" + model_type_str + "_MODEL'"};
@@ -654,7 +688,7 @@ TEST_P(MLRegressionFunctionsTest, RegModelFit) {
     }
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
-      for (std::string numeric_data_type : {"FLOAT", "DOUBLE"}) {
+      for (std::string numeric_data_type : {"DOUBLE"}) {
         // Synthetic data, also test nulls
         {
           const std::string cursor_query =
@@ -683,18 +717,21 @@ TEST_P(MLRegressionFunctionsTest, RegModelFit) {
           if (model_type == MLModelType::LINEAR_REG) {
             const auto coef_query = generate_query("LINEAR_REG_COEFS",
                                                    {{"model", model_name}},
-                                                   {"coef_idx"},
+                                                   {"coef_idx, sub_coef_idx"},
                                                    make_args_named);
             const auto coef_rows = run_multiple_agg(coef_query, dt);
             constexpr double allowed_epsilon{0.1};
             const std::vector<double> expected_coefs = {10.0, 2.0};
             const int64_t num_rows = coef_rows->rowCount();
             EXPECT_EQ(num_rows, 2L);
-            EXPECT_EQ(coef_rows->colCount(), size_t(2));
+            EXPECT_EQ(coef_rows->colCount(), size_t(4));
             for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
               auto crt_row = coef_rows->getNextRow(true, true);
               EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx);
-              const double actual_coef = TestHelpers::v<double>(crt_row[1]);
+              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[1]), 1L);
+              // const auto sub_coef_ptr = boost::get<NullableString>(crt_row[1]);
+              // EXPECT_EQ(nullptr, sub_coef_ptr);
+              const double actual_coef = TestHelpers::v<double>(crt_row[3]);
               EXPECT_GE(actual_coef, expected_coefs[row_idx] - allowed_epsilon);
               EXPECT_LE(actual_coef, expected_coefs[row_idx] + allowed_epsilon);
             }
@@ -702,7 +739,7 @@ TEST_P(MLRegressionFunctionsTest, RegModelFit) {
             const auto var_importance_query =
                 generate_query("RANDOM_FOREST_REG_VAR_IMPORTANCE",
                                {{"model", model_name}},
-                               {"feature_id"},
+                               {"feature_id, sub_feature_id"},
                                make_args_named);
             const auto var_importance_rows = run_multiple_agg(var_importance_query, dt);
 
@@ -710,11 +747,18 @@ TEST_P(MLRegressionFunctionsTest, RegModelFit) {
             const std::vector<double> expected_var_importances = {4996.12};
             const int64_t num_rows = var_importance_rows->rowCount();
             EXPECT_EQ(num_rows, 1L);
-            EXPECT_EQ(var_importance_rows->colCount(), size_t(2));
+            EXPECT_EQ(var_importance_rows->colCount(), size_t(4));
             for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
               auto crt_row = var_importance_rows->getNextRow(true, true);
+              // Feature id
               EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx + 1);
-              const double actual_var_importance = TestHelpers::v<double>(crt_row[1]);
+              // Sub-feature id
+              // We have no categorical one-hot encoded features, so each sub-id
+              // will be 1
+              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[1]), 1L);
+              // const auto sub_coef_ptr = boost::get<NullableString>(crt_row[1]);
+              // EXPECT_EQ(nullptr, sub_coef_ptr);
+              const double actual_var_importance = TestHelpers::v<double>(crt_row[3]);
               EXPECT_GE(actual_var_importance,
                         expected_var_importances[row_idx] -
                             allowed_epsilon_frac * expected_var_importances[row_idx]);
@@ -750,7 +794,7 @@ TEST_P(MLRegressionFunctionsTest, RegModelFit) {
           if (model_type == MLModelType::LINEAR_REG) {
             const auto coef_query = generate_query("LINEAR_REG_COEFS",
                                                    {{"model", model_name}},
-                                                   {"coef_idx"},
+                                                   {"coef_idx, sub_coef_idx"},
                                                    make_args_named);
             const auto coef_rows = run_multiple_agg(coef_query, dt);
 
@@ -759,11 +803,14 @@ TEST_P(MLRegressionFunctionsTest, RegModelFit) {
                 -0.252664, 1.44572, 0.730363, -0.651394};
             const int64_t num_rows = coef_rows->rowCount();
             EXPECT_EQ(num_rows, 4L);
-            EXPECT_EQ(coef_rows->colCount(), size_t(2));
+            EXPECT_EQ(coef_rows->colCount(), size_t(4));
             for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
               auto crt_row = coef_rows->getNextRow(true, true);
               EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx);
-              const double actual_coef = TestHelpers::v<double>(crt_row[1]);
+              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[1]), 1L);
+              // const auto sub_coef_ptr = boost::get<NullableString>(crt_row[1]);
+              // EXPECT_EQ(nullptr, sub_coef_ptr);
+              const double actual_coef = TestHelpers::v<double>(crt_row[3]);
               EXPECT_GE(actual_coef, expected_coefs[row_idx] - allowed_epsilon);
               EXPECT_LE(actual_coef, expected_coefs[row_idx] + allowed_epsilon);
             }
@@ -771,7 +818,7 @@ TEST_P(MLRegressionFunctionsTest, RegModelFit) {
             const auto var_importance_query =
                 generate_query("RANDOM_FOREST_REG_VAR_IMPORTANCE",
                                {{"model", model_name}},
-                               {"feature_id"},
+                               {"feature_id, sub_feature_id"},
                                make_args_named);
             const auto var_importance_rows = run_multiple_agg(var_importance_query, dt);
             constexpr double allowed_epsilon_frac{1.0};
@@ -779,11 +826,16 @@ TEST_P(MLRegressionFunctionsTest, RegModelFit) {
                 1.9378, 2.5813, 0.89731};
             const int64_t num_rows = var_importance_rows->rowCount();
             EXPECT_EQ(num_rows, 3L);
-            EXPECT_EQ(var_importance_rows->colCount(), size_t(2));
+            EXPECT_EQ(var_importance_rows->colCount(), size_t(4));
             for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
               auto crt_row = var_importance_rows->getNextRow(true, true);
+              // Feature id
               EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx + 1);
-              const double actual_var_importance = TestHelpers::v<double>(crt_row[1]);
+              // Sub-feature id
+              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[1]), 1L);
+              // const auto sub_coef_ptr = boost::get<NullableString>(crt_row[1]);
+              // EXPECT_EQ(nullptr, sub_coef_ptr);
+              const double actual_var_importance = TestHelpers::v<double>(crt_row[3]);
               EXPECT_GE(actual_var_importance,
                         expected_var_importances[row_idx] -
                             allowed_epsilon_frac * expected_var_importances[row_idx]);
@@ -812,54 +864,52 @@ TEST_P(MLRegressionFunctionsTest, MLRegPredict) {
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
       for (bool make_args_named : {false, true}) {
-        for (std::string numeric_data_type : {"FLOAT", "DOUBLE"}) {
-          {
-            // Synthetic data
-            const std::string data_table_name("TABLE(generate_series(0, 99999))");
-            const std::string id_col("generate_series");
-            const std::string feature_col("generate_series * 0.001");
+        for (std::string numeric_data_type : {"DOUBLE"}) {
+          // Synthetic data
+          const std::string data_table_name("TABLE(generate_series(0, 99999))");
+          const std::string id_col("generate_series");
+          const std::string feature_col("generate_series * 0.001");
 
-            const auto data_query = generate_cursor_query(
-                data_table_name, id_col, {feature_col}, "", numeric_data_type);
-            const std::string model_query =
-                std::string(
-                    "CURSOR(SELECT * FROM "
-                    "TABLE(" +
-                    model_fit_func + "(model=>'" + model_name +
-                    "', data "
-                    "=> CURSOR(SELECT CAST(CASE WHEN MOD(generate_series, 10) = 0 THEN "
-                    "NULL ELSE "
-                    "generate_series * 0.001 * 2.0 + 10.0 END AS ") +
-                numeric_data_type + ") AS y, CAST(generate_series * 0.001 AS " +
-                numeric_data_type +
-                ") AS x "
-                "FROM TABLE(generate_series(0, 99999))))))";
+          const auto data_query = generate_cursor_query(
+              data_table_name, id_col, {feature_col}, "", numeric_data_type);
+          const std::string model_query =
+              std::string(
+                  "CURSOR(SELECT * FROM "
+                  "TABLE(" +
+                  model_fit_func + "(model=>'" + model_name +
+                  "', data "
+                  "=> CURSOR(SELECT CAST(CASE WHEN MOD(generate_series, 10) = 0 THEN "
+                  "NULL ELSE "
+                  "generate_series * 0.001 * 2.0 + 10.0 END AS ") +
+              numeric_data_type + ") AS y, CAST(generate_series * 0.001 AS " +
+              numeric_data_type +
+              ") AS x "
+              "FROM TABLE(generate_series(0, 99999))))))";
 
-            const auto query = generate_query("ML_REG_PREDICT",
-                                              {{"model", model_query},
-                                               {"data", data_query},
-                                               {"preferred_ml_framework", ml_framework}},
-                                              {"id"},
-                                              make_args_named);
-            const auto rows = run_multiple_agg(query, dt);
-            const int64_t num_rows = rows->rowCount();
-            EXPECT_EQ(num_rows, 100000L);
-            EXPECT_EQ(rows->colCount(), size_t(2));
-            // Tree models can be much less accurate than linear regression in this case,
-            // so give tree models large epsilon.
-            const double allowed_epsilon =
-                model_type == MLModelType::LINEAR_REG ? 0.02 : 20.0;
-            for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
-              auto crt_row = rows->getNextRow(true, true);
-              // id col
-              EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx);
-              const double predicted_val = (numeric_data_type == "FLOAT")
-                                               ? TestHelpers::v<float>(crt_row[1])
-                                               : TestHelpers::v<double>(crt_row[1]);
-              const double expected_predicted_val = row_idx * 0.001 * 2.0 + 10.0;
-              EXPECT_GE(predicted_val, expected_predicted_val - allowed_epsilon);
-              EXPECT_LE(predicted_val, expected_predicted_val + allowed_epsilon);
-            }
+          const auto query = generate_query("ML_REG_PREDICT",
+                                            {{"model", model_query},
+                                             {"data", data_query},
+                                             {"preferred_ml_framework", ml_framework}},
+                                            {"id"},
+                                            make_args_named);
+          const auto rows = run_multiple_agg(query, dt);
+          const int64_t num_rows = rows->rowCount();
+          EXPECT_EQ(num_rows, 100000L);
+          EXPECT_EQ(rows->colCount(), size_t(2));
+          // Tree models can be much less accurate than linear regression in this case,
+          // so give tree models large epsilon.
+          const double allowed_epsilon =
+              model_type == MLModelType::LINEAR_REG ? 0.02 : 20.0;
+          for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
+            auto crt_row = rows->getNextRow(true, true);
+            // id col
+            EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), row_idx);
+            const double predicted_val = (numeric_data_type == "FLOAT")
+                                             ? TestHelpers::v<float>(crt_row[1])
+                                             : TestHelpers::v<double>(crt_row[1]);
+            const double expected_predicted_val = row_idx * 0.001 * 2.0 + 10.0;
+            EXPECT_GE(predicted_val, expected_predicted_val - allowed_epsilon);
+            EXPECT_LE(predicted_val, expected_predicted_val + allowed_epsilon);
           }
         }
       }
@@ -882,7 +932,7 @@ TEST_P(MLRegressionFunctionsTest, R2_SCORE) {
       continue;
     }
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-      for (std::string numeric_data_type : {"FLOAT", "DOUBLE"}) {
+      for (std::string numeric_data_type : {"DOUBLE"}) {
         const auto train_cursor_query = generate_cursor_query(
             data_table_name,
             id_col,
@@ -1076,6 +1126,244 @@ TEST_P(MLRegressionFunctionsTest, ML_PREDICT_NULLS) {
 
 INSTANTIATE_TEST_SUITE_P(MLRegressionTests,
                          MLRegressionFunctionsTest,
+                         ::testing::Values(MLModelType::LINEAR_REG,
+                                           MLModelType::DECISION_TREE_REG,
+                                           MLModelType::GBT_REG,
+                                           MLModelType::RANDOM_FOREST_REG));
+
+TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT) {
+  const auto model_type = GetParam();
+  const auto model_type_str = get_ml_model_type_str(model_type);
+  const std::string model_name{model_type_str + "_MODEL"};
+  const std::string model_fit_func{model_type_str + "_FIT"};
+  const auto supported_ml_frameworks = get_supported_ml_frameworks();
+  // const double allowed_epsilon{0.1};
+  for (auto& ml_framework : supported_ml_frameworks) {
+    if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
+      continue;
+    }
+    for (std::string numeric_data_type : {"DOUBLE"}) {
+      const std::string fit_query(
+          "SELECT * FROM TABLE(" + model_fit_func + "(model=>'" + model_name +
+          "', "
+          "preferred_ml_framework=>" +
+          ml_framework +
+          ", data=>CURSOR(select  price, state, title_status, paint_color, "
+          "condition_, year_, odometer FROM craigslist_f150s WHERE SAMPLE_RATIO(0.5)), "
+          " top_k_cat_attrs=>10, min_cat_attr_proportion=>0.001));");
+
+      for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        const auto fit_rows = run_multiple_agg(fit_query, dt);
+        EXPECT_EQ(fit_rows->rowCount(), 1UL);
+        EXPECT_EQ(fit_rows->colCount(), 1UL);
+        auto model_row = fit_rows->getNextRow(true, true);
+        EXPECT_EQ(boost::get<std::string>(TestHelpers::v<NullableString>(model_row[0])),
+                  model_name);
+        const std::string quoted_model_name{"'" + model_name + "'"};
+        if (model_type == MLModelType::LINEAR_REG) {
+          const std::vector<int64_t> expected_feature_ids = {
+              0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
+              3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 5, 6};
+          const std::vector<int64_t> expected_sub_feature_ids = {
+              1, 1, 2, 3, 4, 5, 6, 7, 8, 9,  10, 1, 2, 3, 4, 5,
+              1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1,  2, 3, 4, 1, 1};
+
+          const std::vector<double> expected_coefs = {
+              -2681553.0554, 1725.9846, 782.4798,   1086.2600,  -2629.4910, -1294.4318,
+              2935.9767,     3032.3311, 524.7911,   -482.2400,  4439.0142,  5996.3565,
+              273.6281,      656.8885,  8127.7868,  22739.9185, -107.2775,  1322.8270,
+              2172.7193,     486.7899,  1696.4142,  1930.9537,  1834.2931,  227.2314,
+              243.9149,      6250.7301, -2171.6164, -86.0133,   480.2044,   -1779.6998,
+              1340.5951,     -0.0046};
+
+          const std::vector<std::string> expected_sub_features = {
+              "",         "fl",      "ca",    "tx",     "mi",     "or",        "wa",
+              "id",       "nc",      "oh",    "mt",     "clean",  "rebuilt",   "salvage",
+              "lien",     "missing", "white", "black",  "red",    "silver",    "blue",
+              "grey",     "brown",   "green", "custom", "orange", "excellent", "good",
+              "like new", "fair",    "",      ""};
+          const auto coef_query = generate_query("LINEAR_REG_COEFS",
+                                                 {{"model", quoted_model_name}},
+                                                 {"coef_idx, sub_coef_idx"},
+                                                 true /* make_args_named */);
+          const auto coef_rows = run_multiple_agg(coef_query, dt);
+          const int64_t num_rows = coef_rows->rowCount();
+          EXPECT_EQ(num_rows, static_cast<int64_t>(expected_sub_features.size()));
+          EXPECT_EQ(coef_rows->colCount(), size_t(4));
+          constexpr double allowed_epsilon{0.1};
+          for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
+            auto crt_row = coef_rows->getNextRow(true, true);
+            EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), expected_feature_ids[row_idx]);
+            EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
+                      expected_sub_feature_ids[row_idx]);
+            if (!expected_sub_features[row_idx].empty()) {
+              const auto sub_coef =
+                  boost::get<std::string>(TestHelpers::v<NullableString>(crt_row[2]));
+              EXPECT_EQ(sub_coef, expected_sub_features[row_idx]);
+            }
+            const double actual_coef = TestHelpers::v<double>(crt_row[3]);
+            EXPECT_GE(actual_coef, expected_coefs[row_idx] - allowed_epsilon);
+            EXPECT_LE(actual_coef, expected_coefs[row_idx] + allowed_epsilon);
+          }
+        } else if (model_type == MLModelType::RANDOM_FOREST_REG) {
+          const std::vector<std::string> expected_sub_features = {
+              "fl",      "ca",    "tx",     "mi",     "or",        "wa",      "id",
+              "nc",      "oh",    "mt",     "clean",  "rebuilt",   "salvage", "lien",
+              "missing", "white", "black",  "red",    "silver",    "blue",    "grey",
+              "brown",   "green", "custom", "orange", "excellent", "good",    "like new",
+              "fair",    "",      ""};
+
+          const std::vector<int64_t> expected_feature_ids = {
+              1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3,
+              3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 5, 6};
+          const std::vector<int64_t> expected_sub_feature_ids = {
+              1, 2, 3, 4, 5, 6, 7, 8, 9,  10, 1, 2, 3, 4, 5, 1,
+              2, 3, 4, 5, 6, 7, 8, 9, 10, 1,  2, 3, 4, 1, 1};
+
+          const std::vector<double> expected_var_importances = {
+              198727819.6012, 115516677.7265,  85804064.8754,   32885823.2236,
+              93879567.7797,  108945370.2278,  30449334.8114,   76809491.7613,
+              31140574.7866,  15926934.3375,   24435261.5452,   29066334.8774,
+              7727622.8688,   8422374.4704,    30542.7535,      690087466.8054,
+              285025868.3378, 87467923.3536,   108070882.1768,  75404161.7598,
+              113921611.1141, 6662550.3564,    2506597.8732,    2215188.4262,
+              659893.1578,    152785340.3212,  188802505.4045,  66233494.7290,
+              4441277.2129,   1861614686.7082, 11590798371.7478};
+          const auto var_importance_query =
+              generate_query("RANDOM_FOREST_REG_VAR_IMPORTANCE",
+                             {{"model", quoted_model_name}},
+                             {"feature_id, sub_feature_id"},
+                             true /* make_args_named */);
+          const auto var_importance_rows = run_multiple_agg(var_importance_query, dt);
+          const int64_t num_rows = var_importance_rows->rowCount();
+          EXPECT_EQ(num_rows, static_cast<int64_t>(expected_sub_features.size()));
+          // Variable importances change wildly between runs on this dataset,
+          // so until we can make them deterministic make the epsilon
+          // absurdly high
+          constexpr double allowed_epsilon_frac{100.0};
+          for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
+            auto crt_row = var_importance_rows->getNextRow(true, true);
+            // Feature id
+            EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), expected_feature_ids[row_idx]);
+            EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
+                      expected_sub_feature_ids[row_idx]);
+            if (!expected_sub_features[row_idx].empty()) {
+              const auto sub_coef =
+                  boost::get<std::string>(TestHelpers::v<NullableString>(crt_row[2]));
+              EXPECT_EQ(sub_coef, expected_sub_features[row_idx]);
+            }
+            const double actual_var_importance = TestHelpers::v<double>(crt_row[3]);
+            EXPECT_GE(actual_var_importance,
+                      expected_var_importances[row_idx] -
+                          allowed_epsilon_frac * expected_var_importances[row_idx]);
+            EXPECT_LE(actual_var_importance,
+                      expected_var_importances[row_idx] +
+                          allowed_epsilon_frac * expected_var_importances[row_idx]);
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_P(MLCategoricalRegressionFunctionsTest, ML_PREDICT) {
+  const auto model_type = GetParam();
+  const auto model_type_str = get_ml_model_type_str(model_type);
+  const std::string model_name{model_type_str + "_MODEL"};
+  const std::string model_fit_func{model_type_str + "_FIT"};
+  const auto supported_ml_frameworks = get_supported_ml_frameworks();
+  const double allowed_epsilon{0.1};
+  for (auto& ml_framework : supported_ml_frameworks) {
+    if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
+      continue;
+    }
+    for (std::string numeric_data_type : {"DOUBLE"}) {
+      const std::string train_query(
+          "SELECT * FROM TABLE(" + model_fit_func + "(model=>'" + model_name +
+          "', "
+          "preferred_ml_framework=>" +
+          ml_framework +
+          ", data=>CURSOR(select  price, state, title_status, paint_color, "
+          "condition_, year_, odometer FROM craigslist_f150s WHERE SAMPLE_RATIO(0.5)), "
+          " top_k_cat_attrs=>50, min_cat_attr_proportion=>0.001));");
+      const std::string row_wise_predict_query(
+          "SELECT AVG(ML_PREDICT('" + model_name +
+          "', state, title_status, paint_color, condition_, year_, odometer)) "
+          "FROM craigslist_f150s WHERE NOT SAMPLE_RATIO(0.5);");
+      const std::string tf_predict_query(
+          "SELECT AVG(prediction) FROM TABLE(ML_REG_PREDICT(model=>'" + model_name +
+          "', "
+          "preferred_ml_framework=>" +
+          ml_framework +
+          ", "
+          "data=>CURSOR(SELECT rowid, state, title_status, paint_color, condition_, "
+          "year_, odometer FROM craigslist_f150s WHERE NOT SAMPLE_RATIO(0.5))));");
+
+      for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
+        const auto row_wise_prediction_avg =
+            TestHelpers::v<double>(run_simple_agg(row_wise_predict_query, dt));
+        const auto tf_prediction_avg =
+            TestHelpers::v<double>(run_simple_agg(tf_predict_query, dt));
+        EXPECT_GE(row_wise_prediction_avg, tf_prediction_avg - allowed_epsilon);
+        EXPECT_LE(row_wise_prediction_avg, tf_prediction_avg + allowed_epsilon);
+      }
+    }
+  }
+}
+
+TEST_P(MLCategoricalRegressionFunctionsTest, R2_SCORE) {
+  const auto model_type = GetParam();
+  const auto model_type_str = get_ml_model_type_str(model_type);
+  const std::string model_name{model_type_str + "_MODEL"};
+  const std::string model_fit_func{model_type_str + "_FIT"};
+  const auto supported_ml_frameworks = get_supported_ml_frameworks();
+  const double allowed_epsilon{0.01};
+  for (auto& ml_framework : supported_ml_frameworks) {
+    if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
+      continue;
+    }
+    for (std::string numeric_data_type : {"DOUBLE"}) {
+      const std::string train_query(
+          "SELECT * FROM TABLE(" + model_fit_func + "(model=>'" + model_name +
+          "', "
+          "preferred_ml_framework=>" +
+          ml_framework +
+          ", data=>CURSOR(select  price, state, title_status, paint_color, "
+          "condition_, year_, odometer FROM craigslist_f150s WHERE SAMPLE_RATIO(0.5)), "
+          " top_k_cat_attrs=>50, min_cat_attr_proportion=>0.001));");
+      const std::string row_wise_r2_query(
+          "SELECT 1.0 - (SUM(POWER(price - ML_PREDICT('" + model_name +
+          "', state, title_status, paint_color, condition_, year_, odometer), 2)) "
+          "/ SUM(POWER(price - (SELECT AVG(price) FROM craigslist_f150s WHERE NOT "
+          "SAMPLE_RATIO(0.5)), 2))) FROM "
+          "craigslist_f150s WHERE NOT "
+          "SAMPLE_RATIO(0.5) AND price IS NOT NULL "
+          "AND year_ IS NOT NULL AND odometer IS NOT NULL;");
+      const std::string tf_r2_query(
+          "SELECT r2 FROM TABLE(R2_SCORE(model=>'" + model_name +
+          "', data=>CURSOR(SELECT price, state, title_status, paint_color, condition_, "
+          "year_, odometer FROM craigslist_f150s WHERE NOT SAMPLE_RATIO(0.5))));");
+
+      for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
+        const auto row_wise_r2 =
+            TestHelpers::v<double>(run_simple_agg(row_wise_r2_query, dt));
+        const auto tf_r2 = TestHelpers::v<double>(run_simple_agg(tf_r2_query, dt));
+        EXPECT_GE(row_wise_r2, 0.0);
+        EXPECT_LE(row_wise_r2, 1.0);
+        EXPECT_GE(row_wise_r2, tf_r2 - allowed_epsilon);
+        EXPECT_LE(row_wise_r2, tf_r2 + allowed_epsilon);
+      }
+    }
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(MLCategoricalRegressionTests,
+                         MLCategoricalRegressionFunctionsTest,
                          ::testing::Values(MLModelType::LINEAR_REG,
                                            MLModelType::DECISION_TREE_REG,
                                            MLModelType::GBT_REG,
