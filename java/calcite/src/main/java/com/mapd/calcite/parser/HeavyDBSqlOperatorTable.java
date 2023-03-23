@@ -776,6 +776,10 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
+      // A call to ML_PREDICT can take the following arguemnts
+      // 1. A text literal with the model name - REQUIRED
+      // 2. Any number of optional text column arguments
+      // 3. Any number of numeric arguments
       final SqlValidator validator = callBinding.getValidator();
 
       final int num_operands = callBinding.getOperandCount();
@@ -787,6 +791,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
         final SqlTypeName operand_type =
                 validator.getValidatedNodeType(operand).getSqlTypeName();
         final SqlTypeFamily operand_type_family = operand_type.getFamily();
+        Boolean first_numeric_argument_found = false;
         if (operand_idx == 0) {
           if (!operand.isA(EnumSet.of(SqlKind.LITERAL))) {
             return throwValidationSignatureErrorOrReturnFalse(
@@ -801,9 +806,20 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
             return throwValidationSignatureErrorOrReturnFalse(
                     callBinding, throwOnFailure);
           }
-          if (operand_type_family != SqlTypeFamily.NUMERIC) {
+          if (!(operand_type_family == SqlTypeFamily.NUMERIC
+                      || operand_type_family == SqlTypeFamily.CHARACTER)) {
             return throwValidationSignatureErrorOrReturnFalse(
                     callBinding, throwOnFailure);
+          }
+          if (operand_type_family == SqlTypeFamily.NUMERIC) {
+            first_numeric_argument_found = true;
+          } else {
+            if (first_numeric_argument_found) {
+              // We've already seen a numeric arg and now have a
+              // text arg, but all text arguments must be up front
+              return throwValidationSignatureErrorOrReturnFalse(
+                      callBinding, throwOnFailure);
+            }
           }
         }
       }

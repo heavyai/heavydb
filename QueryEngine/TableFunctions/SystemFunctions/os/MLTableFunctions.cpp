@@ -61,21 +61,45 @@ EXTENSION_NOINLINE_HOST int32_t
 linear_reg_coefs__cpu_1(TableFunctionManager& mgr,
                         const TextEncodingNone& model_name,
                         Column<int64_t>& output_coef_idx,
+                        Column<int64_t>& output_sub_coef_idx,
+                        Column<TextEncodingDict>& output_sub_attr,
                         Column<double>& output_coef) {
   try {
-    const auto model = ml_models_.getModel(model_name);
-    const auto linear_reg_model = std::dynamic_pointer_cast<LinearRegressionModel>(model);
+    const auto linear_reg_model =
+        std::dynamic_pointer_cast<LinearRegressionModel>(ml_models_.getModel(model_name));
     if (!linear_reg_model) {
       throw std::runtime_error("Model is not of type linear regression.");
     }
+
     const auto& coefs = linear_reg_model->getCoefs();
-    const auto num_coefs = static_cast<int64_t>(coefs.size());
-    mgr.set_output_row_size(num_coefs);
-    for (int64_t coef_idx = 0; coef_idx < num_coefs; ++coef_idx) {
-      output_coef_idx[coef_idx] = coef_idx;
-      output_coef[coef_idx] = coefs[coef_idx];
+    const auto& cat_feature_keys = linear_reg_model->getCatFeatureKeys();
+    const int64_t num_sub_coefs = static_cast<int64_t>(coefs.size());
+    const int64_t num_cat_features = static_cast<int64_t>(cat_feature_keys.size());
+    mgr.set_output_row_size(num_sub_coefs);
+
+    for (int64_t sub_coef_idx = 0, coef_idx = 0; sub_coef_idx < num_sub_coefs;
+         ++coef_idx) {
+      if (num_cat_features >= coef_idx && coef_idx > 0) {
+        const auto& col_cat_feature_keys = cat_feature_keys[coef_idx - 1];
+        int64_t col_cat_feature_idx = 1;
+        for (const auto& col_cat_feature_key : col_cat_feature_keys) {
+          output_coef_idx[sub_coef_idx] = coef_idx;
+          output_sub_coef_idx[sub_coef_idx] = col_cat_feature_idx++;
+          output_sub_attr[sub_coef_idx] =
+              output_sub_attr.getOrAddTransient(col_cat_feature_key);
+          output_coef[sub_coef_idx] = coefs[sub_coef_idx];
+          ++sub_coef_idx;
+        }
+      } else {
+        output_coef_idx[sub_coef_idx] = coef_idx;
+        output_sub_coef_idx[sub_coef_idx] = 1;
+        output_sub_attr[sub_coef_idx] = inline_null_value<TextEncodingDict>();
+        output_coef[sub_coef_idx] = coefs[sub_coef_idx];
+        ++sub_coef_idx;
+      }
     }
-    return num_coefs;
+
+    return num_sub_coefs;
   } catch (std::runtime_error& e) {
     return mgr.ERROR_MESSAGE(e.what());
   }
@@ -85,20 +109,28 @@ EXTENSION_NOINLINE_HOST int32_t
 linear_reg_coefs__cpu_2(TableFunctionManager& mgr,
                         const Column<TextEncodingDict>& model_name,
                         Column<int64_t>& output_coef_idx,
+                        Column<int64_t>& output_sub_coef_idx,
+                        Column<TextEncodingDict>& output_sub_attr,
                         Column<double>& output_coef) {
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model name CURSOR.");
   }
   TextEncodingNone model_name_text_enc_none(model_name.getString(0));
   mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
-  return linear_reg_coefs__cpu_1(
-      mgr, model_name_text_enc_none, output_coef_idx, output_coef);
+  return linear_reg_coefs__cpu_1(mgr,
+                                 model_name_text_enc_none,
+                                 output_coef_idx,
+                                 output_sub_coef_idx,
+                                 output_sub_attr,
+                                 output_coef);
 }
 
 EXTENSION_NOINLINE_HOST int32_t
 random_forest_reg_var_importance__cpu_1(TableFunctionManager& mgr,
                                         const TextEncodingNone& model_name,
                                         Column<int64_t>& feature_id,
+                                        Column<int64_t>& sub_feature_id,
+                                        Column<TextEncodingDict>& sub_feature,
                                         Column<double>& importance_score) {
 #ifndef HAVE_ONEDAL
   return mgr.ERROR_MESSAGE(
@@ -106,17 +138,51 @@ random_forest_reg_var_importance__cpu_1(TableFunctionManager& mgr,
 #endif
   try {
 #ifdef HAVE_ONEDAL
+    const auto base_model = ml_models_.getModel(model_name);
+    const auto rand_forest_model =
+        std::dynamic_pointer_cast<RandomForestRegressionModel>(base_model);
+    if (!rand_forest_model) {
+      throw std::runtime_error("Model is not of type random forest.");
+    }
     const auto& variable_importance_scores =
-        onedal_random_forest_reg_var_importance_impl(model_name);
+        onedal_random_forest_reg_var_importance_impl(rand_forest_model);
     const int64_t num_features = variable_importance_scores.size();
     mgr.set_output_row_size(num_features);
     if (num_features == 0) {
       return mgr.ERROR_MESSAGE("Variable importance not computed for this model.");
     }
-    for (int64_t feature_idx = 0; feature_idx < num_features; ++feature_idx) {
+    if (num_features != rand_forest_model->getNumFeatures()) {
+      return mgr.ERROR_MESSAGE(
+          "Mismatch in number of features and number ofvariable importance metrics.");
+    }
+    const auto num_logical_features = rand_forest_model->getNumLogicalFeatures();
+
+    int64_t physical_feature_idx = 0;
+    const auto& cat_feature_keys = rand_forest_model->getCatFeatureKeys();
+    const auto num_cat_features = rand_forest_model->getNumCatFeatures();
+    for (int64_t feature_idx = 0; feature_idx < num_logical_features; ++feature_idx) {
       // Make feature ids start at 1, not 0
-      feature_id[feature_idx] = feature_idx + 1;
-      importance_score[feature_idx] = variable_importance_scores[feature_idx];
+      if (feature_idx < num_cat_features) {
+        const auto& col_cat_feature_keys = cat_feature_keys[feature_idx];
+        int64_t sub_feature_idx = 1;
+        for (const auto& col_cat_feature_key : col_cat_feature_keys) {
+          feature_id[physical_feature_idx] = feature_idx + 1;
+          sub_feature_id[physical_feature_idx] = sub_feature_idx++;
+          const TextEncodingDict feature_sub_key =
+              sub_feature.getOrAddTransient(col_cat_feature_key);
+          sub_feature[physical_feature_idx] = feature_sub_key;
+          importance_score[physical_feature_idx] =
+              variable_importance_scores[physical_feature_idx];
+          physical_feature_idx++;
+        }
+      } else {
+        feature_id[physical_feature_idx] = feature_idx + 1;
+        sub_feature_id[physical_feature_idx] = 1;
+        sub_feature[physical_feature_idx] = inline_null_value<TextEncodingDict>();
+        importance_score[physical_feature_idx] =
+            variable_importance_scores[physical_feature_idx];
+        physical_feature_idx++;
+      }
     }
     return num_features;
 #endif
@@ -129,14 +195,20 @@ EXTENSION_NOINLINE_HOST int32_t
 random_forest_reg_var_importance__cpu_2(TableFunctionManager& mgr,
                                         const Column<TextEncodingDict>& model_name,
                                         Column<int64_t>& feature_id,
+                                        Column<int64_t>& sub_feature_id,
+                                        Column<TextEncodingDict>& sub_feature,
                                         Column<double>& importance_score) {
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model name CURSOR.");
   }
   TextEncodingNone model_name_text_enc_none(model_name.getString(0));
   mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
-  return random_forest_reg_var_importance__cpu_1(
-      mgr, model_name_text_enc_none, feature_id, importance_score);
+  return random_forest_reg_var_importance__cpu_1(mgr,
+                                                 model_name_text_enc_none,
+                                                 sub_feature_id,
+                                                 feature_id,
+                                                 sub_feature,
+                                                 importance_score);
 }
 
 EXTENSION_NOINLINE_HOST
@@ -225,6 +297,24 @@ int32_t get_decision_trees__cpu_2(TableFunctionManager& mgr,
                                    left_child,
                                    right_child,
                                    value);
+}
+
+EXTENSION_NOINLINE_HOST
+void check_model_params(const std::shared_ptr<AbstractMLModel>& model,
+                        const int64_t num_cat_features,
+                        const int64_t num_numeric_features) {
+  if (model->getNumLogicalFeatures() != num_cat_features + num_numeric_features) {
+    std::ostringstream error_oss;
+    error_oss << "Model expects " << model->getNumLogicalFeatures() << " features but "
+              << num_cat_features + num_numeric_features << " were provided.";
+    throw std::runtime_error(error_oss.str());
+  }
+  if (model->getNumCatFeatures() != num_cat_features) {
+    std::ostringstream error_oss;
+    error_oss << "Model expects " << model->getNumCatFeatures()
+              << " categorical features but " << num_cat_features << " were provided.";
+    throw std::runtime_error(error_oss.str());
+  }
 }
 
 #endif  // #ifndef __CUDACC__

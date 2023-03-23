@@ -44,8 +44,30 @@ inline std::string get_ml_model_type_str(const MLModelType model_type) {
 
 class AbstractMLModel {
  public:
+  AbstractMLModel() {}
+  AbstractMLModel(const std::vector<std::vector<std::string>>& cat_feature_keys)
+      : cat_feature_keys_(cat_feature_keys) {}
   virtual MLModelType getModelType() const = 0;
   virtual std::string getModelTypeString() const = 0;
   virtual int64_t getNumFeatures() const = 0;
   virtual ~AbstractMLModel() = default;
+  const std::vector<std::vector<std::string>>& getCatFeatureKeys() const {
+    return cat_feature_keys_;
+  }
+  const int64_t getNumCatFeatures() const { return cat_feature_keys_.size(); }
+
+  const int64_t getNumOneHotFeatures() const {
+    int64_t num_one_hot_features{0};
+    for (const auto& cat_feature_key : cat_feature_keys_) {
+      num_one_hot_features += static_cast<int64_t>(cat_feature_key.size());
+    }
+    return num_one_hot_features;
+  }
+
+  const int64_t getNumLogicalFeatures() const {
+    return getNumFeatures() - getNumOneHotFeatures() + getNumCatFeatures();
+  }
+
+ protected:
+  std::vector<std::vector<std::string>> cat_feature_keys_;
 };
