@@ -1104,6 +1104,10 @@ ml_reg_predict_impl(TableFunctionManager& mgr,
                     Column<K>& output_ids,
                     Column<T>& output_predictions) {
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
+  if (preferred_ml_framework == MLFramework::INVALID) {
+    return mgr.ERROR_MESSAGE("Invalid ML Framework: " +
+                             preferred_ml_framework_str.getString());
+  }
   const auto denulled_data = denull_data(input_features);
   const int64_t num_rows = denulled_data.masked_num_rows;
   const bool data_is_masked =
