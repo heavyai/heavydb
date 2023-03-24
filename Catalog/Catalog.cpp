@@ -1302,6 +1302,9 @@ void Catalog::reloadCatalogMetadataUnlocked(
     const std::map<int32_t, std::string>& user_name_by_user_id) {
   ////////// TABLES //////////
 
+  sqliteConnector_.reset(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
+                         currentDB_.dbName);
+
   // Notice when tables or columns have been created, dropped, or changed by other nodes.
   // Needed so that users will see reasonably-correct lists of what objects exist.
 
