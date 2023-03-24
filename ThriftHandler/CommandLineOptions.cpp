@@ -44,8 +44,7 @@ using namespace std::string_literals;
 #endif
 
 const std::string CommandLineOptions::nodeIds_token = {"node_id"};
-
-extern std::string cluster_command_line_arg;
+const std::string CommandLineOptions::cluster_command_line_arg{"cluster_topology"};
 
 bool g_enable_thrift_logs{false};
 

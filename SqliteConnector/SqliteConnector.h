@@ -36,6 +36,12 @@ class SqliteConnector {
   SqliteConnector(sqlite3* db);
   SqliteConnector() {}
   virtual ~SqliteConnector();
+
+  void reset(const std::string& path) {
+    sqlite3_close(db_);
+    sqlite3_open(path.c_str(), &db_);
+  }
+
   virtual void query(const std::string& queryString);
 
   virtual void query_with_text_params(std::string const& query_only) {

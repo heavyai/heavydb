@@ -141,7 +141,7 @@ class CommandLineOptions {
 
   std::string getNodeIds();
   std::vector<std::string> getNodeIdsArray();
-  static const std::string nodeIds_token;
+  static const std::string nodeIds_token, cluster_command_line_arg;
 
   boost::optional<int> parse_command_line(int argc,
                                           char const* const* argv,
