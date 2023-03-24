@@ -14,4 +14,11 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "OSDependent/os/heavyai_locks.h"
+
+inline bool g_read_only{false};
+inline bool g_multi_instance{
+    false};  // TODO(sy): set true after internal testing is complete
+inline size_t g_lockfile_lock_extension_milliseconds{1000};

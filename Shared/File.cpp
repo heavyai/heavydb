@@ -37,8 +37,6 @@
 
 #include <boost/filesystem.hpp>
 
-bool g_read_only{false};
-
 namespace File_Namespace {
 
 std::string get_data_file_path(const std::string& base_path,
