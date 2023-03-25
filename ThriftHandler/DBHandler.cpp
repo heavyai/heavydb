@@ -274,12 +274,12 @@ void DBHandler::init_executor_resource_mgr() {
   num_gpu_slots = system_parameters_.num_gpus < 0 ? static_cast<size_t>(0)
                                                   : system_parameters_.num_gpus;
 
+  cpu_buffer_pool_mem = data_mgr_->getCpuBufferPoolSize();
   if (g_executor_resource_mgr_cpu_result_mem_bytes != Executor::auto_cpu_mem_bytes) {
     cpu_result_mem = g_executor_resource_mgr_cpu_result_mem_bytes;
   } else {
     const size_t system_mem_bytes = DataMgr::getTotalSystemMemory();
     CHECK_GT(system_mem_bytes, size_t(0));
-    cpu_buffer_pool_mem = data_mgr_->getCpuBufferPoolSize();
     const size_t remaining_cpu_mem_bytes = system_mem_bytes >= cpu_buffer_pool_mem
                                                ? system_mem_bytes - cpu_buffer_pool_mem
                                                : 0UL;
