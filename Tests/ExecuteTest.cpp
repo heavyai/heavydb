@@ -13386,6 +13386,42 @@ TEST_F(Select, Joins_LeftOuterJoin) {
     c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test.str = test_inner.str AND "
       "test.x = test_inner.x;",
       dt);
+    c("SELECT R.null_str FROM test R LEFT JOIN test_inner S ON R.null_str = S.str WHERE "
+      "R.null_str IS NULL GROUP BY 1;",
+      dt);
+    c("SELECT R.null_str FROM test R LEFT JOIN test_inner S ON R.null_str = S.str WHERE "
+      "R.null_str IS NOT NULL GROUP BY 1;",
+      dt);
+    THROW_ON_AGGREGATOR(run_multiple_agg(
+        "SELECT S.carrier_name AS key0, R.state_name AS key1, PG_DATE_TRUNC('hour', "
+        "S.arr_timestamp) AS key2, COUNT(*) AS col0 FROM data_types_basic3 R LEFT JOIN "
+        "data_types_basic6 S ON R.state_name = S.dest_state WHERE S.arr_timestamp "
+        "BETWEEN '2008-01-04 11:17:58.413' AND '2008-01-05 03:22:28.017' GROUP BY key0, "
+        "key1, key2 ORDER BY KEY_FOR_STRING(key0) DESC NULLS LAST, KEY_FOR_STRING(key1) "
+        "DESC NULLS LAST, key2 DESC NULLS LAST LIMIT 50 OFFSET 0",
+        dt));
+    THROW_ON_AGGREGATOR(run_multiple_agg(
+        "SELECT S.arrtime AS x, R.col_decimal_1 AS y, S.dest_state AS color FROM "
+        "data_types_basic3 R LEFT JOIN data_types_basic6 S ON R.state_name = "
+        "S.dest_state WHERE CAST(S.arrtime AS FLOAT) is not null AND "
+        "CAST(R.col_decimal_1 AS FLOAT) is not null AND UNLIKELY( CAST( CAST(S.arrtime "
+        "AS FLOAT) AS FLOAT ) >= 1053.26416015625 AND CAST( CAST(S.arrtime AS FLOAT) AS "
+        "FLOAT ) <= 1449.943359375 AND CAST( CAST(R.col_decimal_1 AS FLOAT) AS FLOAT ) "
+        ">= -1164.20556640625 AND CAST( CAST(R.col_decimal_1 AS FLOAT) AS FLOAT ) <= "
+        "1136.702880859375) AND ST_Contains(ST_GeomFromText('POLYGON((1290.169799805 "
+        "722.539306641,1075.301879883 722.539306641,1053.264160156 "
+        "492.448486328,1053.264160156 -796.060241699,1218.547119141 "
+        "-1164.205566406,1290.169799805 -1072.169311523,1405.867919922 "
+        "-381.896728516,1449.943359375 814.575683594,1284.660400391 "
+        "1136.702880859,1135.905639648 676.521179199,1290.169799805 722.539306641))', 0 "
+        "), ST_SetSRID( ST_Point(CAST(S.arrtime AS FLOAT), CAST(R.col_decimal_1 AS "
+        "FLOAT) ), 0 )) LIMIT 20",
+        dt));
+    THROW_ON_AGGREGATOR(run_multiple_agg(
+        "SELECT PG_DATE_TRUNC('second', R.col_ts0_2), COUNT(*) FROM data_types_basic3 R "
+        "left join data_types_basic6 S ON R.col_ts0_2 = S.dep_timestamp GROUP BY 1 "
+        "ORDER BY 1 DESC NULLS LAST LIMIT 50 OFFSET 0;",
+        dt));
   }
 }
 

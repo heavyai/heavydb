@@ -2078,6 +2078,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
   }
 
   int8_t crt_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
+  CompilationOptions copied_co = co;
+  copied_co.device_type = device_type;
   do {
     SharedKernelContext shared_context(query_infos);
     ColumnFetcher column_fetcher(this, column_cache);
@@ -2087,7 +2089,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     };
     auto query_comp_desc_owned = std::make_unique<QueryCompilationDescriptor>();
     std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
-
     if (eo.executor_type == ExecutorType::Native) {
       try {
         INJECT_TIMER(query_step_compilation);
@@ -2099,14 +2100,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                            query_infos,
                                            deleted_cols_map,
                                            column_fetcher,
-                                           {device_type,
-                                            co.hoist_literals,
-                                            co.opt_level,
-                                            co.with_dynamic_watchdog,
-                                            co.allow_lazy_fetch,
-                                            co.filter_on_deleted_column,
-                                            co.explain_type,
-                                            co.register_intel_jit_listener},
+                                           copied_co,
                                            eo,
                                            render_info,
                                            this);
