@@ -245,6 +245,7 @@ class ResultSet {
   size_t getCurrentRowBufferIndex() const;
 
   std::vector<TargetValue> getRowAt(const size_t index) const;
+  std::vector<TargetValue> getRowAtNoTranslationSkipPermutation(const size_t index) const;
 
   TargetValue getRowAt(const size_t row_idx,
                        const size_t col_idx,
