@@ -882,6 +882,20 @@ declare i64 @fixed_width_date_decode(i64, i32, i64);
     gen_translate_null_key_sigs();
 
 #ifdef HAVE_CUDA
+
+namespace {
+bool check_any_operand_is_stacksave_intrinsic(llvm::Instruction& inst) {
+  for (auto op_it = inst.op_begin(); op_it != inst.op_end(); op_it++) {
+    if (const llvm::IntrinsicInst* inst2 = llvm::dyn_cast<llvm::IntrinsicInst>(*op_it)) {
+      if (inst2->getIntrinsicID() == llvm::Intrinsic::stacksave) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+}  // namespace
+
 std::string extension_function_decls(const std::unordered_set<std::string>& udf_decls) {
   const auto decls =
       ExtensionFunctionsWhitelist::getLLVMDeclarations(udf_decls, /*is_gpu=*/true);
@@ -900,7 +914,15 @@ void legalize_nvvm_ir(llvm::Function* query_func) {
   std::vector<llvm::Instruction*> lifetime;
   for (auto& BB : *query_func) {
     for (llvm::Instruction& I : BB) {
-      if (const llvm::IntrinsicInst* II = llvm::dyn_cast<llvm::IntrinsicInst>(&I)) {
+      if (llvm::dyn_cast<llvm::PHINode>(&I)) {
+        if (check_any_operand_is_stacksave_intrinsic(I)) {
+          // AFAIK, the only case we have to remove an non-intrinsic inst is a PHI node
+          // iff at least its one of operands is llvm::stacksave intrinsic
+          stacksave_intrinsics.push_back(&I);
+          VLOG(2) << "Remove PHI node having llvm::stacksave intrinsic as its operand";
+        }
+      } else if (const llvm::IntrinsicInst* II =
+                     llvm::dyn_cast<llvm::IntrinsicInst>(&I)) {
         if (II->getIntrinsicID() == llvm::Intrinsic::stacksave) {
           stacksave_intrinsics.push_back(&I);
         } else if (II->getIntrinsicID() == llvm::Intrinsic::stackrestore) {
