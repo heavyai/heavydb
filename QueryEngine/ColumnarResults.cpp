@@ -130,11 +130,14 @@ int64_t toBuffer(const TargetValue& col_val, const SQLTypeInfo& type_info, int8_
 
 int64_t countNumberOfValues(const ResultSet& rows, const size_t column_idx) {
   return tbb::parallel_reduce(
-      tbb::blocked_range<int64_t>(0, rows.rowCount()),
+      tbb::blocked_range<int64_t>(0, rows.entryCount()),
       static_cast<int64_t>(0),
       [&](tbb::blocked_range<int64_t> r, int64_t running_count) {
         for (int i = r.begin(); i < r.end(); ++i) {
-          const auto crt_row = rows.getRowAtNoTranslations(i);
+          const auto crt_row = rows.getRowAtNoTranslationSkipPermutation(i);
+          if (crt_row.empty()) {
+            continue;
+          }
           const auto arr_tv = boost::get<ArrayTargetValue>(&crt_row[column_idx]);
           CHECK(arr_tv);
           if (arr_tv->is_initialized()) {
@@ -152,11 +155,14 @@ int64_t countNumberOfValuesGeoType(const ResultSet& rows,
                                    const SQLTypeInfo& ti,
                                    const size_t column_idx) {
   return tbb::parallel_reduce(
-      tbb::blocked_range<int64_t>(0, rows.rowCount()),
+      tbb::blocked_range<int64_t>(0, rows.entryCount()),
       static_cast<int64_t>(0),
       [&](tbb::blocked_range<int64_t> r, int64_t running_count) {
         for (int i = r.begin(); i < r.end(); ++i) {
-          const auto crt_row = rows.getRowAtNoTranslations(i);
+          const auto crt_row = rows.getRowAtNoTranslationSkipPermutation(i);
+          if (crt_row.empty()) {
+            continue;
+          }
           if (const auto tv = boost::get<ScalarTargetValue>(&crt_row[column_idx])) {
             const auto ns = boost::get<NullableString>(tv);
             CHECK(ns);

@@ -22600,6 +22600,10 @@ TEST_F(Select, Sample) {
       ASSERT_EQ(int64_t(7), v<int64_t>(null_row[3]));
       ASSERT_NEAR(std::numeric_limits<double>::min(), v<double>(null_row[4]), 0.001);
     }
+    run_multiple_agg(
+        "SELECT col_integer_2, SAMPLE(omnisci_geo_linestring), AVG(col_float_2)/20 "
+        "FROM data_types_basic3 GROUP BY 1;",
+        dt);
   }
 }
 
