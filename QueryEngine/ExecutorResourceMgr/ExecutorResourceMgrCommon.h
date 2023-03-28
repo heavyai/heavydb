@@ -29,6 +29,18 @@ namespace ExecutorResourceMgr_Namespace {
 using ChunkKey = std::vector<int>;
 using RequestId = size_t;
 
+class ExecutorResourceMgrError {
+ public:
+  ExecutorResourceMgrError(RequestId const request_id, std::string error_msg)
+      : request_id_(request_id), error_msg_(std::move(error_msg)) {}
+  RequestId getRequestId() const { return request_id_; }
+  std::string getErrorMsg() const { return error_msg_; }
+
+ private:
+  RequestId request_id_;
+  std::string error_msg_;
+};
+
 class QueryTimedOutWaitingInQueue : public std::runtime_error {
  public:
   QueryTimedOutWaitingInQueue(const size_t timeout_ms)
