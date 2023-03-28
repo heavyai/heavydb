@@ -1622,6 +1622,11 @@ boost::optional<int> CommandLineOptions::parse_command_line(
 
     // Trim base path before executing migration
     boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
+    if (!boost::filesystem::exists(base_path)) {
+      std::cerr << "Storage folder (--data) not found: " << base_path << std::endl;
+      std::cerr << "Need to run initheavy before heavydb." << std::endl;
+      return 1;
+    }
 
     // Execute rebrand migration before accessing any system files.
     std::string lockfiles_path = base_path + "/" + shared::kLockfilesDirectoryName;
