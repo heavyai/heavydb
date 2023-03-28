@@ -98,6 +98,9 @@ struct RequestStats {
   size_t total_time_ms{0};
   size_t timeout_in_ms{0};
   bool timed_out{false};
+  // this variable will be filled w/ a corresponding msg when an error is occurred
+  // when processing the resource allocation request by ERM
+  std::optional<std::string> error;
 
   RequestStats(const RequestId request_id,
                const RequestInfo& request_info,
@@ -311,6 +314,8 @@ class ExecutorResourceMgr : public std::enable_shared_from_this<ExecutorResource
    * including resources granted
    */
   RequestStats get_request_for_id(const RequestId request_id) const;
+
+  void mark_request_error(const RequestId request_id, std::string error_msg);
 
   /**
    * @brief Internal method: Invoked from `process_queue_loop`, chooses the next

@@ -84,8 +84,11 @@ ExecutorResourceMgr::request_resources_with_timeout(const RequestInfo& request_i
 
   auto this_ptr = shared_from_this();
   std::shared_lock<std::shared_mutex> queue_stats_read_lock(queue_stats_mutex_);
-  const ResourceGrant& actual_resource_grant =
-      requests_stats_[request_id].actual_resource_grant;
+  RequestStats const& request_stats = requests_stats_[request_id];
+  if (request_stats.error) {
+    throw std::runtime_error("RequestStats error: " + *request_stats.error);
+  }
+  const ResourceGrant& actual_resource_grant = request_stats.actual_resource_grant;
   // Ensure each resource granted was at least the minimum requested
   CHECK_GE(actual_resource_grant.cpu_slots, min_max_resource_grants.first.cpu_slots);
   CHECK_GE(actual_resource_grant.gpu_slots, min_max_resource_grants.first.gpu_slots);
@@ -120,32 +123,43 @@ RequestStats ExecutorResourceMgr::get_request_for_id(const RequestId request_id)
   return requests_stats_[request_id];
 }
 
+void ExecutorResourceMgr::mark_request_error(const RequestId request_id,
+                                             std::string error_msg) {
+  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
+  CHECK_LT(request_id, requests_stats_.size());
+  requests_stats_[request_id].error = std::move(error_msg);
+}
+
 RequestId ExecutorResourceMgr::choose_next_request() {
   const auto request_ids = get_requests_for_stage(ExecutionRequestStage::QUEUED);
   LOG(EXECUTOR) << "ExecutorResourceMgr Queue Itr: " << process_queue_counter_ - 1
                 << " Queued requests: " << request_ids.size();
-  std::shared_lock<std::shared_mutex> queue_stats_read_lock(queue_stats_mutex_);
+  std::unique_lock<std::shared_mutex> queue_stats_lock(queue_stats_mutex_);
   for (const auto request_id : request_ids) {
     auto& request_stats = requests_stats_[request_id];
-    const auto actual_resource_grant =
-        executor_resource_pool_.determine_dynamic_resource_grant(
-            request_stats.min_resource_grant,
-            request_stats.max_resource_grant,
-            request_stats.request_info.chunk_request_info,
-            max_available_resource_use_ratio_);
-    // boolean sentinel first member of returned pair says whether
-    // a resource grant was able to be made at all
-    if (actual_resource_grant.first) {
-      request_stats.actual_resource_grant = actual_resource_grant.second;
-      LOG(EXECUTOR) << "ExecutorResourceMgr Queue chosen request ID: " << request_id
-                    << " from " << request_ids.size() << " queued requests.";
-      LOG(EXECUTOR) << "Request grant: " << actual_resource_grant.second.to_string();
-      if (enable_debug_printing_) {
-        std::unique_lock<std::mutex> print_lock(print_mutex_);
-        std::cout << std::endl << "Actual grant";
-        actual_resource_grant.second.print();
+    try {
+      const auto actual_resource_grant =
+          executor_resource_pool_.determine_dynamic_resource_grant(
+              request_stats.min_resource_grant,
+              request_stats.max_resource_grant,
+              request_stats.request_info.chunk_request_info,
+              max_available_resource_use_ratio_);
+      // boolean sentinel first member of returned pair says whether
+      // a resource grant was able to be made at all
+      if (actual_resource_grant.first) {
+        request_stats.actual_resource_grant = actual_resource_grant.second;
+        LOG(EXECUTOR) << "ExecutorResourceMgr Queue chosen request ID: " << request_id
+                      << " from " << request_ids.size() << " queued requests.";
+        LOG(EXECUTOR) << "Request grant: " << actual_resource_grant.second.to_string();
+        if (enable_debug_printing_) {
+          std::unique_lock<std::mutex> print_lock(print_mutex_);
+          std::cout << std::endl << "Actual grant";
+          actual_resource_grant.second.print();
+        }
+        return request_id;
       }
-      return request_id;
+    } catch (std::runtime_error const& e) {
+      throw ExecutorResourceMgrError(request_id, e.what());
     }
   }
   return INVALID_REQUEST_ID;
@@ -329,7 +343,13 @@ void ExecutorResourceMgr::process_queue_loop() {
     }
 
     process_queue_counter_++;
-    const RequestId chosen_request_id = choose_next_request();
+    RequestId chosen_request_id;
+    try {
+      chosen_request_id = choose_next_request();
+    } catch (ExecutorResourceMgrError const& e) {
+      chosen_request_id = e.getRequestId();
+      mark_request_error(chosen_request_id, e.getErrorMsg());
+    }
     if (enable_debug_printing_) {
       std::unique_lock<std::mutex> print_lock(print_mutex_);
       std::cout << "Process loop iteration: " << process_queue_counter_ - 1 << std::endl;
@@ -344,9 +364,11 @@ void ExecutorResourceMgr::process_queue_loop() {
     // If here we have a valid request id
     mark_request_dequed(chosen_request_id);
     const auto request_stats = get_request_for_id(chosen_request_id);
-    executor_resource_pool_.allocate_resources(
-        request_stats.actual_resource_grant,
-        request_stats.request_info.chunk_request_info);
+    if (!request_stats.error) {
+      executor_resource_pool_.allocate_resources(
+          request_stats.actual_resource_grant,
+          request_stats.request_info.chunk_request_info);
+    }
     outstanding_queue_requests_.wake_request_by_id(chosen_request_id);
 
     if (enable_stats_printing_) {
@@ -418,7 +440,7 @@ void ExecutorResourceMgr::mark_request_dequed(const RequestId request_id) {
   const size_t current_request_count = requests_count_.load(std::memory_order_relaxed);
   CHECK_LT(request_id, current_request_count);
   {
-    std::shared_lock<std::shared_mutex> queue_stats_read_lock(queue_stats_mutex_);
+    std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
     RequestStats& request_stats = requests_stats_[request_id];
     request_stats.deque_time = deque_time;
     request_stats.finished_queueing = true;
@@ -430,7 +452,7 @@ void ExecutorResourceMgr::mark_request_dequed(const RequestId request_id) {
   remove_request_from_stage(request_id, ExecutionRequestStage::QUEUED);
   add_request_to_stage(request_id, ExecutionRequestStage::EXECUTING);
 
-  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
+  std::shared_lock<std::shared_mutex> queue_stats_read_lock(queue_stats_mutex_);
   const RequestStats& request_stats = requests_stats_[request_id];
   executor_stats_.queue_length--;
   executor_stats_.requests_executing++;
@@ -464,14 +486,14 @@ void ExecutorResourceMgr::mark_request_timed_out(const RequestId request_id) {
   const size_t current_request_count = requests_count_.load(std::memory_order_relaxed);
   CHECK_LT(request_id, current_request_count);
   {
-    std::shared_lock<std::shared_mutex> queue_stats_read_lock(queue_stats_mutex_);
+    std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
     RequestStats& request_stats = requests_stats_[request_id];
     CHECK(!request_stats.finished_queueing);
     CHECK_GT(request_stats.timeout_in_ms, size_t(0));
     request_stats.timed_out = true;
   }
   remove_request_from_stage(request_id, ExecutionRequestStage::QUEUED);
-  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
+  std::shared_lock<std::shared_mutex> queue_stats_read_lock(queue_stats_mutex_);
   const RequestStats& request_stats = requests_stats_[request_id];
   CHECK_GT(executor_stats_.queue_length, size_t(0));
   executor_stats_.queue_length--;
