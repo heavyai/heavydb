@@ -2585,6 +2585,49 @@ size_t get_shared_memory_size(const bool shared_mem_used,
              : 0;
 }
 
+bool has_count_expr(RelAlgExecutionUnit const& ra_exe_unit) {
+  for (auto const expr : ra_exe_unit.target_exprs) {
+    if (auto const agg_expr = dynamic_cast<Analyzer::AggExpr*>(expr)) {
+      if (shared::is_any<SQLAgg::kCOUNT, SQLAgg::kCOUNT_IF>(agg_expr->get_aggtype())) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+class CaseExprDetector : public ScalarExprVisitor<bool> {
+ public:
+  CaseExprDetector() : detect_case_expr_(false) {}
+
+  bool detectCaseExpr(const Analyzer::Expr* expr) const {
+    visit(expr);
+    return detect_case_expr_;
+  }
+
+ protected:
+  bool visitCaseExpr(const Analyzer::CaseExpr*) const override {
+    detect_case_expr_ = true;
+    return true;
+  }
+
+ private:
+  mutable bool detect_case_expr_;
+};
+
+bool has_case_expr_within_groupby_expr(RelAlgExecutionUnit const& ra_exe_unit) {
+  if (ra_exe_unit.groupby_exprs.empty() || !ra_exe_unit.groupby_exprs.front()) {
+    return false;
+  }
+  CaseExprDetector detector;
+  for (auto expr : ra_exe_unit.groupby_exprs) {
+    if (detector.detectCaseExpr(expr.get())) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr,
                                  const RelAlgExecutionUnit& ra_exe_unit,
                                  const CudaMgr_Namespace::CudaMgr* cuda_mgr,
@@ -2609,6 +2652,10 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
    *
    */
   if (!cuda_mgr->isArchMaxwellOrLaterForAll()) {
+    return false;
+  }
+  if (cuda_mgr->isArchPascal() && !ra_exe_unit.join_quals.empty() &&
+      has_count_expr(ra_exe_unit) && has_case_expr_within_groupby_expr(ra_exe_unit)) {
     return false;
   }
 

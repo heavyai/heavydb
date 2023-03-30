@@ -4709,6 +4709,18 @@ TEST_F(Select, Case) {
     c("SELECT CASE str WHEN 'foo' THEN 'bar' ELSE 'truncated' END trunc"
       " FROM test ORDER BY trunc;",
       dt);
+    // check whether below two queries are not crashed
+    run_multiple_agg(
+        "SELECT CASE WHEN w > 0 THEN 'A' END AS KEY0, COUNT(*) FROM test WHERE x IN "
+        "(SELECT x FROM "
+        "test_inner) GROUP BY KEY0;",
+        dt);
+    run_multiple_agg(
+        "SELECT CASE WHEN test.t >= 9221236637232377000 THEN 12 ELSE "
+        "WIDTH_BUCKET(test.t, "
+        "9021126390691428, 9221236637232377000, 12) END - 1 AS key0,COUNT(*) FROM test "
+        "INNER JOIN test_inner ON (test.x = test_inner.x) GROUP BY KEY0;",
+        dt);
   }
 }
 
