@@ -884,6 +884,7 @@ void DBHandler::get_status(std::vector<TServerStatus>& _return,
   ret.role = getServerRole();
   ret.renderer_status_json =
       render_handler_ ? render_handler_->get_renderer_status_json() : "";
+  ret.host_id = "";
 
   _return.push_back(ret);
   if (leaf_aggregator_.leafCount() > 0) {
