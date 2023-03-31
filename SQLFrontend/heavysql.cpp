@@ -1092,6 +1092,14 @@ void print_status(ClientContext& context) {
       << ": " << agg_version << " " << edition;
   tss << std::endl;
 
+  const auto& host_id = context.cluster_status[0].host_id;
+  if (!host_id.empty()) {
+    tss << std::left << std::setfill(' ') << std::setw(lhs_width);
+    tss << "Host ID"
+        << ": " << host_id;
+    tss << std::endl;
+  }
+
   if (is_cluster) {
     tss << std::left << std::setfill(' ') << std::setw(lhs_width);
     tss << "Number of processes"
