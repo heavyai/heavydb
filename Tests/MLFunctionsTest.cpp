@@ -1250,6 +1250,36 @@ INSTANTIATE_TEST_SUITE_P(MLRegressionTests,
                                            MLModelType::GBT_REG,
                                            MLModelType::RANDOM_FOREST_REG));
 
+TEST_P(MLCategoricalRegressionFunctionsTest, ML_PREDICT_CATEGORICAL_FEATURES_MISORDERED) {
+  const auto model_type = GetParam();
+  const auto model_type_str = get_ml_model_type_str(model_type);
+  const std::string model_fit_func{model_type_str + "_FIT"};
+  const std::string model_name("CRAIGSLIST_" + model_type_str + "_MODEL");
+  const auto supported_ml_frameworks = get_supported_ml_frameworks();
+  for (auto& ml_framework : supported_ml_frameworks) {
+    if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
+      continue;
+    }
+    const std::string train_query("SELECT * FROM TABLE(" + model_fit_func +
+                                  "(model_name =>'" + model_name +
+                                  "', "
+                                  "preferred_ml_framework=>" +
+                                  ml_framework +
+                                  ", data=>CURSOR(select "
+                                  "price, state, odometer FROM craigslist_f150s)));");
+    // Note we put the TEXT state column after the odometer column, which is illegal
+    // (categorical predictors must come first)
+    const std::string predict_query("SELECT ML_PREDICT('" + model_name +
+                                    "', odometer, state) as prediction "
+                                    "FROM craigslist_f150s;");
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
+      EXPECT_ANY_THROW(run_multiple_agg(predict_query, dt));
+    }
+  }
+}
+
 TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT) {
   const auto model_type = GetParam();
   const auto model_type_str = get_ml_model_type_str(model_type);
@@ -1296,15 +1326,6 @@ TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT) {
                                   {"min_cat_attr_proportion", "0.001"}},
                                  {"model_name"},
                                  true);
-
-        // const std::string fit_query(
-        //    "SELECT * FROM TABLE(" + model_fit_func + "(model_name =>'" + model_name +
-        //    "', "
-        //    "preferred_ml_framework=>" +
-        //    ml_framework +
-        //    ", data=>CURSOR(select  price, state, title_status, paint_color, "
-        //    "condition_, year_, odometer FROM craigslist_f150s WHERE SAMPLE_RATIO(0.5)),
-        //    " " top_k_cat_attrs=>10, min_cat_attr_proportion=>0.001));");
 
         for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
           SKIP_NO_GPU();
