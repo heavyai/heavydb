@@ -765,15 +765,6 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       return SqlOperandCountRanges.from(2);
     }
 
-    protected boolean throwValidationSignatureErrorOrReturnFalse(
-            SqlCallBinding callBinding, boolean throwOnFailure) {
-      if (throwOnFailure) {
-        throw callBinding.newValidationSignatureError();
-      } else {
-        return false;
-      }
-    }
-
     @Override
     public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
       // A call to ML_PREDICT can take the following arguemnts
@@ -784,32 +775,30 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
 
       final int num_operands = callBinding.getOperandCount();
       if (num_operands < 2) {
-        return throwValidationSignatureErrorOrReturnFalse(callBinding, throwOnFailure);
+        throw new IllegalArgumentException(
+                "At least 2 arguments are required, the model name and one or more predictors.");
       }
+      Boolean first_numeric_argument_found = false;
       for (int operand_idx = 0; operand_idx < num_operands; operand_idx++) {
         final SqlNode operand = callBinding.operand(operand_idx);
         final SqlTypeName operand_type =
                 validator.getValidatedNodeType(operand).getSqlTypeName();
         final SqlTypeFamily operand_type_family = operand_type.getFamily();
-        Boolean first_numeric_argument_found = false;
         if (operand_idx == 0) {
-          if (!operand.isA(EnumSet.of(SqlKind.LITERAL))) {
-            return throwValidationSignatureErrorOrReturnFalse(
-                    callBinding, throwOnFailure);
-          }
-          if (operand_type_family != SqlTypeFamily.CHARACTER) {
-            return throwValidationSignatureErrorOrReturnFalse(
-                    callBinding, throwOnFailure);
+          if (!operand.isA(EnumSet.of(SqlKind.LITERAL))
+                  || operand_type_family != SqlTypeFamily.CHARACTER) {
+            throw new IllegalArgumentException(
+                    "First argument must be TEXT literal denoting the model name.");
           }
         } else {
           if (operand.isA(EnumSet.of(SqlKind.LITERAL))) {
-            return throwValidationSignatureErrorOrReturnFalse(
-                    callBinding, throwOnFailure);
+            throw new IllegalArgumentException(
+                    "Literals are not supported as predictors.");
           }
           if (!(operand_type_family == SqlTypeFamily.NUMERIC
                       || operand_type_family == SqlTypeFamily.CHARACTER)) {
-            return throwValidationSignatureErrorOrReturnFalse(
-                    callBinding, throwOnFailure);
+            throw new IllegalArgumentException(
+                    "Only TEXT and NUMERIC predictors are supported.");
           }
           if (operand_type_family == SqlTypeFamily.NUMERIC) {
             first_numeric_argument_found = true;
@@ -817,8 +806,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
             if (first_numeric_argument_found) {
               // We've already seen a numeric arg and now have a
               // text arg, but all text arguments must be up front
-              return throwValidationSignatureErrorOrReturnFalse(
-                      callBinding, throwOnFailure);
+              throw new IllegalArgumentException(
+                      "Categorical predictors of type TEXT must precede numeric predictors.");
             }
           }
         }
