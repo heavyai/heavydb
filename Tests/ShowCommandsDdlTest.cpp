@@ -3708,6 +3708,7 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
 #elif HAVE_MLPACK
   const std::string ml_framework = "mlpack";
 #else
+  const std::string ml_framework = "UNUSED";  // Satisfy compiler
   return;
 #endif
   switchToAdmin();
