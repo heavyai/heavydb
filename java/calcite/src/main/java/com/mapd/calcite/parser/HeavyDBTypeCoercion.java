@@ -9,6 +9,8 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeFactoryImpl;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.RelDataTypeFieldImpl;
+import org.apache.calcite.sql.SqlBasicCall;
+import org.apache.calcite.sql.SqlBinaryOperator;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlCallBinding;
 import org.apache.calcite.sql.SqlKind;
@@ -128,6 +130,7 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
           RelDataType formalRelType = toRelDataType(extType, factory);
           RelDataType actualRelType = factory.createTypeWithNullability(
                   validator.deriveType(scope, selectOperand), true);
+          RelDataType widerType = getWiderTypeForTwo(formalRelType, actualRelType, false);
 
           if (formalRelType.getSqlTypeName() == SqlTypeName.COLUMN_LIST) {
             ExtArgumentType colListSubtype = getValueType(extType);
@@ -145,8 +148,7 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
               }
             }
 
-            RelDataType widerType =
-                    getWiderTypeForTwo(actualRelType, formalSubtype, false);
+            widerType = getWiderTypeForTwo(actualRelType, formalSubtype, false);
             if (!SqlTypeUtil.sameNamedType(actualRelType, formalSubtype)) {
               if (widerType == null || widerType == actualRelType) {
                 // no common type, or actual type is wider than formal
@@ -174,13 +176,17 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
                 } else {
                   score += getScoreForTypes(widerType, actualRelType, true);
                 }
+              } else {
+                // Calcite considers the result of some binary operations as a wider type,
+                // even though they're not passed to the backend as such (FLOAT + literal
+                // == DOUBLE, for instance). We penalize these so that literal operands
+                // are casted regardless. (See QE-788)
+                score += shouldCoerceBinOpOperand(curOperand, widerType, scope) ? 100 : 0;
               }
               colListSize++;
             }
             iActual += colListSize - 1;
           } else if (actualRelType != formalRelType) {
-            RelDataType widerType =
-                    getWiderTypeForTwo(formalRelType, actualRelType, false);
             if (widerType == null) {
               // no common wider type
               return -1;
@@ -197,6 +203,12 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
             } else {
               score += getScoreForTypes(widerType, actualRelType, true);
             }
+          } else {
+            // Calcite considers the result of some binary operations as a wider type,
+            // even though they're not passed to the backend as such (FLOAT + literal
+            // == DOUBLE, for instance). We penalize these so that literal operands
+            // are casted regardless. (See QE-788)
+            score += shouldCoerceBinOpOperand(selectOperand, widerType, scope) ? 100 : 0;
           }
         }
 
@@ -306,6 +318,7 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
           ExtArgumentType extType = formalFieldTypes.get(iFormal);
           RelDataType formalRelType = toRelDataType(extType, factory);
           RelDataType actualRelType = validator.deriveType(scope, selectOperand);
+          RelDataType widerType = getWiderTypeForTwo(formalRelType, actualRelType, false);
 
           if (isColumnArrayType(extType) || isColumnListArrayType(extType)) {
             // Arrays can't be casted so don't bother trying
@@ -316,8 +329,7 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
           if (formalRelType.getSqlTypeName() == SqlTypeName.COLUMN_LIST) {
             ExtArgumentType colListSubtype = getValueType(extType);
             RelDataType formalSubtype = toRelDataType(colListSubtype, factory);
-            RelDataType widerType =
-                    getWiderTypeForTwo(actualRelType, formalSubtype, false);
+            widerType = getWiderTypeForTwo(actualRelType, formalSubtype, false);
 
             int colListSize = 0;
             int numFormalArgumentsLeft = (formalFieldTypes.size() - 1) - iFormal;
@@ -336,15 +348,16 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
                           iActual + colListSize,
                           widerType);
                 }
+              } else if (shouldCoerceBinOpOperand(curOperand, widerType, scope)) {
+                coerceBinOpOperand((SqlBasicCall) curOperand, widerType, scope);
               }
+
               updateValidatedType(
                       newValidatedTypeList, selectNode, iActual + colListSize);
               colListSize++;
             }
             iActual += colListSize - 1;
           } else if (actualRelType != formalRelType) {
-            RelDataType widerType =
-                    getWiderTypeForTwo(formalRelType, actualRelType, false);
             if (!SqlTypeUtil.isTimestamp(widerType)
                     && SqlTypeUtil.sameNamedType(actualRelType, formalRelType)) {
               updateValidatedType(newValidatedTypeList, selectNode, iActual);
@@ -355,6 +368,9 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
             }
             updateValidatedType(newValidatedTypeList, selectNode, iActual);
           } else {
+            if (shouldCoerceBinOpOperand(selectOperand, widerType, scope)) {
+              coerceBinOpOperand((SqlBasicCall) selectOperand, widerType, scope);
+            }
             // keep old validated type for argument that was not coerced
             updateValidatedType(newValidatedTypeList, selectNode, iActual);
           }
@@ -421,7 +437,7 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
     RelDataType newType = validator.getValidatedNodeType(operand);
     if (operand instanceof SqlCall) {
       SqlCall asCall = (SqlCall) operand;
-      if (asCall.getOperator().kind == SqlKind.AS) {
+      if (asCall.getOperator().getKind() == SqlKind.AS) {
         newType = validator.getValidatedNodeType(asCall.operand(0));
       }
     }
@@ -466,5 +482,54 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
         return baseScore /** multiplier*/;
       }
     }
+  }
+
+  /**
+   * Coerces operands of a binary operator to the given @targetType.
+   */
+  private void coerceBinOpOperand(
+          SqlBasicCall binOp, RelDataType targetType, SqlValidatorScope scope) {
+    if (binOp.getKind() == SqlKind.AS) {
+      binOp = binOp.operand(0);
+    }
+    coerceOperandType(scope, binOp, 0, targetType);
+    coerceOperandType(scope, binOp, 1, targetType);
+  }
+
+  /**
+   * Determines if a binary operator's operands need to be coerced explicitly. Calcite
+   * considers the output of some binary operators involving literals as a wider type. As
+   * a consequence, some operations such as FLOAT + <float_literal> are type-inferenced to
+   * DOUBLE, and will typecheck against UDTFs that accept DOUBLE columns. However, these
+   * parameters are still sent to the backend as FLOATs. This method identifies these
+   * occurrences, so that they can be casted explicitly.
+   */
+  private boolean shouldCoerceBinOpOperand(
+          SqlNode op, RelDataType targetType, SqlValidatorScope scope) {
+    if (op instanceof SqlBasicCall) {
+      SqlBasicCall asCall = (SqlBasicCall) op;
+      if (asCall.getOperator().getKind() == SqlKind.AS) {
+        SqlNode op2 = asCall.operand(0);
+        if (op2 instanceof SqlBasicCall) {
+          asCall = (SqlBasicCall) op2;
+        } else {
+          return false;
+        }
+      }
+      if (asCall.getOperator() instanceof SqlBinaryOperator) {
+        SqlNode lhs = asCall.operand(0);
+        SqlNode rhs = asCall.operand(1);
+        RelDataType lhsType = validator.deriveType(scope, lhs);
+        RelDataType rhsType = validator.deriveType(scope, rhs);
+        // if neither operand is already the wider type, and at least one is a literal,
+        // depending on precedence the result might falsely typecheck as the wider type
+        if (lhsType != targetType && rhsType != targetType
+                && (lhs.getKind() == SqlKind.LITERAL
+                        || rhs.getKind() == SqlKind.LITERAL)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 }

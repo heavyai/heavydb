@@ -1406,6 +1406,7 @@ ct_to_polygon__cpu_(TableFunctionManager& mgr,
 /*
   UDTF: row_copier(Column<double>, RowMultiplier) -> Column<double>
   UDTF: row_copier_text(Column<TextEncodingDict>, RowMultiplier) -> Column<TextEncodingDict> | input_id=args<0>
+  UDTF: row_copier_columnlist__cpu__(TableFunctionManager, ColumnList<double> cols) -> Column<double>
   UDTF: row_copier2__cpu__(Column<double>, int) -> Column<double>, Column<double>
 */
 // clang-format on
@@ -1419,6 +1420,11 @@ EXTENSION_NOINLINE_HOST int32_t row_copier2__cpu__(const Column<double>& input_c
                                                    int copy_multiplier,
                                                    Column<double>& output_col,
                                                    Column<double>& output_col2);
+
+EXTENSION_NOINLINE_HOST int32_t
+row_copier_columnlist__cpu__(TableFunctionManager& mgr,
+                             const ColumnList<double>& cols,
+                             Column<double>& output_col);
 
 #endif  // #ifndef __CUDACC__
 

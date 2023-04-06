@@ -642,6 +642,24 @@ EXTENSION_NOINLINE_HOST int32_t row_copier2__cpu__(const Column<double>& input_c
   return result;
 }
 
+EXTENSION_NOINLINE_HOST int32_t
+row_copier_columnlist__cpu__(TableFunctionManager& mgr,
+                             const ColumnList<double>& cols,
+                             Column<double>& output_col) {
+  int32_t output_row_count = 0;
+  for (int i = 0; i < cols.numCols(); ++i) {
+    output_row_count += cols[i].size();
+  }
+  mgr.set_output_row_size(output_row_count);
+  int idx = 0;
+  for (int i = 0; i < cols.numCols(); ++i) {
+    for (int j = 0; j < cols[i].size(); ++j) {
+      output_col[idx++] = cols[i][j];
+    }
+  }
+  return output_row_count;
+}
+
 #endif  // #ifndef __CUDACC__
 
 EXTENSION_NOINLINE int32_t row_copier_text(const Column<TextEncodingDict>& input_col,
