@@ -3473,6 +3473,41 @@ TEST_F(TableFunctions, CalciteAutoCasting) {
           dt);
       ASSERT_EQ(result_qe724->rowCount(), size_t(2));
     }
+
+    // tests for QE-788
+    // Calcite will consider result of some binary ops involving literals (such as FLOAT +
+    // literal) as a wider type (such as DOUBLE), even though they are still passed to the
+    // backend as FLOAT. The casting algorithm should cast operands of such ops to the
+    // wider type explicitly, so that they typecheck.
+    {
+      const auto result_qe788_column = run_multiple_agg(
+          "SELECT out0 from table(row_copier(CURSOR(select f + 1.0 from tf_test)));", dt);
+      const auto result_qe788_column_perm = run_multiple_agg(
+          "SELECT out0 from table(row_copier(CURSOR(select 1.0 + f from tf_test)));", dt);
+      const auto expected_result_qe788_column = run_multiple_agg(
+          "SELECT out0 from table(row_copier(CURSOR(select f + CAST(1.0 as DOUBLE) from "
+          "tf_test)));",
+          dt);
+      assert_equal<double>(result_qe788_column, expected_result_qe788_column);
+      assert_equal<double>(result_qe788_column_perm, expected_result_qe788_column);
+    }
+    {
+      const auto result_qe788_columnlist = run_multiple_agg(
+          "SELECT out0 from table(row_copier_columnlist(CURSOR(select f + 1.0, f + 2.0 "
+          "from tf_test)));",
+          dt);
+      const auto result_qe788_columnlist_perm = run_multiple_agg(
+          "SELECT out0 from table(row_copier_columnlist(CURSOR(select 1.0 + f, 2.0 + f "
+          "from tf_test)));",
+          dt);
+      const auto expected_result_qe788_columnlist = run_multiple_agg(
+          "SELECT out0 from table(row_copier_columnlist(cols => CURSOR(select f + "
+          "CAST(1.0 as DOUBLE), f + CAST(2.0 as DOUBLE) from tf_test)));",
+          dt);
+      assert_equal<double>(result_qe788_columnlist, expected_result_qe788_columnlist);
+      assert_equal<double>(result_qe788_columnlist_perm,
+                           expected_result_qe788_columnlist);
+    }
   }
 }
 
