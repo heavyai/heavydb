@@ -13540,6 +13540,71 @@ TEST_F(Select, Joins_LeftJoin_Projection) {
   }
 }
 
+void perform_left_join_array_projection_test(std::string const& tbl_def) {
+  run_ddl_statement("DROP TABLE IF EXISTS ljap1;");
+  run_ddl_statement("DROP TABLE IF EXISTS ljap2;");
+  run_ddl_statement("CREATE TABLE ljap1" + tbl_def);
+  run_ddl_statement("CREATE TABLE ljap2" + tbl_def);
+  std::vector<std::string> rows{
+      "INSERT INTO ljap1 VALUES (1, null, null, null, null, null, null, null, null, "
+      "null, null, null, null);",
+      "INSERT INTO ljap1 VALUES (2, {'a'}, {'2014-12-13 22:23:15'}, {'1999-09-09'}, "
+      "{'15:13:14'}, {'1.23'}, {'1.23456'}, {'2'}, {'2'}, {'2'}, {'2'}, {'TRUE'}, "
+      "{'1.234567'});",
+      "INSERT INTO ljap1 VALUES (3, {'B'}, {'2014-12-14 22:23:15'}, {'1999-09-10'}, "
+      "{'15:13:15'}, {'1.233'}, {'1.23356'}, {'3'}, {'3'}, {'3'}, {'3'}, {'FALSE'}, "
+      "{'1.334567'});",
+      "INSERT INTO ljap2 VALUES (1, null, null, null, null, null, null, null, null, "
+      "null, null, null, null);",
+      "INSERT INTO ljap2 VALUES (2, {'a'}, {'2014-12-13 22:23:15'}, {'1999-09-09'}, "
+      "{'15:13:14'}, {'1.23'}, {'1.23456'}, {'2'}, {'2'}, {'2'}, {'2'}, {'TRUE'}, "
+      "{'1.234567'});",
+  };
+  for (auto const& row : rows) {
+    run_multiple_agg(row, ExecutorDeviceType::CPU);
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_ALL_ON_AGGREGATOR();
+    for (std::string col : {"str_arr",
+                            "ts_arr",
+                            "dt_arr",
+                            "ti_arr",
+                            "f_arr",
+                            "d_arr",
+                            "int_arr",
+                            "tiny_arr",
+                            "small_arr",
+                            "big_arr",
+                            "b_arr",
+                            "dc_arr"}) {
+      std::string query{"SELECT COUNT_IF(l IS NULL) FROM (SELECT S." + col +
+                        " AS l FROM ljap1 R LEFT JOIN ljap2 S ON R.v = S.v);"};
+      ASSERT_EQ(2, v<int64_t>(run_simple_agg(query, dt))) << query;
+    }
+  }
+  run_ddl_statement("DROP TABLE IF EXISTS ljap1;");
+  run_ddl_statement("DROP TABLE IF EXISTS ljap2;");
+}
+
+TEST_F(Select, Joins_LeftJoin_VarlenArrayProjection) {
+  std::string tbl_def{
+      "(v INT, str_arr TEXT[] ENCODING DICT(32),ts_arr TIMESTAMP(0)[],"
+      "dt_arr DATE[], ti_arr TIME[], f_arr FLOAT[], d_arr DOUBLE[],"
+      "int_arr INTEGER[], tiny_arr TINYINT[], small_arr SMALLINT[],"
+      "big_arr BIGINT[], b_arr BOOLEAN[], dc_arr DECIMAL(8,2)[]);"};
+  perform_left_join_array_projection_test(tbl_def);
+}
+
+TEST_F(Select, Joins_LeftJoin_FixedLenArrayProjection) {
+  std::string tbl_def{
+      "(v INT, str_arr TEXT[1] ENCODING DICT(32),ts_arr TIMESTAMP(0)[1],"
+      "dt_arr DATE[1], ti_arr TIME[1], f_arr FLOAT[1], d_arr DOUBLE[1],"
+      "int_arr INTEGER[1], tiny_arr TINYINT[1], small_arr SMALLINT[1],"
+      "big_arr BIGINT[1], b_arr BOOLEAN[1], dc_arr DECIMAL(8,2)[1]);"};
+  perform_left_join_array_projection_test(tbl_def);
+}
+
 TEST_F(Select, Joins_LeftJoin_MultiQuals) {
   // a test to check whether we can evaluate left join having multiple-quals
   // with our hash join framework, instead of using loop join
