@@ -521,11 +521,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
   const auto& null_ti = col_var->get_type_info();
-  // todo (yoonmin) : allow projection for array and geometry
-  if (null_ti.is_array()) {
-    throw std::runtime_error("Projection type " + null_ti.get_type_name() +
-                             " not supported for outer joins yet");
-  }
   // since this represents a null constant, what value the datum object contains is
   // meaningless we need to know what type we need to create a null constant and `null_ti`
   // contains it
