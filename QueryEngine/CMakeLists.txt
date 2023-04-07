@@ -69,6 +69,7 @@ set(query_engine_source_files
   GeoOps.cpp
   GeoOperators/Codegen.cpp
   GroupByAndAggregate.cpp
+  heavydbColumnOps.cpp
   InValuesBitmap.cpp
   InputMetadata.cpp
   JoinFilterPushDown.cpp
