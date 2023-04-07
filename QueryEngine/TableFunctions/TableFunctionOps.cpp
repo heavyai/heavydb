@@ -50,7 +50,7 @@ extern "C" DEVICE RUNTIME_EXPORT void set_output_row_size(int64_t num_rows) {
 }
 
 /*
-  set_output_item_values_total_number sets the total number of itrem
+  set_output_item_values_total_number sets the total number of items
   values in the index-th output Column of non-scalars.
 
   set_output_item_values_total_number must be called before

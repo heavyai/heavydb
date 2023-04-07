@@ -535,6 +535,8 @@ NO_OPT_ATTRIBUTE bool functions_exist() {
 
 extern bool g_enable_table_functions;
 
+extern bool functions_exist_geo_column();
+
 namespace table_functions {
 
 std::once_flag init_flag;
@@ -550,7 +552,7 @@ void TableFunctionsFactory::init() {
     return;
   }
 
-  if (!functions_exist()) {
+  if (!functions_exist() && !functions_exist_geo_column()) {
     UNREACHABLE();
     return;
   }
