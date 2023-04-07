@@ -23210,11 +23210,7 @@ TEST_F(Select, WindowFunctionLag) {
   }
 }
 
-#ifdef HAVE_TSAN
-TEST_F(Select, DISABLED_WindowFunctionMultiOrderBy) {
-#else
 TEST_F(Select, WindowFunctionMultiOrderBy) {
-#endif
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   for (std::string table_name :
        {"test_window_func_large", "test_window_func_large_multi_frag"}) {
