@@ -59,6 +59,8 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
           "NULL type literals are not currently supported in this context.");
     }
     if (constant->get_is_null()) {
+      const auto i8p_ty =
+          llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
       if (ti.is_string() && ti.get_compression() == kENCODING_NONE) {
         std::vector<llvm::Value*> null_target_lvs;
         llvm::StructType* str_view_ty = createStringViewStructType();
@@ -72,8 +74,6 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
         null_target_lvs.push_back(cgen_state_->llInt((int32_t)0));
         return null_target_lvs;
       } else if (ti.is_geometry()) {
-        const auto i8p_ty =
-            llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
         std::vector<llvm::Value*> ret_lvs;
         // we classify whether the geo col value is null from the rhs of the left-join
         // qual i.e., table S in the qual: R left join S on R.v = S.v by checking 1)
@@ -104,6 +104,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
             CHECK(false);
             return {nullptr};
         }
+      } else if (ti.is_array()) {
+        // similar to above nulled geo case, we can use this `nullptr` to guide
+        // `array_buff` and `array_size` functions representing nulled array value
+        return {llvm::ConstantPointerNull::get(i8p_ty)};
       }
       return {ti.is_fp()
                   ? static_cast<llvm::Value*>(executor_->cgen_state_->inlineFpNull(ti))
