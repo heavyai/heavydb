@@ -456,25 +456,39 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
   if (row_count > size_t(1)) {
     throw std::runtime_error("Scalar sub-query returned multiple rows");
   }
+  auto ti = rex_subquery->getType();
+  if (g_cluster && ti.is_string()) {
+    throw std::runtime_error(
+        "Scalar sub-queries which return strings not supported in distributed mode");
+  }
   if (row_count == size_t(0)) {
     if (row_set->isValidationOnlyRes()) {
       Datum d{0};
-      return makeExpr<Analyzer::Constant>(rex_subquery->getType(), false, d);
+      if (ti.is_string()) {
+        // keep the valid ptr to avoid crash during the query validation
+        // this ptr will be removed when destructing corresponding constant variable
+        d.stringval = new std::string();
+      }
+      if (ti.is_dict_encoded_string()) {
+        // we set a valid ptr for string literal in above which is not dictionary-encoded
+        ti.set_compression(EncodingType::kENCODING_NONE);
+      }
+      return makeExpr<Analyzer::Constant>(ti, false, d);
     }
     throw std::runtime_error("Scalar sub-query returned no results");
   }
   CHECK_EQ(row_count, size_t(1));
   row_set->moveToBegin();
-  auto first_row = row_set->getNextRow(false, false);
+  auto const first_row = row_set->getNextRow(ti.is_dict_encoded_string(), false);
   CHECK_EQ(first_row.size(), size_t(1));
-  auto scalar_tv = boost::get<ScalarTargetValue>(&first_row[0]);
-  auto ti = rex_subquery->getType();
-  if (ti.is_string()) {
-    throw std::runtime_error("Scalar sub-queries which return strings not supported");
-  }
   Datum d{0};
   bool is_null_const{false};
+  auto scalar_tv = boost::get<ScalarTargetValue>(&first_row[0]);
   std::tie(d, is_null_const) = datum_from_scalar_tv(scalar_tv, ti);
+  if (ti.is_dict_encoded_string()) {
+    // we already translate the string, so let's make its type as a string literal
+    ti.set_compression(EncodingType::kENCODING_NONE);
+  }
   return makeExpr<Analyzer::Constant>(ti, is_null_const, d);
 }
 

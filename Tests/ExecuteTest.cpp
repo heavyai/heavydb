@@ -11663,6 +11663,31 @@ TEST_F(Select, ScalarSubquery) {
   }
 }
 
+TEST_F(Select, ScalarSubqueryWithString) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto validate_query = [](std::string const& query, ExecutorDeviceType const& dt) {
+    auto eo = ExecutionOptions::defaults();
+    eo.just_validate = true;
+    auto co = CompilationOptions::defaults();
+    co.device_type = dt;
+    QR::get()->runSelectQuery(query, co, eo);
+  };
+  std::vector<std::string> queries{
+      "SELECT 1 FROM test WHERE fixed_str = (SELECT 'foo') LIMIT 1",
+      "SELECT fixed_str FROM test WHERE fixed_str != (SELECT 'foo') ORDER BY fixed_str "
+      "DESC NULLS LAST LIMIT 1",
+      "SELECT real_str FROM test WHERE real_str = (SELECT 'real_baz')",
+      "SELECT COUNT(*) FROM test WHERE str < (SELECT str FROM test ORDER BY str DESC "
+      "LIMIT 1)"};
+  for (auto const dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (auto const& query : queries) {
+      validate_query(query, dt);
+      EXPECT_NO_THROW(c(query, dt));
+    }
+  }
+}
+
 TEST_F(Select, DecimalCompression) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -12096,10 +12121,6 @@ TEST_F(Select, Subqueries) {
 
     EXPECT_THROW(run_simple_agg("SELECT AVG(SELECT x FROM test LIMIT 5) FROM test;", dt),
                  std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg(
-            "SELECT COUNT(*) FROM test WHERE str < (SELECT str FROM test LIMIT 1);", dt),
-        std::runtime_error);
     EXPECT_THROW(
         run_multiple_agg(
             "SELECT COUNT(*) FROM test WHERE str IN (SELECT x FROM test GROUP BY x);",

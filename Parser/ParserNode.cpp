@@ -310,8 +310,12 @@ std::shared_ptr<Analyzer::Expr> OperExpr::analyze(
   return normalize(optype_, opqualifier_, left_expr, right_expr);
 }
 
-bool exprs_share_one_and_same_rte_idx(const std::shared_ptr<Analyzer::Expr>& lhs_expr,
-                                      const std::shared_ptr<Analyzer::Expr>& rhs_expr) {
+bool should_translate_strings(const std::shared_ptr<Analyzer::Expr>& lhs_expr,
+                              const std::shared_ptr<Analyzer::Expr>& rhs_expr) {
+  if (dynamic_cast<Analyzer::Constant*>(rhs_expr.get())) {
+    // we must translate rhs string literal against lhs str dictionary
+    return true;
+  }
   std::set<int> lhs_rte_idx;
   lhs_expr->collect_rte_idx(lhs_rte_idx);
   CHECK(!lhs_rte_idx.empty());
@@ -429,9 +433,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
           // the normal runtime execution framework), so if we detect
           // that the rte idxs of the two tables are different, bail
           // on translating
-          const bool should_translate_strings =
-              exprs_share_one_and_same_rte_idx(left_expr, right_expr);
-          if (should_translate_strings && (optype == kEQ || optype == kNE)) {
+          if (should_translate_strings(left_expr, right_expr)) {
             CHECK(executor);
             // Make the type we're casting to the transient dictionary, if it exists,
             // otherwise the largest dictionary in terms of number of entries
