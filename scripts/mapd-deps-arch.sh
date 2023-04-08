@@ -70,9 +70,14 @@ yay -Suy \
     zlib
 
 # Install Arrow
-pushd arch/arrow
-makepkg -cis
-popd
+( cd arch/arrow
+  makepkg -cis
+)
+
+# Install oneDAL
+( cd arch/onedal
+  makepkg -cis
+)
 
 # Install Bison++ from source
 wget --continue https://dependencies.mapd.com/thirdparty/bisonpp-1.21-45.tar.gz
