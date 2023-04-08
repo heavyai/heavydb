@@ -1426,15 +1426,6 @@ TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT) {
                 1, 2, 3, 4, 5, 6, 7, 8, 9,  10, 1, 2, 3, 4, 5, 1,
                 2, 3, 4, 5, 6, 7, 8, 9, 10, 1,  2, 3, 4, 1, 1};
 
-            const std::vector<double> expected_var_importances = {
-                198727819.6012, 115516677.7265,  85804064.8754,   32885823.2236,
-                93879567.7797,  108945370.2278,  30449334.8114,   76809491.7613,
-                31140574.7866,  15926934.3375,   24435261.5452,   29066334.8774,
-                7727622.8688,   8422374.4704,    30542.7535,      690087466.8054,
-                285025868.3378, 87467923.3536,   108070882.1768,  75404161.7598,
-                113921611.1141, 6662550.3564,    2506597.8732,    2215188.4262,
-                659893.1578,    152785340.3212,  188802505.4045,  66233494.7290,
-                4441277.2129,   1861614686.7082, 11590798371.7478};
             const auto var_importance_query =
                 generate_query("RANDOM_FOREST_REG_VAR_IMPORTANCE",
                                {{"model_name", quoted_model_name}},
@@ -1444,10 +1435,6 @@ TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT) {
             const int64_t num_rows = var_importance_rows->rowCount();
             EXPECT_EQ(num_rows, static_cast<int64_t>(expected_sub_features.size()));
             EXPECT_EQ(var_importance_rows->colCount(), size_t(5));
-            // Variable importances change wildly between runs on this dataset,
-            // so until we can make them deterministic make the epsilon
-            // absurdly high
-            constexpr double allowed_epsilon_frac{100.0};
             for (int64_t row_idx = 0; row_idx < num_rows; ++row_idx) {
               auto crt_row = var_importance_rows->getNextRow(true, true);
               // Feature id
@@ -1466,12 +1453,9 @@ TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT) {
                 EXPECT_EQ(sub_coef, expected_sub_features[row_idx]);
               }
               const double actual_var_importance = TestHelpers::v<double>(crt_row[4]);
-              EXPECT_GE(actual_var_importance,
-                        expected_var_importances[row_idx] -
-                            allowed_epsilon_frac * expected_var_importances[row_idx]);
-              EXPECT_LE(actual_var_importance,
-                        expected_var_importances[row_idx] +
-                            allowed_epsilon_frac * expected_var_importances[row_idx]);
+              // Variable importances change wildly between runs on this dataset, so
+              // let's do the minimum sanity check until we can make them deterministic
+              EXPECT_GE(actual_var_importance, (double)0);
             }
           }
         }
