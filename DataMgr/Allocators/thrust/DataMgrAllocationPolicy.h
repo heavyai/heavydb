@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cuda_runtime.h>
 #include <thrust/execution_policy.h>
 
 #include "DataMgr/Allocators/ThrustAllocator.h"
