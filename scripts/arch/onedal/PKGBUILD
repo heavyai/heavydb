@@ -1,0 +1,52 @@
+pkgname='onedal'
+pkgver=2023.0.1
+pkgrel=1
+pkgdesc="oneAPI Data Analytics Library (oneDAL)"
+arch=('x86_64')
+url="https://www.intel.com/content/www/us/en/developer/tools/oneapi/onedal.html"
+license=('Apache')
+depends=('java-runtime-common' 'tbb')
+checkdepends=('git')
+optdepends=()
+makedepends=('cmake')
+options=('staticlibs')
+source=("https://github.com/oneapi-src/oneDAL/archive/refs/tags/$pkgver.tar.gz")
+sha256sums=('251e206d4568a09784838b73979b4e326f32091e36108bfe55b048359204b698')
+
+prepare() {
+  cd "$srcdir/oneDAL-$pkgver"
+  ./dev/download_micromkl.sh
+
+  # Remove #include of some headers marked as DAAL_DEPRECATED
+  sed -i '/^#include ".*\/bzip2compression\.h"$/d' cpp/daal/include/daal.h
+  sed -i '/^#include ".*\/zlibcompression\.h"$/d' cpp/daal/include/daal.h
+}
+
+build() {
+  cd "$srcdir/oneDAL-$pkgver"
+
+  JAVA_HOME=/usr/lib/jvm/default \
+  CPATH=$JAVA_HOME/include:$JAVA_HOME/include/linux \
+  LIBRARY_PATH=/usr/lib \
+  LD_LIBRARY_PATH=/usr/lib \
+  TBBROOT=/usr \
+    make -f makefile _daal PLAT=lnx32e REQCPU="avx2" COMPILER=gnu -j
+}
+
+package() {
+  cd "$srcdir/oneDAL-$pkgver"
+
+  find __work_gnu/md/lnx32e/daal/lib -name '*.d' -delete
+
+  mkdir $pkgdir/usr
+  mv __release_lnx_gnu/daal/latest/include \
+     __work_gnu/md/lnx32e/daal/lib \
+     $pkgdir/usr/
+
+  # Install cmake files
+  CMAKE_DIR=$pkgdir/usr/lib/cmake/oneDAL
+  mkdir -p $CMAKE_DIR
+  cmake -D INSTALL_DIR=$CMAKE_DIR -P cmake/scripts/generate_config.cmake
+}
+
+# vim:ts=2:sw=2:et:
