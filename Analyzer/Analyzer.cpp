@@ -751,6 +751,17 @@ std::shared_ptr<Analyzer::Expr> Expr::decompress() {
   return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
 }
 
+namespace {
+SQLTypeInfo make_transient_dict_type(SQLTypeInfo sql_type_info_copy) {
+  sql_type_info_copy.set_type(kTEXT);
+  sql_type_info_copy.set_compression(kENCODING_DICT);
+  sql_type_info_copy.set_comp_param(TRANSIENT_DICT_ID);
+  sql_type_info_copy.setStringDictKey(shared::StringDictKey::kTransientDictKey);
+  sql_type_info_copy.set_fixed_size();
+  return sql_type_info_copy;
+}
+}  // namespace
+
 std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info) {
   if (new_type_info == type_info) {
     return shared_from_this();
@@ -787,13 +798,8 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
   }
   if (!type_info.is_string() && new_type_info.is_string() &&
       !new_type_info.is_text_encoding_dict()) {
-    SQLTypeInfo casted_new_type_info = new_type_info;
-    casted_new_type_info.set_type(kTEXT);
-    casted_new_type_info.set_compression(kENCODING_DICT);
-    casted_new_type_info.set_comp_param(TRANSIENT_DICT_ID);
-    casted_new_type_info.setStringDictKey(shared::StringDictKey::kTransientDictKey);
-    casted_new_type_info.set_fixed_size();
-    return makeExpr<UOper>(casted_new_type_info, contains_agg, kCAST, shared_from_this());
+    return makeExpr<UOper>(
+        make_transient_dict_type(new_type_info), contains_agg, kCAST, shared_from_this());
   }
   return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
 }
@@ -4100,6 +4106,7 @@ Analyzer::Expr* GeoOperator::getOperand(const size_t index) const {
 }
 
 std::shared_ptr<Analyzer::Expr> GeoOperator::add_cast(const SQLTypeInfo& new_type_info) {
+  constexpr bool geo_contains_agg = false;
   if (get_type_info().is_geometry()) {
     std::vector<std::shared_ptr<Analyzer::Expr>> args;
     for (size_t i = 0; i < args_.size(); i++) {
@@ -4107,9 +4114,12 @@ std::shared_ptr<Analyzer::Expr> GeoOperator::add_cast(const SQLTypeInfo& new_typ
     }
     CHECK(new_type_info.is_geometry());
     return makeExpr<GeoOperator>(new_type_info, name_, args, output_srid_override_);
+  } else if (!get_type_info().is_string() && new_type_info.is_string() &&
+             !new_type_info.is_text_encoding_dict()) {
+    auto const trans_dict_type = make_transient_dict_type(new_type_info);
+    return makeExpr<UOper>(trans_dict_type, geo_contains_agg, kCAST, deep_copy());
   } else {
-    auto new_expr = deep_copy();
-    return makeExpr<UOper>(new_type_info, /*contains_agg=*/false, kCAST, new_expr);
+    return makeExpr<UOper>(new_type_info, geo_contains_agg, kCAST, deep_copy());
   }
 }
 
