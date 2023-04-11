@@ -3443,6 +3443,19 @@ TEST(GeoSpatial, ProjectGeoColAfterLeftJoin) {
   }
 }
 
+TEST_P(GeoSpatialTestTablesFixture, Cast) {
+  if (g_aggregator) {
+    GTEST_SKIP() << "TDBException(error_msg=Cast to dictionary-encoded string type "
+                    "not supported for distributed queries)";
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    char const* query =
+        "SELECT CAST(ST_X(p) AS TEXT)='5.000000' FROM geospatial_test WHERE ST_X(p)=5;";
+    ASSERT_EQ(int64_t(1), v<int64_t>(run_simple_agg(query, dt)));
+  }
+}
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 
