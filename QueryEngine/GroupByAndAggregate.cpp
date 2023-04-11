@@ -220,6 +220,8 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   // uses significantly more memory.
   const int64_t baseline_threshold =
       Executor::getBaselineThreshold(has_count_distinct(ra_exe_unit_), device_type_);
+  // `group_cardinality_estimation_` is set as the result of (NDV) cardinality estimator
+  auto group_cardinality_estimation = group_cardinality_estimation_.value_or(0);
   if (ra_exe_unit_.groupby_exprs.size() != 1) {
     try {
       checked_int64_t cardinality{1};
@@ -229,7 +231,11 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
             ra_exe_unit_, query_infos_, groupby_expr.get(), executor_);
         if (col_range_info.hash_type_ != QueryDescriptionType::GroupByPerfectHash) {
           // going through baseline hash if a non-integer type is encountered
-          return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
+          return {QueryDescriptionType::GroupByBaselineHash,
+                  0,
+                  group_cardinality_estimation,
+                  0,
+                  false};
         }
         auto crt_col_cardinality = getBucketedCardinality(col_range_info);
         CHECK_GE(crt_col_cardinality, 0);
@@ -240,15 +246,25 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
       }
       // For zero or high cardinalities, use baseline layout.
       if (!cardinality || cardinality > baseline_threshold) {
-        return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
+        return {QueryDescriptionType::GroupByBaselineHash,
+                0,
+                group_cardinality_estimation,
+                0,
+                false};
       }
+      // todo (yoonmin) : should we consider min(group_cardinality_estimation,
+      // cardinality) if we have `group_cardinality_estimation` value?
       return {QueryDescriptionType::GroupByPerfectHash,
               0,
               int64_t(cardinality),
               0,
               has_nulls};
     } catch (...) {  // overflow when computing cardinality
-      return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
+      return {QueryDescriptionType::GroupByBaselineHash,
+              0,
+              group_cardinality_estimation,
+              0,
+              false};
     }
   }
   // For single column groupby on high timestamps, force baseline hash due to wide ranges
@@ -258,7 +274,11 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   if (ra_exe_unit_.groupby_exprs.front() &&
       ra_exe_unit_.groupby_exprs.front()->get_type_info().is_high_precision_timestamp() &&
       ra_exe_unit_.simple_quals.size() > 0) {
-    return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
+    return {QueryDescriptionType::GroupByBaselineHash,
+            0,
+            group_cardinality_estimation,
+            0,
+            false};
   }
   const auto col_range_info = get_expr_range_info(
       ra_exe_unit_, query_infos_, ra_exe_unit_.groupby_exprs.front().get(), executor_);
@@ -292,8 +312,7 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
       if (!ra_exe_unit_.sort_info.order_entries.empty()) {
         // TODO(adb): allow some sorts to pass through this block by centralizing sort
         // algorithm decision making
-        if (has_count_distinct(ra_exe_unit_) &&
-            is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count)) {
+        if (has_count_distinct(ra_exe_unit_)) {
           // always use baseline hash for column range too big for perfect hash with count
           // distinct descriptors. We will need 8GB of CPU memory minimum for the perfect
           // hash group by in this case.
