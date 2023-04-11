@@ -57,6 +57,13 @@ set(datamgr_source_files
     ForeignStorage/InternalLogsDataWrapper.cpp
 )
 
+if(NOT ENABLE_SYSTEM_TFS)
+  # ForeignStorage/InternalMLModelMetadataDataWrapper.cpp uses class MLModelMetadata
+  # but is only otherwise compiled in QueryEngine/CMakeLists.txt when ENABLE_SYSTEM_TFS.
+  list(APPEND datamgr_source_files
+       ${CMAKE_SOURCE_DIR}/QueryEngine/TableFunctions/SystemFunctions/os/ML/MLModelMetadata.cpp)
+endif()
+
 if(ENABLE_AWS_S3)
   list(APPEND datamgr_source_files ForeignStorage/S3FilePathUtil.cpp)
 endif()
