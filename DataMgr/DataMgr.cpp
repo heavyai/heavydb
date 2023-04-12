@@ -199,9 +199,9 @@ void DataMgr::allocateCpuBufferMgr(int32_t device_id,
 }
 
 // This function exists for testing purposes so that we can test a reset of the cache.
-void DataMgr::resetPersistentStorage(const File_Namespace::DiskCacheConfig& cache_config,
-                                     const size_t num_reader_threads,
-                                     const SystemParameters& sys_params) {
+void DataMgr::resetBufferMgrs(const File_Namespace::DiskCacheConfig& cache_config,
+                              const size_t num_reader_threads,
+                              const SystemParameters& sys_params) {
   int numLevels = bufferMgrs_.size();
   for (int level = numLevels - 1; level >= 0; --level) {
     for (size_t device = 0; device < bufferMgrs_[level].size(); device++) {

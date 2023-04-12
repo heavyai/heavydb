@@ -762,7 +762,7 @@ class CacheControllingSelectQueryBaseTest : public SelectQueryTest {
     for (auto table_it : getCatalog().getAllTableMetadata()) {
       getCatalog().removeFragmenterForTable(table_it->tableId);
     }
-    getCatalog().getDataMgr().resetPersistentStorage(
+    getCatalog().getDataMgr().resetBufferMgrs(
         {cache_path_, cache_level}, 0, getSystemParameters());
   }
 
@@ -814,7 +814,7 @@ class RecoverCacheQueryTest : public ForeignTableTest {
     for (auto table_it : cat_->getAllTableMetadata()) {
       cat_->removeFragmenterForTable(table_it->tableId);
     }
-    cat_->getDataMgr().resetPersistentStorage(cache_config, 0, getSystemParameters());
+    cat_->getDataMgr().resetBufferMgrs(cache_config, 0, getSystemParameters());
     psm_ = cat_->getDataMgr().getPersistentStorageMgr();
     cache_ = psm_->getDiskCache();
   }
@@ -3188,19 +3188,18 @@ class AlteredSourceTest : public RefreshTests,
     stored_cache_config_ =
         cat->getDataMgr().getPersistentStorageMgr()->getDiskCacheConfig();
     // turn on cache for setup as required
-    cat->getDataMgr().resetPersistentStorage(
+    cat->getDataMgr().resetBufferMgrs(
         {cache_path_, File_Namespace::DiskCacheLevel::fsi}, 0, getSystemParameters());
     RefreshTests::SetUp();
     // turn off cache for test
-    cat->getDataMgr().resetPersistentStorage(
+    cat->getDataMgr().resetBufferMgrs(
         {cache_path_, File_Namespace::DiskCacheLevel::none}, 0, getSystemParameters());
   }
 
   void TearDown() override {
     RefreshTests::TearDown();
     auto cat = &getCatalog();
-    cat->getDataMgr().resetPersistentStorage(
-        stored_cache_config_, 0, getSystemParameters());
+    cat->getDataMgr().resetBufferMgrs(stored_cache_config_, 0, getSystemParameters());
   }
 
  protected:

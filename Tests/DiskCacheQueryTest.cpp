@@ -96,7 +96,7 @@ class TableTest : public DBHandlerTestFixture {
     for (auto table_it : cat_->getAllTableMetadata()) {
       cat_->removeFragmenterForTable(table_it->tableId);
     }
-    cat_->getDataMgr().resetPersistentStorage(
+    cat_->getDataMgr().resetBufferMgrs(
         {psm_->getDiskCacheConfig().path, cache_level}, 0, getSystemParameters());
     psm_ = cat_->getDataMgr().getPersistentStorageMgr();
     cache_ = psm_->getDiskCache();
