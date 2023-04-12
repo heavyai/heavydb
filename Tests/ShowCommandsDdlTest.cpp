@@ -2062,7 +2062,7 @@ class ShowDiskCacheUsageForNormalTableTest : public ShowDiskCacheUsageTest {
     for (auto table_it : getCatalog().getAllTableMetadata()) {
       getCatalog().removeFragmenterForTable(table_it->tableId);
     }
-    getCatalog().getDataMgr().resetPersistentStorage(
+    getCatalog().getDataMgr().resetBufferMgrs(
         {cache_path_, cache_level}, 0, getSystemParameters());
   }
 };

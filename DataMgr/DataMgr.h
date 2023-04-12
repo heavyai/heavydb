@@ -255,9 +255,9 @@ class DataMgr {
   static size_t getTotalSystemMemory();
 
   PersistentStorageMgr* getPersistentStorageMgr() const;
-  void resetPersistentStorage(const File_Namespace::DiskCacheConfig& cache_config,
-                              const size_t num_reader_threads,
-                              const SystemParameters& sys_params);
+  void resetBufferMgrs(const File_Namespace::DiskCacheConfig& cache_config,
+                       const size_t num_reader_threads,
+                       const SystemParameters& sys_params);
 
   size_t getCpuBufferPoolSize() const;
   size_t getGpuBufferPoolSize() const;
