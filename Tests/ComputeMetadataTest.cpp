@@ -1457,6 +1457,29 @@ class OpportunisticVacuumingTest : public OptimizeTableVacuumTest {
     CHECK_EQ(static_cast<size_t>(td->nShards), shards.size());
     return shards[shard_index]->tableName;
   }
+
+  ChunkKey getChunkKey(const std::string& table_name,
+                       const std::string& column_name,
+                       int32_t fragment_id) {
+    const auto& catalog = getCatalog();
+    auto table_id = catalog.getTableId(table_name);
+    CHECK(table_id.has_value());
+    auto cd = catalog.getMetadataForColumn(table_id.value(), column_name);
+    CHECK(cd);
+    return {catalog.getDatabaseId(), table_id.value(), cd->columnId, fragment_id};
+  }
+
+  int32_t getGpuDeviceId(const std::string& table_name, int32_t fragment_id) {
+    auto td = getCatalog().getMetadataForTable(table_name, true);
+    CHECK(td);
+    CHECK(td->fragmenter);
+    auto table_info = td->fragmenter->getFragmentsForQuery();
+    CHECK_LT(size_t(fragment_id), table_info.fragments.size());
+    const auto& fragment = table_info.fragments[fragment_id];
+    auto device_level = static_cast<size_t>(MemoryLevel::GPU_LEVEL);
+    CHECK_LT(device_level, fragment.deviceIds.size());
+    return fragment.deviceIds[device_level];
+  }
 };
 
 TEST_F(OpportunisticVacuumingTest, DeletedFragment) {
@@ -1831,6 +1854,107 @@ TEST_F(OpportunisticVacuumingTest, VarLenColumnUpdateOfConsecutiveInnerFragments
                        {i(13), "abc13"}, {i(14), "abc14"}, {i(15), "abc15"},
                        {i(6), "test_val"}, {i(7), "test_val"}, {i(11), "test_val"}});
   // clang-format on
+}
+
+TEST_F(OpportunisticVacuumingTest, PulledInChunkDeleted) {
+  sql("create table test_table (i int, t text encoding none) with (fragment_size = 5);");
+  insertRange(1, 10, "abc");
+
+  std::set<ChunkKey> fragment_0_chunk_keys;
+  std::set<ChunkKey> fragment_1_chunk_keys;
+  std::optional<int32_t> i_column_id;
+  for (auto fragment_id : {0, 1}) {
+    std::set<ChunkKey>* chunk_keys;
+    if (fragment_id == 0) {
+      chunk_keys = &fragment_0_chunk_keys;
+    } else {
+      CHECK_EQ(fragment_id, 1);
+      chunk_keys = &fragment_1_chunk_keys;
+    }
+    auto i_chunk_key = getChunkKey("test_table", "i", fragment_id);
+    if (!i_column_id.has_value()) {
+      i_column_id = i_chunk_key[CHUNK_KEY_COLUMN_IDX];
+    }
+    chunk_keys->emplace(i_chunk_key);
+    auto t_chunk_key = getChunkKey("test_table", "t", fragment_id);
+    t_chunk_key.emplace_back(1);
+    chunk_keys->emplace(t_chunk_key);
+    t_chunk_key.back() = 2;
+    chunk_keys->emplace(t_chunk_key);
+  }
+
+  auto& data_mgr = getCatalog().getDataMgr();
+
+  // Query should load fragment 0 chunks into CPU memory.
+  sql("select * from test_table where i < 5;");
+  for (const auto& chunk_key : fragment_0_chunk_keys) {
+    EXPECT_TRUE(data_mgr.isBufferOnDevice(chunk_key, MemoryLevel::CPU_LEVEL, 0));
+  }
+
+  for (const auto& chunk_key : fragment_1_chunk_keys) {
+    EXPECT_FALSE(data_mgr.isBufferOnDevice(chunk_key, MemoryLevel::CPU_LEVEL, 0));
+  }
+
+  sql("delete from test_table where i <= 2 or i >= 9;");
+
+  // Only previously loaded chunks and chunks required for delete query execution should
+  // remain in CPU memory.
+  for (const auto& chunk_key : fragment_0_chunk_keys) {
+    EXPECT_TRUE(data_mgr.isBufferOnDevice(chunk_key, MemoryLevel::CPU_LEVEL, 0));
+  }
+
+  CHECK(i_column_id.has_value());
+  for (const auto& chunk_key : fragment_1_chunk_keys) {
+    // Chunk for the "i" column was previously loaded for the delete query.
+    if (i_column_id.value() == chunk_key[CHUNK_KEY_COLUMN_IDX]) {
+      EXPECT_TRUE(data_mgr.isBufferOnDevice(chunk_key, MemoryLevel::CPU_LEVEL, 0));
+    } else {
+      EXPECT_FALSE(data_mgr.isBufferOnDevice(chunk_key, MemoryLevel::CPU_LEVEL, 0));
+    }
+  }
+
+  sqlAndCompareResult("select * from test_table order by i;",
+                      {{i(3), "abc3"},
+                       {i(4), "abc4"},
+                       {i(5), "abc5"},
+                       {i(6), "abc6"},
+                       {i(7), "abc7"},
+                       {i(8), "abc8"}});
+}
+
+TEST_F(OpportunisticVacuumingTest, StaleChunkOnGpuDeleted) {
+  if (!setExecuteMode(TExecuteMode::GPU)) {
+    GTEST_SKIP() << "GPU is not enabled.";
+  }
+
+  sql("create table test_table (i int) with (fragment_size = 5);");
+  OptimizeTableVacuumTest::insertRange(1, 10);
+
+  auto chunk_key_1 = getChunkKey("test_table", "i", 0);
+  auto chunk_key_2 = getChunkKey("test_table", "i", 1);
+
+  auto device_id_1 = getGpuDeviceId("test_table", 0);
+  auto device_id_2 = getGpuDeviceId("test_table", 1);
+
+  auto& data_mgr = getCatalog().getDataMgr();
+
+  // Query should load chunk into GPU memory.
+  sql("select avg(i) from test_table where i < 5;");
+  EXPECT_TRUE(
+      data_mgr.isBufferOnDevice(chunk_key_1, MemoryLevel::GPU_LEVEL, device_id_1));
+  EXPECT_FALSE(
+      data_mgr.isBufferOnDevice(chunk_key_2, MemoryLevel::GPU_LEVEL, device_id_2));
+
+  sql("delete from test_table where i <= 2 or i >= 9;");
+
+  // Chunk should be deleted from GPU memory.
+  EXPECT_FALSE(
+      data_mgr.isBufferOnDevice(chunk_key_1, MemoryLevel::GPU_LEVEL, device_id_1));
+  EXPECT_FALSE(
+      data_mgr.isBufferOnDevice(chunk_key_2, MemoryLevel::GPU_LEVEL, device_id_2));
+
+  sqlAndCompareResult("select * from test_table order by i;",
+                      {{i(3)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}});
 }
 
 int main(int argc, char** argv) {
