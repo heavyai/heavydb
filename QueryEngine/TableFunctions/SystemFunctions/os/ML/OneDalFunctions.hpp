@@ -310,7 +310,7 @@ NEVER_INLINE HOST void onedal_decision_tree_reg_fit_impl(
     auto model_ptr = training_result->get(decision_tree::regression::training::model);
     auto model = std::make_shared<DecisionTreeRegressionModel>(
         model_ptr, model_metadata, cat_feature_keys);
-    ml_models_.addModel(model_name, model);
+    g_ml_models.addModel(model_name, model);
   } catch (std::exception& e) {
     throw std::runtime_error(e.what());
   }
@@ -358,7 +358,7 @@ NEVER_INLINE HOST void onedal_gbt_reg_fit_impl(
     auto model_ptr = training_result->get(gbt::regression::training::model);
     auto model =
         std::make_shared<GbtRegressionModel>(model_ptr, model_metadata, cat_feature_keys);
-    ml_models_.addModel(model_name, model);
+    g_ml_models.addModel(model_name, model);
   } catch (std::exception& e) {
     throw std::runtime_error(e.what());
   }
@@ -463,7 +463,7 @@ NEVER_INLINE HOST void onedal_random_forest_reg_fit_impl(
                                                                cat_feature_keys,
                                                                variable_importance,
                                                                out_of_bag_error);
-    ml_models_.addModel(model_name, model);
+    g_ml_models.addModel(model_name, model);
   } catch (std::exception& e) {
     throw std::runtime_error(e.what());
   }

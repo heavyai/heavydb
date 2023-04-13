@@ -78,7 +78,7 @@ void InternalMLModelMetadataDataWrapper::initializeObjectsForTable(
   CHECK_EQ(foreign_table_->tableName, table_name);
   CHECK_EQ(foreign_table_->tableName, Catalog_Namespace::ML_MODEL_METADATA_SYS_TABLE_NAME)
       << "Unexpected table name: " << foreign_table_->tableName;
-  ml_models_metadata_ = ml_models_.getModelMetadata();
+  ml_models_metadata_ = g_ml_models.getModelMetadata();
   row_count_ = ml_models_metadata_.size();
 }
 

@@ -80,8 +80,8 @@ linear_reg_coefs__cpu_1(TableFunctionManager& mgr,
                         Column<TextEncodingDict>& output_sub_feature,
                         Column<double>& output_coef) {
   try {
-    const auto linear_reg_model =
-        std::dynamic_pointer_cast<LinearRegressionModel>(ml_models_.getModel(model_name));
+    const auto linear_reg_model = std::dynamic_pointer_cast<LinearRegressionModel>(
+        g_ml_models.getModel(model_name));
     if (!linear_reg_model) {
       throw std::runtime_error("Model is not of type linear regression.");
     }
@@ -172,7 +172,7 @@ random_forest_reg_var_importance__cpu_1(TableFunctionManager& mgr,
 #endif
   try {
 #ifdef HAVE_ONEDAL
-    const auto base_model = ml_models_.getModel(model_name);
+    const auto base_model = g_ml_models.getModel(model_name);
     const auto rand_forest_model =
         std::dynamic_pointer_cast<RandomForestRegressionModel>(base_model);
     if (!rand_forest_model) {
@@ -273,7 +273,7 @@ int32_t get_decision_trees__cpu_1(TableFunctionManager& mgr,
                                   Column<double>& value) {
 #ifdef HAVE_ONEDAL
   try {
-    const auto model = ml_models_.getModel(model_name);
+    const auto model = g_ml_models.getModel(model_name);
     const auto tree_model = std::dynamic_pointer_cast<AbstractTreeModel>(model);
     if (!tree_model) {
       throw std::runtime_error("Model not a tree-type model.");

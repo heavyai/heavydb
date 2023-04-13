@@ -43,6 +43,8 @@ SqlDdl SqlCustomShow(Span s) :
         |
         LOOKAHEAD(3) show = SqlShowRuntimeTableFunctions(s)
         |
+        LOOKAHEAD(1) show = SqlShowModels(s)
+        |
         LOOKAHEAD(1) show = SqlShowDatabases(s)
         |
         LOOKAHEAD(1) show = SqlShowForeignServers(s)
@@ -162,6 +164,23 @@ SqlDdl SqlShowQueries(Span s) :
         return new SqlShowQueries(s.end(this));
     }
 }
+
+/*
+ * Show existing models using the following syntax:
+ *
+ * SHOW MODELS
+ */
+ 
+SqlDdl SqlShowModels(Span s) :
+{
+}
+{
+    <MODELS>
+    {
+        return new SqlShowModels(s.end(this));
+    }
+}
+
 
 SqlDdl SqlShowDiskCacheUsage(Span s) : {
     SqlIdentifier tableName = null;

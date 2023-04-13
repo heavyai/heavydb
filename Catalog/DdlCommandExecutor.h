@@ -269,6 +269,14 @@ class ShowRuntimeTableFunctionsCommand : public DdlCommand {
   ExecutionResult execute(bool read_only_mode) override;
 };
 
+class ShowModelsCommand : public DdlCommand {
+ public:
+  ShowModelsCommand(const DdlCommandData& ddl_data,
+                    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
 class ShowDiskCacheUsageCommand : public DdlCommand {
  public:
   ShowDiskCacheUsageCommand(
