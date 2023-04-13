@@ -508,9 +508,14 @@ void PerfectJoinHashTable::reify() {
   // register a mapping between cache key and its input table info for per-table cache
   // invalidation if we have valid cache key for "all" devices (otherwise, we skip to use
   // cached hash table for safety)
+  auto allow_hashtable_recycling =
+      HashtableRecycler::isSafeToCacheHashtable(table_id_to_node_map_,
+                                                needs_dict_translation_,
+                                                {inner_outer_string_op_infos_},
+                                                inner_col->getTableKey());
   const bool invalid_cache_key =
       HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_);
-  if (!invalid_cache_key) {
+  if (!invalid_cache_key && allow_hashtable_recycling) {
     if (!shard_count) {
       hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_.front(),
                                                      table_keys_);
@@ -520,6 +525,22 @@ void PerfectJoinHashTable::reify() {
                     [this](QueryPlanHash key) {
                       hash_table_cache_->addQueryPlanDagForTableKeys(key, table_keys_);
                     });
+    }
+    auto found_cached_one_to_many_layout = std::any_of(
+        hashtable_cache_key_.cbegin(),
+        hashtable_cache_key_.cend(),
+        [](QueryPlanHash cache_key) {
+          auto cached_hashtable_layout_type = hash_table_layout_cache_->getItemFromCache(
+              cache_key,
+              CacheItemType::HT_HASHING_SCHEME,
+              DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+              {});
+          return cached_hashtable_layout_type &&
+                 *cached_hashtable_layout_type == HashType::OneToMany;
+        });
+    if (found_cached_one_to_many_layout) {
+      // we need to sync hash_type for all devices
+      hash_type_ = HashType::OneToMany;
     }
   }
 
@@ -568,12 +589,6 @@ void PerfectJoinHashTable::reify() {
       }
     }
   }
-
-  auto allow_hashtable_recycling =
-      HashtableRecycler::isSafeToCacheHashtable(table_id_to_node_map_,
-                                                needs_dict_translation_,
-                                                {inner_outer_string_op_infos_},
-                                                inner_col->getTableKey());
   bool has_invalid_cached_hash_table = false;
   if (effective_memory_level == Data_Namespace::CPU_LEVEL &&
       HashJoin::canAccessHashTable(
@@ -650,7 +665,6 @@ void PerfectJoinHashTable::reify() {
   } catch (const NeedsOneToManyHash& e) {
     VLOG(1) << "RHS/Inner hash join values detected to not be unique, falling back to "
                "One-to-Many hash layout.";
-    CHECK(hash_type_ == HashType::OneToOne);
     hash_type_ = HashType::OneToMany;
     freeHashBufferMemory();
     init_threads.clear();
@@ -676,6 +690,19 @@ void PerfectJoinHashTable::reify() {
     }
     for (auto& init_thread : init_threads) {
       init_thread.get();
+    }
+  }
+  for (int device_id = 0; device_id < device_count_; ++device_id) {
+    auto const cache_key = hashtable_cache_key_[device_id];
+    auto const hash_table_ptr = hash_tables_for_device_[device_id];
+    if (hash_table_ptr) {
+      hash_table_layout_cache_->putItemToCache(cache_key,
+                                               hash_table_ptr->getLayout(),
+                                               CacheItemType::HT_HASHING_SCHEME,
+                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+                                               0,
+                                               0,
+                                               {});
     }
   }
 }
@@ -787,17 +814,6 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                                 needs_dict_translation_,
                                                 {inner_outer_string_op_infos_},
                                                 inner_col->getTableKey());
-  if (allow_hashtable_recycling) {
-    auto cached_hashtable_layout_type = hash_table_layout_cache_->getItemFromCache(
-        hashtable_cache_key_[device_id],
-        CacheItemType::HT_HASHING_SCHEME,
-        DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-        {});
-    if (cached_hashtable_layout_type) {
-      hash_type_ = *cached_hashtable_layout_type;
-      hashtable_layout = hash_type_;
-    }
-  }
   PerfectHashTableEntryInfo hash_table_entry_info(
       getNormalizedHashEntryCount(),
       join_column.num_elems,
@@ -853,14 +869,6 @@ int PerfectJoinHashTable::initHashTableForDevice(
       hash_table->setColumnNumElems(join_column.num_elems);
       if (allow_hashtable_recycling && hash_table &&
           hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU) > 0) {
-        // add ht-related items to cache iff we have a valid hashtable
-        hash_table_layout_cache_->putItemToCache(hashtable_cache_key_[device_id],
-                                                 hashtable_layout,
-                                                 CacheItemType::HT_HASHING_SCHEME,
-                                                 DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-                                                 0,
-                                                 0,
-                                                 {});
         putHashTableOnCpuToCache(hashtable_cache_key_[device_id],
                                  CacheItemType::PERFECT_HT,
                                  hash_table,
@@ -909,17 +917,6 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                executor_);
     CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
     hash_tables_for_device_[device_id] = builder.getHashTable();
-    if (!err && allow_hashtable_recycling && hash_tables_for_device_[device_id]) {
-      // add layout to cache iff we have a valid hashtable
-      hash_table_layout_cache_->putItemToCache(
-          hashtable_cache_key_[device_id],
-          hash_tables_for_device_[device_id]->getLayout(),
-          CacheItemType::HT_HASHING_SCHEME,
-          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-          0,
-          0,
-          {});
-    }
 #else
     UNREACHABLE();
 #endif
