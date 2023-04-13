@@ -309,6 +309,11 @@ std::unique_ptr<RexLiteral> genLiteralBigInt(int64_t val) {
       new RexLiteral(val, SQLTypes::kBIGINT, SQLTypes::kBIGINT, 0, 8, 0, 8));
 }
 
+std::unique_ptr<RexLiteral> genLiteralDouble(double val) {
+  return std::unique_ptr<RexLiteral>(
+      new RexLiteral(val, SQLTypes::kDOUBLE, SQLTypes::kDOUBLE, 0, 8, 0, 8));
+}
+
 std::unique_ptr<RexLiteral> genLiteralBoolean(bool val) {
   return std::unique_ptr<RexLiteral>(
       // new RexLiteral(val, SQLTypes::kBOOLEAN, SQLTypes::kBOOLEAN, 0, 0, 0, 0));
@@ -613,6 +618,8 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     auto drop_model_stmt = Parser::DropModelStmt(extractPayload(*ddl_data_));
     drop_model_stmt.execute(*session_ptr_, read_only_mode);
     return result;
+  } else if (ddl_command_ == "EVALUATE_MODEL") {
+    result = EvaluateModelCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "VALIDATE_SYSTEM") {
     // VALIDATE should have been excuted in outer context before it reaches here
     UNREACHABLE();
@@ -2047,6 +2054,60 @@ ExecutionResult ShowModelsCommand::execute(bool read_only_mode) {
   }
 
   // Create ResultSet
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
+}
+
+EvaluateModelCommand::EvaluateModelCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {}
+
+ExecutionResult EvaluateModelCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string model_name;
+  std::string select_query;
+  if (ddl_payload.HasMember("modelName")) {
+    model_name = ddl_payload["modelName"].GetString();
+  }
+  if (ddl_payload.HasMember("query")) {
+    select_query = ddl_payload["query"].GetString();
+  }
+  std::regex newline_re("\\n");
+  std::regex backtick_re("`");
+  select_query = std::regex_replace(select_query, newline_re, " ");
+  select_query = std::regex_replace(select_query, backtick_re, "");
+  std::ostringstream r2_query_oss;
+  r2_query_oss << "SELECT * FROM TABLE(r2_score(model_name => '" << model_name << "', "
+               << "data => CURSOR(" << select_query << ")))";
+  std::string r2_query = r2_query_oss.str();
+
+  Parser::LocalQueryConnector local_connector;
+  auto query_state = query_state::QueryState::create(session_ptr_, select_query);
+  auto result =
+      local_connector.query(query_state->createQueryStateProxy(), r2_query, {}, false);
+  std::vector<std::string> labels{"r2"};
+  std::vector<TargetMetaInfo> label_infos;
+  for (const auto& label : labels) {
+    label_infos.emplace_back(label, SQLTypeInfo(kDOUBLE, true));
+  }
+  std::vector<RelLogicalValues::RowValues> logical_values;
+  logical_values.emplace_back(RelLogicalValues::RowValues{});
+
+  CHECK_EQ(result.size(), size_t(1));
+  CHECK_EQ(result[0].rs->rowCount(), size_t(1));
+  CHECK_EQ(result[0].rs->colCount(), size_t(1));
+
+  auto result_row = result[0].rs->getNextRow(true, true);
+
+  auto scalar_r = boost::get<ScalarTargetValue>(&result_row[0]);
+  auto p = boost::get<double>(scalar_r);
+
+  logical_values.back().emplace_back(genLiteralDouble(*p));
+
   std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
       ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
 
