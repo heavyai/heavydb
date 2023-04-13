@@ -44,6 +44,7 @@
 using namespace std;
 
 extern bool g_read_only;
+extern bool g_multi_instance;
 
 namespace File_Namespace {
 
@@ -1647,13 +1648,23 @@ bool FileMgr::updatePageIfDeleted(FileInfo* file_info,
   auto table_epoch = epoch(db_id, tb_id);
 
   if (is_page_deleted_with_checkpoint(table_epoch, page_epoch, contingent)) {
-    file_info->freePageImmediate(page_num);
+    if (!g_read_only && !g_multi_instance) {
+      // Read-only mode can find pages like this if the server was previously run in
+      // write-mode but is not allowed to free them.
+      // TODO(sy): Confirm that proper locking is held before writing here.
+      file_info->freePageImmediate(page_num);
+    }
     return true;
   }
 
   // Recover page if it was deleted but not checkpointed.
   if (is_page_deleted_without_checkpoint(table_epoch, page_epoch, contingent)) {
-    file_info->recoverPage(chunk_key, page_num);
+    if (!g_read_only && !g_multi_instance) {
+      // Read-only mode can find pages like this if the server was previously run in
+      // write-mode but is not allowed to free them.
+      // TODO(sy): Confirm that proper locking is held before writing here.
+      file_info->recoverPage(chunk_key, page_num);
+    }
   }
   return false;
 }
