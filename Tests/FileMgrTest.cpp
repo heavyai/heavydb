@@ -2119,6 +2119,18 @@ TEST_P(ParamReadOnlyFileMgrUnitTest, copyPage) {
                 "map::at");
 }
 
+TEST_P(ParamReadOnlyFileMgrUnitTest, updatePageIfDeletedWithCheckpoint) {
+  auto file_info = createFileInfo();
+  ChunkKey key = default_key;
+  file_mgr_->updatePageIfDeleted(&file_info, key, fn::DELETE_CONTINGENT, 0, 0);
+}
+
+TEST_P(ParamReadOnlyFileMgrUnitTest, updatePageIfDeletedWithoutCheckpoint) {
+  auto file_info = createFileInfo();
+  ChunkKey key = default_key;
+  file_mgr_->updatePageIfDeleted(&file_info, key, fn::DELETE_CONTINGENT, -1, 0);
+}
+
 INSTANTIATE_TEST_SUITE_P(SharedReadOnlyFileMgrUnitTest,
                          ParamReadOnlyFileMgrUnitTest,
                          testing::Values(FileMgrType::FileMgr,
@@ -2191,22 +2203,6 @@ TEST_F(ReadOnlyFileMgrUnitTest, createOrMigrateTopLevelMetadata) {
 
 TEST_F(ReadOnlyFileMgrUnitTest, freePage) {
   file_mgr_->free_page(std::make_pair<fn::FileInfo*, int32_t>(nullptr, 0));
-}
-
-TEST_F(ReadOnlyFileMgrUnitTest, updatePageIfDeletedWithCheckpoint) {
-  auto file_info = createFileInfo();
-  ChunkKey key = default_key;
-  ASSERT_DEATH(
-      file_mgr_->updatePageIfDeleted(&file_info, key, fn::DELETE_CONTINGENT, 0, 0),
-      kReadOnlyWriteError);
-}
-
-TEST_F(ReadOnlyFileMgrUnitTest, updatePageIfDeletedWithoutCheckpoint) {
-  auto file_info = createFileInfo();
-  ChunkKey key = default_key;
-  ASSERT_DEATH(
-      file_mgr_->updatePageIfDeleted(&file_info, key, fn::DELETE_CONTINGENT, -1, 0),
-      kReadOnlyWriteError);
 }
 
 TEST_F(ReadOnlyFileMgrUnitTest, writePageMappingsToStatusFile) {
@@ -2315,18 +2311,6 @@ TEST_F(ReadOnlyCachingFileMgrUnitTest, freePage) {
   // CFM needs more setup for this tests because it dereferences the file_info.
   auto file_info = createFileInfo();
   file_mgr_->free_page(std::make_pair<fn::FileInfo*, int32_t>(&file_info, 0));
-}
-
-TEST_F(ReadOnlyCachingFileMgrUnitTest, updatePageIfDeletedWithCheckpoint) {
-  auto file_info = createFileInfo();
-  ChunkKey key = default_key;
-  file_mgr_->updatePageIfDeleted(&file_info, key, fn::DELETE_CONTINGENT, 0, 0);
-}
-
-TEST_F(ReadOnlyCachingFileMgrUnitTest, updatePageIfDeletedWithoutCheckpoint) {
-  auto file_info = createFileInfo();
-  ChunkKey key = default_key;
-  file_mgr_->updatePageIfDeleted(&file_info, key, fn::DELETE_CONTINGENT, -1, 0);
 }
 
 TEST_F(ReadOnlyCachingFileMgrUnitTest, writePageMappingsToStatusFile) {
