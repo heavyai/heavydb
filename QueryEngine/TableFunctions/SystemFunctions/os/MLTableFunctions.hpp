@@ -316,7 +316,7 @@ linear_reg_fit_impl(TableFunctionManager& mgr,
   }
   auto model =
       std::make_shared<LinearRegressionModel>(coefs, model_metadata, cat_feature_keys);
-  ml_models_.addModel(model_name, model);
+  g_ml_models.addModel(model_name, model);
   const std::string model_name_str = model_name.getString();
   const TextEncodingDict model_name_str_id =
       output_model_name.getOrAddTransient(model_name);
@@ -1279,7 +1279,7 @@ ml_reg_predict__cpu_template(TableFunctionManager& mgr,
                              Column<K>& output_ids,
                              Column<T>& output_predictions) {
   try {
-    const auto model = ml_models_.getModel(model_name);
+    const auto model = g_ml_models.getModel(model_name);
     check_model_params(model, 0, input_features.numCols());
     return ml_reg_predict_impl(mgr,
                                model,
@@ -1316,7 +1316,7 @@ ml_reg_predict__cpu_template(TableFunctionManager& mgr,
                              Column<K>& output_ids,
                              Column<T>& output_predictions) {
   try {
-    const auto model = ml_models_.getModel(model_name);
+    const auto model = g_ml_models.getModel(model_name);
     check_model_params(
         model, input_cat_features.numCols(), input_numeric_features.numCols());
     CategoricalFeaturesBuilder<T> cat_features_builder(
@@ -1501,7 +1501,7 @@ NEVER_INLINE HOST int32_t r2_score__cpu_template(TableFunctionManager& mgr,
                                                  const ColumnList<T>& input_features,
                                                  Column<double>& output_r2) {
   try {
-    const auto model = ml_models_.getModel(model_name);
+    const auto model = g_ml_models.getModel(model_name);
     check_model_params(model, 0, input_features.numCols());
     return r2_score_impl(mgr, model, input_labels, input_features, output_r2);
   } catch (std::runtime_error& e) {
@@ -1552,7 +1552,7 @@ r2_score__cpu_template(TableFunctionManager& mgr,
                        const ColumnList<T>& input_numeric_features,
                        Column<double>& output_r2) {
   try {
-    const auto model = ml_models_.getModel(model_name);
+    const auto model = g_ml_models.getModel(model_name);
     check_model_params(
         model, input_cat_features.numCols(), input_numeric_features.numCols());
     CategoricalFeaturesBuilder<T> cat_features_builder(
@@ -1586,7 +1586,7 @@ r2_score__cpu_template(TableFunctionManager& mgr,
   }
   const std::string model_name_str{model_name.getString(0)};
   try {
-    const auto model = ml_models_.getModel(model_name_str);
+    const auto model = g_ml_models.getModel(model_name_str);
     check_model_params(
         model, input_cat_features.numCols(), input_numeric_features.numCols());
     CategoricalFeaturesBuilder<T> cat_features_builder(

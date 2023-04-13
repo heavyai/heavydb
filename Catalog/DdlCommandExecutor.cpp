@@ -39,6 +39,7 @@
 #include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/ResultSetBuilder.h"
+#include "QueryEngine/TableFunctions/SystemFunctions/os/ML/MLModel.h"
 
 extern bool g_enable_fsi;
 
@@ -649,6 +650,8 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
   } else if (ddl_command_ == "SHOW_RUNTIME_TABLE_FUNCTIONS") {
     result = ShowRuntimeTableFunctionsCommand{*ddl_data_, session_ptr_}.execute(
         read_only_mode);
+  } else if (ddl_command_ == "SHOW_MODELS") {
+    result = ShowModelsCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "ALTER_SERVER") {
     result = AlterForeignServerCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "ALTER_DATABASE") {
@@ -2005,6 +2008,42 @@ ExecutionResult ShowRuntimeTableFunctionsCommand::execute(bool read_only_mode) {
       logical_values.emplace_back(RelLogicalValues::RowValues{});
       logical_values.back().emplace_back(genLiteralStr(name));
     }
+  }
+
+  // Create ResultSet
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
+}
+
+ShowModelsCommand::ShowModelsCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {}
+
+ExecutionResult ShowModelsCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
+  // Get all model names
+
+  // valid in read_only_mode
+
+  // label_infos -> column labels
+  std::vector<std::string> labels{"model_name"};
+  std::vector<TargetMetaInfo> label_infos;
+  for (const auto& label : labels) {
+    label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
+  }
+
+  // Get all model names
+  const auto model_names = g_ml_models.getModelNames();
+
+  // logical_values -> table data
+  std::vector<RelLogicalValues::RowValues> logical_values;
+  for (auto model_name : model_names) {
+    logical_values.emplace_back(RelLogicalValues::RowValues{});
+    logical_values.back().emplace_back(genLiteralStr(model_name));
   }
 
   // Create ResultSet

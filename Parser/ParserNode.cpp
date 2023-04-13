@@ -3475,7 +3475,7 @@ std::string write_model_params_to_json(const std::string& predicted,
 }
 
 void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session) {
-  if (ml_models_.modelExists(get_model_name())) {
+  if (g_ml_models.modelExists(get_model_name())) {
     if (if_not_exists_) {
       return;
     }
@@ -3609,7 +3609,7 @@ void DropModelStmt::execute(const Catalog_Namespace::SessionInfo& session,
     throw std::runtime_error("DROP MODEL invalid in read only mode.");
   }
   try {
-    ml_models_.deleteModel(model_name_);
+    g_ml_models.deleteModel(model_name_);
   } catch (std::runtime_error& e) {
     if (!if_exists_) {
       throw e;
