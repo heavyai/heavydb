@@ -101,7 +101,7 @@ class MLModelMap {
   mutable std::shared_mutex model_map_mutex_;
 };
 
-inline MLModelMap ml_models_;
+inline MLModelMap g_ml_models;
 
 class LinearRegressionModel : public AbstractMLModel {
  public:

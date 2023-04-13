@@ -292,7 +292,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::MLPredictExpr* expr,
   const auto model_name_ptr = model_datum.stringval;
   CHECK(model_name_ptr);
   const auto model_name = *model_name_ptr;
-  const auto abstract_model = ml_models_.getModel(model_name);
+  const auto abstract_model = g_ml_models.getModel(model_name);
   const auto model_type = abstract_model->getModelType();
   const auto& regressor_exprs = expr->get_regressor_values();
   if (abstract_model->getNumLogicalFeatures() !=

@@ -2816,6 +2816,152 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   }
 }
 
+class ShowModelsDdlTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    switchToAdmin();
+    sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP MODEL IF EXISTS rf_test_model;");
+    sql("DROP TABLE IF EXISTS test_table;");
+  }
+
+  void TearDown() override {
+    switchToAdmin();
+    sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP MODEL IF EXISTS rf_test_model;");
+    sql("DROP TABLE IF EXISTS test_table;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  static void SetUpTestSuite() {
+    createDBHandler();
+    createTestUser();
+  }
+
+  static void TearDownTestSuite() { dropTestUser(); }
+
+  static void createTestUser() {
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  }
+
+  static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
+
+  void assertExpectedQueryFormat(const TQueryResult& result) const {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), 1UL);
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "model_name");
+  }
+
+  void assertExpectedQuery(
+      const TQueryResult& result,
+      const std::vector<std::string>& expected_values,
+      const std::vector<std::string>& expected_missing_values) const {
+    assertExpectedQueryFormat(result);
+    auto& result_values = result.row_set.columns[0].data.str_col;
+    // TODO: at the moment, this checks that expected_values are a subset of
+    // result_values; once other tests ensure they do not leave behind undropped tables,
+    // this can be changed to be a check for equality of expected and result values
+    std::unordered_set<std::string> result_values_set(result_values.begin(),
+                                                      result_values.end());
+    for (auto& value : expected_values) {
+      ASSERT_FALSE(result_values_set.find(value) == result_values_set.end());
+    }
+    for (auto& value : expected_missing_values) {
+      ASSERT_TRUE(result_values_set.find(value) == result_values_set.end());
+    }
+  }
+
+  void assertExpectedQuery(const TQueryResult& result,
+                           const std::vector<std::string>& expected_values) const {
+    std::vector<std::string> expected_missing_values;
+    assertExpectedQuery(result, expected_values, expected_missing_values);
+  }
+
+  static void createTestTable() {
+    sql("CREATE TABLE test_table ( predicted float, predictor int );");
+    sql("INSERT INTO test_table VALUES (2.0, 1);");
+  }
+  static void createLinearRegTestModel() {
+    sql("CREATE MODEL lin_reg_test_model OF TYPE LINEAR_REG AS SELECT predicted, "
+        "predictor FROM test_table;");
+  }
+  static void createRandomForestTestModel() {
+    sql("CREATE MODEL rf_test_model OF TYPE RANDOM_FOREST_REG AS SELECT predicted, "
+        "predictor FROM test_table;");
+  }
+};
+
+TEST_F(ShowModelsDdlTest, CreateModel) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createLinearRegTestModel();
+  TQueryResult result;
+  std::vector<std::string> expected_result{"LIN_REG_TEST_MODEL"};
+  sql(result, "SHOW MODELS;");
+  assertExpectedQuery(result, expected_result);
+}
+
+TEST_F(ShowModelsDdlTest, CreateTwoModelsDropOne) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createLinearRegTestModel();
+  createRandomForestTestModel();
+  {
+    TQueryResult result;
+    std::vector<std::string> expected_result{"LIN_REG_TEST_MODEL", "RF_TEST_MODEL"};
+    sql(result, "SHOW MODELS;");
+    assertExpectedQuery(result, expected_result);
+  }
+  sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+  {
+    TQueryResult result;
+    std::vector<std::string> expected_result{"RF_TEST_MODEL"};
+    std::vector<std::string> expected_missing_result{"LIN_REG_TEST_MODEL"};
+    sql(result, "SHOW MODELS;");
+    assertExpectedQuery(result, expected_result, expected_missing_result);
+  }
+  sql("DROP MODEL rf_test_model;");
+}
+
+TEST_F(ShowModelsDdlTest, TestUserSeesNoModels) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  login("test_user", "test_pass");
+  TQueryResult result;
+  std::vector<std::string> expected_result{};
+  sql(result, "SHOW MODELS;");
+  assertExpectedQuery(result, expected_result);
+}
+
+TEST_F(ShowModelsDdlTest, CreateModelDropModel) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createLinearRegTestModel();
+  sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+  TQueryResult result;
+  std::vector<std::string> expected_missing_result{"LIN_REG_TEST_MODEL"};
+  sql(result, "SHOW MODELS;");
+  assertExpectedQuery(result, {}, expected_missing_result);
+}
+
 class SystemTablesTest : public DBHandlerTestFixture {
  protected:
   static void SetUpTestSuite() {
