@@ -888,6 +888,26 @@ SqlDdl SqlOptimizeTable(Span s) :
     }
 }
 
+/*
+ * Evaluate a model using the following syntax:
+ *
+ * EVALUATE MODEL <modelName> ON <query>
+ *
+ */
+SqlDdl SqlEvaluateModel(Span s) :
+{
+    final SqlIdentifier modelName;
+    final SqlNode query;
+}
+{
+    <EVALUATE>
+    <MODEL>
+    modelName = CompoundIdentifier()
+    <ON> query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
+    {
+        return new SqlEvaluateModel(s.end(this), modelName.toString(), query);
+    }
+}
 
 /*
  * Create a view using the following syntax:
