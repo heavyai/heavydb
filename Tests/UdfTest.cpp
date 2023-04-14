@@ -59,19 +59,23 @@ std::string udf_file_name_base("../../Tests/Udf/udf_sample");
 std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool allow_loop_joins) {
-  return QR::get()->runSQL(query_str, device_type, true, allow_loop_joins);
+  constexpr bool hoist_literals = true;
+  return QR::get()->runSQL(query_str, device_type, hoist_literals, allow_loop_joins);
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const ExecutorDeviceType device_type) {
-  return run_multiple_agg(query_str, device_type, true);
+  constexpr bool allow_loop_joins = true;
+  return run_multiple_agg(query_str, device_type, allow_loop_joins);
 }
 
 TargetValue run_simple_agg(const std::string& query_str,
                            const ExecutorDeviceType device_type,
                            const bool allow_loop_joins = true) {
   auto rows = run_multiple_agg(query_str, device_type, allow_loop_joins);
-  auto crt_row = rows->getNextRow(true, true);
+  constexpr bool translate_strings = true;
+  constexpr bool decimal_to_double = true;
+  auto crt_row = rows->getNextRow(translate_strings, decimal_to_double);
   CHECK_EQ(size_t(1), crt_row.size());
   return crt_row[0];
 }
@@ -254,12 +258,7 @@ TEST_F(UDFCompilerTest, CalciteRegistration) {
   ASSERT_EQ(signature6, nullptr);
 }
 
-#ifdef HAVE_ASAN
-// Fix this in BE-6450
-TEST_F(UDFCompilerTest, DISABLED_UdfQuery) {
-#else
 TEST_F(UDFCompilerTest, UdfQuery) {
-#endif
   UdfCompiler compiler(g_device_arch);
   EXPECT_NO_THROW(compiler.compileUdf(getUdfFileName()));
 
@@ -540,6 +539,13 @@ TEST_F(UDFCompilerTest, UdfQuery) {
         v<int64_t>(run_simple_agg(
             "select multipolygon_output_srid(p) from geo_mpoly WHERE id = 0;", dt)));
 
+    if constexpr (false)
+    // According to
+    // https://docs.heavy.ai/sql/data-manipulation-dml/functions-operators#user-defined-functions
+    // Array<T> types are not officially supported. It appears to cause problems with
+    // pass_manager.add(llvm::createDeadStoreEliminationPass()) in optimize_ir(). See
+    // QE-791 for more info. This code is left intact in case the problems seen on
+    // ubuntu18 and CentOS7 are later resolved.
     {
       auto check_row_result = [](const auto& crt_row, const auto& expected) {
         compare_array(crt_row[0], expected);

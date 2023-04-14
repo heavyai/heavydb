@@ -59,6 +59,10 @@ int8_t array_at_int64_is_null(Array<int64_t> arr, std::size_t idx) {
   return (int8_t)(array_at_int64(arr, idx) == arr.null_value());
 }
 
+/* Suppress warning: 'array_ret_udf' has C-linkage specified, but returns user-defined
+ * type 'Array<double>' which is incompatible with C [-Wreturn-type-c-linkage]
+ * which may be related to segfaults seen on some platforms when
+ * llvm::createDeadStoreEliminationPass() is used.  See QE-791 for more info.
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
@@ -80,6 +84,7 @@ Array<double> array_ret_udf(const Array<int32_t> arr, double multiplier) {
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
+*/
 
 EXTENSION_NOINLINE
 int32_t udf_diff(const int32_t x, const int32_t y) {
