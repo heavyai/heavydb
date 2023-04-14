@@ -265,6 +265,10 @@ linear_reg_fit_impl(TableFunctionManager& mgr,
                     const TextEncodingNone& preferred_ml_framework_str,
                     const TextEncodingNone& model_metadata,
                     Column<TextEncodingDict>& output_model_name) {
+  if (input_labels.size() == 0) {
+    return mgr.ERROR_MESSAGE(
+        "No rows exist in training input. Training input must at least contain 1 row.");
+  }
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
     return mgr.ERROR_MESSAGE("Invalid ML Framework: " +
@@ -531,6 +535,10 @@ decision_tree_reg_impl(TableFunctionManager& mgr,
                        const TextEncodingNone& preferred_ml_framework_str,
                        const TextEncodingNone& model_metadata,
                        Column<TextEncodingDict>& output_model_name) {
+  if (input_labels.size() == 0) {
+    return mgr.ERROR_MESSAGE(
+        "No rows exist in training input. Training input must at least contain 1 row.");
+  }
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
     return mgr.ERROR_MESSAGE("Invalid ML Framework: " +
@@ -684,6 +692,10 @@ gbt_reg_fit_impl(TableFunctionManager& mgr,
                  const TextEncodingNone& preferred_ml_framework_str,
                  const TextEncodingNone& model_metadata,
                  Column<TextEncodingDict>& output_model_name) {
+  if (input_labels.size() == 0) {
+    return mgr.ERROR_MESSAGE(
+        "No rows exist in training input. Training input must at least contain 1 row.");
+  }
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
     return mgr.ERROR_MESSAGE("Invalid ML Framework: " +
@@ -892,6 +904,10 @@ random_forest_reg_fit_impl(TableFunctionManager& mgr,
                            const TextEncodingNone& preferred_ml_framework_str,
                            const TextEncodingNone& model_metadata,
                            Column<TextEncodingDict>& output_model_name) {
+  if (input_labels.size() == 0) {
+    return mgr.ERROR_MESSAGE(
+        "No rows exist in training input. Training input must at least contain 1 row.");
+  }
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
     return mgr.ERROR_MESSAGE("Invalid ML Framework: " +

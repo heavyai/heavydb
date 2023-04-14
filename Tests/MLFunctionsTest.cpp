@@ -741,6 +741,58 @@ TEST_F(MLTableFunctionsTest, DBSCAN) {
   }
 }
 
+TEST_P(MLRegressionFunctionsTest, REG_MODEL_FIT_NO_ROWS) {
+  const auto model_type = GetParam();
+  const auto model_type_str = get_ml_model_type_str(model_type);
+  const std::string model_name{model_type_str + "_MODEL"};
+  const std::string quoted_model_name{"'" + model_type_str + "_MODEL'"};
+  const std::string model_fit_func{model_type_str + "_FIT"};
+  const std::string data_table_name{"ml_iris"};
+  const std::string id_col{""};  // No id column allowed for Fit calls
+  const std::string label_column{"petal_length_cm"};
+  const auto supported_ml_frameworks = get_supported_ml_frameworks();
+  const bool make_args_named{true};
+  for (auto& ml_framework : supported_ml_frameworks) {
+    if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
+      continue;
+    }
+    for (bool use_create_syntax : {false, true}) {
+      for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        for (std::string numeric_data_type : {"DOUBLE"}) {
+          const auto cursor_query = generate_cursor_query(
+              data_table_name,
+              id_col,
+              {"petal_length_cm", "petal_width_cm", "sepal_length_cm", "sepal_width_cm"},
+              "SAMPLE_RATIO(0.0)",
+              numeric_data_type,
+              !use_create_syntax);
+          const auto fit_query =
+              use_create_syntax
+                  ? generate_create_model_query(
+                        model_type_str,
+                        model_name,
+                        cursor_query,
+                        {{"preferred_ml_framework", ml_framework}},
+                        true)
+                  : generate_query(model_fit_func,
+                                   {{"model_name", quoted_model_name},
+                                    {"data", cursor_query},
+                                    {"preferred_ml_framework", ml_framework}},
+                                   {"model_name"},
+                                   make_args_named);
+
+          if (!use_create_syntax) {
+            EXPECT_ANY_THROW(run_multiple_agg(fit_query, dt));
+          } else {
+            EXPECT_ANY_THROW(run_ddl_statement(fit_query));
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_P(MLRegressionFunctionsTest, REG_MODEL_FIT) {
   const auto model_type = GetParam();
   const auto model_type_str = get_ml_model_type_str(model_type);
