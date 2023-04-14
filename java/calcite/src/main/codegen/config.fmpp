@@ -63,6 +63,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlShowFunctions"
         "com.mapd.parser.extension.ddl.SqlShowRuntimeFunctions"
         "com.mapd.parser.extension.ddl.SqlShowModels"
+        "com.mapd.parser.extension.ddl.SqlShowModelDetails"
         "com.mapd.parser.extension.ddl.SqlEvaluateModel"
         "com.mapd.parser.extension.ddl.SqlAlterTable"
         "com.mapd.parser.extension.ddl.SqlAlterServer"
