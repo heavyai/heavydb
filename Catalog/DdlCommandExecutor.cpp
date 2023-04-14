@@ -659,6 +659,8 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
         read_only_mode);
   } else if (ddl_command_ == "SHOW_MODELS") {
     result = ShowModelsCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "SHOW_MODEL_DETAILS") {
+    result = ShowModelDetailsCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "ALTER_SERVER") {
     result = AlterForeignServerCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "ALTER_DATABASE") {
@@ -2058,6 +2060,99 @@ ExecutionResult ShowModelsCommand::execute(bool read_only_mode) {
       ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
 
   return ExecutionResult(rSet, label_infos);
+}
+
+ShowModelDetailsCommand::ShowModelDetailsCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {}
+
+ExecutionResult ShowModelDetailsCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
+  // Get all model names
+
+  // valid in read_only_mode
+
+  // label_infos -> column labels
+  std::vector<std::string> labels{"model_name", "model_type", "training_query"};
+  std::vector<TargetMetaInfo> label_infos;
+  label_infos.emplace_back("model_name", SQLTypeInfo(kTEXT, true));
+  label_infos.emplace_back("model_type", SQLTypeInfo(kTEXT, true));
+  label_infos.emplace_back("predicted", SQLTypeInfo(kTEXT, true));
+  label_infos.emplace_back("predictors", SQLTypeInfo(kTEXT, true));
+  label_infos.emplace_back("training_query", SQLTypeInfo(kTEXT, true));
+  label_infos.emplace_back("num_logical_features", SQLTypeInfo(kBIGINT, true));
+  label_infos.emplace_back("num_physical_features", SQLTypeInfo(kBIGINT, true));
+  label_infos.emplace_back("num_categorical_features", SQLTypeInfo(kBIGINT, true));
+  label_infos.emplace_back("num_numeric_features", SQLTypeInfo(kBIGINT, true));
+  // for (const auto& label : labels) {
+  //   label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
+  // }
+
+  // Get all model names
+  const auto model_names = getFilteredModelNames();
+
+  // logical_values -> table data
+  std::vector<RelLogicalValues::RowValues> logical_values;
+  for (auto& model_name : model_names) {
+    logical_values.emplace_back(RelLogicalValues::RowValues{});
+    logical_values.back().emplace_back(genLiteralStr(model_name));
+    const auto model_metadata = g_ml_models.getModelMetadata(model_name);
+    logical_values.back().emplace_back(genLiteralStr(model_metadata.getModelType()));
+    logical_values.back().emplace_back(genLiteralStr(model_metadata.getPredicted()));
+    const auto& predictors = model_metadata.getPredictors();
+    std::ostringstream predictors_oss;
+    bool is_first_predictor = true;
+    for (auto& predictor : predictors) {
+      if (!is_first_predictor) {
+        predictors_oss << ", ";
+      } else {
+        is_first_predictor = false;
+      }
+      predictors_oss << predictor;
+    }
+    auto predictors_str = predictors_oss.str();
+    logical_values.back().emplace_back(genLiteralStr(predictors_str));
+    logical_values.back().emplace_back(genLiteralStr(model_metadata.getTrainingQuery()));
+    logical_values.back().emplace_back(
+        genLiteralBigInt(model_metadata.getNumLogicalFeatures()));
+    logical_values.back().emplace_back(genLiteralBigInt(model_metadata.getNumFeatures()));
+    logical_values.back().emplace_back(
+        genLiteralBigInt(model_metadata.getNumCategoricalFeatures()));
+    logical_values.back().emplace_back(
+        genLiteralBigInt(model_metadata.getNumLogicalFeatures() -
+                         model_metadata.getNumCategoricalFeatures()));
+  }
+
+  // Create ResultSet
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
+}
+
+std::vector<std::string> ShowModelDetailsCommand::getFilteredModelNames() {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  auto all_model_names = g_ml_models.getModelNames();
+  if (ddl_payload.HasMember("modelNames")) {
+    std::vector<std::string> filtered_model_names;
+    std::set<std::string> all_model_names_set(all_model_names.begin(),
+                                              all_model_names.end());
+    for (const auto& model_name_json : ddl_payload["modelNames"].GetArray()) {
+      std::string model_name = model_name_json.GetString();
+      const auto model_name_upper = to_upper(model_name);
+      if (all_model_names_set.find(to_upper(model_name_upper)) ==
+          all_model_names_set.end()) {
+        throw std::runtime_error{"Unable to show model details for model: " +
+                                 model_name_upper + ". Model does not exist."};
+      }
+      filtered_model_names.emplace_back(model_name_upper);
+    }
+    return filtered_model_names;
+  } else {
+    return all_model_names;
+  }
 }
 
 EvaluateModelCommand::EvaluateModelCommand(
