@@ -82,7 +82,6 @@ class MLModelMap {
   std::vector<MLModelMetadata> getModelMetadata() const {
     std::shared_lock<std::shared_mutex> model_map_read_lock(model_map_mutex_);
     std::vector<MLModelMetadata> model_metadata;
-    model_metadata.reserve(model_map_.size());
     for (auto const& model : model_map_) {
       model_metadata.emplace_back(MLModelMetadata(
           model.first,
@@ -94,6 +93,24 @@ class MLModelMap {
           model.second->getModelMetadata()));
     }
     return model_metadata;
+  }
+
+  MLModelMetadata getModelMetadata(const std::string& model_name) const {
+    const auto upper_model_name = to_upper(model_name);
+    std::shared_lock<std::shared_mutex> model_map_read_lock(model_map_mutex_);
+    auto model_map_itr = model_map_.find(upper_model_name);
+    if (model_map_itr != model_map_.end()) {
+      return MLModelMetadata(model_map_itr->first,
+                             model_map_itr->second->getModelTypeString(),
+                             model_map_itr->second->getNumLogicalFeatures(),
+                             model_map_itr->second->getNumFeatures(),
+                             model_map_itr->second->getNumCatFeatures(),
+                             model_map_itr->second->getNumLogicalFeatures() -
+                                 model_map_itr->second->getNumCatFeatures(),
+                             model_map_itr->second->getModelMetadata());
+    }
+    const std::string error_str = "Model '" + upper_model_name + "' does not exist.";
+    throw std::runtime_error(error_str);
   }
 
  private:

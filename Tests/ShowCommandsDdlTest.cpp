@@ -2962,6 +2962,218 @@ TEST_F(ShowModelsDdlTest, CreateModelDropModel) {
   assertExpectedQuery(result, {}, expected_missing_result);
 }
 
+class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    switchToAdmin();
+    sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP MODEL IF EXISTS rf_test_model;");
+    sql("DROP TABLE IF EXISTS test_table;");
+  }
+
+  void TearDown() override {
+    switchToAdmin();
+    sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP MODEL IF EXISTS rf_test_model;");
+    sql("DROP TABLE IF EXISTS test_table;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  static void SetUpTestSuite() {
+    createDBHandler();
+    createTestUser();
+  }
+
+  static void TearDownTestSuite() { dropTestUser(); }
+
+  static void createTestUser() {
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  }
+
+  static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
+
+  void assertExpectedQueryFormat(const TQueryResult& result) const {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), 9UL);
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "model_name");
+    ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[1].col_name, "model_type");
+    ASSERT_EQ(result.row_set.row_desc[2].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[2].col_name, "predicted");
+    ASSERT_EQ(result.row_set.row_desc[3].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[3].col_name, "predictors");
+    ASSERT_EQ(result.row_set.row_desc[4].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[4].col_name, "training_query");
+    ASSERT_EQ(result.row_set.row_desc[5].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[5].col_name, "num_logical_features");
+    ASSERT_EQ(result.row_set.row_desc[6].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[6].col_name, "num_physical_features");
+    ASSERT_EQ(result.row_set.row_desc[7].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[7].col_name, "num_categorical_features");
+    ASSERT_EQ(result.row_set.row_desc[8].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[8].col_name, "num_numeric_features");
+  }
+
+  void assertExpectedQuery(TQueryResult& result,
+                           const bool has_linear_reg_model,
+                           const bool has_random_forest_reg_model) {
+    assertExpectedQueryFormat(result);
+    if (has_linear_reg_model && !has_random_forest_reg_model) {
+      assertResultSetEqual({{"LIN_REG_TEST_MODEL",
+                             "Linear Regression",
+                             "predicted",
+                             "predictor",
+                             "SELECT predicted, predictor FROM test_table",
+                             i(1),
+                             i(1),
+                             i(0),
+                             i(1)}},
+                           result);
+    } else if (!has_linear_reg_model && has_random_forest_reg_model) {
+      assertResultSetEqual({{"RF_TEST_MODEL",
+                             "Random Forest Regression",
+                             "predicted",
+                             "predictor",
+                             "SELECT predicted, predictor FROM test_table",
+                             i(1),
+                             i(1),
+                             i(0),
+                             i(1)}},
+                           result);
+    } else if (has_linear_reg_model && has_random_forest_reg_model) {
+      assertResultSetEqual({{"LIN_REG_TEST_MODEL",
+                             "Linear Regression",
+                             "predicted",
+                             "predictor",
+                             "SELECT predicted, predictor FROM test_table",
+                             i(1),
+                             i(1),
+                             i(0),
+                             i(1)},
+                            {"RF_TEST_MODEL",
+                             "Random Forest Regression",
+                             "predicted",
+                             "predictor",
+                             "SELECT predicted, predictor FROM test_table",
+                             i(1),
+                             i(1),
+                             i(0),
+                             i(1)}},
+                           result);
+    } else {
+      assertResultSetEqual({}, result);
+    }
+  }
+
+  static void createTestTable() {
+    sql("CREATE TABLE test_table ( predicted float, predictor int );");
+    sql("INSERT INTO test_table VALUES (2.0, 1);");
+  }
+  static void createLinearRegTestModel() {
+    sql("CREATE MODEL lin_reg_test_model OF TYPE LINEAR_REG AS SELECT predicted, "
+        "predictor FROM test_table;");
+  }
+  static void createRandomForestTestModel() {
+    sql("CREATE MODEL rf_test_model OF TYPE RANDOM_FOREST_REG AS SELECT predicted, "
+        "predictor FROM test_table;");
+  }
+};
+
+TEST_F(ShowModelDetailsDdlTest, CreateModel) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createLinearRegTestModel();
+  TQueryResult result;
+  sql(result, "SHOW MODEL DETAILS;");
+  assertExpectedQuery(result, true, false);
+}
+
+TEST_F(ShowModelDetailsDdlTest, CreateTwoModelsDropOne) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createLinearRegTestModel();
+  createRandomForestTestModel();
+  {
+    TQueryResult result;
+    sql(result, "SHOW MODEL DETAILS;");
+    assertExpectedQuery(result, true, true);
+  }
+  sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+  {
+    TQueryResult result;
+    sql(result, "SHOW MODEL DETAILS;");
+    assertExpectedQuery(result, false, true);
+  }
+  sql("DROP MODEL rf_test_model;");
+}
+
+TEST_F(ShowModelDetailsDdlTest, CreateTwoModelsShowNamed) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createLinearRegTestModel();
+  createRandomForestTestModel();
+  {
+    TQueryResult result;
+    sql(result, "SHOW MODEL DETAILS lin_reg_test_model;");
+    assertExpectedQuery(result, true, false);
+  }
+  {
+    TQueryResult result;
+    sql(result, "SHOW MODEL DETAILS rf_test_model;");
+    assertExpectedQuery(result, false, true);
+  }
+  {
+    TQueryResult result;
+    sql(result, "SHOW MODEL DETAILS lin_reg_test_model, rf_test_model;");
+    assertExpectedQuery(result, true, true);
+  }
+  {
+    TQueryResult result;
+    EXPECT_ANY_THROW(sql(result, "SHOW MODEL DETAILS non_existant_model;"));
+  }
+}
+
+TEST_F(ShowModelDetailsDdlTest, TestUserSeesNoModels) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  login("test_user", "test_pass");
+  TQueryResult result;
+  sql(result, "SHOW MODEL DETAILS;");
+  assertExpectedQuery(result, false, false);
+}
+
+TEST_F(ShowModelDetailsDdlTest, CreateModelDropModel) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createLinearRegTestModel();
+  sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+  TQueryResult result;
+  sql(result, "SHOW MODEL DETAILS;");
+  assertExpectedQuery(result, false, false);
+}
+
 class SystemTablesTest : public DBHandlerTestFixture {
  protected:
   static void SetUpTestSuite() {
