@@ -49,6 +49,7 @@ class MLModelMetadata {
   const std::string& getPredicted() const { return predicted_; }
   const std::vector<std::string>& getPredictors() const { return predictors_; }
   const std::string& getTrainingQuery() const { return training_query_; }
+  double getDataSplitEvalFraction() const { return data_split_eval_fraction_; }
 
  private:
   const std::string model_name_;
@@ -60,4 +61,5 @@ class MLModelMetadata {
   std::string predicted_;
   std::vector<std::string> predictors_;
   std::string training_query_;
+  double data_split_eval_fraction_{0.0};
 };

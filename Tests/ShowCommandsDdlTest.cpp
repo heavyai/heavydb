@@ -1728,7 +1728,8 @@ TEST_F(SystemTablesShowCreateTableTest, MLModels) {
         "predictors TEXT[] ENCODING DICT(32),\n  training_query TEXT ENCODING "
         "DICT(32),\n  "
         "num_logical_features BIGINT,\n  num_physical_features BIGINT,\n  "
-        "num_categorical_features BIGINT,\n  num_numeric_features BIGINT);"}});
+        "num_categorical_features BIGINT,\n  num_numeric_features BIGINT,\n  "
+        "eval_fraction DOUBLE);"}});
 }
 
 TEST_F(SystemTablesShowCreateTableTest, ServerLogs) {
@@ -2996,7 +2997,7 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
 
   void assertExpectedQueryFormat(const TQueryResult& result) const {
     ASSERT_EQ(result.row_set.is_columnar, true);
-    ASSERT_EQ(result.row_set.columns.size(), 9UL);
+    ASSERT_EQ(result.row_set.columns.size(), 10UL);
     ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::STR);
     ASSERT_EQ(result.row_set.row_desc[0].col_name, "model_name");
     ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::STR);
@@ -3015,6 +3016,8 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
     ASSERT_EQ(result.row_set.row_desc[7].col_name, "num_categorical_features");
     ASSERT_EQ(result.row_set.row_desc[8].col_type.type, TDatumType::BIGINT);
     ASSERT_EQ(result.row_set.row_desc[8].col_name, "num_numeric_features");
+    ASSERT_EQ(result.row_set.row_desc[9].col_type.type, TDatumType::DOUBLE);
+    ASSERT_EQ(result.row_set.row_desc[9].col_name, "eval_fraction");
   }
 
   void assertExpectedQuery(TQueryResult& result,
@@ -3030,7 +3033,8 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
                              i(1),
                              i(1),
                              i(0),
-                             i(1)}},
+                             i(1),
+                             double(0.0)}},
                            result);
     } else if (!has_linear_reg_model && has_random_forest_reg_model) {
       assertResultSetEqual({{"RF_TEST_MODEL",
@@ -3041,7 +3045,8 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
                              i(1),
                              i(1),
                              i(0),
-                             i(1)}},
+                             i(1),
+                             double(0.0)}},
                            result);
     } else if (has_linear_reg_model && has_random_forest_reg_model) {
       assertResultSetEqual({{"LIN_REG_TEST_MODEL",
@@ -3052,7 +3057,8 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
                              i(1),
                              i(1),
                              i(0),
-                             i(1)},
+                             i(1),
+                             double(0.0)},
                             {"RF_TEST_MODEL",
                              "Random Forest Regression",
                              "predicted",
@@ -3061,7 +3067,8 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
                              i(1),
                              i(1),
                              i(0),
-                             i(1)}},
+                             i(1),
+                             double(0.0)}},
                            result);
     } else {
       assertResultSetEqual({}, result);
@@ -3172,6 +3179,144 @@ TEST_F(ShowModelDetailsDdlTest, CreateModelDropModel) {
   TQueryResult result;
   sql(result, "SHOW MODEL DETAILS;");
   assertExpectedQuery(result, false, false);
+}
+
+class EvaluateModelDdlTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    switchToAdmin();
+    sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP TABLE IF EXISTS test_table;");
+  }
+
+  void TearDown() override {
+    switchToAdmin();
+    sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP MODEL IF EXISTS rand_forest_test_model;");
+    sql("DROP TABLE IF EXISTS test_table;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  static void SetUpTestSuite() {
+    createDBHandler();
+    createTestUser();
+  }
+
+  static void TearDownTestSuite() { dropTestUser(); }
+
+  static void createTestUser() {
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  }
+
+  static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
+
+  void assertExpectedQueryFormat(const TQueryResult& result) const {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), 1UL);
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::DOUBLE);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "r2");
+  }
+
+  void assertExpectedQuery(TQueryResult& result,
+                           const double expected_r2,
+                           const double allowed_epsilon) {
+    assertExpectedQueryFormat(result);
+    auto row_count = getRowCount(result);
+    EXPECT_EQ(row_count, size_t(1));
+    auto result_row = getRow(result, 0);
+    auto actual_r2_value = result_row[0].val.real_val;
+    ASSERT_GE(actual_r2_value, expected_r2 - allowed_epsilon);
+    ASSERT_LE(actual_r2_value, expected_r2 + allowed_epsilon);
+  }
+
+  static void createTestTable() {
+    sql("CREATE TABLE test_table ( predicted float, predictor int );");
+    sql("INSERT INTO test_table VALUES (2.0, 1);");
+    sql("INSERT INTO test_table VALUES (3.1, 2);");
+    sql("INSERT INTO test_table VALUES (3.9, 3);");
+    sql("INSERT INTO test_table VALUES (5.1, 4);");
+    sql("INSERT INTO test_table VALUES (6.1, 5);");
+    sql("INSERT INTO test_table VALUES (7.0, 6);");
+    sql("INSERT INTO test_table VALUES (8.0, 7);");
+    sql("INSERT INTO test_table VALUES (8.9, 8);");
+    sql("INSERT INTO test_table VALUES (9.0, 9);");
+    sql("INSERT INTO test_table VALUES (10.1, 10);");
+  }
+  static void createLinearRegTestModel() {
+    sql("CREATE OR REPLACE MODEL lin_reg_test_model OF TYPE LINEAR_REG AS SELECT "
+        "predicted, "
+        "predictor FROM test_table;");
+  }
+
+  static void createLinearRegTestModelWithEvalFraction() {
+    sql("CREATE OR REPLACE MODEL lin_reg_test_model OF TYPE LINEAR_REG AS SELECT "
+        "predicted, "
+        "predictor FROM test_table WITH (eval_fraction=0.2);");
+  }
+
+  static void createRandomForestRegTestModelWithDataSplitEvalFraction() {
+    sql("CREATE OR REPLACE MODEL rand_forest_test_model OF TYPE RANDOM_FOREST_REG AS "
+        "SELECT predicted, "
+        "predictor FROM test_table WITH (data_split_eval_fraction=0.2, num_trees=4);");
+  }
+};
+
+TEST_F(EvaluateModelDdlTest, TestModelR2) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createLinearRegTestModel();
+  TQueryResult result;
+  sql(result,
+      "EVALUATE MODEL lin_reg_test_model ON SELECT predicted, predictor FROM "
+      "test_table;");
+  assertExpectedQuery(result, 0.989081, 0.01);
+}
+
+TEST_F(EvaluateModelDdlTest, EvalModelNoEvalSet) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createLinearRegTestModel();
+  TQueryResult result;
+  EXPECT_ANY_THROW(sql(result, "EVALUATE MODEL lin_reg_test_model"););
+}
+
+TEST_F(EvaluateModelDdlTest, EvalModelEvalFraction) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createLinearRegTestModelWithEvalFraction();
+  TQueryResult result;
+  sql(result, "EVALUATE MODEL lin_reg_test_model");
+  assertExpectedQuery(result, 0.946093, 0.01);
+}
+
+TEST_F(EvaluateModelDdlTest, EvalModelDataSplitEvalFraction) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createRandomForestRegTestModelWithDataSplitEvalFraction();
+  TQueryResult result;
+  sql(result, "EVALUATE MODEL rand_forest_test_model");
+  // Add greater variance for random forest model as model params
+  // and R2 can vary more due to underlying stochasticity during
+  // model training
+  assertExpectedQuery(result, -0.02269272, 0.1);
 }
 
 class SystemTablesTest : public DBHandlerTestFixture {
@@ -4088,7 +4233,8 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
                         i(1),
                         i(1),
                         i(0),
-                        i(1)}});
+                        i(1),
+                        double(0.0)}});
   switchToAdmin();
 
   // Create a different model by the same name, but use IF NOT EXISTS clause
@@ -4112,7 +4258,8 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
                         i(1),
                         i(1),
                         i(0),
-                        i(1)}});
+                        i(1),
+                        double(0.0)}});
 
   switchToAdmin();
   // Now create model by same name without IF NOT EXISTS clause, should throw
@@ -4136,7 +4283,8 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
                         i(1),
                         i(1),
                         i(0),
-                        i(1)}});
+                        i(1),
+                        double(0.0)}});
   switchToAdmin();
   // Now create or replace model by same name but without projection aliases, should throw
   const std::string create_or_replace_no_aliases_model2_stmt =
@@ -4159,17 +4307,21 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
                         i(1),
                         i(1),
                         i(0),
-                        i(1)}});
+                        i(1),
+                        double(0.0)}});
 
   switchToAdmin();
   // Now run same create statement but with CREATE OR REPLACE, which should replace
   // previous model
+  // Also add an eval fraction and ensure that shows up in the model info
+  // Use 0.5 for eval fraction as this can be represented with 100% precision with a
+  // double
   const std::string create_or_replace_model2_stmt =
       "CREATE OR REPLACE MODEL model_test OF TYPE LINEAR_REG AS SELECT generate_series * "
       "6.0 AS y2, "
       "generate_series * 2.0 AS x2 FROM TABLE(generate_series(1, 100)) WITH "
       "(preferred_ml_framework='" +
-      ml_framework + "');";
+      ml_framework + "', eval_fraction=0.5);";
   sql(create_or_replace_model2_stmt);
   loginInformationSchema();
   sqlAndCompareResult(
@@ -4183,7 +4335,8 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
         i(1),
         i(1),
         i(0),
-        i(1)}});
+        i(1),
+        double(0.5)}});
 
   switchToAdmin();
   const std::string drop_model_stmt = "DROP MODEL model_test;";
