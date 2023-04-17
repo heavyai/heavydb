@@ -897,13 +897,13 @@ SqlDdl SqlOptimizeTable(Span s) :
 SqlDdl SqlEvaluateModel(Span s) :
 {
     final SqlIdentifier modelName;
-    final SqlNode query;
+    SqlNode query = null;
 }
 {
     <EVALUATE>
     <MODEL>
     modelName = CompoundIdentifier()
-    <ON> query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
+    [ <ON> query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY) ]
     {
         return new SqlEvaluateModel(s.end(this), modelName.toString(), query);
     }

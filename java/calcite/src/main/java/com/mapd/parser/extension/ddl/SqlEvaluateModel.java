@@ -26,6 +26,8 @@ public class SqlEvaluateModel extends SqlCustomDdl {
   public SqlEvaluateModel(final SqlParserPos pos, final String modelName, SqlNode query) {
     super(OPERATOR, pos);
     this.modelName = modelName;
-    this.query = query.toString();
+    if (query != null) {
+      this.query = query.toString();
+    }
   }
 }

@@ -715,6 +715,9 @@ class DBHandlerTestFixture : public testing::Test {
   size_t getRowCount(const TQueryResult& result) {
     return getRowCount(result.row_set);
   }
+  std::vector<TDatum> getRow(const TQueryResult& result, const size_t index) {
+    return getRow(result.row_set, index);
+  }
 
  private:
   static size_t getRowCount(const TRowSet& row_set) {

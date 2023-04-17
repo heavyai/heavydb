@@ -21,6 +21,7 @@
  */
 
 #include "ParserNode.h"
+#include "Shared/base64.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/core/null_deleter.hpp>
@@ -3443,7 +3444,8 @@ CreateModelStmt::CreateModelStmt(const rapidjson::Value& payload) {
 
 std::string write_model_params_to_json(const std::string& predicted,
                                        const std::vector<std::string>& predictors,
-                                       const std::string& training_query) {
+                                       const std::string& training_query,
+                                       const double data_split_eval_fraction) {
   // Create a RapidJSON document
   rapidjson::Document doc;
   doc.SetObject();
@@ -3465,6 +3467,12 @@ std::string write_model_params_to_json(const std::string& predicted,
   training_query_value.SetString(
       training_query.c_str(), training_query.length(), doc.GetAllocator());
   doc.AddMember("training_query", training_query_value, doc.GetAllocator());
+
+  rapidjson::Value key("data_split_eval_fraction", doc.GetAllocator());
+
+  rapidjson::Value value(data_split_eval_fraction);
+
+  doc.AddMember(key, value, doc.GetAllocator());
 
   // Convert the document to a JSON string
   rapidjson::StringBuffer buffer;
@@ -3491,14 +3499,43 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
 
   bool first_options_arg = true;
 
+  const std::unordered_set<std::string> excluded_options_set = {
+      "eval_fraction", "data_split_eval_fraction"};
+  double data_split_eval_fraction = 0.0;
+  bool eval_fraction_specified = false;
   if (!model_options_.empty()) {
     for (auto& p : model_options_) {
+      const auto key = boost::to_lower_copy<std::string>(*p->get_name());
+      if (excluded_options_set.find(key) != excluded_options_set.end()) {
+        if (key == "eval_fraction" || key == "data_split_eval_fraction") {
+          if (eval_fraction_specified) {
+            throw std::runtime_error(
+                "Error parsing DATA_SPLIT_EVAL_FRACTION value. "
+                "Expected only one value.");
+          }
+          const DoubleLiteral* fp_literal =
+              dynamic_cast<const DoubleLiteral*>(p->get_value());
+          if (fp_literal != nullptr) {
+            data_split_eval_fraction = fp_literal->get_doubleval();
+            if (data_split_eval_fraction < 0.0 || data_split_eval_fraction >= 1.0) {
+              throw std::runtime_error(
+                  "Error parsing DATA_SPLIT_EVAL_FRACTION value. "
+                  "Expected value between 0.0 and 1.0.");
+            }
+          } else {
+            throw std::runtime_error(
+                "Error parsing DATA_SPLIT_EVAL_FRACTION value. "
+                "Expected floating point value betwen 0.0 and 1.0.");
+          }
+          eval_fraction_specified = true;
+        }
+        continue;
+      }
       if (!first_options_arg) {
         options_oss << ", ";
       } else {
         first_options_arg = false;
       }
-      const auto key = boost::to_lower_copy<std::string>(*p->get_name());
       options_oss << key << " => ";
       const StringLiteral* str_literal =
           dynamic_cast<const StringLiteral*>(p->get_value());
@@ -3526,13 +3563,26 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
   auto session_copy = session;
   auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
       &session_copy, boost::null_deleter());
+  auto modified_select_query = select_query_;
+  if (data_split_eval_fraction > 0.0) {
+    std::ostringstream modified_query_oss;
+    modified_query_oss << "SELECT * FROM (" << modified_select_query
+                       << ") WHERE SAMPLE_RATIO(" << 1.0 - data_split_eval_fraction
+                       << ")";
+    modified_select_query = modified_query_oss.str();
+  }
 
-  auto query_state = query_state::QueryState::create(session_ptr, select_query_);
+  auto validate_query_state =
+      query_state::QueryState::create(session_ptr, modified_select_query);
 
   LocalQueryConnector local_connector;
 
-  auto validate_result = local_connector.query(
-      query_state->createQueryStateProxy(), select_query_, {}, true, false);
+  auto validate_result =
+      local_connector.query(validate_query_state->createQueryStateProxy(),
+                            modified_select_query,
+                            {},
+                            true,
+                            false);
 
   auto column_descriptors_for_model_create =
       local_connector.getColumnDescriptors(validate_result, true);
@@ -3545,7 +3595,9 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
     // Check to see if the projected column is an expression without a user-provided
     // alias, as we don't allow this.
     if (cd.columnName.rfind("EXPR$", 0) == 0) {
-      throw std::runtime_error("All projected column expressions must be aliased.");
+      throw std::runtime_error(
+          "All projected expressions (i.e. col * 2) that are not column references (i.e. "
+          "col) must be aliased.");
     }
     if (is_predicted) {
       model_predicted_var = cd.columnName;
@@ -3554,10 +3606,22 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
       model_predictor_vars.emplace_back(cd.columnName);
     }
   }
-  const auto model_metadata = write_model_params_to_json(
-      model_predicted_var, model_predictor_vars, select_query_);
+  // We have to base64 encode the model metadata because depending on the query,
+  // the training data can have single quotes that trips up the parsing of the combined
+  // select query with this metadata embedded.
+
+  // This is just a temporary workaround until we store this info in the Catalog
+  // rather than in the stored model pointer itself (and have to pass the metadata
+  // down through the table function call)
+  const auto model_metadata =
+      shared::encode_base64(write_model_params_to_json(model_predicted_var,
+                                                       model_predictor_vars,
+                                                       select_query_,
+                                                       data_split_eval_fraction));
 
   if (!first_options_arg) {
+    // The options string does not have a trailing comma,
+    // so add it
     options_oss << ", ";
   }
   options_oss << "model_metadata => '" << model_metadata << "'";
@@ -3566,13 +3630,13 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
 
   std::ostringstream model_query_oss;
   model_query_oss << "SELECT * FROM TABLE(" << model_train_func << "(model_name=>'"
-                  << get_model_name() << "', data=>CURSOR(" << select_query_ << ")";
-  if (!options_str.empty()) {
-    model_query_oss << ", " << options_str;
-  }
+                  << get_model_name() << "', data=>CURSOR(" << modified_select_query
+                  << ")";
+  model_query_oss << ", " << options_str;
   model_query_oss << "))";
 
   std::string wrapped_model_query = model_query_oss.str();
+  auto query_state = query_state::QueryState::create(session_ptr, wrapped_model_query);
   auto result = local_connector.query(
       query_state->createQueryStateProxy(), wrapped_model_query, {}, false);
 }
@@ -3585,10 +3649,35 @@ void CreateModelStmt::execute(const Catalog_Namespace::SessionInfo& session,
 
   try {
     train_model(session);
-    // catalog.createModel(md);
-  } catch (std::runtime_error& e) {
+  } catch (std::exception& e) {
     std::ostringstream error_oss;
-    error_oss << "Could not create model " << model_name_ << ". " << e.what();
+    // Error messages from table functions come back like this:
+    // Error executing table function: MLTableFunctions.hpp:269 linear_reg_fit_impl: No
+    // rows exist in training input. Training input must at least contain 1 row.
+
+    // We want to take everything after the function name, so we will search for the third
+    // colon.
+    // Todo(todd): Look at making this less hacky by setting a mode for the table function
+    // that will return only the core error string and not the preprending metadata
+
+    auto get_error_substring = [](const std::string& message) -> std::string {
+      size_t colon_position = std::string::npos;
+      for (int i = 0; i < 3; ++i) {
+        colon_position = message.find(':', colon_position + 1);
+        if (colon_position == std::string::npos) {
+          return message;
+        }
+      }
+
+      if (colon_position + 2 >= message.length()) {
+        return message;
+      }
+      return message.substr(colon_position + 2);
+    };
+
+    const auto error_substr = get_error_substring(e.what());
+
+    error_oss << "Could not create model " << model_name_ << ". " << error_substr;
     throw std::runtime_error(error_oss.str());
   }
 }

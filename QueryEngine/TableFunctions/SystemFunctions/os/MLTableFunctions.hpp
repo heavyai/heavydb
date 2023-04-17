@@ -267,7 +267,7 @@ linear_reg_fit_impl(TableFunctionManager& mgr,
                     Column<TextEncodingDict>& output_model_name) {
   if (input_labels.size() == 0) {
     return mgr.ERROR_MESSAGE(
-        "No rows exist in training input. Training input must at least contain 1 row.");
+        "No rows exist in training data. Training data must at least contain 1 row.");
   }
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
@@ -330,10 +330,12 @@ linear_reg_fit_impl(TableFunctionManager& mgr,
    TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<T> features> data,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="{}") ->
+   TextEncodingNone model_metadata | default="e30=") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
+
+// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -446,10 +448,12 @@ struct CategoricalFeaturesBuilder {
    int32_t top_k_cat_attrs | require="top_k_cat_attrs >= 1" | default=10,
    float min_cat_attr_proportion | require="min_cat_attr_proportion > 0.0" | require="min_cat_attr_proportion <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="{}") ->
+   TextEncodingNone model_metadata | default="e30=") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
+
+// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -537,7 +541,7 @@ decision_tree_reg_impl(TableFunctionManager& mgr,
                        Column<TextEncodingDict>& output_model_name) {
   if (input_labels.size() == 0) {
     return mgr.ERROR_MESSAGE(
-        "No rows exist in training input. Training input must at least contain 1 row.");
+        "No rows exist in training data. Training data must at least contain 1 row.");
   }
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
@@ -596,10 +600,12 @@ decision_tree_reg_impl(TableFunctionManager& mgr,
    int64_t max_tree_depth | require="max_tree_depth >= 0" | default=0,
    int64_t min_obs_per_leaf_node | require="min_obs_per_leaf_node >= 0" | default=5,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="{}") ->
+   TextEncodingNone model_metadata | default="e30=") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
+
+// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -635,10 +641,12 @@ decision_tree_reg_fit__cpu_template(TableFunctionManager& mgr,
    int32_t top_k_cat_attrs | require="top_k_cat_attrs >= 1" | default=10,
    float min_cat_attr_proportion | require="min_cat_attr_proportion > 0.0" | require="min_cat_attr_proportion <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="{}") ->
+   TextEncodingNone model_metadata | default="e30=") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
+
+// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t decision_tree_reg_fit__cpu_template(
@@ -694,7 +702,7 @@ gbt_reg_fit_impl(TableFunctionManager& mgr,
                  Column<TextEncodingDict>& output_model_name) {
   if (input_labels.size() == 0) {
     return mgr.ERROR_MESSAGE(
-        "No rows exist in training input. Training input must at least contain 1 row.");
+        "No rows exist in training data. Training data must at least contain 1 row.");
   }
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
@@ -829,10 +837,12 @@ gbt_reg_fit__cpu_template(TableFunctionManager& mgr,
    int32_t top_k_cat_attrs | require="top_k_cat_attrs >= 1" | default=10,
    float min_cat_attr_proportion | require="min_cat_attr_proportion > 0.0" | require="min_cat_attr_proportion <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="{}") ->
+   TextEncodingNone model_metadata | default="e30=") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
+
+// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -906,7 +916,7 @@ random_forest_reg_fit_impl(TableFunctionManager& mgr,
                            Column<TextEncodingDict>& output_model_name) {
   if (input_labels.size() == 0) {
     return mgr.ERROR_MESSAGE(
-        "No rows exist in training input. Training input must at least contain 1 row.");
+        "No rows exist in training data. Training data must at least contain 1 row.");
   }
   const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
   if (preferred_ml_framework == MLFramework::INVALID) {
@@ -1017,10 +1027,12 @@ random_forest_reg_fit_impl(TableFunctionManager& mgr,
    bool use_histogram | default=false,
    TextEncodingNone var_importance_metric | default="MDI",
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="{}") ->
+   TextEncodingNone model_metadata | default="e30=") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
+
+// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -1089,10 +1101,12 @@ random_forest_reg_fit__cpu_template(TableFunctionManager& mgr,
    int32_t top_k_cat_attrs | require="top_k_cat_attrs >= 1" | default=10,
    float min_cat_attr_proportion | require="min_cat_attr_proportion > 0.0" | require="min_cat_attr_proportion <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="{}") ->
+   TextEncodingNone model_metadata | default="e30=") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
+
+// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t random_forest_reg_fit__cpu_template(
@@ -1412,6 +1426,10 @@ NEVER_INLINE HOST int32_t r2_score_impl(TableFunctionManager& mgr,
                                         const ColumnList<T>& input_features,
                                         Column<double>& output_r2) {
   const int64_t num_rows = input_labels.size();
+  if (num_rows == 0) {
+    return mgr.ERROR_MESSAGE(
+        "No rows exist in evaluation data. Evaluation data must at least contain 1 row.");
+  }
   std::vector<T> output_predictions_vec(num_rows);
   Column<T> output_predictions(output_predictions_vec);
   std::vector<int64_t> input_ids_vec(num_rows);
