@@ -20,6 +20,7 @@
 #include "MLModelMetadata.h"
 #include "QueryEngine/DecisionTreeEntry.h"
 
+#include <iostream>
 #include <map>
 #include <memory>
 #include <stack>

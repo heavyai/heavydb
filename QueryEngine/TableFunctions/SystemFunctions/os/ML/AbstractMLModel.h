@@ -17,6 +17,7 @@
 #pragma once
 
 #include <string>
+#include "Shared/base64.h"
 
 enum MLModelType { LINEAR_REG, DECISION_TREE_REG, GBT_REG, RANDOM_FOREST_REG };
 
@@ -62,7 +63,8 @@ class AbstractMLModel {
   AbstractMLModel(const std::string& model_metadata) : model_metadata_(model_metadata) {}
   AbstractMLModel(const std::string& model_metadata,
                   const std::vector<std::vector<std::string>>& cat_feature_keys)
-      : model_metadata_(model_metadata), cat_feature_keys_(cat_feature_keys) {}
+      : model_metadata_(shared::decode_base64(model_metadata))
+      , cat_feature_keys_(cat_feature_keys) {}
   virtual MLModelType getModelType() const = 0;
   virtual std::string getModelTypeString() const = 0;
   virtual int64_t getNumFeatures() const = 0;

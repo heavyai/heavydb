@@ -315,10 +315,8 @@ std::unique_ptr<RexLiteral> genLiteralDouble(double val) {
 }
 
 std::unique_ptr<RexLiteral> genLiteralBoolean(bool val) {
-  return std::unique_ptr<RexLiteral>(
-      // new RexLiteral(val, SQLTypes::kBOOLEAN, SQLTypes::kBOOLEAN, 0, 0, 0, 0));
-      new RexLiteral(
-          (int64_t)(val ? 1 : 0), SQLTypes::kBIGINT, SQLTypes::kBIGINT, 0, 8, 0, 8));
+  return std::unique_ptr<RexLiteral>(new RexLiteral(
+      (int64_t)(val ? 1 : 0), SQLTypes::kBIGINT, SQLTypes::kBIGINT, 0, 8, 0, 8));
 }
 
 void set_headers_with_type(
@@ -2034,10 +2032,6 @@ ShowModelsCommand::ShowModelsCommand(
 ExecutionResult ShowModelsCommand::execute(bool read_only_mode) {
   auto execute_read_lock = legacylockmgr::getExecuteReadLock();
 
-  // Get all model names
-
-  // valid in read_only_mode
-
   // label_infos -> column labels
   std::vector<std::string> labels{"model_name"};
   std::vector<TargetMetaInfo> label_infos;
@@ -2070,11 +2064,6 @@ ShowModelDetailsCommand::ShowModelDetailsCommand(
 ExecutionResult ShowModelDetailsCommand::execute(bool read_only_mode) {
   auto execute_read_lock = legacylockmgr::getExecuteReadLock();
 
-  // Get all model names
-
-  // valid in read_only_mode
-
-  // label_infos -> column labels
   std::vector<std::string> labels{"model_name", "model_type", "training_query"};
   std::vector<TargetMetaInfo> label_infos;
   label_infos.emplace_back("model_name", SQLTypeInfo(kTEXT, true));
@@ -2086,9 +2075,7 @@ ExecutionResult ShowModelDetailsCommand::execute(bool read_only_mode) {
   label_infos.emplace_back("num_physical_features", SQLTypeInfo(kBIGINT, true));
   label_infos.emplace_back("num_categorical_features", SQLTypeInfo(kBIGINT, true));
   label_infos.emplace_back("num_numeric_features", SQLTypeInfo(kBIGINT, true));
-  // for (const auto& label : labels) {
-  //   label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
-  // }
+  label_infos.emplace_back("eval_fraction", SQLTypeInfo(kDOUBLE, true));
 
   // Get all model names
   const auto model_names = getFilteredModelNames();
@@ -2123,6 +2110,8 @@ ExecutionResult ShowModelDetailsCommand::execute(bool read_only_mode) {
     logical_values.back().emplace_back(
         genLiteralBigInt(model_metadata.getNumLogicalFeatures() -
                          model_metadata.getNumCategoricalFeatures()));
+    logical_values.back().emplace_back(
+        genLiteralDouble(model_metadata.getDataSplitEvalFraction()));
   }
 
   // Create ResultSet
@@ -2175,38 +2164,89 @@ ExecutionResult EvaluateModelCommand::execute(bool read_only_mode) {
   std::regex backtick_re("`");
   select_query = std::regex_replace(select_query, newline_re, " ");
   select_query = std::regex_replace(select_query, backtick_re, "");
+  if (select_query.empty()) {
+    const auto model_metadata = g_ml_models.getModelMetadata(model_name);
+    const double data_split_eval_fraction = model_metadata.getDataSplitEvalFraction();
+    CHECK_LE(data_split_eval_fraction, 1.0);
+    if (data_split_eval_fraction <= 0.0) {
+      throw std::runtime_error(
+          "Unable to evaluate model: " + model_name +
+          ". Model was not trained with a data split evaluation fraction.");
+    }
+    const auto& training_query = model_metadata.getTrainingQuery();
+    std::ostringstream select_query_oss;
+    // To get a non-overlapping eval dataset (that does not overlap with the training
+    // dataset), we need to use NOT SAMPLE_RATIO(training_fraction) and not
+    // SAMPLE_RATIO(eval_fraction), as the latter will be a subset of the training
+    // dataset
+    const double data_split_train_fraction = 1.0 - data_split_eval_fraction;
+    select_query_oss << "SELECT * FROM (" << training_query << ") WHERE NOT SAMPLE_RATIO("
+                     << data_split_train_fraction << ")";
+    select_query = select_query_oss.str();
+  }
   std::ostringstream r2_query_oss;
   r2_query_oss << "SELECT * FROM TABLE(r2_score(model_name => '" << model_name << "', "
                << "data => CURSOR(" << select_query << ")))";
   std::string r2_query = r2_query_oss.str();
 
-  Parser::LocalQueryConnector local_connector;
-  auto query_state = query_state::QueryState::create(session_ptr_, select_query);
-  auto result =
-      local_connector.query(query_state->createQueryStateProxy(), r2_query, {}, false);
-  std::vector<std::string> labels{"r2"};
-  std::vector<TargetMetaInfo> label_infos;
-  for (const auto& label : labels) {
-    label_infos.emplace_back(label, SQLTypeInfo(kDOUBLE, true));
+  try {
+    Parser::LocalQueryConnector local_connector;
+    auto query_state = query_state::QueryState::create(session_ptr_, r2_query);
+    auto result =
+        local_connector.query(query_state->createQueryStateProxy(), r2_query, {}, false);
+    std::vector<std::string> labels{"r2"};
+    std::vector<TargetMetaInfo> label_infos;
+    for (const auto& label : labels) {
+      label_infos.emplace_back(label, SQLTypeInfo(kDOUBLE, true));
+    }
+    std::vector<RelLogicalValues::RowValues> logical_values;
+    logical_values.emplace_back(RelLogicalValues::RowValues{});
+
+    CHECK_EQ(result.size(), size_t(1));
+    CHECK_EQ(result[0].rs->rowCount(), size_t(1));
+    CHECK_EQ(result[0].rs->colCount(), size_t(1));
+
+    auto result_row = result[0].rs->getNextRow(true, true);
+
+    auto scalar_r = boost::get<ScalarTargetValue>(&result_row[0]);
+    auto p = boost::get<double>(scalar_r);
+
+    logical_values.back().emplace_back(genLiteralDouble(*p));
+
+    std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+        ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+    return ExecutionResult(rSet, label_infos);
+  } catch (const std::exception& e) {
+    std::ostringstream error_oss;
+    // Error messages from table functions come back like this:
+    // Error executing table function: MLTableFunctions.hpp:1416 r2_score_impl: No
+    // rows exist in evaluation data. Evaluation data must at least contain 1 row.
+
+    // We want to take everything after the function name, so we will search for the third
+    // colon.
+    // Todo(todd): Look at making this less hacky by setting a mode for the table function
+    // that will return only the core error string and not the preprending metadata
+
+    auto get_error_substring = [](const std::string& message) -> std::string {
+      size_t colon_position = std::string::npos;
+      for (int i = 0; i < 3; ++i) {
+        colon_position = message.find(':', colon_position + 1);
+        if (colon_position == std::string::npos) {
+          return message;
+        }
+      }
+
+      if (colon_position + 2 >= message.length()) {
+        return message;
+      }
+      return message.substr(colon_position + 2);
+    };
+
+    const auto error_substr = get_error_substring(e.what());
+    error_oss << "Could not evaluate model " << model_name << ". " << error_substr;
+    throw std::runtime_error(error_oss.str());
   }
-  std::vector<RelLogicalValues::RowValues> logical_values;
-  logical_values.emplace_back(RelLogicalValues::RowValues{});
-
-  CHECK_EQ(result.size(), size_t(1));
-  CHECK_EQ(result[0].rs->rowCount(), size_t(1));
-  CHECK_EQ(result[0].rs->colCount(), size_t(1));
-
-  auto result_row = result[0].rs->getNextRow(true, true);
-
-  auto scalar_r = boost::get<ScalarTargetValue>(&result_row[0]);
-  auto p = boost::get<double>(scalar_r);
-
-  logical_values.back().emplace_back(genLiteralDouble(*p));
-
-  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
-      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
-
-  return ExecutionResult(rSet, label_infos);
 }
 
 ShowForeignServersCommand::ShowForeignServersCommand(
