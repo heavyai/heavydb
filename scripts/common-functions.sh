@@ -290,8 +290,8 @@ function install_geos() {
 
 }
 
-FOLLY_VERSION=2023.02.20.00
-FMT_VERSION=9.1.0
+FOLLY_VERSION=2021.02.01.00
+FMT_VERSION=7.1.3
 function install_folly() {
   # Folly depends on fmt
   download https://github.com/fmtlib/fmt/archive/$FMT_VERSION.tar.gz
@@ -323,7 +323,6 @@ function install_folly() {
   cmake -GNinja \
         -DCMAKE_CXX_FLAGS="-fPIC -pthread" \
         -DFOLLY_USE_JEMALLOC=OFF \
-        -DFOLLY_NO_EXCEPTION_TRACER=ON \
         -DBUILD_SHARED_LIBS=${FOLLY_SHARED} \
         -DCMAKE_INSTALL_PREFIX=$PREFIX ..
   cmake_build_and_install
