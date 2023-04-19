@@ -3168,8 +3168,14 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(
           case kMULTILINESTRING:
           case kPOLYGON:
           case kMULTIPOLYGON:
-            str_col_buffers[col_ids[col_idx]].push_back(
-                col_datum.stringval ? *col_datum.stringval : "");
+            if (col_datum.stringval && col_datum.stringval->empty()) {
+              throw std::runtime_error(
+                  "Empty values are not allowed for geospatial column \"" +
+                  cd->columnName + "\"");
+            } else {
+              str_col_buffers[col_ids[col_idx]].push_back(
+                  col_datum.stringval ? *col_datum.stringval : "");
+            }
             break;
           default:
             CHECK(false);
