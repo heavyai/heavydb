@@ -334,7 +334,7 @@ void import_geospatial_multi_frag_test(const bool use_temporary_tables) {
                             ")'"};
     run_multiple_agg(gen(point, point, point), ExecutorDeviceType::CPU);
   }
-  run_multiple_agg("insert into geospatial_multi_frag_test values ('', '', '')",
+  run_multiple_agg("insert into geospatial_multi_frag_test values (NULL, NULL, NULL)",
                    ExecutorDeviceType::CPU);
 }
 

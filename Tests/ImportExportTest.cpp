@@ -6175,6 +6175,29 @@ TEST_F(ImportStatusTest, InvalidImportId) {
       },
       "Import status not found for id: invalid_import_id");
 }
+
+class GeoInsertErrorTest : public DBHandlerTestFixture,
+                           public ::testing::WithParamInterface<std::string> {
+ protected:
+  void TearDown() override { sql("DROP TABLE IF EXISTS test_table;"); }
+};
+
+TEST_P(GeoInsertErrorTest, EmptyString) {
+  sql("CREATE TABLE test_table (col " + GetParam() + ");");
+  queryAndAssertException("INSERT INTO test_table VALUES ('');",
+                          "Empty values are not allowed for geospatial column \"col\"");
+}
+
+INSTANTIATE_TEST_SUITE_P(GeoColumns,
+                         GeoInsertErrorTest,
+                         ::testing::Values("POINT",
+                                           "MULTIPOINT",
+                                           "LINESTRING",
+                                           "MULTILINESTRING",
+                                           "POLYGON",
+                                           "MULTIPOLYGON"),
+                         [](const auto& param_info) { return param_info.param; });
+
 }  // namespace
 
 int main(int argc, char** argv) {
