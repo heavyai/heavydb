@@ -222,7 +222,8 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
       new PersistentStorageMgr(dataDir_, userSpecifiedNumReaderThreads, cache_config));
 
   levelSizes_.push_back(1);
-  size_t page_size{512};
+  auto page_size = system_parameters.buffer_page_size;
+  CHECK_GT(page_size, size_t(0));
   size_t cpuBufferSize = system_parameters.cpu_buffer_mem_bytes;
   if (cpuBufferSize == 0) {  // if size is not specified
     const auto total_system_memory = getTotalSystemMemory();
