@@ -5336,6 +5336,8 @@ TEST_F(BasicRasterImporterTest, HDF5ImageMultiThreaded) {
 
 static constexpr const char* kPNG = "beach.png";
 static constexpr const char* kGeoTIFF = "USGS_1m_x30y441_OH_Columbus_2019_small.tif";
+static constexpr const char* kGeoTIFFTruncated =
+    "USGS_1m_x30y441_OH_Columbus_2019_small_truncated.tif";
 static constexpr const char* kGeoTIFFDir = "geotif/";
 static constexpr const char* kGRIB = "hrrr.t00z.wrfsubhf00_small.grib2";
 static constexpr const char* kZARRArchive = "small.zarr.tgz";
@@ -5767,6 +5769,21 @@ TEST_F(RasterImportTest, ImportGeoTIFFTest) {
       "",
       "SELECT max(raster_lon), max(raster_lat), max(band_1_1) FROM raster;",
       {{-83.222766892364277, 39.818764365787992, 287.54092407226562}}));
+}
+
+TEST_F(RasterImportTest, ImportGeoTIFFTruncatedTest) {
+  ASSERT_NO_THROW(importTestCommon(kGeoTIFFTruncated,
+                                   ", max_reject=1000000",
+                                   "SELECT count(*) > 10000 FROM raster;",
+                                   {{1L}}));
+}
+
+TEST_F(RasterImportTest, ImportGeoTIFFTruncatedFailTest) {
+  EXPECT_THROW(importTestCommon(kGeoTIFFTruncated,
+                                ", max_reject=1000",
+                                "SELECT count(*) > 10000 FROM raster;",
+                                {{1L}}),
+               TDBException);
 }
 
 TEST_F(RasterImportTest, ImportGeoTIFFPointTest) {

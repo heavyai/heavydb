@@ -5839,6 +5839,10 @@ ImportStatus Importer::importGDALRaster(
     auto const num_rows = y_end - y_start;
     auto const num_elems = band_size_x * num_rows;
 
+    ImportStatus thread_import_status;
+
+    bool read_block_failed = false;
+
     // for each band/column
     for (uint32_t band_idx = 0; band_idx < num_bands; band_idx++) {
       // the corresponding column
@@ -5849,10 +5853,18 @@ ImportStatus Importer::importGDALRaster(
       auto const cd_type = cd_band->columnType.get_type();
 
       // read the scanlines (will do a data type conversion if necessary)
-      auto read_timer = timer_start();
-      raster_importer.getRawPixels(
-          thread_idx, band_idx, y_start, num_rows, cd_type, raw_pixel_bytes);
-      read_s += TIMER_STOP(read_timer);
+      try {
+        auto read_timer = timer_start();
+        raster_importer.getRawPixels(
+            thread_idx, band_idx, y_start, num_rows, cd_type, raw_pixel_bytes);
+        read_s += TIMER_STOP(read_timer);
+      } catch (std::runtime_error& e) {
+        // report error
+        LOG(ERROR) << e.what();
+        // abort this block
+        read_block_failed = true;
+        break;
+      }
 
       // null value?
       auto const [null_value, null_value_valid] =
@@ -5946,20 +5958,25 @@ ImportStatus Importer::importGDALRaster(
       col_itr++;
     }
 
-    // metadata columns?
-    for (auto const& mci : metadata_column_infos) {
-      auto const* cd_band = *col_itr++;
-      CHECK(cd_band);
-      for (int i = 0; i < num_elems; i++) {
-        import_buffers[col_idx]->add_value(cd_band, mci.value, false, copy_params);
+    if (read_block_failed) {
+      // discard block data
+      for (auto& col_buffer : import_buffers) {
+        col_buffer->clear();
       }
-      col_idx++;
+      thread_import_status.rows_rejected += num_elems;
+    } else {
+      // metadata columns?
+      for (auto const& mci : metadata_column_infos) {
+        auto const* cd_band = *col_itr++;
+        CHECK(cd_band);
+        for (int i = 0; i < num_elems; i++) {
+          import_buffers[col_idx]->add_value(cd_band, mci.value, false, copy_params);
+        }
+        col_idx++;
+      }
+      thread_import_status.rows_estimated = num_elems;
+      thread_import_status.rows_completed = num_elems;
     }
-
-    // build status
-    ImportStatus thread_import_status;
-    thread_import_status.rows_estimated = num_elems;
-    thread_import_status.rows_completed = num_elems;
 
     // done
     return {std::move(thread_import_status), {proj_s, read_s, conv_s}};
@@ -6006,7 +6023,6 @@ ImportStatus Importer::importGDALRaster(
     // accumulate the results and times
     float proj_s{0.0f}, read_s{0.0f}, conv_s{0.0f}, load_s{0.0f};
     size_t thread_idx = 0;
-    size_t active_threads = 0;
     for (auto& future : futures) {
       auto const [import_status, times] = future.get();
       import_status_ += import_status;
@@ -6015,20 +6031,21 @@ ImportStatus Importer::importGDALRaster(
       conv_s += times[2];
       // We load the data in thread order so we can get deterministic row-major raster
       // ordering
-      auto thread_load_timer = timer_start();
       // Todo: We should consider invoking the load on another thread in a ping-pong
       // fashion so we can simultaneously read the next batch of data
-      load(import_buffers_vec[thread_idx], rows_per_thread[thread_idx], session_info);
-      ++thread_idx;
-      ++active_threads;
-
+      auto thread_load_timer = timer_start();
+      // only try to load this thread's data if valid
+      if (import_status.rows_rejected == 0) {
+        load(import_buffers_vec[thread_idx], rows_per_thread[thread_idx], session_info);
+      }
       load_s += TIMER_STOP(thread_load_timer);
+      ++thread_idx;
     }
 
     // average times over all threads (except for load which is single-threaded)
-    total_proj_s += (proj_s / float(active_threads));
-    total_read_s += (read_s / float(active_threads));
-    total_conv_s += (conv_s / float(active_threads));
+    total_proj_s += (proj_s / float(futures.size()));
+    total_read_s += (read_s / float(futures.size()));
+    total_conv_s += (conv_s / float(futures.size()));
     total_load_s += load_s;
 
     // update the status
@@ -6048,6 +6065,11 @@ ImportStatus Importer::importGDALRaster(
       import_status_.load_failed = true;
       import_status_.load_msg = "Raster Import interrupted";
       throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+    }
+
+    // hit max_reject?
+    if (import_status_.rows_rejected > copy_params.max_reject) {
+      break;
     }
   }
 
@@ -6069,6 +6091,18 @@ ImportStatus Importer::importGDALRaster(
   LOG(INFO) << "Raster Importer: Total Import Time " << total_wall_s << "s at "
             << total_scanlines_per_second << " scanlines/s and " << total_rows_per_second
             << " rows/s";
+
+  // if we hit max_reject, throw an exception now to report the error and abort any
+  // multi-file loop
+  if (import_status_.rows_rejected > copy_params.max_reject) {
+    std::string msg = "Raster Importer: Import aborted after failing to read " +
+                      std::to_string(import_status_.rows_rejected) +
+                      " rows/pixels (limit " + std::to_string(copy_params.max_reject) +
+                      ")";
+    import_status_.load_msg = msg;
+    set_import_status(import_id, import_status_);
+    throw std::runtime_error(msg);
+  }
 
   // phase times (with proportions)
   auto proj_pct = float(int(total_proj_s / total_wall_s * 1000.0f) * 0.1f);
