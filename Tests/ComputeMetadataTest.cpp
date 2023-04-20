@@ -1856,7 +1856,23 @@ TEST_F(OpportunisticVacuumingTest, VarLenColumnUpdateOfConsecutiveInnerFragments
   // clang-format on
 }
 
-TEST_F(OpportunisticVacuumingTest, PulledInChunkDeleted) {
+class OpportunisticVacuumingMemoryUseTest : public OpportunisticVacuumingTest {
+ protected:
+  void TearDown() override {
+    OpportunisticVacuumingTest::TearDown();
+    resetBufferMgrs(getSystemParameters());
+  }
+
+  void resetBufferMgrs(const SystemParameters& system_parameters) {
+    File_Namespace::DiskCacheConfig disk_cache_config{
+        File_Namespace::DiskCacheConfig::getDefaultPath(std::string(BASE_PATH)),
+        File_Namespace::DiskCacheLevel::fsi};
+    auto& data_mgr = getCatalog().getDataMgr();
+    data_mgr.resetBufferMgrs(disk_cache_config, 0, system_parameters);
+  }
+};
+
+TEST_F(OpportunisticVacuumingMemoryUseTest, PulledInChunkDeleted) {
   sql("create table test_table (i int, t text encoding none) with (fragment_size = 5);");
   insertRange(1, 10, "abc");
 
@@ -1922,7 +1938,7 @@ TEST_F(OpportunisticVacuumingTest, PulledInChunkDeleted) {
                        {i(8), "abc8"}});
 }
 
-TEST_F(OpportunisticVacuumingTest, StaleChunkOnGpuDeleted) {
+TEST_F(OpportunisticVacuumingMemoryUseTest, StaleChunkOnGpuDeleted) {
   if (!setExecuteMode(TExecuteMode::GPU)) {
     GTEST_SKIP() << "GPU is not enabled.";
   }
@@ -1955,6 +1971,39 @@ TEST_F(OpportunisticVacuumingTest, StaleChunkOnGpuDeleted) {
 
   sqlAndCompareResult("select * from test_table order by i;",
                       {{i(3)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}});
+}
+
+TEST_F(OpportunisticVacuumingMemoryUseTest, OneFragmentProcessedAtATime) {
+  sql("create table test_table (i int, t text encoding none) with (fragment_size = 5);");
+  insertRange(0, 9, "a");
+
+  auto system_parameters = getSystemParameters();
+  system_parameters.buffer_page_size = 1;
+  system_parameters.min_cpu_slab_size = 1;
+  // After the delete query is executed, CPU memory should have 50 bytes of chunks for the
+  // i (4 * 10 bytes) and $deleted$ (1 * 10 bytes) columns (both fragments).
+  // Auto-vacuuming should pull in additional chunks of 34 bytes i.e. index chunk of 4
+  // bytes (initial offset) + 5 * 4 bytes and data chunk of 5 * 2 bytes per fragment.
+  system_parameters.max_cpu_slab_size = 84;
+  resetBufferMgrs(system_parameters);
+
+  sql("delete from test_table where i <= 1 or i >= 8;");
+
+  // Assert that only one slab was used.
+  auto memory_info_vector =
+      getCatalog().getDataMgr().getMemoryInfo(MemoryLevel::CPU_LEVEL);
+  ASSERT_EQ(memory_info_vector.size(), size_t(1));
+  for (const auto& memory_data : memory_info_vector[0].nodeMemoryData) {
+    EXPECT_EQ(memory_data.slabNum, size_t(0));
+  }
+
+  sqlAndCompareResult("select * from test_table order by i;",
+                      {{i(2), "a2"},
+                       {i(3), "a3"},
+                       {i(4), "a4"},
+                       {i(5), "a5"},
+                       {i(6), "a6"},
+                       {i(7), "a7"}});
 }
 
 int main(int argc, char** argv) {

@@ -67,6 +67,7 @@ struct SystemParameters {
   size_t calcite_keepalive = false;  // calcite keepalive connection
   int num_executors = 4;
   int num_sessions = -1;  // maximum number of user sessions
+  size_t buffer_page_size = 512;
   enum class RuntimeUdfRegistrationPolicy {
     DISALLOWED,
     ALLOWED_SUPERUSERS_ONLY,

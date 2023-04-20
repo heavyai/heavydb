@@ -457,6 +457,44 @@ void TableOptimizer::vacuumDeletedRows() const {
   }
 }
 
+namespace {
+std::set<ChunkKey> get_uncached_cpu_chunk_keys(const Catalog_Namespace::Catalog& catalog,
+                                               int32_t table_id,
+                                               int32_t fragment_id) {
+  auto& data_mgr = catalog.getDataMgr();
+  std::set<ChunkKey> uncached_cpu_chunk_keys;
+  for (auto cd : catalog.getAllColumnMetadataForTable(table_id, false, false, true)) {
+    ChunkKey chunk_key{catalog.getDatabaseId(), table_id, cd->columnId, fragment_id};
+    if (cd->columnType.is_varlen_indeed()) {
+      chunk_key.emplace_back(1);
+      if (!data_mgr.isBufferOnDevice(
+              chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL, 0)) {
+        uncached_cpu_chunk_keys.emplace(chunk_key);
+      }
+      chunk_key.back() = 2;
+      if (!data_mgr.isBufferOnDevice(
+              chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL, 0)) {
+        uncached_cpu_chunk_keys.emplace(chunk_key);
+      }
+    } else {
+      if (!data_mgr.isBufferOnDevice(
+              chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL, 0)) {
+        uncached_cpu_chunk_keys.emplace(chunk_key);
+      }
+    }
+  }
+  return uncached_cpu_chunk_keys;
+}
+
+void delete_cpu_chunks(const Catalog_Namespace::Catalog& catalog,
+                       const std::set<ChunkKey>& cpu_chunks_to_delete) {
+  auto& data_mgr = catalog.getDataMgr();
+  for (const auto& chunk_key : cpu_chunks_to_delete) {
+    data_mgr.deleteChunksWithPrefix(chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL);
+  }
+}
+}  // namespace
+
 void TableOptimizer::vacuumFragments(const TableDescriptor* td,
                                      const std::set<int>& fragment_ids) const {
   // "if not a table that supports delete return,  nothing more to do"
@@ -467,13 +505,17 @@ void TableOptimizer::vacuumFragments(const TableDescriptor* td,
   // vacuum chunks which show sign of deleted rows in metadata
   ChunkKey chunk_key_prefix = {cat_.getDatabaseId(), td->tableId, cd->columnId};
   ChunkMetadataVector chunk_metadata_vec;
-  cat_.getDataMgr().getChunkMetadataVecForKeyPrefix(chunk_metadata_vec, chunk_key_prefix);
+  auto& data_mgr = cat_.getDataMgr();
+  data_mgr.getChunkMetadataVecForKeyPrefix(chunk_metadata_vec, chunk_key_prefix);
   for (auto& [chunk_key, chunk_metadata] : chunk_metadata_vec) {
     auto fragment_id = chunk_key[CHUNK_KEY_FRAGMENT_IDX];
     // If delete has occurred, only vacuum fragments that are in the fragment_ids set.
     // Empty fragment_ids set implies all fragments.
     if (chunk_metadata->chunkStats.max.tinyintval == 1 &&
         (fragment_ids.empty() || shared::contains(fragment_ids, fragment_id))) {
+      auto cpu_chunks_to_delete =
+          get_uncached_cpu_chunk_keys(cat_, td->tableId, fragment_id);
+
       UpdelRoll updel_roll;
       updel_roll.catalog = &cat_;
       updel_roll.logicalTableId = cat_.getLogicalTableId(td->tableId);
@@ -494,41 +536,13 @@ void TableOptimizer::vacuumFragments(const TableDescriptor* td,
                                   updel_roll.memoryLevel,
                                   updel_roll);
       updel_roll.stageUpdate();
+
+      delete_cpu_chunks(cat_, cpu_chunks_to_delete);
     }
   }
   td->fragmenter->resetSizesFromFragments();
 }
 
-namespace {
-void add_uncached_cpu_chunk_keys(std::set<ChunkKey>& uncached_cpu_chunk_keys,
-                                 const Catalog_Namespace::Catalog& catalog,
-                                 int32_t table_id,
-                                 const std::set<int32_t>& fragment_ids) {
-  auto& data_mgr = catalog.getDataMgr();
-  for (auto cd : catalog.getAllColumnMetadataForTable(table_id, false, false, true)) {
-    for (auto fragment_id : fragment_ids) {
-      ChunkKey chunk_key{catalog.getDatabaseId(), table_id, cd->columnId, fragment_id};
-      if (cd->columnType.is_varlen_indeed()) {
-        chunk_key.emplace_back(1);
-        if (!data_mgr.isBufferOnDevice(
-                chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL, 0)) {
-          uncached_cpu_chunk_keys.emplace(chunk_key);
-        }
-        chunk_key.back() = 2;
-        if (!data_mgr.isBufferOnDevice(
-                chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL, 0)) {
-          uncached_cpu_chunk_keys.emplace(chunk_key);
-        }
-      } else {
-        if (!data_mgr.isBufferOnDevice(
-                chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL, 0)) {
-          uncached_cpu_chunk_keys.emplace(chunk_key);
-        }
-      }
-    }
-  }
-}
-}  // namespace
 void TableOptimizer::vacuumFragmentsAboveMinSelectivity(
     const TableUpdateMetadata& table_update_metadata) const {
   if (td_->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
@@ -577,11 +591,8 @@ void TableOptimizer::vacuumFragmentsAboveMinSelectivity(
     const auto table_lock =
         lockmgr::TableDataLockMgr::getWriteLockForTable({db_id, td_->tableId});
     const auto table_epochs = cat_.getTableEpochs(db_id, td_->tableId);
-    std::set<ChunkKey> cpu_chunks_to_delete;
     try {
       for (const auto& [td, fragment_ids] : fragments_to_vacuum) {
-        add_uncached_cpu_chunk_keys(
-            cpu_chunks_to_delete, cat_, td->tableId, fragment_ids);
         vacuumFragments(td, fragment_ids);
         VLOG(1) << "Auto-vacuumed fragments: " << shared::printContainer(fragment_ids)
                 << ", table id: " << td->tableId;
@@ -590,11 +601,6 @@ void TableOptimizer::vacuumFragmentsAboveMinSelectivity(
     } catch (...) {
       cat_.setTableEpochsLogExceptions(db_id, table_epochs);
       throw;
-    }
-
-    auto& data_mgr = cat_.getDataMgr();
-    for (const auto& chunk_key : cpu_chunks_to_delete) {
-      data_mgr.deleteChunksWithPrefix(chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL);
     }
   } else {
     // Checkpoint, even when no data update occurs, in order to ensure that epochs are
