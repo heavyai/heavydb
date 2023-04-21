@@ -87,6 +87,10 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
     return expr->deep_copy();
   }
 
+  RetType visitPCAProject(const Analyzer::PCAProjectExpr* expr) const override {
+    return expr->deep_copy();
+  }
+
   RetType visitCardinality(const Analyzer::CardinalityExpr* cardinality) const override {
     return makeExpr<Analyzer::CardinalityExpr>(visit(cardinality->get_arg()));
   }

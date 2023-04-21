@@ -32,14 +32,14 @@ void MLModelMetadata::extractModelMetadata(const std::string& model_metadata_jso
       model_metadata_doc["training_query"].IsString()) {
     training_query_ = model_metadata_doc["training_query"].GetString();
   }
-  if (model_metadata_doc.HasMember("predictors") &&
-      model_metadata_doc["predictors"].IsArray()) {
-    const rapidjson::Value& predictors_array = model_metadata_doc["predictors"];
-    for (const auto& predictor : predictors_array.GetArray()) {
-      predictors_.emplace_back(predictor.GetString());
+  if (model_metadata_doc.HasMember("features") &&
+      model_metadata_doc["features"].IsArray()) {
+    const rapidjson::Value& features_array = model_metadata_doc["features"];
+    for (const auto& feature : features_array.GetArray()) {
+      features_.emplace_back(feature.GetString());
     }
   } else {
-    predictors_.resize(num_logical_features, "");
+    features_.resize(num_logical_features, "");
   }
   if (model_metadata_doc.HasMember("data_split_eval_fraction") &&
       model_metadata_doc["data_split_eval_fraction"].IsDouble()) {

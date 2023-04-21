@@ -1104,6 +1104,22 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateMLPredict(
   return makeExpr<Analyzer::MLPredictExpr>(model_value, regressor_values);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translatePCAProject(
+    const RexFunctionOperator* rex_function) const {
+  const auto num_operands = rex_function->size();
+  CHECK_GE(num_operands, 3UL);
+  auto model_value = translateScalarRex(rex_function->getOperand(0));
+  std::vector<std::shared_ptr<Analyzer::Expr>> feature_values;
+  for (size_t feature_idx = 1; feature_idx < num_operands - 1; ++feature_idx) {
+    feature_values.emplace_back(
+        translateScalarRex(rex_function->getOperand(feature_idx)));
+  }
+  auto pc_dimension_value =
+      translateScalarRex(rex_function->getOperand(num_operands - 1));
+  return makeExpr<Analyzer::PCAProjectExpr>(
+      model_value, feature_values, pc_dimension_value);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(
     const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 4);
@@ -1736,6 +1752,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
   if (rex_function->getName() == "ML_PREDICT"sv) {
     return translateMLPredict(rex_function);
+  }
+  if (rex_function->getName() == "PCA_PROJECT"sv) {
+    return translatePCAProject(rex_function);
   }
   if (func_resolve(rex_function->getName(),
                    "LOWER"sv,

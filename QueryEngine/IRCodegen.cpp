@@ -179,6 +179,11 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
     return {codegen(ml_predict_expr, co)};
   }
 
+  auto pca_project_expr = dynamic_cast<const Analyzer::PCAProjectExpr*>(expr);
+  if (pca_project_expr) {
+    return {codegen(pca_project_expr, co)};
+  }
+
   auto likelihood_expr = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
   if (likelihood_expr) {
     return {codegen(likelihood_expr->get_arg(), fetch_columns, co)};

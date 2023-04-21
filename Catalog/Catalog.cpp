@@ -6663,7 +6663,7 @@ void Catalog::initializeMLModelMetadataSystemTable() {
                            {{"model_name", get_encoded_text_type()},
                             {"model_type", get_encoded_text_type()},
                             {"predicted", get_encoded_text_type()},
-                            {"predictors", get_var_encoded_text_array_type()},
+                            {"features", get_var_encoded_text_array_type()},
                             {"training_query", get_encoded_text_type()},
                             {"num_logical_features", {kBIGINT}},
                             {"num_physical_features", {kBIGINT}},

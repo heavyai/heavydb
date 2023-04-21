@@ -230,6 +230,8 @@ class CodeGenerator {
 
   llvm::Value* codegen(const Analyzer::MLPredictExpr*, const CompilationOptions&);
 
+  llvm::Value* codegen(const Analyzer::PCAProjectExpr*, const CompilationOptions&);
+
   llvm::Value* codegenLinRegPredict(const Analyzer::MLPredictExpr*,
                                     const std::string& model_name,
                                     const std::shared_ptr<AbstractMLModel>& model,

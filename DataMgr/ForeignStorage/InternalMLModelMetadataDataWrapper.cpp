@@ -40,13 +40,13 @@ void populate_import_buffers_for_ml_model_metadata(
       itr->second->addString(ml_model_metadata.getModelName());
     }
     if (auto itr = import_buffers.find("model_type"); itr != import_buffers.end()) {
-      itr->second->addString(ml_model_metadata.getModelType());
+      itr->second->addString(ml_model_metadata.getModelTypeStr());
     }
     if (auto itr = import_buffers.find("predicted"); itr != import_buffers.end()) {
       itr->second->addString(ml_model_metadata.getPredicted());
     }
-    if (auto itr = import_buffers.find("predictors"); itr != import_buffers.end()) {
-      itr->second->addStringArray(ml_model_metadata.getPredictors());
+    if (auto itr = import_buffers.find("features"); itr != import_buffers.end()) {
+      itr->second->addStringArray(ml_model_metadata.getFeatures());
     }
     if (auto itr = import_buffers.find("training_query"); itr != import_buffers.end()) {
       itr->second->addString(ml_model_metadata.getTrainingQuery());

@@ -2096,7 +2096,7 @@ ExecutionResult ShowModelDetailsCommand::execute(bool read_only_mode) {
   label_infos.emplace_back("model_name", SQLTypeInfo(kTEXT, true));
   label_infos.emplace_back("model_type", SQLTypeInfo(kTEXT, true));
   label_infos.emplace_back("predicted", SQLTypeInfo(kTEXT, true));
-  label_infos.emplace_back("predictors", SQLTypeInfo(kTEXT, true));
+  label_infos.emplace_back("features", SQLTypeInfo(kTEXT, true));
   label_infos.emplace_back("training_query", SQLTypeInfo(kTEXT, true));
   label_infos.emplace_back("num_logical_features", SQLTypeInfo(kBIGINT, true));
   label_infos.emplace_back("num_physical_features", SQLTypeInfo(kBIGINT, true));
@@ -2113,21 +2113,21 @@ ExecutionResult ShowModelDetailsCommand::execute(bool read_only_mode) {
     logical_values.emplace_back(RelLogicalValues::RowValues{});
     logical_values.back().emplace_back(genLiteralStr(model_name));
     const auto model_metadata = g_ml_models.getModelMetadata(model_name);
-    logical_values.back().emplace_back(genLiteralStr(model_metadata.getModelType()));
+    logical_values.back().emplace_back(genLiteralStr(model_metadata.getModelTypeStr()));
     logical_values.back().emplace_back(genLiteralStr(model_metadata.getPredicted()));
-    const auto& predictors = model_metadata.getPredictors();
-    std::ostringstream predictors_oss;
-    bool is_first_predictor = true;
-    for (auto& predictor : predictors) {
-      if (!is_first_predictor) {
-        predictors_oss << ", ";
+    const auto& features = model_metadata.getFeatures();
+    std::ostringstream features_oss;
+    bool is_first_feature = true;
+    for (auto& feature : features) {
+      if (!is_first_feature) {
+        features_oss << ", ";
       } else {
-        is_first_predictor = false;
+        is_first_feature = false;
       }
-      predictors_oss << predictor;
+      features_oss << feature;
     }
-    auto predictors_str = predictors_oss.str();
-    logical_values.back().emplace_back(genLiteralStr(predictors_str));
+    auto features_str = features_oss.str();
+    logical_values.back().emplace_back(genLiteralStr(features_str));
     logical_values.back().emplace_back(genLiteralStr(model_metadata.getTrainingQuery()));
     logical_values.back().emplace_back(
         genLiteralBigInt(model_metadata.getNumLogicalFeatures()));
@@ -2195,8 +2195,16 @@ ExecutionResult EvaluateModelCommand::execute(bool read_only_mode) {
   std::regex backtick_re("`");
   select_query = std::regex_replace(select_query, newline_re, " ");
   select_query = std::regex_replace(select_query, backtick_re, "");
+  const auto model_metadata = g_ml_models.getModelMetadata(model_name);
+  const auto model_type = model_metadata.getModelType();
+  if (!is_regression_model(model_type)) {
+    const auto& model_type_str = model_metadata.getModelTypeStr();
+    std::ostringstream error_oss;
+    error_oss << "EVALUATE MODEL not supported for " << model_type_str << " models.";
+    throw std::runtime_error(error_oss.str());
+  }
+
   if (select_query.empty()) {
-    const auto model_metadata = g_ml_models.getModelMetadata(model_name);
     const double data_split_eval_fraction = model_metadata.getDataSplitEvalFraction();
     CHECK_LE(data_split_eval_fraction, 1.0);
     if (data_split_eval_fraction <= 0.0) {

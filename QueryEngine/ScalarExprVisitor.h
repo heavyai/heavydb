@@ -81,6 +81,10 @@ class ScalarExprVisitor {
     if (ml_predict) {
       return visitMLPredict(ml_predict);
     }
+    const auto pca_project = dynamic_cast<const Analyzer::PCAProjectExpr*>(expr);
+    if (pca_project) {
+      return visitPCAProject(pca_project);
+    }
     const auto string_oper = dynamic_cast<const Analyzer::StringOper*>(expr);
     if (string_oper) {
       return visitStringOper(string_oper);
@@ -275,6 +279,17 @@ class ScalarExprVisitor {
     for (const auto& regressor_value : regressor_values) {
       result = aggregateResult(result, visit(regressor_value.get()));
     }
+    return result;
+  }
+
+  virtual T visitPCAProject(const Analyzer::PCAProjectExpr* pca_project_expr) const {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(pca_project_expr->get_model_value()));
+    const auto& feature_values = pca_project_expr->get_feature_values();
+    for (const auto& feature_value : feature_values) {
+      result = aggregateResult(result, visit(feature_value.get()));
+    }
+    result = aggregateResult(result, visit(pca_project_expr->get_pc_dimension_value()));
     return result;
   }
 

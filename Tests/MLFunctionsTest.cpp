@@ -742,6 +742,73 @@ TEST_F(MLTableFunctionsTest, DBSCAN) {
   }
 }
 
+TEST_F(MLTableFunctionsTest, PCA) {
+  const std::string data_table_name{"ml_iris"};
+  const std::string id_col{"id"};
+  const std::string model_name{"PCA_MODEL"};
+  const std::string quoted_model_name{"'" + model_name + "'"};
+  const std::vector<std::string> feature_cols{
+      {"petal_length_cm", "petal_width_cm", "sepal_length_cm", "sepal_width_cm"}};
+  const auto supported_ml_frameworks = get_supported_ml_frameworks();
+  for (auto& ml_framework : supported_ml_frameworks) {
+    if (ml_framework != "'onedal'") {
+      continue;
+    }
+    for (auto numeric_data_type : {"DOUBLE"}) {
+      const auto cursor_query = generate_cursor_query(
+          "ml_iris",
+          "",
+          {"petal_length_cm", "petal_width_cm", "sepal_length_cm", "sepal_width_cm"},
+          "",
+          numeric_data_type);
+      for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        const auto pca_partial_query =
+            generate_query("PCA_FIT",
+                           {{"model_name", quoted_model_name},
+                            {"data", cursor_query},
+                            {"preferred_ml_framework", ml_framework}},
+                           {},
+                           true /* make_args_named */);
+        const auto query = "SELECT * FROM " + pca_partial_query + ";";
+        const auto fit_rows = run_multiple_agg(query, dt);
+        EXPECT_EQ(fit_rows->rowCount(), size_t(1));
+        EXPECT_EQ(fit_rows->colCount(), size_t(1));
+        auto model_row = fit_rows->getNextRow(true, true);
+        EXPECT_EQ(boost::get<std::string>(TestHelpers::v<NullableString>(model_row[0])),
+                  model_name);
+        const auto model = g_ml_models.getModel(model_name);
+        const auto pca_model = std::dynamic_pointer_cast<PcaModel>(model);
+        const auto model_type = pca_model->getModelType();
+        EXPECT_EQ(model_type, MLModelType::PCA);
+        const auto num_features = pca_model->getNumFeatures();
+        constexpr int64_t expected_num_features = 4;
+        EXPECT_EQ(num_features, expected_num_features);
+        const auto& eigenvalues = pca_model->getEigenvalues();
+        const auto& eigenvectors = pca_model->getEigenvectors();
+        const std::vector<double> expected_eigenvalues{
+            2.91082, 0.921221, 0.147353, 0.0206075};
+        const std::vector<std::vector<double>> expected_eigenvectors{
+            {0.581254, 0.565611, 0.522371, -0.263355},
+            {0.0210948, 0.065416, 0.372318, 0.925557},
+            {-0.140893, -0.633801, 0.721017, -0.242033},
+            {0.801154, -0.523547, -0.261995, 0.124135}};
+        EXPECT_EQ(eigenvalues.size(), size_t(expected_num_features));
+        for (int64_t feature_idx = 0; feature_idx < expected_num_features;
+             ++feature_idx) {
+          EXPECT_NEAR(eigenvalues[feature_idx], expected_eigenvalues[feature_idx], 1e-2);
+          EXPECT_EQ(eigenvectors[feature_idx].size(), size_t(expected_num_features));
+          for (int64_t ev_idx = 0; ev_idx < expected_num_features; ++ev_idx) {
+            EXPECT_NEAR(eigenvectors[feature_idx][ev_idx],
+                        expected_eigenvectors[feature_idx][ev_idx],
+                        1e-2);
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_P(MLRegressionFunctionsTest, REG_MODEL_FIT_NO_ROWS) {
   const auto model_type = GetParam();
   const auto model_type_str = get_ml_model_type_str(model_type);
