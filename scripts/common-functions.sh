@@ -14,8 +14,32 @@ if [ "$NOCUDA" = "true" ]; then
   ARROW_USE_CUDA="-DARROW_CUDA=OFF"
 fi
 
+function generate_deps_version_file() {
+  # get the git hash 
+  pushd $SCRIPTS_DIR >/dev/null
+  # For some version of git when run by Jenkins
+  # this command will fail and return an error.  
+  # Better to carry on report what is known.
+  SHORT_HASH=$(git rev-parse --short HEAD || echo "UNKOWN")
+  popd >/dev/null
+  echo "Deps generated for git hash [$SHORT_HASH] and SUFFIX [$SUFFIX]" > $PREFIX/mapd_deps_version.txt
+  # Grab all the _VERSION variables and print them to the file
+  for i in $(compgen -A variable | grep _VERSION) ; do echo  $i "${!i}" ; done >> $PREFIX/mapd_deps_version.txt
+}      
+
 function download() {
+  echo $CACHE/$target_file
+  target_file=$(basename $1)
+  if [[ -s $CACHE/$target_file ]] ; then
+    # the '\' before the cp forces the command processor to use
+    # the actual command rather than an aliased version.
+    \cp $CACHE/$target_file .
+  else
     wget --continue "$1"
+  fi
+  if  [[ -n $CACHE &&  $1 != *mapd* && ! -e "$CACHE/$target_file" ]] ; then
+    cp $target_file $CACHE
+  fi
 }
 
 function extract() {
@@ -46,15 +70,23 @@ function make_install() {
   fi
 }
 
+function check_artifact_cleanup() {
+  download_file=$1
+  build_dir=$2
+  [[ -z $build_dir || -z $download_file ]] && echo "Invalid args remove_install_artifacts" && return
+  if [[ $SAVE_SPACE == 'true' ]] ; then 
+    rm $download_file
+    rm -rf $build_dir
+  fi
+}
+
 function download_make_install() {
-    name="$(basename $1)"
     download "$1"
-    extract $name
-    if [ -z "$2" ]; then
-        pushd ${name%%.tar*}
-    else
-        pushd $2
-    fi
+    artifact_name="$(basename $1)"
+    extract $artifact_name
+    build_dir=${artifact_name%%.tar*}
+    [[ -n "$2" ]] && build_dir="${2}"
+    pushd ${build_dir}
 
     if [ -x ./Configure ]; then
         ./Configure --prefix=$PREFIX $3
@@ -64,12 +96,55 @@ function download_make_install() {
     makej
     make_install
     popd
+    check_artifact_cleanup $artifact_name $build_dir
 }
 
 CMAKE_VERSION=3.16.5
 
 function install_cmake() {
   CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
+}
+
+# gcc
+GCC_VERSION=11.1.0
+function install_centos_gcc() {
+
+  download ftp://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz
+  extract gcc-${GCC_VERSION}.tar.xz
+  pushd gcc-${GCC_VERSION}
+  export CPPFLAGS="-I$PREFIX/include"
+  ./configure \
+    --prefix=$PREFIX \
+    --disable-multilib \
+    --enable-bootstrap \
+    --enable-shared \
+    --enable-threads=posix \
+    --enable-checking=release \
+    --with-system-zlib \
+    --enable-__cxa_atexit \
+    --disable-libunwind-exceptions \
+    --enable-gnu-unique-object \
+    --enable-languages=c,c++ \
+    --with-tune=generic \
+    --with-gmp=$PREFIX \
+    --with-mpc=$PREFIX \
+    --with-mpfr=$PREFIX #replace '--with-tune=generic' with '--with-tune=power8' for POWER8
+  makej
+  make install
+  popd
+  check_artifact_cleanup gcc-${GCC_VERSION}.tar.xz gcc-${GCC_VERSION}
+}
+
+BOOST_VERSION=1_72_0
+function install_boost() {
+  # http://downloads.sourceforge.net/project/boost/boost/${BOOST_VERSION//_/.}/boost_$${BOOST_VERSION}.tar.bz2
+  download ${HTTP_DEPS}/boost_${BOOST_VERSION}.tar.bz2
+  extract boost_${BOOST_VERSION}.tar.bz2
+  pushd boost_${BOOST_VERSION}
+  ./bootstrap.sh --prefix=$PREFIX
+  ./b2 cxxflags=-fPIC install --prefix=$PREFIX || true
+  popd
+  check_artifact_cleanup boost_${BOOST_VERSION}.tar.bz2 boost_${BOOST_VERSION}
 }
 
 ARROW_VERSION=apache-arrow-9.0.0
@@ -106,6 +181,7 @@ function install_arrow() {
   makej
   make_install
   popd
+  check_artifact_cleanup $ARROW_VERSION.tar.gz arrow-$ARROW_VERSION
 }
 
 SNAPPY_VERSION=1.1.7
@@ -123,6 +199,7 @@ function install_snappy() {
   makej
   make_install
   popd
+  check_artifact_cleanup $SNAPPY_VERSION.tar.gz snappy-$SNAPPY_VERSION
 }
 
 AWSCPP_VERSION=1.7.301
@@ -158,6 +235,7 @@ function install_awscpp() {
         ..
     cmake_build_and_install
     popd
+    check_artifact_cleanup ${AWSCPP_VERSION}.tar.gz aws-sdk-cpp-${AWSCPP_VERSION}
 }
 
 LLVM_VERSION=14.0.6
@@ -202,6 +280,11 @@ function install_llvm() {
     makej
     make install
     popd
+    check_artifact_cleanup clang-$VERS.src.tar.xz llvm-$VERS.src/tools/clang
+    check_artifact_cleanup compiler-rt-$VERS.src.tar.xz llvm-$VERS.src/projects/compiler-rt
+    check_artifact_cleanup clang-tools-extra-$VERS.src.tar.xz llvm-$VERS.src/tools/clang/tools/extra
+    check_artifact_cleanup llvm-$VERS.src.tar.xz  llvm-$VERS.src
+    [[ $SAVE_SPACE == 'true' ]]  && rm -rf build.llvm-$VERS
 }
 
 THRIFT_VERSION=0.15.0
@@ -234,6 +317,7 @@ function install_thrift() {
     makej
     make install
     popd
+    check_artifact_cleanup thrift-$THRIFT_VERSION.tar.gz thrift-$THRIFT_VERSION
 }
 
 PROJ_VERSION=8.2.1
@@ -281,6 +365,9 @@ function install_gdal() {
     makej
     make_install
     popd
+    check_artifact_cleanup libkml-master.zip libkml-master
+    check_artifact_cleanup v4.8.1.tar.gz netcdf-c-4.8.1
+    check_artifact_cleanup gdal-${GDAL_VERSION}.tar.gz gdal-${GDAL_VERSION}
 }
 
 GEOS_VERSION=3.8.1
@@ -328,6 +415,8 @@ function install_folly() {
   cmake_build_and_install
 
   popd
+  check_artifact_cleanup $FMT_VERSION.tar.gz "fmt-$FMT_VERSION"
+  check_artifact_cleanup v$FOLLY_VERSION.tar.gz "folly-$FOLLY_VERSION"
 }
 
 IWYU_VERSION=0.18
@@ -352,6 +441,7 @@ function install_iwyu() {
         ..
   cmake_build_and_install
   popd
+  check_artifact_cleanup "include-what-you-use-${IWYU_VERSION}.src.tar.gz" "include-what-you-use"
 }
 
 RDKAFKA_VERSION=1.1.0
@@ -361,10 +451,9 @@ function install_rdkafka() {
     else
       STATIC="OFF"
     fi
-    VERS=${RDKAFKA_VERSION}
-    download https://github.com/edenhill/librdkafka/archive/v$VERS.tar.gz
-    extract v$VERS.tar.gz
-    BDIR="librdkafka-$VERS/build"
+    download https://github.com/edenhill/librdkafka/archive/v$RDKAFKA_VERSION.tar.gz
+    extract v$RDKAFKA_VERSION.tar.gz
+    BDIR="librdkafka-$RDKAFKA_VERSION/build"
     mkdir -p $BDIR
     pushd $BDIR
     cmake \
@@ -379,6 +468,7 @@ function install_rdkafka() {
     makej
     make install
     popd
+    check_artifact_cleanup  v$RDKAFKA_VERSION.tar.gz "librdkafka-$RDKAFKA_VERSION"
 }
 
 GO_VERSION=1.15.6
@@ -393,6 +483,7 @@ function install_go() {
     extract go$VERS.linux-$ARCH.tar.gz
     rm -rf $PREFIX/go || true
     mv go $PREFIX
+    [[ $SAVE_SPACE == 'true' ]]  && rm go$VERS.linux-$ARCH.tar.gz
 }
 
 NINJA_VERSION=1.11.1
@@ -402,6 +493,7 @@ function install_ninja() {
   unzip -u ninja-linux.zip
   mkdir -p $PREFIX/bin/
   mv ninja $PREFIX/bin/
+  [[ $SAVE_SPACE == 'true' ]]  && rm  ninja-linux.zip
 }
 
 MAVEN_VERSION=3.6.3
@@ -411,6 +503,7 @@ function install_maven() {
     extract apache-maven-${MAVEN_VERSION}-bin.tar.gz
     rm -rf $PREFIX/maven || true
     mv apache-maven-${MAVEN_VERSION} $PREFIX/maven
+    [[ $SAVE_SPACE == 'true' ]]  && rm apache-maven-${MAVEN_VERSION}-bin.tar.gz
 }
 
 # The version of Thrust included in CUDA 11.0 and CUDA 11.1 does not support newer TBB
@@ -489,6 +582,7 @@ function install_tbb() {
   make install
   popd
   popd
+  check_artifact_cleanup v${TBB_VERSION}.tar.gz oneTBB-${TBB_VERSION}
 }
 
 LIBNUMA_VERSION=2.0.14
@@ -515,6 +609,7 @@ function install_memkind() {
     || echo "${memkind_dir}/libmemkind.so was not found"
 
   popd
+  check_artifact_cleanup v${MEMKIND_VERSION}.tar.gz memkind-${MEMKIND_VERSION}
 }
 
 VULKAN_VERSION=1.3.239.0 # 1/30/23
@@ -560,6 +655,7 @@ function install_blosc() {
   make -j $(nproc)
   make install
   popd
+  check_artifact_cleanup  v${BLOSC_VERSION}.tar.gz $BDIR
 }
 
 oneDAL_VERSION=2023.0.1
@@ -602,6 +698,7 @@ function install_onedal() {
   mkdir -p ${PREFIX}/lib/cmake/oneDAL
   cp cmake/*.cmake ${PREFIX}/lib/cmake/oneDAL/.
   popd
+  check_artifact_cleanup ${oneDAL_VERSION}.tar.gz oneDAL-${oneDAL_VERSION}
 }
 
 PDAL_VERSION=2.4.2
@@ -627,6 +724,7 @@ function install_pdal() {
   cmake_build_and_install
   popd
   popd
+  check_artifact_cleanup PDAL-${PDAL_VERSION}-src.tar.bz2 PDAL-${PDAL_VERSION}-src
 }
 
 MOLD_VERSION=1.10.1
@@ -634,4 +732,44 @@ MOLD_VERSION=1.10.1
 function install_mold_precompiled_x86_64() {
   download https://github.com/rui314/mold/releases/download/v${MOLD_VERSION}/mold-${MOLD_VERSION}-x86_64-linux.tar.gz
   tar --strip-components=1 -xvf mold-${MOLD_VERSION}-x86_64-linux.tar.gz -C ${PREFIX}
+}
+
+BZIP2_VERSION=1.0.6
+function install_bzip2() {
+  # http://bzip.org/${BZIP2_VERSION}/bzip2-$VERS.tar.gz
+  download ${HTTP_DEPS}/bzip2-${BZIP2_VERSION}.tar.gz
+  extract bzip2-$BZIP2_VERSION.tar.gz
+  pushd bzip2-${BZIP2_VERSION}
+  sed -i 's/O2 -g \$/O2 -g -fPIC \$/' Makefile
+  makej
+  make install PREFIX=$PREFIX
+  popd
+  check_artifact_cleanup bzip2-${BZIP2_VERSION}.tar.gz bzip2-${BZIP2_VERSION}
+}
+
+DOUBLE_CONVERSION_VERSION=3.1.5
+function install_double_conversion() {
+
+  download https://github.com/google/double-conversion/archive/v${DOUBLE_CONVERSION_VERSION}.tar.gz
+  extract v${DOUBLE_CONVERSION_VERSION}.tar.gz
+  mkdir -p double-conversion-${DOUBLE_CONVERSION_VERSION}/build
+  pushd double-conversion-${DOUBLE_CONVERSION_VERSION}/build
+  cmake -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+  makej
+  make install
+  popd
+  check_artifact_cleanup  v${DOUBLE_CONVERSION_VERSION}.tar.gz double-conversion-${DOUBLE_CONVERSION_VERSION}
+}
+
+ARCHIVE_VERSION=2.2.2
+function install_archive(){
+  download https://github.com/gflags/gflags/archive/v$ARCHIVE_VERSION.tar.gz
+  extract v$ARCHIVE_VERSION.tar.gz
+  mkdir -p gflags-$ARCHIVE_VERSION/build
+  pushd gflags-$ARCHIVE_VERSION/build
+  cmake -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+  makej
+  make install
+  popd
+  check_artifact_cleanup  v${ARCHIVE_VERSION}.tar.gz gflags-$ARCHIVE_VERSION
 }

@@ -7,11 +7,15 @@ set -x
 TSAN=false
 COMPRESS=false
 NOCUDA=false
+CACHE=
 
 while (( $# )); do
   case "$1" in
     --compress)
       COMPRESS=true
+      ;;
+    --savespace)
+      SAVE_SPACE=true
       ;;
     --tsan)
       TSAN=true
@@ -19,12 +23,30 @@ while (( $# )); do
     --nocuda)
       NOCUDA=true
       ;;
+    --cache=*)
+      CACHE="${1#*=}"
+      ;;
     *)
       break
       ;;
   esac
   shift
 done
+
+if [[ -n $CACHE && ( ! -d $CACHE  ||  ! -w $CACHE )  ]]; then
+  # To prevent possible mistakes CACHE must be a writable directory
+  echo "Invalid cache argument [$CACHE] supplied. Ignoring."
+  CACHE=
+fi
+
+if [[ ! -x  "$(command -v sudo)" ]] ; then
+  if [ "$EUID" -eq 0 ] ; then
+    yum install -y sudo
+  else
+    echo "ERROR - sudo not installed and not running as root"
+    exit
+  fi
+fi
 
 HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
 
@@ -49,6 +71,7 @@ fi
 
 sudo mkdir -p $PREFIX
 sudo chown -R $(id -u) $PREFIX
+# create a  txt file in $PREFIX
 
 # this should be based on the actual distro and arch, but they're the same files.
 DEBIAN_FRONTEND=noninteractive sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub
@@ -123,6 +146,8 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
 sudo update-alternatives \
   --install /usr/bin/gcc gcc /usr/bin/gcc-11 1100 \
   --slave /usr/bin/g++ g++ /usr/bin/g++-11
+
+generate_deps_version_file
 
 # Needed to find sqlite3, xmltooling, xml_security_c, and LLVM (for iwyu)
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
