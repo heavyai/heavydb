@@ -6,14 +6,22 @@ set -x
 # Parse inputs
 TSAN=false
 COMPRESS=false
+SAVE_SPACE=false
+CACHE=
 
 while (( $# )); do
   case "$1" in
     --compress)
       COMPRESS=true
       ;;
+    --savespace)
+      SAVE_SPACE=true
+      ;;
     --tsan)
       TSAN=true
+      ;;
+    --cache=*)
+      CACHE="${1#*=}"
       ;;
     *)
       break
@@ -22,14 +30,29 @@ while (( $# )); do
   shift
 done
 
+if [[ -n $CACHE && ( ! -d $CACHE  ||  ! -w $CACHE )  ]]; then
+  # To prevent possible mistakes CACHE must be a writable directory
+  echo "Invalid cache argument [$CACHE] supplied. Ignoring."
+  CACHE=
+fi
+
+if [[ ! -x  "$(command -v sudo)" ]] ; then
+  if [ "$EUID" -eq 0 ] ; then
+    yum install -y sudo  
+  else
+    echo "ERROR - sudo not installed and not running as root"
+    exit
+  fi
+fi
+
 SUFFIX=${SUFFIX:=$(date +%Y%m%d)}
 PREFIX=${MAPD_PATH:="/usr/local/mapd-deps/$SUFFIX"}
+
 if [ ! -w $(dirname $PREFIX) ] ; then
     SUDO=sudo
 fi
 $SUDO mkdir -p $PREFIX
 $SUDO chown -R $(id -u) $PREFIX
-
 export PATH=$PREFIX/bin:$PATH
 export LD_LIBRARY_PATH=$PREFIX/lib64:$PREFIX/lib:$LD_LIBRARY_PATH
 
@@ -38,7 +61,6 @@ export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $SCRIPTS_DIR/common-functions.sh
-
 
 sudo yum groupinstall -y "Development Tools"
 sudo yum install -y \
@@ -65,6 +87,7 @@ sudo yum install -y \
     jq \
     pxz
 
+generate_deps_version_file
 # mold fast linker
 install_mold_precompiled_x86_64
 
@@ -74,37 +97,14 @@ install_mold_precompiled_x86_64
 # patch -p1 < 4a6d258b467f
 # https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz
 download_make_install ${HTTP_DEPS}/gmp-6.1.2.tar.xz "" "--enable-fat"
+
 # http://www.mpfr.org/mpfr-current/mpfr-3.1.5.tar.xz
 download_make_install ${HTTP_DEPS}/mpfr-4.0.1.tar.xz "" "--with-gmp=$PREFIX"
 download_make_install ftp://ftp.gnu.org/gnu/mpc/mpc-1.1.0.tar.gz "" "--with-gmp=$PREFIX"
-download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
-download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.16.1.tar.xz
+download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"  
+download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.16.1.tar.xz 
 
-# gcc
-VERS=11.1.0
-download ftp://ftp.gnu.org/gnu/gcc/gcc-$VERS/gcc-$VERS.tar.xz
-extract gcc-$VERS.tar.xz
-pushd gcc-$VERS
-export CPPFLAGS="-I$PREFIX/include"
-./configure \
-    --prefix=$PREFIX \
-    --disable-multilib \
-    --enable-bootstrap \
-    --enable-shared \
-    --enable-threads=posix \
-    --enable-checking=release \
-    --with-system-zlib \
-    --enable-__cxa_atexit \
-    --disable-libunwind-exceptions \
-    --enable-gnu-unique-object \
-    --enable-languages=c,c++ \
-    --with-tune=generic \
-    --with-gmp=$PREFIX \
-    --with-mpc=$PREFIX \
-    --with-mpfr=$PREFIX #replace '--with-tune=generic' with '--with-tune=power8' for POWER8
-makej
-make install
-popd
+install_centos_gcc
 
 export CC=$PREFIX/bin/gcc
 export CXX=$PREFIX/bin/g++
@@ -115,67 +115,37 @@ install_maven
 
 install_cmake
 
+install_boost
+
 download_make_install ftp://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz
+
 
 # http://zlib.net/zlib-1.2.8.tar.xz
 download_make_install ${HTTP_DEPS}/zlib-1.2.8.tar.xz
 
 install_memkind
 
-VERS=1.0.6
-# http://bzip.org/$VERS/bzip2-$VERS.tar.gz
-download ${HTTP_DEPS}/bzip2-$VERS.tar.gz
-extract bzip2-$VERS.tar.gz
-pushd bzip2-$VERS
-sed -i 's/O2 -g \$/O2 -g -fPIC \$/' Makefile
-makej
-make install PREFIX=$PREFIX
-popd
+install_bzip2
 
 # https://www.openssl.org/source/openssl-1.0.2u.tar.gz
 download_make_install ${HTTP_DEPS}/openssl-1.0.2u.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 
 # libarchive
 CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared --with-pic"
-CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libarchive-3.3.2.tar.gz "" "--without-openssl --disable-shared"
+CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libarchive-3.3.2.tar.gz "" "--without-openssl --disable-shared" 
 
-CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.1.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu"
+CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.1.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu" 
 
-download_make_install ftp://ftp.gnu.org/gnu/bison/bison-3.4.2.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
+download_make_install ftp://ftp.gnu.org/gnu/bison/bison-3.4.2.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu" 
 
 # https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz
 download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/gnu/readline/readline-7.0.tar.gz
 
-VERS=1_72_0
-# http://downloads.sourceforge.net/project/boost/boost/${VERS//_/.}/boost_$VERS.tar.bz2
-download ${HTTP_DEPS}/boost_$VERS.tar.bz2
-extract boost_$VERS.tar.bz2
-pushd boost_$VERS
-./bootstrap.sh --prefix=$PREFIX
-./b2 cxxflags=-fPIC install --prefix=$PREFIX || true
-popd
+install_double_conversion
 
-VERS=3.1.5
-download https://github.com/google/double-conversion/archive/v$VERS.tar.gz
-extract v$VERS.tar.gz
-mkdir -p double-conversion-$VERS/build
-pushd double-conversion-$VERS/build
-cmake -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX ..
-makej
-make install
-popd
-
-VERS=2.2.2
-download https://github.com/gflags/gflags/archive/v$VERS.tar.gz
-extract v$VERS.tar.gz
-mkdir -p gflags-$VERS/build
-pushd gflags-$VERS/build
-cmake -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX ..
-makej
-make install
-popd
+install_archive
 
 VERS=0.3.5
 CXXFLAGS="-fPIC -std=c++11" download_make_install https://github.com/google/glog/archive/v$VERS.tar.gz glog-$VERS "--enable-shared=no" # --build=powerpc64le-unknown-linux-gnu"
@@ -189,10 +159,11 @@ install_folly
 # llvm
 # http://thrysoee.dk/editline/libedit-20170329-3.1.tar.gz
 download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
-# (see common-functions.sh)
-install_llvm
 
-install_iwyu
+# (see common-functions.sh)
+install_llvm 
+
+install_iwyu 
 
 VERS=7.75.0
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
@@ -210,7 +181,7 @@ VERS=1.6.21
 download_make_install ${HTTP_DEPS}/libpng-$VERS.tar.xz
 
 install_snappy
-
+ 
 VERS=3.52.15
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
 
@@ -221,6 +192,7 @@ install_blosc
 install_gdal
 install_geos
 install_pdal
+
 
 download_make_install https://mirrors.sarata.com/gnu/binutils/binutils-2.32.tar.xz
 
