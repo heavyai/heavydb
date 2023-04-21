@@ -32,7 +32,9 @@ STRING = DataType(
     [
         T.STR,
         T.POINT,
+        T.MULTIPOINT,
         T.LINESTRING,
+        T.MULTILINESTRING,
         T.POLYGON,
         T.MULTIPOLYGON,
         T.GEOMETRY,
