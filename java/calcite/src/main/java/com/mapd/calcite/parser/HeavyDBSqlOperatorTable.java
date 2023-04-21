@@ -314,6 +314,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new nsTimestamp());
 
     addOperator(new MLPredict());
+    addOperator(new PCAProject());
 
     if (extSigs == null) {
       return;
@@ -809,6 +810,88 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
               throw new IllegalArgumentException(
                       "Categorical predictors of type TEXT must precede numeric predictors.");
             }
+          }
+        }
+      }
+      return true;
+    }
+  }
+
+  public static class PCAProject extends SqlFunction {
+    public PCAProject() {
+      super("PCA_PROJECT",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              null,
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.DOUBLE), /*nullable=*/true);
+    }
+
+    @Override
+    public SqlOperandCountRange getOperandCountRange() {
+      return SqlOperandCountRanges.from(3);
+    }
+
+    @Override
+    public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
+      // A call to PCA_PROJECT can take the following arguemnts
+      // 1. A text literal with the model name - REQUIRED
+      // 2. Any number of optional text column arguments
+      // 3. Any number of numeric arguments
+      // 4. A numeric literal with the nth principal component to project to
+      final SqlValidator validator = callBinding.getValidator();
+
+      final int num_operands = callBinding.getOperandCount();
+      if (num_operands < 3) {
+        throw new IllegalArgumentException(
+                "At least 3 arguments are required, the model name, one or more features, and the nth principal component to project to.");
+      }
+      Boolean first_numeric_argument_found = false;
+      for (int operand_idx = 0; operand_idx < num_operands; operand_idx++) {
+        final SqlNode operand = callBinding.operand(operand_idx);
+        final SqlTypeName operand_type =
+                validator.getValidatedNodeType(operand).getSqlTypeName();
+        final SqlTypeFamily operand_type_family = operand_type.getFamily();
+        if (operand_idx == 0) {
+          if (!operand.isA(EnumSet.of(SqlKind.LITERAL))
+                  || operand_type_family != SqlTypeFamily.CHARACTER) {
+            throw new IllegalArgumentException(
+                    "First argument must be TEXT literal denoting the model name.");
+          }
+        } else if (operand_idx < num_operands - 1) {
+          if (operand.isA(EnumSet.of(SqlKind.LITERAL))) {
+            throw new IllegalArgumentException("Literals are not supported as features.");
+          }
+          if (!(operand_type_family == SqlTypeFamily.NUMERIC
+                      || operand_type_family == SqlTypeFamily.CHARACTER)) {
+            throw new IllegalArgumentException(
+                    "Only TEXT and NUMERIC features are supported.");
+          }
+          if (operand_type_family == SqlTypeFamily.NUMERIC) {
+            first_numeric_argument_found = true;
+          } else {
+            if (first_numeric_argument_found) {
+              // We've already seen a numeric arg and now have a
+              // text arg, but all text arguments must be up front
+              throw new IllegalArgumentException(
+                      "Categorical features of type TEXT must precede numeric features.");
+            }
+          }
+        } else {
+          if (!operand.isA(EnumSet.of(SqlKind.LITERAL))) {
+            throw new IllegalArgumentException(
+                    "Last argument to PCA_PROJECT expects integer literal dimension index.");
+          }
+          if (!(operand_type_family == SqlTypeFamily.NUMERIC)) {
+            throw new IllegalArgumentException(
+                    "Last argument to PCA_PROJECT expects integer literal dimension index.");
           }
         }
       }

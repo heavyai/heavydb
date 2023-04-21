@@ -418,6 +418,37 @@ template std::vector<std::vector<double>> z_std_normalize_data(
     const std::vector<double*>& input_data,
     const int64_t num_rows);
 
+template <typename T>
+std::tuple<std::vector<std::vector<T>>, std::vector<T>, std::vector<T>>
+z_std_normalize_data_with_summary_stats(const std::vector<T*>& input_data,
+                                        const int64_t num_rows) {
+  const int64_t num_features = input_data.size();
+  std::vector<std::vector<T>> normalized_data(num_features);
+  std::vector<T> means(num_features);
+  std::vector<T> std_devs(num_features);
+  for (int64_t feature_idx = 0; feature_idx < num_features; ++feature_idx) {
+    means[feature_idx] = get_column_mean(input_data[feature_idx], num_rows);
+    std_devs[feature_idx] =
+        get_column_std_dev(input_data[feature_idx], num_rows, means[feature_idx]);
+    normalized_data[feature_idx].resize(num_rows);
+    z_std_normalize_col(input_data[feature_idx],
+                        normalized_data[feature_idx].data(),
+                        num_rows,
+                        means[feature_idx],
+                        std_devs[feature_idx]);
+  }
+  return std::make_tuple(normalized_data, means, std_devs);
+}
+
+template std::
+    tuple<std::vector<std::vector<float>>, std::vector<float>, std::vector<float>>
+    z_std_normalize_data_with_summary_stats(const std::vector<float*>& input_data,
+                                            const int64_t num_rows);
+template std::
+    tuple<std::vector<std::vector<double>>, std::vector<double>, std::vector<double>>
+    z_std_normalize_data_with_summary_stats(const std::vector<double*>& input_data,
+                                            const int64_t num_rows);
+
 template <typename T1, typename T2>
 NEVER_INLINE HOST T1
 distance_in_meters(const T1 fromlon, const T1 fromlat, const T2 tolon, const T2 tolat) {

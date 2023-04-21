@@ -57,18 +57,19 @@ int32_t supported_ml_frameworks__cpu_(TableFunctionManager& mgr,
   return num_frameworks;
 }
 
-std::vector<std::string> get_model_predictors(
+std::vector<std::string> get_model_features(
     const std::string& model_name,
     const std::shared_ptr<AbstractMLModel>& model) {
   MLModelMetadata ml_model_metadata(
       model_name,
+      model->getModelType(),
       model->getModelTypeString(),
       model->getNumLogicalFeatures(),
       model->getNumFeatures(),
       model->getNumCatFeatures(),
       model->getNumLogicalFeatures() - model->getNumCatFeatures(),
       model->getModelMetadata());
-  return ml_model_metadata.getPredictors();
+  return ml_model_metadata.getFeatures();
 }
 
 EXTENSION_NOINLINE_HOST int32_t
@@ -93,7 +94,7 @@ linear_reg_coefs__cpu_1(TableFunctionManager& mgr,
     mgr.set_output_row_size(num_sub_coefs);
 
     std::vector<std::string> feature_names =
-        get_model_predictors(model_name, linear_reg_model);
+        get_model_features(model_name, linear_reg_model);
     feature_names.insert(feature_names.begin(), "intercept");
 
     for (int64_t sub_coef_idx = 0, coef_idx = 0; sub_coef_idx < num_sub_coefs;
@@ -190,7 +191,7 @@ random_forest_reg_var_importance__cpu_1(TableFunctionManager& mgr,
     }
     const auto num_logical_features = rand_forest_model->getNumLogicalFeatures();
     std::vector<std::string> feature_names =
-        get_model_predictors(model_name, rand_forest_model);
+        get_model_features(model_name, rand_forest_model);
 
     int64_t physical_feature_idx = 0;
     const auto& cat_feature_keys = rand_forest_model->getCatFeatureKeys();

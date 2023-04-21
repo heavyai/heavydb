@@ -3467,7 +3467,7 @@ CreateModelStmt::CreateModelStmt(const rapidjson::Value& payload) {
 }
 
 std::string write_model_params_to_json(const std::string& predicted,
-                                       const std::vector<std::string>& predictors,
+                                       const std::vector<std::string>& features,
                                        const std::string& training_query,
                                        const double data_split_eval_fraction) {
   // Create a RapidJSON document
@@ -3479,13 +3479,13 @@ std::string write_model_params_to_json(const std::string& predicted,
   predicted_value.SetString(predicted.c_str(), predicted.length(), doc.GetAllocator());
   doc.AddMember("predicted", predicted_value, doc.GetAllocator());
 
-  rapidjson::Value predictors_array(rapidjson::kArrayType);
-  for (const auto& predictor : predictors) {
-    rapidjson::Value predictor_value;
-    predictor_value.SetString(predictor.c_str(), predictor.length(), doc.GetAllocator());
-    predictors_array.PushBack(predictor_value, doc.GetAllocator());
+  rapidjson::Value features_array(rapidjson::kArrayType);
+  for (const auto& feature : features) {
+    rapidjson::Value feature_value;
+    feature_value.SetString(feature.c_str(), feature.length(), doc.GetAllocator());
+    features_array.PushBack(feature_value, doc.GetAllocator());
   }
-  doc.AddMember("predictors", predictors_array, doc.GetAllocator());
+  doc.AddMember("features", features_array, doc.GetAllocator());
 
   rapidjson::Value training_query_value;
   training_query_value.SetString(
@@ -3612,9 +3612,11 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
       local_connector.getColumnDescriptors(validate_result, true);
 
   std::string model_predicted_var;
-  std::vector<std::string> model_predictor_vars;
-  model_predictor_vars.reserve(column_descriptors_for_model_create.size() - 1);
-  bool is_predicted = true;
+  std::vector<std::string> model_feature_vars;
+  bool model_has_predicted_var = is_regression_model(model_type_);
+  model_feature_vars.reserve(column_descriptors_for_model_create.size() -
+                             (model_has_predicted_var ? 1 : 0));
+  bool is_predicted = model_has_predicted_var ? true : false;
   for (auto& cd : column_descriptors_for_model_create) {
     // Check to see if the projected column is an expression without a user-provided
     // alias, as we don't allow this.
@@ -3627,7 +3629,7 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
       model_predicted_var = cd.columnName;
       is_predicted = false;
     } else {
-      model_predictor_vars.emplace_back(cd.columnName);
+      model_feature_vars.emplace_back(cd.columnName);
     }
   }
   // We have to base64 encode the model metadata because depending on the query,
@@ -3637,12 +3639,8 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
   // This is just a temporary workaround until we store this info in the Catalog
   // rather than in the stored model pointer itself (and have to pass the metadata
   // down through the table function call)
-  const auto model_metadata =
-      shared::encode_base64(write_model_params_to_json(model_predicted_var,
-                                                       model_predictor_vars,
-                                                       select_query_,
-                                                       data_split_eval_fraction));
-
+  const auto model_metadata = shared::encode_base64(write_model_params_to_json(
+      model_predicted_var, model_feature_vars, select_query_, data_split_eval_fraction));
   if (!first_options_arg) {
     // The options string does not have a trailing comma,
     // so add it

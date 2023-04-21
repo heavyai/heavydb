@@ -16,13 +16,16 @@
 
 #pragma once
 
+#include "MLModelType.h"
+
 #include <string>
 #include <vector>
 
 class MLModelMetadata {
  public:
   MLModelMetadata(const std::string& model_name,
-                  const std::string& model_type,
+                  const MLModelType model_type,
+                  const std::string& model_type_str,
                   const int64_t num_logical_features,
                   const int64_t num_features,
                   const int64_t num_categorical_features,
@@ -30,6 +33,7 @@ class MLModelMetadata {
                   const std::string& model_metadata_json)
       : model_name_(model_name)
       , model_type_(model_type)
+      , model_type_str_(model_type_str)
       , num_logical_features_(num_logical_features)
       , num_features_(num_features)
       , num_categorical_features_(num_categorical_features)
@@ -41,25 +45,27 @@ class MLModelMetadata {
                             const int64_t num_logical_features);
 
   const std::string& getModelName() const { return model_name_; }
-  const std::string& getModelType() const { return model_type_; }
+  const MLModelType getModelType() const { return model_type_; }
+  const std::string& getModelTypeStr() const { return model_type_str_; }
   int64_t getNumLogicalFeatures() const { return num_logical_features_; }
   int64_t getNumFeatures() const { return num_features_; }
   int64_t getNumCategoricalFeatures() const { return num_categorical_features_; }
   int64_t getNumNumericFeatures() const { return num_numeric_features_; }
   const std::string& getPredicted() const { return predicted_; }
-  const std::vector<std::string>& getPredictors() const { return predictors_; }
+  const std::vector<std::string>& getFeatures() const { return features_; }
   const std::string& getTrainingQuery() const { return training_query_; }
   double getDataSplitEvalFraction() const { return data_split_eval_fraction_; }
 
  private:
   const std::string model_name_;
-  const std::string model_type_;
+  const MLModelType model_type_;
+  const std::string model_type_str_;
   const int64_t num_logical_features_;
   const int64_t num_features_;
   const int64_t num_categorical_features_;
   const int64_t num_numeric_features_;
   std::string predicted_;
-  std::vector<std::string> predictors_;
+  std::vector<std::string> features_;
   std::string training_query_;
   double data_split_eval_fraction_{0.0};
 };

@@ -86,6 +86,7 @@ class MLModelMap {
     for (auto const& model : model_map_) {
       model_metadata.emplace_back(MLModelMetadata(
           model.first,
+          model.second->getModelType(),
           model.second->getModelTypeString(),
           model.second->getNumLogicalFeatures(),
           model.second->getNumFeatures(),
@@ -102,6 +103,7 @@ class MLModelMap {
     auto model_map_itr = model_map_.find(upper_model_name);
     if (model_map_itr != model_map_.end()) {
       return MLModelMetadata(model_map_itr->first,
+                             model_map_itr->second->getModelType(),
                              model_map_itr->second->getModelTypeString(),
                              model_map_itr->second->getNumLogicalFeatures(),
                              model_map_itr->second->getNumFeatures(),
@@ -323,6 +325,53 @@ class RandomForestRegressionModel : public virtual AbstractTreeModel {
   decision_forest::regression::interface1::ModelPtr model_ptr_;
   std::vector<double> variable_importance_;
   double out_of_bag_error_;
+};
+
+class PcaModel : public AbstractMLModel {
+ public:
+  PcaModel(const std::vector<double>& col_means,
+           const std::vector<double>& col_std_devs,
+           const std::vector<std::vector<double>>& eigenvectors,
+           const std::vector<double>& eigenvalues,
+           const std::string& model_metadata)
+      : AbstractMLModel(model_metadata)
+      , col_means_(col_means)
+      , col_std_devs_(col_std_devs)
+      , eigenvectors_(eigenvectors)
+      , eigenvalues_(eigenvalues) {}
+
+  PcaModel(const std::vector<double>& col_means,
+           const std::vector<double>& col_std_devs,
+           const std::vector<std::vector<double>>& eigenvectors,
+           const std::vector<double>& eigenvalues,
+           const std::string& model_metadata,
+           const std::vector<std::vector<std::string>>& cat_feature_keys)
+      : AbstractMLModel(model_metadata, cat_feature_keys)
+      , col_means_(col_means)
+      , col_std_devs_(col_std_devs)
+      , eigenvectors_(eigenvectors)
+      , eigenvalues_(eigenvalues) {}
+
+  virtual MLModelType getModelType() const override { return MLModelType::PCA; }
+
+  virtual std::string getModelTypeString() const override { return "PCA"; }
+
+  virtual int64_t getNumFeatures() const override {
+    return static_cast<int64_t>(col_means_.size());
+  }
+
+  const std::vector<double>& getColumnMeans() const { return col_means_; }
+  const std::vector<double>& getColumnStdDevs() const { return col_std_devs_; }
+  const std::vector<std::vector<double>>& getEigenvectors() const {
+    return eigenvectors_;
+  }
+  const std::vector<double>& getEigenvalues() const { return eigenvalues_; }
+
+ private:
+  std::vector<double> col_means_;
+  std::vector<double> col_std_devs_;
+  std::vector<std::vector<double>> eigenvectors_;
+  std::vector<double> eigenvalues_;
 };
 
 #endif  // #ifdef HAVE_ONEDAL

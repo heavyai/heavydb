@@ -1726,7 +1726,7 @@ TEST_F(SystemTablesShowCreateTableTest, MLModels) {
       "SHOW CREATE TABLE ml_models;",
       {{"CREATE TABLE ml_models (\n  model_name TEXT ENCODING DICT(32),\n  "
         "model_type TEXT ENCODING DICT(32),\n  predicted TEXT ENCODING DICT(32),\n  "
-        "predictors TEXT[] ENCODING DICT(32),\n  training_query TEXT ENCODING "
+        "features TEXT[] ENCODING DICT(32),\n  training_query TEXT ENCODING "
         "DICT(32),\n  "
         "num_logical_features BIGINT,\n  num_physical_features BIGINT,\n  "
         "num_categorical_features BIGINT,\n  num_numeric_features BIGINT,\n  "
@@ -3007,7 +3007,7 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
     ASSERT_EQ(result.row_set.row_desc[2].col_type.type, TDatumType::STR);
     ASSERT_EQ(result.row_set.row_desc[2].col_name, "predicted");
     ASSERT_EQ(result.row_set.row_desc[3].col_type.type, TDatumType::STR);
-    ASSERT_EQ(result.row_set.row_desc[3].col_name, "predictors");
+    ASSERT_EQ(result.row_set.row_desc[3].col_name, "features");
     ASSERT_EQ(result.row_set.row_desc[4].col_type.type, TDatumType::STR);
     ASSERT_EQ(result.row_set.row_desc[4].col_name, "training_query");
     ASSERT_EQ(result.row_set.row_desc[5].col_type.type, TDatumType::BIGINT);
@@ -3196,6 +3196,7 @@ class EvaluateModelDdlTest : public DBHandlerTestFixture {
     switchToAdmin();
     sql("DROP MODEL IF EXISTS lin_reg_test_model;");
     sql("DROP MODEL IF EXISTS rand_forest_test_model;");
+    sql("DROP MODEL IF EXISTS pca_test_model;");
     sql("DROP TABLE IF EXISTS test_table;");
     DBHandlerTestFixture::TearDown();
   }
@@ -3263,6 +3264,11 @@ class EvaluateModelDdlTest : public DBHandlerTestFixture {
         "SELECT predicted, "
         "predictor FROM test_table WITH (data_split_eval_fraction=0.2, num_trees=4);");
   }
+  static void createPCATestModelWithDataSplitEvalFraction() {
+    sql("CREATE OR REPLACE MODEL pca_test_model OF TYPE PCA AS "
+        "SELECT predicted, "
+        "predictor FROM test_table WITH (data_split_eval_fraction=0.2);");
+  }
 };
 
 TEST_F(EvaluateModelDdlTest, TestModelR2) {
@@ -3290,6 +3296,20 @@ TEST_F(EvaluateModelDdlTest, EvalModelNoEvalSet) {
   createLinearRegTestModel();
   TQueryResult result;
   EXPECT_ANY_THROW(sql(result, "EVALUATE MODEL lin_reg_test_model"););
+}
+
+TEST_F(EvaluateModelDdlTest, EvalModelPCA) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createPCATestModelWithDataSplitEvalFraction();
+  TQueryResult result;
+  // This should throw with:
+  // "EVALUATE MODEL not supported for PCA models."
+  EXPECT_ANY_THROW(sql(result, "EVALUATE MODEL pca_test_model"););
 }
 
 TEST_F(EvaluateModelDdlTest, EvalModelEvalFraction) {

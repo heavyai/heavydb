@@ -367,6 +367,7 @@ bool is_table_function_whitelisted(std::string_view const function_name) {
        "linear_reg_coefs",
        "linear_reg_fit",
        "ml_reg_predict",
+       "pca_fit",
        "r2_score",
        "random_forest_reg_fit",
        "random_forest_reg_var_importance",
@@ -404,6 +405,7 @@ bool is_table_function_whitelisted(std::string_view const function_name) {
                                                   "linear_reg_coefs",
                                                   "linear_reg_fit",
                                                   "ml_reg_predict",
+                                                  "pca_fit"
                                                   "r2_score",
                                                   "random_forest_reg_fit",
                                                   "random_forest_reg_var_importance",

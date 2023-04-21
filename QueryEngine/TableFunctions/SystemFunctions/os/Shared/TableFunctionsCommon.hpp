@@ -77,6 +77,11 @@ std::vector<std::vector<T>> z_std_normalize_data(const std::vector<T*>& input_da
                                                  const int64_t num_rows);
 
 template <typename T>
+std::tuple<std::vector<std::vector<T>>, std::vector<T>, std::vector<T>>
+z_std_normalize_data_with_summary_stats(const std::vector<T*>& input_data,
+                                        const int64_t num_rows);
+
+template <typename T>
 NEVER_INLINE HOST std::tuple<T, T, bool> get_column_metadata(const Column<T>& col);
 
 NEVER_INLINE HOST std::tuple<int32_t, int32_t, bool> get_column_metadata(

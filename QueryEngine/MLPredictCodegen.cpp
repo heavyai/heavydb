@@ -27,16 +27,16 @@
 #include <stack>
 #include <vector>
 
-std::vector<std::shared_ptr<Analyzer::Expr>> generated_encoded_and_casted_regressors(
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& regressor_exprs,
+std::vector<std::shared_ptr<Analyzer::Expr>> generated_encoded_and_casted_features(
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& feature_exprs,
     const std::vector<std::vector<std::string>>& cat_feature_keys,
     Executor* executor) {
-  std::vector<std::shared_ptr<Analyzer::Expr>> casted_regressor_exprs;
-  const size_t num_regressor_exprs = regressor_exprs.size();
-  const size_t num_cat_regressors = cat_feature_keys.size();
+  std::vector<std::shared_ptr<Analyzer::Expr>> casted_feature_exprs;
+  const size_t num_feature_exprs = feature_exprs.size();
+  const size_t num_cat_features = cat_feature_keys.size();
 
-  if (num_cat_regressors > num_regressor_exprs) {
-    throw std::runtime_error("More categorical keys than regressors.");
+  if (num_cat_features > num_feature_exprs) {
+    throw std::runtime_error("More categorical keys than features.");
   }
 
   auto get_int_constant_expr = [](int32_t const_val) {
@@ -45,27 +45,27 @@ std::vector<std::shared_ptr<Analyzer::Expr>> generated_encoded_and_casted_regres
     return makeExpr<Analyzer::Constant>(SQLTypeInfo(kINT, false), false, d);
   };
 
-  for (size_t regressor_idx = 0; regressor_idx < num_regressor_exprs; ++regressor_idx) {
-    auto& regressor_expr = regressor_exprs[regressor_idx];
-    const auto& regressor_ti = regressor_expr->get_type_info();
-    if (regressor_ti.is_number()) {
+  for (size_t feature_idx = 0; feature_idx < num_feature_exprs; ++feature_idx) {
+    auto& feature_expr = feature_exprs[feature_idx];
+    const auto& feature_ti = feature_expr->get_type_info();
+    if (feature_ti.is_number()) {
       // Don't conditionally cast to double iff type is not double
       // as this was causing issues for the random forest function with
       // mixed types. Need to troubleshoot more but always casting to double
       // regardless of the underlying type always seems to be safe
-      casted_regressor_exprs.emplace_back(makeExpr<Analyzer::UOper>(
-          SQLTypeInfo(kDOUBLE, false), false, kCAST, regressor_expr));
+      casted_feature_exprs.emplace_back(makeExpr<Analyzer::UOper>(
+          SQLTypeInfo(kDOUBLE, false), false, kCAST, feature_expr));
     } else {
-      CHECK(regressor_ti.is_string()) << "Expected text type";
-      if (!regressor_ti.is_text_encoding_dict()) {
+      CHECK(feature_ti.is_string()) << "Expected text type";
+      if (!feature_ti.is_text_encoding_dict()) {
         throw std::runtime_error("Expected dictionary-encoded text column.");
       }
-      if (regressor_idx >= num_cat_regressors) {
+      if (feature_idx >= num_cat_features) {
         throw std::runtime_error("Model not trained on text type for column.");
       }
-      const auto& str_dict_key = regressor_ti.getStringDictKey();
+      const auto& str_dict_key = feature_ti.getStringDictKey();
       const auto str_dict_proxy = executor->getStringDictionaryProxy(str_dict_key, true);
-      for (const auto& cat_feature_key : cat_feature_keys[regressor_idx]) {
+      for (const auto& cat_feature_key : cat_feature_keys[feature_idx]) {
         // For one-hot encoded columns, null values will translate as a 0.0 and not a null
         // We are computing the following:
         // CASE WHEN str_val is NULL then 0.0 ELSE
@@ -73,7 +73,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> generated_encoded_and_casted_regres
 
         // Check if the expression is null
         auto is_null_expr = makeExpr<Analyzer::UOper>(
-            SQLTypeInfo(kBOOLEAN, false), false, kISNULL, regressor_expr);
+            SQLTypeInfo(kBOOLEAN, false), false, kISNULL, feature_expr);
         Datum zero_datum;
         zero_datum.doubleval = 0.0;
         // If null then emit a 0.0 double constant as the THEN expr
@@ -88,7 +88,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> generated_encoded_and_casted_regres
         const auto str_id = str_dict_proxy->getIdOfString(cat_feature_key);
         auto str_id_expr = get_int_constant_expr(str_id);
         // Get integer id for this row's string
-        auto key_for_string_expr = makeExpr<Analyzer::KeyForStringExpr>(regressor_expr);
+        auto key_for_string_expr = makeExpr<Analyzer::KeyForStringExpr>(feature_expr);
 
         // Check if this row's string id is equal to the search one-hot encoded id
         std::shared_ptr<Analyzer::Expr> str_equality_expr =
@@ -102,13 +102,13 @@ std::vector<std::shared_ptr<Analyzer::Expr>> generated_encoded_and_casted_regres
         auto cast_expr = makeExpr<Analyzer::UOper>(
             SQLTypeInfo(kDOUBLE, false), false, kCAST, str_equality_expr);
 
-        // Generate the full CASE statement and add to the casted regressor exprssions
-        casted_regressor_exprs.emplace_back(makeExpr<Analyzer::CaseExpr>(
+        // Generate the full CASE statement and add to the casted feature exprssions
+        casted_feature_exprs.emplace_back(makeExpr<Analyzer::CaseExpr>(
             SQLTypeInfo(kDOUBLE, false), false, when_then_exprs, cast_expr));
       }
     }
   }
-  return casted_regressor_exprs;
+  return casted_feature_exprs;
 }
 
 llvm::Value* CodeGenerator::codegenLinRegPredict(
@@ -128,7 +128,7 @@ llvm::Value* CodeGenerator::codegenLinRegPredict(
 
   const auto& regressor_exprs = expr->get_regressor_values();
 
-  const auto casted_regressor_exprs = generated_encoded_and_casted_regressors(
+  const auto casted_regressor_exprs = generated_encoded_and_casted_features(
       regressor_exprs, cat_feature_keys, executor());
 
   auto get_double_constant_expr = [](double const_val) {
@@ -185,7 +185,7 @@ llvm::Value* CodeGenerator::codegenTreeRegPredict(
   const int64_t num_trees = static_cast<int64_t>(tree_model->getNumTrees());
   const auto& regressor_exprs = expr->get_regressor_values();
   const auto& cat_feature_keys = tree_model->getCatFeatureKeys();
-  const auto casted_regressor_exprs = generated_encoded_and_casted_regressors(
+  const auto casted_regressor_exprs = generated_encoded_and_casted_features(
       regressor_exprs, cat_feature_keys, executor());
   // We cast all regressors to double for simplicity and to match
   // how feature filters are stored in the tree model.
@@ -318,4 +318,88 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::MLPredictExpr* expr,
       throw std::runtime_error("Unsupported model type.");
     }
   }
+}
+
+llvm::Value* CodeGenerator::codegen(const Analyzer::PCAProjectExpr* expr,
+                                    const CompilationOptions& co) {
+  auto timer = DEBUG_TIMER(__func__);
+  const auto& model_expr = expr->get_model_value();
+  CHECK(model_expr);
+  auto model_constant_expr = dynamic_cast<const Analyzer::Constant*>(model_expr);
+  CHECK(model_constant_expr);
+  const auto model_datum = model_constant_expr->get_constval();
+  const auto model_name_ptr = model_datum.stringval;
+  CHECK(model_name_ptr);
+  const auto model_name = *model_name_ptr;
+  const auto abstract_model = g_ml_models.getModel(model_name);
+  const auto model_type = abstract_model->getModelType();
+  if (model_type != MLModelType::PCA) {
+    throw std::runtime_error("PCA_PROJECT: Model '" + model_name +
+                             "' is not a PCA model.");
+  }
+  const auto pca_model = std::dynamic_pointer_cast<PcaModel>(abstract_model);
+  const auto& feature_exprs = expr->get_feature_values();
+  if (pca_model->getNumLogicalFeatures() != static_cast<int64_t>(feature_exprs.size())) {
+    std::ostringstream error_oss;
+    error_oss << "PCA_PROJECT: Model '" << model_name
+              << "' expects different number of predictor variables ("
+              << pca_model->getNumLogicalFeatures() << ") than provided ("
+              << feature_exprs.size() << ").";
+    throw std::runtime_error(error_oss.str());
+  }
+
+  const auto& pc_dimension_expr = expr->get_pc_dimension_value();
+  auto pc_dimension_const_expr =
+      dynamic_cast<const Analyzer::Constant*>(pc_dimension_expr);
+  const auto pc_dimension_datum = pc_dimension_const_expr->get_constval();
+  const auto pc_dimension = pc_dimension_datum.intval - 1;
+  if (pc_dimension < 0 || pc_dimension >= pca_model->getNumFeatures()) {
+    std::ostringstream error_oss;
+    error_oss << "PCA_PROJECT: Invalid PC dimension (" << pc_dimension + 1
+              << ") provided. Valid range is [1, " << pca_model->getNumFeatures() << "].";
+    throw std::runtime_error(error_oss.str());
+  }
+
+  const auto& column_means = pca_model->getColumnMeans();
+  const auto& column_std_devs = pca_model->getColumnStdDevs();
+  const auto& eigenvectors = pca_model->getEigenvectors();
+
+  const auto& cat_feature_keys = pca_model->getCatFeatureKeys();
+
+  const auto casted_feature_exprs =
+      generated_encoded_and_casted_features(feature_exprs, cat_feature_keys, executor());
+
+  auto get_double_constant_expr = [](double const_val) {
+    Datum d;
+    d.doubleval = const_val;
+    return makeExpr<Analyzer::Constant>(SQLTypeInfo(kDOUBLE, false), false, d);
+  };
+
+  std::shared_ptr<Analyzer::Expr> result;
+
+  for (size_t feature_idx = 0; feature_idx < feature_exprs.size(); ++feature_idx) {
+    auto mean_expr = get_double_constant_expr(column_means[feature_idx]);
+    const auto& casted_feature_expr = casted_feature_exprs[feature_idx];
+    // Subtract column mean from feature
+    auto mean_diff_expr = makeExpr<Analyzer::BinOper>(
+        SQLTypeInfo(kDOUBLE, false), false, kMINUS, kONE, casted_feature_expr, mean_expr);
+    auto std_dev_expr = get_double_constant_expr(column_std_devs[feature_idx]);
+    auto z_score_expr = makeExpr<Analyzer::BinOper>(
+        SQLTypeInfo(kDOUBLE, false), false, kDIVIDE, kONE, mean_diff_expr, std_dev_expr);
+    auto pc_term_expr = get_double_constant_expr(eigenvectors[pc_dimension][feature_idx]);
+    auto pca_mul_expr = makeExpr<Analyzer::BinOper>(
+        SQLTypeInfo(kDOUBLE, false), false, kMULTIPLY, kONE, z_score_expr, pc_term_expr);
+    if (feature_idx == 0) {
+      // There is no result yet, so set the result to the first term
+      result = pca_mul_expr;
+    } else {
+      // Add the term to the result
+      result = makeExpr<Analyzer::BinOper>(
+          SQLTypeInfo(kDOUBLE, false), false, kPLUS, kONE, result, pca_mul_expr);
+    }
+  }
+
+  // The following will codegen the expression tree we just created modeling
+  // the linear regression formula
+  return codegenArith(dynamic_cast<Analyzer::BinOper*>(result.get()), co);
 }

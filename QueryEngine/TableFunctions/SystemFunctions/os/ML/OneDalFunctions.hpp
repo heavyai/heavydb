@@ -171,6 +171,40 @@ NEVER_INLINE HOST int32_t onedal_dbscan_impl(const std::vector<const T*>& input_
 }
 
 template <typename T>
+NEVER_INLINE HOST std::pair<std::vector<std::vector<T>>, std::vector<T>> onedal_pca_impl(
+    const std::vector<const T*>& input_features,
+    const int64_t num_rows) {
+  try {
+    const auto features_table = prepare_data_table(input_features, num_rows);
+    pca::Batch<> algorithm;
+    algorithm.input.set(pca::data, features_table);
+    algorithm.parameter.resultsToCompute = pca::mean | pca::variance | pca::eigenvalue;
+    algorithm.parameter.isDeterministic = true;
+
+    algorithm.compute();
+    pca::ResultPtr result = algorithm.getResult();
+    const auto eigenvectors_table = result->get(pca::eigenvectors);
+    const int64_t num_vectors = eigenvectors_table->getNumberOfRows();
+    const int64_t num_dims = eigenvectors_table->getNumberOfColumns();
+    std::vector<std::vector<T>> eigenvectors(num_vectors, std::vector<T>(num_dims));
+    for (int64_t vec_idx = 0; vec_idx < num_vectors; ++vec_idx) {
+      for (int64_t dim_idx = 0; dim_idx < num_dims; ++dim_idx) {
+        eigenvectors[vec_idx][dim_idx] =
+            eigenvectors_table->getValue<T>(dim_idx, vec_idx);
+      }
+    }
+    const auto eigenvalues_table = result->get(pca::eigenvalues);
+    std::vector<T> eigenvalues(num_vectors);
+    for (int64_t vec_idx = 0; vec_idx < num_vectors; ++vec_idx) {
+      eigenvalues[vec_idx] = eigenvalues_table->getValue<T>(vec_idx, 0);
+    }
+    return std::make_pair(eigenvectors, eigenvalues);
+  } catch (std::exception& e) {
+    throw std::runtime_error(e.what());
+  }
+}
+
+template <typename T>
 int32_t extract_model_coefs(const NumericTablePtr& coefs_table,
                             int64_t* coef_idxs,
                             double* coefs) {

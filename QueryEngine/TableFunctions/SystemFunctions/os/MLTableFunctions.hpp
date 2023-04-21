@@ -122,18 +122,19 @@ kmeans__cpu_template(TableFunctionManager& mgr,
                              preferred_ml_framework_str.getString());
   }
 
-  const auto denulled_data = denull_data(input_features);
-  const int64_t num_rows = denulled_data.masked_num_rows;
-  const bool data_is_masked =
-      denulled_data.masked_num_rows < denulled_data.unmasked_num_rows;
-  std::vector<int32_t> denulled_output_allocation(data_is_masked ? num_rows : 0);
-  int32_t* denulled_output =
-      data_is_masked ? denulled_output_allocation.data() : output_clusters.ptr_;
-
-  const auto normalized_data = z_std_normalize_data(denulled_data.data, num_rows);
-  const auto normalized_ptrs = pluck_ptrs(normalized_data, 0L, normalized_data.size());
-
   try {
+    const auto denulled_data = denull_data(input_features);
+    const int64_t num_rows = denulled_data.masked_num_rows;
+    const bool data_is_masked =
+        denulled_data.masked_num_rows < denulled_data.unmasked_num_rows;
+    std::vector<int32_t> denulled_output_allocation(data_is_masked ? num_rows : 0);
+    int32_t* denulled_output =
+        data_is_masked ? denulled_output_allocation.data() : output_clusters.ptr_;
+
+    // z_std_normalize_data can throw if std dev is 0
+    const auto normalized_data = z_std_normalize_data(denulled_data.data, num_rows);
+    const auto normalized_ptrs = pluck_ptrs(normalized_data, 0L, normalized_data.size());
+
     bool did_execute = false;
 #ifdef HAVE_ONEDAL
     if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
@@ -163,16 +164,16 @@ kmeans__cpu_template(TableFunctionManager& mgr,
       return mgr.ERROR_MESSAGE("Cannot find " + preferred_ml_framework_str.getString() +
                                " ML library to support kmeans implementation.");
     }
+
+    if (data_is_masked) {
+      unmask_data(denulled_output,
+                  denulled_data.reverse_index_map,
+                  output_clusters.ptr_,
+                  denulled_data.unmasked_num_rows,
+                  inline_null_value<int32_t>());
+    }
   } catch (std::runtime_error& e) {
     return mgr.ERROR_MESSAGE(e.what());
-  }
-
-  if (data_is_masked) {
-    unmask_data(denulled_output,
-                denulled_data.reverse_index_map,
-                output_clusters.ptr_,
-                denulled_data.unmasked_num_rows,
-                inline_null_value<int32_t>());
   }
   return input_ids.size();
 }
@@ -208,18 +209,19 @@ dbscan__cpu_template(TableFunctionManager& mgr,
                              preferred_ml_framework_str.getString());
   }
 
-  const auto denulled_data = denull_data(input_features);
-  const int64_t num_rows = denulled_data.masked_num_rows;
-  const bool data_is_masked =
-      denulled_data.masked_num_rows < denulled_data.unmasked_num_rows;
-  std::vector<int32_t> denulled_output_allocation(data_is_masked ? num_rows : 0);
-  int32_t* denulled_output =
-      data_is_masked ? denulled_output_allocation.data() : output_clusters.ptr_;
-
-  const auto normalized_data = z_std_normalize_data(denulled_data.data, num_rows);
-  const auto normalized_ptrs = pluck_ptrs(normalized_data, 0L, normalized_data.size());
-
   try {
+    const auto denulled_data = denull_data(input_features);
+    const int64_t num_rows = denulled_data.masked_num_rows;
+    const bool data_is_masked =
+        denulled_data.masked_num_rows < denulled_data.unmasked_num_rows;
+    std::vector<int32_t> denulled_output_allocation(data_is_masked ? num_rows : 0);
+    int32_t* denulled_output =
+        data_is_masked ? denulled_output_allocation.data() : output_clusters.ptr_;
+
+    // z_std_normalize_data can throw if std dev is 0
+    const auto normalized_data = z_std_normalize_data(denulled_data.data, num_rows);
+    const auto normalized_ptrs = pluck_ptrs(normalized_data, 0L, normalized_data.size());
+
     bool did_execute = false;
 #ifdef HAVE_ONEDAL
     if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
@@ -241,16 +243,16 @@ dbscan__cpu_template(TableFunctionManager& mgr,
       return mgr.ERROR_MESSAGE("Cannot find " + preferred_ml_framework_str.getString() +
                                " ML library to support dbscan implementation.");
     }
+
+    if (data_is_masked) {
+      unmask_data(denulled_output,
+                  denulled_data.reverse_index_map,
+                  output_clusters.ptr_,
+                  denulled_data.unmasked_num_rows,
+                  inline_null_value<int32_t>());
+    }
   } catch (std::runtime_error& e) {
     return mgr.ERROR_MESSAGE(e.what());
-  }
-
-  if (data_is_masked) {
-    unmask_data(denulled_output,
-                denulled_data.reverse_index_map,
-                output_clusters.ptr_,
-                denulled_data.unmasked_num_rows,
-                inline_null_value<int32_t>());
   }
   return input_ids.size();
 }
@@ -1160,6 +1162,140 @@ NEVER_INLINE HOST int32_t random_forest_reg_fit__cpu_template(
                                     output_model_name);
 }
 
+template <typename T>
+NEVER_INLINE HOST int32_t
+pca_fit_impl(TableFunctionManager& mgr,
+             const TextEncodingNone& model_name,
+             const ColumnList<T>& input_features,
+             const std::vector<std::vector<std::string>>& cat_feature_keys,
+             const TextEncodingNone& preferred_ml_framework_str,
+             const TextEncodingNone& model_metadata,
+             Column<TextEncodingDict>& output_model_name) {
+  if (input_features.size() == 0) {
+    return mgr.ERROR_MESSAGE(
+        "No rows exist in training data. Training data must at least contain 1 row.");
+  }
+  const auto preferred_ml_framework = get_ml_framework(preferred_ml_framework_str);
+  if (preferred_ml_framework == MLFramework::INVALID) {
+    return mgr.ERROR_MESSAGE("Invalid ML Framework: " +
+                             preferred_ml_framework_str.getString());
+  }
+  try {
+    const auto denulled_data = denull_data(input_features);
+    const int64_t num_rows = denulled_data.masked_num_rows;
+    if (num_rows == 0) {
+      return mgr.ERROR_MESSAGE(
+          "No non-null rows exist in training data. Training data must at least contain "
+          "1 "
+          "non-null row.");
+    }
+    const auto features_ptrs =
+        pluck_ptrs(denulled_data.data, 0L, input_features.numCols());
+    // z_std_normalize_data_with_summary_stats can throw if std dev is 0
+    const auto [normalized_data, feature_means, feature_std_devs] =
+        z_std_normalize_data_with_summary_stats(denulled_data.data, num_rows);
+    const auto normalized_ptrs = pluck_ptrs(normalized_data, 0L, normalized_data.size());
+    bool did_execute = false;
+#ifdef HAVE_ONEDAL
+    if (preferred_ml_framework == MLFramework::ONEDAL ||
+        preferred_ml_framework == MLFramework::DEFAULT) {
+      const auto [eigenvectors, eigenvalues] =
+          onedal_pca_impl(normalized_ptrs, denulled_data.masked_num_rows);
+      auto model = std::make_shared<PcaModel>(feature_means,
+                                              feature_std_devs,
+                                              eigenvectors,
+                                              eigenvalues,
+                                              model_metadata,
+                                              cat_feature_keys);
+      g_ml_models.addModel(model_name, model);
+      did_execute = true;
+    }
+#endif
+    if (!did_execute) {
+      return mgr.ERROR_MESSAGE("Cannot find " + preferred_ml_framework_str.getString() +
+                               " ML library to support PCA implementation.");
+    }
+    mgr.set_output_row_size(1);
+    const TextEncodingDict model_name_str_id =
+        output_model_name.getOrAddTransient(model_name);
+    output_model_name[0] = model_name_str_id;
+    return 1;
+  } catch (std::runtime_error& e) {
+    return mgr.ERROR_MESSAGE(e.what());
+  }
+}
+
+// clang-format off
+/*
+  UDTF: pca_fit__cpu_template(TableFunctionManager,
+   TextEncodingNone model_name,
+   Cursor<ColumnList<T> features> data,
+   TextEncodingNone preferred_ml_framework | default="DEFAULT",
+   TextEncodingNone model_metadata | default="e30=") ->
+   Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
+ */
+// clang-format on
+
+// default value for model_metadata of "e30=" is base64 encoded "{}"
+
+template <typename T>
+NEVER_INLINE HOST int32_t
+pca_fit__cpu_template(TableFunctionManager& mgr,
+                      const TextEncodingNone& model_name,
+                      const ColumnList<T>& input_features,
+                      const TextEncodingNone& preferred_ml_framework_str,
+                      const TextEncodingNone& model_metadata,
+                      Column<TextEncodingDict>& output_model_name) {
+  std::vector<std::vector<std::string>> empty_cat_feature_keys;
+  return pca_fit_impl(mgr,
+                      model_name,
+                      input_features,
+                      empty_cat_feature_keys,
+                      preferred_ml_framework_str,
+                      model_metadata,
+                      output_model_name);
+}
+
+// clang-format off
+/*
+  UDTF: pca_fit__cpu_template(TableFunctionManager,
+   TextEncodingNone model_name,
+   Cursor<ColumnList<TextEncodingDict> cat_features, ColumnList<T> features> data,
+   int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
+   float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
+   TextEncodingNone preferred_ml_framework | default="DEFAULT",
+   TextEncodingNone model_metadata | default="e30=") ->
+   Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
+ */
+// clang-format on
+
+// default value for model_metadata of "e30=" is base64 encoded "{}"
+
+template <typename T>
+NEVER_INLINE HOST int32_t
+pca_fit__cpu_template(TableFunctionManager& mgr,
+                      const TextEncodingNone& model_name,
+                      const ColumnList<TextEncodingDict>& input_cat_features,
+                      const ColumnList<T>& input_numeric_features,
+                      const int32_t cat_top_k,
+                      const float cat_min_fraction,
+                      const TextEncodingNone& preferred_ml_framework_str,
+                      const TextEncodingNone& model_metadata,
+                      Column<TextEncodingDict>& output_model_name) {
+  CategoricalFeaturesBuilder<T> cat_features_builder(input_cat_features,
+                                                     input_numeric_features,
+                                                     cat_top_k,
+                                                     cat_min_fraction,
+                                                     false /* cat_include_others */);
+  return pca_fit_impl(mgr,
+                      model_name,
+                      cat_features_builder.getFeatures(),
+                      cat_features_builder.getCatFeatureKeys(),
+                      preferred_ml_framework_str,
+                      model_metadata,
+                      output_model_name);
+}
+
 template <typename T, typename K>
 NEVER_INLINE HOST int32_t
 ml_reg_predict_impl(TableFunctionManager& mgr,
@@ -1250,6 +1386,9 @@ ml_reg_predict_impl(TableFunctionManager& mgr,
         }
 #endif
         break;
+      }
+      default: {
+        throw std::runtime_error("Unsupported model type");
       }
     }
     if (!did_execute) {

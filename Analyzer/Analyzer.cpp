@@ -141,6 +141,15 @@ std::shared_ptr<Analyzer::Expr> MLPredictExpr::deep_copy() const {
   return makeExpr<MLPredictExpr>(model_value_->deep_copy(), regressors_copy);
 }
 
+std::shared_ptr<Analyzer::Expr> PCAProjectExpr::deep_copy() const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> features_copy;
+  for (auto feature_value : feature_values_) {
+    features_copy.emplace_back(feature_value->deep_copy());
+  }
+  return makeExpr<PCAProjectExpr>(
+      model_value_->deep_copy(), features_copy, pc_dimension_value_->deep_copy());
+}
+
 std::shared_ptr<Analyzer::Expr> CharLengthExpr::deep_copy() const {
   return makeExpr<CharLengthExpr>(arg->deep_copy(), calc_encoded_length);
 }
@@ -1743,6 +1752,22 @@ void MLPredictExpr::group_predicates(std::list<const Expr*>& scan_predicates,
   }
 }
 
+void PCAProjectExpr::group_predicates(std::list<const Expr*>& scan_predicates,
+                                      std::list<const Expr*>& join_predicates,
+                                      std::list<const Expr*>& const_predicates) const {
+  std::set<int> rte_idx_set;
+  for (const auto& feature_value : feature_values_) {
+    feature_value->collect_rte_idx(rte_idx_set);
+  }
+  if (rte_idx_set.size() > 1) {
+    join_predicates.push_back(this);
+  } else if (rte_idx_set.size() == 1) {
+    scan_predicates.push_back(this);
+  } else {
+    const_predicates.push_back(this);
+  }
+}
+
 void SampleRatioExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                        std::list<const Expr*>& join_predicates,
                                        std::list<const Expr*>& const_predicates) const {
@@ -2406,6 +2431,29 @@ bool MLPredictExpr::operator==(const Expr& rhs) const {
   return true;
 }
 
+bool PCAProjectExpr::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(PCAProjectExpr)) {
+    return false;
+  }
+  const PCAProjectExpr& rhs_cl = dynamic_cast<const PCAProjectExpr&>(rhs);
+  if (!(*model_value_ == *rhs_cl.get_model_value())) {
+    return false;
+  }
+  if (!(*pc_dimension_value_ == *rhs_cl.get_pc_dimension_value())) {
+    return false;
+  }
+  auto rhs_feature_values = rhs_cl.get_feature_values();
+  if (feature_values_.size() != rhs_feature_values.size()) {
+    return false;
+  }
+  for (size_t feature_idx = 0; feature_idx < feature_values_.size(); ++feature_idx) {
+    if (!(*feature_values_[feature_idx] == *rhs_feature_values[feature_idx])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool CardinalityExpr::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(CardinalityExpr)) {
     return false;
@@ -2814,6 +2862,20 @@ std::string MLPredictExpr::toString() const {
   for (const auto& regressor_value : regressor_values_) {
     ss << regressor_value->toString() << " ";
   }
+  ss << ") ";
+  return ss.str();
+}
+
+std::string PCAProjectExpr::toString() const {
+  std::stringstream ss;
+  ss << "PCA_PROJECT(Model: ";
+  ss << model_value_->toString();
+  ss << " Features: ";
+  for (const auto& feature_value : feature_values_) {
+    ss << feature_value->toString() << " ";
+  }
+  ss << " PC Dimension: ";
+  ss << pc_dimension_value_->toString() << " ";
   ss << ") ";
   return ss.str();
 }
@@ -3229,6 +3291,17 @@ void MLPredictExpr::find_expr(std::function<bool(const Expr*)> f,
   }
   for (auto& r : regressor_values_) {
     r->find_expr(f, expr_list);
+  }
+}
+
+void PCAProjectExpr::find_expr(std::function<bool(const Expr*)> f,
+                               std::list<const Expr*>& expr_list) const {
+  if (f(this)) {
+    add_unique(expr_list);
+    return;
+  }
+  for (auto& feature_value : feature_values_) {
+    feature_value->find_expr(f, expr_list);
   }
 }
 
