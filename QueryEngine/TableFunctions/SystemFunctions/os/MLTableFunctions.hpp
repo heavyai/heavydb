@@ -1371,8 +1371,7 @@ ml_reg_predict__cpu_template(TableFunctionManager& mgr,
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model CURSOR.");
   }
-  TextEncodingNone model_name_text_enc_none(model_name.getString(0));
-  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
+  TextEncodingNone model_name_text_enc_none(mgr, model_name.getString(0));
   return ml_reg_predict__cpu_template(mgr,
                                       model_name_text_enc_none,
                                       input_ids,
@@ -1406,9 +1405,7 @@ ml_reg_predict__cpu_template(TableFunctionManager& mgr,
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model CURSOR.");
   }
-  const std::string model_name_str{model_name.getString(0)};
-  TextEncodingNone model_name_text_enc_none(model_name_str);
-  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
+  TextEncodingNone model_name_text_enc_none(mgr, model_name.getString(0));
   return ml_reg_predict__cpu_template(mgr,
                                       model_name_text_enc_none,
                                       input_ids,
@@ -1547,8 +1544,7 @@ r2_score__cpu_template(TableFunctionManager& mgr,
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model name CURSOR.");
   }
-  TextEncodingNone model_name_text_enc_none(model_name.getString(0));
-  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
+  TextEncodingNone model_name_text_enc_none(mgr, model_name.getString(0));
   return r2_score__cpu_template(
       mgr, model_name_text_enc_none, input_labels, input_features, output_r2);
 }

@@ -217,12 +217,13 @@ DEVICE RUNTIME_EXPORT std::string TableFunctionManager_getString(int8_t* mgr_ptr
   return mgr->getString(db_id, dict_id, string_id);
 }
 
-extern "C" DEVICE RUNTIME_EXPORT void TableFunctionManager_addVarlenBuffer(
+extern "C" DEVICE RUNTIME_EXPORT int8_t* TableFunctionManager_makeBuffer(
     int8_t* mgr_ptr,
-    int8_t* buffer) {
+    int64_t element_count,
+    int64_t element_size) {
   auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
   CHECK(mgr);
-  mgr->add_varlen_buffer(buffer);
+  return mgr->makeBuffer(element_count, element_size);
 }
 
 extern "C" DEVICE RUNTIME_EXPORT int32_t

@@ -60,4 +60,13 @@ RowFunctionManager_getOrAddTransient(int8_t* mgr_ptr,
   return mgr->getOrAddTransient(db_id, dict_id, str);
 }
 
+extern "C" DEVICE RUNTIME_EXPORT int8_t* RowFunctionManager_makeBuffer(
+    int8_t* mgr_ptr,
+    int64_t element_count,
+    int64_t element_size) {
+  auto mgr = reinterpret_cast<RowFunctionManager*>(mgr_ptr);
+  CHECK(mgr);
+  return mgr->makeBuffer(element_count, element_size);
+}
+
 #endif  // #ifdef EXECUTE_INCLUDE

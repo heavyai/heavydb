@@ -26,26 +26,21 @@ int32_t text_encoding_none_length(const TextEncodingNone& t) {
   return t.size();
 }
 
-EXTENSION_NOINLINE
-TextEncodingNone text_encoding_none_copy(const TextEncodingNone& t) {
 #ifndef __CUDACC__
-  return TextEncodingNone(t.getString());
-#else
-  return TextEncodingNone();
-#endif
+
+EXTENSION_NOINLINE
+TextEncodingNone text_encoding_none_copy(RowFunctionManager& mgr,
+                                         const TextEncodingNone& t) {
+  return TextEncodingNone(mgr, t.getString());
 }
 
 EXTENSION_NOINLINE
-TextEncodingNone text_encoding_none_concat(const TextEncodingNone& t1,
+TextEncodingNone text_encoding_none_concat(RowFunctionManager& mgr,
+                                           const TextEncodingNone& t1,
                                            const TextEncodingNone& t2) {
-#ifndef __CUDACC__
-  return TextEncodingNone(t1.getString() + ' ' + t2.getString());
-#else
-  return TextEncodingNone();
-#endif
+  return TextEncodingNone(mgr, t1.getString() + ' ' + t2.getString());
 }
 
-#ifndef __CUDACC__
 EXTENSION_NOINLINE
 TextEncodingDict text_encoding_dict_concat(RowFunctionManager& mgr,
                                            const TextEncodingDict t_dict,
@@ -93,7 +88,7 @@ TextEncodingDict text_encoding_dict_copy_from(RowFunctionManager& mgr,
   }
   return mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, "copy: " + str);
 }
-#endif
+#endif  // #ifndef __CUDACC__
 
 #ifdef __clang__
 #pragma clang diagnostic pop
