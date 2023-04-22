@@ -147,8 +147,7 @@ linear_reg_coefs__cpu_2(TableFunctionManager& mgr,
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model name CURSOR.");
   }
-  TextEncodingNone model_name_text_enc_none(model_name.getString(0));
-  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
+  TextEncodingNone model_name_text_enc_none(mgr, model_name.getString(0));
   return linear_reg_coefs__cpu_1(mgr,
                                  model_name_text_enc_none,
                                  output_coef_idx,
@@ -250,8 +249,7 @@ random_forest_reg_var_importance__cpu_2(TableFunctionManager& mgr,
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model name CURSOR.");
   }
-  TextEncodingNone model_name_text_enc_none(model_name.getString(0));
-  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
+  TextEncodingNone model_name_text_enc_none(mgr, model_name.getString(0));
   return random_forest_reg_var_importance__cpu_1(mgr,
                                                  model_name_text_enc_none,
                                                  feature_id,
@@ -336,8 +334,7 @@ int32_t get_decision_trees__cpu_2(TableFunctionManager& mgr,
   if (model_name.size() != 1) {
     return mgr.ERROR_MESSAGE("Expected only one row in model name CURSOR.");
   }
-  TextEncodingNone model_name_text_enc_none(model_name.getString(0));
-  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(model_name_text_enc_none.ptr_));
+  TextEncodingNone model_name_text_enc_none(mgr, model_name.getString(0));
   return get_decision_trees__cpu_1(mgr,
                                    model_name_text_enc_none,
                                    tree_id,

@@ -126,8 +126,9 @@ EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getOrAddTransient(int8_t* m
                                                                        int32_t dict_id,
                                                                        std::string str);
 
-EXTENSION_NOINLINE_HOST void TableFunctionManager_addVarlenBuffer(int8_t* mgr_ptr,
-                                                                  int8_t* buffer);
+EXTENSION_NOINLINE_HOST int8_t* TableFunctionManager_makeBuffer(int8_t* mgr_ptr,
+                                                                int64_t count,
+                                                                int64_t size);
 /*
   Row function management functions and macros:
  */
@@ -154,6 +155,10 @@ EXTENSION_NOINLINE_HOST int32_t RowFunctionManager_getOrAddTransient(int8_t* mgr
                                                                      int32_t db_id,
                                                                      int32_t dict_id,
                                                                      std::string str);
+
+EXTENSION_NOINLINE_HOST int8_t* RowFunctionManager_makeBuffer(int8_t* mgr_ptr,
+                                                              int64_t count,
+                                                              int64_t size);
 
 /*
   Column<Array<T>> methods
@@ -280,6 +285,168 @@ DEVICE inline TextEncodingDict inline_null_value() {
 #endif
 }
 
+#ifndef __CUDACC__
+
+/*
+  This RowFunctionManager struct is a minimal proxy to the
+  RowFunctionManager defined in RowFunctionManager.h. The
+  corresponding instances share `this` but have different virtual
+  tables for methods.
+*/
+
+struct RowFunctionManager {
+  std::string getString(int32_t db_id, int32_t dict_id, int32_t string_id) {
+    return RowFunctionManager_getString(
+        reinterpret_cast<int8_t*>(this), db_id, dict_id, string_id);
+  }
+
+  int32_t getDictDbId(const char* func_name, size_t arg_idx) {
+    return RowFunctionManager_getDictDbId(
+        reinterpret_cast<int8_t*>(this), func_name, arg_idx);
+  }
+
+  int32_t getDictId(const char* func_name, size_t arg_idx) {
+    return RowFunctionManager_getDictId(
+        reinterpret_cast<int8_t*>(this), func_name, arg_idx);
+  }
+
+  int32_t getOrAddTransient(int32_t db_id, int32_t dict_id, std::string str) {
+    return RowFunctionManager_getOrAddTransient(
+        reinterpret_cast<int8_t*>(this), db_id, dict_id, str);
+  }
+
+  int8_t* makeBuffer(int64_t element_count, int64_t element_size) {
+    return RowFunctionManager_makeBuffer(
+        reinterpret_cast<int8_t*>(this), element_count, element_size);
+  }
+};
+
+/*
+  This TableFunctionManager struct is a minimal proxy to the
+  TableFunctionManager defined in TableFunctionManager.h. The
+  corresponding instances share `this` but have different virtual
+  tables for methods.
+*/
+
+namespace {
+template <typename T>
+TableFunctionMetadataType get_metadata_type() {
+  if constexpr (std::is_same<T, int8_t>::value) {
+    return TableFunctionMetadataType::kInt8;
+  } else if constexpr (std::is_same<T, int16_t>::value) {
+    return TableFunctionMetadataType::kInt16;
+  } else if constexpr (std::is_same<T, int32_t>::value) {
+    return TableFunctionMetadataType::kInt32;
+  } else if constexpr (std::is_same<T, int64_t>::value) {
+    return TableFunctionMetadataType::kInt64;
+  } else if constexpr (std::is_same<T, float>::value) {
+    return TableFunctionMetadataType::kFloat;
+  } else if constexpr (std::is_same<T, double>::value) {
+    return TableFunctionMetadataType::kDouble;
+  } else if constexpr (std::is_same<T, bool>::value) {
+    return TableFunctionMetadataType::kBool;
+  }
+  throw std::runtime_error("Unsupported TableFunctionMetadataType");
+}
+}  // namespace
+
+#ifndef UDF_COMPILED
+
+struct TableFunctionManager {
+  static TableFunctionManager* get_singleton() {
+    return reinterpret_cast<TableFunctionManager*>(TableFunctionManager_get_singleton());
+  }
+
+  void set_output_array_values_total_number(int32_t index,
+                                            int64_t output_array_values_total_number) {
+    TableFunctionManager_set_output_array_values_total_number(
+        reinterpret_cast<int8_t*>(this), index, output_array_values_total_number);
+  }
+
+  void set_output_item_values_total_number(int32_t index,
+                                           int64_t output_item_values_total_number) {
+    TableFunctionManager_set_output_item_values_total_number(
+        reinterpret_cast<int8_t*>(this), index, output_item_values_total_number);
+  }
+
+  void set_output_row_size(int64_t num_rows) {
+    if (!output_allocations_disabled) {
+      TableFunctionManager_set_output_row_size(reinterpret_cast<int8_t*>(this), num_rows);
+    }
+  }
+
+  void disable_output_allocations() { output_allocations_disabled = true; }
+
+  void enable_output_allocations() { output_allocations_disabled = false; }
+
+  int32_t error_message(const char* message) {
+    return TableFunctionManager_error_message(reinterpret_cast<int8_t*>(this), message);
+  }
+
+  template <typename T>
+  void set_metadata(const std::string& key, const T& value) {
+    TableFunctionManager_set_metadata(reinterpret_cast<int8_t*>(this),
+                                      key.c_str(),
+                                      reinterpret_cast<const uint8_t*>(&value),
+                                      sizeof(value),
+                                      get_metadata_type<T>());
+  }
+
+  template <typename T>
+  void get_metadata(const std::string& key, T& value) {
+    const uint8_t* raw_data{};
+    size_t num_bytes{};
+    TableFunctionMetadataType value_type;
+    TableFunctionManager_get_metadata(
+        reinterpret_cast<int8_t*>(this), key.c_str(), raw_data, num_bytes, value_type);
+    if (sizeof(T) != num_bytes) {
+      throw std::runtime_error("Size mismatch for Table Function Metadata '" + key + "'");
+    }
+    if (get_metadata_type<T>() != value_type) {
+      throw std::runtime_error("Type mismatch for Table Function Metadata '" + key + "'");
+    }
+    std::memcpy(&value, raw_data, num_bytes);
+  }
+  int32_t getNewDictDbId() {
+    return TableFunctionManager_getNewDictDbId(reinterpret_cast<int8_t*>(this));
+  }
+  int32_t getNewDictId() {
+    return TableFunctionManager_getNewDictId(reinterpret_cast<int8_t*>(this));
+  }
+  StringDictionaryProxy* getStringDictionaryProxy(int32_t db_id, int32_t dict_id) {
+    return reinterpret_cast<StringDictionaryProxy*>(
+        TableFunctionManager_getStringDictionaryProxy(
+            reinterpret_cast<int8_t*>(this), db_id, dict_id));
+  }
+  std::string getString(int32_t db_id, int32_t dict_id, int32_t string_id) {
+    return TableFunctionManager_getString(
+        reinterpret_cast<int8_t*>(this), db_id, dict_id, string_id);
+  }
+  int32_t getOrAddTransient(int32_t db_id, int32_t dict_id, std::string str) {
+    return TableFunctionManager_getOrAddTransient(
+        reinterpret_cast<int8_t*>(this), db_id, dict_id, str);
+  }
+  int8_t* makeBuffer(int64_t element_count, int64_t element_size) {
+    return TableFunctionManager_makeBuffer(
+        reinterpret_cast<int8_t*>(this), element_count, element_size);
+  }
+
+#ifdef HAVE_TOSTRING
+  std::string toString() const {
+    std::string result = ::typeName(this) + "(";
+    if (!(void*)this) {  // cast to void* to avoid warnings
+      result += "UNINITIALIZED";
+    }
+    result += ")";
+    return result;
+  }
+#endif  // HAVE_TOSTRING
+  bool output_allocations_disabled{false};
+};
+
+#endif  // #ifndef UDF_COMPILED
+#endif  // #ifndef __CUDACC__
+
 template <typename T>
 struct Array {
   T* ptr;
@@ -289,6 +456,24 @@ struct Array {
   DEVICE Array(T* ptr, const int64_t size, const bool is_null = false)
       : ptr(is_null ? nullptr : ptr), size(size), is_null(is_null) {}
   DEVICE Array() : ptr(nullptr), size(0), is_null(true) {}
+
+#ifndef __CUDACC__
+  template <typename M>
+  HOST Array(M& mgr, const int64_t size, const bool is_null = false)
+      : size(size), is_null(is_null) {
+    static_assert(
+#ifndef UDF_COMPILED
+        (std::is_same<TableFunctionManager, M>::value) ||
+#endif  // #ifndef UDF_COMPILED
+            (std::is_same<RowFunctionManager, M>::value),
+        "M must be a TableFunctionManager or RowFunctionManager");
+    if (!is_null) {
+      ptr = reinterpret_cast<T*>(mgr.makeBuffer(size, static_cast<int64_t>(sizeof(T))));
+    } else {
+      ptr = nullptr;
+    }
+  }
+#endif  // #ifndef __CUDACC__
 
   DEVICE Array(const int64_t size, const bool is_null = false)
       : size(size), is_null(is_null) {
@@ -311,14 +496,25 @@ struct Array {
     }
   }
 
-  DEVICE T& operator[](const unsigned int index) { return ptr[index]; }
-  DEVICE const T& operator[](const unsigned int index) const { return ptr[index]; }
+  DEVICE T& operator[](const unsigned int index) {
+    return ptr[index];
+  }
 
-  DEVICE int64_t getSize() const { return size; }
+  DEVICE const T& operator[](const unsigned int index) const {
+    return ptr[index];
+  }
 
-  DEVICE bool isNull() const { return is_null; }
+  DEVICE int64_t getSize() const {
+    return size;
+  }
 
-  DEVICE constexpr inline T null_value() const { return inline_null_value<T>(); }
+  DEVICE bool isNull() const {
+    return is_null;
+  }
+
+  DEVICE constexpr inline T null_value() const {
+    return inline_null_value<T>();
+  }
 
   DEVICE bool isNull(const unsigned int index) const {
     return (is_null ? false : ptr[index] == null_value());
@@ -358,7 +554,15 @@ struct TextEncodingNone {
   // Requires external ownership.
   explicit TextEncodingNone(char const* const c_str)
       : ptr_(const_cast<char*>(c_str)), size_(strlen(c_str)) {}
-  explicit TextEncodingNone(const std::string& str) {
+
+  template <typename M>
+  explicit DEVICE ALWAYS_INLINE TextEncodingNone(M& mgr, const std::string& str) {
+    static_assert(
+#ifndef UDF_COMPILED
+        (std::is_same<TableFunctionManager, M>::value) ||
+#endif  // #ifndef UDF_COMPILED
+            (std::is_same<RowFunctionManager, M>::value),
+        "M must be a TableFunctionManager or RowFunctionManager");
     size_ = str.length();
     if (str.empty()) {
       ptr_ = nullptr;
@@ -366,11 +570,12 @@ struct TextEncodingNone {
       // Memory must be manually released, otherwise leaks can happen.
       // On UDFs, if it is the return argument, memory is released with
       // register_buffer_with_executor_rsm
-      ptr_ = reinterpret_cast<char*>(
-          allocate_varlen_buffer((size_ + 1), static_cast<int64_t>(sizeof(char))));
-      strncpy(ptr_, str.c_str(), (size_ + 1));
+      int8_t* buffer = mgr.makeBuffer(size_, static_cast<int64_t>(sizeof(char)));
+      ptr_ = reinterpret_cast<char*>(buffer);
+      strcpy(ptr_, str.c_str());
     }
   }
+
   operator std::string() const {
     return std::string(ptr_, size_);
   }
@@ -817,8 +1022,8 @@ struct Column {
   DEVICE Column(const Column& other) : ptr_(other.ptr_), num_rows_(other.num_rows_) {}
   DEVICE Column(std::vector<T>& input_vec)
       : ptr_(input_vec.data()), num_rows_(static_cast<int64_t>(input_vec.size())) {}
-#endif
-#endif
+#endif  // #ifndef UDF_COMPILED
+#endif  // #ifndef __CUDACC__
 
   DEVICE T& operator[](const unsigned int index) const {
     if (index >= num_rows_) {
@@ -2142,151 +2347,5 @@ struct ColumnList<TextEncodingDict> {
 
 #endif
 };
-
-#ifndef __CUDACC__
-struct RowFunctionManager {
-  std::string getString(int32_t db_id, int32_t dict_id, int32_t string_id) {
-    return RowFunctionManager_getString(
-        reinterpret_cast<int8_t*>(this), db_id, dict_id, string_id);
-  }
-
-  int32_t getDictDbId(const char* func_name, size_t arg_idx) {
-    return RowFunctionManager_getDictDbId(
-        reinterpret_cast<int8_t*>(this), func_name, arg_idx);
-  }
-
-  int32_t getDictId(const char* func_name, size_t arg_idx) {
-    return RowFunctionManager_getDictId(
-        reinterpret_cast<int8_t*>(this), func_name, arg_idx);
-  }
-
-  int32_t getOrAddTransient(int32_t db_id, int32_t dict_id, std::string str) {
-    return RowFunctionManager_getOrAddTransient(
-        reinterpret_cast<int8_t*>(this), db_id, dict_id, str);
-  }
-};
-#endif
-
-/*
-  This TableFunctionManager struct is a minimal proxy to the
-  TableFunctionManager defined in TableFunctionManager.h. The
-  corresponding instances share `this` but have different virtual
-  tables for methods.
-*/
-#ifndef __CUDACC__
-
-namespace {
-template <typename T>
-TableFunctionMetadataType get_metadata_type() {
-  if constexpr (std::is_same<T, int8_t>::value) {
-    return TableFunctionMetadataType::kInt8;
-  } else if constexpr (std::is_same<T, int16_t>::value) {
-    return TableFunctionMetadataType::kInt16;
-  } else if constexpr (std::is_same<T, int32_t>::value) {
-    return TableFunctionMetadataType::kInt32;
-  } else if constexpr (std::is_same<T, int64_t>::value) {
-    return TableFunctionMetadataType::kInt64;
-  } else if constexpr (std::is_same<T, float>::value) {
-    return TableFunctionMetadataType::kFloat;
-  } else if constexpr (std::is_same<T, double>::value) {
-    return TableFunctionMetadataType::kDouble;
-  } else if constexpr (std::is_same<T, bool>::value) {
-    return TableFunctionMetadataType::kBool;
-  }
-  throw std::runtime_error("Unsupported TableFunctionMetadataType");
-}
-}  // namespace
-
-struct TableFunctionManager {
-  static TableFunctionManager* get_singleton() {
-    return reinterpret_cast<TableFunctionManager*>(TableFunctionManager_get_singleton());
-  }
-
-  void set_output_array_values_total_number(int32_t index,
-                                            int64_t output_array_values_total_number) {
-    TableFunctionManager_set_output_array_values_total_number(
-        reinterpret_cast<int8_t*>(this), index, output_array_values_total_number);
-  }
-
-  void set_output_item_values_total_number(int32_t index,
-                                           int64_t output_item_values_total_number) {
-    TableFunctionManager_set_output_item_values_total_number(
-        reinterpret_cast<int8_t*>(this), index, output_item_values_total_number);
-  }
-
-  void set_output_row_size(int64_t num_rows) {
-    if (!output_allocations_disabled) {
-      TableFunctionManager_set_output_row_size(reinterpret_cast<int8_t*>(this), num_rows);
-    }
-  }
-
-  void disable_output_allocations() { output_allocations_disabled = true; }
-
-  void enable_output_allocations() { output_allocations_disabled = false; }
-
-  int32_t error_message(const char* message) {
-    return TableFunctionManager_error_message(reinterpret_cast<int8_t*>(this), message);
-  }
-
-  template <typename T>
-  void set_metadata(const std::string& key, const T& value) {
-    TableFunctionManager_set_metadata(reinterpret_cast<int8_t*>(this),
-                                      key.c_str(),
-                                      reinterpret_cast<const uint8_t*>(&value),
-                                      sizeof(value),
-                                      get_metadata_type<T>());
-  }
-
-  template <typename T>
-  void get_metadata(const std::string& key, T& value) {
-    const uint8_t* raw_data{};
-    size_t num_bytes{};
-    TableFunctionMetadataType value_type;
-    TableFunctionManager_get_metadata(
-        reinterpret_cast<int8_t*>(this), key.c_str(), raw_data, num_bytes, value_type);
-    if (sizeof(T) != num_bytes) {
-      throw std::runtime_error("Size mismatch for Table Function Metadata '" + key + "'");
-    }
-    if (get_metadata_type<T>() != value_type) {
-      throw std::runtime_error("Type mismatch for Table Function Metadata '" + key + "'");
-    }
-    std::memcpy(&value, raw_data, num_bytes);
-  }
-  int32_t getNewDictDbId() {
-    return TableFunctionManager_getNewDictDbId(reinterpret_cast<int8_t*>(this));
-  }
-  int32_t getNewDictId() {
-    return TableFunctionManager_getNewDictId(reinterpret_cast<int8_t*>(this));
-  }
-  StringDictionaryProxy* getStringDictionaryProxy(int32_t db_id, int32_t dict_id) {
-    return reinterpret_cast<StringDictionaryProxy*>(
-        TableFunctionManager_getStringDictionaryProxy(
-            reinterpret_cast<int8_t*>(this), db_id, dict_id));
-  }
-  std::string getString(int32_t db_id, int32_t dict_id, int32_t string_id) {
-    return TableFunctionManager_getString(
-        reinterpret_cast<int8_t*>(this), db_id, dict_id, string_id);
-  }
-  int32_t getOrAddTransient(int32_t db_id, int32_t dict_id, std::string str) {
-    return TableFunctionManager_getOrAddTransient(
-        reinterpret_cast<int8_t*>(this), db_id, dict_id, str);
-  }
-  void addVarlenBuffer(int8_t* buffer) {
-    TableFunctionManager_addVarlenBuffer(reinterpret_cast<int8_t*>(this), buffer);
-  }
-
-#ifdef HAVE_TOSTRING
-  std::string toString() const {
-    std::string result = ::typeName(this) + "(";
-    if (!(void*)this) {  // cast to void* to avoid warnings
-      result += "UNINITIALIZED";
-    }
-    result += ")";
-    return result;
-  }
-#endif  // HAVE_TOSTRING
-  bool output_allocations_disabled{false};
-};
-#endif  // #ifndef __CUDACC__
 
 #endif  // #ifndef UDF_COMPILED

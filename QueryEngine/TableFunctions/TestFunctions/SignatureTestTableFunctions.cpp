@@ -419,8 +419,7 @@ EXTENSION_NOINLINE_HOST int32_t ct_test_allocator(TableFunctionManager& mgr,
                                                   Column<int32_t>& out) {
   mgr.enable_output_allocations();
   mgr.set_output_row_size(1);
-  TextEncodingNone t2(t.getString());
-  mgr.addVarlenBuffer(reinterpret_cast<int8_t*>(t2.ptr_));
+  TextEncodingNone t2(mgr, t.getString());
   out[0] = 11;
   return 1;
 }

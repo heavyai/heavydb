@@ -113,6 +113,13 @@ struct RowFunctionManager {
     return reinterpret_cast<int8_t*>(proxy);
   }
 
+  inline int8_t* makeBuffer(int64_t element_count, int64_t element_size) {
+    int8_t* buffer =
+        reinterpret_cast<int8_t*>(checked_malloc((element_count + 1) * element_size));
+    executor_->getRowSetMemoryOwner()->addVarlenBuffer(buffer);
+    return buffer;
+  }
+
   // Executor
   const Executor* executor_;
   const RelAlgExecutionUnit& ra_exe_unit_;
