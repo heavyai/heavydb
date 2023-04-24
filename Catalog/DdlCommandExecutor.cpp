@@ -43,6 +43,7 @@
 
 extern bool g_enable_fsi;
 extern bool g_enable_ml_functions;
+extern bool g_restrict_ml_model_metadata_to_superusers;
 
 namespace {
 
@@ -2032,6 +2033,14 @@ ShowModelsCommand::ShowModelsCommand(
   if (!g_enable_ml_functions) {
     throw std::runtime_error("Cannot show models. ML functions are disabled.");
   }
+  if (g_restrict_ml_model_metadata_to_superusers) {
+    // Check if user is super user
+    const auto& current_user = session_ptr->get_currentUser();
+    if (!current_user.isSuper) {
+      throw std::runtime_error(
+          "Cannot show models. Showing model information to non-superusers is disabled.");
+    }
+  }
 }
 
 ExecutionResult ShowModelsCommand::execute(bool read_only_mode) {
@@ -2067,6 +2076,15 @@ ShowModelDetailsCommand::ShowModelDetailsCommand(
     : DdlCommand(ddl_data, session_ptr) {
   if (!g_enable_ml_functions) {
     throw std::runtime_error("Cannot show model details. ML functions are disabled.");
+  }
+  if (g_restrict_ml_model_metadata_to_superusers) {
+    // Check if user is super user
+    const auto& current_user = session_ptr->get_currentUser();
+    if (!current_user.isSuper) {
+      throw std::runtime_error(
+          "Cannot show model details. Showing model information to non-superusers is "
+          "disabled.");
+    }
   }
 }
 
