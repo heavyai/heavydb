@@ -21,6 +21,7 @@
 #include <unordered_set>
 
 extern bool g_enable_table_functions;
+extern bool g_enable_ml_functions;
 extern bool g_enable_dev_table_functions;
 
 namespace table_functions {
@@ -384,6 +385,27 @@ bool is_table_function_whitelisted(const std::string& function_name) {
       "tf_export_ov_grid_mesh"
 #endif
   };
+
+  static const std::unordered_set<std::string> ml_table_functions = {
+      "supported_ml_frameworks",
+      "kmeans",
+      "dbscan",
+      "linear_reg_fit",
+      "linear_reg_coefs",
+      "decision_tree_reg_fit",
+      "gbt_reg_fit",
+      "random_forest_reg_fit",
+      "random_forest_reg_var_importance",
+      "ml_reg_predict",
+      "r2_score",
+      "get_decision_trees",
+  };
+
+  if (!g_enable_ml_functions) {
+    return whitelisted_table_functions.find(function_name) !=
+               whitelisted_table_functions.end() &&
+           ml_table_functions.find(function_name) == ml_table_functions.end();
+  }
 
   return whitelisted_table_functions.find(function_name) !=
          whitelisted_table_functions.end();

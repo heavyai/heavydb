@@ -88,6 +88,8 @@ bool g_enable_fsi_regex_import{true};
 
 bool g_enable_add_metadata_columns{true};
 
+extern bool g_enable_ml_functions;
+
 using Catalog_Namespace::SysCatalog;
 using namespace std::string_literals;
 
@@ -3434,6 +3436,9 @@ void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session,
 }
 
 CreateModelStmt::CreateModelStmt(const rapidjson::Value& payload) {
+  if (!g_enable_ml_functions) {
+    throw std::runtime_error("Cannot create model. ML functions are disabled.");
+  }
   CHECK(payload.HasMember("name"));
   const std::string model_type_str = json_str(payload["type"]);
   model_type_ = get_ml_model_type_from_str(model_type_str);

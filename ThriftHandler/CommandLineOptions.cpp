@@ -688,6 +688,11 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(g_enable_table_functions)
                          ->implicit_value(true),
                      "Enable system table functions support.");
+  desc.add_options()("enable-ml-functions",
+                     po::value<bool>(&g_enable_ml_functions)
+                         ->default_value(g_enable_ml_functions)
+                         ->implicit_value(true),
+                     "Enable ML support.");
   desc.add_options()("enable-logs-system-tables",
                      po::value<bool>(&g_enable_logs_system_tables)
                          ->default_value(g_enable_logs_system_tables)
@@ -1466,6 +1471,19 @@ void CommandLineOptions::validate() {
         "Invalid value for executor-max-available-resource-use-ratio, must be greater "
         "than "
         "0. and less than or equal to 1.0");
+  }
+
+#ifndef HAVE_SYSTEM_TFS
+  if (g_enable_table_functions) {
+    g_enable_table_functions = false;
+    LOG(INFO) << "System table functions turned off due to HeavyDB being built without "
+                 "table function support.";
+  }
+#endif  // HAVE_SYSTEM_TFS
+  if (g_enable_ml_functions && !g_enable_table_functions) {
+    g_enable_ml_functions = false;
+    LOG(INFO) << "ML functions turned off due to `--enable-table-functions` being set to "
+                 "false. Please enable table functions to use ML functionality.";
   }
 
   if (disk_cache_level == "foreign_tables") {
