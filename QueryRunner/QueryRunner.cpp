@@ -623,7 +623,7 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
       ddl_query.Parse(query_ra);
       CHECK(ddl_query.HasMember("payload"));
       CHECK(ddl_query["payload"].IsObject());
-      auto stmt = Parser::InsertValuesStmt(ddl_query["payload"].GetObject());
+      auto stmt = Parser::InsertValuesStmt(cat, ddl_query["payload"].GetObject());
       stmt.execute(*session_info_, false /* read only */);
       return;
     }

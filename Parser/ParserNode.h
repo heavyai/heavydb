@@ -2103,7 +2103,8 @@ class ValuesList : public Node {
  */
 class InsertValuesStmt : public InsertStmt {
  public:
-  InsertValuesStmt(const rapidjson::Value& payload);
+  InsertValuesStmt(const Catalog_Namespace::Catalog& catalog,
+                   const rapidjson::Value& payload);
   InsertValuesStmt(std::string* t, std::list<std::string*>* c, std::list<Expr*>* v)
       : InsertStmt(t, c) {
     UNREACHABLE() << "Legacy inserts should not be called anymore";

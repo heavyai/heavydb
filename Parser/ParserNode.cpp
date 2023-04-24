@@ -2440,7 +2440,8 @@ ArrayLiteral* parse_insert_array_literal(const rapidjson::Value& array) {
 }
 }  // namespace
 
-InsertValuesStmt::InsertValuesStmt(const rapidjson::Value& payload)
+InsertValuesStmt::InsertValuesStmt(const Catalog_Namespace::Catalog& catalog,
+                                   const rapidjson::Value& payload)
     : InsertStmt(nullptr, nullptr) {
   CHECK(payload.HasMember("name"));
   table_ = std::make_unique<std::string>(json_str(payload["name"]));
@@ -2459,19 +2460,36 @@ InsertValuesStmt::InsertValuesStmt(const rapidjson::Value& payload)
     throw std::runtime_error("Values statement cannot be empty");
   }
   values_lists_.reserve(tuples.Size());
-  for (const auto& json_tuple : tuples) {
-    auto values_list = std::make_unique<ValuesList>();
-    CHECK(json_tuple.IsArray());
-    auto tuple = json_tuple.GetArray();
-    for (const auto& value : tuple) {
-      CHECK(value.IsObject());
-      if (value.HasMember("array")) {
-        values_list->push_back(parse_insert_array_literal(value["array"]));
-      } else {
-        values_list->push_back(parse_insert_literal(value));
+  int column_offset = 0;
+  try {
+    for (const auto& json_tuple : tuples) {
+      auto values_list = std::make_unique<ValuesList>();
+      CHECK(json_tuple.IsArray());
+      auto tuple = json_tuple.GetArray();
+      column_offset = 0;
+      for (const auto& value : tuple) {
+        CHECK(value.IsObject());
+        if (value.HasMember("array")) {
+          values_list->push_back(parse_insert_array_literal(value["array"]));
+        } else {
+          values_list->push_back(parse_insert_literal(value));
+        }
+        ++column_offset;
       }
+      values_lists_.push_back(std::move(values_list));
     }
-    values_lists_.push_back(std::move(values_list));
+  } catch (std::out_of_range const& e) {
+    auto* td = catalog.getMetadataForTable(*table_, false);
+    CHECK(td);
+    auto cds = catalog.getAllColumnMetadataForTable(td->tableId, false, false, false);
+    auto target_col_iter = cds.begin();
+    std::advance(target_col_iter, column_offset);
+    auto* cd = *target_col_iter;
+    CHECK(cd);
+    auto const col_identifier = td->tableName + "." + cd->columnName;
+    throw std::runtime_error(
+        "Detected an out-of-range exception when inserting a value into column \"" +
+        col_identifier + "\"");
   }
 }
 
