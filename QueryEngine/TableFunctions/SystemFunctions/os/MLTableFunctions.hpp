@@ -362,13 +362,12 @@ struct CategoricalFeaturesBuilder {
  public:
   CategoricalFeaturesBuilder(const ColumnList<TextEncodingDict>& cat_features,
                              const ColumnList<T>& numeric_features,
-                             const int32_t top_k_cat_attrs,
-                             const float min_cat_attr_proportion,
+                             const int32_t cat_top_k,
+                             const float cat_min_fraction,
                              const bool cat_include_others)
       : num_rows_(numeric_features.size()) {
     TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodingInfo
-        one_hot_encoding_info(
-            top_k_cat_attrs, min_cat_attr_proportion, cat_include_others);
+        one_hot_encoding_info(cat_top_k, cat_min_fraction, cat_include_others);
     const size_t num_cat_features = static_cast<size_t>(cat_features.numCols());
     std::vector<TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodingInfo>
         one_hot_encoding_infos;
@@ -445,8 +444,8 @@ struct CategoricalFeaturesBuilder {
    TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<TextEncodingDict> cat_features, 
    ColumnList<T> numeric_features> data,
-   int32_t top_k_cat_attrs | require="top_k_cat_attrs >= 1" | default=10,
-   float min_cat_attr_proportion | require="min_cat_attr_proportion > 0.0" | require="min_cat_attr_proportion <= 1.0" | default=0.01,
+   int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
+   float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
    TextEncodingNone model_metadata | default="e30=") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
@@ -462,15 +461,15 @@ linear_reg_fit__cpu_template(TableFunctionManager& mgr,
                              const Column<T>& input_labels,
                              const ColumnList<TextEncodingDict>& input_cat_features,
                              const ColumnList<T>& input_numeric_features,
-                             const int32_t top_k_cat_attrs,
-                             const float min_cat_attr_proportion,
+                             const int32_t cat_top_k,
+                             const float cat_min_fraction,
                              const TextEncodingNone& preferred_ml_framework_str,
                              const TextEncodingNone& model_metadata,
                              Column<TextEncodingDict>& output_model_name) {
   CategoricalFeaturesBuilder<T> cat_features_builder(input_cat_features,
                                                      input_numeric_features,
-                                                     top_k_cat_attrs,
-                                                     min_cat_attr_proportion,
+                                                     cat_top_k,
+                                                     cat_min_fraction,
                                                      false /* cat_include_others */);
 
   return linear_reg_fit_impl(mgr,
@@ -638,8 +637,8 @@ decision_tree_reg_fit__cpu_template(TableFunctionManager& mgr,
    Cursor<Column<T> labels, ColumnList<TextEncodingDict> cat_features, ColumnList<T> numeric_features> data,
    int64_t max_tree_depth | require="max_tree_depth >= 0" | default=0,
    int64_t min_obs_per_leaf_node | require="min_obs_per_leaf_node >= 0" | default=5,
-   int32_t top_k_cat_attrs | require="top_k_cat_attrs >= 1" | default=10,
-   float min_cat_attr_proportion | require="min_cat_attr_proportion > 0.0" | require="min_cat_attr_proportion <= 1.0" | default=0.01,
+   int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
+   float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
    TextEncodingNone model_metadata | default="e30=") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
@@ -657,16 +656,16 @@ NEVER_INLINE HOST int32_t decision_tree_reg_fit__cpu_template(
     const ColumnList<T>& input_numeric_features,
     const int64_t max_tree_depth,
     const int64_t min_observations_per_leaf_node,
-    const int32_t top_k_cat_attrs,
-    const float min_cat_attr_proportion,
+    const int32_t cat_top_k,
+    const float cat_min_fraction,
     const TextEncodingNone& preferred_ml_framework_str,
     const TextEncodingNone& model_metadata,
     Column<TextEncodingDict>& output_model_name) {
   std::vector<std::vector<std::string>> empty_cat_feature_keys;
   CategoricalFeaturesBuilder<T> cat_features_builder(input_cat_features,
                                                      input_numeric_features,
-                                                     top_k_cat_attrs,
-                                                     min_cat_attr_proportion,
+                                                     cat_top_k,
+                                                     cat_min_fraction,
                                                      false /* cat_include_others */);
   return decision_tree_reg_impl(mgr,
                                 model_name,
@@ -834,8 +833,8 @@ gbt_reg_fit__cpu_template(TableFunctionManager& mgr,
    int64_t min_obs_per_leaf_node | require="min_obs_per_leaf_node > 0" | default=5,
    int64_t max_bins | require="max_bins > 0" | default=256,
    int64_t min_bin_size | require="min_bin_size >= 0" | default=5,
-   int32_t top_k_cat_attrs | require="top_k_cat_attrs >= 1" | default=10,
-   float min_cat_attr_proportion | require="min_cat_attr_proportion > 0.0" | require="min_cat_attr_proportion <= 1.0" | default=0.01,
+   int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
+   float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
    TextEncodingNone model_metadata | default="e30=") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
@@ -861,15 +860,15 @@ gbt_reg_fit__cpu_template(TableFunctionManager& mgr,
                           const int64_t min_observations_per_leaf_node,
                           const int64_t max_bins,
                           const int64_t min_bin_size,
-                          const int32_t top_k_cat_attrs,
-                          const float min_cat_attr_proportion,
+                          const int32_t cat_top_k,
+                          const float cat_min_fraction,
                           const TextEncodingNone& preferred_ml_framework_str,
                           const TextEncodingNone& model_metadata,
                           Column<TextEncodingDict>& output_model_name) {
   CategoricalFeaturesBuilder<T> cat_features_builder(input_cat_features,
                                                      input_numeric_features,
-                                                     top_k_cat_attrs,
-                                                     min_cat_attr_proportion,
+                                                     cat_top_k,
+                                                     cat_min_fraction,
                                                      false /* cat_include_others */);
   return gbt_reg_fit_impl(mgr,
                           model_name,
@@ -1098,8 +1097,8 @@ random_forest_reg_fit__cpu_template(TableFunctionManager& mgr,
    int64_t max_leaf_nodes | require="max_leaf_nodes >=0" | default=0,
    bool use_histogram | default=false,
    TextEncodingNone var_importance_metric | default="MDI",
-   int32_t top_k_cat_attrs | require="top_k_cat_attrs >= 1" | default=10,
-   float min_cat_attr_proportion | require="min_cat_attr_proportion > 0.0" | require="min_cat_attr_proportion <= 1.0" | default=0.01,
+   int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
+   float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
    TextEncodingNone model_metadata | default="e30=") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
@@ -1128,15 +1127,15 @@ NEVER_INLINE HOST int32_t random_forest_reg_fit__cpu_template(
     const int64_t max_leaf_nodes,
     const bool use_histogram,
     const TextEncodingNone& var_importance_metric_str,
-    const int32_t top_k_cat_attrs,
-    const float min_cat_attr_proportion,
+    const int32_t cat_top_k,
+    const float cat_min_fraction,
     const TextEncodingNone& preferred_ml_framework_str,
     const TextEncodingNone& model_metadata,
     Column<TextEncodingDict>& output_model_name) {
   CategoricalFeaturesBuilder<T> cat_features_builder(input_cat_features,
                                                      input_numeric_features,
-                                                     top_k_cat_attrs,
-                                                     min_cat_attr_proportion,
+                                                     cat_top_k,
+                                                     cat_min_fraction,
                                                      false /* cat_include_others */);
   return random_forest_reg_fit_impl(mgr,
                                     model_name,
