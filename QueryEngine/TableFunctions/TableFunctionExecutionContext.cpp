@@ -153,6 +153,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
       CHECK_EQ(col_index, -1);
     }
     if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
+      CHECK(ti.is_column_list() || ti.is_column()) << "ti=" << ti;
       const auto& table_key = col_var->getTableKey();
       auto table_info_it = std::find_if(
           table_infos.begin(), table_infos.end(), [&table_key](const auto& table_info) {
@@ -169,7 +170,8 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           device_allocator.get(),
           /*thread_idx=*/0,
           chunks_owner,
-          column_fetcher.columnarized_table_cache_);
+          column_fetcher.columnarized_table_cache_,
+          /*convert_to_flatbuffer=*/true);
       // We use the number of entries in the first column to be the number of rows to base
       // the output off of (optionally depending on the sizing parameter)
       if (!input_num_rows) {
@@ -266,7 +268,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
                                                      device_type,
                                                      literals_owner,
                                                      device_allocator.get()));
-      } else if (ti.is_bytes()) {  // text encoding none string
+      } else if (ti.is_text_encoding_none()) {
         col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.stringval,
                                                      device_type,
                                                      literals_owner,
@@ -604,7 +606,7 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
 
   for (size_t col_idx = 0; col_idx < num_out_columns; col_idx++) {
     auto ti = exe_unit.target_exprs[col_idx]->get_type_info();
-    if (ti.supports_flatbuffer()) {
+    if (ti.usesFlatBuffer()) {
       // TODO: implement FlatBuffer normalization when the
       // max_nof_values is larger than the nof specified values.
       //
@@ -708,7 +710,6 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
                                        elem_count,
                                        QueryDescriptionType::TableFunction,
                                        /*is_table_function=*/true);
-  query_mem_desc.setOutputColumnar(true);
 
   for (size_t i = 0; i < num_out_columns; i++) {
     const size_t col_width = exe_unit.target_exprs[i]->get_type_info().get_size();

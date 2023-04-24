@@ -137,14 +137,18 @@ struct TableFunctionManager {
                                          output_num_rows,  // divide by row multiplier???
                                          QueryDescriptionType::TableFunction,
                                          /*is_table_function=*/true);
-    query_mem_desc.setOutputColumnar(true);
 
     for (size_t i = 0; i < num_out_columns; i++) {
       // All outputs have padded width set to logical column width
       auto ti = exe_unit_.target_exprs[i]->get_type_info();
-      if (ti.supports_flatbuffer()) {
+      if (ti.usesFlatBuffer()) {
         int64_t total_number = -1;
         switch (ti.get_type()) {
+          case kTEXT:
+            if (ti.get_compression() != kENCODING_NONE) {
+              UNREACHABLE() << "allocate_output_buffers not implemented for "
+                            << ti.toString();
+            }
           case kARRAY:
           case kLINESTRING:
           case kPOLYGON:
@@ -218,10 +222,15 @@ struct TableFunctionManager {
         col->size = output_num_rows_;
 
         auto ti = exe_unit_.target_exprs[i]->get_type_info();
-        if (ti.supports_flatbuffer()) {
+        if (ti.usesFlatBuffer()) {
           FlatBufferManager m{output_buffers_ptr};
           int64_t total_number = -1;
           switch (ti.get_type()) {
+            case kTEXT:
+              if (ti.get_compression() != kENCODING_NONE) {
+                UNREACHABLE() << "allocate_output_buffers not implemented for "
+                              << ti.toString();
+              }
             case kARRAY:
             case kLINESTRING:
             case kPOLYGON:

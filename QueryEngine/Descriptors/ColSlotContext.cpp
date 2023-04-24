@@ -282,6 +282,17 @@ int64_t ColSlotContext::getFlatBufferSize(const size_t slot_idx) const {
   return varlen_map_it->second;
 }
 
+bool ColSlotContext::checkSlotUsesFlatBufferFormat(const size_t slot_idx) const {
+  const auto varlen_map_it = varlen_output_slot_map_.find(slot_idx);
+  if (varlen_map_it != varlen_output_slot_map_.end() &&
+      slot_idx < col_to_slot_map_.size() && col_to_slot_map_[slot_idx].size() == 1) {
+    const auto& slot_size = slot_sizes_[col_to_slot_map_[slot_idx][0]];
+    return slot_size.padded_size == 0 &&
+           slot_size.logical_size == 0;  // as per addColumnFlatBuffer
+  }
+  return false;
+}
+
 void ColSlotContext::addSlotForColumn(const int8_t logical_size,
                                       const size_t column_idx) {
   addSlotForColumn(-1, logical_size, column_idx);

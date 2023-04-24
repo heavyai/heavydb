@@ -1996,9 +1996,9 @@ std::vector<TargetMetaInfo> get_targets_meta(
   for (size_t i = 0; i < ra_node->size(); ++i) {
     CHECK(target_exprs[i]);
     // TODO(alex): remove the count distinct type fixup.
-    targets_meta.emplace_back(ra_node->getFieldName(i),
-                              get_logical_type_for_expr(*target_exprs[i]),
-                              target_exprs[i]->get_type_info());
+    auto ti = get_logical_type_for_expr(*target_exprs[i]);
+    targets_meta.emplace_back(
+        ra_node->getFieldName(i), ti, target_exprs[i]->get_type_info());
   }
   return targets_meta;
 }
@@ -3510,15 +3510,27 @@ bool can_output_columnar(const RelAlgExecutionUnit& ra_exe_unit,
     // disable output columnar when we have top-sort node query
     return false;
   }
+  bool flatbuffer_is_used = false;
   for (const auto& target_expr : ra_exe_unit.target_exprs) {
+    const auto ti = target_expr->get_type_info();
+    // Usage of FlatBuffer memory layout implies columnar-only support.
+    if (ti.usesFlatBuffer()) {
+      flatbuffer_is_used = true;
+      continue;
+    }
     // We don't currently support varlen columnar projections, so
     // return false if we find one
-    if (target_expr->get_type_info().is_varlen()) {
+    // TODO: notice that currently ti.supportsFlatBuffer() == ti.is_varlen()
+    if (ti.is_varlen()) {
       return false;
     }
   }
   if (auto top_project = dynamic_cast<const RelProject*>(body)) {
     if (top_project->isRowwiseOutputForced()) {
+      if (flatbuffer_is_used) {
+        throw std::runtime_error(
+            "Cannot force rowwise output when FlatBuffer layout is used.");
+      }
       return false;
     }
   }
@@ -3526,6 +3538,12 @@ bool can_output_columnar(const RelAlgExecutionUnit& ra_exe_unit,
 }
 
 bool should_output_columnar(const RelAlgExecutionUnit& ra_exe_unit) {
+  for (const auto& target_expr : ra_exe_unit.target_exprs) {
+    if (target_expr->get_type_info().usesFlatBuffer()) {
+      // using FlatBuffer memory layout implies columnar-only output
+      return true;
+    }
+  }
   return g_columnar_large_projections &&
          ra_exe_unit.scan_limit >= g_columnar_large_projections_threshold;
 }
@@ -3808,7 +3826,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     if (!eo.output_columnar_hint && should_output_columnar(ra_exe_unit)) {
       VLOG(1) << "Using columnar layout for projection as output size of "
               << ra_exe_unit.scan_limit << " rows exceeds threshold of "
-              << g_columnar_large_projections_threshold << ".";
+              << g_columnar_large_projections_threshold
+              << " or some target uses FlatBuffer memory layout.";
       eo.output_columnar_hint = true;
     }
   } else {
@@ -5196,6 +5215,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
         }
         type_info.set_type(ti.get_type());  // set type to column list
         type_info.set_dimension(ti.get_dimension());
+        type_info.setUsesFlatBuffer(type_info.get_elem_type().supportsFlatBuffer());
         input_expr->set_type_info(type_info);
 
         input_col_exprs.push_back(col_var);
@@ -5215,6 +5235,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
         type_info.set_subtype(type_info.get_type());  // set type to be subtype
       }
       type_info.set_type(ti.get_type());  // set type to column
+      type_info.setUsesFlatBuffer(type_info.get_elem_type().supportsFlatBuffer());
       input_expr->set_type_info(type_info);
       input_col_exprs.push_back(col_var);
       input_index++;
@@ -5233,6 +5254,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   constexpr int32_t transient_pos{-1};
   for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
     auto ti = table_function_impl.getOutputSQLType(i);
+    ti.setUsesFlatBuffer(ti.supportsFlatBuffer());
     if (ti.is_geometry()) {
       auto p = table_function_impl.getInputID(i);
       int32_t input_pos = p.first;

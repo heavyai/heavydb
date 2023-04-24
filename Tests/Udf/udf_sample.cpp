@@ -11,7 +11,7 @@ bool array_is_null_double(Array<double> arr) {
 
 EXTENSION_NOINLINE
 int32_t array_sz_double(Array<double> arr) {
-  return arr.getSize();
+  return arr.size();
 }
 
 EXTENSION_NOINLINE
@@ -26,7 +26,7 @@ bool array_is_null_int32(Array<int32_t> arr) {
 
 EXTENSION_NOINLINE
 int32_t array_sz_int32(Array<int32_t> arr) {
-  return (int32_t)arr.getSize();
+  return (int32_t)arr.size();
 }
 
 EXTENSION_NOINLINE
@@ -46,7 +46,7 @@ bool array_is_null_int64(Array<int64_t> arr) {
 
 EXTENSION_NOINLINE
 int64_t array_sz_int64(Array<int64_t> arr) {
-  return arr.getSize();
+  return arr.size();
 }
 
 EXTENSION_NOINLINE
@@ -70,8 +70,8 @@ int8_t array_at_int64_is_null(Array<int64_t> arr, std::size_t idx) {
 
 EXTENSION_NOINLINE
 Array<double> array_ret_udf(const Array<int32_t> arr, double multiplier) {
-  Array<double> ret(arr.getSize());
-  for (int64_t i = 0; i < arr.getSize(); i++) {
+  Array<double> ret(arr.size());
+  for (size_t i = 0; i < arr.size(); i++) {
     if (arr(i) == arr.null_value()) {
       ret[i] = ret.null_value();
     } else {

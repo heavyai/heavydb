@@ -149,7 +149,7 @@ bool PlanState::hasExpressionNeedsLazyFetch(
   return std::any_of(target_exprs_to_codegen.begin(),
                      target_exprs_to_codegen.end(),
                      [](const TargetExprCodegen& target_expr) {
-                       return target_expr.target_info.sql_type.supports_flatbuffer();
+                       return target_expr.target_info.sql_type.usesFlatBuffer();
                      });
 }
 
@@ -157,7 +157,7 @@ void PlanState::registerNonLazyFetchExpression(
     const std::vector<TargetExprCodegen>& target_exprs_to_codegen) {
   auto const needs_lazy_fetch = hasExpressionNeedsLazyFetch(target_exprs_to_codegen);
   for (const auto& expr : target_exprs_to_codegen) {
-    if (needs_lazy_fetch && !expr.target_info.sql_type.supports_flatbuffer()) {
+    if (needs_lazy_fetch && !expr.target_info.sql_type.usesFlatBuffer()) {
       if (auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr.target_expr)) {
         // force non-lazy fetch on all other columns that don't support flatbuffer
         addColumnToFetch(col_var->getColumnKey(), /*unmark_lazy_fetch=*/true);

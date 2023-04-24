@@ -75,11 +75,11 @@ inline llvm::Type* get_llvm_type_from_sql_column_type(const SQLTypeInfo elem_ti,
     if (elem_ti.get_compression() == kENCODING_DICT) {
       return get_int_ptr_type(elem_ti.get_size() * 8, ctx);
     }
-    CHECK(elem_ti.is_bytes());  // None encoded string
+    CHECK(elem_ti.is_text_encoding_none());
     return get_int_ptr_type(8, ctx);
   } else if (elem_ti.is_timestamp()) {
     return get_int_ptr_type(elem_ti.get_size() * 8, ctx);
-  } else if (elem_ti.supports_flatbuffer()) {
+  } else if (elem_ti.usesFlatBuffer()) {
     return get_int_ptr_type(8, ctx);
   }
   LOG(FATAL) << "get_llvm_type_from_sql_column_type: not implemented for "
@@ -459,7 +459,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
           "input_scalar_int." + std::to_string(func_arg_index));
       func_args.push_back(scalar_int);
       CHECK_EQ(col_index, -1);
-    } else if (ti.is_bytes()) {
+    } else if (ti.is_text_encoding_none()) {
       auto varchar_size =
           cgen_state->ir_builder_.CreateBitCast(col_heads[i], get_int_ptr_type(64, ctx));
       auto varchar_ptr = cgen_state->ir_builder_.CreateGEP(
@@ -543,6 +543,8 @@ void TableFunctionCompilationContext::generateEntryPoint(
     CHECK(!ti.is_column());       // UDTF output column type is its data type
     CHECK(!ti.is_column_list());  // TODO: when UDTF outputs column_list, convert it to
                                   // output columns
+    // UDTF output columns use FlatBuffer storage whenever type supports it
+    CHECK_EQ(ti.supportsFlatBuffer(), ti.usesFlatBuffer()) << ti;
     auto [col, col_ptr] = alloc_column(
         std::string("output_col.") + std::to_string(i),
         i,

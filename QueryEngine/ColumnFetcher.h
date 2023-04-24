@@ -60,7 +60,8 @@ class ColumnFetcher {
       DeviceAllocator* device_allocator,
       const size_t thread_idx,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-      ColumnCacheMap& column_cache);
+      ColumnCacheMap& column_cache,
+      bool convert_to_flatbuffer = false);
 
   //! Creates a JoinColumn struct containing an array of JoinChunk structs.
   static JoinColumn makeJoinColumn(

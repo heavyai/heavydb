@@ -297,14 +297,15 @@
 #define RETURN_ERROR(exc) return (exc)
 #endif
 
+#include "../../Shared/funcannotations.h"
+
 #include <float.h>
 #ifdef HAVE_TOSTRING
 #include <string.h>
 #include <ostream>
 #endif
+#include <string>
 #include <vector>
-
-#include "../../Shared/funcannotations.h"
 
 #ifdef __CUDACC__
 #define FLATBUFFER_UNREACHABLE() \
@@ -515,7 +516,13 @@ struct FlatBufferManager {
   // FlatBuffer main buffer. It is the only member of the FlatBuffer struct.
   int8_t* buffer;
 
-  // Check if a buffer contains FlatBuffer formatted data
+  // Check if a buffer contains FlatBuffer formatted data. Useful
+  // mostly for sanity checks and debugging.
+  //
+  // WARNING: calling this function on uninitialized buffer will lead
+  // to valgrind memcheck failure. Therefore, if possible, use this
+  // method only in context where SQLTypeInfo::usesFlatBuffer()
+  // returns true.
   HOST DEVICE static bool isFlatBuffer(const void* buffer) {
     if (buffer) {
       // warning: assume that buffer size is at least 8 bytes
@@ -1039,6 +1046,26 @@ struct FlatBufferManager {
 
   // High-level API
 
+  template <size_t NDIM>
+  HOST DEVICE Status isNull(const int64_t index[NDIM], const size_t n, bool& is_null) {
+    if (isNestedArray()) {
+      NestedArrayItem<NDIM> item;
+      auto status = getItem<NDIM>(index, n, item);
+      if (status != Success) {
+        RETURN_ERROR(status);
+      }
+      is_null = item.is_null;
+      return Success;
+    }
+    RETURN_ERROR(NotSupportedFormatError);
+  }
+
+  template <size_t NDIM = 1>
+  HOST DEVICE Status getLength(const int64_t index, size_t& length) {
+    const int64_t index_[NDIM] = {index};
+    return getLength<NDIM>(index_, 1, length);
+  }
+
   // This getLength method is a worker method of accessing the
   // flatbuffer content.
   template <size_t NDIM>
@@ -1056,7 +1083,14 @@ struct FlatBufferManager {
     if (n > ndims + 1) {
       RETURN_ERROR(DimensionalityError);
     }
+    if (index[0] < 0 || index[0] >= itemsCount()) {
+      // Callers may interpret the IndexError as a NULL value return
+      return IndexError;
+    }
     const auto storage_index = get_storage_index(index[0]);
+    if (storage_index < 0) {
+      return ItemUnspecifiedError;
+    }
     const auto* values_offsets = get_values_offsets();
     const auto values_offset = values_offsets[storage_index];
     if (values_offset < 0) {  // NULL item
@@ -1155,7 +1189,7 @@ struct FlatBufferManager {
 
         n == 3 means return a point: value, getLength returns 0 [NOTIMPL]
 
-      linestring/multipoint (ndims == 1):
+      linestring/multipoint/array of scalars/textencodingnone (ndims == 1):
 
         n == 0 means return a column of linestring/multipoint:
           flatbuffer, getLenght returns itemsCount()
@@ -1245,6 +1279,11 @@ struct FlatBufferManager {
           }
           case 2: {
             nof_values = sizes_buffer[sizes2_offset + index[1]];
+            break;
+          }
+          case 1: {
+            nof_values = 1;
+            is_null = containsNullValue(values);
             break;
           }
           default:
@@ -1546,7 +1585,7 @@ struct FlatBufferManager {
     return Success;
   }
 
-  template <size_t NDIM=0, bool check_sizes=true>
+  template <size_t NDIM=1, bool check_sizes=true>
   HOST DEVICE Status setItem(const int64_t index,
                  const int8_t* values_buf,
                  const int32_t nof_values) {
@@ -1594,6 +1633,20 @@ struct FlatBufferManager {
                                             static_cast<int32_t>(NDIM));
   }
 
+  template <size_t NDIM=1, bool check_sizes=true>
+  HOST DEVICE Status setItem(const int64_t index,
+                             const NestedArrayItem<NDIM>& item) {
+    if (item.is_null) {
+      return Success;
+    }
+    return setItemWorker<NDIM, check_sizes>(index,
+                                            item.values,
+                                            item.nof_values,
+                                            item.sizes_buffers,
+                                            item.sizes_lengths,
+                                            item.nof_sizes);
+  }
+
   template <size_t NDIM=0, bool check_sizes=true>
   HOST DEVICE Status concatItem(const int64_t index,
                     const int8_t* values_buf,
@@ -1606,6 +1659,41 @@ struct FlatBufferManager {
                                          sizes_buffers,
                                          sizes_lengths,
                                          0);
+  }
+
+  template <size_t NDIM=1, bool check_sizes=true>
+  HOST DEVICE Status concatItem(const int64_t index,
+                                const NestedArrayItem<NDIM>& item) {
+    if (item.is_null) {
+      return Success;
+    }
+    return concatItemWorker<NDIM, check_sizes>(index,
+                                               item.values,
+                                               item.nof_values,
+                                               item.sizes_buffers,
+                                               item.sizes_lengths,
+                                               item.nof_sizes);
+  }
+
+  Status getItem(const int64_t index, std::string& s, bool& is_null) {
+    is_null = true;
+    const auto* metadata = getNestedArrayMetadata();
+    if (metadata->value_type != Int8) {
+      RETURN_ERROR(TypeError);
+    }
+    NestedArrayItem<1> item;
+    Status status = getItem(index, item);
+    if (status != Success) {
+      return status;
+    }
+    if (item.nof_sizes != 0) {
+      RETURN_ERROR(InconsistentSizesError);
+    }
+    if (!item.is_null) {
+      s.assign(reinterpret_cast<const char*>(item.values), static_cast<size_t>(item.nof_values));
+      is_null = false;
+    }
+    return status;
   }
 
   template <typename CT>
@@ -1703,6 +1791,14 @@ struct FlatBufferManager {
                           reinterpret_cast<sizes_t*>(item.sizes_buffers[0] + item.sizes_lengths[0] * sizeof(int32_t)));
   return Success;
 
+  }
+
+  Status setItem(const int64_t index, const std::string& s) {
+    const auto* metadata = getNestedArrayMetadata();
+    if (metadata->value_type != Int8) {
+      RETURN_ERROR(TypeError);
+    }
+    return setItem<1, false>(index, reinterpret_cast<const int8_t*>(s.data()), s.size());
   }
 
   template <typename CT, size_t NDIM=0>

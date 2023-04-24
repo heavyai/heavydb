@@ -557,6 +557,20 @@ class TableFunctions : public ::testing::Test {
                            "NULL"),
                        ExecutorDeviceType::CPU);
     }
+    {
+      run_ddl_statement("DROP TABLE IF EXISTS bytes_test;");
+      run_ddl_statement(
+          "CREATE TABLE bytes_test ("
+          "t1 TEXT ENCODING NONE, t2 TEXT ENCODING NONE, t12 TEXT ENCODING NONE, t1abc "
+          "TEXT ENCODING NONE, abct1 TEXT ENCODING NONE);");
+      TestHelpers::ValuesGenerator gen("bytes_test");
+
+      run_multiple_agg(gen("'A', 'B', 'AB', 'Aabc', 'abcA'"), ExecutorDeviceType::CPU);
+      run_multiple_agg(gen("'B', 'CD', 'BCD', 'Babc', 'abcB'"), ExecutorDeviceType::CPU);
+      run_multiple_agg(gen("'C', NULL, 'C', 'Cabc', 'abcC'"), ExecutorDeviceType::CPU);
+      run_multiple_agg(gen("NULL, 'D', 'D', NULL, NULL"), ExecutorDeviceType::CPU);
+      run_multiple_agg(gen("NULL, NULL, NULL, NULL, NULL"), ExecutorDeviceType::CPU);
+    }
   }
 
   void TearDown() override {
@@ -570,6 +584,7 @@ class TableFunctions : public ::testing::Test {
     run_ddl_statement("DROP TABLE IF EXISTS geo_point_test;");
     run_ddl_statement("DROP TABLE IF EXISTS geo_line_string_test;");
     run_ddl_statement("DROP TABLE IF EXISTS geo_polygon_test;");
+    run_ddl_statement("DROP TABLE IF EXISTS bytes_test;");
   }
 };
 
@@ -3000,22 +3015,48 @@ void assert_equal(const TargetValue& val1,
       ASSERT_NEAR(static_cast<T>(*p1), static_cast<T>(*p2), 1e-7)
           << "ti=" << ti.to_string();
     }
+  } else if (ti.is_text_encoding_none()) {
+    const auto scalar_col_val1 = boost::get<ScalarTargetValue>(&val1);
+    const auto scalar_col_val2 = boost::get<ScalarTargetValue>(&val2);
+    const auto ns1 = boost::get<NullableString>(scalar_col_val1);
+    const auto ns2 = boost::get<NullableString>(scalar_col_val2);
+    const auto s1 = boost::get<std::string>(ns1);
+    const auto s2 = boost::get<std::string>(ns2);
+    const std::string nullstr = "";
+    if (s1 == nullptr) {
+      if (s2 != nullptr) {
+        ASSERT_EQ(*s2, nullstr);
+      }
+    } else if (s2 == nullptr) {
+      if (s1 != nullptr) {
+        ASSERT_EQ(*s1, nullstr);
+      }
+    } else {
+      ASSERT_EQ(*s1, *s2);
+    }
   } else if (ti.is_array()) {
     const auto array_col_val1 = boost::get<ArrayTargetValue>(&val1);
     const auto array_col_val2 = boost::get<ArrayTargetValue>(&val2);
     if (array_col_val1->is_initialized()) {
-      ASSERT_EQ(array_col_val2->is_initialized(), true);
-      const auto& vec1 = array_col_val1->get();
-      const auto& vec2 = array_col_val2->get();
-      ASSERT_EQ(vec1.size(), vec2.size()) << "ti=" << ti.to_string();
-      for (size_t i = 0; i < vec1.size(); i++) {
-        const auto item1 = vec1[i];
-        const auto item2 = vec2[i];
-        assert_equal<T>(item1, item2, ti.get_elem_type());
+      if (array_col_val2->is_initialized()) {
+        const auto& vec1 = array_col_val1->get();
+        const auto& vec2 = array_col_val2->get();
+        ASSERT_EQ(vec1.size(), vec2.size()) << "ti=" << ti.to_string();
+        for (size_t i = 0; i < vec1.size(); i++) {
+          const auto item1 = vec1[i];
+          const auto item2 = vec2[i];
+          assert_equal<T>(item1, item2, ti.get_elem_type());
+        }
+      } else {
+        const auto& vec1 = array_col_val1->get();
+        ASSERT_EQ(vec1.size(), size_t(0)) << "ti=" << ti.to_string();
       }
     } else {
       // null array
-      ASSERT_EQ(array_col_val2->is_initialized(), false) << "ti=" << ti.to_string();
+      if (array_col_val2->is_initialized()) {
+        const auto& vec2 = array_col_val2->get();
+        ASSERT_EQ(vec2.size(), size_t(0)) << "ti=" << ti.to_string();
+      }
     }
   } else if (ti.is_geometry()) {
     const auto scalar_col_val1 = boost::get<ScalarTargetValue>(&val1);
@@ -3154,21 +3195,28 @@ void assert_equal(const ResultSetPtr rows1, const ResultSetPtr rows2) {
         const auto array_col_val1 = boost::get<ArrayTargetValue>(&val1);
         const auto array_col_val2 = boost::get<ArrayTargetValue>(&val2);
         if (array_col_val1->is_initialized()) {
-          ASSERT_EQ(array_col_val2->is_initialized(), true);
-          const auto& vec1 = array_col_val1->get();
-          const auto& vec2 = array_col_val2->get();
-          ASSERT_EQ(vec1.size(), vec2.size());
-          for (size_t i = 0; i < vec1.size(); i++) {
-            const auto item1 = vec1[i];
-            const auto item2 = vec2[i];
-            auto p1 = boost::get<int64_t>(item1);
-            auto p2 = boost::get<int64_t>(item2);
-            std::string s1 = proxy1->getString(static_cast<int32_t>(p1));
-            std::string s2 = proxy2->getString(static_cast<int32_t>(p2));
-            ASSERT_EQ(s1, s2);
+          if (array_col_val2->is_initialized()) {
+            const auto& vec1 = array_col_val1->get();
+            const auto& vec2 = array_col_val2->get();
+            ASSERT_EQ(vec1.size(), vec2.size());
+            for (size_t i = 0; i < vec1.size(); i++) {
+              const auto item1 = vec1[i];
+              const auto item2 = vec2[i];
+              auto p1 = boost::get<int64_t>(item1);
+              auto p2 = boost::get<int64_t>(item2);
+              std::string s1 = proxy1->getString(static_cast<int32_t>(p1));
+              std::string s2 = proxy2->getString(static_cast<int32_t>(p2));
+              ASSERT_EQ(s1, s2);
+            }
+          } else {
+            const auto& vec1 = array_col_val1->get();
+            ASSERT_EQ(vec1.size(), size_t(0));
           }
         } else {
-          ASSERT_EQ(array_col_val2->is_initialized(), false);
+          if (array_col_val2->is_initialized()) {
+            const auto& vec2 = array_col_val2->get();
+            ASSERT_EQ(vec2.size(), size_t(0));
+          }
         }
       } else {
         ASSERT_EQ(ti1, ti2) << "  ti1=" << ti1.toString() << "\n  ti2=" << ti2.toString();
@@ -3563,12 +3611,12 @@ TEST_F(TableFunctions, ColumnArrayAt) {
     SKIP_NO_GPU();
 #define COLUMNARRAYATTEST(COLNAME, CTYPE, SUFFIX)                                  \
   {                                                                                \
-    const auto rows = run_multiple_agg(                                            \
+    std::string q1 =                                                               \
         "SELECT (out0)" #SUFFIX " FROM TABLE(array_copier(cursor(SELECT " #COLNAME \
-        " FROM arr_test)));",                                                      \
-        dt);                                                                       \
-    const auto result_rows =                                                       \
-        run_multiple_agg("SELECT (" #COLNAME ")" #SUFFIX " FROM arr_test;", dt);   \
+        " FROM arr_test)));";                                                      \
+    const auto rows = run_multiple_agg(q1, dt);                                    \
+    std::string q2 = "SELECT (" #COLNAME ")" #SUFFIX " FROM arr_test;";            \
+    const auto result_rows = run_multiple_agg(q1, dt);                             \
     assert_equal<CTYPE>(rows, result_rows);                                        \
   }
     COLUMNARRAYATTEST(barr, bool, [1]);
@@ -3594,15 +3642,15 @@ TEST_F(TableFunctions, ColumnArrayAt) {
 TEST_F(TableFunctions, ColumnArrayUnnest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-#define COLUMNARRAYUNNEST(COLNAME, CTYPE)                                            \
-  {                                                                                  \
-    const auto rows = run_multiple_agg(                                              \
-        "SELECT UNNEST(out0) AS ua  FROM TABLE(array_copier(cursor(SELECT " #COLNAME \
-        " FROM arr_test))) GROUP BY ua;",                                            \
-        dt);                                                                         \
-    const auto result_rows = run_multiple_agg(                                       \
-        "SELECT UNNEST(" #COLNAME ") AS ua  FROM arr_test GROUP BY ua;", dt);        \
-    assert_equal<CTYPE>(rows, result_rows);                                          \
+#define COLUMNARRAYUNNEST(COLNAME, CTYPE)                                             \
+  {                                                                                   \
+    std::string q1 =                                                                  \
+        "SELECT UNNEST(out0) AS ua  FROM TABLE(array_copier(cursor(SELECT " #COLNAME  \
+        " FROM arr_test))) GROUP BY ua;";                                             \
+    const auto rows = run_multiple_agg(q1, dt);                                       \
+    std::string q2 = "SELECT UNNEST(" #COLNAME ") AS ua  FROM arr_test GROUP BY ua;"; \
+    const auto result_rows = run_multiple_agg(q2, dt);                                \
+    assert_equal<CTYPE>(rows, result_rows);                                           \
   }
 
     COLUMNARRAYUNNEST(barr, bool);
@@ -4147,6 +4195,54 @@ TEST_F(TableFunctions, ColumnGeoMultiPointCopy) {
         const auto rows = run_multiple_agg(q2, dt);
         assert_equal<double>(rows, expected_rows);
       }
+    }
+  }
+}
+
+TEST_F(TableFunctions, ColumnTextEncodingNoneCopy) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+    {
+      std::string q1 = "SELECT t1 FROM bytes_test;";
+      std::string q2 =
+          "SELECT outputs FROM TABLE(CT_COPY(CURSOR(SELECT t1 FROM bytes_test)))";
+      const auto expected_rows = run_multiple_agg(q1, dt);
+      const auto rows = run_multiple_agg(q2, dt);
+      assert_equal<double>(rows, expected_rows);
+    }
+  }
+}
+
+TEST_F(TableFunctions, ColumnTextEncodingNoneConcat) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+    {
+      std::string q1 = "SELECT t12 FROM bytes_test;";
+      std::string q2 =
+          "SELECT outputs FROM TABLE(CT_CONCAT(CURSOR(SELECT t1, t2 FROM bytes_test)))";
+      const auto expected_rows = run_multiple_agg(q1, dt);
+      const auto rows = run_multiple_agg(q2, dt);
+      assert_equal<double>(rows, expected_rows);
+    }
+    {
+      // FIXME: Warning: UDTF has no CURSOR field subtype data. Proceeding assuming CURSOR
+      // typechecks.
+      std::string q1 = "SELECT t1abc FROM bytes_test;";
+      std::string q2 =
+          "SELECT outputs FROM TABLE(CT_CONCAT(CURSOR(SELECT t1 FROM bytes_test), "
+          "'abc'))";
+      const auto expected_rows = run_multiple_agg(q1, dt);
+      const auto rows = run_multiple_agg(q2, dt);
+      assert_equal<double>(rows, expected_rows);
+    }
+    {
+      std::string q1 = "SELECT abct1 FROM bytes_test;";
+      std::string q2 =
+          "SELECT outputs FROM TABLE(CT_CONCAT('abc', CURSOR(SELECT t1 FROM "
+          "bytes_test)))";
+      const auto expected_rows = run_multiple_agg(q1, dt);
+      const auto rows = run_multiple_agg(q2, dt);
+      assert_equal<double>(rows, expected_rows);
     }
   }
 }

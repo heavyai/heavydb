@@ -157,7 +157,7 @@ extern "C" DEVICE RUNTIME_EXPORT void GeoMultiPolygon_fromCoords(Geo::MultiPolyg
 
 #define EXPOSE_Geo_toCoords_vec2(BaseType)                                    \
   extern "C" DEVICE RUNTIME_EXPORT double Geo##BaseType##_toCoords_get_value( \
-      Geo::BaseType& base, int64_t ring_index, int64_t coord_index) {         \
+      const Geo::BaseType& base, int64_t ring_index, int64_t coord_index) {   \
     Geo::Point2D p = base[ring_index][coord_index / 2];                       \
     return (coord_index % 2 == 0) ? p.x : p.y;                                \
   }

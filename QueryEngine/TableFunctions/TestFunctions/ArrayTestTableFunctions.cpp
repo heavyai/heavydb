@@ -37,7 +37,7 @@ NEVER_INLINE HOST int32_t sum_along_row__cpu_template(const Column<Array<T>>& in
       if constexpr (std::is_same<T, TextEncodingDict>::value) {
         auto* mgr = TableFunctionManager::get_singleton();
         std::string acc = "";
-        for (auto j = 0; j < arr.getSize(); j++) {
+        for (size_t j = 0; j < arr.size(); j++) {
           if (!arr.isNull(j)) {
             acc += mgr->getString(input.getDictDbId(), input.getDictId(), arr[j]);
           }
@@ -47,7 +47,7 @@ NEVER_INLINE HOST int32_t sum_along_row__cpu_template(const Column<Array<T>>& in
         output[i] = out_string_id;
       } else {
         T acc{0};
-        for (auto j = 0; j < arr.getSize(); j++) {
+        for (size_t j = 0; j < arr.size(); j++) {
           if constexpr (std::is_same_v<T, bool>) {
             // todo: arr.isNull(i) returns arr[i] because bool does not
             // have null value, we should introduce 8-bit boolean type
@@ -94,7 +94,7 @@ NEVER_INLINE HOST int32_t array_copier__cpu_template(TableFunctionManager& mgr,
   // count the number of items in all input arrays:
   int output_values_size = 0;
   for (int i = 0; i < size; i++) {
-    output_values_size += input[i].getSize();
+    output_values_size += input[i].size();
   }
 
   // set the size and allocate the output columns buffers:
@@ -154,7 +154,7 @@ NEVER_INLINE HOST int32_t array_concat__cpu_template(TableFunctionManager& mgr,
   int output_values_size = 0;
   for (int j = 0; j < inputs.numCols(); j++) {
     for (int i = 0; i < size; i++) {
-      output_values_size += inputs[j][i].getSize();
+      output_values_size += inputs[j][i].size();
     }
   }
   mgr.set_output_array_values_total_number(
@@ -275,7 +275,7 @@ NEVER_INLINE HOST int32_t array_split__cpu_template(TableFunctionManager& mgr,
   int second_values_size = 0;
   for (int i = 0; i < size; i++) {
     if (!input.isNull(i)) {
-      int64_t sz = input[i].getSize();
+      int64_t sz = input[i].size();
       first_values_size += sz / 2;
       second_values_size += sz - sz / 2;
     }
@@ -290,7 +290,7 @@ NEVER_INLINE HOST int32_t array_split__cpu_template(TableFunctionManager& mgr,
       second.setNull(i);
     } else {
       Array<T> arr = input[i];
-      int64_t sz = arr.getSize();
+      int64_t sz = arr.size();
       Array<T> arr1 = first.getItem(i, sz / 2);
       Array<T> arr2 = second.getItem(i, sz - sz / 2);
       for (int64_t j = 0; j < sz; j++) {

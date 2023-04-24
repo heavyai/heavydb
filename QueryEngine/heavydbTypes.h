@@ -155,11 +155,9 @@ EXTENSION_NOINLINE_HOST int32_t RowFunctionManager_getOrAddTransient(int8_t* mgr
                                                                      int32_t db_id,
                                                                      int32_t dict_id,
                                                                      std::string str);
-
 EXTENSION_NOINLINE_HOST int8_t* RowFunctionManager_makeBuffer(int8_t* mgr_ptr,
                                                               int64_t count,
                                                               int64_t size);
-
 /*
   Column<Array<T>> methods
 */
@@ -321,12 +319,7 @@ struct RowFunctionManager {
   }
 };
 
-/*
-  This TableFunctionManager struct is a minimal proxy to the
-  TableFunctionManager defined in TableFunctionManager.h. The
-  corresponding instances share `this` but have different virtual
-  tables for methods.
-*/
+#ifndef UDF_COMPILED
 
 namespace {
 template <typename T>
@@ -350,7 +343,12 @@ TableFunctionMetadataType get_metadata_type() {
 }
 }  // namespace
 
-#ifndef UDF_COMPILED
+/*
+  This TableFunctionManager struct is a minimal proxy to the
+  TableFunctionManager defined in TableFunctionManager.h. The
+  corresponding instances share `this` but have different virtual
+  tables for methods.
+*/
 
 struct TableFunctionManager {
   static TableFunctionManager* get_singleton() {
@@ -447,69 +445,99 @@ struct TableFunctionManager {
 #endif  // #ifndef UDF_COMPILED
 #endif  // #ifndef __CUDACC__
 
+// Defines the maximal dimensionality of nested array objects.
+#define NESTED_ARRAY_NDIM 4
+
+#define IS_VALUE_TYPE(T)                                                   \
+  (std::is_scalar<T>::value || std::is_same<T, TextEncodingDict>::value || \
+   std::is_same<T, Geo::Point2D>::value)
+
+namespace flatbuffer {
+template <typename T>
+struct Array;
+}
+
+namespace Geo {
+struct Point2D;
+}
+
 template <typename T>
 struct Array {
-  T* ptr;
-  int64_t size;
-  int8_t is_null;
+  T* ptr_;
+  int64_t size_;
+  int8_t is_null_;
 
   DEVICE Array(T* ptr, const int64_t size, const bool is_null = false)
-      : ptr(is_null ? nullptr : ptr), size(size), is_null(is_null) {}
-  DEVICE Array() : ptr(nullptr), size(0), is_null(true) {}
+      : ptr_(is_null ? nullptr : ptr), size_(size), is_null_(is_null) {}
+  DEVICE Array() : ptr_(nullptr), size_(0), is_null_(true) {}
 
 #ifndef __CUDACC__
   template <typename M>
   HOST Array(M& mgr, const int64_t size, const bool is_null = false)
-      : size(size), is_null(is_null) {
+      : size_(size), is_null_(is_null) {
     static_assert(
 #ifndef UDF_COMPILED
         (std::is_same<TableFunctionManager, M>::value) ||
 #endif  // #ifndef UDF_COMPILED
             (std::is_same<RowFunctionManager, M>::value),
         "M must be a TableFunctionManager or RowFunctionManager");
-    if (!is_null) {
-      ptr = reinterpret_cast<T*>(mgr.makeBuffer(size, static_cast<int64_t>(sizeof(T))));
+    if (!is_null_) {
+      ptr_ = reinterpret_cast<T*>(mgr.makeBuffer(size, static_cast<int64_t>(sizeof(T))));
     } else {
-      ptr = nullptr;
+      ptr_ = nullptr;
     }
   }
 #endif  // #ifndef __CUDACC__
 
   DEVICE Array(const int64_t size, const bool is_null = false)
-      : size(size), is_null(is_null) {
+      : size_(size), is_null_(is_null) {
     if (!is_null) {
       // Memory must be manually released, otherwise leaks can happen.
       // On UDFs, if it is the return argument, memory is released with
       // register_buffer_with_executor_rsm
-      ptr = reinterpret_cast<T*>(
+      ptr_ = reinterpret_cast<T*>(
           allocate_varlen_buffer(size, static_cast<int64_t>(sizeof(T))));
     } else {
-      ptr = nullptr;
+      ptr_ = nullptr;
     }
   }
 
+  DEVICE Array(const flatbuffer::Array<T>& arr) {
+    bool _is_null;
+    arr.getValuesBuffer(ptr_, size_, _is_null);
+    is_null_ = _is_null;
+  }
+
+  DEVICE ALWAYS_INLINE T* data() const {
+    return ptr_;
+  }
+
+  DEVICE ALWAYS_INLINE size_t size() const {
+    return size_;
+  }
+
   DEVICE T operator()(const unsigned int index) const {
-    if (index < static_cast<unsigned int>(size)) {
-      return ptr[index];
+    if (index < static_cast<unsigned int>(size_)) {
+      return ptr_[index];
     } else {
       return 0;  // see array_at
     }
   }
 
   DEVICE T& operator[](const unsigned int index) {
-    return ptr[index];
+    return ptr_[index];
   }
 
   DEVICE const T& operator[](const unsigned int index) const {
-    return ptr[index];
+    return ptr_[index];
   }
 
   DEVICE int64_t getSize() const {
-    return size;
+    return size_;
   }
 
   DEVICE bool isNull() const {
-    return is_null;
+    return is_null_;
   }
 
   DEVICE constexpr inline T null_value() const {
@@ -517,20 +545,21 @@ struct Array {
   }
 
   DEVICE bool isNull(const unsigned int index) const {
-    return (is_null ? false : ptr[index] == null_value());
+    return (is_null_ ? false : ptr_[index] == null_value());
   }
 
 #ifdef HAVE_TOSTRING
   std::string toString() const {
-    std::string result =
-        ::typeName(this) + "(ptr=" + ::toString(reinterpret_cast<void*>(ptr)) +
-        ", size=" + std::to_string(size) + ", is_null=" + std::to_string(is_null) + ")[";
-    for (int64_t i = 0; i < size; i++) {
-      if (size > 10) {
+    std::string result = ::typeName(this) +
+                         "(ptr=" + ::toString(reinterpret_cast<void*>(ptr_)) +
+                         ", size=" + std::to_string(size_) +
+                         ", is_null=" + std::to_string(is_null_) + ")[";
+    for (int64_t i = 0; i < size_; i++) {
+      if (size_ > 10) {
         // show the first 8 and the last 2 values in the array:
         if (i == 8) {
           result += "..., ";
-        } else if (i > 8 && i < size - 2) {
+        } else if (i > 8 && i < size_ - 2) {
           continue;
         }
       }
@@ -603,6 +632,9 @@ struct TextEncodingNone {
     return !(this->operator==(rhs));
   }
   DEVICE ALWAYS_INLINE operator char*() const {
+    return ptr_;
+  }
+  DEVICE ALWAYS_INLINE char* data() const {
     return ptr_;
   }
   DEVICE ALWAYS_INLINE int64_t size() const {
@@ -1080,16 +1112,176 @@ struct Column {
 #endif
 };
 
-// Defines the maximal dimensionality of nested array objects.
-#define NESTED_ARRAY_NDIM 4
+namespace flatbuffer {
 
-template <typename ItemType, bool item_is_nested_array = true>
+// clang-format off
+/*
+  flatbuffer::Column<RowType, RowStruct> is a base class for various Column types
+  that use FlatBuffer storage. It provides an API to access column
+  rows:
+
+    bool isNull(int64_t index)      --- check if index-th row is a NULL row
+    int64_t size()                  --- return the total number of rows
+    RowType getItem(int64_t index)  --- get the index-th row
+    RowType operator[](unsigned int index)   --- same as getItem
+    RowStruct operator()(unsigned int index) --- getItem result returned as RowStruct
+    void setNull(int64_t index)     --- set the index-th row to NULL
+    voit setItem(int64_t index, const RowType& item) --- set the index-th row to item
+
+  RowType class is a substruct of NestedArray<ItemType>. If the row
+  item is a some sort of a sequence of, say, an array of scalar
+  values, geo points, etc., then ItemType itself can be a subclass of
+  NestedArray<SubItemType>. The same applies to SubItemType etc.
+
+  RowStruct is a struct capturing the data of a row as a buffer and
+  its size.
+
+  NestedArray<ItemType, ...> provides an API for accessing its items:
+
+    size_t size() --- return the number of items in the NestedArray
+                      instance
+    size_t size(int64_t index)        --- return the number of subitems in an item
+    ItemType getItem(int64_t index)   --- return the index-th item
+    ItemType operator[](unsigned int index)  --- same as getItem
+    bool isNull()                     --- check if NestedArray instance itself is NULL
+    NestedArray<ItemType> operator=(NestedArray<ItemType>& other)
+         --- copy other items to self
+
+  If ItemType class is not a subclass of NestedArray, then classes
+  derived from NestedArray<ItemType> must
+  implement the following methods:
+
+    ItemType getItem(const int64_t index);
+    ItemType getItem(const int64_t index) const;
+    ItemType operator[](unsigned int index);
+
+  Notice that classes derived from NestedArray do not implement
+  setItem nor setNull methods. Only flatbuffer::Column<RowType>::setItem
+  method can be used to allocate and initialize items. The setItem can
+  be called exactly once per index value.
+
+  To change the content of existing NestedArray item, the operator=
+  interface can be used. However, then the NestedArray item must have
+  exactly the same shape as in the other NestedArray item has.
+*/
+// clang-format on
+
+template <typename RowType, typename RowStruct>
+struct Column {
+  int8_t* flatbuffer_;
+  int64_t num_rows_;
+
+  Column<RowType, RowStruct>(int8_t* flatbuffer, int64_t num_rows)
+      : flatbuffer_(flatbuffer), num_rows_(num_rows) {}
+
+  // Return true if index-th row is NULL.
+  DEVICE inline bool isNull(int64_t index) const {
+    FlatBufferManager m{flatbuffer_};
+    bool is_null = false;
+    auto status = m.isNull(index, is_null);
+#ifndef __CUDACC__
+    if (status != FlatBufferManager::Status::Success) {
+      throw std::runtime_error("isNull failed: " + ::toString(status));
+    }
+#endif
+    return is_null;
+  }
+
+  // Return the number of rows.
+  DEVICE int64_t size() const {
+    return num_rows_;
+  }
+
+  // Set the index-th row to NULL. Can be called once per row.
+  DEVICE inline void setNull(int64_t index) {
+    FlatBufferManager m{flatbuffer_};
+    auto status = m.setNull(index);
+#ifndef __CUDACC__
+    if (status != FlatBufferManager::Status::Success) {
+      throw std::runtime_error("setNull failed: " + ::toString(status));
+    }
+#endif
+  }
+
+  // Return row object.
+  DEVICE inline RowType getItem(const int64_t index) const {
+    RowType row{{flatbuffer_, {index}, 1}};
+    return row;
+  }
+
+  // Return row object via indexing.
+  DEVICE inline RowType operator[](const unsigned int index) const {
+    return getItem(static_cast<int64_t>(index));
+  }
+
+  // Return row buffer object.
+  DEVICE inline RowStruct operator()(const unsigned int index) const {
+    return (*this)[index];
+  }
+
+  // Copy item into the index-th row.
+  DEVICE inline void setItem(int64_t index, const RowType& item) {
+    RowType this_item = getItem(index);
+    this_item = item;
+  }
+
+  // Copy item into the index-th row.
+  DEVICE inline void setItem(int64_t index, const RowStruct& item) {
+    RowType this_item = getItem(index);
+    this_item = item;
+  }
+
+  // Return the total number of values that the flatbuffer instance
+  // holds.
+  inline int64_t getNofValues() const {
+    FlatBufferManager m{flatbuffer_};
+    return m.getValuesCount();
+  }
+
+  DEVICE inline void concatItem(int64_t index, const RowType& item) {
+    RowType this_item = getItem(index);
+    this_item += item;
+  }
+
+  // Return row object with the specified extra number of elements.
+  DEVICE RowType getItem(const int64_t index, const int64_t extra_numel) const {
+    auto result = (*this)[index];
+    if (extra_numel >= 0) {
+      result.extend(nullptr, extra_numel, /*assing=*/false);
+    }
+    return result;
+  }
+
+  const SQLTypeInfoLite* getTypeInfo() const {
+    FlatBufferManager m{flatbuffer_};
+    const auto* ti = reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+    if (ti == nullptr) {
+#ifndef __CUDACC__
+      throw std::runtime_error(::typeName(this) +
+                               " getTypeInfo failed: no user data buffer");
+#endif
+    }
+    return ti;
+  }
+
+#ifdef HAVE_FLATBUFFER_TOSTRING
+  std::string toString() const {
+    FlatBufferManager m{flatbuffer_};
+    return ::typeName(this) + "(" + m.toString() +
+           ", num_rows=" + std::to_string(num_rows_) + ")";
+  }
+#endif
+};
+
+template <typename ItemType>
 struct NestedArray {
   /*
-    flatbuffer_ contains a NestedArray with dimensionality up to NDIM.
+    flatbuffer_ contains a NestedArray with dimensionality up to NESTED_ARRAY_NDIM.
 
-    index_ defines an indexed NestedArray with n_ number of indices.
-   */
+    index_ contains indices used to index a NestedArray
+
+    n_ defines how many indices in index_ are used in the indexing operation
+  */
 
   int8_t* flatbuffer_;
   int64_t index_[NESTED_ARRAY_NDIM];
@@ -1102,7 +1294,8 @@ struct NestedArray {
     status = m.getLength<NESTED_ARRAY_NDIM>(index_, n_, length);
     if (status != FlatBufferManager::Status::Success) {
 #ifndef __CUDACC__
-      throw std::runtime_error("NestedArray size failed: " + ::toString(status));
+      throw std::runtime_error(::typeName(this) + " size failed: getLength failed with " +
+                               ::toString(status));
 #endif
       return 0;
     }
@@ -1113,16 +1306,99 @@ struct NestedArray {
     return getItem(index).size();
   }
 
-  // non-nested array items must implement its own getItem method
-  ItemType getItem(const int64_t index) {
-    if constexpr (!item_is_nested_array) {
+  void getValuesBuffer(ItemType*& values,
+                       int64_t& nof_values,
+                       bool& is_null,
+                       bool require_1d_item = true) const {
+    int8_t* _values;
+    size_t value_size;
+    getRawBuffer(_values, nof_values, value_size, is_null, require_1d_item);
+    values = reinterpret_cast<ItemType*>(_values);
+  }
+
+  void getRawBuffer(int8_t*& values,
+                    int64_t& nof_values,
+                    size_t& value_size,
+                    bool& is_null,
+                    bool require_1d_item = true) const {
+    values = nullptr;
+    nof_values = 0;
+    is_null = true;
+    value_size = 0;
+    if constexpr (!IS_VALUE_TYPE(ItemType)) {
 #ifndef __CUDACC__
-      throw std::runtime_error(::typeName(this) + " must implement getItem method");
+      ItemType item{};
+      throw std::runtime_error(::typeName(this) +
+                               " getValuesBuffer failed: expected scalar type but got " +
+                               ::typeName(&item));
 #endif
-      ItemType result{};
-      return result;
     } else {
-      ItemType result{{{flatbuffer_, {}, n_ + 1}}};
+      FlatBufferManager::Status status{};
+      FlatBufferManager m{flatbuffer_};
+      FlatBufferManager::NestedArrayItem<NESTED_ARRAY_NDIM> item;
+      status = m.getItem<NESTED_ARRAY_NDIM>(index_, n_, item);
+      if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+        throw std::runtime_error(::typeName(this) +
+                                 " getValuesBuffer failed: getItem returned " +
+                                 ::toString(status));
+#endif
+      }
+      if (require_1d_item && item.nof_sizes != 0) {
+#ifndef __CUDACC__
+        throw std::runtime_error(::typeName(this) +
+                                 " &getValuesBuffer failed: expected 1-D item");
+#endif
+      }
+      values = item.values;
+      nof_values = item.nof_values;
+      is_null = item.is_null;
+      value_size = m.getValueSize();
+    }
+  }
+
+  // Return reference to index-th item that is of scalar type.
+  // For the direct assess to the array buffer, one can use `&getValue(0)`
+  ItemType& getValue(const int64_t index) const {
+    if constexpr (!IS_VALUE_TYPE(ItemType)) {
+#ifndef __CUDACC__
+      ItemType item{};
+      throw std::runtime_error(::typeName(this) +
+                               " &getValue failed: expected scalar type but got " +
+                               ::typeName(&item));
+#endif
+    }
+    ItemType* values;
+    int64_t nof_values;
+    bool is_null;
+    getValuesBuffer(values, nof_values, is_null);
+    if (is_null) {
+#ifndef __CUDACC__
+      throw std::runtime_error(::typeName(this) +
+                               " &getValue failed: expected non-null item ");
+#endif
+    }
+    if (index < 0 || index >= nof_values) {
+#ifndef __CUDACC__
+      throw std::runtime_error(
+          ::typeName(this) + " &getValue failed: index (=" + std::to_string(index) +
+          ") is out of range, expected 0 <= index < " + std::to_string(nof_values));
+#endif
+    }
+    return values[index];
+  }
+
+  // same as getItem
+  const ItemType operator[](const int64_t index) const {
+    return getItem(index);
+  }
+
+  // Return index-th item,
+  const ItemType getItem(const int64_t index) const {
+    if constexpr (IS_VALUE_TYPE(ItemType)) {
+      return getValue(index);
+    } else {
+      ItemType result{flatbuffer_, {}, n_ + 1};
       for (size_t i = 0; i < n_; i++) {
         result.index_[i] = index_[i];
       }
@@ -1131,91 +1407,136 @@ struct NestedArray {
     }
   }
 
-  // non-nested array items must implement its own getItem method
-  ItemType getItem(const int64_t index) const {
-    if constexpr (!item_is_nested_array) {
-#ifndef __CUDACC__
-      throw std::runtime_error("NestedArray.getItem is not defined for " +
-                               ::typeName(this));
-#endif
-    } else {
-      ItemType result{{{flatbuffer_, {}, n_ + 1}}};
-      for (size_t i = 0; i < n_; i++) {
-        result.index_[i] = index_[i];
-      }
-      result.index_[n_] = index;
-      return result;
-    }
-  }
-
-  // non-nested array items must implement its own operator[]
-  inline ItemType operator[](const unsigned int index) {
-    return getItem(static_cast<int64_t>(index));
-  }
-
-  inline const ItemType operator[](const unsigned int index) const {
-    return getItem(static_cast<int64_t>(index));
-  }
-
-  // check if the parent is NULL
+  // Check if the parent is NULL
   inline bool isNull() const {
     FlatBufferManager m{flatbuffer_};
     bool is_null = false;
     auto status = m.isNull(index_[0], is_null);
 #ifndef __CUDACC__
     if (status != FlatBufferManager::Status::Success) {
-      throw std::runtime_error("isNull failed: " + ::toString(status));
+      throw std::runtime_error(::typeName(this) + "isNull failed: isNull returned " +
+                               ::toString(status));
     }
 #endif
     return is_null;
   }
 
-  // copy other into self, can be called exactly once
-  NestedArray<ItemType, item_is_nested_array>& operator=(
-      const NestedArray<ItemType, item_is_nested_array>& other) {
+  // Check if the index-th item has NULL value
+  inline bool isNull(int64_t index) const {
+    FlatBufferManager m{flatbuffer_};
+    bool is_null = false;
+    int64_t tmp_index[NESTED_ARRAY_NDIM];
+    for (size_t i = 0; i < n_; i++) {
+      tmp_index[i] = index_[i];
+    }
+    tmp_index[n_] = index;
+    auto status =
+        m.isNull<NESTED_ARRAY_NDIM>(tmp_index, static_cast<size_t>(n_ + 1), is_null);
+#ifndef __CUDACC__
+    if (status != FlatBufferManager::Status::Success) {
+      throw std::runtime_error(::typeName(this) +
+                               "isNull(index) failed: isNull returned " +
+                               ::toString(status));
+    }
+#endif
+    return is_null;
+  }
+
+  // Extends or assigns other item to item
+  DEVICE void extend(const int8_t* data, const int32_t size, bool assign = false) {
     if (n_ != 1) {
 #ifndef __CUDACC__
-      throw std::runtime_error(
-          "NestedArray operator= failed: expected single index, got " + ::toString(n_));
+      throw std::runtime_error(::typeName(this) +
+                               " extend failed: expected single index, got " +
+                               ::toString(n_));
+#endif
+    }
+    FlatBufferManager::Status status{};
+    FlatBufferManager m{flatbuffer_};
+    if (assign) {
+      status = m.setItem(index_[0], data, size);
+      if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+        throw std::runtime_error(
+            ::typeName(this) +
+            " extend failed: setItem failed with: " + ::toString(status));
+#endif
+      }
+    } else {
+      status = m.concatItem(index_[0], data, size);
+      if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+        throw std::runtime_error(
+            ::typeName(this) +
+            " extend failed: concatItem failed with: " + ::toString(status));
+#endif
+      }
+    }
+  }
+
+  void extend(const NestedArray<ItemType>& other, bool assign = false) {
+    // TODO: check flatbuffer_ equality
+    if (n_ != 1) {
+#ifndef __CUDACC__
+      throw std::runtime_error(::typeName(this) +
+                               "extend failed: expected single index, got " +
+                               ::toString(n_));
 #endif
     }
     FlatBufferManager other_m{other.flatbuffer_};
-    int8_t* values;
-    int32_t nof_values;
-    int32_t* sizes[NESTED_ARRAY_NDIM];
-    int32_t sizes_lengths[NESTED_ARRAY_NDIM];
-    int32_t nof_sizes;
-    bool is_null;
-    FlatBufferManager::Status status;
-    status = other_m.getItemWorker<NESTED_ARRAY_NDIM>(other.index_,
-                                                      other.n_,
-                                                      values,
-                                                      nof_values,
-                                                      sizes,
-                                                      sizes_lengths,
-                                                      nof_sizes,
-                                                      is_null);
+    FlatBufferManager::NestedArrayItem<NESTED_ARRAY_NDIM> item;
+    auto status = other_m.getItem<NESTED_ARRAY_NDIM>(other.index_, other.n_, item);
     if (status != FlatBufferManager::Status::Success) {
 #ifndef __CUDACC__
-      throw std::runtime_error("NestedArray operator= failed: getItem raised " +
+      throw std::runtime_error(::typeName(this) + " extend failed: getItem raised " +
                                ::toString(status));
 #endif
     } else {
       FlatBufferManager this_m{flatbuffer_};
-      if (is_null) {
-        status = this_m.setNull(index_[0]);
-      } else {
-        status = this_m.setItemWorker<NESTED_ARRAY_NDIM>(
-            index_[0], values, nof_values, sizes, sizes_lengths, nof_sizes);
-      }
-      if (status != FlatBufferManager::Status::Success) {
+      if (assign) {
+        status = this_m.setItem<NESTED_ARRAY_NDIM>(index_[0], item);
+        if (status != FlatBufferManager::Status::Success) {
 #ifndef __CUDACC__
-        throw std::runtime_error("NestedArray operator= failed: setItem raised " +
-                                 ::toString(status));
+          throw std::runtime_error(::typeName(this) + " extend failed: setItem raised " +
+                                   ::toString(status));
 #endif
+        }
+      } else {
+        status = this_m.concatItem<NESTED_ARRAY_NDIM>(index_[0], item);
+        if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+          throw std::runtime_error(::typeName(this) +
+                                   " extend failed: concatItem raised " +
+                                   ::toString(status));
+#endif
+        }
       }
     }
+  }
+
+  // copy other into self, can be called exactly once
+  NestedArray<ItemType>& operator=(const NestedArray<ItemType>& other) {
+    extend(other, /*assign=*/true);
     return *this;
+  }
+
+  // extend self with other, can be called multiple times provided
+  // that self is the last specified item in its container
+  NestedArray<ItemType>& operator+=(const NestedArray<ItemType>& other) {
+    extend(other, /*assign=*/false);
+    return *this;
+  }
+
+  const SQLTypeInfoLite* getTypeInfo() const {
+    FlatBufferManager m{flatbuffer_};
+    const auto* ti = reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+    if (ti == nullptr) {
+#ifndef __CUDACC__
+      throw std::runtime_error(::typeName(this) +
+                               " getTypeInfo failed: user data buffer is null");
+#endif
+    }
+    return ti;
   }
 
 #ifdef HAVE_TOSTRING
@@ -1230,11 +1551,97 @@ struct NestedArray {
 #endif
 };
 
+struct TextEncodingNone : NestedArray<char> {
+  using NestedArray<char>::operator=;
+  using NestedArray<char>::operator+=;
+
+  char& operator[](const int64_t index) { return getValue(index); }
+
+  DEVICE TextEncodingNone& operator=(const ::TextEncodingNone& other) {
+    extend(reinterpret_cast<const int8_t*>(other.data()),
+           static_cast<int32_t>(other.size()),
+           true);
+    return *this;
+  }
+
+  DEVICE TextEncodingNone& operator+=(const ::TextEncodingNone& other) {
+    extend(reinterpret_cast<const int8_t*>(other.data()),
+           static_cast<int32_t>(other.size()),
+           false);
+    return *this;
+  }
+
+#ifndef __CUDACC__
+  // std::string supported API
+
+  std::string str() const {
+    char* values;
+    int64_t nof_values;
+    bool is_null;
+    getValuesBuffer(values, nof_values, is_null);
+    if (is_null) {
+      return {};
+    }
+    std::string result;
+    result.assign(reinterpret_cast<const char*>(values), static_cast<size_t>(nof_values));
+    return result;
+  }
+
+  DEVICE TextEncodingNone& operator=(const std::string& s) {
+    extend(
+        reinterpret_cast<const int8_t*>(s.data()), static_cast<int32_t>(s.size()), true);
+    return *this;
+  }
+
+  DEVICE TextEncodingNone& operator+=(const std::string& s) {
+    extend(
+        reinterpret_cast<const int8_t*>(s.data()), static_cast<int32_t>(s.size()), false);
+    return *this;
+  }
+
+  std::string getString() const {
+    return str();
+  }
+#endif
+};
+
+template <typename T>  // T is scalar type
+struct Array : public NestedArray<T> {
+  using NestedArray<T>::size;
+  using NestedArray<T>::getItem;
+  using NestedArray<T>::getValue;
+  using NestedArray<T>::extend;
+
+  T& operator[](const int64_t index) { return getValue(index); }
+
+  DEVICE Array<T>& operator=(const ::Array<T>& s) {
+    extend(
+        reinterpret_cast<const int8_t*>(s.data()), static_cast<int32_t>(s.size()), true);
+    return *this;
+  }
+
+  DEVICE Array<T>& operator+=(const ::Array<T>& s) {
+    extend(
+        reinterpret_cast<const int8_t*>(s.data()), static_cast<int32_t>(s.size()), false);
+    return *this;
+  }
+
+  // For BC:
+  DEVICE int64_t getSize() const { return size(); }
+  DEVICE T operator()(const unsigned int index) const {
+    return getItem(static_cast<int64_t>(index));
+  }
+  DEVICE T operator()(const int64_t index) const { return getItem(index); }
+};
+
+};  // namespace flatbuffer
+
 namespace Geo {
 
 struct Point2D {
   double x{std::numeric_limits<double>::quiet_NaN()};
   double y{std::numeric_limits<double>::quiet_NaN()};
+
 #ifdef HAVE_TOSTRING
   std::string toString() const {
     return ::typeName(this) + "(x=" + ::toString(x) + ", y=" + std::to_string(y) + ")";
@@ -1501,42 +1908,43 @@ inline int32_t get_output_srid(const int8_t* flatbuffer) {
   }
 }
 
-template <typename ItemType, bool item_is_nested_array = true>
-struct GeoNestedArray : public NestedArray<ItemType, item_is_nested_array> {
-  using NestedArray<ItemType, item_is_nested_array>::flatbuffer_;
-  using NestedArray<ItemType, item_is_nested_array>::index_;
-  using NestedArray<ItemType, item_is_nested_array>::n_;
-  using NestedArray<ItemType, item_is_nested_array>::size;
-  using NestedArray<ItemType, item_is_nested_array>::getItem;
+template <typename ItemType>
+struct GeoNestedArray : public flatbuffer::NestedArray<ItemType> {
+  using flatbuffer::NestedArray<ItemType>::flatbuffer_;
+  using flatbuffer::NestedArray<ItemType>::index_;
+  using flatbuffer::NestedArray<ItemType>::n_;
+  using flatbuffer::NestedArray<ItemType>::size;
+  using flatbuffer::NestedArray<ItemType>::getItem;
+  using flatbuffer::NestedArray<ItemType>::getTypeInfo;
+  using flatbuffer::NestedArray<ItemType>::getRawBuffer;
+
+  DEVICE Point2D getPoint(const int64_t index) const {
+    int8_t* values;
+    int64_t nof_values;
+    bool is_null;
+    size_t value_size;
+    getRawBuffer(values, nof_values, value_size, is_null);
+    if (is_null) {
+      return {};
+    }
+    const auto* ti = getTypeInfo();
+    return get_point(
+        values, 2 * index, ti->get_input_srid(), ti->get_output_srid(), ti->is_geoint());
+  }
 
 #ifndef __CUDACC__
 
   template <typename CT, typename VT>
   FlatBufferManager::Status toCoordsWorker(std::vector<VT>& result) const {
     if constexpr (std::is_same<CT, VT>::value) {
-      FlatBufferManager m{flatbuffer_};
-      const auto* ti = reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
-      if (ti == nullptr) {
-        throw std::runtime_error("NestedArray toCoords failed: unspecified type info");
-      }
-      int8_t* points_buf;
-      int32_t nof_points;
-      int32_t* sizes[NESTED_ARRAY_NDIM];
-      int32_t sizes_lengths[NESTED_ARRAY_NDIM];
-      int32_t nof_sizes;
+      int8_t* values;
+      int64_t nof_values;
       bool is_null;
-      auto status = m.getItemWorker<NESTED_ARRAY_NDIM>(
-          index_, n_, points_buf, nof_points, sizes, sizes_lengths, nof_sizes, is_null);
-      if (nof_sizes != 0) {
-        // TODO: if we allow this, this corresponds to flattening of
-        // coordinates. Decide if we want this.
-        throw std::runtime_error("NestedArray toCoords expect nof_sizes be 0 but got " +
-                                 ::toString(nof_sizes));
-      }
-      if (status == FlatBufferManager::Status::Success) {
-        points_to_vector(points_buf, nof_points, ti->is_geoint(), result);
-      }
-      return status;
+      size_t value_size;
+      getRawBuffer(values, nof_values, value_size, is_null);
+      const auto* ti = getTypeInfo();
+      points_to_vector(values, nof_values, ti->is_geoint(), result);
+      return FlatBufferManager::Status::Success;
     } else {
       auto sz = size();
       result.reserve(sz);
@@ -1573,7 +1981,7 @@ struct GeoNestedArray : public NestedArray<ItemType, item_is_nested_array> {
   template <typename CT, typename VT>
   FlatBufferManager::Status fromCoordsWorker(const VT& coords) {
     FlatBufferManager m{flatbuffer_};
-    const auto* ti = reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+    const auto* ti = getTypeInfo();
     if (ti == nullptr) {
       return FlatBufferManager::UserDataError;
     }
@@ -1619,50 +2027,14 @@ struct GeoNestedArray : public NestedArray<ItemType, item_is_nested_array> {
 #endif
 };
 
-struct LineString : public GeoNestedArray<Point2D, false> {
-  using GeoNestedArray<Point2D, false>::flatbuffer_;
-  using GeoNestedArray<Point2D, false>::index_;
-  using GeoNestedArray<Point2D, false>::n_;
-
-  DEVICE Point2D getItem(const int64_t index) {
-    FlatBufferManager m{flatbuffer_};
-    const SQLTypeInfoLite* ti =
-        reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
-    int8_t* points;
-    int32_t nof_points;
-    int32_t nof_sizes;
-    int32_t* sizes[NESTED_ARRAY_NDIM];
-    int32_t sizes_lengths[NESTED_ARRAY_NDIM];
-    bool is_null;
-    auto status = m.getItemWorker<NESTED_ARRAY_NDIM>(
-        index_, n_, points, nof_points, sizes, sizes_lengths, nof_sizes, is_null);
-    if (status != FlatBufferManager::Status::Success) {
-#ifndef __CUDACC__
-      throw std::runtime_error("LineString.getItem failed: flatbuffer getItem raised " +
-                               ::toString(status));
-#endif
-    }
-    if (is_null) {
-      Point2D result;
-      return result;
-    }
-    if (index < 0 || index >= nof_points) {
-#ifndef __CUDACC__
-      throw std::runtime_error("LineString.getItem failed: index " + ::toString(index) +
-                               " is out of range [0, " + ::toString(nof_points) + ")");
-#endif
-    }
-    return get_point(
-        points, 2 * index, ti->get_input_srid(), ti->get_output_srid(), ti->is_geoint());
-  }
-
-  DEVICE inline Point2D operator[](const unsigned int index) {
-    return getItem(static_cast<int64_t>(index));
+struct LineString : public GeoNestedArray<Point2D> {
+  DEVICE inline Point2D operator[](const unsigned int index) const {
+    return getPoint(static_cast<int64_t>(index));
   }
 
 #ifndef __CUDACC__
 
-  using GeoNestedArray<Point2D, false>::toCoords;
+  using GeoNestedArray<Point2D>::toCoords;
 
   template <typename CT>
   std::vector<CT> toCoords() const {
@@ -1670,7 +2042,8 @@ struct LineString : public GeoNestedArray<Point2D, false> {
     auto status = toCoords(result);
     if (status != FlatBufferManager::Status::Success) {
 #ifndef __CUDACC__
-      throw std::runtime_error("LineString.toCoords failed: " + ::toString(status));
+      throw std::runtime_error(::typeName(this) +
+                               " toCoords failed: " + ::toString(status));
 #endif
     }
     return result;
@@ -1683,50 +2056,14 @@ struct LineString : public GeoNestedArray<Point2D, false> {
 #endif
 };
 
-struct MultiPoint : public GeoNestedArray<Point2D, false> {
-  using GeoNestedArray<Point2D, false>::flatbuffer_;
-  using GeoNestedArray<Point2D, false>::index_;
-  using GeoNestedArray<Point2D, false>::n_;
-
-  DEVICE Point2D getItem(const int64_t index) {
-    FlatBufferManager m{flatbuffer_};
-    const SQLTypeInfoLite* ti =
-        reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
-    int8_t* points;
-    int32_t nof_points;
-    int32_t nof_sizes;
-    int32_t* sizes[NESTED_ARRAY_NDIM];
-    int32_t sizes_lengths[NESTED_ARRAY_NDIM];
-    bool is_null;
-    auto status = m.getItemWorker<NESTED_ARRAY_NDIM>(
-        index_, n_, points, nof_points, sizes, sizes_lengths, nof_sizes, is_null);
-    if (status != FlatBufferManager::Status::Success) {
-#ifndef __CUDACC__
-      throw std::runtime_error("MultiPoint.getItem failed: flatbuffer getItem raised " +
-                               ::toString(status));
-#endif
-    }
-    if (is_null) {
-      Point2D result;
-      return result;
-    }
-    if (index < 0 || index >= nof_points) {
-#ifndef __CUDACC__
-      throw std::runtime_error("MultiPoint.getItem failed: index " + ::toString(index) +
-                               " is out of range [0, " + ::toString(nof_points) + ")");
-#endif
-    }
-    return get_point(
-        points, 2 * index, ti->get_input_srid(), ti->get_output_srid(), ti->is_geoint());
-  }
-
-  DEVICE inline Point2D operator[](const unsigned int index) {
-    return getItem(static_cast<int64_t>(index));
+struct MultiPoint : public GeoNestedArray<Point2D> {
+  DEVICE inline Point2D operator[](const unsigned int index) const {
+    return getPoint(static_cast<int64_t>(index));
   }
 
 #ifndef __CUDACC__
 
-  using GeoNestedArray<Point2D, false>::toCoords;
+  using GeoNestedArray<Point2D>::toCoords;
 
   template <typename CT>
   std::vector<CT> toCoords() const {
@@ -1734,7 +2071,8 @@ struct MultiPoint : public GeoNestedArray<Point2D, false> {
     auto status = toCoords(result);
     if (status != FlatBufferManager::Status::Success) {
 #ifndef __CUDACC__
-      throw std::runtime_error("MultiPoint.toCoords failed: " + ::toString(status));
+      throw std::runtime_error(::typeName(this) +
+                               " toCoords failed: " + ::toString(status));
 #endif
     }
     return result;
@@ -1757,7 +2095,8 @@ struct MultiLineString : public GeoNestedArray<LineString> {
     std::vector<std::vector<CT>> result;
     auto status = toCoords(result);
     if (status != FlatBufferManager::Status::Success) {
-      throw std::runtime_error("MultiLineString.toCoords failed: " + ::toString(status));
+      throw std::runtime_error(::typeName(this) +
+                               " toCoords failed: " + ::toString(status));
     }
     return result;
   }
@@ -1779,7 +2118,8 @@ struct Polygon : public GeoNestedArray<LineString> {
     std::vector<std::vector<CT>> result;
     auto status = toCoords(result);
     if (status != FlatBufferManager::Status::Success) {
-      throw std::runtime_error("Polygon.toCoords failed: " + ::toString(status));
+      throw std::runtime_error(::typeName(this) +
+                               " toCoords failed: " + ::toString(status));
     }
     return result;
   }
@@ -1801,7 +2141,8 @@ struct MultiPolygon : public GeoNestedArray<Polygon> {
     std::vector<std::vector<std::vector<CT>>> result;
     auto status = toCoords(result);
     if (status != FlatBufferManager::Status::Success) {
-      throw std::runtime_error("MultiPolygon.toCoords failed: " + ::toString(status));
+      throw std::runtime_error(::typeName(this) +
+                               " toCoords failed: " + ::toString(status));
     }
     return result;
   }
@@ -1815,87 +2156,24 @@ struct MultiPolygon : public GeoNestedArray<Polygon> {
 
 }  // namespace Geo
 
-template <typename RowType>
-struct ColumnFlatBuffer {
-  int8_t* flatbuffer_;
-  int64_t num_rows_;
-
-  // Return true if index-th row is NULL.
-  DEVICE inline bool isNull(int64_t index) const {
-    FlatBufferManager m{flatbuffer_};
-    bool is_null = false;
-    auto status = m.isNull(index, is_null);
-#ifndef __CUDACC__
-    if (status != FlatBufferManager::Status::Success) {
-      throw std::runtime_error("isNull failed: " + ::toString(status));
-    }
-#endif
-    return is_null;
-  }
-
-  // Return the number of rows.
-  DEVICE int64_t size() const {
-    return num_rows_;
-  }
-
-  // Set the index-th row to NULL. Can be called once per row.
-  DEVICE inline void setNull(int64_t index) {
-    FlatBufferManager m{flatbuffer_};
-    auto status = m.setNull(index);
-#ifndef __CUDACC__
-    if (status != FlatBufferManager::Status::Success) {
-      throw std::runtime_error("setNull failed: " + ::toString(status));
-    }
-#endif
-  }
-
-  // Return row object.
-  DEVICE inline RowType getItem(const int64_t index) const {
-    RowType row{{{flatbuffer_, {index}, 1}}};
-    return row;
-  }
-
-  // Return row object via indexing.
-  DEVICE inline RowType operator[](const unsigned int index) const {
-    return getItem(static_cast<int64_t>(index));
-  }
-
-  // Copy item into the index-th row.
-  DEVICE inline void setItem(int64_t index, const RowType& item) {
-    RowType this_item = getItem(index);
-    this_item = item;
-  }
-
-  // Return the total number of values that the flatbuffer instance
-  // holds.
-  inline int64_t getNofValues() const {
-    FlatBufferManager m{flatbuffer_};
-    return m.getValuesCount();
-  }
-
-#ifdef HAVE_FLATBUFFER_TOSTRING
-  std::string toString() const {
-    FlatBufferManager m{flatbuffer_};
-    return ::typeName(this) + "(" + m.toString() +
-           ", num_rows=" + std::to_string(num_rows_) + ")";
-  }
-#endif
+template <>
+struct Column<GeoLineString> : public flatbuffer::Column<Geo::LineString, GeoLineString> {
 };
 
 template <>
-struct Column<GeoLineString> : public ColumnFlatBuffer<Geo::LineString> {};
+struct Column<GeoMultiPoint> : public flatbuffer::Column<Geo::MultiPoint, GeoMultiPoint> {
+};
 
 template <>
-struct Column<GeoMultiPoint> : public ColumnFlatBuffer<Geo::MultiPoint> {};
+struct Column<GeoPolygon> : public flatbuffer::Column<Geo::Polygon, GeoPolygon> {};
 
 template <>
-struct Column<GeoPolygon> : public ColumnFlatBuffer<Geo::Polygon> {};
+struct Column<GeoMultiLineString>
+    : public flatbuffer::Column<Geo::MultiLineString, GeoMultiLineString> {};
 
 template <>
-struct Column<GeoMultiLineString> : public ColumnFlatBuffer<Geo::MultiLineString> {};
-
-template <>
-struct Column<GeoMultiPolygon> : public ColumnFlatBuffer<Geo::MultiPolygon> {};
+struct Column<GeoMultiPolygon>
+    : public flatbuffer::Column<Geo::MultiPolygon, GeoMultiPolygon> {};
 
 template <>
 struct Column<GeoPoint> {
@@ -1999,95 +2277,34 @@ struct Column<GeoPoint> {
 #endif
 };
 
+template <>
+struct Column<TextEncodingNone>
+    : public flatbuffer::Column<flatbuffer::TextEncodingNone, TextEncodingNone> {};
+
 template <typename T>
-struct Column<Array<T>> {
-  // A type for a column of variable length arrays
-  //
-  // Internally, the varlen arrays are stored using compressed storage
-  // format (see https://pearu.github.io/variable_length_arrays.html
-  // for the description) using FlatBuffer tool.
-  int8_t* flatbuffer_;  // contains a flat buffer of the storage, use FlatBufferManager
-                        // to access it.
-  int64_t num_rows_;    // total row count, the number of all varlen arrays
+struct Column<Array<T>> : public flatbuffer::Column<flatbuffer::Array<T>, Array<T>> {
+  Column<Array<T>>(int8_t* flatbuffer, int64_t num_rows)
+      : flatbuffer::Column<flatbuffer::Array<T>, Array<T>>(flatbuffer, num_rows) {}
+};
 
-  Column<Array<T>>(int8_t* flatbuffer, const int64_t num_rows)
-      : flatbuffer_(flatbuffer), num_rows_(num_rows) {}
-
-  DEVICE Array<T> getItem(const int64_t index, const int64_t expected_numel = -1) const {
-    int8_t* ptr = nullptr;
-    int64_t size = 0;
-    bool is_null = false;
-
-    ColumnArray_getArray(flatbuffer_, index, expected_numel, ptr, size, is_null);
-    Array<T> result(reinterpret_cast<T*>(ptr), size, is_null);
-    return result;
-  }
-
-  DEVICE inline Array<T> operator[](const unsigned int index) const {
-    return getItem(static_cast<int64_t>(index));
-  }
-
-  DEVICE int64_t size() const { return num_rows_; }
-
-  DEVICE inline bool isNull(int64_t index) const {
-    return ColumnArray_isNull(flatbuffer_, index);
-  }
-
-  DEVICE inline void setNull(int64_t index) { ColumnArray_setNull(flatbuffer_, index); }
-
-  DEVICE inline void setItem(int64_t index, const Array<T>& other) {
-    ColumnArray_setArray(flatbuffer_,
-                         index,
-                         reinterpret_cast<const int8_t*>(&(other[0])),
-                         other.getSize(),
-                         other.isNull());
-  }
-
-  DEVICE inline void concatItem(int64_t index, const Array<T>& other) {
-    ColumnArray_concatArray(flatbuffer_,
-                            index,
-                            reinterpret_cast<const int8_t*>(&(other[0])),
-                            other.getSize(),
-                            other.isNull());
-  }
+template <>
+struct Column<Array<TextEncodingDict>>
+    : public flatbuffer::Column<flatbuffer::Array<TextEncodingDict>,
+                                Array<TextEncodingDict>> {
+  Column<Array<TextEncodingDict>>(int8_t* flatbuffer, int64_t num_rows)
+      : flatbuffer::Column<flatbuffer::Array<TextEncodingDict>, Array<TextEncodingDict>>(
+            flatbuffer,
+            num_rows) {}
 
   DEVICE inline int32_t getDictDbId() const {
-    FlatBufferManager m{flatbuffer_};
-    const auto* ti = reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
-    if (ti == nullptr) {
-#ifndef __CUDACC__
-      throw std::runtime_error(
-          "Column<Array<T>> getDictId failed: unspecified type info");
-#else
-      return 0;
-#endif
-    } else {
-      return ti->db_id;
-    }
+    const auto* ti = getTypeInfo();
+    return (ti ? ti->db_id : 0);
   }
 
   DEVICE inline int32_t getDictId() const {
-    FlatBufferManager m{flatbuffer_};
-    const auto* ti = reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
-    if (ti == nullptr) {
-#ifndef __CUDACC__
-      throw std::runtime_error(
-          "Column<Array<T>> getDictId failed: unspecified type info");
-#else
-      return 0;
-#endif
-    } else {
-      return ti->dict_id;
-    }
+    const auto* ti = getTypeInfo();
+    return (ti ? ti->dict_id : 0);
   }
-
-#ifdef HAVE_FLATBUFFER_TOSTRING
-  std::string toString() const {
-    FlatBufferManager m{flatbuffer_};
-    return ::typeName(this) + "(" + m.toString() +
-           ", num_rows=" + std::to_string(num_rows_) + ")";
-  }
-#endif
 };
 
 template <>

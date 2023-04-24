@@ -32,13 +32,26 @@ inline const ColumnarResults* columnarize_result(
     const ResultSetPtr& result,
     const size_t thread_idx,
     const size_t executor_id,
-    const int frag_id) {
+    const int frag_id,
+    const bool convert_to_flatbuffer = false) {
   INJECT_TIMER(columnarize_result);
   CHECK_EQ(0, frag_id);
 
   std::vector<SQLTypeInfo> col_types;
   for (size_t i = 0; i < result->colCount(); ++i) {
-    col_types.push_back(get_logical_type_info(result->getColType(i)));
+    const auto& src_ti = result->getColType(i);
+    CHECK_EQ(result->checkSlotUsesFlatBufferFormat(i), src_ti.usesFlatBuffer());
+    auto ti = get_logical_type_info(src_ti);
+    if (src_ti.usesFlatBuffer() || ti.is_geometry() || ti.is_array()) {
+      // Using FlatBuffer layout is forced for geometry types as this
+      // the only way to columnarize geo data:
+      ti.setUsesFlatBuffer(true);
+    } else if (ti.supportsFlatBuffer()) {
+      // Otherwise, in the case of array and text encoding none types,
+      // using FlatBuffer layout will be enabled on demand only:
+      ti.setUsesFlatBuffer(convert_to_flatbuffer);
+    }
+    col_types.push_back(ti);
   }
   return new ColumnarResults(
       row_set_mem_owner, *result, result->colCount(), col_types, executor_id, thread_idx);
@@ -73,7 +86,8 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
     DeviceAllocator* device_allocator,
     const size_t thread_idx,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-    ColumnCacheMap& column_cache) {
+    ColumnCacheMap& column_cache,
+    bool convert_to_flatbuffer) {
   static std::mutex columnar_conversion_mutex;
   auto timer = DEBUG_TIMER(__func__);
   if (fragment.isEmptyPhysicalFragment()) {
@@ -84,6 +98,10 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
   CHECK(!cd || !(cd->isVirtualCol));
   const int8_t* col_buff = nullptr;
   if (cd) {  // real table
+    if (convert_to_flatbuffer) {
+      throw std::runtime_error(
+          "Conversion to flatbuffer for real tables not supported yet");
+    }
     /* chunk_meta_it is used here to retrieve chunk numBytes and
        numElements. Apparently, their values are often zeros. If we
        knew how to predict the zero values, calling
@@ -128,7 +146,8 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
                 get_temporary_table(executor->temporary_tables_, table_key.table_id),
                 executor->executor_id_,
                 thread_idx,
-                frag_id))));
+                frag_id,
+                convert_to_flatbuffer))));
       }
       col_frag = column_cache[table_key][frag_id].get();
     }
@@ -995,8 +1014,8 @@ const int8_t* ColumnFetcher::transferColumnIfNeeded(
   if (memory_level == Data_Namespace::GPU_LEVEL) {
     const auto& col_ti = columnar_results->getColumnType(col_id);
     size_t num_bytes;
-    if (col_ti.supports_flatbuffer() &&
-        FlatBufferManager::isFlatBuffer(col_buffers[col_id])) {
+    if (col_ti.usesFlatBuffer()) {
+      CHECK(FlatBufferManager::isFlatBuffer(col_buffers[col_id]));
       num_bytes = FlatBufferManager::getBufferSize(col_buffers[col_id]);
     } else {
       num_bytes = columnar_results->size() * col_ti.get_size();

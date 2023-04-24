@@ -589,7 +589,15 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , is_table_function_(is_table_function)
     , use_streaming_top_n_(false)
     , threads_can_reuse_group_by_buffers_(false)
-    , force_4byte_float_(false) {}
+    , force_4byte_float_(false) {
+  if (query_desc_type == QueryDescriptionType::TableFunction) {
+    // TODO: eliminate is_table_function as duplicate of
+    // QueryDescriptionType::TableFunction, see QE-754
+    CHECK(is_table_function_);
+    // Table functions output columns are always columnar
+    output_columnar_ = true;
+  }
+}
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_desc_type,
                                              const int64_t min_val,
@@ -929,6 +937,14 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t col_idx) const {
   }
   offset += getColOnlyOffInBytes(col_idx);
   return offset;
+}
+
+int64_t QueryMemoryDescriptor::getPaddedSlotBufferSize(const size_t slot_idx) const {
+  if (checkSlotUsesFlatBufferFormat(slot_idx)) {
+    return align_to_int64(getFlatBufferSize(slot_idx));
+  }
+  int8_t column_width = getPaddedSlotWidthBytes(slot_idx);
+  return align_to_int64(column_width * entry_count_);
 }
 
 /*
@@ -1302,6 +1318,7 @@ std::vector<TargetInfo> target_exprs_to_infos(
     const std::vector<Analyzer::Expr*>& targets,
     const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<TargetInfo> target_infos;
+  size_t index = 0;
   for (const auto target_expr : targets) {
     auto target = get_target_info(target_expr, g_bigint_count);
     if (query_mem_desc.getQueryDescriptionType() ==
@@ -1309,7 +1326,12 @@ std::vector<TargetInfo> target_exprs_to_infos(
       set_notnull(target, false);
       target.sql_type.set_notnull(false);
     }
+    if (target.sql_type.supportsFlatBuffer()) {
+      target.sql_type.setUsesFlatBuffer(
+          query_mem_desc.checkSlotUsesFlatBufferFormat(index));
+    }
     target_infos.push_back(target);
+    index++;
   }
   return target_infos;
 }

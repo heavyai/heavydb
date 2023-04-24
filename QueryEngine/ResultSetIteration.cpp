@@ -1411,6 +1411,17 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
       bool is_end{false};
       auto col_buf = const_cast<int8_t*>(frag_col_buffers[col_lazy_fetch.local_col_id]);
       if (target_info.sql_type.is_string()) {
+        if (FlatBufferManager::isFlatBuffer(col_buf)) {
+          FlatBufferManager m{col_buf};
+          std::string fetched_str;
+          bool is_null{};
+          auto status = m.getItem(varlen_ptr, fetched_str, is_null);
+          if (is_null) {
+            return TargetValue(nullptr);
+          }
+          CHECK_EQ(status, FlatBufferManager::Status::Success);
+          return fetched_str;
+        }
         VarlenDatum vd;
         ChunkIter_get_nth(
             reinterpret_cast<ChunkIter*>(col_buf), varlen_ptr, false, &vd, &is_end);
@@ -1431,7 +1442,6 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
           ChunkIter_get_nth(
               reinterpret_cast<ChunkIter*>(col_buf), varlen_ptr, &ad, &is_end);
         }
-        CHECK(!is_end);
         if (ad.is_null) {
           return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});
         }
@@ -2206,6 +2216,54 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   return TargetValue(int64_t(0));
 }
 
+TargetValue getTargetValueFromFlatBuffer(
+    const int8_t* col_ptr,
+    const TargetInfo& target_info,
+    const size_t slot_idx,
+    const size_t target_logical_idx,
+    const size_t global_entry_idx,
+    const size_t local_entry_idx,
+    const bool translate_strings,
+    const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner_) {
+  CHECK(FlatBufferManager::isFlatBuffer(col_ptr));
+  FlatBufferManager m{const_cast<int8_t*>(col_ptr)};
+  FlatBufferManager::Status status{};
+  CHECK(m.isNestedArray());
+  switch (target_info.sql_type.get_type()) {
+    case kARRAY: {
+      ArrayDatum ad;
+      FlatBufferManager::NestedArrayItem<1> item;
+      status = m.getItem(local_entry_idx, item);
+      if (status == FlatBufferManager::Status::Success) {
+        ad.length = item.nof_values * m.getValueSize();
+        ad.pointer = item.values;
+        ad.is_null = item.is_null;
+      } else {
+        ad.length = 0;
+        ad.pointer = NULL;
+        ad.is_null = true;
+        CHECK_EQ(status, FlatBufferManager::Status::ItemUnspecifiedError);
+      }
+      if (ad.is_null) {
+        return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});
+      }
+      CHECK_GE(ad.length, 0u);
+      if (ad.length > 0) {
+        CHECK(ad.pointer);
+      }
+      return build_array_target_value(target_info.sql_type,
+                                      ad.pointer,
+                                      ad.length,
+                                      translate_strings,
+                                      row_set_mem_owner_);
+    } break;
+    default:
+      UNREACHABLE() << "ti=" << target_info.sql_type;
+  }
+  CHECK(false);
+  return {};
+}
+
 // Gets the TargetValue stored at position local_entry_idx in the col1_ptr and col2_ptr
 // column buffers. The second column is only used for AVG.
 // the global_entry_idx is passed to makeTargetValue to be used for
@@ -2223,6 +2281,18 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(
     const bool decimal_to_double) const {
   CHECK(query_mem_desc_.didOutputColumnar());
   const auto col1_ptr = col_ptr;
+  if (target_info.sql_type.usesFlatBuffer()) {
+    CHECK(FlatBufferManager::isFlatBuffer(col_ptr))
+        << "target_info.sql_type=" << target_info.sql_type;
+    return getTargetValueFromFlatBuffer(col_ptr,
+                                        target_info,
+                                        slot_idx,
+                                        target_logical_idx,
+                                        global_entry_idx,
+                                        local_entry_idx,
+                                        translate_strings,
+                                        row_set_mem_owner_);
+  }
   const auto compact_sz1 = query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
   const auto next_col_ptr =
       advance_to_next_columnar_target_buff(col1_ptr, query_mem_desc, slot_idx);
@@ -2234,7 +2304,6 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(
                             is_real_str_or_array(target_info))
                                ? query_mem_desc.getPaddedSlotWidthBytes(slot_idx + 1)
                                : 0;
-
   // TODO(Saman): add required logics for count distinct
   // geospatial target values:
   if (target_info.sql_type.is_geometry()) {
@@ -2293,6 +2362,11 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
     const bool translate_strings,
     const bool decimal_to_double,
     const bool fixup_count_distinct_pointers) const {
+  // FlatBuffer can exists only in a columnar storage. If the
+  // following check fails it means that storage specific attributes
+  // of type info have leaked.
+  CHECK(!target_info.sql_type.usesFlatBuffer());
+
   if (UNLIKELY(fixup_count_distinct_pointers)) {
     if (is_distinct_target(target_info)) {
       auto count_distinct_ptr_ptr = reinterpret_cast<int64_t*>(rowwise_target_ptr);

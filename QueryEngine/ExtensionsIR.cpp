@@ -165,7 +165,7 @@ inline SQLTypeInfo get_sql_type_from_llvm_type(const llvm::Type* ll_type) {
 inline llvm::Type* get_llvm_type_from_sql_array_type(const SQLTypeInfo ti,
                                                      llvm::LLVMContext& ctx) {
   CHECK(ti.is_buffer());
-  if (ti.is_bytes()) {
+  if (ti.is_text_encoding_none()) {
     return llvm::Type::getInt8PtrTy(ctx);
   }
 
@@ -209,7 +209,7 @@ bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_ope
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
     if ((func_ti.is_array() && arg_ti.is_array()) ||
-        (func_ti.is_bytes() && arg_ti.is_bytes()) ||
+        (func_ti.is_text_encoding_none() && arg_ti.is_text_encoding_none()) ||
         (func_ti.is_text_encoding_dict() && arg_ti.is_text_encoding_dict()) ||
         (func_ti.is_text_encoding_dict_array() && arg_ti.is_text_encoding_dict())) {
       // If the function returns an array and any of the arguments are arrays, allow NULL
@@ -319,7 +319,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
       for (size_t j = 0; j < arg_lvs.size(); j++) {
         orig_arg_lvs.push_back(arg_lvs[j]);
       }
-    } else if (arg_ti.is_bytes()) {
+    } else if (arg_ti.is_text_encoding_none()) {
       CHECK_EQ(size_t(3), arg_lvs.size());
       // arg_lvs contains:
       // arg_lvs[0] StringView struct { i8*, i64 }
@@ -369,7 +369,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
   llvm::Value* buffer_ret{nullptr};
   if (ret_ti.is_buffer()) {
     // codegen buffer return as first arg
-    CHECK(ret_ti.is_array() || ret_ti.is_bytes());
+    CHECK(ret_ti.is_array() || ret_ti.is_text_encoding_none());
     ret_ty = llvm::Type::getVoidTy(cgen_state_->context_);
     const auto struct_ty = get_buffer_struct_type(
         cgen_state_,
@@ -1379,7 +1379,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
     const auto ext_func_arg = ext_func_args[ij];
     const auto& arg_ti = arg->get_type_info();
     llvm::Value* arg_lv{nullptr};
-    if (arg_ti.is_bytes()) {
+    if (arg_ti.is_text_encoding_none()) {
       CHECK(ext_func_arg == ExtArgumentType::TextEncodingNone)
           << ::toString(ext_func_arg);
       const auto ptr_lv = orig_arg_lvs[k + 1];

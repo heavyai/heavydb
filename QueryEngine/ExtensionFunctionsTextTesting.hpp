@@ -88,6 +88,7 @@ TextEncodingDict text_encoding_dict_copy_from(RowFunctionManager& mgr,
   }
   return mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, "copy: " + str);
 }
+
 #endif  // #ifndef __CUDACC__
 
 #ifdef __clang__
