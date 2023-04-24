@@ -685,6 +685,36 @@ class FsiImportTest {
   bool stored_g_enable_fsi_regex_import_ = true;
 };
 
+class ImportErrorHandling : public ImportExportTestBase {
+ protected:
+  void SetUp() override {
+    ImportExportTestBase::SetUp();
+    ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS oor_insert_test;"));
+    sql("CREATE TABLE oor_insert_test (v int, poly polygon, v2 int);");
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS oor_insert_test;"));
+    ImportExportTestBase::TearDown();
+  }
+};
+
+TEST_F(ImportErrorHandling, OutOfRangeValueInsertion_BeforeGeoCol) {
+  queryAndAssertException(
+      "INSERT INTO oor_insert_test values (1241237127481248127481274, 'POLYGON((0 0, 1 "
+      "0, 0 1, 0 0))', 1);",
+      "Detected an out-of-range exception when inserting a value into column "
+      "\"oor_insert_test.v\"");
+}
+
+TEST_F(ImportErrorHandling, OutOfRangeValueInsertion_AfterGeoCol) {
+  queryAndAssertException(
+      "INSERT INTO oor_insert_test values (1, 'POLYGON((0 0, 1 0, 0 1, 0 0))', "
+      "1124213124124214124124124);",
+      "Detected an out-of-range exception when inserting a value into column "
+      "\"oor_insert_test.v2\"");
+}
+
 class ImportConfigurationErrorHandling : public ImportExportTestBase,
                                          public FsiImportTest {
  protected:
