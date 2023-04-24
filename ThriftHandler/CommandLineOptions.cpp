@@ -693,6 +693,11 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(g_enable_ml_functions)
                          ->implicit_value(true),
                      "Enable ML support.");
+  desc.add_options()("restrict-ml-model-metadata-to-superusers",
+                     po::value<bool>(&g_restrict_ml_model_metadata_to_superusers)
+                         ->default_value(g_restrict_ml_model_metadata_to_superusers)
+                         ->implicit_value(true),
+                     "RESTRICT SHOW MODEL and SHOW MODEL DETAILS to superusers only.");
   desc.add_options()("enable-logs-system-tables",
                      po::value<bool>(&g_enable_logs_system_tables)
                          ->default_value(g_enable_logs_system_tables)
