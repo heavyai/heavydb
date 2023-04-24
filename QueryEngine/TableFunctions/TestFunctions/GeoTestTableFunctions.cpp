@@ -100,47 +100,7 @@ ct_pointn__cpu_template(TableFunctionManager& mgr,
                         Column<double>& xcoords,
                         Column<double>& ycoords);
 
-template <typename T>
-NEVER_INLINE HOST int32_t ct_copy__cpu_template(TableFunctionManager& mgr,
-                                                const Column<T>& inputs,
-                                                Column<T>& outputs) {
-  auto size = inputs.size();
-  mgr.set_output_item_values_total_number(0, inputs.getNofValues());
-  mgr.set_output_row_size(size);
-  for (int64_t i = 0; i < size; i++) {
-    if (inputs.isNull(i)) {
-      outputs.setNull(i);
-    } else {
-      outputs[i] = inputs[i];
-    }
-  }
-  return size;
-}
-
 // explicit instantiations
-template NEVER_INLINE HOST int32_t
-ct_copy__cpu_template(TableFunctionManager& mgr,
-                      const Column<GeoLineString>& inputs,
-                      Column<GeoLineString>& outputs);
-
-template NEVER_INLINE HOST int32_t
-ct_copy__cpu_template(TableFunctionManager& mgr,
-                      const Column<GeoMultiPoint>& inputs,
-                      Column<GeoMultiPoint>& outputs);
-
-template NEVER_INLINE HOST int32_t
-ct_copy__cpu_template(TableFunctionManager& mgr,
-                      const Column<GeoMultiLineString>& inputs,
-                      Column<GeoMultiLineString>& outputs);
-
-template NEVER_INLINE HOST int32_t ct_copy__cpu_template(TableFunctionManager& mgr,
-                                                         const Column<GeoPolygon>& inputs,
-                                                         Column<GeoPolygon>& outputs);
-
-template NEVER_INLINE HOST int32_t
-ct_copy__cpu_template(TableFunctionManager& mgr,
-                      const Column<GeoMultiPolygon>& inputs,
-                      Column<GeoMultiPolygon>& outputs);
 
 EXTENSION_NOINLINE int32_t ct_linestringn__cpu_(TableFunctionManager& mgr,
                                                 const Column<GeoPolygon>& polygons,

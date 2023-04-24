@@ -561,6 +561,7 @@ class ResultSet {
 
   bool isZeroCopyColumnarConversionPossible(size_t column_idx) const;
   const int8_t* getColumnarBuffer(size_t column_idx) const;
+  const size_t getColumnarBufferSize(size_t column_idx) const;
 
   QueryDescriptionType getQueryDescriptionType() const {
     return query_mem_desc_.getQueryDescriptionType();
@@ -628,6 +629,10 @@ class ResultSet {
   void eachCellInColumn(RowIterationState&, CellCallback const&);
 
   const Executor* getExecutor() const { return query_mem_desc_.getExecutor(); }
+
+  bool checkSlotUsesFlatBufferFormat(const size_t slot_idx) const {
+    return query_mem_desc_.checkSlotUsesFlatBufferFormat(slot_idx);
+  }
 
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;

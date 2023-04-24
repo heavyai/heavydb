@@ -117,11 +117,9 @@ class ColumnarResults {
       : num_rows_(num_rows)
       , target_types_(target_types)
       , padded_target_sizes_(padded_target_sizes) {}
-  std::vector<bool> isFlatBufferColumns(const size_t num_columns) const;
   inline void writeBackCell(const TargetValue& col_val,
                             const size_t row_idx,
                             const SQLTypeInfo& type_info,
-                            const bool is_flatbuffer,
                             int8_t* column_buf,
                             std::mutex* write_mutex = nullptr);
   void materializeAllColumnsDirectly(const ResultSet& rows, const size_t num_columns);
@@ -205,7 +203,7 @@ class ColumnarResults {
   const std::vector<SQLTypeInfo> target_types_;
   bool parallel_conversion_;         // multi-threaded execution of columnar conversion
   bool direct_columnar_conversion_;  // whether columnar conversion might happen directly
-  // with minimal ussage of result set's iterator access
+  // with minimal usage of result set's iterator access
   size_t thread_idx_;
   std::shared_ptr<Executor> executor_;
   std::vector<size_t> padded_target_sizes_;

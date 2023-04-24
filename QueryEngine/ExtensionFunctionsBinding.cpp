@@ -81,6 +81,8 @@ ExtArgumentType get_column_arg_elem_type(const ExtArgumentType ext_arg_column_ty
       return ExtArgumentType::GeoMultiLineString;
     case ExtArgumentType::ColumnGeoMultiPolygon:
       return ExtArgumentType::GeoMultiPolygon;
+    case ExtArgumentType::ColumnTextEncodingNone:
+      return ExtArgumentType::TextEncodingNone;
     default:
       UNREACHABLE();
   }
@@ -134,6 +136,8 @@ ExtArgumentType get_column_list_arg_elem_type(
       return ExtArgumentType::GeoMultiLineString;
     case ExtArgumentType::ColumnListGeoMultiPolygon:
       return ExtArgumentType::GeoMultiPolygon;
+    case ExtArgumentType::ColumnListTextEncodingNone:
+      return ExtArgumentType::TextEncodingNone;
     default:
       UNREACHABLE();
   }
@@ -158,6 +162,8 @@ ExtArgumentType get_array_arg_elem_type(const ExtArgumentType ext_arg_array_type
       return ExtArgumentType::Bool;
     case ExtArgumentType::ArrayTextEncodingDict:
       return ExtArgumentType::TextEncodingDict;
+    case ExtArgumentType::ArrayTextEncodingNone:
+      return ExtArgumentType::TextEncodingNone;
     default:
       UNREACHABLE();
   }
@@ -589,6 +595,7 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
                                    ": column support for type info " +
                                    type_info.to_string() + " is not implemented");
         }
+        ti.setUsesFlatBuffer(type_info.supportsFlatBuffer());
         type_infos_input.push_back(ti);
         args_are_constants.push_back(type_info.get_type() != kTEXT);
         continue;

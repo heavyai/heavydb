@@ -24,6 +24,10 @@
 
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
 #include "toString.h"
+#else
+#ifndef PRINT
+#define PRINT(...)
+#endif
 #endif
 
 #include "../Logger/Logger.h"
@@ -528,7 +532,7 @@ class SQLTypeInfo {
         << ", comp_param=" << get_comp_param()
         << ", subtype=" << type_name[static_cast<int>(subtype)] << ", size=" << get_size()
         << ", element_size=" << get_elem_type().get_size() << ", dict_key=" << dict_key_
-        << ")";
+        << ", uses_flatbuffer=" << uses_flatbuffer_ << ")";
     return oss.str();
   }
 
@@ -536,8 +540,8 @@ class SQLTypeInfo {
     if (is_array()) {
       return "Array";
     }
-    if (is_bytes()) {
-      return "Bytes";
+    if (is_text_encoding_none()) {
+      return "TextEncodingNone";
     }
 
     if (is_column()) {
@@ -605,7 +609,7 @@ class SQLTypeInfo {
     const auto c = get_compression();
     return type == kCOLUMN_LIST && (c == kENCODING_ARRAY || c == kENCODING_ARRAY_DICT);
   }  // ColumnList of ColumnArray
-  inline bool is_bytes() const {
+  inline bool is_text_encoding_none() const {
     return type == kTEXT && get_compression() == kENCODING_NONE;
   }
   inline bool is_text_encoding_dict() const {
@@ -615,7 +619,7 @@ class SQLTypeInfo {
     return type == kARRAY && subtype == kTEXT && get_compression() == kENCODING_DICT;
   }
   inline bool is_buffer() const {
-    return is_array() || is_column() || is_column_list() || is_bytes();
+    return is_array() || is_column() || is_column_list() || is_text_encoding_none();
   }
   inline bool transforms() const {
     return IS_GEO(type) && get_input_srid() > 0 && get_output_srid() > 0 &&
@@ -703,6 +707,7 @@ class SQLTypeInfo {
     comp_param = rhs.get_comp_param();
     size = rhs.get_size();
     dict_key_ = rhs.dict_key_;
+    uses_flatbuffer_ = rhs.uses_flatbuffer_;
   }
 
   inline bool is_castable(const SQLTypeInfo& new_type_info) const {
@@ -991,6 +996,7 @@ class SQLTypeInfo {
       type_info.set_type(subtype);
       type_info.set_subtype(kNULLT);
       type_info.set_notnull(false);
+      type_info.setUsesFlatBuffer(false);
     } else {
       type_info.set_type(subtype);
       type_info.set_subtype(kNULLT);
@@ -1067,8 +1073,17 @@ class SQLTypeInfo {
     dict_key_ = dict_key;
   }
 
-  // column of this type can use FlatBuffer storage
-  inline bool supports_flatbuffer() const {
+  // a column or an ouput column of this type may use FlatBuffer storage.
+  inline void setUsesFlatBuffer(bool uses_flatbuffer = true) {
+    uses_flatbuffer_ = uses_flatbuffer;
+  }
+
+  inline bool usesFlatBuffer() const {
+    return uses_flatbuffer_;
+  }
+
+  // Checks if a column of this type can use FlatBuffer storage
+  inline bool supportsFlatBuffer() const {
     switch (type) {
       case kARRAY:
       case kPOINT:
@@ -1078,6 +1093,12 @@ class SQLTypeInfo {
       case kMULTILINESTRING:
       case kMULTIPOLYGON:
         return true;
+      case kTEXT:
+        return get_compression() == kENCODING_NONE;
+      case kCOLUMN:
+      case kCOLUMN_LIST:
+        // calling supportsFlatBuffer on a column type is not meaningful
+        UNREACHABLE();
       default:;
     }
     return false;
@@ -1259,6 +1280,7 @@ class SQLTypeInfo {
   static std::string comp_name[kENCODING_LAST];
 #endif
   shared::StringDictKey dict_key_;
+  bool uses_flatbuffer_{false};
   HOST DEVICE inline int get_storage_size() const {
     switch (type) {
       case kBOOLEAN:
@@ -1710,7 +1732,7 @@ DEVICE inline void VarlenArray_get_nth(int8_t* buf,
       *is_end = true;
 #ifndef __CUDACC__
       // out of range indexing is equivalent to returning NULL (SQL AT)
-      CHECK_EQ(status, FlatBufferManager::Status::IndexError);
+      CHECK_EQ(status, FlatBufferManager::Status::ItemUnspecifiedError);
 #endif
     }
   } else {
@@ -1727,6 +1749,38 @@ DEVICE inline void VarlenArray_get_nth(int8_t* buf,
       CHECK_EQ(status, FlatBufferManager::Status::Success);
 #endif
     }
+  }
+}
+
+DEVICE inline void VarlenArray_get_nth(int8_t* buf,
+                                       int n,
+                                       bool uncompress,
+                                       VarlenDatum* result,
+                                       bool* is_end) {
+  FlatBufferManager m{buf};
+  FlatBufferManager::Status status{};
+#ifndef __CUDACC__
+  CHECK(m.isNestedArray());
+#endif
+  FlatBufferManager::NestedArrayItem<1> item;
+  status = m.getItem(n, item);
+  if (status == FlatBufferManager::Status::Success) {
+    result->length = item.nof_values * m.getValueSize();
+    result->pointer = item.values;
+    result->is_null = item.is_null;
+    *is_end = false;
+#ifndef __CUDACC__
+    CHECK(!uncompress);  // NOT IMPLEMENTED
+#endif
+  } else {
+    result->length = 0;
+    result->pointer = NULL;
+    result->is_null = true;
+    *is_end = true;
+#ifndef __CUDACC__
+    // out of range indexing is equivalent to returning NULL (SQL AT)
+    CHECK_EQ(status, FlatBufferManager::Status::IndexError);
+#endif
   }
 }
 
@@ -1769,6 +1823,7 @@ inline void getFlatBufferNDimsAndSizes(const int64_t items_count,
         case kENCODING_NONE:
           ndims = 1;
           max_nof_sizes = items_count + max_nof_values / 3;
+          break;
         case kENCODING_DICT:
           ndims = 0;
           break;

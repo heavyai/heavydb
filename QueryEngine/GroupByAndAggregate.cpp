@@ -406,7 +406,7 @@ GroupByAndAggregate::GroupByAndAggregate(
       continue;
     }
     const auto& groupby_ti = groupby_expr->get_type_info();
-    if (groupby_ti.is_bytes()) {
+    if (groupby_ti.is_text_encoding_none()) {
       throw std::runtime_error(
           "Cannot group by string columns which are not dictionary encoded.");
     }
@@ -657,7 +657,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
       CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
       const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
       const auto& arg_ti = agg_expr->get_arg()->get_type_info();
-      if (arg_ti.is_bytes()) {
+      if (arg_ti.is_text_encoding_none()) {
         throw std::runtime_error(
             "Strings must be dictionary-encoded for COUNT(DISTINCT).");
       }
@@ -2033,7 +2033,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
       if (!func_expr && !arr_expr) {
         // Something with the chunk transport is code that was generated from a source
         // other than an ARRAY[] expression
-        if (target_ti.is_bytes()) {
+        if (target_ti.is_text_encoding_none()) {
           CHECK_EQ(size_t(3), target_lvs.size());
           return {target_lvs[1], target_lvs[2]};
         }
@@ -2065,7 +2065,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
         if (dynamic_cast<const Analyzer::FunctionOper*>(target_expr)) {
           CHECK_EQ(size_t(1), target_lvs.size());
           const auto prefix = target_ti.get_buffer_name();
-          CHECK(target_ti.is_array() || target_ti.is_bytes());
+          CHECK(target_ti.is_array() || target_ti.is_text_encoding_none());
           const auto target_lv = LL_BUILDER.CreateLoad(
               target_lvs[0]->getType()->getPointerElementType(), target_lvs[0]);
           // const auto target_lv_type = target_lvs[0]->getType();

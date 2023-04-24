@@ -184,6 +184,10 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it,
                               bool uncompress,
                               VarlenDatum* result,
                               bool* is_end) {
+  if (FlatBufferManager::isFlatBuffer(it)) {
+    VarlenArray_get_nth(reinterpret_cast<int8_t*>(it), n, uncompress, result, is_end);
+    return;
+  }
   if (!it || static_cast<size_t>(n) >= it->num_elems || n < 0) {
     *is_end = true;
     result->length = 0;

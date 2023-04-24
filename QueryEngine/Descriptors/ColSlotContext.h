@@ -125,6 +125,8 @@ class ColSlotContext {
     return varlen_output_slot_map_.count(slot_idx) > 0;
   }
 
+  bool checkSlotUsesFlatBufferFormat(const size_t slot_idx) const;
+
   std::string toString() const {
     std::string str{"Col Slot Context State\n"};
     if (slot_sizes_.empty()) {

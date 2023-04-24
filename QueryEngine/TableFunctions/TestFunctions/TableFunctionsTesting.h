@@ -1328,7 +1328,6 @@ EXTENSION_NOINLINE int32_t ct_require_range__cpu_(const Column<int32_t>& input1,
   UDTF: ct_coords__cpu_(TableFunctionManager, Column<GeoPoint> points) -> Column<double> x, Column<double> y
   UDTF: ct_shift__cpu_(TableFunctionManager, Column<GeoPoint> points, double x, double y) -> Column<GeoPoint> shifted
   UDTF: ct_pointn__cpu_template(TableFunctionManager, Column<T> points, int64_t n) -> Column<double> x, Column<double> y, T=[GeoLineString, GeoMultiPoint]
-  UDTF: ct_copy__cpu_template(TableFunctionManager mgr, Column<T> inputs) -> Column<T> outputs | input_id=args<0>, T=[GeoMultiPoint, GeoLineString, GeoMultiLineString, GeoPolygon, GeoMultiPolygon]
   UDTF: ct_linestringn__cpu_(TableFunctionManager, Column<GeoPolygon> polygons, int64_t n) -> Column<GeoLineString> linestrings
   UDTF: ct_make_polygon3__cpu_(TableFunctionManager, Cursor<Column<GeoLineString> rings, Column<GeoLineString> holes1, Column<GeoLineString> holes2>) -> Column<GeoPolygon> polygons, Column<int> sizes
   UDTF: ct_make_linestring2__cpu_(TableFunctionManager, Cursor<Column<double> x, Column<double> y>, double dx, double dy) -> Column<GeoLineString> linestrings
@@ -1336,6 +1335,15 @@ EXTENSION_NOINLINE int32_t ct_require_range__cpu_(const Column<int32_t>& input1,
   UDTF: ct_polygonn__cpu_(TableFunctionManager, Column<GeoMultiPolygon> mpolygons, int64_t n) -> Column<GeoPolygon> polygons
   UDTF: ct_to_multilinestring__cpu_(TableFunctionManager, Column<GeoPolygon> polygons) -> Column<GeoMultiLineString> mlinestrings
   UDTF: ct_to_polygon__cpu_(TableFunctionManager, Column<GeoMultiLineString> mlinestrings) -> Column<GeoPolygon> polygons
+  UDTF: ct_copy__generic_cpu_template(TableFunctionManager mgr, Column<T> inputs) -> Column<T> outputs | input_id=args<0>,
+            T=[TextEncodingNone, GeoLineString, GeoMultiPoint, GeoMultiLineString, GeoPolygon, GeoMultiPolygon]
+  UDTF: ct_concat__generic_cpu_template(TableFunctionManager mgr, Cursor<Column<T> input1, Column<T> input2>) -> Column<T> outputs | input_id=args<0>,
+            T=[TextEncodingNone]
+  UDTF: ct_concat__generic2_cpu_template(TableFunctionManager mgr, Column<T> input1, T input2) -> Column<T> outputs | input_id=args<0>,
+            T=[TextEncodingNone]
+  UDTF: ct_concat__generic2_cpu_template(TableFunctionManager mgr, Column<Array<T>> input1, Array<T> input2) -> Column<Array<T>> outputs, T=[double]
+  UDTF: ct_concat__generic3_cpu_template(TableFunctionManager mgr, T input1, Column<T> input2) -> Column<T> outputs | input_id=args<0>,
+            T=[TextEncodingNone]
 */
 // clang-format on
 
@@ -1358,9 +1366,27 @@ NEVER_INLINE HOST int32_t ct_pointn__cpu_template(TableFunctionManager& mgr,
                                                   Column<double>& ycoords);
 
 template <typename T>
-NEVER_INLINE HOST int32_t ct_copy__cpu_template(TableFunctionManager& mgr,
-                                                const Column<T>& inputs,
-                                                Column<T>& outputs);
+NEVER_INLINE HOST int32_t ct_copy__generic_cpu_template(TableFunctionManager& mgr,
+                                                        const Column<T>& inputs,
+                                                        Column<T>& outputs);
+
+template <typename T>
+NEVER_INLINE HOST int32_t ct_concat__generic_cpu_template(TableFunctionManager& mgr,
+                                                          const Column<T>& input1,
+                                                          const Column<T>& input2,
+                                                          Column<T>& outputs);
+
+template <typename T>
+NEVER_INLINE HOST int32_t ct_concat__generic2_cpu_template(TableFunctionManager& mgr,
+                                                           const Column<T>& input1,
+                                                           const T& input2,
+                                                           Column<T>& outputs);
+
+template <typename T>
+NEVER_INLINE HOST int32_t ct_concat__generic3_cpu_template(TableFunctionManager& mgr,
+                                                           const T& input1,
+                                                           const Column<T>& input2,
+                                                           Column<T>& outputs);
 
 EXTENSION_NOINLINE int32_t ct_linestringn__cpu_(TableFunctionManager& mgr,
                                                 const Column<GeoPolygon>& polygons,

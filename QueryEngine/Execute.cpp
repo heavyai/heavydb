@@ -2310,7 +2310,6 @@ ResultSetPtr Executor::executeTableFunction(
                                          /*entry_count=*/0,
                                          QueryDescriptionType::TableFunction,
                                          /*is_table_function=*/true);
-    query_mem_desc.setOutputColumnar(true);
     return std::make_shared<ResultSet>(
         target_exprs_to_infos(exe_unit.target_exprs, query_mem_desc),
         co.device_type,

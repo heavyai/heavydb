@@ -228,6 +228,10 @@ class QueryMemoryDescriptor {
   int64_t getFlatBufferSize(const size_t slot_idx) const {
     return col_slot_context_.getFlatBufferSize(slot_idx);
   }
+  bool checkSlotUsesFlatBufferFormat(const size_t slot_idx) const {
+    return col_slot_context_.checkSlotUsesFlatBufferFormat(slot_idx);
+  }
+  int64_t getPaddedSlotBufferSize(const size_t slot_idx) const;
 
   void clearSlotInfo();
 

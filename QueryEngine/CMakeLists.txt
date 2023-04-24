@@ -125,6 +125,7 @@ set(query_engine_source_files
   StringDictionaryGenerations.cpp
   TableFunctions/TestFunctions/ArrayTestTableFunctions.cpp
   TableFunctions/TestFunctions/FilterPushdownTestTableFunctions.cpp
+  TableFunctions/TestFunctions/FlatBufferTableFunctions.cpp
   TableFunctions/TestFunctions/GeoTestTableFunctions.cpp
   TableFunctions/TestFunctions/OtherTestTableFunctions.cpp
   TableFunctions/TestFunctions/RbcTestTableFunctions.cpp

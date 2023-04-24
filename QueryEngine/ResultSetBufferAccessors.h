@@ -36,6 +36,7 @@
 
 inline bool is_real_str_or_array(const TargetInfo& target_info) {
   return (!target_info.is_agg || target_info.agg_kind == kSAMPLE) &&
+         !target_info.sql_type.usesFlatBuffer() &&
          (target_info.sql_type.is_array() ||
           (target_info.sql_type.is_string() &&
            target_info.sql_type.get_compression() == kENCODING_NONE));
@@ -111,10 +112,7 @@ inline T advance_to_next_columnar_target_buff(T target_ptr,
                                               const QueryMemoryDescriptor& query_mem_desc,
                                               const size_t target_slot_idx) {
   auto new_target_ptr = target_ptr;
-  const auto column_size = query_mem_desc.getEntryCount() *
-                           query_mem_desc.getPaddedSlotWidthBytes(target_slot_idx);
-  new_target_ptr += align_to_int64(column_size);
-
+  new_target_ptr += query_mem_desc.getPaddedSlotBufferSize(target_slot_idx);
   return new_target_ptr;
 }
 

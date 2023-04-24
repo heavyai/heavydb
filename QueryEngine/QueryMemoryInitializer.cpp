@@ -394,10 +394,11 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   size_t total_group_by_buffer_size{0};
   for (size_t i = 0; i < num_columns; ++i) {
     auto ti = exe_unit.target_exprs[i]->get_type_info();
-    if (ti.supports_flatbuffer()) {
+    if (ti.usesFlatBuffer()) {
       // See TableFunctionManager.h for info regarding flatbuffer
       // memory managment.
       auto slot_idx = query_mem_desc.getSlotIndexForSingleSlotCol(i);
+      CHECK(query_mem_desc.checkSlotUsesFlatBufferFormat(slot_idx));
       int64_t flatbuffer_size = query_mem_desc.getFlatBufferSize(slot_idx);
       total_group_by_buffer_size =
           align_to_int64(total_group_by_buffer_size + flatbuffer_size);

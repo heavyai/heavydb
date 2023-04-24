@@ -31,10 +31,11 @@ EXTENSION_NOINLINE Array<int64_t> raw_array_as_array_same_type(const int64_t* in
                                                                const int64_t val) {
   // return array with val appended as array
   auto array = Array<int64_t>(val + 1, false);
+  auto* data = array.data();
   for (int64_t i = 0; i < val; i++) {
-    array.ptr[i] = in_arr[i];
+    data[i] = in_arr[i];
   }
-  array.ptr[val] = val;
+  data[val] = val;
   return array;
 }
 
@@ -42,10 +43,11 @@ EXTENSION_NOINLINE Array<int32_t> raw_array_as_array_diff_type(const int64_t* in
                                                                const int64_t val) {
   // return array with val appended as array
   auto array = Array<int32_t>(val + 1, false);
+  auto* data = array.data();
   for (int64_t i = 0; i < val; i++) {
-    array.ptr[i] = static_cast<int32_t>(in_arr[i]);
+    data[i] = static_cast<int32_t>(in_arr[i]);
   }
-  array.ptr[val] = static_cast<int32_t>(val);
+  data[val] = static_cast<int32_t>(val);
   return array;
 }
 

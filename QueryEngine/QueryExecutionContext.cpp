@@ -638,7 +638,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                           query_mem_desc_);
   }
 
-  RowFunctionManager mgr(this->executor_, ra_exe_unit);
+  RowFunctionManager mgr(executor_, ra_exe_unit);
   int8_t* row_func_mgr_ptr = reinterpret_cast<int8_t*>(&mgr);
 
   CHECK(native_code);

@@ -52,7 +52,7 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
         case kDATE:
           return std::make_shared<FixedWidthInt>(8);
         default:
-          CHECK(false);
+          CHECK(false) << "ti=" << ti;
       }
     }
     case kENCODING_DICT:
@@ -119,6 +119,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
       return {codegenRowId(col_var, co)};
     }
     const auto col_ti = cd->columnType;
+    if (col_ti.usesFlatBuffer()) {
+      throw std::runtime_error(
+          "Flatbuffer storage in a real table column not supported yet");
+    }
     if (col_ti.get_physical_coord_cols() > 0) {
       std::vector<llvm::Value*> cols;
       const auto col_id = column_key.column_id;
@@ -143,12 +147,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
         plan_state_->addColumnToFetch(column_key);
       }
       return cols;
-    }
-  } else {
-    const auto& col_ti = col_var->get_type_info();
-    if (col_ti.is_geometry() && !col_ti.supports_flatbuffer()) {
-      throw std::runtime_error(
-          "Geospatial columns not supported in temporary tables yet");
     }
   }
   const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
@@ -212,7 +210,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
     }
     return varlen_str_column_lvs;
   }
-  if (col_ti.supports_flatbuffer()) {
+  if (col_ti.usesFlatBuffer()) {
+    return {col_byte_stream};
+  }
+  if (col_ti.is_array() || col_ti.get_type() == kPOINT) {
     return {col_byte_stream};
   }
   if (window_func_context) {

@@ -700,6 +700,16 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.ColumnListGeoMultiLineString;
       case ColumnListGeoMultiPolygon:
         return ExtensionFunction.ExtArgumentType.ColumnListGeoMultiPolygon;
+      case ArrayTextEncodingNone:
+        return ExtensionFunction.ExtArgumentType.ArrayTextEncodingNone;
+      case ColumnTextEncodingNone:
+        return ExtensionFunction.ExtArgumentType.ColumnTextEncodingNone;
+      case ColumnListTextEncodingNone:
+        return ExtensionFunction.ExtArgumentType.ColumnListTextEncodingNone;
+      case ColumnArrayTextEncodingNone:
+        return ExtensionFunction.ExtArgumentType.ColumnArrayTextEncodingNone;
+      case ColumnListArrayTextEncodingNone:
+        return ExtensionFunction.ExtArgumentType.ColumnListArrayTextEncodingNone;
       default:
         HEAVYDBLOGGER.error("toExtArgumentType: unknown type " + type);
         return null;

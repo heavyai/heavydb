@@ -1508,6 +1508,17 @@ const int8_t* ResultSet::getColumnarBuffer(size_t column_idx) const {
   return storage_->getUnderlyingBuffer() + query_mem_desc_.getColOffInBytes(column_idx);
 }
 
+const size_t ResultSet::getColumnarBufferSize(size_t column_idx) const {
+  const auto col_context = query_mem_desc_.getColSlotContext();
+  const auto idx = col_context.getSlotsForCol(column_idx).front();
+  return query_mem_desc_.getPaddedSlotBufferSize(idx);
+  if (checkSlotUsesFlatBufferFormat(idx)) {
+    return query_mem_desc_.getFlatBufferSize(idx);
+  }
+  const size_t padded_slot_width = static_cast<size_t>(getPaddedSlotWidthBytes(idx));
+  return padded_slot_width * entryCount();
+}
+
 // returns a bitmap (and total number) of all single slot targets
 std::tuple<std::vector<bool>, size_t> ResultSet::getSingleSlotTargetBitmap() const {
   std::vector<bool> target_bitmap(targets_.size(), true);

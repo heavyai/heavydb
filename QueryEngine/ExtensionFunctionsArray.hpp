@@ -11,11 +11,11 @@ namespace {
 
 template <typename T>
 DEVICE ALWAYS_INLINE Array<T> array_append_impl(const Array<T>& in_arr, T val) {
-  Array<T> out_arr(in_arr.getSize() + 1);
-  for (int64_t i = 0; i < in_arr.getSize(); i++) {
+  Array<T> out_arr(in_arr.size() + 1);
+  for (size_t i = 0; i < in_arr.size(); i++) {
     out_arr[i] = in_arr(i);
   }
-  out_arr[in_arr.getSize()] = val;
+  out_arr[in_arr.size()] = val;
   return out_arr;
 }
 
@@ -23,21 +23,21 @@ DEVICE ALWAYS_INLINE Array<T> array_append_impl(const Array<T>& in_arr, T val) {
 // array storage carefully to correctly represent null sentinel for bool type array
 DEVICE ALWAYS_INLINE Array<bool> barray_append_impl(const Array<bool>& in_arr,
                                                     const int8_t val) {
-  Array<bool> out_arr(in_arr.getSize() + 1);
+  Array<bool> out_arr(in_arr.size() + 1);
   // cast bool array storage to int8_t type to mask null elem correctly
-  auto casted_out_arr = (int8_t*)out_arr.ptr;
-  for (int64_t i = 0; i < in_arr.getSize(); i++) {
+  auto casted_out_arr = (int8_t*)out_arr.data();
+  for (size_t i = 0; i < in_arr.size(); i++) {
     casted_out_arr[i] = in_arr(i);
   }
-  casted_out_arr[in_arr.getSize()] = val;
+  casted_out_arr[in_arr.size()] = val;
   return out_arr;
 }
 
 template <typename T>
 DEVICE ALWAYS_INLINE Array<T> array_first_half_impl(const Array<T>& in_arr) {
-  auto sz = in_arr.getSize();
+  auto sz = in_arr.size();
   Array<T> out_arr(sz / 2, in_arr.isNull());
-  for (int64_t i = 0; i < sz / 2; i++) {
+  for (size_t i = 0; i < sz / 2; i++) {
     out_arr[i] = in_arr(i);
   }
   return out_arr;
@@ -45,9 +45,9 @@ DEVICE ALWAYS_INLINE Array<T> array_first_half_impl(const Array<T>& in_arr) {
 
 template <typename T>
 DEVICE ALWAYS_INLINE Array<T> array_second_half_impl(const Array<T>& in_arr) {
-  auto sz = in_arr.getSize();
+  auto sz = in_arr.size();
   Array<T> out_arr(sz - sz / 2, in_arr.isNull());
-  for (int64_t i = sz / 2; i < sz; i++) {
+  for (size_t i = sz / 2; i < sz; i++) {
     out_arr[i - sz / 2] = in_arr(i);
   }
   return out_arr;
@@ -135,8 +135,8 @@ EXTENSION_NOINLINE Array<TextEncodingDict> tarray_append(
     RowFunctionManager& mgr,
     const Array<TextEncodingDict>& in_arr,
     const TextEncodingDict val) {
-  Array<TextEncodingDict> out_arr(in_arr.getSize() + 1);
-  for (int64_t i = 0; i < in_arr.getSize(); i++) {
+  Array<TextEncodingDict> out_arr(in_arr.size() + 1);
+  for (size_t i = 0; i < in_arr.size(); i++) {
     if (in_arr.isNull(i)) {
       out_arr[i] = in_arr[i];
     } else {
@@ -146,10 +146,10 @@ EXTENSION_NOINLINE Array<TextEncodingDict> tarray_append(
     }
   }
   if (val.isNull()) {
-    out_arr[in_arr.getSize()] = val;
+    out_arr[in_arr.size()] = val;
   } else {
     std::string str = mgr.getString(GET_DICT_DB_ID(mgr, 1), GET_DICT_ID(mgr, 1), val);
-    out_arr[in_arr.getSize()] =
+    out_arr[in_arr.size()] =
         mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, str);
   }
   return out_arr;
@@ -307,7 +307,7 @@ EXTENSION_NOINLINE
 Array<TextEncodingDict> array_first_half__t32(RowFunctionManager& mgr,
                                               const Array<TextEncodingDict>& in_arr) {
   Array<TextEncodingDict> out_arr = array_first_half_impl(in_arr);
-  for (int64_t i = 0; i < out_arr.getSize(); i++) {
+  for (size_t i = 0; i < out_arr.size(); i++) {
     if (!out_arr.isNull(i)) {
       std::string str =
           mgr.getString(GET_DICT_DB_ID(mgr, 0), GET_DICT_ID(mgr, 0), out_arr[i]);
@@ -321,7 +321,7 @@ EXTENSION_NOINLINE
 Array<TextEncodingDict> array_second_half__t32(RowFunctionManager& mgr,
                                                const Array<TextEncodingDict>& in_arr) {
   Array<TextEncodingDict> out_arr = array_second_half_impl(in_arr);
-  for (int64_t i = 0; i < out_arr.getSize(); i++) {
+  for (size_t i = 0; i < out_arr.size(); i++) {
     if (!out_arr.isNull(i)) {
       std::string str =
           mgr.getString(GET_DICT_DB_ID(mgr, 0), GET_DICT_ID(mgr, 0), out_arr[i]);

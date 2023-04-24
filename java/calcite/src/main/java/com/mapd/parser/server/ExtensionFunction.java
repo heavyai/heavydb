@@ -118,6 +118,11 @@ public class ExtensionFunction {
     ColumnListGeoMultiPoint,
     ColumnListGeoMultiLineString,
     ColumnListGeoMultiPolygon,
+    ArrayTextEncodingNone,
+    ColumnTextEncodingNone,
+    ColumnListTextEncodingNone,
+    ColumnArrayTextEncodingNone,
+    ColumnListArrayTextEncodingNone,
   }
   ;
 
@@ -422,6 +427,16 @@ public class ExtensionFunction {
         return "ColumnList<GeoMultiLineString>";
       case ColumnListGeoMultiPolygon:
         return "ColumnList<GeoMultiPolygon>";
+      case ArrayTextEncodingNone:
+        return "Array<TextEncodingNone>";
+      case ColumnTextEncodingNone:
+        return "Column<TextEncodingNone>";
+      case ColumnListTextEncodingNone:
+        return "ColumnList<TextEncodingNone>";
+      case ColumnArrayTextEncodingNone:
+        return "Column<Array<TextEncodingNone>>";
+      case ColumnListArrayTextEncodingNone:
+        return "ColumnList<Array<TextEncodingNone>>";
     }
     HEAVYDBLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
@@ -475,7 +490,8 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnArrayFloat
             || type == ExtArgumentType.ColumnArrayDouble
             || type == ExtArgumentType.ColumnArrayBool
-            || type == ExtArgumentType.ColumnArrayTextEncodingDict;
+            || type == ExtArgumentType.ColumnArrayTextEncodingDict
+            || type == ExtArgumentType.ColumnArrayTextEncodingNone;
   }
 
   public static boolean isArrayType(final ExtArgumentType type) {
@@ -483,7 +499,8 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ArrayInt32 || type == ExtArgumentType.ArrayInt64
             || type == ExtArgumentType.ArrayFloat || type == ExtArgumentType.ArrayDouble
             || type == ExtArgumentType.ArrayBool
-            || type == ExtArgumentType.ArrayTextEncodingDict;
+            || type == ExtArgumentType.ArrayTextEncodingDict
+            || type == ExtArgumentType.ArrayTextEncodingNone;
   }
 
   public static boolean isColumnListArrayType(final ExtArgumentType type) {
@@ -494,7 +511,8 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnListArrayFloat
             || type == ExtArgumentType.ColumnListArrayDouble
             || type == ExtArgumentType.ColumnListArrayBool
-            || type == ExtArgumentType.ColumnListArrayTextEncodingDict;
+            || type == ExtArgumentType.ColumnListArrayTextEncodingDict
+            || type == ExtArgumentType.ColumnListArrayTextEncodingNone;
   }
 
   public static boolean isColumnType(final ExtArgumentType type) {
@@ -503,6 +521,7 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnFloat || type == ExtArgumentType.ColumnDouble
             || type == ExtArgumentType.ColumnBool
             || type == ExtArgumentType.ColumnTextEncodingDict
+            || type == ExtArgumentType.ColumnTextEncodingNone
             || type == ExtArgumentType.ColumnTimestamp || isColumnArrayType(type)
             || type == ExtArgumentType.ColumnGeoPoint
             || type == ExtArgumentType.ColumnGeoLineString
@@ -521,6 +540,7 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnListDouble
             || type == ExtArgumentType.ColumnListBool
             || type == ExtArgumentType.ColumnListTextEncodingDict
+            || type == ExtArgumentType.ColumnListTextEncodingNone
             || isColumnListArrayType(type) || type == ExtArgumentType.ColumnListGeoPoint
             || type == ExtArgumentType.ColumnListGeoLineString
             || type == ExtArgumentType.ColumnListGeoPolygon
@@ -622,6 +642,13 @@ public class ExtensionFunction {
       case ColumnGeoMultiPolygon:
       case ColumnListGeoMultiPolygon:
         return ExtArgumentType.GeoMultiPolygon;
+      case ArrayTextEncodingNone:
+      case ColumnTextEncodingNone:
+      case ColumnListTextEncodingNone:
+        return ExtArgumentType.TextEncodingNone;
+      case ColumnArrayTextEncodingNone:
+      case ColumnListArrayTextEncodingNone:
+        return ExtArgumentType.ArrayTextEncodingNone;
     }
     HEAVYDBLOGGER.error("getValueType: no value for type " + type);
     assert false;
@@ -643,6 +670,7 @@ public class ExtensionFunction {
       case ArrayDouble:
       case ArrayBool:
       case ArrayTextEncodingDict:
+      case ArrayTextEncodingNone:
         return factory.createTypeWithNullability(
                 factory.createArrayType(toRelDataType(getValueType(type), factory), -1),
                 true);
@@ -654,6 +682,7 @@ public class ExtensionFunction {
       case ColumnArrayDouble:
       case ColumnArrayBool:
       case ColumnArrayTextEncodingDict:
+      case ColumnArrayTextEncodingNone:
         return factory.createTypeWithNullability(
                 factory.createArrayType(
                         toRelDataType(getValueType(getValueType(type)), factory), -1),
@@ -717,6 +746,7 @@ public class ExtensionFunction {
       case ArrayDouble:
       case ArrayBool:
       case ArrayTextEncodingDict:
+      case ArrayTextEncodingNone:
         return SqlTypeName.ARRAY;
       case ColumnArrayInt8:
       case ColumnArrayInt16:
@@ -726,6 +756,7 @@ public class ExtensionFunction {
       case ColumnArrayDouble:
       case ColumnArrayBool:
       case ColumnArrayTextEncodingDict:
+      case ColumnArrayTextEncodingNone:
         return SqlTypeName.ARRAY;
       case GeoPoint:
       case GeoMultiPoint:
@@ -745,6 +776,7 @@ public class ExtensionFunction {
       case TextEncodingNone:
       case TextEncodingDict:
       case ColumnTextEncodingDict:
+      case ColumnTextEncodingNone:
         return SqlTypeName.VARCHAR;
       case Timestamp:
       case ColumnTimestamp:
@@ -771,6 +803,8 @@ public class ExtensionFunction {
       case ColumnListGeoMultiPoint:
       case ColumnListGeoMultiLineString:
       case ColumnListGeoMultiPolygon:
+      case ColumnListTextEncodingNone:
+      case ColumnListArrayTextEncodingNone:
         return SqlTypeName.COLUMN_LIST;
       case DayTimeInterval:
         return SqlTypeName.INTERVAL_DAY_HOUR;

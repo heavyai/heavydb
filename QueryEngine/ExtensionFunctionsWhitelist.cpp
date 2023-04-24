@@ -316,6 +316,14 @@ std::string serialize_type(const ExtArgumentType type,
       return (declare ? "{i8*, i64, i64}*" : "ColumnList<GeoMultiLineString>");
     case ExtArgumentType::ColumnListGeoMultiPolygon:
       return (declare ? "{i8*, i64, i64}*" : "ColumnList<GeoMultiPolygon>");
+    case ExtArgumentType::ColumnTextEncodingNone:
+      return (declare ? "{i8*, i64}*" : "Column<TextEncodingNone>");
+    case ExtArgumentType::ColumnArrayTextEncodingNone:
+      return (declare ? "{i8*, i64}*" : "Column<Array<TextEncodingNone>>");
+    case ExtArgumentType::ColumnListTextEncodingNone:
+      return (declare ? "{i8*, i64, i64}*" : "ColumnList<TextEncodingNone>");
+    case ExtArgumentType::ColumnListArrayTextEncodingNone:
+      return (declare ? "{i8*, i64, i64}*" : "ColumnList<Array<TextEncodingNone>>");
     default:
       CHECK(false);
   }
@@ -529,6 +537,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "ARRAY<BOOLEAN>";
     case ExtArgumentType::ArrayTextEncodingDict:
       return "ARRAY<TEXT ENCODING DICT>";
+    case ExtArgumentType::ArrayTextEncodingNone:
+      return "ARRAY<TEXT ENCODING NONE>";
     case ExtArgumentType::ColumnInt8:
       return "COLUMN<TINYINT>";
     case ExtArgumentType::ColumnInt16:
@@ -545,6 +555,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "COLUMN<BOOLEAN>";
     case ExtArgumentType::ColumnTextEncodingDict:
       return "COLUMN<TEXT ENCODING DICT>";
+    case ExtArgumentType::ColumnTextEncodingNone:
+      return "COLUMN<TEXT ENCODING NONE>";
     case ExtArgumentType::ColumnTimestamp:
       return "COLUMN<TIMESTAMP(9)>";
     case ExtArgumentType::Cursor:
@@ -585,6 +597,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "COLUMNLIST<BOOLEAN>";
     case ExtArgumentType::ColumnListTextEncodingDict:
       return "COLUMNLIST<TEXT ENCODING DICT>";
+    case ExtArgumentType::ColumnListTextEncodingNone:
+      return "COLUMNLIST<TEXT ENCODING NONE>";
     case ExtArgumentType::ColumnArrayInt8:
       return "COLUMN<ARRAY<TINYINT>>";
     case ExtArgumentType::ColumnArrayInt16:
@@ -601,6 +615,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "COLUMN<ARRAY<BOOLEAN>>";
     case ExtArgumentType::ColumnArrayTextEncodingDict:
       return "COLUMN<ARRAY<TEXT ENCODING DICT>>";
+    case ExtArgumentType::ColumnArrayTextEncodingNone:
+      return "COLUMN<ARRAY<TEXT ENCODING NONE>>";
     case ExtArgumentType::ColumnListArrayInt8:
       return "COLUMNLIST<ARRAY<TINYINT>>";
     case ExtArgumentType::ColumnListArrayInt16:
@@ -617,6 +633,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "COLUMNLIST<ARRAY<BOOLEAN>>";
     case ExtArgumentType::ColumnListArrayTextEncodingDict:
       return "COLUMNLIST<ARRAY<TEXT ENCODING DICT>>";
+    case ExtArgumentType::ColumnListArrayTextEncodingNone:
+      return "COLUMNLIST<ARRAY<TEXT ENCODING NONE>>";
     case ExtArgumentType::DayTimeInterval:
       return "DAY TIME INTERVAL";
     case ExtArgumentType::YearMonthTimeInterval:
@@ -646,7 +664,7 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
     case ExtArgumentType::ColumnListGeoMultiPolygon:
       return "COLUMNLIST<GEOMULTIPOLYGON>";
     default:
-      UNREACHABLE();
+      UNREACHABLE() << " sig_type=" << static_cast<int>(sig_type);
   }
   return "";
 }
