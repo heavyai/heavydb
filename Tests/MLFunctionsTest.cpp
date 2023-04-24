@@ -1368,15 +1368,15 @@ TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT) {
                                               model_name,
                                               data_query,
                                               {{"preferred_ml_framework", ml_framework},
-                                               {"top_k_cat_attrs", "10"},
-                                               {"min_cat_attr_proportion", "0.001"}},
+                                               {"cat_top_k", "10"},
+                                               {"cat_min_fraction", "0.001"}},
                                               true)
                 : generate_query(model_fit_func,
                                  {{"model_name", quoted_model_name},
                                   {"data", data_query},
                                   {"preferred_ml_framework", ml_framework},
-                                  {"top_k_cat_attrs", "10"},
-                                  {"min_cat_attr_proportion", "0.001"}},
+                                  {"cat_top_k", "10"},
+                                  {"cat_min_fraction", "0.001"}},
                                  {"model_name"},
                                  true);
 
@@ -1536,7 +1536,7 @@ TEST_P(MLCategoricalRegressionFunctionsTest, ML_PREDICT) {
           ml_framework +
           ", data=>CURSOR(select  price, state, title_status, paint_color, "
           "condition_, year_, odometer FROM craigslist_f150s WHERE SAMPLE_RATIO(0.5)), "
-          " top_k_cat_attrs=>50, min_cat_attr_proportion=>0.001));");
+          " cat_top_k=>50, cat_min_fraction=>0.001));");
       const std::string row_wise_predict_query(
           "SELECT AVG(ML_PREDICT('" + model_name +
           "', state, title_status, paint_color, condition_, year_, odometer)) "
@@ -1583,7 +1583,7 @@ TEST_P(MLCategoricalRegressionFunctionsTest, R2_SCORE) {
           ml_framework +
           ", data=>CURSOR(select  price, state, title_status, paint_color, "
           "condition_, year_, odometer FROM craigslist_f150s WHERE SAMPLE_RATIO(0.5)), "
-          " top_k_cat_attrs=>50, min_cat_attr_proportion=>0.001));");
+          " cat_top_k=>50, cat_min_fraction=>0.001));");
       const std::string row_wise_r2_query(
           "SELECT 1.0 - (SUM(POWER(price - ML_PREDICT('" + model_name +
           "', state, title_status, paint_color, condition_, year_, odometer), 2)) "
