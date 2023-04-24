@@ -138,7 +138,7 @@ std::shared_ptr<Analyzer::Expr> MLPredictExpr::deep_copy() const {
   for (auto r : regressor_values_) {
     regressors_copy.emplace_back(r->deep_copy());
   }
-  return makeExpr<MLPredictExpr>(model_value_->deep_copy(), regressor_values_);
+  return makeExpr<MLPredictExpr>(model_value_->deep_copy(), regressors_copy);
 }
 
 std::shared_ptr<Analyzer::Expr> CharLengthExpr::deep_copy() const {
