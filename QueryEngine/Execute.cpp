@@ -113,6 +113,7 @@ size_t g_default_max_groups_buffer_entry_guess{16384};
 size_t g_big_group_threshold{g_default_max_groups_buffer_entry_guess};
 bool g_enable_window_functions{true};
 bool g_enable_table_functions{true};
+bool g_enable_ml_functions{true};
 bool g_enable_dev_table_functions{false};
 bool g_enable_geo_ops_on_uncompressed_coords{true};
 bool g_enable_rf_prop_table_functions{true};
