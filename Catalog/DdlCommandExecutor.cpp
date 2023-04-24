@@ -42,6 +42,7 @@
 #include "QueryEngine/TableFunctions/SystemFunctions/os/ML/MLModel.h"
 
 extern bool g_enable_fsi;
+extern bool g_enable_ml_functions;
 
 namespace {
 
@@ -2027,7 +2028,11 @@ ExecutionResult ShowRuntimeTableFunctionsCommand::execute(bool read_only_mode) {
 ShowModelsCommand::ShowModelsCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_data, session_ptr) {}
+    : DdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_ml_functions) {
+    throw std::runtime_error("Cannot show models. ML functions are disabled.");
+  }
+}
 
 ExecutionResult ShowModelsCommand::execute(bool read_only_mode) {
   auto execute_read_lock = legacylockmgr::getExecuteReadLock();
@@ -2059,7 +2064,11 @@ ExecutionResult ShowModelsCommand::execute(bool read_only_mode) {
 ShowModelDetailsCommand::ShowModelDetailsCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_data, session_ptr) {}
+    : DdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_ml_functions) {
+    throw std::runtime_error("Cannot show model details. ML functions are disabled.");
+  }
+}
 
 ExecutionResult ShowModelDetailsCommand::execute(bool read_only_mode) {
   auto execute_read_lock = legacylockmgr::getExecuteReadLock();
@@ -2147,7 +2156,11 @@ std::vector<std::string> ShowModelDetailsCommand::getFilteredModelNames() {
 EvaluateModelCommand::EvaluateModelCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_data, session_ptr) {}
+    : DdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_ml_functions) {
+    throw std::runtime_error("Cannot evaluate model. ML functions are disabled.");
+  }
+}
 
 ExecutionResult EvaluateModelCommand::execute(bool read_only_mode) {
   auto execute_read_lock = legacylockmgr::getExecuteReadLock();

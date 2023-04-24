@@ -42,6 +42,7 @@ extern bool g_enable_s3_fsi;
 extern bool g_enable_system_tables;
 extern bool g_enable_logs_system_tables;
 extern bool g_enable_table_functions;
+extern bool g_enable_ml_functions;
 extern bool g_enable_dev_table_functions;
 extern size_t g_logs_system_tables_max_files_count;
 
@@ -2895,6 +2896,7 @@ class ShowModelsDdlTest : public DBHandlerTestFixture {
   }
 };
 
+#ifdef HAVE_SYSTEM_TFS
 TEST_F(ShowModelsDdlTest, CreateModel) {
   if (isDistributedMode()) {
     // We currenntly cannot create models in distributed mode as table functions
@@ -3318,6 +3320,7 @@ TEST_F(EvaluateModelDdlTest, EvalModelDataSplitEvalFraction) {
   // model training
   assertExpectedQuery(result, -0.02269272, 0.1);
 }
+#endif  // HAVE_SYSTEM_TFS
 
 class SystemTablesTest : public DBHandlerTestFixture {
  protected:
@@ -4198,6 +4201,7 @@ TEST_F(SystemTablesTest, SystemTablesJoin) {
   // clang-format on
 }
 
+#ifdef HAVE_SYSTEM_TFS
 TEST_F(SystemTablesTest, CreateOrReplaceModel) {
   if (isDistributedMode()) {
     // We currenntly cannot create models in distributed mode as table functions
@@ -4344,6 +4348,7 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
   loginInformationSchema();
   sqlAndCompareResult("SELECT * FROM ml_models;", {});
 }
+#endif  // HAVE_SYSTEM_TFS
 
 struct StorageDetailsResult {
   std::string node{"Server"};
@@ -5155,6 +5160,7 @@ TEST_F(GetTableDetailsTest, NonIsoInputStartDateTime) {
 int main(int argc, char** argv) {
   g_enable_table_functions = true;
   g_enable_dev_table_functions = true;
+  g_enable_ml_functions = true;
   g_enable_fsi = true;
   g_enable_system_tables = true;
   g_enable_logs_system_tables = true;

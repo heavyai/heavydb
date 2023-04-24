@@ -33,6 +33,7 @@
 using QR = QueryRunner::QueryRunner;
 
 extern bool g_enable_table_functions;
+extern bool g_enable_ml_functions;
 using namespace TestHelpers;
 
 namespace {
@@ -1625,6 +1626,7 @@ int main(int argc, char** argv) {
   // Table function support must be enabled before initialized the query runner
   // environment
   g_enable_table_functions = true;
+  g_enable_ml_functions = true;
   QR::init(BASE_PATH);
 
   int err{0};
