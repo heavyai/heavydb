@@ -38,7 +38,11 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
       , min_(std::numeric_limits<V>::max())
       , max_(std::numeric_limits<V>::lowest())
       , current_batch_offset_(0)
-      , invalid_indices_(nullptr) {}
+      , invalid_indices_(nullptr) {
+    if (chunk_metadata_) {
+      chunk_metadata_->chunkStats.has_nulls = false;
+    }
+  }
 
   // TODO: this member largely mirrors `appendDataTrackErrors` but is only used
   // by the parquet-secific import FSI cut-over, and will be removed in the
@@ -156,7 +160,7 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
       min_ = std::min<V>(data_ptr[i], min_);
       max_ = std::max<V>(data_ptr[i], max_);
     }
-    chunk_metadata_->fillChunkStats(min_, max_, false);
+    chunk_metadata_->fillChunkStats(min_, max_, chunk_metadata_->chunkStats.has_nulls);
   }
 
   StringDictionary* string_dictionary_;
