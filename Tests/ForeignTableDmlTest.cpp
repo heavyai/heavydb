@@ -1224,6 +1224,16 @@ TEST_P(CacheControllingSelectQueryTest, ParquetNullRowgroups) {
   // clang-format on
 }
 
+TEST_P(CacheControllingSelectQueryTest, StringDictColumnWithNullValueInFirstRowGroup) {
+  const auto& query = getCreateForeignTableQuery(
+      "(i INTEGER, t TEXT)", "first_row_group_null_str", "parquet");
+  sql(query);
+
+  sqlAndCompareResult(
+      "SELECT avg(i) AS col, t FROM test_foreign_table GROUP BY t ORDER BY col;",
+      {{1.0, "a"}, {2.0, Null}, {3.0, "c"}, {4.0, "d"}, {5.0, "e"}});
+}
+
 TEST_P(CacheControllingSelectQueryTest, CacheExists) {
   auto cache = getCatalog().getDataMgr().getPersistentStorageMgr()->getDiskCache();
   if (GetParam() == File_Namespace::DiskCacheLevel::none) {
