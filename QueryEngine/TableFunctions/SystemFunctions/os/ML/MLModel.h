@@ -327,6 +327,8 @@ class RandomForestRegressionModel : public virtual AbstractTreeModel {
   double out_of_bag_error_;
 };
 
+#endif  // #ifdef HAVE_ONEDAL
+
 class PcaModel : public AbstractMLModel {
  public:
   PcaModel(const std::vector<double>& col_means,
@@ -373,7 +375,5 @@ class PcaModel : public AbstractMLModel {
   std::vector<std::vector<double>> eigenvectors_;
   std::vector<double> eigenvalues_;
 };
-
-#endif  // #ifdef HAVE_ONEDAL
 
 #endif  // #ifndef __CUDACC__
