@@ -47,6 +47,8 @@ SqlDdl SqlCustomShow(Span s) :
         |
         LOOKAHEAD(2) show = SqlShowModelDetails(s)
         |
+        LOOKAHEAD(2) show = SqlShowModelFeatureDetails(s)
+        |
         LOOKAHEAD(1) show = SqlShowDatabases(s)
         |
         LOOKAHEAD(1) show = SqlShowForeignServers(s)
@@ -212,6 +214,26 @@ SqlDdl SqlShowModelDetails(Span s) :
     ]
     {
         return new SqlShowModelDetails(s.end(this), modelNames);
+    }
+}
+
+/*
+ * Show model feature details using the following syntax:
+ *
+ * SHOW MODEL FEATURE DETAILS <model_name>
+ */
+ 
+SqlDdl SqlShowModelFeatureDetails(Span s) :
+{
+    SqlIdentifier modelName = null;
+}
+{
+    <MODEL> <FEATURE> <DETAILS>
+    (
+        modelName = CompoundIdentifier()
+    )
+    {
+        return new SqlShowModelFeatureDetails(s.end(this), modelName.toString());
     }
 }
 

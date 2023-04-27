@@ -289,6 +289,15 @@ class ShowModelDetailsCommand : public DdlCommand {
   std::vector<std::string> getFilteredModelNames();
 };
 
+class ShowModelFeatureDetailsCommand : public DdlCommand {
+ public:
+  ShowModelFeatureDetailsCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
 class EvaluateModelCommand : public DdlCommand {
  public:
   EvaluateModelCommand(const DdlCommandData& ddl_data,

@@ -712,6 +712,11 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
   size_t getRowCount(const TQueryResult& result) {
     return getRowCount(result.row_set);
   }
+
+  size_t getColumnCount(const TQueryResult& result) {
+    return getColumnCount(result.row_set);
+  }
+
   std::vector<TDatum> getRow(const TQueryResult& result, const size_t index) {
     return getRow(result.row_set, index);
   }

@@ -2818,6 +2818,8 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   }
 }
 
+#ifdef HAVE_SYSTEM_TFS
+#ifdef HAVE_ONEDAL
 class ShowModelsDdlTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
@@ -2896,7 +2898,6 @@ class ShowModelsDdlTest : public DBHandlerTestFixture {
   }
 };
 
-#ifdef HAVE_SYSTEM_TFS
 TEST_F(ShowModelsDdlTest, CreateModel) {
   if (isDistributedMode()) {
     // We currenntly cannot create models in distributed mode as table functions
@@ -3091,7 +3092,222 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
   }
 };
 
-TEST_F(ShowModelDetailsDdlTest, CreateModel) {
+class ShowModelFeatureDetailsDdlTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    switchToAdmin();
+    sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP MODEL IF EXISTS rf_test_model;");
+    sql("DROP MODEL IF EXISTS gbt_test_model;");
+    sql("DROP MODEL IF EXISTS dt_test_model;");
+    sql("DROP MODEL IF EXISTS pca_test_model;");
+    sql("DROP TABLE IF EXISTS test_table;");
+  }
+
+  void TearDown() override {
+    switchToAdmin();
+    sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP MODEL IF EXISTS rf_test_model;");
+    sql("DROP MODEL IF EXISTS gbt_test_model;");
+    sql("DROP MODEL IF EXISTS dt_test_model;");
+    sql("DROP MODEL IF EXISTS pca_test_model;");
+    sql("DROP TABLE IF EXISTS test_table;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  static void SetUpTestSuite() {
+    createDBHandler();
+    createTestUser();
+  }
+
+  static void TearDownTestSuite() { dropTestUser(); }
+
+  static void createTestUser() {
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  }
+
+  static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
+
+  void assertExpectedQueryFormatLinearReg(const TQueryResult& result) const {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), 5UL);
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "feature_id");
+    ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[1].col_name, "feature");
+    ASSERT_EQ(result.row_set.row_desc[2].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[2].col_name, "sub_feature_id");
+    ASSERT_EQ(result.row_set.row_desc[3].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[3].col_name, "sub_feature");
+    ASSERT_EQ(result.row_set.row_desc[4].col_type.type, TDatumType::DOUBLE);
+    ASSERT_EQ(result.row_set.row_desc[4].col_name, "coefficient");
+  }
+
+  void assertExpectedQueryFormatRandomForestReg(const TQueryResult& result) const {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), 5UL);
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "feature_id");
+    ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[1].col_name, "feature");
+    ASSERT_EQ(result.row_set.row_desc[2].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[2].col_name, "sub_feature_id");
+    ASSERT_EQ(result.row_set.row_desc[3].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[3].col_name, "sub_feature");
+    ASSERT_EQ(result.row_set.row_desc[4].col_type.type, TDatumType::DOUBLE);
+    ASSERT_EQ(result.row_set.row_desc[4].col_name, "feature_importance");
+  }
+
+  void assertExpectedQueryFormatGbtDecisionTreeReg(const TQueryResult& result) const {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), 4UL);
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "feature_id");
+    ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[1].col_name, "feature");
+    ASSERT_EQ(result.row_set.row_desc[2].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[2].col_name, "sub_feature_id");
+    ASSERT_EQ(result.row_set.row_desc[3].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[3].col_name, "sub_feature");
+  }
+
+  void assertExpectedQueryFormatPca(const TQueryResult& result) const {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), 6UL);
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "feature_id");
+    ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[1].col_name, "feature");
+    ASSERT_EQ(result.row_set.row_desc[2].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[2].col_name, "sub_feature_id");
+    ASSERT_EQ(result.row_set.row_desc[3].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[3].col_name, "sub_feature");
+    ASSERT_EQ(result.row_set.row_desc[4].col_type.type, TDatumType::DOUBLE);
+    ASSERT_EQ(result.row_set.row_desc[4].col_name, "eigenvalue");
+    ASSERT_EQ(result.row_set.row_desc[5].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[5].col_name, "eigenvector");
+  }
+
+  void assertExpectedQueryResultsLinearReg(TQueryResult& result) {
+    const auto row_count = getRowCount(result);
+    EXPECT_EQ(row_count, size_t(2));
+    const auto col_count = getColumnCount(result);
+    EXPECT_EQ(col_count, size_t(5));
+    const std::vector<int64_t> expected_feature_ids = {0, 1};
+    const std::vector<std::string> expected_feature_names = {"intercept", "predictor"};
+    const std::vector<int64_t> expected_sub_feature_ids = {1, 1};
+    const std::vector<std::string> expected_sub_feature_names = {"", ""};
+    const std::vector<double> expected_coefs = {0.7666666984558088, 0.8987878626043153};
+    for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      auto result_row = getRow(result, row_idx);
+      EXPECT_EQ(result_row[0].val.int_val, expected_feature_ids[row_idx]);
+      EXPECT_EQ(result_row[1].val.str_val, expected_feature_names[row_idx]);
+      EXPECT_EQ(result_row[2].val.int_val, expected_sub_feature_ids[row_idx]);
+      EXPECT_EQ(result_row[3].val.str_val, expected_sub_feature_names[row_idx]);
+      EXPECT_NEAR(result_row[4].val.real_val, expected_coefs[row_idx], 0.01);
+    }
+  }
+
+  void assertExpectedQueryResultsRandomForestReg(TQueryResult& result) {
+    const auto row_count = getRowCount(result);
+    EXPECT_EQ(row_count, size_t(1));
+    const auto col_count = getColumnCount(result);
+    EXPECT_EQ(col_count, size_t(5));
+    const std::vector<int64_t> expected_feature_ids = {1};
+    const std::vector<std::string> expected_feature_names = {"predictor"};
+    const std::vector<int64_t> expected_sub_feature_ids = {1};
+    const std::vector<std::string> expected_sub_feature_names = {""};
+    const std::vector<double> expected_feature_importances = {1.706679964179994};
+    for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      auto result_row = getRow(result, row_idx);
+      EXPECT_EQ(result_row[0].val.int_val, expected_feature_ids[row_idx]);
+      EXPECT_EQ(result_row[1].val.str_val, expected_feature_names[row_idx]);
+      EXPECT_EQ(result_row[2].val.int_val, expected_sub_feature_ids[row_idx]);
+      EXPECT_EQ(result_row[3].val.str_val, expected_sub_feature_names[row_idx]);
+      EXPECT_NEAR(
+          result_row[4].val.real_val, expected_feature_importances[row_idx], 0.01);
+    }
+  }
+
+  void assertExpectedQueryResultsGbtDecisionTreeReg(TQueryResult& result) {
+    const auto row_count = getRowCount(result);
+    EXPECT_EQ(row_count, size_t(1));
+    const auto col_count = getColumnCount(result);
+    EXPECT_EQ(col_count, size_t(4));
+    const std::vector<int64_t> expected_feature_ids = {1};
+    const std::vector<std::string> expected_feature_names = {"predictor"};
+    const std::vector<int64_t> expected_sub_feature_ids = {1};
+    const std::vector<std::string> expected_sub_feature_names = {""};
+    for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      auto result_row = getRow(result, row_idx);
+      EXPECT_EQ(result_row[0].val.int_val, expected_feature_ids[row_idx]);
+      EXPECT_EQ(result_row[1].val.str_val, expected_feature_names[row_idx]);
+      EXPECT_EQ(result_row[2].val.int_val, expected_sub_feature_ids[row_idx]);
+      EXPECT_EQ(result_row[3].val.str_val, expected_sub_feature_names[row_idx]);
+    }
+  }
+
+  void assertExpectedQueryResultsPca(TQueryResult& result) {
+    const auto row_count = getRowCount(result);
+    EXPECT_EQ(row_count, size_t(2));
+    const auto col_count = getColumnCount(result);
+    EXPECT_EQ(col_count, size_t(6));
+    const std::vector<int64_t> expected_feature_ids = {1, 2};
+    const std::vector<std::string> expected_feature_names = {"predicted", "predictor"};
+    const std::vector<int64_t> expected_sub_feature_ids = {1, 1};
+    const std::vector<std::string> expected_sub_feature_names = {"", ""};
+    const std::vector<double> expected_eigenvalues = {1.992699384689331,
+                                                      0.007300645112991333};
+    for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      auto result_row = getRow(result, row_idx);
+      EXPECT_EQ(result_row[0].val.int_val, expected_feature_ids[row_idx]);
+      EXPECT_EQ(result_row[1].val.str_val, expected_feature_names[row_idx]);
+      EXPECT_EQ(result_row[2].val.int_val, expected_sub_feature_ids[row_idx]);
+      EXPECT_EQ(result_row[3].val.str_val, expected_sub_feature_names[row_idx]);
+      EXPECT_NEAR(result_row[4].val.real_val, expected_eigenvalues[row_idx], 0.01);
+    }
+  }
+
+  static void createTestTable() {
+    sql("CREATE TABLE test_table ( predicted float, predictor int );");
+    sql("INSERT INTO test_table VALUES (2.0, 1), (3.1, 2), (2.9, 3), (4.1, 4), (4.9, 5), "
+        "(6.1, 6), (7.1, 7), (8.0, 8), (8.9, 9), (10.0, 10);");
+  }
+
+  static void createLinearRegTestModel() {
+    sql("CREATE MODEL lin_reg_test_model OF TYPE LINEAR_REG AS SELECT predicted, "
+        "predictor FROM test_table;");
+  }
+
+  static void createRandomForestTestModel() {
+    sql("CREATE MODEL rf_test_model OF TYPE RANDOM_FOREST_REG AS SELECT predicted, "
+        "predictor FROM test_table;");
+  }
+
+  static void createGbtTestModel() {
+    sql("CREATE MODEL gbt_test_model OF TYPE GBT_REG AS SELECT predicted, "
+        "predictor FROM test_table;");
+  }
+
+  static void createDecisionTreeTestModel() {
+    sql("CREATE MODEL dt_test_model OF TYPE DECISION_TREE_REG AS SELECT predicted, "
+        "predictor FROM test_table;");
+  }
+
+  static void createPcaTestModel() {
+    sql("CREATE MODEL pca_test_model OF TYPE PCA AS SELECT predicted, "
+        "predictor FROM test_table;");
+  }
+};
+
+TEST_F(ShowModelFeatureDetailsDdlTest, MissingModel) {
+  TQueryResult result;
+  EXPECT_ANY_THROW(sql(result, "SHOW MODEL FEATURE DETAILS lin_reg_test_model;"));
+}
+
+TEST_F(ShowModelFeatureDetailsDdlTest, CreateLinearRegModel) {
   if (isDistributedMode()) {
     // We currenntly cannot create models in distributed mode as table functions
     // are not yet supported for distributed, so skip this test for distributed
@@ -3100,87 +3316,64 @@ TEST_F(ShowModelDetailsDdlTest, CreateModel) {
   createTestTable();
   createLinearRegTestModel();
   TQueryResult result;
-  sql(result, "SHOW MODEL DETAILS;");
-  assertExpectedQuery(result, true, false);
+  sql(result, "SHOW MODEL FEATURE DETAILS lin_reg_test_model;");
+  assertExpectedQueryFormatLinearReg(result);
+  assertExpectedQueryResultsLinearReg(result);
 }
 
-TEST_F(ShowModelDetailsDdlTest, CreateTwoModelsDropOne) {
+TEST_F(ShowModelFeatureDetailsDdlTest, CreateRandomForestRegModel) {
   if (isDistributedMode()) {
     // We currenntly cannot create models in distributed mode as table functions
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
   createTestTable();
-  createLinearRegTestModel();
   createRandomForestTestModel();
-  {
-    TQueryResult result;
-    sql(result, "SHOW MODEL DETAILS;");
-    assertExpectedQuery(result, true, true);
-  }
-  sql("DROP MODEL IF EXISTS lin_reg_test_model;");
-  {
-    TQueryResult result;
-    sql(result, "SHOW MODEL DETAILS;");
-    assertExpectedQuery(result, false, true);
-  }
-  sql("DROP MODEL rf_test_model;");
+  TQueryResult result;
+  sql(result, "SHOW MODEL FEATURE DETAILS rf_test_model;");
+  assertExpectedQueryFormatRandomForestReg(result);
+  assertExpectedQueryResultsRandomForestReg(result);
 }
 
-TEST_F(ShowModelDetailsDdlTest, CreateTwoModelsShowNamed) {
+TEST_F(ShowModelFeatureDetailsDdlTest, CreateDecisionTreeModel) {
   if (isDistributedMode()) {
     // We currenntly cannot create models in distributed mode as table functions
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
   createTestTable();
-  createLinearRegTestModel();
-  createRandomForestTestModel();
-  {
-    TQueryResult result;
-    sql(result, "SHOW MODEL DETAILS lin_reg_test_model;");
-    assertExpectedQuery(result, true, false);
-  }
-  {
-    TQueryResult result;
-    sql(result, "SHOW MODEL DETAILS rf_test_model;");
-    assertExpectedQuery(result, false, true);
-  }
-  {
-    TQueryResult result;
-    sql(result, "SHOW MODEL DETAILS lin_reg_test_model, rf_test_model;");
-    assertExpectedQuery(result, true, true);
-  }
-  {
-    TQueryResult result;
-    EXPECT_ANY_THROW(sql(result, "SHOW MODEL DETAILS non_existant_model;"));
-  }
-}
-
-TEST_F(ShowModelDetailsDdlTest, TestUserSeesNoModels) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
-  login("test_user", "test_pass");
+  createDecisionTreeTestModel();
   TQueryResult result;
-  sql(result, "SHOW MODEL DETAILS;");
-  assertExpectedQuery(result, false, false);
+  sql(result, "SHOW MODEL FEATURE DETAILS dt_test_model;");
+  assertExpectedQueryFormatGbtDecisionTreeReg(result);
+  assertExpectedQueryResultsGbtDecisionTreeReg(result);
 }
 
-TEST_F(ShowModelDetailsDdlTest, CreateModelDropModel) {
+TEST_F(ShowModelFeatureDetailsDdlTest, CreateGBTModel) {
   if (isDistributedMode()) {
     // We currenntly cannot create models in distributed mode as table functions
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
   createTestTable();
-  createLinearRegTestModel();
-  sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+  createGbtTestModel();
   TQueryResult result;
-  sql(result, "SHOW MODEL DETAILS;");
-  assertExpectedQuery(result, false, false);
+  sql(result, "SHOW MODEL FEATURE DETAILS gbt_test_model;");
+  assertExpectedQueryFormatGbtDecisionTreeReg(result);
+  assertExpectedQueryResultsGbtDecisionTreeReg(result);
+}
+
+TEST_F(ShowModelFeatureDetailsDdlTest, CreatePCAModel) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTable();
+  createPcaTestModel();
+  TQueryResult result;
+  sql(result, "SHOW MODEL FEATURE DETAILS pca_test_model;");
+  assertExpectedQueryFormatPca(result);
 }
 
 class EvaluateModelDdlTest : public DBHandlerTestFixture {
@@ -3189,6 +3382,8 @@ class EvaluateModelDdlTest : public DBHandlerTestFixture {
     DBHandlerTestFixture::SetUp();
     switchToAdmin();
     sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP MODEL IF EXISTS rand_forest_test_model;");
+    sql("DROP MODEL IF EXISTS pca_test_model;");
     sql("DROP TABLE IF EXISTS test_table;");
   }
 
@@ -3226,7 +3421,7 @@ class EvaluateModelDdlTest : public DBHandlerTestFixture {
                            const double expected_r2,
                            const double allowed_epsilon) {
     assertExpectedQueryFormat(result);
-    auto row_count = getRowCount(result);
+    const auto row_count = getRowCount(result);
     EXPECT_EQ(row_count, size_t(1));
     auto result_row = getRow(result, 0);
     auto actual_r2_value = result_row[0].val.real_val;
@@ -3340,6 +3535,7 @@ TEST_F(EvaluateModelDdlTest, EvalModelDataSplitEvalFraction) {
   // model training
   assertExpectedQuery(result, -0.02269272, 0.1);
 }
+#endif  // HAVE_ONEDAL
 #endif  // HAVE_SYSTEM_TFS
 
 class SystemTablesTest : public DBHandlerTestFixture {
@@ -4222,6 +4418,7 @@ TEST_F(SystemTablesTest, SystemTablesJoin) {
 }
 
 #ifdef HAVE_SYSTEM_TFS
+#ifdef HAVE_ONEDAL
 TEST_F(SystemTablesTest, CreateOrReplaceModel) {
   if (isDistributedMode()) {
     // We currenntly cannot create models in distributed mode as table functions
@@ -4368,6 +4565,7 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
   loginInformationSchema();
   sqlAndCompareResult("SELECT * FROM ml_models;", {});
 }
+#endif  // HAVE_ONEDAL
 #endif  // HAVE_SYSTEM_TFS
 
 struct StorageDetailsResult {
