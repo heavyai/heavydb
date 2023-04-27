@@ -17,8 +17,10 @@
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 
 #include <boost/algorithm/string.hpp>
-#include <mutex>
-#include <unordered_set>
+
+#include <algorithm>
+#include <string_view>
+#include <unordered_map>
 
 extern bool g_enable_table_functions;
 extern bool g_enable_ml_functions;
@@ -341,74 +343,69 @@ size_t TableFunction::getSqlOutputRowSizeParameter() const {
   return getOutputRowSizeParameter();
 }
 
-bool is_table_function_whitelisted(const std::string& function_name) {
+bool is_table_function_whitelisted(std::string_view const function_name) {
   // All table functions that will be on by default (and not just for testing)
   // must be added to the whitelisted_table_functions set below.
-  static const std::unordered_set<std::string> whitelisted_table_functions = {
-      "generate_series",
-      "generate_random_strings",
-      "tf_mandelbrot",
-      "tf_mandelbrot_float",
-      "tf_mandelbrot_cuda",
-      "tf_mandelbrot_cuda_float",
-      "tf_geo_rasterize",
-      "tf_geo_multi_rasterize",
-      "tf_geo_rasterize_slope",
-      "tf_compute_dwell_times",
-      "tf_feature_similarity",
-      "tf_feature_self_similarity",
-      "tf_graph_shortest_path",
-      "tf_graph_shortest_paths_distances",
-      "tf_raster_graph_shortest_slope_weighted_path",
-      "supported_ml_frameworks",
-      "kmeans",
-      "dbscan",
-      "linear_reg_fit",
-      "linear_reg_coefs",
-      "decision_tree_reg_fit",
-      "gbt_reg_fit",
-      "random_forest_reg_fit",
-      "random_forest_reg_var_importance",
-      "ml_reg_predict",
-      "r2_score",
-      "get_decision_trees",
-      "tf_point_cloud_metadata",
-      "tf_load_point_cloud",
-      "tf_raster_contour_lines",
-      "tf_raster_contour_polygons"
-#ifdef HAVE_OMNIVERSE_CONNECTOR
-      ,
-      "tf_export_ov_terrain_texture",
-      "tf_export_ov_buildings_texture",
-      "tf_export_ov_polygons_2d",
-      "tf_export_ov_polygons_3d",
-      "tf_export_ov_grid_mesh"
-#endif
-  };
+  constexpr std::string_view whitelisted_table_functions[]{
+       "dbscan",
+       "decision_tree_reg_fit",
+       "gbt_reg_fit",
+       "generate_random_strings",
+       "generate_series",
+       "get_decision_trees",
+       "kmeans",
+       "linear_reg_coefs",
+       "linear_reg_fit",
+       "ml_reg_predict",
+       "r2_score",
+       "random_forest_reg_fit",
+       "random_forest_reg_var_importance",
+       "supported_ml_frameworks",
+       "tf_compute_dwell_times",
+       "tf_feature_self_similarity",
+       "tf_feature_similarity",
+       "tf_geo_multi_rasterize",
+       "tf_geo_rasterize",
+       "tf_geo_rasterize_slope",
+       "tf_graph_shortest_path",
+       "tf_graph_shortest_paths_distances",
+       "tf_load_point_cloud",
+       "tf_mandelbrot",
+       "tf_mandelbrot_cuda",
+       "tf_mandelbrot_cuda_float",
+       "tf_mandelbrot_float",
+       "tf_point_cloud_metadata",
+       "tf_raster_contour_lines",
+       "tf_raster_contour_polygons",
+       "tf_raster_graph_shortest_slope_weighted_path"
+    };
 
-  static const std::unordered_set<std::string> ml_table_functions = {
-      "supported_ml_frameworks",
-      "kmeans",
-      "dbscan",
-      "linear_reg_fit",
-      "linear_reg_coefs",
-      "decision_tree_reg_fit",
-      "gbt_reg_fit",
-      "random_forest_reg_fit",
-      "random_forest_reg_var_importance",
-      "ml_reg_predict",
-      "r2_score",
-      "get_decision_trees",
-  };
+  // Must be sorted.
+  constexpr std::string_view ml_table_functions[]{"dbscan",
+                                                  "decision_tree_reg_fit",
+                                                  "gbt_reg_fit",
+                                                  "get_decision_trees",
+                                                  "kmeans",
+                                                  "linear_reg_coefs",
+                                                  "linear_reg_fit",
+                                                  "ml_reg_predict",
+                                                  "r2_score",
+                                                  "random_forest_reg_fit",
+                                                  "random_forest_reg_var_importance",
+                                                  "supported_ml_frameworks"};
 
-  if (!g_enable_ml_functions) {
-    return whitelisted_table_functions.find(function_name) !=
-               whitelisted_table_functions.end() &&
-           ml_table_functions.find(function_name) == ml_table_functions.end();
+  if (!std::binary_search(
+          whitelisted_table_functions,
+          whitelisted_table_functions +
+              sizeof whitelisted_table_functions / sizeof *whitelisted_table_functions,
+          function_name)) {
+    return false;
   }
-
-  return whitelisted_table_functions.find(function_name) !=
-         whitelisted_table_functions.end();
+  return g_enable_ml_functions ||
+         !std::binary_search(
+             ml_table_functions,
+             ml_table_functions + sizeof ml_table_functions / sizeof *ml_table_functions,
+             function_name);
 }
 
 void TableFunctionsFactory::add(
