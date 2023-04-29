@@ -472,16 +472,22 @@ Executor::CgenStateManager::~CgenStateManager() {
   // to the old CgenState instance as the execution of the generated
   // code uses these bitmaps
 
+  for (auto& bm : executor_.cgen_state_->in_values_bitmaps_) {
+    cgen_state_->moveInValuesBitmap(bm);
+  }
+  executor_.cgen_state_->in_values_bitmaps_.clear();
+
   for (auto& str_dict_translation_mgr :
        executor_.cgen_state_->str_dict_translation_mgrs_) {
     cgen_state_->moveStringDictionaryTranslationMgr(std::move(str_dict_translation_mgr));
   }
   executor_.cgen_state_->str_dict_translation_mgrs_.clear();
 
-  for (auto& bm : executor_.cgen_state_->in_values_bitmaps_) {
-    cgen_state_->moveInValuesBitmap(bm);
+  for (auto& tree_model_prediction_mgr :
+       executor_.cgen_state_->tree_model_prediction_mgrs_) {
+    cgen_state_->moveTreeModelPredictionMgr(std::move(tree_model_prediction_mgr));
   }
-  executor_.cgen_state_->in_values_bitmaps_.clear();
+  executor_.cgen_state_->tree_model_prediction_mgrs_.clear();
 
   // Delete worker module that may have been set by
   // set_module_shallow_copy. If QueryMustRunOnCpu is thrown, the
@@ -1999,7 +2005,6 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                        const bool has_cardinality_estimation,
                                        ColumnCacheMap& column_cache) {
   VLOG(1) << "Executor " << executor_id_ << " is executing work unit:" << ra_exe_unit_in;
-
   ScopeGuard cleanup_post_execution = [this] {
     // cleanup/unpin GPU buffer allocations
     // TODO: separate out this state into a single object
@@ -2007,6 +2012,7 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
     if (cgen_state_) {
       cgen_state_->in_values_bitmaps_.clear();
       cgen_state_->str_dict_translation_mgrs_.clear();
+      cgen_state_->tree_model_prediction_mgrs_.clear();
     }
     row_set_mem_owner_->clearNonOwnedGroupByBuffers();
   };
