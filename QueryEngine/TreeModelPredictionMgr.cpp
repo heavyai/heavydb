@@ -49,6 +49,18 @@ TreeModelPredictionMgr::TreeModelPredictionMgr(
   createKernelBuffers();
 }
 
+TreeModelPredictionMgr::~TreeModelPredictionMgr() {
+  CHECK(data_mgr_);
+  for (auto* buffer : decision_tree_table_device_buffers_) {
+    CHECK(buffer);
+    data_mgr_->free(buffer);
+  }
+  for (auto* buffer : decision_tree_offsets_device_buffers_) {
+    CHECK(buffer);
+    data_mgr_->free(buffer);
+  }
+}
+
 void TreeModelPredictionMgr::allocateAndPopulateHostBuffers(
     const std::vector<std::vector<DecisionTreeEntry>>& decision_trees,
     const std::vector<int64_t>& decision_tree_offsets) {
