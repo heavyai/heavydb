@@ -42,6 +42,7 @@ class TreeModelPredictionMgr {
       const std::vector<std::vector<DecisionTreeEntry>>& decision_trees,
       const std::vector<int64_t>& decision_tree_offsets,
       const bool compute_avg);
+  ~TreeModelPredictionMgr();
 
   llvm::Value* codegen(const std::vector<llvm::Value*>& regressor_inputs,
                        const CompilationOptions& co) const;
