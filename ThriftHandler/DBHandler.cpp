@@ -3492,16 +3492,47 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session_id_or_json,
   auto desc_id_to_column_id =
       column_ids_by_names(loader->get_column_descs(), column_names);
   size_t num_rows = 0;
+
+  // col_idx indexes "desc_id_to_column_id"
   size_t col_idx = 0;
+
   try {
     for (auto cd : loader->get_column_descs()) {
+      if (cd->isGeoPhyCol) {
+        // Skip in the case of "cd" being a physical cols, as they are generated
+        // in fillGeoColumns:
+        //  * Point: coords col
+        //  * MultiPoint/LineString: coords/bounds cols
+        //  etc...
+        continue;
+      }
       auto mapped_idx = desc_id_to_column_id[col_idx];
       if (mapped_idx != -1) {
         auto& array = *batch->column(mapped_idx);
         import_export::ArraySliceRange row_slice(0, array.length());
-        num_rows = import_buffers[col_idx]->add_arrow_values(
+
+        // col_id indexes "import_buffers"
+        size_t col_id = cd->columnId;
+
+        // When importing a buffer with "add_arrow_values", the index in
+        // "importing_buffers" is given by the "columnId" attribute of a ColumnDescriptor.
+        // This index will differ from "col_idx" if any of the importing columns is a
+        // geometry column as they have physical columns for other properties (i.e. a
+        // LineString also has "coords" and "bounds").
+        num_rows = import_buffers[col_id - 1]->add_arrow_values(
             cd, array, true, row_slice, nullptr);
+        // For geometry columns: process WKT strings and fill physical columns
+        if (cd->columnType.is_geometry()) {
+          fillGeoColumns(request_info.sessionId(),
+                         session_ptr->getCatalog(),
+                         import_buffers,
+                         cd,
+                         col_id,
+                         num_rows,
+                         table_name);
+        }
       }
+      // Advance to the next column in the table
       col_idx++;
     }
   } catch (const std::exception& e) {
