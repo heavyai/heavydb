@@ -116,11 +116,6 @@ size_t result_set::get_byteoff_of_slot(const size_t slot_idx,
   return query_mem_desc.getPaddedColWidthForRange(0, slot_idx);
 }
 
-std::vector<TargetValue> ResultSet::getRowAtNoTranslationSkipPermutation(
-    const size_t global_entry_idx) const {
-  return getRowAt(global_entry_idx, false, false, false, {});
-}
-
 std::vector<TargetValue> ResultSet::getRowAt(
     const size_t global_entry_idx,
     const bool translate_strings,

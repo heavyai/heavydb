@@ -12116,9 +12116,7 @@ TEST_F(Select, Subqueries) {
       "((SELECT COUNT(x) FROM test) - "
       "1)) FROM test;",
       dt);
-    EXPECT_THROW(run_multiple_agg("SELECT * FROM (SELECT * FROM test LIMIT 5);", dt),
-                 std::runtime_error);
-
+    c("SELECT * FROM (SELECT * FROM test ORDER BY x, w DESC LIMIT 5);", dt);
     EXPECT_THROW(run_simple_agg("SELECT AVG(SELECT x FROM test LIMIT 5) FROM test;", dt),
                  std::runtime_error);
     EXPECT_THROW(
@@ -14842,17 +14840,13 @@ TEST_F(Select, UnsupportedExtensions) {
 TEST_F(Select, UnsupportedSortOfIntermediateResult) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test ORDER BY x;", dt),
-                 std::runtime_error);
-
     // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
     // Note we don't compare to Sqlite reference answer as ordering only on
     // x is not deterministic
     SKIP_ON_AGGREGATOR(EXPECT_NO_THROW(
         run_multiple_agg(R"(SELECT ENCODE_TEXT(real_str) FROM test ORDER BY x;)", dt)));
 
-    EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test ORDER BY x, real_str;", dt),
-                 std::runtime_error);
+    c("SELECT real_str FROM test ORDER BY x, real_str;", dt);
 
     // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
     SKIP_ON_AGGREGATOR(
@@ -25780,11 +25774,9 @@ TEST_F(Select, UnionAll) {
           "SELECT str FROM test UNION ALL SELECT real_str FROM test ORDER BY str;",
           dt));
 
-    // Exception: Columnar conversion not supported for variable length types
-    EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test UNION ALL "
-                                  "SELECT real_str FROM test ORDER BY real_str;",
-                                  dt),
-                 std::runtime_error);
+    c("SELECT real_str FROM test UNION ALL "
+      "SELECT real_str FROM test ORDER BY real_str;",
+      dt);
 
     // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
     SKIP_ON_AGGREGATOR(

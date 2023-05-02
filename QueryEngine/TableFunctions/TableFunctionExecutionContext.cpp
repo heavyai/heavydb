@@ -170,8 +170,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           device_allocator.get(),
           /*thread_idx=*/0,
           chunks_owner,
-          column_fetcher.columnarized_table_cache_,
-          /*convert_to_flatbuffer=*/true);
+          column_fetcher.columnarized_table_cache_);
       // We use the number of entries in the first column to be the number of rows to base
       // the output off of (optionally depending on the sizing parameter)
       if (!input_num_rows) {
