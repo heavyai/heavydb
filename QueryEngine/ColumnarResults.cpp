@@ -152,7 +152,7 @@ int64_t computeTotalNofValuesForColumnArray(const ResultSet& rows,
       static_cast<int64_t>(0),
       [&](tbb::blocked_range<int64_t> r, int64_t running_count) {
         for (int i = r.begin(); i < r.end(); ++i) {
-          const auto crt_row = rows.getRowAtNoTranslationSkipPermutation(i);
+          const auto crt_row = rows.getRowAtNoTranslations(i);
           if (crt_row.empty()) {
             continue;
           }
@@ -177,7 +177,7 @@ int64_t computeTotalNofValuesForColumnGeoType(const ResultSet& rows,
       static_cast<int64_t>(0),
       [&](tbb::blocked_range<int64_t> r, int64_t running_count) {
         for (int i = r.begin(); i < r.end(); ++i) {
-          const auto crt_row = rows.getRowAtNoTranslationSkipPermutation(i);
+          const auto crt_row = rows.getRowAtNoTranslations(i);
           if (crt_row.empty()) {
             continue;
           }
@@ -223,18 +223,27 @@ int64_t computeTotalNofValuesForColumnGeoType(const ResultSet& rows,
 int64_t computeTotalNofValuesForColumnTextEncodingNone(const ResultSet& rows,
                                                        const size_t column_idx) {
   return tbb::parallel_reduce(
-      tbb::blocked_range<int64_t>(0, rows.rowCount()),
+      tbb::blocked_range<int64_t>(0, rows.entryCount()),
       static_cast<int64_t>(0),
       [&](tbb::blocked_range<int64_t> r, int64_t running_count) {
         for (int i = r.begin(); i < r.end(); ++i) {
-          const auto crt_row = rows.getRowAtNoTranslationSkipPermutation(i);
-          const auto tv = boost::get<ScalarTargetValue>(&crt_row[column_idx]);
-          CHECK(tv);
-          const auto ns = boost::get<NullableString>(tv);
-          CHECK(ns);
-          const auto s_ptr = boost::get<std::string>(ns);
-          if (s_ptr) {
-            running_count += s_ptr->size();
+          // Apparently, ResultSet permutation vector may be sparse
+          // (len(permutation) > entryCount), so we cannot ignore the
+          // permutation vector when iterating over all entries.
+          const auto crt_row = rows.getRowAtNoTranslations(i);
+          if (crt_row.empty()) {
+            continue;
+          }
+          const auto col_val = crt_row[column_idx];
+          if (const auto tv = boost::get<ScalarTargetValue>(&col_val)) {
+            const auto ns = boost::get<NullableString>(tv);
+            CHECK(ns);
+            const auto s_ptr = boost::get<std::string>(ns);
+            if (s_ptr) {
+              running_count += s_ptr->size();
+            }
+          } else {
+            UNREACHABLE();
           }
         }
         return running_count;
@@ -760,22 +769,24 @@ inline void writeBackCellTextEncodingNone(FlatBufferManager& m,
                                           const TargetValue& col_val,
                                           std::mutex* write_mutex) {
   FlatBufferManager::Status status{};
-  const auto tv = boost::get<ScalarTargetValue>(&col_val);
-  CHECK(tv);
-  const auto ns = boost::get<NullableString>(tv);
-  CHECK(ns);
-  const auto s_ptr = boost::get<std::string>(ns);
-  {
-    auto lock_scope =
-        (write_mutex == nullptr ? std::unique_lock<std::mutex>()
-                                : std::unique_lock<std::mutex>(*write_mutex));
-    if (s_ptr) {
-      status = m.setItem(row_idx, *s_ptr);
-    } else {
-      status = m.setNull(row_idx);
+  if (const auto tv = boost::get<ScalarTargetValue>(&col_val)) {
+    const auto ns = boost::get<NullableString>(tv);
+    CHECK(ns);
+    const auto s_ptr = boost::get<std::string>(ns);
+    {
+      auto lock_scope =
+          (write_mutex == nullptr ? std::unique_lock<std::mutex>()
+                                  : std::unique_lock<std::mutex>(*write_mutex));
+      if (s_ptr) {
+        status = m.setItem(row_idx, *s_ptr);
+      } else {
+        status = m.setNull(row_idx);
+      }
     }
+    CHECK_EQ(status, FlatBufferManager::Status::Success);
+  } else {
+    UNREACHABLE();
   }
-  CHECK_EQ(status, FlatBufferManager::Status::Success);
 }
 
 inline void writeBackCellGeoPoint(FlatBufferManager& m,
