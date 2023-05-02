@@ -3,6 +3,7 @@ add_custom_target(gdal-data ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${CM
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/ThirdParty/geo_samples DESTINATION "ThirdParty" COMPONENT "data")
 add_custom_target(geo_samples ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/ThirdParty/geo_samples" "${CMAKE_BINARY_DIR}/ThirdParty/geo_samples")
+add_dependencies(initheavy geo_samples)
 
 find_program(PROJINFO_EXECUTABLE NAMES projinfo)
 if(NOT PROJINFO_EXECUTABLE)
@@ -24,6 +25,7 @@ else()
     install(DIRECTORY ${PROJ_DATA_PATH} DESTINATION "ThirdParty/gdal-data" COMPONENT "data")
     add_custom_target(proj-data ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJ_DATA_PATH}" "${CMAKE_BINARY_DIR}/ThirdParty/gdal-data/proj")
     add_dependencies(proj-data gdal-data)
+    add_dependencies(initheavy proj-data)
   else()
     message(WARNING "proj data path not found. Will not attempt to copy proj_lib data files.")
   endif()
