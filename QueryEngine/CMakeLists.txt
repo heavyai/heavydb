@@ -483,6 +483,7 @@ if(ENABLE_CUDA)
     ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.fatbin
     ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a
   )
+  add_dependencies(QueryEngine QueryEngineCudaTargets)
   string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
 
   if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)

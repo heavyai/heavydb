@@ -91,10 +91,6 @@ list(APPEND SANITY_TEST_PROGRAMS ArrowCsvForeignStorageTest)
 ##########
 
 add_executable(BufferMgrTest BufferMgrTest.cpp)
-# CudaMgr constructor requires the dependency on QueryEngineCudaTargets and QueryEngine.
-if(ENABLE_CUDA)
-  add_dependencies(BufferMgrTest QueryEngineCudaTargets)
-endif()
 target_link_libraries(BufferMgrTest gtest DataMgr QueryEngine)
 add_test(BufferMgrTest BufferMgrTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS BufferMgrTest)
