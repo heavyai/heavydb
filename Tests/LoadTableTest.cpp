@@ -598,8 +598,7 @@ TEST_F(LoadTableTest, ArrowAllColumnsNoGeo) {
   sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "s", "nns"}});
 }
 
-// TODO (max) load_table_binary_arrow doesn't support tables with geocolumns properly yet
-TEST_F(LoadTableTest, DISABLED_ArrowAllColumnsPromotePolyToMPoly) {
+TEST_F(LoadTableTest, ArrowAllColumnsPromotePolyToMPoly) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   auto schema = arrow::schema({i1_field, ls_field, s_field, p_field, nns_field});
@@ -614,7 +613,7 @@ TEST_F(LoadTableTest, DISABLED_ArrowAllColumnsPromotePolyToMPoly) {
                       {{i(1), LINESTRING, "s", POLYGON_PROMOTED, "nns"}});
 }
 
-TEST_F(LoadTableTest, DISABLED_ArrowAllColumns) {
+TEST_F(LoadTableTest, ArrowAllColumns) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   auto schema = arrow::schema({i1_field, ls_field, s_field, mp_field, nns_field});
