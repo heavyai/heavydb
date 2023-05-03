@@ -68,6 +68,9 @@ void populate_import_buffers_for_ml_model_metadata(
       itr->second->addBigint(ml_model_metadata.getNumLogicalFeatures() -
                              ml_model_metadata.getNumCategoricalFeatures());
     }
+    if (auto itr = import_buffers.find("train_fraction"); itr != import_buffers.end()) {
+      itr->second->addDouble(ml_model_metadata.getDataSplitTrainFraction());
+    }
     if (auto itr = import_buffers.find("eval_fraction"); itr != import_buffers.end()) {
       itr->second->addDouble(ml_model_metadata.getDataSplitEvalFraction());
     }

@@ -3469,6 +3469,7 @@ CreateModelStmt::CreateModelStmt(const rapidjson::Value& payload) {
 std::string write_model_params_to_json(const std::string& predicted,
                                        const std::vector<std::string>& features,
                                        const std::string& training_query,
+                                       const double data_split_train_fraction,
                                        const double data_split_eval_fraction) {
   // Create a RapidJSON document
   rapidjson::Document doc;
@@ -3492,11 +3493,21 @@ std::string write_model_params_to_json(const std::string& predicted,
       training_query.c_str(), training_query.length(), doc.GetAllocator());
   doc.AddMember("training_query", training_query_value, doc.GetAllocator());
 
-  rapidjson::Value key("data_split_eval_fraction", doc.GetAllocator());
+  rapidjson::Value data_split_train_fraction_key("data_split_train_fraction",
+                                                 doc.GetAllocator());
 
-  rapidjson::Value value(data_split_eval_fraction);
+  rapidjson::Value data_split_train_fraction_value(data_split_train_fraction);
 
-  doc.AddMember(key, value, doc.GetAllocator());
+  doc.AddMember(
+      data_split_train_fraction_key, data_split_train_fraction_value, doc.GetAllocator());
+
+  rapidjson::Value data_split_eval_fraction_key("data_split_eval_fraction",
+                                                doc.GetAllocator());
+
+  rapidjson::Value data_split_eval_fraction_value(data_split_eval_fraction);
+
+  doc.AddMember(
+      data_split_eval_fraction_key, data_split_eval_fraction_value, doc.GetAllocator());
 
   // Convert the document to a JSON string
   rapidjson::StringBuffer buffer;
@@ -3524,13 +3535,40 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
   bool first_options_arg = true;
 
   const std::unordered_set<std::string> excluded_options_set = {
-      "eval_fraction", "data_split_eval_fraction"};
+      "eval_fraction",
+      "data_split_eval_fraction",
+      "train_fraction",
+      "data_split_train_fraction"};
+  double data_split_train_fraction = 1.0;
   double data_split_eval_fraction = 0.0;
+  bool train_fraction_specified = false;
   bool eval_fraction_specified = false;
   if (!model_options_.empty()) {
     for (auto& p : model_options_) {
       const auto key = boost::to_lower_copy<std::string>(*p->get_name());
       if (excluded_options_set.find(key) != excluded_options_set.end()) {
+        if (key == "train_fraction" || key == "data_split_train_fraction") {
+          if (train_fraction_specified) {
+            throw std::runtime_error(
+                "Error parsing DATA_SPLIT_TRAIN_FRACTION value. "
+                "Expected only one value.");
+          }
+          const DoubleLiteral* fp_literal =
+              dynamic_cast<const DoubleLiteral*>(p->get_value());
+          if (fp_literal != nullptr) {
+            data_split_train_fraction = fp_literal->get_doubleval();
+            if (data_split_train_fraction <= 0.0 || data_split_train_fraction > 1.0) {
+              throw std::runtime_error(
+                  "Error parsing DATA_SPLIT_TRAIN_FRACTION value. "
+                  "Expected value between 0.0 and 1.0.");
+            }
+          } else {
+            throw std::runtime_error(
+                "Error parsing DATA_SPLIT_TRAIN_FRACTION value. "
+                "Expected floating point value betwen 0.0 and 1.0.");
+          }
+          train_fraction_specified = true;
+        }
         if (key == "eval_fraction" || key == "data_split_eval_fraction") {
           if (eval_fraction_specified) {
             throw std::runtime_error(
@@ -3584,15 +3622,34 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
     }
   }
 
+  // First handle case where data_split_train_fraction was left to default value
+  // and data_split_eval_fraction was specified. We shouldn't error here,
+  // but rather set data_split_train_fraction to 1.0 - data_split_eval_fraction
+  // Likewise if data_split_eval_fraction was left to default value and we have
+  // a specified data_split_train_fraction, we should set data_split_eval_fraction
+  // to 1.0 - data_split_train_fraction
+  if (data_split_eval_fraction > 0.0 && data_split_train_fraction == 1.0) {
+    data_split_train_fraction = 1.0 - data_split_eval_fraction;
+  } else if (data_split_eval_fraction == 0.0 && data_split_train_fraction < 1.0) {
+    data_split_eval_fraction = 1.0 - data_split_train_fraction;
+  }
+
+  // If data_split_train_fraction was specified, and data_split_train_fraction +
+  // data_split_eval_fraction > 1.0, then we should error
+  if (data_split_eval_fraction + data_split_train_fraction > 1.0) {
+    throw std::runtime_error(
+        "Error parsing DATA_SPLIT_TRAIN_FRACTION and DATA_SPLIT_EVAL_FRACTION values. "
+        "Expected sum of values to be less than or equal to 1.0.");
+  }
+
   auto session_copy = session;
   auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
       &session_copy, boost::null_deleter());
   auto modified_select_query = select_query_;
-  if (data_split_eval_fraction > 0.0) {
+  if (data_split_train_fraction < 1.0) {
     std::ostringstream modified_query_oss;
     modified_query_oss << "SELECT * FROM (" << modified_select_query
-                       << ") WHERE SAMPLE_RATIO(" << 1.0 - data_split_eval_fraction
-                       << ")";
+                       << ") WHERE SAMPLE_RATIO(" << data_split_train_fraction << ")";
     modified_select_query = modified_query_oss.str();
   }
 
@@ -3639,8 +3696,12 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
   // This is just a temporary workaround until we store this info in the Catalog
   // rather than in the stored model pointer itself (and have to pass the metadata
   // down through the table function call)
-  const auto model_metadata = shared::encode_base64(write_model_params_to_json(
-      model_predicted_var, model_feature_vars, select_query_, data_split_eval_fraction));
+  const auto model_metadata =
+      shared::encode_base64(write_model_params_to_json(model_predicted_var,
+                                                       model_feature_vars,
+                                                       select_query_,
+                                                       data_split_train_fraction,
+                                                       data_split_eval_fraction));
   if (!first_options_arg) {
     // The options string does not have a trailing comma,
     // so add it
