@@ -784,6 +784,8 @@ endif()
 list(APPEND SANITY_TESTS ${SANITY_TEST_PROGRAMS})
 set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "_sanity_")
 
+add_custom_target(sanity_tests_build_only DEPENDS init_test_dir ${SANITY_TEST_PROGRAMS})
+
 add_custom_target(sanity_tests
     COMMAND env AWS_REGION=${AWS_REGION}
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
