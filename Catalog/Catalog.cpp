@@ -6669,6 +6669,7 @@ void Catalog::initializeMLModelMetadataSystemTable() {
                             {"num_physical_features", {kBIGINT}},
                             {"num_categorical_features", {kBIGINT}},
                             {"num_numeric_features", {kBIGINT}},
+                            {"train_fraction", {kDOUBLE}},
                             {"eval_fraction", {kDOUBLE}}},
                            true);
   recreateSystemTableIfUpdated(foreign_table, columns);

@@ -1730,7 +1730,7 @@ TEST_F(SystemTablesShowCreateTableTest, MLModels) {
         "DICT(32),\n  "
         "num_logical_features BIGINT,\n  num_physical_features BIGINT,\n  "
         "num_categorical_features BIGINT,\n  num_numeric_features BIGINT,\n  "
-        "eval_fraction DOUBLE);"}});
+        "train_fraction DOUBLE,\n  eval_fraction DOUBLE);"}});
 }
 
 TEST_F(SystemTablesShowCreateTableTest, ServerLogs) {
@@ -3000,7 +3000,7 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
 
   void assertExpectedQueryFormat(const TQueryResult& result) const {
     ASSERT_EQ(result.row_set.is_columnar, true);
-    ASSERT_EQ(result.row_set.columns.size(), 10UL);
+    ASSERT_EQ(result.row_set.columns.size(), 11UL);
     ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::STR);
     ASSERT_EQ(result.row_set.row_desc[0].col_name, "model_name");
     ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::STR);
@@ -3020,7 +3020,9 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
     ASSERT_EQ(result.row_set.row_desc[8].col_type.type, TDatumType::BIGINT);
     ASSERT_EQ(result.row_set.row_desc[8].col_name, "num_numeric_features");
     ASSERT_EQ(result.row_set.row_desc[9].col_type.type, TDatumType::DOUBLE);
-    ASSERT_EQ(result.row_set.row_desc[9].col_name, "eval_fraction");
+    ASSERT_EQ(result.row_set.row_desc[9].col_name, "train_fraction");
+    ASSERT_EQ(result.row_set.row_desc[10].col_type.type, TDatumType::DOUBLE);
+    ASSERT_EQ(result.row_set.row_desc[10].col_name, "eval_fraction");
   }
 
   void assertExpectedQuery(TQueryResult& result,
@@ -3037,6 +3039,7 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
                              i(1),
                              i(0),
                              i(1),
+                             double(1.0),
                              double(0.0)}},
                            result);
     } else if (!has_linear_reg_model && has_random_forest_reg_model) {
@@ -3049,6 +3052,7 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
                              i(1),
                              i(0),
                              i(1),
+                             double(1.0),
                              double(0.0)}},
                            result);
     } else if (has_linear_reg_model && has_random_forest_reg_model) {
@@ -3061,6 +3065,7 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
                              i(1),
                              i(0),
                              i(1),
+                             double(1.0),
                              double(0.0)},
                             {"RF_TEST_MODEL",
                              "Random Forest Regression",
@@ -3071,6 +3076,7 @@ class ShowModelDetailsDdlTest : public DBHandlerTestFixture {
                              i(1),
                              i(0),
                              i(1),
+                             double(1.0),
                              double(0.0)}},
                            result);
     } else {
@@ -4455,6 +4461,7 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
                         i(1),
                         i(0),
                         i(1),
+                        double(1.0),
                         double(0.0)}});
   switchToAdmin();
 
@@ -4480,6 +4487,7 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
                         i(1),
                         i(0),
                         i(1),
+                        double(1.0),
                         double(0.0)}});
 
   switchToAdmin();
@@ -4505,6 +4513,7 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
                         i(1),
                         i(0),
                         i(1),
+                        double(1.0),
                         double(0.0)}});
   switchToAdmin();
   // Now create or replace model by same name but without projection aliases, should throw
@@ -4529,6 +4538,7 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
                         i(1),
                         i(0),
                         i(1),
+                        double(1.0),
                         double(0.0)}});
 
   switchToAdmin();
@@ -4557,6 +4567,32 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
         i(1),
         i(0),
         i(1),
+        double(0.5),
+        double(0.5)}});
+
+  switchToAdmin();
+  // Now do the same with a test fraction
+  const std::string create_or_replace_model3_stmt =
+      "CREATE OR REPLACE MODEL model_test OF TYPE LINEAR_REG AS SELECT generate_series * "
+      "12.0 AS y2, "
+      "generate_series * 3.0 AS x2 FROM TABLE(generate_series(1, 100)) WITH "
+      "(preferred_ml_framework='" +
+      ml_framework + "', train_fraction=0.5);";
+  sql(create_or_replace_model3_stmt);
+  loginInformationSchema();
+  sqlAndCompareResult(
+      "SELECT * FROM ml_models;",
+      {{"MODEL_TEST",
+        "Linear Regression",
+        "y2",
+        array({"x2"}),
+        "SELECT generate_series * 12.0 AS y2, generate_series * 3.0 AS x2 FROM "
+        "TABLE(generate_series(1, 100))",
+        i(1),
+        i(1),
+        i(0),
+        i(1),
+        double(0.5),
         double(0.5)}});
 
   switchToAdmin();

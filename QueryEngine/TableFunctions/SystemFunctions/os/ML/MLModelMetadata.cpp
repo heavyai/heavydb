@@ -41,6 +41,12 @@ void MLModelMetadata::extractModelMetadata(const std::string& model_metadata_jso
   } else {
     features_.resize(num_logical_features, "");
   }
+  if (model_metadata_doc.HasMember("data_split_train_fraction") &&
+      model_metadata_doc["data_split_train_fraction"].IsDouble()) {
+    // Extract the double value
+    data_split_train_fraction_ =
+        model_metadata_doc["data_split_train_fraction"].GetDouble();
+  }
   if (model_metadata_doc.HasMember("data_split_eval_fraction") &&
       model_metadata_doc["data_split_eval_fraction"].IsDouble()) {
     // Extract the double value

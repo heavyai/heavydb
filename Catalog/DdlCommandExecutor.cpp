@@ -2104,6 +2104,7 @@ ExecutionResult ShowModelDetailsCommand::execute(bool read_only_mode) {
   label_infos.emplace_back("num_physical_features", SQLTypeInfo(kBIGINT, true));
   label_infos.emplace_back("num_categorical_features", SQLTypeInfo(kBIGINT, true));
   label_infos.emplace_back("num_numeric_features", SQLTypeInfo(kBIGINT, true));
+  label_infos.emplace_back("train_fraction", SQLTypeInfo(kDOUBLE, true));
   label_infos.emplace_back("eval_fraction", SQLTypeInfo(kDOUBLE, true));
 
   // Get all model names
@@ -2139,6 +2140,8 @@ ExecutionResult ShowModelDetailsCommand::execute(bool read_only_mode) {
     logical_values.back().emplace_back(
         genLiteralBigInt(model_metadata.getNumLogicalFeatures() -
                          model_metadata.getNumCategoricalFeatures()));
+    logical_values.back().emplace_back(
+        genLiteralDouble(model_metadata.getDataSplitTrainFraction()));
     logical_values.back().emplace_back(
         genLiteralDouble(model_metadata.getDataSplitEvalFraction()));
   }
