@@ -289,6 +289,9 @@ class ShowModelDetailsCommand : public DdlCommand {
   std::vector<std::string> getFilteredModelNames();
 };
 
+class AbstractMLModel;
+class MLModelMetadata;
+
 class ShowModelFeatureDetailsCommand : public DdlCommand {
  public:
   ShowModelFeatureDetailsCommand(
@@ -296,6 +299,19 @@ class ShowModelFeatureDetailsCommand : public DdlCommand {
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
   ExecutionResult execute(bool read_only_mode) override;
+
+ private:
+  std::vector<TargetMetaInfo> prepareLabelInfos() const;
+  std::pair<std::vector<double>, std::vector<std::vector<double>>> extractExtraMetadata(
+      std::shared_ptr<AbstractMLModel> model,
+      std::vector<TargetMetaInfo>& label_infos) const;
+
+  std::vector<RelLogicalValues::RowValues> prepareLogicalValues(
+      const MLModelMetadata& model_metadata,
+      const std::vector<std::vector<std::string>>& cat_sub_features,
+      std::vector<double>& extra_metadata,
+      const std::vector<std::vector<double>>& eigenvectors,
+      const std::vector<int64_t>& inverse_permutations) const;
 };
 
 class EvaluateModelCommand : public DdlCommand {

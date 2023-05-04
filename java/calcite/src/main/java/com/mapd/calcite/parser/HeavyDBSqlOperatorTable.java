@@ -779,7 +779,6 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
         throw new IllegalArgumentException(
                 "At least 2 arguments are required, the model name and one or more predictors.");
       }
-      Boolean first_numeric_argument_found = false;
       for (int operand_idx = 0; operand_idx < num_operands; operand_idx++) {
         final SqlNode operand = callBinding.operand(operand_idx);
         final SqlTypeName operand_type =
@@ -800,16 +799,6 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
                       || operand_type_family == SqlTypeFamily.CHARACTER)) {
             throw new IllegalArgumentException(
                     "Only TEXT and NUMERIC predictors are supported.");
-          }
-          if (operand_type_family == SqlTypeFamily.NUMERIC) {
-            first_numeric_argument_found = true;
-          } else {
-            if (first_numeric_argument_found) {
-              // We've already seen a numeric arg and now have a
-              // text arg, but all text arguments must be up front
-              throw new IllegalArgumentException(
-                      "Categorical predictors of type TEXT must precede numeric predictors.");
-            }
           }
         }
       }
@@ -853,7 +842,6 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
         throw new IllegalArgumentException(
                 "At least 3 arguments are required, the model name, one or more features, and the nth principal component to project to.");
       }
-      Boolean first_numeric_argument_found = false;
       for (int operand_idx = 0; operand_idx < num_operands; operand_idx++) {
         final SqlNode operand = callBinding.operand(operand_idx);
         final SqlTypeName operand_type =
@@ -874,25 +862,11 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
             throw new IllegalArgumentException(
                     "Only TEXT and NUMERIC features are supported.");
           }
-          if (operand_type_family == SqlTypeFamily.NUMERIC) {
-            first_numeric_argument_found = true;
-          } else {
-            if (first_numeric_argument_found) {
-              // We've already seen a numeric arg and now have a
-              // text arg, but all text arguments must be up front
-              throw new IllegalArgumentException(
-                      "Categorical features of type TEXT must precede numeric features.");
-            }
-          }
-        } else {
-          if (!operand.isA(EnumSet.of(SqlKind.LITERAL))) {
-            throw new IllegalArgumentException(
-                    "Last argument to PCA_PROJECT expects integer literal dimension index.");
-          }
-          if (!(operand_type_family == SqlTypeFamily.NUMERIC)) {
-            throw new IllegalArgumentException(
-                    "Last argument to PCA_PROJECT expects integer literal dimension index.");
-          }
+        } else if (!operand.isA(EnumSet.of(SqlKind.LITERAL))
+                || !(operand_type_family == SqlTypeFamily.NUMERIC)
+                || !(operand_type.equals(SqlTypeName.INTEGER))) {
+          throw new IllegalArgumentException(
+                  "Last argument to PCA_PROJECT expects integer literal dimension index.");
         }
       }
       return true;

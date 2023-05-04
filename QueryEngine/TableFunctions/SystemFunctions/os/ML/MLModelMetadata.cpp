@@ -53,4 +53,12 @@ void MLModelMetadata::extractModelMetadata(const std::string& model_metadata_jso
     data_split_eval_fraction_ =
         model_metadata_doc["data_split_eval_fraction"].GetDouble();
   }
+  if (model_metadata_doc.HasMember("feature_permutations") &&
+      model_metadata_doc["feature_permutations"].IsArray()) {
+    const rapidjson::Value& feature_permutations_array =
+        model_metadata_doc["feature_permutations"];
+    for (const auto& feature_permutation : feature_permutations_array.GetArray()) {
+      feature_permutations_.emplace_back(feature_permutation.GetInt64());
+    }
+  }
 }

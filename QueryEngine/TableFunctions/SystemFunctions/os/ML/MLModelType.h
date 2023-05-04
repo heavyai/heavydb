@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "Shared/misc.h"
+
 #include <string>
 
 enum MLModelType { LINEAR_REG, DECISION_TREE_REG, GBT_REG, RANDOM_FOREST_REG, PCA };
@@ -63,8 +65,8 @@ inline MLModelType get_ml_model_type_from_str(const std::string& model_type_str)
 }
 
 inline bool is_regression_model(const MLModelType model_type) {
-  return model_type == MLModelType::LINEAR_REG ||
-         model_type == MLModelType::DECISION_TREE_REG ||
-         model_type == MLModelType::GBT_REG ||
-         model_type == MLModelType::RANDOM_FOREST_REG;
+  return shared::is_any<MLModelType::LINEAR_REG,
+                        MLModelType::DECISION_TREE_REG,
+                        MLModelType::GBT_REG,
+                        MLModelType::RANDOM_FOREST_REG>(model_type);
 }

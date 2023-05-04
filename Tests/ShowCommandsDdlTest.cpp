@@ -3103,22 +3103,26 @@ class ShowModelFeatureDetailsDdlTest : public DBHandlerTestFixture {
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     switchToAdmin();
-    sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP MODEL IF EXISTS lin_reg_test_model_1;");
+    sql("DROP MODEL IF EXISTS lin_reg_test_model_2;");
     sql("DROP MODEL IF EXISTS rf_test_model;");
     sql("DROP MODEL IF EXISTS gbt_test_model;");
     sql("DROP MODEL IF EXISTS dt_test_model;");
     sql("DROP MODEL IF EXISTS pca_test_model;");
-    sql("DROP TABLE IF EXISTS test_table;");
+    sql("DROP TABLE IF EXISTS test_table_1;");
+    sql("DROP TABLE IF EXISTS test_table_2;");
   }
 
   void TearDown() override {
     switchToAdmin();
-    sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP MODEL IF EXISTS lin_reg_test_model_1;");
+    sql("DROP MODEL IF EXISTS lin_reg_test_model_2;");
     sql("DROP MODEL IF EXISTS rf_test_model;");
     sql("DROP MODEL IF EXISTS gbt_test_model;");
     sql("DROP MODEL IF EXISTS dt_test_model;");
     sql("DROP MODEL IF EXISTS pca_test_model;");
-    sql("DROP TABLE IF EXISTS test_table;");
+    sql("DROP TABLE IF EXISTS test_table_1;");
+    sql("DROP TABLE IF EXISTS test_table_2;");
     DBHandlerTestFixture::TearDown();
   }
 
@@ -3216,6 +3220,50 @@ class ShowModelFeatureDetailsDdlTest : public DBHandlerTestFixture {
     }
   }
 
+  void assertExpectedQueryResultsLinearRegCatFeatureFirst(TQueryResult& result) {
+    const auto row_count = getRowCount(result);
+    EXPECT_EQ(row_count, size_t(4));
+    const auto col_count = getColumnCount(result);
+    EXPECT_EQ(col_count, size_t(5));
+    const std::vector<int64_t> expected_feature_ids = {0, 1, 1, 2};
+    const std::vector<std::string> expected_feature_names = {
+        "intercept", "cat_predictor", "cat_predictor", "numeric_predictor"};
+    const std::vector<int64_t> expected_sub_feature_ids = {1, 1, 2, 1};
+    const std::vector<std::string> expected_sub_feature_names = {"", "one", "two", ""};
+    const std::vector<double> expected_coefs = {
+        20.741142915998175, -19.905714293888618, -9.905714198521192, 0.8862856946672704};
+    for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      auto result_row = getRow(result, row_idx);
+      EXPECT_EQ(result_row[0].val.int_val, expected_feature_ids[row_idx]);
+      EXPECT_EQ(result_row[1].val.str_val, expected_feature_names[row_idx]);
+      EXPECT_EQ(result_row[2].val.int_val, expected_sub_feature_ids[row_idx]);
+      EXPECT_EQ(result_row[3].val.str_val, expected_sub_feature_names[row_idx]);
+      EXPECT_NEAR(result_row[4].val.real_val, expected_coefs[row_idx], 0.01);
+    }
+  }
+
+  void assertExpectedQueryResultsLinearRegNumericFeatureFirst(TQueryResult& result) {
+    const auto row_count = getRowCount(result);
+    EXPECT_EQ(row_count, size_t(4));
+    const auto col_count = getColumnCount(result);
+    EXPECT_EQ(col_count, size_t(5));
+    const std::vector<int64_t> expected_feature_ids = {0, 1, 2, 2};
+    const std::vector<std::string> expected_feature_names = {
+        "intercept", "numeric_predictor", "cat_predictor", "cat_predictor"};
+    const std::vector<int64_t> expected_sub_feature_ids = {1, 1, 1, 2};
+    const std::vector<std::string> expected_sub_feature_names = {"", "", "one", "two"};
+    const std::vector<double> expected_coefs = {
+        20.741142915998175, 0.8862856946672704, -19.905714293888618, -9.905714198521192};
+    for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      auto result_row = getRow(result, row_idx);
+      EXPECT_EQ(result_row[0].val.int_val, expected_feature_ids[row_idx]);
+      EXPECT_EQ(result_row[1].val.str_val, expected_feature_names[row_idx]);
+      EXPECT_EQ(result_row[2].val.int_val, expected_sub_feature_ids[row_idx]);
+      EXPECT_EQ(result_row[3].val.str_val, expected_sub_feature_names[row_idx]);
+      EXPECT_NEAR(result_row[4].val.real_val, expected_coefs[row_idx], 0.01);
+    }
+  }
+
   void assertExpectedQueryResultsRandomForestReg(TQueryResult& result) {
     const auto row_count = getRowCount(result);
     EXPECT_EQ(row_count, size_t(1));
@@ -3225,15 +3273,15 @@ class ShowModelFeatureDetailsDdlTest : public DBHandlerTestFixture {
     const std::vector<std::string> expected_feature_names = {"predictor"};
     const std::vector<int64_t> expected_sub_feature_ids = {1};
     const std::vector<std::string> expected_sub_feature_names = {""};
-    const std::vector<double> expected_feature_importances = {1.706679964179994};
     for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
       auto result_row = getRow(result, row_idx);
       EXPECT_EQ(result_row[0].val.int_val, expected_feature_ids[row_idx]);
       EXPECT_EQ(result_row[1].val.str_val, expected_feature_names[row_idx]);
       EXPECT_EQ(result_row[2].val.int_val, expected_sub_feature_ids[row_idx]);
       EXPECT_EQ(result_row[3].val.str_val, expected_sub_feature_names[row_idx]);
-      EXPECT_NEAR(
-          result_row[4].val.real_val, expected_feature_importances[row_idx], 0.01);
+      // Only test the feature importance is positive, since the exact value is
+      // indeterminate between runs
+      EXPECT_GT(result_row[4].val.real_val, 0.0);
     }
   }
 
@@ -3276,41 +3324,64 @@ class ShowModelFeatureDetailsDdlTest : public DBHandlerTestFixture {
     }
   }
 
-  static void createTestTable() {
-    sql("CREATE TABLE test_table ( predicted float, predictor int );");
-    sql("INSERT INTO test_table VALUES (2.0, 1), (3.1, 2), (2.9, 3), (4.1, 4), (4.9, 5), "
+  static void createTestTables() {
+    sql("CREATE TABLE test_table_1 ( predicted float, predictor int );");
+    sql("INSERT INTO test_table_1 VALUES (2.0, 1), (3.1, 2), (2.9, 3), (4.1, 4), (4.9, "
+        "5), "
         "(6.1, 6), (7.1, 7), (8.0, 8), (8.9, 9), (10.0, 10);");
+    sql("CREATE TABLE test_table_2 ( predicted float, numeric_predictor int, "
+        "cat_predictor text );");
+    sql("INSERT INTO test_table_2 VALUES (2.0, 1, 'one'), (3.1, 2, 'one'), (2.9, 3, "
+        "'one'), (4.1, 4, 'one'), (4.9, 5, 'one'), "
+        "(6.1, 6, 'one'), (7.1, 7, 'one'), (8.0, 8, 'one'), (8.9, 9, 'one'), (10.0, 10, "
+        "'one'), "
+        "(12.0, 1, 'two'), (13.1, 2, 'two'), (12.9, 3, 'two'), (14.1, 4, 'two'), (14.9, "
+        "5, 'two'), "
+        "(16.1, 6, 'two'), (17.1, 7, 'two'), (18.0, 8, 'two'), (18.9, 9, 'two'), (20.0, "
+        "10, 'two'), "
+        "(22.0, 1, 'three'), (23.1, 2, 'three'), (22.9, 3, 'three'), (24.1, 4, 'three'), "
+        "(24.9, 5, 'three');");
   }
 
   static void createLinearRegTestModel() {
-    sql("CREATE MODEL lin_reg_test_model OF TYPE LINEAR_REG AS SELECT predicted, "
-        "predictor FROM test_table;");
+    sql("CREATE MODEL lin_reg_test_model_1 OF TYPE LINEAR_REG AS SELECT predicted, "
+        "predictor FROM test_table_1;");
+  }
+
+  static void createLinearRegTestModelCatNumericFeatures(const bool cat_predictor_first) {
+    if (cat_predictor_first) {
+      sql("CREATE MODEL lin_reg_test_model_2 OF TYPE LINEAR_REG AS SELECT predicted, "
+          "cat_predictor, numeric_predictor FROM test_table_2;");
+    } else {
+      sql("CREATE MODEL lin_reg_test_model_2 OF TYPE LINEAR_REG AS SELECT predicted, "
+          "numeric_predictor, cat_predictor FROM test_table_2;");
+    }
   }
 
   static void createRandomForestTestModel() {
     sql("CREATE MODEL rf_test_model OF TYPE RANDOM_FOREST_REG AS SELECT predicted, "
-        "predictor FROM test_table;");
+        "predictor FROM test_table_1;");
   }
 
   static void createGbtTestModel() {
     sql("CREATE MODEL gbt_test_model OF TYPE GBT_REG AS SELECT predicted, "
-        "predictor FROM test_table;");
+        "predictor FROM test_table_1;");
   }
 
   static void createDecisionTreeTestModel() {
     sql("CREATE MODEL dt_test_model OF TYPE DECISION_TREE_REG AS SELECT predicted, "
-        "predictor FROM test_table;");
+        "predictor FROM test_table_1;");
   }
 
   static void createPcaTestModel() {
     sql("CREATE MODEL pca_test_model OF TYPE PCA AS SELECT predicted, "
-        "predictor FROM test_table;");
+        "predictor FROM test_table_1;");
   }
 };
 
 TEST_F(ShowModelFeatureDetailsDdlTest, MissingModel) {
   TQueryResult result;
-  EXPECT_ANY_THROW(sql(result, "SHOW MODEL FEATURE DETAILS lin_reg_test_model;"));
+  EXPECT_ANY_THROW(sql(result, "SHOW MODEL FEATURE DETAILS lin_reg_test_model_1;"));
 }
 
 TEST_F(ShowModelFeatureDetailsDdlTest, CreateLinearRegModel) {
@@ -3319,10 +3390,10 @@ TEST_F(ShowModelFeatureDetailsDdlTest, CreateLinearRegModel) {
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
-  createTestTable();
+  createTestTables();
   createLinearRegTestModel();
   TQueryResult result;
-  sql(result, "SHOW MODEL FEATURE DETAILS lin_reg_test_model;");
+  sql(result, "SHOW MODEL FEATURE DETAILS lin_reg_test_model_1;");
   assertExpectedQueryFormatLinearReg(result);
   assertExpectedQueryResultsLinearReg(result);
 }
@@ -3333,7 +3404,7 @@ TEST_F(ShowModelFeatureDetailsDdlTest, CreateRandomForestRegModel) {
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
-  createTestTable();
+  createTestTables();
   createRandomForestTestModel();
   TQueryResult result;
   sql(result, "SHOW MODEL FEATURE DETAILS rf_test_model;");
@@ -3347,7 +3418,7 @@ TEST_F(ShowModelFeatureDetailsDdlTest, CreateDecisionTreeModel) {
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
-  createTestTable();
+  createTestTables();
   createDecisionTreeTestModel();
   TQueryResult result;
   sql(result, "SHOW MODEL FEATURE DETAILS dt_test_model;");
@@ -3361,7 +3432,7 @@ TEST_F(ShowModelFeatureDetailsDdlTest, CreateGBTModel) {
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
-  createTestTable();
+  createTestTables();
   createGbtTestModel();
   TQueryResult result;
   sql(result, "SHOW MODEL FEATURE DETAILS gbt_test_model;");
@@ -3375,11 +3446,39 @@ TEST_F(ShowModelFeatureDetailsDdlTest, CreatePCAModel) {
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
-  createTestTable();
+  createTestTables();
   createPcaTestModel();
   TQueryResult result;
   sql(result, "SHOW MODEL FEATURE DETAILS pca_test_model;");
   assertExpectedQueryFormatPca(result);
+}
+
+TEST_F(ShowModelFeatureDetailsDdlTest, CreateLinearRegModelCatFeatureFirst) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTables();
+  createLinearRegTestModelCatNumericFeatures(true);
+  TQueryResult result;
+  sql(result, "SHOW MODEL FEATURE DETAILS lin_reg_test_model_2;");
+  assertExpectedQueryFormatLinearReg(result);
+  assertExpectedQueryResultsLinearRegCatFeatureFirst(result);
+}
+
+TEST_F(ShowModelFeatureDetailsDdlTest, CreateLinearRegModelNumericFeatureFirst) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTables();
+  createLinearRegTestModelCatNumericFeatures(false);
+  TQueryResult result;
+  sql(result, "SHOW MODEL FEATURE DETAILS lin_reg_test_model_2;");
+  assertExpectedQueryFormatLinearReg(result);
+  assertExpectedQueryResultsLinearRegNumericFeatureFirst(result);
 }
 
 class EvaluateModelDdlTest : public DBHandlerTestFixture {
@@ -3387,18 +3486,22 @@ class EvaluateModelDdlTest : public DBHandlerTestFixture {
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     switchToAdmin();
-    sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP MODEL IF EXISTS lin_reg_test_model_1;");
+    sql("DROP MODEL IF EXISTS lin_reg_test_model_2;");
     sql("DROP MODEL IF EXISTS rand_forest_test_model;");
     sql("DROP MODEL IF EXISTS pca_test_model;");
-    sql("DROP TABLE IF EXISTS test_table;");
+    sql("DROP TABLE IF EXISTS test_table_1;");
+    sql("DROP TABLE IF EXISTS test_table_2;");
   }
 
   void TearDown() override {
     switchToAdmin();
-    sql("DROP MODEL IF EXISTS lin_reg_test_model;");
+    sql("DROP MODEL IF EXISTS lin_reg_test_model_1;");
+    sql("DROP MODEL IF EXISTS lin_reg_test_model_2;");
     sql("DROP MODEL IF EXISTS rand_forest_test_model;");
     sql("DROP MODEL IF EXISTS pca_test_model;");
-    sql("DROP TABLE IF EXISTS test_table;");
+    sql("DROP TABLE IF EXISTS test_table_1;");
+    sql("DROP TABLE IF EXISTS test_table_2;");
     DBHandlerTestFixture::TearDown();
   }
 
@@ -3435,40 +3538,59 @@ class EvaluateModelDdlTest : public DBHandlerTestFixture {
     ASSERT_LE(actual_r2_value, expected_r2 + allowed_epsilon);
   }
 
-  static void createTestTable() {
-    sql("CREATE TABLE test_table ( predicted float, predictor int );");
-    sql("INSERT INTO test_table VALUES (2.0, 1);");
-    sql("INSERT INTO test_table VALUES (3.1, 2);");
-    sql("INSERT INTO test_table VALUES (3.9, 3);");
-    sql("INSERT INTO test_table VALUES (5.1, 4);");
-    sql("INSERT INTO test_table VALUES (6.1, 5);");
-    sql("INSERT INTO test_table VALUES (7.0, 6);");
-    sql("INSERT INTO test_table VALUES (8.0, 7);");
-    sql("INSERT INTO test_table VALUES (8.9, 8);");
-    sql("INSERT INTO test_table VALUES (9.0, 9);");
-    sql("INSERT INTO test_table VALUES (10.1, 10);");
+  static void createTestTables() {
+    sql("CREATE TABLE test_table_1 ( predicted float, predictor int );");
+    sql("INSERT INTO test_table_1 VALUES (2.0, 1), (3.1, 2), (2.9, 3), (4.1, 4), (4.9, "
+        "5), "
+        "(6.1, 6), (7.1, 7), (8.0, 8), (8.9, 9), (10.0, 10);");
+    sql("CREATE TABLE test_table_2 ( predicted float, numeric_predictor int, "
+        "cat_predictor text );");
+    sql("INSERT INTO test_table_2 VALUES (2.0, 1, 'one'), (3.1, 2, 'one'), (2.9, 3, "
+        "'one'), (4.1, 4, 'one'), (4.9, 5, 'one'), "
+        "(6.1, 6, 'one'), (7.1, 7, 'one'), (8.0, 8, 'one'), (8.9, 9, 'one'), (10.0, 10, "
+        "'one'), "
+        "(12.0, 1, 'two'), (13.1, 2, 'two'), (12.9, 3, 'two'), (14.1, 4, 'two'), (14.9, "
+        "5, 'two'), "
+        "(16.1, 6, 'two'), (17.1, 7, 'two'), (18.0, 8, 'two'), (18.9, 9, 'two'), (20.0, "
+        "10, 'two'), "
+        "(22.0, 1, 'three'), (23.1, 2, 'three'), (22.9, 3, 'three'), (24.1, 4, 'three'), "
+        "(24.9, 5, 'three');");
   }
+
   static void createLinearRegTestModel() {
-    sql("CREATE OR REPLACE MODEL lin_reg_test_model OF TYPE LINEAR_REG AS SELECT "
+    sql("CREATE OR REPLACE MODEL lin_reg_test_model_1 OF TYPE LINEAR_REG AS SELECT "
         "predicted, "
-        "predictor FROM test_table;");
+        "predictor FROM test_table_1;");
+  }
+
+  static void createLinearRegTestModelCatNumericFeaturesWithEvalFraction(
+      const bool cat_predictor_first) {
+    if (cat_predictor_first) {
+      sql("CREATE OR REPLACE MODEL lin_reg_test_model_2 OF TYPE LINEAR_REG AS SELECT "
+          "predicted, cat_predictor, numeric_predictor FROM test_table_2 WITH "
+          "(EVAL_FRACTION=0.2);");
+    } else {
+      sql("CREATE OR REPLACE MODEL lin_reg_test_model_2 OF TYPE LINEAR_REG AS SELECT "
+          "predicted, numeric_predictor, cat_predictor FROM test_table_2 WITH "
+          "(EVAL_FRACTION=0.2);");
+    }
   }
 
   static void createLinearRegTestModelWithEvalFraction() {
-    sql("CREATE OR REPLACE MODEL lin_reg_test_model OF TYPE LINEAR_REG AS SELECT "
+    sql("CREATE OR REPLACE MODEL lin_reg_test_model_1 OF TYPE LINEAR_REG AS SELECT "
         "predicted, "
-        "predictor FROM test_table WITH (eval_fraction=0.2);");
+        "predictor FROM test_table_1 WITH (eval_fraction=0.2);");
   }
 
   static void createRandomForestRegTestModelWithDataSplitEvalFraction() {
     sql("CREATE OR REPLACE MODEL rand_forest_test_model OF TYPE RANDOM_FOREST_REG AS "
         "SELECT predicted, "
-        "predictor FROM test_table WITH (data_split_eval_fraction=0.2, num_trees=4);");
+        "predictor FROM test_table_1 WITH (data_split_eval_fraction=0.2, num_trees=4);");
   }
   static void createPCATestModelWithDataSplitEvalFraction() {
     sql("CREATE OR REPLACE MODEL pca_test_model OF TYPE PCA AS "
         "SELECT predicted, "
-        "predictor FROM test_table WITH (data_split_eval_fraction=0.2);");
+        "predictor FROM test_table_1 WITH (data_split_eval_fraction=0.2);");
   }
 };
 
@@ -3478,13 +3600,45 @@ TEST_F(EvaluateModelDdlTest, TestModelR2) {
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
-  createTestTable();
+  createTestTables();
   createLinearRegTestModel();
   TQueryResult result;
   sql(result,
-      "EVALUATE MODEL lin_reg_test_model ON SELECT predicted, predictor FROM "
-      "test_table;");
+      "EVALUATE MODEL lin_reg_test_model_1 ON SELECT predicted, predictor FROM "
+      "test_table_1;");
   assertExpectedQuery(result, 0.989081, 0.01);
+}
+
+TEST_F(EvaluateModelDdlTest, TestModelR2CatFeatureFirst) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTables();
+  createLinearRegTestModelCatNumericFeaturesWithEvalFraction(
+      true /* cat_predictor_first */);
+  TQueryResult result;
+  sql(result,
+      "EVALUATE MODEL lin_reg_test_model_2 ON SELECT predicted, cat_predictor, "
+      "numeric_predictor FROM test_table_2;");
+  assertExpectedQuery(result, 0.997792, 0.01);
+}
+
+TEST_F(EvaluateModelDdlTest, TestModelR2NumericFeatureFirst) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTables();
+  createLinearRegTestModelCatNumericFeaturesWithEvalFraction(
+      false /* cat_predictor_first */);
+  TQueryResult result;
+  sql(result,
+      "EVALUATE MODEL lin_reg_test_model_2 ON SELECT predicted, numeric_predictor, "
+      "cat_predictor FROM test_table_2;");
+  assertExpectedQuery(result, 0.997792, 0.01);
 }
 
 TEST_F(EvaluateModelDdlTest, EvalModelNoEvalSet) {
@@ -3493,10 +3647,10 @@ TEST_F(EvaluateModelDdlTest, EvalModelNoEvalSet) {
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
-  createTestTable();
+  createTestTables();
   createLinearRegTestModel();
   TQueryResult result;
-  EXPECT_ANY_THROW(sql(result, "EVALUATE MODEL lin_reg_test_model"););
+  EXPECT_ANY_THROW(sql(result, "EVALUATE MODEL lin_reg_test_model_1"););
 }
 
 TEST_F(EvaluateModelDdlTest, EvalModelPCA) {
@@ -3505,7 +3659,7 @@ TEST_F(EvaluateModelDdlTest, EvalModelPCA) {
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
-  createTestTable();
+  createTestTables();
   createPCATestModelWithDataSplitEvalFraction();
   TQueryResult result;
   // This should throw with:
@@ -3519,11 +3673,39 @@ TEST_F(EvaluateModelDdlTest, EvalModelEvalFraction) {
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
-  createTestTable();
+  createTestTables();
   createLinearRegTestModelWithEvalFraction();
   TQueryResult result;
-  sql(result, "EVALUATE MODEL lin_reg_test_model");
-  assertExpectedQuery(result, 0.946093, 0.01);
+  sql(result, "EVALUATE MODEL lin_reg_test_model_1");
+  assertExpectedQuery(result, 0.992112, 0.01);
+}
+
+TEST_F(EvaluateModelDdlTest, EvalModelEvalFractionCatFeatureFirst) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTables();
+  createLinearRegTestModelCatNumericFeaturesWithEvalFraction(
+      true /* cat_predictor_first */);
+  TQueryResult result;
+  sql(result, "EVALUATE MODEL lin_reg_test_model_2;");
+  assertExpectedQuery(result, 0.997745, 0.01);
+}
+
+TEST_F(EvaluateModelDdlTest, EvalModelEvalFractionNumericFeatureFirst) {
+  if (isDistributedMode()) {
+    // We currenntly cannot create models in distributed mode as table functions
+    // are not yet supported for distributed, so skip this test for distributed
+    GTEST_SKIP() << "ML Models not supported in distributed mode.";
+  }
+  createTestTables();
+  createLinearRegTestModelCatNumericFeaturesWithEvalFraction(
+      false /* cat_predictor_first */);
+  TQueryResult result;
+  sql(result, "EVALUATE MODEL lin_reg_test_model_2;");
+  assertExpectedQuery(result, 0.997745, 0.01);
 }
 
 TEST_F(EvaluateModelDdlTest, EvalModelDataSplitEvalFraction) {
@@ -3532,7 +3714,7 @@ TEST_F(EvaluateModelDdlTest, EvalModelDataSplitEvalFraction) {
     // are not yet supported for distributed, so skip this test for distributed
     GTEST_SKIP() << "ML Models not supported in distributed mode.";
   }
-  createTestTable();
+  createTestTables();
   createRandomForestRegTestModelWithDataSplitEvalFraction();
   TQueryResult result;
   sql(result, "EVALUATE MODEL rand_forest_test_model");
@@ -4442,6 +4624,7 @@ TEST_F(SystemTablesTest, CreateOrReplaceModel) {
   return;
 #endif
   switchToAdmin();
+  sql("DROP MODEL IF EXISTS model_test;");
   // Create new model
   const std::string create_model1_stmt =
       "CREATE MODEL model_test OF TYPE LINEAR_REG AS SELECT generate_series * 2.0 AS y, "

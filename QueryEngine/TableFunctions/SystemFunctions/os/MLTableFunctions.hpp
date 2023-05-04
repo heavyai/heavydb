@@ -1470,17 +1470,20 @@ pca_fit_impl(TableFunctionManager& mgr,
     const auto features_ptrs =
         pluck_ptrs(denulled_data.data, 0L, input_features.numCols());
     // z_std_normalize_data_with_summary_stats can throw if std dev is 0
-    const auto [normalized_data, feature_means, feature_std_devs] =
+    const auto z_std_norm_summary_stats =
         z_std_normalize_data_with_summary_stats(denulled_data.data, num_rows);
-    const auto normalized_ptrs = pluck_ptrs(normalized_data, 0L, normalized_data.size());
+    const auto normalized_ptrs =
+        pluck_ptrs(z_std_norm_summary_stats.normalized_data,
+                   0L,
+                   z_std_norm_summary_stats.normalized_data.size());
     bool did_execute = false;
 #ifdef HAVE_ONEDAL
     if (preferred_ml_framework == MLFramework::ONEDAL ||
         preferred_ml_framework == MLFramework::DEFAULT) {
       const auto [eigenvectors, eigenvalues] =
           onedal_pca_impl(normalized_ptrs, denulled_data.masked_num_rows);
-      auto model = std::make_shared<PcaModel>(feature_means,
-                                              feature_std_devs,
+      auto model = std::make_shared<PcaModel>(z_std_norm_summary_stats.means,
+                                              z_std_norm_summary_stats.std_devs,
                                               eigenvectors,
                                               eigenvalues,
                                               model_metadata,

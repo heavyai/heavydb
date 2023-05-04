@@ -30,6 +30,7 @@
 std::vector<std::shared_ptr<Analyzer::Expr>> generated_encoded_and_casted_features(
     const std::vector<std::shared_ptr<Analyzer::Expr>>& feature_exprs,
     const std::vector<std::vector<std::string>>& cat_feature_keys,
+    const std::vector<int64_t>& feature_permutations,
     Executor* executor) {
   std::vector<std::shared_ptr<Analyzer::Expr>> casted_feature_exprs;
   const size_t num_feature_exprs = feature_exprs.size();
@@ -45,7 +46,11 @@ std::vector<std::shared_ptr<Analyzer::Expr>> generated_encoded_and_casted_featur
     return makeExpr<Analyzer::Constant>(SQLTypeInfo(kINT, false), false, d);
   };
 
-  for (size_t feature_idx = 0; feature_idx < num_feature_exprs; ++feature_idx) {
+  for (size_t original_feature_idx = 0; original_feature_idx < num_feature_exprs;
+       ++original_feature_idx) {
+    const auto feature_idx = feature_permutations.empty()
+                                 ? original_feature_idx
+                                 : feature_permutations[original_feature_idx];
     auto& feature_expr = feature_exprs[feature_idx];
     const auto& feature_ti = feature_expr->get_type_info();
     if (feature_ti.is_number()) {
@@ -60,12 +65,12 @@ std::vector<std::shared_ptr<Analyzer::Expr>> generated_encoded_and_casted_featur
       if (!feature_ti.is_text_encoding_dict()) {
         throw std::runtime_error("Expected dictionary-encoded text column.");
       }
-      if (feature_idx >= num_cat_features) {
+      if (original_feature_idx >= num_cat_features) {
         throw std::runtime_error("Model not trained on text type for column.");
       }
       const auto& str_dict_key = feature_ti.getStringDictKey();
       const auto str_dict_proxy = executor->getStringDictionaryProxy(str_dict_key, true);
-      for (const auto& cat_feature_key : cat_feature_keys[feature_idx]) {
+      for (const auto& cat_feature_key : cat_feature_keys[original_feature_idx]) {
         // For one-hot encoded columns, null values will translate as a 0.0 and not a null
         // We are computing the following:
         // CASE WHEN str_val is NULL then 0.0 ELSE
@@ -129,7 +134,10 @@ llvm::Value* CodeGenerator::codegenLinRegPredict(
   const auto& regressor_exprs = expr->get_regressor_values();
 
   const auto casted_regressor_exprs = generated_encoded_and_casted_features(
-      regressor_exprs, cat_feature_keys, executor());
+      regressor_exprs,
+      cat_feature_keys,
+      linear_reg_model->getModelMetadata().getFeaturePermutations(),
+      executor());
 
   auto get_double_constant_expr = [](double const_val) {
     Datum d;
@@ -186,7 +194,10 @@ llvm::Value* CodeGenerator::codegenTreeRegPredict(
   const auto& regressor_exprs = expr->get_regressor_values();
   const auto& cat_feature_keys = tree_model->getCatFeatureKeys();
   const auto casted_regressor_exprs = generated_encoded_and_casted_features(
-      regressor_exprs, cat_feature_keys, executor());
+      regressor_exprs,
+      cat_feature_keys,
+      tree_model->getModelMetadata().getFeaturePermutations(),
+      executor());
   // We cast all regressors to double for simplicity and to match
   // how feature filters are stored in the tree model.
   // Null checks are handled further down in the generated kernel
@@ -366,8 +377,11 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::PCAProjectExpr* expr,
 
   const auto& cat_feature_keys = pca_model->getCatFeatureKeys();
 
-  const auto casted_feature_exprs =
-      generated_encoded_and_casted_features(feature_exprs, cat_feature_keys, executor());
+  const auto casted_feature_exprs = generated_encoded_and_casted_features(
+      feature_exprs,
+      cat_feature_keys,
+      pca_model->getModelMetadata().getFeaturePermutations(),
+      executor());
 
   auto get_double_constant_expr = [](double const_val) {
     Datum d;

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "MLModelMetadata.h"
 #include "MLModelType.h"
 
 #include <string>
@@ -34,7 +35,17 @@ class AbstractMLModel {
   virtual std::string getModelTypeString() const = 0;
   virtual int64_t getNumFeatures() const = 0;
   virtual ~AbstractMLModel() = default;
-  const std::string& getModelMetadata() const { return model_metadata_; }
+  const std::string& getModelMetadataStr() const { return model_metadata_; }
+  MLModelMetadata getModelMetadata() const {
+    return MLModelMetadata("",
+                           getModelType(),
+                           getModelTypeString(),
+                           getNumLogicalFeatures(),
+                           getNumFeatures(),
+                           getNumCatFeatures(),
+                           getNumLogicalFeatures() - getNumCatFeatures(),
+                           getModelMetadataStr());
+  }
   const std::vector<std::vector<std::string>>& getCatFeatureKeys() const {
     return cat_feature_keys_;
   }

@@ -804,6 +804,45 @@ TEST_F(MLTableFunctionsTest, PCA) {
                         1e-2);
           }
         }
+        const std::string pca_project_substr(
+            "PCA_PROJECT(" + quoted_model_name +
+            ", petal_length_cm, petal_width_cm, sepal_length_cm, sepal_width_cm");
+        const std::string pca_project_query(
+            "SELECT petal_length_cm, petal_width_cm, sepal_length_cm, sepal_width_cm, " +
+            pca_project_substr + ", 1) AS pca_1, " + pca_project_substr +
+            ", 2) AS pca_2, " + pca_project_substr + ", 3) AS pca_3, " +
+            pca_project_substr + ", 4) AS pca_4 FROM ml_iris;");
+        const auto pca_project_rows = run_multiple_agg(pca_project_query, dt);
+        EXPECT_EQ(pca_project_rows->colCount(), size_t(8));
+        const auto num_rows = pca_project_rows->rowCount();
+        EXPECT_EQ(num_rows,
+                  static_cast<size_t>(TestHelpers::v<int64_t>(
+                      run_simple_agg("SELECT COUNT(*) FROM ml_iris", dt))));
+        const auto& col_means = pca_model->getColumnMeans();
+        const auto& col_std_devs = pca_model->getColumnStdDevs();
+
+        for (size_t row_idx = 0; row_idx < num_rows; ++row_idx) {
+          auto crt_row = pca_project_rows->getNextRow(true, true);
+          std::vector<double> scaled_input_features;
+          for (size_t input_feature_idx = 0; input_feature_idx < 4; ++input_feature_idx) {
+            scaled_input_features.emplace_back(
+                (TestHelpers::v<float>(crt_row[input_feature_idx]) -
+                 col_means[input_feature_idx]) /
+                col_std_devs[input_feature_idx]);
+          }
+          for (size_t pca_component_idx = 0; pca_component_idx < 4; ++pca_component_idx) {
+            double expected_pca_project = 0.0;
+            for (size_t input_feature_idx = 0; input_feature_idx < 4;
+                 ++input_feature_idx) {
+              expected_pca_project += scaled_input_features[input_feature_idx] *
+                                      eigenvectors[pca_component_idx][input_feature_idx];
+            }
+            // Offset by 4 as pca features are stored after actual features
+            EXPECT_NEAR(TestHelpers::v<double>(crt_row[pca_component_idx + 4]),
+                        expected_pca_project,
+                        1e-2);
+          }
+        }
       }
     }
   }
@@ -1659,36 +1698,54 @@ TEST_P(MLCategoricalRegressionFunctionsTest, ML_PREDICT) {
       continue;
     }
     for (std::string numeric_data_type : {"DOUBLE"}) {
-      const std::string train_query(
-          "SELECT * FROM TABLE(" + model_fit_func + "(model_name =>'" + model_name +
-          "', "
-          "preferred_ml_framework=>" +
-          ml_framework +
-          ", data=>CURSOR(select  price, state, title_status, paint_color, "
-          "condition_, year_, odometer FROM craigslist_f150s WHERE SAMPLE_RATIO(0.5)), "
-          " cat_top_k=>50, cat_min_fraction=>0.001));");
-      const std::string row_wise_predict_query(
-          "SELECT AVG(ML_PREDICT('" + model_name +
-          "', state, title_status, paint_color, condition_, year_, odometer)) "
-          "FROM craigslist_f150s WHERE NOT SAMPLE_RATIO(0.5);");
-      const std::string tf_predict_query(
-          "SELECT AVG(prediction) FROM TABLE(ML_REG_PREDICT(model_name =>'" + model_name +
-          "', "
-          "preferred_ml_framework=>" +
-          ml_framework +
-          ", "
-          "data=>CURSOR(SELECT rowid, state, title_status, paint_color, condition_, "
-          "year_, odometer FROM craigslist_f150s WHERE NOT SAMPLE_RATIO(0.5))));");
+      // Test two different orders of features, one categorical predictors first and the
+      // other in mixed order
+      const std::string features_ordering_1 =
+          "state, title_status, paint_color, condition_, "
+          "year_, odometer";
+      const std::string features_ordering_2 =
+          "year_, state, title_status, odometer, "
+          "paint_color, condition_";
+      for (std::string features_order : {features_ordering_1, features_ordering_2}) {
+        const std::string train_query("CREATE OR REPLACE MODEL " + model_name +
+                                      " OF TYPE " + model_type_str +
+                                      " AS "
+                                      "SELECT price, " +
+                                      features_order +
+                                      " FROM craigslist_f150s WITH ("
+                                      "EVAL_FRACTION=0.5, PREFERRED_ML_FRAMEWORK=" +
+                                      ml_framework +
+                                      ", CAT_TOP_K=50, "
+                                      "CAT_MIN_FRACTION=0.001);");
+        const std::string row_wise_predict_query("SELECT AVG(ML_PREDICT('" + model_name +
+                                                 "', " + features_order +
+                                                 ")) "
+                                                 " FROM craigslist_f150s "
+                                                 "WHERE NOT SAMPLE_RATIO(0.5);");
+        // We can't reorder direct calls to ML_REG_PREDICT TF, so need to use
+        // features_ordering_1, which is the same order that ML_PREDICT
+        const std::string tf_predict_query(
+            "SELECT AVG(prediction) FROM TABLE(ML_REG_PREDICT(model_name =>'" +
+            model_name +
+            "', "
+            "preferred_ml_framework=>" +
+            ml_framework +
+            ", "
+            "data=>CURSOR(SELECT rowid, " +
+            features_ordering_1 +
+            " FROM craigslist_f150s "
+            "WHERE NOT SAMPLE_RATIO(0.5))));");
 
-      for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-        SKIP_NO_GPU();
-        EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
-        const auto row_wise_prediction_avg =
-            TestHelpers::v<double>(run_simple_agg(row_wise_predict_query, dt));
-        const auto tf_prediction_avg =
-            TestHelpers::v<double>(run_simple_agg(tf_predict_query, dt));
-        EXPECT_GE(row_wise_prediction_avg, tf_prediction_avg - allowed_epsilon);
-        EXPECT_LE(row_wise_prediction_avg, tf_prediction_avg + allowed_epsilon);
+        for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+          SKIP_NO_GPU();
+          EXPECT_NO_THROW(run_ddl_statement(train_query));
+          const auto row_wise_prediction_avg =
+              TestHelpers::v<double>(run_simple_agg(row_wise_predict_query, dt));
+          const auto tf_prediction_avg =
+              TestHelpers::v<double>(run_simple_agg(tf_predict_query, dt));
+          EXPECT_GE(row_wise_prediction_avg, tf_prediction_avg - allowed_epsilon);
+          EXPECT_LE(row_wise_prediction_avg, tf_prediction_avg + allowed_epsilon);
+        }
       }
     }
   }

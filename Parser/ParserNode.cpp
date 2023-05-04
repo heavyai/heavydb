@@ -3470,7 +3470,8 @@ std::string write_model_params_to_json(const std::string& predicted,
                                        const std::vector<std::string>& features,
                                        const std::string& training_query,
                                        const double data_split_train_fraction,
-                                       const double data_split_eval_fraction) {
+                                       const double data_split_eval_fraction,
+                                       const std::vector<int64_t>& feature_permutations) {
   // Create a RapidJSON document
   rapidjson::Document doc;
   doc.SetObject();
@@ -3509,6 +3510,14 @@ std::string write_model_params_to_json(const std::string& predicted,
   doc.AddMember(
       data_split_eval_fraction_key, data_split_eval_fraction_value, doc.GetAllocator());
 
+  rapidjson::Value feature_permutations_array(rapidjson::kArrayType);
+  for (const auto& feature_permutation : feature_permutations) {
+    rapidjson::Value feature_permutation_value;
+    feature_permutation_value.SetInt64(feature_permutation);
+    feature_permutations_array.PushBack(feature_permutation_value, doc.GetAllocator());
+  }
+  doc.AddMember("feature_permutations", feature_permutations_array, doc.GetAllocator());
+
   // Convert the document to a JSON string
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
@@ -3517,10 +3526,12 @@ std::string write_model_params_to_json(const std::string& predicted,
   return buffer.GetString();
 }
 
-void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session) {
+bool CreateModelStmt::check_model_exists() {
   if (g_ml_models.modelExists(get_model_name())) {
     if (if_not_exists_) {
-      return;
+      // Returning true tells the caller we should just return early and silently (without
+      // error)
+      return true;
     }
     if (!replace_) {
       std::ostringstream error_oss;
@@ -3528,98 +3539,85 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
       throw std::runtime_error(error_oss.str());
     }
   }
+  // Returning false tells the caller all is clear to proceed with the create model,
+  // whether that means creating a new one or overwriting an existing model
+  return false;
+}
 
-  const std::string model_train_func = get_ml_model_type_str(model_type_) + "_FIT";
-  std::ostringstream options_oss;
-
-  bool first_options_arg = true;
-
-  const std::unordered_set<std::string> excluded_options_set = {
-      "eval_fraction",
-      "data_split_eval_fraction",
-      "train_fraction",
-      "data_split_train_fraction"};
-  double data_split_train_fraction = 1.0;
-  double data_split_eval_fraction = 0.0;
+void CreateModelStmt::parse_model_options() {
   bool train_fraction_specified = false;
   bool eval_fraction_specified = false;
-  if (!model_options_.empty()) {
-    for (auto& p : model_options_) {
-      const auto key = boost::to_lower_copy<std::string>(*p->get_name());
-      if (excluded_options_set.find(key) != excluded_options_set.end()) {
-        if (key == "train_fraction" || key == "data_split_train_fraction") {
-          if (train_fraction_specified) {
-            throw std::runtime_error(
-                "Error parsing DATA_SPLIT_TRAIN_FRACTION value. "
-                "Expected only one value.");
-          }
-          const DoubleLiteral* fp_literal =
-              dynamic_cast<const DoubleLiteral*>(p->get_value());
-          if (fp_literal != nullptr) {
-            data_split_train_fraction = fp_literal->get_doubleval();
-            if (data_split_train_fraction <= 0.0 || data_split_train_fraction > 1.0) {
-              throw std::runtime_error(
-                  "Error parsing DATA_SPLIT_TRAIN_FRACTION value. "
-                  "Expected value between 0.0 and 1.0.");
-            }
-          } else {
-            throw std::runtime_error(
-                "Error parsing DATA_SPLIT_TRAIN_FRACTION value. "
-                "Expected floating point value betwen 0.0 and 1.0.");
-          }
-          train_fraction_specified = true;
-        }
-        if (key == "eval_fraction" || key == "data_split_eval_fraction") {
-          if (eval_fraction_specified) {
-            throw std::runtime_error(
-                "Error parsing DATA_SPLIT_EVAL_FRACTION value. "
-                "Expected only one value.");
-          }
-          const DoubleLiteral* fp_literal =
-              dynamic_cast<const DoubleLiteral*>(p->get_value());
-          if (fp_literal != nullptr) {
-            data_split_eval_fraction = fp_literal->get_doubleval();
-            if (data_split_eval_fraction < 0.0 || data_split_eval_fraction >= 1.0) {
-              throw std::runtime_error(
-                  "Error parsing DATA_SPLIT_EVAL_FRACTION value. "
-                  "Expected value between 0.0 and 1.0.");
-            }
-          } else {
-            throw std::runtime_error(
-                "Error parsing DATA_SPLIT_EVAL_FRACTION value. "
-                "Expected floating point value betwen 0.0 and 1.0.");
-          }
-          eval_fraction_specified = true;
-        }
-        continue;
-      }
-      if (!first_options_arg) {
-        options_oss << ", ";
-      } else {
-        first_options_arg = false;
-      }
-      options_oss << key << " => ";
-      const StringLiteral* str_literal =
-          dynamic_cast<const StringLiteral*>(p->get_value());
-      if (str_literal != nullptr) {
-        options_oss << "'"
-                    << boost::to_lower_copy<std::string>(*str_literal->get_stringval())
-                    << "'";
-        continue;
-      }
-      const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
-      if (int_literal != nullptr) {
-        options_oss << int_literal->get_intval();
-        continue;
+  for (auto& p : model_options_) {
+    const auto key = boost::to_lower_copy<std::string>(*p->get_name());
+    if (key == "train_fraction" || key == "data_split_train_fraction") {
+      if (train_fraction_specified) {
+        throw std::runtime_error(
+            "Error parsing DATA_SPLIT_TRAIN_FRACTION value. "
+            "Expected only one value.");
       }
       const DoubleLiteral* fp_literal =
           dynamic_cast<const DoubleLiteral*>(p->get_value());
       if (fp_literal != nullptr) {
-        options_oss << fp_literal->get_doubleval();
-        continue;
+        data_split_train_fraction_ = fp_literal->get_doubleval();
+        if (data_split_train_fraction_ <= 0.0 || data_split_train_fraction_ > 1.0) {
+          throw std::runtime_error(
+              "Error parsing DATA_SPLIT_TRAIN_FRACTION value. "
+              "Expected value between 0.0 and 1.0.");
+        }
+      } else {
+        throw std::runtime_error(
+            "Error parsing DATA_SPLIT_TRAIN_FRACTION value. "
+            "Expected floating point value betwen 0.0 and 1.0.");
       }
-      throw std::runtime_error("Error parsing value.");
+      train_fraction_specified = true;
+      continue;
     }
+    if (key == "eval_fraction" || key == "data_split_eval_fraction") {
+      if (eval_fraction_specified) {
+        throw std::runtime_error(
+            "Error parsing DATA_SPLIT_EVAL_FRACTION value. "
+            "Expected only one value.");
+      }
+      const DoubleLiteral* fp_literal =
+          dynamic_cast<const DoubleLiteral*>(p->get_value());
+      if (fp_literal != nullptr) {
+        data_split_eval_fraction_ = fp_literal->get_doubleval();
+        if (data_split_eval_fraction_ < 0.0 || data_split_eval_fraction_ >= 1.0) {
+          throw std::runtime_error(
+              "Error parsing DATA_SPLIT_EVAL_FRACTION value. "
+              "Expected value between 0.0 and 1.0.");
+        }
+      } else {
+        throw std::runtime_error(
+            "Error parsing DATA_SPLIT_EVAL_FRACTION value. "
+            "Expected floating point value betwen 0.0 and 1.0.");
+      }
+      eval_fraction_specified = true;
+      continue;
+    }
+    if (num_options_) {
+      options_oss_ << ", ";
+    }
+    num_options_++;
+    options_oss_ << key << " => ";
+    const StringLiteral* str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+    if (str_literal != nullptr) {
+      options_oss_ << "'"
+                   << boost::to_lower_copy<std::string>(*str_literal->get_stringval())
+                   << "'";
+      continue;
+    }
+    const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+    if (int_literal != nullptr) {
+      options_oss_ << int_literal->get_intval();
+      continue;
+    }
+    const DoubleLiteral* fp_literal = dynamic_cast<const DoubleLiteral*>(p->get_value());
+    if (fp_literal != nullptr) {
+      options_oss_ << fp_literal->get_doubleval();
+      continue;
+    }
+    throw std::runtime_error("Error parsing value.");
   }
 
   // First handle case where data_split_train_fraction was left to default value
@@ -3628,52 +3626,41 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
   // Likewise if data_split_eval_fraction was left to default value and we have
   // a specified data_split_train_fraction, we should set data_split_eval_fraction
   // to 1.0 - data_split_train_fraction
-  if (data_split_eval_fraction > 0.0 && data_split_train_fraction == 1.0) {
-    data_split_train_fraction = 1.0 - data_split_eval_fraction;
-  } else if (data_split_eval_fraction == 0.0 && data_split_train_fraction < 1.0) {
-    data_split_eval_fraction = 1.0 - data_split_train_fraction;
+  if (data_split_eval_fraction_ > 0.0 && data_split_train_fraction_ == 1.0) {
+    data_split_train_fraction_ = 1.0 - data_split_eval_fraction_;
+  } else if (data_split_eval_fraction_ == 0.0 && data_split_train_fraction_ < 1.0) {
+    data_split_eval_fraction_ = 1.0 - data_split_train_fraction_;
   }
 
   // If data_split_train_fraction was specified, and data_split_train_fraction +
   // data_split_eval_fraction > 1.0, then we should error
-  if (data_split_eval_fraction + data_split_train_fraction > 1.0) {
+  if (data_split_eval_fraction_ + data_split_train_fraction_ > 1.0) {
     throw std::runtime_error(
         "Error parsing DATA_SPLIT_TRAIN_FRACTION and DATA_SPLIT_EVAL_FRACTION values. "
         "Expected sum of values to be less than or equal to 1.0.");
   }
-
-  auto session_copy = session;
-  auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
-      &session_copy, boost::null_deleter());
-  auto modified_select_query = select_query_;
-  if (data_split_train_fraction < 1.0) {
-    std::ostringstream modified_query_oss;
-    modified_query_oss << "SELECT * FROM (" << modified_select_query
-                       << ") WHERE SAMPLE_RATIO(" << data_split_train_fraction << ")";
-    modified_select_query = modified_query_oss.str();
-  }
-
-  auto validate_query_state =
-      query_state::QueryState::create(session_ptr, modified_select_query);
+}
+std::string CreateModelStmt::build_model_query(
+    const std::shared_ptr<Catalog_Namespace::SessionInfo> session_ptr) {
+  auto validate_query_state = query_state::QueryState::create(session_ptr, select_query_);
 
   LocalQueryConnector local_connector;
 
-  auto validate_result =
-      local_connector.query(validate_query_state->createQueryStateProxy(),
-                            modified_select_query,
-                            {},
-                            true,
-                            false);
+  auto validate_result = local_connector.query(
+      validate_query_state->createQueryStateProxy(), select_query_, {}, true, false);
 
   auto column_descriptors_for_model_create =
       local_connector.getColumnDescriptors(validate_result, true);
 
-  std::string model_predicted_var;
-  std::vector<std::string> model_feature_vars;
+  std::vector<size_t> categorical_feature_idxs;
+  std::vector<size_t> numeric_feature_idxs;
+  bool numeric_feature_seen = false;
+  bool all_categorical_features_placed_first = true;
   bool model_has_predicted_var = is_regression_model(model_type_);
-  model_feature_vars.reserve(column_descriptors_for_model_create.size() -
-                             (model_has_predicted_var ? 1 : 0));
+  model_feature_vars_.reserve(column_descriptors_for_model_create.size() -
+                              (model_has_predicted_var ? 1 : 0));
   bool is_predicted = model_has_predicted_var ? true : false;
+  size_t feature_idx = 0;
   for (auto& cd : column_descriptors_for_model_create) {
     // Check to see if the projected column is an expression without a user-provided
     // alias, as we don't allow this.
@@ -3683,12 +3670,83 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
           "col) must be aliased.");
     }
     if (is_predicted) {
-      model_predicted_var = cd.columnName;
+      model_predicted_var_ = cd.columnName;
+      if (!cd.columnType.is_number()) {
+        throw std::runtime_error(
+            "Numeric predicted column expression should be first argument to CREATE "
+            "MODEL.");
+      }
       is_predicted = false;
     } else {
-      model_feature_vars.emplace_back(cd.columnName);
+      if (cd.columnType.is_number()) {
+        numeric_feature_idxs.emplace_back(feature_idx);
+        numeric_feature_seen = true;
+      } else if (cd.columnType.is_string()) {
+        categorical_feature_idxs.emplace_back(feature_idx);
+        if (numeric_feature_seen) {
+          all_categorical_features_placed_first = false;
+        }
+      } else {
+        throw std::runtime_error("Feature column expression should be numeric or TEXT.");
+      }
+      model_feature_vars_.emplace_back(cd.columnName);
+      feature_idx++;
     }
   }
+  auto modified_select_query = select_query_;
+  if (!all_categorical_features_placed_first) {
+    std::ostringstream modified_query_oss;
+    modified_query_oss << "SELECT ";
+    if (model_has_predicted_var) {
+      modified_query_oss << model_predicted_var_ << ", ";
+    }
+    for (auto categorical_feature_idx : categorical_feature_idxs) {
+      modified_query_oss << model_feature_vars_[categorical_feature_idx] << ", ";
+      feature_permutations_.emplace_back(static_cast<int64_t>(categorical_feature_idx));
+    }
+    for (auto numeric_feature_idx : numeric_feature_idxs) {
+      modified_query_oss << model_feature_vars_[numeric_feature_idx];
+      feature_permutations_.emplace_back(static_cast<int64_t>(numeric_feature_idx));
+      if (numeric_feature_idx != numeric_feature_idxs.back()) {
+        modified_query_oss << ", ";
+      }
+    }
+    modified_query_oss << " FROM (" << modified_select_query << ")";
+    modified_select_query = modified_query_oss.str();
+  }
+
+  if (data_split_train_fraction_ < 1.0) {
+    std::ostringstream modified_query_oss;
+    if (all_categorical_features_placed_first) {
+      modified_query_oss << "SELECT * FROM (" << modified_select_query << ")";
+    } else {
+      modified_query_oss << modified_select_query;
+    }
+    modified_query_oss << " WHERE SAMPLE_RATIO(" << data_split_train_fraction_ << ")";
+    modified_select_query = modified_query_oss.str();
+  }
+  return modified_select_query;
+}
+
+void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session) {
+  if (check_model_exists()) {
+    // Will return true if model exists and if_not_exists_ is true, in this
+    // case we should return only
+    return;
+  }
+
+  parse_model_options();
+
+  auto session_copy = session;
+  auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
+      &session_copy, boost::null_deleter());
+
+  // We need to do various manipulations on the raw select query, such
+  // as adding in any sampling or feature permutation logic. All of this
+  // work is encapsulated in build_model_query
+
+  const auto modified_select_query = build_model_query(session_ptr);
+
   // We have to base64 encode the model metadata because depending on the query,
   // the training data can have single quotes that trips up the parsing of the combined
   // select query with this metadata embedded.
@@ -3697,19 +3755,22 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
   // rather than in the stored model pointer itself (and have to pass the metadata
   // down through the table function call)
   const auto model_metadata =
-      shared::encode_base64(write_model_params_to_json(model_predicted_var,
-                                                       model_feature_vars,
+      shared::encode_base64(write_model_params_to_json(model_predicted_var_,
+                                                       model_feature_vars_,
                                                        select_query_,
-                                                       data_split_train_fraction,
-                                                       data_split_eval_fraction));
-  if (!first_options_arg) {
+                                                       data_split_train_fraction_,
+                                                       data_split_eval_fraction_,
+                                                       feature_permutations_));
+  if (num_options_) {
     // The options string does not have a trailing comma,
     // so add it
-    options_oss << ", ";
+    options_oss_ << ", ";
   }
-  options_oss << "model_metadata => '" << model_metadata << "'";
+  options_oss_ << "model_metadata => '" << model_metadata << "'";
 
-  const std::string options_str = options_oss.str();
+  const std::string options_str = options_oss_.str();
+
+  const std::string model_train_func = get_ml_model_type_str(model_type_) + "_FIT";
 
   std::ostringstream model_query_oss;
   model_query_oss << "SELECT * FROM TABLE(" << model_train_func << "(model_name=>'"
@@ -3720,7 +3781,9 @@ void CreateModelStmt::train_model(const Catalog_Namespace::SessionInfo& session)
 
   std::string wrapped_model_query = model_query_oss.str();
   auto query_state = query_state::QueryState::create(session_ptr, wrapped_model_query);
-  auto result = local_connector.query(
+  // Don't need result back from query, as the query will create the model
+  LocalQueryConnector local_connector;
+  local_connector.query(
       query_state->createQueryStateProxy(), wrapped_model_query, {}, false);
 }
 
@@ -3738,10 +3801,11 @@ void CreateModelStmt::execute(const Catalog_Namespace::SessionInfo& session,
     // Error executing table function: MLTableFunctions.hpp:269 linear_reg_fit_impl: No
     // rows exist in training input. Training input must at least contain 1 row.
 
-    // We want to take everything after the function name, so we will search for the third
-    // colon.
-    // Todo(todd): Look at making this less hacky by setting a mode for the table function
-    // that will return only the core error string and not the preprending metadata
+    // We want to take everything after the function name, so we will search for the
+    // third colon.
+    // Todo(todd): Look at making this less hacky by setting a mode for the table
+    // function that will return only the core error string and not the preprending
+    // metadata
 
     auto get_error_substring = [](const std::string& message) -> std::string {
       size_t colon_position = std::string::npos;
