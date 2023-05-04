@@ -60,16 +60,7 @@ int32_t supported_ml_frameworks__cpu_(TableFunctionManager& mgr,
 std::vector<std::string> get_model_features(
     const std::string& model_name,
     const std::shared_ptr<AbstractMLModel>& model) {
-  MLModelMetadata ml_model_metadata(
-      model_name,
-      model->getModelType(),
-      model->getModelTypeString(),
-      model->getNumLogicalFeatures(),
-      model->getNumFeatures(),
-      model->getNumCatFeatures(),
-      model->getNumLogicalFeatures() - model->getNumCatFeatures(),
-      model->getModelMetadata());
-  return ml_model_metadata.getFeatures();
+  return model->getModelMetadata().getFeatures();
 }
 
 EXTENSION_NOINLINE_HOST int32_t

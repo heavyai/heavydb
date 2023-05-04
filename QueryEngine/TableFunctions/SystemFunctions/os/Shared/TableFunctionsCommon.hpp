@@ -77,9 +77,21 @@ std::vector<std::vector<T>> z_std_normalize_data(const std::vector<T*>& input_da
                                                  const int64_t num_rows);
 
 template <typename T>
-std::tuple<std::vector<std::vector<T>>, std::vector<T>, std::vector<T>>
-z_std_normalize_data_with_summary_stats(const std::vector<T*>& input_data,
-                                        const int64_t num_rows);
+struct ZStdNormalizationSummaryStats {
+  ZStdNormalizationSummaryStats(const std::vector<std::vector<T>>& normalized_data,
+                                const std::vector<T>& means,
+                                const std::vector<T>& std_devs)
+      : normalized_data(normalized_data), means(means), std_devs(std_devs) {}
+
+  std::vector<std::vector<T>> normalized_data;
+  std::vector<T> means;
+  std::vector<T> std_devs;
+};
+
+template <typename T>
+ZStdNormalizationSummaryStats<T> z_std_normalize_data_with_summary_stats(
+    const std::vector<T*>& input_data,
+    const int64_t num_rows);
 
 template <typename T>
 NEVER_INLINE HOST std::tuple<T, T, bool> get_column_metadata(const Column<T>& col);

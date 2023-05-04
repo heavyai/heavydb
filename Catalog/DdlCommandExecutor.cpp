@@ -2196,24 +2196,23 @@ ShowModelFeatureDetailsCommand::ShowModelFeatureDetailsCommand(
   }
 }
 
-ExecutionResult ShowModelFeatureDetailsCommand::execute(bool read_only_mode) {
-  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
-  auto& ddl_payload = extractPayload(ddl_data_);
-  CHECK(ddl_payload.HasMember("modelName")) << "Model name missing.";
-  const auto model_name = ddl_payload["modelName"].GetString();
-  const auto model_metadata = g_ml_models.getModelMetadata(model_name);
-  const auto model_type = model_metadata.getModelType();
+std::vector<TargetMetaInfo> ShowModelFeatureDetailsCommand::prepareLabelInfos() const {
   std::vector<TargetMetaInfo> label_infos;
   label_infos.emplace_back("feature_id", SQLTypeInfo(kBIGINT, true));
   label_infos.emplace_back("feature", SQLTypeInfo(kTEXT, true));
   label_infos.emplace_back("sub_feature_id", SQLTypeInfo(kBIGINT, true));
   label_infos.emplace_back("sub_feature", SQLTypeInfo(kTEXT, true));
+  return label_infos;
+}
+
+std::pair<std::vector<double>, std::vector<std::vector<double>>>
+ShowModelFeatureDetailsCommand::extractExtraMetadata(
+    std::shared_ptr<AbstractMLModel> model,
+    std::vector<TargetMetaInfo>& label_infos) const {
   std::vector<double> extra_metadata;
   std::vector<std::vector<double>> eigenvectors;
-  auto features = model_metadata.getFeatures();
-  const auto model = g_ml_models.getModel(model_name);
-  auto cat_sub_features = model->getCatFeatureKeys();
-  switch (model_type) {
+
+  switch (model->getModelType()) {
     case MLModelType::LINEAR_REG: {
       label_infos.emplace_back("coefficient", SQLTypeInfo(kDOUBLE, true));
       const auto linear_reg_model =
@@ -2238,7 +2237,6 @@ ExecutionResult ShowModelFeatureDetailsCommand::execute(bool read_only_mode) {
       extra_metadata = pca_model->getEigenvalues();
       eigenvectors = pca_model->getEigenvectors();
       CHECK_EQ(eigenvectors.size(), extra_metadata.size());
-
       break;
     }
 #endif  // HAVE_ONEDAL
@@ -2246,8 +2244,19 @@ ExecutionResult ShowModelFeatureDetailsCommand::execute(bool read_only_mode) {
       break;
     }
   }
-  const int64_t num_features = static_cast<int64_t>(features.size());
+
+  return std::make_pair(std::move(extra_metadata), std::move(eigenvectors));
+}
+
+std::vector<RelLogicalValues::RowValues>
+ShowModelFeatureDetailsCommand::prepareLogicalValues(
+    const MLModelMetadata& model_metadata,
+    const std::vector<std::vector<std::string>>& cat_sub_features,
+    std::vector<double>& extra_metadata,
+    const std::vector<std::vector<double>>& eigenvectors,
+    const std::vector<int64_t>& inverse_permutations) const {
   std::vector<RelLogicalValues::RowValues> logical_values;
+  const auto model_type = model_metadata.getModelType();
   if (model_type == MLModelType::LINEAR_REG) {
     logical_values.emplace_back(RelLogicalValues::RowValues{});
     logical_values.back().emplace_back(genLiteralBigInt(0));
@@ -2257,20 +2266,37 @@ ExecutionResult ShowModelFeatureDetailsCommand::execute(bool read_only_mode) {
     logical_values.back().emplace_back(genLiteralDouble(extra_metadata[0]));
     extra_metadata.erase(extra_metadata.begin());
   }
-  int64_t physical_feature_idx = 0;
-  for (int64_t feature_idx = 0; feature_idx < num_features; ++feature_idx) {
+  const auto& features = model_metadata.getFeatures();
+  const int64_t num_features = static_cast<int64_t>(features.size());
+  std::vector<int64_t> physical_feature_idx_prefix_sums = {0};
+  for (int64_t feature_idx = 1; feature_idx < num_features; ++feature_idx) {
+    if (feature_idx - 1 < static_cast<int64_t>(cat_sub_features.size())) {
+      physical_feature_idx_prefix_sums.emplace_back(
+          physical_feature_idx_prefix_sums.back() +
+          static_cast<int64_t>(cat_sub_features[feature_idx - 1].size()));
+    } else {
+      physical_feature_idx_prefix_sums.emplace_back(
+          physical_feature_idx_prefix_sums.back() + 1);
+    }
+  }
+  for (int64_t original_feature_idx = 0; original_feature_idx < num_features;
+       ++original_feature_idx) {
+    const auto feature_idx = inverse_permutations.empty()
+                                 ? original_feature_idx
+                                 : inverse_permutations[original_feature_idx];
     int64_t num_sub_features =
         feature_idx >= static_cast<int64_t>(cat_sub_features.size())
             ? 0
             : static_cast<int64_t>(cat_sub_features[feature_idx].size());
     const bool has_sub_features = num_sub_features > 0;
     num_sub_features = num_sub_features == 0 ? 1 : num_sub_features;
+    int64_t physical_feature_idx = physical_feature_idx_prefix_sums[feature_idx];
     for (int64_t sub_feature_idx = 0; sub_feature_idx < num_sub_features;
          ++sub_feature_idx) {
       logical_values.emplace_back(RelLogicalValues::RowValues{});
       // Make feature id one-based
-      logical_values.back().emplace_back(genLiteralBigInt(feature_idx + 1));
-      logical_values.back().emplace_back(genLiteralStr(features[feature_idx]));
+      logical_values.back().emplace_back(genLiteralBigInt(original_feature_idx + 1));
+      logical_values.back().emplace_back(genLiteralStr(features[original_feature_idx]));
       logical_values.back().emplace_back(genLiteralBigInt(sub_feature_idx + 1));
       if (has_sub_features) {
         logical_values.back().emplace_back(
@@ -2297,6 +2323,38 @@ ExecutionResult ShowModelFeatureDetailsCommand::execute(bool read_only_mode) {
       physical_feature_idx++;
     }
   }
+  return logical_values;
+}
+
+ExecutionResult ShowModelFeatureDetailsCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+  auto& ddl_payload = extractPayload(ddl_data_);
+  CHECK(ddl_payload.HasMember("modelName")) << "Model name missing.";
+  const auto model_name = ddl_payload["modelName"].GetString();
+  const auto model = g_ml_models.getModel(model_name);
+  const auto model_metadata = model->getModelMetadata();
+  // const auto& features = model_metadata.getFeatures();
+  // const auto model_type = model_metadata.getModelType();
+  const auto& feature_permutations = model_metadata.getFeaturePermutations();
+
+  std::vector<int64_t> inverse_permutations(feature_permutations.size());
+  for (int64_t perm_idx = 0; perm_idx < static_cast<int64_t>(feature_permutations.size());
+       ++perm_idx) {
+    inverse_permutations[feature_permutations[perm_idx]] = perm_idx;
+  }
+
+  auto label_infos = prepareLabelInfos();
+  auto [extra_metadata, eigenvectors] = extractExtraMetadata(model, label_infos);
+
+  // Todo(todd): Make cat_sub_features accessible from MLModelMetadata so we don't have to
+  // access and pass it separately
+  const auto& cat_sub_features = model->getCatFeatureKeys();
+  auto logical_values = prepareLogicalValues(model_metadata,
+                                             cat_sub_features,
+                                             extra_metadata,
+                                             eigenvectors,
+                                             inverse_permutations);
+
   // Create ResultSet
   std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
       ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
@@ -2346,15 +2404,55 @@ ExecutionResult EvaluateModelCommand::execute(bool read_only_mode) {
           ". Model was not trained with a data split evaluation fraction.");
     }
     const auto& training_query = model_metadata.getTrainingQuery();
+    const auto& feature_permutations = model_metadata.getFeaturePermutations();
     std::ostringstream select_query_oss;
     // To get a non-overlapping eval dataset (that does not overlap with the training
     // dataset), we need to use NOT SAMPLE_RATIO(training_fraction) and not
     // SAMPLE_RATIO(eval_fraction), as the latter will be a subset of the training
     // dataset
     const double data_split_train_fraction = 1.0 - data_split_eval_fraction;
-    select_query_oss << "SELECT * FROM (" << training_query << ") WHERE NOT SAMPLE_RATIO("
+    select_query_oss << "SELECT ";
+    if (!feature_permutations.empty()) {
+      select_query_oss << model_metadata.getPredicted() << ", ";
+      const auto& features = model_metadata.getFeatures();
+      for (const auto feature_permutation : feature_permutations) {
+        select_query_oss << features[feature_permutation];
+        if (feature_permutation != feature_permutations.back()) {
+          select_query_oss << ", ";
+        }
+      }
+    } else {
+      select_query_oss << " * ";
+    }
+
+    select_query_oss << " FROM (" << training_query << ") WHERE NOT SAMPLE_RATIO("
                      << data_split_train_fraction << ")";
     select_query = select_query_oss.str();
+  } else {
+    const auto& feature_permutations = model_metadata.getFeaturePermutations();
+    if (!feature_permutations.empty()) {
+      Parser::LocalQueryConnector local_connector;
+      auto validate_query_state =
+          query_state::QueryState::create(session_ptr_, select_query);
+      auto validate_result = local_connector.query(
+          validate_query_state->createQueryStateProxy(), select_query, {}, true, false);
+      auto column_descriptors_list =
+          local_connector.getColumnDescriptors(validate_result, true);
+      std::vector<ColumnDescriptor> column_descriptors;
+      for (auto& cd : column_descriptors_list) {
+        column_descriptors.emplace_back(cd);
+      }
+      std::ostringstream select_query_oss;
+      select_query_oss << "SELECT " << model_metadata.getPredicted() << ", ";
+      for (const auto feature_permutation : feature_permutations) {
+        select_query_oss << column_descriptors[feature_permutation + 1].columnName;
+        if (feature_permutation != feature_permutations.back()) {
+          select_query_oss << ", ";
+        }
+      }
+      select_query_oss << " FROM (" << select_query << ")";
+      select_query = select_query_oss.str();
+    }
   }
   std::ostringstream r2_query_oss;
   r2_query_oss << "SELECT * FROM TABLE(r2_score(model_name => '" << model_name << "', "
@@ -2395,10 +2493,10 @@ ExecutionResult EvaluateModelCommand::execute(bool read_only_mode) {
     // Error executing table function: MLTableFunctions.hpp:1416 r2_score_impl: No
     // rows exist in evaluation data. Evaluation data must at least contain 1 row.
 
-    // We want to take everything after the function name, so we will search for the third
-    // colon.
-    // Todo(todd): Look at making this less hacky by setting a mode for the table function
-    // that will return only the core error string and not the preprending metadata
+    // We want to take everything after the function name, so we will search for the
+    // third colon. Todo(todd): Look at making this less hacky by setting a mode for the
+    // table function that will return only the core error string and not the
+    // preprending metadata
 
     auto get_error_substring = [](const std::string& message) -> std::string {
       size_t colon_position = std::string::npos;

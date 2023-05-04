@@ -92,7 +92,7 @@ class MLModelMap {
           model.second->getNumFeatures(),
           model.second->getNumCatFeatures(),
           model.second->getNumLogicalFeatures() - model.second->getNumCatFeatures(),
-          model.second->getModelMetadata()));
+          model.second->getModelMetadataStr()));
     }
     return model_metadata;
   }
@@ -110,7 +110,7 @@ class MLModelMap {
                              model_map_itr->second->getNumCatFeatures(),
                              model_map_itr->second->getNumLogicalFeatures() -
                                  model_map_itr->second->getNumCatFeatures(),
-                             model_map_itr->second->getModelMetadata());
+                             model_map_itr->second->getModelMetadataStr());
     }
     const std::string error_str = "Model '" + upper_model_name + "' does not exist.";
     throw std::runtime_error(error_str);

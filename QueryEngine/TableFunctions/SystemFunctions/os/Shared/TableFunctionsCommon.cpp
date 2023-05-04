@@ -419,9 +419,9 @@ template std::vector<std::vector<double>> z_std_normalize_data(
     const int64_t num_rows);
 
 template <typename T>
-std::tuple<std::vector<std::vector<T>>, std::vector<T>, std::vector<T>>
-z_std_normalize_data_with_summary_stats(const std::vector<T*>& input_data,
-                                        const int64_t num_rows) {
+ZStdNormalizationSummaryStats<T> z_std_normalize_data_with_summary_stats(
+    const std::vector<T*>& input_data,
+    const int64_t num_rows) {
   const int64_t num_features = input_data.size();
   std::vector<std::vector<T>> normalized_data(num_features);
   std::vector<T> means(num_features);
@@ -437,17 +437,15 @@ z_std_normalize_data_with_summary_stats(const std::vector<T*>& input_data,
                         means[feature_idx],
                         std_devs[feature_idx]);
   }
-  return std::make_tuple(normalized_data, means, std_devs);
+  return ZStdNormalizationSummaryStats<T>(normalized_data, means, std_devs);
 }
 
-template std::
-    tuple<std::vector<std::vector<float>>, std::vector<float>, std::vector<float>>
-    z_std_normalize_data_with_summary_stats(const std::vector<float*>& input_data,
-                                            const int64_t num_rows);
-template std::
-    tuple<std::vector<std::vector<double>>, std::vector<double>, std::vector<double>>
-    z_std_normalize_data_with_summary_stats(const std::vector<double*>& input_data,
-                                            const int64_t num_rows);
+template ZStdNormalizationSummaryStats<float> z_std_normalize_data_with_summary_stats(
+    const std::vector<float*>& input_data,
+    const int64_t num_rows);
+template ZStdNormalizationSummaryStats<double> z_std_normalize_data_with_summary_stats(
+    const std::vector<double*>& input_data,
+    const int64_t num_rows);
 
 template <typename T1, typename T2>
 NEVER_INLINE HOST T1

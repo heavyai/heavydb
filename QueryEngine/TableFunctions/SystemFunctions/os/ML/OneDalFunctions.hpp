@@ -28,9 +28,7 @@ using namespace daal::algorithms;
 using namespace daal::data_management;
 
 template <typename T>
-const NumericTablePtr prepare_data_table(const T* data,
-
-                                         const int64_t num_rows) {
+const NumericTablePtr prepare_data_table(const T* data, const int64_t num_rows) {
   // Prepare input data as structure of arrays (SOA) as columnar format (zero-copy)
   const auto data_table = SOANumericTable::create(1 /* num_columns */, num_rows);
   data_table->setArray<T>(const_cast<T*>(data), 0);
@@ -184,19 +182,20 @@ NEVER_INLINE HOST std::pair<std::vector<std::vector<T>>, std::vector<T>> onedal_
     algorithm.compute();
     pca::ResultPtr result = algorithm.getResult();
     const auto eigenvectors_table = result->get(pca::eigenvectors);
-    const int64_t num_vectors = eigenvectors_table->getNumberOfRows();
-    const int64_t num_dims = eigenvectors_table->getNumberOfColumns();
-    std::vector<std::vector<T>> eigenvectors(num_vectors, std::vector<T>(num_dims));
-    for (int64_t vec_idx = 0; vec_idx < num_vectors; ++vec_idx) {
-      for (int64_t dim_idx = 0; dim_idx < num_dims; ++dim_idx) {
-        eigenvectors[vec_idx][dim_idx] =
-            eigenvectors_table->getValue<T>(dim_idx, vec_idx);
+    const int64_t num_dims = eigenvectors_table->getNumberOfRows();
+    CHECK_EQ(num_dims, static_cast<int64_t>(eigenvectors_table->getNumberOfColumns()));
+    std::vector<std::vector<T>> eigenvectors(num_dims, std::vector<T>(num_dims));
+    for (int64_t row_idx = 0; row_idx < num_dims; ++row_idx) {
+      for (int64_t col_idx = 0; col_idx < num_dims; ++col_idx) {
+        // eigenvectors_table is column major, so need to flip the lookup indicies
+        eigenvectors[row_idx][col_idx] =
+            eigenvectors_table->getValue<T>(col_idx, row_idx);
       }
     }
     const auto eigenvalues_table = result->get(pca::eigenvalues);
-    std::vector<T> eigenvalues(num_vectors);
-    for (int64_t vec_idx = 0; vec_idx < num_vectors; ++vec_idx) {
-      eigenvalues[vec_idx] = eigenvalues_table->getValue<T>(vec_idx, 0);
+    std::vector<T> eigenvalues(num_dims);
+    for (int64_t dim_idx = 0; dim_idx < num_dims; ++dim_idx) {
+      eigenvalues[dim_idx] = eigenvalues_table->getValue<T>(dim_idx, 0);
     }
     return std::make_pair(eigenvectors, eigenvalues);
   } catch (std::exception& e) {

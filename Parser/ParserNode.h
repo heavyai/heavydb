@@ -1955,6 +1955,7 @@ class DropDBStmt : public DDLStmt {
  * @type CreateModelStmt
  * @brief CREATE MODEL statement
  */
+
 class CreateModelStmt : public DDLStmt {
  public:
   CreateModelStmt(const rapidjson::Value& payload);
@@ -1972,6 +1973,20 @@ class CreateModelStmt : public DDLStmt {
   bool replace_;
   bool if_not_exists_;
   std::list<std::unique_ptr<NameValueAssign>> model_options_;
+  std::ostringstream options_oss_;
+  size_t num_options_{0};
+  double data_split_train_fraction_{1.0};
+  double data_split_eval_fraction_{0.0};
+  std::string model_predicted_var_;
+  std::vector<std::string> model_feature_vars_;
+  std::vector<int64_t> feature_permutations_;
+
+  bool check_model_exists();
+
+  void parse_model_options();
+
+  std::string build_model_query(
+      const std::shared_ptr<Catalog_Namespace::SessionInfo> session_ptr);
 };
 
 /* @type DropModelStmt

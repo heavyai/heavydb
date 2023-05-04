@@ -56,6 +56,9 @@ class MLModelMetadata {
   const std::string& getTrainingQuery() const { return training_query_; }
   double getDataSplitTrainFraction() const { return data_split_train_fraction_; }
   double getDataSplitEvalFraction() const { return data_split_eval_fraction_; }
+  const std::vector<int64_t>& getFeaturePermutations() const {
+    return feature_permutations_;
+  }
 
  private:
   const std::string model_name_;
@@ -70,4 +73,5 @@ class MLModelMetadata {
   std::string training_query_;
   double data_split_train_fraction_{1.0};
   double data_split_eval_fraction_{0.0};
+  std::vector<int64_t> feature_permutations_;
 };
