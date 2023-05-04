@@ -73,6 +73,26 @@ std::vector<std::string> get_model_features(
 }
 
 EXTENSION_NOINLINE_HOST int32_t
+pca_fit__cpu_1(TableFunctionManager& mgr,
+               const TextEncodingNone& model_name,
+               const ColumnList<TextEncodingDict>& input_cat_features,
+               const int32_t cat_top_k,
+               const float cat_min_fraction,
+               const TextEncodingNone& preferred_ml_framework_str,
+               const TextEncodingNone& model_metadata,
+               Column<TextEncodingDict>& output_model_name) {
+  CategoricalFeaturesBuilder<double> cat_features_builder(
+      input_cat_features, cat_top_k, cat_min_fraction, false /* cat_include_others */);
+  return pca_fit_impl(mgr,
+                      model_name,
+                      cat_features_builder.getFeatures(),
+                      cat_features_builder.getCatFeatureKeys(),
+                      preferred_ml_framework_str,
+                      model_metadata,
+                      output_model_name);
+}
+
+EXTENSION_NOINLINE_HOST int32_t
 linear_reg_coefs__cpu_1(TableFunctionManager& mgr,
                         const TextEncodingNone& model_name,
                         Column<int64_t>& output_coef_idx,

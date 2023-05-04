@@ -1400,7 +1400,70 @@ TEST_P(MLCategoricalRegressionFunctionsTest, ML_PREDICT_CATEGORICAL_FEATURES_MIS
   }
 }
 
-TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT) {
+TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT_CAT_FEATURES_ONLY) {
+  // This test is just to make sure model creation with only categorical features
+  // runs properly.
+  // Actually getting sane results is tested in REG_MODEL_FIT_MIXED_FEATURES
+  const auto model_type = GetParam();
+  const auto model_type_str = get_ml_model_type_str(model_type);
+  const std::string model_name{model_type_str + "_MODEL"};
+  const std::string quoted_model_name{"'" + model_type_str + "_MODEL'"};
+  const std::string model_fit_func{model_type_str + "_FIT"};
+  const auto supported_ml_frameworks = get_supported_ml_frameworks();
+  // const double allowed_epsilon{0.1};
+  for (auto& ml_framework : supported_ml_frameworks) {
+    if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
+      continue;
+    }
+    for (bool use_create_syntax : {false, true}) {
+      for (std::string numeric_data_type : {"DOUBLE"}) {
+        const auto data_query = generate_cursor_query(
+            "craigslist_f150s",
+            "",
+            {"price", "state", "title_status", "paint_color", "condition_"},
+            "",
+            numeric_data_type,
+            !use_create_syntax,
+            0.5,
+            false,
+            false);
+        const auto fit_query =
+            use_create_syntax
+                ? generate_create_model_query(model_type_str,
+                                              model_name,
+                                              data_query,
+                                              {{"preferred_ml_framework", ml_framework},
+                                               {"cat_top_k", "10"},
+                                               {"cat_min_fraction", "0.001"}},
+                                              true)
+                : generate_query(model_fit_func,
+                                 {{"model_name", quoted_model_name},
+                                  {"data", data_query},
+                                  {"preferred_ml_framework", ml_framework},
+                                  {"cat_top_k", "10"},
+                                  {"cat_min_fraction", "0.001"}},
+                                 {"model_name"},
+                                 true);
+        for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+          SKIP_NO_GPU();
+          if (!use_create_syntax) {
+            const auto fit_rows = run_multiple_agg(fit_query, dt);
+            EXPECT_EQ(fit_rows->rowCount(), 1UL);
+            EXPECT_EQ(fit_rows->colCount(), 1UL);
+            auto model_row = fit_rows->getNextRow(true, true);
+            EXPECT_EQ(
+                boost::get<std::string>(TestHelpers::v<NullableString>(model_row[0])),
+                model_name);
+          } else {
+            run_ddl_statement(fit_query);
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT_MIXED_FEATURES) {
   const auto model_type = GetParam();
   const auto model_type_str = get_ml_model_type_str(model_type);
   const std::string model_name{model_type_str + "_MODEL"};
