@@ -12407,6 +12407,37 @@ TEST_F(Select, Joins_EmptyTable) {
   }
 }
 
+TEST_F(Select, Joins_BuildHashTableFromTableWithNullValueOnly) {
+  auto drop_tables = []() {
+    run_ddl_statement("DROP TABLE IF EXISTS nt1;");
+    run_ddl_statement("DROP TABLE IF EXISTS nt2");
+  };
+  drop_tables();
+  run_ddl_statement(
+      "CREATE TABLE nt1 (str1 TEXT ENCODING DICT(32), str2 TEXT ENCODING DICT(32));");
+  run_ddl_statement(
+      "CREATE TABLE nt2 (str1 TEXT ENCODING DICT(32), str2 TEXT ENCODING DICT(32));");
+  run_multiple_agg("INSERT INTO nt1 VALUES('VAL1', 'VAL1');", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO nt1 VALUES('VAL2', 'VAL2');", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO nt2 VALUES('VAL1', 'VAL1');", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO nt2 VALUES(NULL, NULL);", ExecutorDeviceType::CPU);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // perfect join hash table
+    ASSERT_EQ(int64_t(0),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM nt1 WHERE (str1 IN (SELECT "
+                                        "DISTINCT(str1) FROM nt2 WHERE str1 IS NULL));",
+                                        dt)));
+    // baseline join hash table
+    ASSERT_EQ(int64_t(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM nt1 R, (SELECT str1, str2 FROM nt2 WHERE str1 IS "
+                  "NULL) S WHERE R.str1 = S.str1 AND R.str2 = S.str2;",
+                  dt)));
+  }
+  drop_tables();
+}
+
 TEST_F(Select, Joins_FunctionOper) {
   // The g_enable_table_functions flag (neccessary for generate_series)
   // is turned on in main() (and is enabled by default)
