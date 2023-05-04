@@ -38,7 +38,7 @@ void GpuCudaBuffer::readData(int8_t* const dst,
                              const int dst_device_id) {
   if (dst_buffer_type == CPU_LEVEL) {
     cuda_mgr_->copyDeviceToHost(
-        dst, mem_ + offset, num_bytes, device_id_);  // need to replace 0 with gpu num
+        dst, mem_ + offset, num_bytes);  // need to replace 0 with gpu num
   } else if (dst_buffer_type == GPU_LEVEL) {
     cuda_mgr_->copyDeviceToDevice(
         dst, mem_ + offset, num_bytes, dst_device_id, device_id_);

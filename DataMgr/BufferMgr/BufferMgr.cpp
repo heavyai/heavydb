@@ -470,6 +470,7 @@ std::string BufferMgr::printSlabs() {
 }
 
 void BufferMgr::clearSlabs() {
+  std::lock_guard<std::mutex> lock(global_mutex_);
   bool pinned_exists = false;
   for (auto& segment_list : slab_segments_) {
     for (auto& segment : segment_list) {

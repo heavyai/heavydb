@@ -25,6 +25,16 @@ CudaMgr::CudaMgr(const int, const int) : device_count_(-1), start_gpu_(-1) {
 
 CudaMgr::~CudaMgr() {}
 
+size_t CudaMgr::computePaddedBufferSize(size_t buf_size, size_t granularity) const {
+  CHECK(false);
+  return 0;
+}
+
+size_t CudaMgr::getGranularity(const int device_num) const {
+  CHECK(false);
+  return 0;
+}
+
 void CudaMgr::synchronizeDevices() const {
   CHECK(false);
 }
@@ -39,7 +49,6 @@ void CudaMgr::copyHostToDevice(int8_t* device_ptr,
 void CudaMgr::copyDeviceToHost(int8_t* host_ptr,
                                const int8_t* device_ptr,
                                const size_t num_bytes,
-                               const int device_num,
                                CUstream cuda_stream) {
   CHECK(false);
 }
