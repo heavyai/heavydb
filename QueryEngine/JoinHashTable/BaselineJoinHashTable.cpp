@@ -730,15 +730,16 @@ void BaselineJoinHashTable::copyCpuHashTableToGpu(
       cpu_hash_table->getHashTableEntryInfo(), device_id, executor_, query_hints_);
   auto gpu_target_hash_table = builder.getHashTable();
   CHECK(gpu_target_hash_table);
-
   const auto gpu_buff = gpu_target_hash_table->getGpuBuffer();
-  CHECK(gpu_buff);
-  auto allocator = std::make_unique<CudaAllocator>(
-      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-  allocator->copyToDevice(
-      gpu_buff,
-      cpu_hash_table->getCpuBuffer(),
-      cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU));
+  if (gpu_buff) {
+    auto allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
+    allocator->copyToDevice(
+        gpu_buff,
+        cpu_hash_table->getCpuBuffer(),
+        cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU));
+  }
+  CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
   hash_tables_for_device_[device_id] = std::move(gpu_target_hash_table);
 }
 

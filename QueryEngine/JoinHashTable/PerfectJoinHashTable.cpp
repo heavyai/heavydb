@@ -1148,18 +1148,12 @@ void PerfectJoinHashTable::copyCpuHashTableToGpu(
   CHECK(gpu_hash_table);
   auto gpu_buffer_ptr = gpu_hash_table->getGpuBuffer();
   if (gpu_buffer_ptr) {
-    // transfer the hash table iff it is valid, i.e., non-empty hash table
-    CHECK_LE(cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
-             gpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::GPU));
-
     auto device_allocator = std::make_unique<CudaAllocator>(
         data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     device_allocator->copyToDevice(
         gpu_buffer_ptr,
         cpu_hash_table->getCpuBuffer(),
         cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU));
-  } else {
-    CHECK_EQ(hash_table_entry_info.getNumKeys(), size_t(0));
   }
   CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
   hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
