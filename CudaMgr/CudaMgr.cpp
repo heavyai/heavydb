@@ -19,7 +19,6 @@
 #include "Shared/boost_stacktrace.hpp"
 
 #include <algorithm>
-#include <cassert>
 #include <iostream>
 #include <stdexcept>
 
@@ -62,7 +61,7 @@ CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
   fillDeviceProperties();
   initDeviceGroup();
   createDeviceContexts();
-  printDeviceProperties();
+  logDeviceProperties();
 
   // warm up the GPU JIT
   LOG(INFO) << "Warming up the GPU JIT Compiler... (this may take several seconds)";
@@ -82,9 +81,10 @@ CudaMgr::~CudaMgr() {
   try {
     // We don't want to remove the cudaMgr before all other processes have cleaned up.
     // This should be enforced by the lifetime policies, but take this lock to be safe.
-    std::lock_guard<std::mutex> gpu_lock(device_cleanup_mutex_);
-
+    std::lock_guard<std::mutex> device_lock(device_mutex_);
     synchronizeDevices();
+    CHECK(device_memory_allocation_map_.empty());
+
     for (int d = 0; d < device_count_; ++d) {
       checkError(cuCtxDestroy(device_contexts_[d]));
     }
@@ -97,6 +97,21 @@ CudaMgr::~CudaMgr() {
   } catch (const std::runtime_error& e) {
     LOG(ERROR) << "CUDA Error: " << e.what();
   }
+}
+
+size_t CudaMgr::computePaddedBufferSize(size_t buf_size, size_t granularity) const {
+  return (((buf_size + (granularity - 1)) / granularity) * granularity);
+}
+
+size_t CudaMgr::getGranularity(const int device_num) const {
+  CUmemAllocationProp allocation_prop{};
+  allocation_prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+  allocation_prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+  allocation_prop.location.id = device_num;
+  size_t granularity{};
+  checkError(cuMemGetAllocationGranularity(
+      &granularity, &allocation_prop, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
+  return granularity;
 }
 
 void CudaMgr::synchronizeDevices() const {
@@ -125,17 +140,24 @@ void CudaMgr::copyHostToDevice(int8_t* device_ptr,
 void CudaMgr::copyDeviceToHost(int8_t* host_ptr,
                                const int8_t* device_ptr,
                                const size_t num_bytes,
-                               const int device_num,
                                CUstream cuda_stream) {
-  setContext(device_num);
+  // set device_num based on device_ptr
+  auto const cu_device_ptr = reinterpret_cast<CUdeviceptr>(device_ptr);
+  {
+    std::lock_guard<std::mutex> device_lock(device_mutex_);
+    auto itr = device_memory_allocation_map_.upper_bound(cu_device_ptr);
+    CHECK(itr != device_memory_allocation_map_.begin());
+    --itr;
+    auto const& allocation_base = itr->first;
+    auto const& allocation_size = itr->second.size;
+    CHECK_LE(cu_device_ptr + num_bytes, allocation_base + allocation_size);
+    auto const& allocation_device_num = itr->second.device_num;
+    setContext(allocation_device_num);
+  }
   if (!cuda_stream) {
-    checkError(cuMemcpyDtoH(
-        host_ptr, reinterpret_cast<const CUdeviceptr>(device_ptr), num_bytes));
+    checkError(cuMemcpyDtoH(host_ptr, cu_device_ptr, num_bytes));
   } else {
-    checkError(cuMemcpyDtoHAsync(host_ptr,
-                                 reinterpret_cast<const CUdeviceptr>(device_ptr),
-                                 num_bytes,
-                                 cuda_stream));
+    checkError(cuMemcpyDtoHAsync(host_ptr, cu_device_ptr, num_bytes, cuda_stream));
     checkError(cuStreamSynchronize(cuda_stream));
   }
 }
@@ -191,9 +213,8 @@ void CudaMgr::loadGpuModuleData(CUmodule* module,
 }
 
 void CudaMgr::unloadGpuModuleData(CUmodule* module, const int device_id) const {
-  std::lock_guard<std::mutex> gpuLock(device_cleanup_mutex_);
+  std::lock_guard<std::mutex> device_lock(device_mutex_);
   CHECK(module);
-
   setContext(device_id);
   try {
     auto code = cuModuleUnload(*module);
@@ -272,6 +293,9 @@ void CudaMgr::fillDeviceProperties() {
     device_properties_[device_num].memoryBandwidthGBs =
         device_properties_[device_num].memoryClockKhz / 1000000.0 / 8.0 *
         device_properties_[device_num].memoryBusWidth;
+
+    // capture memory allocation granularity
+    device_properties_[device_num].allocationGranularity = getGranularity(device_num);
   }
   min_shared_memory_per_block_for_all_devices =
       computeMinSharedMemoryPerBlockForAllDevices();
@@ -286,20 +310,80 @@ int8_t* CudaMgr::allocatePinnedHostMem(const size_t num_bytes) {
 }
 
 int8_t* CudaMgr::allocateDeviceMem(const size_t num_bytes, const int device_num) {
+  std::lock_guard<std::mutex> map_lock(device_mutex_);
   setContext(device_num);
-  CUdeviceptr device_ptr;
-  checkError(cuMemAlloc(&device_ptr, num_bytes));
+
+  CUdeviceptr device_ptr{};
+  CUmemGenericAllocationHandle handle{};
+  auto granularity = getGranularity(device_num);
+  // reserve the actual memory
+  auto padded_num_bytes = computePaddedBufferSize(num_bytes, granularity);
+  auto status = cuMemAddressReserve(&device_ptr, padded_num_bytes, granularity, 0, 0);
+
+  if (status == CUDA_SUCCESS) {
+    // create a handle for the allocation
+    CUmemAllocationProp allocation_prop{};
+    allocation_prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+    allocation_prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    allocation_prop.requestedHandleTypes = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
+    allocation_prop.location.id = device_num + start_gpu_;
+    status = cuMemCreate(&handle, padded_num_bytes, &allocation_prop, 0);
+
+    if (status == CUDA_SUCCESS) {
+      // map the memory
+      status = cuMemMap(device_ptr, padded_num_bytes, 0, handle, 0);
+
+      if (status == CUDA_SUCCESS) {
+        // set the memory access
+        CUmemAccessDesc access_desc{};
+        access_desc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+        access_desc.location.id = device_num + start_gpu_;
+        access_desc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+        status = cuMemSetAccess(device_ptr, padded_num_bytes, &access_desc, 1);
+      }
+    }
+  }
+
+  if (status != CUDA_SUCCESS) {
+    // clean up in reverse order
+    if (device_ptr && handle) {
+      cuMemUnmap(device_ptr, padded_num_bytes);
+    }
+    if (handle) {
+      cuMemRelease(handle);
+    }
+    if (device_ptr) {
+      cuMemAddressFree(device_ptr, padded_num_bytes);
+    }
+    throw CudaErrorException(status);
+  }
+  DeviceMemoryMetadata device_ptr_metadata{
+      padded_num_bytes, handle, getDeviceProperties(device_num)->uuid, device_num};
+  CHECK(
+      device_memory_allocation_map_.try_emplace(device_ptr, device_ptr_metadata).second);
   return reinterpret_cast<int8_t*>(device_ptr);
 }
 
-void CudaMgr::freePinnedHostMem(int8_t* host_ptr) {
-  checkError(cuMemFreeHost(reinterpret_cast<void*>(host_ptr)));
-}
-
 void CudaMgr::freeDeviceMem(int8_t* device_ptr) {
-  std::lock_guard<std::mutex> gpu_lock(device_cleanup_mutex_);
-
-  checkError(cuMemFree(reinterpret_cast<CUdeviceptr>(device_ptr)));
+  // take lock
+  std::lock_guard<std::mutex> map_lock(device_mutex_);
+  // find in map
+  auto const cu_device_ptr = reinterpret_cast<CUdeviceptr>(device_ptr);
+  auto const itr = device_memory_allocation_map_.find(cu_device_ptr);
+  CHECK(itr != device_memory_allocation_map_.end());
+  // get attributes
+  auto const size = itr->second.size;
+  auto const handle = itr->second.handle;
+  // attempt to unmap, release, free
+  auto status_unmap = cuMemUnmap(cu_device_ptr, size);
+  auto status_release = cuMemRelease(handle);
+  auto status_free = cuMemAddressFree(cu_device_ptr, size);
+  // remove from map
+  device_memory_allocation_map_.erase(itr);
+  // check for errors
+  checkError(status_unmap);
+  checkError(status_release);
+  checkError(status_free);
 }
 
 void CudaMgr::zeroDeviceMem(int8_t* device_ptr,
@@ -425,7 +509,7 @@ int CudaMgr::getContext() const {
   throw std::runtime_error("invalid cuda device context");
 }
 
-void CudaMgr::printDeviceProperties() const {
+void CudaMgr::logDeviceProperties() const {
   LOG(INFO) << "Using " << device_count_ << " Gpus.";
   for (int d = 0; d < device_count_; ++d) {
     VLOG(1) << "Device: " << device_properties_[d].device;

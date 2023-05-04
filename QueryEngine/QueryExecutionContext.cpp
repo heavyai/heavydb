@@ -775,7 +775,7 @@ void QueryExecutionContext::copyInitAggValsToDevice(
     auto cmpt_sz = align_to<8>(query_mem_desc_.getColsSize()) / sizeof(int64_t);
     auto cmpt_val_buff = compact_init_vals(cmpt_sz, init_agg_vals, query_mem_desc_);
     copyVectorToDevice(device_ptr, cmpt_val_buff);
-  } else {
+  } else if (init_agg_vals.size()) {
     copyVectorToDevice(device_ptr, init_agg_vals);
   }
 }

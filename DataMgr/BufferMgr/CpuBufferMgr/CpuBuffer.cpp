@@ -58,7 +58,7 @@ void CpuBuffer::writeData(int8_t* const src,
   } else if (src_memory_level == GPU_LEVEL) {
     // std::cout << "Writing to CPU from source GPU" << std::endl;
     CHECK_GE(src_device_id, 0);
-    cuda_mgr_->copyDeviceToHost(mem_ + offset, src, num_bytes, src_device_id);
+    cuda_mgr_->copyDeviceToHost(mem_ + offset, src, num_bytes);
   } else {
     LOG(FATAL) << "Unsupported buffer type";
   }

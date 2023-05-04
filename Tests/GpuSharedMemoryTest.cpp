@@ -459,7 +459,7 @@ void GpuReductionTester::performReductionTest(
 
   // transfer back the results:
   cuda_mgr_->copyDeviceToHost(
-      gpu_result_storage->getUnderlyingBuffer(), d_result_buffer, buffer_size, device_id);
+      gpu_result_storage->getUnderlyingBuffer(), d_result_buffer, buffer_size);
 
   // release the gpu memory used:
   for (auto& d_buffer : d_input_buffers) {

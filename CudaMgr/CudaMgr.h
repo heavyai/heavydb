@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cstdlib>
+#include <map>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -31,6 +32,16 @@
 #endif  // HAVE_CUDA
 
 namespace CudaMgr_Namespace {
+
+using DeviceMemoryPtrConstant = uint64_t;
+
+struct DeviceMemoryMetadata {
+  uint64_t size;
+  uint64_t handle;
+  heavyai::UUID device_uuid;
+  int device_num;
+};
+using DeviceMemoryAllocationMap = std::map<DeviceMemoryPtrConstant, DeviceMemoryMetadata>;
 
 enum class NvidiaDeviceArch {
   Kepler,   // compute major = 3
@@ -76,6 +87,7 @@ struct DeviceProperties {
   float memoryBandwidthGBs;
   int clockKhz;
   int numCore;
+  size_t allocationGranularity;
 };
 
 class CudaMgr {
@@ -87,6 +99,8 @@ class CudaMgr {
   int getDeviceCount() const { return device_count_; }
   int getStartGpu() const { return start_gpu_; }
   const heavyai::DeviceGroup& getDeviceGroup() const { return device_group_; }
+  size_t computePaddedBufferSize(size_t buf_size, size_t granularity) const;
+  size_t getGranularity(const int device_num) const;
 
   void copyHostToDevice(int8_t* device_ptr,
                         const int8_t* host_ptr,
@@ -96,7 +110,6 @@ class CudaMgr {
   void copyDeviceToHost(int8_t* host_ptr,
                         const int8_t* device_ptr,
                         const size_t num_bytes,
-                        const int device_num,
                         CUstream cuda_stream = 0);
   void copyDeviceToDevice(int8_t* dest_ptr,
                           int8_t* src_ptr,
@@ -209,7 +222,7 @@ class CudaMgr {
 
 #ifdef HAVE_CUDA
 
-  void printDeviceProperties() const;
+  void logDeviceProperties() const;
 
   const std::vector<CUcontext>& getDeviceContexts() const {
     return device_contexts_;
@@ -253,8 +266,8 @@ class CudaMgr {
   std::vector<DeviceProperties> device_properties_;
   heavyai::DeviceGroup device_group_;
   std::vector<CUcontext> device_contexts_;
-
-  mutable std::mutex device_cleanup_mutex_;
+  DeviceMemoryAllocationMap device_memory_allocation_map_;
+  mutable std::mutex device_mutex_;
 };
 
 }  // Namespace CudaMgr_Namespace
