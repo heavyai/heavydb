@@ -203,17 +203,18 @@ std::string serialize_type(const ExtArgumentType type,
     case ExtArgumentType::ArrayTextEncodingDict:
       return (declare ? "{i32*, i64, i8}*" : "Array<TextEncodingDict>");
     case ExtArgumentType::GeoPoint:
-      return (declare ? "geo_point" : "GeoPoint");
+      return (declare ? "{i8*, i32, i32, i32, i32}*" : "GeoPoint");
     case ExtArgumentType::GeoMultiPoint:
-      return (declare ? "geo_multi_point" : "GeoMultiPoint");
+      return (declare ? "{i8*, i32, i32, i32, i32}*" : "GeoMultiPoint");
     case ExtArgumentType::GeoLineString:
-      return (declare ? "geo_linestring" : "GeoLineString");
+      return (declare ? "{i8*, i32, i32, i32, i32}*" : "GeoLineString");
     case ExtArgumentType::GeoMultiLineString:
-      return (declare ? "geo_multi_linestring" : "GeoMultiLineSting");
+      return (declare ? "{i8*, i32, i8*, i32, i32, i32, i32}*" : "GeoMultiLineSting");
     case ExtArgumentType::GeoPolygon:
-      return (declare ? "geo_polygon" : "GeoPolygon");
+      return (declare ? "{i8*, i32, i8*, i32, i32, i32, i32}*" : "GeoPolygon");
     case ExtArgumentType::GeoMultiPolygon:
-      return (declare ? "geo_multi_polygon" : "GeoMultiPolygon");
+      return (declare ? "{i8*, i32, i8*, i32, i8*, i32, i32, i32, i32}*"
+                      : "GeoMultiPolygon");
     case ExtArgumentType::Cursor:
       return "cursor";
     case ExtArgumentType::ColumnInt8:
@@ -842,22 +843,22 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "Array<TextEncodingDict>") {
     return ExtArgumentType::ArrayTextEncodingDict;
   }
-  if (type_name == "geo_point" || type_name == "GeoPoint") {
+  if (type_name == "GeoPoint") {
     return ExtArgumentType::GeoPoint;
   }
-  if (type_name == "geo_multi_point" || type_name == "GeoMultiPoint") {
+  if (type_name == "GeoMultiPoint") {
     return ExtArgumentType::GeoMultiPoint;
   }
-  if (type_name == "geo_linestring" || type_name == "GeoLineString") {
+  if (type_name == "GeoLineString") {
     return ExtArgumentType::GeoLineString;
   }
-  if (type_name == "geo_multi_linestring" || type_name == "GeoMultiLineString") {
+  if (type_name == "GeoMultiLineString") {
     return ExtArgumentType::GeoMultiLineString;
   }
-  if (type_name == "geo_polygon" || type_name == "GeoPolygon") {
+  if (type_name == "GeoPolygon") {
     return ExtArgumentType::GeoPolygon;
   }
-  if (type_name == "geo_multi_polygon" || type_name == "GeoMultiPolygon") {
+  if (type_name == "GeoMultiPolygon") {
     return ExtArgumentType::GeoMultiPolygon;
   }
   if (type_name == "cursor") {

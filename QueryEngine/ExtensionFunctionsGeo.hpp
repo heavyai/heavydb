@@ -1,7 +1,10 @@
+#include "Geospatial/Compression.h"
 #include "Geospatial/CompressionRuntime.h"
+#include "Geospatial/Types.h"
 #include "Geospatial/Utm.h"
 
 #ifndef __CUDACC__
+#include <iomanip>
 #include <string>
 #include "Shared/likely.h"
 #else
@@ -5087,3 +5090,302 @@ EXTENSION_NOINLINE bool is_point_size_in_view(int8_t* p,
   return !(lon + londiff < min_lon || lon - londiff > max_lon ||
            lat + latdiff < min_lat || lat - latdiff > max_lat);
 }
+
+#ifndef __CUDACC__
+
+Geospatial::GeoPoint to_Geospatial_GeoPoint(GeoPoint& p) {
+  int8_t* ptr = p.ptr;
+  int32_t lsize = p.getSize();
+  int32_t ic = p.getCompression();
+  int32_t isr = p.getInputSrid();
+  int32_t osr = p.getOutputSrid();
+
+  double x = ST_X_Point(ptr, lsize, ic, isr, osr);
+  double y = ST_Y_Point(ptr, lsize, ic, isr, osr);
+  auto point = Geospatial::GeoPoint(std::vector<double>{x, y});
+  return point;
+}
+
+Geospatial::GeoMultiPoint to_Geospatial_GeoMultiPoint(GeoMultiPoint& mp) {
+  int8_t* ptr = mp.ptr;
+  int32_t lsize = mp.getSize();
+  int32_t ic = mp.getCompression();
+  int32_t isr = mp.getInputSrid();
+  int32_t osr = mp.getOutputSrid();
+
+  std::vector<double> coords =
+      *Geospatial::decompress_coords<double, int32_t>(ic, ptr, lsize);
+  auto multipoint = Geospatial::GeoMultiPoint(coords);
+  multipoint.transform(isr, osr);
+  return multipoint;
+}
+
+Geospatial::GeoLineString to_Geospatial_GeoLineString(GeoLineString& l) {
+  int8_t* ptr = l.ptr;
+  int32_t lsize = l.getSize();
+  int32_t ic = l.getCompression();
+  int32_t isr = l.getInputSrid();
+  int32_t osr = l.getOutputSrid();
+
+  std::vector<double> coords =
+      *Geospatial::decompress_coords<double, int32_t>(ic, ptr, lsize);
+  auto linestring = Geospatial::GeoLineString(coords);
+  linestring.transform(isr, osr);
+  return linestring;
+}
+
+Geospatial::GeoMultiLineString to_Geospatial_GeoMultiLineString(GeoMultiLineString& ml) {
+  int8_t* ptr = ml.ptr;
+  int32_t ml_coords_size = ml.getCoordsSize();
+  int32_t* linestring_sizes = reinterpret_cast<int32_t*>(ml.getLineStringSizes());
+  int32_t num_linestrings = ml.getNumLineStrings();
+  int32_t ic = ml.getCompression();
+  int32_t isr = ml.getInputSrid();
+  int32_t osr = ml.getOutputSrid();
+
+  std::vector<double> coords =
+      *Geospatial::decompress_coords<double, int32_t>(ic, ptr, ml_coords_size);
+
+  std::vector<int32_t> v_linestring_sizes(linestring_sizes,
+                                          linestring_sizes + num_linestrings);
+
+  auto multilinestring = Geospatial::GeoMultiLineString(coords, v_linestring_sizes);
+  multilinestring.transform(isr, osr);
+  return multilinestring;
+}
+
+Geospatial::GeoPolygon to_Geospatial_GeoPolygon(GeoPolygon& p) {
+  int8_t* poly_coords = p.ptr_coords;
+  int32_t poly_coords_size = p.getCoordsSize();
+  int32_t* poly_ring_sizes = reinterpret_cast<int32_t*>(p.getRingSizes());
+  int32_t poly_num_rings = p.getNumRings();
+  int32_t ic = p.getCompression();
+  int32_t isr = p.getInputSrid();
+  int32_t osr = p.getOutputSrid();
+
+  std::vector<double> coords =
+      *Geospatial::decompress_coords<double, int32_t>(ic, poly_coords, poly_coords_size);
+
+  std::vector<int32_t> ring_sizes(poly_ring_sizes, poly_ring_sizes + poly_num_rings);
+  auto polygon = Geospatial::GeoPolygon(coords, ring_sizes);
+  polygon.transform(isr, osr);
+  return polygon;
+}
+
+Geospatial::GeoMultiPolygon to_Geospatial_GeoMultiPolygon(GeoMultiPolygon& mp) {
+  int8_t* poly_coords = mp.ptr_coords;
+  int32_t poly_coords_size = mp.getCoordsSize();
+  int32_t* poly_ring_sizes = reinterpret_cast<int32_t*>(mp.getRingSizes());
+  int32_t poly_num_rings = mp.getNumRings();
+  int32_t* poly_sizes = reinterpret_cast<int32_t*>(mp.getPolygonSizes());
+  int32_t num_polys = mp.getNumPolygons();
+  int32_t ic = mp.getCompression();
+  int32_t isr = mp.getInputSrid();
+  int32_t osr = mp.getOutputSrid();
+
+  std::vector<double> coords =
+      *Geospatial::decompress_coords<double, int32_t>(ic, poly_coords, poly_coords_size);
+
+  std::vector<int32_t> ring_sizes(poly_ring_sizes, poly_ring_sizes + poly_num_rings);
+  std::vector<int32_t> poly_rings(poly_sizes, poly_sizes + num_polys);
+
+  auto multipolygon = Geospatial::GeoMultiPolygon(coords, ring_sizes, poly_rings);
+  multipolygon.transform(isr, osr);
+  return multipolygon;
+}
+
+/*
+  Return the Well-Known Text (WKT) representation of the geometry/geography
+  without SRID metadata.
+
+  Reference
+  ---------
+  https://postgis.net/docs/ST_AsText.html
+*/
+EXTENSION_NOINLINE TextEncodingNone ST_AsText__GeoPoint__cpu_(RowFunctionManager& mgr,
+                                                              GeoPoint& p) {
+  Geospatial::GeoPoint point = to_Geospatial_GeoPoint(p);
+  std::string wkt = point.getWktString();
+  return TextEncodingNone(mgr, wkt);
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsText__GeoMultiPoint__cpu_(RowFunctionManager& mgr, GeoMultiPoint& mp) {
+  Geospatial::GeoMultiPoint multipoint = to_Geospatial_GeoMultiPoint(mp);
+  std::string wkt = multipoint.getWktString();
+  return TextEncodingNone(mgr, wkt);
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsText__GeoLineString__cpu_(RowFunctionManager& mgr, GeoLineString& l) {
+  Geospatial::GeoLineString linestring = to_Geospatial_GeoLineString(l);
+  std::string wkt = linestring.getWktString();
+  return TextEncodingNone(mgr, wkt);
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsText__GeoMultiLineString__cpu_(RowFunctionManager& mgr, GeoMultiLineString& ml) {
+  Geospatial::GeoMultiLineString multilinestring = to_Geospatial_GeoMultiLineString(ml);
+  std::string wkt = multilinestring.getWktString();
+  return TextEncodingNone(mgr, wkt);
+}
+
+EXTENSION_NOINLINE TextEncodingNone ST_AsText__GeoPolygon__cpu_(RowFunctionManager& mgr,
+                                                                GeoPolygon& p) {
+  Geospatial::GeoPolygon polygon = to_Geospatial_GeoPolygon(p);
+  std::string wkt = polygon.getWktString();
+  return TextEncodingNone(mgr, wkt);
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsText__GeoMultiPolygon__cpu_(RowFunctionManager& mgr, GeoMultiPolygon& mp) {
+  Geospatial::GeoMultiPolygon multipolygon = to_Geospatial_GeoMultiPolygon(mp);
+  std::string wkt = multipolygon.getWktString();
+  return TextEncodingNone(mgr, wkt);
+}
+
+/*
+  Alias for ST_AsText
+
+  Reference
+  ---------
+  https://docs.snowflake.com/en/sql-reference/functions/st_aswkt
+*/
+
+EXTENSION_NOINLINE TextEncodingNone ST_AsWkt__GeoPoint__cpu_(RowFunctionManager& mgr,
+                                                             GeoPoint& p) {
+  return ST_AsText__GeoPoint__cpu_(mgr, p);
+}
+
+EXTENSION_NOINLINE TextEncodingNone ST_AsWkt__GeoMultiPoint__cpu_(RowFunctionManager& mgr,
+                                                                  GeoMultiPoint& p) {
+  return ST_AsText__GeoMultiPoint__cpu_(mgr, p);
+}
+
+EXTENSION_NOINLINE TextEncodingNone ST_AsWkt__GeoLineString__cpu_(RowFunctionManager& mgr,
+                                                                  GeoLineString& p) {
+  return ST_AsText__GeoLineString__cpu_(mgr, p);
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsWkt__GeoMultiLineString__cpu_(RowFunctionManager& mgr, GeoMultiLineString& p) {
+  return ST_AsText__GeoMultiLineString__cpu_(mgr, p);
+}
+
+EXTENSION_NOINLINE TextEncodingNone ST_AsWkt__GeoPolygon__cpu_(RowFunctionManager& mgr,
+                                                               GeoPolygon& p) {
+  return ST_AsText__GeoPolygon__cpu_(mgr, p);
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsWkt__GeoMultiPolygon__cpu_(RowFunctionManager& mgr, GeoMultiPolygon& p) {
+  return ST_AsText__GeoMultiPolygon__cpu_(mgr, p);
+}
+
+/*
+  Return the OGC/ISO Well-Known Binary (WKB) representation of the
+  geometry/geography without SRID meta data.
+
+  Reference
+  ---------
+  https://postgis.net/docs/ST_AsBinary.html
+  https://libgeos.org/specifications/wkb/
+*/
+
+template <typename T>
+ALWAYS_INLINE std::string __wkb_to_str(T& geometry) {
+  std::vector<uint8_t> bytes;
+
+  bool ok = geometry.getWkb(bytes);
+  if (!ok) {
+    return std::string();
+  }
+
+  std::ostringstream ss;
+  for (auto b : bytes) {
+    ss << std::setfill('0') << std::setw(2) << std::hex << static_cast<int>(b);
+  }
+  return ss.str();
+}
+
+EXTENSION_NOINLINE TextEncodingNone ST_AsBinary__GeoPoint__cpu_(RowFunctionManager& mgr,
+                                                                GeoPoint& p) {
+  Geospatial::GeoPoint point = to_Geospatial_GeoPoint(p);
+  std::string wkb = __wkb_to_str(point);
+  return TextEncodingNone(mgr, wkb);
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsBinary__GeoMultiPoint__cpu_(RowFunctionManager& mgr, GeoMultiPoint& mp) {
+  Geospatial::GeoMultiPoint multipoint = to_Geospatial_GeoMultiPoint(mp);
+  std::string wkb = __wkb_to_str(multipoint);
+  return TextEncodingNone(mgr, wkb);
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsBinary__GeoLineString__cpu_(RowFunctionManager& mgr, GeoLineString& l) {
+  Geospatial::GeoLineString linestring = to_Geospatial_GeoLineString(l);
+  std::string wkb = __wkb_to_str(linestring);
+  return TextEncodingNone(mgr, wkb);
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsBinary__GeoMultiLineString__cpu_(RowFunctionManager& mgr, GeoMultiLineString& ml) {
+  Geospatial::GeoMultiLineString multilinestring = to_Geospatial_GeoMultiLineString(ml);
+  std::string wkb = __wkb_to_str(multilinestring);
+  return TextEncodingNone(mgr, wkb);
+}
+
+EXTENSION_NOINLINE TextEncodingNone ST_AsBinary__GeoPolygon__cpu_(RowFunctionManager& mgr,
+                                                                  GeoPolygon& p) {
+  Geospatial::GeoPolygon polygon = to_Geospatial_GeoPolygon(p);
+  std::string wkb = __wkb_to_str(polygon);
+  return TextEncodingNone(mgr, wkb);
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsBinary__GeoMultiPolygon__cpu_(RowFunctionManager& mgr, GeoMultiPolygon& mp) {
+  Geospatial::GeoMultiPolygon multipolygon = to_Geospatial_GeoMultiPolygon(mp);
+  std::string wkb = __wkb_to_str(multipolygon);
+  return TextEncodingNone(mgr, wkb);
+}
+
+/*
+  Alias for ST_AsBinary
+
+  Reference
+  ---------
+  https://docs.snowflake.com/en/sql-reference/functions/st_aswkb
+*/
+
+EXTENSION_NOINLINE TextEncodingNone ST_AsWkb__GeoPoint__cpu_(RowFunctionManager& mgr,
+                                                             GeoPoint& p) {
+  return ST_AsBinary__GeoPoint__cpu_(mgr, p);
+}
+
+EXTENSION_NOINLINE TextEncodingNone ST_AsWkb__GeoMultiPoint__cpu_(RowFunctionManager& mgr,
+                                                                  GeoMultiPoint& p) {
+  return ST_AsBinary__GeoMultiPoint__cpu_(mgr, p);
+}
+
+EXTENSION_NOINLINE TextEncodingNone ST_AsWkb__GeoLineString__cpu_(RowFunctionManager& mgr,
+                                                                  GeoLineString& p) {
+  return ST_AsBinary__GeoLineString__cpu_(mgr, p);
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsWkb__GeoMultiLineString__cpu_(RowFunctionManager& mgr, GeoMultiLineString& p) {
+  return ST_AsBinary__GeoMultiLineString__cpu_(mgr, p);
+}
+
+EXTENSION_NOINLINE TextEncodingNone ST_AsWkb__GeoPolygon__cpu_(RowFunctionManager& mgr,
+                                                               GeoPolygon& p) {
+  return ST_AsBinary__GeoPolygon__cpu_(mgr, p);
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsWkb__GeoMultiPolygon__cpu_(RowFunctionManager& mgr, GeoMultiPolygon& p) {
+  return ST_AsBinary__GeoMultiPolygon__cpu_(mgr, p);
+}
+
+#endif  // #ifndef __CUDACC__
