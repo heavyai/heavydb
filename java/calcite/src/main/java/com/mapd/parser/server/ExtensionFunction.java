@@ -332,19 +332,19 @@ public class ExtensionFunction {
       case ColumnTimestamp:
         return "Column<timestamp>";
       case GeoPoint:
-        return "geo_point";
+        return "GeoPoint";
       case GeoMultiPoint:
-        return "geo_multi_point";
+        return "GeoMultiPoint";
       case Cursor:
         return "cursor";
       case GeoLineString:
-        return "geo_linestring";
+        return "GeoLineString";
       case GeoMultiLineString:
-        return "geo_multi_linestring";
+        return "GeoMultiLineString";
       case GeoPolygon:
-        return "geo_polygon";
+        return "GeoPolygon";
       case GeoMultiPolygon:
-        return "geo_multi_polygon";
+        return "GeoMultiPolygon";
       case Timestamp:
         return "timestamp";
       case TextEncodingNone:

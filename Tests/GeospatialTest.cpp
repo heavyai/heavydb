@@ -1527,6 +1527,45 @@ TEST_P(GeoSpatialTestTablesFixture, LLVMOptimization) {
   }
 }
 
+TEST_P(GeoSpatialTestTablesFixture, AsText) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    if (dt == ExecutorDeviceType::GPU) {
+      LOG(WARNING) << "ST_AsText is a CPU-specific UDF";
+    } else {
+      std::vector<std::string> col_names{
+          "p",       "p_null",     "mp",      "mp_null",   "l",          "l_null",
+          "ml",      "ml2",        "ml_null", "poly",      "poly_null",  "mpoly",
+          "mpoly2",  "mpoly_null", "gp",      "gp4326",    "gp4326none", "gp900913",
+          "gmp4326", "gl4326none", "gml4326", "gpoly4326", "gpoly900913"};
+
+      std::vector<std::string> fns{"ST_AsText", "ST_AsWkt"};
+
+      for (std::string& fn : fns) {
+        for (std::string& col : col_names) {
+          std::string query =
+              "SELECT " + fn + "(" + col + "), " + col + " FROM geospatial_test;";
+          const auto rows = run_multiple_agg(query, dt);
+          size_t row_count = rows->rowCount();
+          for (size_t i = 0; i < row_count; i++) {
+            auto row = rows->getNextRow(true, false);
+            NullableString ns = TestHelpers::v<NullableString>(row[0]);
+
+            if (std::string* str = boost::get<std::string>(&ns)) {
+              std::string expected =
+                  boost::get<std::string>(TestHelpers::v<NullableString>(row[1]));
+              ASSERT_EQ(expected, *str);
+            } else {
+              void* val = boost::get<void*>(TestHelpers::v<NullableString>(row[1]));
+              ASSERT_EQ(val, nullptr);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(GeoSpatialTablesTests,
                          GeoSpatialTestTablesFixture,
                          ::testing::Values(true, false));

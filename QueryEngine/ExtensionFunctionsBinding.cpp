@@ -314,9 +314,12 @@ static int match_arguments(const SQLTypeInfo& arg_type,
           sig_pos < max_pos && sig_types[sig_pos + 1] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 2;
-      } else if (sig_type == ExtArgumentType::GeoPoint ||
-                 sig_type == ExtArgumentType::GeoMultiPoint ||
-                 sig_type == ExtArgumentType::GeoLineString) {
+      } else if ((sig_type == ExtArgumentType::GeoPoint &&
+                  arg_type.get_type() == kPOINT) ||
+                 (sig_type == ExtArgumentType::GeoMultiPoint &&
+                  arg_type.get_type() == kMULTIPOINT) ||
+                 (sig_type == ExtArgumentType::GeoLineString &&
+                  arg_type.get_type() == kLINESTRING)) {
         penalty_score += 1000;
         return 1;
       }
