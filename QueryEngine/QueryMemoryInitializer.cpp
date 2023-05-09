@@ -212,9 +212,10 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   }
 
   if (render_allocator_map || !query_mem_desc.isGroupBy()) {
-    allocateCountDistinctBuffers(query_mem_desc, false, executor, ra_exe_unit);
-    allocateModes(query_mem_desc, false, executor, ra_exe_unit);
-    allocateTDigests(query_mem_desc, false, executor, ra_exe_unit);
+    constexpr bool defer = false;  // Allocate aggregation data structures now
+    allocateCountDistinctBuffers(query_mem_desc, defer, executor, ra_exe_unit);
+    allocateModes(query_mem_desc, defer, executor, ra_exe_unit);
+    allocateTDigests(query_mem_desc, defer, executor, ra_exe_unit);
     if (render_info && render_info->useCudaBuffers()) {
       return;
     }
@@ -324,10 +325,10 @@ QueryMemoryInitializer::QueryMemoryInitializer(
       }
     }
 
-    group_by_buffers_.push_back(group_by_buffer);
-    for (size_t j = 1; j < step; ++j) {
-      group_by_buffers_.push_back(nullptr);
-    }
+    size_t old_size = group_by_buffers_.size();
+    group_by_buffers_.resize(old_size + std::max(size_t(1), step), nullptr);
+    group_by_buffers_[old_size] = group_by_buffer;
+
     const bool use_target_exprs_union =
         ra_exe_unit.union_all && get_input_idx(ra_exe_unit, outer_table_key);
     const auto& target_exprs = use_target_exprs_union ? ra_exe_unit.target_exprs_union
@@ -336,25 +337,24 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     const auto column_frag_sizes =
         get_consistent_frags_sizes(target_exprs, consistent_frag_sizes);
 
-    result_sets_.emplace_back(
-        new ResultSet(target_exprs_to_infos(target_exprs, query_mem_desc),
-                      executor->getColLazyFetchInfo(target_exprs),
-                      col_buffers,
-                      column_frag_offsets,
-                      column_frag_sizes,
-                      device_type,
-                      device_id,
-                      thread_idx,
-                      ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
-                      row_set_mem_owner_,
-                      executor->blockSize(),
-                      executor->gridSize()));
-    result_sets_.back()->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer),
-                                         executor->plan_state_->init_agg_vals_,
-                                         getVarlenOutputInfo());
-    for (size_t j = 1; j < step; ++j) {
-      result_sets_.emplace_back(nullptr);
-    }
+    old_size = result_sets_.size();
+    result_sets_.resize(old_size + std::max(size_t(1), step));
+    result_sets_[old_size] =
+        std::make_unique<ResultSet>(target_exprs_to_infos(target_exprs, query_mem_desc),
+                                    executor->getColLazyFetchInfo(target_exprs),
+                                    col_buffers,
+                                    column_frag_offsets,
+                                    column_frag_sizes,
+                                    device_type,
+                                    device_id,
+                                    thread_idx,
+                                    ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
+                                    row_set_mem_owner_,
+                                    executor->blockSize(),
+                                    executor->gridSize());
+    result_sets_[old_size]->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer),
+                                            executor->plan_state_->init_agg_vals_,
+                                            getVarlenOutputInfo());
   }
 }
 
@@ -488,10 +488,11 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
   const size_t row_size{query_mem_desc.getRowSize()};
   const size_t col_base_off{query_mem_desc.getColOffInBytes(0)};
 
+  constexpr bool defer = true;  // defer allocation of aggregation data structures
   auto agg_bitmap_size =
-      allocateCountDistinctBuffers(query_mem_desc, true, executor, ra_exe_unit);
-  auto mode_index_set = allocateModes(query_mem_desc, true, executor, ra_exe_unit);
-  auto quantile_params = allocateTDigests(query_mem_desc, true, executor, ra_exe_unit);
+      allocateCountDistinctBuffers(query_mem_desc, defer, executor, ra_exe_unit);
+  auto mode_index_set = allocateModes(query_mem_desc, defer, executor, ra_exe_unit);
+  auto quantile_params = allocateTDigests(query_mem_desc, defer, executor, ra_exe_unit);
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
 
   const auto query_mem_desc_fixedup =
