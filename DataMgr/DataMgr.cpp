@@ -48,6 +48,23 @@ size_t g_pmem_size{0};
 
 namespace Data_Namespace {
 
+namespace {
+// Global pointer and function for atexit registration.
+// Do NOT use this pointer for anything else.
+static DataMgr* g_data_mgr_ptr = nullptr;
+static bool at_exit_called = false;
+}  // namespace
+
+void DataMgr::atExitHandler() {
+  at_exit_called = true;
+  if (g_data_mgr_ptr && g_data_mgr_ptr->hasGpus_) {
+    // safely destroy all gpu allocations explicitly to avoid unexpected
+    // `CUDA_ERROR_DEINITIALIZED` exception while trying to synchronize
+    // devices to destroy BufferMgr for GPU, i.e., 'GpuCudaBufferMgr` and `CudaMgr`
+    g_data_mgr_ptr->clearMemory(MemoryLevel::GPU_LEVEL);
+  }
+}
+
 DataMgr::DataMgr(const std::string& dataDir,
                  const SystemParameters& system_parameters,
                  std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr,
@@ -62,6 +79,11 @@ DataMgr::DataMgr(const std::string& dataDir,
   if (useGpus) {
     if (cudaMgr_) {
       hasGpus_ = true;
+
+      // we register the `atExitHandler` if we create `DataMgr` having GPU
+      // to make sure we clear all allocated GPU memory when destructing this `DataMgr`
+      g_data_mgr_ptr = this;
+      std::atexit(atExitHandler);
     } else {
       LOG(ERROR) << "CudaMgr instance is invalid, falling back to CPU-only mode.";
       hasGpus_ = false;
@@ -81,6 +103,14 @@ DataMgr::DataMgr(const std::string& dataDir,
 }
 
 DataMgr::~DataMgr() {
+  g_data_mgr_ptr = nullptr;
+
+  // This duplicates atExitHandler so we still shut down in the case of a startup
+  // exception. We can request cleanup of GPU memory twice, so it's safe.
+  if (!at_exit_called && hasGpus_) {
+    clearMemory(GPU_LEVEL);
+  }
+
   int numLevels = bufferMgrs_.size();
   for (int level = numLevels - 1; level >= 0; --level) {
     for (size_t device = 0; device < bufferMgrs_[level].size(); device++) {

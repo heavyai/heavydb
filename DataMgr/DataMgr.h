@@ -268,6 +268,8 @@ class DataMgr {
   // Used for testing.
   Buffer_Namespace::GpuCudaBufferMgr* getGpuBufferMgr(int32_t device_id) const;
 
+  static void atExitHandler();
+
  private:
   void populateMgrs(const SystemParameters& system_parameters,
                     const size_t userSpecifiedNumReaderThreads,
