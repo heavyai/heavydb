@@ -207,7 +207,9 @@ logger::Severity StdLog::stdlogBeginSeverity(char const* func) {
       {"execute_query_step", logger::Severity::INFO},
       {"broadcast_serialized_rows", logger::Severity::INFO},
       {"start_render_query", logger::Severity::INFO},
-      {"execute_next_render_step", logger::Severity::INFO}};
+      {"execute_next_render_step", logger::Severity::INFO},
+      {"clear_gpu_memory", logger::Severity::INFO},
+      {"clear_cpu_memory", logger::Severity::INFO}};
   auto const itr = map.find(func);
   return itr == map.cend() ? defaultSeverity : itr->second;
 }
