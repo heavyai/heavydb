@@ -3254,7 +3254,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     const size_t offset = sort->getOffset();
     if (limit || offset) {
       if (!order_entries.empty()) {
-        result_rows->sort(order_entries, limit + offset, executor_);
+        result_rows->sort(order_entries, limit + offset, co.device_type, executor_);
       }
       result_rows->dropFirstN(offset);
       if (limit) {
@@ -3372,7 +3372,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     if (sort->collationCount() != 0 && !rows_to_sort->definitelyHasNoRows() &&
         !use_speculative_top_n_sort) {
       const size_t top_n = limit == 0 ? 0 : limit + offset;
-      rows_to_sort->sort(order_entries, top_n, executor_);
+      rows_to_sort->sort(order_entries, top_n, co.device_type, executor_);
     }
     if (limit || offset) {
       if (g_cluster && sort->collationCount() == 0) {

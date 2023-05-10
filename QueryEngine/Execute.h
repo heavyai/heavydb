@@ -925,7 +925,8 @@ class Executor {
 
   ResultSetPtr collectAllDeviceShardedTopResults(
       SharedKernelContext& shared_context,
-      const RelAlgExecutionUnit& ra_exe_unit) const;
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const ExecutorDeviceType device_type) const;
 
   std::unordered_map<shared::TableKey, const Analyzer::BinOper*> getInnerTabIdToJoinCond()
       const;
