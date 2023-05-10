@@ -11780,6 +11780,34 @@ TEST_F(Select, BigintGroupByColCompactionTest) {
   run_ddl_statement("DROP TABLE IF EXISTS bigint_groupby_col_compaction_test;");
 }
 
+TEST_F(Select, SortWithCPUQueryHint) {
+  SKIP_ALL_ON_AGGREGATOR();
+  if (!QR::get()->gpusPresent()) {
+    return;
+  }
+  auto& cat = QR::get()->getSession()->getCatalog();
+  auto& data_mgr = cat.getDataMgr();
+  auto* cuda_mgr = data_mgr.getCudaMgr();
+  if (!(cuda_mgr && cuda_mgr->getDeviceCount() > 1)) {
+    return;
+  }
+  auto check_no_gpu_mem_allocated = []() {
+    auto qr_instance = QR::get();
+    const auto memory_infos =
+        qr_instance->getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL);
+    for (auto& pool_memory_info : memory_infos) {
+      ASSERT_EQ(pool_memory_info.numPageAllocated, static_cast<size_t>(0));
+    }
+  };
+  QR::get()->clearGpuMemory();
+  check_no_gpu_mem_allocated();
+  run_multiple_agg(
+      "SELECT /*+ g_cpu_mode */ shared_dict AS key0, AVG(u) AS col0 FROM test GROUP BY "
+      "key0 ORDER BY col0 DESC NULLS LAST LIMIT 100;",
+      ExecutorDeviceType::GPU);
+  check_no_gpu_mem_allocated();
+}
+
 TEST(Update, DecimalOverflow) {
   // TODO: Move decimal validator into temp table update codegen
   SKIP_WITH_TEMP_TABLES();

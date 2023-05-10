@@ -2598,7 +2598,7 @@ ResultSetPtr Executor::collectAllDeviceResults(
           : 0;
 
   if (shard_count && !result_per_device.empty()) {
-    return collectAllDeviceShardedTopResults(shared_context, ra_exe_unit);
+    return collectAllDeviceShardedTopResults(shared_context, ra_exe_unit, device_type);
   }
   return reduceMultiDeviceResults(
       ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
@@ -2688,7 +2688,8 @@ size_t permute_storage_row_wise(const ResultSetStorage* input_storage,
 // this path when one of the columns involved is a shard key.
 ResultSetPtr Executor::collectAllDeviceShardedTopResults(
     SharedKernelContext& shared_context,
-    const RelAlgExecutionUnit& ra_exe_unit) const {
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const ExecutorDeviceType device_type) const {
   auto& result_per_device = shared_context.getFragmentResults();
   const auto first_result_set = result_per_device.front().first;
   CHECK(first_result_set);
@@ -2699,7 +2700,7 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
   for (auto& result : result_per_device) {
     const auto result_set = result.first;
     CHECK(result_set);
-    result_set->sort(ra_exe_unit.sort_info.order_entries, top_n, this);
+    result_set->sort(ra_exe_unit.sort_info.order_entries, top_n, device_type, this);
     size_t new_entry_cnt = top_query_mem_desc.getEntryCount() + result_set->rowCount();
     top_query_mem_desc.setEntryCount(new_entry_cnt);
   }

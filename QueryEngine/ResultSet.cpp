@@ -777,6 +777,7 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
 
 void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
                      size_t top_n,
+                     ExecutorDeviceType device_type,
                      const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
 
@@ -787,7 +788,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
   CHECK(!targets_.empty());
 #ifdef HAVE_CUDA
   if (canUseFastBaselineSort(order_entries, top_n)) {
-    baselineSort(order_entries, top_n, executor);
+    baselineSort(order_entries, top_n, device_type, executor);
     return;
   }
 #endif  // HAVE_CUDA
@@ -837,10 +838,11 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
 #ifdef HAVE_CUDA
 void ResultSet::baselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
                              const size_t top_n,
+                             const ExecutorDeviceType device_type,
                              const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
   // If we only have on GPU, it's usually faster to do multi-threaded radix sort on CPU
-  if (getGpuCount() > 1) {
+  if (device_type == ExecutorDeviceType::GPU && getGpuCount() > 1) {
     try {
       doBaselineSort(ExecutorDeviceType::GPU, order_entries, top_n, executor);
     } catch (...) {

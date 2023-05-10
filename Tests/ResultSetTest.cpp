@@ -965,7 +965,6 @@ std::vector<TargetInfo> generate_random_groups_target_infos() {
 std::vector<TargetInfo> generate_random_groups_nullable_target_infos() {
   std::vector<TargetInfo> target_infos;
   SQLTypeInfo int_ti(kINT, false);
-  // SQLTypeInfo null_ti(kNULLT, false);
   SQLTypeInfo double_ti(kDOUBLE, false);
   target_infos.push_back(TargetInfo{true, kMIN, int_ti, int_ti, true, false});
   target_infos.push_back(TargetInfo{true, kMAX, int_ti, int_ti, true, false});
@@ -978,7 +977,7 @@ std::vector<TargetInfo> generate_random_groups_nullable_target_infos() {
 std::vector<OneRow> get_rows_sorted_by_col(ResultSet& rs, const size_t col_idx) {
   std::list<Analyzer::OrderEntry> order_entries;
   order_entries.emplace_back(1, false, false);
-  rs.sort(order_entries, 0, nullptr);
+  rs.sort(order_entries, 0, ExecutorDeviceType::CPU, nullptr);
   std::vector<OneRow> result;
 
   while (true) {
@@ -1046,7 +1045,7 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
   if (sort) {
     std::list<Analyzer::OrderEntry> order_entries;
     order_entries.emplace_back(1, false, false);
-    result_rs->sort(order_entries, 0, nullptr);
+    result_rs->sort(order_entries, 0, ExecutorDeviceType::CPU, nullptr);
   }
   const size_t thread_count = cpu_threads();
   const auto row_count = result_rs->rowCount();

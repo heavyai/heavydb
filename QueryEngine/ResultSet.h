@@ -264,6 +264,7 @@ class ResultSet {
 
   void sort(const std::list<Analyzer::OrderEntry>& order_entries,
             size_t top_n,
+            const ExecutorDeviceType device_type,
             const Executor* executor);
 
   void keepFirstN(const size_t n);
@@ -907,6 +908,7 @@ class ResultSet {
 
   void baselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
                     const size_t top_n,
+                    const ExecutorDeviceType device_type,
                     const Executor* executor);
 
   void doBaselineSort(const ExecutorDeviceType device_type,
