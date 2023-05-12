@@ -135,8 +135,7 @@ struct TableFunctionManager {
     auto num_out_columns = get_ncols();
     QueryMemoryDescriptor query_mem_desc(executor_,
                                          output_num_rows,  // divide by row multiplier???
-                                         QueryDescriptionType::TableFunction,
-                                         /*is_table_function=*/true);
+                                         QueryDescriptionType::TableFunction);
 
     for (size_t i = 0; i < num_out_columns; i++) {
       // All outputs have padded width set to logical column width

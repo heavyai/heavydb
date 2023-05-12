@@ -180,8 +180,7 @@ ResultSet* ResultSetLogicalValuesBuilder::create(
 
   QueryMemoryDescriptor query_mem_desc(/*executor=*/nullptr,
                                        /*entry_count=*/numRows,
-                                       QueryDescriptionType::Projection,
-                                       /*is_table_function=*/false);
+                                       QueryDescriptionType::Projection);
 
   // target_infos -> defines the table columns
   std::vector<TargetInfo> target_infos;

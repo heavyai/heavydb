@@ -2124,7 +2124,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       plan_state_->allocateLocalColumnIds(ra_exe_unit.input_col_descs);
       CHECK(!query_mem_desc_owned);
       query_mem_desc_owned.reset(
-          new QueryMemoryDescriptor(this, 0, QueryDescriptionType::Projection, false));
+          new QueryMemoryDescriptor(this, 0, QueryDescriptionType::Projection));
     }
     if (eo.just_explain) {
       return executeExplain(*query_comp_desc_owned);
@@ -2316,8 +2316,7 @@ ResultSetPtr Executor::executeTableFunction(
   if (eo.just_validate) {
     QueryMemoryDescriptor query_mem_desc(this,
                                          /*entry_count=*/0,
-                                         QueryDescriptionType::TableFunction,
-                                         /*is_table_function=*/true);
+                                         QueryDescriptionType::TableFunction);
     return std::make_shared<ResultSet>(
         target_exprs_to_infos(exe_unit.target_exprs, query_mem_desc),
         co.device_type,
