@@ -1986,22 +1986,8 @@ bool is_window_function_avg(const RexScalar* rex) {
 // Detect both window function operators and window function operators embedded in case
 // statements (for null handling)
 bool is_window_function_operator(const RexScalar* rex) {
-  if (dynamic_cast<const RexWindowFunctionOperator*>(rex)) {
-    return true;
-  }
-
-  // unwrap from casts, if they exist
-  const auto rex_cast = dynamic_cast<const RexOperator*>(rex);
-  if (rex_cast && rex_cast->getOperator() == kCAST) {
-    CHECK_EQ(rex_cast->size(), size_t(1));
-    return is_window_function_operator(rex_cast->getOperand(0));
-  }
-
-  if (is_window_function_sum(rex) || is_window_function_avg(rex)) {
-    return true;
-  }
-
-  return false;
+  return dynamic_cast<const RexWindowFunctionOperator*>(rex) ||
+         is_window_function_sum(rex) || is_window_function_avg(rex);
 }
 
 }  // namespace
