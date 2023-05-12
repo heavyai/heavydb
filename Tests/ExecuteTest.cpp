@@ -23839,7 +23839,7 @@ TEST_F(Select, WindowFunctionComplexExpressions) {
           table_name +
           " ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, t ASC NULLS FIRST, r1 ASC, r2 "
           "ASC;";
-      EXPECT_THROW(run_multiple_agg(query, dt), std::runtime_error);
+      c(query, query, dt);
     }
     // check the case of window function with a generic expression
     {
@@ -23936,6 +23936,13 @@ TEST_F(Select, DISABLED_WindowFunctionParallelism) {
       c(query, query, dt);
     }
   }
+}
+
+TEST_F(Select, WindowFunctionNested) {
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  c("SELECT CAST(SUM(x) OVER () as DOUBLE) v FROM test ORDER BY v ASC NULLS FIRST;", dt);
+  c("SELECT CASE WHEN (y > 0) THEN lag(dn) OVER () ELSE MAX(x) OVER () END FROM test;",
+    dt);
 }
 
 TEST_F(Select, WindowFunctionFraming) {
