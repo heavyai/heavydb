@@ -2774,10 +2774,8 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
     const RelLogicalValues* logical_values,
     const ExecutionOptions& eo) {
   auto timer = DEBUG_TIMER(__func__);
-  QueryMemoryDescriptor query_mem_desc(executor_,
-                                       logical_values->getNumRows(),
-                                       QueryDescriptionType::Projection,
-                                       /*is_table_function=*/false);
+  QueryMemoryDescriptor query_mem_desc(
+      executor_, logical_values->getNumRows(), QueryDescriptionType::Projection);
 
   auto tuple_type = logical_values->getTupleType();
   for (size_t i = 0; i < tuple_type.size(); ++i) {

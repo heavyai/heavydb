@@ -484,7 +484,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , output_columnar_(false)
     , render_output_(render_output)
     , must_use_baseline_sort_(must_use_baseline_sort)
-    , is_table_function_(false)
     , use_streaming_top_n_(use_streaming_top_n)
     , threads_can_reuse_group_by_buffers_(threads_can_reuse_group_by_buffers)
     , force_4byte_float_(false)
@@ -561,15 +560,13 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
     , output_columnar_(false)
     , render_output_(false)
     , must_use_baseline_sort_(false)
-    , is_table_function_(false)
     , use_streaming_top_n_(false)
     , threads_can_reuse_group_by_buffers_(false)
     , force_4byte_float_(false) {}
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
                                              const size_t entry_count,
-                                             const QueryDescriptionType query_desc_type,
-                                             const bool is_table_function)
+                                             const QueryDescriptionType query_desc_type)
     : executor_(executor)
     , allow_multifrag_(false)
     , query_desc_type_(query_desc_type)
@@ -586,14 +583,10 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , output_columnar_(false)
     , render_output_(false)
     , must_use_baseline_sort_(false)
-    , is_table_function_(is_table_function)
     , use_streaming_top_n_(false)
     , threads_can_reuse_group_by_buffers_(false)
     , force_4byte_float_(false) {
   if (query_desc_type == QueryDescriptionType::TableFunction) {
-    // TODO: eliminate is_table_function as duplicate of
-    // QueryDescriptionType::TableFunction, see QE-754
-    CHECK(is_table_function_);
     // Table functions output columns are always columnar
     output_columnar_ = true;
   }
@@ -621,7 +614,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_de
     , output_columnar_(false)
     , render_output_(false)
     , must_use_baseline_sort_(false)
-    , is_table_function_(false)
     , use_streaming_top_n_(false)
     , threads_can_reuse_group_by_buffers_(false)
     , force_4byte_float_(false) {}
@@ -908,7 +900,7 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t col_idx) const {
     if (!keyless_hash_) {
       offset += getPrependedGroupBufferSizeInBytes();
     }
-    if (is_table_function_) {
+    if (query_desc_type_ == QueryDescriptionType::TableFunction) {
       for (size_t index = 0; index < col_idx; ++index) {
         int8_t column_width = getPaddedSlotWidthBytes(index);
         if (column_width > 0) {
@@ -1286,7 +1278,6 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tAllow Lazy Fetch: " + ::toString(allow_lazy_fetch) + "\n";
   str += "\tRender Output: " + ::toString(render_output_) + "\n";
   str += "\tUse Baseline Sort: " + ::toString(must_use_baseline_sort_) + "\n";
-  str += "\tIs Table Function: " + ::toString(is_table_function_) + "\n";
   return str;
 }
 

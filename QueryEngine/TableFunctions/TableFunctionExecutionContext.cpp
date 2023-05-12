@@ -705,10 +705,8 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   kernel_params[ERROR_BUFFER] =
       reinterpret_cast<CUdeviceptr>(gpu_allocator->alloc(sizeof(int32_t)));
   // initialize output memory
-  QueryMemoryDescriptor query_mem_desc(executor,
-                                       elem_count,
-                                       QueryDescriptionType::TableFunction,
-                                       /*is_table_function=*/true);
+  QueryMemoryDescriptor query_mem_desc(
+      executor, elem_count, QueryDescriptionType::TableFunction);
 
   for (size_t i = 0; i < num_out_columns; i++) {
     const size_t col_width = exe_unit.target_exprs[i]->get_type_info().get_size();
