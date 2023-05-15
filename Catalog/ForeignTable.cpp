@@ -63,7 +63,7 @@ void ForeignTable::validateSupportedOptionKeys(const OptionsMap& options_map) co
   const auto& data_wrapper_options =
       foreign_storage::ForeignDataWrapperFactory::createForValidation(
           foreign_server->data_wrapper_type, this)
-          .getSupportedTableOptions();
+          ->getSupportedTableOptions();
   for (const auto& [key, value] : options_map) {
     if (!shared::contains(supported_options, key) &&
         !shared::contains(data_wrapper_options, key)) {
@@ -127,7 +127,7 @@ void ForeignTable::validateRefreshOptionValues() const {
 void ForeignTable::validateDataWrapperOptions() const {
   foreign_storage::ForeignDataWrapperFactory::createForValidation(
       foreign_server->data_wrapper_type, this)
-      .validateTableOptions(this);
+      ->validateTableOptions(this);
 }
 
 OptionsMap ForeignTable::createOptionsMap(const rapidjson::Value& json_options) {
@@ -149,7 +149,7 @@ void ForeignTable::validateAlterOptions(const OptionsMap& options_map) const {
   const auto& data_wrapper_options =
       foreign_storage::ForeignDataWrapperFactory::createForValidation(
           foreign_server->data_wrapper_type, this)
-          .getAlterableTableOptions();
+          ->getAlterableTableOptions();
 
   for (const auto& [key, value] : options_map) {
     if (!shared::contains(alterable_options, key) &&
@@ -163,7 +163,7 @@ void ForeignTable::validateAlterOptions(const OptionsMap& options_map) const {
 void ForeignTable::validateSchema(const std::list<ColumnDescriptor>& columns) const {
   foreign_storage::ForeignDataWrapperFactory::createForValidation(
       foreign_server->data_wrapper_type, this)
-      .validateSchema(columns);
+      ->validateSchema(columns);
 }
 
 }  // namespace foreign_storage

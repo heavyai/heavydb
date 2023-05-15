@@ -154,7 +154,7 @@ class ForeignDataWrapperFactory {
    * ForeignDataWrapper to be used for validation purposes. Returned instance should not
    * be used for any stateful operations, such as fetching foreign table data/metadata.
    */
-  static const ForeignDataWrapper& createForValidation(
+  static const ForeignDataWrapper* createForValidation(
       const std::string& data_wrapper_type,
       const ForeignTable* foreign_table = nullptr);
 
