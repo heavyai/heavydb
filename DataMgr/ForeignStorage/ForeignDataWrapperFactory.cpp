@@ -378,7 +378,7 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::create(
   return data_wrapper;
 }
 
-const ForeignDataWrapper& ForeignDataWrapperFactory::createForValidation(
+const ForeignDataWrapper* ForeignDataWrapperFactory::createForValidation(
     const std::string& data_wrapper_type,
     const ForeignTable* foreign_table) {
   bool is_s3_select_wrapper{false};
@@ -390,48 +390,37 @@ const ForeignDataWrapper& ForeignDataWrapperFactory::createForValidation(
     data_wrapper_type_key = S3_SELECT_WRAPPER_KEY;
   }
 
-  if (validation_data_wrappers_.find(data_wrapper_type_key) ==
-      validation_data_wrappers_.end()) {
+  auto [itr, is_new] = validation_data_wrappers_.emplace(data_wrapper_type_key, nullptr);
+  if (is_new) {
     if (data_wrapper_type == DataWrapperType::CSV) {
       if (is_s3_select_wrapper) {
         UNREACHABLE();
       } else {
-        validation_data_wrappers_[data_wrapper_type_key] =
-            std::make_unique<CsvDataWrapper>();
+        itr->second = std::make_unique<CsvDataWrapper>();
       }
 #ifdef ENABLE_IMPORT_PARQUET
     } else if (data_wrapper_type == DataWrapperType::PARQUET) {
-      validation_data_wrappers_[data_wrapper_type_key] =
-          std::make_unique<ParquetDataWrapper>();
+      itr->second = std::make_unique<ParquetDataWrapper>();
 #endif
     } else if (data_wrapper_type == DataWrapperType::REGEX_PARSER) {
-      validation_data_wrappers_[data_wrapper_type_key] =
-          std::make_unique<RegexParserDataWrapper>();
+      itr->second = std::make_unique<RegexParserDataWrapper>();
     } else if (data_wrapper_type == DataWrapperType::INTERNAL_CATALOG) {
-      validation_data_wrappers_[data_wrapper_type_key] =
-          std::make_unique<InternalCatalogDataWrapper>();
+      itr->second = std::make_unique<InternalCatalogDataWrapper>();
     } else if (data_wrapper_type == DataWrapperType::INTERNAL_EXECUTOR_STATS) {
-      validation_data_wrappers_[data_wrapper_type_key] =
-          std::make_unique<InternalExecutorStatsDataWrapper>();
+      itr->second = std::make_unique<InternalExecutorStatsDataWrapper>();
     } else if (data_wrapper_type == DataWrapperType::INTERNAL_ML_MODEL_METADATA) {
-      validation_data_wrappers_[data_wrapper_type_key] =
-          std::make_unique<InternalMLModelMetadataDataWrapper>();
+      itr->second = std::make_unique<InternalMLModelMetadataDataWrapper>();
     } else if (data_wrapper_type == DataWrapperType::INTERNAL_MEMORY_STATS) {
-      validation_data_wrappers_[data_wrapper_type_key] =
-          std::make_unique<InternalMemoryStatsDataWrapper>();
+      itr->second = std::make_unique<InternalMemoryStatsDataWrapper>();
     } else if (data_wrapper_type == DataWrapperType::INTERNAL_STORAGE_STATS) {
-      validation_data_wrappers_[data_wrapper_type_key] =
-          std::make_unique<InternalStorageStatsDataWrapper>();
+      itr->second = std::make_unique<InternalStorageStatsDataWrapper>();
     } else if (data_wrapper_type == DataWrapperType::INTERNAL_LOGS) {
-      validation_data_wrappers_[data_wrapper_type_key] =
-          std::make_unique<InternalLogsDataWrapper>();
+      itr->second = std::make_unique<InternalLogsDataWrapper>();
     } else {
       UNREACHABLE();
     }
   }
-  CHECK(validation_data_wrappers_.find(data_wrapper_type_key) !=
-        validation_data_wrappers_.end());
-  return *validation_data_wrappers_[data_wrapper_type_key];
+  return itr->second.get();
 }
 
 void ForeignDataWrapperFactory::validateDataWrapperType(

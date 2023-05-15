@@ -84,8 +84,9 @@ class LoadTableTest : public DBHandlerTestFixture {
 
  private:
   void initData() {
+    p_column.nulls = std::vector<bool>(1, false);
     i1_column.nulls = s_column.nulls = nns_column.nulls = ls_column.nulls =
-        mp_column.nulls = p_column.nulls = {false};
+        mp_column.nulls = p_column.nulls;
     i1_column.data.int_col = {1};
     s_column.data.str_col = {"s"};
     nns_column.data.str_col = {"nns"};

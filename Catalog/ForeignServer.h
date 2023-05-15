@@ -62,7 +62,7 @@ struct ForeignServer : public OptionsContainer {
  private:
   void validateStorageParameters() {
     ForeignDataWrapperFactory::createForValidation(data_wrapper_type)
-        .validateServerOptions(this);
+        ->validateServerOptions(this);
   }
 };
 }  // namespace foreign_storage

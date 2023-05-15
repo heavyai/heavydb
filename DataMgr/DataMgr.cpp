@@ -399,7 +399,7 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfoUnlocked(
 
     const auto& slab_segments = cpu_buffer->getSlabSegments();
     for (size_t slab_num = 0; slab_num < slab_segments.size(); ++slab_num) {
-      for (auto segment : slab_segments[slab_num]) {
+      for (auto const& segment : slab_segments[slab_num]) {
         MemoryData md;
         md.slabNum = slab_num;
         md.startPage = segment.start_page;
@@ -428,7 +428,7 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfoUnlocked(
 
       const auto& slab_segments = gpu_buffer->getSlabSegments();
       for (size_t slab_num = 0; slab_num < slab_segments.size(); ++slab_num) {
-        for (auto segment : slab_segments[slab_num]) {
+        for (auto const& segment : slab_segments[slab_num]) {
           MemoryData md;
           md.slabNum = slab_num;
           md.startPage = segment.start_page;

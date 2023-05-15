@@ -368,10 +368,11 @@ void ParquetDataWrapper::updateMetadataForRolledOffFiles(
         for (auto row_group = row_group_interval.start_index;
              row_group <= row_group_interval.end_index;
              row_group++) {
-          const auto& row_group_metadata_item = shared::get_from_map(
-              row_group_metadata_map, {row_group_interval.file_path, row_group});
+          auto itr =
+              row_group_metadata_map.find({row_group_interval.file_path, row_group});
+          CHECK(itr != row_group_metadata_map.end());
           updateChunkMetadataForFragment(column_interval,
-                                         row_group_metadata_item.column_chunk_metadata,
+                                         itr->second.column_chunk_metadata,
                                          partially_deleted_fragment_id.value());
         }
       }

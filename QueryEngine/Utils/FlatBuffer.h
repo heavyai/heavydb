@@ -285,6 +285,8 @@
 */
 // clang-format on
 
+#include <cstring>
+
 #ifdef FLATBUFFER_ERROR_ABORTS
 #include "../../Shared/toString.h"
 #define RETURN_ERROR(exc) \
@@ -1147,6 +1149,8 @@ struct FlatBufferManager {
     values = nullptr;
     nof_values = 0;
     nof_sizes = 0;
+    std::memset(sizes_buffers, 0, NDIM * sizeof(int32_t*));
+    std::memset(sizes_lengths, 0, NDIM * sizeof(int32_t));
     is_null = true;
 
     if (!isNestedArray()) {
