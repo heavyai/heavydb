@@ -470,7 +470,6 @@ void DataMgr::clearMemory(const MemoryLevel memLevel) {
     if (cudaMgr_) {
       int numGpus = cudaMgr_->getDeviceCount();
       for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-        LOG(INFO) << "clear slabs on gpu " << gpuNum;
         auto buffer_mgr_for_gpu =
             dynamic_cast<Buffer_Namespace::BufferMgr*>(bufferMgrs_[memLevel][gpuNum]);
         CHECK(buffer_mgr_for_gpu);

@@ -2842,6 +2842,22 @@ void DBHandler::get_version(std::string& version) {
   version = MAPD_RELEASE;
 }
 
+namespace {
+
+ScopeGuard pause_and_resume_executor_queue() {
+  if (g_enable_executor_resource_mgr) {
+    Executor::pause_executor_queue();
+    return [] {
+      // we need to resume erm queue if we throw any exception
+      // that heavydb server can handle w/o shutting it down
+      Executor::resume_executor_queue();
+    };
+  }
+  return [] {};
+}
+
+}  // namespace
+
 void DBHandler::clear_gpu_memory(const TSessionId& session_id_or_json) {
   heavyai::RequestInfo const request_info(session_id_or_json);
   SET_REQUEST_ID(request_info.requestId());
@@ -2851,13 +2867,18 @@ void DBHandler::clear_gpu_memory(const TSessionId& session_id_or_json) {
   if (!session_ptr->get_currentUser().isSuper) {
     THROW_DB_EXCEPTION("Superuser privilege is required to run clear_gpu_memory");
   }
+  auto resume_executor_queue = pause_and_resume_executor_queue();
+  // clear renderer memory first
+  // this will block until any running render finishes
+  if (render_handler_) {
+    render_handler_->clear_gpu_memory();
+  }
+  // then clear the QE memory
+  // the renderer will have disconnected from any QE memory
   try {
     Executor::clearMemory(Data_Namespace::MemoryLevel::GPU_LEVEL);
   } catch (const std::exception& e) {
     THROW_DB_EXCEPTION(e.what());
-  }
-  if (render_handler_) {
-    render_handler_->clear_gpu_memory();
   }
 }
 
@@ -2869,13 +2890,18 @@ void DBHandler::clear_cpu_memory(const TSessionId& session_id_or_json) {
   if (!session_ptr->get_currentUser().isSuper) {
     THROW_DB_EXCEPTION("Superuser privilege is required to run clear_cpu_memory");
   }
+  auto resume_executor_queue = pause_and_resume_executor_queue();
+  // clear renderer memory first
+  // this will block until any running render finishes
+  if (render_handler_) {
+    render_handler_->clear_cpu_memory();
+  }
+  // then clear the QE memory
+  // the renderer will have disconnected from any QE memory
   try {
     Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL);
   } catch (const std::exception& e) {
     THROW_DB_EXCEPTION(e.what());
-  }
-  if (render_handler_) {
-    render_handler_->clear_cpu_memory();
   }
 }
 
@@ -2889,6 +2915,7 @@ void DBHandler::clearRenderMemory(const TSessionId& session_id_or_json) {
     THROW_DB_EXCEPTION("Superuser privilege is required to run clear_render_memory");
   }
   if (render_handler_) {
+    auto resume_executor_queue = pause_and_resume_executor_queue();
     render_handler_->clear_cpu_memory();
     render_handler_->clear_gpu_memory();
   }
