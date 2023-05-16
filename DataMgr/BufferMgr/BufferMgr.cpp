@@ -485,9 +485,12 @@ void BufferMgr::clearSlabs() {
   }
   if (!pinned_exists) {
     // lets actually clear the buffer from memory
+    LOG(INFO) << getStringMgrType() << ":" << device_id_ << " clear slab memory";
     freeAllMem();
     clear();
     reinit();
+  } else {
+    LOG(INFO) << getStringMgrType() << ":" << device_id_ << " keep slab memory (pinned).";
   }
 }
 
