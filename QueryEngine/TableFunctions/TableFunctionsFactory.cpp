@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 
 extern bool g_enable_table_functions;
 extern bool g_enable_ml_functions;
@@ -343,9 +344,18 @@ size_t TableFunction::getSqlOutputRowSizeParameter() const {
   return getOutputRowSizeParameter();
 }
 
+namespace {
+
+template <size_t... I>
+constexpr bool string_view_array_sorted_and_distinct(std::string_view const* list,
+                                                     std::index_sequence<I...>) {
+  return ((list[I] < list[I + 1]) && ...);
+}
+
 bool is_table_function_whitelisted(std::string_view const function_name) {
   // All table functions that will be on by default (and not just for testing)
-  // must be added to the whitelisted_table_functions set below.
+  // must be added to the whitelisted_table_functions list below.
+  // These lists must be in alphabetical order (enforced at compile-time)
   constexpr std::string_view whitelisted_table_functions[]{
        "dbscan",
        "decision_tree_reg_fit",
@@ -362,6 +372,7 @@ bool is_table_function_whitelisted(std::string_view const function_name) {
        "random_forest_reg_var_importance",
        "supported_ml_frameworks",
        "tf_compute_dwell_times",
+       "tf_cross_section_1d",
        "tf_feature_self_similarity",
        "tf_feature_similarity",
        "tf_geo_multi_rasterize",
@@ -379,6 +390,9 @@ bool is_table_function_whitelisted(std::string_view const function_name) {
        "tf_raster_contour_polygons",
        "tf_raster_graph_shortest_slope_weighted_path"
     };
+    constexpr auto whitelisted_table_functions_len =
+       sizeof(whitelisted_table_functions) / sizeof(*whitelisted_table_functions);
+
 
   // Must be sorted.
   constexpr std::string_view ml_table_functions[]{"dbscan",
@@ -393,20 +407,29 @@ bool is_table_function_whitelisted(std::string_view const function_name) {
                                                   "random_forest_reg_fit",
                                                   "random_forest_reg_var_importance",
                                                   "supported_ml_frameworks"};
+  constexpr auto ml_table_functions_len =
+      sizeof(ml_table_functions) / sizeof(*ml_table_functions);
 
-  if (!std::binary_search(
-          whitelisted_table_functions,
-          whitelisted_table_functions +
-              sizeof whitelisted_table_functions / sizeof *whitelisted_table_functions,
-          function_name)) {
+  // compile-time validation that above lists are sorted and distinct
+  static_assert(string_view_array_sorted_and_distinct(
+      whitelisted_table_functions,
+      std::make_index_sequence<whitelisted_table_functions_len - 1>{}));
+  static_assert(string_view_array_sorted_and_distinct(
+      ml_table_functions, std::make_index_sequence<ml_table_functions_len - 1>{}));
+
+  if (!std::binary_search(whitelisted_table_functions,
+                          whitelisted_table_functions + whitelisted_table_functions_len,
+                          function_name)) {
     return false;
   }
   return g_enable_ml_functions ||
-         !std::binary_search(
-             ml_table_functions,
-             ml_table_functions + sizeof ml_table_functions / sizeof *ml_table_functions,
-             function_name);
+         !std::binary_search(ml_table_functions,
+                             ml_table_functions + ml_table_functions_len,
+                             function_name);
 }
+
+
+}  // namespace
 
 void TableFunctionsFactory::add(
     const std::string& name,
