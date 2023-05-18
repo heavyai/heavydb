@@ -55,6 +55,8 @@ class LruCache {
     }
   }
 
+  const_list_iterator_t cbegin() const { return (cache_items_list_.cbegin()); }
+
   const_list_iterator_t cend() const { return (cache_items_list_.cend()); }
 
   void clear() {
@@ -62,18 +64,15 @@ class LruCache {
     cache_items_map_.clear();
   }
 
-  void evictFractionEntries(const float fraction) {
-    size_t entries_to_evict =
+  size_t computeNumEntriesToEvict(const float fraction) {
+    return std::min(
         std::min(std::max(static_cast<size_t>(cache_items_map_.size() * fraction),
                           static_cast<size_t>(1)),
-                 cache_items_map_.size());
-    evictCommon(entries_to_evict);
+                 cache_items_map_.size()),
+        cache_items_map_.size());
   }
 
-  void evictNEntries(const size_t n) {
-    size_t entries_to_evict = std::min(n, cache_items_map_.size());
-    evictCommon(entries_to_evict);
-  }
+  void evictNEntries(const size_t n) { evictCommon(n); }
 
   size_t size() const { return cache_items_list_.size(); }
 

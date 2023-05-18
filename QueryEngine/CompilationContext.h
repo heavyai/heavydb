@@ -25,6 +25,7 @@
 class CompilationContext {
  public:
   virtual ~CompilationContext() {}
+  virtual size_t getMemSize() const = 0;
 };
 
 struct CompilationOptions;
@@ -89,6 +90,8 @@ class CpuCompilationContext : public CompilationContext {
   TableFunctionEntryPointPtr table_function_entry_point() const {
     return (TableFunctionEntryPointPtr)func_;
   }
+
+  size_t getMemSize() const { return 0; }
 
  private:
   void* func_{nullptr};

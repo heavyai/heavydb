@@ -27,6 +27,7 @@
 #include <functional>
 #include <future>
 #include <iostream>
+#include <numeric>
 #include <string_view>
 #include <thread>
 #include <type_traits>
@@ -135,7 +136,12 @@ StringDictionary::StringDictionary(const shared::StringDictKey& dict_key,
     , offset_file_size_(0)
     , payload_file_size_(0)
     , payload_file_off_(0)
-    , strings_cache_(nullptr) {
+    , like_cache_size_(0)
+    , regex_cache_size_(0)
+    , equal_cache_size_(0)
+    , compare_cache_size_(0)
+    , strings_cache_(nullptr)
+    , strings_cache_size_(0) {
   if (!isTemp && folder.empty()) {
     return;
   }
@@ -880,6 +886,7 @@ std::vector<int32_t> StringDictionary::getLike(const std::string& pattern,
   }
   // place result into cache for reuse if similar query
   const auto it_ok = like_cache_.insert(std::make_pair(cache_key, result));
+  like_cache_size_ += (pattern.size() + 3 + (result.size() * sizeof(int32_t)));
 
   CHECK(it_ok.second);
 
@@ -894,7 +901,7 @@ std::vector<int32_t> StringDictionary::getEquals(std::string pattern,
   int32_t eq_id = MAX_STRLEN + 1;
   int32_t cur_size = str_count_;
   if (eq_id_itr != equal_cache_.end()) {
-    auto eq_id = eq_id_itr->second;
+    eq_id = eq_id_itr->second;
     if (comp_operator == "=") {
       result.push_back(eq_id);
     } else {
@@ -931,6 +938,7 @@ std::vector<int32_t> StringDictionary::getEquals(std::string pattern,
     }
     if (result.size() > 0) {
       const auto it_ok = equal_cache_.insert(std::make_pair(pattern, result[0]));
+      equal_cache_size_ += (pattern.size() + (result.size() * sizeof(int32_t)));
       CHECK(it_ok.second);
       eq_id = result[0];
     }
@@ -993,6 +1001,7 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
     }
 
     compare_cache_.put(pattern, cache_index);
+    compare_cache_size_ += (pattern.size() + sizeof(cache_index));
   }
 
   // since we have a cache in form of vector of ints which is sorted according to
@@ -1149,6 +1158,7 @@ std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
     result.insert(result.end(), worker_result.begin(), worker_result.end());
   }
   const auto it_ok = regex_cache_.insert(std::make_pair(cache_key, result));
+  regex_cache_size_ += (pattern.size() + 1 + (result.size() * sizeof(int32_t)));
   CHECK(it_ok.second);
 
   return result;
@@ -1173,13 +1183,17 @@ std::vector<std::string> StringDictionary::copyStrings() const {
       multithreaded ? static_cast<size_t>(cpu_threads()) : size_t(1);
   CHECK_GT(worker_count, 0UL);
   std::vector<std::vector<std::string>> worker_results(worker_count);
-  auto copy = [this](std::vector<std::string>& str_list,
-                     const size_t start_id,
-                     const size_t end_id) {
+  std::vector<size_t> string_size(worker_count, 0);
+  auto copy = [this, &string_size](std::vector<std::string>& str_list,
+                                   const size_t worker_idx,
+                                   const size_t start_id,
+                                   const size_t end_id) {
     CHECK_LE(start_id, end_id);
     str_list.reserve(end_id - start_id);
     for (size_t string_id = start_id; string_id < end_id; ++string_id) {
-      str_list.push_back(getStringUnlocked(string_id));
+      auto str = getStringUnlocked(string_id);
+      string_size[worker_idx] += str.size();
+      str_list.push_back(str);
     }
   };
   if (multithreaded) {
@@ -1188,21 +1202,27 @@ std::vector<std::string> StringDictionary::copyStrings() const {
     for (size_t worker_idx = 0, start = 0, end = std::min(start + stride, str_count_);
          worker_idx < worker_count && start < str_count_;
          ++worker_idx, start += stride, end = std::min(start + stride, str_count_)) {
-      workers.push_back(std::async(
-          std::launch::async, copy, std::ref(worker_results[worker_idx]), start, end));
+      workers.push_back(std::async(std::launch::async,
+                                   copy,
+                                   std::ref(worker_results[worker_idx]),
+                                   worker_idx,
+                                   start,
+                                   end));
     }
     for (auto& worker : workers) {
       worker.get();
     }
   } else {
     CHECK_EQ(worker_results.size(), size_t(1));
-    copy(worker_results[0], 0, str_count_);
+    copy(worker_results[0], 0, 0, str_count_);
   }
 
   for (const auto& worker_result : worker_results) {
     strings_cache_->insert(
         strings_cache_->end(), worker_result.begin(), worker_result.end());
   }
+  strings_cache_size_ +=
+      std::accumulate(string_size.begin(), string_size.end(), size_t(0));
   return *strings_cache_;
 }
 
@@ -1590,6 +1610,11 @@ void StringDictionary::invalidateInvertedIndex() noexcept {
     decltype(equal_cache_)().swap(equal_cache_);
   }
   compare_cache_.invalidateInvertedIndex();
+
+  like_cache_size_ = 0;
+  regex_cache_size_ = 0;
+  equal_cache_size_ = 0;
+  compare_cache_size_ = 0;
 }
 
 // TODO 5 Mar 2021 Nothing will undo the writes to dictionary currently on a failed
@@ -2054,4 +2079,11 @@ void translate_string_ids(std::vector<int32_t>& dest_ids,
                                      source_ids,
                                      {source_dict_key.db_id, source_dict_key.dict_id},
                                      dest_generation);
+}
+
+size_t StringDictionary::computeCacheSize() const {
+  return string_id_string_dict_hash_table_.size() * sizeof(int32_t) +
+         hash_cache_.size() * sizeof(string_dict_hash_t) +
+         sorted_cache.size() * sizeof(int32_t) + like_cache_size_ + regex_cache_size_ +
+         equal_cache_size_ + compare_cache_size_ + strings_cache_size_;
 }

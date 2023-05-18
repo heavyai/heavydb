@@ -508,7 +508,6 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
   if (cached_code) {
     return cached_code;
   }
-
   if (cgen_state_->needs_geos_) {
 #ifdef ENABLE_GEOS
     auto llvm_module = multifrag_query_func->getParent();
@@ -1380,6 +1379,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
        ++device_id) {
     gpu_compilation_context->addDeviceCode(
         std::make_unique<GpuDeviceCompilationContext>(cubin,
+                                                      cubin_result.cubin_size,
                                                       func_name,
                                                       device_id,
                                                       gpu_target.cuda_mgr,
@@ -1389,6 +1389,16 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   }
 
   checkCudaErrors(cuLinkDestroy(link_state));
+  try {
+    QueryEngine::getInstance()->addGpuKernelSize(cubin_result.cubin_size);
+  } catch (std::runtime_error const& e) {
+    if (strcmp(e.what(), "QueryEngine instance hasn't been created")) {
+      LOG(WARNING) << "QueryEngine::getInstance() failed: " << e.what();
+    }
+  } catch (...) {
+    LOG(WARNING) << "Fail to get QueryEngine instance";
+    throw;
+  }
   return gpu_compilation_context;
 #else
   return {};
@@ -1419,7 +1429,6 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
   if (cached_code) {
     return cached_code;
   }
-
   bool row_func_not_inlined = false;
   if (no_inline) {
     for (auto it = llvm::inst_begin(cgen_state_->row_func_),
@@ -1456,11 +1465,24 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     if (cuda_error.getStatus() == CUDA_ERROR_OUT_OF_MEMORY) {
       // Thrown if memory not able to be allocated on gpu
       // Retry once after evicting portion of code cache
+      auto& code_cache_accessor = QueryEngine::getInstance()->gpu_code_accessor;
+      auto const num_entries_to_evict =
+          code_cache_accessor->computeNumEntriesToEvict(g_fraction_code_cache_to_evict);
+      auto evicted_kernels_size =
+          code_cache_accessor->getSumSizeEvicted(num_entries_to_evict);
       LOG(WARNING) << "Failed to allocate GPU memory for generated code. Evicting "
-                   << g_fraction_code_cache_to_evict * 100.
-                   << "% of GPU code cache and re-trying.";
-      QueryEngine::getInstance()->gpu_code_accessor->evictFractionEntries(
-          g_fraction_code_cache_to_evict);
+                   << num_entries_to_evict << " (" << evicted_kernels_size
+                   << " bytes) cached GPU code and re-trying.";
+      try {
+        QueryEngine::getInstance()->subGpuKernelSize(evicted_kernels_size);
+      } catch (std::runtime_error const& e) {
+        if (strcmp(e.what(), "QueryEngine instance hasn't been created")) {
+          LOG(WARNING) << "QueryEngine::getInstance() failed: " << e.what();
+        }
+      } catch (...) {
+        LOG(WARNING) << "Fail to get QueryEngine instance";
+      }
+      code_cache_accessor->evictEntries(num_entries_to_evict);
       compilation_context = CodeGenerator::generateNativeGPUCode(this,
                                                                  query_func,
                                                                  multifrag_query_func,

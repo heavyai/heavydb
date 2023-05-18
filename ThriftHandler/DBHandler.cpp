@@ -6065,6 +6065,68 @@ void DBHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* sessio
   }
 }
 
+namespace {
+
+void log_cache_size(const Catalog_Namespace::Catalog& cat) {
+  std::ostringstream oss;
+  oss << "Cache size information {";
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  // 1. Data recycler
+  // 1.a Resultset Recycler
+  auto resultset_cache_size =
+      executor->getResultSetRecyclerHolder()
+          .getResultSetRecycler()
+          ->getResultSetRecyclerMetricTracker()
+          .getCurrentCacheSize(DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  if (resultset_cache_size) {
+    oss << "\"query_resultset\": " << *resultset_cache_size << " bytes, ";
+  }
+
+  // 1.b Join Hash Table Recycler
+  auto perfect_join_ht_cache_size =
+      PerfectJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
+          CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto baseline_join_ht_cache_size =
+      BaselineJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
+          CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto overlaps_join_ht_cache_size =
+      OverlapsJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
+          CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto overlaps_ht_tuner_cache_size =
+      OverlapsJoinHashTable::getOverlapsTuningParamCache()->getCurrentCacheSizeForDevice(
+          CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
+          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto sum_hash_table_cache_size =
+      perfect_join_ht_cache_size + baseline_join_ht_cache_size +
+      overlaps_join_ht_cache_size + overlaps_ht_tuner_cache_size;
+  oss << "\"hash_tables\": " << sum_hash_table_cache_size << " bytes, ";
+
+  // 1.c Chunk Metadata Recycler
+  auto chunk_metadata_cache_size =
+      executor->getResultSetRecyclerHolder()
+          .getChunkMetadataRecycler()
+          ->getCurrentCacheSizeForDevice(CacheItemType::CHUNK_METADATA,
+                                         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  oss << "\"chunk_metadata\": " << chunk_metadata_cache_size << " bytes, ";
+
+  // 2. Query Plan Dag
+  auto query_plan_dag_cache_size =
+      executor->getQueryPlanDagCache().getCurrentNodeMapSize();
+  oss << "\"query_plan_dag\": " << query_plan_dag_cache_size << " bytes, ";
+
+  // 3. Compiled Code
+  oss << "\"compiled_GPU code\": " << QueryEngine::getInstance()->getTotalCacheKeySize()
+      << " bytes, ";
+
+  // 4. String Dictionary
+  oss << "\"string_dictionary\": " << cat.getTotalMemorySizeForDictionariesForDatabase()
+      << " bytes";
+  oss << "}";
+  LOG(INFO) << oss.str();
+}
+
+}  // namespace
+
 std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
     ExecutionResult& _return,
     QueryStateProxy query_state_proxy,
@@ -6132,6 +6194,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
     execution_time_ms -= rs->getQueueTime();
   }
   _return.setExecutionTime(execution_time_ms);
+  log_cache_size(cat);
   VLOG(1) << cat.getDataMgr().getSystemMemoryUsage();
   const auto& filter_push_down_info = _return.getPushedDownFilterInfo();
   if (!filter_push_down_info.empty()) {

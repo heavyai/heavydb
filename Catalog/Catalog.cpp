@@ -2470,6 +2470,19 @@ void Catalog::getDictionary(const ColumnDescriptor& cd,
   stringDicts[ccd.columnId] = dit->second.get()->stringDict.get();
 }
 
+size_t Catalog::getTotalMemorySizeForDictionariesForDatabase() const {
+  size_t ret{0};
+  for (auto const& kv : dictDescriptorMapByRef_) {
+    if (kv.first.dbId == currentDB_.dbId) {
+      auto dictionary = kv.second.get()->stringDict.get();
+      if (dictionary) {
+        ret += dictionary->computeCacheSize();
+      }
+    }
+  }
+  return ret;
+}
+
 void Catalog::alterColumnTypeTransactional(const ColumnDescriptor& cd) {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
