@@ -32,6 +32,7 @@ struct CubinResult {
   std::vector<CUjit_option> option_keys;
   std::vector<void*> option_values;
   CUlinkState link_state;
+  size_t cubin_size;
 };
 
 /**
@@ -50,6 +51,7 @@ CubinResult ptx_to_cubin(const std::string& ptx,
 class GpuDeviceCompilationContext {
  public:
   GpuDeviceCompilationContext(const void* image,
+                              const size_t module_size,
                               const std::string& kernel_name,
                               const int device_id,
                               const void* cuda_mgr,
@@ -60,9 +62,11 @@ class GpuDeviceCompilationContext {
   CUfunction kernel() { return kernel_; }
   CUmodule module() { return module_; }
   std::string const& name() const { return kernel_name_; }
+  size_t getModulesize() const { return module_size_; }
 
  private:
   CUmodule module_;
+  size_t module_size_;
   CUfunction kernel_;
   std::string const kernel_name_;
 #ifdef HAVE_CUDA
@@ -98,6 +102,10 @@ class GpuCompilationContext : public CompilationContext {
   std::string const& name(size_t const device_id) const {
     CHECK_LT(device_id, contexts_per_device_.size());
     return contexts_per_device_[device_id]->name();
+  }
+
+  size_t getMemSize() const {
+    return contexts_per_device_.begin()->get()->getModulesize();
   }
 
  private:

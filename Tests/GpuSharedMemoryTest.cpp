@@ -188,13 +188,15 @@ std::unique_ptr<GpuDeviceCompilationContext> compile_and_link_gpu_code(
   auto cubin = cubin_result.cubin;
   auto link_state = cubin_result.link_state;
   const auto num_options = option_keys.size();
-  auto gpu_context = std::make_unique<GpuDeviceCompilationContext>(cubin,
-                                                                   kernel_name,
-                                                                   gpu_device_idx,
-                                                                   cuda_mgr,
-                                                                   num_options,
-                                                                   &option_keys[0],
-                                                                   &option_values[0]);
+  auto gpu_context =
+      std::make_unique<GpuDeviceCompilationContext>(cubin,
+                                                    cubin_result.cubin_size,
+                                                    kernel_name,
+                                                    gpu_device_idx,
+                                                    cuda_mgr,
+                                                    num_options,
+                                                    &option_keys[0],
+                                                    &option_values[0]);
 
   checkCudaErrors(cuLinkDestroy(link_state));
   return gpu_context;

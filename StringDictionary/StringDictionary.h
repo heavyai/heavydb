@@ -175,6 +175,7 @@ class StringDictionary {
   static constexpr size_t MAX_STRCOUNT = (1U << 31) - 1;
 
   void update_leaf(const LeafHostInfo& host_info);
+  size_t computeCacheSize() const;
 
  private:
   struct StringIdxEntry {
@@ -284,10 +285,15 @@ class StringDictionary {
   mutable std::shared_mutex rw_mutex_;
   mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int32_t>>
       like_cache_;
+  mutable size_t like_cache_size_;
   mutable std::map<std::pair<std::string, char>, std::vector<int32_t>> regex_cache_;
+  mutable size_t regex_cache_size_;
   mutable std::map<std::string, int32_t> equal_cache_;
+  mutable size_t equal_cache_size_;
   mutable DictionaryCache<std::string, compare_cache_value_t> compare_cache_;
+  mutable size_t compare_cache_size_;
   mutable std::shared_ptr<std::vector<std::string>> strings_cache_;
+  mutable size_t strings_cache_size_;
   mutable std::unique_ptr<StringDictionaryClient> client_;
   mutable std::unique_ptr<StringDictionaryClient> client_no_timeout_;
 

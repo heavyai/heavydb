@@ -186,12 +186,13 @@ CubinResult ptx_to_cubin(const std::string& ptx,
   CHECK(cubin);
   CHECK_GT(cubinSize, size_t(0));
   VLOG(1) << "Generated GPU binary code size: " << cubinSize << " bytes";
-  return {cubin, option_keys, option_values, link_state};
+  return {cubin, option_keys, option_values, link_state, cubinSize};
 }
 #endif
 
 #ifdef HAVE_CUDA
 GpuDeviceCompilationContext::GpuDeviceCompilationContext(const void* image,
+                                                         const size_t module_size,
                                                          const std::string& kernel_name,
                                                          const int device_id,
                                                          const void* cuda_mgr,
@@ -199,6 +200,7 @@ GpuDeviceCompilationContext::GpuDeviceCompilationContext(const void* image,
                                                          CUjit_option* options,
                                                          void** option_vals)
     : module_(nullptr)
+    , module_size_(module_size)
     , kernel_(nullptr)
     , kernel_name_(kernel_name)
     , device_id_(device_id)

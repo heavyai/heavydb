@@ -43,10 +43,28 @@ class CodeCacheAccessor {
   void swap(const CodeCacheKey& key, CodeCacheVal<CompilationContext>&& value);
   void clear();
 
-  void evictFractionEntries(const float fraction) {
+  size_t computeNumEntriesToEvict(const float fraction) {
+    std::lock_guard<std::mutex> lock(code_cache_mutex_);
+    return code_cache_.computeNumEntriesToEvict(fraction);
+  }
+
+  void evictEntries(const size_t n) {
     std::lock_guard<std::mutex> lock(code_cache_mutex_);
     evict_count_++;
-    code_cache_.evictFractionEntries(fraction);
+    code_cache_.evictNEntries(n);
+  }
+
+  size_t getSumSizeEvicted(const size_t n) {
+    std::lock_guard<std::mutex> lock(code_cache_mutex_);
+    auto last = code_cache_.cend();
+    size_t visited = 0;
+    size_t ret = 0;
+    while (visited < n && last != code_cache_.cbegin()) {
+      last--;
+      ret += last->second->getMemSize();
+      visited++;
+    }
+    return ret;
   }
 
   friend std::ostream& operator<<(std::ostream& os, CodeCacheAccessor& c) {

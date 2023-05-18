@@ -78,6 +78,11 @@ class QueryEngine {
     }
   }
 
+  size_t getTotalCacheKeySize() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return cached_gpu_kernel_total_size_;
+  }
+
   static std::shared_ptr<QueryEngine> getInstance() {
     if (auto s = instance_.lock()) {
       return s;
@@ -98,6 +103,16 @@ class QueryEngine {
     }
   }
 
+  void addGpuKernelSize(size_t sz) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    cached_gpu_kernel_total_size_ += sz;
+  }
+
+  void subGpuKernelSize(size_t sz) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    cached_gpu_kernel_total_size_ -= sz;
+  }
+
  private:
   CudaMgr_Namespace::CudaMgr* cuda_mgr_;
   std::vector<CUstream> cuda_streams_;
@@ -105,7 +120,12 @@ class QueryEngine {
   inline static std::mutex mutex_;  // TODO(sy): use atomics instead?
   inline static std::weak_ptr<QueryEngine> instance_;
 
+  // todo (yoonmin) : avoid hard-coded max cache entries
   static constexpr size_t code_cache_size{1000};
+
+  // we currently only track GPU kernel cache size
+  // todo (yoonmin): add CPU kernel size calculator
+  size_t cached_gpu_kernel_total_size_{0};
 
  public:
   std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> s_stubs_accessor;

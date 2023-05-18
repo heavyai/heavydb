@@ -323,6 +323,7 @@ class Catalog final {
   void rollLegacy(const bool forward);
   void getDictionary(const ColumnDescriptor& cd,
                      std::map<int, StringDictionary*>& stringDicts);
+  size_t getTotalMemorySizeForDictionariesForDatabase() const;
 
   DictRef addDictionaryTransactional(ColumnDescriptor& cd);
   void delDictionaryTransactional(const ColumnDescriptor& cd);
