@@ -1163,6 +1163,9 @@ std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
                                            const int device_id,
                                            bool raw) const {
   auto buffer = getJoinHashBuffer(device_type, device_id);
+  if (!buffer) {
+    return "EMPTY";
+  }
   auto buffer_size = getJoinHashBufferSize(device_type, device_id);
   auto hash_table = getHashTableForDevice(device_id);
 #ifdef HAVE_CUDA
