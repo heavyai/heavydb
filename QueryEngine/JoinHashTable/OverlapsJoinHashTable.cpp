@@ -1734,6 +1734,9 @@ std::string OverlapsJoinHashTable::toString(const ExecutorDeviceType device_type
                                             const int device_id,
                                             bool raw) const {
   auto buffer = getJoinHashBuffer(device_type, device_id);
+  if (!buffer) {
+    return "EMPTY";
+  }
   CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
   auto hash_table = hash_tables_for_device_[device_id];
   CHECK(hash_table);
