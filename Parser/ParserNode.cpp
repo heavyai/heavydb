@@ -2878,8 +2878,9 @@ decltype(auto) get_storage_type(TableDescriptor& td,
 decltype(auto) get_frag_size_def(TableDescriptor& td,
                                  const NameValueAssign* p,
                                  const std::list<ColumnDescriptor>& columns) {
-  return get_property_value<IntLiteral>(p,
-                                        [&td](const auto val) { td.maxFragRows = val; });
+  return get_property_value<IntLiteral>(p, [&td](const auto val) {
+    td.maxFragRows = validate_and_get_fragment_size(std::to_string(val));
+  });
 }
 
 decltype(auto) get_frag_size_dataframe_def(DataframeTableDescriptor& df_td,
@@ -7236,4 +7237,26 @@ void execute_stmt_for_json(
   }
 }
 
+int32_t validate_and_get_fragment_size(const std::string& fragment_size_str) {
+  int64_t fragment_size_value{-1};
+  bool validation_failed{false};
+  try {
+    fragment_size_value = std::stoll(fragment_size_str);
+  } catch (std::out_of_range& e) {
+    validation_failed = true;
+  }
+  constexpr int64_t max_fragment_size = std::numeric_limits<int32_t>::max();
+  if (!validation_failed &&
+      (fragment_size_value <= 0 || fragment_size_value > max_fragment_size)) {
+    validation_failed = true;
+  }
+  if (validation_failed) {
+    throw std::runtime_error(
+        "Invalid value \"" + fragment_size_str +
+        "\" provided for FRAGMENT_SIZE option, expected a positive integer between "
+        "1 and " +
+        std::to_string(max_fragment_size) + ".");
+  }
+  return fragment_size_value;
+}
 }  // namespace Parser
