@@ -1452,7 +1452,7 @@ void CreateForeignTableCommand::setTableDetails(
 
   if (const auto it = foreign_table.options.find("FRAGMENT_SIZE");
       it != foreign_table.options.end()) {
-    foreign_table.maxFragRows = std::stoi(it->second);
+    foreign_table.maxFragRows = Parser::validate_and_get_fragment_size(it->second);
   }
 
   if (const auto it = foreign_table.options.find("MAX_CHUNK_SIZE");

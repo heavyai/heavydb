@@ -1091,6 +1091,46 @@ TEST_P(CreateTableTest, WithFragmentSizeOption) {
   assertColumnDetails(expected_attributes, column);
 }
 
+TEST_P(CreateTableTest, MaxFragmentSizeExceeded) {
+  auto query = (getCreateTableQuery(
+      GetParam(), "test_table", "(col1 INTEGER)", {{"fragment_size", "3147483646"}}));
+  queryAndAssertException(
+      query,
+      "Invalid value \"3147483646\" provided for FRAGMENT_SIZE "
+      "option, expected a positive integer between 1 and 2147483647.");
+}
+
+TEST_P(CreateTableTest, OverflowFragmentSize) {
+  auto query = (getCreateTableQuery(GetParam(),
+                                    "test_table",
+                                    "(col1 INTEGER)",
+                                    {{"fragment_size", "9223372036854775808"}}));
+  if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
+    queryAndAssertException(
+        query,
+        "Invalid value \"9223372036854775808\" provided for FRAGMENT_SIZE "
+        "option, expected a positive integer between 1 and 2147483647.");
+  } else {
+    queryAndAssertException(query, "Unable to handle literal for fragment_size");
+  }
+}
+
+TEST_P(CreateTableTest, ZeroFragmentSize) {
+  auto query = (getCreateTableQuery(
+      GetParam(), "test_table", "(col1 INTEGER)", {{"fragment_size", "0"}}));
+  queryAndAssertException(query,
+                          "Invalid value \"0\" provided for FRAGMENT_SIZE option, "
+                          "expected a positive integer between 1 and 2147483647.");
+}
+
+TEST_P(CreateTableTest, NegativeFragmentSize) {
+  auto query = (getCreateTableQuery(
+      GetParam(), "test_table", "(col1 INTEGER)", {{"fragment_size", "-1"}}));
+  queryAndAssertException(query,
+                          "Invalid value \"-1\" provided for FRAGMENT_SIZE option, "
+                          "expected a positive integer between 1 and 2147483647.");
+}
+
 TEST_P(CreateTableTest, UnsupportedGeometrySyntax) {
   auto query = getCreateTableQuery(GetParam(), "test_table", "(geom GEOMETRY)");
   queryAndAssertException(query, "Unsupported type \"GEOMETRY\" specified.");

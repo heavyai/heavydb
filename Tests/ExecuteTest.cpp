@@ -661,9 +661,9 @@ TEST(Create, StorageOptions) {
     static const std::map<std::pair<std::string, bool>,
                           std::pair<std::string, std::vector<std::string>>>
         params{
-            {{"fragment_size"s, true}, {"", {"-1", "0"}}},
+            {{"fragment_size"s, true}, {"", {"-1", "0", "2147483648"}}},
             {{"fragment_size"s, false},
-             {"", {"2097152", "4194304", "10485760", "2147483648"}}},
+             {"", {"2097152", "4194304", "10485760", "2147483647"}}},
             {{"max_rows"s, true}, {"", {"-1", "0"}}},
             {{"max_rows"s, false},
              {"", {"2097152", "4194304", "10485760", "2147483648"}}},

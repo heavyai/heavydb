@@ -2198,7 +2198,12 @@ struct DefaultValidate<IntLiteral> {
       throw std::runtime_error(property_name + " must be an integer literal.");
     }
     const auto val = static_cast<const IntLiteral*>(t->get_value())->get_intval();
-    if (val <= 0) {
+    // Delay this check for FRAGMENT_SIZE because we shouldn't make
+    // assumptions about the stored type from here.
+    // TODO : remove this check for all other integer options if we
+    // would like to preform similar bounds checking i.e. max_rows,
+    // page_size, max_chunk_size, etc...
+    if (val <= 0 && property_name != "FRAGMENT_SIZE") {
       throw std::runtime_error(property_name + " must be a positive number.");
     }
     return val;
@@ -2267,6 +2272,7 @@ std::unique_ptr<ColumnDef> column_from_json(const rapidjson::Value& element);
 void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
                                  const TableDescriptor* td);
 
+int32_t validate_and_get_fragment_size(const std::string& fragment_size_str);
 }  // namespace Parser
 
 #endif  // PARSERNODE_H_
