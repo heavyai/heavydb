@@ -104,7 +104,7 @@ bool g_enable_overlaps_hashjoin{true};
 size_t g_num_tuple_threshold_switch_to_baseline{100000};
 size_t g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline{100};
 bool g_enable_distance_rangejoin{true};
-bool g_enable_hashjoin_many_to_many{false};
+bool g_enable_hashjoin_many_to_many{true};
 size_t g_overlaps_max_table_size_bytes{1024 * 1024 * 1024};
 double g_overlaps_target_entries_per_bin{1.3};
 bool g_strip_join_covered_quals{false};
