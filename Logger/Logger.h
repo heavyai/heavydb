@@ -288,11 +288,11 @@ inline bool fast_logging_check(Severity severity) {
 
 #define VLOGGING(n) logger::fast_logging_check(logger::DEBUG##n)
 
-#define CHECK(condition)                                \
-  if (BOOST_UNLIKELY(!(condition)))                     \
-  LOG(FATAL) << "Stack trace:\n"                        \
-             << getCurrentStackTrace(1, nullptr, false) \
-             << "Check failed: " #condition " "
+#define CHECK(condition)                         \
+  if (BOOST_UNLIKELY(!(condition)))              \
+  LOG(FATAL) << "Check failed: " #condition "\n" \
+             << "Stack trace:\n"                 \
+             << getCurrentStackTrace(1, nullptr, false)
 
 #define CHECK_OP(OP, x, y)                                      \
   if (std::string* fatal_msg = logger::Check##OP(x, y, #x, #y)) \
@@ -312,7 +312,8 @@ BOOST_NOINLINE std::string* check_failed(X const& x,
                                          char const* ystr,
                                          char const* op_str) {
   std::stringstream ss;
-  ss << "Check failed: " << xstr << op_str << ystr << " (" << x << op_str << y << ") ";
+  ss << "Check failed: " << xstr << op_str << ystr << " (" << x << op_str << y << ")\n";
+  ss << "Stack trace:\n" << getCurrentStackTrace(1, nullptr, false);
   return new std::string(ss.str());  // Deleted by CHECK_OP macro.
 }
 
