@@ -3506,6 +3506,294 @@ TEST_P(GeoSpatialTestTablesFixture, Cast) {
   }
 }
 
+using TestParamType =
+    std::tuple<ExecutorDeviceType, std::string, std::string, std::string>;
+class GeoFunctionsParamTypeTest : public ::testing::TestWithParam<TestParamType> {
+ public:
+  static void SetUpTestSuite() {
+    std::string create_table_statement;
+    for (const auto& column_name_and_type : column_names_and_types_) {
+      auto column_name = column_name_and_type[0], column_type = column_name_and_type[1];
+      if (create_table_statement.empty()) {
+        create_table_statement =
+            "CREATE TABLE geo_table (" + column_name + " " + column_type;
+      } else {
+        create_table_statement += "," + column_name + " " + column_type;
+      }
+    }
+    create_table_statement += ");";
+    run_ddl_statement(create_table_statement);
+
+    run_multiple_agg(
+        "INSERT INTO geo_table VALUES "
+        "  ('POINT(2 1)', 'MULTIPOINT(2 1)', 'LINESTRING(1 1, 2 1, 3 1)', "
+        "   'MULTILINESTRING((1 1, 2 1, 3 1))', 'POLYGON((0 0, 4 0, 4 4, 0 4, 0 0))', "
+        "   'MULTIPOLYGON(((0 0, 4 0, 4 4, 0 4, 0 0)))'), "
+        "  ('POINT(0 0)', 'MULTIPOINT(10 10)', 'LINESTRING(50 50, 60 50, 70 50)', "
+        "   'MULTILINESTRING((50 100, 60 100, 70 100))', "
+        "   'POLYGON((50 150, 60 150, 60 200, 50 200, 50 150))', "
+        "   'MULTIPOLYGON(((50 300, 60 300, 60 350, 50 350, 50 300)))');",
+        ExecutorDeviceType::CPU);
+  }
+
+  static void TearDownTestSuite() { run_ddl_statement("DROP TABLE geo_table;"); }
+
+  void SetUp() override {
+    auto device_type = getDeviceType();
+#ifdef HAVE_CUDA
+    bool skip_test =
+        (device_type == ExecutorDeviceType::GPU && !QR::get()->gpusPresent());
+#else
+    bool skip_test = (device_type == ExecutorDeviceType::GPU);
+#endif
+    if (skip_test) {
+      GTEST_SKIP() << "Unsupported device type: " << device_type;
+    }
+  }
+
+  std::string getGeoPredicate() {
+    const auto& [_, function_name, left_operand_type, right_operand_type] = GetParam();
+    auto predicate = function_name + "(" + getColumnName(left_operand_type) + "," +
+                     getColumnName(right_operand_type) + ")";
+    if (function_name == "ST_DISTANCE") {
+      predicate += " < 1.0";
+    }
+    return predicate;
+  }
+
+  int64_t getResultCount() {
+    int64_t count;
+    if (mapContainsParam(true_result_mapping_)) {
+      count = 2;
+    } else if (mapContainsParam(false_result_mapping_)) {
+      count = 0;
+    } else {
+      // Table rows were created in such a way that most queries should return a count
+      // of 1.
+      count = 1;
+    }
+    return count;
+  }
+
+  using ParamMapType =
+      std::map<std::string, std::map<std::string, std::vector<std::string>>>;
+  bool mapContainsParam(const ParamMapType& param_map) {
+    const auto& [_, function_name, left_operand_type, right_operand_type] = GetParam();
+    if (param_map.count(function_name) > 0) {
+      const auto& type_map = shared::get_from_map(param_map, function_name);
+      if (type_map.count(left_operand_type) > 0) {
+        auto right_operand_types = shared::get_from_map(type_map, left_operand_type);
+        return shared::contains(right_operand_types, right_operand_type);
+      }
+    }
+    return false;
+  }
+
+  std::string getColumnName(const std::string& column_type) {
+    for (const auto& column_name_and_type : column_names_and_types_) {
+      if (column_name_and_type[1] == column_type) {
+        return column_name_and_type[0];
+      }
+    }
+    UNREACHABLE() << "Could not find column name for type: " << column_type;
+    return {};
+  }
+
+  ExecutorDeviceType getDeviceType() {
+    return std::get<0>(GetParam());
+  }
+
+  static std::vector<std::string> getGeoColumnTypes() {
+    std::vector<std::string> column_types;
+    for (const auto& column_name_and_type : column_names_and_types_) {
+      column_types.emplace_back(column_name_and_type[1]);
+    }
+    return column_types;
+  }
+
+  static std::string printTestParams(
+      const ::testing::TestParamInfo<TestParamType>& info) {
+    const auto& param = info.param;
+    std::stringstream ss;
+    ss << std::get<0>(param) << "_" << std::get<1>(param) << "_" << std::get<2>(param)
+       << "_" << std::get<3>(param);
+    return ss.str();
+  }
+
+  static inline const std::vector<std::vector<std::string>> column_names_and_types_{
+      {"pt1", "POINT"},
+      {"pt2", "MULTIPOINT"},
+      {"ls1", "LINESTRING"},
+      {"ls2", "MULTILINESTRING"},
+      {"py1", "POLYGON"},
+      {"py2", "MULTIPOLYGON"}};
+
+  // Use cases/geo type permutations that are currently supported.
+  static inline const ParamMapType supported_mapping_{
+      {"ST_CONTAINS",
+       {{"POINT", {"POINT", "LINESTRING", "POLYGON"}},
+        {"LINESTRING", {"POINT", "POLYGON"}},
+        {"POLYGON", {"POINT", "LINESTRING", "POLYGON"}},
+        {"MULTIPOLYGON", {"POINT", "LINESTRING"}}}},
+      {"ST_WITHIN",
+       {{"POINT", {"POINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}},
+        {"LINESTRING", {"POINT", "POLYGON", "MULTIPOLYGON"}},
+        {"POLYGON", {"POINT", "LINESTRING", "POLYGON"}}}},
+      {"ST_DISTANCE",
+       {{"POINT",
+         {"POINT",
+          "MULTIPOINT",
+          "LINESTRING",
+          "MULTILINESTRING",
+          "POLYGON",
+          "MULTIPOLYGON"}},
+        {"MULTIPOINT", {"POINT", "MULTIPOINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}},
+        {"LINESTRING", {"POINT", "MULTIPOINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}},
+        {"MULTILINESTRING", {"POINT"}},
+        {"POLYGON", {"POINT", "MULTIPOINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}},
+        {"MULTIPOLYGON",
+         {"POINT", "MULTIPOINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}}}},
+      {"ST_DISJOINT",
+       {{"POINT", {"POINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}},
+        {"LINESTRING", {"POINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}},
+        {"POLYGON", {"POINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}},
+        {"MULTIPOLYGON", {"POINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}}}},
+      {"ST_INTERSECTS",
+       {{"POINT", {"POINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}},
+        {"LINESTRING", {"POINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}},
+        {"POLYGON", {"POINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}},
+        {"MULTIPOLYGON", {"POINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}}}}};
+
+  // Use cases that always return true.
+  static inline const ParamMapType true_result_mapping_{
+      {"ST_CONTAINS", {{"POINT", {"POINT"}}}},  // Always true for the same point.
+      {"ST_WITHIN", {{"POINT", {"POINT"}}}},    // Always true for the same point.
+      {"ST_DISTANCE",  // Same values will always have a distance of 0.
+       {{"POINT", {"POINT"}},
+        {"MULTIPOINT", {"MULTIPOINT"}},
+        {"LINESTRING", {"LINESTRING"}},
+        {"MULTILINESTRING", {"MULTILINESTRING"}},
+        {"POLYGON", {"POLYGON"}},
+        {"MULTIPOLYGON", {"MULTIPOLYGON"}}}},
+      {"ST_INTERSECTS",  // Values always intersect with themselves.
+       {{"POINT", {"POINT"}},
+        {"LINESTRING", {"LINESTRING"}},
+        {"POLYGON", {"POLYGON"}},
+        {"MULTIPOLYGON", {"MULTIPOLYGON"}}}}};
+
+  // Use cases that always return false.
+  static inline const ParamMapType false_result_mapping_{
+      {"ST_CONTAINS",  // Smaller geo types cannot contain larger geo types.
+       {{"POINT", {"LINESTRING", "POLYGON"}},
+        {"LINESTRING", {"POLYGON"}},
+        {"POLYGON", {"POLYGON"}}}},  // TODO: This case should return true
+      {"ST_WITHIN",                  // Smaller geo types cannot contain larger geo types.
+       {{"LINESTRING", {"POINT"}},
+        {"POLYGON", {"POINT", "LINESTRING", "POLYGON"}}}},  // TODO: POLYGON/POLYGON case
+                                                            // should return true
+      {"ST_DISJOINT",  // Values cannot be disjoint with themselves.
+       {{"POINT", {"POINT"}},
+        {"LINESTRING", {"LINESTRING"}},
+        {"POLYGON", {"POLYGON"}},
+        {"MULTIPOLYGON", {"MULTIPOLYGON"}}}}};
+};
+
+class SupportedGeoFunctionsParamTypeTest : public GeoFunctionsParamTypeTest {
+ public:
+  static std::vector<TestParamType> getTestParams() {
+    std::vector<TestParamType> result;
+    for (auto device_type : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      for (const auto& [function_name, type_map] : supported_mapping_) {
+        for (const auto& [type, values] : type_map) {
+          for (const auto& value : values) {
+            result.emplace_back(device_type, function_name, type, value);
+          }
+        }
+      }
+    }
+    return result;
+  }
+};
+
+TEST_P(SupportedGeoFunctionsParamTypeTest, AllSupportedTypes) {
+  auto query = "SELECT count(*) FROM geo_table WHERE " + getGeoPredicate() + ";";
+  ASSERT_EQ(getResultCount(), v<int64_t>(run_simple_agg(query, getDeviceType())));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    OperatorsAndColumnTypes,
+    SupportedGeoFunctionsParamTypeTest,
+    ::testing::ValuesIn(SupportedGeoFunctionsParamTypeTest::getTestParams()),
+    GeoFunctionsParamTypeTest::printTestParams);
+
+class UnsupportedGeoFunctionsParamTypeTest : public GeoFunctionsParamTypeTest {
+ public:
+  static std::vector<TestParamType> getTestParams() {
+    auto column_types = getGeoColumnTypes();
+    std::vector<TestParamType> result;
+    for (auto device_type : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      for (const auto& [function_name, type_map] : supported_mapping_) {
+        for (const auto& left_operand_type : column_types) {
+          if (type_map.find(left_operand_type) == type_map.end()) {
+            // Include all geo column types for the right operand in the test, if the geo
+            // function does not support this column type.
+            for (const auto& right_operand_type : column_types) {
+              result.emplace_back(
+                  device_type, function_name, left_operand_type, right_operand_type);
+            }
+          } else {
+            const auto& right_operand_types =
+                shared::get_from_map(type_map, left_operand_type);
+            for (const auto& right_operand_type : column_types) {
+              // Include geo column types that are missing from the supported types list.
+              if (!shared::contains(right_operand_types, right_operand_type)) {
+                result.emplace_back(
+                    device_type, function_name, left_operand_type, right_operand_type);
+              }
+            }
+          }
+        }
+      }
+    }
+    return result;
+  }
+};
+
+TEST_P(UnsupportedGeoFunctionsParamTypeTest, AllUnsupportedTypes) {
+  try {
+    auto query = "SELECT count(*) FROM geo_table WHERE " + getGeoPredicate() + ";";
+    run_simple_agg(query, getDeviceType());
+    FAIL() << "An exception should have been thrown for this test case. Query: " << query;
+  } catch (const std::runtime_error& e) {
+    const auto& [_, function_name, left_operand_type, right_operand_type] = GetParam();
+    // In certain cases, ST_WITHIN is converted to ST_CONTAINS, and ST_DISJOINT is
+    // converted to ST_INTERSECT. See RelAlgTranslator::translateBinaryGeoFunction.
+    std::string executed_function_name;
+    if (function_name == "ST_WITHIN") {
+      executed_function_name = "ST_CONTAINS";
+    } else if (function_name == "ST_DISJOINT") {
+      executed_function_name = "ST_INTERSECTS";
+    } else {
+      executed_function_name = function_name;
+    }
+    auto error_regex =
+        "(" + (".*Function\\s" + executed_function_name + ".*not\\ssupported.*") + "|" +
+        (".*" + function_name +
+         "\\scurrently\\sdoesn't\\ssupport\\sthis\\sargument\\scombination.*") +
+        ")";
+    std::string actual_error{e.what()};
+    ASSERT_TRUE(
+        std::regex_match(actual_error, std::regex{error_regex, std::regex::icase}))
+        << "Error: " << actual_error << ", Regex: " << error_regex;
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    OperatorsAndColumnTypes,
+    UnsupportedGeoFunctionsParamTypeTest,
+    ::testing::ValuesIn(UnsupportedGeoFunctionsParamTypeTest::getTestParams()),
+    GeoFunctionsParamTypeTest::printTestParams);
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 
