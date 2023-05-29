@@ -94,7 +94,6 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     gcc-11 \
     g++-11 \
     libboost-all-dev \
-    libgoogle-glog-dev \
     libssl-dev \
     libevent-dev \
     default-jre \

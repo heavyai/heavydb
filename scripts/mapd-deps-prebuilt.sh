@@ -67,7 +67,6 @@ if [ "$ID" == "ubuntu" ] ; then
       gcc-11 \
       g++-11 \
       libboost-all-dev \
-      libgoogle-glog-dev \
       golang \
       libssl-dev \
       libevent-dev \
