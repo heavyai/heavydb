@@ -284,7 +284,9 @@ function install_llvm() {
     check_artifact_cleanup compiler-rt-$VERS.src.tar.xz llvm-$VERS.src/projects/compiler-rt
     check_artifact_cleanup clang-tools-extra-$VERS.src.tar.xz llvm-$VERS.src/tools/clang/tools/extra
     check_artifact_cleanup llvm-$VERS.src.tar.xz  llvm-$VERS.src
-    [[ $SAVE_SPACE == 'true' ]]  && rm -rf build.llvm-$VERS
+    if [[ $SAVE_SPACE == 'true' ]]; then
+      rm -rf build.llvm-$VERS
+    fi
 }
 
 THRIFT_VERSION=0.15.0
@@ -379,7 +381,21 @@ function install_geos() {
 
 FOLLY_VERSION=2021.02.01.00
 FMT_VERSION=7.1.3
+GLOG_VERSION=0.5.0
 function install_folly() {
+  # Build Glog statically to remove dependency on it from heavydb CMake
+  download https://github.com/google/glog/archive/refs/tags/v$GLOG_VERSION.tar.gz
+  extract v$GLOG_VERSION.tar.gz
+  BUILD_DIR="glog-$GLOG_VERSION/build"
+  mkdir -p $BUILD_DIR
+  pushd $BUILD_DIR
+  cmake -GNinja \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DWITH_UNWIND=OFF \
+  -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+  cmake_build_and_install
+  popd
+
   # Folly depends on fmt
   download https://github.com/fmtlib/fmt/archive/$FMT_VERSION.tar.gz
   extract $FMT_VERSION.tar.gz
@@ -387,9 +403,9 @@ function install_folly() {
   mkdir -p $BUILD_DIR
   pushd $BUILD_DIR
   cmake -GNinja \
-        -DCMAKE_CXX_FLAGS="-fPIC" \
         -DFMT_DOC=OFF \
         -DFMT_TEST=OFF \
+        -DBUILD_SHARED_LIBS=OFF \
         -DCMAKE_INSTALL_PREFIX=$PREFIX ..
   cmake_build_and_install
   popd
@@ -398,19 +414,12 @@ function install_folly() {
   extract v$FOLLY_VERSION.tar.gz
   pushd folly-$FOLLY_VERSION/build/
 
-  source /etc/os-release
-  if [ "$ID" == "ubuntu"  ] ; then
-    FOLLY_SHARED=ON
-  else
-    FOLLY_SHARED=OFF
-  fi
-
   # jemalloc disabled due to issue with clang build on Ubuntu
   # see: https://github.com/facebook/folly/issues/976
   cmake -GNinja \
-        -DCMAKE_CXX_FLAGS="-fPIC -pthread" \
+        -DCMAKE_CXX_FLAGS="-pthread" \
         -DFOLLY_USE_JEMALLOC=OFF \
-        -DBUILD_SHARED_LIBS=${FOLLY_SHARED} \
+        -DBUILD_SHARED_LIBS=OFF \
         -DCMAKE_INSTALL_PREFIX=$PREFIX ..
   cmake_build_and_install
 
@@ -483,7 +492,9 @@ function install_go() {
     extract go$VERS.linux-$ARCH.tar.gz
     rm -rf $PREFIX/go || true
     mv go $PREFIX
-    [[ $SAVE_SPACE == 'true' ]]  && rm go$VERS.linux-$ARCH.tar.gz
+    if [[ $SAVE_SPACE == 'true' ]]; then
+      rm go$VERS.linux-$ARCH.tar.gz
+    fi
 }
 
 NINJA_VERSION=1.11.1
@@ -493,7 +504,9 @@ function install_ninja() {
   unzip -u ninja-linux.zip
   mkdir -p $PREFIX/bin/
   mv ninja $PREFIX/bin/
-  [[ $SAVE_SPACE == 'true' ]]  && rm  ninja-linux.zip
+  if [[ $SAVE_SPACE == 'true' ]]; then
+    rm  ninja-linux.zip
+  fi
 }
 
 MAVEN_VERSION=3.6.3
@@ -503,7 +516,9 @@ function install_maven() {
     extract apache-maven-${MAVEN_VERSION}-bin.tar.gz
     rm -rf $PREFIX/maven || true
     mv apache-maven-${MAVEN_VERSION} $PREFIX/maven
-    [[ $SAVE_SPACE == 'true' ]]  && rm apache-maven-${MAVEN_VERSION}-bin.tar.gz
+    if [[ $SAVE_SPACE == 'true' ]]; then
+      rm apache-maven-${MAVEN_VERSION}-bin.tar.gz
+    fi
 }
 
 # The version of Thrust included in CUDA 11.0 and CUDA 11.1 does not support newer TBB

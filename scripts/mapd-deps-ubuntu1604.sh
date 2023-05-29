@@ -22,7 +22,6 @@ sudo apt install -y \
     git \
     wget \
     curl \
-    libgoogle-glog-dev \
     libssl-dev \
     libevent-dev \
     default-jre \
