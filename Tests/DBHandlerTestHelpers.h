@@ -23,6 +23,7 @@
 #include "Catalog/Catalog.h"
 #include "QueryRunner/TestProcessSignalHandler.h"
 #include "Shared/clean_boost_regex.hpp"
+#include "TestHelpers.h"
 #include "ThriftHandler/DBHandler.h"
 
 #include <gtest/gtest.h>
@@ -267,7 +268,7 @@ class AssertValueEqualsOrIsNullVisitor : public boost::static_visitor<> {
  * Helper gtest fixture class for executing SQL queries through DBHandler
  * and asserting result sets.
  */
-class DBHandlerTestFixture : public testing::Test {
+class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
  public:
   static po::variables_map initTestArgs(int argc,
                                         char** argv,
@@ -471,10 +472,9 @@ class DBHandlerTestFixture : public testing::Test {
   friend class DBHandlerTestEnvironment;
 
   void SetUp() override {
+    TbbPrivateServerKiller::SetUp();
     switchToAdmin();
   }
-
-  void TearDown() override {}
 
   static void sql(const std::string& query) {
     TQueryResult result;

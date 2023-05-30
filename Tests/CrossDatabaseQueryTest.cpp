@@ -354,6 +354,7 @@ class CrossDatabaseWriteQueryTest : public CrossDatabaseQueryTest {
     switchToAdmin();
     sql("DROP TABLE IF EXISTS test_table_2;");
     sql("REVOKE ALL ON DATABASE db_1 FROM test_user;");
+    CrossDatabaseQueryTest::TearDown();
   }
 
   static inline std::string dump_path_{std::filesystem::absolute("./test_dump").string()};
