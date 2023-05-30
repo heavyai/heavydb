@@ -7454,6 +7454,8 @@ void DBHandler::get_license_claims(TLicenseInfo& _return,
 void DBHandler::shutdown() {
   emergency_shutdown();
 
+  Executor::clearExternalCaches(false, nullptr, -1);
+
   query_engine_.reset();
 
   if (render_handler_) {
