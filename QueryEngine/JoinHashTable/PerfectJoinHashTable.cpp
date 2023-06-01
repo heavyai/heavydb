@@ -243,15 +243,6 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     throw TooManyHashEntries(oss.str());
   }
 
-  auto const shard_count = get_shard_count(qual_bin_oper.get(), executor);
-  if (device_count > 1 && shard_count > 1) {
-    // use baseline hash join to compute this case until resolving related hash join logic
-    // todd(yoonmin): relax this after fixing related hashtable build/probe logic is fixed
-    throw TooManyHashEntries(
-        "Use baseline hash join: multiple GPUs process the input sharded table via "
-        "perfect hash can cause a wrong result");
-  }
-
   if (qual_bin_oper->get_optype() == kBW_EQ &&
       col_range.getIntMax() >= std::numeric_limits<int64_t>::max()) {
     throw HashJoinFail("Cannot translate null value for kBW_EQ");
@@ -260,14 +251,19 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   if (VLOGGING(1)) {
     ts1 = std::chrono::steady_clock::now();
   }
-
+  auto hash_type = preferred_hash_type;
+  if (query_hints.force_one_to_many_hash_join) {
+    LOG(INFO) << "A user's query hint forced the join operation to use OneToMany hash "
+                 "join layout";
+    hash_type = HashType::OneToMany;
+  }
   auto join_hash_table = std::shared_ptr<PerfectJoinHashTable>(
       new PerfectJoinHashTable(qual_bin_oper,
                                inner_col,
                                query_infos,
                                memory_level,
                                join_type,
-                               preferred_hash_type,
+                               hash_type,
                                col_range,
                                rhs_source_col_range,
                                bucketized_entry_count_info,

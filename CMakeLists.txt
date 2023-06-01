@@ -247,8 +247,12 @@ if(ENABLE_CUDA)
   else()
     if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.18.0")
       message(STATUS "CMake 3.18+, Setting CUDA_ARCHITECTURES.")
-      set(CMAKE_CUDA_ARCHITECTURES
-          35-virtual
+      if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.0.0)
+        set(CMAKE_CUDA_ARCHITECTURES 35-virtual)
+      else()
+        set(CMAKE_CUDA_ARCHITECTURES "")
+      endif()
+      list(APPEND CMAKE_CUDA_ARCHITECTURES
           50-virtual
           60-virtual
           70-virtual
@@ -258,8 +262,12 @@ if(ENABLE_CUDA)
       message(STATUS "CUDA_ARCHITECTURES: ${CMAKE_CUDA_ARCHITECTURES}")
     else()
       message(STATUS "CMake 3.17 or under, setting CUDA architecture flags manually.")
-      set(CUDA_COMPILATION_ARCH
-        -gencode=arch=compute_35,code=compute_35;
+      if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.0.0)
+        set(CUDA_COMPILATION_ARCH -gencode=arch=compute_35,code=compute_35;)
+      else()
+        set(CUDA_COMPILATION_ARCH "")
+      endif()
+      list(APPEND CUDA_COMPILATION_ARCH
         -gencode=arch=compute_50,code=compute_50;
         -gencode=arch=compute_60,code=compute_60;
         -gencode=arch=compute_70,code=compute_70;

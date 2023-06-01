@@ -870,11 +870,9 @@ OverlapsJoinTranslationResult translate_overlaps_conjunction_with_reordering(
     // ordering for overlaps, the join builder will fail.
     std::set<int> lhs_rte_idx;
     lhs->collect_rte_idx(lhs_rte_idx);
-    CHECK(!lhs_rte_idx.empty());
     std::set<int> rhs_rte_idx;
     rhs->collect_rte_idx(rhs_rte_idx);
-    CHECK(!rhs_rte_idx.empty());
-    auto has_invalid_num_join_cols = lhs_rte_idx.size() > 1 || rhs_rte_idx.size() > 1;
+    auto has_invalid_num_join_cols = lhs_rte_idx.size() != 1 || rhs_rte_idx.size() != 1;
     auto has_invalid_rte_idx = lhs_rte_idx > rhs_rte_idx;
     return std::make_pair(has_invalid_num_join_cols || has_invalid_rte_idx,
                           has_invalid_rte_idx);

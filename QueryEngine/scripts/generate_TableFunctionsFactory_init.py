@@ -314,7 +314,8 @@ class Bracket:
             ctype = name
         elif name == 'YearMonthTimeInterval':
             ctype = name
-        elif name in ['GeoPoint', 'GeoLineString', 'GeoPolygon']:
+        elif name in ['GeoPoint', 'GeoLineString', 'GeoPolygon',
+                      'GeoMultiPoint', 'GeoMultiLineString', 'GeoMultiPolygon']:
             ctype = name
         else:
             raise NotImplementedError(self)

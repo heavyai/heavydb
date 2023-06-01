@@ -69,6 +69,14 @@ class InputColDescriptor final {
 
   const InputDescriptor& getScanDesc() const { return input_desc_; }
 
+  shared::TableKey getTableKey() const {
+    return shared::TableKey{input_desc_.getTableKey()};
+  }
+
+  shared::ColumnKey getColumnKey() const {
+    return shared::ColumnKey{getTableKey(), col_id_};
+  }
+
   size_t hash() const {
     return input_desc_.hash() ^ (static_cast<size_t>(col_id_) << 16);
   }

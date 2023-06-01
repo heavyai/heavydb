@@ -37,6 +37,11 @@ class InsufficientBufferSizeException : public std::runtime_error {
       : std::runtime_error(message) {}
 };
 
+class DelimitedParserException : public std::runtime_error {
+ public:
+  DelimitedParserException(const std::string& message) : std::runtime_error(message) {}
+};
+
 /**
  * @brief Finds the closest possible row beginning in the given buffer.
  *

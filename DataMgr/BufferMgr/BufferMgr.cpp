@@ -620,17 +620,11 @@ void BufferMgr::deleteBuffersWithPrefix(const ChunkKey& key_prefix, const bool) 
                            // reserveBuffer which needs segs_mutex_ and then
                            // chunk_index_mutex_
   std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
-  auto startChunkIt = chunk_index_.lower_bound(key_prefix);
-  if (startChunkIt == chunk_index_.end()) {
-    return;
-  }
-
-  auto buffer_it = startChunkIt;
-  while (buffer_it != chunk_index_.end() &&
-         std::search(buffer_it->first.begin(),
-                     buffer_it->first.begin() + key_prefix.size(),
-                     key_prefix.begin(),
-                     key_prefix.end()) != buffer_it->first.begin() + key_prefix.size()) {
+  auto prefix_upper_bound = key_prefix;
+  prefix_upper_bound.emplace_back(std::numeric_limits<ChunkKey::value_type>::max());
+  for (auto buffer_it = chunk_index_.lower_bound(key_prefix),
+            end_chunk_it = chunk_index_.upper_bound(prefix_upper_bound);
+       buffer_it != end_chunk_it;) {
     auto seg_it = buffer_it->second;
     if (seg_it->buffer) {
       if (seg_it->buffer->getPinCount() != 0) {

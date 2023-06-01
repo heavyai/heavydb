@@ -147,7 +147,10 @@ struct TableFunctionManager {
         switch (ti.get_type()) {
           case kARRAY:
           case kLINESTRING:
-          case kPOLYGON: {
+          case kPOLYGON:
+          case kMULTIPOINT:
+          case kMULTILINESTRING:
+          case kMULTIPOLYGON: {
             if (output_item_values_total_number_[i] == -1) {
               throw std::runtime_error("set_output_item_values_total_number(" +
                                        std::to_string(i) +
@@ -221,7 +224,10 @@ struct TableFunctionManager {
           switch (ti.get_type()) {
             case kARRAY:
             case kLINESTRING:
-            case kPOLYGON: {
+            case kPOLYGON:
+            case kMULTIPOINT:
+            case kMULTILINESTRING:
+            case kMULTIPOLYGON: {
               total_number = output_item_values_total_number_[i];
               break;
             }
@@ -232,6 +238,10 @@ struct TableFunctionManager {
                             << ti.toString();
           }
           initializeFlatBuffer(m, output_num_rows_, total_number, ti);
+          CHECK(FlatBufferManager::isFlatBuffer(output_buffers_ptr));
+          // Checks if the implementations of getFlatBufferSize and
+          // initializeFlatBuffer in sqltypes.h are in sync:
+          CHECK_EQ(m.getBufferSize(), query_mem_desc.getFlatBufferSize(i));
           output_buffers_ptr = align_to_int64(output_buffers_ptr + m.getBufferSize());
         } else {
           const size_t col_width = ti.get_size();

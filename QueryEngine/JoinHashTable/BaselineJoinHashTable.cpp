@@ -52,8 +52,15 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     const TableIdToNodeMap& table_id_to_node_map) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
 
+  auto hash_type = preferred_hash_type;
+  if (query_hints.force_one_to_many_hash_join) {
+    LOG(INFO) << "A user's query hint forced the join operation to use OneToMany hash "
+                 "join layout";
+    hash_type = HashType::OneToMany;
+  }
+
   if (VLOGGING(1)) {
-    VLOG(1) << "Building keyed hash table " << getHashTypeString(preferred_hash_type)
+    VLOG(1) << "Building keyed hash table " << getHashTypeString(hash_type)
             << " for qual: " << condition->toString();
     ts1 = std::chrono::steady_clock::now();
   }
@@ -75,7 +82,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
                                 hashtable_build_dag_map,
                                 table_id_to_node_map));
   try {
-    join_hash_table->reify(preferred_hash_type);
+    join_hash_table->reify(hash_type);
   } catch (const TableMustBeReplicated& e) {
     // Throw a runtime error to abort the query
     join_hash_table->freeHashBufferMemory();

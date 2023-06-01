@@ -354,9 +354,7 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
       }
 
       // set output contour linestring
-      auto const* coords_int8_t = reinterpret_cast<const int8_t*>(coords.data());
-      contour_features.setItem(
-          output_feature_index, coords_int8_t, sizeof(double) * coords.size());
+      contour_features[output_feature_index].fromCoords(coords);
 
       // set output contour value
       contour_values[output_feature_index] =

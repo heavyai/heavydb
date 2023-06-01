@@ -1503,6 +1503,138 @@ bool ResultSet::isGeoColOnGpu(const size_t col_idx) const {
   return device_type_ == ExecutorDeviceType::GPU;
 }
 
+template <size_t NDIM,
+          typename GeospatialGeoType,
+          typename GeoTypeTargetValue,
+          typename GeoTypeTargetValuePtr>
+TargetValue NestedArrayToGeoTargetValue(const int8_t* buf,
+                                        const int64_t index,
+                                        const SQLTypeInfo& ti,
+                                        const ResultSet::GeoReturnType return_type) {
+  FlatBufferManager m{const_cast<int8_t*>(buf)};
+  const SQLTypeInfoLite* ti_lite =
+      reinterpret_cast<const SQLTypeInfoLite*>(m.get_user_data_buffer());
+  if (ti_lite->is_geoint()) {
+    CHECK_EQ(ti.get_compression(), kENCODING_GEOINT);
+  } else {
+    CHECK_EQ(ti.get_compression(), kENCODING_NONE);
+  }
+  FlatBufferManager::NestedArrayItem<NDIM> item;
+  auto status = m.getItem(index, item);
+  CHECK_EQ(status, FlatBufferManager::Status::Success);
+  if (!item.is_null) {
+    // to ensure we can access item.sizes_buffers[...] and item.sizes_lengths[...]
+    CHECK_EQ(item.nof_sizes, NDIM - 1);
+  }
+  switch (return_type) {
+    case ResultSet::GeoReturnType::WktString: {
+      if (item.is_null) {
+        return NullableString(nullptr);
+      }
+      std::vector<double> coords;
+      if (ti_lite->is_geoint()) {
+        coords = *decompress_coords<double, SQLTypeInfo>(
+            ti, item.values, 2 * item.nof_values * sizeof(int32_t));
+      } else {
+        const double* values_buf = reinterpret_cast<const double*>(item.values);
+        coords.insert(coords.end(), values_buf, values_buf + 2 * item.nof_values);
+      }
+      if constexpr (NDIM == 1) {
+        GeospatialGeoType obj(coords);
+        return NullableString(obj.getWktString());
+      } else if constexpr (NDIM == 2) {
+        std::vector<int32_t> rings;
+        rings.insert(rings.end(),
+                     item.sizes_buffers[0],
+                     item.sizes_buffers[0] + item.sizes_lengths[0]);
+        GeospatialGeoType obj(coords, rings);
+        return NullableString(obj.getWktString());
+      } else if constexpr (NDIM == 3) {
+        std::vector<int32_t> rings;
+        std::vector<int32_t> poly_rings;
+        poly_rings.insert(poly_rings.end(),
+                          item.sizes_buffers[0],
+                          item.sizes_buffers[0] + item.sizes_lengths[0]);
+        rings.insert(rings.end(),
+                     item.sizes_buffers[1],
+                     item.sizes_buffers[1] + item.sizes_lengths[1]);
+        GeospatialGeoType obj(coords, rings, poly_rings);
+        return NullableString(obj.getWktString());
+      } else {
+        UNREACHABLE();
+      }
+    } break;
+    case ResultSet::GeoReturnType::GeoTargetValue: {
+      if (item.is_null) {
+        return GeoTargetValue();
+      }
+      std::vector<double> coords;
+      if (ti_lite->is_geoint()) {
+        coords = *decompress_coords<double, SQLTypeInfo>(
+            ti, item.values, 2 * item.nof_values * sizeof(int32_t));
+      } else {
+        const double* values_buf = reinterpret_cast<const double*>(item.values);
+        coords.insert(coords.end(), values_buf, values_buf + 2 * item.nof_values);
+      }
+      if constexpr (NDIM == 1) {
+        return GeoTargetValue(GeoTypeTargetValue(coords));
+      } else if constexpr (NDIM == 2) {
+        std::vector<int32_t> rings;
+        rings.insert(rings.end(),
+                     item.sizes_buffers[0],
+                     item.sizes_buffers[0] + item.sizes_lengths[0]);
+        return GeoTargetValue(GeoTypeTargetValue(coords, rings));
+      } else if constexpr (NDIM == 3) {
+        std::vector<int32_t> rings;
+        std::vector<int32_t> poly_rings;
+        poly_rings.insert(poly_rings.end(),
+                          item.sizes_buffers[0],
+                          item.sizes_buffers[0] + item.sizes_lengths[0]);
+        rings.insert(rings.end(),
+                     item.sizes_buffers[1],
+                     item.sizes_buffers[1] + item.sizes_lengths[1]);
+        return GeoTargetValue(GeoTypeTargetValue(coords, rings, poly_rings));
+      } else {
+        UNREACHABLE();
+      }
+    } break;
+    case ResultSet::GeoReturnType::GeoTargetValuePtr:
+    case ResultSet::GeoReturnType::GeoTargetValueGpuPtr: {
+      if (item.is_null) {
+        return GeoTypeTargetValuePtr();
+      }
+      auto coords = std::make_shared<VarlenDatum>(
+          item.nof_values * m.getValueSize(), item.values, false);
+
+      if constexpr (NDIM == 1) {
+        return GeoTypeTargetValuePtr({std::move(coords)});
+      } else if constexpr (NDIM == 2) {
+        auto rings = std::make_shared<VarlenDatum>(
+            item.sizes_lengths[0] * sizeof(int32_t),
+            reinterpret_cast<int8_t*>(item.sizes_buffers[0]),
+            false);
+        return GeoTypeTargetValuePtr({std::move(coords), std::move(rings)});
+      } else if constexpr (NDIM == 3) {
+        auto poly_rings = std::make_shared<VarlenDatum>(
+            item.sizes_lengths[0] * sizeof(int32_t),
+            reinterpret_cast<int8_t*>(item.sizes_buffers[0]),
+            false);
+        auto rings = std::make_shared<VarlenDatum>(
+            item.sizes_lengths[1] * sizeof(int32_t),
+            reinterpret_cast<int8_t*>(item.sizes_buffers[1]),
+            false);
+        return GeoTypeTargetValuePtr(
+            {std::move(coords), std::move(rings), std::move(poly_rings)});
+      } else {
+        UNREACHABLE();
+      }
+    } break;
+    default:
+      UNREACHABLE();
+  }
+  return TargetValue(nullptr);
+}
+
 // Reads a geo value from a series of ptrs to var len types
 // In Columnar format, geo_target_ptr is the geo column ptr (a pointer to the beginning
 // of that specific geo column) and should be appropriately adjusted with the
@@ -1702,6 +1834,16 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
             static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()));
       } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
         const auto& frag_col_buffers = getFragColBuffers();
+
+        auto ptr = frag_col_buffers[col_lazy_fetch->local_col_id];
+        if (FlatBufferManager::isFlatBuffer(ptr)) {
+          int64_t index = getCoordsDataPtr(geo_target_ptr);
+          return NestedArrayToGeoTargetValue<1,
+                                             Geospatial::GeoLineString,
+                                             GeoLineStringTargetValue,
+                                             GeoLineStringTargetValuePtr>(
+              ptr, index, target_info.sql_type, geo_return_type_);
+        }
         return GeoTargetValueBuilder<kLINESTRING, GeoLazyFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
@@ -1740,6 +1882,16 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
                 varlen_buffer[getCoordsDataPtr(geo_target_ptr) + 1].size()));
       } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
         const auto& frag_col_buffers = getFragColBuffers();
+
+        auto ptr = frag_col_buffers[col_lazy_fetch->local_col_id];
+        if (FlatBufferManager::isFlatBuffer(ptr)) {
+          int64_t index = getCoordsDataPtr(geo_target_ptr);
+          return NestedArrayToGeoTargetValue<2,
+                                             Geospatial::GeoMultiLineString,
+                                             GeoMultiLineStringTargetValue,
+                                             GeoMultiLineStringTargetValuePtr>(
+              ptr, index, target_info.sql_type, geo_return_type_);
+        }
 
         return GeoTargetValueBuilder<kMULTILINESTRING, GeoLazyFetchHandler>::build(
             target_info.sql_type,
@@ -1785,48 +1937,12 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         const auto& frag_col_buffers = getFragColBuffers();
         auto ptr = frag_col_buffers[col_lazy_fetch->local_col_id];
         if (FlatBufferManager::isFlatBuffer(ptr)) {
-          FlatBufferManager m{const_cast<int8_t*>(ptr)};
-
-          int8_t* coords_buf = nullptr;
-          int64_t nof_counts{};
-          bool is_null = false;
-          int32_t* counts = nullptr;
-          int64_t length{};
           int64_t index = getCoordsDataPtr(geo_target_ptr);
-          m.getItemCountsAndData(index, counts, nof_counts, coords_buf, length, is_null);
-
-          if (ResultSet::GeoReturnType::WktString == geo_return_type_) {
-            if (is_null) {
-              return NullableString("NULL");
-            }
-            std::vector<int32_t> ring_sizes_vec;
-            ring_sizes_vec.reserve(nof_counts);
-            for (int i = 0; i < nof_counts; i++) {
-              ring_sizes_vec.push_back(counts[i]);
-            }
-            Geospatial::GeoPolygon poly(*decompress_coords<double, SQLTypeInfo>(
-                                            target_info.sql_type, coords_buf, length),
-                                        ring_sizes_vec);
-            return NullableString(poly.getWktString());
-          } else if (ResultSet::GeoReturnType::GeoTargetValuePtr == geo_return_type_) {
-            auto coords = std::make_shared<VarlenDatum>(length, coords_buf, false);
-            auto rings = std::make_shared<VarlenDatum>(
-                nof_counts * sizeof(int32_t), reinterpret_cast<int8_t*>(counts), false);
-            return GeoPolyTargetValuePtr({std::move(coords), std::move(rings)});
-          } else if (ResultSet::GeoReturnType::GeoTargetValue == geo_return_type_) {
-            std::shared_ptr<std::vector<double>> coords =
-                decompress_coords<double, SQLTypeInfo>(
-                    target_info.sql_type, coords_buf, length);
-            std::vector<int32_t> rings(counts, counts + nof_counts);
-            return GeoTargetValue(GeoPolyTargetValue(*coords, rings));
-          } else if (ResultSet::GeoReturnType::GeoTargetValueGpuPtr == geo_return_type_) {
-            auto coords = std::make_shared<VarlenDatum>(length, coords_buf, false);
-            auto rings = std::make_shared<VarlenDatum>(
-                nof_counts * sizeof(int32_t), reinterpret_cast<int8_t*>(counts), false);
-            return GeoPolyTargetValuePtr({std::move(coords), std::move(rings)});
-          } else {
-            UNREACHABLE();
-          }
+          return NestedArrayToGeoTargetValue<2,
+                                             Geospatial::GeoPolygon,
+                                             GeoPolyTargetValue,
+                                             GeoPolyTargetValuePtr>(
+              ptr, index, target_info.sql_type, geo_return_type_);
         }
 
         return GeoTargetValueBuilder<kPOLYGON, GeoLazyFetchHandler>::build(
@@ -1875,6 +1991,15 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
                 varlen_buffer[getCoordsDataPtr(geo_target_ptr) + 2].size()));
       } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
         const auto& frag_col_buffers = getFragColBuffers();
+        auto ptr = frag_col_buffers[col_lazy_fetch->local_col_id];
+        if (FlatBufferManager::isFlatBuffer(ptr)) {
+          int64_t index = getCoordsDataPtr(geo_target_ptr);
+          return NestedArrayToGeoTargetValue<3,
+                                             Geospatial::GeoMultiPolygon,
+                                             GeoMultiPolyTargetValue,
+                                             GeoMultiPolyTargetValuePtr>(
+              ptr, index, target_info.sql_type, geo_return_type_);
+        }
 
         return GeoTargetValueBuilder<kMULTIPOLYGON, GeoLazyFetchHandler>::build(
             target_info.sql_type,

@@ -1220,6 +1220,54 @@ TEST(QueryHint, Subquery) {
   }
 }
 
+TEST(QueryHint, HashJoinSpec) {
+  // this join originally a target for perfect join hash table w/ OneToOne hash table
+  // layout
+  auto check_registered_hint = [](std::string const& query,
+                                  QueryHint query_hint,
+                                  bool is_global) {
+    auto const rel_alg_dag = QR::get()->getRelAlgDag(query);
+    if (is_global) {
+      EXPECT_TRUE(is_hint_globally_registered(rel_alg_dag->getGlobalHints(), query_hint));
+    } else {
+      EXPECT_TRUE(is_hint_registered(rel_alg_dag->getQueryHints(), query_hint));
+    }
+  };
+  std::string q1 =
+      "select /*+ force_baseline_hash_join */ count(1) from JOIN_HINT_TEST R, "
+      "JOIN_HINT_TEST S where R.v = S.v;";
+  std::string q2 =
+      "select /*+ force_one_to_many_hash_join */ count(1) from JOIN_HINT_TEST R, "
+      "JOIN_HINT_TEST S where R.v = S.v;";
+  std::string q1_g =
+      "select /*+ g_force_baseline_hash_join */ count(1) from JOIN_HINT_TEST R, "
+      "JOIN_HINT_TEST S where R.v = S.v;";
+  std::string q2_g =
+      "select /*+ g_force_one_to_many_hash_join */ count(1) from JOIN_HINT_TEST R, "
+      "JOIN_HINT_TEST S where R.v = S.v;";
+  check_registered_hint(q1, QueryHint::kforceBaselineHashJoin, false);
+  check_registered_hint(q1_g, QueryHint::kforceBaselineHashJoin, true);
+  check_registered_hint(q2, QueryHint::kforceOneToManyHashJoin, false);
+  check_registered_hint(q2_g, QueryHint::kforceOneToManyHashJoin, true);
+
+  std::set<QueryPlanHash> visited;
+  QR::get()->runSQL(q1, ExecutorDeviceType::CPU);
+  auto q1_ht_info = QR::get()->getCachedHashtableWithoutCacheKey(
+      visited, CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto cached_ht1 = std::get<1>(q1_ht_info);
+  auto expected_ht1 = dynamic_cast<BaselineHashTable*>(cached_ht1.get());
+  EXPECT_TRUE(expected_ht1);
+
+  QR::get()->runSQL(q2, ExecutorDeviceType::CPU);
+  auto q2_ht_info = QR::get()->getCachedHashtableWithoutCacheKey(
+      visited, CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto cached_ht2 = std::get<1>(q2_ht_info);
+  auto expected_ht2 = dynamic_cast<PerfectHashTable*>(cached_ht2.get());
+  EXPECT_TRUE(expected_ht2);
+  EXPECT_TRUE(expected_ht2->getHashTableEntryInfo().getHashTableLayout() ==
+              HashType::OneToMany);
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
