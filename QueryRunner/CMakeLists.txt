@@ -9,5 +9,9 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND QR_LIBRARIES Distributed)
 endif()
 
+if (ENABLE_RUNTIME_LIBS)
+  list(APPEND QR_LIBRARIES RuntimeLibManager)
+endif()
+
 add_library(QueryRunner ${query_runner_source_files})
 target_link_libraries(QueryRunner ${QR_LIBRARIES} ${Boost_LIBRARIES})

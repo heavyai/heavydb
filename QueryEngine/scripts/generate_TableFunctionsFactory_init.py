@@ -480,7 +480,7 @@ for input_file in input_files:
 
 def call_methods(add_stmts):
     n_add_funcs = linker.GenerateAddTableFunctionsFiles.get_num_generated_files()
-    return [ 'add_table_functions_%d();' % (i) for i in range(n_add_funcs+1) ]
+    return [ 'table_functions::add_table_functions_%d();' % (i) for i in range(n_add_funcs+1) ]
 
 
 content = '''
@@ -537,16 +537,25 @@ extern bool g_enable_table_functions;
 
 extern bool functions_exist_geo_column();
 
-namespace table_functions {
-
-std::once_flag init_flag;
-
+// Each table function initialization module needs its own AddTableFunctions struct definition,
+// otherwise, when calling an initialization function at runtime, symbol name conflicts will
+// cause the wrong struct to be instantiated.
+namespace {
 struct AddTableFunctions {
   NO_OPT_ATTRIBUTE void operator()() {
     %s
   }
 };
+} // anonymous namespace
 
+namespace table_functions {
+
+// Each table function initialization module should have its own init flag
+static std::once_flag init_flag;
+
+static const char filename[] = __FILE__;
+
+template<const char *filename>
 void TableFunctionsFactory::init() {
   if (!g_enable_table_functions) {
     return;
@@ -558,6 +567,10 @@ void TableFunctionsFactory::init() {
   }
 
   std::call_once(init_flag, AddTableFunctions{});
+}
+
+extern "C" void init_table_functions() {
+    TableFunctionsFactory::init<filename>();
 }
 #if defined(_MSC_VER)
 #pragma optimize("", on)

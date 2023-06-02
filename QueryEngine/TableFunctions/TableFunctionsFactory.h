@@ -353,6 +353,7 @@ class TableFunctionsFactory {
   static std::vector<TableFunction> get_table_funcs(const std::string& name);
   static std::vector<TableFunction> get_table_funcs(const bool is_runtime);
   static std::vector<TableFunction> get_table_funcs();
+  template <const char* filename>
   static void init();
   static void reset();
 
@@ -361,5 +362,7 @@ class TableFunctionsFactory {
 
   friend class ::ExtensionFunctionsWhitelist;
 };
+
+extern "C" void init_table_functions();
 
 }  // namespace table_functions
