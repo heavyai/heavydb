@@ -33,6 +33,9 @@
 #include "QueryEngine/RelAlgExecutor.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/ThriftSerializers.h"
+#ifdef HAVE_RUNTIME_LIBS
+#include "RuntimeLibManager/RuntimeLibManager.h"
+#endif
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/SystemParameters.h"
@@ -188,7 +191,11 @@ QueryRunner::QueryRunner(const char* db_path,
     ExtensionFunctionsWhitelist::addUdfs(g_calcite->getUserDefinedFunctionWhitelist());
   }
 
-  table_functions::TableFunctionsFactory::init();
+  table_functions::init_table_functions();
+#ifdef HAVE_RUNTIME_LIBS
+  RuntimeLibManager::loadTestRuntimeLibs();
+  RuntimeLibManager::loadRuntimeLibs();
+#endif
   auto udtfs = ThriftSerializers::to_thrift(
       table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/false));
   std::vector<TUserDefinedFunction> udfs = {};

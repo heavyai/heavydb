@@ -1,6 +1,10 @@
 set(THRIFT_HANDLER_SOURCES DBHandler.cpp RequestInfo.cpp TokenCompletionHints.cpp CommandLineOptions.cpp SystemValidator.cpp ForeignTableRefreshScheduler.cpp)
 set(THRIFT_HANDLER_LIBS mapd_thrift Shared ${CMAKE_DL_LIBS})
 
+if(ENABLE_RUNTIME_LIBS)
+  list(APPEND THRIFT_HANDLER_LIBS RuntimeLibManager)
+endif(ENABLE_RUNTIME_LIBS)
+
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND THRIFT_HANDLER_LIBS ${RdKafka_LIBRARIES} StringDictionary)
   include_directories(${CMAKE_SOURCE_DIR} "${CMAKE_CURRENT_SOURCE_DIR}/ee")

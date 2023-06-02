@@ -4328,6 +4328,47 @@ TEST_F(TableFunctions, TFBindingAlgorithm) {
   }
 }
 
+#ifdef HAVE_RUNTIME_LIBS
+TEST_F(TableFunctions, RuntimeLibTestTableFunctions) {
+  {
+    // Calling a template table function which uses functions from a library loaded at
+    // runtime
+    const auto result_double = run_multiple_agg(
+        "SELECT out0 FROM TABLE(ct_test_runtime_libs_add(cursor(SELECT d FROM tf_test), "
+        "cursor(SELECT d FROM tf_test)));",
+        ExecutorDeviceType::CPU);
+    const auto result_int = run_multiple_agg(
+        "SELECT out0 FROM TABLE(ct_test_runtime_libs_add(cursor(SELECT x FROM tf_test), "
+        "cursor(SELECT x FROM tf_test)));",
+        ExecutorDeviceType::CPU);
+    const auto expected_double =
+        run_multiple_agg("SELECT d + d FROM tf_test", ExecutorDeviceType::CPU);
+    const auto expected_int = run_multiple_agg(
+        "SELECT CAST(x + x AS BIGINT) FROM tf_test", ExecutorDeviceType::CPU);
+    assert_equal<double>(result_double, expected_double);
+    assert_equal<int64_t>(result_int, expected_int);
+  }
+  {
+    // Calling a template table function which uses template functions from a library
+    // loaded at runtime
+    const auto result_double = run_multiple_agg(
+        "SELECT out0 FROM TABLE(ct_test_runtime_libs_sub(cursor(SELECT d FROM tf_test), "
+        "cursor(SELECT d FROM tf_test)));",
+        ExecutorDeviceType::CPU);
+    const auto result_int = run_multiple_agg(
+        "SELECT out0 FROM TABLE(ct_test_runtime_libs_sub(cursor(SELECT x FROM tf_test), "
+        "cursor(SELECT x FROM tf_test)));",
+        ExecutorDeviceType::CPU);
+    const auto expected_double =
+        run_multiple_agg("SELECT d - d FROM tf_test;", ExecutorDeviceType::CPU);
+    const auto expected_int = run_multiple_agg(
+        "SELECT CAST(x - x AS BIGINT) FROM tf_test;", ExecutorDeviceType::CPU);
+    assert_equal<double>(result_double, expected_double);
+    assert_equal<int64_t>(result_int, expected_int);
+  }
+}
+#endif
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

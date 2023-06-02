@@ -65,6 +65,9 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
 #include "RequestInfo.h"
+#ifdef HAVE_RUNTIME_LIBS
+#include "RuntimeLibManager/RuntimeLibManager.h"
+#endif
 #include "Shared/ArrowUtil.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/StringTransform.h"
@@ -482,10 +485,19 @@ void DBHandler::initialize(const bool is_new_db) {
   }
 
   try {
-    table_functions::TableFunctionsFactory::init();
+    table_functions::init_table_functions();
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize table functions factory: " << e.what();
   }
+
+#ifdef HAVE_RUNTIME_LIBS
+  try {
+    RuntimeLibManager::loadRuntimeLibs();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Failed to load runtime libraries: " << e.what();
+    LOG(ERROR) << "Support for runtime library table functions is disabled.";
+  }
+#endif
 
   try {
     auto udtfs = ThriftSerializers::to_thrift(
