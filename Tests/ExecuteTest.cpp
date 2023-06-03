@@ -26293,7 +26293,7 @@ TEST_F(Select, ResultsetAndChunkMetadataRecycling) {
   g_enable_data_recycler = true;
   g_use_query_resultset_cache = true;
   g_use_chunk_metadata_cache = true;
-  g_allow_query_step_skipping = true;
+  g_allow_query_step_skipping = false;
   g_allow_auto_resultset_caching = false;
 
   auto CPU_DT = ExecutorDeviceType::CPU;
@@ -26394,27 +26394,21 @@ TEST_F(Select, ResultsetAndChunkMetadataRecycling) {
   // order by
   auto q4 =
       "SELECT /*+ keep_result */ AVG(f), MAX(y) AS n FROM test WHERE x = 7 GROUP BY z "
-      "HAVING AVG(y) > 42.0 ORDER BY n;";
+      "HAVING AVG(y) > 42.0 ORDER BY n DESC;";
   c(q4, CPU_DT);
-  const auto num_cached_res1 = resultset_recycler->getCurrentNumCachedItems(
-      CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
   collect_cache_key_and_ref_cnt();
 
-  // we do not support resultset cache if a query has LIMIT clause
+  // subquery - limit + projection
   auto q5 =
-      "SELECT /*+ keep_result */ count(*) FROM (SELECT /*+ keep_result */ x FROM test "
+      "SELECT count(*) FROM (SELECT /*+ keep_result */ x FROM test "
       "GROUP BY x LIMIT 2);";
   EXPECT_EQ(int64_t(2), v<int64_t>(run_simple_agg(q5, CPU_DT)));
-  const auto num_cached_res2 = resultset_recycler->getCurrentNumCachedItems(
-      CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  // q5 has two SELECT queries, but we only keep the outer SELECT query
-  EXPECT_EQ(num_cached_res2 - num_cached_res1, static_cast<size_t>(1));
+  collect_cache_key_and_ref_cnt();
 
   // subquery - group by
   auto q6 =
       "SELECT /*+ keep_result */ COUNT(*) FROM subquery_test WHERE x NOT IN (SELECT "
-      "/*+ "
-      "keep_result */ x + 1 FROM subquery_test GROUP BY x);";
+      "/*+ keep_result */ x + 1 FROM subquery_test GROUP BY x);";
   c(q6, CPU_DT);
   collect_cache_key_and_ref_cnt();
 
@@ -26435,24 +26429,33 @@ TEST_F(Select, ResultsetAndChunkMetadataRecycling) {
   auto q9 =
       "SELECT /*+ keep_result */ x, SUM(y) AS n, SUM(z) as n2 FROM (SELECT /*+ "
       "keep_result */ x, SUM(y) as y, AVG(z) as z FROM test GROUP BY x ORDER BY x) "
-      "GROUP "
-      "BY x ORDER BY n;";
+      "GROUP BY x ORDER BY n DESC;";
   c(q9, CPU_DT);
   collect_cache_key_and_ref_cnt();
 
-  // we do not support resultset cache if a query has LIMIT clause
+  // subquery - limit + order by
   const auto num_cached_res3 = resultset_recycler->getCurrentNumCachedItems(
       CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
   auto q10 =
       "SELECT /*+ keep_result */ SUM(X), AVG(y) FROM (SELECT /*+ keep_result */ x, y "
-      "FROM test ORDER BY x,y LIMIT 5);";
+      "FROM test ORDER BY x DESC, y DESC LIMIT 5);";
   c(q10, CPU_DT);
+  collect_cache_key_and_ref_cnt();
   const auto num_cached_res4 = resultset_recycler->getCurrentNumCachedItems(
       CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  // q10 has two SELECT queries, but we only keep the outer SELECT query
-  EXPECT_EQ(num_cached_res4 - num_cached_res3, static_cast<size_t>(1));
+  EXPECT_EQ(num_cached_res4 - num_cached_res3, static_cast<size_t>(2));
+  EXPECT_EQ(cache_keys.size(), static_cast<size_t>(10));
 
-  EXPECT_EQ(cache_keys.size(), static_cast<size_t>(8));
+  auto q11 = "SELECT /*+ keep_result */ x FROM test ORDER BY 1 DESC LIMIT 1";
+  auto res_q11 = run_multiple_agg(q11, CPU_DT);
+  collect_cache_key_and_ref_cnt();
+  EXPECT_EQ(cache_keys.size(), static_cast<size_t>(11));
+
+  auto q12 = "SELECT /*+ keep_result */ x FROM test ORDER BY 1 DESC LIMIT 2";
+  auto res_q12 = run_multiple_agg(q12, CPU_DT);
+  collect_cache_key_and_ref_cnt();
+
+  EXPECT_EQ(cache_keys.size(), static_cast<size_t>(12));
 
   std::vector<int> prev_num_resultset_ref;
   std::vector<int> prev_num_chunk_metadata_ref;
@@ -26476,15 +26479,21 @@ TEST_F(Select, ResultsetAndChunkMetadataRecycling) {
       c(q4, dt);
       collect_ref_count(cache_keys[3], 3);
       EXPECT_EQ(int64_t(2), v<int64_t>(run_simple_agg(q5, dt)));
-      c(q6, dt);
       collect_ref_count(cache_keys[4], 4);
-      c(q7, dt);
+      c(q6, dt);
       collect_ref_count(cache_keys[5], 5);
-      c(q8, dt);
+      c(q7, dt);
       collect_ref_count(cache_keys[6], 6);
-      c(q9, dt);
+      c(q8, dt);
       collect_ref_count(cache_keys[7], 7);
+      c(q9, dt);
+      collect_ref_count(cache_keys[8], 8);
       c(q10, dt);
+      collect_ref_count(cache_keys[9], 9);
+      res_q11 = run_multiple_agg(q11, dt);
+      collect_ref_count(cache_keys[10], 10);
+      res_q12 = run_multiple_agg(q12, dt);
+      collect_ref_count(cache_keys[11], 11);
     }
   }
 
