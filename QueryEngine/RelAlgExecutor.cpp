@@ -486,6 +486,21 @@ void check_none_encoded_string_cast_tuple_limit(
   throw std::runtime_error(oss.str());
 }
 
+SortInfo create_sort_info(RelSort const* sort) {
+  return {get_order_entries(sort),
+          SortAlgorithm::SpeculativeTopN,
+          sort->getLimit(),
+          sort->getOffset(),
+          sort->isLimitDelivered()};
+}
+
+size_t update_query_plan_dag_hash(size_t hash, SortInfo const& sort_info) {
+  if (sort_info.limit_delivered) {
+    boost::hash_combine(hash, sort_info.limit);
+  }
+  return hash;
+}
+
 }  // namespace
 
 bool RelAlgExecutor::canUseResultsetCache(const ExecutionOptions& eo,
@@ -1064,16 +1079,16 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       eo.with_watchdog && (step_idx == 0 || dynamic_cast<const RelProject*>(body));
   eo_work_unit.outer_fragment_indices =
       step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>();
-
-  auto handle_hint = [co,
-                      eo_work_unit,
-                      body,
-                      this]() -> std::pair<CompilationOptions, ExecutionOptions> {
+  auto query_plan_dag_hash = body->getQueryPlanDagHash();
+  auto handle_hint = [co, eo_work_unit, body, &query_plan_dag_hash, this]()
+      -> std::pair<CompilationOptions, ExecutionOptions> {
     ExecutionOptions eo_hint_applied = eo_work_unit;
     CompilationOptions co_hint_applied = co;
     auto target_node = body;
     if (auto sort_body = dynamic_cast<const RelSort*>(body)) {
       target_node = sort_body->getInput(0);
+      query_plan_dag_hash = update_query_plan_dag_hash(target_node->getQueryPlanDagHash(),
+                                                       create_sort_info(sort_body));
     }
     auto query_hints = getParsedQueryHint(target_node);
     auto columnar_output_hint_enabled = false;
@@ -1191,18 +1206,16 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
 
   auto hint_applied = handle_hint();
   setHasStepForUnion(seq.hasQueryStepForUnion());
-
   if (canUseResultsetCache(eo, render_info) && has_valid_query_plan_dag(body)) {
     if (auto cached_resultset =
             executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(
-                body->getQueryPlanDagHash())) {
+                query_plan_dag_hash)) {
       VLOG(1) << "recycle resultset of the root node " << body->getRelNodeDagId()
               << " from resultset cache";
       body->setOutputMetainfo(cached_resultset->getTargetMetaInfo());
       if (render_info) {
         std::vector<std::shared_ptr<Analyzer::Expr>>& cached_target_exprs =
-            executor_->getResultSetRecyclerHolder().getTargetExprs(
-                body->getQueryPlanDagHash());
+            executor_->getResultSetRecyclerHolder().getTargetExprs(query_plan_dag_hash);
         std::vector<Analyzer::Expr*> copied_target_exprs;
         for (const auto& expr : cached_target_exprs) {
           copied_target_exprs.push_back(expr.get());
@@ -2592,7 +2605,8 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
   std::unique_ptr<WindowFunctionContext> context;
-  auto partition_cache_key = work_unit.body->getQueryPlanDagHash();
+  auto partition_cache_key = update_query_plan_dag_hash(
+      work_unit.body->getQueryPlanDagHash(), work_unit.exe_unit.sort_info);
   JoinType window_partition_type = window_func->isFrameNavigateWindowFunction()
                                        ? JoinType::WINDOW_FUNCTION_FRAMING
                                        : JoinType::WINDOW_FUNCTION;
@@ -3304,7 +3318,11 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     auto source_node = sort->getInput(0);
     CHECK(source_node);
     ExecutionResult source_result{nullptr, {}};
-    auto source_query_plan_dag = source_node->getQueryPlanDagHash();
+    SortAlgorithm sort_algorithm{SortAlgorithm::SpeculativeTopN};
+    SortInfo sort_info{
+        order_entries, sort_algorithm, limit, offset, sort->isLimitDelivered()};
+    auto source_query_plan_dag =
+        update_query_plan_dag_hash(source_node->getQueryPlanDagHash(), sort_info);
     bool enable_resultset_recycler = canUseResultsetCache(eo, render_info);
     if (enable_resultset_recycler && has_valid_query_plan_dag(source_node) &&
         !sort->isEmptyResult()) {
@@ -3962,8 +3980,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   auto allow_auto_caching_resultset =
       res && res->hasValidBuffer() && g_allow_auto_resultset_caching &&
       res->getBufferSizeBytes(co.device_type) <= g_auto_resultset_caching_threshold;
-  if (use_resultset_cache && (eo.keep_result || allow_auto_caching_resultset) &&
-      !work_unit.exe_unit.sort_info.limit_delivered) {
+  if (use_resultset_cache && (eo.keep_result || allow_auto_caching_resultset)) {
     auto query_exec_time = timer_stop(query_exec_time_begin);
     res->setExecTime(query_exec_time);
     res->setQueryPlanHash(ra_exe_unit.query_plan_dag_hash);
@@ -4558,24 +4575,25 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
     }
   }
   CHECK_EQ(compound->size(), target_exprs.size());
-  const RelAlgExecutionUnit exe_unit = {input_descs,
-                                        input_col_descs,
-                                        quals_cf.simple_quals,
-                                        quals,
-                                        left_deep_join_quals,
-                                        groupby_exprs,
-                                        target_exprs,
-                                        target_exprs_type_infos,
-                                        nullptr,
-                                        sort_info,
-                                        0,
-                                        query_hint,
-                                        compound->getQueryPlanDagHash(),
-                                        {},
-                                        {},
-                                        false,
-                                        std::nullopt,
-                                        query_state_};
+  const RelAlgExecutionUnit exe_unit = {
+      input_descs,
+      input_col_descs,
+      quals_cf.simple_quals,
+      quals,
+      left_deep_join_quals,
+      groupby_exprs,
+      target_exprs,
+      target_exprs_type_infos,
+      nullptr,
+      sort_info,
+      0,
+      query_hint,
+      update_query_plan_dag_hash(compound->getQueryPlanDagHash(), sort_info),
+      {},
+      {},
+      false,
+      std::nullopt,
+      query_state_};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
@@ -4853,24 +4871,25 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
   }
   auto join_info = QueryPlanDagExtractor::extractJoinInfo(
       aggregate, std::nullopt, getLeftDeepJoinTreesInfo(), executor_);
-  return {RelAlgExecutionUnit{input_descs,
-                              input_col_descs,
-                              {},
-                              {},
-                              {},
-                              groupby_exprs,
-                              target_exprs,
-                              target_exprs_type_infos,
-                              nullptr,
-                              sort_info,
-                              0,
-                              query_hint,
-                              aggregate->getQueryPlanDagHash(),
-                              join_info.hash_table_plan_dag,
-                              join_info.table_id_to_node_map,
-                              false,
-                              std::nullopt,
-                              query_state_},
+  return {RelAlgExecutionUnit{
+              input_descs,
+              input_col_descs,
+              {},
+              {},
+              {},
+              groupby_exprs,
+              target_exprs,
+              target_exprs_type_infos,
+              nullptr,
+              sort_info,
+              0,
+              query_hint,
+              update_query_plan_dag_hash(aggregate->getQueryPlanDagHash(), sort_info),
+              join_info.hash_table_plan_dag,
+              join_info.table_id_to_node_map,
+              false,
+              std::nullopt,
+              query_state_},
           aggregate,
           g_default_max_groups_buffer_entry_guess,
           nullptr};
@@ -4945,24 +4964,25 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
       query_hint = *candidate;
     }
   }
-  const RelAlgExecutionUnit exe_unit = {input_descs,
-                                        input_col_descs,
-                                        {},
-                                        {},
-                                        left_deep_join_quals,
-                                        {nullptr},
-                                        target_exprs,
-                                        {},
-                                        nullptr,
-                                        sort_info,
-                                        0,
-                                        query_hint,
-                                        project->getQueryPlanDagHash(),
-                                        {},
-                                        {},
-                                        false,
-                                        std::nullopt,
-                                        query_state_};
+  const RelAlgExecutionUnit exe_unit = {
+      input_descs,
+      input_col_descs,
+      {},
+      {},
+      left_deep_join_quals,
+      {nullptr},
+      target_exprs,
+      {},
+      nullptr,
+      sort_info,
+      0,
+      query_hint,
+      update_query_plan_dag_hash(project->getQueryPlanDagHash(), sort_info),
+      {},
+      {},
+      false,
+      std::nullopt,
+      query_state_};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(project, rewritten_exe_unit.target_exprs);
@@ -5410,7 +5430,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            sort_info,
            0,
            query_hint,
-           filter->getQueryPlanDagHash(),
+           update_query_plan_dag_hash(filter->getQueryPlanDagHash(), sort_info),
            join_info.hash_table_plan_dag,
            join_info.table_id_to_node_map},
           filter,
