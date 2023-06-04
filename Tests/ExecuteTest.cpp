@@ -1656,6 +1656,34 @@ TEST_F(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE b = null;", dt);
     c("SELECT COUNT(*) FROM test WHERE bn = null;", dt);
     c("SELECT COUNT(*) FROM test WHERE bn = b;", dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT AVG(R.v1), AVG(S.v2) FROM (SELECT AVG(x) v1 FROM test) R, (SELECT "
+          "AVG(xx) v2 FROM test_inner) S;",
+          dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT AVG(R.v1), AVG(S.v2) FROM (SELECT x v1 FROM test) R, (SELECT xx v2 "
+          "FROM test_inner) S;",
+          dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT AVG(R.v1), AVG(S.v2) FROM (SELECT AVG(x) v1 FROM test) R, (SELECT xx "
+          "v2 FROM test_inner) S;",
+          dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT AVG(R.v1), MAX(R.v1), AVG(S.v2), SUM(S.v2) FROM (SELECT AVG(x) v1 FROM "
+          "test) R, (SELECT AVG(xx) v2 FROM test_inner) S;",
+          dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT AVG(R.v1), MAX(R.v2), AVG(S.v1), SUM(S.v2) FROM (SELECT AVG(x) v1, y "
+          "v2 FROM test GROUP BY v2) R, (SELECT AVG(xx) v1, xx v2 FROM test_inner GROUP "
+          "BY v2) S;",
+          dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT AVG(R.v1), MAX(R.v2), MIN(R.v3), AVG(S.v1), SUM(S.v2), MAX(S.v3) FROM "
+          "(SELECT AVG(x) v1, SUM(x) v2, y "
+          "v3 FROM test GROUP BY v3) R, (SELECT AVG(xx) v1, SUM(xx) v2, xx v3 FROM "
+          "test_inner GROUP "
+          "BY v3) S;",
+          dt));
     ASSERT_EQ(19,
               v<int64_t>(run_simple_agg("SELECT rowid FROM test WHERE rowid = 19;", dt)))
         << dt;

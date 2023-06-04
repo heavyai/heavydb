@@ -2101,6 +2101,60 @@ void coalesce_nodes(
   }
 }
 
+namespace {
+void create_rex_input_for_new_project_node(
+    RelAlgNode const* node,
+    std::vector<std::unique_ptr<const RexScalar>>& scalar_exprs,
+    std::vector<std::string>& fields) {
+  for (size_t i = 0; i < node->size(); i++) {
+    auto new_rex_input = std::make_unique<RexInput>(node, i);
+    scalar_exprs.emplace_back(std::move(new_rex_input));
+    fields.emplace_back("");
+  }
+}
+}  // namespace
+
+// Handle a query plan pattern "Aggregate-Join" which is not supported b/c Join node
+// (i.e., RelLeftDeepJoin) has multiple inputs (at least two if it has a single binary
+// join) We expect that the Aggregate node has a single input node, so we inject a new
+// Project node to satisfy the condition After the transformation, we have
+// "Aggregate-Project-Join" and can continue the execution w/o any crash or exception
+void handle_agg_over_join(
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
+        query_hints) {
+  std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
+  bool replace_nodes = false;
+  for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
+    auto node = *node_itr;
+    if (auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node)) {
+      std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
+      std::vector<std::string> fields;
+      std::shared_ptr<RelProject> new_project;
+      CHECK_EQ(agg_node->getInputs().size(), size_t(1));
+      CHECK_NE(*node_itr, *node_list.begin());
+      const auto prev_node = *std::prev(node_itr);
+      CHECK(prev_node);
+      auto const input_node_ptr = agg_node->getAndOwnInput(0);
+      if (auto join_node =
+              std::dynamic_pointer_cast<RelLeftDeepInnerJoin const>(input_node_ptr)) {
+        for (auto const* join_input_node : join_node->getInputs()) {
+          create_rex_input_for_new_project_node(join_input_node, scalar_exprs, fields);
+        }
+        if (!scalar_exprs.empty()) {
+          replace_nodes = true;
+          new_project = std::make_shared<RelProject>(scalar_exprs, fields, join_node);
+          agg_node->replaceInput(join_node, new_project);
+          node_list.insert(node_itr, new_project);
+        }
+      }
+    }
+  }
+  if (replace_nodes) {
+    nodes.assign(node_list.begin(), node_list.end());
+  }
+}
+
 class WindowFunctionCollector : public RexVisitor<void*> {
  public:
   WindowFunctionCollector(
@@ -3338,6 +3392,7 @@ void RelAlgDagBuilder::optimizeDag(RelAlgDag& rel_alg_dag) {
   coalesce_nodes(nodes, left_deep_joins, query_hints);
   CHECK(nodes.back().use_count() == 1);
   create_left_deep_join(nodes);
+  handle_agg_over_join(nodes, query_hints);
 
   setBuildState(rel_alg_dag, RelAlgDag::BuildState::kBuiltOptimized);
 }
