@@ -373,6 +373,7 @@ bool is_table_function_whitelisted(std::string_view const function_name) {
        "supported_ml_frameworks",
        "tf_compute_dwell_times",
        "tf_cross_section_1d",
+       "tf_cross_section_2d",
        "tf_feature_self_similarity",
        "tf_feature_similarity",
        "tf_geo_multi_rasterize",
