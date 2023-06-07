@@ -1058,6 +1058,119 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
   return seq.getDescriptor(interval.second - 1)->getResult();
 }
 
+namespace {
+void handle_query_hint(RegisteredQueryHint const& query_hints,
+                       ExecutionOptions& eo,
+                       CompilationOptions& co) {
+  auto columnar_output_hint_enabled = false;
+  auto rowwise_output_hint_enabled = false;
+  if (query_hints.isHintRegistered(QueryHint::kCpuMode)) {
+    VLOG(1) << "A user forces to run the query on the CPU execution mode";
+    co.device_type = ExecutorDeviceType::CPU;
+  }
+  if (query_hints.isHintRegistered(QueryHint::kKeepResult)) {
+    if (!g_enable_data_recycler) {
+      VLOG(1) << "A user enables keeping query resultset but is skipped since data "
+                 "recycler is disabled";
+    }
+    if (!g_use_query_resultset_cache) {
+      VLOG(1) << "A user enables keeping query resultset but is skipped since query "
+                 "resultset recycler is disabled";
+    } else {
+      VLOG(1) << "A user enables keeping query resultset";
+      eo.keep_result = true;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kKeepTableFuncResult)) {
+    // we use this hint within the function 'executeTableFunction`
+    if (!g_enable_data_recycler) {
+      VLOG(1) << "A user enables keeping table function's resultset but is skipped "
+                 "since data recycler is disabled";
+    }
+    if (!g_use_query_resultset_cache) {
+      VLOG(1) << "A user enables keeping table function's resultset but is skipped "
+                 "since query resultset recycler is disabled";
+    } else {
+      VLOG(1) << "A user enables keeping table function's resultset";
+      eo.keep_result = true;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kWatchdog)) {
+    if (!eo.with_watchdog) {
+      VLOG(1) << "A user enables watchdog for this query";
+      eo.with_watchdog = true;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kWatchdogOff)) {
+    if (eo.with_watchdog) {
+      VLOG(1) << "A user disables watchdog for this query";
+      eo.with_watchdog = false;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kDynamicWatchdog)) {
+    if (!eo.with_dynamic_watchdog) {
+      VLOG(1) << "A user enables dynamic watchdog for this query";
+      eo.with_watchdog = true;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kDynamicWatchdogOff)) {
+    if (eo.with_dynamic_watchdog) {
+      VLOG(1) << "A user disables dynamic watchdog for this query";
+      eo.with_watchdog = false;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kQueryTimeLimit)) {
+    std::ostringstream oss;
+    oss << "A user sets query time limit to " << query_hints.query_time_limit << " ms";
+    eo.dynamic_watchdog_time_limit = query_hints.query_time_limit;
+    if (!eo.with_dynamic_watchdog) {
+      eo.with_dynamic_watchdog = true;
+      oss << " (and system automatically enables dynamic watchdog to activate the "
+             "given \"query_time_limit\" hint)";
+    }
+    VLOG(1) << oss.str();
+  }
+  if (query_hints.isHintRegistered(QueryHint::kAllowLoopJoin)) {
+    VLOG(1) << "A user enables loop join";
+    eo.allow_loop_joins = true;
+  }
+  if (query_hints.isHintRegistered(QueryHint::kDisableLoopJoin)) {
+    VLOG(1) << "A user disables loop join";
+    eo.allow_loop_joins = false;
+  }
+  if (query_hints.isHintRegistered(QueryHint::kMaxJoinHashTableSize)) {
+    eo.max_join_hash_table_size = query_hints.max_join_hash_table_size;
+    VLOG(1) << "A user forces the maximum size of a join hash table as "
+            << eo.max_join_hash_table_size << " bytes";
+  }
+  if (query_hints.isHintRegistered(QueryHint::kOptCudaBlockAndGridSizes)) {
+    if (query_hints.isHintRegistered(QueryHint::kCudaGridSize) ||
+        query_hints.isHintRegistered(QueryHint::kCudaBlockSize)) {
+      VLOG(1) << "Skip query hint \"opt_cuda_grid_and_block_size\" when at least one "
+                 "of the following query hints are given simultaneously: "
+                 "\"cuda_block_size\" and \"cuda_grid_size_multiplier\"";
+    } else {
+      VLOG(1) << "A user enables optimization of cuda block and grid sizes";
+      eo.optimize_cuda_block_and_grid_sizes = true;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kColumnarOutput)) {
+    VLOG(1) << "A user forces the query to run with columnar output";
+    columnar_output_hint_enabled = true;
+  } else if (query_hints.isHintRegistered(QueryHint::kRowwiseOutput)) {
+    VLOG(1) << "A user forces the query to run with rowwise output";
+    rowwise_output_hint_enabled = true;
+  }
+  auto columnar_output_enabled = eo.output_columnar_hint ? !rowwise_output_hint_enabled
+                                                         : columnar_output_hint_enabled;
+  if (g_cluster && (columnar_output_hint_enabled || rowwise_output_hint_enabled)) {
+    LOG(INFO) << "Currently, we do not support applying query hint to change query "
+                 "output layout in distributed mode.";
+  }
+  eo.output_columnar_hint = columnar_output_enabled;
+}
+}  // namespace
+
 void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
                                        const size_t step_idx,
                                        const CompilationOptions& co,
@@ -1074,137 +1187,25 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     handleNop(exec_desc);
     return;
   }
-  ExecutionOptions eo_work_unit = eo;
-  eo_work_unit.with_watchdog =
+  ExecutionOptions eo_copied = eo;
+  CompilationOptions co_copied = co;
+  eo_copied.with_watchdog =
       eo.with_watchdog && (step_idx == 0 || dynamic_cast<const RelProject*>(body));
-  eo_work_unit.outer_fragment_indices =
+  eo_copied.outer_fragment_indices =
       step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>();
-  auto query_plan_dag_hash = body->getQueryPlanDagHash();
-  auto handle_hint = [co, eo_work_unit, body, &query_plan_dag_hash, this]()
-      -> std::pair<CompilationOptions, ExecutionOptions> {
-    ExecutionOptions eo_hint_applied = eo_work_unit;
-    CompilationOptions co_hint_applied = co;
-    auto target_node = body;
-    if (auto sort_body = dynamic_cast<const RelSort*>(body)) {
-      target_node = sort_body->getInput(0);
-      query_plan_dag_hash = update_query_plan_dag_hash(target_node->getQueryPlanDagHash(),
-                                                       create_sort_info(sort_body));
-    }
-    auto query_hints = getParsedQueryHint(target_node);
-    auto columnar_output_hint_enabled = false;
-    auto rowwise_output_hint_enabled = false;
-    if (query_hints) {
-      if (query_hints->isHintRegistered(QueryHint::kCpuMode)) {
-        VLOG(1) << "A user forces to run the query on the CPU execution mode";
-        co_hint_applied.device_type = ExecutorDeviceType::CPU;
-      }
-      if (query_hints->isHintRegistered(QueryHint::kKeepResult)) {
-        if (!g_enable_data_recycler) {
-          VLOG(1) << "A user enables keeping query resultset but is skipped since data "
-                     "recycler is disabled";
-        }
-        if (!g_use_query_resultset_cache) {
-          VLOG(1) << "A user enables keeping query resultset but is skipped since query "
-                     "resultset recycler is disabled";
-        } else {
-          VLOG(1) << "A user enables keeping query resultset";
-          eo_hint_applied.keep_result = true;
-        }
-      }
-      if (query_hints->isHintRegistered(QueryHint::kKeepTableFuncResult)) {
-        // we use this hint within the function 'executeTableFunction`
-        if (!g_enable_data_recycler) {
-          VLOG(1) << "A user enables keeping table function's resultset but is skipped "
-                     "since data recycler is disabled";
-        }
-        if (!g_use_query_resultset_cache) {
-          VLOG(1) << "A user enables keeping table function's resultset but is skipped "
-                     "since query resultset recycler is disabled";
-        } else {
-          VLOG(1) << "A user enables keeping table function's resultset";
-          eo_hint_applied.keep_result = true;
-        }
-      }
-      if (query_hints->isHintRegistered(QueryHint::kWatchdog)) {
-        if (!eo_hint_applied.with_watchdog) {
-          VLOG(1) << "A user enables watchdog for this query";
-          eo_hint_applied.with_watchdog = true;
-        }
-      }
-      if (query_hints->isHintRegistered(QueryHint::kWatchdogOff)) {
-        if (eo_hint_applied.with_watchdog) {
-          VLOG(1) << "A user disables watchdog for this query";
-          eo_hint_applied.with_watchdog = false;
-        }
-      }
-      if (query_hints->isHintRegistered(QueryHint::kDynamicWatchdog)) {
-        if (!eo_hint_applied.with_dynamic_watchdog) {
-          VLOG(1) << "A user enables dynamic watchdog for this query";
-          eo_hint_applied.with_watchdog = true;
-        }
-      }
-      if (query_hints->isHintRegistered(QueryHint::kDynamicWatchdogOff)) {
-        if (eo_hint_applied.with_dynamic_watchdog) {
-          VLOG(1) << "A user disables dynamic watchdog for this query";
-          eo_hint_applied.with_watchdog = false;
-        }
-      }
-      if (query_hints->isHintRegistered(QueryHint::kQueryTimeLimit)) {
-        std::ostringstream oss;
-        oss << "A user sets query time limit to " << query_hints->query_time_limit
-            << " ms";
-        eo_hint_applied.dynamic_watchdog_time_limit = query_hints->query_time_limit;
-        if (!eo_hint_applied.with_dynamic_watchdog) {
-          eo_hint_applied.with_dynamic_watchdog = true;
-          oss << " (and system automatically enables dynamic watchdog to activate the "
-                 "given \"query_time_limit\" hint)";
-        }
-        VLOG(1) << oss.str();
-      }
-      if (query_hints->isHintRegistered(QueryHint::kAllowLoopJoin)) {
-        VLOG(1) << "A user enables loop join";
-        eo_hint_applied.allow_loop_joins = true;
-      }
-      if (query_hints->isHintRegistered(QueryHint::kDisableLoopJoin)) {
-        VLOG(1) << "A user disables loop join";
-        eo_hint_applied.allow_loop_joins = false;
-      }
-      if (query_hints->isHintRegistered(QueryHint::kMaxJoinHashTableSize)) {
-        eo_hint_applied.max_join_hash_table_size = query_hints->max_join_hash_table_size;
-        VLOG(1) << "A user forces the maximum size of a join hash table as "
-                << eo_hint_applied.max_join_hash_table_size << " bytes";
-      }
-      if (query_hints->isHintRegistered(QueryHint::kOptCudaBlockAndGridSizes)) {
-        if (query_hints->isHintRegistered(QueryHint::kCudaGridSize) ||
-            query_hints->isHintRegistered(QueryHint::kCudaBlockSize)) {
-          VLOG(1) << "Skip query hint \"opt_cuda_grid_and_block_size\" when at least one "
-                     "of the following query hints are given simultaneously: "
-                     "\"cuda_block_size\" and \"cuda_grid_size_multiplier\"";
-        } else {
-          VLOG(1) << "A user enables optimization of cuda block and grid sizes";
-          eo_hint_applied.optimize_cuda_block_and_grid_sizes = true;
-        }
-      }
-      if (query_hints->isHintRegistered(QueryHint::kColumnarOutput)) {
-        VLOG(1) << "A user forces the query to run with columnar output";
-        columnar_output_hint_enabled = true;
-      } else if (query_hints->isHintRegistered(QueryHint::kRowwiseOutput)) {
-        VLOG(1) << "A user forces the query to run with rowwise output";
-        rowwise_output_hint_enabled = true;
-      }
-    }
-    auto columnar_output_enabled = eo_work_unit.output_columnar_hint
-                                       ? !rowwise_output_hint_enabled
-                                       : columnar_output_hint_enabled;
-    if (g_cluster && (columnar_output_hint_enabled || rowwise_output_hint_enabled)) {
-      LOG(INFO) << "Currently, we do not support applying query hint to change query "
-                   "output layout in distributed mode.";
-    }
-    eo_hint_applied.output_columnar_hint = columnar_output_enabled;
-    return std::make_pair(co_hint_applied, eo_hint_applied);
-  };
 
-  auto hint_applied = handle_hint();
+  auto target_node = body;
+  auto query_plan_dag_hash = body->getQueryPlanDagHash();
+  if (auto sort_body = dynamic_cast<const RelSort*>(body)) {
+    target_node = sort_body->getInput(0);
+    query_plan_dag_hash = update_query_plan_dag_hash(target_node->getQueryPlanDagHash(),
+                                                     create_sort_info(sort_body));
+  }
+  auto query_hints = getParsedQueryHint(target_node);
+  if (query_hints) {
+    handle_query_hint(*query_hints, eo_copied, co_copied);
+  }
+
   setHasStepForUnion(seq.hasQueryStepForUnion());
   if (canUseResultsetCache(eo, render_info) && has_valid_query_plan_dag(body)) {
     if (auto cached_resultset =
@@ -1232,12 +1233,12 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
     if (compound->isDeleteViaSelect()) {
-      executeDelete(compound, hint_applied.first, hint_applied.second, queue_time_ms);
+      executeDelete(compound, co_copied, eo_copied, queue_time_ms);
     } else if (compound->isUpdateViaSelect()) {
-      executeUpdate(compound, hint_applied.first, hint_applied.second, queue_time_ms);
+      executeUpdate(compound, co_copied, eo_copied, queue_time_ms);
     } else {
-      exec_desc.setResult(executeCompound(
-          compound, hint_applied.first, hint_applied.second, render_info, queue_time_ms));
+      exec_desc.setResult(
+          executeCompound(compound, co_copied, eo_copied, render_info, queue_time_ms));
       VLOG(3) << "Returned from executeCompound(), addTemporaryTable("
               << static_cast<int>(-compound->getId()) << ", ...)"
               << " exec_desc.getResult().getDataPtr()->rowCount()="
@@ -1252,9 +1253,9 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   const auto project = dynamic_cast<const RelProject*>(body);
   if (project) {
     if (project->isDeleteViaSelect()) {
-      executeDelete(project, hint_applied.first, hint_applied.second, queue_time_ms);
+      executeDelete(project, co_copied, eo_copied, queue_time_ms);
     } else if (project->isUpdateViaSelect()) {
-      executeUpdate(project, hint_applied.first, hint_applied.second, queue_time_ms);
+      executeUpdate(project, co_copied, eo_copied, queue_time_ms);
     } else {
       std::optional<size_t> prev_count;
       // Disabling the intermediate count optimization in distributed, as the previous
@@ -1279,12 +1280,8 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
           }
         }
       }
-      exec_desc.setResult(executeProject(project,
-                                         hint_applied.first,
-                                         hint_applied.second,
-                                         render_info,
-                                         queue_time_ms,
-                                         prev_count));
+      exec_desc.setResult(executeProject(
+          project, co_copied, eo_copied, render_info, queue_time_ms, prev_count));
       VLOG(3) << "Returned from executeProject(), addTemporaryTable("
               << static_cast<int>(-project->getId()) << ", ...)"
               << " exec_desc.getResult().getDataPtr()->rowCount()="
@@ -1298,22 +1295,22 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   }
   const auto aggregate = dynamic_cast<const RelAggregate*>(body);
   if (aggregate) {
-    exec_desc.setResult(executeAggregate(
-        aggregate, hint_applied.first, hint_applied.second, render_info, queue_time_ms));
+    exec_desc.setResult(
+        executeAggregate(aggregate, co_copied, eo_copied, render_info, queue_time_ms));
     addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
   const auto filter = dynamic_cast<const RelFilter*>(body);
   if (filter) {
-    exec_desc.setResult(executeFilter(
-        filter, hint_applied.first, hint_applied.second, render_info, queue_time_ms));
+    exec_desc.setResult(
+        executeFilter(filter, co_copied, eo_copied, render_info, queue_time_ms));
     addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
   const auto sort = dynamic_cast<const RelSort*>(body);
   if (sort) {
-    exec_desc.setResult(executeSort(
-        sort, hint_applied.first, hint_applied.second, render_info, queue_time_ms));
+    exec_desc.setResult(
+        executeSort(sort, co_copied, eo_copied, render_info, queue_time_ms));
     if (exec_desc.getResult().isFilterPushDownEnabled()) {
       return;
     }
@@ -1322,30 +1319,26 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   }
   const auto logical_values = dynamic_cast<const RelLogicalValues*>(body);
   if (logical_values) {
-    exec_desc.setResult(executeLogicalValues(logical_values, hint_applied.second));
+    exec_desc.setResult(executeLogicalValues(logical_values, eo_copied));
     addTemporaryTable(-logical_values->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
   const auto modify = dynamic_cast<const RelModify*>(body);
   if (modify) {
-    exec_desc.setResult(executeModify(modify, hint_applied.second));
+    exec_desc.setResult(executeModify(modify, eo_copied));
     return;
   }
   const auto logical_union = dynamic_cast<const RelLogicalUnion*>(body);
   if (logical_union) {
-    exec_desc.setResult(executeUnion(logical_union,
-                                     seq,
-                                     hint_applied.first,
-                                     hint_applied.second,
-                                     render_info,
-                                     queue_time_ms));
+    exec_desc.setResult(executeUnion(
+        logical_union, seq, co_copied, eo_copied, render_info, queue_time_ms));
     addTemporaryTable(-logical_union->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
   const auto table_func = dynamic_cast<const RelTableFunction*>(body);
   if (table_func) {
-    exec_desc.setResult(executeTableFunction(
-        table_func, hint_applied.first, hint_applied.second, queue_time_ms));
+    exec_desc.setResult(
+        executeTableFunction(table_func, co_copied, eo_copied, queue_time_ms));
     addTemporaryTable(-table_func->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
