@@ -2354,6 +2354,20 @@ TEST_F(TableFunctions, TimestampTests) {
         ASSERT_EQ(asString, expected_result_set[i]);
       }
     }
+    // Reproducer of QE-374
+    if (dt == ExecutorDeviceType::GPU) {
+      for (int i = 0; i < 2; i++) {
+        // According to QE-374, the following query will hang forever
+        // when i==1 due to unclean code cache locking:
+        const auto result = run_multiple_agg(
+            "SELECT * FROM TABLE(ct_timestamp_add_offset_cpu_only(cursor(SELECT t1 from"
+            " time_test_castable), CAST('1970-01-01 00:00:00.000000001' AS "
+            "TIMESTAMP(9))));",
+            dt);
+        ASSERT_EQ(result->rowCount(), size_t(1));
+      }
+    }
+
     // TIMESTAMP columns mixed with scalar inputs and sizer argument
     {
       const auto result = run_multiple_agg(

@@ -56,49 +56,54 @@ void CodeCacheAccessor<CompilationContext>::put(const CodeCacheKey& key,
 template <typename CompilationContext>
 CodeCacheVal<CompilationContext>* CodeCacheAccessor<CompilationContext>::get_or_wait(
     const CodeCacheKey& key) {
-  CodeCacheVal<CompilationContext>* cached_code = nullptr;
   std::unique_lock<std::mutex> lk(code_cache_mutex_);
   get_count_++;
-  cached_code = code_cache_.get(key);
-  if (cached_code) {
-    if (cached_code->get()) {
-      found_count_++;
-      VLOG(1) << "Reuse a cached compiled code";
-      return cached_code;
-    } else {
-      // Wait until compiling thread inserts code to cache. TODO: this
-      // wait also locks other unrelated get_or_wait calls on
-      // different keys. This is suboptimal as it will block in
-      // addition to others threads get_or_wait(key) calls, also
-      // independent get_or_wait(other_key) calls. To fix this, we'll
-      // need a key specific mutex or use some other approach that
-      // would allow threads with other keys to proceed.
-      compilation_cv_.wait(lk, [&] { return !!(code_cache_.get(key)->get()); });
-      cached_code = code_cache_.get(key);
+  if (auto* cached_code = code_cache_.get(key)) {
+    if (!cached_code->get()) {
+      // Wait until the compiling thread puts code to cache. TODO:
+      // this wait also locks other unrelated get_or_wait calls on
+      // different keys. This is suboptimal as it will block also
+      // independent get_or_wait(other_key) calls. To fix this (it
+      // likely also requires using ORCJIT to enable concurrent
+      // compilations), we'll need a key specific mutex or use some
+      // other approach that would allow threads with other keys to
+      // proceed.
+      compilation_cv_.wait(lk, [=] { return cached_code->get(); });
+      // Don't ignore spurious awakenings as the support for such
+      // events has not been implemented:
       CHECK(cached_code->get());
-      found_count_++;
-      VLOG(1) << "Reuse a cached compiled code";
-      return cached_code;
     }
+    found_count_++;
+    VLOG(1) << "Reuse a cached compiled code";
+    return cached_code;
   }
   // This is the first time the key is used to acquire code from
-  // cache. Insert null value to cache so that other threads acquiring
-  // the same key will wait (see above) until the code is inserted to
-  // cache (by put method below):
+  // cache. Put null value to cache so that other threads acquiring
+  // the same key will wait (see above) until the code is put to the
+  // cache:
   CodeCacheVal<CompilationContext> not_a_code(nullptr);
   code_cache_.put(key, std::move(not_a_code));
-  return nullptr;  // caller must trigger code compilation for the given key
+  // returning nullptr will notify caller to trigger code compilation
+  // for the given key:
+  return nullptr;
 }
 
 template <typename CompilationContext>
-void CodeCacheAccessor<CompilationContext>::swap(
+void CodeCacheAccessor<CompilationContext>::reset(
     const CodeCacheKey& key,
-    CodeCacheVal<CompilationContext>&& value) {
+    CodeCacheVal<CompilationContext> value) {
   std::lock_guard<std::mutex> lock(code_cache_mutex_);
   auto result = code_cache_.get(key);
-  CHECK(result);          // get_or_wait has inserted not_a_code to code cache
+  CHECK(result);          // get_or_wait has put not_a_code to code cache
   CHECK(!result->get());  // ensure that result really contains not_a_code per get_or_wait
-  result->swap(value);    // swap not_a_code with actual code
+  *result = std::move(value);    // set actual code
+  compilation_cv_.notify_all();  // notify waiting get_or_wait(..) calls
+}
+
+template <typename CompilationContext>
+void CodeCacheAccessor<CompilationContext>::erase(const CodeCacheKey& key) {
+  std::lock_guard<std::mutex> lock(code_cache_mutex_);
+  code_cache_.erase(key);
   compilation_cv_.notify_all();  // notify waiting get_or_wait(..) calls
 }
 
