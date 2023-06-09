@@ -317,10 +317,18 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
     CHECK(!emit_only_preflight_fn);
     generateGpuKernel();
   }
-
-  QueryEngine::getInstance()->tf_code_accessor->swap(key,
-                                                     finalize(emit_only_preflight_fn));
-  return QueryEngine::getInstance()->tf_code_accessor->get_value(key);
+  std::shared_ptr<CompilationContext> code;
+  try {
+    code = finalize(emit_only_preflight_fn);
+  } catch (const std::exception& e) {
+    // Erase unsuccesful key and release lock from the get_or_wait(key) call above:
+    QueryEngine::getInstance()->tf_code_accessor->erase(key);
+    throw;
+  }
+  // get_or_wait added code with nullptr to cache, here we reset the
+  // cached code with the pointer to the generated code:
+  QueryEngine::getInstance()->tf_code_accessor->reset(key, code);
+  return code;
 }
 
 bool TableFunctionCompilationContext::passColumnsByValue(

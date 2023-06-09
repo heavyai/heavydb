@@ -484,6 +484,31 @@ EXTENSION_NOINLINE_HOST int32_t ct_timestamp_add_offset(TableFunctionManager& mg
   return size;
 }
 
+// The following test function ct_timestamp_add_offset_cpu_only is
+// equivalent interface-wise to ct_timestamp_add_offset but is
+// different codegen-wise because it will be compiled for both GPU and
+// CPU execution that is contrary to the ct_timestamp_add_offset
+// function case that will be compiled for CPU only (this is because
+// it uses TableFunctionManager argument that will disable compilation
+// for GPU execution).  However, compiling
+// ct_timestamp_add_offset_cpu_only for GPU execution will fail and
+// QueryMustRunOnCpu will be thrown which used to lead to a hanging
+// server due to unclean code cache locking. See QE-374 for more
+// information.
+//
+// A learning point here is that to avoid unnecessary attempts to
+// compile a UDTF for GPU execution, either its implementation must
+// use TableFunctionManager argument or the implementation name must
+// have a suffix containing `__cpu_`.
+EXTENSION_NOINLINE_HOST int32_t
+ct_timestamp_add_offset_cpu_only(const Column<Timestamp>& input,
+                                 const int32_t multiplier,
+                                 const Timestamp offset,
+                                 Column<Timestamp>& out) {
+  out[0] = input[0] + offset;
+  return 1;
+}
+
 // Test table function with sizer argument, and mix of scalar/column inputs.
 EXTENSION_NOINLINE int32_t
 ct_timestamp_test_columns_and_scalars__cpu(const Column<Timestamp>& input,

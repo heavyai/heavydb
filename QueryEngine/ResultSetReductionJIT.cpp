@@ -1283,8 +1283,8 @@ void ResultSetReductionJIT::finalizeReductionCode(
       reinterpret_cast<ReductionCode::FuncPtr>(cpu_compilation_context->func());
   CHECK(reduction_code.llvm_reduce_loop->getParent() == reduction_code.module);
   auto executor = Executor::getExecutor(executor_id_);
-  QueryEngine::getInstance()->s_code_accessor->swap(key,
-                                                    std::move(cpu_compilation_context));
+  QueryEngine::getInstance()->s_code_accessor->reset(key,
+                                                     std::move(cpu_compilation_context));
 }
 
 namespace {
