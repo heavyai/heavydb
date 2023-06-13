@@ -27,7 +27,7 @@ std::optional<RelNodeId> QueryPlanDagCache::addNodeIfAbsent(const RelAlgNode* no
   auto key = node->toHash();
   auto const result = node_map_.emplace(key, getCurrentNodeMapCardinality());
   if (result.second) {
-    if (getCurrentNodeMapSize() > max_node_map_size_ ||
+    if (getCurrentNodeMapSizeUnlocked() > max_node_map_size_ ||
         getCurrentNodeMapCardinality() == SIZE_MAX) {
       // unfortunately our DAG cache becomes full
       // so clear the internal status and skip the query plan DAG extraction
@@ -131,6 +131,11 @@ void QueryPlanDagCache::printDag() {
 }
 
 size_t QueryPlanDagCache::getCurrentNodeMapSize() const {
+  std::lock_guard<std::mutex> cache_lock(cache_lock_);
+  return getCurrentNodeMapSizeUnlocked();
+}
+
+size_t QueryPlanDagCache::getCurrentNodeMapSizeUnlocked() const {
   return node_map_.size() * elem_size_;
 }
 
