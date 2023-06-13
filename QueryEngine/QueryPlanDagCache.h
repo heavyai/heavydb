@@ -127,8 +127,6 @@ class QueryPlanDagCache {
 
   void setNodeMapMaxSize(const size_t map_size);
 
-  size_t getCurrentNodeMapCardinality() const;
-
   size_t getJoinColumnsInfoHash(const Analyzer::Expr* join_expr,
                                 JoinColumnSide target_side,
                                 bool extract_only_col_id);
@@ -141,6 +139,9 @@ class QueryPlanDagCache {
   void printDag();
 
  private:
+  size_t getCurrentNodeMapSizeUnlocked() const;
+  size_t getCurrentNodeMapCardinality() const;
+
   // a map btw. rel node and its unique node id
   RelNodeMap node_map_;
   // a graph structure that represents relationships among extracted query plan DAGs
@@ -150,6 +151,6 @@ class QueryPlanDagCache {
   size_t max_node_map_size_;
 
   // a lock to protect contentions while accessing internal data structure of DAG cache
-  std::mutex cache_lock_;
+  mutable std::mutex cache_lock_;
   ColumnVarsVisitor col_var_visitor_;
 };
