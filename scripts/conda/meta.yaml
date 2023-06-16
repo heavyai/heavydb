@@ -39,7 +39,6 @@ requirements:
     - double-conversion
     - flex
     - gflags
-    - glog
     - llvmdev <11
     - llvm <11
     - libarchive
@@ -198,7 +197,6 @@ outputs:
         - double-conversion
         - flex
         - gflags
-        - glog
         - llvmdev <11
         - llvm <11
         - libarchive

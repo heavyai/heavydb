@@ -549,14 +549,20 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
           : nullptr;
 
   // execute
-  const auto err = compilation_context->table_function_entry_point()(
-      reinterpret_cast<const int8_t*>(mgr.get()),
-      byte_stream_ptr,                       // input columns buffer
-      col_sizes_ptr,                         // input column sizes
-      input_str_dict_proxy_byte_stream_ptr,  // input str dictionary proxies
-      nullptr,
-      output_str_dict_proxy_byte_stream_ptr,
-      &output_row_count);
+  int32_t err;
+  try {
+    err = compilation_context->table_function_entry_point()(
+        reinterpret_cast<const int8_t*>(mgr.get()),
+        byte_stream_ptr,                       // input columns buffer
+        col_sizes_ptr,                         // input column sizes
+        input_str_dict_proxy_byte_stream_ptr,  // input str dictionary proxies
+        nullptr,
+        output_str_dict_proxy_byte_stream_ptr,
+        &output_row_count);
+  } catch (std::exception const& e) {
+    throw UserTableFunctionError("Error executing table function: " +
+                                 std::string(e.what()));
+  }
 
   if (err == TableFunctionErrorCode::GenericError) {
     throw UserTableFunctionError("Error executing table function: " +
