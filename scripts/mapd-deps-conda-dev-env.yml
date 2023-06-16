@@ -41,7 +41,6 @@ dependencies:
   - double-conversion
   - snappy
   - gflags
-  - glog
   - libarchive
   - libkml
   - libiconv

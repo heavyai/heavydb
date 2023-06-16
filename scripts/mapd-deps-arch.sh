@@ -51,7 +51,6 @@ yay -Suy \
     glm \
     glslang \
     go \
-    google-glog \
     intel-tbb \
     jdk-openjdk \
     libiodbc \

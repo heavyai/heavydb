@@ -42,7 +42,7 @@ build(){
                                       -DARROW_GANDIVA=OFF \
                                       -DARROW_PROTOBUF_USE_SHARED=ON \
                                       -DARROW_GFLAGS_USE_SHARED=ON \
-                                      -DARROW_USE_GLOG=ON \
+                                      -DARROW_USE_GLOG=OFF \
                                       -DARROW_WITH_ZSTD=BUNDLED \
                                       -DARROW_WITH_SNAPPY=BUNDLED \
                                       -DARROW_WITH_BROTLI=BUNDLED \

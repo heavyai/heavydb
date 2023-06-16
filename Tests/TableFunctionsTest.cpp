@@ -1014,28 +1014,6 @@ TEST_F(TableFunctions, BasicProjection) {
                                     dt),
                    std::runtime_error);
     }
-
-    // TODO: enable the following tests after QE-50 is resolved:
-    if (false && dt == ExecutorDeviceType::CPU) {
-      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
-                                    "FROM tf_test), -3));",
-                                    dt),
-                   UserTableFunctionError);
-    }
-
-    if (false && dt == ExecutorDeviceType::CPU) {
-      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
-                                    "FROM tf_test), -4));",
-                                    dt),
-                   UserTableFunctionError);
-    }
-
-    if (false && dt == ExecutorDeviceType::CPU) {
-      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
-                                    "FROM tf_test), -5));",
-                                    dt),
-                   TableFunctionError);
-    }
   }
 }
 
@@ -2091,6 +2069,30 @@ TEST_F(TableFunctions, ThrowingTests) {
                            dt),
           UserTableFunctionError);
     }
+
+    // These should throw directly from within UDTF code, be caught by the server, and
+    // re-thrown as UserTableFunctionErrors
+    if (dt == ExecutorDeviceType::CPU) {
+      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
+                                    "FROM tf_test), -3));",
+                                    dt),
+                   UserTableFunctionError);
+    }
+
+    if (dt == ExecutorDeviceType::CPU) {
+      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
+                                    "FROM tf_test), -4));",
+                                    dt),
+                   UserTableFunctionError);
+    }
+
+    if (dt == ExecutorDeviceType::CPU) {
+      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
+                                    "FROM tf_test), -5));",
+                                    dt),
+                   UserTableFunctionError);
+    }
+
     {
       const auto rows = run_multiple_agg(
           "SELECT CAST(val AS INT) AS val FROM "
