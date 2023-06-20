@@ -26393,7 +26393,6 @@ TEST_F(Select, ResultsetAndChunkMetadataRecycling) {
         collect_ref_count(cache_key);
       };
   // first run the query and then see whether we can exploit the resultset recycler
-
   // projection
   auto q1 = "SELECT /*+ keep_result */ SUM(x), AVG(y) FROM test;";
   c(q1, CPU_DT);
@@ -26526,8 +26525,8 @@ TEST_F(Select, ResultsetAndChunkMetadataRecycling) {
   }
 
   for (size_t i = 0; i < num_resultset_ref.size(); ++i) {
-    EXPECT_GT(num_resultset_ref[i], prev_num_resultset_ref[i]);
-    EXPECT_GE(num_chunk_metadata_ref[i], prev_num_chunk_metadata_ref[i]);
+    EXPECT_GT(num_resultset_ref[i], prev_num_resultset_ref[i]) << i;
+    EXPECT_GE(num_chunk_metadata_ref[i], prev_num_chunk_metadata_ref[i]) << i;
   }
 
   clearCache();

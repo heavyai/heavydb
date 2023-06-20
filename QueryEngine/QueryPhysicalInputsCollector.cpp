@@ -229,7 +229,6 @@ std::ostream& operator<<(std::ostream& os, PhysicalInput const& physical_input) 
 
 size_t PhysicalInput::hash() const {
   auto hash_value = shared::compute_hash(col_id, table_id);
-  boost::hash_combine(hash_value, db_id);
   return hash_value;
 }
 

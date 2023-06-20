@@ -40,17 +40,8 @@
 #include "Shared/toString.h"
 #include "Utils/FsiUtils.h"
 
-using ColumnNameList = std::vector<std::string>;
-static auto const HASH_N = boost::hash_value("n");
-
-struct RelRexToStringConfig {
-  bool skip_input_nodes{false};
-  bool attributes_only{false};
-
-  static RelRexToStringConfig defaults() { return RelRexToStringConfig(); }
-};
-
 class RelAggregate;
+class RelAlgNode;
 class RelCompound;
 class RelFilter;
 class RelJoin;
@@ -63,16 +54,29 @@ class RelScan;
 class RelSort;
 class RelTableFunction;
 class RelTranslatedJoin;
+class Rex;
 class RexAbstractInput;
+class RexAgg;
 class RexCase;
 class RexFunctionOperator;
 class RexInput;
 class RexLiteral;
 class RexOperator;
 class RexRef;
-class RexAgg;
+class RexScalar;
 class RexSubQuery;
 class RexWindowFunctionOperator;
+class SortField;
+
+using RelAlgInputs = std::vector<std::shared_ptr<const RelAlgNode>>;
+using ColumnNameList = std::vector<std::string>;
+
+struct RelRexToStringConfig {
+  bool skip_input_nodes{false};
+  bool attributes_only{false};
+
+  static RelRexToStringConfig defaults() { return RelRexToStringConfig(); }
+};
 
 class RelAlgDagNode {
  public:
@@ -137,12 +141,11 @@ class RelAlgDagNode {
 
 class Rex : public RelAlgDagNode {
  public:
-  // return hashed value of string representation of this rex
-  virtual size_t toHash() const = 0;
-
   virtual ~Rex() {}
 
   virtual size_t getStepNumber() const { return 0; }
+
+  virtual size_t toHash() const = 0;
 
  protected:
   mutable std::optional<size_t> hash_;
@@ -151,6 +154,7 @@ class Rex : public RelAlgDagNode {
 };
 
 class RexScalar : public Rex {};
+
 // For internal use of the abstract interpreter only. The result after abstract
 // interpretation will not have any references to 'RexAbstractInput' objects.
 class RexAbstractInput : public RexScalar {
@@ -176,15 +180,11 @@ class RexAbstractInput : public RexScalar {
     return cat(::typeName(this), "(", std::to_string(in_index_), ")");
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RexAbstractInput).hash_code();
-      boost::hash_combine(*hash_, in_index_);
-    }
-    return *hash_;
-  }
+  virtual size_t toHash() const override { return hash_value(*this); }
 
  private:
+  friend std::size_t hash_value(RexAbstractInput const&);
+
   mutable unsigned in_index_;
 
   friend struct RelAlgDagSerializer;
@@ -310,34 +310,15 @@ class RexLiteral : public RexScalar {
     return oss.str();
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RexLiteral).hash_code();
-      boost::apply_visitor(
-          [this](auto&& current_val) {
-            using T = std::decay_t<decltype(current_val)>;
-            if constexpr (!std::is_same_v<boost::blank, T>) {
-              static_assert(std::is_same_v<int64_t, T> || std::is_same_v<double, T> ||
-                            std::is_same_v<std::string, T> || std::is_same_v<bool, T>);
-              boost::hash_combine(*hash_, current_val);
-            }
-          },
-          literal_);
-      boost::hash_combine(*hash_, type_);
-      boost::hash_combine(*hash_, target_type_);
-      boost::hash_combine(*hash_, scale_);
-      boost::hash_combine(*hash_, precision_);
-      boost::hash_combine(*hash_, target_scale_);
-      boost::hash_combine(*hash_, target_precision_);
-    }
-    return *hash_;
-  }
-
   std::unique_ptr<RexLiteral> deepCopy() const {
     return std::make_unique<RexLiteral>(*this);
   }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RexLiteral const&);
+
   boost::variant<boost::blank, int64_t, double, std::string, bool> literal_;
   SQLTypes type_;
   SQLTypes target_type_;
@@ -410,28 +391,17 @@ class RexOperator : public RexScalar {
     }
   };
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RexOperator).hash_code();
-      boost::hash_combine(*hash_, op_);
-      for (auto& operand : operands_) {
-        boost::hash_combine(*hash_, operand->toHash());
-      }
-      boost::hash_combine(*hash_, getType().get_type_name());
-    }
-    return *hash_;
-  }
+  virtual size_t toHash() const override { return hash_value(*this); }
 
  protected:
+  friend std::size_t hash_value(RexOperator const&);
+
   SQLOps op_;
   mutable std::vector<std::unique_ptr<const RexScalar>> operands_;
   SQLTypeInfo type_;
 
   friend struct RelAlgDagSerializer;
 };
-
-class RelAlgNode;
-using RelAlgInputs = std::vector<std::shared_ptr<const RelAlgNode>>;
 
 // Not a real node created by Calcite. Created by us because CaseExpr is a node in our
 // Analyzer.
@@ -488,19 +458,11 @@ class RexCase : public RexScalar {
     }
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RexCase).hash_code();
-      for (size_t i = 0; i < branchCount(); ++i) {
-        boost::hash_combine(*hash_, getWhen(i)->toHash());
-        boost::hash_combine(*hash_, getThen(i)->toHash());
-      }
-      boost::hash_combine(*hash_, getElse() ? getElse()->toHash() : HASH_N);
-    }
-    return *hash_;
-  }
+  virtual size_t toHash() const override { return hash_value(*this); }
 
  private:
+  friend std::size_t hash_value(RexCase const&);
+
   std::vector<
       std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>>
       expr_pair_list_;
@@ -556,20 +518,11 @@ class RexFunctionOperator : public RexOperator {
     }
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RexFunctionOperator).hash_code();
-      boost::hash_combine(*hash_, ::toString(op_));
-      boost::hash_combine(*hash_, getType().get_type_name());
-      for (auto& operand : operands_) {
-        boost::hash_combine(*hash_, operand->toHash());
-      }
-      boost::hash_combine(*hash_, name_);
-    }
-    return *hash_;
-  }
+  virtual size_t toHash() const override { return hash_value(*this); }
 
  private:
+  friend std::size_t hash_value(RexFunctionOperator const&);
+
   std::string name_;
 
   friend struct RelAlgDagSerializer;
@@ -608,14 +561,11 @@ class SortField {
                ")");
   }
 
-  size_t toHash() const {
-    auto hash = boost::hash_value(field_);
-    boost::hash_combine(hash, sort_dir_ == SortDirection::Ascending ? "a" : "d");
-    boost::hash_combine(hash, nulls_pos_ == NullSortedPosition::First ? "f" : "l");
-    return hash;
-  }
+  virtual size_t toHash() const { return hash_value(*this); }
 
  private:
+  friend std::size_t hash_value(SortField const&);
+
   size_t field_;
   SortDirection sort_dir_;
   NullSortedPosition nulls_pos_;
@@ -763,42 +713,11 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
     }
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RexWindowFunctionOperator).hash_code();
-      boost::hash_combine(*hash_, getType().get_type_name());
-      boost::hash_combine(*hash_, getName());
-      boost::hash_combine(*hash_, is_rows_);
-      for (auto& collation : collation_) {
-        boost::hash_combine(*hash_, collation.toHash());
-      }
-      for (auto& operand : operands_) {
-        boost::hash_combine(*hash_, operand->toHash());
-      }
-      for (auto& key : partition_keys_) {
-        boost::hash_combine(*hash_, key->toHash());
-      }
-      for (auto& key : order_keys_) {
-        boost::hash_combine(*hash_, key->toHash());
-      }
-      auto get_window_bound_hash =
-          [](const RexWindowFunctionOperator::RexWindowBound& bound) {
-            auto h =
-                boost::hash_value(bound.bound_expr ? bound.bound_expr->toHash() : HASH_N);
-            boost::hash_combine(h, bound.unbounded);
-            boost::hash_combine(h, bound.preceding);
-            boost::hash_combine(h, bound.following);
-            boost::hash_combine(h, bound.is_current_row);
-            boost::hash_combine(h, bound.order_key);
-            return h;
-          };
-      boost::hash_combine(*hash_, get_window_bound_hash(frame_start_bound_));
-      boost::hash_combine(*hash_, get_window_bound_hash(frame_end_bound_));
-    }
-    return *hash_;
-  }
+  virtual size_t toHash() const override { return hash_value(*this); }
 
  private:
+  friend std::size_t hash_value(RexWindowFunctionOperator const&);
+
   SqlWindowFunctionKind kind_;
   mutable ConstRexScalarPtrVector partition_keys_;
   mutable ConstRexScalarPtrVector order_keys_;
@@ -833,17 +752,13 @@ class RexRef : public RexScalar {
     return cat(::typeName(this), "(", std::to_string(index_), ")");
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RexRef).hash_code();
-      boost::hash_combine(*hash_, index_);
-    }
-    return *hash_;
-  }
-
   std::unique_ptr<RexRef> deepCopy() const { return std::make_unique<RexRef>(index_); }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RexRef const&);
+
   size_t index_;
 
   friend struct RelAlgDagSerializer;
@@ -881,19 +796,6 @@ class RexAgg : public Rex {
                ")");
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RexAgg).hash_code();
-      for (auto& operand : operands_) {
-        boost::hash_combine(*hash_, operand);
-      }
-      boost::hash_combine(*hash_, agg_);
-      boost::hash_combine(*hash_, distinct_);
-      boost::hash_combine(*hash_, type_.get_type_name());
-    }
-    return *hash_;
-  }
-
   SQLAgg getKind() const { return agg_; }
 
   bool isDistinct() const { return distinct_; }
@@ -908,7 +810,11 @@ class RexAgg : public Rex {
     return std::make_unique<RexAgg>(agg_, distinct_, type_, operands_);
   }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RexAgg const&);
+
   SQLAgg agg_;
   bool distinct_;
   SQLTypeInfo type_;
@@ -1021,9 +927,6 @@ class RelAlgNode : public RelAlgDagNode {
   virtual std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const = 0;
 
-  // return hashed value of a string representation of this rel node
-  virtual size_t toHash() const = 0;
-
   virtual size_t size() const = 0;
 
   virtual std::shared_ptr<RelAlgNode> deepCopy() const = 0;
@@ -1035,6 +938,8 @@ class RelAlgNode : public RelAlgDagNode {
    * results in distributed mode.
    */
   void clearContextData() const { context_data_ = nullptr; }
+
+  virtual size_t toHash() const = 0;
 
  protected:
   RelAlgInputs inputs_;
@@ -1111,13 +1016,15 @@ class RexSubQuery : public RexScalar {
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
 
-  size_t toHash() const override;
-
   std::unique_ptr<RexSubQuery> deepCopy() const;
 
   void setExecutionResult(const ExecutionResultShPtr result);
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RexSubQuery const&);
+
   std::shared_ptr<SQLTypeInfo> type_;
   std::shared_ptr<ExecutionResultShPtr> result_;
   std::shared_ptr<const RelAlgNode> ra_;
@@ -1160,13 +1067,15 @@ class RexInput : public RexAbstractInput {
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
 
-  size_t toHash() const override;
-
   std::unique_ptr<RexInput> deepCopy() const {
     return std::make_unique<RexInput>(node_, getIndex());
   }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RexInput const&);
+
   mutable const RelAlgNode* node_;
 
   friend struct RelAlgDagSerializer;
@@ -1227,16 +1136,6 @@ class RelScan : public RelAlgNode {
     }
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RelScan).hash_code();
-      boost::hash_combine(*hash_, td_->tableId);
-      boost::hash_combine(*hash_, td_->tableName);
-      boost::hash_combine(*hash_, ::toString(field_names_));
-    }
-    return *hash_;
-  }
-
   std::shared_ptr<RelAlgNode> deepCopy() const override {
     CHECK(false);
     return nullptr;
@@ -1267,7 +1166,11 @@ class RelScan : public RelAlgNode {
 
   Hints* getDeliveredHints() { return hints_.get(); }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RelScan const&);
+
   const TableDescriptor* td_;
   std::vector<std::string> field_names_;
   bool hint_applied_;
@@ -1494,17 +1397,6 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
     }
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RelProject).hash_code();
-      for (auto& target_expr : scalar_exprs_) {
-        boost::hash_combine(*hash_, target_expr->toHash());
-      }
-      boost::hash_combine(*hash_, ::toString(fields_));
-    }
-    return *hash_;
-  }
-
   std::shared_ptr<RelAlgNode> deepCopy() const override {
     auto copied_project_node = std::make_shared<RelProject>(*this);
     if (isProjectForUpdate()) {
@@ -1543,7 +1435,11 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
 
   Hints* getDeliveredHints() { return hints_.get(); }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RelProject const&);
+
   template <typename EXPR_VISITOR_FUNCTOR>
   void visitScalarExprs(EXPR_VISITOR_FUNCTOR visitor_functor) const {
     for (int i = 0; i < static_cast<int>(scalar_exprs_.size()); i++) {
@@ -1673,21 +1569,6 @@ class RelAggregate : public RelAlgNode {
     }
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RelAggregate).hash_code();
-      boost::hash_combine(*hash_, groupby_count_);
-      for (auto& agg_expr : agg_exprs_) {
-        boost::hash_combine(*hash_, agg_expr->toHash());
-      }
-      for (auto& node : inputs_) {
-        boost::hash_combine(*hash_, node->toHash());
-      }
-      boost::hash_combine(*hash_, ::toString(fields_));
-    }
-    return *hash_;
-  }
-
   std::shared_ptr<RelAlgNode> deepCopy() const override {
     return std::make_shared<RelAggregate>(*this);
   }
@@ -1717,7 +1598,11 @@ class RelAggregate : public RelAlgNode {
 
   Hints* getDeliveredHints() { return hints_.get(); }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RelAggregate const&);
+
   size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   std::vector<std::string> fields_;
@@ -1807,18 +1692,6 @@ class RelJoin : public RelAlgNode {
     }
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RelJoin).hash_code();
-      boost::hash_combine(*hash_, condition_ ? condition_->toHash() : HASH_N);
-      for (auto& node : inputs_) {
-        boost::hash_combine(*hash_, node->toHash());
-      }
-      boost::hash_combine(*hash_, ::toString(getJoinType()));
-    }
-    return *hash_;
-  }
-
   size_t size() const override { return inputs_[0]->size() + inputs_[1]->size(); }
 
   std::shared_ptr<RelAlgNode> deepCopy() const override {
@@ -1850,7 +1723,11 @@ class RelJoin : public RelAlgNode {
 
   Hints* getDeliveredHints() { return hints_.get(); }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RelJoin const&);
+
   mutable std::unique_ptr<const RexScalar> condition_;
   JoinType join_type_;
   bool hint_applied_;
@@ -1952,23 +1829,6 @@ class RelTranslatedJoin : public RelAlgNode {
                  ")");
     }
   }
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RelTranslatedJoin).hash_code();
-      boost::hash_combine(*hash_, lhs_->toHash());
-      boost::hash_combine(*hash_, rhs_->toHash());
-      boost::hash_combine(*hash_, outer_join_cond_ ? outer_join_cond_->toHash() : HASH_N);
-      boost::hash_combine(*hash_, nested_loop_);
-      boost::hash_combine(*hash_, ::toString(join_type_));
-      boost::hash_combine(*hash_, op_type_);
-      boost::hash_combine(*hash_, qualifier_);
-      boost::hash_combine(*hash_, op_typeinfo_);
-      for (auto& filter_op : filter_ops_) {
-        boost::hash_combine(*hash_, filter_op->toString());
-      }
-    }
-    return *hash_;
-  }
   const RelAlgNode* getLHS() const { return lhs_; }
   const RelAlgNode* getRHS() const { return rhs_; }
   size_t getFilterCondSize() const { return filter_ops_.size(); }
@@ -2007,7 +1867,11 @@ class RelTranslatedJoin : public RelAlgNode {
   }
   bool isNestedLoopQual() const { return nested_loop_; }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RelTranslatedJoin const&);
+
   const RelAlgNode* lhs_;
   const RelAlgNode* rhs_;
   const std::vector<const Analyzer::ColumnVar*> lhs_join_cols_;
@@ -2094,22 +1958,15 @@ class RelFilter : public RelAlgNode {
     }
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RelFilter).hash_code();
-      boost::hash_combine(*hash_, filter_ ? filter_->toHash() : HASH_N);
-      for (auto& node : inputs_) {
-        boost::hash_combine(*hash_, node->toHash());
-      }
-    }
-    return *hash_;
-  }
-
   std::shared_ptr<RelAlgNode> deepCopy() const override {
     return std::make_shared<RelFilter>(*this);
   }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RelFilter const&);
+
   std::unique_ptr<const RexScalar> filter_;
 
   friend struct RelAlgDagSerializer;
@@ -2155,8 +2012,6 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
 
-  size_t toHash() const override;
-
   size_t size() const override;
   virtual size_t getOuterConditionsSize() const;
 
@@ -2168,7 +2023,11 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
 
   std::vector<std::shared_ptr<const RelJoin>> getOriginalJoins() const;
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RelLeftDeepInnerJoin const&);
+
   std::unique_ptr<const RexScalar> condition_;
   std::vector<std::unique_ptr<const RexScalar>> outer_conditions_per_level_;
   std::shared_ptr<RelFilter> original_filter_;
@@ -2295,8 +2154,6 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
 
-  size_t toHash() const override;
-
   std::shared_ptr<RelAlgNode> deepCopy() const override {
     return std::make_shared<RelCompound>(*this);
   }
@@ -2326,7 +2183,11 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
 
   Hints* getDeliveredHints() { return hints_.get(); }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RelCompound const&);
+
   std::unique_ptr<const RexScalar> filter_expr_;
   size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
@@ -2442,32 +2303,17 @@ class RelSort : public RelAlgNode {
     }
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RelSort).hash_code();
-      for (auto& collation : collation_) {
-        boost::hash_combine(*hash_, collation.toHash());
-      }
-      boost::hash_combine(*hash_, empty_result_);
-      boost::hash_combine(*hash_, limit_delivered_);
-      if (limit_delivered_) {
-        boost::hash_combine(*hash_, limit_);
-      }
-      boost::hash_combine(*hash_, offset_);
-      for (auto& node : inputs_) {
-        boost::hash_combine(*hash_, node->toHash());
-      }
-    }
-    return *hash_;
-  }
-
   size_t size() const override { return inputs_[0]->size(); }
 
   std::shared_ptr<RelAlgNode> deepCopy() const override {
     return std::make_shared<RelSort>(*this);
   }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RelSort const&);
+
   std::vector<SortField> collation_;
   size_t limit_;
   size_t offset_;
@@ -2615,20 +2461,6 @@ class RelModify : public RelAlgNode {
     }
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RelModify).hash_code();
-      boost::hash_combine(*hash_, table_descriptor_->tableName);
-      boost::hash_combine(*hash_, flattened_);
-      boost::hash_combine(*hash_, yieldModifyOperationString(operation_));
-      boost::hash_combine(*hash_, ::toString(target_column_list_));
-      for (auto& node : inputs_) {
-        boost::hash_combine(*hash_, node->toHash());
-      }
-    }
-    return *hash_;
-  }
-
   void applyUpdateModificationsToInputNode() {
     auto previous_node = dynamic_cast<RelProject const*>(inputs_[0].get());
     CHECK(previous_node != nullptr);
@@ -2706,7 +2538,11 @@ class RelModify : public RelAlgNode {
     previous_project_node->setModifiedTableCatalog(&catalog_);
   }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RelModify const&);
+
   Catalog_Namespace::Catalog const& catalog_;
   const TableDescriptor* table_descriptor_;
   bool flattened_;
@@ -2848,25 +2684,11 @@ class RelTableFunction : public RelAlgNode {
     }
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RelTableFunction).hash_code();
-      for (auto& table_func_input : table_func_inputs_) {
-        boost::hash_combine(*hash_, table_func_input->toHash());
-      }
-      for (auto& target_expr : target_exprs_) {
-        boost::hash_combine(*hash_, target_expr->toHash());
-      }
-      boost::hash_combine(*hash_, function_name_);
-      boost::hash_combine(*hash_, ::toString(fields_));
-      for (auto& node : inputs_) {
-        boost::hash_combine(*hash_, node->toHash());
-      }
-    }
-    return *hash_;
-  }
+  virtual size_t toHash() const override { return hash_value(*this); }
 
  private:
+  friend std::size_t hash_value(RelTableFunction const&);
+
   std::string function_name_;
   std::vector<std::string> fields_;
 
@@ -2928,17 +2750,6 @@ class RelLogicalValues : public RelAlgNode {
     return ret;
   }
 
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RelLogicalValues).hash_code();
-      for (auto& target_meta_info : tuple_type_) {
-        boost::hash_combine(*hash_, target_meta_info.get_resname());
-        boost::hash_combine(*hash_, target_meta_info.get_type_info().get_type_name());
-      }
-    }
-    return *hash_;
-  }
-
   std::string getFieldName(const size_t col_idx) const {
     CHECK_LT(col_idx, size());
     return tuple_type_[col_idx].get_resname();
@@ -2969,7 +2780,11 @@ class RelLogicalValues : public RelAlgNode {
     return std::make_shared<RelLogicalValues>(*this);
   }
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RelLogicalValues const&);
+
   std::vector<TargetMetaInfo> tuple_type_;
   std::vector<RowValues> values_;
 
@@ -3002,7 +2817,6 @@ class RelLogicalUnion : public RelAlgNode {
   size_t size() const override;
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
-  size_t toHash() const override;
 
   std::string getFieldName(const size_t i) const;
 
@@ -3014,7 +2828,11 @@ class RelLogicalUnion : public RelAlgNode {
   // Not unique_ptr to allow for an easy deepCopy() implementation.
   mutable std::vector<std::shared_ptr<const RexScalar>> scalar_exprs_;
 
+  virtual size_t toHash() const override { return hash_value(*this); }
+
  private:
+  friend std::size_t hash_value(RelLogicalUnion const&);
+
   bool is_all_;
 
   friend struct RelAlgDagSerializer;
@@ -3620,3 +3438,47 @@ using RANodeOutput = std::vector<RexInput>;
 RANodeOutput get_node_output(const RelAlgNode* ra_node);
 
 std::string tree_string(const RelAlgNode*, const size_t depth = 0);
+
+namespace boost {
+// boost::hash_value(T*) by default will hash just the address.
+// Specialize this function template for each type so that the object itself is hashed.
+constexpr size_t HASH_NULLPTR{0u};
+#define HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(T)    \
+  template <>                                          \
+  inline std::size_t hash_value(T const* const& ptr) { \
+    return ptr ? ptr->toHash() : HASH_NULLPTR;         \
+  }                                                    \
+  template <>                                          \
+  inline std::size_t hash_value(T* const& ptr) {       \
+    return ptr ? ptr->toHash() : HASH_NULLPTR;         \
+  }
+
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelAggregate)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelCompound)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelFilter)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelJoin)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelLeftDeepInnerJoin)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelLogicalUnion)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelLogicalValues)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelModify)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelProject)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelScan)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelSort)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelTableFunction)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelTranslatedJoin)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RexAbstractInput)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RexCase)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RexFunctionOperator)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RexInput)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RexLiteral)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RexOperator)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RexRef)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RexAgg)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RexSubQuery)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RexWindowFunctionOperator)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RelAlgNode)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(RexScalar)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(Rex)
+HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER(SortField)
+#undef HEAVYAI_SPECIALIZE_HASH_VALUE_OF_POINTER
+}  // namespace boost
