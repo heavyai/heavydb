@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "Logger/Logger.h"
+#include "Shared/StringTransform.h"
 #include "Shared/misc.h"
 
 #include <string>
