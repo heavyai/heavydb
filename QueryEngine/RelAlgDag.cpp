@@ -852,14 +852,6 @@ std::string RelLogicalUnion::toString(RelRexToStringConfig config) const {
   return cat(::typeName(this), "(is_all(", is_all_, "))");
 }
 
-size_t RelLogicalUnion::toHash() const {
-  if (!hash_) {
-    hash_ = typeid(RelLogicalUnion).hash_code();
-    boost::hash_combine(*hash_, is_all_);
-  }
-  return *hash_;
-}
-
 std::string RelLogicalUnion::getFieldName(const size_t i) const {
   if (auto const* compound = dynamic_cast<RelCompound const*>(inputs_[0].get())) {
     return compound->getFieldName(i);
@@ -3430,14 +3422,6 @@ std::string RexSubQuery::toString(RelRexToStringConfig config) const {
   }
 }
 
-size_t RexSubQuery::toHash() const {
-  if (!hash_) {
-    hash_ = typeid(RexSubQuery).hash_code();
-    boost::hash_combine(*hash_, ra_->toHash());
-  }
-  return *hash_;
-}
-
 std::string RexInput::toString(RelRexToStringConfig config) const {
   const auto scan_node = dynamic_cast<const RelScan*>(node_);
   if (scan_node) {
@@ -3451,15 +3435,6 @@ std::string RexInput::toString(RelRexToStringConfig config) const {
   auto node_str = config.skip_input_nodes ? "(input_node_id=" + node_id_str
                                           : "(input_node=" + node_->toString(config);
   return cat(::typeName(this), node_str, ", in_index=", std::to_string(getIndex()), ")");
-}
-
-size_t RexInput::toHash() const {
-  if (!hash_) {
-    hash_ = typeid(RexInput).hash_code();
-    boost::hash_combine(*hash_, node_->toHash());
-    boost::hash_combine(*hash_, getIndex());
-  }
-  return *hash_;
 }
 
 std::string RelCompound::toString(RelRexToStringConfig config) const {
@@ -3499,24 +3474,309 @@ std::string RelCompound::toString(RelRexToStringConfig config) const {
   }
 }
 
-size_t RelCompound::toHash() const {
-  if (!hash_) {
-    hash_ = typeid(RelCompound).hash_code();
-    boost::hash_combine(*hash_, filter_expr_ ? filter_expr_->toHash() : HASH_N);
-    boost::hash_combine(*hash_, is_agg_);
-    for (auto& target_expr : target_exprs_) {
-      if (auto rex_scalar = dynamic_cast<const RexScalar*>(target_expr)) {
-        boost::hash_combine(*hash_, rex_scalar->toHash());
-      }
-    }
-    for (auto& agg_expr : agg_exprs_) {
-      boost::hash_combine(*hash_, agg_expr->toHash());
-    }
-    for (auto& scalar_source : scalar_sources_) {
-      boost::hash_combine(*hash_, scalar_source->toHash());
-    }
-    boost::hash_combine(*hash_, groupby_count_);
-    boost::hash_combine(*hash_, ::toString(fields_));
+std::size_t hash_value(RexAbstractInput const& rex_ab_input) {
+  if (rex_ab_input.hash_) {
+    return *rex_ab_input.hash_;
   }
-  return *hash_;
+  rex_ab_input.hash_ = typeid(RexAbstractInput).hash_code();
+  boost::hash_combine(*rex_ab_input.hash_, rex_ab_input.in_index_);
+  return *rex_ab_input.hash_;
+}
+
+std::size_t hash_value(RexLiteral const& rex_literal) {
+  if (rex_literal.hash_) {
+    return *rex_literal.hash_;
+  }
+  rex_literal.hash_ = typeid(RexLiteral).hash_code();
+  boost::apply_visitor(
+      [&rex_literal](auto&& current_val) {
+        using T = std::decay_t<decltype(current_val)>;
+        if constexpr (!std::is_same_v<boost::blank, T>) {
+          static_assert(std::is_same_v<int64_t, T> || std::is_same_v<double, T> ||
+                        std::is_same_v<std::string, T> || std::is_same_v<bool, T>);
+          boost::hash_combine(*rex_literal.hash_, current_val);
+        }
+      },
+      rex_literal.literal_);
+  boost::hash_combine(*rex_literal.hash_, rex_literal.type_);
+  boost::hash_combine(*rex_literal.hash_, rex_literal.target_type_);
+  boost::hash_combine(*rex_literal.hash_, rex_literal.scale_);
+  boost::hash_combine(*rex_literal.hash_, rex_literal.precision_);
+  boost::hash_combine(*rex_literal.hash_, rex_literal.target_scale_);
+  boost::hash_combine(*rex_literal.hash_, rex_literal.target_precision_);
+  return *rex_literal.hash_;
+}
+
+std::size_t hash_value(RexOperator const& rex_op) {
+  if (rex_op.hash_) {
+    return *rex_op.hash_;
+  }
+  rex_op.hash_ = typeid(RexOperator).hash_code();
+  boost::hash_combine(*rex_op.hash_, rex_op.op_);
+  boost::hash_combine(*rex_op.hash_, rex_op.operands_);
+  boost::hash_combine(*rex_op.hash_, rex_op.getType().get_type_name());
+  return *rex_op.hash_;
+}
+
+std::size_t hash_value(RexCase const& rex_case) {
+  if (rex_case.hash_) {
+    return *rex_case.hash_;
+  }
+  rex_case.hash_ = typeid(RexCase).hash_code();
+  boost::hash_combine(*rex_case.hash_, rex_case.expr_pair_list_);
+  boost::hash_combine(*rex_case.hash_, rex_case.else_expr_);
+  return *rex_case.hash_;
+}
+
+std::size_t hash_value(RexFunctionOperator const& rex_op) {
+  if (rex_op.hash_) {
+    return *rex_op.hash_;
+  }
+  rex_op.hash_ = typeid(RexFunctionOperator).hash_code();
+  boost::hash_combine(*rex_op.hash_, ::toString(rex_op.op_));
+  boost::hash_combine(*rex_op.hash_, rex_op.getType().get_type_name());
+  boost::hash_combine(*rex_op.hash_, rex_op.operands_);
+  boost::hash_combine(*rex_op.hash_, rex_op.name_);
+  return *rex_op.hash_;
+}
+
+std::size_t hash_value(SortField const& sort_field) {
+  auto hash = boost::hash_value(sort_field.field_);
+  boost::hash_combine(hash, sort_field.sort_dir_ == SortDirection::Ascending ? "a" : "d");
+  boost::hash_combine(hash,
+                      sort_field.nulls_pos_ == NullSortedPosition::First ? "f" : "l");
+  return hash;
+}
+
+std::size_t hash_value(RexWindowFunctionOperator const& rex_window) {
+  if (rex_window.hash_) {
+    return *rex_window.hash_;
+  }
+  rex_window.hash_ = typeid(RexWindowFunctionOperator).hash_code();
+  boost::hash_combine(*rex_window.hash_, rex_window.getType().get_type_name());
+  boost::hash_combine(*rex_window.hash_, rex_window.getName());
+  boost::hash_combine(*rex_window.hash_, rex_window.is_rows_);
+  boost::hash_combine(*rex_window.hash_, rex_window.collation_);
+  boost::hash_combine(*rex_window.hash_, rex_window.operands_);
+  boost::hash_combine(*rex_window.hash_, rex_window.partition_keys_);
+  boost::hash_combine(*rex_window.hash_, rex_window.order_keys_);
+  auto get_window_bound_hash =
+      [](const RexWindowFunctionOperator::RexWindowBound& bound) {
+        auto h = boost::hash_value(bound.bound_expr);
+        boost::hash_combine(h, bound.unbounded);
+        boost::hash_combine(h, bound.preceding);
+        boost::hash_combine(h, bound.following);
+        boost::hash_combine(h, bound.is_current_row);
+        boost::hash_combine(h, bound.order_key);
+        return h;
+      };
+  boost::hash_combine(*rex_window.hash_,
+                      get_window_bound_hash(rex_window.frame_start_bound_));
+  boost::hash_combine(*rex_window.hash_,
+                      get_window_bound_hash(rex_window.frame_end_bound_));
+  return *rex_window.hash_;
+}
+
+std::size_t hash_value(RexRef const& rex_ref) {
+  if (rex_ref.hash_) {
+    return *rex_ref.hash_;
+  }
+  rex_ref.hash_ = typeid(RexRef).hash_code();
+  boost::hash_combine(*rex_ref.hash_, rex_ref.index_);
+  return *rex_ref.hash_;
+}
+
+std::size_t hash_value(RexAgg const& rex_agg) {
+  if (rex_agg.hash_) {
+    return *rex_agg.hash_;
+  }
+  rex_agg.hash_ = typeid(RexAgg).hash_code();
+  boost::hash_combine(*rex_agg.hash_, rex_agg.operands_);
+  boost::hash_combine(*rex_agg.hash_, rex_agg.agg_);
+  boost::hash_combine(*rex_agg.hash_, rex_agg.distinct_);
+  boost::hash_combine(*rex_agg.hash_, rex_agg.type_.get_type_name());
+  return *rex_agg.hash_;
+}
+
+std::size_t hash_value(RexSubQuery const& rex_subq) {
+  if (rex_subq.hash_) {
+    return *rex_subq.hash_;
+  }
+  rex_subq.hash_ = typeid(RexSubQuery).hash_code();
+  boost::hash_combine(*rex_subq.hash_, rex_subq.ra_);
+  return *rex_subq.hash_;
+}
+
+std::size_t hash_value(RexInput const& rex_input) {
+  if (rex_input.hash_) {
+    return *rex_input.hash_;
+  }
+  rex_input.hash_ = typeid(RexInput).hash_code();
+  boost::hash_combine(*rex_input.hash_, rex_input.node_);
+  boost::hash_combine(*rex_input.hash_, rex_input.getIndex());
+  return *rex_input.hash_;
+}
+
+std::size_t hash_value(RelScan const& rel_scan) {
+  if (rel_scan.hash_) {
+    return *rel_scan.hash_;
+  }
+  rel_scan.hash_ = typeid(RelScan).hash_code();
+  boost::hash_combine(*rel_scan.hash_, rel_scan.td_->tableId);
+  boost::hash_combine(*rel_scan.hash_, rel_scan.td_->tableName);
+  boost::hash_combine(*rel_scan.hash_, ::toString(rel_scan.field_names_));
+  return *rel_scan.hash_;
+}
+
+std::size_t hash_value(RelProject const& rel_project) {
+  if (rel_project.hash_) {
+    return *rel_project.hash_;
+  }
+  rel_project.hash_ = typeid(RelProject).hash_code();
+  boost::hash_combine(*rel_project.hash_, rel_project.scalar_exprs_);
+  boost::hash_combine(*rel_project.hash_, rel_project.fields_);
+  boost::hash_combine(*rel_project.hash_, rel_project.inputs_);
+  return *rel_project.hash_;
+}
+
+std::size_t hash_value(RelAggregate const& rel_agg) {
+  if (rel_agg.hash_) {
+    return *rel_agg.hash_;
+  }
+  rel_agg.hash_ = typeid(RelAggregate).hash_code();
+  boost::hash_combine(*rel_agg.hash_, rel_agg.groupby_count_);
+  boost::hash_combine(*rel_agg.hash_, rel_agg.agg_exprs_);
+  boost::hash_combine(*rel_agg.hash_, rel_agg.fields_);
+  boost::hash_combine(*rel_agg.hash_, rel_agg.inputs_);
+  return *rel_agg.hash_;
+}
+
+std::size_t hash_value(RelJoin const& rel_join) {
+  if (rel_join.hash_) {
+    return *rel_join.hash_;
+  }
+  rel_join.hash_ = typeid(RelJoin).hash_code();
+  boost::hash_combine(*rel_join.hash_, rel_join.condition_);
+  boost::hash_combine(*rel_join.hash_, rel_join.inputs_);
+  boost::hash_combine(*rel_join.hash_, ::toString(rel_join.getJoinType()));
+  return *rel_join.hash_;
+}
+
+std::size_t hash_value(RelTranslatedJoin const& rel_tr_join) {
+  if (rel_tr_join.hash_) {
+    return *rel_tr_join.hash_;
+  }
+  rel_tr_join.hash_ = typeid(RelTranslatedJoin).hash_code();
+  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.lhs_);
+  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.rhs_);
+  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.outer_join_cond_);
+  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.nested_loop_);
+  boost::hash_combine(*rel_tr_join.hash_, ::toString(rel_tr_join.join_type_));
+  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.op_type_);
+  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.qualifier_);
+  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.op_typeinfo_);
+  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.filter_ops_);
+  return *rel_tr_join.hash_;
+}
+
+std::size_t hash_value(RelFilter const& rel_filter) {
+  if (rel_filter.hash_) {
+    return *rel_filter.hash_;
+  }
+  rel_filter.hash_ = typeid(RelFilter).hash_code();
+  boost::hash_combine(*rel_filter.hash_, rel_filter.filter_);
+  boost::hash_combine(*rel_filter.hash_, rel_filter.inputs_);
+  return *rel_filter.hash_;
+}
+
+std::size_t hash_value(RelLeftDeepInnerJoin const& rel_join) {
+  if (rel_join.hash_) {
+    return *rel_join.hash_;
+  }
+  rel_join.hash_ = typeid(RelLeftDeepInnerJoin).hash_code();
+  boost::hash_combine(*rel_join.hash_, rel_join.condition_);
+  boost::hash_combine(*rel_join.hash_, rel_join.outer_conditions_per_level_);
+  boost::hash_combine(*rel_join.hash_, rel_join.original_filter_);
+  boost::hash_combine(*rel_join.hash_, rel_join.inputs_);
+  return *rel_join.hash_;
+}
+
+std::size_t hash_value(RelCompound const& rel_compound) {
+  if (rel_compound.hash_) {
+    return *rel_compound.hash_;
+  }
+  rel_compound.hash_ = typeid(RelCompound).hash_code();
+  boost::hash_combine(*rel_compound.hash_, rel_compound.filter_expr_);
+  boost::hash_combine(*rel_compound.hash_, rel_compound.is_agg_);
+  boost::hash_combine(*rel_compound.hash_, rel_compound.target_exprs_);
+  boost::hash_combine(*rel_compound.hash_, rel_compound.agg_exprs_);
+  boost::hash_combine(*rel_compound.hash_, rel_compound.scalar_sources_);
+  boost::hash_combine(*rel_compound.hash_, rel_compound.groupby_count_);
+  boost::hash_combine(*rel_compound.hash_, rel_compound.fields_);
+  boost::hash_combine(*rel_compound.hash_, rel_compound.inputs_);
+  return *rel_compound.hash_;
+}
+
+std::size_t hash_value(RelSort const& rel_sort) {
+  if (rel_sort.hash_) {
+    return *rel_sort.hash_;
+  }
+  rel_sort.hash_ = typeid(RelSort).hash_code();
+  boost::hash_combine(*rel_sort.hash_, rel_sort.collation_);
+  boost::hash_combine(*rel_sort.hash_, rel_sort.empty_result_);
+  boost::hash_combine(*rel_sort.hash_, rel_sort.limit_delivered_);
+  boost::hash_combine(*rel_sort.hash_, rel_sort.limit_);
+  boost::hash_combine(*rel_sort.hash_, rel_sort.offset_);
+  boost::hash_combine(*rel_sort.hash_, rel_sort.inputs_);
+  return *rel_sort.hash_;
+}
+
+std::size_t hash_value(RelModify const& rel_modify) {
+  if (rel_modify.hash_) {
+    return *rel_modify.hash_;
+  }
+  rel_modify.hash_ = typeid(RelModify).hash_code();
+  boost::hash_combine(*rel_modify.hash_, rel_modify.table_descriptor_->tableName);
+  boost::hash_combine(*rel_modify.hash_, rel_modify.table_descriptor_->tableId);
+  boost::hash_combine(*rel_modify.hash_, rel_modify.flattened_);
+  boost::hash_combine(*rel_modify.hash_,
+                      RelModify::yieldModifyOperationString(rel_modify.operation_));
+  boost::hash_combine(*rel_modify.hash_, rel_modify.target_column_list_);
+  boost::hash_combine(*rel_modify.hash_, rel_modify.inputs_);
+  return *rel_modify.hash_;
+}
+
+std::size_t hash_value(RelTableFunction const& rel_tf) {
+  if (rel_tf.hash_) {
+    return *rel_tf.hash_;
+  }
+  rel_tf.hash_ = typeid(RelTableFunction).hash_code();
+  boost::hash_combine(*rel_tf.hash_, rel_tf.function_name_);
+  boost::hash_combine(*rel_tf.hash_, rel_tf.table_func_inputs_);
+  boost::hash_combine(*rel_tf.hash_, rel_tf.target_exprs_);
+  boost::hash_combine(*rel_tf.hash_, rel_tf.fields_);
+  boost::hash_combine(*rel_tf.hash_, rel_tf.inputs_);
+  return *rel_tf.hash_;
+}
+
+std::size_t hash_value(RelLogicalValues const& rel_lv) {
+  if (rel_lv.hash_) {
+    return *rel_lv.hash_;
+  }
+  rel_lv.hash_ = typeid(RelLogicalValues).hash_code();
+  for (auto& target_meta_info : rel_lv.tuple_type_) {
+    boost::hash_combine(*rel_lv.hash_, target_meta_info.get_resname());
+    boost::hash_combine(*rel_lv.hash_, target_meta_info.get_type_info().get_type_name());
+  }
+  return *rel_lv.hash_;
+}
+
+std::size_t hash_value(RelLogicalUnion const& rel_lv) {
+  if (rel_lv.hash_) {
+    return *rel_lv.hash_;
+  }
+  rel_lv.hash_ = typeid(RelLogicalUnion).hash_code();
+  boost::hash_combine(*rel_lv.hash_, rel_lv.is_all_);
+  boost::hash_combine(*rel_lv.hash_, rel_lv.inputs_);
+  return *rel_lv.hash_;
 }
