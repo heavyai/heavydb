@@ -1787,47 +1787,22 @@ class RelTranslatedJoin : public RelAlgNode {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    if (!config.attributes_only) {
-      return cat(::typeName(this),
-                 "( join_quals { lhs: ",
-                 ::toString(lhs_join_cols_),
-                 ", rhs: ",
-                 ::toString(rhs_join_cols_),
-                 " }, filter_quals: { ",
-                 ::toString(filter_ops_),
-                 " }, outer_join_cond: { ",
-                 outer_join_cond_->toString(config),
-                 " }, loop_join: ",
-                 ::toString(nested_loop_),
-                 ", join_type: ",
-                 ::toString(join_type_),
-                 ", op_type: ",
-                 ::toString(op_type_),
-                 ", qualifier: ",
-                 ::toString(qualifier_),
-                 ", op_type_info: ",
-                 ::toString(op_typeinfo_),
-                 ")");
+    std::ostringstream oss;
+    oss << ::typeName(this) << "( join_quals { lhs: " << ::toString(lhs_join_cols_);
+    oss << "rhs: " << ::toString(rhs_join_cols_);
+    oss << " }, filter_quals: { " << ::toString(filter_ops_);
+    oss << " }, outer_join_cond: { ";
+    if (outer_join_cond_) {
+      oss << outer_join_cond_->toString(config);
     } else {
-      return cat(::typeName(this),
-                 "( join_quals { lhs: ",
-                 ::toString(lhs_join_cols_),
-                 ", rhs: ",
-                 ::toString(rhs_join_cols_),
-                 " }, filter_quals: { ",
-                 ::toString(filter_ops_),
-                 " }, loop_join: ",
-                 ::toString(nested_loop_),
-                 ", join_type: ",
-                 ::toString(join_type_),
-                 ", op_type: ",
-                 ::toString(op_type_),
-                 ", qualifier: ",
-                 ::toString(qualifier_),
-                 ", op_type_info: ",
-                 ::toString(op_typeinfo_),
-                 ")");
+      oss << "N/A";
     }
+    oss << " }, loop_join: " << ::toString(nested_loop_);
+    oss << ", join_type: " << ::toString(join_type_);
+    oss << ", op_type: " << ::toString(op_type_);
+    oss << ", qualifier: " << ::toString(qualifier_);
+    oss << ", op_type_info: " << ::toString(op_typeinfo_) << ")";
+    return oss.str();
   }
   const RelAlgNode* getLHS() const { return lhs_; }
   const RelAlgNode* getRHS() const { return rhs_; }
@@ -2262,45 +2237,30 @@ class RelSort : public RelAlgNode {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    if (!config.attributes_only) {
-      const std::string limit_info = limit_delivered_ ? std::to_string(limit_) : "N/A";
-      auto ret = cat(::typeName(this),
-                     "(",
-                     "empty_result: ",
-                     ::toString(empty_result_),
-                     ", collation=",
-                     ::toString(collation_),
-                     ", limit=",
-                     limit_info,
-                     ", offset",
-                     std::to_string(offset_));
-      if (!config.skip_input_nodes) {
-        ret += ", inputs=", ::toString(inputs_);
-      } else {
-        ret += ", input node id={";
-        for (auto& input : inputs_) {
-          auto node_id_in_plan = input->getIdInPlanTree();
-          auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
-                                             : std::to_string(input->getId());
-          ret += node_id_str + " ";
-        }
-        ret += "}";
-      }
-      return cat(ret, ")");
+    const std::string limit_info = limit_delivered_ ? std::to_string(limit_) : "N/A";
+    auto ret = cat(::typeName(this),
+                   "(",
+                   "empty_result: ",
+                   ::toString(empty_result_),
+                   ", collation=",
+                   ::toString(collation_),
+                   ", limit=",
+                   limit_info,
+                   ", offset",
+                   std::to_string(offset_));
+    if (!config.skip_input_nodes) {
+      ret += ", inputs=", ::toString(inputs_);
     } else {
-      const std::string limit_info = limit_delivered_ ? std::to_string(limit_) : "N/A";
-      return cat(::typeName(this),
-                 "(",
-                 "empty_result: ",
-                 ::toString(empty_result_),
-                 ", collation=",
-                 ::toString(collation_),
-                 ", limit=",
-                 limit_info,
-                 ", offset",
-                 std::to_string(offset_),
-                 ")");
+      ret += ", input node id={";
+      for (auto& input : inputs_) {
+        auto node_id_in_plan = input->getIdInPlanTree();
+        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                           : std::to_string(input->getId());
+        ret += node_id_str + " ";
+      }
+      ret += "}";
     }
+    return cat(ret, ")");
   }
 
   size_t size() const override { return inputs_[0]->size(); }
@@ -2424,41 +2384,29 @@ class RelModify : public RelAlgNode {
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    if (!config.attributes_only) {
-      auto ret = cat(::typeName(this),
-                     "(",
-                     table_descriptor_->tableName,
-                     ", flattened=",
-                     std::to_string(flattened_),
-                     ", op=",
-                     yieldModifyOperationString(operation_),
-                     ", target_column_list=",
-                     ::toString(target_column_list_));
-      if (!config.skip_input_nodes) {
-        ret += ", inputs=", ::toString(inputs_);
-      } else {
-        ret += ", input node id={";
-        for (auto& input : inputs_) {
-          auto node_id_in_plan = input->getIdInPlanTree();
-          auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
-                                             : std::to_string(input->getId());
-          ret += node_id_str + " ";
-        }
-        ret += "}";
-      }
-      return cat(ret, ")");
+    auto ret = cat(::typeName(this),
+                   "(",
+                   table_descriptor_->tableName,
+                   ", flattened=",
+                   std::to_string(flattened_),
+                   ", op=",
+                   yieldModifyOperationString(operation_),
+                   ", target_column_list=",
+                   ::toString(target_column_list_));
+
+    if (!config.skip_input_nodes) {
+      ret += ", inputs=", ::toString(inputs_);
     } else {
-      return cat(::typeName(this),
-                 "(",
-                 table_descriptor_->tableName,
-                 ", flattened=",
-                 std::to_string(flattened_),
-                 ", op=",
-                 yieldModifyOperationString(operation_),
-                 ", target_column_list=",
-                 ::toString(target_column_list_),
-                 ")");
+      ret += ", input node id={";
+      for (auto& input : inputs_) {
+        auto node_id_in_plan = input->getIdInPlanTree();
+        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                           : std::to_string(input->getId());
+        ret += node_id_str + " ";
+      }
+      ret += "}";
     }
+    return cat(ret, ")");
   }
 
   void applyUpdateModificationsToInputNode() {
