@@ -3571,6 +3571,19 @@ TEST_F(StringFunctionTest, DISABLED_CardinalityStrtokToArrayTextEncodingDict) {
   }
 }
 
+TEST_F(StringFunctionTest, StrtokToArray_UDF) {
+  // Apply STRTOK_TO_ARRAY on the output of an UDF
+  for (auto dt : {ExecutorDeviceType::CPU, /* ExecutorDeviceType::GPU */}) {
+    SKIP_NO_GPU();
+
+    const auto result_set =
+        sql("select strtok_to_array(udf_identity(name), ' ') from text_enc_test;", dt);
+    std::vector<std::vector<std::string>> expected_result_set{
+        {"United", "States"}, {"Canada"}, {"United", "Kingdom"}, {"Germany"}};
+    compare_array_columns(expected_result_set, result_set);
+  }
+}
+
 TEST_F(StringFunctionTest, AlterTable_RuntimeFunction) {
   for (auto dt : {ExecutorDeviceType::CPU, /* ExecutorDeviceType::GPU */}) {
     SKIP_NO_GPU();

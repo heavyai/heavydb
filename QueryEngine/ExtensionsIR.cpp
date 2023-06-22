@@ -320,13 +320,28 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
         orig_arg_lvs.push_back(arg_lvs[j]);
       }
     } else if (arg_ti.is_text_encoding_none()) {
-      CHECK_EQ(size_t(3), arg_lvs.size());
-      // arg_lvs contains:
-      // arg_lvs[0] StringView struct { i8*, i64 }
-      // arg_lvs[1] i8* pointer
-      // arg_lvs[2] i32 string length (truncated from i64)
-      for (size_t j = 0; j < arg_lvs.size(); j++) {
-        orig_arg_lvs.push_back(arg_lvs[j]);
+      if (arg_lvs.size() == 3) {
+        // arg_lvs contains:
+        // arg_lvs[0] StringView struct { i8*, i64 }
+        // arg_lvs[1] i8* pointer
+        // arg_lvs[2] i32 string length (truncated from i64)
+        std::copy(
+            std::begin(arg_lvs), std::end(arg_lvs), std::back_inserter(orig_arg_lvs));
+      } else if (arg_lvs.size() == 1) {
+        // TextEncodingNone*
+        // orig_arg_lvs should contain:
+        // orig_arg_lvs[0]: TextEncodingNone struct { i8*, i64, i8* }
+        // orig_arg_lvs[1]: i8*
+        // orig_arg_lvs[1]: i32 string length (truncated from i64)
+        CHECK(arg_lvs[0]->getType()->isPointerTy());
+        auto none_enc_string = cgen_state_->ir_builder_.CreateLoad(
+            arg_lvs[0]->getType()->getPointerElementType(), arg_lvs[0]);
+        orig_arg_lvs.push_back(none_enc_string);
+        orig_arg_lvs.push_back(
+            cgen_state_->ir_builder_.CreateExtractValue(none_enc_string, 0));
+        orig_arg_lvs.push_back(cgen_state_->ir_builder_.CreateTrunc(
+            cgen_state_->ir_builder_.CreateExtractValue(none_enc_string, 1),
+            llvm::Type::getInt32Ty(cgen_state_->context_)));
       }
     } else if (arg_ti.is_text_encoding_dict()) {
       CHECK_EQ(size_t(1), arg_lvs.size());

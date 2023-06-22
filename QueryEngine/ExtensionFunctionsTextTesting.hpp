@@ -89,6 +89,12 @@ TextEncodingDict text_encoding_dict_copy_from(RowFunctionManager& mgr,
   return mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, "copy: " + str);
 }
 
+EXTENSION_NOINLINE
+TextEncodingNone udf_identity(RowFunctionManager& mgr, const TextEncodingNone& t) {
+  std::string s = t.getString();
+  return TextEncodingNone(mgr, s);
+}
+
 #endif  // #ifndef __CUDACC__
 
 #ifdef __clang__
