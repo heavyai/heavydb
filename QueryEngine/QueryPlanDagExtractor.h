@@ -114,6 +114,8 @@ class QueryPlanDagExtractor {
     table_id_to_node_map_.clear();
   }
 
+  static size_t applyLimitClauseToCacheKey(size_t cache_key, SortInfo const& sort_info);
+
  private:
   void visit(const RelAlgNode*, const RelAlgNode*);
   std::vector<Analyzer::ColumnVar const*> getColVar(const Analyzer::Expr* col_info);

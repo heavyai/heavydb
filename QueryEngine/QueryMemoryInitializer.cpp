@@ -460,7 +460,8 @@ void QueryMemoryInitializer::initGroupByBuffer(
     if (query_mem_desc.useStreamingTopN()) {
       const auto node_count_size = thread_count * sizeof(int64_t);
       memset(rows_ptr, 0, node_count_size);
-      const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
+      const auto n =
+          ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit.value_or(0);
       const auto rows_offset = streaming_top_n::get_rows_offset_of_heaps(n, thread_count);
       memset(rows_ptr + thread_count, -1, rows_offset - node_count_size);
       rows_ptr += rows_offset / sizeof(int64_t);
@@ -944,7 +945,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     if (render_allocator) {
       throw StreamingTopNNotSupportedInRenderQuery();
     }
-    const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
+    const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit.value_or(0);
     CHECK(!output_columnar);
 
     return prepareTopNHeapsDevBuffer(
@@ -1220,7 +1221,8 @@ void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
 
   size_t total_buff_size{0};
   if (ra_exe_unit && query_mem_desc.useStreamingTopN()) {
-    const size_t n = ra_exe_unit->sort_info.offset + ra_exe_unit->sort_info.limit;
+    const size_t n =
+        ra_exe_unit->sort_info.offset + ra_exe_unit->sort_info.limit.value_or(0);
     total_buff_size =
         streaming_top_n::get_heap_size(query_mem_desc.getRowSize(), n, thread_count);
   } else {
@@ -1248,7 +1250,7 @@ void QueryMemoryInitializer::applyStreamingTopNOffsetCpu(
   const auto rows_copy = streaming_top_n::get_rows_copy_from_heaps(
       group_by_buffers_[buffer_start_idx],
       query_mem_desc.getBufferSizeBytes(ra_exe_unit, 1, ExecutorDeviceType::CPU),
-      ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit,
+      ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit.value_or(0),
       1);
   CHECK_EQ(rows_copy.size(),
            query_mem_desc.getEntryCount() * query_mem_desc.getRowSize());

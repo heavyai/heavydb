@@ -103,7 +103,7 @@ RelAlgExecutionUnit build_ra_exe_unit(
                              target_exprs,
                              {},
                              nullptr,
-                             SortInfo{{}, SortAlgorithm::Default, 0, 0, false},
+                             SortInfo(),
                              0};
 }
 

@@ -161,15 +161,16 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   // TODO: Allow streaming top n for columnar output
+  auto limit_value = ra_exe_unit.sort_info.limit.value_or(0);
   if (!output_columnar && ra_exe_unit.sort_info.order_entries.size() == 1 &&
-      ra_exe_unit.sort_info.limit &&
+      limit_value > 0 &&
       ra_exe_unit.sort_info.algorithm == SortAlgorithm::StreamingTopN) {
     const auto only_order_entry = ra_exe_unit.sort_info.order_entries.front();
     CHECK_GT(only_order_entry.tle_no, int(0));
     CHECK_LE(static_cast<size_t>(only_order_entry.tle_no),
              ra_exe_unit.target_exprs.size());
     const auto order_entry_expr = ra_exe_unit.target_exprs[only_order_entry.tle_no - 1];
-    const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
+    const auto n = ra_exe_unit.sort_info.offset + limit_value;
     if ((order_entry_expr->get_type_info().is_number() ||
          order_entry_expr->get_type_info().is_time()) &&
         n <= g_streaming_topn_max) {
@@ -390,7 +391,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
 
       if (streaming_top_n_hint && use_streaming_top_n(ra_exe_unit, output_columnar)) {
         streaming_top_n = true;
-        entry_count = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
+        entry_count =
+            ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit.value_or(0);
       } else {
         if (ra_exe_unit.use_bump_allocator) {
           output_columnar = false;
@@ -1039,7 +1041,8 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
     const unsigned thread_count,
     const ExecutorDeviceType device_type) const {
   if (use_streaming_top_n_) {
-    const size_t n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
+    const size_t n =
+        ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit.value_or(0);
     return streaming_top_n::get_heap_size(getRowSize(), n, thread_count);
   }
   return getBufferSizeBytes(device_type, entry_count_);

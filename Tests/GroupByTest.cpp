@@ -127,7 +127,7 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
                                   {count_expr.get()},
                                   {},
                                   nullptr,
-                                  SortInfo{},
+                                  SortInfo(),
                                   0};
 
   ColumnCacheMap column_cache;
@@ -226,7 +226,7 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                   {count_expr.get()},
                                   {},
                                   nullptr,
-                                  SortInfo{},
+                                  SortInfo(),
                                   0};
 
   ColumnCacheMap column_cache;
@@ -306,7 +306,7 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
                                   {count_expr.get()},
                                   {},
                                   nullptr,
-                                  SortInfo{},
+                                  SortInfo(),
                                   0};
 
   ColumnCacheMap column_cache;

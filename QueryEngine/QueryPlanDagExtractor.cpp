@@ -602,3 +602,9 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
     translated_join_info_->push_back(std::move(cur_translated_join_node));
   }
 }
+
+size_t QueryPlanDagExtractor::applyLimitClauseToCacheKey(size_t cache_key,
+                                                         SortInfo const& sort_info) {
+  boost::hash_combine(cache_key, sort_info.hashLimit());
+  return cache_key;
+}

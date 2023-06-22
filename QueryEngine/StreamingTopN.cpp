@@ -66,7 +66,7 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
   CHECK_EQ(ra_exe_unit.sort_info.order_entries.size(), size_t(1));
   const auto& only_oe = ra_exe_unit.sort_info.order_entries.back();
   const auto oe_col_idx = only_oe.tle_no - 1;
-  const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
+  const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit.value_or(0);
   const auto group_key_bytes = query_mem_desc.getEffectiveKeyWidth();
   const PodOrderEntry pod_oe{only_oe.tle_no, only_oe.is_desc, only_oe.nulls_first};
   const auto key_slot_idx = get_heap_key_slot_index(ra_exe_unit.target_exprs, oe_col_idx);

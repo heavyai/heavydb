@@ -2181,17 +2181,13 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
 class RelSort : public RelAlgNode {
  public:
   // default constructor used for deserialization only
-  RelSort() : limit_{0}, offset_{0}, empty_result_{false}, limit_delivered_{false} {}
+  RelSort() : limit_(std::nullopt), offset_(0) {}
 
   RelSort(const std::vector<SortField>& collation,
-          const size_t limit,
+          std::optional<size_t> limit,
           const size_t offset,
-          std::shared_ptr<const RelAlgNode> input,
-          bool limit_delivered)
-      : collation_(collation)
-      , limit_(limit)
-      , offset_(offset)
-      , limit_delivered_(limit_delivered) {
+          std::shared_ptr<const RelAlgNode> input)
+      : collation_(collation), limit_(limit), offset_(offset) {
     inputs_.push_back(input);
   }
 
@@ -2209,9 +2205,7 @@ class RelSort : public RelAlgNode {
   }
 
   bool operator==(const RelSort& that) const {
-    return limit_ == that.limit_ && offset_ == that.offset_ &&
-           empty_result_ == that.empty_result_ &&
-           limit_delivered_ == that.limit_delivered_ && hasEquivCollationOf(that);
+    return limit_ == that.limit_ && offset_ == that.offset_ && hasEquivCollationOf(that);
   }
 
   size_t collationCount() const { return collation_.size(); }
@@ -2225,24 +2219,20 @@ class RelSort : public RelAlgNode {
     collation_ = std::move(collation);
   }
 
-  void setEmptyResult(bool emptyResult) { empty_result_ = emptyResult; }
+  bool isEmptyResult() const { return limit_.value_or(-1) == 0; }
 
-  bool isEmptyResult() const { return empty_result_; }
+  bool isLimitDelivered() const { return limit_.has_value(); }
 
-  bool isLimitDelivered() const { return limit_delivered_; }
-
-  size_t getLimit() const { return limit_; }
+  std::optional<size_t> getLimit() const { return limit_; }
 
   size_t getOffset() const { return offset_; }
 
   std::string toString(
       RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
-    const std::string limit_info = limit_delivered_ ? std::to_string(limit_) : "N/A";
+    const std::string limit_info = limit_ ? std::to_string(*limit_) : "N/A";
     auto ret = cat(::typeName(this),
                    "(",
-                   "empty_result: ",
-                   ::toString(empty_result_),
-                   ", collation=",
+                   "collation=",
                    ::toString(collation_),
                    ", limit=",
                    limit_info,
@@ -2271,14 +2261,23 @@ class RelSort : public RelAlgNode {
 
   virtual size_t toHash() const override { return hash_value(*this); }
 
+  std::list<Analyzer::OrderEntry> getOrderEntries() const {
+    std::list<Analyzer::OrderEntry> result;
+    for (size_t i = 0; i < collation_.size(); ++i) {
+      const auto sort_field = collation_[i];
+      result.emplace_back(sort_field.getField() + 1,
+                          sort_field.getSortDir() == SortDirection::Descending,
+                          sort_field.getNullsPosition() == NullSortedPosition::First);
+    }
+    return result;
+  }
+
  private:
   friend std::size_t hash_value(RelSort const&);
 
   std::vector<SortField> collation_;
-  size_t limit_;
+  std::optional<size_t> limit_;
   size_t offset_;
-  bool empty_result_;
-  bool limit_delivered_;
 
   bool hasEquivCollationOf(const RelSort& that) const;
 
