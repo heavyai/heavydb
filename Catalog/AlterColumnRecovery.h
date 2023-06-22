@@ -40,6 +40,7 @@ class AlterTableAlterColumnCommandRecoveryMgr {
     std::list<ColumnDescriptor> updated_dict_cds;
 
     int32_t table_epoch;
+    bool is_vacuumed;
 
     std::list<std::pair<ColumnDescriptor, ColumnDescriptor>> src_dst_cds;
   };

@@ -550,6 +550,9 @@ class AlterTableAlterColumnTest : public DBHandlerTestFixture {
       sql("CREATE TABLE " + table_name + " (" + table_schema + ") WITH (" + options_str +
           ");");
     }
+    if (values.empty()) {
+      return;
+    }
     std::string data_str{};
     int index = 1;
     for (const auto& row : values) {
@@ -882,6 +885,65 @@ TEST_F(AlterTableAlterColumnTest, GeoTypes) {
   compareSchemaToReference("test_table", reference_schema);
 }
 
+TEST_F(AlterTableAlterColumnTest, ReencodeDictionaryLowerDepthExceedingSize) {
+  createTextTable({"d0"}, {}, "ENCODING DICT (32)");
+
+  auto num_elements = static_cast<int>(std::numeric_limits<unsigned char>::max()) + 1;
+  for (int i = 0; i < num_elements; ++i) {
+    std::string insert_query = "INSERT INTO test_table VALUES (" + std::to_string(i) +
+                               ",'text_" + std::to_string(i) + "');";
+    sql(insert_query);
+  }
+
+  std::string alter_column_command =
+      "ALTER TABLE test_table"
+      " ALTER COLUMN d0 TYPE TEXT ENCODING DICT(8);";
+
+  queryAndAssertPartialException(
+      alter_column_command,
+      "has exceeded it's limit of 8 bits (255 unique values) while attempting to add the "
+      "new string 'text_255'. To load more data, please re-create the table with this "
+      "column as type TEXT ENCODING DICT(16) or TEXT ENCODING DICT(32) and reload your "
+      "data.");
+
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{};
+  for (int i = 0; i < num_elements; ++i) {
+    expected_values.push_back({static_cast<int64_t>(i), "text_" + std::to_string(i)});
+  }
+  sqlAndCompareResult("SELECT * FROM test_table ORDER BY index;", expected_values);
+  auto reference_schema = std::vector<std::pair<std::string, std::string>>{
+      {"index", "INT"}, {"d0", "TEXT ENCODING DICT(32)"}};
+  compareSchemaToReference("test_table", reference_schema);
+}
+
+TEST_F(AlterTableAlterColumnTest, ReencodeDictionaryLowerDepthNotExceedingSize) {
+  createTextTable({"d0"}, {}, "ENCODING DICT (32)");
+
+  auto num_elements = static_cast<int>(std::numeric_limits<unsigned char>::max()) + 1;
+  for (int i = 0; i < num_elements; ++i) {
+    std::string insert_query = "INSERT INTO test_table VALUES (" + std::to_string(i) +
+                               ",'text_" + std::to_string(i) + "');";
+    sql(insert_query);
+  }
+
+  sql("DELETE FROM test_table WHERE index = 255;");
+
+  std::string alter_column_command =
+      "ALTER TABLE test_table"
+      " ALTER COLUMN d0 TYPE TEXT ENCODING DICT(8);";
+
+  sql(alter_column_command);
+
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{};
+  for (int i = 0; i < num_elements - 1; ++i) {
+    expected_values.push_back({static_cast<int64_t>(i), "text_" + std::to_string(i)});
+  }
+  sqlAndCompareResult("SELECT * FROM test_table ORDER BY index;", expected_values);
+  auto reference_schema = std::vector<std::pair<std::string, std::string>>{
+      {"index", "INT"}, {"d0", "TEXT ENCODING DICT(8)"}};
+  compareSchemaToReference("test_table", reference_schema);
+}
+
 TEST_F(AlterTableAlterColumnTest, ReencodeDictionaryLowerDepth) {
   createTextTable({"d0", "d1"},
                   {
@@ -966,6 +1028,25 @@ TEST_F(AlterTableAlterColumnTest, MultiFragment) {
       {1L, 100L, 100L},
       {2L, 200L, 200L},
       {3L, 300L, 300L},
+  };
+  sqlAndCompareResult("SELECT * FROM test_table ORDER BY index;", expected_values);
+  auto reference_schema = std::vector<std::pair<std::string, std::string>>{
+      {"index", "INT"},
+      {"i", "INT"},
+      {"bi", "BIGINT"},
+  };
+  compareSchemaToReference("test_table", reference_schema);
+}
+
+TEST_F(AlterTableAlterColumnTest, MalformedAndDeleted) {
+  createTextTable({"bi", "i"},
+                  {{"12", "123"}, {"1234", "12345"}, {"123456", "3000000000000"}},
+                  "ENCODING DICT(32)");
+  sql("DELETE FROM test_table WHERE index = 3;");
+  sql("ALTER TABLE test_table ALTER COLUMN i TYPE INT, ALTER COLUMN bi TYPE BIGINT;");
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {1L, 12L, 123L},
+      {2L, 1234L, 12345L},
   };
   sqlAndCompareResult("SELECT * FROM test_table ORDER BY index;", expected_values);
   auto reference_schema = std::vector<std::pair<std::string, std::string>>{
@@ -1094,6 +1175,27 @@ TEST_F(AlterTableAlterColumnTest, EmptyTable) {
     };
     compareSchemaToReference("test_table", reference_schema);
   }
+}
+
+TEST_F(AlterTableAlterColumnTest, ColumnWithNullToNotNullAfterNullDeletion) {
+  createTextTable({"txt"}, {{"txt1"}, {"NULL"}, {"txt2"}}, "ENCODING DICT(32)");
+
+  sql("DELETE FROM test_table WHERE txt is NULL;");
+
+  std::string alter_column_command =
+      "ALTER TABLE test_table"
+      " ALTER COLUMN txt TYPE TEXT NOT NULL;";
+
+  sql(alter_column_command);
+
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {1L, "txt1"},
+      {3L, "txt2"},
+  };
+  sqlAndCompareResult("SELECT * FROM test_table ORDER BY index;", expected_values);
+  auto reference_schema = std::vector<std::pair<std::string, std::string>>{
+      {"index", "INT"}, {"txt", "TEXT NOT NULL ENCODING DICT(32)"}};
+  compareSchemaToReference("test_table", reference_schema);
 }
 
 TEST_F(AlterTableAlterColumnTest, NullTextValuesAlterToNotNull) {
