@@ -272,7 +272,13 @@ RaExecutionDesc* RaExecutionSequence::next() {
         QueryPlanDagExtractor::extractQueryPlanDag(node, executor_);
     if (g_allow_query_step_skipping &&
         !boost::iequals(extracted_query_plan_dag.extracted_dag, EMPTY_QUERY_PLAN)) {
-      checkQueryStepSkippable(node, node->getQueryPlanDagHash(), descs_.size() - 1);
+      SortInfo sort_info;
+      if (auto sort_node = dynamic_cast<const RelSort*>(node)) {
+        sort_info = SortInfo::createFromSortNode(sort_node);
+      }
+      auto cache_key = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
+          node->getQueryPlanDagHash(), sort_info);
+      checkQueryStepSkippable(node, cache_key, descs_.size() - 1);
     }
     return descs_.back().get();
   }

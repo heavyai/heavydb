@@ -94,7 +94,7 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                   {count_expr.get()},
                                   {},
                                   nullptr,
-                                  {{}, SortAlgorithm::Default, 0, 0, false},
+                                  SortInfo(),
                                   0};
   size_t one{1};
   ResultSetPtr filtered_result;

@@ -1182,7 +1182,8 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
         static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(target_idx));
     auto order_entry_lv = executor_->cgen_state_->castToTypeIn(
         code_generator.codegen(order_entry_expr, true, co).front(), chosen_bytes * 8);
-    const uint32_t n = ra_exe_unit_.sort_info.offset + ra_exe_unit_.sort_info.limit;
+    const uint32_t n =
+        ra_exe_unit_.sort_info.offset + ra_exe_unit_.sort_info.limit.value_or(0);
     std::string fname = "get_bin_from_k_heap";
     const auto& oe_ti = order_entry_expr->get_type_info();
     llvm::Value* null_key_lv = nullptr;

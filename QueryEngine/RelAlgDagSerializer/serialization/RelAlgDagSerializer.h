@@ -298,8 +298,6 @@ struct RelAlgDagSerializer {
       (ar & obj.collation_);
       (ar & obj.limit_);
       (ar & obj.offset_);
-      (ar & obj.empty_result_);
-      (ar & obj.limit_delivered_);
     } else if constexpr (std::is_same_v<RelModify, RelAlgClass>) {
       (ar & boost::serialization::base_object<RelAlgNode>(obj));
       // NOTE: not serializing anything in regard to RelModify::catalog_ or

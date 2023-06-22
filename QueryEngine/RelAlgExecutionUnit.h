@@ -114,11 +114,44 @@ struct OrderEntry;
 }  // namespace Analyzer
 
 struct SortInfo {
-  const std::list<Analyzer::OrderEntry> order_entries;
-  const SortAlgorithm algorithm;
-  const size_t limit;
-  const size_t offset;
-  bool limit_delivered{false};
+  SortInfo()
+      : order_entries({})
+      , algorithm(SortAlgorithm::Default)
+      , limit(std::nullopt)
+      , offset(0) {}
+
+  SortInfo(const std::list<Analyzer::OrderEntry>& oe,
+           const SortAlgorithm sa,
+           std::optional<size_t> l,
+           size_t o)
+      : order_entries(oe), algorithm(sa), limit(l), offset(o) {}
+
+  SortInfo& operator=(const SortInfo& other) {
+    order_entries = other.order_entries;
+    algorithm = other.algorithm;
+    limit = other.limit;
+    offset = other.offset;
+    return *this;
+  }
+
+  static SortInfo createFromSortNode(const RelSort* sort_node) {
+    return {sort_node->getOrderEntries(),
+            SortAlgorithm::SpeculativeTopN,
+            sort_node->getLimit(),
+            sort_node->getOffset()};
+  }
+
+  size_t hashLimit() const {
+    size_t hash{0};
+    boost::hash_combine(hash, limit.has_value());
+    boost::hash_combine(hash, limit.value_or(0));
+    return hash;
+  }
+
+  std::list<Analyzer::OrderEntry> order_entries;
+  SortAlgorithm algorithm;
+  std::optional<size_t> limit;
+  size_t offset;
 };
 
 struct JoinCondition {

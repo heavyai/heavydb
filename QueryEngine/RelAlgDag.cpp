@@ -2968,8 +2968,10 @@ class RelAlgDispatcher {
     auto limit = get_int_literal_field(sort_ra, "fetch", -1);
     const auto offset = get_int_literal_field(sort_ra, "offset", 0);
     auto ret = std::make_shared<RelSort>(
-        collation, limit > 0 ? limit : 0, offset, inputs.front(), limit > 0);
-    ret->setEmptyResult(limit == 0);
+        collation,
+        limit >= 0 ? std::make_optional<size_t>(limit) : std::nullopt,
+        offset,
+        inputs.front());
     return ret;
   }
 
@@ -3723,9 +3725,8 @@ std::size_t hash_value(RelSort const& rel_sort) {
   }
   rel_sort.hash_ = typeid(RelSort).hash_code();
   boost::hash_combine(*rel_sort.hash_, rel_sort.collation_);
-  boost::hash_combine(*rel_sort.hash_, rel_sort.empty_result_);
-  boost::hash_combine(*rel_sort.hash_, rel_sort.limit_delivered_);
-  boost::hash_combine(*rel_sort.hash_, rel_sort.limit_);
+  boost::hash_combine(*rel_sort.hash_, rel_sort.limit_.has_value());
+  boost::hash_combine(*rel_sort.hash_, rel_sort.limit_.value_or(0));
   boost::hash_combine(*rel_sort.hash_, rel_sort.offset_);
   boost::hash_combine(*rel_sort.hash_, rel_sort.inputs_);
   return *rel_sort.hash_;

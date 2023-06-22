@@ -1661,7 +1661,8 @@ ResultSetPtr Executor::reduceSpeculativeTopN(
   if (results_per_device.size() == 1) {
     return std::move(results_per_device.front().first);
   }
-  const auto top_n = ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
+  const auto top_n =
+      ra_exe_unit.sort_info.limit.value_or(0) + ra_exe_unit.sort_info.offset;
   SpeculativeTopNMap m;
   for (const auto& result : results_per_device) {
     auto rows = result.first;
@@ -1959,7 +1960,8 @@ std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_uni
   os << "\n\t  Order Entries: "
      << boost::algorithm::join(expr_container_to_string(sort_info.order_entries), ", ");
   os << "\n\t  Algorithm: " << sort_algorithm_to_string(sort_info.algorithm);
-  os << "\n\t  Limit: " << std::to_string(sort_info.limit);
+  std::string limit_str = sort_info.limit ? std::to_string(*sort_info.limit) : "N/A";
+  os << "\n\t  Limit: " << limit_str;
   os << "\n\t  Offset: " << std::to_string(sort_info.offset);
   os << "\n\tScan Limit: " << std::to_string(ra_exe_unit.scan_limit);
   os << "\n\tBump Allocator: " << ::toString(ra_exe_unit.use_bump_allocator);
@@ -2694,7 +2696,8 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
   CHECK(first_result_set);
   auto top_query_mem_desc = first_result_set->getQueryMemDesc();
   CHECK(!top_query_mem_desc.hasInterleavedBinsOnGpu());
-  const auto top_n = ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
+  const auto top_n =
+      ra_exe_unit.sort_info.limit.value_or(0) + ra_exe_unit.sort_info.offset;
   top_query_mem_desc.setEntryCount(0);
   for (auto& result : result_per_device) {
     const auto result_set = result.first;

@@ -219,19 +219,7 @@ void prepare_for_system_table_execution(const RelAlgNode& ra_node,
 bool has_valid_query_plan_dag(const RelAlgNode* node) {
   return node->getQueryPlanDagHash() != EMPTY_HASHED_PLAN_DAG_KEY;
 }
-
-// TODO(alex): Once we're fully migrated to the relational algebra model, change
-// the executor interface to use the collation directly and remove this conversion.
-std::list<Analyzer::OrderEntry> get_order_entries(const RelSort* sort) {
-  std::list<Analyzer::OrderEntry> result;
-  for (size_t i = 0; i < sort->collationCount(); ++i) {
-    const auto sort_field = sort->getCollation(i);
-    result.emplace_back(sort_field.getField() + 1,
-                        sort_field.getSortDir() == SortDirection::Descending,
-                        sort_field.getNullsPosition() == NullSortedPosition::First);
-  }
-  return result;
-}
+}  // namespace
 
 void build_render_targets(RenderInfo& render_info,
                           const std::vector<Analyzer::Expr*>& work_unit_target_exprs,
@@ -454,6 +442,8 @@ TextEncodingCastCounts get_text_cast_counts(const RelAlgExecutionUnit& ra_exe_un
   return cast_counts;
 }
 
+namespace {
+
 void check_none_encoded_string_cast_tuple_limit(
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit& ra_exe_unit) {
@@ -484,21 +474,6 @@ void check_none_encoded_string_cast_tuple_limit(
       << "exceeds the configured watchdog none-encoded string translation limit of "
       << g_watchdog_none_encoded_string_translation_limit << " rows.";
   throw std::runtime_error(oss.str());
-}
-
-SortInfo create_sort_info(RelSort const* sort) {
-  return {get_order_entries(sort),
-          SortAlgorithm::SpeculativeTopN,
-          sort->getLimit(),
-          sort->getOffset(),
-          sort->isLimitDelivered()};
-}
-
-size_t update_query_plan_dag_hash(size_t hash, SortInfo const& sort_info) {
-  if (sort_info.limit_delivered) {
-    boost::hash_combine(hash, sort_info.limit);
-  }
-  return hash;
 }
 
 }  // namespace
@@ -558,8 +533,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
 
   const auto project = dynamic_cast<const RelProject*>(body);
   if (project) {
-    auto work_unit =
-        createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
+    auto work_unit = createProjectWorkUnit(project, SortInfo(), eo);
     return get_frag_count_of_table(work_unit.exe_unit.input_descs[0].getTableKey(),
                                    executor_);
   }
@@ -575,8 +549,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
         return 0;
       }
 
-      const auto work_unit =
-          createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
+      const auto work_unit = createCompoundWorkUnit(compound, SortInfo(), eo);
 
       return get_frag_count_of_table(work_unit.exe_unit.input_descs[0].getTableKey(),
                                      executor_);
@@ -847,7 +820,7 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
 
   if (sort) {
     check_sort_node_source_constraint(sort);
-    auto order_entries = get_order_entries(sort);
+    auto order_entries = sort->getOrderEntries();
     const auto source_work_unit = createSortInputWorkUnit(sort, order_entries, eo);
     shard_count =
         GroupByAndAggregate::shard_count_for_top_groups(source_work_unit.exe_unit);
@@ -1198,8 +1171,11 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   auto query_plan_dag_hash = body->getQueryPlanDagHash();
   if (auto sort_body = dynamic_cast<const RelSort*>(body)) {
     target_node = sort_body->getInput(0);
-    query_plan_dag_hash = update_query_plan_dag_hash(target_node->getQueryPlanDagHash(),
-                                                     create_sort_info(sort_body));
+    query_plan_dag_hash = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
+        target_node->getQueryPlanDagHash(), SortInfo::createFromSortNode(sort_body));
+  } else {
+    query_plan_dag_hash = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
+        target_node->getQueryPlanDagHash(), SortInfo());
   }
   auto query_hints = getParsedQueryHint(target_node);
   if (query_hints) {
@@ -2146,13 +2122,11 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
   };
 
   if (auto compound = dynamic_cast<const RelCompound*>(node)) {
-    auto work_unit =
-        createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
+    auto work_unit = createCompoundWorkUnit(compound, SortInfo(), eo_in);
 
     execute_update_for_node(compound, work_unit, compound->isAggregate());
   } else if (auto project = dynamic_cast<const RelProject*>(node)) {
-    auto work_unit =
-        createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
+    auto work_unit = createProjectWorkUnit(project, SortInfo(), eo_in);
 
     if (project->isSimple()) {
       CHECK_EQ(size_t(1), project->inputCount());
@@ -2278,12 +2252,10 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
   };
 
   if (auto compound = dynamic_cast<const RelCompound*>(node)) {
-    const auto work_unit =
-        createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
+    const auto work_unit = createCompoundWorkUnit(compound, SortInfo(), eo_in);
     execute_delete_for_node(compound, work_unit, compound->isAggregate());
   } else if (auto project = dynamic_cast<const RelProject*>(node)) {
-    auto work_unit =
-        createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
+    auto work_unit = createProjectWorkUnit(project, SortInfo(), eo_in);
     if (project->isSimple()) {
       CHECK_EQ(size_t(1), project->inputCount());
       const auto input_ra = project->getInput(0);
@@ -2307,8 +2279,7 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 RenderInfo* render_info,
                                                 const int64_t queue_time_ms) {
   auto timer = DEBUG_TIMER(__func__);
-  const auto work_unit =
-      createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
+  const auto work_unit = createCompoundWorkUnit(compound, SortInfo(), eo);
   CompilationOptions co_compound = co;
   return executeWorkUnit(work_unit,
                          compound->getOutputMetainfo(),
@@ -2325,8 +2296,7 @@ ExecutionResult RelAlgExecutor::executeAggregate(const RelAggregate* aggregate,
                                                  RenderInfo* render_info,
                                                  const int64_t queue_time_ms) {
   auto timer = DEBUG_TIMER(__func__);
-  const auto work_unit = createAggregateWorkUnit(
-      aggregate, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  const auto work_unit = createAggregateWorkUnit(aggregate, SortInfo(), eo.just_explain);
   return executeWorkUnit(work_unit,
                          aggregate->getOutputMetainfo(),
                          true,
@@ -2357,7 +2327,7 @@ ExecutionResult RelAlgExecutor::executeProject(
     const int64_t queue_time_ms,
     const std::optional<size_t> previous_count) {
   auto timer = DEBUG_TIMER(__func__);
-  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
+  auto work_unit = createProjectWorkUnit(project, SortInfo(), eo);
   CompilationOptions co_project = co;
   if (project->isSimple()) {
     CHECK_EQ(size_t(1), project->inputCount());
@@ -2598,7 +2568,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
   std::unique_ptr<WindowFunctionContext> context;
-  auto partition_cache_key = update_query_plan_dag_hash(
+  auto partition_cache_key = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
       work_unit.body->getQueryPlanDagHash(), work_unit.exe_unit.sort_info);
   JoinType window_partition_type = window_func->isFrameNavigateWindowFunction()
                                        ? JoinType::WINDOW_FUNCTION_FRAMING
@@ -2728,8 +2698,7 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
                                               RenderInfo* render_info,
                                               const int64_t queue_time_ms) {
   auto timer = DEBUG_TIMER(__func__);
-  const auto work_unit =
-      createFilterWorkUnit(filter, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  const auto work_unit = createFilterWorkUnit(filter, SortInfo(), eo.just_explain);
   return executeWorkUnit(
       work_unit, filter->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
 }
@@ -2766,8 +2735,7 @@ ExecutionResult RelAlgExecutor::executeUnion(const RelLogicalUnion* logical_unio
   if (boost::algorithm::any_of(logical_union->getOutputMetainfo(), isGeometry)) {
     throw std::runtime_error("UNION does not support subqueries with geo-columns.");
   }
-  auto work_unit =
-      createUnionWorkUnit(logical_union, {{}, SortAlgorithm::Default, 0, 0}, eo);
+  auto work_unit = createUnionWorkUnit(logical_union, SortInfo(), eo);
   return executeWorkUnit(work_unit,
                          logical_union->getOutputMetainfo(),
                          false,
@@ -3227,13 +3195,17 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(
 
 namespace {
 
-size_t get_scan_limit(const RelAlgNode* ra, const size_t limit) {
+size_t get_limit_value(std::optional<size_t> limit) {
+  return limit ? *limit : 0;
+}
+
+size_t get_scan_limit(const RelAlgNode* ra, std::optional<size_t> limit) {
   const auto aggregate = dynamic_cast<const RelAggregate*>(ra);
   if (aggregate) {
     return 0;
   }
   const auto compound = dynamic_cast<const RelCompound*>(ra);
-  return (compound && compound->isAggregate()) ? 0 : limit;
+  return (compound && compound->isAggregate()) ? 0 : get_limit_value(limit);
 }
 
 bool first_oe_is_desc(const std::list<Analyzer::OrderEntry>& order_entries) {
@@ -3252,7 +3224,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   const auto source = sort->getInput(0);
   const bool is_aggregate = node_is_aggregate(source);
   auto it = leaf_results_.find(sort->getId());
-  auto order_entries = get_order_entries(sort);
+  auto order_entries = sort->getOrderEntries();
   if (it != leaf_results_.end()) {
     // Add any transient string literals to the sdp on the agg
     const auto source_work_unit = createSortInputWorkUnit(sort, order_entries, eo);
@@ -3261,15 +3233,16 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     // Handle push-down for LIMIT for multi-node
     auto& aggregated_result = it->second;
     auto& result_rows = aggregated_result.rs;
-    const size_t limit = sort->getLimit();
+    auto limit = sort->getLimit();
     const size_t offset = sort->getOffset();
     if (limit || offset) {
       if (!order_entries.empty()) {
-        result_rows->sort(order_entries, limit + offset, co.device_type, executor_);
+        result_rows->sort(
+            order_entries, get_limit_value(limit) + offset, co.device_type, executor_);
       }
       result_rows->dropFirstN(offset);
       if (limit) {
-        result_rows->keepFirstN(limit);
+        result_rows->keepFirstN(get_limit_value(limit));
       }
     }
 
@@ -3305,17 +3278,16 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                              &is_desc,
                              &order_entries,
                              &use_speculative_top_n_sort]() -> ExecutionResult {
-    const size_t limit = sort->getLimit();
+    std::optional<size_t> limit = sort->getLimit();
     const size_t offset = sort->getOffset();
     // check whether sort's input is cached
     auto source_node = sort->getInput(0);
     CHECK(source_node);
     ExecutionResult source_result{nullptr, {}};
     SortAlgorithm sort_algorithm{SortAlgorithm::SpeculativeTopN};
-    SortInfo sort_info{
-        order_entries, sort_algorithm, limit, offset, sort->isLimitDelivered()};
-    auto source_query_plan_dag =
-        update_query_plan_dag_hash(source_node->getQueryPlanDagHash(), sort_info);
+    SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
+    auto source_query_plan_dag = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
+        source_node->getQueryPlanDagHash(), sort_info);
     bool enable_resultset_recycler = canUseResultsetCache(eo, render_info);
     if (enable_resultset_recycler && has_valid_query_plan_dag(source_node) &&
         !sort->isEmptyResult()) {
@@ -3384,9 +3356,10 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     if (eo.just_explain) {
       return {rows_to_sort, {}};
     }
+    auto const limit_val = get_limit_value(limit);
     if (sort->collationCount() != 0 && !rows_to_sort->definitelyHasNoRows() &&
         !use_speculative_top_n_sort) {
-      const size_t top_n = limit == 0 ? 0 : limit + offset;
+      const size_t top_n = limit_val + offset;
       rows_to_sort->sort(order_entries, top_n, co.device_type, executor_);
     }
     if (limit || offset) {
@@ -3394,12 +3367,12 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
         if (offset >= rows_to_sort->rowCount()) {
           rows_to_sort->dropFirstN(offset);
         } else {
-          rows_to_sort->keepFirstN(limit + offset);
+          rows_to_sort->keepFirstN(limit_val + offset);
         }
       } else {
         rows_to_sort->dropFirstN(offset);
         if (limit) {
-          rows_to_sort->keepFirstN(limit);
+          rows_to_sort->keepFirstN(limit_val);
         }
       }
     }
@@ -3421,7 +3394,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
     std::list<Analyzer::OrderEntry>& order_entries,
     const ExecutionOptions& eo) {
   const auto source = sort->getInput(0);
-  const size_t limit = sort->getLimit();
+  auto limit = sort->getLimit();
   const size_t offset = sort->getOffset();
   const size_t scan_limit = sort->collationCount() ? 0 : get_scan_limit(source, limit);
   const size_t scan_total_limit =
@@ -3429,8 +3402,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
   size_t max_groups_buffer_entry_guess{
       scan_total_limit ? scan_total_limit : g_default_max_groups_buffer_entry_guess};
   SortAlgorithm sort_algorithm{SortAlgorithm::SpeculativeTopN};
-  SortInfo sort_info{
-      order_entries, sort_algorithm, limit, offset, sort->isLimitDelivered()};
+  SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
   auto source_work_unit = createWorkUnit(source, sort_info, eo);
   const auto& source_exe_unit = source_work_unit.exe_unit;
 
@@ -3468,11 +3440,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
                               source_exe_unit.target_exprs,
                               source_exe_unit.target_exprs_original_type_infos,
                               nullptr,
-                              {sort_info.order_entries,
-                               sort_algorithm,
-                               limit,
-                               offset,
-                               sort_info.limit_delivered},
+                              {sort_info.order_entries, sort_algorithm, limit, offset},
                               scan_total_limit,
                               source_exe_unit.query_hint,
                               source_exe_unit.query_plan_dag_hash,
@@ -4568,25 +4536,25 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
     }
   }
   CHECK_EQ(compound->size(), target_exprs.size());
-  const RelAlgExecutionUnit exe_unit = {
-      input_descs,
-      input_col_descs,
-      quals_cf.simple_quals,
-      quals,
-      left_deep_join_quals,
-      groupby_exprs,
-      target_exprs,
-      target_exprs_type_infos,
-      nullptr,
-      sort_info,
-      0,
-      query_hint,
-      update_query_plan_dag_hash(compound->getQueryPlanDagHash(), sort_info),
-      {},
-      {},
-      false,
-      std::nullopt,
-      query_state_};
+  const RelAlgExecutionUnit exe_unit = {input_descs,
+                                        input_col_descs,
+                                        quals_cf.simple_quals,
+                                        quals,
+                                        left_deep_join_quals,
+                                        groupby_exprs,
+                                        target_exprs,
+                                        target_exprs_type_infos,
+                                        nullptr,
+                                        sort_info,
+                                        0,
+                                        query_hint,
+                                        QueryPlanDagExtractor::applyLimitClauseToCacheKey(
+                                            compound->getQueryPlanDagHash(), sort_info),
+                                        {},
+                                        {},
+                                        false,
+                                        std::nullopt,
+                                        query_state_};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
@@ -4864,25 +4832,25 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
   }
   auto join_info = QueryPlanDagExtractor::extractJoinInfo(
       aggregate, std::nullopt, getLeftDeepJoinTreesInfo(), executor_);
-  return {RelAlgExecutionUnit{
-              input_descs,
-              input_col_descs,
-              {},
-              {},
-              {},
-              groupby_exprs,
-              target_exprs,
-              target_exprs_type_infos,
-              nullptr,
-              sort_info,
-              0,
-              query_hint,
-              update_query_plan_dag_hash(aggregate->getQueryPlanDagHash(), sort_info),
-              join_info.hash_table_plan_dag,
-              join_info.table_id_to_node_map,
-              false,
-              std::nullopt,
-              query_state_},
+  return {RelAlgExecutionUnit{input_descs,
+                              input_col_descs,
+                              {},
+                              {},
+                              {},
+                              groupby_exprs,
+                              target_exprs,
+                              target_exprs_type_infos,
+                              nullptr,
+                              sort_info,
+                              0,
+                              query_hint,
+                              QueryPlanDagExtractor::applyLimitClauseToCacheKey(
+                                  aggregate->getQueryPlanDagHash(), sort_info),
+                              join_info.hash_table_plan_dag,
+                              join_info.table_id_to_node_map,
+                              false,
+                              std::nullopt,
+                              query_state_},
           aggregate,
           g_default_max_groups_buffer_entry_guess,
           nullptr};
@@ -4957,25 +4925,25 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
       query_hint = *candidate;
     }
   }
-  const RelAlgExecutionUnit exe_unit = {
-      input_descs,
-      input_col_descs,
-      {},
-      {},
-      left_deep_join_quals,
-      {nullptr},
-      target_exprs,
-      {},
-      nullptr,
-      sort_info,
-      0,
-      query_hint,
-      update_query_plan_dag_hash(project->getQueryPlanDagHash(), sort_info),
-      {},
-      {},
-      false,
-      std::nullopt,
-      query_state_};
+  const RelAlgExecutionUnit exe_unit = {input_descs,
+                                        input_col_descs,
+                                        {},
+                                        {},
+                                        left_deep_join_quals,
+                                        {nullptr},
+                                        target_exprs,
+                                        {},
+                                        nullptr,
+                                        sort_info,
+                                        0,
+                                        query_hint,
+                                        QueryPlanDagExtractor::applyLimitClauseToCacheKey(
+                                            project->getQueryPlanDagHash(), sort_info),
+                                        {},
+                                        {},
+                                        false,
+                                        std::nullopt,
+                                        query_state_};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(project, rewritten_exe_unit.target_exprs);
@@ -5423,7 +5391,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            sort_info,
            0,
            query_hint,
-           update_query_plan_dag_hash(filter->getQueryPlanDagHash(), sort_info),
+           QueryPlanDagExtractor::applyLimitClauseToCacheKey(
+               filter->getQueryPlanDagHash(), sort_info),
            join_info.hash_table_plan_dag,
            join_info.table_id_to_node_map},
           filter,

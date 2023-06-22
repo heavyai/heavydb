@@ -463,7 +463,7 @@ bool QueryFragmentDescriptor::terminateDispatchMaybe(
     const RelAlgExecutionUnit& ra_exe_unit,
     const ExecutionKernelDescriptor& kernel) const {
   const auto sample_query_limit =
-      ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
+      ra_exe_unit.sort_info.limit.value_or(0) + ra_exe_unit.sort_info.offset;
   if (!kernel.outer_tuple_count) {
     return false;
   } else {
