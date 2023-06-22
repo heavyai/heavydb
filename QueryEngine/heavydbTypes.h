@@ -597,9 +597,6 @@ struct TextEncodingNone {
     if (str.empty()) {
       ptr_ = nullptr;
     } else {
-      // Memory must be manually released, otherwise leaks can happen.
-      // On UDFs, if it is the return argument, memory is released with
-      // register_buffer_with_executor_rsm
       int8_t* buffer = mgr.makeBuffer(size_, static_cast<int64_t>(sizeof(char)));
       ptr_ = reinterpret_cast<char*>(buffer);
       strcpy(ptr_, str.c_str());
