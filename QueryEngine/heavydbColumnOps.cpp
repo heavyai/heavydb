@@ -92,6 +92,7 @@ EXPOSE(GeoMultiPoint, Geo::MultiPoint);
 EXPOSE(GeoPolygon, Geo::Polygon);
 EXPOSE(GeoMultiLineString, Geo::MultiLineString);
 EXPOSE(GeoMultiPolygon, Geo::MultiPolygon);
+EXPOSE(TextEncodingNone, flatbuffer::TextEncodingNone);
 
 // -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 // Geo* methods
@@ -208,6 +209,29 @@ EXPOSE_Geo_toCoords_vec(LineString);
 EXPOSE_Geo_toCoords_vec2(Polygon);
 EXPOSE_Geo_toCoords_vec2(MultiLineString);
 // Missing vec3 for MultiPolygon
+
+// -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+
+extern "C" DEVICE RUNTIME_EXPORT void ColumnTextEncodingNone_setItem_fromBuffer(
+    Column<TextEncodingNone>& col,
+    int64_t index,
+    int8_t* rhs) {
+  col.setItem(index, *(reinterpret_cast<TextEncodingNone*>(rhs)));
+}
+
+extern "C" DEVICE RUNTIME_EXPORT void ColumnTextEncodingNone_concatItem_fromBuffer(
+    Column<TextEncodingNone>& col,
+    int64_t index,
+    int8_t* rhs) {
+  col[index] += *(reinterpret_cast<TextEncodingNone*>(rhs));
+}
+
+extern "C" DEVICE RUNTIME_EXPORT void ColumnTextEncodingNone_concatItem(
+    Column<TextEncodingNone>& col,
+    int64_t index,
+    int8_t* rhs) {
+  col[index] += *(reinterpret_cast<flatbuffer::TextEncodingNone*>(rhs));
+}
 
 // -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 
