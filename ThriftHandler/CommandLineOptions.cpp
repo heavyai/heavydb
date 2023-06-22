@@ -759,7 +759,7 @@ void CommandLineOptions::fillDeveloperOptions() {
       po::value<bool>(&allow_multifrag)
           ->default_value(allow_multifrag)
           ->implicit_value(true),
-     "Enable execution over multiple fragments in a single round-trip to GPU.");
+      "Enable execution over multiple fragments in a single round-trip to GPU.");
   desc.add_options()("enable-lazy-fetch",
                      po::value<bool>(&g_enable_lazy_fetch)
                          ->default_value(g_enable_lazy_fetch)
@@ -769,7 +769,7 @@ void CommandLineOptions::fillDeveloperOptions() {
                      po::value<bool>(&g_enable_smem_group_by)
                          ->default_value(g_enable_smem_group_by)
                          ->implicit_value(true),
-                    "Enable using GPU shared memory for some GROUP BY queries.");
+                     "Enable using GPU shared memory for some GROUP BY queries.");
   desc.add_options()("num-executors",
                      po::value<int>(&system_parameters.num_executors)
                          ->default_value(system_parameters.num_executors),
@@ -851,7 +851,6 @@ void CommandLineOptions::fillDeveloperOptions() {
                          ->implicit_value(true),
                      "Enable dev (test or alpha) table functions. Also "
                      "requires --enable-table-functions to be turned on");
-
 
   desc.add_options()("enable-geo-ops-on-uncompressed-coords",
                      po::value<bool>(&g_enable_geo_ops_on_uncompressed_coords)
