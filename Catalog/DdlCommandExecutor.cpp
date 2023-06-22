@@ -40,12 +40,30 @@
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/ResultSetBuilder.h"
 #include "QueryEngine/TableFunctions/SystemFunctions/os/ML/MLModel.h"
+#include "QueryEngine/TableOptimizer.h"
 
 extern bool g_enable_fsi;
 extern bool g_enable_ml_functions;
 extern bool g_restrict_ml_model_metadata_to_superusers;
 
 namespace {
+
+void vacuum_table_if_required(const Catalog_Namespace::Catalog& catalog,
+                              const TableDescriptor* td) {
+  if (!td->hasDeletedCol) {
+    return;
+  }
+
+  DEBUG_TIMER(__func__);
+
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  const TableOptimizer optimizer(td, executor, catalog);
+  auto total_time_ms = measure<>::execution([&]() { optimizer.vacuumDeletedRows(); });
+  LOG(INFO) << "Vacuum time (alter column data type): " << total_time_ms << "ms";
+
+  // Reload fragmenter
+  catalog.getMetadataForTable(td->tableName, true);
+}
 
 void validate_alter_type_allowed(const std::string& colname,
                                  const SQLTypeInfo& src,
@@ -2946,6 +2964,7 @@ void AlterTableAlterColumnCommand::populateAndWriteRecoveryInfo(
   auto table_epochs = catalog.getTableEpochs(catalog.getDatabaseId(), td->tableId);
   CHECK_GT(table_epochs.size(), 0UL);
   recovery_info_.table_epoch = table_epochs[0].table_epoch;
+  recovery_info_.is_vacuumed = td->hasDeletedCol;
 
   collectExpectedCatalogChanges(td, src_dst_cds);
 
@@ -2967,6 +2986,9 @@ void AlterTableAlterColumnCommand::alterColumnTypes(const TableDescriptor* td,
   populateAndWriteRecoveryInfo(td, src_dst_cds);
 
   try {
+    // Apply a vacuum operation prior to alter column when applicable
+    vacuum_table_if_required(catalog, td);
+
     auto physical_columns = prepareGeoColumns(td, src_dst_cds);
     auto geo_src_dst_column_pairs =
         get_alter_column_geo_pairs_from_src_dst_pairs_phys_cds(src_dst_cds,

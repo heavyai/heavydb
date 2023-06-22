@@ -19,6 +19,7 @@
 #include <filesystem>
 
 #include "Catalog/SysCatalog.h"
+#include "LockMgr/LockMgr.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
 #include "Shared/JsonUtils.h"
 #include "Utils/DdlUtils.h"
@@ -217,6 +218,7 @@ AlterTableAlterColumnCommandRecoveryMgr::deserializeRecoveryInformation(
   json_utils::get_value_from_object(d, param.updated_dict_cds, "updated_dict_cds");
 
   json_utils::get_value_from_object(d, param.table_epoch, "table_epoch");
+  json_utils::get_value_from_object(d, param.is_vacuumed, "is_vacuumed");
 
   json_utils::get_value_from_object(d, param.src_dst_cds, "src_dst_cds");
 
@@ -280,6 +282,7 @@ std::string AlterTableAlterColumnCommandRecoveryMgr::serializeRecoveryInformatio
   json_utils::add_value_to_object(
       d, param.updated_dict_cds, "updated_dict_cds", d.GetAllocator());
   json_utils::add_value_to_object(d, param.table_epoch, "table_epoch", d.GetAllocator());
+  json_utils::add_value_to_object(d, param.is_vacuumed, "is_vacuumed", d.GetAllocator());
 
   json_utils::add_value_to_object(d, param.src_dst_cds, "src_dst_cds", d.GetAllocator());
 
@@ -421,7 +424,15 @@ void AlterTableAlterColumnCommandRecoveryMgr::recoverAlterTableAlterColumnFromFi
   CHECK_GT(recovery_param.src_dst_cds.size(), 0UL);
 
   auto table_id = recovery_param.src_dst_cds.begin()->first.tableId;
-  auto td = catalog_.getMetadataForTable(table_id, false);
+  auto table_name_opt = catalog_.getTableName(table_id);
+  CHECK(table_name_opt.has_value());
+  auto table_name = table_name_opt.value();
+
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog_, table_name, false);
+  const auto td = td_with_lock();
+
   CHECK(td);
   LOG(INFO) << "Starting crash recovery for table: " << td->tableName;
 
@@ -429,9 +440,37 @@ void AlterTableAlterColumnCommandRecoveryMgr::recoverAlterTableAlterColumnFromFi
   CHECK_GT(table_epochs.size(), 0UL);
   auto current_first_epoch = table_epochs[0].table_epoch;
 
-  if (current_first_epoch == recovery_param.table_epoch) {
+  // The following semantics apply to the three epochs referenced below.
+  //
+  // alter_catalog_checkpoint_epoch: This refers to the checkpoint prior to any
+  // data modification, only operations that have modified the catalog are
+  // expected to have happened.
+  //
+  // alter_data_checkpoint_epoch: This refers to the checkpoint immediately
+  // after data conversion is complete.
+  //
+  // completed_alter_column_checkpoint_epoch: This refers to the checkpoint
+  // after all cleanup operations complete for the alter table command.
+  //
+  // NOTE: If the table may have deleted but unvacuumed elements, there may be
+  // an additional epoch introduced at the start requiring an additional offset.
+  int alter_catalog_checkpoint_epoch = recovery_param.table_epoch;
+
+  if (recovery_param.is_vacuumed) {
+    alter_catalog_checkpoint_epoch++;
+  }
+  int alter_data_checkpoint_epoch = alter_catalog_checkpoint_epoch + 1;
+  int completed_alter_column_checkpoint_epoch = alter_data_checkpoint_epoch + 1;
+
+  if (current_first_epoch == alter_catalog_checkpoint_epoch) {
     rollback(td, recovery_param);
-  } else if (current_first_epoch == recovery_param.table_epoch + 1) {
+    // If a vacuum operation was performed prior to alter column, revert the
+    // operation.
+    if (recovery_param.is_vacuumed) {
+      catalog_.setTableEpoch(
+          catalog_.getDatabaseId(), td->tableId, recovery_param.table_epoch);
+    }
+  } else if (current_first_epoch == alter_data_checkpoint_epoch) {
     auto src_dst_cds = getSrcDstCds(table_id, recovery_param.src_dst_cds);
     try {
       cleanup(td, src_dst_cds);
@@ -446,7 +485,7 @@ void AlterTableAlterColumnCommandRecoveryMgr::recoverAlterTableAlterColumnFromFi
     catalog_.getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
 
   } else {
-    CHECK_EQ(current_first_epoch, recovery_param.table_epoch + 2);
+    CHECK_EQ(current_first_epoch, completed_alter_column_checkpoint_epoch);
     // no-op, last checkpoint reached in processing
   }
   LOG(INFO) << "Completed crash recovery for table: " << td->tableName;

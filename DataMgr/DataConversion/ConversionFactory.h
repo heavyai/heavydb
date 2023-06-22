@@ -30,6 +30,7 @@ struct ConversionFactoryParam {
   Chunk_NS::Chunk scalar_temp_chunk;                             // used by array encoders
   std::list<Chunk_NS::Chunk> geo_chunks;                         // used by geo encoder
   std::list<std::unique_ptr<ChunkMetadata>> geo_chunk_metadata;  // used by geo encoder
+  std::optional<Chunk_NS::Chunk> delete_chunk;
   int db_id;
 };
 
