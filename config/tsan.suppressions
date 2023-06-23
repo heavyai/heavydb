@@ -19,3 +19,8 @@ race:^testing::internal::TestEventRepeater::OnTestIterationEnd
 race:osgeo::proj::io::DatabaseContext::Private::closeDB
 # 2023-03-08 Suppress race in arrow::csv pending investigation see SIO-1443
 race:arrow::csv::*::AsyncThreadedTableReader::ReadAsync
+# QE-869
+race:fpk_serv_free
+race:ShowModelFeatureDetailsDdlTest::TearDown
+# QE-872
+race:ResultSet::parallelTop
