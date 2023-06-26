@@ -50,6 +50,9 @@ static void loadGeo(std::string base_path) {
 #ifdef ENABLE_GEOS
   std::string libgeos_so_filename{};
 #endif
+#ifdef HAVE_TORCH_TFS
+  std::string torch_lib_path{};
+#endif
   std::vector<LeafHostInfo> db_leaves{};
   std::vector<LeafHostInfo> string_leaves{};
 
@@ -120,6 +123,9 @@ static void loadGeo(std::string base_path) {
                                                 udf_compiler_options,
 #ifdef ENABLE_GEOS
                                                 libgeos_so_filename,
+#endif
+#ifdef HAVE_TORCH_TFS
+                                                torch_lib_path,
 #endif
                                                 disk_cache_config,
                                                 false);

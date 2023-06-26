@@ -195,6 +195,9 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
 #ifdef ENABLE_GEOS
                      const std::string& libgeos_so_filename,
 #endif
+#ifdef HAVE_TORCH_TFS
+                     const std::string& torch_lib_path,
+#endif
                      const File_Namespace::DiskCacheConfig& disk_cache_config,
                      const bool is_new_db)
     : leaf_aggregator_(db_leaves)
@@ -229,6 +232,9 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , num_reader_threads_(num_reader_threads)
 #ifdef ENABLE_GEOS
     , libgeos_so_filename_(libgeos_so_filename)
+#endif
+#ifdef HAVE_TORCH_TFS
+    , torch_lib_path_(torch_lib_path)
 #endif
     , disk_cache_config_(disk_cache_config)
     , udf_filename_(udf_filename)
@@ -492,7 +498,11 @@ void DBHandler::initialize(const bool is_new_db) {
 
 #ifdef HAVE_RUNTIME_LIBS
   try {
+#ifdef HAVE_TORCH_TFS
+    RuntimeLibManager::loadRuntimeLibs(torch_lib_path_);
+#else
     RuntimeLibManager::loadRuntimeLibs();
+#endif
   } catch (const std::exception& e) {
     LOG(ERROR) << "Failed to load runtime libraries: " << e.what();
     LOG(ERROR) << "Support for runtime library table functions is disabled.";

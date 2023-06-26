@@ -163,7 +163,9 @@ enum class SqlWindowFrameBoundType {
 
 enum SQLStmtType { kSELECT, kUPDATE, kINSERT, kDELETE, kCREATE_TABLE };
 
-enum StorageOption { kDISK = 0, kGPU = 1, kCPU = 2 };
+// StorageOption::kCPU and ::kGPU conflict with libtorch's c10::DeviceType::kCPU
+// Keep it as enum class rather than plain enum
+enum class StorageOption { kDISK = 0, kGPU = 1, kCPU = 2 };
 
 enum ViewRefreshOption { kMANUAL = 0, kAUTO = 1, kIMMEDIATE = 2 };
 

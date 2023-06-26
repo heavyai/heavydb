@@ -6,4 +6,8 @@ endif()
 
 add_library(RuntimeLibManager RuntimeLibManager.cpp RuntimeLibManager.h)
 
+if(ENABLE_TORCH_TFS)
+  target_include_directories(RuntimeLibManager PRIVATE ${TORCH_INCLUDE_DIRS})
+endif()
+
 target_link_libraries(RuntimeLibManager ${llvm_libs})

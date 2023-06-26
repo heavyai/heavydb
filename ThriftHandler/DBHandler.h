@@ -194,6 +194,9 @@ class DBHandler : public HeavyIf {
 #ifdef ENABLE_GEOS
             const std::string& libgeos_so_filename,
 #endif
+#ifdef HAVE_TORCH_TFS
+            const std::string& torch_lib_path,
+#endif
             const File_Namespace::DiskCacheConfig& disk_cache_config,
             const bool is_new_db);
   void initialize(const bool is_new_db);
@@ -968,6 +971,9 @@ class DBHandler : public HeavyIf {
   const size_t num_reader_threads_;
 #ifdef ENABLE_GEOS
   const std::string& libgeos_so_filename_;
+#endif
+#ifdef HAVE_TORCH_TFS
+  const std::string& torch_lib_path_;
 #endif
   const File_Namespace::DiskCacheConfig& disk_cache_config_;
   const std::string& udf_filename_;
