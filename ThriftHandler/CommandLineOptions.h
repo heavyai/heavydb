@@ -122,6 +122,10 @@ class CommandLineOptions {
   std::string libgeos_so_filename = {"libgeos_c.so"};
 #endif
 
+#ifdef HAVE_TORCH_TFS
+  std::string torch_lib_path = {""};
+#endif
+
   void fillOptions();
   void fillDeveloperOptions();
 

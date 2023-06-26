@@ -426,6 +426,18 @@ endif()
 
 ##########
 
+if(ENABLE_SYSTEM_TFS)
+  if (ENABLE_TORCH_TFS)
+    add_executable(TorchTableFunctionsTest TorchTableFunctionsTest.cpp)
+    add_dependencies(TorchTableFunctionsTest TorchTableFunctions TestRuntimeLib RuntimeLibTestTableFunctions)
+    target_link_libraries(TorchTableFunctionsTest ${EXECUTE_TEST_LIBS})
+    add_test(TorchTableFunctionsTest ${TEST_ARGS})
+    list(APPEND SANITY_TEST_PROGRAMS TorchTableFunctionsTest)
+  endif()
+endif()
+
+##########
+
 if(NOT MSVC)
   add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
   target_link_libraries(OmniSQLCommandTest gtest ${Boost_LIBRARIES} mapd_thrift)

@@ -1150,6 +1150,14 @@ void CommandLineOptions::fillDeveloperOptions() {
           ->default_value(g_allow_invalid_literal_buffer_reads)
           ->implicit_value(true),
       "For backwards compatibility. Enabling may cause invalid query results.");
+
+#ifdef HAVE_TORCH_TFS
+  desc.add_options()("torch-lib-path",
+                     po::value<std::string>(&torch_lib_path),
+                     "Absolute path to custom LibTorch shared library location to be "
+                     "loaded at runtime. (If not provided, the library will be searched "
+                     "for in the system's default library path.)");
+#endif
 }
 
 namespace {
@@ -1804,6 +1812,12 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   if (vm.count("udf-compiler-path")) {
     boost::algorithm::trim_if(udf_compiler_path, boost::is_any_of("\"'"));
   }
+
+#ifdef HAVE_TORCH_TFS
+  if (vm.count("torch-lib-path")) {
+    boost::algorithm::trim_if(torch_lib_path, boost::is_any_of("\"'"));
+  }
+#endif
 
   auto trim_string = [](std::string& s) {
     boost::algorithm::trim_if(s, boost::is_any_of("\"'"));

@@ -489,6 +489,9 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
 #ifdef ENABLE_GEOS
                                       prog_config_opts.libgeos_so_filename,
 #endif
+#ifdef HAVE_TORCH_TFS
+                                      prog_config_opts.torch_lib_path,
+#endif
                                       prog_config_opts.disk_cache_config,
                                       false);
     } else {  // running ha server

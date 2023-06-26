@@ -455,6 +455,9 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
 #ifdef ENABLE_GEOS
                                                 libgeos_so_filename_,
 #endif
+#ifdef HAVE_TORCH_TFS
+                                                torch_lib_path_,
+#endif
                                                 disk_cache_config,
                                                 false);
       loginAdmin();
@@ -826,6 +829,9 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
 #ifdef ENABLE_GEOS
   static std::string libgeos_so_filename_;
 #endif
+#ifdef HAVE_TORCH_TFS
+  static std::string torch_lib_path_;
+#endif
 
  public:
   static void setupSignalHandler() {
@@ -875,6 +881,9 @@ std::vector<std::string> DBHandlerTestFixture::udf_compiler_options_{};
 std::string DBHandlerTestFixture::cluster_config_file_path_{};
 #ifdef ENABLE_GEOS
 std::string DBHandlerTestFixture::libgeos_so_filename_{};
+#endif
+#ifdef HAVE_TORCH_TFS
+std::string DBHandlerTestFixture::torch_lib_path_{};
 #endif
 File_Namespace::DiskCacheLevel DBHandlerTestFixture::disk_cache_level_{
     File_Namespace::DiskCacheLevel::fsi};
