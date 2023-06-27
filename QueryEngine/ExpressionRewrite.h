@@ -42,30 +42,35 @@ Analyzer::ExpressionPtr rewrite_expr(const Analyzer::Expr*);
 Analyzer::ExpressionPtr rewrite_array_elements(const Analyzer::Expr*);
 
 // Rewrite a FunctionOper to an AND between a BinOper and the FunctionOper if the
-// FunctionOper is supported for overlaps joins
-struct OverlapsJoinConjunction {
+// FunctionOper is supported for bounding box intersect hash joins
+struct BoundingBoxIntersectJoinConjunction {
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
   std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
 };
 
-struct OverlapsJoinTranslationInfo {
+struct BoundingBoxIntersectJoinTranslationInfo {
   JoinQualsPerNestingLevel join_quals;
-  bool has_overlaps_join{false};
+  bool has_bbox_intersect_join{false};
   bool is_reordered{false};
 };
 
-struct OverlapsJoinTranslationResult {
+struct BoundingBoxIntersectJoinTranslationResult {
   bool swap_arguments{false};
-  std::optional<OverlapsJoinConjunction> converted_overlaps_join_info{std::nullopt};
+  std::optional<BoundingBoxIntersectJoinConjunction> converted_bbox_intersect_join_info{
+      std::nullopt};
 
-  static OverlapsJoinTranslationResult createEmptyResult() {
+  static BoundingBoxIntersectJoinTranslationResult createEmptyResult() {
     return {false, std::nullopt};
   }
 };
 
-enum class OverlapsJoinRewriteType { OVERLAPS_JOIN, RANGE_JOIN, UNKNOWN };
+enum class BoundingBoxIntersectJoinRewriteType {
+  BBOX_INTERSECT_JOIN,
+  RANGE_JOIN,
+  UNKNOWN
+};
 
-struct OverlapsJoinSupportedFunction {
+struct BoundingBoxIntersectJoinSupportedFunction {
   static constexpr std::string_view ST_CONTAINS_POLYGON_POINT_sv{
       "ST_Contains_Polygon_Point"};
   static constexpr std::string_view ST_CONTAINS_POLYGON_POLYGON_sv{
@@ -103,7 +108,7 @@ struct OverlapsJoinSupportedFunction {
       "ST_cIntersects_MultiPolygon_Point"};
   static constexpr std::string_view ST_DWITHIN_POINT_POINT_sv{"ST_DWithin_Point_Point"};
 
-  static constexpr std::array<std::string_view, 18> OVERLAPS_SUPPORTED_FUNC{
+  static constexpr std::array<std::string_view, 18> BBOX_INTERSECT_SUPPORTED_FUNC{
       ST_CONTAINS_POLYGON_POINT_sv,
       ST_CONTAINS_MULTIPOLYGON_POINT_sv,
       ST_CONTAINS_POLYGON_POLYGON_sv,
@@ -123,7 +128,7 @@ struct OverlapsJoinSupportedFunction {
       ST_OVERLAPS_sv,
       ST_DWITHIN_POINT_POINT_sv};
 
-  static constexpr std::array<std::string_view, 5> MANY_TO_MANY_OVERLAPS_FUNC{
+  static constexpr std::array<std::string_view, 5> MANY_TO_MANY_BBOX_INTERSECT_FUNC{
       ST_CONTAINS_POLYGON_POLYGON_sv,
       ST_INTERSECTS_POLYGON_POLYGON_sv,
       ST_INTERSECTS_POLYGON_MULTIPOLYGON_sv,
@@ -156,26 +161,29 @@ struct OverlapsJoinSupportedFunction {
       ST_DISTANCE_sv,
       ST_DWITHIN_POINT_POINT_sv};
 
-  static bool is_overlaps_supported_func(std::string_view target_func_name) {
-    return std::any_of(OverlapsJoinSupportedFunction::OVERLAPS_SUPPORTED_FUNC.begin(),
-                       OverlapsJoinSupportedFunction::OVERLAPS_SUPPORTED_FUNC.end(),
-                       [target_func_name](std::string_view func_name) {
-                         return target_func_name == func_name;
-                       });
+  static bool is_bbox_intersect_supported_func(std::string_view target_func_name) {
+    return std::any_of(
+        BoundingBoxIntersectJoinSupportedFunction::BBOX_INTERSECT_SUPPORTED_FUNC.begin(),
+        BoundingBoxIntersectJoinSupportedFunction::BBOX_INTERSECT_SUPPORTED_FUNC.end(),
+        [target_func_name](std::string_view func_name) {
+          return target_func_name == func_name;
+        });
   }
 
   static bool is_many_to_many_func(std::string_view target_func_name) {
-    return std::any_of(OverlapsJoinSupportedFunction::MANY_TO_MANY_OVERLAPS_FUNC.begin(),
-                       OverlapsJoinSupportedFunction::MANY_TO_MANY_OVERLAPS_FUNC.end(),
-                       [target_func_name](std::string_view func_name) {
-                         return target_func_name == func_name;
-                       });
+    return std::any_of(
+        BoundingBoxIntersectJoinSupportedFunction::MANY_TO_MANY_BBOX_INTERSECT_FUNC
+            .begin(),
+        BoundingBoxIntersectJoinSupportedFunction::MANY_TO_MANY_BBOX_INTERSECT_FUNC.end(),
+        [target_func_name](std::string_view func_name) {
+          return target_func_name == func_name;
+        });
   }
 
   static bool is_poly_mpoly_rewrite_target_func(std::string_view target_func_name) {
     return std::any_of(
-        OverlapsJoinSupportedFunction::POLY_MPOLY_REWRITE_TARGET_FUNC.begin(),
-        OverlapsJoinSupportedFunction::POLY_MPOLY_REWRITE_TARGET_FUNC.end(),
+        BoundingBoxIntersectJoinSupportedFunction::POLY_MPOLY_REWRITE_TARGET_FUNC.begin(),
+        BoundingBoxIntersectJoinSupportedFunction::POLY_MPOLY_REWRITE_TARGET_FUNC.end(),
         [target_func_name](std::string_view func_name) {
           return target_func_name == func_name;
         });
@@ -183,8 +191,8 @@ struct OverlapsJoinSupportedFunction {
 
   static bool is_point_poly_rewrite_target_func(std::string_view target_func_name) {
     return std::any_of(
-        OverlapsJoinSupportedFunction::POINT_POLY_REWRITE_TARGET_FUNC.begin(),
-        OverlapsJoinSupportedFunction::POINT_POLY_REWRITE_TARGET_FUNC.end(),
+        BoundingBoxIntersectJoinSupportedFunction::POINT_POLY_REWRITE_TARGET_FUNC.begin(),
+        BoundingBoxIntersectJoinSupportedFunction::POINT_POLY_REWRITE_TARGET_FUNC.end(),
         [target_func_name](std::string_view func_name) {
           return target_func_name == func_name;
         });
@@ -192,8 +200,8 @@ struct OverlapsJoinSupportedFunction {
 
   static bool is_poly_point_rewrite_target_func(std::string_view target_func_name) {
     return std::any_of(
-        OverlapsJoinSupportedFunction::POLY_POINT_REWRITE_TARGET_FUNC.begin(),
-        OverlapsJoinSupportedFunction::POLY_POINT_REWRITE_TARGET_FUNC.end(),
+        BoundingBoxIntersectJoinSupportedFunction::POLY_POINT_REWRITE_TARGET_FUNC.begin(),
+        BoundingBoxIntersectJoinSupportedFunction::POLY_POINT_REWRITE_TARGET_FUNC.end(),
         [target_func_name](std::string_view func_name) {
           return target_func_name == func_name;
         });
@@ -201,24 +209,24 @@ struct OverlapsJoinSupportedFunction {
 
   static bool is_range_join_rewrite_target_func(std::string_view target_func_name) {
     return std::any_of(
-        OverlapsJoinSupportedFunction::RANGE_JOIN_REWRITE_TARGET_FUNC.begin(),
-        OverlapsJoinSupportedFunction::RANGE_JOIN_REWRITE_TARGET_FUNC.end(),
+        BoundingBoxIntersectJoinSupportedFunction::RANGE_JOIN_REWRITE_TARGET_FUNC.begin(),
+        BoundingBoxIntersectJoinSupportedFunction::RANGE_JOIN_REWRITE_TARGET_FUNC.end(),
         [target_func_name](std::string_view func_name) {
           return target_func_name == func_name;
         });
   }
 };
 
-OverlapsJoinTranslationResult translate_overlaps_conjunction_with_reordering(
+BoundingBoxIntersectJoinTranslationResult translate_bbox_intersect_with_reordering(
     const std::shared_ptr<Analyzer::Expr> expr,
     std::vector<InputDescriptor> const& input_descs,
     std::unordered_map<const RelAlgNode*, int> const& input_to_nest_level,
     std::vector<size_t> const& input_permutation,
     std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc,
-    const OverlapsJoinRewriteType rewrite_type,
+    const BoundingBoxIntersectJoinRewriteType rewrite_type,
     Executor const* executor);
 
-OverlapsJoinTranslationInfo convert_overlaps_join(
+BoundingBoxIntersectJoinTranslationInfo convert_bbox_intersect_join(
     JoinQualsPerNestingLevel const& join_quals,
     std::vector<InputDescriptor>& input_descs,
     std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,

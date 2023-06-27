@@ -1348,7 +1348,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   auto return_type = rex_function->getType();
 
   if (function_name == "ST_Overlaps"sv) {
-    // Overlaps join is the only implementation supported for now, only translate bounds
+    // Bounding box intersection is the only implementation supported for now, only
+    // translate bounds
     CHECK_EQ(size_t(2), rex_function->size());
     auto extract_geo_bounds_from_input =
         [this, &rex_function](const size_t index) -> std::shared_ptr<Analyzer::Expr> {
@@ -1889,7 +1890,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
   return nullptr;
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoOverlapsOper(
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoBoundingBoxIntersectOper(
     const RexOperator* rex_operator) const {
   CHECK_EQ(rex_operator->size(), 2u);
 
@@ -1909,7 +1910,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoOverlapsOper(
   };
 
   SQLQualifier sql_qual{kONE};
-  SQLOps sql_op{kOVERLAPS};
+  SQLOps sql_op{kBBOX_INTERSECT};
   return makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false),
                                      false,
                                      sql_op,

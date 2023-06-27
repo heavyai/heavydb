@@ -67,27 +67,27 @@ struct ExecutionContext {
 
 template <typename TEST_BODY>
 void executeAllScenarios(TEST_BODY fn) {
-  for (const auto overlaps_state : {true, false}) {
-    const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
+  for (const auto bbox_intersect_state : {true, false}) {
+    const auto enable_bbox_intersect_hashjoin = g_enable_bbox_intersect_hashjoin;
     const auto enable_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many;
 
-    g_enable_overlaps_hashjoin = overlaps_state;
-    g_enable_hashjoin_many_to_many = overlaps_state;
-    g_trivial_loop_join_threshold = overlaps_state ? 1 : 1000;
+    g_enable_bbox_intersect_hashjoin = bbox_intersect_state;
+    g_enable_hashjoin_many_to_many = bbox_intersect_state;
+    g_trivial_loop_join_threshold = bbox_intersect_state ? 1 : 1000;
 
-    ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state,
-                                       &enable_hashjoin_many_to_many_state] {
-      g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
-      g_enable_overlaps_hashjoin = enable_hashjoin_many_to_many_state;
+    ScopeGuard reset_state = [&enable_bbox_intersect_hashjoin,
+                              &enable_hashjoin_many_to_many_state] {
+      g_enable_bbox_intersect_hashjoin = enable_bbox_intersect_hashjoin;
+      g_enable_hashjoin_many_to_many = enable_hashjoin_many_to_many_state;
       g_trivial_loop_join_threshold = 1000;
     };
 
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
-      // .device_type = dt, .hash_join_enabled = overlaps_state,
+      // .device_type = dt, .hash_join_enabled = bbox_intersect_state,
       ExecutionContext execution_context{
           dt,
-          overlaps_state,
+          bbox_intersect_state,
       };
       QR::get()->clearGpuMemory();
       QR::get()->clearCpuMemory();
@@ -196,7 +196,7 @@ const auto init_stmts_dml = {
 };
 // clang-format on
 
-class OverlapsTest : public ::testing::Test {
+class GeospatialJoinTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
     for (const auto& stmt : cleanup_stmts) {
@@ -243,7 +243,7 @@ TargetValue execSQLWithAllowLoopJoin(const std::string& stmt,
   return crt_row[0];
 }
 
-TEST_F(OverlapsTest, SimplePointInPolyIntersects) {
+TEST_F(GeospatialJoinTest, SimplePointInPolyIntersects) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     const auto sql =
         "SELECT "
@@ -253,7 +253,7 @@ TEST_F(OverlapsTest, SimplePointInPolyIntersects) {
   });
 }
 
-TEST_F(OverlapsTest, InnerJoinPointInPolyIntersects) {
+TEST_F(GeospatialJoinTest, InnerJoinPointInPolyIntersects) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql =
         "SELECT "
@@ -284,7 +284,7 @@ TEST_F(OverlapsTest, InnerJoinPointInPolyIntersects) {
 
 // TODO(jclay): This should succeed without failure.
 // For now, we test against the (incorrect) failure.
-TEST_F(OverlapsTest, InnerJoinPolyInPointIntersects) {
+TEST_F(GeospatialJoinTest, InnerJoinPolyInPointIntersects) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     const auto sql =
         "SELECT "
@@ -299,7 +299,7 @@ TEST_F(OverlapsTest, InnerJoinPolyInPointIntersects) {
   });
 }
 
-TEST_F(OverlapsTest, InnerJoinPolyPolyIntersects) {
+TEST_F(GeospatialJoinTest, InnerJoinPolyPolyIntersects) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   JOIN does_intersect_b as b
@@ -308,7 +308,7 @@ TEST_F(OverlapsTest, InnerJoinPolyPolyIntersects) {
   });
 }
 
-TEST_F(OverlapsTest, InnerJoinMPolyPolyIntersects) {
+TEST_F(GeospatialJoinTest, InnerJoinMPolyPolyIntersects) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   JOIN does_intersect_b as b
@@ -317,7 +317,7 @@ TEST_F(OverlapsTest, InnerJoinMPolyPolyIntersects) {
   });
 }
 
-TEST_F(OverlapsTest, InnerJoinMPolyMPolyIntersects) {
+TEST_F(GeospatialJoinTest, InnerJoinMPolyMPolyIntersects) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   JOIN does_intersect_b as b
@@ -326,7 +326,7 @@ TEST_F(OverlapsTest, InnerJoinMPolyMPolyIntersects) {
   });
 }
 
-TEST_F(OverlapsTest, LeftJoinMPolyPolyIntersects) {
+TEST_F(GeospatialJoinTest, LeftJoinMPolyPolyIntersects) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   LEFT JOIN does_intersect_b as b
@@ -335,7 +335,7 @@ TEST_F(OverlapsTest, LeftJoinMPolyPolyIntersects) {
   });
 }
 
-TEST_F(OverlapsTest, LeftJoinMPolyMPolyIntersects) {
+TEST_F(GeospatialJoinTest, LeftJoinMPolyMPolyIntersects) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   LEFT JOIN does_intersect_b as b
@@ -344,7 +344,7 @@ TEST_F(OverlapsTest, LeftJoinMPolyMPolyIntersects) {
   });
 }
 
-TEST_F(OverlapsTest, InnerJoinPolyPolyIntersectsTranspose) {
+TEST_F(GeospatialJoinTest, InnerJoinPolyPolyIntersectsTranspose) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     const auto sql = R"(SELECT count(*) from does_intersect_a as a
                         JOIN does_intersect_b as b
@@ -353,7 +353,7 @@ TEST_F(OverlapsTest, InnerJoinPolyPolyIntersectsTranspose) {
   });
 }
 
-TEST_F(OverlapsTest, LeftJoinPolyPolyIntersects) {
+TEST_F(GeospatialJoinTest, LeftJoinPolyPolyIntersects) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_b as b
                       LEFT JOIN does_intersect_a as a
@@ -362,7 +362,7 @@ TEST_F(OverlapsTest, LeftJoinPolyPolyIntersects) {
   });
 }
 
-TEST_F(OverlapsTest, LeftJoinPointInPolyIntersects) {
+TEST_F(GeospatialJoinTest, LeftJoinPointInPolyIntersects) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                       LEFT JOIN does_intersect_b as b
@@ -372,10 +372,9 @@ TEST_F(OverlapsTest, LeftJoinPointInPolyIntersects) {
 }
 
 // TODO(jclay): This should succeed without failure.
-// Look into rewriting this in overlaps rewrite.
 // For now, we test against the (incorrect) failure.
 // It should return 3.
-TEST_F(OverlapsTest, LeftJoinPointInPolyIntersectsWrongLHS) {
+TEST_F(GeospatialJoinTest, LeftJoinPointInPolyIntersectsWrongLHS) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                       LEFT JOIN does_intersect_b as b
@@ -388,7 +387,7 @@ TEST_F(OverlapsTest, LeftJoinPointInPolyIntersectsWrongLHS) {
   });
 }
 
-TEST_F(OverlapsTest, InnerJoinPolyPolyContains) {
+TEST_F(GeospatialJoinTest, InnerJoinPolyPolyContains) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_b as b
                   JOIN does_intersect_a as a
@@ -401,7 +400,7 @@ TEST_F(OverlapsTest, InnerJoinPolyPolyContains) {
 // - ST_Contains_MultiPolygon_MultiPolygon
 // - ST_Contains_MultiPolygon_Polygon
 // As a result, the following should succeed rather than throw error.
-TEST_F(OverlapsTest, InnerJoinMPolyPolyContains) {
+TEST_F(GeospatialJoinTest, InnerJoinMPolyPolyContains) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   JOIN does_intersect_b as b
@@ -410,7 +409,7 @@ TEST_F(OverlapsTest, InnerJoinMPolyPolyContains) {
   });
 }
 
-TEST_F(OverlapsTest, InnerJoinMPolyMPolyContains) {
+TEST_F(GeospatialJoinTest, InnerJoinMPolyMPolyContains) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   JOIN does_intersect_b as b
@@ -421,7 +420,7 @@ TEST_F(OverlapsTest, InnerJoinMPolyMPolyContains) {
 }
 
 // NOTE(jclay): We don't support multipoly / poly ST_Contains
-TEST_F(OverlapsTest, LeftJoinMPolyPolyContains) {
+TEST_F(GeospatialJoinTest, LeftJoinMPolyPolyContains) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_b as b
                   LEFT JOIN does_intersect_a as a
@@ -431,7 +430,7 @@ TEST_F(OverlapsTest, LeftJoinMPolyPolyContains) {
   });
 }
 
-TEST_F(OverlapsTest, LeftJoinMPolyMPolyContains) {
+TEST_F(GeospatialJoinTest, LeftJoinMPolyMPolyContains) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_b as b
                   LEFT JOIN does_intersect_a as a
@@ -441,7 +440,7 @@ TEST_F(OverlapsTest, LeftJoinMPolyMPolyContains) {
   });
 }
 
-TEST_F(OverlapsTest, JoinPolyPointContains) {
+TEST_F(GeospatialJoinTest, JoinPolyPointContains) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql =
         "SELECT "
@@ -465,7 +464,7 @@ TEST_F(OverlapsTest, JoinPolyPointContains) {
   });
 }
 
-TEST_F(OverlapsTest, JoinPolyCentroidContains) {
+TEST_F(GeospatialJoinTest, JoinPolyCentroidContains) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql =
         "SELECT "
@@ -483,7 +482,7 @@ TEST_F(OverlapsTest, JoinPolyCentroidContains) {
   });
 }
 
-TEST_F(OverlapsTest, PolyPolyDoesNotIntersect) {
+TEST_F(GeospatialJoinTest, PolyPolyDoesNotIntersect) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     ASSERT_EQ(static_cast<int64_t>(0),
               v<int64_t>(execSQL("SELECT count(*) FROM does_not_intersect_b as b "
@@ -493,7 +492,7 @@ TEST_F(OverlapsTest, PolyPolyDoesNotIntersect) {
   });
 }
 
-TEST_F(OverlapsTest, EmptyPolyPolyJoin) {
+TEST_F(GeospatialJoinTest, EmptyPolyPolyJoin) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     const auto sql =
         "SELECT count(*) FROM does_not_intersect_a as a "
@@ -503,76 +502,85 @@ TEST_F(OverlapsTest, EmptyPolyPolyJoin) {
   });
 }
 
-TEST_F(OverlapsTest, SkipHashtableCaching) {
-  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
+TEST_F(GeospatialJoinTest, SkipHashtableCaching) {
+  const auto enable_bbox_intersect_hashjoin_state = g_enable_bbox_intersect_hashjoin;
   const auto enable_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many;
 
-  g_enable_overlaps_hashjoin = true;
+  g_enable_bbox_intersect_hashjoin = true;
   g_enable_hashjoin_many_to_many = true;
   g_trivial_loop_join_threshold = 1;
 
-  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state,
-                                     &enable_hashjoin_many_to_many_state] {
-    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
-    g_enable_overlaps_hashjoin = enable_hashjoin_many_to_many_state;
+  ScopeGuard reset_state = [&enable_bbox_intersect_hashjoin_state,
+                            &enable_hashjoin_many_to_many_state] {
+    g_enable_bbox_intersect_hashjoin = enable_bbox_intersect_hashjoin_state;
+    g_enable_hashjoin_many_to_many = enable_hashjoin_many_to_many_state;
     g_trivial_loop_join_threshold = 1000;
   };
 
   QR::get()->clearCpuMemory();
-  // check whether overlaps hashtable caching works properly
+  // check whether hashtable caching works properly
   const auto q1 =
       "SELECT count(*) FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q1, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)2);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)2);
 
   const auto q2 =
-      "SELECT /*+ overlaps_bucket_threshold(0.2), overlaps_no_cache */ count(*) FROM "
+      "SELECT /*+ bbox_intersect_bucket_threshold(0.2), bbox_intersect_no_cache */ "
+      "count(*) FROM "
       "does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q2, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)2);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)2);
 
   QR::get()->clearCpuMemory();
   execSQL(q2, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)0);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)0);
 
   const auto q3 =
-      "SELECT /*+ overlaps_no_cache */ count(*) FROM does_not_intersect_b as b JOIN "
+      "SELECT /*+ bbox_intersect_no_cache */ count(*) FROM does_not_intersect_b as b "
+      "JOIN "
       "does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q3, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)0);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)0);
 
   const auto q4 =
-      "SELECT /*+ overlaps_max_size(1000), overlaps_no_cache */ count(*) FROM "
+      "SELECT /*+ bbox_intersect_max_size(1000), bbox_intersect_no_cache */ count(*) "
+      "FROM "
       "does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q4, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)0);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)0);
 
   const auto q5 =
-      "SELECT /*+ overlaps_bucket_threshold(0.2), overlaps_max_size(1000), "
-      "overlaps_no_cache */ count(*) FROM does_not_intersect_b as b JOIN "
+      "SELECT /*+ bbox_intersect_bucket_threshold(0.2), bbox_intersect_max_size(1000), "
+      "bbox_intersect_no_cache */ count(*) FROM does_not_intersect_b as b JOIN "
       "does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q5, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)0);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)0);
 }
 
-TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
+TEST_F(GeospatialJoinTest, CacheBehaviorUnderQueryHint) {
   // consider the following symbols:
   // T_E: bucket_threshold_hint_enabled
   // T_D: bucket_threshold_hint_disabled (use default value)
@@ -601,17 +609,17 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
   // <T_C, M_D> --> possible, and comes from the initial setting of <T_D, M_D>
 
   QR::get()->clearCpuMemory();
-  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
+  const auto enable_bbox_intersect_hashjoin_state = g_enable_bbox_intersect_hashjoin;
   const auto enable_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many;
 
-  g_enable_overlaps_hashjoin = true;
+  g_enable_bbox_intersect_hashjoin = true;
   g_enable_hashjoin_many_to_many = true;
   g_trivial_loop_join_threshold = 1;
 
-  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state,
-                                     &enable_hashjoin_many_to_many_state] {
-    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
-    g_enable_overlaps_hashjoin = enable_hashjoin_many_to_many_state;
+  ScopeGuard reset_state = [&enable_bbox_intersect_hashjoin_state,
+                            &enable_hashjoin_many_to_many_state] {
+    g_enable_bbox_intersect_hashjoin = enable_bbox_intersect_hashjoin_state;
+    g_enable_hashjoin_many_to_many = enable_hashjoin_many_to_many_state;
     g_trivial_loop_join_threshold = 1000;
   };
 
@@ -620,87 +628,102 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
       "SELECT count(*) FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q1, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)2);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)2);
 
   // <T_E, M_D> case, only add hashtable to cache with <T_E: 0.1, M_D>
   const auto q2 =
-      "SELECT /*+ overlaps_bucket_threshold(0.1) */ count(*) FROM does_not_intersect_b "
+      "SELECT /*+ bbox_intersect_bucket_threshold(0.1) */ count(*) FROM "
+      "does_not_intersect_b "
       "as b JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
   execSQL(q2, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)3);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)3);
 
   // <T_E, M_D> case... only add hashtable to cache with <T_E: 0.2, M_D>
   const auto q3 =
-      "SELECT /*+ overlaps_bucket_threshold(0.2) */ count(*) FROM does_not_intersect_b "
+      "SELECT /*+ bbox_intersect_bucket_threshold(0.2) */ count(*) FROM "
+      "does_not_intersect_b "
       "as b JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
   execSQL(q3, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)4);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)4);
 
   // only reuse cached hashtable for <T_E: 0.1, M_D>
   const auto q4 =
-      "SELECT /*+ overlaps_bucket_threshold(0.1) */ count(*) FROM does_not_intersect_b "
+      "SELECT /*+ bbox_intersect_bucket_threshold(0.1) */ count(*) FROM "
+      "does_not_intersect_b "
       "as b JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
   execSQL(q4, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)4);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)4);
 
   // skip max_size hint, so <T_E, M_D> case and only reuse <T_E: 0.1, M_D> hashtable
   const auto q5 =
-      "SELECT /*+ overlaps_bucket_threshold(0.1), overlaps_max_size(1000) */ count(*) "
+      "SELECT /*+ bbox_intersect_bucket_threshold(0.1), bbox_intersect_max_size(1000) */ "
+      "count(*) "
       "FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q5, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)4);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)4);
 
   // <T_D, M_E> case, so it now becomes <T_C, M_E>
   // add <T_D, M_E> --> <T_C, M_E: 1000> mapping to auto_tuner
   // add <T_C, M_E: 1000> hashtable to cache
   const auto q6 =
-      "SELECT /*+ overlaps_max_size(1000) */ count(*) FROM does_not_intersect_b as b "
+      "SELECT /*+ bbox_intersect_max_size(1000) */ count(*) FROM does_not_intersect_b as "
+      "b "
       "JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
   execSQL(q6, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)6);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)6);
 
   // <T_E, M_D> case, only reuse cached hashtable of <T_E: 0.2, M_D>
   const auto q7 =
-      "SELECT /*+ overlaps_max_size(1000), overlaps_bucket_threshold(0.2) */ count(*) "
+      "SELECT /*+ bbox_intersect_max_size(1000), bbox_intersect_bucket_threshold(0.2) */ "
+      "count(*) "
       "FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q7, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)6);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)6);
 
   // <T_E, M_D> case... only add hashtable to cache with <T_E: 0.3, M_D>
   const auto q8 =
-      "SELECT /*+ overlaps_max_size(1000), overlaps_bucket_threshold(0.3) */ count(*) "
+      "SELECT /*+ bbox_intersect_max_size(1000), bbox_intersect_bucket_threshold(0.3) */ "
+      "count(*) "
       "FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q8, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            (size_t)7);
+  ASSERT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      (size_t)7);
 }
 
-class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
+class BoundingBoxIntersectJoinHashTableMock : public BoundingBoxIntersectJoinHashTable {
  public:
   struct ExpectedValues {
     size_t entry_count;
     size_t emitted_keys_count;
   };
 
-  static std::shared_ptr<OverlapsJoinHashTableMock> getInstance(
+  static std::shared_ptr<BoundingBoxIntersectJoinHashTableMock> getInstance(
       const std::shared_ptr<Analyzer::BinOper> condition,
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
@@ -708,28 +731,31 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
       Executor* executor,
       const int device_count,
       const RegisteredQueryHint& query_hints,
-      const std::vector<OverlapsJoinHashTableMock::ExpectedValues>& expected_values) {
-    auto hash_join = std::make_shared<OverlapsJoinHashTableMock>(condition,
-                                                                 query_infos,
-                                                                 memory_level,
-                                                                 column_cache,
-                                                                 executor,
-                                                                 device_count,
-                                                                 query_hints,
-                                                                 expected_values);
+      const std::vector<BoundingBoxIntersectJoinHashTableMock::ExpectedValues>&
+          expected_values) {
+    auto hash_join =
+        std::make_shared<BoundingBoxIntersectJoinHashTableMock>(condition,
+                                                                query_infos,
+                                                                memory_level,
+                                                                column_cache,
+                                                                executor,
+                                                                device_count,
+                                                                query_hints,
+                                                                expected_values);
     hash_join->reifyWithLayout(HashType::OneToMany);
     return hash_join;
   }
 
-  OverlapsJoinHashTableMock(const std::shared_ptr<Analyzer::BinOper> condition,
-                            const std::vector<InputTableInfo>& query_infos,
-                            const Data_Namespace::MemoryLevel memory_level,
-                            ColumnCacheMap& column_cache,
-                            Executor* executor,
-                            const int device_count,
-                            const RegisteredQueryHint& query_hints,
-                            const std::vector<ExpectedValues>& expected_values)
-      : OverlapsJoinHashTable(
+  BoundingBoxIntersectJoinHashTableMock(
+      const std::shared_ptr<Analyzer::BinOper> condition,
+      const std::vector<InputTableInfo>& query_infos,
+      const Data_Namespace::MemoryLevel memory_level,
+      ColumnCacheMap& column_cache,
+      Executor* executor,
+      const int device_count,
+      const RegisteredQueryHint& query_hints,
+      const std::vector<ExpectedValues>& expected_values)
+      : BoundingBoxIntersectJoinHashTable(
             condition,
             JoinType::INVALID,  // b/c this is mock
             query_infos,
@@ -769,10 +795,11 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
       const size_t chosen_max_hashtable_size,
       const double chosen_bucket_threshold) final {
     auto [entry_count, emitted_keys_count] =
-        OverlapsJoinHashTable::approximateTupleCount(bucket_sizes_for_dimension,
-                                                     columns_per_device,
-                                                     chosen_max_hashtable_size,
-                                                     chosen_bucket_threshold);
+        BoundingBoxIntersectJoinHashTable::approximateTupleCount(
+            bucket_sizes_for_dimension,
+            columns_per_device,
+            chosen_max_hashtable_size,
+            chosen_bucket_threshold);
     return std::make_pair(entry_count, emitted_keys_count);
   }
 
@@ -784,11 +811,12 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
       const size_t chosen_max_hashtable_size,
       const double chosen_bucket_threshold) final {
     auto [entry_count, emitted_keys_count] =
-        OverlapsJoinHashTable::computeHashTableCounts(shard_count,
-                                                      bucket_sizes_for_dimension,
-                                                      columns_per_device,
-                                                      chosen_max_hashtable_size,
-                                                      chosen_bucket_threshold);
+        BoundingBoxIntersectJoinHashTable::computeHashTableCounts(
+            shard_count,
+            bucket_sizes_for_dimension,
+            columns_per_device,
+            chosen_max_hashtable_size,
+            chosen_bucket_threshold);
     EXPECT_LT(step_, expected_values_per_step_.size());
     auto& expected_values = expected_values_per_step_[step_];
     EXPECT_EQ(entry_count, expected_values.entry_count);
@@ -830,7 +858,7 @@ class BucketSizeTest : public ::testing::Test {
 
  public:
   static std::pair<std::shared_ptr<Analyzer::BinOper>, std::vector<InputTableInfo>>
-  getOverlapsBuildInfo() {
+  getHashTableBuildInfo() {
     auto catalog = QR::get()->getCatalog();
     CHECK(catalog);
 
@@ -858,69 +886,69 @@ class BucketSizeTest : public ::testing::Test {
     query_infos.emplace_back(InputTableInfo{poly_table_key, build_table_info({poly_td})});
 
     auto condition = std::make_shared<Analyzer::BinOper>(
-        kBOOLEAN, kOVERLAPS, kANY, pt_col_var, poly_col_var);
+        kBOOLEAN, kBBOX_INTERSECT, kANY, pt_col_var, poly_col_var);
     return std::make_pair(condition, query_infos);
   }
 };
 
-TEST_F(BucketSizeTest, OverlapsTunerEarlyOut) {
+TEST_F(BucketSizeTest, TunerEarlyOut) {
   // 2 steps, early out due to increasing keys per bin
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
   auto executor = QR::get()->getExecutor();
 
-  auto [condition, query_infos] = BucketSizeTest::getOverlapsBuildInfo();
+  auto [condition, query_infos] = BucketSizeTest::getHashTableBuildInfo();
 
   ColumnCacheMap column_cache;
-  std::vector<OverlapsJoinHashTableMock::ExpectedValues> expected_values;
+  std::vector<BoundingBoxIntersectJoinHashTableMock::ExpectedValues> expected_values;
   expected_values.emplace_back(
-      OverlapsJoinHashTableMock::ExpectedValues{8, 7});  // step 1
+      BoundingBoxIntersectJoinHashTableMock::ExpectedValues{8, 7});  // step 1
   expected_values.emplace_back(
-      OverlapsJoinHashTableMock::ExpectedValues{1340, 688});  // step 2
-  expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{
+      BoundingBoxIntersectJoinHashTableMock::ExpectedValues{1340, 688});  // step 2
+  expected_values.emplace_back(BoundingBoxIntersectJoinHashTableMock::ExpectedValues{
       1340, 688});  // increasing keys per bin, stop at step 2
 
-  auto hash_table =
-      OverlapsJoinHashTableMock::getInstance(condition,
-                                             query_infos,
-                                             Data_Namespace::MemoryLevel::CPU_LEVEL,
-                                             column_cache,
-                                             executor.get(),
-                                             /*device_count=*/1,
-                                             RegisteredQueryHint::defaults(),
-                                             expected_values);
+  auto hash_table = BoundingBoxIntersectJoinHashTableMock::getInstance(
+      condition,
+      query_infos,
+      Data_Namespace::MemoryLevel::CPU_LEVEL,
+      column_cache,
+      executor.get(),
+      /*device_count=*/1,
+      RegisteredQueryHint::defaults(),
+      expected_values);
   CHECK(hash_table);
 }
 
-TEST_F(BucketSizeTest, OverlapsTooBig) {
+TEST_F(BucketSizeTest, TooBig) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
   auto executor = QR::get()->getExecutor();
 
-  auto [condition, query_infos] = BucketSizeTest::getOverlapsBuildInfo();
+  auto [condition, query_infos] = BucketSizeTest::getHashTableBuildInfo();
 
   ColumnCacheMap column_cache;
-  std::vector<OverlapsJoinHashTableMock::ExpectedValues> expected_values;
+  std::vector<BoundingBoxIntersectJoinHashTableMock::ExpectedValues> expected_values;
   // runs 8 back tuner steps after initial size too big failure
   expected_values.emplace_back(
-      OverlapsJoinHashTableMock::ExpectedValues{8, 7});  // step 1
+      BoundingBoxIntersectJoinHashTableMock::ExpectedValues{8, 7});  // step 1
   expected_values.emplace_back(
-      OverlapsJoinHashTableMock::ExpectedValues{2, 4});  // step 2 (reversal)
-  expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{
+      BoundingBoxIntersectJoinHashTableMock::ExpectedValues{2, 4});  // step 2 (reversal)
+  expected_values.emplace_back(BoundingBoxIntersectJoinHashTableMock::ExpectedValues{
       2, 4});  // step 3 (hash table not getting smaller, bails)
 
   RegisteredQueryHint hint;
-  hint.overlaps_max_size = 2;
-  hint.registerHint(QueryHint::kOverlapsMaxSize);
-  EXPECT_ANY_THROW(
-      OverlapsJoinHashTableMock::getInstance(condition,
-                                             query_infos,
-                                             Data_Namespace::MemoryLevel::CPU_LEVEL,
-                                             column_cache,
-                                             executor.get(),
-                                             /*device_count=*/1,
-                                             hint,
-                                             expected_values));
+  hint.bbox_intersect_max_size = 2;
+  hint.registerHint(QueryHint::kBBoxIntersectMaxSize);
+  EXPECT_ANY_THROW(BoundingBoxIntersectJoinHashTableMock::getInstance(
+      condition,
+      query_infos,
+      Data_Namespace::MemoryLevel::CPU_LEVEL,
+      column_cache,
+      executor.get(),
+      /*device_count=*/1,
+      hint,
+      expected_values));
 }
 
 void populateTablesForVarlenLinearizationTest() {
@@ -1372,13 +1400,13 @@ void dropTablesForVarlenLinearizationTest() {
   }
 }
 
-class MultiFragGeoOverlapsJoinTest : public ::testing::Test {
+class MultiFragGeospatialJoinTest : public ::testing::Test {
  protected:
   void SetUp() override {}
   void TearDown() override {}
 };
 
-TEST_F(MultiFragGeoOverlapsJoinTest, Point) {
+TEST_F(MultiFragGeospatialJoinTest, Point) {
   // point - point by stwithin
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gpt", "gpt4e", "gpt4n"};
@@ -1402,7 +1430,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Point) {
   });
 }
 
-TEST_F(MultiFragGeoOverlapsJoinTest, Linestring) {
+TEST_F(MultiFragGeospatialJoinTest, Linestring) {
   // linestring - polygon by st_intersect
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gl", "gl4e", "gl4n"};
@@ -1426,7 +1454,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Linestring) {
   });
 }
 
-TEST_F(MultiFragGeoOverlapsJoinTest, Polygon) {
+TEST_F(MultiFragGeospatialJoinTest, Polygon) {
   // polygon - point by st_intersects
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gp", "gp4e", "gp4n"};
@@ -1450,7 +1478,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Polygon) {
   });
 }
 
-TEST_F(MultiFragGeoOverlapsJoinTest, MultiPolygon) {
+TEST_F(MultiFragGeospatialJoinTest, MultiPolygon) {
   // multipolygon - polygon by st_intersects
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gmp", "gmp4e", "gmp4n"};
@@ -1474,7 +1502,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, MultiPolygon) {
   });
 }
 
-TEST_F(MultiFragGeoOverlapsJoinTest, Point_Nullable) {
+TEST_F(MultiFragGeospatialJoinTest, Point_Nullable) {
   // point - point by stwithin
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gpt", "gpt4e", "gpt4n"};
@@ -1498,7 +1526,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Point_Nullable) {
   });
 }
 
-TEST_F(MultiFragGeoOverlapsJoinTest, Linestring_Nullable) {
+TEST_F(MultiFragGeospatialJoinTest, Linestring_Nullable) {
   // linestring - polygon by st_intersect
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gl", "gl4e", "gl4n"};
@@ -1522,7 +1550,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Linestring_Nullable) {
   });
 }
 
-TEST_F(MultiFragGeoOverlapsJoinTest, Polygon_Nullable) {
+TEST_F(MultiFragGeospatialJoinTest, Polygon_Nullable) {
   // polygon - point by st_intersects
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gp", "gp4e", "gp4n"};
@@ -1546,7 +1574,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Polygon_Nullable) {
   });
 }
 
-TEST_F(MultiFragGeoOverlapsJoinTest, MultiPolygon_Nullable) {
+TEST_F(MultiFragGeospatialJoinTest, MultiPolygon_Nullable) {
   // multipolygon - polygon by st_intersects
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gmp", "gmp4e", "gmp4n"};
@@ -1570,7 +1598,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, MultiPolygon_Nullable) {
   });
 }
 
-TEST_F(MultiFragGeoOverlapsJoinTest, Nullable_Geo_Exhaustive) {
+TEST_F(MultiFragGeospatialJoinTest, Nullable_Geo_Exhaustive) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 114;
     int64_t single_frag_res2 = 5163;
@@ -1829,7 +1857,7 @@ class RangeJoinTest : public ::testing::Test {
 
       if (ctx.hash_join_enabled) {
         ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                   CacheItemType::OVERLAPS_HT),
+                                                   CacheItemType::BBOX_INTERSECT_HT),
                   expected_hash_tables)
             << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
         expected_hash_tables++;
@@ -1843,7 +1871,7 @@ class RangeJoinTest : public ::testing::Test {
 
         if (ctx.hash_join_enabled) {
           ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                     CacheItemType::OVERLAPS_HT),
+                                                     CacheItemType::BBOX_INTERSECT_HT),
                     expected_hash_tables)
               << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
           expected_hash_tables++;
@@ -1919,7 +1947,7 @@ TEST_F(RangeJoinTest, IsEnabledByDefault) {
   size_t expected_hash_tables{0};
 
   ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                             CacheItemType::OVERLAPS_HT),
+                                             CacheItemType::BBOX_INTERSECT_HT),
             expected_hash_tables)
       << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
   expected_hash_tables++;
@@ -1940,7 +1968,7 @@ TEST_F(RangeJoinTest, IsEnabledByDefault) {
         << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                               CacheItemType::OVERLAPS_HT),
+                                               CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
         << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
     expected_hash_tables++;
@@ -1960,7 +1988,7 @@ TEST_F(RangeJoinTest, CanBeDisabled) {
   const size_t expected_hash_tables{0};
 
   ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                             CacheItemType::OVERLAPS_HT),
+                                             CacheItemType::BBOX_INTERSECT_HT),
             expected_hash_tables)
       << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
 
@@ -1980,7 +2008,7 @@ TEST_F(RangeJoinTest, CanBeDisabled) {
         << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                               CacheItemType::OVERLAPS_HT),
+                                               CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
         << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
   }
@@ -2040,15 +2068,19 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
     expected_hash_tables++;
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                               CacheItemType::OVERLAPS_HT),
+                                               CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
         << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
     auto ht_info = QR::get()->getCachedHashtableWithoutCacheKey(
-        visited, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+        visited,
+        CacheItemType::BBOX_INTERSECT_HT,
+        DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     auto cache_key = std::get<0>(ht_info);
     cache_keys.push_back(cache_key);
-    auto ht_metrics = QR::get()->getCacheItemMetric(
-        cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    auto ht_metrics =
+        QR::get()->getCacheItemMetric(cache_key,
+                                      CacheItemType::BBOX_INTERSECT_HT,
+                                      DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     CHECK(ht_metrics);
     ht_ref_cnts.push_back(ht_metrics->getRefCount());
   }
@@ -2066,16 +2098,20 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
         << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
     expected_hash_tables++;
     auto ht_info = QR::get()->getCachedHashtableWithoutCacheKey(
-        visited, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+        visited,
+        CacheItemType::BBOX_INTERSECT_HT,
+        DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     auto cache_key = std::get<0>(ht_info);
     cache_keys.push_back(cache_key);
-    auto ht_metrics = QR::get()->getCacheItemMetric(
-        cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    auto ht_metrics =
+        QR::get()->getCacheItemMetric(cache_key,
+                                      CacheItemType::BBOX_INTERSECT_HT,
+                                      DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     CHECK(ht_metrics);
     ht_ref_cnts.push_back(ht_metrics->getRefCount());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                               CacheItemType::OVERLAPS_HT),
+                                               CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
         << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
   }
@@ -2094,12 +2130,14 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
         << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                               CacheItemType::OVERLAPS_HT),
+                                               CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
         << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
     auto cache_key = cache_keys[idx];
-    auto ht_metrics = QR::get()->getCacheItemMetric(
-        cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    auto ht_metrics =
+        QR::get()->getCacheItemMetric(cache_key,
+                                      CacheItemType::BBOX_INTERSECT_HT,
+                                      DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     CHECK(ht_metrics);
     EXPECT_LT(ht_ref_cnts[idx], ht_metrics->getRefCount());
     ht_ref_cnts[idx] = ht_metrics->getRefCount();
@@ -2119,12 +2157,14 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
         << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                               CacheItemType::OVERLAPS_HT),
+                                               CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
         << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
     auto cache_key = cache_keys[idx];
-    auto ht_metrics = QR::get()->getCacheItemMetric(
-        cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    auto ht_metrics =
+        QR::get()->getCacheItemMetric(cache_key,
+                                      CacheItemType::BBOX_INTERSECT_HT,
+                                      DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     CHECK(ht_metrics);
     EXPECT_LT(ht_ref_cnts[idx], ht_metrics->getRefCount());
     ht_ref_cnts[idx] = ht_metrics->getRefCount();
@@ -2145,12 +2185,14 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
         << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                               CacheItemType::OVERLAPS_HT),
+                                               CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
         << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
     auto cache_key = cache_keys[idx];
-    auto ht_metrics = QR::get()->getCacheItemMetric(
-        cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    auto ht_metrics =
+        QR::get()->getCacheItemMetric(cache_key,
+                                      CacheItemType::BBOX_INTERSECT_HT,
+                                      DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     CHECK(ht_metrics);
     EXPECT_LT(ht_ref_cnts[idx], ht_metrics->getRefCount());
     ++idx;
@@ -2169,19 +2211,21 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
         << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                               CacheItemType::OVERLAPS_HT),
+                                               CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
         << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
     auto cache_key = cache_keys[idx];
-    auto ht_metrics = QR::get()->getCacheItemMetric(
-        cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    auto ht_metrics =
+        QR::get()->getCacheItemMetric(cache_key,
+                                      CacheItemType::BBOX_INTERSECT_HT,
+                                      DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     CHECK(ht_metrics);
     EXPECT_LT(ht_ref_cnts[idx], ht_metrics->getRefCount());
     ++idx;
   }
 }
 
-namespace OverlapsJoinRewriter {
+namespace BoundingBoxIntersectRewriter {
 
 const auto setup_stmts = {
     "CREATE TABLE TEST_GEOPT (ptc4326 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32), pt "
@@ -2217,32 +2261,32 @@ const auto cleanup_stmts = {
     "DROP TABLE IF EXISTS TEST_GEOPT3;",
     "DROP TABLE IF EXISTS TEST_GEOPT4;",
 };
-}  // namespace OverlapsJoinRewriter
+}  // namespace BoundingBoxIntersectRewriter
 
-class OverlapsJoinRewriteTest : public ::testing::Test {
+class BoundingBoxIntersectRewriteTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    for (const auto& stmt : OverlapsJoinRewriter::cleanup_stmts) {
+    for (const auto& stmt : BoundingBoxIntersectRewriter::cleanup_stmts) {
       QR::get()->runDDLStatement(stmt);
     }
 
-    for (const auto& stmt : OverlapsJoinRewriter::setup_stmts) {
+    for (const auto& stmt : BoundingBoxIntersectRewriter::setup_stmts) {
       QR::get()->runDDLStatement(stmt);
     }
 
-    for (const auto& stmt : OverlapsJoinRewriter::insert_data_stmts) {
+    for (const auto& stmt : BoundingBoxIntersectRewriter::insert_data_stmts) {
       QR::get()->runSQL(stmt, ExecutorDeviceType::CPU);
     }
   }
 
   void TearDown() override {
-    for (const auto& stmt : OverlapsJoinRewriter::cleanup_stmts) {
+    for (const auto& stmt : BoundingBoxIntersectRewriter::cleanup_stmts) {
       QR::get()->runDDLStatement(stmt);
     }
   }
 };
 
-TEST_F(OverlapsJoinRewriteTest, VariousHashKeyExpressionsForP2PSTDistanceJoin) {
+TEST_F(BoundingBoxIntersectRewriteTest, VariousHashKeyExpressionsForP2PSTDistanceJoin) {
   std::vector<int64_t> answer_sheet;
   std::array<std::string, 11> queries{
       "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE ST_DISTANCE(a.pt4326, "
@@ -2269,28 +2313,28 @@ TEST_F(OverlapsJoinRewriteTest, VariousHashKeyExpressionsForP2PSTDistanceJoin) {
       "ST_DISTANCE(ST_CENTROID(a.poly), b.pt) < 1;",
       "SELECT COUNT(1) FROM does_intersect_a a, does_intersect_b b WHERE "
       "ST_DISTANCE(ST_CENTROID(a.mpoly), b.pt) < 1;"};
-  ScopeGuard flag_reset = [orig = g_enable_overlaps_hashjoin] {
-    g_enable_overlaps_hashjoin = orig;
+  ScopeGuard flag_reset = [orig = g_enable_bbox_intersect_hashjoin] {
+    g_enable_bbox_intersect_hashjoin = orig;
   };
-  g_enable_overlaps_hashjoin = false;
+  g_enable_bbox_intersect_hashjoin = false;
   for (size_t i = 0; i < answer_sheet.size(); i++) {
     answer_sheet.push_back(v<int64_t>(execSQL(queries[i], ExecutorDeviceType::CPU)));
   }
-  g_enable_overlaps_hashjoin = true;
+  g_enable_bbox_intersect_hashjoin = true;
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     QR::get()->clearCpuMemory();
     for (size_t i = 0; i < answer_sheet.size(); i++) {
       EXPECT_EQ(v<int64_t>(execSQL(queries[i], dt)), answer_sheet[i]);
       ASSERT_GT(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT),
+                                                 CacheItemType::BBOX_INTERSECT_HT),
                 size_t(0))
-          << "Query does not exploit overlaps hash join: " << queries[i];
+          << "Query does not exploit bounding box intersection: " << queries[i];
     }
   }
 }
 
-TEST_F(OverlapsJoinRewriteTest, P2PDistanceJoinGeoTypeChecking) {
+TEST_F(BoundingBoxIntersectRewriteTest, P2PDistanceJoinGeoTypeChecking) {
   std::array<std::string, 5> queries{
       "SELECT COUNT(1) FROM TEST_GEOPT R, TEST_GEOPT2 S WHERE ST_DISTANCE(R.pt4326, "
       "S.ls) < 0.1;",
@@ -2317,7 +2361,7 @@ TEST_F(OverlapsJoinRewriteTest, P2PDistanceJoinGeoTypeChecking) {
   }
 }
 
-TEST_F(OverlapsJoinRewriteTest, ArgumentOrderingAfterTableReordering) {
+TEST_F(BoundingBoxIntersectRewriteTest, ArgumentOrderingAfterTableReordering) {
   // test logic is different compared with the previous test,
   // so we do not use performTest function here
   QR::get()->clearCpuMemory();
@@ -2338,7 +2382,7 @@ TEST_F(OverlapsJoinRewriteTest, ArgumentOrderingAfterTableReordering) {
   }
 }
 
-TEST_F(OverlapsJoinRewriteTest, ArgumentReorderingNonPointCol) {
+TEST_F(BoundingBoxIntersectRewriteTest, ArgumentReorderingNonPointCol) {
   // test logic is different compared with the previous test,
   // so we do not use performTest function here
   QR::get()->clearCpuMemory();
@@ -2368,7 +2412,7 @@ TEST_F(OverlapsJoinRewriteTest, ArgumentReorderingNonPointCol) {
   }
 }
 
-TEST_F(OverlapsJoinRewriteTest, TemporaryTable) {
+TEST_F(BoundingBoxIntersectRewriteTest, TemporaryTable) {
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS tp1;");
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS tp2;");
   QR::get()->runDDLStatement(

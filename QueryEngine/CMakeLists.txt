@@ -76,7 +76,7 @@ set(query_engine_source_files
   JoinHashTable/BaselineJoinHashTable.cpp
   JoinHashTable/HashJoin.cpp
   JoinHashTable/HashTable.cpp
-  JoinHashTable/OverlapsJoinHashTable.cpp
+  JoinHashTable/BoundingBoxIntersectJoinHashTable.cpp
   JoinHashTable/PerfectJoinHashTable.cpp
   JoinHashTable/Runtime/HashJoinRuntime.cpp
   JoinHashTable/RangeJoinHashTable.cpp
@@ -154,7 +154,7 @@ set(query_engine_source_files
   ResultSetRecyclerHolder.cpp
   DataRecycler/HashtableRecycler.cpp
   DataRecycler/HashingSchemeRecycler.cpp
-  DataRecycler/OverlapsTuningParamRecycler.cpp
+  DataRecycler/BoundingBoxIntersectTuningParamRecycler.cpp
   DataRecycler/ResultSetRecycler.cpp
   DataRecycler/ChunkMetadataRecycler.cpp
   Visitors/QueryPlanDagChecker.cpp

@@ -36,14 +36,14 @@ struct EMPTY_META_INFO {};
 
 // Item type that we try to recycle
 enum CacheItemType {
-  PERFECT_HT = 0,             // Perfect hashtable
-  BASELINE_HT,                // Baseline hashtable
-  OVERLAPS_HT,                // Overlaps hashtable
-  HT_HASHING_SCHEME,          // Hashtable layout
-  BASELINE_HT_APPROX_CARD,    // Approximated cardinality for baseline hashtable
-  OVERLAPS_AUTO_TUNER_PARAM,  // Hashtable auto tuner's params for overlaps join
-  QUERY_RESULTSET,            // query resultset
-  CHUNK_METADATA,             // query resultset's chunk metadata
+  PERFECT_HT = 0,                   // Perfect hashtable
+  BASELINE_HT,                      // Baseline hashtable
+  BBOX_INTERSECT_HT,                // Bounding box intersect hashtable
+  HT_HASHING_SCHEME,                // Hashtable layout
+  BASELINE_HT_APPROX_CARD,          // Approximated cardinality for baseline hashtable
+  BBOX_INTERSECT_AUTO_TUNER_PARAM,  // Bounding box intersect auto tuner's params
+  QUERY_RESULTSET,                  // query resultset
+  CHUNK_METADATA,                   // query resultset's chunk metadata
   // TODO (yoonmin): support the following items for recycling
   // COUNTALL_CARD_EST,  Cardinality of query result
   // NDV_CARD_EST,       # Non-distinct value
@@ -55,10 +55,10 @@ inline std::ostream& operator<<(std::ostream& os, CacheItemType const item_type)
   constexpr char const* cache_item_type_str[]{
       "Perfect Join Hashtable",
       "Baseline Join Hashtable",
-      "Overlaps Join Hashtable",
+      "Bounding Box Intersect Join Hashtable",
       "Hashing Scheme for Join Hashtable",
       "Baseline Join Hashtable's Approximated Cardinality",
-      "Overlaps Join Hashtable's Auto Tuner's Parameters",
+      "Bounding Box Intersect Join Hashtable's Auto Tuner's Parameters",
       "Query ResultSet",
       "Chunk Metadata"};
   static_assert(sizeof(cache_item_type_str) / sizeof(*cache_item_type_str) ==
@@ -179,7 +179,7 @@ class DataRecyclerUtil {
 
 // contain information regarding 1) per-cache item metric: perfect ht-1, perfect ht-2,
 // baseline ht-1, ... and 2) per-type size in current: perfect-ht cache size, baseline-ht
-// cache size, overlaps-ht cache size, ...
+// cache size, ...
 class CacheMetricTracker {
  public:
   CacheMetricTracker(CacheItemType cache_item_type,

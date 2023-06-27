@@ -219,89 +219,94 @@ TEST(QueryHint, ForceToCPUMode) {
                                            {{QueryHint::kCpuMode, false}}));
 }
 
-TEST(QueryHint, QueryHintForOverlapsJoin) {
-  ScopeGuard reset_loop_join_state = [orig_overlaps_hash_join =
-                                          g_enable_overlaps_hashjoin] {
-    g_enable_overlaps_hashjoin = orig_overlaps_hash_join;
+TEST(QueryHint, QueryHintForBoundingBoxIntersection) {
+  ScopeGuard reset_loop_join_state = [orig_bbox_intersect_hash_join =
+                                          g_enable_bbox_intersect_hashjoin] {
+    g_enable_bbox_intersect_hashjoin = orig_bbox_intersect_hash_join;
   };
-  g_enable_overlaps_hashjoin = true;
+  g_enable_bbox_intersect_hashjoin = true;
 
   {
     const auto q1 =
-        "SELECT /*+ overlaps_bucket_threshold(0.718) */ a.id FROM geospatial_test a "
+        "SELECT /*+ bbox_intersect_bucket_threshold(0.718) */ a.id FROM geospatial_test "
+        "a "
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q1_hints = QR::get()->getParsedQueryHint(q1);
-    EXPECT_TRUE(q1_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold));
-    EXPECT_NEAR(0.718, q1_hints.overlaps_bucket_threshold, EPS * 0.718);
-    EXPECT_TRUE(
-        check_serialized_rel_alg_dag(q1, {{QueryHint::kOverlapsBucketThreshold, false}}));
+    EXPECT_TRUE(q1_hints.isHintRegistered(QueryHint::kBBoxIntersectBucketThreshold));
+    EXPECT_NEAR(0.718, q1_hints.bbox_intersect_bucket_threshold, EPS * 0.718);
+    EXPECT_TRUE(check_serialized_rel_alg_dag(
+        q1, {{QueryHint::kBBoxIntersectBucketThreshold, false}}));
   }
   {
     const auto q2 =
-        "SELECT /*+ overlaps_max_size(2021) */ a.id FROM geospatial_test a INNER JOIN "
+        "SELECT /*+ bbox_intersect_max_size(2021) */ a.id FROM geospatial_test a INNER "
+        "JOIN "
         "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q2_hints = QR::get()->getParsedQueryHint(q2);
-    EXPECT_TRUE(q2_hints.isHintRegistered(QueryHint::kOverlapsMaxSize) &&
-                q2_hints.overlaps_max_size == 2021);
-    EXPECT_TRUE(check_serialized_rel_alg_dag(q2, {{QueryHint::kOverlapsMaxSize, false}}));
+    EXPECT_TRUE(q2_hints.isHintRegistered(QueryHint::kBBoxIntersectMaxSize) &&
+                q2_hints.bbox_intersect_max_size == 2021);
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(q2, {{QueryHint::kBBoxIntersectMaxSize, false}}));
   }
 
   {
     const auto q3 =
-        "SELECT /*+ overlaps_bucket_threshold(0.718), overlaps_max_size(2021) */ a.id "
+        "SELECT /*+ bbox_intersect_bucket_threshold(0.718), "
+        "bbox_intersect_max_size(2021) */ a.id "
         "FROM "
         "geospatial_test a INNER JOIN geospatial_inner_join_test b ON "
         "ST_Contains(b.poly, "
         "a.p);";
     auto q3_hints = QR::get()->getParsedQueryHint(q3);
-    EXPECT_TRUE(q3_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold) &&
-                q3_hints.isHintRegistered(QueryHint::kOverlapsMaxSize) &&
-                q3_hints.overlaps_max_size == 2021);
-    EXPECT_NEAR(0.718, q3_hints.overlaps_bucket_threshold, EPS * 0.718);
+    EXPECT_TRUE(q3_hints.isHintRegistered(QueryHint::kBBoxIntersectBucketThreshold) &&
+                q3_hints.isHintRegistered(QueryHint::kBBoxIntersectMaxSize) &&
+                q3_hints.bbox_intersect_max_size == 2021);
+    EXPECT_NEAR(0.718, q3_hints.bbox_intersect_bucket_threshold, EPS * 0.718);
     EXPECT_TRUE(
         check_serialized_rel_alg_dag(q3,
-                                     {{QueryHint::kOverlapsBucketThreshold, false},
-                                      {QueryHint::kOverlapsMaxSize, false}}));
+                                     {{QueryHint::kBBoxIntersectBucketThreshold, false},
+                                      {QueryHint::kBBoxIntersectMaxSize, false}}));
   }
 
   {
     const auto query =
-        R"(SELECT /*+ overlaps_allow_gpu_build */ a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);)";
+        R"(SELECT /*+ bbox_intersect_allow_gpu_build */ a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);)";
     const auto hints = QR::get()->getParsedQueryHint(query);
-    EXPECT_TRUE(hints.isHintRegistered(QueryHint::kOverlapsAllowGpuBuild));
-    EXPECT_TRUE(hints.overlaps_allow_gpu_build);
+    EXPECT_TRUE(hints.isHintRegistered(QueryHint::kBBoxIntersectAllowGpuBuild));
+    EXPECT_TRUE(hints.bbox_intersect_allow_gpu_build);
     EXPECT_TRUE(check_serialized_rel_alg_dag(
-        query, {{QueryHint::kOverlapsAllowGpuBuild, false}}));
+        query, {{QueryHint::kBBoxIntersectAllowGpuBuild, false}}));
   }
   {
     const auto q4 =
-        "SELECT /*+ overlaps_bucket_threshold(0.1) */ a.id FROM geospatial_test a "
+        "SELECT /*+ bbox_intersect_bucket_threshold(0.1) */ a.id FROM geospatial_test a "
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q4_hints = QR::get()->getParsedQueryHint(q4);
-    EXPECT_TRUE(q4_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold));
-    EXPECT_NEAR(0.1, q4_hints.overlaps_bucket_threshold, EPS * 0.1);
+    EXPECT_TRUE(q4_hints.isHintRegistered(QueryHint::kBBoxIntersectBucketThreshold));
+    EXPECT_NEAR(0.1, q4_hints.bbox_intersect_bucket_threshold, EPS * 0.1);
   }
   {
     const auto q5 =
-        "SELECT /*+ overlaps_keys_per_bin(0.1) */ a.id FROM geospatial_test a "
+        "SELECT /*+ bbox_intersect_keys_per_bin(0.1) */ a.id FROM geospatial_test a "
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q5_hints = QR::get()->getParsedQueryHint(q5);
-    EXPECT_TRUE(q5_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin));
-    EXPECT_NEAR(0.1, q5_hints.overlaps_keys_per_bin, EPS * 0.1);
+    EXPECT_TRUE(q5_hints.isHintRegistered(QueryHint::kBBoxIntersectKeysPerBin));
+    EXPECT_NEAR(0.1, q5_hints.bbox_intersect_keys_per_bin, EPS * 0.1);
     EXPECT_TRUE(
-        check_serialized_rel_alg_dag(q5, {{QueryHint::kOverlapsKeysPerBin, false}}));
+        check_serialized_rel_alg_dag(q5, {{QueryHint::kBBoxIntersectKeysPerBin, false}}));
   }
   {
     const auto q6 =
-        "SELECT /*+ overlaps_keys_per_bin(19980909.01) */ a.id FROM geospatial_test a "
+        "SELECT /*+ bbox_intersect_keys_per_bin(19980909.01) */ a.id FROM "
+        "geospatial_test a "
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q6_hints = QR::get()->getParsedQueryHint(q6);
-    EXPECT_TRUE(q6_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin));
-    EXPECT_NEAR(19980909.01, q6_hints.overlaps_keys_per_bin, EPS * 19980909.01);
+    EXPECT_TRUE(q6_hints.isHintRegistered(QueryHint::kBBoxIntersectKeysPerBin));
+    EXPECT_NEAR(19980909.01, q6_hints.bbox_intersect_keys_per_bin, EPS * 19980909.01);
   }
 
   {
@@ -314,46 +319,51 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
 
   {
     const auto wrong_q1 =
-        "SELECT /*+ overlaps_bucket_threshold(-0.718) */ a.id FROM geospatial_test a "
+        "SELECT /*+ bbox_intersect_bucket_threshold(-0.718) */ a.id FROM geospatial_test "
+        "a "
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto wrong_q1_hints = QR::get()->getParsedQueryHint(wrong_q1);
-    EXPECT_TRUE(!wrong_q1_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold));
+    EXPECT_TRUE(
+        !wrong_q1_hints.isHintRegistered(QueryHint::kBBoxIntersectBucketThreshold));
   }
 
   {
     const auto wrong_q2 =
-        "SELECT /*+ overlaps_bucket_threshold(91.718) */ a.id FROM geospatial_test a "
+        "SELECT /*+ bbox_intersect_bucket_threshold(91.718) */ a.id FROM geospatial_test "
+        "a "
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto wrong_q2_hints = QR::get()->getParsedQueryHint(wrong_q2);
-    EXPECT_TRUE(!wrong_q2_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold));
+    EXPECT_TRUE(
+        !wrong_q2_hints.isHintRegistered(QueryHint::kBBoxIntersectBucketThreshold));
   }
 
   {
     const auto wrong_q3 =
-        "SELECT /*+ overlaps_max_size(-2021) */ a.id FROM geospatial_test a INNER "
+        "SELECT /*+ bbox_intersect_max_size(-2021) */ a.id FROM geospatial_test a INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto wrong_q3_hints = QR::get()->getParsedQueryHint(wrong_q3);
-    EXPECT_TRUE(!wrong_q3_hints.isHintRegistered(QueryHint::kOverlapsMaxSize));
+    EXPECT_TRUE(!wrong_q3_hints.isHintRegistered(QueryHint::kBBoxIntersectMaxSize));
   }
   {
     const auto wrong_q4 =
-        "SELECT /*+ overlaps_keys_per_bin(-0.1) */ a.id FROM geospatial_test a INNER "
+        "SELECT /*+ bbox_intersect_keys_per_bin(-0.1) */ a.id FROM geospatial_test a "
+        "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto wrong_q4_hints = QR::get()->getParsedQueryHint(wrong_q4);
-    EXPECT_TRUE(!wrong_q4_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin));
+    EXPECT_TRUE(!wrong_q4_hints.isHintRegistered(QueryHint::kBBoxIntersectKeysPerBin));
   }
   {
-    // overlaps_keys_per_bin needs to below then DOUBLE_MAX
+    // bbox_intersect_keys_per_bin needs to below then DOUBLE_MAX
     auto double_max = std::to_string(std::numeric_limits<double>::max());
     const auto wrong_q5 =
-        "SELECT /*+ overlaps_keys_per_bin(" + double_max +
+        "SELECT /*+ bbox_intersect_keys_per_bin(" + double_max +
         ") */ a.id "
         "FROM geospatial_test a INNER JOIN geospatial_inner_join_test b "
         "ON ST_Contains(b.poly, a.p);";
     auto wrong_q5_hints = QR::get()->getParsedQueryHint(wrong_q5);
-    EXPECT_TRUE(!wrong_q5_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin));
+    EXPECT_TRUE(!wrong_q5_hints.isHintRegistered(QueryHint::kBBoxIntersectKeysPerBin));
   }
 }
 
@@ -624,174 +634,184 @@ TEST(QueryHint, WindowFunction) {
             static_cast<size_t>(7));
 }
 
-TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
-  ScopeGuard reset_loop_join_state = [orig_overlaps_hash_join =
-                                          g_enable_overlaps_hashjoin] {
-    g_enable_overlaps_hashjoin = orig_overlaps_hash_join;
+TEST(QueryHint, GlobalHint_BoundingBox_Intersect) {
+  ScopeGuard reset_loop_join_state = [orig_bbox_intersect_hash_join =
+                                          g_enable_bbox_intersect_hashjoin] {
+    g_enable_bbox_intersect_hashjoin = orig_bbox_intersect_hash_join;
   };
-  g_enable_overlaps_hashjoin = true;
+  g_enable_bbox_intersect_hashjoin = true;
 
-  // testing global query hint for overlaps join is tricky since we apply all registered
-  // hint during hashtable building time, so it's hard to get the result at that time
-  // instead by exploiting cached hashtable we can check whether hints are registered &
-  // applied correctly in indirect manner
+  // testing global query hint for bounding box intersection is tricky since we apply all
+  // registered hint during hashtable building time, so it's hard to get the result at
+  // that time instead by exploiting cached hashtable we can check whether hints are
+  // registered & applied correctly in indirect manner
 
   // q1 and q2: global query hint registered to the main query block
   const auto q1 =
-      "SELECT /*+ g_overlaps_no_cache */ t1.ID FROM (SELECT a.id FROM geospatial_test a "
+      "SELECT /*+ g_bbox_intersect_no_cache */ t1.ID FROM (SELECT a.id FROM "
+      "geospatial_test a "
       "INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T1;";
   {
     auto res = run_query(q1, ExecutorDeviceType::CPU);
-    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
-        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
-    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(0));
-    EXPECT_TRUE(check_serialized_rel_alg_dag(q1, {{QueryHint::kOverlapsNoCache, true}}));
+    auto numCachedBBoxIntersectHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT);
+    EXPECT_EQ(numCachedBBoxIntersectHashTable, static_cast<size_t>(0));
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(q1, {{QueryHint::kBBoxIntersectNoCache, true}}));
   }
 
   if (QR::get()->gpusPresent()) {
     const auto q2 =
-        "SELECT /*+ g_overlaps_allow_gpu_build */ t1.ID FROM (SELECT a.id FROM "
+        "SELECT /*+ g_bbox_intersect_allow_gpu_build */ t1.ID FROM (SELECT a.id FROM "
         "geospatial_test a INNER JOIN geospatial_inner_join_test b ON "
         "ST_Contains(b.poly, a.p)) T1;";
     auto res = run_query(q2, ExecutorDeviceType::GPU);
-    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
-        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
-    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(0));
-    EXPECT_TRUE(
-        check_serialized_rel_alg_dag(q2, {{QueryHint::kOverlapsAllowGpuBuild, true}}));
+    auto numCachedBBoxIntersectHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT);
+    EXPECT_EQ(numCachedBBoxIntersectHashTable, static_cast<size_t>(0));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(
+        q2, {{QueryHint::kBBoxIntersectAllowGpuBuild, true}}));
   }
 
-  // q3 and q4: two (e.g., multiple) subqueries and we disallow to put hashtable to cache
-  // for one of them so we should have just a single overlaps join hashtable with
-  // registered global hint
+  // q3 and q4: two (e.g., multiple) subqueries and we disallow to put hashtable to
+  // cache for one of them so we should have just a single hashtable for bounding box
+  // intersect with registered global hint
   std::set<QueryPlanHash> visited_hashtable_key;
   const auto q3 =
-      "SELECT /*+ g_overlaps_max_size(7777) */ t1.ID, t2.ID FROM \n"
+      "SELECT /*+ g_bbox_intersect_max_size(7777) */ t1.ID, t2.ID FROM \n"
       "(SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON "
       "ST_Contains(b.poly, a.p)) T1, \n"
-      "(SELECT /*+ overlaps_no_cache */ a.id FROM geospatial_test a INNER JOIN "
+      "(SELECT /*+ bbox_intersect_no_cache */ a.id FROM geospatial_test a INNER JOIN "
       "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T2 \n"
       "WHERE t1.ID = t2.ID;";
   {
     auto res = run_query(q3, ExecutorDeviceType::CPU);
     auto cached_ht_info =
-        getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+        getCachedHashTable(visited_hashtable_key, CacheItemType::BBOX_INTERSECT_HT);
     auto query_hint = cached_ht_info.second;
     EXPECT_TRUE(query_hint.has_value());
-    EXPECT_EQ(query_hint->overlaps_max_size, static_cast<size_t>(7777));
-    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
-        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
-    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
+    EXPECT_EQ(query_hint->bbox_intersect_max_size, static_cast<size_t>(7777));
+    auto numCachedBBoxIntersectHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT);
+    EXPECT_EQ(numCachedBBoxIntersectHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
-    EXPECT_TRUE(check_serialized_rel_alg_dag(
-        q3, {{QueryHint::kOverlapsNoCache, false}, {QueryHint::kOverlapsMaxSize, true}}));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q3,
+                                             {{QueryHint::kBBoxIntersectNoCache, false},
+                                              {QueryHint::kBBoxIntersectMaxSize, true}}));
   }
 
   if (QR::get()->gpusPresent()) {
     const auto q4 =
-        "SELECT /*+ g_overlaps_bucket_threshold(0.718) */ t1.ID, t2.ID FROM \n"
-        "(SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON "
+        "SELECT /*+ g_bbox_intersect_bucket_threshold(0.718) */ t1.ID, t2.ID FROM \n"
+        "(SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b "
+        "ON "
         "ST_Contains(b.poly, a.p)) T1,\n"
-        "(SELECT /*+ overlaps_allow_gpu_build */ a.id FROM geospatial_test a INNER JOIN "
+        "(SELECT /*+ bbox_intersect_allow_gpu_build */ a.id FROM geospatial_test a "
+        "INNER JOIN "
         "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T2\n"
         "WHERE t1.ID = t2.ID;";
     auto res = run_query(q4, ExecutorDeviceType::GPU);
     auto cached_ht_info =
-        getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+        getCachedHashTable(visited_hashtable_key, CacheItemType::BBOX_INTERSECT_HT);
     auto query_hint = cached_ht_info.second;
     EXPECT_TRUE(query_hint.has_value());
-    EXPECT_NEAR(0.718, query_hint->overlaps_bucket_threshold, EPS * 0.718);
-    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
-        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
-    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
+    EXPECT_NEAR(0.718, query_hint->bbox_intersect_bucket_threshold, EPS * 0.718);
+    auto numCachedBBoxIntersectHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT);
+    EXPECT_EQ(numCachedBBoxIntersectHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
     EXPECT_TRUE(
         check_serialized_rel_alg_dag(q4,
-                                     {{QueryHint::kOverlapsAllowGpuBuild, false},
-                                      {QueryHint::kOverlapsBucketThreshold, true}}));
+                                     {{QueryHint::kBBoxIntersectAllowGpuBuild, false},
+                                      {QueryHint::kBBoxIntersectBucketThreshold, true}}));
   }
 
   // q5, q6 and q7: a subquery block which is allowed to interact with hashtable cache
   // should have the info related to both global and local query hint(s)
   const auto q5 =
-      "SELECT /*+ g_overlaps_keys_per_bin(0.1) */ t1.ID, t2.ID FROM \n"
-      "(SELECT /*+ overlaps_max_size(7777) */ a.id FROM geospatial_test a INNER JOIN "
+      "SELECT /*+ g_bbox_intersect_keys_per_bin(0.1) */ t1.ID, t2.ID FROM \n"
+      "(SELECT /*+ bbox_intersect_max_size(7777) */ a.id FROM geospatial_test a INNER "
+      "JOIN "
       "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T1,\n"
-      "(SELECT /*+ overlaps_no_cache */ a.id FROM geospatial_test a INNER JOIN "
+      "(SELECT /*+ bbox_intersect_no_cache */ a.id FROM geospatial_test a INNER JOIN "
       "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T2\n"
       "WHERE t1.ID = t2.ID;";
   {
     auto res = run_query(q5, ExecutorDeviceType::CPU);
     auto cached_ht_info =
-        getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+        getCachedHashTable(visited_hashtable_key, CacheItemType::BBOX_INTERSECT_HT);
     auto query_hint = cached_ht_info.second;
     EXPECT_TRUE(query_hint.has_value());
-    EXPECT_NEAR(0.1, query_hint->overlaps_keys_per_bin, EPS * 0.1);
-    EXPECT_EQ(query_hint->overlaps_max_size, static_cast<size_t>(7777));
-    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
-        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
-    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
+    EXPECT_NEAR(0.1, query_hint->bbox_intersect_keys_per_bin, EPS * 0.1);
+    EXPECT_EQ(query_hint->bbox_intersect_max_size, static_cast<size_t>(7777));
+    auto numCachedBBoxIntersectHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT);
+    EXPECT_EQ(numCachedBBoxIntersectHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
-    EXPECT_TRUE(check_serialized_rel_alg_dag(q5,
-                                             {{QueryHint::kOverlapsNoCache, false},
-                                              {QueryHint::kOverlapsKeysPerBin, true},
-                                              {QueryHint::kOverlapsMaxSize, false}}));
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(q5,
+                                     {{QueryHint::kBBoxIntersectNoCache, false},
+                                      {QueryHint::kBBoxIntersectKeysPerBin, true},
+                                      {QueryHint::kBBoxIntersectMaxSize, false}}));
   }
 
   const auto q6 =
-      "SELECT /*+ g_overlaps_keys_per_bin(0.1) */ t1.ID, t2.ID FROM \n"
-      "(SELECT /*+ g_overlaps_bucket_threshold(0.718) */ a.id FROM geospatial_test a "
+      "SELECT /*+ g_bbox_intersect_keys_per_bin(0.1) */ t1.ID, t2.ID FROM \n"
+      "(SELECT /*+ g_bbox_intersect_bucket_threshold(0.718) */ a.id FROM "
+      "geospatial_test a "
       "INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T1,\n"
-      "(SELECT /*+ overlaps_no_cache */ a.id FROM geospatial_test a INNER JOIN "
+      "(SELECT /*+ bbox_intersect_no_cache */ a.id FROM geospatial_test a INNER JOIN "
       "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T2\n"
       "WHERE t1.ID = t2.ID;";
   {
     auto res = run_query(q6, ExecutorDeviceType::CPU);
     auto cached_ht_info =
-        getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+        getCachedHashTable(visited_hashtable_key, CacheItemType::BBOX_INTERSECT_HT);
     auto query_hint = cached_ht_info.second;
     EXPECT_TRUE(query_hint.has_value());
-    EXPECT_NEAR(0.1, query_hint->overlaps_keys_per_bin, EPS * 0.1);
-    EXPECT_NEAR(0.718, query_hint->overlaps_bucket_threshold, EPS * 0.718);
-    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
-        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
-    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
+    EXPECT_NEAR(0.1, query_hint->bbox_intersect_keys_per_bin, EPS * 0.1);
+    EXPECT_NEAR(0.718, query_hint->bbox_intersect_bucket_threshold, EPS * 0.718);
+    auto numCachedBBoxIntersectHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT);
+    EXPECT_EQ(numCachedBBoxIntersectHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
     EXPECT_TRUE(
         check_serialized_rel_alg_dag(q6,
-                                     {{QueryHint::kOverlapsNoCache, false},
-                                      {QueryHint::kOverlapsKeysPerBin, true},
-                                      {QueryHint::kOverlapsBucketThreshold, true}}));
+                                     {{QueryHint::kBBoxIntersectNoCache, false},
+                                      {QueryHint::kBBoxIntersectKeysPerBin, true},
+                                      {QueryHint::kBBoxIntersectBucketThreshold, true}}));
   }
 
   const auto q7 =
-      "SELECT /*+ g_overlaps_max_size(7777) */ t1.ID, t2.ID FROM \n"
-      "(SELECT /*+ overlaps_keys_per_bin(0.1) */ a.id FROM geospatial_test a INNER JOIN "
+      "SELECT /*+ g_bbox_intersect_max_size(7777) */ t1.ID, t2.ID FROM \n"
+      "(SELECT /*+ bbox_intersect_keys_per_bin(0.1) */ a.id FROM geospatial_test a "
+      "INNER JOIN "
       "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T1,\n"
-      "(SELECT /*+ overlaps_no_cache */ a.id FROM geospatial_test a INNER JOIN "
+      "(SELECT /*+ bbox_intersect_no_cache */ a.id FROM geospatial_test a INNER JOIN "
       "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T2\n"
       "WHERE t1.ID = t2.ID;";
   {
     auto res = run_query(q7, ExecutorDeviceType::CPU);
     auto cached_ht_info =
-        getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+        getCachedHashTable(visited_hashtable_key, CacheItemType::BBOX_INTERSECT_HT);
     auto query_hint = cached_ht_info.second;
     EXPECT_TRUE(query_hint.has_value());
-    EXPECT_NEAR(0.1, query_hint->overlaps_keys_per_bin, EPS * 0.1);
-    EXPECT_EQ(query_hint->overlaps_max_size, static_cast<size_t>(7777));
-    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
-        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
-    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
+    EXPECT_NEAR(0.1, query_hint->bbox_intersect_keys_per_bin, EPS * 0.1);
+    EXPECT_EQ(query_hint->bbox_intersect_max_size, static_cast<size_t>(7777));
+    auto numCachedBBoxIntersectHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT);
+    EXPECT_EQ(numCachedBBoxIntersectHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
-    EXPECT_TRUE(check_serialized_rel_alg_dag(q7,
-                                             {{QueryHint::kOverlapsNoCache, false},
-                                              {QueryHint::kOverlapsKeysPerBin, false},
-                                              {QueryHint::kOverlapsMaxSize, true}}));
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(q7,
+                                     {{QueryHint::kBBoxIntersectNoCache, false},
+                                      {QueryHint::kBBoxIntersectKeysPerBin, false},
+                                      {QueryHint::kBBoxIntersectMaxSize, true}}));
   }
 }
 
@@ -823,9 +843,11 @@ TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
     EXPECT_TRUE(check_serialized_rel_alg_dag(q2, {{QueryHint::kCpuMode, true}}));
   }
 
-  // check whether we can see not only cpu mode hint but also global columnar output hint
+  // check whether we can see not only cpu mode hint but also global columnar output
+  // hint
   const auto q3 =
-      "SELECT /*+ cpu_mode */ out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT /*+ "
+      "SELECT /*+ cpu_mode */ out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT "
+      "/*+ "
       "g_columnar_output */ key FROM SQL_HINT_DUMMY)));";
   {
     auto query_hints = QR::get()->getParsedQueryHints(q3);
@@ -1009,15 +1031,17 @@ TEST(QueryHint, CudaBlockAndGridSizes) {
         {{QueryHint::kOptCudaBlockAndGridSizes, true}}));
 
     auto query_hint12 = QR::get()->getParsedQueryHint(
-        "SELECT /*+ cuda_opt_block_and_grid_sizes, cuda_block_size(512) */ COUNT(1) FROM "
+        "SELECT /*+ cuda_opt_block_and_grid_sizes, cuda_block_size(512) */ COUNT(1) "
+        "FROM "
         "SQL_HINT_DUMMY");
     EXPECT_TRUE(query_hint12.isHintRegistered(QueryHint::kOptCudaBlockAndGridSizes));
     EXPECT_TRUE(query_hint12.isHintRegistered(QueryHint::kCudaBlockSize));
-    EXPECT_TRUE(check_serialized_rel_alg_dag(
-        "SELECT /*+ cuda_opt_block_and_grid_sizes, cuda_block_size(512) */ COUNT(1) FROM "
-        "SQL_HINT_DUMMY",
-        {{QueryHint::kCudaBlockSize, false},
-         {QueryHint::kOptCudaBlockAndGridSizes, false}}));
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag("SELECT /*+ cuda_opt_block_and_grid_sizes, "
+                                     "cuda_block_size(512) */ COUNT(1) FROM "
+                                     "SQL_HINT_DUMMY",
+                                     {{QueryHint::kCudaBlockSize, false},
+                                      {QueryHint::kOptCudaBlockAndGridSizes, false}}));
 
     // grid_size should be greater or equal to one regardless of query hint value
     auto res4 = QR::get()->runSQL(query_gen(false, "0.000001"), ExecutorDeviceType::GPU);
@@ -1129,14 +1153,16 @@ TEST(QueryHint, LoopJoin) {
       QR::get()->runSQL(loop_join_on_query, ExecutorDeviceType::CPU, false, false));
 
   const auto loop_join_off_query =
-      "SELECT /*+ disable_loop_join */ COUNT(1) FROM JOIN_HINT_TEST R, JOIN_HINT_TEST S;";
+      "SELECT /*+ disable_loop_join */ COUNT(1) FROM JOIN_HINT_TEST R, JOIN_HINT_TEST "
+      "S;";
   auto loop_join_off = QR::get()->getParsedQueryHint(loop_join_off_query);
   EXPECT_TRUE(loop_join_off.isHintRegistered(QueryHint::kDisableLoopJoin));
   EXPECT_ANY_THROW(
       QR::get()->runSQL(loop_join_off_query, ExecutorDeviceType::CPU, false, true));
 
   const auto loop_join_limit_query =
-      "SELECT /*+ loop_join_inner_table_max_num_rows(3) */ COUNT(1) FROM JOIN_HINT_TEST "
+      "SELECT /*+ loop_join_inner_table_max_num_rows(3) */ COUNT(1) FROM "
+      "JOIN_HINT_TEST "
       "R, JOIN_HINT_TEST S;";
   auto loop_join_limit = QR::get()->getParsedQueryHint(loop_join_limit_query);
   EXPECT_TRUE(loop_join_limit.isHintRegistered(QueryHint::kLoopJoinInnerTableMaxNumRows));
@@ -1154,7 +1180,8 @@ TEST(QueryHint, LoopJoin) {
       QR::get()->runSQL(loop_join_limit_query2, ExecutorDeviceType::CPU, false, true));
 
   const auto wrong_query_hint_query =
-      "SELECT /*+ loop_join_inner_table_max_num_rows(-1) */ COUNT(1) FROM JOIN_HINT_TEST "
+      "SELECT /*+ loop_join_inner_table_max_num_rows(-1) */ COUNT(1) FROM "
+      "JOIN_HINT_TEST "
       "R, JOIN_HINT_TEST S;";
   auto wrong_query_hint = QR::get()->getParsedQueryHint(wrong_query_hint_query);
   EXPECT_TRUE(
@@ -1178,13 +1205,15 @@ TEST(QueryHint, JoinHashTableSize) {
   EXPECT_ANY_THROW(
       QR::get()->runSQL(baseline_hash_limit_query, ExecutorDeviceType::CPU, false, true));
 
-  const auto overlaps_join_limit_query =
+  const auto bbox_intersect_join_limit_query =
       "SELECT /*+ max_join_hashtable_size(1) */ COUNT(1) FROM geospatial_test R, "
       "geospatial_test S WHERE ST_DISTANCE(R.p, S.p) < 0.1;";
-  auto overlaps_join_limit = QR::get()->getParsedQueryHint(overlaps_join_limit_query);
-  EXPECT_TRUE(overlaps_join_limit.isHintRegistered(QueryHint::kMaxJoinHashTableSize));
-  EXPECT_ANY_THROW(
-      QR::get()->runSQL(overlaps_join_limit_query, ExecutorDeviceType::CPU, false, true));
+  auto bbox_intersect_join_limit =
+      QR::get()->getParsedQueryHint(bbox_intersect_join_limit_query);
+  EXPECT_TRUE(
+      bbox_intersect_join_limit.isHintRegistered(QueryHint::kMaxJoinHashTableSize));
+  EXPECT_ANY_THROW(QR::get()->runSQL(
+      bbox_intersect_join_limit_query, ExecutorDeviceType::CPU, false, true));
 
   const auto wrong_query_hint_query =
       "SELECT /*+ max_join_hashtable_size(-1) */ COUNT(1) FROM JOIN_HINT_TEST R, "
@@ -1196,7 +1225,8 @@ TEST(QueryHint, JoinHashTableSize) {
 TEST(QueryHint, Subquery) {
   {
     std::string q1 =
-        "select /*+ g_cpu_mode */ count(1) from subquery_test where x in (select x from "
+        "select /*+ g_cpu_mode */ count(1) from subquery_test where x in (select x "
+        "from "
         "subquery_test "
         "where y = (select y from subquery_test where rowid = 1));";
     const auto rel_alg_dag = QR::get()->getRelAlgDag(q1);
@@ -1204,7 +1234,8 @@ TEST(QueryHint, Subquery) {
   }
   {
     std::string q2 =
-        "select count(1) from subquery_test where x in (select /*+ g_cpu_mode */ x from "
+        "select count(1) from subquery_test where x in (select /*+ g_cpu_mode */ x "
+        "from "
         "subquery_test "
         "where y = (select y from subquery_test where rowid = 1));";
     const auto rel_alg_dag = QR::get()->getRelAlgDag(q2);

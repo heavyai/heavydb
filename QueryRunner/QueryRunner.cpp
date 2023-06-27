@@ -1067,8 +1067,8 @@ QueryRunner::getCachedHashtableWithoutCacheKey(std::set<size_t>& visited,
       hash_table_cache = BaselineJoinHashTable::getHashTableCache();
       break;
     }
-    case CacheItemType::OVERLAPS_HT: {
-      hash_table_cache = OverlapsJoinHashTable::getHashTableCache();
+    case CacheItemType::BBOX_INTERSECT_HT: {
+      hash_table_cache = BoundingBoxIntersectJoinHashTable::getHashTableCache();
       break;
     }
     default: {
@@ -1095,8 +1095,8 @@ std::shared_ptr<CacheItemMetric> QueryRunner::getCacheItemMetric(
       hash_table_cache = BaselineJoinHashTable::getHashTableCache();
       break;
     }
-    case CacheItemType::OVERLAPS_HT: {
-      hash_table_cache = OverlapsJoinHashTable::getHashTableCache();
+    case CacheItemType::BBOX_INTERSECT_HT: {
+      hash_table_cache = BoundingBoxIntersectJoinHashTable::getHashTableCache();
       break;
     }
     default: {
@@ -1111,24 +1111,25 @@ std::shared_ptr<CacheItemMetric> QueryRunner::getCacheItemMetric(
 
 size_t QueryRunner::getNumberOfCachedItem(CacheItemStatus item_status,
                                           CacheItemType hash_table_type,
-                                          bool with_overlaps_tuning_param) const {
+                                          bool with_bbox_intersect_tuning_param) const {
   auto get_num_cached_auto_tuner_param = [&item_status]() {
-    auto auto_tuner_cache = OverlapsJoinHashTable::getOverlapsTuningParamCache();
+    auto auto_tuner_cache =
+        BoundingBoxIntersectJoinHashTable::getBoundingBoxIntersectTuningParamCache();
     CHECK(auto_tuner_cache);
     switch (item_status) {
       case CacheItemStatus::ALL: {
         return auto_tuner_cache->getCurrentNumCachedItems(
-            CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
+            CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM,
             DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
       }
       case CacheItemStatus::CLEAN_ONLY: {
         return auto_tuner_cache->getCurrentNumCleanCachedItems(
-            CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
+            CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM,
             DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
       }
       case CacheItemStatus::DIRTY_ONLY: {
         return auto_tuner_cache->getCurrentNumDirtyCachedItems(
-            CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
+            CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM,
             DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
       }
       default: {
@@ -1141,14 +1142,14 @@ size_t QueryRunner::getNumberOfCachedItem(CacheItemStatus item_status,
   auto get_num_cached_hashtable =
       [&item_status,
        &hash_table_type,
-       &with_overlaps_tuning_param,
+       &with_bbox_intersect_tuning_param,
        &get_num_cached_auto_tuner_param](HashtableRecycler* hash_table_cache) {
         switch (item_status) {
           case CacheItemStatus::ALL: {
-            if (with_overlaps_tuning_param) {
+            if (with_bbox_intersect_tuning_param) {
               // we assume additional consideration of turing param cache is only valid
-              // for overlaps join hashtable
-              CHECK_EQ(hash_table_type, CacheItemType::OVERLAPS_HT);
+              // for bounding box intersection
+              CHECK_EQ(hash_table_type, CacheItemType::BBOX_INTERSECT_HT);
               return hash_table_cache->getCurrentNumCachedItems(
                          hash_table_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER) +
                      get_num_cached_auto_tuner_param();
@@ -1157,8 +1158,8 @@ size_t QueryRunner::getNumberOfCachedItem(CacheItemStatus item_status,
                 hash_table_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
           }
           case CacheItemStatus::CLEAN_ONLY: {
-            if (with_overlaps_tuning_param) {
-              CHECK_EQ(hash_table_type, CacheItemType::OVERLAPS_HT);
+            if (with_bbox_intersect_tuning_param) {
+              CHECK_EQ(hash_table_type, CacheItemType::BBOX_INTERSECT_HT);
               return hash_table_cache->getCurrentNumCleanCachedItems(
                          hash_table_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER) +
                      get_num_cached_auto_tuner_param();
@@ -1167,8 +1168,8 @@ size_t QueryRunner::getNumberOfCachedItem(CacheItemStatus item_status,
                 hash_table_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
           }
           case CacheItemStatus::DIRTY_ONLY: {
-            if (with_overlaps_tuning_param) {
-              CHECK_EQ(hash_table_type, CacheItemType::OVERLAPS_HT);
+            if (with_bbox_intersect_tuning_param) {
+              CHECK_EQ(hash_table_type, CacheItemType::BBOX_INTERSECT_HT);
               return hash_table_cache->getCurrentNumDirtyCachedItems(
                          hash_table_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER) +
                      get_num_cached_auto_tuner_param();
@@ -1194,12 +1195,12 @@ size_t QueryRunner::getNumberOfCachedItem(CacheItemStatus item_status,
       CHECK(hash_table_cache);
       return get_num_cached_hashtable(hash_table_cache);
     }
-    case CacheItemType::OVERLAPS_HT: {
-      auto hash_table_cache = OverlapsJoinHashTable::getHashTableCache();
+    case CacheItemType::BBOX_INTERSECT_HT: {
+      auto hash_table_cache = BoundingBoxIntersectJoinHashTable::getHashTableCache();
       CHECK(hash_table_cache);
       return get_num_cached_hashtable(hash_table_cache);
     }
-    case CacheItemType::OVERLAPS_AUTO_TUNER_PARAM: {
+    case CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM: {
       return get_num_cached_auto_tuner_param();
     }
     default: {

@@ -421,7 +421,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
   }
 
   if (IS_COMPARISON(optype)) {
-    if (optype != kOVERLAPS && new_left_type.is_geometry() &&
+    if (optype != kBBOX_INTERSECT && new_left_type.is_geometry() &&
         new_right_type.is_geometry()) {
       throw std::runtime_error(
           "Comparison operators are not yet supported for geospatial types.");

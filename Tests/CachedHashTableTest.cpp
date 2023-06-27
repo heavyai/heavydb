@@ -746,8 +746,8 @@ TEST(Truncate, JoinCacheInvalidationTest) {
   }
 }
 
-TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
-  EXPECT_TRUE(g_enable_overlaps_hashjoin);
+TEST(Truncate, BBoxIntersectCacheInvalidationTest) {
+  EXPECT_TRUE(g_enable_bbox_intersect_hashjoin);
 
   run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_point;");
   run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_poly;");
@@ -778,19 +778,20 @@ TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
     auto count = boost::get<int64_t>(boost::get<ScalarTargetValue>(row[0]));
     EXPECT_EQ(1, count);  // POINT(1 1)
   }
-  EXPECT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            size_t(2));  // bucket threshold and hash table
+  EXPECT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      size_t(2));  // bucket threshold and hash table
 
   run_ddl_statement("TRUNCATE TABLE cache_invalid_poly");
-  EXPECT_EQ(
-      QR::get()->getNumberOfCachedItem(
-          QueryRunner::CacheItemStatus::CLEAN_ONLY, CacheItemType::OVERLAPS_HT, true),
-      size_t(0));
-  EXPECT_EQ(
-      QR::get()->getNumberOfCachedItem(
-          QueryRunner::CacheItemStatus::DIRTY_ONLY, CacheItemType::OVERLAPS_HT, true),
-      size_t(2));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::BBOX_INTERSECT_HT,
+                                             true),
+            size_t(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::BBOX_INTERSECT_HT,
+                                             true),
+            size_t(2));
 
   run_query(
       R"(INSERT INTO cache_invalid_poly VALUES ('MULTIPOLYGON(((0 0, 11 0, 11 11, 0 11, 0 0)))');)",
@@ -799,7 +800,8 @@ TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
   // user provided bucket threshold -- only one additional cache entry
   {
     auto result = QR::get()->runSQL(
-        "SELECT /*+ overlaps_bucket_threshold(0.2) */ count(*) FROM cache_invalid_point "
+        "SELECT /*+ bbox_intersect_bucket_threshold(0.2) */ count(*) FROM "
+        "cache_invalid_point "
         "a, cache_invalid_poly b WHERE "
         "ST_Contains(b.poly, a.pt);",
         ExecutorDeviceType::CPU);
@@ -809,28 +811,29 @@ TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
     auto count = boost::get<int64_t>(boost::get<ScalarTargetValue>(row[0]));
     EXPECT_EQ(2, count);  // POINT(1 1) , POINT(10 10)
   }
-  EXPECT_EQ(QR::get()->getNumberOfCachedItem(
-                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
-            size_t(3));  // bucket threshold and hash table
   EXPECT_EQ(
       QR::get()->getNumberOfCachedItem(
-          QueryRunner::CacheItemStatus::DIRTY_ONLY, CacheItemType::OVERLAPS_HT, true),
-      size_t(2));
-  EXPECT_EQ(
-      QR::get()->getNumberOfCachedItem(
-          QueryRunner::CacheItemStatus::CLEAN_ONLY, CacheItemType::OVERLAPS_HT, true),
-      size_t(1));
+          QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true),
+      size_t(3));  // bucket threshold and hash table
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::BBOX_INTERSECT_HT,
+                                             true),
+            size_t(2));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::BBOX_INTERSECT_HT,
+                                             true),
+            size_t(1));
 
   run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_point;");
   run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_poly;");
-  EXPECT_EQ(
-      QR::get()->getNumberOfCachedItem(
-          QueryRunner::CacheItemStatus::CLEAN_ONLY, CacheItemType::OVERLAPS_HT, true),
-      size_t(0));
-  EXPECT_EQ(
-      QR::get()->getNumberOfCachedItem(
-          QueryRunner::CacheItemStatus::DIRTY_ONLY, CacheItemType::OVERLAPS_HT, true),
-      size_t(3));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::BBOX_INTERSECT_HT,
+                                             true),
+            size_t(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::BBOX_INTERSECT_HT,
+                                             true),
+            size_t(3));
   clearCaches();
 }
 
@@ -1017,8 +1020,8 @@ int main(int argc, char** argv) {
 
   int err{0};
 
-  // enable overlaps hashjoin
-  g_enable_overlaps_hashjoin = true;
+  // enable bounding box intersection
+  g_enable_bbox_intersect_hashjoin = true;
 
   try {
     err = RUN_ALL_TESTS();

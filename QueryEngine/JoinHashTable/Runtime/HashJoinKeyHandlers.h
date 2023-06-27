@@ -130,10 +130,10 @@ struct GenericKeyHandler {
   const int32_t* sd_min_inner_elems_;
 };
 
-struct OverlapsKeyHandler {
-  OverlapsKeyHandler(const size_t key_dims_count,
-                     const JoinColumn* join_column,  // always 1 column
-                     const double* bucket_sizes_for_dimension)
+struct BoundingBoxIntersectKeyHandler {
+  BoundingBoxIntersectKeyHandler(const size_t key_dims_count,
+                                 const JoinColumn* join_column,  // always 1 column
+                                 const double* bucket_sizes_for_dimension)
       : key_dims_count_(key_dims_count)
       , join_column_(join_column)
       , bucket_sizes_for_dimension_(bucket_sizes_for_dimension) {}

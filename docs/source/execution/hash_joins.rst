@@ -87,13 +87,13 @@ In some cases the Keys section can be omitted from the hash join buffer giving p
 
 HeavyDB automatically selects from one of three C++ classes when building a hash join buffer:
 
-============================ ============================= ========================
-C++ Class Name               Layouts                       Selected For
-============================ ============================= ========================
-JoinHashTable                One-To-One or One-To-Many     Perfect hashing
-BaselineJoinHashTable        One-To-One or One-To-Many     Keyed hashing
-OverlapsJoinHashTable        only One-To-Many              Geospatial hashing
-============================ ============================= ========================
+=================================== ============================= ========================
+C++ Class Name                       Layouts                       Selected For
+=================================== ============================= ========================
+JoinHashTable                       One-To-One or One-To-Many     Perfect hashing
+BaselineJoinHashTable               One-To-One or One-To-Many     Keyed hashing
+BoundingBoxIntersectJoinHashTable   only One-To-Many              Geospatial hashing
+=================================== ============================= ========================
 
 =============================
 Inspecting a Hash Join Buffer
@@ -110,96 +110,110 @@ This SQL causes HeavyDB to use one-to-one perfect hashing shown by the very simp
 
     SQL:
       create table table1 (a integer);
-      create table table2 (b integer);
+create table table2(b integer);
 
-      insert into table1 values (1);
-      insert into table1 values (1);
-      insert into table1 values (2);
-      insert into table1 values (3);
-      insert into table1 values (4);
+insert into table1 values(1);
+insert into table1 values(1);
+insert into table1 values(2);
+insert into table1 values(3);
+insert into table1 values(4);
 
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (3);
+insert into table2 values(0);
+insert into table2 values(1);
+insert into table2 values(3);
 
-      select * from table1 join table2 on a = b;
+select* from table1 join table2 on a = b;
 
-    C++ toString():
-      | payloads 0 1 * 2 |
+C++ toString()
+    : | payloads 0 1 * 2 |
 
-One-To-Many JoinHashTable Example
----------------------------------
+    One - To -
+        Many JoinHashTable Example-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-This SQL is nearly identical to the previous example, except that a duplicate record has been added to the second table, causing one-to-many perfect hashing to be selected instead of one-to-one perfect hashing. The one-to-many hashing requires Offsets and Counts sections to be built into the hash join buffer in addition to the Payloads section, and the Offsets section acts as the hash table instead of the Payloads section.
+        This SQL is nearly identical to the previous example
+, except that a duplicate record has been added to the second table
+, causing one - to - many perfect hashing to be selected instead of one - to
+      - one perfect hashing.The one - to -
+      many hashing requires Offsets and Counts sections to be built into the hash join
+      buffer in addition to the Payloads section
+, and the Offsets section acts as the hash table instead of the Payloads section.
 
-    SQL:
-      create table table1 (a integer);
-      create table table2 (b integer);
+  SQL : create table table1(a integer);
+create table table2(b integer);
 
-      insert into table1 values (1);
-      insert into table1 values (1);
-      insert into table1 values (2);
-      insert into table1 values (3);
-      insert into table1 values (4);
+insert into table1 values(1);
+insert into table1 values(1);
+insert into table1 values(2);
+insert into table1 values(3);
+insert into table1 values(4);
 
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (3);
-      insert into table2 values (3);
+insert into table2 values(0);
+insert into table2 values(1);
+insert into table2 values(3);
+insert into table2 values(3);
 
-      select * from table1 join table2 on a = b;
+select* from table1 join table2 on a = b;
 
-    C++ toString():
-      | offsets 0 1 * 2 | counts 1 1 * 2 | payloads 0 1 2 3 |
+C++ toString()
+    : | offsets 0 1 * 2 | counts 1 1 * 2 | payloads 0 1 2 3 |
 
-One-To-One BaselineJoinHashTable Example
-----------------------------------------
+    One - To -
+        One BaselineJoinHashTable Example
+        -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
-Adding a second column to one of the tables, then including that column in the join qualifier (the ``ON`` expression) prevents perfect hashing from being used and requires a Keys section to be built into the hash buffer. As an optimization that is possible with one-to-one hashing, the payloads are interleaved into the keys as if each payload row ID was an additional key component.
+        Adding a second column to one of the tables
+, then including that column in the join
+      qualifier(the ``ON`` expression) prevents perfect hashing from being used
+      and requires a Keys section to be built into the hash buffer.As an
+              optimization that is possible with one
+              - to - one hashing
+, the payloads are interleaved into the keys as
+  if each payload row ID was an additional key component.
 
-    SQL:
-      create table table1 (a1 integer, a2 integer);
-      create table table2 (b integer);
+  SQL : create table table1(a1 integer, a2 integer);
+create table table2(b integer);
 
-      insert into table1 values (1, 11);
-      insert into table1 values (2, 12);
-      insert into table1 values (3, 13);
-      insert into table1 values (4, 14);
+insert into table1 values(1, 11);
+insert into table1 values(2, 12);
+insert into table1 values(3, 13);
+insert into table1 values(4, 14);
 
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (3);
+insert into table2 values(0);
+insert into table2 values(1);
+insert into table2 values(3);
 
-      select * from table1 join table2 on a1 = b and a2-10 = b;
+select* from table1 join table2 on a1 = b and a2 - 10 = b;
 
-    C++ toString():
-      | keys * (1,1,1) (3,3,2) (0,0,0) * * |
+C++ toString()
+    : | keys * (1, 1, 1)(3, 3, 2)(0, 0, 0) * * |
 
-One-To-Many BaselineJoinHashTable Example
------------------------------------------
+    One - To -
+        Many BaselineJoinHashTable Example
+        -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-Adding a duplicate record to the previous example turns the hash join into a one-to-many lookup, requiring all four buffer sections to be built.
+        Adding a duplicate record to the previous example turns the hash join into a one
+        - to - many lookup
+, requiring all four buffer sections to be built.
 
-    SQL:
-      create table table1 (a1 integer, a2 integer);
-      create table table2 (b integer);
+  SQL : create table table1(a1 integer, a2 integer);
+create table table2(b integer);
 
-      insert into table1 values (1, 11);
-      insert into table1 values (2, 12);
-      insert into table1 values (3, 13);
-      insert into table1 values (4, 14);
+insert into table1 values(1, 11);
+insert into table1 values(2, 12);
+insert into table1 values(3, 13);
+insert into table1 values(4, 14);
 
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (3);
-      insert into table2 values (3);
+insert into table2 values(0);
+insert into table2 values(1);
+insert into table2 values(3);
+insert into table2 values(3);
 
-      select * from table1 join table2 on a1 = b and a2-10 = b;
+select* from table1 join table2 on a1 = b and a2 - 10 = b;
 
     C++ toString():
       | keys * (1,1) (3,3) (0,0) * * | offsets * 0 1 3 * * | counts * 1 2 1 * * | payloads 1 2 3 0 |
 
-One-To-Many OverlapsJoinHashTable Example
+One-To-Many JoinHashTable for Bounding Box Intersection Example
 -----------------------------------------
 
 TODO

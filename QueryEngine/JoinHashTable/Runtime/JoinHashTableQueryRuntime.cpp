@@ -200,10 +200,10 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t insert_sorted(int32_t* arr
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
-overlaps_hash_join_idx(int64_t hash_buff,
-                       const int64_t key,
-                       const int64_t min_key,
-                       const int64_t max_key) {
+bbox_intersect_hash_join_idx(int64_t hash_buff,
+                             const int64_t key,
+                             const int64_t min_key,
+                             const int64_t max_key) {
   if (key >= min_key && key <= max_key) {
     return *(reinterpret_cast<int32_t*>(hash_buff) + (key - min_key));
   }
@@ -236,7 +236,7 @@ get_row_id_buffer_ptr(int64_t* hash_table_ptr,
   one_to_many_ptr += offset_buffer_ptr_offset;
 
   // Returns an index used to fetch row count and row ids.
-  const auto slot = overlaps_hash_join_idx(
+  const auto slot = bbox_intersect_hash_join_idx(
       reinterpret_cast<int64_t>(one_to_many_ptr), key_idx, min_key, max_key);
   if (slot < 0) {
     return BufferRange{nullptr, 0};
@@ -245,7 +245,7 @@ get_row_id_buffer_ptr(int64_t* hash_table_ptr,
   // Offset into the row count section of buffer
   int8_t* count_ptr = one_to_many_ptr + sub_buff_size;
 
-  const int64_t matched_row_count = overlaps_hash_join_idx(
+  const int64_t matched_row_count = bbox_intersect_hash_join_idx(
       reinterpret_cast<int64_t>(count_ptr), key_idx, min_key, max_key);
 
   // Offset into payload section, containing an array of row ids
@@ -262,7 +262,7 @@ struct Bounds {
   const double max_Y;
 };
 
-/// Getting overlapping candidates for the overlaps join algorithm
+/// Getting overlapping candidates for the bounding box intersection algorithm
 /// works as follows:
 ///
 /// 1. Take the bounds of the Polygon and use the bucket sizes

@@ -37,11 +37,11 @@ void serialize(Archive& ar, RegisteredQueryHint& query_hint, const unsigned int 
   (ar & query_hint.cuda_block_size);
   (ar & query_hint.cuda_grid_size_multiplier);
   (ar & query_hint.aggregate_tree_fanout);
-  (ar & query_hint.overlaps_bucket_threshold);
-  (ar & query_hint.overlaps_max_size);
-  (ar & query_hint.overlaps_allow_gpu_build);
-  (ar & query_hint.overlaps_no_cache);
-  (ar & query_hint.overlaps_keys_per_bin);
+  (ar & query_hint.bbox_intersect_bucket_threshold);
+  (ar & query_hint.bbox_intersect_max_size);
+  (ar & query_hint.bbox_intersect_allow_gpu_build);
+  (ar & query_hint.bbox_intersect_no_cache);
+  (ar & query_hint.bbox_intersect_keys_per_bin);
   (ar & query_hint.use_loop_join);
   (ar & query_hint.max_join_hash_table_size);
   (ar & query_hint.loop_join_inner_table_max_num_rows);

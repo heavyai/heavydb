@@ -51,7 +51,7 @@ std::vector<InnerOuterOrLoopQual> QueryPlanDagExtractor::normalizeColumnsPair(
     try {
       auto inner_outer_pair =
           HashJoin::normalizeColumnPair(
-              lhs, rhs, temporary_table, condition->is_overlaps_oper())
+              lhs, rhs, temporary_table, condition->is_bbox_intersect_oper())
               .first;
       InnerOuterOrLoopQual valid_qual{
           std::make_pair(inner_outer_pair.first, inner_outer_pair.second), false};
@@ -484,7 +484,7 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
       auto qual_bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(join_qual);
       auto join_qual_str = ::toString(join_qual);
       if (qual_bin_oper) {
-        is_geo_join = qual_bin_oper->is_overlaps_oper();
+        is_geo_join = qual_bin_oper->is_bbox_intersect_oper();
         if (join_qual == current_level_join_conditions.quals.front()) {
           // set op_info based on the first qual
           op_info = OpInfo{::toString(qual_bin_oper->get_optype()),

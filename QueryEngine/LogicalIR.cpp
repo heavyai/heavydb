@@ -68,7 +68,7 @@ bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
   if (contains_unsafe_division(bin_expr.get())) {
     return true;
   }
-  if (bin_expr->is_overlaps_oper()) {
+  if (bin_expr->is_bbox_intersect_oper()) {
     return false;
   }
   const auto rhs = bin_expr->get_right_operand();

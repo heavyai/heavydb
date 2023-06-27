@@ -37,7 +37,7 @@
 #include "../../../Shared/funcannotations.h"
 
 struct GenericKeyHandler;
-struct OverlapsKeyHandler;
+struct BoundingBoxIntersectKeyHandler;
 struct RangeKeyHandler;
 
 struct BucketizedHashEntryInfo {
@@ -240,15 +240,16 @@ int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
                                     const int32_t cpu_thread_idx,
                                     const int32_t cpu_thread_count);
 
-int overlaps_fill_baseline_hash_join_buff_32(int8_t* hash_buff,
-                                             const int64_t entry_count,
-                                             const int32_t invalid_slot_val,
-                                             const size_t key_component_count,
-                                             const bool with_val_slot,
-                                             const OverlapsKeyHandler* key_handler,
-                                             const int64_t num_elems,
-                                             const int32_t cpu_thread_idx,
-                                             const int32_t cpu_thread_count);
+int bbox_intersect_fill_baseline_hash_join_buff_32(
+    int8_t* hash_buff,
+    const int64_t entry_count,
+    const int32_t invalid_slot_val,
+    const size_t key_component_count,
+    const bool with_val_slot,
+    const BoundingBoxIntersectKeyHandler* key_handler,
+    const int64_t num_elems,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count);
 
 int range_fill_baseline_hash_join_buff_32(int8_t* hash_buff,
                                           const size_t entry_count,
@@ -271,15 +272,16 @@ int fill_baseline_hash_join_buff_64(int8_t* hash_buff,
                                     const int32_t cpu_thread_idx,
                                     const int32_t cpu_thread_count);
 
-int overlaps_fill_baseline_hash_join_buff_64(int8_t* hash_buff,
-                                             const int64_t entry_count,
-                                             const int32_t invalid_slot_val,
-                                             const size_t key_component_count,
-                                             const bool with_val_slot,
-                                             const OverlapsKeyHandler* key_handler,
-                                             const int64_t num_elems,
-                                             const int32_t cpu_thread_idx,
-                                             const int32_t cpu_thread_count);
+int bbox_intersect_fill_baseline_hash_join_buff_64(
+    int8_t* hash_buff,
+    const int64_t entry_count,
+    const int32_t invalid_slot_val,
+    const size_t key_component_count,
+    const bool with_val_slot,
+    const BoundingBoxIntersectKeyHandler* key_handler,
+    const int64_t num_elems,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count);
 
 int range_fill_baseline_hash_join_buff_64(int8_t* hash_buff,
                                           const size_t entry_count,
@@ -311,14 +313,14 @@ void fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
                                                const GenericKeyHandler* key_handler,
                                                const int64_t num_elems);
 
-void overlaps_fill_baseline_hash_join_buff_on_device_64(
+void bbox_intersect_fill_baseline_hash_join_buff_on_device_64(
     int8_t* hash_buff,
     const int64_t entry_count,
     const int32_t invalid_slot_val,
     const size_t key_component_count,
     const bool with_val_slot,
     int* dev_err_buff,
-    const OverlapsKeyHandler* key_handler,
+    const BoundingBoxIntersectKeyHandler* key_handler,
     const int64_t num_elems);
 
 void range_fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
@@ -377,11 +379,11 @@ void fill_one_to_many_baseline_hash_table_on_device_64(
     const int64_t num_elems,
     const bool for_window_framing);
 
-void overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
+void bbox_intersect_fill_one_to_many_baseline_hash_table_on_device_64(
     int32_t* buff,
     const int64_t* composite_key_dict,
     const int64_t hash_entry_count,
-    const OverlapsKeyHandler* key_handler,
+    const BoundingBoxIntersectKeyHandler* key_handler,
     const int64_t num_elems);
 
 void range_fill_one_to_many_baseline_hash_table_on_device_64(
@@ -398,7 +400,7 @@ void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,
                                  const std::vector<JoinColumnTypeInfo>& type_info_per_key,
                                  const int thread_count);
 
-void approximate_distinct_tuples_overlaps(
+void approximate_distinct_tuples_bbox_intersect(
     uint8_t* hll_buffer_all_cpus,
     std::vector<int32_t>& row_counts,
     const uint32_t b,
@@ -424,11 +426,12 @@ void approximate_distinct_tuples_on_device(uint8_t* hll_buffer,
                                            const GenericKeyHandler* key_handler,
                                            const int64_t num_elems);
 
-void approximate_distinct_tuples_on_device_overlaps(uint8_t* hll_buffer,
-                                                    const uint32_t b,
-                                                    int32_t* row_counts_buffer,
-                                                    const OverlapsKeyHandler* key_handler,
-                                                    const int64_t num_elems);
+void approximate_distinct_tuples_on_device_bbox_intersect(
+    uint8_t* hll_buffer,
+    const uint32_t b,
+    int32_t* row_counts_buffer,
+    const BoundingBoxIntersectKeyHandler* key_handler,
+    const int64_t num_elems);
 
 void compute_bucket_sizes_on_cpu(std::vector<double>& bucket_sizes_for_dimension,
                                  const JoinColumn& join_column,

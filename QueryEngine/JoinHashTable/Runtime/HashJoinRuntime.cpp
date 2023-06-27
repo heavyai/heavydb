@@ -1862,15 +1862,16 @@ int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
                                                cpu_thread_count);
 }
 
-int overlaps_fill_baseline_hash_join_buff_32(int8_t* hash_buff,
-                                             const int64_t entry_count,
-                                             const int32_t invalid_slot_val,
-                                             const size_t key_component_count,
-                                             const bool with_val_slot,
-                                             const OverlapsKeyHandler* key_handler,
-                                             const int64_t num_elems,
-                                             const int32_t cpu_thread_idx,
-                                             const int32_t cpu_thread_count) {
+int bbox_intersect_fill_baseline_hash_join_buff_32(
+    int8_t* hash_buff,
+    const int64_t entry_count,
+    const int32_t invalid_slot_val,
+    const size_t key_component_count,
+    const bool with_val_slot,
+    const BoundingBoxIntersectKeyHandler* key_handler,
+    const int64_t num_elems,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count) {
   return fill_baseline_hash_join_buff<int32_t>(hash_buff,
                                                entry_count,
                                                invalid_slot_val,
@@ -1926,15 +1927,16 @@ int fill_baseline_hash_join_buff_64(int8_t* hash_buff,
                                                cpu_thread_count);
 }
 
-int overlaps_fill_baseline_hash_join_buff_64(int8_t* hash_buff,
-                                             const int64_t entry_count,
-                                             const int32_t invalid_slot_val,
-                                             const size_t key_component_count,
-                                             const bool with_val_slot,
-                                             const OverlapsKeyHandler* key_handler,
-                                             const int64_t num_elems,
-                                             const int32_t cpu_thread_idx,
-                                             const int32_t cpu_thread_count) {
+int bbox_intersect_fill_baseline_hash_join_buff_64(
+    int8_t* hash_buff,
+    const int64_t entry_count,
+    const int32_t invalid_slot_val,
+    const size_t key_component_count,
+    const bool with_val_slot,
+    const BoundingBoxIntersectKeyHandler* key_handler,
+    const int64_t num_elems,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count) {
   return fill_baseline_hash_join_buff<int64_t>(hash_buff,
                                                entry_count,
                                                invalid_slot_val,
@@ -2022,7 +2024,7 @@ void fill_one_to_many_baseline_hash_table(
            &join_column_per_key,
            cpu_thread_idx,
            cpu_thread_count] {
-            const auto key_handler = OverlapsKeyHandler(
+            const auto key_handler = BoundingBoxIntersectKeyHandler(
                 join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.size(),
                 &join_column_per_key[0],
                 join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.data());
@@ -2131,7 +2133,7 @@ void fill_one_to_many_baseline_hash_table(
            for_window_framing,
            cpu_thread_idx,
            cpu_thread_count] {
-            const auto key_handler = OverlapsKeyHandler(
+            const auto key_handler = BoundingBoxIntersectKeyHandler(
                 join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.size(),
                 &join_column_per_key[0],
                 join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.data());
@@ -2283,7 +2285,7 @@ void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,
   }
 }
 
-void approximate_distinct_tuples_overlaps(
+void approximate_distinct_tuples_bbox_intersect(
     uint8_t* hll_buffer_all_cpus,
     std::vector<int32_t>& row_counts,
     const uint32_t b,
@@ -2310,7 +2312,7 @@ void approximate_distinct_tuples_overlaps(
          thread_count] {
           auto hll_buffer = hll_buffer_all_cpus + thread_idx * padded_size_bytes;
 
-          const auto key_handler = OverlapsKeyHandler(
+          const auto key_handler = BoundingBoxIntersectKeyHandler(
               join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.size(),
               &join_column_per_key[0],
               join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.data());

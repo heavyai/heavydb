@@ -54,7 +54,7 @@
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/InPlaceSort.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
-#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/QueryDispatchQueue.h"
@@ -100,13 +100,13 @@ size_t g_filter_push_down_passing_row_ubound{0};
 bool g_enable_columnar_output{false};
 bool g_enable_left_join_filter_hoisting{true};
 bool g_optimize_row_initialization{true};
-bool g_enable_overlaps_hashjoin{true};
+bool g_enable_bbox_intersect_hashjoin{true};
 size_t g_num_tuple_threshold_switch_to_baseline{100000};
 size_t g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline{100};
 bool g_enable_distance_rangejoin{true};
 bool g_enable_hashjoin_many_to_many{true};
-size_t g_overlaps_max_table_size_bytes{1024 * 1024 * 1024};
-double g_overlaps_target_entries_per_bin{1.3};
+size_t g_bbox_intersect_max_table_size_bytes{1024 * 1024 * 1024};
+double g_bbox_intersect_target_entries_per_bin{1.3};
 bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
 size_t g_default_max_groups_buffer_entry_guess{16384};
@@ -3175,8 +3175,8 @@ bool Executor::skipFragmentPair(
   if (!join_condition) {
     return false;
   }
-  // TODO(adb): support fragment skipping based on the overlaps operator
-  if (join_condition->is_overlaps_oper()) {
+  // TODO(adb): support fragment skipping based on the bounding box intersect operator
+  if (join_condition->is_bbox_intersect_oper()) {
     return false;
   }
   size_t shard_count{0};
@@ -4174,8 +4174,9 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const HashTableBuildDagMap& hashtable_build_dag_map,
     const RegisteredQueryHint& query_hint,
     const TableIdToNodeMap& table_id_to_node_map) {
-  if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
-    return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
+  if (!g_enable_bbox_intersect_hashjoin && qual_bin_oper->is_bbox_intersect_oper()) {
+    return {nullptr,
+            "Bounding box intersection disabled, attempting to fall back to loop join"};
   }
   if (g_enable_dynamic_watchdog && interrupted_.load()) {
     throw QueryExecutionError(ERR_INTERRUPTED);

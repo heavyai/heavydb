@@ -21,7 +21,7 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
-#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/thread_count.h"
@@ -625,7 +625,8 @@ TEST_F(Build, GeoOneToMany1) {
     auto a1 = getSyntheticColumnVar("my_points", "locations", 0, *catalog);
     auto a2 = getSyntheticColumnVar("my_grid", "cells", 1, *catalog);
 
-    auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kOVERLAPS, kONE, a1, a2);
+    auto op =
+        std::make_shared<Analyzer::BinOper>(kBOOLEAN, kBBOX_INTERSECT, kONE, a1, a2);
 
     auto memory_level =
         (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -692,7 +693,8 @@ TEST_F(Build, GeoOneToMany2) {
     auto a1 = getSyntheticColumnVar("my_points", "locations", 0, *catalog);
     auto a2 = getSyntheticColumnVar("my_grid", "cells", 1, *catalog);
 
-    auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kOVERLAPS, kONE, a1, a2);
+    auto op =
+        std::make_shared<Analyzer::BinOper>(kBOOLEAN, kBBOX_INTERSECT, kONE, a1, a2);
 
     auto memory_level =
         (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -1078,7 +1080,7 @@ TEST_F(Other, Regression) {
 }
 
 int main(int argc, char** argv) {
-  ::g_enable_overlaps_hashjoin = true;
+  ::g_enable_bbox_intersect_hashjoin = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 

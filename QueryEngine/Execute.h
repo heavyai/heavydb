@@ -1649,7 +1649,7 @@ class Executor {
   friend class ExecutionKernel;
   friend class KernelSubtask;
   friend class HashJoin;  // cgen_state_
-  friend class OverlapsJoinHashTable;
+  friend class BoundingBoxIntersectJoinHashTable;
   friend class RangeJoinHashTable;
   friend class GroupByAndAggregate;
   friend class QueryCompilationDescriptor;

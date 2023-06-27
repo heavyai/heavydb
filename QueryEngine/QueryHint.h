@@ -30,11 +30,11 @@ enum QueryHint {
   kCpuMode = 0,
   kColumnarOutput,
   kRowwiseOutput,
-  kOverlapsBucketThreshold,
-  kOverlapsMaxSize,
-  kOverlapsAllowGpuBuild,
-  kOverlapsNoCache,
-  kOverlapsKeysPerBin,
+  kBBoxIntersectBucketThreshold,
+  kBBoxIntersectMaxSize,
+  kBBoxIntersectAllowGpuBuild,
+  kBBoxIntersectNoCache,
+  kBBoxIntersectKeysPerBin,
   kKeepResult,
   kKeepTableFuncResult,
   kAggregateTreeFanout,
@@ -61,11 +61,11 @@ static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"cpu_mode", QueryHint::kCpuMode},
     {"columnar_output", QueryHint::kColumnarOutput},
     {"rowwise_output", QueryHint::kRowwiseOutput},
-    {"overlaps_bucket_threshold", QueryHint::kOverlapsBucketThreshold},
-    {"overlaps_max_size", QueryHint::kOverlapsMaxSize},
-    {"overlaps_allow_gpu_build", QueryHint::kOverlapsAllowGpuBuild},
-    {"overlaps_no_cache", QueryHint::kOverlapsNoCache},
-    {"overlaps_keys_per_bin", QueryHint::kOverlapsKeysPerBin},
+    {"bbox_intersect_bucket_threshold", QueryHint::kBBoxIntersectBucketThreshold},
+    {"bbox_intersect_max_size", QueryHint::kBBoxIntersectMaxSize},
+    {"bbox_intersect_allow_gpu_build", QueryHint::kBBoxIntersectAllowGpuBuild},
+    {"bbox_intersect_no_cache", QueryHint::kBBoxIntersectNoCache},
+    {"bbox_intersect_keys_per_bin", QueryHint::kBBoxIntersectKeysPerBin},
     {"keep_result", QueryHint::kKeepResult},
     {"keep_table_function_result", QueryHint::kKeepTableFuncResult},
     {"aggregate_tree_fanout", QueryHint::kAggregateTreeFanout},
@@ -199,11 +199,11 @@ struct RegisteredQueryHint {
       , cuda_grid_size_multiplier(0.0)
       , opt_cuda_grid_and_block_size(false)
       , aggregate_tree_fanout(8)
-      , overlaps_bucket_threshold(std::numeric_limits<double>::max())
-      , overlaps_max_size(g_overlaps_max_table_size_bytes)
-      , overlaps_allow_gpu_build(false)
-      , overlaps_no_cache(false)
-      , overlaps_keys_per_bin(g_overlaps_target_entries_per_bin)
+      , bbox_intersect_bucket_threshold(std::numeric_limits<double>::max())
+      , bbox_intersect_max_size(g_bbox_intersect_max_table_size_bytes)
+      , bbox_intersect_allow_gpu_build(false)
+      , bbox_intersect_no_cache(false)
+      , bbox_intersect_keys_per_bin(g_bbox_intersect_target_entries_per_bin)
       , use_loop_join(std::nullopt)
       , loop_join_inner_table_max_num_rows(g_trivial_loop_join_threshold)
       , max_join_hash_table_size(std::numeric_limits<size_t>::max())
@@ -241,22 +241,23 @@ struct RegisteredQueryHint {
           case QueryHint::kOptCudaBlockAndGridSizes:
             updated_query_hints.opt_cuda_grid_and_block_size = true;
             break;
-          case QueryHint::kOverlapsBucketThreshold:
-            updated_query_hints.overlaps_bucket_threshold =
-                global_hints.overlaps_bucket_threshold;
+          case QueryHint::kBBoxIntersectBucketThreshold:
+            updated_query_hints.bbox_intersect_bucket_threshold =
+                global_hints.bbox_intersect_bucket_threshold;
             break;
-          case QueryHint::kOverlapsMaxSize:
-            updated_query_hints.overlaps_max_size = global_hints.overlaps_max_size;
+          case QueryHint::kBBoxIntersectMaxSize:
+            updated_query_hints.bbox_intersect_max_size =
+                global_hints.bbox_intersect_max_size;
             break;
-          case QueryHint::kOverlapsAllowGpuBuild:
-            updated_query_hints.overlaps_allow_gpu_build = true;
+          case QueryHint::kBBoxIntersectAllowGpuBuild:
+            updated_query_hints.bbox_intersect_allow_gpu_build = true;
             break;
-          case QueryHint::kOverlapsNoCache:
-            updated_query_hints.overlaps_no_cache = true;
+          case QueryHint::kBBoxIntersectNoCache:
+            updated_query_hints.bbox_intersect_no_cache = true;
             break;
-          case QueryHint::kOverlapsKeysPerBin:
-            updated_query_hints.overlaps_keys_per_bin =
-                global_hints.overlaps_keys_per_bin;
+          case QueryHint::kBBoxIntersectKeysPerBin:
+            updated_query_hints.bbox_intersect_keys_per_bin =
+                global_hints.bbox_intersect_keys_per_bin;
             break;
           case QueryHint::kKeepResult:
             updated_query_hints.keep_result = global_hints.keep_result;
@@ -326,12 +327,13 @@ struct RegisteredQueryHint {
   // window function framing
   size_t aggregate_tree_fanout;
 
-  // overlaps hash join
-  double overlaps_bucket_threshold;  // defined in "OverlapsJoinHashTable.h"
-  size_t overlaps_max_size;
-  bool overlaps_allow_gpu_build;
-  bool overlaps_no_cache;
-  double overlaps_keys_per_bin;
+  // bbox_intersect hash join
+  double bbox_intersect_bucket_threshold;  // defined in
+                                           // "BoundingBoxIntersectJoinHashTable.h"
+  size_t bbox_intersect_max_size;
+  bool bbox_intersect_allow_gpu_build;
+  bool bbox_intersect_no_cache;
+  double bbox_intersect_keys_per_bin;
 
   // generic hash join
   std::optional<bool> use_loop_join;

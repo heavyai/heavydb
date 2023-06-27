@@ -79,47 +79,47 @@ TargetValue run_simple_query(const std::string& query_str,
   return crt_row[0];
 }
 
-void drop_tables_for_overlaps_hashjoin() {
-  const auto cleanup_stmts = {R"(drop table if exists overlaps_t11;)",
-                              R"(drop table if exists overlaps_t12;)",
-                              R"(drop table if exists overlaps_t13;)",
-                              R"(drop table if exists overlaps_t2;)",
-                              R"(drop table if exists overlaps_t3;)",
-                              R"(drop table if exists overlaps_t4;)"};
+void drop_tables_for_bbox_intersect() {
+  const auto cleanup_stmts = {R"(drop table if exists bbox_intersect_t11;)",
+                              R"(drop table if exists bbox_intersect_t12;)",
+                              R"(drop table if exists bbox_intersect_t13;)",
+                              R"(drop table if exists bbox_intersect_t2;)",
+                              R"(drop table if exists bbox_intersect_t3;)",
+                              R"(drop table if exists bbox_intersect_t4;)"};
 
   for (const auto& stmt : cleanup_stmts) {
     QR::get()->runDDLStatement(stmt);
   }
 }
 
-void create_table_for_overlaps_hashjoin() {
+void create_table_for_bbox_intersect() {
   const auto init_stmts_ddl = {
-      R"(create table overlaps_t11 (id int,
+      R"(create table bbox_intersect_t11 (id int,
                         poly geometry(polygon, 4326),
                         mpoly geometry(multipolygon, 4326),
                         pt geometry(point, 4326));
     )",
-      R"(create table overlaps_t12 (id int,
+      R"(create table bbox_intersect_t12 (id int,
                         poly geometry(polygon, 4326),
                         mpoly geometry(multipolygon, 4326),
                         pt geometry(point, 4326));
     )",
-      R"(create table overlaps_t13 (id int,
+      R"(create table bbox_intersect_t13 (id int,
                         poly geometry(polygon, 4326),
                         mpoly geometry(multipolygon, 4326),
                         pt geometry(point, 4326));
     )",
-      R"(create table overlaps_t2 (id int,
+      R"(create table bbox_intersect_t2 (id int,
                         poly geometry(polygon, 4326),
                         mpoly geometry(multipolygon, 4326),
                         pt geometry(point, 4326));
     )",
-      R"(create table overlaps_t3 (id int,
+      R"(create table bbox_intersect_t3 (id int,
                         poly geometry(polygon, 4326),
                         mpoly geometry(multipolygon, 4326),
                         pt geometry(point, 4326));
     )",
-      R"(create table overlaps_t4 (id int,
+      R"(create table bbox_intersect_t4 (id int,
                         poly geometry(polygon, 4326),
                         mpoly geometry(multipolygon, 4326),
                         pt geometry(point, 4326));
@@ -130,27 +130,31 @@ void create_table_for_overlaps_hashjoin() {
   }
 }
 
-void insert_dml_for_overlaps_hashjoin() {
+void insert_dml_for_bbox_intersect() {
   std::string value_str =
       "(0,'polygon((20 20,30 25,30 30,25 30,20 20))','multipolygon(((20 20,30 25,30 "
       "30,25 30,20 2)))','point(22 22)');";
-  std::string overlaps_val1 =
+  std::string bbox_intersect_val1 =
       " values (0,'polygon((20 20,30 25,30 30,25 30,20 "
       "20))','multipolygon(((20 20,30 25,30 30,25 30,20 2)))','point(22 22)')";
-  std::string overlaps_val2 =
+  std::string bbox_intersect_val2 =
       " values (1,'polygon((2 2,10 2,10 10,2 10,2 2))', "
       "'multipolygon(((2 2,10 2,10 10,2 10,2 2)))', 'point(8 8)')";
   auto insert_stmt = [&value_str](const std::string& tbl_name) {
     return "INSERT INTO " + tbl_name + " VALUES " + value_str;
   };
-  std::vector<std::string> tbl_names1{"overlaps_t11", "overlaps_t12", "overlaps_t13"};
-  std::vector<std::string> tbl_names2{"overlaps_t2", "overlaps_t3", "overlaps_t4"};
+  std::vector<std::string> tbl_names1{
+      "bbox_intersect_t11", "bbox_intersect_t12", "bbox_intersect_t13"};
+  std::vector<std::string> tbl_names2{
+      "bbox_intersect_t2", "bbox_intersect_t3", "bbox_intersect_t4"};
   for (const std::string& tbl_name : tbl_names1) {
     QR::get()->runSQL(insert_stmt(tbl_name), ExecutorDeviceType::CPU);
   }
   for (const std::string& tbl_name : tbl_names2) {
-    QR::get()->runSQL("insert into " + tbl_name + overlaps_val1, ExecutorDeviceType::CPU);
-    QR::get()->runSQL("insert into " + tbl_name + overlaps_val2, ExecutorDeviceType::CPU);
+    QR::get()->runSQL("insert into " + tbl_name + bbox_intersect_val1,
+                      ExecutorDeviceType::CPU);
+    QR::get()->runSQL("insert into " + tbl_name + bbox_intersect_val2,
+                      ExecutorDeviceType::CPU);
   }
 }
 
@@ -161,7 +165,7 @@ int drop_table() {
     run_ddl_statement("DROP TABLE IF EXISTS T3;");
     run_ddl_statement("DROP TABLE IF EXISTS T4;");
     run_ddl_statement("DROP TABLE IF EXISTS TF_TEST;");
-    drop_tables_for_overlaps_hashjoin();
+    drop_tables_for_bbox_intersect();
   } catch (...) {
     LOG(ERROR) << "Failed to drop table";
     return -1;
@@ -206,8 +210,8 @@ int create_and_populate_table() {
       QR::get()->runSQL(insert_dml + v + ", " + v + ");", ExecutorDeviceType::CPU);
     }
 
-    create_table_for_overlaps_hashjoin();
-    insert_dml_for_overlaps_hashjoin();
+    create_table_for_bbox_intersect();
+    insert_dml_for_bbox_intersect();
 
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table";
@@ -227,7 +231,7 @@ std::shared_ptr<CacheItemMetric> getCachedHashTableMetric(
       cache_key, cache_item_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
 }
 
-struct OverlapsCachedHTAndMetaInfo {
+struct BBoxIntersectCachedHTAndMetaInfo {
   QueryPlanHash key;
   std::shared_ptr<HashTable> cached_ht;
   std::optional<HashtableCacheMetaInfo> cached_ht_metainfo;
@@ -235,20 +239,23 @@ struct OverlapsCachedHTAndMetaInfo {
   std::optional<AutoTunerMetaInfo> cached_tuning_info;
 };
 
-OverlapsCachedHTAndMetaInfo getCachedOverlapsHashTableWithItsTuningParam(
+BBoxIntersectCachedHTAndMetaInfo
+getCachedHashTableForBoundingBoxIntersectWithItsTuningParam(
     std::set<QueryPlanHash>& already_visited) {
   auto cached_ht = QR::get()->getCachedHashtableWithoutCacheKey(
       already_visited,
-      CacheItemType::OVERLAPS_HT,
+      CacheItemType::BBOX_INTERSECT_HT,
       DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
   auto cache_key = std::get<0>(cached_ht);
   already_visited.insert(cache_key);
-  auto ht_metric = QR::get()->getCacheItemMetric(
-      cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  auto tuning_param_cache = OverlapsJoinHashTable::getOverlapsTuningParamCache();
+  auto ht_metric = QR::get()->getCacheItemMetric(cache_key,
+                                                 CacheItemType::BBOX_INTERSECT_HT,
+                                                 DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto tuning_param_cache =
+      BoundingBoxIntersectJoinHashTable::getBoundingBoxIntersectTuningParamCache();
   auto tuning_param =
       tuning_param_cache->getItemFromCache(cache_key,
-                                           CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
+                                           CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM,
                                            DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
   return {
       cache_key, std::get<1>(cached_ht), std::get<2>(cached_ht), ht_metric, tuning_param};
@@ -438,7 +445,7 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   auto& DAG_CACHE = executor->getQueryPlanDagCache();
 
   auto original_DAG_cache_max_size = MAX_NODE_CACHE_SIZE;
-  ScopeGuard reset_overlaps_state = [&original_DAG_cache_max_size, &DAG_CACHE] {
+  ScopeGuard reset_dag_state = [&original_DAG_cache_max_size, &DAG_CACHE] {
     DAG_CACHE.setNodeMapMaxSize(original_DAG_cache_max_size);
   };
 
@@ -489,21 +496,21 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   EXPECT_GE(DAG_CACHE.getCurrentNodeMapSize(), 48u);
 }
 
-TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
-  ScopeGuard reset_overlaps_state =
-      [orig_overlaps_hashjoin_state = g_enable_overlaps_hashjoin,
+TEST(DataRecycler, Hashtable_For_BBox_Intersect_Cache_Maintanence) {
+  ScopeGuard reset_state =
+      [orig_bbox_hashjoin_state = g_enable_bbox_intersect_hashjoin,
        orig_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many,
        orig_trivial_loop_join_threshold = g_trivial_loop_join_threshold,
        orig_table_reordering_state = g_from_table_reordering] {
-        g_enable_overlaps_hashjoin = orig_overlaps_hashjoin_state;
-        g_enable_overlaps_hashjoin = orig_hashjoin_many_to_many_state;
+        g_enable_bbox_intersect_hashjoin = orig_bbox_hashjoin_state;
+        g_enable_bbox_intersect_hashjoin = orig_hashjoin_many_to_many_state;
         g_trivial_loop_join_threshold = orig_trivial_loop_join_threshold;
         g_from_table_reordering = orig_table_reordering_state;
       };
-  g_enable_overlaps_hashjoin = true;
+  g_enable_bbox_intersect_hashjoin = true;
   g_enable_hashjoin_many_to_many = true;
   g_trivial_loop_join_threshold = 1;
-  // we need to disable table reordering to control our overlaps hash join logic
+  // we need to disable table reordering to control our logic
   g_from_table_reordering = false;
 
   std::set<QueryPlanHash> visited_hashtable_key;
@@ -525,13 +532,13 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
       clearCaches();
 
       auto q1 =
-          R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
       EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
-      auto q1_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+                                                 CacheItemType::BBOX_INTERSECT_HT));
+      auto q1_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
       auto ht1_ref_count_v1 = q1_ht_metrics->getRefCount();
       EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_metrics->getMemSize());
@@ -539,11 +546,11 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
       auto ht1_ref_count_v2 = q1_ht_metrics->getRefCount();
       EXPECT_LT(ht1_ref_count_v1, ht1_ref_count_v2);
       auto q2 =
-          R"(SELECT count(*) from overlaps_t13 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t13 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
       EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
+                                                 CacheItemType::BBOX_INTERSECT_HT));
       auto ht1_ref_count_v3 = q1_ht_metrics->getRefCount();
       EXPECT_LT(ht1_ref_count_v2, ht1_ref_count_v3);
     }
@@ -552,18 +559,18 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
       // test2. cache t11 and t12
       clearCaches();
       auto q1 =
-          R"(SELECT count(*) from overlaps_t11 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t11 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
       EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
+                                                 CacheItemType::BBOX_INTERSECT_HT));
 
       auto q2 =
-          R"(SELECT count(*) from overlaps_t11 as b JOIN overlaps_t12 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t11 as b JOIN bbox_intersect_t12 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
       EXPECT_EQ(static_cast<size_t>(2),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
+                                                 CacheItemType::BBOX_INTERSECT_HT));
     }
 
     {
@@ -573,37 +580,37 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
       // and so we need to remove t11's to cache t2's
       // (to check we disallow having more hashtables beyond its capacity)
       const auto original_total_cache_size = g_hashtable_cache_total_bytes;
-      OverlapsJoinHashTable::getHashTableCache()->setTotalCacheSize(
-          CacheItemType::OVERLAPS_HT, 420);
+      BoundingBoxIntersectJoinHashTable::getHashTableCache()->setTotalCacheSize(
+          CacheItemType::BBOX_INTERSECT_HT, 420);
       ScopeGuard reset_cache_status = [&original_total_cache_size] {
-        OverlapsJoinHashTable::getHashTableCache()->setTotalCacheSize(
-            CacheItemType::OVERLAPS_HT, original_total_cache_size);
+        BoundingBoxIntersectJoinHashTable::getHashTableCache()->setTotalCacheSize(
+            CacheItemType::BBOX_INTERSECT_HT, original_total_cache_size);
       };
       clearCaches();
 
       auto q1 =
-          R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
       EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
-      auto q1_overlaps_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
-      auto ht1_ref_count = q1_overlaps_ht_metrics->getRefCount();
+                                                 CacheItemType::BBOX_INTERSECT_HT));
+      auto q1_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
+      auto ht1_ref_count = q1_ht_metrics->getRefCount();
       EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count);
-      EXPECT_EQ(static_cast<size_t>(208), q1_overlaps_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(208), q1_ht_metrics->getMemSize());
 
       auto q2 =
-          R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t2 as b JOIN bbox_intersect_t2 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q2, dt)));
       EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
-      auto q2_overlaps_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
-      auto ht2_ref_count = q2_overlaps_ht_metrics->getRefCount();
+                                                 CacheItemType::BBOX_INTERSECT_HT));
+      auto q2_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
+      auto ht2_ref_count = q2_ht_metrics->getRefCount();
       EXPECT_EQ(static_cast<size_t>(1), ht2_ref_count);
-      EXPECT_EQ(static_cast<size_t>(416), q2_overlaps_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(416), q2_ht_metrics->getMemSize());
     }
 
     {
@@ -611,43 +618,43 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
       // cache t11 and t12 (so total 416 bytes) and then try to cache t2
       // and check whether cache only has t2 (remove t11 and t12 to make a room for t2)
       const auto original_total_cache_size = g_hashtable_cache_total_bytes;
-      OverlapsJoinHashTable::getHashTableCache()->setTotalCacheSize(
-          CacheItemType::OVERLAPS_HT, 500);
+      BoundingBoxIntersectJoinHashTable::getHashTableCache()->setTotalCacheSize(
+          CacheItemType::BBOX_INTERSECT_HT, 500);
       ScopeGuard reset_cache_status = [&original_total_cache_size] {
-        OverlapsJoinHashTable::getHashTableCache()->setTotalCacheSize(
-            CacheItemType::OVERLAPS_HT, original_total_cache_size);
+        BoundingBoxIntersectJoinHashTable::getHashTableCache()->setTotalCacheSize(
+            CacheItemType::BBOX_INTERSECT_HT, original_total_cache_size);
       };
       clearCaches();
 
       auto q1 =
-          R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
       EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
-      auto q1_ht_dag_info =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+                                                 CacheItemType::BBOX_INTERSECT_HT));
+      auto q1_ht_dag_info = getCachedHashTableMetric(visited_hashtable_key,
+                                                     CacheItemType::BBOX_INTERSECT_HT);
 
       auto q2 =
-          R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t12 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t12 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
       EXPECT_EQ(static_cast<size_t>(2),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
-      auto q2_ht_dag_info =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+                                                 CacheItemType::BBOX_INTERSECT_HT));
+      auto q2_ht_dag_info = getCachedHashTableMetric(visited_hashtable_key,
+                                                     CacheItemType::BBOX_INTERSECT_HT);
 
       auto q3 =
-          R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t2 as b JOIN bbox_intersect_t2 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q3, dt)));
       EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
-      auto q3_overlaps_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
-      auto ht2_ref_count = q3_overlaps_ht_metrics->getRefCount();
+                                                 CacheItemType::BBOX_INTERSECT_HT));
+      auto q3_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
+      auto ht2_ref_count = q3_ht_metrics->getRefCount();
       EXPECT_EQ(static_cast<size_t>(1), ht2_ref_count);
-      EXPECT_EQ(static_cast<size_t>(416), q3_overlaps_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(416), q3_ht_metrics->getMemSize());
     }
 
     {
@@ -658,46 +665,46 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
       // if our cache maintenance works correctly, we should remove t12 since it is
       // less frequently reused one
       const auto original_total_cache_size = g_hashtable_cache_total_bytes;
-      OverlapsJoinHashTable::getHashTableCache()->setTotalCacheSize(
-          CacheItemType::OVERLAPS_HT, 650);
+      BoundingBoxIntersectJoinHashTable::getHashTableCache()->setTotalCacheSize(
+          CacheItemType::BBOX_INTERSECT_HT, 650);
       ScopeGuard reset_cache_status = [&original_total_cache_size] {
-        OverlapsJoinHashTable::getHashTableCache()->setTotalCacheSize(
-            CacheItemType::OVERLAPS_HT, original_total_cache_size);
+        BoundingBoxIntersectJoinHashTable::getHashTableCache()->setTotalCacheSize(
+            CacheItemType::BBOX_INTERSECT_HT, original_total_cache_size);
       };
       clearCaches();
 
       auto q1 =
-          R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
       EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
-      auto q1_overlaps_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
-      auto ht1_ref_count = q1_overlaps_ht_metrics->getRefCount();
+                                                 CacheItemType::BBOX_INTERSECT_HT));
+      auto q1_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
+      auto ht1_ref_count = q1_ht_metrics->getRefCount();
       EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count);
-      EXPECT_EQ(static_cast<size_t>(208), q1_overlaps_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(208), q1_ht_metrics->getMemSize());
 
       auto q2 =
-          R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t12 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t12 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
       EXPECT_EQ(static_cast<size_t>(2),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
+                                                 CacheItemType::BBOX_INTERSECT_HT));
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      auto q2_overlaps_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+      auto q2_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
 
       auto q3 =
-          R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t2 as b JOIN bbox_intersect_t2 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q3, dt)));
-      auto q3_overlaps_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
-      EXPECT_LT(static_cast<size_t>(1), q1_overlaps_ht_metrics->getRefCount());
-      EXPECT_EQ(static_cast<size_t>(1), q3_overlaps_ht_metrics->getRefCount());
-      EXPECT_EQ(static_cast<size_t>(416), q3_overlaps_ht_metrics->getMemSize());
+      auto q3_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
+      EXPECT_LT(static_cast<size_t>(1), q1_ht_metrics->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(1), q3_ht_metrics->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(416), q3_ht_metrics->getMemSize());
     }
 
     {
@@ -705,75 +712,76 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
       // and try to cache t11, t12 and t2
       // due to the per item limit, we can cache t11 and t12 but not t2
       const auto original_per_max_hashtable_size = g_max_cacheable_hashtable_size_bytes;
-      OverlapsJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
-          CacheItemType::OVERLAPS_HT, 250);
+      BoundingBoxIntersectJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
+          CacheItemType::BBOX_INTERSECT_HT, 250);
       ScopeGuard reset_cache_status = [&original_per_max_hashtable_size] {
-        OverlapsJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
-            CacheItemType::OVERLAPS_HT, original_per_max_hashtable_size);
+        BoundingBoxIntersectJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
+            CacheItemType::BBOX_INTERSECT_HT, original_per_max_hashtable_size);
       };
       clearCaches();
 
       auto q1 =
-          R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
       EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
-      auto q1_overlaps_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+                                                 CacheItemType::BBOX_INTERSECT_HT));
+      auto q1_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
 
       auto q2 =
-          R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t12 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t12 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
       EXPECT_EQ(static_cast<size_t>(2),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
-      auto q2_overlaps_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+                                                 CacheItemType::BBOX_INTERSECT_HT));
+      auto q2_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
 
       auto q3 =
-          R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t2 as b JOIN bbox_intersect_t2 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q3, dt)));
       EXPECT_EQ(static_cast<size_t>(2),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
-      auto q3_overlaps_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+                                                 CacheItemType::BBOX_INTERSECT_HT));
+      auto q3_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
       auto current_cache_size =
-          OverlapsJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
-              CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+          BoundingBoxIntersectJoinHashTable::getHashTableCache()
+              ->getCurrentCacheSizeForDevice(CacheItemType::BBOX_INTERSECT_HT,
+                                             DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
       EXPECT_EQ(static_cast<size_t>(416), current_cache_size);
     }
 
     {
       clearCaches();
       std::unordered_set<QueryPlanHash> key_set;
-      // Test 7. check whether we can recycle overlaps hash table correctly for st_contain
-      // between mpoly and st_point
+      // Test 7. check whether we can recycle hash table for bbox intersect correctly for
+      // st_contain between mpoly and st_point
       auto q1 =
-          R"(SELECT count(1) FROM overlaps_t11 t2, overlaps_t2 t1 WHERE st_contains(t1.mpoly, t2.pt);)";
+          R"(SELECT count(1) FROM bbox_intersect_t11 t2, bbox_intersect_t2 t1 WHERE st_contains(t1.mpoly, t2.pt);)";
       auto q2 =
-          R"(SELECT count(1) FROM overlaps_t12 t2, overlaps_t3 t1 WHERE st_contains(t1.mpoly, t2.pt);)";
+          R"(SELECT count(1) FROM bbox_intersect_t12 t2, bbox_intersect_t3 t1 WHERE st_contains(t1.mpoly, t2.pt);)";
       auto q3 =
-          R"(SELECT count(1) FROM overlaps_t13 t2, overlaps_t4 t1 WHERE st_contains(t1.mpoly, t2.pt);)";
+          R"(SELECT count(1) FROM bbox_intersect_t13 t2, bbox_intersect_t4 t1 WHERE st_contains(t1.mpoly, t2.pt);)";
       run_simple_query(q1, dt);
-      auto q1_overlaps_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
-      auto q1_key = q1_overlaps_ht_metrics->getQueryPlanHash();
+      auto q1_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
+      auto q1_key = q1_ht_metrics->getQueryPlanHash();
       key_set.insert(q1_key);
       run_simple_query(q2, dt);
-      auto q2_overlaps_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
-      auto q2_key = q2_overlaps_ht_metrics->getQueryPlanHash();
+      auto q2_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
+      auto q2_key = q2_ht_metrics->getQueryPlanHash();
       key_set.insert(q2_key);
       run_simple_query(q3, dt);
-      auto q3_overlaps_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
-      auto q3_key = q3_overlaps_ht_metrics->getQueryPlanHash();
+      auto q3_ht_metrics = getCachedHashTableMetric(visited_hashtable_key,
+                                                    CacheItemType::BBOX_INTERSECT_HT);
+      auto q3_key = q3_ht_metrics->getQueryPlanHash();
       key_set.insert(q3_key);
       EXPECT_EQ(static_cast<size_t>(3),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
+                                                 CacheItemType::BBOX_INTERSECT_HT));
       EXPECT_EQ(static_cast<size_t>(3), key_set.size());
       run_simple_query(q2, dt);
       run_simple_query(q2, dt);
@@ -782,25 +790,25 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
       run_simple_query(q3, dt);
       run_simple_query(q3, dt);
 
-      auto q1_ref_cnt = q1_overlaps_ht_metrics->getRefCount();
-      auto q2_ref_cnt = q2_overlaps_ht_metrics->getRefCount();
-      auto q3_ref_cnt = q3_overlaps_ht_metrics->getRefCount();
+      auto q1_ref_cnt = q1_ht_metrics->getRefCount();
+      auto q2_ref_cnt = q2_ht_metrics->getRefCount();
+      auto q3_ref_cnt = q3_ht_metrics->getRefCount();
       EXPECT_LT(q1_ref_cnt, q2_ref_cnt);
       EXPECT_LT(q2_ref_cnt, q3_ref_cnt);
     }
   }
 }
 
-TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
-  ScopeGuard reset_overlaps_state =
-      [orig_overlaps_hashjoin_state = g_enable_overlaps_hashjoin,
+TEST(DataRecycler, Hashtable_For_BBox_Intersect_Reuse_Per_Parameter) {
+  ScopeGuard reset_state =
+      [orig_bbox_intersect_state = g_enable_bbox_intersect_hashjoin,
        orig_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many,
        orig_trivial_loop_join_threshold = g_trivial_loop_join_threshold] {
-        g_enable_overlaps_hashjoin = orig_overlaps_hashjoin_state;
-        g_enable_overlaps_hashjoin = orig_hashjoin_many_to_many_state;
+        g_enable_bbox_intersect_hashjoin = orig_bbox_intersect_state;
+        g_enable_bbox_intersect_hashjoin = orig_hashjoin_many_to_many_state;
         g_trivial_loop_join_threshold = orig_trivial_loop_join_threshold;
       };
-  g_enable_overlaps_hashjoin = true;
+  g_enable_bbox_intersect_hashjoin = true;
   g_enable_hashjoin_many_to_many = true;
   g_trivial_loop_join_threshold = 1;
   std::set<QueryPlanHash> visited_hashtable_key;
@@ -825,12 +833,13 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
     return true;
   };
 
-  auto compareOverlapsHTParams = [&compareBucketDims](
-                                     const std::optional<OverlapsHashTableMetaInfo> rhs,
-                                     const std::optional<OverlapsHashTableMetaInfo> lhs) {
+  auto compareHTParams = [&compareBucketDims](
+                             const std::optional<BoundingBoxIntersectMetaInfo> rhs,
+                             const std::optional<BoundingBoxIntersectMetaInfo> lhs) {
     return rhs.has_value() && lhs.has_value() &&
-           rhs->overlaps_max_table_size_bytes == lhs->overlaps_max_table_size_bytes &&
-           rhs->overlaps_bucket_threshold == lhs->overlaps_bucket_threshold &&
+           rhs->bbox_intersect_max_table_size_bytes ==
+               lhs->bbox_intersect_max_table_size_bytes &&
+           rhs->bbox_intersect_bucket_threshold == lhs->bbox_intersect_bucket_threshold &&
            compareBucketDims(rhs->bucket_sizes, lhs->bucket_sizes);
   };
 
@@ -838,145 +847,159 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
     // currently we do not support hashtable caching for GPU
     // hashtables of t11, t12, t13: 208 bytes
     // hashtable of t2: 416 bytes
-    // note that we do not compute overlaps join hashtable params if given sql query
+    // note that we do not compute bbox-intersect join hashtable params if given sql query
     // contains bucket_threshold
 
-    // test1. run q1 with different overlaps tuning param hint
+    // test1. run q1 with different bbox-intersect tuning param hint
     // to see whether hashtable recycler utilizes the latest param
     {
       clearCaches();
       auto q1 =
-          R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      EXPECT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedItem(
-                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
+      EXPECT_EQ(
+          static_cast<size_t>(2),
+          QR::get()->getNumberOfCachedItem(
+              QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true));
       auto q1_ht_and_metainfo =
-          getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
+          getCachedHashTableForBoundingBoxIntersectWithItsTuningParam(
+              visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
       EXPECT_TRUE(q1_ht_metainfo.has_value());
-      EXPECT_TRUE(q1_ht_metainfo->overlaps_meta_info.has_value());
+      EXPECT_TRUE(q1_ht_metainfo->bbox_intersect_meta_info.has_value());
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
 
       auto q1_v2 =
-          R"(SELECT /*+ overlaps_bucket_threshold(0.718) */ count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT /*+ bbox_intersect_bucket_threshold(0.718) */ count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1_v2, dt)));
       EXPECT_EQ(static_cast<size_t>(2),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
-      EXPECT_EQ(static_cast<size_t>(3),
-                QR::get()->getNumberOfCachedItem(
-                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
+                                                 CacheItemType::BBOX_INTERSECT_HT));
+      EXPECT_EQ(
+          static_cast<size_t>(3),
+          QR::get()->getNumberOfCachedItem(
+              QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true));
       auto q1_v2_ht_and_metainfo =
-          getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
+          getCachedHashTableForBoundingBoxIntersectWithItsTuningParam(
+              visited_hashtable_key);
       auto q1_v2_ht_metainfo = q1_v2_ht_and_metainfo.cached_ht_metainfo;
       EXPECT_TRUE(q1_v2_ht_metainfo.has_value());
-      EXPECT_TRUE(q1_v2_ht_metainfo->overlaps_meta_info.has_value());
+      EXPECT_TRUE(q1_v2_ht_metainfo->bbox_intersect_meta_info.has_value());
       auto q1_v2_tuning_param = q1_v2_ht_and_metainfo.cached_tuning_info;
       // we do not cache the tuning param if we give a related sql hint
       EXPECT_TRUE(!q1_v2_tuning_param.has_value());
       // due to the hint the same query has different hashtable params
-      EXPECT_TRUE(!compareOverlapsHTParams(q1_ht_metainfo->overlaps_meta_info,
-                                           q1_v2_ht_metainfo->overlaps_meta_info));
+      EXPECT_TRUE(!compareHTParams(q1_ht_metainfo->bbox_intersect_meta_info,
+                                   q1_v2_ht_metainfo->bbox_intersect_meta_info));
       auto q1_v3 =
-          R"(SELECT /*+ overlaps_bucket_threshold(0.909), overlaps_max_size(2021) */ count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT /*+ bbox_intersect_bucket_threshold(0.909), bbox_intersect_max_size(2021) */ count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1_v3, dt)));
       EXPECT_EQ(static_cast<size_t>(3),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
-      EXPECT_EQ(static_cast<size_t>(4),
-                QR::get()->getNumberOfCachedItem(
-                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
+                                                 CacheItemType::BBOX_INTERSECT_HT));
+      EXPECT_EQ(
+          static_cast<size_t>(4),
+          QR::get()->getNumberOfCachedItem(
+              QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true));
 
       auto q1_v3_ht_and_metainfo =
-          getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
+          getCachedHashTableForBoundingBoxIntersectWithItsTuningParam(
+              visited_hashtable_key);
       auto q1_v3_ht_metainfo = q1_v3_ht_and_metainfo.cached_ht_metainfo;
       EXPECT_TRUE(q1_v3_ht_metainfo.has_value());
-      EXPECT_TRUE(q1_v3_ht_metainfo->overlaps_meta_info.has_value());
+      EXPECT_TRUE(q1_v3_ht_metainfo->bbox_intersect_meta_info.has_value());
       auto q1_v3_tuning_param = q1_v3_ht_and_metainfo.cached_tuning_info;
       // we do not cache the tuning param if we give a related sql hint
       EXPECT_TRUE(!q1_v3_tuning_param.has_value());
       // due to the changes in the hint the same query has different hashtable params
-      EXPECT_TRUE(!compareOverlapsHTParams(q1_v2_ht_metainfo->overlaps_meta_info,
-                                           q1_v3_ht_metainfo->overlaps_meta_info));
+      EXPECT_TRUE(!compareHTParams(q1_v2_ht_metainfo->bbox_intersect_meta_info,
+                                   q1_v3_ht_metainfo->bbox_intersect_meta_info));
     }
 
-    // test2. run q1 and then run q2 having different overlaps
-    // ht params to see whether we keep the latest q2's overlaps ht
+    // test2. run q1 and then run q2 having different bbox_intersect
+    // ht params to see whether we keep the latest q2's bbox_intersect ht
     {
       clearCaches();
       auto q1 =
-          R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      EXPECT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedItem(
-                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
+      EXPECT_EQ(
+          static_cast<size_t>(2),
+          QR::get()->getNumberOfCachedItem(
+              QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true));
       auto q1_ht_and_metainfo =
-          getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
+          getCachedHashTableForBoundingBoxIntersectWithItsTuningParam(
+              visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
       EXPECT_TRUE(q1_ht_metainfo.has_value());
-      EXPECT_TRUE(q1_ht_metainfo->overlaps_meta_info.has_value());
+      EXPECT_TRUE(q1_ht_metainfo->bbox_intersect_meta_info.has_value());
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
 
       auto q2 =
-          R"(SELECT count(*) from overlaps_t13 as b JOIN overlaps_t12 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t13 as b JOIN bbox_intersect_t12 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
-      EXPECT_EQ(static_cast<size_t>(4),
-                QR::get()->getNumberOfCachedItem(
-                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
+      EXPECT_EQ(
+          static_cast<size_t>(4),
+          QR::get()->getNumberOfCachedItem(
+              QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true));
       auto q2_ht_and_metainfo =
-          getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
+          getCachedHashTableForBoundingBoxIntersectWithItsTuningParam(
+              visited_hashtable_key);
       auto q2_ht_metainfo = q2_ht_and_metainfo.cached_ht_metainfo;
       EXPECT_TRUE(q2_ht_metainfo.has_value());
-      EXPECT_TRUE(q2_ht_metainfo->overlaps_meta_info.has_value());
+      EXPECT_TRUE(q2_ht_metainfo->bbox_intersect_meta_info.has_value());
       auto q2_tuning_param = q2_ht_and_metainfo.cached_tuning_info;
       EXPECT_TRUE(q2_tuning_param.has_value());
 
       auto q2_v2 =
-          R"(SELECT /*+ overlaps_max_size(2021) */ count(*) from overlaps_t13 as b JOIN overlaps_t12 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT /*+ bbox_intersect_max_size(2021) */ count(*) from bbox_intersect_t13 as b JOIN bbox_intersect_t12 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2_v2, dt)));
-      EXPECT_EQ(static_cast<size_t>(6),
-                QR::get()->getNumberOfCachedItem(
-                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
+      EXPECT_EQ(
+          static_cast<size_t>(6),
+          QR::get()->getNumberOfCachedItem(
+              QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true));
       auto q2_v2_ht_and_metainfo =
-          getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
+          getCachedHashTableForBoundingBoxIntersectWithItsTuningParam(
+              visited_hashtable_key);
       auto q2_v2_ht_metainfo = q2_v2_ht_and_metainfo.cached_ht_metainfo;
       EXPECT_TRUE(q2_v2_ht_metainfo.has_value());
-      EXPECT_TRUE(q2_v2_ht_metainfo->overlaps_meta_info.has_value());
+      EXPECT_TRUE(q2_v2_ht_metainfo->bbox_intersect_meta_info.has_value());
       auto q2_v2_tuning_param = q2_v2_ht_and_metainfo.cached_tuning_info;
       // we compute hashtable param when we give max_hashtable size hint
       EXPECT_TRUE(q2_v2_tuning_param.has_value());
       // we should have different meta info due to the updated ht when executing q2_v2
-      EXPECT_TRUE(!compareOverlapsHTParams(q2_ht_metainfo->overlaps_meta_info,
-                                           q2_v2_ht_metainfo->overlaps_meta_info));
+      EXPECT_TRUE(!compareHTParams(q2_ht_metainfo->bbox_intersect_meta_info,
+                                   q2_v2_ht_metainfo->bbox_intersect_meta_info));
     }
 
     // test3. run q1 and then run q2 but make cache has limited space to
     // see whether we invalidate ht cache but keep auto tuner param cache
     {
       const auto original_total_cache_size = g_hashtable_cache_total_bytes;
-      OverlapsJoinHashTable::getHashTableCache()->setTotalCacheSize(
-          CacheItemType::OVERLAPS_HT, 250);
+      BoundingBoxIntersectJoinHashTable::getHashTableCache()->setTotalCacheSize(
+          CacheItemType::BBOX_INTERSECT_HT, 250);
       ScopeGuard reset_cache_status = [&original_total_cache_size] {
-        OverlapsJoinHashTable::getHashTableCache()->setTotalCacheSize(
-            CacheItemType::OVERLAPS_HT, original_total_cache_size);
+        BoundingBoxIntersectJoinHashTable::getHashTableCache()->setTotalCacheSize(
+            CacheItemType::BBOX_INTERSECT_HT, original_total_cache_size);
       };
       clearCaches();
       auto q1 =
-          R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      EXPECT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedItem(
-                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
+      EXPECT_EQ(
+          static_cast<size_t>(2),
+          QR::get()->getNumberOfCachedItem(
+              QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true));
       auto q1_ht_and_metainfo =
-          getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
+          getCachedHashTableForBoundingBoxIntersectWithItsTuningParam(
+              visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
       EXPECT_TRUE(q1_ht_metainfo.has_value());
-      EXPECT_TRUE(q1_ht_metainfo->overlaps_meta_info.has_value());
+      EXPECT_TRUE(q1_ht_metainfo->bbox_intersect_meta_info.has_value());
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
@@ -984,16 +1007,18 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       CHECK_NE(q1_hash_table_cache_key, EMPTY_HASHED_PLAN_DAG_KEY);
 
       auto q2 =
-          R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t2 as b JOIN bbox_intersect_t2 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q2, dt)));
-      EXPECT_EQ(static_cast<size_t>(3),
-                QR::get()->getNumberOfCachedItem(
-                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
+      EXPECT_EQ(
+          static_cast<size_t>(3),
+          QR::get()->getNumberOfCachedItem(
+              QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true));
       EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
+                                                 CacheItemType::BBOX_INTERSECT_HT));
       auto q2_ht_and_metainfo =
-          getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
+          getCachedHashTableForBoundingBoxIntersectWithItsTuningParam(
+              visited_hashtable_key);
       CHECK(!q2_ht_and_metainfo.cached_ht);
     }
 
@@ -1003,40 +1028,44 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
     {
       clearCaches();
       const auto original_max_cache_size = g_max_cacheable_hashtable_size_bytes;
-      OverlapsJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
-          CacheItemType::OVERLAPS_HT, 250);
+      BoundingBoxIntersectJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
+          CacheItemType::BBOX_INTERSECT_HT, 250);
       ScopeGuard reset_cache_status = [&original_max_cache_size] {
-        OverlapsJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
-            CacheItemType::OVERLAPS_HT, original_max_cache_size);
+        BoundingBoxIntersectJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
+            CacheItemType::BBOX_INTERSECT_HT, original_max_cache_size);
       };
       clearCaches();
       auto q1 =
-          R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t12 as b JOIN bbox_intersect_t11 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      EXPECT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedItem(
-                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
+      EXPECT_EQ(
+          static_cast<size_t>(2),
+          QR::get()->getNumberOfCachedItem(
+              QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true));
       auto q1_ht_and_metainfo =
-          getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
+          getCachedHashTableForBoundingBoxIntersectWithItsTuningParam(
+              visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
       EXPECT_TRUE(q1_ht_metainfo.has_value());
-      EXPECT_TRUE(q1_ht_metainfo->overlaps_meta_info.has_value());
+      EXPECT_TRUE(q1_ht_metainfo->bbox_intersect_meta_info.has_value());
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
       visited_hashtable_key.clear();
 
       auto q2 =
-          R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
+          R"(SELECT count(*) from bbox_intersect_t2 as b JOIN bbox_intersect_t2 as a ON ST_Intersects(a.poly, b.pt);)";
       EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q2, dt)));
-      EXPECT_EQ(static_cast<size_t>(3),  // hashtable: q1, auto tuner param: q1 and q2
-                QR::get()->getNumberOfCachedItem(
-                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
+      EXPECT_EQ(
+          static_cast<size_t>(3),  // hashtable: q1, auto tuner param: q1 and q2
+          QR::get()->getNumberOfCachedItem(
+              QueryRunner::CacheItemStatus::ALL, CacheItemType::BBOX_INTERSECT_HT, true));
       EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT));
+                                                 CacheItemType::BBOX_INTERSECT_HT));
       auto q1_ht_and_metainfo_v2 =
-          getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
+          getCachedHashTableForBoundingBoxIntersectWithItsTuningParam(
+              visited_hashtable_key);
       // but we skip to cache ht of q2 and this means we still have that of q1
       EXPECT_EQ(static_cast<size_t>(1),
                 q1_ht_and_metainfo_v2.cached_metric->getRefCount());
@@ -1044,12 +1073,12 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
                 q1_ht_and_metainfo_v2.cached_metric->getMemSize());
       auto q1_ht_metainfo_v2 = q1_ht_and_metainfo_v2.cached_ht_metainfo;
       EXPECT_TRUE(q1_ht_metainfo_v2.has_value());
-      EXPECT_TRUE(q1_ht_metainfo_v2->overlaps_meta_info.has_value());
+      EXPECT_TRUE(q1_ht_metainfo_v2->bbox_intersect_meta_info.has_value());
       auto q1_tuning_param_v2 = q1_ht_and_metainfo_v2.cached_tuning_info;
       EXPECT_TRUE(q1_tuning_param_v2.has_value());
-      EXPECT_TRUE(compareOverlapsHTParams(
-          q1_ht_and_metainfo.cached_ht_metainfo->overlaps_meta_info,
-          q1_ht_and_metainfo_v2.cached_ht_metainfo->overlaps_meta_info));
+      EXPECT_TRUE(compareHTParams(
+          q1_ht_and_metainfo.cached_ht_metainfo->bbox_intersect_meta_info,
+          q1_ht_and_metainfo_v2.cached_ht_metainfo->bbox_intersect_meta_info));
     }
   }
 }

@@ -22,7 +22,7 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
-#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
 #include "QueryEngine/RangeTableIndexVisitor.h"
 #include "QueryEngine/RuntimeFunctions.h"
@@ -30,7 +30,7 @@
 
 #include <sstream>
 
-extern bool g_enable_overlaps_hashjoin;
+extern bool g_enable_bbox_intersect_hashjoin;
 extern size_t g_num_tuple_threshold_switch_to_baseline;
 extern size_t g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline;
 
@@ -297,22 +297,23 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<HashJoin> join_hash_table;
   CHECK_GT(device_count, 0);
-  if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
+  if (!g_enable_bbox_intersect_hashjoin && qual_bin_oper->is_bbox_intersect_oper()) {
     throw std::runtime_error(
-        "Overlaps hash join disabled, attempting to fall back to loop join");
+        "Bounding box intersection disabled, attempting to fall back to loop join");
   }
-  if (qual_bin_oper->is_overlaps_oper()) {
+  if (qual_bin_oper->is_bbox_intersect_oper()) {
     VLOG(1) << "Trying to build geo hash table:";
-    join_hash_table = OverlapsJoinHashTable::getInstance(qual_bin_oper,
-                                                         query_infos,
-                                                         memory_level,
-                                                         join_type,
-                                                         device_count,
-                                                         column_cache,
-                                                         executor,
-                                                         hashtable_build_dag_map,
-                                                         query_hint,
-                                                         table_id_to_node_map);
+    join_hash_table =
+        BoundingBoxIntersectJoinHashTable::getInstance(qual_bin_oper,
+                                                       query_infos,
+                                                       memory_level,
+                                                       join_type,
+                                                       device_count,
+                                                       column_cache,
+                                                       executor,
+                                                       hashtable_build_dag_map,
+                                                       query_hint,
+                                                       table_id_to_node_map);
   } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
                  qual_bin_oper->get_left_operand()) ||
              query_hint.force_baseline_hash_join) {
@@ -822,10 +823,10 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
     const Analyzer::Expr* lhs,
     const Analyzer::Expr* rhs,
     const TemporaryTables* temporary_tables,
-    const bool is_overlaps_join) {
+    const bool is_bbox_intersect) {
   SQLTypeInfo lhs_ti = lhs->get_type_info();
   SQLTypeInfo rhs_ti = rhs->get_type_info();
-  if (!is_overlaps_join) {
+  if (!is_bbox_intersect) {
     if (lhs_ti.get_type() != rhs_ti.get_type()) {
       throw HashJoinFail("Equijoin types must be identical, found: " +
                          lhs_ti.get_type_name() + ", " + rhs_ti.get_type_name());
@@ -964,22 +965,24 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
       (lhs_cast || rhs_cast)) {
     throw HashJoinFail("Cannot use hash join for given expression (cast from decimal)");
   }
-  if (is_overlaps_join) {
+  if (is_bbox_intersect) {
     if (!inner_col_real_ti.is_array()) {
       throw HashJoinFail(
-          "Overlaps join only supported for inner columns with array type");
+          "Bounding box intersection only supported for inner columns with array type");
     }
     auto is_bounds_array = [](const auto ti) {
       return ti.is_fixlen_array() && ti.get_size() == 32;
     };
     if (!is_bounds_array(inner_col_real_ti)) {
       throw HashJoinFail(
-          "Overlaps join only supported for 4-element double fixed length arrays");
+          "Bounding box intersection only supported for 4-element double fixed length "
+          "arrays");
     }
     if (!(outer_col_ti.get_type() == kPOINT || is_bounds_array(outer_col_ti) ||
           is_constructed_point(outer_expr))) {
       throw HashJoinFail(
-          "Overlaps join only supported for geometry outer columns of type point, "
+          "Bounding box intersection only supported for geometry outer columns of type "
+          "point, "
           "geometry columns with bounds or constructed points");
     }
   } else {
@@ -1026,7 +1029,7 @@ HashJoin::normalizeColumnPairs(const Analyzer::BinOper* condition,
       const auto col_pair = normalizeColumnPair(lhs_tuple[i].get(),
                                                 rhs_tuple[i].get(),
                                                 temporary_tables,
-                                                condition->is_overlaps_oper());
+                                                condition->is_bbox_intersect_oper());
       result.first.emplace_back(col_pair.first);
       result.second.emplace_back(col_pair.second);
     }
@@ -1035,7 +1038,7 @@ HashJoin::normalizeColumnPairs(const Analyzer::BinOper* condition,
     const auto col_pair = normalizeColumnPair(condition->get_left_operand(),
                                               condition->get_right_operand(),
                                               temporary_tables,
-                                              condition->is_overlaps_oper());
+                                              condition->is_bbox_intersect_oper());
     result.first.emplace_back(col_pair.first);
     result.second.emplace_back(col_pair.second);
   }

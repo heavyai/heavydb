@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 
-class RangeJoinHashTable final : public OverlapsJoinHashTable {
+class RangeJoinHashTable final : public BoundingBoxIntersectJoinHashTable {
  public:
   RangeJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
                      const JoinType join_type,
@@ -33,17 +33,17 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
                      const RegisteredQueryHint& query_hints,
                      const HashTableBuildDagMap& hashtable_build_dag_map,
                      const TableIdToNodeMap& table_id_to_node_map)
-      : OverlapsJoinHashTable(condition,
-                              join_type,
-                              query_infos,
-                              memory_level,
-                              column_cache,
-                              executor,
-                              inner_outer_pairs,
-                              device_count,
-                              query_hints,
-                              hashtable_build_dag_map,
-                              table_id_to_node_map)
+      : BoundingBoxIntersectJoinHashTable(condition,
+                                          join_type,
+                                          query_infos,
+                                          memory_level,
+                                          column_cache,
+                                          executor,
+                                          inner_outer_pairs,
+                                          device_count,
+                                          query_hints,
+                                          hashtable_build_dag_map,
+                                          table_id_to_node_map)
       , range_expr_(range_expr)
       , inner_col_expr_(std::move(inner_col_expr)) {}
 
