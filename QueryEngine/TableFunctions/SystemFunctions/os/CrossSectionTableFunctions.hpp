@@ -111,7 +111,7 @@ int32_t tf_cross_section_1d_impl(TableFunctionManager& mgr,
   std::vector<double> coords;
   coords.reserve(num_points * 2);
   for (int i = 0; i < num_points; i++) {
-    auto const x = static_cast<TV>(i) / static_cast<TV>(num_points);
+    auto const x = static_cast<TV>(i) / static_cast<TV>(num_points - 1);
     auto const y = bucket_counts[i]
                        ? (bucket_values[i] / static_cast<TV>(bucket_counts[i]))
                        : static_cast<TV>(0);
@@ -160,8 +160,10 @@ int32_t tf_cross_section_2d_impl(TableFunctionManager& mgr,
   CHECK_GT(num_points_x, 1) << "num_points_x must be > 1";
   CHECK_GT(num_points_y, 1) << "num_points_y must be > 1";
 
-  // any raster data?
-  if (values.size() == 0) {
+  static constexpr int kNumNearest = 3;
+
+  // enough raster data?
+  if (values.size() < kNumNearest) {
     mgr.set_output_item_values_total_number(0, 0);
     mgr.set_output_item_values_total_number(1, 0);
     mgr.set_output_item_values_total_number(2, 0);
@@ -233,7 +235,6 @@ int32_t tf_cross_section_2d_impl(TableFunctionManager& mgr,
   auto const max_dist2 = dwithin_distance * dwithin_distance;
 
   static constexpr double kMinDistance2 = 0.0001;
-  static constexpr size_t kNumNearest = 3u;
 
   tbb::parallel_for(
       tbb::blocked_range<int32_t>(0, num_output_rows),
