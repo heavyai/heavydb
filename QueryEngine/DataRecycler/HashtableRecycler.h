@@ -20,18 +20,18 @@
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "QueryEngine/QueryHint.h"
 
-struct OverlapsHashTableMetaInfo {
-  size_t overlaps_max_table_size_bytes;
-  double overlaps_bucket_threshold;
+struct BoundingBoxIntersectMetaInfo {
+  size_t bbox_intersect_max_table_size_bytes;
+  double bbox_intersect_bucket_threshold;
   std::vector<double> bucket_sizes;
 };
 
 struct HashtableCacheMetaInfo {
-  std::optional<OverlapsHashTableMetaInfo> overlaps_meta_info;
+  std::optional<BoundingBoxIntersectMetaInfo> bbox_intersect_meta_info;
   std::optional<RegisteredQueryHint> registered_query_hint;
 
   HashtableCacheMetaInfo()
-      : overlaps_meta_info(std::nullopt), registered_query_hint(std::nullopt){};
+      : bbox_intersect_meta_info(std::nullopt), registered_query_hint(std::nullopt){};
 };
 
 struct HashtableAccessPathInfo {
@@ -86,9 +86,9 @@ class HashtableRecycler
 
   std::string toString() const override;
 
-  bool checkOverlapsHashtableBucketCompatability(
-      const OverlapsHashTableMetaInfo& candidate_bucket_dim,
-      const OverlapsHashTableMetaInfo& target_bucket_dim) const;
+  bool checkHashtableForBoundingBoxIntersectBucketCompatability(
+      const BoundingBoxIntersectMetaInfo& candidate_bucket_dim,
+      const BoundingBoxIntersectMetaInfo& target_bucket_dim) const;
 
   static HashtableAccessPathInfo getHashtableAccessPathInfo(
       const std::vector<InnerOuter>& inner_outer_pairs,
@@ -168,7 +168,7 @@ class HashtableRecycler
   // we maintain the mapping between a hashed table_key -> a set of hashed query plan dag
   // only in hashtable recycler to minimize memory footprint
   // so other types of data recycler related to hashtable cache
-  // i.e., hashing scheme recycler and overlaps tuning param recycler should use the
-  // key_set when we retrieve it from here, see `markCachedItemAsDirty` function
+  // i.e., hashing scheme recycler and bounding box intersect tuning param recycler should
+  // use the key_set when we retrieve it from here, see `markCachedItemAsDirty` function
   std::unordered_map<size_t, std::unordered_set<size_t>> table_key_to_query_plan_dag_map_;
 };

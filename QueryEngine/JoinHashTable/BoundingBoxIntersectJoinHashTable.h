@@ -16,24 +16,24 @@
 
 #pragma once
 
-#include "QueryEngine/DataRecycler/OverlapsTuningParamRecycler.h"
+#include "QueryEngine/DataRecycler/BoundingBoxIntersectTuningParamRecycler.h"
 #include "QueryEngine/JoinHashTable/BaselineHashTable.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 
-class OverlapsJoinHashTable : public HashJoin {
+class BoundingBoxIntersectJoinHashTable : public HashJoin {
  public:
-  OverlapsJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
-                        const JoinType join_type,
-                        const std::vector<InputTableInfo>& query_infos,
-                        const Data_Namespace::MemoryLevel memory_level,
-                        ColumnCacheMap& column_cache,
-                        Executor* executor,
-                        const std::vector<InnerOuter>& inner_outer_pairs,
-                        const int device_count,
-                        const RegisteredQueryHint& query_hints,
-                        const HashTableBuildDagMap& hashtable_build_dag_map,
-                        const TableIdToNodeMap& table_id_to_node_map)
+  BoundingBoxIntersectJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
+                                    const JoinType join_type,
+                                    const std::vector<InputTableInfo>& query_infos,
+                                    const Data_Namespace::MemoryLevel memory_level,
+                                    ColumnCacheMap& column_cache,
+                                    Executor* executor,
+                                    const std::vector<InnerOuter>& inner_outer_pairs,
+                                    const int device_count,
+                                    const RegisteredQueryHint& query_hints,
+                                    const HashTableBuildDagMap& hashtable_build_dag_map,
+                                    const TableIdToNodeMap& table_id_to_node_map)
       : condition_(condition)
       , join_type_(join_type)
       , query_infos_(query_infos)
@@ -49,10 +49,10 @@ class OverlapsJoinHashTable : public HashJoin {
     hash_tables_for_device_.resize(std::max(device_count_, 1));
   }
 
-  virtual ~OverlapsJoinHashTable() {}
+  virtual ~BoundingBoxIntersectJoinHashTable() {}
 
   //! Make hash table from an in-flight SQL query's parse tree etc.
-  static std::shared_ptr<OverlapsJoinHashTable> getInstance(
+  static std::shared_ptr<BoundingBoxIntersectJoinHashTable> getInstance(
       const std::shared_ptr<Analyzer::BinOper> condition,
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
@@ -78,13 +78,14 @@ class OverlapsJoinHashTable : public HashJoin {
     auto candidate_table_keys =
         hash_table_cache_->getMappedQueryPlanDagsWithTableKey(table_key);
     if (candidate_table_keys.has_value()) {
-      auto_tuner_cache_->markCachedItemAsDirty(table_key,
-                                               *candidate_table_keys,
-                                               CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
-                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      auto_tuner_cache_->markCachedItemAsDirty(
+          table_key,
+          *candidate_table_keys,
+          CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM,
+          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
       hash_table_cache_->markCachedItemAsDirty(table_key,
                                                *candidate_table_keys,
-                                               CacheItemType::OVERLAPS_HT,
+                                               CacheItemType::BBOX_INTERSECT_HT,
                                                DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     }
   }
@@ -94,7 +95,8 @@ class OverlapsJoinHashTable : public HashJoin {
     return hash_table_cache_.get();
   }
 
-  static OverlapsTuningParamRecycler* getOverlapsTuningParamCache() {
+  static BoundingBoxIntersectTuningParamRecycler*
+  getBoundingBoxIntersectTuningParamCache() {
     CHECK(auto_tuner_cache_);
     return auto_tuner_cache_.get();
   }
@@ -200,7 +202,7 @@ class OverlapsJoinHashTable : public HashJoin {
                                  const int device_id) const override;
 
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override {
-    UNREACHABLE();  // not applicable for overlaps join
+    UNREACHABLE();  // not applicable for bounding box intersection
     return nullptr;
   }
 
@@ -278,7 +280,7 @@ class OverlapsJoinHashTable : public HashJoin {
   }
 
   std::string getHashJoinType() const final {
-    return "Overlaps";
+    return "BoundingBoxIntersect";
   }
 
   bool isBitwiseEq() const override;
@@ -302,11 +304,11 @@ class OverlapsJoinHashTable : public HashJoin {
   llvm::Value* codegenKey(const CompilationOptions&);
   std::vector<llvm::Value*> codegenManyKey(const CompilationOptions&);
 
-  std::optional<OverlapsHashTableMetaInfo> getOverlapsHashTableMetaInfo() {
-    return hashtable_cache_meta_info_.overlaps_meta_info;
+  std::optional<BoundingBoxIntersectMetaInfo> getBoundingBoxIntersectMetaInfo() {
+    return hashtable_cache_meta_info_.bbox_intersect_meta_info;
   }
 
-  struct AlternativeCacheKeyForOverlapsHashJoin {
+  struct AlternativeCacheKeyForBoundingBoxIntersection {
     std::vector<InnerOuter> inner_outer_pairs;
     const size_t num_elements;
     const size_t chunk_key_hash;
@@ -316,7 +318,8 @@ class OverlapsJoinHashTable : public HashJoin {
     const std::vector<double> inverse_bucket_sizes = {};
   };
 
-  QueryPlanHash getAlternativeCacheKey(AlternativeCacheKeyForOverlapsHashJoin& info) {
+  QueryPlanHash getAlternativeCacheKey(
+      AlternativeCacheKeyForBoundingBoxIntersection& info) {
     auto hash = info.chunk_key_hash;
     for (InnerOuter inner_outer : info.inner_outer_pairs) {
       auto inner_col = inner_outer.first;
@@ -362,15 +365,15 @@ class OverlapsJoinHashTable : public HashJoin {
     return inner_outer_pairs_;
   }
 
-  void setOverlapsHashtableMetaInfo(size_t max_table_size_bytes,
-                                    double bucket_threshold,
-                                    std::vector<double>& bucket_sizes) {
-    OverlapsHashTableMetaInfo overlaps_meta_info;
-    overlaps_meta_info.bucket_sizes = bucket_sizes;
-    overlaps_meta_info.overlaps_max_table_size_bytes = max_table_size_bytes;
-    overlaps_meta_info.overlaps_bucket_threshold = bucket_threshold;
+  void setBoundingBoxIntersectionMetaInfo(size_t max_table_size_bytes,
+                                          double bucket_threshold,
+                                          std::vector<double>& bucket_sizes) {
+    BoundingBoxIntersectMetaInfo bbox_intersect_meta_info;
+    bbox_intersect_meta_info.bucket_sizes = bucket_sizes;
+    bbox_intersect_meta_info.bbox_intersect_max_table_size_bytes = max_table_size_bytes;
+    bbox_intersect_meta_info.bbox_intersect_bucket_threshold = bucket_threshold;
     HashtableCacheMetaInfo meta_info;
-    meta_info.overlaps_meta_info = overlaps_meta_info;
+    meta_info.bbox_intersect_meta_info = bbox_intersect_meta_info;
     hashtable_cache_meta_info_ = meta_info;
   }
 
@@ -387,8 +390,8 @@ class OverlapsJoinHashTable : public HashJoin {
   RegisteredQueryHint query_hints_;
 
   std::vector<double> inverse_bucket_sizes_for_dimension_;
-  double chosen_overlaps_bucket_threshold_;
-  size_t chosen_overlaps_max_table_size_bytes_;
+  double chosen_bbox_intersect_bucket_threshold_;
+  size_t chosen_bbox_intersect_max_table_size_bytes_;
   CompositeKeyInfo composite_key_info_;
 
   std::optional<HashType>
@@ -398,14 +401,14 @@ class OverlapsJoinHashTable : public HashJoin {
 
   // cache a hashtable based on the cache key C
   // C = query plan dag D + join col J + hashtable params P
-  // by varying overlaps join hashtable parameters P, we can build
+  // by varying a parameters P for bounding box intersect, we can build
   // multiple (and different) hashtables for the same query plan dag D
   // in this scenario, the rule we follow is cache everything
   // with the assumption that varying P is intended by user
   // for the performance and so worth to keep it for future recycling
   static std::unique_ptr<HashtableRecycler> hash_table_cache_;
   // auto tuner cache is maintained separately with hashtable cache
-  static std::unique_ptr<OverlapsTuningParamRecycler> auto_tuner_cache_;
+  static std::unique_ptr<BoundingBoxIntersectTuningParamRecycler> auto_tuner_cache_;
 
   HashTableBuildDagMap hashtable_build_dag_map_;
   QueryPlanDAG query_plan_dag_;

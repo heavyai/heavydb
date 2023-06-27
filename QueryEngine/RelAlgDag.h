@@ -2865,89 +2865,92 @@ class RelAlgDag : public boost::noncopyable {
           has_global_rowwise_output_hint = target.isGlobalHint();
           break;
         }
-        case QueryHint::kOverlapsBucketThreshold: {
+        case QueryHint::kBBoxIntersectBucketThreshold: {
           if (target.getListOptions().size() != 1) {
-            VLOG(1) << "Skip the given query hint \"overlaps_bucket_threshold\" ("
+            VLOG(1) << "Skip the given query hint \"bbox_intersect_bucket_threshold\" ("
                     << target.getListOptions()[0]
                     << ") : invalid # hint options are given";
             break;
           }
-          double overlaps_bucket_threshold = std::stod(target.getListOptions()[0]);
-          if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 90.0) {
-            query_hint.registerHint(QueryHint::kOverlapsBucketThreshold);
-            query_hint.overlaps_bucket_threshold = overlaps_bucket_threshold;
+          double bbox_intersect_bucket_threshold = std::stod(target.getListOptions()[0]);
+          if (bbox_intersect_bucket_threshold >= 0.0 &&
+              bbox_intersect_bucket_threshold <= 90.0) {
+            query_hint.registerHint(QueryHint::kBBoxIntersectBucketThreshold);
+            query_hint.bbox_intersect_bucket_threshold = bbox_intersect_bucket_threshold;
             if (target.isGlobalHint()) {
-              global_query_hint.registerHint(QueryHint::kOverlapsBucketThreshold);
-              global_query_hint.overlaps_bucket_threshold = overlaps_bucket_threshold;
+              global_query_hint.registerHint(QueryHint::kBBoxIntersectBucketThreshold);
+              global_query_hint.bbox_intersect_bucket_threshold =
+                  bbox_intersect_bucket_threshold;
             }
           } else {
-            VLOG(1) << "Skip the given query hint \"overlaps_bucket_threshold\" ("
-                    << overlaps_bucket_threshold
+            VLOG(1) << "Skip the given query hint \"bbox_intersect_bucket_threshold\" ("
+                    << bbox_intersect_bucket_threshold
                     << ") : the hint value should be within 0.0 ~ 90.0";
           }
           break;
         }
-        case QueryHint::kOverlapsMaxSize: {
+        case QueryHint::kBBoxIntersectMaxSize: {
           if (target.getListOptions().size() != 1) {
-            VLOG(1) << "Skip the given query hint \"overlaps_max_size\" ("
+            VLOG(1) << "Skip the given query hint \"bbox_intersect_max_size\" ("
                     << target.getListOptions()[0]
                     << ") : invalid # hint options are given";
             break;
           }
           std::stringstream ss(target.getListOptions()[0]);
-          int overlaps_max_size;
-          ss >> overlaps_max_size;
-          if (overlaps_max_size >= 0) {
-            query_hint.registerHint(QueryHint::kOverlapsMaxSize);
-            query_hint.overlaps_max_size = (size_t)overlaps_max_size;
+          int bbox_intersect_max_size;
+          ss >> bbox_intersect_max_size;
+          if (bbox_intersect_max_size >= 0) {
+            query_hint.registerHint(QueryHint::kBBoxIntersectMaxSize);
+            query_hint.bbox_intersect_max_size = (size_t)bbox_intersect_max_size;
             if (target.isGlobalHint()) {
-              global_query_hint.registerHint(QueryHint::kOverlapsMaxSize);
-              global_query_hint.overlaps_max_size = (size_t)overlaps_max_size;
+              global_query_hint.registerHint(QueryHint::kBBoxIntersectMaxSize);
+              global_query_hint.bbox_intersect_max_size = (size_t)bbox_intersect_max_size;
             }
           } else {
-            VLOG(1) << "Skip the query hint \"overlaps_max_size\" (" << overlaps_max_size
+            VLOG(1) << "Skip the query hint \"bbox_intersect_max_size\" ("
+                    << bbox_intersect_max_size
                     << ") : the hint value should be larger than or equal to zero";
           }
           break;
         }
-        case QueryHint::kOverlapsAllowGpuBuild: {
-          query_hint.registerHint(QueryHint::kOverlapsAllowGpuBuild);
-          query_hint.overlaps_allow_gpu_build = true;
+        case QueryHint::kBBoxIntersectAllowGpuBuild: {
+          query_hint.registerHint(QueryHint::kBBoxIntersectAllowGpuBuild);
+          query_hint.bbox_intersect_allow_gpu_build = true;
           if (target.isGlobalHint()) {
-            global_query_hint.registerHint(QueryHint::kOverlapsAllowGpuBuild);
-            global_query_hint.overlaps_allow_gpu_build = true;
+            global_query_hint.registerHint(QueryHint::kBBoxIntersectAllowGpuBuild);
+            global_query_hint.bbox_intersect_allow_gpu_build = true;
           }
           break;
         }
-        case QueryHint::kOverlapsNoCache: {
-          query_hint.registerHint(QueryHint::kOverlapsNoCache);
-          query_hint.overlaps_no_cache = true;
+        case QueryHint::kBBoxIntersectNoCache: {
+          query_hint.registerHint(QueryHint::kBBoxIntersectNoCache);
+          query_hint.bbox_intersect_no_cache = true;
           if (target.isGlobalHint()) {
-            global_query_hint.registerHint(QueryHint::kOverlapsNoCache);
-            global_query_hint.overlaps_no_cache = true;
+            global_query_hint.registerHint(QueryHint::kBBoxIntersectNoCache);
+            global_query_hint.bbox_intersect_no_cache = true;
           }
-          VLOG(1) << "Skip auto tuner and hashtable caching for overlaps join.";
+          VLOG(1) << "Skip auto tuner and hashtable caching for bbox_intersect join.";
           break;
         }
-        case QueryHint::kOverlapsKeysPerBin: {
+        case QueryHint::kBBoxIntersectKeysPerBin: {
           if (target.getListOptions().size() != 1) {
-            VLOG(1) << "Skip the given query hint \"overlaps_keys_per_bin\" ("
+            VLOG(1) << "Skip the given query hint \"bbox_intersect_keys_per_bin\" ("
                     << target.getListOptions()[0]
                     << ") : invalid # hint options are given";
             break;
           }
-          double overlaps_keys_per_bin = std::stod(target.getListOptions()[0]);
-          if (overlaps_keys_per_bin > 0.0 &&
-              overlaps_keys_per_bin < std::numeric_limits<double>::max()) {
-            query_hint.registerHint(QueryHint::kOverlapsKeysPerBin);
-            query_hint.overlaps_keys_per_bin = overlaps_keys_per_bin;
+          double bbox_intersect_keys_per_bin = std::stod(target.getListOptions()[0]);
+          if (bbox_intersect_keys_per_bin > 0.0 &&
+              bbox_intersect_keys_per_bin < std::numeric_limits<double>::max()) {
+            query_hint.registerHint(QueryHint::kBBoxIntersectKeysPerBin);
+            query_hint.bbox_intersect_keys_per_bin = bbox_intersect_keys_per_bin;
             if (target.isGlobalHint()) {
-              global_query_hint.registerHint(QueryHint::kOverlapsKeysPerBin);
-              global_query_hint.overlaps_keys_per_bin = overlaps_keys_per_bin;
+              global_query_hint.registerHint(QueryHint::kBBoxIntersectKeysPerBin);
+              global_query_hint.bbox_intersect_keys_per_bin = bbox_intersect_keys_per_bin;
             }
           } else {
-            VLOG(1) << "Skip the given query hint \"overlaps_keys_per_bin\" ("
-                    << overlaps_keys_per_bin
+            VLOG(1) << "Skip the given query hint \"bbox_intersect_keys_per_bin\" ("
+                    << bbox_intersect_keys_per_bin
                     << ") : the hint value should be larger than zero";
           }
           break;

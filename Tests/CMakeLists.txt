@@ -464,7 +464,7 @@ if(${HEAVYAI_PARTITION} EQUAL 0 OR ${HEAVYAI_PARTITION} EQUAL 4)  # Partition 4
 
 ##########
 
-add_executable(OverlapsJoinTest OverlapsJoinTest.cpp)
+add_executable(OverlapsJoinTest GeospatialJoinTest.cpp)
 target_link_libraries(OverlapsJoinTest ${EXECUTE_TEST_LIBS})
 add_test(OverlapsJoinTest OverlapsJoinTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS OverlapsJoinTest)

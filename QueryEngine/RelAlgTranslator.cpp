@@ -1034,8 +1034,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
       return date_plus_minus;
     }
   }
-  if (sql_op == kOVERLAPS) {
-    return translateOverlapsOper(rex_operator);
+  if (sql_op == kBBOX_INTERSECT) {
+    return translateBoundingBoxIntersectOper(rex_operator);
   } else if (IS_COMPARISON(sql_op)) {
     auto geo_comp = translateGeoComparison(rex_operator);
     if (geo_comp) {
@@ -1060,18 +1060,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
   return lhs;
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOverlapsOper(
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBoundingBoxIntersectOper(
     const RexOperator* rex_operator) const {
   const auto sql_op = rex_operator->getOperator();
-  CHECK(sql_op == kOVERLAPS);
+  CHECK(sql_op == kBBOX_INTERSECT);
 
   const auto lhs = translateScalarRex(rex_operator->getOperand(0));
   const auto lhs_ti = lhs->get_type_info();
   if (lhs_ti.is_geometry()) {
-    return translateGeoOverlapsOper(rex_operator);
+    return translateGeoBoundingBoxIntersectOper(rex_operator);
   } else {
     throw std::runtime_error(
-        "Overlaps equivalence is currently only supported for geospatial types");
+        "Bounding Box Intersection equivalence is currently only supported for "
+        "geospatial types");
   }
 }
 

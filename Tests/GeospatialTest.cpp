@@ -2928,10 +2928,10 @@ class GeoSpatialJoinTablesFixture : public ::testing::TestWithParam<bool> {
 };
 
 TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
-  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
-  g_enable_overlaps_hashjoin = false;
-  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state] {
-    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
+  const auto enable_bbox_intersect_state = g_enable_bbox_intersect_hashjoin;
+  g_enable_bbox_intersect_hashjoin = false;
+  ScopeGuard reset_state = [&enable_bbox_intersect_state] {
+    g_enable_bbox_intersect_hashjoin = enable_bbox_intersect_state;
   };
 
   // Test loop joins
@@ -2983,7 +2983,7 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
         std::runtime_error));
   }
 
-  g_enable_overlaps_hashjoin = true;
+  g_enable_bbox_intersect_hashjoin = true;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -3110,10 +3110,10 @@ class GeoSpatialMultiFragTestTablesFixture : public ::testing::TestWithParam<boo
 TEST_P(GeoSpatialMultiFragTestTablesFixture, LoopJoin) {
   SKIP_ALL_ON_AGGREGATOR();  // TODO(adb): investigate different result in distributed
 
-  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
-  g_enable_overlaps_hashjoin = false;
-  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state] {
-    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
+  const auto enable_bbox_intersect_state = g_enable_bbox_intersect_hashjoin;
+  g_enable_bbox_intersect_hashjoin = false;
+  ScopeGuard reset_state = [&enable_bbox_intersect_state] {
+    g_enable_bbox_intersect_hashjoin = enable_bbox_intersect_state;
   };
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {

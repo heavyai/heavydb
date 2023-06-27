@@ -245,12 +245,12 @@ llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
     const auto bw_eq_oper = lower_bw_eq(bin_oper);
     return codegenLogical(bw_eq_oper.get(), co);
   }
-  if (optype == kOVERLAPS) {
-    return codegenOverlaps(optype,
-                           qualifier,
-                           bin_oper->get_own_left_operand(),
-                           bin_oper->get_own_right_operand(),
-                           co);
+  if (optype == kBBOX_INTERSECT) {
+    return codegenBoundingBoxIntersect(optype,
+                                       qualifier,
+                                       bin_oper->get_own_left_operand(),
+                                       bin_oper->get_own_right_operand(),
+                                       co);
   }
   if (is_unnest(lhs) || is_unnest(rhs)) {
     throw std::runtime_error("Unnest not supported in comparisons");
@@ -282,18 +282,20 @@ llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
   return codegenCmp(optype, qualifier, lhs_lvs, lhs_ti, rhs, co);
 }
 
-llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
-                                            const SQLQualifier qualifier,
-                                            const std::shared_ptr<Analyzer::Expr> lhs,
-                                            const std::shared_ptr<Analyzer::Expr> rhs,
-                                            const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenBoundingBoxIntersect(
+    const SQLOps optype,
+    const SQLQualifier qualifier,
+    const std::shared_ptr<Analyzer::Expr> lhs,
+    const std::shared_ptr<Analyzer::Expr> rhs,
+    const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto lhs_ti = lhs->get_type_info();
-  if (g_enable_overlaps_hashjoin) {
-    // failed to build a suitable hash table. short circuit the overlaps expression by
-    // always returning true. this will fall into the ST_Contains check, which will do
-    // overlaps checks before the heavier contains computation.
-    VLOG(1) << "Failed to build overlaps hash table, short circuiting overlaps operator.";
+  if (g_enable_bbox_intersect_hashjoin) {
+    // failed to build a suitable hash table. short circuit the bounding box interesect
+    // expression by always returning true. this will fall into the ST_Contains check,
+    // which will do bounding box intersection before the heavier contains computation.
+    VLOG(1) << "Failed to build bounding box intersect hash table, short circuiting "
+               "bounding box intersect operator.";
     return llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_), true);
   }
   // TODO(adb): we should never get here, but going to leave this in place for now since
@@ -362,7 +364,8 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
     return codegenFunctionOper(bbox_contains_func_oper.get(), co);
   }
 
-  CHECK(false) << "Unsupported type for overlaps operator: " << lhs_ti.get_type_name();
+  CHECK(false) << "Unsupported type for bounding box intersect operator: "
+               << lhs_ti.get_type_name();
   return nullptr;
 }
 
@@ -465,7 +468,7 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
   }
   auto rhs_lvs = codegen(rhs, true, co);
   CHECK_EQ(kONE, qualifier);
-  if (optype == kOVERLAPS) {
+  if (optype == kBBOX_INTERSECT) {
     CHECK(lhs_ti.is_geometry());
     CHECK(rhs_ti.is_array() ||
           rhs_ti.is_geometry());  // allow geo col or bounds col to pass

@@ -446,11 +446,11 @@ class CodeGenerator {
                                       const Analyzer::Expr*,
                                       const CompilationOptions&);
 
-  llvm::Value* codegenOverlaps(const SQLOps,
-                               const SQLQualifier,
-                               const std::shared_ptr<Analyzer::Expr>,
-                               const std::shared_ptr<Analyzer::Expr>,
-                               const CompilationOptions&);
+  llvm::Value* codegenBoundingBoxIntersect(const SQLOps,
+                                           const SQLQualifier,
+                                           const std::shared_ptr<Analyzer::Expr>,
+                                           const std::shared_ptr<Analyzer::Expr>,
+                                           const CompilationOptions&);
 
   llvm::Value* codegenStrCmp(const SQLOps,
                              const SQLQualifier,

@@ -168,7 +168,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
     }
   }
   const auto hash_join_lhs = hashJoinLhs(col_var);
-  // Note(jclay): This has been prone to cause failures in some overlaps joins.
+  // Note(jclay): This has been prone to cause failures in some bounding box intersection.
   // I believe most of the issues are worked out now, but a good place to check if
   // failures are happening.
 

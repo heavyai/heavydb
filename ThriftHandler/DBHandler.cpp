@@ -6111,16 +6111,17 @@ void log_cache_size(const Catalog_Namespace::Catalog& cat) {
   auto baseline_join_ht_cache_size =
       BaselineJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
           CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  auto overlaps_join_ht_cache_size =
-      OverlapsJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
-          CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  auto overlaps_ht_tuner_cache_size =
-      OverlapsJoinHashTable::getOverlapsTuningParamCache()->getCurrentCacheSizeForDevice(
-          CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
-          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto bbox_intersect_ht_cache_size =
+      BoundingBoxIntersectJoinHashTable::getHashTableCache()
+          ->getCurrentCacheSizeForDevice(CacheItemType::BBOX_INTERSECT_HT,
+                                         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto bbox_intersect_ht_tuner_cache_size =
+      BoundingBoxIntersectJoinHashTable::getBoundingBoxIntersectTuningParamCache()
+          ->getCurrentCacheSizeForDevice(CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM,
+                                         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
   auto sum_hash_table_cache_size =
       perfect_join_ht_cache_size + baseline_join_ht_cache_size +
-      overlaps_join_ht_cache_size + overlaps_ht_tuner_cache_size;
+      bbox_intersect_ht_cache_size + bbox_intersect_ht_tuner_cache_size;
   oss << "\"hash_tables\": " << sum_hash_table_cache_size << " bytes, ";
 
   // 1.c Chunk Metadata Recycler

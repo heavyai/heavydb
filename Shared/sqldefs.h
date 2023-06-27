@@ -50,13 +50,13 @@ enum SQLOps {
   kUNNEST,
   kFUNCTION,
   kIN,
-  kOVERLAPS,
+  kBBOX_INTERSECT,
   kENCODE_TEXT,
   kINVALID_OP
 };
 
-#define IS_COMPARISON(X)                                                          \
-  ((X) == kEQ || (X) == kBW_EQ || (X) == kOVERLAPS || (X) == kNE || (X) == kLT || \
+#define IS_COMPARISON(X)                                                                \
+  ((X) == kEQ || (X) == kBW_EQ || (X) == kBBOX_INTERSECT || (X) == kNE || (X) == kLT || \
    (X) == kGT || (X) == kLE || (X) == kGE)
 #define IS_LOGIC(X) ((X) == kAND || (X) == kOR)
 #define IS_ARITHMETIC(X) \
@@ -66,7 +66,7 @@ enum SQLOps {
 #define IS_UNARY(X)                                                                     \
   ((X) == kNOT || (X) == kUMINUS || (X) == kISNULL || (X) == kEXISTS || (X) == kCAST || \
    (X) == kENCODE_TEXT)
-#define IS_EQUIVALENCE(X) ((X) == kEQ || (X) == kBW_EQ || (X) == kOVERLAPS)
+#define IS_EQUIVALENCE(X) ((X) == kEQ || (X) == kBW_EQ || (X) == kBBOX_INTERSECT)
 
 enum SQLQualifier { kONE, kANY, kALL };
 
@@ -312,8 +312,8 @@ inline std::string toString(const SQLOps& op) {
       return "FUNCTION";
     case kIN:
       return "IN";
-    case kOVERLAPS:
-      return "OVERLAPS";
+    case kBBOX_INTERSECT:
+      return "BOUNDING_BOX_INTERSECT";
     case kENCODE_TEXT:
       return "ENCODE_TEXT";
     case kINVALID_OP:

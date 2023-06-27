@@ -213,8 +213,8 @@ std::string ScalarExprToSql::binOpTypeToString(const SQLOps op_type) {
       return "%";
     case kARRAY_AT:
       return "[]";
-    case kOVERLAPS:
-      return "OVERLAPS";
+    case kBBOX_INTERSECT:
+      return "BBOX_INTERSECT";
     default:
       LOG(FATAL) << "Invalid operator type: " << op_type;
       return "";

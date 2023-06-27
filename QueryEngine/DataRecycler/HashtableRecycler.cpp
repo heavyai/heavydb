@@ -36,12 +36,13 @@ bool HashtableRecycler::hasItemInCache(
         return cached_item.key == key;
       });
   if (candidate_ht_it != hashtable_cache->end()) {
-    if (item_type == OVERLAPS_HT) {
-      CHECK(candidate_ht_it->meta_info && candidate_ht_it->meta_info->overlaps_meta_info);
-      CHECK(meta_info && meta_info->overlaps_meta_info);
-      if (checkOverlapsHashtableBucketCompatability(
-              *candidate_ht_it->meta_info->overlaps_meta_info,
-              *meta_info->overlaps_meta_info)) {
+    if (item_type == BBOX_INTERSECT_HT) {
+      CHECK(candidate_ht_it->meta_info &&
+            candidate_ht_it->meta_info->bbox_intersect_meta_info);
+      CHECK(meta_info && meta_info->bbox_intersect_meta_info);
+      if (checkHashtableForBoundingBoxIntersectBucketCompatability(
+              *candidate_ht_it->meta_info->bbox_intersect_meta_info,
+              *meta_info->bbox_intersect_meta_info)) {
         return true;
       }
     } else {
@@ -66,13 +67,14 @@ std::shared_ptr<HashTable> HashtableRecycler::getItemFromCache(
       key, item_type, device_identifier, *hashtable_cache, lock);
   if (candidate_ht) {
     bool can_return_cached_item = false;
-    if (item_type == OVERLAPS_HT) {
-      // we have to check hashtable metainfo for overlaps join hashtable
-      CHECK(candidate_ht->meta_info && candidate_ht->meta_info->overlaps_meta_info);
-      CHECK(meta_info && meta_info->overlaps_meta_info);
-      if (checkOverlapsHashtableBucketCompatability(
-              *candidate_ht->meta_info->overlaps_meta_info,
-              *meta_info->overlaps_meta_info)) {
+    if (item_type == BBOX_INTERSECT_HT) {
+      // we have to check hashtable metainfo of join hashtable for bounding box
+      // intersection
+      CHECK(candidate_ht->meta_info && candidate_ht->meta_info->bbox_intersect_meta_info);
+      CHECK(meta_info && meta_info->bbox_intersect_meta_info);
+      if (checkHashtableForBoundingBoxIntersectBucketCompatability(
+              *candidate_ht->meta_info->bbox_intersect_meta_info,
+              *meta_info->bbox_intersect_meta_info)) {
         can_return_cached_item = true;
       }
     } else {
@@ -112,13 +114,14 @@ void HashtableRecycler::putItemToCache(QueryPlanHash key,
                      [&key](const auto& cached_item) { return cached_item.key == key; });
     bool found_candidate = false;
     if (candidate_it != hashtable_cache->end()) {
-      if (item_type == OVERLAPS_HT) {
-        // we have to check hashtable metainfo for overlaps join hashtable
-        CHECK(candidate_it->meta_info && candidate_it->meta_info->overlaps_meta_info);
-        CHECK(meta_info && meta_info->overlaps_meta_info);
-        if (checkOverlapsHashtableBucketCompatability(
-                *candidate_it->meta_info->overlaps_meta_info,
-                *meta_info->overlaps_meta_info)) {
+      if (item_type == BBOX_INTERSECT_HT) {
+        // we have to check hashtable metainfo for bounding box intersection
+        CHECK(candidate_it->meta_info &&
+              candidate_it->meta_info->bbox_intersect_meta_info);
+        CHECK(meta_info && meta_info->bbox_intersect_meta_info);
+        if (checkHashtableForBoundingBoxIntersectBucketCompatability(
+                *candidate_it->meta_info->bbox_intersect_meta_info,
+                *meta_info->bbox_intersect_meta_info)) {
           found_candidate = true;
         }
       } else {
@@ -327,9 +330,9 @@ std::string HashtableRecycler::toString() const {
   return oss.str();
 }
 
-bool HashtableRecycler::checkOverlapsHashtableBucketCompatability(
-    const OverlapsHashTableMetaInfo& candidate,
-    const OverlapsHashTableMetaInfo& target) const {
+bool HashtableRecycler::checkHashtableForBoundingBoxIntersectBucketCompatability(
+    const BoundingBoxIntersectMetaInfo& candidate,
+    const BoundingBoxIntersectMetaInfo& target) const {
   if (candidate.bucket_sizes.size() != target.bucket_sizes.size()) {
     return false;
   }
@@ -339,9 +342,9 @@ bool HashtableRecycler::checkOverlapsHashtableBucketCompatability(
     }
   }
   auto threshold_check =
-      candidate.overlaps_bucket_threshold == target.overlaps_bucket_threshold;
-  auto hashtable_size_check =
-      candidate.overlaps_max_table_size_bytes == target.overlaps_max_table_size_bytes;
+      candidate.bbox_intersect_bucket_threshold == target.bbox_intersect_bucket_threshold;
+  auto hashtable_size_check = candidate.bbox_intersect_max_table_size_bytes ==
+                              target.bbox_intersect_max_table_size_bytes;
   return threshold_check && hashtable_size_check;
 }
 

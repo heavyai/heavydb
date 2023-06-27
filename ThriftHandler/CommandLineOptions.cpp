@@ -31,7 +31,7 @@ using namespace std::string_literals;
 #include "MigrationMgr/MigrationMgr.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
-#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
 #include "Shared/Compressor.h"
 #include "Shared/SysDefinitions.h"
@@ -355,18 +355,20 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(g_enable_filter_push_down)
                          ->implicit_value(true),
                      "Enable filter push down through joins.");
-  desc.add_options()("enable-overlaps-hashjoin",
-                     po::value<bool>(&g_enable_overlaps_hashjoin)
-                         ->default_value(g_enable_overlaps_hashjoin)
-                         ->implicit_value(true),
-                     "Enable the overlaps hash join framework allowing for range "
-                     "join (e.g. spatial overlaps) computation using a hash table.");
+  desc.add_options()(
+      "enable-bbox-intersect-hashjoin",
+      po::value<bool>(&g_enable_bbox_intersect_hashjoin)
+          ->default_value(g_enable_bbox_intersect_hashjoin)
+          ->implicit_value(true),
+      "Enable the bounding box intersect hash join framework to enable post-filtering of "
+      "pairs of geometries before actually comptuing geometry function.");
   desc.add_options()("enable-hashjoin-many-to-many",
                      po::value<bool>(&g_enable_hashjoin_many_to_many)
                          ->default_value(g_enable_hashjoin_many_to_many)
                          ->implicit_value(true),
-                     "Enable the overlaps hash join framework allowing for range "
-                     "join (e.g. spatial overlaps) computation using a hash table.");
+                     "Enable the bounding box intersect hash join framework to more "
+                     "spatial join operators for pairs of geometry types corresponding "
+                     "to many-to-many relationship.");
   desc.add_options()("enable-distance-rangejoin",
                      po::value<bool>(&g_enable_distance_rangejoin)
                          ->default_value(g_enable_distance_rangejoin)
@@ -502,14 +504,14 @@ void CommandLineOptions::fillOptions() {
       "Max number of default import threads to use (num hardware threads will be used "
       "instead if lower). Can be overriden with copy statement threads option).");
   desc.add_options()(
-      "overlaps-max-table-size-bytes",
-      po::value<size_t>(&g_overlaps_max_table_size_bytes)
-          ->default_value(g_overlaps_max_table_size_bytes),
-      "The maximum size in bytes of the hash table for an overlaps hash join.");
-  desc.add_options()("overlaps-target-entries-per-bin",
-                     po::value<double>(&g_overlaps_target_entries_per_bin)
-                         ->default_value(g_overlaps_target_entries_per_bin),
-                     "The target number of hash entries per bin for overlaps join");
+      "bbox-intersect-max-table-size-bytes",
+      po::value<size_t>(&g_bbox_intersect_max_table_size_bytes)
+          ->default_value(g_bbox_intersect_max_table_size_bytes),
+      "The maximum size in bytes of the hash table for bounding box intersect.");
+  desc.add_options()("bbox-intersect-target-entries-per-bin",
+                     po::value<double>(&g_bbox_intersect_target_entries_per_bin)
+                         ->default_value(g_bbox_intersect_target_entries_per_bin),
+                     "The target number of entries per bin for bounding box intersect");
   if (!dist_v5_) {
     desc.add_options()("port,p",
                        po::value<int>(&system_parameters.omnisci_server_port)
@@ -1754,14 +1756,14 @@ boost::optional<int> CommandLineOptions::parse_command_line(
           CacheItemType::PERFECT_HT, g_hashtable_cache_total_bytes);
       BaselineJoinHashTable::getHashTableCache()->setTotalCacheSize(
           CacheItemType::BASELINE_HT, g_hashtable_cache_total_bytes);
-      OverlapsJoinHashTable::getHashTableCache()->setTotalCacheSize(
-          CacheItemType::OVERLAPS_HT, g_hashtable_cache_total_bytes);
+      BoundingBoxIntersectJoinHashTable::getHashTableCache()->setTotalCacheSize(
+          CacheItemType::BBOX_INTERSECT_HT, g_hashtable_cache_total_bytes);
       PerfectJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
           CacheItemType::PERFECT_HT, g_max_cacheable_hashtable_size_bytes);
       BaselineJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
           CacheItemType::BASELINE_HT, g_max_cacheable_hashtable_size_bytes);
-      OverlapsJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
-          CacheItemType::OVERLAPS_HT, g_max_cacheable_hashtable_size_bytes);
+      BoundingBoxIntersectJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
+          CacheItemType::BBOX_INTERSECT_HT, g_max_cacheable_hashtable_size_bytes);
     }
     g_optimize_cuda_block_and_grid_sizes = optimize_cuda_block_and_grid_sizes;
 

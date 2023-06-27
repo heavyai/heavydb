@@ -17,11 +17,11 @@ public class HeavyDBHintStrategyTable {
     supportedHints.add("cpu_mode");
     supportedHints.add("columnar_output");
     supportedHints.add("rowwise_output");
-    supportedHints.add("overlaps_bucket_threshold");
-    supportedHints.add("overlaps_max_size");
-    supportedHints.add("overlaps_allow_gpu_build");
-    supportedHints.add("overlaps_no_cache");
-    supportedHints.add("overlaps_keys_per_bin");
+    supportedHints.add("bbox_intersect_bucket_threshold");
+    supportedHints.add("bbox_intersect_max_size");
+    supportedHints.add("bbox_intersect_allow_gpu_build");
+    supportedHints.add("bbox_intersect_no_cache");
+    supportedHints.add("bbox_intersect_keys_per_bin");
     supportedHints.add("keep_result");
     supportedHints.add("keep_table_function_result");
     supportedHints.add("aggregate_tree_fanout");

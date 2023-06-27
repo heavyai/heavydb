@@ -59,17 +59,18 @@ int fill_baseline_hash_join_buff(int8_t* hash_buff,
                                                  cpu_thread_idx,
                                                  cpu_thread_count);
   } else {
-    static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
-                  "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    return overlaps_fill_baseline_hash_join_buff_32(hash_buff,
-                                                    entry_count,
-                                                    invalid_slot_val,
-                                                    key_component_count,
-                                                    with_val_slot,
-                                                    key_handler,
-                                                    num_elems,
-                                                    cpu_thread_idx,
-                                                    cpu_thread_count);
+    static_assert(
+        std::is_same<KEY_HANDLER, BoundingBoxIntersectKeyHandler>::value,
+        "Only Generic, Bounding Box Intersect, and Range Key Handlers are supported.");
+    return bbox_intersect_fill_baseline_hash_join_buff_32(hash_buff,
+                                                          entry_count,
+                                                          invalid_slot_val,
+                                                          key_component_count,
+                                                          with_val_slot,
+                                                          key_handler,
+                                                          num_elems,
+                                                          cpu_thread_idx,
+                                                          cpu_thread_count);
   }
 }
 
@@ -108,17 +109,18 @@ int fill_baseline_hash_join_buff(int8_t* hash_buff,
                                                  cpu_thread_idx,
                                                  cpu_thread_count);
   } else {
-    static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
-                  "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    return overlaps_fill_baseline_hash_join_buff_64(hash_buff,
-                                                    entry_count,
-                                                    invalid_slot_val,
-                                                    key_component_count,
-                                                    with_val_slot,
-                                                    key_handler,
-                                                    num_elems,
-                                                    cpu_thread_idx,
-                                                    cpu_thread_count);
+    static_assert(
+        std::is_same<KEY_HANDLER, BoundingBoxIntersectKeyHandler>::value,
+        "Only Generic, Bounding Box Intersection, and Range Key Handlers are supported.");
+    return bbox_intersect_fill_baseline_hash_join_buff_64(hash_buff,
+                                                          entry_count,
+                                                          invalid_slot_val,
+                                                          key_component_count,
+                                                          with_val_slot,
+                                                          key_handler,
+                                                          num_elems,
+                                                          cpu_thread_idx,
+                                                          cpu_thread_count);
   }
 }
 
@@ -147,9 +149,10 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
   } else if constexpr (std::is_same<KEY_HANDLER, RangeKeyHandler>::value) {
     UNREACHABLE();
   } else {
-    static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
-                  "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    LOG(FATAL) << "32-bit keys not yet supported for overlaps join.";
+    static_assert(
+        std::is_same<KEY_HANDLER, BoundingBoxIntersectKeyHandler>::value,
+        "Only Generic, Bounding Box Intersection, and Range Key Handlers are supported.");
+    LOG(FATAL) << "32-bit keys not yet supported for bounding box intersect.";
   }
 }
 
@@ -185,16 +188,17 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                                     key_handler,
                                                     num_elems);
   } else {
-    static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
-                  "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    overlaps_fill_baseline_hash_join_buff_on_device_64(hash_buff,
-                                                       entry_count,
-                                                       invalid_slot_val,
-                                                       key_component_count,
-                                                       with_val_slot,
-                                                       dev_err_buff,
-                                                       key_handler,
-                                                       num_elems);
+    static_assert(
+        std::is_same<KEY_HANDLER, BoundingBoxIntersectKeyHandler>::value,
+        "Only Generic, Bounding Box Intersect, and Range Key Handlers are supported.");
+    bbox_intersect_fill_baseline_hash_join_buff_on_device_64(hash_buff,
+                                                             entry_count,
+                                                             invalid_slot_val,
+                                                             key_component_count,
+                                                             with_val_slot,
+                                                             dev_err_buff,
+                                                             key_handler,
+                                                             num_elems);
   }
 }
 
@@ -217,10 +221,11 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                       num_elems,
                                                       for_window_framing);
   } else {
-    static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value ||
-                      std::is_same<KEY_HANDLER, RangeKeyHandler>::value,
-                  "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    LOG(FATAL) << "32-bit keys not yet supported for overlaps join.";
+    static_assert(
+        std::is_same<KEY_HANDLER, BoundingBoxIntersectKeyHandler>::value ||
+            std::is_same<KEY_HANDLER, RangeKeyHandler>::value,
+        "Only Generic, Bounding Box Intersection, and Range Key Handlers are supported.");
+    LOG(FATAL) << "32-bit keys not yet supported for bounding box intersect.";
   }
 }
 
@@ -245,9 +250,10 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
     range_fill_one_to_many_baseline_hash_table_on_device_64(
         buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
   } else {
-    static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
-                  "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
+    static_assert(
+        std::is_same<KEY_HANDLER, BoundingBoxIntersectKeyHandler>::value,
+        "Only Generic, Bounding Box Intersect, and Range Key Handlers are supported.");
+    bbox_intersect_fill_one_to_many_baseline_hash_table_on_device_64(
         buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
   }
 }

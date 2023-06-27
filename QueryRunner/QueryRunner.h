@@ -28,8 +28,8 @@
 #include "LeafAggregator.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
-#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/QueryHint.h"
@@ -281,7 +281,7 @@ class QueryRunner {
                                                       DeviceIdentifier device_identifier);
   size_t getNumberOfCachedItem(CacheItemStatus item_status,
                                CacheItemType hash_table_type,
-                               bool with_overlaps_tuning_param = false) const;
+                               bool with_bbox_intersect_tuning_param = false) const;
 
   void resizeDispatchQueue(const size_t num_executors);
 

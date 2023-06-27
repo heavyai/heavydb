@@ -4498,19 +4498,19 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
           left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
     }
   }
-  auto const overlaps_quals_info = convert_overlaps_join(left_deep_join_quals,
-                                                         input_descs,
-                                                         input_to_nest_level,
-                                                         input_permutation,
-                                                         input_col_descs,
-                                                         executor_);
-  if (overlaps_quals_info.is_reordered) {
+  auto const bbox_intersect_qual_info = convert_bbox_intersect_join(left_deep_join_quals,
+                                                                    input_descs,
+                                                                    input_to_nest_level,
+                                                                    input_permutation,
+                                                                    input_col_descs,
+                                                                    executor_);
+  if (bbox_intersect_qual_info.is_reordered) {
     query_infos = get_table_infos(input_descs, executor_);
     VLOG(3) << "input_descs=" << shared::printContainer(input_descs);
     VLOG(3) << "input_col_descs=" << shared::printContainer(input_col_descs);
   }
-  if (overlaps_quals_info.has_overlaps_join) {
-    left_deep_join_quals = overlaps_quals_info.join_quals;
+  if (bbox_intersect_qual_info.has_bbox_intersect_join) {
+    left_deep_join_quals = bbox_intersect_qual_info.join_quals;
   }
   RelAlgTranslator translator(
       query_state_, executor_, input_to_nest_level, join_types, now_, eo.just_explain);
@@ -4896,19 +4896,19 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
           left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
     }
   }
-  auto const overlaps_quals_info = convert_overlaps_join(left_deep_join_quals,
-                                                         input_descs,
-                                                         input_to_nest_level,
-                                                         input_permutation,
-                                                         input_col_descs,
-                                                         executor_);
-  if (overlaps_quals_info.is_reordered) {
+  auto const bbox_intersect_qual_info = convert_bbox_intersect_join(left_deep_join_quals,
+                                                                    input_descs,
+                                                                    input_to_nest_level,
+                                                                    input_permutation,
+                                                                    input_col_descs,
+                                                                    executor_);
+  if (bbox_intersect_qual_info.is_reordered) {
     query_infos = get_table_infos(input_descs, executor_);
     VLOG(3) << "input_descs=" << shared::printContainer(input_descs);
     VLOG(3) << "input_col_descs=" << shared::printContainer(input_col_descs);
   }
-  if (overlaps_quals_info.has_overlaps_join) {
-    left_deep_join_quals = overlaps_quals_info.join_quals;
+  if (bbox_intersect_qual_info.has_bbox_intersect_join) {
+    left_deep_join_quals = bbox_intersect_qual_info.join_quals;
   }
   RelAlgTranslator translator(
       query_state_, executor_, input_to_nest_level, join_types, now_, eo.just_explain);

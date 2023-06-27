@@ -29,14 +29,14 @@ struct AutoTunerMetaInfo {
   std::vector<double> bucket_sizes;
 };
 
-class OverlapsTuningParamRecycler
+class BoundingBoxIntersectTuningParamRecycler
     : public DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO> {
  public:
   // hashing scheme recycler caches logical information instead of actual data
   // so we do not limit its capacity
   // thus we do not maintain a metric cache for hashing scheme
-  OverlapsTuningParamRecycler()
-      : DataRecycler({CacheItemType::OVERLAPS_AUTO_TUNER_PARAM},
+  BoundingBoxIntersectTuningParamRecycler()
+      : DataRecycler({CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM},
                      std::numeric_limits<size_t>::max(),
                      std::numeric_limits<size_t>::max(),
                      0) {}

@@ -266,7 +266,7 @@ void BaselineJoinHashTable::reify(const HashType preferred_layout) {
       executor_);
 
   auto layout = preferred_layout;
-  if (condition_->is_overlaps_oper()) {
+  if (condition_->is_bbox_intersect_oper()) {
     CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
 
     if (inner_outer_pairs_[0].second->get_type_info().is_array()) {
@@ -278,7 +278,8 @@ void BaselineJoinHashTable::reify(const HashType preferred_layout) {
       reifyWithLayout(layout);
       return;
     } catch (const std::exception& e) {
-      VLOG(1) << "Caught exception while building overlaps baseline hash table: "
+      VLOG(1) << "Caught exception while building baseline hash table for bounding box "
+                 "intersection: "
               << e.what();
       throw;
     }

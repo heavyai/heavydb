@@ -93,12 +93,13 @@ class FailedToJoinOnVirtualColumn : public HashJoinFail {
   FailedToJoinOnVirtualColumn() : HashJoinFail("Cannot join on rowid") {}
 };
 
-class OverlapsHashTableTooBig : public HashJoinFail {
+class TooBigHashTableForBoundingBoxIntersect : public HashJoinFail {
  public:
-  OverlapsHashTableTooBig(const size_t overlaps_hash_table_max_bytes)
+  TooBigHashTableForBoundingBoxIntersect(const size_t bbox_intersect_hash_table_max_bytes)
       : HashJoinFail(
-            "Could not create overlaps hash table with less than max allowed size of " +
-            std::to_string(overlaps_hash_table_max_bytes) + " bytes") {}
+            "Could not create hash table for bounding box intersection with less than "
+            "max allowed size of " +
+            std::to_string(bbox_intersect_hash_table_max_bytes) + " bytes") {}
 };
 
 using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
@@ -281,7 +282,7 @@ class HashJoin {
       const Analyzer::Expr* lhs,
       const Analyzer::Expr* rhs,
       const TemporaryTables* temporary_tables,
-      const bool is_overlaps_join = false);
+      const bool is_bbox_intersect = false);
 
   template <typename T>
   static const T* getHashJoinColumn(const Analyzer::Expr* expr);

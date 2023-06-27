@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-#include "OverlapsTuningParamRecycler.h"
+#include "BoundingBoxIntersectTuningParamRecycler.h"
 
-std::optional<AutoTunerMetaInfo> OverlapsTuningParamRecycler::getItemFromCache(
+std::optional<AutoTunerMetaInfo>
+BoundingBoxIntersectTuningParamRecycler::getItemFromCache(
     QueryPlanHash key,
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
@@ -25,7 +26,7 @@ std::optional<AutoTunerMetaInfo> OverlapsTuningParamRecycler::getItemFromCache(
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return std::nullopt;
   }
-  CHECK_EQ(item_type, CacheItemType::OVERLAPS_AUTO_TUNER_PARAM);
+  CHECK_EQ(item_type, CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM);
   std::lock_guard<std::mutex> lock(getCacheLock());
   auto param_cache = getCachedItemContainer(item_type, device_identifier);
   auto cached_param = getCachedItemWithoutConsideringMetaInfo(
@@ -40,7 +41,7 @@ std::optional<AutoTunerMetaInfo> OverlapsTuningParamRecycler::getItemFromCache(
   return std::nullopt;
 }
 
-void OverlapsTuningParamRecycler::putItemToCache(
+void BoundingBoxIntersectTuningParamRecycler::putItemToCache(
     QueryPlanHash key,
     std::optional<AutoTunerMetaInfo> item,
     CacheItemType item_type,
@@ -52,7 +53,7 @@ void OverlapsTuningParamRecycler::putItemToCache(
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return;
   }
-  CHECK_EQ(item_type, CacheItemType::OVERLAPS_AUTO_TUNER_PARAM);
+  CHECK_EQ(item_type, CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM);
   std::lock_guard<std::mutex> lock(getCacheLock());
   auto param_cache = getCachedItemContainer(item_type, device_identifier);
   auto cached_param = getCachedItemWithoutConsideringMetaInfo(
@@ -67,7 +68,7 @@ void OverlapsTuningParamRecycler::putItemToCache(
   return;
 }
 
-bool OverlapsTuningParamRecycler::hasItemInCache(
+bool BoundingBoxIntersectTuningParamRecycler::hasItemInCache(
     QueryPlanHash key,
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
@@ -77,7 +78,7 @@ bool OverlapsTuningParamRecycler::hasItemInCache(
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return false;
   }
-  CHECK_EQ(item_type, CacheItemType::OVERLAPS_AUTO_TUNER_PARAM);
+  CHECK_EQ(item_type, CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM);
   auto param_cache = getCachedItemContainer(item_type, device_identifier);
   auto candidate_it = std::find_if(
       param_cache->begin(), param_cache->end(), [&key](const auto& cached_item) {
@@ -86,7 +87,7 @@ bool OverlapsTuningParamRecycler::hasItemInCache(
   return candidate_it != param_cache->end();
 }
 
-void OverlapsTuningParamRecycler::removeItemFromCache(
+void BoundingBoxIntersectTuningParamRecycler::removeItemFromCache(
     QueryPlanHash key,
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
@@ -105,19 +106,19 @@ void OverlapsTuningParamRecycler::removeItemFromCache(
   }
 }
 
-void OverlapsTuningParamRecycler::clearCache() {
+void BoundingBoxIntersectTuningParamRecycler::clearCache() {
   std::lock_guard<std::mutex> lock(getCacheLock());
-  auto param_cache = getCachedItemContainer(CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
-                                            PARAM_CACHE_DEVICE_IDENTIFIER);
+  auto param_cache = getCachedItemContainer(
+      CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM, PARAM_CACHE_DEVICE_IDENTIFIER);
   if (!param_cache->empty()) {
-    VLOG(1) << "[" << CacheItemType::OVERLAPS_AUTO_TUNER_PARAM << ", "
+    VLOG(1) << "[" << CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM << ", "
             << DataRecyclerUtil::getDeviceIdentifierString(PARAM_CACHE_DEVICE_IDENTIFIER)
             << "] clear cache (# items: " << param_cache->size() << ")";
     param_cache->clear();
   }
 }
 
-void OverlapsTuningParamRecycler::markCachedItemAsDirty(
+void BoundingBoxIntersectTuningParamRecycler::markCachedItemAsDirty(
     size_t table_key,
     std::unordered_set<QueryPlanHash>& key_set,
     CacheItemType item_type,
@@ -125,7 +126,7 @@ void OverlapsTuningParamRecycler::markCachedItemAsDirty(
   if (!g_enable_data_recycler || !g_use_hashtable_cache || key_set.empty()) {
     return;
   }
-  CHECK_EQ(item_type, CacheItemType::OVERLAPS_AUTO_TUNER_PARAM);
+  CHECK_EQ(item_type, CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM);
   std::lock_guard<std::mutex> lock(getCacheLock());
   auto param_cache = getCachedItemContainer(item_type, device_identifier);
   for (auto key : key_set) {
@@ -133,13 +134,13 @@ void OverlapsTuningParamRecycler::markCachedItemAsDirty(
   }
 }
 
-std::string OverlapsTuningParamRecycler::toString() const {
+std::string BoundingBoxIntersectTuningParamRecycler::toString() const {
   std::ostringstream oss;
-  oss << "A current status of the Overlaps Join Hashtable Tuning Parameter Recycler:\n";
+  oss << "A current status of the Bounding Box Intersection Tuning Parameter Recycler:\n";
   oss << "\t# cached parameters:\n";
   oss << "\t\tDevice" << PARAM_CACHE_DEVICE_IDENTIFIER << "\n";
-  auto param_cache = getCachedItemContainer(CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
-                                            PARAM_CACHE_DEVICE_IDENTIFIER);
+  auto param_cache = getCachedItemContainer(
+      CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM, PARAM_CACHE_DEVICE_IDENTIFIER);
   for (auto& cache_container : *param_cache) {
     oss << "\t\t\tCache_key: " << cache_container.key;
     if (cache_container.cached_item.has_value()) {

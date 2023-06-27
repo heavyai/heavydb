@@ -29,20 +29,20 @@
 /// ========================================
 ///
 ///  First, let's take a concrete example of a query that is rewritten as a range join.
-///  Notice in the first code block, that the condition operator is an Overlaps operator.
+///  Notice in the first code block, that the condition operator is a bounding box intersection operator.
 ///  The LHS is a column, and the RHS is the range operator. In order to have the hash table
 ///  build and probe work properly, we need to ensure that the approriate runtime functions 
 ///  are selected. The following breakdown is provided to help document how the appropriate 
 ///  runtime funditon is selected.
 ///
 ///    * The LHS of the RangeOper is used to build the hash table
-///    * The LHS of the OverlapsOper + the RHS of the RangeOper is used as probe
+///    * The LHS of the BoundingBoxIntersectionOper + the RHS of the RangeOper is used as probe
 ///
 /// SELECT count(*) FROM t1, t2 where ST_Distance(t1.p1_comp32, t2.p1) <= 6.3;
 ///
 ///   BinOper condition
 ///   -----------------------
-///   ((OVERLAPS)
+///   ((BoundingBoxIntersect)
 ///     (ColumnVar table: (t1) column: (p1_comp32) GEOMETRY(POINT, 4326) ENCODING  COMPRESSED(32))
 ///     (RangeOper)
 ///        (ColumnVar table: (t2) column: (p1) GEOMETRY(POINT, 4326) ENCODING NONE),
@@ -59,7 +59,7 @@
 ///
 ///   SELECT count(*) FROM t1, t2 where 
 ///          ST_Distance(
-///                        t1.p1_comp32,      << Overlaps Condition LHS
+///                        t1.p1_comp32,      << Bounding Box Intersection Condition LHS
 ///                        t2.p1              << RangeOper LHS
 ///                     ) <= 6.3;             << RangeOper RHS
 ///
@@ -182,9 +182,9 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
       dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(
           data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
     }
-    // for overlaps join, we need to fetch columns regardless of the availability of
-    // cached hash table to calculate various params, i.e., bucket size info todo
-    // (yoonmin) : relax this
+    // for bounding box intersection, we need to fetch columns regardless of the
+    // availability of cached hash table to calculate various params, i.e., bucket size
+    // info todo(yoonmin) : relax this
     const auto columns_for_device =
         fetchColumnsForDevice(fragments_per_device[device_id],
                               device_id,
@@ -214,9 +214,9 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
   effective_memory_level_ = getEffectiveMemoryLevel(inner_outer_pairs_);
 
   // to properly lookup cached hash table, we need to use join columns listed as lhs and
-  // rhs of the overlaps op instead of physical (and hidden) column tailored to range join
-  // expr in other words, we need to use geometry column (point) instead of its hidden
-  // array column i.e., see `get_physical_cols` function
+  // rhs of the bbox intersect op instead of physical (and hidden) column tailored to
+  // range join expr in other words, we need to use geometry column (point) instead of its
+  // hidden array column i.e., see `get_physical_cols` function
   std::vector<InnerOuter> inner_outer_pairs_for_cache_lookup;
   inner_outer_pairs_for_cache_lookup.emplace_back(InnerOuter{
       dynamic_cast<const Analyzer::ColumnVar*>(range_expr_->get_left_operand()),
@@ -246,7 +246,7 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
   }
   CHECK(!table_keys_.empty());
 
-  setOverlapsHashtableMetaInfo(
+  setBoundingBoxIntersectionMetaInfo(
       max_hashtable_size_, bucket_threshold_, inverse_bucket_sizes_for_dimension_);
   generateCacheKey(max_hashtable_size_,
                    bucket_threshold_,
@@ -262,7 +262,7 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
       boost::hash_combine(chunk_key_hash,
                           HashJoin::collectFragmentIds(fragments_per_device[device_id]));
       per_device_chunk_key.push_back(chunk_key_hash);
-      AlternativeCacheKeyForOverlapsHashJoin cache_key{
+      AlternativeCacheKeyForBoundingBoxIntersection cache_key{
           inner_outer_pairs_for_cache_lookup,
           columns_per_device.front().join_columns.front().num_elems,
           chunk_key_hash,
@@ -280,7 +280,7 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
     std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
     if (auto generic_hash_table =
             initHashTableOnCpuFromCache(hashtable_cache_key_.front(),
-                                        CacheItemType::OVERLAPS_HT,
+                                        CacheItemType::BBOX_INTERSECT_HT,
                                         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER)) {
       if (auto hash_table =
               std::dynamic_pointer_cast<BaselineHashTable>(generic_hash_table)) {
@@ -316,7 +316,7 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
   auto [entry_count, emitted_keys_count] =
       computeRangeHashTableCounts(shard_count, columns_per_device);
 
-  size_t hash_table_size = OverlapsJoinHashTable::calculateHashTableSize(
+  size_t hash_table_size = BoundingBoxIntersectJoinHashTable::calculateHashTableSize(
       inverse_bucket_sizes_for_dimension_.size(), emitted_keys_count, entry_count);
 
   VLOG(1) << "Finalized range join hash table: entry count " << entry_count
@@ -492,7 +492,7 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
   auto hashtable_build_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
   putHashTableOnCpuToCache(hashtable_cache_key_.front(),
-                           CacheItemType::OVERLAPS_HT,
+                           CacheItemType::BBOX_INTERSECT_HT,
                            hash_table,
                            DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
                            hashtable_build_time);
@@ -747,8 +747,8 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
           {col_lvs.front(), code_generator.posArg(outer_col)});
       CHECK(array_buff_ptr);
       CHECK(coords_ti.get_elem_type().get_type() == kTINYINT)
-          << "Only TINYINT coordinates columns are supported in geo overlaps "
-             "hash join.";
+          << "Only TINYINT coordinates columns are supported in bounding box "
+             "intersection.";
       arr_ptr =
           code_generator.castArrayPointer(array_buff_ptr, coords_ti.get_elem_type());
     } else if (auto geo_expr_outer_col =
