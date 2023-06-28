@@ -1500,7 +1500,7 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
         : "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"
     },
     {
-      i(5), Null, Null, Null, Null. Null, Null
+      i(5), Null, Null, Null, Null, Null, Null
     }},
     query);
   // clang-format on
