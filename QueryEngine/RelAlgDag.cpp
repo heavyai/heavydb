@@ -842,6 +842,11 @@ RelLogicalUnion::RelLogicalUnion(RelAlgInputs inputs, bool is_all)
   if (!is_all_) {
     throw QueryNotSupported("UNION without ALL is not supported yet.");
   }
+  if (!allStringCastsAreToDictionaryEncodedStrings()) {
+    throw QueryNotSupported(
+        "Unsupported CAST in UNION: Currently, we only allow casting text type to "
+        "dictionary-encoded strings.");
+  }
 }
 
 size_t RelLogicalUnion::size() const {
@@ -945,6 +950,22 @@ RexScalar const* RelLogicalUnion::copyAndRedirectSource(RexScalar const* rex_sca
     return scalar_exprs_.back().get();
   }
   return rex_scalar;
+}
+
+bool RelLogicalUnion::allStringCastsAreToDictionaryEncodedStrings() const {
+  for (auto const& input : inputs_) {
+    if (auto* proj_node = dynamic_cast<RelProject const*>(input.get())) {
+      for (size_t i = 0; i < proj_node->size(); i++) {
+        if (auto* oper = dynamic_cast<RexOperator const*>(proj_node->getProjectAt(i))) {
+          if (oper->getOperator() == SQLOps::kCAST && oper->getType().is_string() &&
+              !oper->getType().is_dict_encoded_string()) {
+            return false;
+          }
+        }
+      }
+    }
+  }
+  return true;
 }
 
 namespace {

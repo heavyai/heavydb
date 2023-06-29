@@ -25880,6 +25880,7 @@ TEST_F(Select, UnionAll) {
           "SELECT real_str FROM test UNION ALL SELECT real_str "
           "FROM test ORDER BY real_str;",
           dt));
+    EXPECT_ANY_THROW(c("SELECT t FROM test UNION ALL SELECT fixed_str FROM test;", dt));
   }
   g_enable_union = enable_union;
 }
