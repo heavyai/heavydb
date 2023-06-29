@@ -4,7 +4,7 @@ if(ENABLE_SYSTEM_TFS)
     list(APPEND TORCH_LIBS ${TORCH_LIBRARIES} ${MKL_LIBRARIES})
 
     set(torch_table_function_source_files
-      ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp TestTorchTableFunctions.cpp
+      TorchWrapper.cpp TorchOps.hpp TorchTableFunctions.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp TestTorchTableFunctions.cpp
     )
 
     set(TORCH_TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TestTorchTableFunctions.h)
