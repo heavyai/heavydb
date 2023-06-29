@@ -2779,6 +2779,7 @@ class RelLogicalUnion : public RelAlgNode {
 
  private:
   friend std::size_t hash_value(RelLogicalUnion const&);
+  bool allStringCastsAreToDictionaryEncodedStrings() const;
 
   bool is_all_;
 
