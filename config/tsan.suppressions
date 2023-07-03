@@ -24,3 +24,5 @@ race:fpk_serv_free
 race:ShowModelFeatureDetailsDdlTest::TearDown
 # QE-872
 race:ResultSet::parallelTop
+# QE-874
+race:rml::internal::BootStrapBlocks::allocate
