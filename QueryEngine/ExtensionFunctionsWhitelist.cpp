@@ -843,6 +843,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "Array<TextEncodingDict>") {
     return ExtArgumentType::ArrayTextEncodingDict;
   }
+  if (type_name == "Array<TextEncodingNone>") {
+    return ExtArgumentType::ArrayTextEncodingNone;
+  }
   if (type_name == "GeoPoint") {
     return ExtArgumentType::GeoPoint;
   }
