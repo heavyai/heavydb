@@ -332,6 +332,53 @@ Array<TextEncodingDict> array_second_half__t32(RowFunctionManager& mgr,
 }
 #endif
 
+EXTENSION_NOINLINE bool array_equal__bool(const Array<bool>& in_arr,
+                                          const Array<bool>& other_arr) {
+  return in_arr == other_arr;
+}
+
+EXTENSION_NOINLINE bool array_equal__i8(const Array<int8_t>& in_arr,
+                                        const Array<int8_t>& other_arr) {
+  return in_arr == other_arr;
+}
+
+EXTENSION_NOINLINE bool array_equal__i16(const Array<int16_t>& in_arr,
+                                         const Array<int16_t>& other_arr) {
+  return in_arr == other_arr;
+}
+
+EXTENSION_NOINLINE bool array_equal__i32(const Array<int32_t>& in_arr,
+                                         const Array<int32_t>& other_arr) {
+  return in_arr == other_arr;
+}
+
+EXTENSION_NOINLINE bool array_equal__i64(const Array<int64_t>& in_arr,
+                                         const Array<int64_t>& other_arr) {
+  return in_arr == other_arr;
+}
+
+EXTENSION_NOINLINE bool array_equal__f32(const Array<float>& in_arr,
+                                         const Array<float>& other_arr) {
+  return in_arr == other_arr;
+}
+
+EXTENSION_NOINLINE bool array_equal__f64(const Array<double>& in_arr,
+                                         const Array<double>& other_arr) {
+  return in_arr == other_arr;
+}
+
+/*
+  // Requires Array<TextEncodingNone> indexing support:
+  EXTENSION_NOINLINE bool array_equal__text(const Array<TextEncodingNone>& in_arr, const
+  Array<TextEncodingNone>& other_arr) { return in_arr == other_arr;
+  }
+*/
+
+EXTENSION_NOINLINE bool array_equal__textdict(const Array<TextEncodingDict>& in_arr,
+                                              const Array<TextEncodingDict>& other_arr) {
+  return in_arr == other_arr;
+}
+
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif

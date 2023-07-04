@@ -421,6 +421,113 @@ TEST_F(ArrayExtOpsEnv, ArrayAppendFloat) {
   }
 }
 
+TEST_F(ArrayExtOpsEnv, ArrayEqual) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto check_row_result =
+        [](const auto& crt_row, const auto expected, const std::string& msg) {
+          ASSERT_EQ(v<int64_t>(crt_row[0]), expected) << msg;
+        };
+    auto check_first_equal = [&check_row_result](const auto& rows,
+                                                 const std::string& msg) {
+      ASSERT_EQ(rows->rowCount(), size_t(6));
+
+      check_row_result(rows->getNextRow(true, true), 1, msg + ": row 0");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 1");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 2");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 3");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 4");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 5");
+    };
+
+    auto check_all_nonnull_equal = [&check_row_result](const auto& rows,
+                                                       const std::string& msg) {
+      ASSERT_EQ(rows->rowCount(), size_t(6));
+
+      check_row_result(rows->getNextRow(true, true), 1, msg + ": row 0");
+      check_row_result(rows->getNextRow(true, true), 1, msg + ": row 1");
+      check_row_result(rows->getNextRow(true, true), 1, msg + ": row 2");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 3");
+      check_row_result(rows->getNextRow(true, true), 1, msg + ": row 4");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 5");
+    };
+
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arri1, ARRAY[true, false]) FROM array_ext_ops_test;", dt);
+      check_first_equal(rows, "array_equal(arri1, {true, false})");
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arri8, ARRAY[CAST(1 AS TINYINT), CAST(2 AS TINYINT)]) FROM "
+          "array_ext_ops_test;",
+          dt);
+      check_first_equal(rows, "array_equal(arri8, {1, 2})");
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arri16, ARRAY[CAST(1 AS SMALLINT), CAST(2 AS SMALLINT)]) "
+          "FROM array_ext_ops_test;",
+          dt);
+      check_first_equal(rows, "array_equal(arri16, {1, 2})");
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arri32, ARRAY[CAST(1 AS INT), CAST(2 AS INT)]) FROM "
+          "array_ext_ops_test;",
+          dt);
+      check_first_equal(rows, "array_equal(arri32, {1, 2})");
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arri64, ARRAY[CAST(1 AS BIGINT), CAST(2 AS BIGINT)]) FROM "
+          "array_ext_ops_test;",
+          dt);
+      check_first_equal(rows, "array_equal(arri64, {1, 2})");
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arrf, ARRAY[CAST(1 AS FLOAT), CAST(2 AS FLOAT)]) FROM "
+          "array_ext_ops_test;",
+          dt);
+      check_first_equal(rows, "array_equal(arrf, {1, 2})");
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arrd, ARRAY[CAST(1 AS DOUBLE), CAST(2 AS DOUBLE)]) FROM "
+          "array_ext_ops_test;",
+          dt);
+      check_first_equal(rows, "array_equal(arrd, {1, 2})");
+    }
+    if constexpr (false) {  // Requires Array<TextEncodingNone> indexing support
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arrstr, ARRAY['a', 'b']) FROM array_ext_ops_test;", dt);
+      check_first_equal(rows, "array_equal(arrstr, {'a', 'b'})");
+    }
+    if constexpr (false) {  // Requires Array<TextEncodingNone> indexing support
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arrdict, ARRAY['a', 'b']) FROM array_ext_ops_test;", dt);
+      check_first_equal(rows, "array_equal(arrdict, {'a', 'b'})");
+    }
+    {
+      std::string cols[] = {"arri1",
+                            "arri8",
+                            "arri16",
+                            "arri32",
+                            "arri64",
+                            "arrf",
+                            "arrd" /*, "arrstr"*/,
+                            "arrdict"};
+      for (const auto& col : cols) {
+        std::string expr = "array_equal(" + col + ", " + col + ")";
+        const auto rows =
+            run_multiple_agg("SELECT " + expr + " FROM array_ext_ops_test;", dt);
+        check_all_nonnull_equal(rows, expr);
+      }
+    }
+  }
+}
+
 TEST_F(ArrayExtOpsEnv, ArrayAppendDowncast) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

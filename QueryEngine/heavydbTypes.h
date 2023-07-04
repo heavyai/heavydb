@@ -462,6 +462,8 @@ namespace Geo {
 struct Point2D;
 }
 
+struct TextEncodingNone;
+
 template <typename T>
 struct Array {
   T* ptr_;
@@ -518,6 +520,10 @@ struct Array {
   }
 
   DEVICE T operator()(const unsigned int index) const {
+#ifndef UDF_COMPILED
+    // TODO: implement Array<TextEncodingNone> indexing support
+    static_assert(!std::is_same<T, TextEncodingNone>::value);
+#endif
     if (index < static_cast<unsigned int>(size_)) {
       return ptr_[index];
     } else {
@@ -526,10 +532,18 @@ struct Array {
   }
 
   DEVICE T& operator[](const unsigned int index) {
+#ifndef UDF_COMPILED
+    // TODO: implement Array<TextEncodingNone> indexing support
+    static_assert(!std::is_same<T, TextEncodingNone>::value);
+#endif
     return ptr_[index];
   }
 
   DEVICE const T& operator[](const unsigned int index) const {
+#ifndef UDF_COMPILED
+    // TODO: implement Array<TextEncodingNone> indexing support
+    static_assert(!std::is_same<T, TextEncodingNone>::value);
+#endif
     return ptr_[index];
   }
 
@@ -542,11 +556,27 @@ struct Array {
   }
 
   DEVICE constexpr inline T null_value() const {
-    return inline_null_value<T>();
+    if constexpr (std::is_same<T, TextEncodingNone>::value) {
+      return {};
+    } else {
+      return inline_null_value<T>();
+    }
   }
 
   DEVICE bool isNull(const unsigned int index) const {
     return (is_null_ ? false : ptr_[index] == null_value());
+  }
+
+  DEVICE bool operator==(const Array& other) const {
+    if (isNull() || other.isNull() || size() != other.size()) {
+      return false;
+    }
+    for (int64_t i = 0; i < size_; i++) {
+      if ((*this)[i] != other[i]) {
+        return false;
+      }
+    }
+    return true;
   }
 
 #ifdef HAVE_TOSTRING
@@ -626,7 +656,25 @@ struct TextEncodingNone {
     return strcmp(ptr_, rhs) == 0;
 #endif
   }
+  DEVICE ALWAYS_INLINE bool operator==(const TextEncodingNone& rhs) const {
+    if (isNull() || rhs.isNull() || size_ != rhs.size()) {
+      return false;
+    }
+#ifdef __CUDACC__
+    for (int i = 0; i < size_; i++) {
+      if ((*this)[i] != rhs[i]) {
+        return false;
+      }
+    }
+    return true;
+#else
+    return strncmp(ptr_, rhs.data(), size_) == 0;
+#endif
+  }
   DEVICE ALWAYS_INLINE bool operator!=(const char* rhs) const {
+    return !(this->operator==(rhs));
+  }
+  DEVICE ALWAYS_INLINE bool operator!=(const TextEncodingNone& rhs) const {
     return !(this->operator==(rhs));
   }
   DEVICE ALWAYS_INLINE operator char*() const {
