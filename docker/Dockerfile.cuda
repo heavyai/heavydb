@@ -25,7 +25,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         liblz4-tool \
         libgeos-dev \
         default-jre-headless \
-        libtinfo5 && \
+        libtinfo5 \
+        software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get install -y --no-install-recommends \
+        python3.10 \
+        python3.10-venv \
+        libpython3.10 && \
     apt-get remove --purge -y && \
     rm -rf /var/lib/apt/lists/*
 

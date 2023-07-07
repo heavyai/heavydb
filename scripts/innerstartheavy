@@ -28,8 +28,9 @@ MAPD_TCP_PORT=${MAPD_TCP_PORT:=6274}
 MAPD_HTTP_PORT=${MAPD_HTTP_PORT:=6278}
 MAPD_WEB_PORT=${MAPD_WEB_PORT:=6273}
 MAPD_CALCITE_PORT=${MAPD_CALCITE_PORT:=6279}
+export MAPD_HEAVYIQ_PORT=${MAPD_HEAVYIQ_PORT:=6275}
 
-MAPD_DATA=${MAPD_DATA:="storage"}
+export MAPD_DATA=${MAPD_DATA:="storage"}
 
 while (( $# )); do
     case "$1" in
@@ -57,7 +58,7 @@ while (( $# )); do
         --config)
             shift
             if [ -e "$1" ]; then
-                CONFIG_FILE="$1"
+                export CONFIG_FILE="$1"
                 CONFIG="--config $1"
             else
                 echo "WARN: config file does not exist, ignoring: --config $1" >&2
@@ -81,6 +82,7 @@ echo "Backend TCP:  localhost:${MAPD_TCP_PORT}"
 echo "Backend HTTP: localhost:${MAPD_HTTP_PORT}"
 echo "Frontend Web: localhost:${MAPD_WEB_PORT}"
 echo "Calcite TCP:  localhost:${MAPD_CALCITE_PORT}"
+echo "HeavyIQ HTTP:  localhost:${MAPD_HEAVYIQ_PORT}"
 
 if [ ! -d $MAPD_DATA ]; then
     mkdir -p $MAPD_DATA
@@ -167,6 +169,12 @@ if [ -d frontend ] && [ -e ./bin/heavy_web_server ]; then
     else
         echo "Navigate to: $MAPDFRONTEND"
     fi
+fi
+
+if [[ -d heavyiq ]]; then
+  # Execute the HeavyIQ startup script in a subshell in order to avoid
+  # possible conflicts from virtual environment activation.
+  ($DIR/scripts/ee/start_heavyiq.sh)
 fi
 
 if [ "$LEGACY" = "" ]; then

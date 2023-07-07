@@ -1170,7 +1170,7 @@ std::stringstream sanitize_config_file(std::ifstream& in) {
   std::string line;
   while (std::getline(in, line)) {
     ss << line << "\n";
-    if (line == "[web]") {
+    if (line == "[web]" || line == "[iq]") {
       break;
     }
   }
