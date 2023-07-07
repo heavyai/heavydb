@@ -1269,6 +1269,14 @@ if(MAPD_IMMERSE_DOWNLOAD)
   endif()
 endif()
 
+# HeavyIQ
+option(HEAVYIQ_DOWNLOAD "Download HeavyIQ for packaging" ON)
+if(HEAVYIQ_DOWNLOAD)
+  if("${MAPD_EDITION_LOWER}" STREQUAL "ee" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/HeavyIQ")
+    add_subdirectory(HeavyIQ)
+  endif()
+endif()
+
 add_subdirectory(ThirdParty/generate_cert)
 
 # systemd
@@ -1376,6 +1384,9 @@ install(FILES "${EULA_FILE}" DESTINATION "."  COMPONENT "doc")
 
 install(PROGRAMS startheavy DESTINATION ".")
 install(PROGRAMS scripts/innerstartheavy DESTINATION "scripts")
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  install(PROGRAMS scripts/ee/start_heavyiq.sh DESTINATION "scripts/ee")
+endif()
 install(PROGRAMS insert_sample_data DESTINATION ".")
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
