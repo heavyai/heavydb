@@ -95,7 +95,7 @@ struct BoundingBoxIntersectJoinSupportedFunction {
       "ST_Intersects_MultiPolygon_Point"};
   static constexpr std::string_view ST_APPROX_OVERLAPS_MULTIPOLYGON_POINT_sv{
       "ST_Approx_Overlaps_MultiPolygon_Point"};
-  static constexpr std::string_view ST_OVERLAPS_sv{"ST_Overlaps"};
+  static constexpr std::string_view ST_INTERSECTSBOX_sv{"ST_IntersectsBox"};
   static constexpr std::string_view ST_DISTANCE_sv{"ST_Distance"};
   // compressed coords version
   static constexpr std::string_view ST_CCONTAINS_MULTIPOLYGON_POINT_sv{
@@ -125,7 +125,7 @@ struct BoundingBoxIntersectJoinSupportedFunction {
       ST_CCONTAINS_MULTIPOLYGON_POINT_sv,
       ST_CINTERSECTS_POLYGON_POINT_sv,
       ST_CINTERSECTS_MULTIPOLYGON_POINT_sv,
-      ST_OVERLAPS_sv,
+      ST_INTERSECTSBOX_sv,
       ST_DWITHIN_POINT_POINT_sv};
 
   static constexpr std::array<std::string_view, 5> MANY_TO_MANY_BBOX_INTERSECT_FUNC{

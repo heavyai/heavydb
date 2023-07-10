@@ -243,7 +243,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new ST_Contains());
     addOperator(new ST_Equals());
     addOperator(new ST_Intersects());
-    addOperator(new ST_Overlaps());
+    addOperator(new ST_IntersectsBox());
     addOperator(new ST_Approx_Overlaps());
     addOperator(new ST_Disjoint());
     addOperator(new ST_Within());
@@ -1789,9 +1789,9 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     }
   }
 
-  static class ST_Overlaps extends SqlFunction {
-    ST_Overlaps() {
-      super("ST_Overlaps",
+  static class ST_IntersectsBox extends SqlFunction {
+    ST_IntersectsBox() {
+      super("ST_IntersectsBox",
               SqlKind.OTHER_FUNCTION,
               null,
               null,
@@ -1807,11 +1807,11 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> st_overlaps_sig =
+      java.util.List<SqlTypeFamily> st_intersect_box_sig =
               new java.util.ArrayList<SqlTypeFamily>();
-      st_overlaps_sig.add(SqlTypeFamily.ANY);
-      st_overlaps_sig.add(SqlTypeFamily.ANY);
-      return st_overlaps_sig;
+      st_intersect_box_sig.add(SqlTypeFamily.ANY);
+      st_intersect_box_sig.add(SqlTypeFamily.ANY);
+      return st_intersect_box_sig;
     }
   }
 
@@ -1833,11 +1833,11 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> st_overlaps_sig =
+      java.util.List<SqlTypeFamily> st_intersect_box_sig =
               new java.util.ArrayList<SqlTypeFamily>();
-      st_overlaps_sig.add(SqlTypeFamily.ANY);
-      st_overlaps_sig.add(SqlTypeFamily.ANY);
-      return st_overlaps_sig;
+      st_intersect_box_sig.add(SqlTypeFamily.ANY);
+      st_intersect_box_sig.add(SqlTypeFamily.ANY);
+      return st_intersect_box_sig;
     }
   }
 
