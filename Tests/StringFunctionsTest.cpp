@@ -3584,6 +3584,20 @@ TEST_F(StringFunctionTest, StrtokToArray_UDF) {
   }
 }
 
+TEST_F(StringFunctionTest, UDFConcat) {
+  for (auto dt : {ExecutorDeviceType::CPU, /* ExecutorDeviceType::GPU */}) {
+    SKIP_NO_GPU();
+    const auto result_set =
+        sql("select 'hello ' || udf_identity(name) from text_enc_test;", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+        {"hello United States"},
+        {"hello Canada"},
+        {"hello United Kingdom"},
+        {"hello Germany"}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
 TEST_F(StringFunctionTest, AlterTable_RuntimeFunction) {
   for (auto dt : {ExecutorDeviceType::CPU, /* ExecutorDeviceType::GPU */}) {
     SKIP_NO_GPU();

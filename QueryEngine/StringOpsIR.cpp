@@ -288,12 +288,11 @@ CodeGenerator::codegenStringFetchAndEncode(const Analyzer::StringOper* expr,
 
   auto primary_str_lv = codegen(expr->getArg(arg_idx), true, co);
   std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
-  if (primary_str_lv.size() != 3) {
+  if (primary_str_lv.size() != 3 && arg_ti.is_dict_encoded_string()) {
     // If this is the case we should have a transient dictionary from a previous op
     // We can't use the dictionary values without decoding as this op occurs directly
     // inline on top of whatever operation created the transient dictionary
     CHECK_EQ(size_t(1), primary_str_lv.size());
-    CHECK(arg_ti.is_dict_encoded_string());
     const bool is_nullable = !arg_ti.get_notnull();
     if (codegen_nullcheck && is_nullable) {
       const auto decoded_input_ti = SQLTypeInfo(kTEXT, is_nullable, kENCODING_DICT);
@@ -314,6 +313,16 @@ CodeGenerator::codegenStringFetchAndEncode(const Analyzer::StringOper* expr,
     primary_str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(string_view, 1));
     primary_str_lv.back() = cgen_state_->ir_builder_.CreateTrunc(
         primary_str_lv.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
+  } else if (primary_str_lv.size() == 1 and arg_ti.is_none_encoded_string()) {
+    // real (not dictionary-encoded) strings
+    CHECK(primary_str_lv[0]->getType()->isPointerTy());
+    const auto none_enc_string = cgen_state_->ir_builder_.CreateLoad(
+        primary_str_lv[0]->getType()->getPointerElementType(), primary_str_lv[0]);
+    primary_str_lv.push_back(
+        cgen_state_->ir_builder_.CreateExtractValue(none_enc_string, 0));
+    primary_str_lv.push_back(cgen_state_->ir_builder_.CreateTrunc(
+        cgen_state_->ir_builder_.CreateExtractValue(none_enc_string, 1),
+        llvm::Type::getInt32Ty(cgen_state_->context_)));
   }
   CHECK_EQ(size_t(3), primary_str_lv.size());
   return std::make_pair(primary_str_lv, std::move(nullcheck_codegen));
