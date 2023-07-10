@@ -1018,7 +1018,8 @@ translate_bounding_box_intersect_with_reordering(
    * returning the original expr means we additionally call its corresponding native
    * function to compute the result accurately (i.e., bbox-intersect hash join operates a
    * kind of filter expression which may include false-positive of the true resultset).
-   * Note that ST_Overlaps is the only function that does not return the original expr.
+   * Note that ST_IntersectsBox is the only function that does not return the original
+   * expr.
    * */
   std::shared_ptr<Analyzer::BinOper> bbox_intersect_oper{nullptr};
   bool needs_to_return_original_expr = false;
@@ -1034,14 +1035,15 @@ translate_bounding_box_intersect_with_reordering(
       return BoundingBoxIntersectJoinTranslationResult::createEmptyResult();
     }
     DeepCopyVisitor deep_copy_visitor;
-    if (func_name == BoundingBoxIntersectJoinSupportedFunction::ST_OVERLAPS_sv) {
+    if (func_name == BoundingBoxIntersectJoinSupportedFunction::ST_INTERSECTSBOX_sv) {
       CHECK_GE(func_oper->getArity(), size_t(2));
       // this case returns {empty quals, bbox_intersect join quals} b/c our join key
-      // matching logic for this case is the same as the implementation of ST_Overlaps
-      // function Note that we can build a join hash table for bbox_intersect regardless
-      // of table ordering and the argument order in this case b/c selecting lhs and rhs
-      // by arguments 0 and 1 always match the rte index requirement (rte_lhs < rte_rhs)
-      // so what table ordering we take, the rte index requirement satisfies
+      // matching logic for this case is the same as the implementation of
+      // ST_IntersectsBox function Note that we can build a join hash table for
+      // bbox_intersect regardless of table ordering and the argument order in this case
+      // b/c selecting lhs and rhs by arguments 0 and 1 always match the rte index
+      // requirement (rte_lhs < rte_rhs) so what table ordering we take, the rte index
+      // requirement satisfies
       // TODO(adb): we will likely want to actually check for true bbox_intersect, but
       // this works for now
       auto lhs = func_oper->getOwnArg(0);

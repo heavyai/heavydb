@@ -1217,11 +1217,21 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     EXPECT_ANY_THROW(run_multiple_agg(
         "SELECT poly, l, id FROM geospatial_test ORDER BY id, poly;", dt));
 
+    // ST_IntersectsBox to join two tables
+    // todo: support boolean predicate operator to determine geospatial relationship based
+    // on bounding box
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "SELECT ST_IntersectsBox(poly, mpoly) FROM geospatial_test", dt));
     // geo operator with non-geo column
-    EXPECT_ANY_THROW(
-        run_multiple_agg("SELECT ST_OVERLAPS(l, id) FROM geospatial_test", dt));
-    EXPECT_ANY_THROW(
-        run_multiple_agg("SELECT ST_OVERLAPS(id, l) FROM geospatial_test", dt));
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "SELECT COUNT(1) FROM geospatial_test R, geospatial_test S WHERE "
+        "ST_IntersectsBox(R.poly, S.id)",
+        dt));
+    ASSERT_EQ(static_cast<int64_t>(100),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(1) FROM geospatial_test R, geospatial_test S WHERE "
+                  "ST_IntersectsBox(R.poly, S.mpoly)",
+                  dt)));
 
     // ST_NumGeometries
     // pass (actual count)

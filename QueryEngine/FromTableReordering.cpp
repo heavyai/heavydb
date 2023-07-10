@@ -117,7 +117,7 @@ std::tuple<cost_t, cost_t, InnerQualDecision> get_join_qual_cost(
       // rest of bbox-intersection-available and unavailable geo functions
       // can reach here, and they are reordered by table cardinality
       // specifically, bbox-intersection-available geo join functions are satisfied one of
-      // followings: ST_OVERLAPS_sv and is_poly_mpoly_rewrite_target_func we can use
+      // followings: ST_INTERSECTSBOX_sv and is_poly_mpoly_rewrite_target_func we can use
       // bbox-intersection hash join for those functions regardless of table ordering see
       // rewrite_bbox_intersection function in ExpressionRewrite.cpp
       VLOG(2) << "Detect geo join operator, initial_inner_table(db_id: "

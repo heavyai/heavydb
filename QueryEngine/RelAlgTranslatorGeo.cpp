@@ -1347,7 +1347,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   auto function_name = rex_function->getName();
   auto return_type = rex_function->getType();
 
-  if (function_name == "ST_Overlaps"sv) {
+  if (function_name == "ST_IntersectsBox"sv) {
     // Bounding box intersection is the only implementation supported for now, only
     // translate bounds
     CHECK_EQ(size_t(2), rex_function->size());
@@ -1360,13 +1360,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
         const auto exprs = translateGeoColumn(rex_input, ti, true, false);
         CHECK_GT(exprs.size(), size_t(0));
         if (ti.get_type() == kPOINT) {
-          throw std::runtime_error("ST_Overlaps is not supported for point arguments.");
+          throw std::runtime_error(
+              "ST_IntersectsBox is not supported for point arguments.");
         } else {
           return exprs.back();
         }
       } else {
         throw std::runtime_error(
-            "Only inputs are supported as arguments to ST_Overlaps for now.");
+            "Only inputs are supported as arguments to ST_IntersectsBox for now.");
       }
     };
     std::vector<std::shared_ptr<Analyzer::Expr>> geo_args;
