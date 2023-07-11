@@ -81,7 +81,8 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
     if (value == null_val) {
       continue;
     }
-    agg_count_distinct_bitmap(reinterpret_cast<int64_t*>(&cpu_bitset), value, min_val_);
+    agg_count_distinct_bitmap(
+        reinterpret_cast<int64_t*>(&cpu_bitset), value, min_val_, 0);
   }
 #ifdef HAVE_CUDA
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {

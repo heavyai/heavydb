@@ -3606,12 +3606,14 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     }
     CountDistinctDescriptor approx_count_distinct_desc{CountDistinctImplType::Bitmap,
                                                        arg_range.getIntMin(),
+                                                       0,
                                                        approx_bitmap_sz_bits,
                                                        true,
                                                        device_type,
                                                        sub_bitmap_count};
     CountDistinctDescriptor precise_count_distinct_desc{CountDistinctImplType::Bitmap,
                                                         arg_range.getIntMin(),
+                                                        0,
                                                         bitmap_sz_bits,
                                                         false,
                                                         device_type,

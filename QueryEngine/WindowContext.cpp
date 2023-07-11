@@ -419,11 +419,11 @@ void index_to_partition_end(
   int64_t partition_end_handle = reinterpret_cast<int64_t>(partition_end);
   for (size_t i = 0; i < index_size; ++i) {
     if (advance_current_rank(comparator, index, i)) {
-      agg_count_distinct_bitmap(&partition_end_handle, off + i - 1, 0);
+      agg_count_distinct_bitmap(&partition_end_handle, off + i - 1, 0, 0);
     }
   }
   CHECK(index_size);
-  agg_count_distinct_bitmap(&partition_end_handle, off + index_size - 1, 0);
+  agg_count_distinct_bitmap(&partition_end_handle, off + index_size - 1, 0, 0);
 }
 
 bool pos_is_set(const int64_t bitset, const int64_t pos) {
@@ -1695,6 +1695,7 @@ int64_t* WindowFunctionContext::getNullValueEndPos() const {
 void WindowFunctionContext::fillPartitionStart() {
   CountDistinctDescriptor partition_start_bitmap{CountDistinctImplType::Bitmap,
                                                  0,
+                                                 0,
                                                  static_cast<int64_t>(elem_count_),
                                                  false,
                                                  ExecutorDeviceType::CPU,
@@ -1706,7 +1707,7 @@ void WindowFunctionContext::fillPartitionStart() {
   partition_start_ = static_cast<int8_t*>(checked_calloc(bitmap_sz, 1));
   int64_t partition_count = partitionCount();
   auto partition_start_handle = reinterpret_cast<int64_t>(partition_start_);
-  agg_count_distinct_bitmap(&partition_start_handle, 0, 0);
+  agg_count_distinct_bitmap(&partition_start_handle, 0, 0, 0);
   if (partition_start_offset_) {
     // if we have `partition_start_offset_`, we can reuse it for this logic
     // but note that it has partition_count + 1 elements where the first element is zero
@@ -1714,19 +1715,20 @@ void WindowFunctionContext::fillPartitionStart() {
     // and rest of them can represent values required for this logic
     for (int64_t i = 0; i < partition_count - 1; ++i) {
       agg_count_distinct_bitmap(
-          &partition_start_handle, partition_start_offset_[i + 1], 0);
+          &partition_start_handle, partition_start_offset_[i + 1], 0, 0);
     }
   } else {
     std::vector<size_t> partition_offsets(partition_count);
     std::partial_sum(counts(), counts() + partition_count, partition_offsets.begin());
     for (int64_t i = 0; i < partition_count - 1; ++i) {
-      agg_count_distinct_bitmap(&partition_start_handle, partition_offsets[i], 0);
+      agg_count_distinct_bitmap(&partition_start_handle, partition_offsets[i], 0, 0);
     }
   }
 }
 
 void WindowFunctionContext::fillPartitionEnd() {
   CountDistinctDescriptor partition_start_bitmap{CountDistinctImplType::Bitmap,
+                                                 0,
                                                  0,
                                                  static_cast<int64_t>(elem_count_),
                                                  false,
@@ -1749,10 +1751,10 @@ void WindowFunctionContext::fillPartitionEnd() {
         continue;
       }
       agg_count_distinct_bitmap(
-          &partition_end_handle, partition_start_offset_[i + 1] - 1, 0);
+          &partition_end_handle, partition_start_offset_[i + 1] - 1, 0, 0);
     }
     if (elem_count_) {
-      agg_count_distinct_bitmap(&partition_end_handle, elem_count_ - 1, 0);
+      agg_count_distinct_bitmap(&partition_end_handle, elem_count_ - 1, 0, 0);
     }
   } else {
     std::vector<size_t> partition_offsets(partition_count);
@@ -1761,10 +1763,10 @@ void WindowFunctionContext::fillPartitionEnd() {
       if (partition_offsets[i] == 0) {
         continue;
       }
-      agg_count_distinct_bitmap(&partition_end_handle, partition_offsets[i] - 1, 0);
+      agg_count_distinct_bitmap(&partition_end_handle, partition_offsets[i] - 1, 0, 0);
     }
     if (elem_count_) {
-      agg_count_distinct_bitmap(&partition_end_handle, elem_count_ - 1, 0);
+      agg_count_distinct_bitmap(&partition_end_handle, elem_count_ - 1, 0, 0);
     }
   }
 }

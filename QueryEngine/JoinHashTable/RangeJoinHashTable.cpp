@@ -525,6 +525,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
   CountDistinctDescriptor count_distinct_desc{
       CountDistinctImplType::Bitmap,
       0,
+      0,
       11,
       true,
       effective_memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
@@ -536,6 +537,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
   CountDistinctDescriptor count_distinct_desc{
       .impl_type_ = CountDistinctImplType::Bitmap,
       .min_val = 0,
+      .bucket_size = 0,
       .bitmap_sz_bits = 11,
       .approximate = true,
       .device_type = effective_memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL

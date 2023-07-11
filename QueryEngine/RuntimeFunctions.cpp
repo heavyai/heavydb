@@ -362,9 +362,15 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t agg_count(uint64_t* agg, const 
   return (*agg)++;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void
-agg_count_distinct_bitmap(int64_t* agg, const int64_t val, const int64_t min_val) {
-  const uint64_t bitmap_idx = val - min_val;
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_count_distinct_bitmap(
+    int64_t* agg,
+    const int64_t val,
+    const int64_t min_val,
+    const int64_t bucket_size) {
+  uint64_t bitmap_idx = val - min_val;
+  if (1 < bucket_size) {
+    bitmap_idx /= static_cast<uint64_t>(bucket_size);
+  }
   reinterpret_cast<int8_t*>(*agg)[bitmap_idx >> 3] |= (1 << (bitmap_idx & 7));
 }
 
@@ -375,6 +381,7 @@ agg_count_distinct_bitmap(int64_t* agg, const int64_t val, const int64_t min_val
 #endif
 
 extern "C" GPU_RT_STUB void agg_count_distinct_bitmap_gpu(int64_t*,
+                                                          const int64_t,
                                                           const int64_t,
                                                           const int64_t,
                                                           const int64_t,
@@ -1175,13 +1182,15 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_count_distinct_bitmap_skip_val(
     int64_t* agg,
     const int64_t val,
     const int64_t min_val,
+    const int64_t bucket_size,
     const int64_t skip_val) {
   if (val != skip_val) {
-    agg_count_distinct_bitmap(agg, val, min_val);
+    agg_count_distinct_bitmap(agg, val, min_val, bucket_size);
   }
 }
 
 extern "C" GPU_RT_STUB void agg_count_distinct_bitmap_skip_val_gpu(int64_t*,
+                                                                   const int64_t,
                                                                    const int64_t,
                                                                    const int64_t,
                                                                    const int64_t,

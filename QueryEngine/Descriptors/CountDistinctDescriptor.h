@@ -41,6 +41,7 @@ enum class CountDistinctImplType { Invalid, Bitmap, UnorderedSet };
 struct CountDistinctDescriptor {
   CountDistinctImplType impl_type_;
   int64_t min_val;
+  int64_t bucket_size;
   // When used in the approximate count distinct algorithm, bitmap_sz_bits has a
   // different meaning than the bitmap size: https://en.wikipedia.org/wiki/HyperLogLog
   int64_t bitmap_sz_bits;

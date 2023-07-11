@@ -151,7 +151,8 @@ extern "C" RUNTIME_EXPORT void agg_min_float_skip_val(int32_t* agg,
 
 extern "C" RUNTIME_EXPORT void agg_count_distinct_bitmap(int64_t* agg,
                                                          const int64_t val,
-                                                         const int64_t min_val);
+                                                         const int64_t min_val,
+                                                         const int64_t bucket_size);
 
 #define EMPTY_KEY_64 std::numeric_limits<int64_t>::max()
 #define EMPTY_KEY_32 std::numeric_limits<int32_t>::max()

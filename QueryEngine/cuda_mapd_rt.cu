@@ -1303,12 +1303,16 @@ extern "C" __device__ void linear_probabilistic_count(uint8_t* bitmap,
 extern "C" __device__ void agg_count_distinct_bitmap_gpu(int64_t* agg,
                                                          const int64_t val,
                                                          const int64_t min_val,
+                                                         const int64_t bucket_size,
                                                          const int64_t base_dev_addr,
                                                          const int64_t base_host_addr,
                                                          const uint64_t sub_bitmap_count,
                                                          const uint64_t bitmap_bytes) {
   constexpr unsigned bitmap_element_size = 8 * sizeof(uint32_t);
-  auto const bitmap_idx = static_cast<uint64_t>(val - min_val);
+  auto bitmap_idx = static_cast<uint64_t>(val - min_val);
+  if (1 < bucket_size) {
+    bitmap_idx /= static_cast<uint64_t>(bucket_size);
+  }
   uint64_t const word_idx = bitmap_idx / bitmap_element_size;
   uint32_t const bit_idx = bitmap_idx % bitmap_element_size;
   int64_t const agg_offset = *agg - base_host_addr;
@@ -1321,14 +1325,21 @@ extern "C" __device__ void agg_count_distinct_bitmap_skip_val_gpu(
     int64_t* agg,
     const int64_t val,
     const int64_t min_val,
+    const int64_t bucket_size,
     const int64_t skip_val,
     const int64_t base_dev_addr,
     const int64_t base_host_addr,
     const uint64_t sub_bitmap_count,
     const uint64_t bitmap_bytes) {
   if (val != skip_val) {
-    agg_count_distinct_bitmap_gpu(
-        agg, val, min_val, base_dev_addr, base_host_addr, sub_bitmap_count, bitmap_bytes);
+    agg_count_distinct_bitmap_gpu(agg,
+                                  val,
+                                  min_val,
+                                  bucket_size,
+                                  base_dev_addr,
+                                  base_host_addr,
+                                  sub_bitmap_count,
+                                  bitmap_bytes);
   }
 }
 
