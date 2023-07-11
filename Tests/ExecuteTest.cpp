@@ -26208,6 +26208,18 @@ TEST_F(Select, ProjectVarlenColWithLazyFetching) {
     EXPECT_TRUE(!result_rows2->isEmpty());
     auto crt_row2 = result_rows2->getNextRow(true, true);
     EXPECT_EQ(size_t(2), crt_row2.size());
+
+    for (std::string col :
+         {"col_point_1", "col_linestring_1", "col_polygon_1", "col_multipolygon_1"}) {
+      std::ostringstream oss;
+      oss << "SELECT " << col << ", ST_NPoints(" << col << ") FROM data_types_basic3;";
+      std::ostringstream oss2;
+      oss2 << "SELECT ST_NPoints(" << col << "), " << col << " FROM data_types_basic3;";
+      auto rs1 = run_multiple_agg(oss.str(), dt);
+      EXPECT_TRUE(!rs1->isEmpty());
+      auto rs2 = run_multiple_agg(oss2.str(), dt);
+      EXPECT_TRUE(!rs2->isEmpty());
+    }
   }
 }
 

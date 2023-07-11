@@ -127,6 +127,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
       std::vector<llvm::Value*> cols;
       const auto col_id = column_key.column_id;
       auto temp_column_key = column_key;
+      bool fetch_physical_columns = fetch_column;
       for (auto i = 0; i < col_ti.get_physical_coord_cols(); i++) {
         temp_column_key.column_id = col_id + i + 1;
         const auto cd0 = get_column_descriptor(temp_column_key);
@@ -135,13 +136,17 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
         CHECK(!cd0->isVirtualCol);
         const auto col0_var =
             makeExpr<Analyzer::ColumnVar>(col0_ti, temp_column_key, rte_idx);
-        const auto col = codegenColVar(col0_var.get(), fetch_column, false, co);
+        if (plan_state_->isColumnToFetch(temp_column_key)) {
+          // sync the fetch status for all physical columns
+          fetch_physical_columns = true;
+        }
+        const auto col = codegenColVar(col0_var.get(), fetch_physical_columns, false, co);
         cols.insert(cols.end(), col.begin(), col.end());
-        if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
+        if (!fetch_physical_columns && plan_state_->isLazyFetchColumn(col_var)) {
           plan_state_->addColumnToNotFetch(temp_column_key);
         }
       }
-      if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
+      if (!fetch_physical_columns && plan_state_->isLazyFetchColumn(col_var)) {
         plan_state_->addColumnToNotFetch(column_key);
       } else {
         plan_state_->addColumnToFetch(column_key);

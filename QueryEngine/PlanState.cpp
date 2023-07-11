@@ -119,6 +119,8 @@ bool PlanState::isColumnToNotFetch(const shared::ColumnKey& column_key) const {
   return shared::contains(columns_to_not_fetch_, column_key);
 }
 
+// todo (yoonmin): determine non-lazy fetch compilation in a high-level; to avoid
+// recompilation which may incur noticeable overhead
 void PlanState::addColumnToFetch(const shared::ColumnKey& column_key,
                                  bool unmark_lazy_fetch) {
   if (unmark_lazy_fetch) {
@@ -129,9 +131,12 @@ void PlanState::addColumnToFetch(const shared::ColumnKey& column_key,
       columns_to_not_fetch_.erase(it);
     }
   } else {
-    if (shared::contains(columns_to_not_fetch_, column_key)) {
-      // This column was previously marked for lazy fetch due to incomplete information.
-      // Throw an exception in this case to restart the compilation step.
+    if (columns_to_not_fetch_.count(column_key)) {
+      // this case represents a query w/ fetching expressions with the order of
+      // cv and an expression on it, i.e., SELECT col1, ST_NPoints(col1) FROM ...
+      // since we first touch the cv itself and we forcely mark it as lazy-fetch
+      // but to evaluate the expression, we must fetch the same cv;
+      // so let's fetch the cv to allow evaluating the expression using the same cv
       throw CompilationRetryNoLazyFetch();
     }
   }
