@@ -725,6 +725,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
         count_distinct_descriptors.emplace_back(
             CountDistinctDescriptor{CountDistinctImplType::Bitmap,
                                     0,
+                                    arg_range_info.bucket,
                                     64,
                                     agg_info.agg_kind == kAPPROX_COUNT_DISTINCT,
                                     device_type,
@@ -831,13 +832,14 @@ CountDistinctDescriptors init_count_distinct_descriptors(
       count_distinct_descriptors.emplace_back(
           CountDistinctDescriptor{count_distinct_impl_type,
                                   arg_range_info.min,
+                                  arg_range_info.bucket,
                                   bitmap_sz_bits,
                                   agg_info.agg_kind == kAPPROX_COUNT_DISTINCT,
                                   device_type,
                                   sub_bitmap_count});
     } else {
       count_distinct_descriptors.emplace_back(CountDistinctDescriptor{
-          CountDistinctImplType::Invalid, 0, 0, false, device_type, 0});
+          CountDistinctImplType::Invalid, 0, 0, 0, false, device_type, 0});
     }
   }
   return count_distinct_descriptors;
@@ -1885,7 +1887,8 @@ void GroupByAndAggregate::codegenCountDistinct(
   std::string agg_fname{"agg_count_distinct"};
   if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::Bitmap) {
     agg_fname += "_bitmap";
-    agg_args.push_back(LL_INT(static_cast<int64_t>(count_distinct_descriptor.min_val)));
+    agg_args.push_back(LL_INT(count_distinct_descriptor.min_val));
+    agg_args.push_back(LL_INT(count_distinct_descriptor.bucket_size));
   }
   if (agg_info.skip_null_val) {
     auto null_lv = executor_->cgen_state_->castToTypeIn(

@@ -527,6 +527,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
   CountDistinctDescriptor count_distinct_desc{
       CountDistinctImplType::Bitmap,
       0,
+      0,
       11,
       true,
       effective_memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL

@@ -3323,8 +3323,10 @@ TEST_F(Select, CountDistinct) {
     run_ddl_statement(drop_dt_tbl_stmt);
     g_sqlite_comparator.query(drop_dt_tbl_stmt);
   };
-  ScopeGuard drop_cd_test_tables = [drop_cd_test_tables_ddl] {
-    drop_cd_test_tables_ddl();
+  ScopeGuard drop_cd_test_tables = [&] {
+    if (!g_keep_test_data) {
+      drop_cd_test_tables_ddl();
+    }
   };
   drop_cd_test_tables_ddl();
   for (const auto& p : ts_tbl_name_ddl_prefix_pair) {
@@ -3434,6 +3436,14 @@ TEST_F(Select, CountDistinct) {
                     "SELECT COUNT(DISTINCT " + col_name + ") FROM dt_cd_test_tbl WHERE " +
                         col_name + " BETWEEN date '2022-01-10' AND date '2022-01-30';",
                     dt)));
+      EXPECT_EQ(9,
+                v<int64_t>(run_simple_agg("SELECT COUNT(DISTINCT(DATE_TRUNC(month," +
+                                              col_name + "))) FROM dt_cd_test_tbl;",
+                                          dt)));
+      EXPECT_EQ(35,
+                v<int64_t>(run_simple_agg("SELECT COUNT(DISTINCT(DATE_TRUNC(week," +
+                                              col_name + "))) FROM dt_cd_test_tbl;",
+                                          dt)));
     }
   }
   {
@@ -7270,6 +7280,27 @@ TEST_F(Select, DateTruncate) {
             R"(SELECT EXTRACT('epoch' FROM date_trunc('quarter', dt)) FROM test_date_time ORDER BY dt;)",
             dt),
         {-213148800, -55296000, 0, 339206400});
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(DISTINCT(DATE_TRUNC(second,m))) FROM test;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(DISTINCT(DATE_TRUNC(minute,m))) FROM test;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(DISTINCT(DATE_TRUNC(hour,m))) FROM test;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(DISTINCT(DATE_TRUNC(day,m))) FROM test;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(DISTINCT(DATE_TRUNC(day,m_3))) FROM test;", dt)));
+    ASSERT_EQ(3,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(DISTINCT(DATE_TRUNC(day,m_6))) FROM test;", dt)));
+    ASSERT_EQ(3,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(DISTINCT(DATE_TRUNC(day,m_9))) FROM test;", dt)));
   }
 }
 
