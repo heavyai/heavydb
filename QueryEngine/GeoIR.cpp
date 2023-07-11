@@ -127,6 +127,23 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoConstant(
   return ret;
 }
 
+namespace {
+void mark_logical_column_to_fetch(const Analyzer::GeoOperator* geo_operator,
+                                  PlanState* plan_state) {
+  auto comparator = Analyzer::ColumnVar::colvar_comp;
+  std::set<const Analyzer::ColumnVar*,
+           bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>
+      colvar_set(comparator);
+  geo_operator->collect_column_var(colvar_set, false);
+  std::for_each(colvar_set.begin(), colvar_set.end(), [&](const Analyzer::ColumnVar* cv) {
+    // we set `unmark_lazy_fetch` to be FALSE to restart the compilation step
+    // if we already generated a code for the expression used in this geo_oper as
+    // lazy-fetch
+    plan_state->addColumnToFetch(cv->getColumnKey(), false);
+  });
+}
+}  // namespace
+
 std::vector<llvm::Value*> CodeGenerator::codegenGeoOperator(
     const Analyzer::GeoOperator* geo_operator,
     const CompilationOptions& co) {
@@ -142,6 +159,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoOperator(
 
   auto op_codegen = spatial_type::Codegen::init(geo_operator);
   CHECK(op_codegen);
+  // we fetch all physical columns, so we sync the logical geo column w/ it
+  mark_logical_column_to_fetch(geo_operator, plan_state_);
 
   std::vector<llvm::Value*> load_lvs;
   std::vector<llvm::Value*> pos_lvs;
