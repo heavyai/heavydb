@@ -384,6 +384,10 @@ void TableFunctionCompilationContext::generateTableFunctionCall(
   ir_builder->CreateRet(const_zero);
 
   ir_builder->SetInsertPoint(bb_exit);
+  // when table_func_return == TableFunctionErrorCode::NotAnError,
+  // then the table function is considered a success while
+  // output_row_count_ptr will be uninitialized and the output row
+  // count is defined by other means, see QE-877.
   ir_builder->CreateRet(table_func_return);
 }
 

@@ -30,7 +30,7 @@ int64_t g_bitmap_memory_limit{8LL * 1000 * 1000 * 1000};
 namespace {
 
 inline void check_total_bitmap_memory(const QueryMemoryDescriptor& query_mem_desc) {
-  const int32_t groups_buffer_entry_count = query_mem_desc.getEntryCount();
+  const size_t groups_buffer_entry_count = query_mem_desc.getEntryCount();
   checked_int64_t total_bytes_per_group = 0;
   const size_t num_count_distinct_descs =
       query_mem_desc.getCountDistinctDescriptorsSize();
@@ -399,15 +399,36 @@ QueryMemoryInitializer::QueryMemoryInitializer(
       // memory managment.
       auto slot_idx = query_mem_desc.getSlotIndexForSingleSlotCol(i);
       CHECK(query_mem_desc.checkSlotUsesFlatBufferFormat(slot_idx));
-      int64_t flatbuffer_size = query_mem_desc.getFlatBufferSize(slot_idx);
-      total_group_by_buffer_size =
-          align_to_int64(total_group_by_buffer_size + flatbuffer_size);
+      checked_int64_t flatbuffer_size = query_mem_desc.getFlatBufferSize(slot_idx);
+      try {
+        total_group_by_buffer_size = align_to_int64(
+            static_cast<int64_t>(total_group_by_buffer_size + flatbuffer_size));
+      } catch (...) {
+        throw OutOfHostMemory(std::numeric_limits<int64_t>::max() / 8);
+      }
     } else {
-      const size_t col_width = ti.get_size();
-      const size_t group_buffer_size = num_rows_ * col_width;
-      total_group_by_buffer_size =
-          align_to_int64(total_group_by_buffer_size + group_buffer_size);
+      const checked_int64_t col_width = ti.get_size();
+      try {
+        const checked_int64_t group_buffer_size = col_width * num_rows_;
+        total_group_by_buffer_size = align_to_int64(
+            static_cast<int64_t>(group_buffer_size + total_group_by_buffer_size));
+      } catch (...) {
+        throw OutOfHostMemory(std::numeric_limits<int64_t>::max() / 8);
+      }
     }
+  }
+
+#ifdef __SANITIZE_ADDRESS__
+  // AddressSanitizer will reject allocation sizes above 1 TiB
+#define MAX_BUFFER_SIZE 0x10000000000ll
+#else
+  // otherwise, we'll set the limit to 16 TiB, feel free to increase
+  // the limit if needed
+#define MAX_BUFFER_SIZE 0x100000000000ll
+#endif
+
+  if (total_group_by_buffer_size >= MAX_BUFFER_SIZE) {
+    throw OutOfHostMemory(total_group_by_buffer_size);
   }
 
   CHECK_EQ(num_buffers_, size_t(1));

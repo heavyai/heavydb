@@ -222,13 +222,13 @@ TEST_F(SystemTFs, GenerateSeries) {
                 static_cast<int64_t>(500000L));  // avg of 500,000
     }
 
-    // Outputs of more than 2^30 rows are not allowed
+    // Outputs of rows that buffers sizes exceed 16 TiB, are not allowed
     {
       EXPECT_THROW(
           run_multiple_agg(
               "SELECT COUNT(*) AS n, MIN(generate_series) AS min_series, "
               "MAX(generate_series) AS max_series, AVG(generate_series) as avg_series "
-              "FROM (SELECT * FROM TABLE(generate_series(0, 2000000000, 1)));",
+              "FROM (SELECT * FROM TABLE(generate_series(0, 100000000000000, 1)));",
               dt),
           UserTableFunctionError);
     }

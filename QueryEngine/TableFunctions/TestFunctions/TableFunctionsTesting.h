@@ -1442,6 +1442,7 @@ ct_to_polygon__cpu_(TableFunctionManager& mgr,
   UDTF: row_copier_text(Column<TextEncodingDict>, RowMultiplier) -> Column<TextEncodingDict> | input_id=args<0>
   UDTF: row_copier_columnlist__cpu__(TableFunctionManager, ColumnList<double> cols) -> Column<double>
   UDTF: row_copier2__cpu__(Column<double>, int) -> Column<double>, Column<double>
+  UDTF: row_repeater__cpu_template(TableFunctionManager, Column<T>, int) -> Column<T>, T=[int8_t, int16_t, int32_t, int64_t, float, double, bool]
 */
 // clang-format on
 EXTENSION_NOINLINE int32_t row_copier(const Column<double>& input_col,
@@ -1459,6 +1460,12 @@ EXTENSION_NOINLINE_HOST int32_t
 row_copier_columnlist__cpu__(TableFunctionManager& mgr,
                              const ColumnList<double>& cols,
                              Column<double>& output_col);
+
+template <typename T>
+TEMPLATE_NOINLINE int32_t row_repeater__cpu_template(TableFunctionManager& mgr,
+                                                     const Column<T>& input_col,
+                                                     const int reps,
+                                                     Column<T>& output_col);
 
 #endif  // #ifndef __CUDACC__
 
