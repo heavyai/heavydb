@@ -73,6 +73,7 @@ EXTENSION_NOINLINE int8_t* allocate_varlen_buffer(int64_t element_count,
       .c_str()
 #define TABLE_FUNCTION_ERROR(MSG) table_function_error(ERROR_STRING(MSG))
 #define ERROR_MESSAGE(MSG) error_message(ERROR_STRING(MSG))
+#define SUCCESS table_function_success_code()
 
 EXTENSION_NOINLINE_HOST void set_output_item_values_total_number(
     int32_t index,
@@ -93,6 +94,7 @@ EXTENSION_NOINLINE_HOST void TableFunctionManager_set_output_row_size(int8_t* mg
                                                                       int64_t num_rows);
 EXTENSION_NOINLINE_HOST int8_t* TableFunctionManager_get_singleton();
 EXTENSION_NOINLINE_HOST int32_t table_function_error(const char* message);
+EXTENSION_NOINLINE_HOST int32_t table_function_success_code();
 EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_error_message(int8_t* mgr_ptr,
                                                                    const char* message);
 EXTENSION_NOINLINE_HOST void TableFunctionManager_set_metadata(

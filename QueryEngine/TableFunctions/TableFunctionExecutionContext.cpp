@@ -397,12 +397,17 @@ void TableFunctionExecutionContext::launchPreCodeOnCpu(
       nullptr,
       nullptr,  // output string dictionary proxy ptrs - not supported for pre-flights yet
       &output_row_count);
-
+  if (err == TableFunctionErrorCode::NotAnError) {
+    // table_function_entry_point does not initialize output_row_count
+    // when a UDTF returns NotAnError, so we'll set it here.
+    output_row_count = mgr->get_nrows();
+  }
   if (exe_unit.table_func.hasPreFlightOutputSizer()) {
     exe_unit.output_buffer_size_param = output_row_count;
   }
 
-  if (err == TableFunctionErrorCode::GenericError) {
+  if (err == TableFunctionErrorCode::NotAnError) {
+  } else if (err == TableFunctionErrorCode::GenericError) {
     throw UserTableFunctionError("Error executing table function pre flight check: " +
                                  std::string(mgr->get_error_message()));
   } else if (err) {
@@ -564,7 +569,11 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
                                  std::string(e.what()));
   }
 
-  if (err == TableFunctionErrorCode::GenericError) {
+  if (err == TableFunctionErrorCode::NotAnError) {
+    // table_function_entry_point does not initialize output_row_count
+    // when a UDTF returns NotAnError, so we'll set it here.
+    output_row_count = mgr->get_nrows();
+  } else if (err == TableFunctionErrorCode::GenericError) {
     throw UserTableFunctionError("Error executing table function: " +
                                  std::string(mgr->get_error_message()));
   }

@@ -970,3 +970,65 @@ EXTENSION_NOINLINE int32_t ct_test_func__cpu_2(const Column<int32_t>& input1,
   out[0] = 234;
   return 1;
 }
+
+#ifndef __CUDACC__
+template <typename T>
+TEMPLATE_NOINLINE int32_t row_repeater__cpu_template(TableFunctionManager& mgr,
+                                                     const Column<T>& input_col,
+                                                     const int reps,
+                                                     Column<T>& output_col) {
+  // Equivalent to row_copier but supports output row sizes larger
+  // than MAX_INT
+  size_t output_row_count = input_col.size() * reps;
+  mgr.set_output_row_size(output_row_count);
+
+  auto start = 0;
+  auto stop = input_col.size();
+  auto step = 1;
+
+  for (auto i = start; i < stop; i += step) {
+    for (int c = 0; c < reps; c++) {
+      output_col[i + (stop * c)] = input_col[i];
+    }
+  }
+
+  return SUCCESS;
+}
+
+template TEMPLATE_NOINLINE int32_t
+row_repeater__cpu_template(TableFunctionManager& mgr,
+                           const Column<int8_t>& input_col,
+                           const int reps,
+                           Column<int8_t>& output_col);
+template TEMPLATE_NOINLINE int32_t
+row_repeater__cpu_template(TableFunctionManager& mgr,
+                           const Column<int16_t>& input_col,
+                           const int reps,
+                           Column<int16_t>& output_col);
+template TEMPLATE_NOINLINE int32_t
+row_repeater__cpu_template(TableFunctionManager& mgr,
+                           const Column<int32_t>& input_col,
+                           const int reps,
+                           Column<int32_t>& output_col);
+template TEMPLATE_NOINLINE int32_t
+row_repeater__cpu_template(TableFunctionManager& mgr,
+                           const Column<int64_t>& input_col,
+                           const int reps,
+                           Column<int64_t>& output_col);
+template TEMPLATE_NOINLINE int32_t
+row_repeater__cpu_template(TableFunctionManager& mgr,
+                           const Column<float>& input_col,
+                           const int reps,
+                           Column<float>& output_col);
+template TEMPLATE_NOINLINE int32_t
+row_repeater__cpu_template(TableFunctionManager& mgr,
+                           const Column<double>& input_col,
+                           const int reps,
+                           Column<double>& output_col);
+template TEMPLATE_NOINLINE int32_t
+row_repeater__cpu_template(TableFunctionManager& mgr,
+                           const Column<bool>& input_col,
+                           const int reps,
+                           Column<bool>& output_col);
+
+#endif  // #ifndef __CUDACC__

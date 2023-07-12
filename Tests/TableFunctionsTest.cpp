@@ -4385,6 +4385,19 @@ TEST_F(TableFunctions, RuntimeLibTestTableFunctions) {
 }
 #endif
 
+TEST_F(TableFunctions, RowRepeater) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ROW_REPEATER(CURSOR(SELECT generate_series FROM "
+          "TABLE(generate_series(1, 1000))), 30));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(30000));
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

@@ -49,6 +49,9 @@ class UserTableFunctionError : public TableFunctionError {
 // negative return values
 enum TableFunctionErrorCode : int32_t {
   GenericError = -0x75BCD15,
+  NotAnError = -0x4F4B,  // used to indicate a succesful UDTF
+                         // execution without specifying the row
+                         // size for output columns
 };
 
 extern std::mutex TableFunctionManager_singleton_mutex;

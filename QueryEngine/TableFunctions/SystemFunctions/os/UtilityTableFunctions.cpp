@@ -51,7 +51,7 @@ int32_t generate_series_parallel(const T start,
                         series_output[out_idx] = start + (step * out_idx);
                       }
                     });
-  return num_rows;
+  return SUCCESS;
 }
 
 template <typename T, typename K>
@@ -60,20 +60,16 @@ NEVER_INLINE HOST int32_t generate_series__cpu_template(TableFunctionManager& mg
                                                         const T stop,
                                                         const K step,
                                                         Column<T>& series_output) {
-  const int64_t MAX_ROWS{1L << 30};
   const int64_t PARALLEL_THRESHOLD{10000L};
   const int64_t num_rows = numStepsBetween(start, stop, step) + 1;
   if (num_rows <= 0) {
     mgr.set_output_row_size(0);
     return 0;
   }
+  // set_output_row_size ensures that the output buffer size will be
+  // in a reasonable range (up to 16 TiB), and if it is not, an
+  // OutOfHostMemory exception will be thrown.
   mgr.set_output_row_size(num_rows);
-
-  if (num_rows > MAX_ROWS) {
-    return mgr.ERROR_MESSAGE(
-        "Invocation of generate_series would result in " + std::to_string(num_rows) +
-        " rows, which exceeds the max limit of " + std::to_string(MAX_ROWS) + " rows.");
-  }
 
 #ifdef HAVE_TBB
   if (num_rows > PARALLEL_THRESHOLD) {
@@ -84,7 +80,7 @@ NEVER_INLINE HOST int32_t generate_series__cpu_template(TableFunctionManager& mg
   for (int64_t out_idx = 0; out_idx != num_rows; ++out_idx) {
     series_output[out_idx] = start + (step * out_idx);
   }
-  return num_rows;
+  return SUCCESS;
 }
 
 template <typename T>
