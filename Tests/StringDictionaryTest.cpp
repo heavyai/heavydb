@@ -39,6 +39,7 @@
 #endif
 
 extern bool g_cache_string_hash;
+int g_op_count{250000};
 
 class StringDictionaryTest : public TestHelpers::TbbPrivateServerKiller {};
 class StringDictionaryProxyTest : public TestHelpers::TbbPrivateServerKiller {};
@@ -96,8 +97,6 @@ TEST_F(StringDictionaryTest, RecoverZero) {
   size_t num_strings = string_dict.storageEntryCount();
   ASSERT_EQ(static_cast<size_t>(0), num_strings);
 }
-
-const int g_op_count{250000};
 
 TEST_F(StringDictionaryTest, ManyAddsAndGets) {
   const DictRef dict_ref(-1, 1);
@@ -352,7 +351,7 @@ TEST_F(StringDictionaryProxyTest, GetOrAddTransient) {
       }
     }
 
-    for (size_t i = 0; i < g_op_count; ++i) {
+    for (int i = 0; i < g_op_count; ++i) {
       string_ids[i] = string_dict_proxy.getOrAddTransient(strings[i]);
     }
 
@@ -378,7 +377,7 @@ TEST_F(StringDictionaryProxyTest, GetOrAddTransient) {
       }
     }
 
-    for (size_t i = 0; i < g_op_count; ++i) {
+    for (int i = 0; i < g_op_count; ++i) {
       string_ids[i] = string_dict_proxy.getOrAddTransient(strings[i]);
     }
 
@@ -565,7 +564,7 @@ TEST_F(StringDictionaryProxyTest, BuildIntersectionTranslationMapToOtherProxy) {
 
     constexpr int32_t num_source_proxy_transient_ids{64};
     constexpr int32_t num_dest_proxy_transient_ids{32};
-    constexpr int32_t proxy_transient_start{g_op_count * 2};
+    int proxy_transient_start{g_op_count * 2};
     for (int i = proxy_transient_start;
          i < proxy_transient_start + num_source_proxy_transient_ids;
          ++i) {
@@ -945,6 +944,10 @@ int main(int argc, char** argv) {
           ->default_value(g_cache_string_hash)
           ->implicit_value(true),
       "Cache string hash values in the string dictionary server during import.");
+
+  desc.add_options()("string-dictionary-size",
+                     po::value<int>(&g_op_count)->default_value(g_op_count),
+                     "The size of string dictionaries used during the test");
 
   logger::LogOptions log_options(argv[0]);
   log_options.severity_ = logger::Severity::FATAL;
