@@ -361,6 +361,12 @@ class QueryMemoryDescriptor {
     return col_slot_context_.slotIsVarlen(slot_idx);
   }
 
+  size_t getAvailableCpuThreads() const { return num_available_threads_; }
+
+  void setAvailableCpuThreads(size_t num_available_threads) const {
+    num_available_threads_ = num_available_threads;
+  }
+
  protected:
   void resetGroupColWidths(const std::vector<int8_t>& new_group_col_widths) {
     group_col_widths_ = new_group_col_widths;
@@ -397,6 +403,12 @@ class QueryMemoryDescriptor {
   bool force_4byte_float_;
 
   ColSlotContext col_slot_context_;
+
+  // # available CPU threads can be used for this query kernel, i.e., to parallelize rest
+  // of query initialization step its default value is one which means we do not
+  // parallelize for the query kernel, and it will be updated to a proper value before
+  // performing the query initialization
+  mutable size_t num_available_threads_{1};
 
   size_t getTotalBytesOfColumnarBuffers() const;
   size_t getTotalBytesOfColumnarBuffers(const size_t num_entries_per_column) const;

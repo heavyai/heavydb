@@ -47,6 +47,14 @@ class SharedKernelContext {
     return query_infos_;
   }
 
+  void setNumAllocatedThreads(size_t num_threads) {
+    num_allocated_threads_ = num_threads;
+  }
+
+  size_t getNumAllocatedThreads() {
+    return num_allocated_threads_;
+  }
+
   std::atomic_flag dynamic_watchdog_set = ATOMIC_FLAG_INIT;
 
 #ifdef HAVE_TBB
@@ -69,6 +77,10 @@ class SharedKernelContext {
   std::mutex all_frag_row_offsets_mutex_;
   const std::vector<InputTableInfo>& query_infos_;
   const RegisteredQueryHint query_hint_;
+  // the # threads to execute the query (kernel) w/ a value one by default (means serial
+  // query execution). After finishing the compilation of the kernel, we will set it to a
+  // proper value based on the query's status
+  size_t num_allocated_threads_{1};
 
 #ifdef HAVE_TBB
   threading::task_group* task_group_;

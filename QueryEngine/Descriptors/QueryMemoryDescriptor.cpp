@@ -489,7 +489,8 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , use_streaming_top_n_(use_streaming_top_n)
     , threads_can_reuse_group_by_buffers_(threads_can_reuse_group_by_buffers)
     , force_4byte_float_(false)
-    , col_slot_context_(col_slot_context) {
+    , col_slot_context_(col_slot_context)
+    , num_available_threads_(cpu_threads()) {
   CHECK(!(query_desc_type_ == QueryDescriptionType::TableFunction));
   col_slot_context_.setAllUnsetSlotsPaddedSize(8);
   col_slot_context_.validate();
@@ -587,7 +588,8 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , must_use_baseline_sort_(false)
     , use_streaming_top_n_(false)
     , threads_can_reuse_group_by_buffers_(false)
-    , force_4byte_float_(false) {
+    , force_4byte_float_(false)
+    , num_available_threads_(cpu_threads()) {
   if (query_desc_type == QueryDescriptionType::TableFunction) {
     // Table functions output columns are always columnar
     output_columnar_ = true;
@@ -618,7 +620,8 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_de
     , must_use_baseline_sort_(false)
     , use_streaming_top_n_(false)
     , threads_can_reuse_group_by_buffers_(false)
-    , force_4byte_float_(false) {}
+    , force_4byte_float_(false)
+    , num_available_threads_(cpu_threads()) {}
 
 bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const {
   // Note that this method does not check ptr reference members (e.g. executor_) or
