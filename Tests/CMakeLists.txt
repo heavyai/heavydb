@@ -586,9 +586,19 @@ else()
     $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
     ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${AwsS3_CURL_SUPPORT} ${CMAKE_DL_LIBS})
 endif()
-add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
+
+if(ENABLE_TSAN)
+  add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS} "--string-dictionary-size=10000")
+else()
+  add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
+endif()
 list(APPEND SANITY_TEST_PROGRAMS StringDictionaryTest)
-add_test(NAME StringDictionaryHashTest COMMAND StringDictionaryTest ${TEST_ARGS} "--enable-string-dict-hash-cache")
+
+if(ENABLE_TSAN)
+  add_test(NAME StringDictionaryHashTest COMMAND StringDictionaryTest ${TEST_ARGS} "--enable-string-dict-hash-cache" "--string-dictionary-size=10000")
+else()
+  add_test(NAME StringDictionaryHashTest COMMAND StringDictionaryTest ${TEST_ARGS} "--enable-string-dict-hash-cache")
+endif()
 list(APPEND SANITY_TESTS StringDictionaryHashTest)
 
 ##########

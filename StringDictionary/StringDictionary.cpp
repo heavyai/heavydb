@@ -539,7 +539,6 @@ size_t StringDictionary::getBulk(const std::vector<String>& string_vec,
 
   tbb::task_arena limited_arena(thread_info.num_threads);
   limited_arena.execute([&] {
-    CHECK_LE(tbb::this_task_arena::max_concurrency(), thread_info.num_threads);
     tbb::parallel_for(
         tbb::blocked_range<int64_t>(
             0, num_lookup_strings, thread_info.num_elems_per_thread /* tbb grain_size */),
@@ -1792,7 +1791,6 @@ std::vector<std::string_view> StringDictionary::getStringViews(
     CHECK_GE(thread_info.num_elems_per_thread, 1L);
 
     tbb::task_arena limited_arena(thread_info.num_threads);
-    CHECK_LE(tbb::this_task_arena::max_concurrency(), thread_info.num_threads);
     limited_arena.execute([&] {
       tbb::parallel_for(
           tbb::blocked_range<int64_t>(
@@ -1915,7 +1913,6 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   std::vector<size_t> num_strings_not_translated_per_thread(thread_info.num_threads, 0UL);
   constexpr bool short_circuit_empty_dictionary_translations{false};
   limited_arena.execute([&] {
-    CHECK_LE(tbb::this_task_arena::max_concurrency(), thread_info.num_threads);
     if (short_circuit_empty_dictionary_translations && dest_dictionary_is_empty) {
       tbb::parallel_for(
           tbb::blocked_range<int32_t>(
@@ -2050,19 +2047,21 @@ void StringDictionary::buildDictionaryNumericTranslationMap(
   // destination dictionary, but this version gets significantly better performance
   // (~2X), likely due to eliminating the overhead of writing out the string views and
   // then reading them back in (along with the associated cache misses)
-  tbb::parallel_for(
-      tbb::blocked_range<int32_t>(
-          0, num_source_strings, thread_info.num_elems_per_thread /* tbb grain_size */),
-      [&](const tbb::blocked_range<int32_t>& r) {
-        const int32_t start_idx = r.begin();
-        const int32_t end_idx = r.end();
-        for (int32_t source_string_id = start_idx; source_string_id != end_idx;
-             ++source_string_id) {
-          const std::string source_str =
-              std::string(getStringFromStorageFast(source_string_id));
-          translated_ids[source_string_id] = string_ops.numericEval(source_str);
-        }
-      });
+  limited_arena.execute([&] {
+    tbb::parallel_for(
+        tbb::blocked_range<int32_t>(
+            0, num_source_strings, thread_info.num_elems_per_thread /* tbb grain_size */),
+        [&](const tbb::blocked_range<int32_t>& r) {
+          const int32_t start_idx = r.begin();
+          const int32_t end_idx = r.end();
+          for (int32_t source_string_id = start_idx; source_string_id != end_idx;
+               ++source_string_id) {
+            const std::string source_str =
+                std::string(getStringFromStorageFast(source_string_id));
+            translated_ids[source_string_id] = string_ops.numericEval(source_str);
+          }
+        });
+  });
 }
 
 void translate_string_ids(std::vector<int32_t>& dest_ids,
