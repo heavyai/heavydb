@@ -519,10 +519,15 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
 
   const auto query_mem_desc_fixedup =
       ResultSet::fixupQueryMemoryDescriptor(query_mem_desc);
+  auto const num_available_cpu_threads =
+      std::min(query_mem_desc.getAvailableCpuThreads(),
+               static_cast<size_t>(std::max(cpu_threads(), 1)));
+  tbb::task_arena initialization_arena(num_available_cpu_threads);
 
   auto const is_true = [](auto const& x) { return static_cast<bool>(x); };
   // not COUNT DISTINCT / APPROX_COUNT_DISTINCT / APPROX_QUANTILE
   // we fallback to default implementation in that cases
+  auto const key_sz = query_mem_desc.getEffectiveKeyWidth();
   if (!std::any_of(agg_bitmap_size.begin(), agg_bitmap_size.end(), is_true) &&
       !std::any_of(quantile_params.begin(), quantile_params.end(), is_true) &&
       mode_index_set.empty() && g_optimize_row_initialization) {
@@ -538,50 +543,67 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
     if (query_mem_desc.hasKeylessHash()) {
       CHECK(warp_size >= 1);
       CHECK(key_count == 1 || warp_size == 1);
-      for (size_t warp_idx = 0; warp_idx < warp_size; ++warp_idx) {
-        for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
-             ++bin, buffer_ptr += row_size) {
-          memcpy(buffer_ptr + col_base_off, sample_row.data(), sample_row.size());
-        }
-      }
+      initialization_arena.execute([&] {
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, groups_buffer_entry_count * warp_size),
+            [&](const tbb::blocked_range<size_t>& r) {
+              auto cur_row_buf = buffer_ptr + (row_size * r.begin());
+              for (size_t i = r.begin(); i != r.end(); ++i, cur_row_buf += row_size) {
+                memcpy(cur_row_buf + col_base_off, sample_row.data(), sample_row.size());
+              }
+            });
+      });
       return;
     }
-
-    for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
-         ++bin, buffer_ptr += row_size) {
-      memcpy(buffer_ptr + col_base_off, sample_row.data(), sample_row.size());
-      result_set::fill_empty_key(
-          buffer_ptr, key_count, query_mem_desc.getEffectiveKeyWidth());
-    }
+    initialization_arena.execute([&] {
+      tbb::parallel_for(
+          tbb::blocked_range<size_t>(0, groups_buffer_entry_count * warp_size),
+          [&](const tbb::blocked_range<size_t>& r) {
+            auto cur_row_buf = buffer_ptr + (row_size * r.begin());
+            for (size_t i = r.begin(); i != r.end(); ++i, cur_row_buf += row_size) {
+              memcpy(cur_row_buf + col_base_off, sample_row.data(), sample_row.size());
+              result_set::fill_empty_key(cur_row_buf, key_count, key_sz);
+            }
+          });
+    });
   } else {
     if (query_mem_desc.hasKeylessHash()) {
       CHECK(warp_size >= 1);
       CHECK(key_count == 1 || warp_size == 1);
-      for (size_t warp_idx = 0; warp_idx < warp_size; ++warp_idx) {
-        for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
-             ++bin, buffer_ptr += row_size) {
-          initColumnsPerRow(query_mem_desc_fixedup,
-                            &buffer_ptr[col_base_off],
-                            init_vals,
-                            agg_bitmap_size,
-                            mode_index_set,
-                            quantile_params);
-        }
-      }
+      initialization_arena.execute([&] {
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, groups_buffer_entry_count * warp_size),
+            [&](const tbb::blocked_range<size_t>& r) {
+              auto cur_row_buf = buffer_ptr + (row_size * r.begin());
+              for (size_t i = r.begin(); i != r.end(); ++i, cur_row_buf += row_size) {
+                initColumnsPerRow(query_mem_desc_fixedup,
+                                  &cur_row_buf[col_base_off],
+                                  init_vals,
+                                  agg_bitmap_size,
+                                  mode_index_set,
+                                  quantile_params);
+              }
+            });
+      });
       return;
     }
 
-    for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
-         ++bin, buffer_ptr += row_size) {
-      result_set::fill_empty_key(
-          buffer_ptr, key_count, query_mem_desc.getEffectiveKeyWidth());
-      initColumnsPerRow(query_mem_desc_fixedup,
-                        &buffer_ptr[col_base_off],
-                        init_vals,
-                        agg_bitmap_size,
-                        mode_index_set,
-                        quantile_params);
-    }
+    initialization_arena.execute([&] {
+      tbb::parallel_for(tbb::blocked_range<size_t>(0, groups_buffer_entry_count),
+                        [&](const tbb::blocked_range<size_t>& r) {
+                          auto cur_row_buf = buffer_ptr + (row_size * r.begin());
+                          for (size_t i = r.begin(); i != r.end();
+                               ++i, cur_row_buf += row_size) {
+                            result_set::fill_empty_key(cur_row_buf, key_count, key_sz);
+                            initColumnsPerRow(query_mem_desc_fixedup,
+                                              &cur_row_buf[col_base_off],
+                                              init_vals,
+                                              agg_bitmap_size,
+                                              mode_index_set,
+                                              quantile_params);
+                          }
+                        });
+    });
   }
 }
 

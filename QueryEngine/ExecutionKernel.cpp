@@ -157,6 +157,29 @@ void ExecutionKernel::run(Executor* executor,
   }
 }
 
+namespace {
+size_t get_available_cpu_threads_per_task(Executor* executor,
+                                          SharedKernelContext& shared_context) {
+  // total # allocated slots (i.e., threads) for compiled kernels of the input query
+  auto const num_kernels = shared_context.getNumAllocatedThreads();
+  CHECK_GE(num_kernels, 1u);
+  size_t available_slots_per_task;
+  if (executor->executor_resource_mgr_) {
+    auto const resources_status = executor->executor_resource_mgr_->get_resource_info();
+    // # available slots (i.e., threads) in the resource pool; idle threads
+    auto const idle_cpu_slots =
+        resources_status.total_cpu_slots - resources_status.allocated_cpu_slots;
+    // we want to evenly use idle slots for each kernel task to avoid oversubscription
+    available_slots_per_task = 1u + (idle_cpu_slots + num_kernels - 1u) / num_kernels;
+  } else {
+    available_slots_per_task = std::max(static_cast<size_t>(cpu_threads()) / num_kernels,
+                                        static_cast<size_t>(1));
+  }
+  CHECK_GE(available_slots_per_task, 1u);
+  return available_slots_per_task;
+}
+}  // namespace
+
 void ExecutionKernel::runImpl(Executor* executor,
                               const size_t thread_idx,
                               SharedKernelContext& shared_context) {
@@ -298,6 +321,11 @@ void ExecutionKernel::runImpl(Executor* executor,
                     all_frag_row_offsets[frag_list.begin()->fragment_ids.front()];
     }
   }
+
+  // determine the # available CPU threads for each kernel to parallelize rest of
+  // initialization steps when necessary
+  query_mem_desc.setAvailableCpuThreads(
+      get_available_cpu_threads_per_task(executor, shared_context));
 
 #ifdef HAVE_TBB
   bool can_run_subkernels = shared_context.getThreadPool() != nullptr;

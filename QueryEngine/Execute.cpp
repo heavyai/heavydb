@@ -2911,6 +2911,7 @@ void Executor::launchKernelsImpl(SharedKernelContext& shared_context,
 #else
   const size_t num_threads = cpu_threads();
 #endif
+  shared_context.setNumAllocatedThreads(num_threads);
   LOG(EXECUTOR) << "Launching query step with " << num_threads << " threads.";
   threading::task_group tg;
   // A hack to have unused unit for results collection.
