@@ -2109,18 +2109,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
   if (window_function_is_value(window_func_kind)) {
     CHECK_GE(args.size(), 1u);
     ti = args.front()->get_type_info();
-  } else if (window_function_conditional_aggregate(window_func_kind)) {
-    switch (window_func_kind) {
-      case SqlWindowFunctionKind::COUNT_IF:
-        // count_if should have an input expression having boolean type
-        // but returned value should have the same as a normal count agg expr
-        // so we force to set its type to bigint
-        CHECK(ti.is_boolean());
-        ti = SQLTypeInfo(kBIGINT);
-        break;
-      default:
-        break;
-    }
   }
   auto determine_frame_bound_type =
       [](const RexWindowFunctionOperator::RexWindowBound& bound) {

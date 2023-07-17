@@ -2834,7 +2834,9 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      return opBinding.getOperandType(0);
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.BIGINT), false);
     }
   }
 

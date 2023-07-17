@@ -3543,6 +3543,12 @@ TEST_F(Select, CountIf) {
     }
     run_test(test_queries);
   }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    const auto res =
+        run_simple_agg("SELECT COUNT_IF(x > 0) - COUNT_IF(x > 0) FROM test;", dt);
+    EXPECT_EQ(v<int64_t>(res), 0);
+  }
 }
 
 TEST_F(Select, SumIf) {
