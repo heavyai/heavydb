@@ -56,7 +56,8 @@ GpuCudaBufferMgr::~GpuCudaBufferMgr() {
 void GpuCudaBufferMgr::addSlab(const size_t slab_size) {
   slabs_.resize(slabs_.size() + 1);
   try {
-    slabs_.back() = cuda_mgr_->allocateDeviceMem(slab_size, device_id_);
+    slabs_.back() =
+        cuda_mgr_->allocateDeviceMem(slab_size, device_id_, /* is_slab */ true);
   } catch (std::runtime_error& error) {
     slabs_.resize(slabs_.size() - 1);
     throw FailedToCreateSlab(slab_size);

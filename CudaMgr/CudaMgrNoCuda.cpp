@@ -65,7 +65,9 @@ int8_t* CudaMgr::allocatePinnedHostMem(const size_t num_bytes) {
   CHECK(false);
   return nullptr;
 }
-int8_t* CudaMgr::allocateDeviceMem(const size_t num_bytes, const int device_num) {
+int8_t* CudaMgr::allocateDeviceMem(const size_t num_bytes,
+                                   const int device_num,
+                                   const bool is_slab) {
   CHECK(false);
   return nullptr;
 }

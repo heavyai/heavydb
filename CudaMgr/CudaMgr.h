@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "CudaMgr/DeviceMemoryAllocationMap.h"
 #include "Logger/Logger.h"
 #include "Shared/DeviceGroup.h"
 
@@ -32,16 +33,6 @@
 #endif  // HAVE_CUDA
 
 namespace CudaMgr_Namespace {
-
-using DeviceMemoryPtrConstant = uint64_t;
-
-struct DeviceMemoryMetadata {
-  uint64_t size;
-  uint64_t handle;
-  heavyai::UUID device_uuid;
-  int device_num;
-};
-using DeviceMemoryAllocationMap = std::map<DeviceMemoryPtrConstant, DeviceMemoryMetadata>;
 
 enum class NvidiaDeviceArch {
   Kepler,   // compute major = 3
@@ -119,7 +110,9 @@ class CudaMgr {
                           CUstream cuda_stream = 0);
 
   int8_t* allocatePinnedHostMem(const size_t num_bytes);
-  virtual int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num);
+  virtual int8_t* allocateDeviceMem(const size_t num_bytes,
+                                    const int device_num,
+                                    const bool is_slab = false);
   void freePinnedHostMem(int8_t* host_ptr);
   void freeDeviceMem(int8_t* device_ptr);
   void zeroDeviceMem(int8_t* device_ptr,
@@ -245,6 +238,10 @@ class CudaMgr {
   };
 
   static CudaMemoryUsage getCudaMemoryUsage();
+
+  DeviceMemoryAllocationMap& getDeviceMemoryAllocationMap();
+  int exportHandle(const uint64_t handle) const;
+
 #endif
 
  private:
@@ -266,8 +263,11 @@ class CudaMgr {
   std::vector<DeviceProperties> device_properties_;
   heavyai::DeviceGroup device_group_;
   std::vector<CUcontext> device_contexts_;
-  DeviceMemoryAllocationMap device_memory_allocation_map_;
   mutable std::mutex device_mutex_;
+
+#ifdef HAVE_CUDA
+  DeviceMemoryAllocationMapUqPtr device_memory_allocation_map_;
+#endif
 };
 
 }  // Namespace CudaMgr_Namespace

@@ -1,5 +1,5 @@
 if(ENABLE_CUDA)
-    add_library(CudaMgr CudaMgr.cpp)
+    add_library(CudaMgr CudaMgr.cpp DeviceMemoryAllocationMap.cpp)
 else()
     add_library(CudaMgr CudaMgrNoCuda.cpp)
 endif()

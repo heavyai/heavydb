@@ -48,7 +48,8 @@ std::string errorMessage(CUresult const status) {
 CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
     : start_gpu_(start_gpu)
     , min_shared_memory_per_block_for_all_devices(0)
-    , min_num_mps_for_all_devices(0) {
+    , min_num_mps_for_all_devices(0)
+    , device_memory_allocation_map_{std::make_unique<DeviceMemoryAllocationMap>()} {
   checkError(cuInit(0));
   checkError(cuDeviceGetCount(&device_count_));
 
@@ -83,7 +84,9 @@ CudaMgr::~CudaMgr() {
     // This should be enforced by the lifetime policies, but take this lock to be safe.
     std::lock_guard<std::mutex> device_lock(device_mutex_);
     synchronizeDevices();
-    CHECK(device_memory_allocation_map_.empty());
+
+    CHECK(getDeviceMemoryAllocationMap().mapEmpty());
+    device_memory_allocation_map_ = nullptr;
 
     for (int d = 0; d < device_count_; ++d) {
       checkError(cuCtxDestroy(device_contexts_[d]));
@@ -145,14 +148,10 @@ void CudaMgr::copyDeviceToHost(int8_t* host_ptr,
   auto const cu_device_ptr = reinterpret_cast<CUdeviceptr>(device_ptr);
   {
     std::lock_guard<std::mutex> device_lock(device_mutex_);
-    auto itr = device_memory_allocation_map_.upper_bound(cu_device_ptr);
-    CHECK(itr != device_memory_allocation_map_.begin());
-    --itr;
-    auto const& allocation_base = itr->first;
-    auto const& allocation_size = itr->second.size;
-    CHECK_LE(cu_device_ptr + num_bytes, allocation_base + allocation_size);
-    auto const& allocation_device_num = itr->second.device_num;
-    setContext(allocation_device_num);
+    auto const [allocation_base, allocation] =
+        getDeviceMemoryAllocationMap().getAllocation(cu_device_ptr);
+    CHECK_LE(cu_device_ptr + num_bytes, allocation_base + allocation.size);
+    setContext(allocation.device_num);
   }
   if (!cuda_stream) {
     checkError(cuMemcpyDtoH(host_ptr, cu_device_ptr, num_bytes));
@@ -309,7 +308,9 @@ int8_t* CudaMgr::allocatePinnedHostMem(const size_t num_bytes) {
   return reinterpret_cast<int8_t*>(host_ptr);
 }
 
-int8_t* CudaMgr::allocateDeviceMem(const size_t num_bytes, const int device_num) {
+int8_t* CudaMgr::allocateDeviceMem(const size_t num_bytes,
+                                   const int device_num,
+                                   const bool is_slab) {
   std::lock_guard<std::mutex> map_lock(device_mutex_);
   setContext(device_num);
 
@@ -357,33 +358,34 @@ int8_t* CudaMgr::allocateDeviceMem(const size_t num_bytes, const int device_num)
     }
     throw CudaErrorException(status);
   }
-  DeviceMemoryMetadata device_ptr_metadata{
-      padded_num_bytes, handle, getDeviceProperties(device_num)->uuid, device_num};
-  CHECK(
-      device_memory_allocation_map_.try_emplace(device_ptr, device_ptr_metadata).second);
+  // emplace in the map
+  getDeviceMemoryAllocationMap().addAllocation(device_ptr,
+                                               padded_num_bytes,
+                                               handle,
+                                               getDeviceProperties(device_num)->uuid,
+                                               device_num,
+                                               is_slab);
+  // notify
+  getDeviceMemoryAllocationMap().notifyMapChanged(device_num);
   return reinterpret_cast<int8_t*>(device_ptr);
 }
 
 void CudaMgr::freeDeviceMem(int8_t* device_ptr) {
   // take lock
   std::lock_guard<std::mutex> map_lock(device_mutex_);
-  // find in map
+  // fetch and remove from map
   auto const cu_device_ptr = reinterpret_cast<CUdeviceptr>(device_ptr);
-  auto const itr = device_memory_allocation_map_.find(cu_device_ptr);
-  CHECK(itr != device_memory_allocation_map_.end());
-  // get attributes
-  auto const size = itr->second.size;
-  auto const handle = itr->second.handle;
+  auto allocation = getDeviceMemoryAllocationMap().removeAllocation(cu_device_ptr);
   // attempt to unmap, release, free
-  auto status_unmap = cuMemUnmap(cu_device_ptr, size);
-  auto status_release = cuMemRelease(handle);
-  auto status_free = cuMemAddressFree(cu_device_ptr, size);
-  // remove from map
-  device_memory_allocation_map_.erase(itr);
+  auto status_unmap = cuMemUnmap(cu_device_ptr, allocation.size);
+  auto status_release = cuMemRelease(allocation.handle);
+  auto status_free = cuMemAddressFree(cu_device_ptr, allocation.size);
   // check for errors
   checkError(status_unmap);
   checkError(status_release);
   checkError(status_free);
+  // notify
+  getDeviceMemoryAllocationMap().notifyMapChanged(allocation.device_num);
 }
 
 void CudaMgr::zeroDeviceMem(int8_t* device_ptr,
@@ -542,6 +544,18 @@ void CudaMgr::checkError(CUresult status) const {
   if (status != CUDA_SUCCESS) {
     throw CudaErrorException(status);
   }
+}
+
+DeviceMemoryAllocationMap& CudaMgr::getDeviceMemoryAllocationMap() {
+  CHECK(device_memory_allocation_map_);
+  return *device_memory_allocation_map_;
+}
+
+int CudaMgr::exportHandle(const uint64_t handle) const {
+  int fd{-1};
+  checkError(cuMemExportToShareableHandle(
+      &fd, handle, CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR, 0));
+  return fd;
 }
 
 }  // namespace CudaMgr_Namespace
