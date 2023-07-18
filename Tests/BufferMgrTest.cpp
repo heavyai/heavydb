@@ -273,12 +273,15 @@ class MockCudaMgr : public CudaMgr_Namespace::CudaMgr {
  public:
   MockCudaMgr() : CudaMgr_Namespace::CudaMgr(1), fail_on_allocation_(false) {}
 
-  int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num) override {
+  int8_t* allocateDeviceMem(const size_t num_bytes,
+                            const int device_num,
+                            const bool is_slab) override {
     int8_t* mem_ptr{nullptr};
     if (fail_on_allocation_) {
       throw CudaMgr_Namespace::CudaErrorException(CUDA_ERROR_OUT_OF_MEMORY);
     } else {
-      mem_ptr = CudaMgr_Namespace::CudaMgr::allocateDeviceMem(num_bytes, device_num);
+      mem_ptr =
+          CudaMgr_Namespace::CudaMgr::allocateDeviceMem(num_bytes, device_num, is_slab);
     }
     return mem_ptr;
   }
