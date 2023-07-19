@@ -118,6 +118,116 @@ Datum Position::numericEval(const std::string_view str) const {
   }
 }
 
+// Prefix length to consider for the Jaro-Winkler score.
+constexpr int winkler_k_prefix_length = 4;
+
+// Scaling factor for the adjustment of the score.
+constexpr double winkler_k_scaling_factor = 0.1;
+
+double compute_jaro_score(std::string_view s1, std::string_view s2) {
+  int s1_len = s1.size();
+  int s2_len = s2.size();
+
+  if (s1_len == 0 || s2_len == 0) {
+    return 0.0;
+  }
+
+  int match_distance = std::max(s1_len, s2_len) / 2 - 1;
+  std::vector<bool> s1_match(s1_len, false);
+  std::vector<bool> s2_match(s2_len, false);
+
+  int matches = 0;
+  int transpositions = 0;
+
+  for (int i = 0; i < s1_len; ++i) {
+    int start = std::max(0, i - match_distance);
+    int end = std::min(i + match_distance + 1, s2_len);
+
+    for (int j = start; j < end; ++j) {
+      if (s2_match[j]) {
+        continue;
+      }
+      if (s1[i] != s2[j]) {
+        continue;
+      }
+      s1_match[i] = true;
+      s2_match[j] = true;
+      ++matches;
+      break;
+    }
+  }
+
+  if (matches == 0) {
+    return 0.0;
+  }
+
+  int k = 0;
+  for (int i = 0; i < s1_len; ++i) {
+    if (!s1_match[i]) {
+      continue;
+    }
+    while (!s2_match[k]) {
+      ++k;
+    }
+    if (s1[i] != s2[k]) {
+      ++transpositions;
+    }
+    ++k;
+  }
+
+  double score = ((matches / (double)s1_len) + (matches / (double)s2_len) +
+                  ((matches - transpositions / 2.0) / matches)) /
+                 3.0;
+
+  return score;
+}
+
+double compute_jaro_winkler_score(std::string_view s1, std::string_view s2) {
+  double jaro_score = compute_jaro_score(s1, s2);
+
+  int l = 0;
+  int n = std::min({static_cast<int>(s1.size()),
+                    static_cast<int>(s2.size()),
+                    winkler_k_prefix_length});
+
+  for (; l < n; ++l) {
+    if (s1[l] != s2[l]) {
+      break;
+    }
+  }
+
+  double winkler_adjustment = l * winkler_k_scaling_factor * (1 - jaro_score);
+  double jaro_winkler_score = jaro_score + winkler_adjustment;
+
+  return jaro_winkler_score * 100;
+}
+
+NullableStrType JarowinklerSimilarity::operator()(const std::string& str) const {
+  UNREACHABLE() << "Invalid string output for Jarowinkler Similarity";
+  return {};
+}
+
+Datum JarowinklerSimilarity::numericEval(const std::string_view str) const {
+  if (str.empty()) {
+    return NullDatum(return_ti_);
+  }
+  const double jaro_winkler_score = compute_jaro_winkler_score(str, str_literal_);
+  Datum return_datum;
+  return_datum.bigintval = static_cast<int64_t>(std::round(jaro_winkler_score));
+  return return_datum;
+}
+
+Datum JarowinklerSimilarity::numericEval(const std::string_view str1,
+                                         const std::string_view str2) const {
+  if (str1.empty() || str2.empty()) {
+    return NullDatum(return_ti_);
+  }
+  const double jaro_winkler_score = compute_jaro_winkler_score(str1, str2);
+  Datum return_datum;
+  return_datum.bigintval = static_cast<int64_t>(std::round(jaro_winkler_score));
+  return return_datum;
+}
+
 NullableStrType Lower::operator()(const std::string& str) const {
   std::string output_str(str);
   std::transform(
@@ -698,6 +808,16 @@ Datum StringOps::numericEval(const std::string_view str) const {
   return string_ops_.back()->numericEval(modified_str.str);
 }
 
+Datum StringOps::numericEval(const std::string_view str1,
+                             const std::string_view str2) const {
+  const auto num_string_producing_ops = string_ops_.size() - 1;
+  // All string ops should be evaluated before invoking
+  // numericEval with two non-literal string inputs, so
+  // num string producing ops should be 0 here
+  CHECK_EQ(num_string_producing_ops, 0UL);
+  return string_ops_.back()->numericEval(str1, str2);
+}
+
 std::vector<std::unique_ptr<const StringOp>> StringOps::genStringOpsFromOpInfos(
     const std::vector<StringOpInfo>& string_op_infos) const {
   // Should we handle pure literal expressions here as well
@@ -891,6 +1011,17 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       } else {
         return std::make_unique<const Position>(var_string_optional_literal,
                                                 search_literal);
+      }
+    }
+    case SqlStringOpKind::JAROWINKLER_SIMILARITY: {
+      CHECK_GE(num_non_variable_literals, 0UL);
+      CHECK_LE(num_non_variable_literals, 1UL);
+      if (num_non_variable_literals == 1UL) {
+        const auto str_literal = string_op_info.getStringLiteral(1);
+        return std::make_unique<const JarowinklerSimilarity>(var_string_optional_literal,
+                                                             str_literal);
+      } else {
+        return std::make_unique<const JarowinklerSimilarity>(var_string_optional_literal);
       }
     }
     default: {

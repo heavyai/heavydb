@@ -145,6 +145,26 @@ DEF_APPLY_NUMERIC_STRING_OPS(double, double)
 
 #undef DEF_APPLY_NUMERIC_STRING_OPS
 
+#define DEF_APPLY_MULTI_INPUT_NUMERIC_STRING_OPS(value_type, value_name)            \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE value_type                                \
+      apply_multi_input_numeric_string_ops_##value_name(                            \
+          const char* str1_ptr,                                                     \
+          const int32_t str1_len,                                                   \
+          const char* str2_ptr,                                                     \
+          const int32_t str2_len,                                                   \
+          const int64_t string_ops_handle) {                                        \
+    const std::string_view raw_str1(str1_ptr, str1_len);                            \
+    const std::string_view raw_str2(str2_ptr, str2_len);                            \
+    auto string_ops =                                                               \
+        reinterpret_cast<const StringOps_Namespace::StringOps*>(string_ops_handle); \
+    const auto result_datum = string_ops->numericEval(raw_str1, raw_str2);          \
+    return result_datum.value_name##val;                                            \
+  }
+
+DEF_APPLY_MULTI_INPUT_NUMERIC_STRING_OPS(int64_t, bigint)
+
+#undef DEF_APPLY_MULTI_INPUT_NUMERIC_STRING_OPS
+
 inline int32_t write_string_to_proxy(const std::string& str,
                                      const int64_t string_dict_handle) {
   if (str.empty()) {
@@ -357,11 +377,25 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
   auto string_ops_handle_lv = cgen_state_->llInt(string_ops_handle);
 
   if (!return_ti.is_string()) {
-    CHECK_EQ(non_literals_arity, 1UL);
-    std::vector<llvm::Value*> string_oper_lvs{
-        primary_str_lv[1], primary_str_lv[2], string_ops_handle_lv};
+    CHECK_GE(non_literals_arity, 1UL);
+    CHECK_LE(non_literals_arity, 2UL);
+    std::vector<llvm::Value*> string_oper_lvs;
+    if (non_literals_arity == 1UL) {
+      string_oper_lvs = {primary_str_lv[1], primary_str_lv[2], string_ops_handle_lv};
+    } else {
+      const auto [secondary_str_lv, secondary_nullcheck_codegen] =
+          codegenStringFetchAndEncode(expr, co, 1UL, false);
+      CHECK_EQ(size_t(3), secondary_str_lv.size());
+      string_oper_lvs = {primary_str_lv[1],
+                         primary_str_lv[2],
+                         secondary_str_lv[1],
+                         secondary_str_lv[2],
+                         string_ops_handle_lv};
+    }
     const auto return_type = return_ti.get_type();
-    std::string fn_call = "apply_numeric_string_ops_";
+    std::string fn_call = non_literals_arity == 1UL
+                              ? "apply_numeric_string_ops_"
+                              : "apply_multi_input_numeric_string_ops_";
     switch (return_type) {
       case kBOOLEAN: {
         fn_call += "bool";

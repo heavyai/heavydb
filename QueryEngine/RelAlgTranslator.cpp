@@ -1520,6 +1520,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
       return makeExpr<Analyzer::TryStringCastOper>(rex_function->getType(), args);
     case SqlStringOpKind::POSITION:
       return makeExpr<Analyzer::PositionStringOper>(args);
+    case SqlStringOpKind::JAROWINKLER_SIMILARITY:
+      return makeExpr<Analyzer::JarowinklerSimilarityStringOper>(args);
     default: {
       throw std::runtime_error("Unsupported string function.");
     }
@@ -1780,7 +1782,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "BASE64_ENCODE"sv,
                    "BASE64_DECODE"sv,
                    "TRY_CAST"sv,
-                   "POSITION"sv)) {
+                   "POSITION"sv,
+                   "JAROWINKLER_SIMILARITY"sv)) {
     return translateStringOper(rex_function);
   }
   if (func_resolve(rex_function->getName(), "CARDINALITY"sv, "ARRAY_LENGTH"sv)) {

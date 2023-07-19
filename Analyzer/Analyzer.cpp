@@ -3788,6 +3788,11 @@ std::shared_ptr<Analyzer::Expr> PositionStringOper::deep_copy() const {
       std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
 }
 
+std::shared_ptr<Analyzer::Expr> JarowinklerSimilarityStringOper::deep_copy() const {
+  return makeExpr<Analyzer::JarowinklerSimilarityStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
 std::shared_ptr<Analyzer::Expr> FunctionOper::deep_copy() const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
   for (size_t i = 0; i < getArity(); ++i) {
@@ -4515,6 +4520,26 @@ std::vector<std::shared_ptr<Analyzer::Expr>> PositionStringOper::normalize_opera
   }
   return normalized_operands;
 }
+
+std::vector<std::shared_ptr<Analyzer::Expr>>
+JarowinklerSimilarityStringOper::normalize_operands(
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& operands) {
+  if (operands.size() != 2UL) {
+    std::ostringstream oss;
+    oss << "JAROWINKLER_SIMILARITY operator expects two arguments, but was provided "
+        << operands.size() << ".";
+    throw std::runtime_error(oss.str());
+  }
+  const auto operand0_is_literal =
+      dynamic_cast<const Analyzer::Constant*>(operands[0].get());
+  const auto operand1_is_literal =
+      dynamic_cast<const Analyzer::Constant*>(operands[1].get());
+  if (operand0_is_literal && !operand1_is_literal) {
+    return {operands[1], operands[0]};
+  }
+  return operands;
+}
+
 }  // namespace Analyzer
 
 bool expr_list_match(const std::vector<std::shared_ptr<Analyzer::Expr>>& lhs,
