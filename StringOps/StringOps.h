@@ -93,6 +93,13 @@ struct StringOp {
     return NullDatum(SQLTypeInfo());
   }
 
+  virtual Datum numericEval(const std::string_view str1,
+                            const std::string_view str2) const {
+    UNREACHABLE() << "numericEval not allowed for this method";
+    // Make compiler happy
+    return NullDatum(SQLTypeInfo());
+  }
+
   virtual Datum numericEval() const {
     CHECK(hasVarStringLiteral());
     if (var_str_literal_.is_null) {
@@ -157,6 +164,26 @@ struct Position : public StringOp {
  private:
   const std::string search_str_;
   const int64_t start_;
+};
+
+struct JarowinklerSimilarity : public StringOp {
+  JarowinklerSimilarity(const std::optional<std::string>& var_str_optional_literal,
+                        const std::string& str_literal)
+      : StringOp(SqlStringOpKind::JAROWINKLER_SIMILARITY,
+                 SQLTypeInfo(kBIGINT),
+                 var_str_optional_literal)
+      , str_literal_(str_literal) {}
+
+  JarowinklerSimilarity(const std::optional<std::string>& var_str_optional_literal)
+      : StringOp(SqlStringOpKind::JAROWINKLER_SIMILARITY, var_str_optional_literal) {}
+
+  NullableStrType operator()(const std::string& str) const override;
+
+  Datum numericEval(const std::string_view str) const override;
+  Datum numericEval(const std::string_view str1,
+                    const std::string_view str2) const override;
+
+  const std::string str_literal_;
 };
 
 struct Lower : public StringOp {
@@ -565,6 +592,7 @@ class StringOps {
   std::string_view operator()(const std::string_view sv, std::string& sv_storage) const;
 
   Datum numericEval(const std::string_view str) const;
+  Datum numericEval(const std::string_view str1, const std::string_view str2) const;
 
   size_t size() const { return num_ops_; }
 

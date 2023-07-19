@@ -1619,12 +1619,13 @@ class StringOper : public Expr {
              const std::vector<OperandTypeFamily>& expected_type_families,
              const std::vector<std::string>& arg_names)
       : Expr(StringOper::get_return_type(kind, args)), kind_(kind), args_(args) {
-    check_operand_types(min_args,
-                        expected_type_families,
-                        arg_names,
-                        false /* dict_encoded_cols_only */,
-                        !(kind == SqlStringOpKind::CONCAT ||
-                          kind == SqlStringOpKind::RCONCAT) /* cols_first_arg_only */);
+    check_operand_types(
+        min_args,
+        expected_type_families,
+        arg_names,
+        false /* dict_encoded_cols_only */,
+        !(kind == SqlStringOpKind::CONCAT || kind == SqlStringOpKind::RCONCAT ||
+          kind == SqlStringOpKind::JAROWINKLER_SIMILARITY) /* cols_first_arg_only */);
   }
 
   StringOper(const SqlStringOpKind kind,
@@ -1634,12 +1635,13 @@ class StringOper : public Expr {
              const std::vector<OperandTypeFamily>& expected_type_families,
              const std::vector<std::string>& arg_names)
       : Expr(return_ti), kind_(kind), args_(args) {
-    check_operand_types(min_args,
-                        expected_type_families,
-                        arg_names,
-                        false /* dict_encoded_cols_only */,
-                        !(kind == SqlStringOpKind::CONCAT ||
-                          kind == SqlStringOpKind::RCONCAT) /* cols_first_arg_only */);
+    check_operand_types(
+        min_args,
+        expected_type_families,
+        arg_names,
+        false /* dict_encoded_cols_only */,
+        !(kind == SqlStringOpKind::CONCAT || kind == SqlStringOpKind::RCONCAT ||
+          kind == SqlStringOpKind::JAROWINKLER_SIMILARITY) /* cols_first_arg_only */);
   }
 
   StringOper(const SqlStringOpKind kind,
@@ -2511,6 +2513,47 @@ class PositionStringOper : public StringOper {
   }
   std::vector<std::string> getArgNames() const override {
     return {"search string", "source string", "start position"};
+  }
+
+ private:
+  static std::vector<std::shared_ptr<Analyzer::Expr>> normalize_operands(
+      const std::vector<std::shared_ptr<Analyzer::Expr>>& operands);
+};
+
+class JarowinklerSimilarityStringOper : public StringOper {
+ public:
+  JarowinklerSimilarityStringOper(const std::shared_ptr<Analyzer::Expr>& left_operand,
+                                  const std::shared_ptr<Analyzer::Expr>& right_operand)
+      : StringOper(SqlStringOpKind::JAROWINKLER_SIMILARITY,
+                   SQLTypeInfo(kBIGINT),
+                   JarowinklerSimilarityStringOper::normalize_operands(
+                       {left_operand, right_operand}),
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  JarowinklerSimilarityStringOper(
+      const std::vector<std::shared_ptr<Analyzer::Expr>>& operands)
+      : StringOper(SqlStringOpKind::JAROWINKLER_SIMILARITY,
+                   SQLTypeInfo(kBIGINT),
+                   JarowinklerSimilarityStringOper::normalize_operands(operands),
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  JarowinklerSimilarityStringOper(
+      const std::shared_ptr<Analyzer::StringOper>& string_oper)
+      : StringOper(string_oper) {}
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  size_t getMinArgs() const override { return 2UL; }
+
+  std::vector<OperandTypeFamily> getExpectedTypeFamilies() const override {
+    return {OperandTypeFamily::STRING_FAMILY, OperandTypeFamily::STRING_FAMILY};
+  }
+  std::vector<std::string> getArgNames() const override {
+    return {"left operand", "right operand"};
   }
 
  private:

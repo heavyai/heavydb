@@ -228,6 +228,7 @@ static std::set<std::string> reserved_keywords{
     "INTERVAL",
     "INTO",
     "IS",
+    "JAROWINKLER_SIMILARITY"
     "JOIN",
     "LAG",
     "LANGUAGE",
