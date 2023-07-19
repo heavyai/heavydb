@@ -2030,6 +2030,97 @@ TEST_F(StringFunctionTest, Position) {
   }
 }
 
+TEST_F(StringFunctionTest, JarowinklerSimilarity) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Literal similarity
+      // Identical strings should score 100 similarity
+      auto result_set = sql("select jarowinkler_similarity('hi', 'hi');", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(100)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Literal similarity
+      // Completely dissimilar strings should score 0 similarity
+      // Note that Jaro-Winkler similarity is case sensitive
+      auto result_set = sql("select jarowinkler_similarity('hi', 'HI');", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-literal similarity, literal last
+      auto result_set =
+          sql("select jarowinkler_similarity(personal_motto, 'one for all') from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(63)}, {int64_t(45)}, {int64_t(48)}, {int64_t(59)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-literal similarity, literal first
+      auto result_set =
+          sql("select jarowinkler_similarity('one for all', personal_motto) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(63)}, {int64_t(45)}, {int64_t(48)}, {int64_t(59)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-var similarity
+      auto result_set =
+          sql("select jarowinkler_similarity(personal_motto, raw_email) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(56)}, {int64_t(43)}, {int64_t(42)}, {int64_t(60)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-var similarity, same string
+      auto result_set =
+          sql("select jarowinkler_similarity(personal_motto, personal_motto) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(100)}, {int64_t(100)}, {int64_t(100)}, {int64_t(100)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-var similarity, one argument encoding none
+      auto result_set =
+          sql("select jarowinkler_similarity(personal_motto, last_name) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(0)}, {int64_t(49)}, {int64_t(69)}, {int64_t(38)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-var similarity, both arguments encoding none
+      auto result_set =
+          sql("select jarowinkler_similarity(last_name, last_name) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(100)}, {int64_t(100)}, {int64_t(100)}, {int64_t(100)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-var similarity, nested LOWER operator
+      auto result_set =
+          sql("select jarowinkler_similarity(lower(first_name), lower(full_name)) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(88)}, {int64_t(88)}, {int64_t(87)}, {int64_t(84)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
 TEST_F(StringFunctionTest, ExplicitCastToNumeric) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

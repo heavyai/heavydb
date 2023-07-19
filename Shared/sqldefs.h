@@ -112,8 +112,9 @@ enum class SqlStringOpKind {
   JSON_VALUE,
   BASE64_ENCODE,
   BASE64_DECODE,
-  TRY_STRING_CAST,  // string-to-numeric
-  POSITION,         // string-to-numeric
+  TRY_STRING_CAST,         // string-to-numeric
+  POSITION,                // string-to-numeric
+  JAROWINKLER_SIMILARITY,  // string-to-numeric
   INVALID
 };
 
@@ -371,6 +372,8 @@ inline std::ostream& operator<<(std::ostream& os, const SqlStringOpKind kind) {
       return os << "TRY_STRING_CAST";
     case SqlStringOpKind::POSITION:
       return os << "POSITION";
+    case SqlStringOpKind::JAROWINKLER_SIMILARITY:
+      return os << "JAROWINKLER_SIMILARITY";
     case SqlStringOpKind::INVALID:
       return os << "INVALID";
   }
@@ -448,6 +451,9 @@ inline SqlStringOpKind name_to_string_op_kind(const std::string& func_name) {
   }
   if (func_name == "POSITION") {
     return SqlStringOpKind::POSITION;
+  }
+  if (func_name == "JAROWINKLER_SIMILARITY") {
+    return SqlStringOpKind::JAROWINKLER_SIMILARITY;
   }
   LOG(FATAL) << "Invalid string function " << func_name << ".";
   return SqlStringOpKind::INVALID;
