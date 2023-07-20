@@ -186,6 +186,26 @@ struct JarowinklerSimilarity : public StringOp {
   const std::string str_literal_;
 };
 
+struct LevenshteinDistance : public StringOp {
+  LevenshteinDistance(const std::optional<std::string>& var_str_optional_literal,
+                      const std::string& str_literal)
+      : StringOp(SqlStringOpKind::LEVENSHTEIN_DISTANCE,
+                 SQLTypeInfo(kBIGINT),
+                 var_str_optional_literal)
+      , str_literal_(str_literal) {}
+
+  LevenshteinDistance(const std::optional<std::string>& var_str_optional_literal)
+      : StringOp(SqlStringOpKind::LEVENSHTEIN_DISTANCE, var_str_optional_literal) {}
+
+  NullableStrType operator()(const std::string& str) const override;
+
+  Datum numericEval(const std::string_view str) const override;
+  Datum numericEval(const std::string_view str1,
+                    const std::string_view str2) const override;
+
+  const std::string str_literal_;
+};
+
 struct Lower : public StringOp {
   Lower(const std::optional<std::string>& var_str_optional_literal)
       : StringOp(SqlStringOpKind::LOWER, var_str_optional_literal) {}
