@@ -1625,7 +1625,8 @@ class StringOper : public Expr {
         arg_names,
         false /* dict_encoded_cols_only */,
         !(kind == SqlStringOpKind::CONCAT || kind == SqlStringOpKind::RCONCAT ||
-          kind == SqlStringOpKind::JAROWINKLER_SIMILARITY) /* cols_first_arg_only */);
+          kind == SqlStringOpKind::JAROWINKLER_SIMILARITY ||
+          kind == SqlStringOpKind::LEVENSHTEIN_DISTANCE) /* cols_first_arg_only */);
   }
 
   StringOper(const SqlStringOpKind kind,
@@ -1641,7 +1642,8 @@ class StringOper : public Expr {
         arg_names,
         false /* dict_encoded_cols_only */,
         !(kind == SqlStringOpKind::CONCAT || kind == SqlStringOpKind::RCONCAT ||
-          kind == SqlStringOpKind::JAROWINKLER_SIMILARITY) /* cols_first_arg_only */);
+          kind == SqlStringOpKind::JAROWINKLER_SIMILARITY ||
+          kind == SqlStringOpKind::LEVENSHTEIN_DISTANCE) /* cols_first_arg_only */);
   }
 
   StringOper(const SqlStringOpKind kind,
@@ -2543,6 +2545,46 @@ class JarowinklerSimilarityStringOper : public StringOper {
 
   JarowinklerSimilarityStringOper(
       const std::shared_ptr<Analyzer::StringOper>& string_oper)
+      : StringOper(string_oper) {}
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  size_t getMinArgs() const override { return 2UL; }
+
+  std::vector<OperandTypeFamily> getExpectedTypeFamilies() const override {
+    return {OperandTypeFamily::STRING_FAMILY, OperandTypeFamily::STRING_FAMILY};
+  }
+  std::vector<std::string> getArgNames() const override {
+    return {"left operand", "right operand"};
+  }
+
+ private:
+  static std::vector<std::shared_ptr<Analyzer::Expr>> normalize_operands(
+      const std::vector<std::shared_ptr<Analyzer::Expr>>& operands);
+};
+
+class LevenshteinDistanceStringOper : public StringOper {
+ public:
+  LevenshteinDistanceStringOper(const std::shared_ptr<Analyzer::Expr>& left_operand,
+                                const std::shared_ptr<Analyzer::Expr>& right_operand)
+      : StringOper(SqlStringOpKind::LEVENSHTEIN_DISTANCE,
+                   SQLTypeInfo(kBIGINT),
+                   LevenshteinDistanceStringOper::normalize_operands(
+                       {left_operand, right_operand}),
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  LevenshteinDistanceStringOper(
+      const std::vector<std::shared_ptr<Analyzer::Expr>>& operands)
+      : StringOper(SqlStringOpKind::LEVENSHTEIN_DISTANCE,
+                   SQLTypeInfo(kBIGINT),
+                   LevenshteinDistanceStringOper::normalize_operands(operands),
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  LevenshteinDistanceStringOper(const std::shared_ptr<Analyzer::StringOper>& string_oper)
       : StringOper(string_oper) {}
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;

@@ -228,6 +228,93 @@ Datum JarowinklerSimilarity::numericEval(const std::string_view str1,
   return return_datum;
 }
 
+// int64_t compute_levenshtein_distance(std::string_view s1, std::string_view s2) {
+//   const size_t len1 = s1.size(), len2 = s2.size();
+//   std::vector<std::vector<size_t>> d(len1 + 1, std::vector<size_t>(len2 + 1));
+//
+//   d[0][0] = 0;
+//   for (size_t i = 1; i <= len1; ++i) {
+//     d[i][0] = i;
+//   }
+//   for (size_t i = 1; i <= len2; ++i) {
+//     d[0][i] = i;
+//   }
+//
+//   for (size_t i = 1; i <= len1; ++i) {
+//     for (size_t j = 1; j <= len2; ++j) {
+//       d[i][j] = std::min({d[i - 1][j] + 1,
+//                           d[i][j - 1] + 1,
+//                           d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1)});
+//     }
+//   }
+//
+//   return d[len1][len2];
+// }
+
+template <typename T>
+T compute_levenshtein_distance_template(std::string_view s1, std::string_view s2) {
+  const size_t len1 = s1.size(), len2 = s2.size();
+  std::vector<std::vector<T>> d(len1 + 1, std::vector<T>(len2 + 1));
+
+  d[0][0] = 0;
+  for (size_t i = 1; i <= len1; ++i) {
+    d[i][0] = i;
+  }
+  for (size_t i = 1; i <= len2; ++i) {
+    d[0][i] = i;
+  }
+
+  for (size_t i = 1; i <= len1; ++i) {
+    for (size_t j = 1; j <= len2; ++j) {
+      d[i][j] = std::min({d[i - 1][j] + 1,
+                          d[i][j - 1] + 1,
+                          d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1)});
+    }
+  }
+
+  return d[len1][len2];
+}
+
+int64_t compute_levenshtein_distance(std::string_view s1, std::string_view s2) {
+  const size_t max_len = std::max(s1.size(), s2.size());
+
+  if (max_len < 256) {
+    return compute_levenshtein_distance_template<uint8_t>(s1, s2);
+  } else if (max_len < 65536) {
+    return compute_levenshtein_distance_template<uint16_t>(s1, s2);
+  } else if (max_len < std::numeric_limits<uint32_t>::max()) {
+    return compute_levenshtein_distance_template<uint32_t>(s1, s2);
+  } else {
+    return compute_levenshtein_distance_template<uint64_t>(s1, s2);
+  }
+}
+
+NullableStrType LevenshteinDistance::operator()(const std::string& str) const {
+  UNREACHABLE() << "Invalid string output for Levenshtein Distance";
+  return {};
+}
+
+Datum LevenshteinDistance::numericEval(const std::string_view str) const {
+  if (str.empty()) {
+    return NullDatum(return_ti_);
+  }
+  const double levenshtein_distance = compute_levenshtein_distance(str, str_literal_);
+  Datum return_datum;
+  return_datum.bigintval = static_cast<int64_t>(std::round(levenshtein_distance));
+  return return_datum;
+}
+
+Datum LevenshteinDistance::numericEval(const std::string_view str1,
+                                       const std::string_view str2) const {
+  if (str1.empty() || str2.empty()) {
+    return NullDatum(return_ti_);
+  }
+  const double levenshtein_distance = compute_levenshtein_distance(str1, str2);
+  Datum return_datum;
+  return_datum.bigintval = static_cast<int64_t>(std::round(levenshtein_distance));
+  return return_datum;
+}
+
 NullableStrType Lower::operator()(const std::string& str) const {
   std::string output_str(str);
   std::transform(
@@ -1022,6 +1109,17 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
                                                              str_literal);
       } else {
         return std::make_unique<const JarowinklerSimilarity>(var_string_optional_literal);
+      }
+    }
+    case SqlStringOpKind::LEVENSHTEIN_DISTANCE: {
+      CHECK_GE(num_non_variable_literals, 0UL);
+      CHECK_LE(num_non_variable_literals, 1UL);
+      if (num_non_variable_literals == 1UL) {
+        const auto str_literal = string_op_info.getStringLiteral(1);
+        return std::make_unique<const LevenshteinDistance>(var_string_optional_literal,
+                                                           str_literal);
+      } else {
+        return std::make_unique<const LevenshteinDistance>(var_string_optional_literal);
       }
     }
     default: {
