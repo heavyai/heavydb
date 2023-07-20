@@ -234,6 +234,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new Base64Encode());
     addOperator(new Base64Decode());
     addOperator(new JarowinklerSimilarity());
+    addOperator(new LevenshteinDistance());
     addOperator(new Likely());
     addOperator(new Unlikely());
     addOperator(new Sign());
@@ -1489,6 +1490,32 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public static class JarowinklerSimilarity extends SqlFunction {
     public JarowinklerSimilarity() {
       super("JAROWINKLER_SIMILARITY",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 2;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BIGINT);
+    }
+  }
+
+  public static class LevenshteinDistance extends SqlFunction {
+    public LevenshteinDistance() {
+      super("LEVENSHTEIN_DISTANCE",
               SqlKind.OTHER_FUNCTION,
               null,
               null,

@@ -3793,6 +3793,11 @@ std::shared_ptr<Analyzer::Expr> JarowinklerSimilarityStringOper::deep_copy() con
       std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
 }
 
+std::shared_ptr<Analyzer::Expr> LevenshteinDistanceStringOper::deep_copy() const {
+  return makeExpr<Analyzer::LevenshteinDistanceStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
 std::shared_ptr<Analyzer::Expr> FunctionOper::deep_copy() const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
   for (size_t i = 0; i < getArity(); ++i) {
@@ -4527,6 +4532,25 @@ JarowinklerSimilarityStringOper::normalize_operands(
   if (operands.size() != 2UL) {
     std::ostringstream oss;
     oss << "JAROWINKLER_SIMILARITY operator expects two arguments, but was provided "
+        << operands.size() << ".";
+    throw std::runtime_error(oss.str());
+  }
+  const auto operand0_is_literal =
+      dynamic_cast<const Analyzer::Constant*>(operands[0].get());
+  const auto operand1_is_literal =
+      dynamic_cast<const Analyzer::Constant*>(operands[1].get());
+  if (operand0_is_literal && !operand1_is_literal) {
+    return {operands[1], operands[0]};
+  }
+  return operands;
+}
+
+std::vector<std::shared_ptr<Analyzer::Expr>>
+LevenshteinDistanceStringOper::normalize_operands(
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& operands) {
+  if (operands.size() != 2UL) {
+    std::ostringstream oss;
+    oss << "LEVENSHTEIN_DISTANCE operator expects two arguments, but was provided "
         << operands.size() << ".";
     throw std::runtime_error(oss.str());
   }

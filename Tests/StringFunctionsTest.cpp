@@ -2121,6 +2121,97 @@ TEST_F(StringFunctionTest, JarowinklerSimilarity) {
   }
 }
 
+TEST_F(StringFunctionTest, LevenshteinDistance) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Literal distance
+      // Identical strings should have 0 distance
+      auto result_set = sql("select levenshtein_distance('hi', 'hi');", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Literal distance
+      // Completely dissimilar strings should have distance equal to length of strings
+      // Note that Levenshtein Distance is case sensitive
+      auto result_set = sql("select levenshtein_distance('hi', 'HI');", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(2)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-literal distance, literal last
+      auto result_set =
+          sql("select levenshtein_distance(personal_motto, 'one for all') from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(17)}, {int64_t(24)}, {int64_t(31)}, {int64_t(73)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-literal distance, literal first
+      auto result_set =
+          sql("select levenshtein_distance('one for all', personal_motto) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(17)}, {int64_t(24)}, {int64_t(31)}, {int64_t(73)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-var distance
+      auto result_set =
+          sql("select levenshtein_distance(personal_motto, raw_email) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(37)}, {int64_t(27)}, {int64_t(36)}, {int64_t(74)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-var distance, same string
+      auto result_set =
+          sql("select levenshtein_distance(personal_motto, personal_motto) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(0)}, {int64_t(0)}, {int64_t(0)}, {int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-var distance, one argument encoding none
+      auto result_set =
+          sql("select levenshtein_distance(personal_motto, last_name) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(28)}, {int64_t(30)}, {int64_t(34)}, {int64_t(80)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-var distance, both arguments encoding none
+      auto result_set =
+          sql("select levenshtein_distance(last_name, last_name) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(0)}, {int64_t(0)}, {int64_t(0)}, {int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Var-var distance, nested LOWER operator
+      auto result_set =
+          sql("select levenshtein_distance(lower(first_name), lower(full_name)) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(6)}, {int64_t(6)}, {int64_t(7)}, {int64_t(6)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
 TEST_F(StringFunctionTest, ExplicitCastToNumeric) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

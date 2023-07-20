@@ -238,6 +238,7 @@ static std::set<std::string> reserved_keywords{
     "LEAD",
     "LEADING",
     "LEFT",
+    "LEVENSHTEIN_DISTANCE"
     "LIKE",
     "LIKE_REGEX",
     "LIMIT",
