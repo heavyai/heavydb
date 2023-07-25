@@ -1,4 +1,4 @@
-set(HEAVYIQ_BUILD_ID "main" CACHE STRING "HeavyIQ Build ID")
+set(HEAVYIQ_BUILD_ID "41" CACHE STRING "HeavyIQ Build ID")
 set(HEAVYIQ_URL "http://builds.mapd.com/heavyiq/heavyiq-${HEAVYIQ_BUILD_ID}/dist.tgz")
 
 include(ExternalProject)
