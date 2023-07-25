@@ -191,6 +191,9 @@ class ConcurrencyTestEnv : public DBHandlerTestFixture {
     fast_query_ms_warmup_future.get();
     slow_query_ms_warmup_future.get();
 
+    auto const baseline_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::system_clock::now().time_since_epoch())
+                                 .count();
     setExecuteMode(execution_mode_slow_query);
 
     auto slow_query_ms_future = std::async(
@@ -202,8 +205,8 @@ class ConcurrencyTestEnv : public DBHandlerTestFixture {
     auto fast_query_ms_future = std::async(
         std::launch::async, get_query_return_time_epoch_ms, std::ref(fast_query_sql));
 
-    const auto fast_query_return_ms = fast_query_ms_future.get();
-    const auto slow_query_return_ms = slow_query_ms_future.get();
+    const auto fast_query_return_ms = fast_query_ms_future.get() - baseline_ms;
+    const auto slow_query_return_ms = slow_query_ms_future.get() - baseline_ms;
 
     if (fast_query_should_finish_first) {
       EXPECT_LT(fast_query_return_ms, slow_query_return_ms);
@@ -215,7 +218,7 @@ class ConcurrencyTestEnv : public DBHandlerTestFixture {
  private:
   const std::string table_name{"test_concurrency"};
   const std::string slow_query_sql =
-      "SELECT SUM(ct_sleep_us(100000)) AS res FROM test_concurrency WHERE i64 < 50;";
+      "SELECT SUM(ct_sleep_us(5000000)) AS res FROM test_concurrency WHERE i64 < 50;";
   const std::string fast_query_sql =
       "SELECT SUM(1) AS res FROM test_concurrency WHERE i64 < 50;";
   const char* table_schema = R"(
