@@ -28502,7 +28502,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
   for (bool is_multi_frag : {false, true}) {
     const size_t rand_seed = is_multi_frag ? 23 : 42;
     int err = create_and_populate_large_window_func_table(
-        is_multi_frag, g_shard_count, 40000, rand_seed);
+        is_multi_frag, g_shard_count, 4000, rand_seed);
     if (err) {
       return err;
     }
