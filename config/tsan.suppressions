@@ -26,3 +26,5 @@ race:ShowModelFeatureDetailsDdlTest::TearDown
 race:ResultSet::parallelTop
 # QE-874
 race:rml::internal::BootStrapBlocks::allocate
+# QE-891
+race:daal::*
