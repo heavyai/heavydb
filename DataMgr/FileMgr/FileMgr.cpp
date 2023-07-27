@@ -1651,7 +1651,6 @@ bool FileMgr::updatePageIfDeleted(FileInfo* file_info,
     if (!g_read_only && !g_multi_instance) {
       // Read-only mode can find pages like this if the server was previously run in
       // write-mode but is not allowed to free them.
-      // TODO(sy): Confirm that proper locking is held before writing here.
       file_info->freePageImmediate(page_num);
     }
     return true;
@@ -1662,7 +1661,6 @@ bool FileMgr::updatePageIfDeleted(FileInfo* file_info,
     if (!g_read_only && !g_multi_instance) {
       // Read-only mode can find pages like this if the server was previously run in
       // write-mode but is not allowed to free them.
-      // TODO(sy): Confirm that proper locking is held before writing here.
       file_info->recoverPage(chunk_key, page_num);
     }
   }
