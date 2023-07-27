@@ -3544,7 +3544,8 @@ bool compute_output_buffer_size(const RelAlgExecutionUnit& ra_exe_unit) {
     }
   }
   if (ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
-      (!ra_exe_unit.scan_limit || ra_exe_unit.scan_limit > Executor::high_scan_limit)) {
+      (!ra_exe_unit.scan_limit ||
+       ra_exe_unit.scan_limit > Executor::g_projection_query_scan_limit)) {
     return true;
   }
   return false;

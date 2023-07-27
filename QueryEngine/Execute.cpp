@@ -1750,12 +1750,12 @@ std::string get_table_name(const InputDescriptor& input_desc) {
   }
 }
 
-inline size_t getDeviceBasedScanLimit(const ExecutorDeviceType device_type,
-                                      const int device_count) {
+inline size_t getDeviceBasedWatchdogScanLimit(const ExecutorDeviceType device_type,
+                                              const int device_count) {
   if (device_type == ExecutorDeviceType::GPU) {
-    return device_count * Executor::high_scan_limit;
+    return device_count * Executor::g_watchdog_high_scan_limit;
   }
-  return Executor::high_scan_limit;
+  return Executor::g_watchdog_high_scan_limit;
 }
 
 void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
@@ -1768,7 +1768,8 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
     }
   }
   if (!ra_exe_unit.scan_limit && table_infos.size() == 1 &&
-      table_infos.front().info.getPhysicalNumTuples() < Executor::high_scan_limit) {
+      table_infos.front().info.getPhysicalNumTuples() <
+          Executor::g_watchdog_high_scan_limit) {
     // Allow a query with no scan limit to run on small tables
     return;
   }
@@ -1780,7 +1781,8 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
   if (ra_exe_unit.sort_info.algorithm != SortAlgorithm::StreamingTopN &&
       ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
       (!ra_exe_unit.scan_limit ||
-       ra_exe_unit.scan_limit > getDeviceBasedScanLimit(device_type, device_count))) {
+       ra_exe_unit.scan_limit >
+           getDeviceBasedWatchdogScanLimit(device_type, device_count))) {
     std::vector<std::string> table_names;
     const auto& input_descs = ra_exe_unit.input_descs;
     for (const auto& input_desc : input_descs) {
@@ -1796,7 +1798,7 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
           boost::algorithm::join(table_names, ", ") + "  would contain " +
           std::to_string(ra_exe_unit.scan_limit) +
           " rows, which is more than the current system limit of " +
-          std::to_string(getDeviceBasedScanLimit(device_type, device_count)));
+          std::to_string(getDeviceBasedWatchdogScanLimit(device_type, device_count)));
     }
   }
 }
