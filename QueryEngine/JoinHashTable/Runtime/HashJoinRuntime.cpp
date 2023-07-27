@@ -42,6 +42,7 @@
 #endif
 
 #if HAVE_CUDA
+#include <cuda_runtime.h>
 #include <thrust/scan.h>
 #endif
 #include "Shared/funcannotations.h"
