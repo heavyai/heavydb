@@ -182,7 +182,7 @@ download_make_install ${HTTP_DEPS}/libpng-$VERS.tar.xz
 
 install_snappy
  
-VERS=3.52.15
+VERS=3.52.16
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
 
 # c-blosc

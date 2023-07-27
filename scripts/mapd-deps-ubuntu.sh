@@ -189,7 +189,7 @@ install_awscpp -j $(nproc)
 # thrift
 install_thrift
 
-VERS=3.52.15
+VERS=3.52.16
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
 
 install_folly
