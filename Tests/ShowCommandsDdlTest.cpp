@@ -49,6 +49,7 @@ extern size_t g_logs_system_tables_max_files_count;
 std::string test_binary_file_path;
 std::string test_source_path;
 bool g_run_odbc{false};
+bool g_custom_odbc_inst{false};  // Are tests being run with a custom odbcinst.ini file?
 
 namespace bf = boost::filesystem;
 namespace po = boost::program_options;
@@ -5610,8 +5611,11 @@ int main(int argc, char** argv) {
 
   po::options_description desc("Options");
   desc.add_options()("run-odbc-tests", "Run ODBC related tests.");
+  desc.add_options()("run-altered-odbcinst-tests",
+                     "Run ODBC tests that depend on a custom odbcinst.ini file.");
   po::variables_map vm = DBHandlerTestFixture::initTestArgs(argc, argv, desc);
   g_run_odbc = (vm.count("run-odbc-tests"));
+  g_custom_odbc_inst = (vm.count("run-altered-odbcinst-tests"));
 
   int err{0};
   try {
