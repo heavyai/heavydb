@@ -56,14 +56,9 @@ FileInfo::~FileInfo() {
 void FileInfo::initNewFile() {
   // initialize pages and free page list
   // Also zeroes out first four bytes of every header
-
-  int32_t headerSize = 0;
-  int8_t* headerSizePtr = (int8_t*)(&headerSize);
   for (size_t pageId = 0; pageId < numPages; ++pageId) {
-    fileMgr->writeFile(f, pageId * pageSize, sizeof(int32_t), headerSizePtr);
-    freePages.insert(pageId);
+    freePageImmediate(pageId);
   }
-  isDirty = true;
 }
 
 size_t FileInfo::write(const size_t offset, const size_t size, const int8_t* buf) {
@@ -149,7 +144,6 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec) {
       if (!g_read_only && !g_multi_instance) {
         // Read-only mode can find pages like this if the server was previously run in
         // write-mode but is not allowed to free them.
-        // TODO(sy): Confirm that proper locking is held before writing here.
         freePageImmediate(pageNum);
         LOG(WARNING) << "Was not checkpointed: Chunk key: " << show_chunk(chunkKey)
                      << " Page id: " << pageId << " Epoch: " << versionEpoch
@@ -191,17 +185,14 @@ static void sighandler(int sig) {
 #endif
 
 void FileInfo::freePage(int pageId, const bool isRolloff, int32_t epoch) {
-  std::lock_guard<std::mutex> lock(readWriteMutex_);
   int32_t epoch_freed_page[2] = {DELETE_CONTINGENT, epoch};
   if (isRolloff) {
     epoch_freed_page[0] = ROLLOFF_CONTINGENT;
   }
-  fileMgr->writeFile(f,
-                     pageId * pageSize + sizeof(int32_t),
-                     sizeof(epoch_freed_page),
-                     reinterpret_cast<const int8_t*>(epoch_freed_page));
+  write(pageId * pageSize + sizeof(int32_t),
+        sizeof(epoch_freed_page),
+        reinterpret_cast<const int8_t*>(epoch_freed_page));
   fileMgr->free_page(std::make_pair(this, pageId));
-  isDirty = true;
 
 #ifdef ENABLE_CRASH_CORRUPTION_TEST
   signal(SIGUSR2, sighandler);
@@ -252,20 +243,17 @@ int32_t FileInfo::syncToDisk() {
 }
 
 void FileInfo::freePageImmediate(int32_t page_num) {
-  CHECK(!g_multi_instance) << "Attempted unsynchronized write in multi-instance mode";
   int32_t zero{0};
-  fileMgr->writeFile(
-      f, page_num * pageSize, sizeof(int32_t), reinterpret_cast<const int8_t*>(&zero));
+  write(page_num * pageSize, sizeof(int32_t), reinterpret_cast<const int8_t*>(&zero));
   freePageDeferred(page_num);
 }
 
 // Overwrites delete/rollback contingents by re-writing chunk key to page.
 void FileInfo::recoverPage(const ChunkKey& chunk_key, int32_t page_num) {
   CHECK(!g_multi_instance) << "Attempted unsynchronized write in multi-instance mode";
-  fileMgr->writeFile(f,
-                     page_num * pageSize + sizeof(int32_t),
-                     2 * sizeof(int32_t),
-                     reinterpret_cast<const int8_t*>(chunk_key.data()));
+  write(page_num * pageSize + sizeof(int32_t),
+        2 * sizeof(int32_t),
+        reinterpret_cast<const int8_t*>(chunk_key.data()));
 }
 
 bool is_page_deleted_with_checkpoint(int32_t table_epoch,
