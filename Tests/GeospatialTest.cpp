@@ -103,7 +103,8 @@ TargetValue run_simple_agg(const std::string& query_str,
                            const ExecutorDeviceType device_type,
                            const bool geo_return_geo_tv = true,
                            const bool allow_loop_joins = true) {
-  auto rows = QR::get()->runSQL(query_str, device_type, allow_loop_joins);
+  auto rows =
+      QR::get()->runSQL(query_str, device_type, g_hoist_literals, allow_loop_joins);
   if (geo_return_geo_tv) {
     rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   }
@@ -2957,8 +2958,8 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
         "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
         "b ON ST_Contains(b.poly, a.p);",
         dt,
-        true,
-        false));
+        true,     // geo_return_geo_tv
+        false));  // allow_loop_joins
 
     SKIP_ON_AGGREGATOR(ASSERT_EQ(
         static_cast<int64_t>(1),
@@ -2966,8 +2967,8 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
             "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2;",
             dt,
-            true,
-            false))));
+            true,       // geo_return_geo_tv
+            false))));  // allow_loop_joins
 
     const auto trivial_loop_join_state = g_trivial_loop_join_threshold;
     g_trivial_loop_join_threshold = 1;
