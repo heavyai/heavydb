@@ -2444,6 +2444,9 @@ void Executor::addTransientStringLiterals(
 ExecutorDeviceType Executor::getDeviceTypeForTargets(
     const RelAlgExecutionUnit& ra_exe_unit,
     const ExecutorDeviceType requested_device_type) {
+  if (!getDataMgr()->gpusPresent()) {
+    return ExecutorDeviceType::CPU;
+  }
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
     if (!ra_exe_unit.groupby_exprs.empty() &&
