@@ -51,12 +51,6 @@ done
 if [ "$ID" == "ubuntu" ] ; then
   sudo $PACKAGER update
 
-  # required for gcc-11 on Ubuntu < 22.04
-  if [ "$VERSION_ID" == "20.04" ] || [ "$VERSION_ID" == "19.10" ] || [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ]; then
-    DEBIAN_FRONTEND=noninteractive sudo apt install -y software-properties-common
-    DEBIAN_FRONTEND=noninteractive sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-  fi
-
   sudo $PACKAGER install \
       software-properties-common \
       build-essential \
@@ -64,8 +58,6 @@ if [ "$ID" == "ubuntu" ] ; then
       git \
       wget \
       curl \
-      gcc-11 \
-      g++-11 \
       libboost-all-dev \
       golang \
       libssl-dev \
@@ -107,6 +99,15 @@ if [ "$ID" == "ubuntu" ] ; then
       python-yaml \
       libxerces-c-dev \
       swig
+
+  # required for gcc-11 on Ubuntu < 22.04
+  if [ "$VERSION_ID" == "20.04" ] || [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ]; then
+    DEBIAN_FRONTEND=noninteractive sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+  fi
+
+  sudo $PACKAGER install \
+      gcc-11 \
+      g++-11
 
 # Set up gcc-11 as default gcc
 sudo update-alternatives \
