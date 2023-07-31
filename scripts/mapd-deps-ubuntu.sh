@@ -78,12 +78,6 @@ DEBIAN_FRONTEND=noninteractive sudo apt-key adv --fetch-keys https://developer.d
 
 DEBIAN_FRONTEND=noninteractive sudo apt update
 
-# required for gcc-11 on Ubuntu < 22.04
-if [ "$VERSION_ID" == "20.04" ] || [ "$VERSION_ID" == "19.10" ] || [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ]; then
-  DEBIAN_FRONTEND=noninteractive sudo apt install -y software-properties-common
-  DEBIAN_FRONTEND=noninteractive sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-fi
-
 DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     software-properties-common \
     build-essential \
@@ -91,8 +85,6 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     git \
     wget \
     curl \
-    gcc-11 \
-    g++-11 \
     libboost-all-dev \
     libssl-dev \
     libevent-dev \
@@ -140,6 +132,15 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     libxinerama-dev \
     libxcursor-dev \
     libxi-dev
+
+# required for gcc-11 on Ubuntu < 22.04
+if [ "$VERSION_ID" == "20.04" ] || [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ]; then
+  DEBIAN_FRONTEND=noninteractive sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+fi
+
+sudo $PACKAGER install \
+  gcc-11 \
+  g++-11
 
 # Set up gcc-11 as default gcc
 sudo update-alternatives \
