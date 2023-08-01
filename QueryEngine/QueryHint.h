@@ -52,6 +52,8 @@ enum QueryHint {
   kMaxJoinHashTableSize,
   kforceBaselineHashJoin,
   kforceOneToManyHashJoin,
+  kWatchdogMaxProjectedRowsPerDevice,
+  kPreflightCountQueryThreshold,
   kHintCount,   // should be at the last elem before INVALID enum value to count #
                 // supported hints correctly
   kInvalidHint  // this should be the last elem of this enum
@@ -82,7 +84,10 @@ static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"loop_join_inner_table_max_num_rows", QueryHint::kLoopJoinInnerTableMaxNumRows},
     {"max_join_hashtable_size", QueryHint::kMaxJoinHashTableSize},
     {"force_baseline_hash_join", QueryHint::kforceBaselineHashJoin},
-    {"force_one_to_many_hash_join", QueryHint::kforceOneToManyHashJoin}};
+    {"force_one_to_many_hash_join", QueryHint::kforceOneToManyHashJoin},
+    {"watchdog_max_projected_rows_per_device",
+     QueryHint::kWatchdogMaxProjectedRowsPerDevice},
+    {"preflight_count_query_threshold", QueryHint::kPreflightCountQueryThreshold}};
 
 struct HintIdentifier {
   bool global_hint;
@@ -195,6 +200,8 @@ struct RegisteredQueryHint {
       , watchdog(std::nullopt)
       , dynamic_watchdog(std::nullopt)
       , query_time_limit(0)
+      , watchdog_max_projected_rows_per_device(g_watchdog_max_projected_rows_per_device)
+      , preflight_count_query_threshold(g_preflight_count_query_threshold)
       , cuda_block_size(0)
       , cuda_grid_size_multiplier(0.0)
       , opt_cuda_grid_and_block_size(false)
@@ -301,6 +308,14 @@ struct RegisteredQueryHint {
             updated_query_hints.force_one_to_many_hash_join =
                 global_hints.force_one_to_many_hash_join;
             break;
+          case QueryHint::kWatchdogMaxProjectedRowsPerDevice:
+            updated_query_hints.watchdog_max_projected_rows_per_device =
+                global_hints.watchdog_max_projected_rows_per_device;
+            break;
+          case QueryHint::kPreflightCountQueryThreshold:
+            updated_query_hints.preflight_count_query_threshold =
+                global_hints.preflight_count_query_threshold;
+            break;
           default:
             UNREACHABLE();
         }
@@ -318,6 +333,8 @@ struct RegisteredQueryHint {
   std::optional<bool> watchdog;
   std::optional<bool> dynamic_watchdog;
   size_t query_time_limit;
+  size_t watchdog_max_projected_rows_per_device;
+  size_t preflight_count_query_threshold;
 
   // control CUDA behavior
   size_t cuda_block_size;

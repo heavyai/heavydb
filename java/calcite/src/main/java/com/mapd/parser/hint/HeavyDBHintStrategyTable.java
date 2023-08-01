@@ -39,6 +39,8 @@ public class HeavyDBHintStrategyTable {
     supportedHints.add("max_join_hashtable_size");
     supportedHints.add("force_baseline_hash_join");
     supportedHints.add("force_one_to_many_hash_join");
+    supportedHints.add("watchdog_max_projected_rows_per_device");
+    supportedHints.add("preflight_count_query_threshold");
 
     for (String hint_name : supportedHints) {
       // add local / global hints, e.., cpu_mode / g_cpu_mode

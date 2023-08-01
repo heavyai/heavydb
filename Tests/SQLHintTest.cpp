@@ -64,6 +64,19 @@ std::shared_ptr<ResultSet> run_query(const std::string& query_str,
   return QR::get()->runSQL(query_str, device_type, true, true);
 }
 
+std::optional<RegisteredQueryHint> get_hint_registered(std::string const& query,
+                                                       QueryHint query_hint) {
+  auto const rel_alg_dag = QR::get()->getRelAlgDag(query);
+  for (const auto& kv : rel_alg_dag.get()->getQueryHints()) {
+    for (auto& kv2 : kv.second) {
+      if (kv2.second.isHintRegistered(query_hint)) {
+        return kv2.second;
+      }
+    }
+  }
+  return std::nullopt;
+}
+
 bool is_hint_registered(
     std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>& hints,
     QueryHint expected_hint) {
@@ -80,6 +93,17 @@ bool is_hint_registered(
 bool is_hint_globally_registered(const RegisteredQueryHint& hints,
                                  QueryHint expected_hint) {
   return hints.isHintRegistered(expected_hint);
+}
+
+void check_hint_registered(std::string const& query,
+                           QueryHint query_hint,
+                           bool is_global) {
+  auto const rel_alg_dag = QR::get()->getRelAlgDag(query);
+  if (is_global) {
+    EXPECT_TRUE(is_hint_globally_registered(rel_alg_dag->getGlobalHints(), query_hint));
+  } else {
+    EXPECT_TRUE(is_hint_registered(rel_alg_dag->getQueryHints(), query_hint));
+  }
 }
 
 struct QueryHintInfo {
@@ -1254,16 +1278,6 @@ TEST(QueryHint, Subquery) {
 TEST(QueryHint, HashJoinSpec) {
   // this join originally a target for perfect join hash table w/ OneToOne hash table
   // layout
-  auto check_registered_hint = [](std::string const& query,
-                                  QueryHint query_hint,
-                                  bool is_global) {
-    auto const rel_alg_dag = QR::get()->getRelAlgDag(query);
-    if (is_global) {
-      EXPECT_TRUE(is_hint_globally_registered(rel_alg_dag->getGlobalHints(), query_hint));
-    } else {
-      EXPECT_TRUE(is_hint_registered(rel_alg_dag->getQueryHints(), query_hint));
-    }
-  };
   std::string q1 =
       "select /*+ force_baseline_hash_join */ count(1) from JOIN_HINT_TEST R, "
       "JOIN_HINT_TEST S where R.v = S.v;";
@@ -1276,10 +1290,10 @@ TEST(QueryHint, HashJoinSpec) {
   std::string q2_g =
       "select /*+ g_force_one_to_many_hash_join */ count(1) from JOIN_HINT_TEST R, "
       "JOIN_HINT_TEST S where R.v = S.v;";
-  check_registered_hint(q1, QueryHint::kforceBaselineHashJoin, false);
-  check_registered_hint(q1_g, QueryHint::kforceBaselineHashJoin, true);
-  check_registered_hint(q2, QueryHint::kforceOneToManyHashJoin, false);
-  check_registered_hint(q2_g, QueryHint::kforceOneToManyHashJoin, true);
+  check_hint_registered(q1, QueryHint::kforceBaselineHashJoin, false);
+  check_hint_registered(q1_g, QueryHint::kforceBaselineHashJoin, true);
+  check_hint_registered(q2, QueryHint::kforceOneToManyHashJoin, false);
+  check_hint_registered(q2_g, QueryHint::kforceOneToManyHashJoin, true);
 
   std::set<QueryPlanHash> visited;
   QR::get()->runSQL(q1, ExecutorDeviceType::CPU);
@@ -1297,6 +1311,60 @@ TEST(QueryHint, HashJoinSpec) {
   EXPECT_TRUE(expected_ht2);
   EXPECT_TRUE(expected_ht2->getHashTableEntryInfo().getHashTableLayout() ==
               HashType::OneToMany);
+}
+
+TEST(QueryHint, ProjectionScanLimit) {
+  std::string watchdog_q1 =
+      "SELECT /*+ watchdog, watchdog_max_projected_rows_per_device(1) */ v FROM "
+      "JOIN_HINT_TEST";
+  std::string watchdog_q1_g =
+      "SELECT /*+ g_watchdog, g_watchdog_max_projected_rows_per_device(2) */ v FROM "
+      "JOIN_HINT_TEST";
+  std::string projection_q1 =
+      "SELECT /*+ preflight_count_query_threshold(1) */ v FROM JOIN_HINT_TEST";
+  std::string projection_q1_g =
+      "SELECT /*+ g_preflight_count_query_threshold(2) */ v FROM JOIN_HINT_TEST";
+
+  check_hint_registered(
+      watchdog_q1, QueryHint::kWatchdogMaxProjectedRowsPerDevice, false);
+  auto watchdog_q1_hint =
+      get_hint_registered(watchdog_q1, QueryHint::kWatchdogMaxProjectedRowsPerDevice);
+  EXPECT_TRUE(watchdog_q1_hint.has_value());
+  EXPECT_EQ(1UL, watchdog_q1_hint->watchdog_max_projected_rows_per_device);
+  EXPECT_ANY_THROW(run_query(watchdog_q1, ExecutorDeviceType::CPU));
+
+  check_hint_registered(
+      watchdog_q1_g, QueryHint::kWatchdogMaxProjectedRowsPerDevice, true);
+  auto watchdog_q1_g_hint =
+      get_hint_registered(watchdog_q1_g, QueryHint::kWatchdogMaxProjectedRowsPerDevice);
+  EXPECT_TRUE(watchdog_q1_g_hint.has_value());
+  EXPECT_EQ(2UL, watchdog_q1_g_hint->watchdog_max_projected_rows_per_device);
+
+  check_hint_registered(projection_q1, QueryHint::kPreflightCountQueryThreshold, false);
+  auto projection_q1_hint =
+      get_hint_registered(projection_q1, QueryHint::kPreflightCountQueryThreshold);
+  EXPECT_TRUE(projection_q1_hint.has_value());
+  EXPECT_EQ(1UL, projection_q1_hint->preflight_count_query_threshold);
+
+  check_hint_registered(projection_q1_g, QueryHint::kPreflightCountQueryThreshold, true);
+  auto projection_q1_g_hint =
+      get_hint_registered(projection_q1_g, QueryHint::kPreflightCountQueryThreshold);
+  EXPECT_TRUE(projection_q1_g_hint.has_value());
+  EXPECT_EQ(2UL, projection_q1_g_hint->preflight_count_query_threshold);
+
+  std::string watchdog_q2 =
+      "SELECT /*+ watchdog, watchdog_max_projected_rows_per_device(-1) */ v FROM "
+      "JOIN_HINT_TEST LIMIT "
+      "2";
+  auto watchdog_q2_hint =
+      get_hint_registered(watchdog_q2, QueryHint::kWatchdogMaxProjectedRowsPerDevice);
+  EXPECT_FALSE(watchdog_q2_hint.has_value());
+
+  std::string projection_q2 =
+      "SELECT /*+ preflight_count_query_threshold(-1) */ v FROM JOIN_HINT_TEST LIMIT 2";
+  auto projection_q2_hint =
+      get_hint_registered(projection_q2, QueryHint::kPreflightCountQueryThreshold);
+  EXPECT_FALSE(projection_q2_hint.has_value());
 }
 
 int main(int argc, char** argv) {

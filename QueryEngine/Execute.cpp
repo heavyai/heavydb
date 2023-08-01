@@ -80,6 +80,8 @@
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
 size_t g_watchdog_none_encoded_string_translation_limit{1000000UL};
+size_t g_watchdog_max_projected_rows_per_device{128000000};
+size_t g_preflight_count_query_threshold{1000000};
 bool g_enable_cpu_sub_tasks{false};
 size_t g_cpu_sub_task_size{500'000};
 bool g_enable_filter_function{true};
@@ -1750,12 +1752,14 @@ std::string get_table_name(const InputDescriptor& input_desc) {
   }
 }
 
-inline size_t getDeviceBasedWatchdogScanLimit(const ExecutorDeviceType device_type,
-                                              const int device_count) {
+inline size_t getDeviceBasedWatchdogScanLimit(
+    size_t watchdog_max_projected_rows_per_device,
+    const ExecutorDeviceType device_type,
+    const int device_count) {
   if (device_type == ExecutorDeviceType::GPU) {
-    return device_count * Executor::g_watchdog_high_scan_limit;
+    return device_count * watchdog_max_projected_rows_per_device;
   }
-  return Executor::g_watchdog_high_scan_limit;
+  return watchdog_max_projected_rows_per_device;
 }
 
 void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
@@ -1767,9 +1771,18 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
       return;
     }
   }
+  size_t watchdog_max_projected_rows_per_device =
+      g_watchdog_max_projected_rows_per_device;
+  if (ra_exe_unit.query_hint.isHintRegistered(
+          QueryHint::kWatchdogMaxProjectedRowsPerDevice)) {
+    watchdog_max_projected_rows_per_device =
+        ra_exe_unit.query_hint.watchdog_max_projected_rows_per_device;
+    VLOG(1) << "Set the watchdog per device maximum projection limit: "
+            << watchdog_max_projected_rows_per_device << " by a query hint";
+  }
   if (!ra_exe_unit.scan_limit && table_infos.size() == 1 &&
       table_infos.front().info.getPhysicalNumTuples() <
-          Executor::g_watchdog_high_scan_limit) {
+          watchdog_max_projected_rows_per_device) {
     // Allow a query with no scan limit to run on small tables
     return;
   }
@@ -1782,7 +1795,8 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
       ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
       (!ra_exe_unit.scan_limit ||
        ra_exe_unit.scan_limit >
-           getDeviceBasedWatchdogScanLimit(device_type, device_count))) {
+           getDeviceBasedWatchdogScanLimit(
+               watchdog_max_projected_rows_per_device, device_type, device_count))) {
     std::vector<std::string> table_names;
     const auto& input_descs = ra_exe_unit.input_descs;
     for (const auto& input_desc : input_descs) {
@@ -1798,7 +1812,8 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
           boost::algorithm::join(table_names, ", ") + "  would contain " +
           std::to_string(ra_exe_unit.scan_limit) +
           " rows, which is more than the current system limit of " +
-          std::to_string(getDeviceBasedWatchdogScanLimit(device_type, device_count)));
+          std::to_string(getDeviceBasedWatchdogScanLimit(
+              watchdog_max_projected_rows_per_device, device_type, device_count)));
     }
   }
 }
