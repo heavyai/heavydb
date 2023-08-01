@@ -60,6 +60,7 @@ size_t g_columnar_large_projections_threshold{1000000};
 
 extern bool g_enable_watchdog;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
+extern size_t g_preflight_count_query_threshold;
 extern bool g_enable_bump_allocator;
 extern size_t g_default_max_groups_buffer_entry_guess;
 extern bool g_enable_system_tables;
@@ -3543,9 +3544,16 @@ bool compute_output_buffer_size(const RelAlgExecutionUnit& ra_exe_unit) {
       return false;
     }
   }
+  size_t preflight_count_query_threshold = g_preflight_count_query_threshold;
+  if (ra_exe_unit.query_hint.isHintRegistered(QueryHint::kPreflightCountQueryThreshold)) {
+    preflight_count_query_threshold =
+        ra_exe_unit.query_hint.preflight_count_query_threshold;
+    VLOG(1) << "Set the pre-flight count query's threshold as "
+            << preflight_count_query_threshold << " by a query hint";
+  }
   if (ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
       (!ra_exe_unit.scan_limit ||
-       ra_exe_unit.scan_limit > Executor::g_projection_query_scan_limit)) {
+       ra_exe_unit.scan_limit > preflight_count_query_threshold)) {
     return true;
   }
   return false;
@@ -3799,6 +3807,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       } else if (!eo.just_explain) {
         const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
         if (filter_count_all) {
+          VLOG(1) << "Pre-flight counts query returns " << *filter_count_all;
           ra_exe_unit.scan_limit = std::max(*filter_count_all, size_t(1));
         }
       }
@@ -4000,6 +4009,7 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
   size_t one{1};
   ResultSetPtr count_all_result;
   try {
+    VLOG(1) << "Try to execute pre-flight counts query";
     ColumnCacheMap column_cache;
     count_all_result =
         executor_->executeWorkUnit(one,

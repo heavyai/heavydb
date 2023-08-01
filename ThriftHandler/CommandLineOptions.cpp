@@ -420,6 +420,16 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(enable_watchdog)
                          ->implicit_value(true),
                      "Enable watchdog.");
+  desc.add_options()("watchdog-max-projected-rows-per-device",
+                     po::value<size_t>(&watchdog_max_projected_rows_per_device)
+                         ->default_value(watchdog_max_projected_rows_per_device),
+                     "Max number of rows allowed to be projected when running a query "
+                     "with watchdog enabled.");
+  desc.add_options()(
+      "preflight-count-query-threshold",
+      po::value<size_t>(&preflight_count_query_threshold)
+          ->default_value(preflight_count_query_threshold),
+      "Threshold to run pre-flight count query which computes # output rows accurately.");
   desc.add_options()("watchdog-none-encoded-string-translation-limit",
                      po::value<size_t>(&watchdog_none_encoded_string_translation_limit)
                          ->default_value(watchdog_none_encoded_string_translation_limit),
@@ -1740,6 +1750,8 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     g_enable_watchdog = enable_watchdog;
     g_watchdog_none_encoded_string_translation_limit =
         watchdog_none_encoded_string_translation_limit;
+    g_watchdog_max_projected_rows_per_device = watchdog_max_projected_rows_per_device;
+    g_preflight_count_query_threshold = preflight_count_query_threshold;
     g_enable_dynamic_watchdog = enable_dynamic_watchdog;
     g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
     g_enable_runtime_query_interrupt = enable_runtime_query_interrupt;
