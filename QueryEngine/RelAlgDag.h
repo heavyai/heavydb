@@ -3154,7 +3154,10 @@ class RelAlgDag : public boost::noncopyable {
           CHECK_EQ(1u, target.getListOptions().size());
           int loop_size_threshold = std::stoi(target.getListOptions()[0]);
           if (loop_size_threshold <= 0) {
-            VLOG(1) << "The loop size threshold should be larger than zero";
+            VLOG(1)
+                << "Skip the given query hint \"loop_join_inner_table_max_num_rows\" ("
+                << target.getListOptions()[0]
+                << ") : the hint value should be larger than zero";
           } else {
             query_hint.registerHint(QueryHint::kLoopJoinInnerTableMaxNumRows);
             query_hint.loop_join_inner_table_max_num_rows = loop_size_threshold;
@@ -3169,7 +3172,9 @@ class RelAlgDag : public boost::noncopyable {
           CHECK_EQ(1u, target.getListOptions().size());
           int max_join_hash_table_size = std::stoi(target.getListOptions()[0]);
           if (max_join_hash_table_size <= 0) {
-            VLOG(1) << "The maximum hash table size should be larger than zero";
+            VLOG(1) << "Skip the given query hint \"max_join_hashtable_size\" ("
+                    << target.getListOptions()[0]
+                    << ") : the hint value should be larger than zero";
           } else {
             query_hint.registerHint(QueryHint::kMaxJoinHashTableSize);
             query_hint.max_join_hash_table_size = max_join_hash_table_size;
@@ -3195,6 +3200,46 @@ class RelAlgDag : public boost::noncopyable {
           if (target.isGlobalHint()) {
             global_query_hint.registerHint(QueryHint::kforceOneToManyHashJoin);
             global_query_hint.force_one_to_many_hash_join = true;
+          }
+          break;
+        }
+        case QueryHint::kWatchdogMaxProjectedRowsPerDevice: {
+          CHECK_EQ(1u, target.getListOptions().size());
+          int watchdog_max_projected_rows_per_device =
+              std::stoi(target.getListOptions()[0]);
+          if (watchdog_max_projected_rows_per_device <= 0) {
+            VLOG(1) << "Skip the given query hint "
+                       "\"watchdog_max_projected_rows_per_device\" ("
+                    << target.getListOptions()[0]
+                    << ") : the hint value should be larger than zero";
+          } else {
+            query_hint.registerHint(QueryHint::kWatchdogMaxProjectedRowsPerDevice);
+            query_hint.watchdog_max_projected_rows_per_device =
+                watchdog_max_projected_rows_per_device;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(
+                  QueryHint::kWatchdogMaxProjectedRowsPerDevice);
+              global_query_hint.watchdog_max_projected_rows_per_device =
+                  watchdog_max_projected_rows_per_device;
+            }
+          }
+          break;
+        }
+        case QueryHint::kPreflightCountQueryThreshold: {
+          CHECK_EQ(1u, target.getListOptions().size());
+          int preflight_count_query_threshold = std::stoi(target.getListOptions()[0]);
+          if (preflight_count_query_threshold <= 0) {
+            VLOG(1) << "Skip the given query hint \"preflight_count_query_threshold\" ("
+                    << target.getListOptions()[0]
+                    << ") : the hint value should be larger than zero";
+          } else {
+            query_hint.registerHint(QueryHint::kPreflightCountQueryThreshold);
+            query_hint.preflight_count_query_threshold = preflight_count_query_threshold;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kPreflightCountQueryThreshold);
+              global_query_hint.preflight_count_query_threshold =
+                  preflight_count_query_threshold;
+            }
           }
           break;
         }
