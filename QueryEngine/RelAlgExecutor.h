@@ -337,7 +337,7 @@ class RelAlgExecutor : private StorageIOFacility {
                           const CompilationOptions& co,
                           const ExecutionOptions& eo);
 
-  std::optional<size_t> getFilteredCountAll(const WorkUnit& work_unit,
+  std::optional<size_t> getFilteredCountAll(const RelAlgExecutionUnit& ra_exe_unit,
                                             const bool is_agg,
                                             const CompilationOptions& co,
                                             const ExecutionOptions& eo);

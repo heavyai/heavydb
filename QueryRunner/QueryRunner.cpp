@@ -682,6 +682,7 @@ ExecutionOptions QueryRunner::defaultExecutionOptionsForRunSQL(bool allow_loop_j
           false,
           g_gpu_mem_limit_percent,
           false,
+          0.5,
           1000,
           false};
 }

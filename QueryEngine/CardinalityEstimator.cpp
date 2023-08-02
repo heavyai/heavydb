@@ -134,7 +134,8 @@ RelAlgExecutionUnit RelAlgExecutionUnit::createCountAllExecutionUnit(
           false,
           union_all,
           query_state,
-          {replacement_target}};
+          {replacement_target},
+          /*per_device_cardinality=*/{}};
 }
 
 ResultSetPtr reduce_estimator_results(

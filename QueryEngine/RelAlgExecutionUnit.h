@@ -182,6 +182,7 @@ struct RelAlgExecutionUnit {
   const std::optional<bool> union_all;
   std::shared_ptr<const query_state::QueryState> query_state;
   std::vector<Analyzer::Expr*> target_exprs_union;  // targets in second subquery of UNION
+  mutable std::vector<std::pair<std::vector<size_t>, size_t>> per_device_cardinality;
 
   RelAlgExecutionUnit createNdvExecutionUnit(const int64_t range) const;
   RelAlgExecutionUnit createCountAllExecutionUnit(
