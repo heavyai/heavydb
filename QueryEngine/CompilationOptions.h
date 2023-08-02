@@ -81,6 +81,7 @@ struct ExecutionOptions {
   double running_query_interrupt_freq;
   unsigned pending_query_interrupt_freq;
   bool optimize_cuda_block_and_grid_sizes;
+  bool estimate_output_cardinality{false};
   size_t max_join_hash_table_size = std::numeric_limits<size_t>::max();
   ExecutorType executor_type = ExecutorType::Native;
   std::vector<size_t> outer_fragment_indices{};
