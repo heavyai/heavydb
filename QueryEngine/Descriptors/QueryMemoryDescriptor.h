@@ -367,6 +367,11 @@ class QueryMemoryDescriptor {
     num_available_threads_ = num_available_threads;
   }
 
+  std::optional<size_t> getMaxPerDeviceCardinality(
+      const RelAlgExecutionUnit& ra_exe_unit) const;
+
+  bool canUsePerDeviceCardinality(const RelAlgExecutionUnit& ra_exe_unit) const;
+
  protected:
   void resetGroupColWidths(const std::vector<int8_t>& new_group_col_widths) {
     group_col_widths_ = new_group_col_widths;

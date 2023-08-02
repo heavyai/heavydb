@@ -1068,11 +1068,9 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(const ExecutorDeviceType device
   if (keyless_hash_ && !output_columnar_) {
     CHECK_GE(group_col_widths_.size(), size_t(1));
     auto row_bytes = align_to_int64(getColsSize());
-
     return (interleavedBins(device_type) ? executor_->warpSize() : 1) * entry_count *
            row_bytes;
   }
-
   constexpr size_t row_index_width = sizeof(int64_t);
   size_t total_bytes{0};
   if (output_columnar_) {
@@ -1364,4 +1362,25 @@ size_t QueryMemoryDescriptor::varlenOutputRowSizeToSlot(const size_t slot_idx) c
     }
   }
   return buffer_element_size;
+}
+
+std::optional<size_t> QueryMemoryDescriptor::getMaxPerDeviceCardinality(
+    const RelAlgExecutionUnit& ra_exe_unit) const {
+  auto& pdc = ra_exe_unit.per_device_cardinality;
+  auto by_cardinality = [](auto& a, auto& b) { return a.second < b.second; };
+  auto itr = std::max_element(pdc.begin(), pdc.end(), by_cardinality);
+  if (itr != pdc.end() && itr->second > 0) {
+    return itr->second;
+  }
+  return std::nullopt;
+}
+
+bool QueryMemoryDescriptor::canUsePerDeviceCardinality(
+    const RelAlgExecutionUnit& ra_exe_unit) const {
+  if (query_desc_type_ != QueryDescriptionType::Projection) {
+    return false;
+  }
+  auto is_left_join = [](auto& join_qual) { return join_qual.type == JoinType::LEFT; };
+  auto& join_quals = ra_exe_unit.join_quals;
+  return !std::any_of(join_quals.begin(), join_quals.end(), is_left_join);
 }

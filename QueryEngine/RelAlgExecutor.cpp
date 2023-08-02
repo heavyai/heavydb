@@ -3312,27 +3312,8 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     if (!source_result.getDataPtr()) {
       const auto source_work_unit = createSortInputWorkUnit(sort, order_entries, eo);
       is_desc = first_oe_is_desc(order_entries);
-      ExecutionOptions eo_copy = {
-          eo.output_columnar_hint,
-          eo.keep_result,
-          eo.allow_multifrag,
-          eo.just_explain,
-          eo.allow_loop_joins,
-          eo.with_watchdog,
-          eo.jit_debug,
-          eo.just_validate || sort->isEmptyResult(),
-          eo.with_dynamic_watchdog,
-          eo.dynamic_watchdog_time_limit,
-          eo.find_push_down_candidates,
-          eo.just_calcite_explain,
-          eo.gpu_input_mem_limit_percent,
-          eo.allow_runtime_query_interrupt,
-          eo.running_query_interrupt_freq,
-          eo.pending_query_interrupt_freq,
-          eo.optimize_cuda_block_and_grid_sizes,
-          eo.max_join_hash_table_size,
-          eo.executor_type,
-      };
+      ExecutionOptions eo_copy = eo;
+      eo_copy.just_validate = eo.just_validate || sort->isEmptyResult();
 
       groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
       source_result = executeWorkUnit(source_work_unit,
@@ -3805,10 +3786,12 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       } else if (eo.executor_type == ::ExecutorType::Extern) {
         ra_exe_unit.scan_limit = 0;
       } else if (!eo.just_explain) {
-        const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
+        const auto filter_count_all = getFilteredCountAll(ra_exe_unit, true, co, eo);
         if (filter_count_all) {
           VLOG(1) << "Pre-flight counts query returns " << *filter_count_all;
           ra_exe_unit.scan_limit = std::max(*filter_count_all, size_t(1));
+          VLOG(1) << "Set a new scan limit from filtered_count_all: "
+                  << ra_exe_unit.scan_limit;
         }
       }
     }
@@ -3892,9 +3875,12 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     auto cached_cardinality = executor_->getCachedCardinality(cache_key);
     auto card = cached_cardinality.second;
     if (cached_cardinality.first && card >= 0) {
+      VLOG(1) << "Use cached cardinality for max_groups_buffer_entry_guess: " << card;
       result = execute_and_handle_errors(
           card, /*has_cardinality_estimation=*/true, /*has_ndv_estimation=*/false);
     } else {
+      VLOG(1) << "Use default cardinality for max_groups_buffer_entry_guess: "
+              << max_groups_buffer_entry_guess;
       result = execute_and_handle_errors(
           max_groups_buffer_entry_guess,
           groups_approx_upper_bound(table_infos) <= g_big_group_threshold,
@@ -3905,6 +3891,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     auto cached_cardinality = executor_->getCachedCardinality(cache_key);
     auto card = cached_cardinality.second;
     if (cached_cardinality.first && card >= 0) {
+      VLOG(1) << "CardinalityEstimationRequired, Use cached cardinality for "
+                 "max_groups_buffer_entry_guess: "
+              << card;
       result = execute_and_handle_errors(card, true, /*has_ndv_estimation=*/true);
     } else {
       const auto ndv_groups_estimation =
@@ -3914,6 +3903,10 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                     : std::min(groups_approx_upper_bound(table_infos),
                                                g_estimator_failure_max_groupby_size);
       CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
+      VLOG(1) << "CardinalityEstimationRequired, Use ndv_estimation: "
+              << ndv_groups_estimation
+              << ", cardinality for estimated_groups_buffer_entry_guess: "
+              << estimated_groups_buffer_entry_guess;
       result = execute_and_handle_errors(
           estimated_groups_buffer_entry_guess, true, /*has_ndv_estimation=*/true);
       if (!(eo.just_validate || eo.just_explain)) {
@@ -3994,33 +3987,35 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   return result;
 }
 
-std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
-                                                          const bool is_agg,
-                                                          const CompilationOptions& co,
-                                                          const ExecutionOptions& eo) {
+std::optional<size_t> RelAlgExecutor::getFilteredCountAll(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const bool is_agg,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo) {
   const auto count =
       makeExpr<Analyzer::AggExpr>(SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false),
                                   kCOUNT,
                                   nullptr,
                                   false,
                                   nullptr);
-  const auto count_all_exe_unit =
-      work_unit.exe_unit.createCountAllExecutionUnit(count.get());
+  const auto count_all_exe_unit = ra_exe_unit.createCountAllExecutionUnit(count.get());
   size_t one{1};
   ResultSetPtr count_all_result;
   try {
     VLOG(1) << "Try to execute pre-flight counts query";
     ColumnCacheMap column_cache;
-    count_all_result =
-        executor_->executeWorkUnit(one,
-                                   is_agg,
-                                   get_table_infos(work_unit.exe_unit, executor_),
-                                   count_all_exe_unit,
-                                   co,
-                                   eo,
-                                   nullptr,
-                                   false,
-                                   column_cache);
+    ExecutionOptions copied_eo = eo;
+    copied_eo.estimate_output_cardinality = true;
+    count_all_result = executor_->executeWorkUnit(one,
+                                                  is_agg,
+                                                  get_table_infos(ra_exe_unit, executor_),
+                                                  count_all_exe_unit,
+                                                  co,
+                                                  copied_eo,
+                                                  nullptr,
+                                                  false,
+                                                  column_cache);
+    ra_exe_unit.per_device_cardinality = count_all_exe_unit.per_device_cardinality;
   } catch (const foreign_storage::ForeignStorageException& error) {
     throw;
   } catch (const QueryMustRunOnCpu&) {

@@ -9608,6 +9608,58 @@ TEST_F(Select, SkipFragments) {
     ExecutorDeviceType::CPU);
 }
 
+TEST_F(Select, PerDeviceCardinality) {
+  SKIP_ALL_ON_AGGREGATOR();
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    size_t num_fragments{0};
+    if (dt == ExecutorDeviceType::GPU) {
+      num_fragments = QR::get()->getExecutor()->deviceCount(dt);
+    } else {
+      num_fragments = 2;
+    }
+    run_ddl_statement("DROP TABLE IF EXISTS pdc_test;");
+    run_ddl_statement("CREATE TABLE pdc_test (v1 int, v2 int) WITH (FRAGMENT_SIZE = 4);");
+    for (size_t i = 0; i < num_fragments; i++) {
+      for (size_t j = 1; j <= 4; j++) {
+        run_multiple_agg("INSERT INTO pdc_test VALUES(1, " + std::to_string(j) + ");",
+                         ExecutorDeviceType::CPU);
+      }
+    }
+    std::shared_ptr<ResultSet> res =
+        run_multiple_agg("SELECT v1 FROM pdc_test WHERE v2 <= 2;", dt);
+    CHECK_EQ(res->entryCount(), num_fragments * 2)
+        << "Expected: " << num_fragments * 2 << ", Actual: " << res->entryCount();
+  }
+  run_ddl_statement("DROP TABLE IF EXISTS pdc_test;");
+}
+
+TEST_F(Select, PerDeviceCardinalityShardedTable) {
+  size_t num_fragments = 4;
+  size_t frag_size = 4;
+  run_ddl_statement("DROP TABLE IF EXISTS pdc_test;");
+  run_ddl_statement(
+      "CREATE TABLE pdc_test (v1 int, v2 int, shard key(v1)) WITH (SHARD_COUNT = 2, "
+      "FRAGMENT_SIZE = 4);");
+  for (size_t i = 1; i <= num_fragments; i++) {
+    for (size_t j = 1; j <= frag_size; j++) {
+      run_multiple_agg("INSERT INTO pdc_test VALUES(" + std::to_string(i) + ", " +
+                           std::to_string(j) + ");",
+                       ExecutorDeviceType::CPU);
+    }
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (size_t i = 1; i <= frag_size; i++) {
+      std::string q =
+          "SELECT COUNT(1) FROM (SELECT v1 FROM pdc_test WHERE v2 <= 2) WHERE v1 = " +
+          std::to_string(i) + ";";
+      EXPECT_EQ(v<int64_t>(run_simple_agg(q, dt)), int64_t(2)) << q;
+    }
+  }
+  run_ddl_statement("DROP TABLE IF EXISTS pdc_test;");
+}
+
 TEST_F(Select, UnsupportedNodes) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

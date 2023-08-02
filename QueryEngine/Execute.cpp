@@ -2149,6 +2149,18 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       return executeExplain(*query_comp_desc_owned);
     }
 
+    if (query_mem_desc_owned->canUsePerDeviceCardinality(ra_exe_unit)) {
+      auto const max_rows_per_device =
+          query_mem_desc_owned->getMaxPerDeviceCardinality(ra_exe_unit);
+      if (max_rows_per_device && *max_rows_per_device >= 0 &&
+          *max_rows_per_device < query_mem_desc_owned->getEntryCount()) {
+        VLOG(1) << "Setting the max per device cardinality of {max_rows_per_device} as "
+                   "the new scan limit: "
+                << *max_rows_per_device;
+        throw CompilationRetryNewScanLimit(*max_rows_per_device);
+      }
+    }
+
     if (!eo.just_validate) {
       int available_cpus = cpu_threads();
       auto available_gpus = get_available_gpus(data_mgr_);
@@ -2218,6 +2230,23 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         }
       }
       try {
+        if (eo.estimate_output_cardinality) {
+          for (const auto& result : shared_context.getFragmentResults()) {
+            auto row = result.first->getNextRow(false, false);
+            CHECK_EQ(1u, row.size());
+            auto scalar_r = boost::get<ScalarTargetValue>(&row[0]);
+            CHECK(scalar_r);
+            auto p = boost::get<int64_t>(scalar_r);
+            CHECK(p);
+            // todo(yoonmin): sort the frag_ids to make it consistent for later usage
+            auto frag_ids = result.second;
+            VLOG(1) << "Filtered cardinality for fragments-{" << ::toString(result.second)
+                    << "} : " << static_cast<size_t>(*p);
+            ra_exe_unit_in.per_device_cardinality.emplace_back(result.second,
+                                                               static_cast<size_t>(*p));
+            result.first->moveToBegin();
+          }
+        }
         return collectAllDeviceResults(shared_context,
                                        ra_exe_unit,
                                        *query_mem_desc_owned,
