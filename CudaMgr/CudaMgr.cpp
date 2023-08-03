@@ -366,7 +366,7 @@ int8_t* CudaMgr::allocateDeviceMem(const size_t num_bytes,
                                                device_num,
                                                is_slab);
   // notify
-  getDeviceMemoryAllocationMap().notifyMapChanged(device_num);
+  getDeviceMemoryAllocationMap().notifyMapChanged(device_num, is_slab);
   return reinterpret_cast<int8_t*>(device_ptr);
 }
 
@@ -385,7 +385,8 @@ void CudaMgr::freeDeviceMem(int8_t* device_ptr) {
   checkError(status_release);
   checkError(status_free);
   // notify
-  getDeviceMemoryAllocationMap().notifyMapChanged(allocation.device_num);
+  getDeviceMemoryAllocationMap().notifyMapChanged(allocation.device_num,
+                                                  allocation.is_slab);
 }
 
 void CudaMgr::zeroDeviceMem(int8_t* device_ptr,
