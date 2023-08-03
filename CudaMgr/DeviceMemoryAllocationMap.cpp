@@ -77,9 +77,10 @@ void DeviceMemoryAllocationMap::unregisterMapChangedCB(const MapChangedCBID cbid
   map_changed_cbs_.erase(itr);
 }
 
-void DeviceMemoryAllocationMap::notifyMapChanged(const int gpu_id) const {
+void DeviceMemoryAllocationMap::notifyMapChanged(const int gpu_id,
+                                                 const bool is_slab) const {
   for (auto const& cb : map_changed_cbs_) {
-    cb.second(gpu_id);
+    cb.second(gpu_id, is_slab);
   }
 }
 
