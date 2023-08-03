@@ -271,8 +271,8 @@ DEF_UMINUS_NULLABLE(double, double)
       cast_##from_type##_to_##to_type##_scaled_nullable(const from_type operand,       \
                                                         const from_type from_null_val, \
                                                         const to_type to_null_val,     \
-                                                        const to_type multiplier) {    \
-    return operand == from_null_val ? to_null_val : multiplier * operand;              \
+                                                        const to_type divider) {       \
+    return operand == from_null_val ? to_null_val : operand / divider;                 \
   }
 
 #define DEF_CAST_NULLABLE_BIDIR(type1, type2) \

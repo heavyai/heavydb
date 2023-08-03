@@ -570,13 +570,13 @@ llvm::Value* CodeGenerator::codegenCastToFp(llvm::Value* operand_lv,
                              : llvm::Type::getDoubleTy(cgen_state_->context_);
     result_lv = cgen_state_->ir_builder_.CreateSIToFP(operand_lv, fp_type);
     if (auto const scale = static_cast<unsigned>(operand_ti.get_scale())) {
-      double const multiplier = shared::power10inv(scale);
-      result_lv = cgen_state_->ir_builder_.CreateFMul(
-          result_lv, llvm::ConstantFP::get(result_lv->getType(), multiplier));
+      double const divider = shared::power10(scale);
+      result_lv = cgen_state_->ir_builder_.CreateFDiv(
+          result_lv, llvm::ConstantFP::get(result_lv->getType(), divider));
     }
   } else {
     if (auto const scale = static_cast<unsigned>(operand_ti.get_scale())) {
-      double const multiplier = shared::power10inv(scale);
+      double const divider = shared::power10(scale);
       auto const fp_type = ti.get_type() == kFLOAT
                                ? llvm::Type::getFloatTy(cgen_state_->context_)
                                : llvm::Type::getDoubleTy(cgen_state_->context_);
@@ -585,7 +585,7 @@ llvm::Value* CodeGenerator::codegenCastToFp(llvm::Value* operand_lv,
                                         {operand_lv,
                                          cgen_state_->inlineIntNull(operand_ti),
                                          cgen_state_->inlineFpNull(ti),
-                                         llvm::ConstantFP::get(fp_type, multiplier)});
+                                         llvm::ConstantFP::get(fp_type, divider)});
     } else {
       result_lv = cgen_state_->emitCall("cast_" + numeric_type_name(operand_ti) + "_to_" +
                                             numeric_type_name(ti) + "_nullable",
