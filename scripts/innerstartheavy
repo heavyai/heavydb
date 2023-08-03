@@ -32,6 +32,8 @@ export MAPD_HEAVYIQ_PORT=${MAPD_HEAVYIQ_PORT:=6275}
 
 export MAPD_DATA=${MAPD_DATA:="storage"}
 
+FORWARDED_ARGS=()
+
 while (( $# )); do
     case "$1" in
         --read-only)
@@ -73,7 +75,8 @@ while (( $# )); do
         --verbose)
             VERBOSE="--verbose" ;;
         *)
-            break ;;
+            FORWARDED_ARGS+=("$1")
+            ;;
     esac
     shift
 done
@@ -126,7 +129,7 @@ else
     export VK_ICD_FILENAMES=$icd_path
 fi
 
-./bin/heavydb $MAPD_DATA $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT --calcite-port $MAPD_CALCITE_PORT $CONFIG $VERBOSE $* &
+./bin/heavydb $MAPD_DATA $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT --calcite-port $MAPD_CALCITE_PORT $CONFIG $VERBOSE ${FORWARDED_ARGS[@]} &
 PID1=$!
 echo "- heavydb $PID1 started"
 
