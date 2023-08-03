@@ -2879,6 +2879,75 @@ TEST_F(Select, ConstantWidthBucketExpr) {
   g_sqlite_comparator.query(drop);
 }
 
+TEST_F(Select, ConstantWidthBucketExprOnDecimalColLowerBound) {
+  // TEST 1. Check target value against edge cases related to lower_bound
+  run_ddl_statement("DROP TABLE IF EXISTS wbdct1;");
+  run_ddl_statement(
+      "CREATE TABLE wbdct1 (v1 FLOAT, v2 DOUBLE, v3 DECIMAL(9, 6) ENCODING FIXED(32), v4 "
+      "FLOAT NOT NULL, v5 DOUBLE NOT NULL, v6 DECIMAL(9, 6) NOT NULL ENCODING "
+      "FIXED(32));");
+  run_multiple_agg(
+      "INSERT INTO wbdct1 VALUES (25.88865, 25.88865, 25.88865, 25.88865, 25.88865, "
+      "25.88865);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO wbdct1 VALUES (25.88866, 25.88866, 25.88866, 25.88866, 25.88866, "
+      "25.88866);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO wbdct1 VALUES (25.888661,25.888661,25.888661, "
+      "25.888661,25.888661,25.888661);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO wbdct1 VALUES (25.88867, 25.88867, 25.88867, 25.88867, 25.88867, "
+      "25.88867);",
+      ExecutorDeviceType::CPU);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (std::string col_name : {"v1", "v2", "v3", "v4", "v5", "v6"}) {
+      std::string q = "select sum(c) from (select width_bucket(" + col_name +
+                      ", 25.88866, 51.046306, 12) c from wbdct1 group by 1);";
+      // WIDTH_BUCKET should returns {0, 1} -> so, we expect 1 as a result
+      EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg(q, dt)));
+    }
+  }
+  run_ddl_statement("DROP TABLE IF EXISTS wbdct1;");
+}
+
+TEST_F(Select, ConstantWidthBucketExprOnDecimalColUpperBound) {
+  run_ddl_statement("DROP TABLE IF EXISTS wbdct2;");
+  run_ddl_statement(
+      "CREATE TABLE wbdct2 (v1 FLOAT, v2 DOUBLE, v3 DECIMAL(9, 6) ENCODING FIXED(32), v4 "
+      "FLOAT NOT NULL, v5 DOUBLE NOT NULL, v6 DECIMAL(9, 6) NOT NULL ENCODING "
+      "FIXED(32));");
+  run_multiple_agg(
+      "INSERT INTO wbdct2 VALUES (51.046305, 51.046305, 51.046305, 51.046305, 51.046305, "
+      "51.046305);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO wbdct2 VALUES (51.046306, 51.046306, 51.046306, 51.046306, 51.046306, "
+      "51.046306);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO wbdct2 VALUES (51.0463061,51.0463061,51.0463061, "
+      "51.0463061,51.0463061,51.0463061);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO wbdct2 VALUES (51.046307,51.046307,51.04630, "
+      "51.046307,51.046307,51.04630);",
+      ExecutorDeviceType::CPU);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (std::string col_name : {"v1", "v2", "v3", "v4", "v5", "v6"}) {
+      std::string q = "select sum(c) from (select width_bucket(" + col_name +
+                      ", 25.88866, 51.046306, 12) c from wbdct2 group by 1);";
+      // WIDTH_BUCKET should returns {12, 13} -> so, we expect 25 as a result
+      EXPECT_EQ(int64_t(25), v<int64_t>(run_simple_agg(q, dt)));
+    }
+  }
+  run_ddl_statement("DROP TABLE IF EXISTS wbdct2;");
+}
+
 TEST_F(Select, WidthBucketExpr) {
   auto drop = "DROP TABLE IF EXISTS wb_test;";
   auto create =
@@ -4064,9 +4133,9 @@ TEST_F(Select, ModeBasic) {
     auto const fx = select_mode<int64_t>("fx", dt);
     EXPECT_EQ(9, fx) << dt;
     query = "SELECT CAST(MODE(dd) AS DOUBLE) FROM test;";
-    EXPECT_EQ(11110 * 0.01, v<double>(run_simple_agg(query, dt))) << dt << ": " << query;
+    EXPECT_EQ(11110 / 100.0, v<double>(run_simple_agg(query, dt))) << dt << ": " << query;
     query = "SELECT CAST(MODE(dd_notnull) AS DOUBLE) FROM test;";
-    EXPECT_EQ(11110 * 0.01, v<double>(run_simple_agg(query, dt))) << dt << ": " << query;
+    EXPECT_EQ(11110 / 100.0, v<double>(run_simple_agg(query, dt))) << dt << ": " << query;
     auto const ss = boost::get<std::string>(select_mode<NullableString>("ss", dt));
     EXPECT_EQ("fish", ss) << dt;
     query = "SELECT MODE(u) IS NULL FROM test;";
