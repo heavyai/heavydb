@@ -2168,6 +2168,30 @@ void handle_agg_over_join(
   }
 }
 
+void eliminate_redundant_projection(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+  for (auto& node : nodes) {
+    if (auto* proj_node = dynamic_cast<RelProject*>(node.get())) {
+      if (proj_node->isSimple()) {
+        if (auto child_proj_node =
+                dynamic_cast<RelProject const*>(proj_node->getInput(0))) {
+          std::vector<std::unique_ptr<RexScalar const>> scalar_exprs;
+          RexDeepCopyVisitor copier;
+          for (size_t i = 0; i < proj_node->size(); i++) {
+            auto rex_abs_input =
+                dynamic_cast<RexAbstractInput const*>(proj_node->getProjectAt(i));
+            scalar_exprs.push_back(
+                copier.visit(child_proj_node->getProjectAt(rex_abs_input->getIndex())));
+          }
+          CHECK_EQ(scalar_exprs.size(), proj_node->getFields().size());
+          proj_node->setExpressions(scalar_exprs);
+          proj_node->replaceInput(proj_node->getAndOwnInput(0),
+                                  child_proj_node->getAndOwnInput(0));
+        }
+      }
+    }
+  }
+}
+
 class WindowFunctionCollector : public RexVisitor<void*> {
  public:
   WindowFunctionCollector(
@@ -3408,6 +3432,7 @@ void RelAlgDagBuilder::optimizeDag(RelAlgDag& rel_alg_dag) {
   CHECK(nodes.back().use_count() == 1);
   create_left_deep_join(nodes);
   handle_agg_over_join(nodes, query_hints);
+  eliminate_redundant_projection(nodes);
 
   setBuildState(rel_alg_dag, RelAlgDag::BuildState::kBuiltOptimized);
 }

@@ -26825,6 +26825,27 @@ TEST_F(Select, AutoQueryCaching) {
   }
 }
 
+TEST_F(Select, RedundantProjectionRemoving) {
+  // in dist mode, we cannot get RaExecutionSequence from QR
+  SKIP_ALL_ON_AGGREGATOR();
+  auto perform_test = [](std::string query) {
+    auto const ra_exec_seq = QR::get()->getRaExecutionSequence(query);
+    EXPECT_EQ(ra_exec_seq.size(), size_t(1));
+  };
+  std::string q1 =
+      "select fn, f from (select R.f, abs(R.ff) v, R.fn from test R, test_inner S where "
+      "R.x = "
+      "S.x and S.str is not null) where f > 0";
+  std::string q2 = q1 + " order by 1";
+  std::string q3 =
+      "select f, fn from (select fn, abs(ff), f from (select R.f, R.ff, abs(R.fn) fn "
+      "from test R, test_inner S where R.x = S.x and S.str is not null) where fn > 0) "
+      "where f > 0";
+  perform_test(q1);
+  perform_test(q2);
+  perform_test(q3);
+}
+
 class SubqueryTestEnv : public ::testing::Test {
  protected:
   void SetUp() override {
