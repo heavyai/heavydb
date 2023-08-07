@@ -72,7 +72,7 @@ using RelAlgInputs = std::vector<std::shared_ptr<const RelAlgNode>>;
 using ColumnNameList = std::vector<std::string>;
 
 struct RelRexToStringConfig {
-  bool skip_input_nodes{false};
+  bool skip_input_nodes{true};
   bool attributes_only{false};
 
   static RelRexToStringConfig defaults() { return RelRexToStringConfig(); }
