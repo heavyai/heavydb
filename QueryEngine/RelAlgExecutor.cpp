@@ -3788,10 +3788,19 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       } else if (!eo.just_explain) {
         const auto filter_count_all = getFilteredCountAll(ra_exe_unit, true, co, eo);
         if (filter_count_all) {
-          VLOG(1) << "Pre-flight counts query returns " << *filter_count_all;
           ra_exe_unit.scan_limit = std::max(*filter_count_all, size_t(1));
           VLOG(1) << "Set a new scan limit from filtered_count_all: "
                   << ra_exe_unit.scan_limit;
+          auto const has_limit_value = ra_exe_unit.sort_info.limit.has_value();
+          auto const top_k_sort_query =
+              has_limit_value && !ra_exe_unit.sort_info.order_entries.empty();
+          // top-k sort query needs to get a global result before sorting, so we cannot
+          // apply LIMIT value at this point
+          if (has_limit_value && !top_k_sort_query &&
+              ra_exe_unit.scan_limit > ra_exe_unit.sort_info.limit.value()) {
+            ra_exe_unit.scan_limit = ra_exe_unit.sort_info.limit.value();
+            VLOG(1) << "Override scan limit to LIMIT value: " << ra_exe_unit.scan_limit;
+          }
         }
       }
     }
