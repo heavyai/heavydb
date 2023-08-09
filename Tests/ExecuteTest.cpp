@@ -9729,6 +9729,25 @@ TEST_F(Select, PerDeviceCardinalityShardedTable) {
   run_ddl_statement("DROP TABLE IF EXISTS pdc_test;");
 }
 
+TEST_F(Select, FilteredCountallWithLimit) {
+  ScopeGuard reset = [old_val = g_preflight_count_query_threshold] {
+    g_preflight_count_query_threshold = old_val;
+    run_ddl_statement("DROP TABLE IF EXISTS fcwl_test;");
+  };
+  g_preflight_count_query_threshold = 10;
+  run_ddl_statement("DROP TABLE IF EXISTS fcwl_test;");
+  run_ddl_statement("CREATE TABLE fcwl_test (v INT) WITH (FRAGMENT_SIZE=20);");
+  for (size_t i = 0; i < 40; i++) {
+    run_multiple_agg("INSERT INTO fcwl_test VALUES(1);", ExecutorDeviceType::CPU);
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    std::shared_ptr<ResultSet> res =
+        run_multiple_agg("SELECT v FROM fcwl_test LIMIT 11", dt);
+    EXPECT_EQ(res->entryCount(), size_t(11));
+  }
+}
+
 TEST_F(Select, UnsupportedNodes) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
