@@ -2,7 +2,7 @@ __all__ = ['TransformerException', 'AstPrinter', 'TemplateTransformer',
            'FixRowMultiplierPosArgTransformer', 'RenameNodesTransformer',
            'TextEncodingDictTransformer', 'FieldAnnotationTransformer',
            'SupportedAnnotationsTransformer', 'RangeAnnotationTransformer',
-           'AmbiguousSignatureCheckTransformer',
+           'CursorAnnotationTransformer', 'AmbiguousSignatureCheckTransformer',
            'DefaultValueAnnotationTransformer',
            'DeclBracketTransformer', 'Pipeline']
 
@@ -445,6 +445,20 @@ class RangeAnnotationTransformer(AstTransformer):
                 else:
                     raise TransformerException('"range" requires an interval. Got {v}'.format(v=v))
                 arg_node.set_annotation('require', value)
+        return arg_node
+
+
+class CursorAnnotationTransformer(AstTransformer):
+    """
+    * Move a "require" annotation from inside a cursor to the cursor
+    """
+
+    def visit_arg_node(self, arg_node):
+        if arg_node.type.is_cursor():
+            for inner in arg_node.type.inner:
+                for ann in inner.annotations:
+                    if ann.key == 'require':
+                        arg_node.annotations.append(ann)
         return arg_node
 
 

@@ -919,6 +919,16 @@ TEST_F(TableFunctions, BasicProjection) {
     }
     {
       const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_require_cursor(cursor(SELECT x"
+          " FROM tf_test), 6));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto row = rows->getNextRow(true, false);
+      auto v = TestHelpers::v<int64_t>(row[0]);
+      ASSERT_EQ(v, 12);
+    }
+    {
+      const auto rows = run_multiple_agg(
           "SELECT * FROM TABLE(ct_test_allocator(cursor(SELECT x"
           " FROM tf_test), 'hello'));",
           dt);
@@ -2042,6 +2052,13 @@ TEST_F(TableFunctions, ThrowingTests) {
                        " FROM sd_test), 0));",
                        dt),
                    TableFunctionError);
+    }
+    {
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(ct_require_cursor(cursor(SELECT x"
+                           " FROM tf_test), 0));",
+                           dt),
+          TableFunctionError);
     }
     {
       if (dt == ExecutorDeviceType::GPU) {

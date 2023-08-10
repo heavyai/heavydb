@@ -162,5 +162,8 @@
   UDTF: foo_54(Cursor<ColumnList<T>, Column<T>>, Cursor<ColumnList<T>>) -> Column<T>, T=[int64_t] $=>$
         foo_54(Cursor<ColumnListInt64, ColumnInt64> | fields=[field0,field1], Cursor<ColumnListInt64> | fields=[field0]) -> ColumnInt64
 
+  UDTF: foo_55(Cursor<Column<int> x | require="x.size() > 2">) -> Column<int> $=>$
+        foo_55(Cursor<ColumnInt32 | name=x | require="x.size() > 2"> | fields=[x] | require="x.size() > 2") -> ColumnInt32
+
  */
 // clang-format on
