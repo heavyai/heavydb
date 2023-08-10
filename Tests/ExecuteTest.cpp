@@ -25768,7 +25768,7 @@ TEST_F(Select, GroupEmptyBlank) {
 TEST_F(Select, UnionAll) {
   bool enable_union = true;
   std::swap(g_enable_union, enable_union);
-  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM ("
       " SELECT a4 FROM union_all_a"
@@ -26045,9 +26045,11 @@ TEST_F(Select, UnionAll) {
           "SELECT str FROM test UNION ALL SELECT real_str FROM test ORDER BY str;",
           dt));
 
-    c("SELECT real_str FROM test UNION ALL "
-      "SELECT real_str FROM test ORDER BY real_str;",
-      dt);
+    if (dt == ExecutorDeviceType::CPU) {
+      c("SELECT real_str FROM test UNION ALL "
+        "SELECT real_str FROM test ORDER BY real_str;",
+        dt);
+    }
 
     // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
     SKIP_ON_AGGREGATOR(
@@ -26060,6 +26062,33 @@ TEST_F(Select, UnionAll) {
     EXPECT_ANY_THROW(c("SELECT t FROM test UNION ALL SELECT fixed_str FROM test;", dt));
   }
   g_enable_union = enable_union;
+}
+
+TEST_F(Select, UnionAllIgnorePerSubqueryCardinality) {
+  ScopeGuard reset = [old1 = g_enable_union, old2 = g_preflight_count_query_threshold] {
+    g_enable_union = old1;
+    g_preflight_count_query_threshold = old2;
+  };
+  g_enable_union = true;
+  g_preflight_count_query_threshold = 1;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 BETWEEN 111 AND 115"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 BETWEEN 211 AND 217"
+      " ORDER BY a1;",
+      dt);
+    c("SELECT COUNT(*) FROM ("
+      " SELECT a4 FROM union_all_a"
+      " UNION ALL"
+      " SELECT b4 FROM union_all_b"
+      " UNION ALL"
+      " SELECT c4 FROM union_all_c"
+      ");",
+      dt);
+  }
 }
 
 TEST_F(Select, VariableLengthAggs) {
