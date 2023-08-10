@@ -337,6 +337,8 @@ class RelAlgExecutor : private StorageIOFacility {
                           const CompilationOptions& co,
                           const ExecutionOptions& eo);
 
+  bool hasDeletedRowInQuery(std::vector<InputTableInfo> const&) const;
+
   std::optional<size_t> getFilteredCountAll(const RelAlgExecutionUnit& ra_exe_unit,
                                             const bool is_agg,
                                             const CompilationOptions& co,

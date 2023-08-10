@@ -4546,7 +4546,7 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
     sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'CPU' ORDER BY page_count;",
                         {{"Server", db_id, shared::kDefaultDbName, table_id, "test_table_1",
                           i(1), "i", array({db_id, table_id, i(1), i(0)}),
-                          i(0), "CPU", "USED", i(1), getCpuPageSize(), i(0), i(0), i(1)},
+                          i(0), "CPU", "USED", i(1), getCpuPageSize(), i(0), i(0), i(0)},
                           {"Server", Null, Null, Null, Null, Null, Null, Null,
                           i(0), "CPU", "FREE", getAllocatedCpuPageCount() - 1,
                           getCpuPageSize(), i(0), i(1), i(0)}});

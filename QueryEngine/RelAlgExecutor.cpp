@@ -3446,16 +3446,19 @@ namespace {
  * estimation. We don't account for cross-joins and / or group by unnested array, which
  * is the reason this estimation isn't entirely reliable.
  */
-size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos) {
+std::pair<size_t, shared::TableKey> groups_approx_upper_bound(
+    const std::vector<InputTableInfo>& table_infos) {
   CHECK(!table_infos.empty());
   const auto& first_table = table_infos.front();
   size_t max_num_groups = first_table.info.getNumTuplesUpperBound();
+  auto table_key = first_table.table_key;
   for (const auto& table_info : table_infos) {
     if (table_info.info.getNumTuplesUpperBound() > max_num_groups) {
       max_num_groups = table_info.info.getNumTuplesUpperBound();
+      table_key = table_info.table_key;
     }
   }
-  return std::max(max_num_groups, size_t(1));
+  return std::make_pair(std::max(max_num_groups, size_t(1)), table_key);
 }
 
 bool is_projection(const RelAlgExecutionUnit& ra_exe_unit) {
@@ -3532,7 +3535,7 @@ bool compute_output_buffer_size(const RelAlgExecutionUnit& ra_exe_unit) {
     VLOG(1) << "Set the pre-flight count query's threshold as "
             << preflight_count_query_threshold << " by a query hint";
   }
-  if (ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
+  if (is_projection(ra_exe_unit) &&
       (!ra_exe_unit.scan_limit ||
        ra_exe_unit.scan_limit > preflight_count_query_threshold)) {
     return true;
@@ -3892,7 +3895,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
               << max_groups_buffer_entry_guess;
       result = execute_and_handle_errors(
           max_groups_buffer_entry_guess,
-          groups_approx_upper_bound(table_infos) <= g_big_group_threshold,
+          groups_approx_upper_bound(table_infos).first <= g_big_group_threshold,
           /*has_ndv_estimation=*/false);
     }
   } catch (const CardinalityEstimationRequired& e) {
@@ -3908,9 +3911,10 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       const auto ndv_groups_estimation =
           getNDVEstimation(work_unit, e.range(), is_agg, co, eo);
       const auto estimated_groups_buffer_entry_guess =
-          ndv_groups_estimation > 0 ? 2 * ndv_groups_estimation
-                                    : std::min(groups_approx_upper_bound(table_infos),
-                                               g_estimator_failure_max_groupby_size);
+          ndv_groups_estimation > 0
+              ? 2 * ndv_groups_estimation
+              : std::min(groups_approx_upper_bound(table_infos).first,
+                         g_estimator_failure_max_groupby_size);
       CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
       VLOG(1) << "CardinalityEstimationRequired, Use ndv_estimation: "
               << ndv_groups_estimation
@@ -3996,11 +4000,56 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   return result;
 }
 
+bool RelAlgExecutor::hasDeletedRowInQuery(
+    std::vector<InputTableInfo> const& input_tables_info) const {
+  return std::any_of(
+      input_tables_info.begin(), input_tables_info.end(), [](InputTableInfo const& info) {
+        auto const& table_key = info.table_key;
+        if (table_key.db_id > 0) {
+          auto catalog =
+              Catalog_Namespace::SysCatalog::instance().getCatalog(table_key.db_id);
+          CHECK(catalog);
+          auto td = catalog->getMetadataForTable(table_key.table_id);
+          CHECK(td);
+          if (catalog->getDeletedColumnIfRowsDeleted(td)) {
+            return true;
+          }
+        }
+        return false;
+      });
+}
+
+namespace {
+std::string get_table_name_from_table_key(shared::TableKey const& table_key) {
+  std::string table_name{""};
+  if (table_key.db_id > 0) {
+    auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(table_key.db_id);
+    CHECK(catalog);
+    auto td = catalog->getMetadataForTable(table_key.table_id);
+    CHECK(td);
+    table_name = td->tableName;
+  }
+  return table_name;
+}
+}  // namespace
+
 std::optional<size_t> RelAlgExecutor::getFilteredCountAll(
     const RelAlgExecutionUnit& ra_exe_unit,
     const bool is_agg,
     const CompilationOptions& co,
     const ExecutionOptions& eo) {
+  auto const input_tables_info = get_table_infos(ra_exe_unit, executor_);
+  if (is_projection(ra_exe_unit) && ra_exe_unit.simple_quals.empty() &&
+      ra_exe_unit.quals.empty() && ra_exe_unit.join_quals.empty() &&
+      !hasDeletedRowInQuery(input_tables_info)) {
+    auto const max_row_info = groups_approx_upper_bound(input_tables_info);
+    auto const num_rows = max_row_info.first;
+    auto const table_name = get_table_name_from_table_key(max_row_info.second);
+    VLOG(1) << "Short-circuiting filtered count query for the projection query "
+               "containing input table "
+            << table_name << ": return its table cardinality " << num_rows << " instead";
+    return std::make_optional<size_t>(num_rows);
+  }
   const auto count =
       makeExpr<Analyzer::AggExpr>(SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false),
                                   kCOUNT,
@@ -4017,7 +4066,7 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(
     copied_eo.estimate_output_cardinality = true;
     count_all_result = executor_->executeWorkUnit(one,
                                                   is_agg,
-                                                  get_table_infos(ra_exe_unit, executor_),
+                                                  input_tables_info,
                                                   count_all_exe_unit,
                                                   co,
                                                   copied_eo,
