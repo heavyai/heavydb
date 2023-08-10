@@ -1377,7 +1377,9 @@ std::optional<size_t> QueryMemoryDescriptor::getMaxPerDeviceCardinality(
 
 bool QueryMemoryDescriptor::canUsePerDeviceCardinality(
     const RelAlgExecutionUnit& ra_exe_unit) const {
-  if (query_desc_type_ != QueryDescriptionType::Projection) {
+  // union-query needs to consider the "SUM" of each subquery's result
+  if (query_desc_type_ != QueryDescriptionType::Projection ||
+      !ra_exe_unit.target_exprs_union.empty()) {
     return false;
   }
   auto is_left_join = [](auto& join_qual) { return join_qual.type == JoinType::LEFT; };
