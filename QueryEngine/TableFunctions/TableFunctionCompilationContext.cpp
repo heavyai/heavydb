@@ -103,25 +103,25 @@ void initialize_ptr_member(llvm::Value* member_ptr,
   }
 }
 
-void initialize_int64_member(llvm::Value* member_ptr,
-                             llvm::Value* value,
-                             int64_t default_value,
-                             llvm::LLVMContext& ctx,
-                             llvm::IRBuilder<>& ir_builder) {
+template <typename T>
+void initialize_int_member(llvm::Value* member_ptr,
+                           llvm::Value* value,
+                           int64_t default_value,
+                           llvm::LLVMContext& ctx,
+                           llvm::IRBuilder<>& ir_builder) {
   llvm::Value* val = nullptr;
   if (value != nullptr) {
     auto value_type = value->getType();
     if (value_type->isPointerTy()) {
-      CHECK(value_type->getPointerElementType()->isIntegerTy(64));
+      CHECK(value_type->getPointerElementType()->isIntegerTy(sizeof(T) * 8));
       val = ir_builder.CreateLoad(value->getType()->getPointerElementType(), value);
     } else {
-      CHECK(value_type->isIntegerTy(64));
+      CHECK(value_type->isIntegerTy(sizeof(T) * 8));
       val = value;
     }
     ir_builder.CreateStore(val, member_ptr);
   } else {
-    auto const_default =
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), default_value, true);
+    auto const_default = ll_int<T>(default_value, ctx);
     ir_builder.CreateStore(const_default, member_ptr);
   }
 }
@@ -184,7 +184,7 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
   }
 
   initialize_ptr_member(col_ptr_ptr, data_ptr_llvm_type, data_ptr, ir_builder);
-  initialize_int64_member(col_sz_ptr, data_size, -1, ctx, ir_builder);
+  initialize_int_member<int64_t>(col_sz_ptr, data_size, -1, ctx, ir_builder);
   if (is_text_encoding_dict_type) {
     initialize_ptr_member(col_str_dict_ptr,
                           llvm::Type::getInt8PtrTy(ctx),
@@ -257,7 +257,7 @@ llvm::Value* alloc_column_list(std::string col_list_name,
   auto const_length = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), length, true);
   ir_builder.CreateStore(const_length, col_list_length_ptr);
 
-  initialize_int64_member(col_list_size_ptr, data_size, -1, ctx, ir_builder);
+  initialize_int_member<int64_t>(col_list_size_ptr, data_size, -1, ctx, ir_builder);
 
   if (is_text_encoding_dict_type) {
     initialize_ptr_member(col_str_dict_ptr_ptr,
@@ -270,6 +270,51 @@ llvm::Value* alloc_column_list(std::string col_list_name,
       col_list_ptr_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(ctx), 0));
   col_list_ptr->setName(col_list_name + "_ptrs");
   return col_list_ptr;
+}
+
+llvm::Value* alloc_array(std::string arr_name,
+                         const size_t index,
+                         const SQLTypeInfo& data_target_info,
+                         llvm::Value* data_ptr,
+                         llvm::Value* data_size,
+                         llvm::Value* data_is_null,
+                         llvm::LLVMContext& ctx,
+                         llvm::IRBuilder<>& ir_builder) {
+  /*
+    Creates a new Array instance of given element type and initialize
+    its data ptr and sz members when specified. If data ptr or sz are
+    unspecified (have nullptr values) then the corresponding members
+    are initialized with NULL and -1, respectively.
+
+    Return a pointer to Array instance.
+   */
+  llvm::StructType* arr_struct_type;
+  llvm::Type* data_ptr_llvm_type =
+      get_llvm_type_from_sql_column_type(data_target_info.get_elem_type(), ctx);
+  arr_struct_type =
+      llvm::StructType::get(ctx,
+                            {
+                                data_ptr_llvm_type,          /* T* ptr_ */
+                                llvm::Type::getInt64Ty(ctx), /* int64_t size_ */
+                                llvm::Type::getInt8Ty(ctx)   /* int8_t is_null_ */
+                            });
+
+  auto arr = ir_builder.CreateAlloca(arr_struct_type);
+  arr->setName(arr_name);
+  auto arr_ptr_ptr = ir_builder.CreateStructGEP(arr_struct_type, arr, 0);
+  auto arr_sz_ptr = ir_builder.CreateStructGEP(arr_struct_type, arr, 1);
+  auto arr_is_null_ptr = ir_builder.CreateStructGEP(arr_struct_type, arr, 2);
+  arr_ptr_ptr->setName(arr_name + ".ptr");
+  arr_sz_ptr->setName(arr_name + ".size");
+  arr_is_null_ptr->setName(arr_name + ".is_null");
+
+  initialize_ptr_member(arr_ptr_ptr, data_ptr_llvm_type, data_ptr, ir_builder);
+  initialize_int_member<int64_t>(arr_sz_ptr, data_size, -1, ctx, ir_builder);
+  initialize_int_member<int8_t>(arr_is_null_ptr, data_is_null, -1, ctx, ir_builder);
+  auto arr_ptr = ir_builder.CreatePointerCast(
+      arr_ptr_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(ctx), 0));
+  arr_ptr->setName(arr_name + "_pointer");
+  return arr_ptr;
 }
 
 std::string exprsKey(const std::vector<Analyzer::Expr*>& exprs) {
@@ -526,12 +571,55 @@ void TableFunctionCompilationContext::generateEntryPoint(
       if (col_index + 1 == ti.get_dimension()) {
         col_index = -1;
       }
+    } else if (ti.is_array()) {
+      /*
+          Literal array expression is encoded in a contiguous buffer
+          with the following memory layout:
+
+          | <array size> | <array is_null> |  <array data>                             |
+          |<-- 8 bytes ->|<-- 8 bytes ---->|<-- <array size> * <array element size> -->|
+
+          Notice that while is_null in the `struct Array` has type
+          int8_t, in the buffer we use int64_t value to hold the
+          is_null state in order to have the array data 64-bit
+          aligned.
+       */
+      auto array_size =
+          cgen_state->ir_builder_.CreateBitCast(col_heads[i], get_int_ptr_type(64, ctx));
+      auto array_is_null_ptr = cgen_state->ir_builder_.CreateGEP(
+          col_heads[i]->getType()->getScalarType()->getPointerElementType(),
+          col_heads[i],
+          cgen_state->llInt(8));
+      auto array_is_null = cgen_state->ir_builder_.CreateLoad(
+          array_is_null_ptr->getType()->getPointerElementType(), array_is_null_ptr);
+
+      auto array_ptr = cgen_state->ir_builder_.CreateGEP(
+          col_heads[i]->getType()->getScalarType()->getPointerElementType(),
+          col_heads[i],
+          cgen_state->llInt(16));
+      array_size->setName(std::string("array_size.") + std::to_string(func_arg_index));
+      array_is_null->setName(std::string("array_is_null.") +
+                             std::to_string(func_arg_index));
+      array_ptr->setName(std::string("array_ptr.") + std::to_string(func_arg_index));
+
+      auto array_struct_ptr =
+          alloc_array(std::string("literal_array.") + std::to_string(func_arg_index),
+                      i,
+                      ti,
+                      array_ptr,
+                      array_size,
+                      array_is_null,
+                      ctx,
+                      cgen_state->ir_builder_);
+
+      // passing columns by value is a historical artifact, so no need
+      // to support it for array expressions:
+      CHECK_EQ(pass_column_by_value, false);
+      func_args.push_back(array_struct_ptr);
+      CHECK_EQ(col_index, -1);
     } else {
-      throw std::runtime_error(
-          "Only integer and floating point columns or scalars are supported as inputs to "
-          "table "
-          "functions, got " +
-          ti.get_type_name());
+      throw std::runtime_error("Table function input has unsupported type: " +
+                               ti.get_type_name());
     }
   }
   auto output_str_dict_proxy_heads =

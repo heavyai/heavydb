@@ -173,6 +173,29 @@ NEVER_INLINE HOST int32_t array_concat__cpu_template(TableFunctionManager& mgr,
   return size;
 }
 
+template <typename T>
+NEVER_INLINE HOST int32_t array_append__cpu_template(TableFunctionManager& mgr,
+                                                     const Column<Array<T>>& input1,
+                                                     const Array<T>& input2,
+                                                     Column<Array<T>>& output) {
+  int size = input1.size();
+  int output_values_size = input2.size() * size;
+  for (int i = 0; i < size; i++) {
+    output_values_size += input1[i].size();
+  }
+  mgr.set_output_array_values_total_number(
+      /*output column index=*/0,
+      /*upper bound to the number of items in all output arrays=*/output_values_size);
+
+  mgr.set_output_row_size(size);
+
+  for (int i = 0; i < size; i++) {
+    output.concatItem(i, input1[i]);
+    output.concatItem(i, input2);
+  }
+  return size;
+}
+
 // explicit instantiations
 template NEVER_INLINE HOST int32_t
 array_concat__cpu_template(TableFunctionManager& mgr,
@@ -206,6 +229,42 @@ template NEVER_INLINE HOST int32_t
 array_concat__cpu_template(TableFunctionManager& mgr,
                            const ColumnList<Array<TextEncodingDict>>& inputs,
                            Column<Array<TextEncodingDict>>& output);
+
+template NEVER_INLINE HOST int32_t
+array_append__cpu_template(TableFunctionManager& mgr,
+                           const Column<Array<float>>& input1,
+                           const Array<float>& input2,
+                           Column<Array<float>>& output);
+template NEVER_INLINE HOST int32_t
+array_append__cpu_template(TableFunctionManager& mgr,
+                           const Column<Array<double>>& input1,
+                           const Array<double>& input2,
+                           Column<Array<double>>& output);
+template NEVER_INLINE HOST int32_t
+array_append__cpu_template(TableFunctionManager& mgr,
+                           const Column<Array<int8_t>>& input1,
+                           const Array<int8_t>& input2,
+                           Column<Array<int8_t>>& output);
+template NEVER_INLINE HOST int32_t
+array_append__cpu_template(TableFunctionManager& mgr,
+                           const Column<Array<int16_t>>& input1,
+                           const Array<int16_t>& input2,
+                           Column<Array<int16_t>>& output);
+template NEVER_INLINE HOST int32_t
+array_append__cpu_template(TableFunctionManager& mgr,
+                           const Column<Array<int32_t>>& input1,
+                           const Array<int32_t>& input2,
+                           Column<Array<int32_t>>& output);
+template NEVER_INLINE HOST int32_t
+array_append__cpu_template(TableFunctionManager& mgr,
+                           const Column<Array<int64_t>>& input1,
+                           const Array<int64_t>& input2,
+                           Column<Array<int64_t>>& output);
+template NEVER_INLINE HOST int32_t
+array_append__cpu_template(TableFunctionManager& mgr,
+                           const Column<Array<bool>>& input1,
+                           const Array<bool>& input2,
+                           Column<Array<bool>>& output);
 
 template <typename T>
 NEVER_INLINE HOST int32_t array_asarray__cpu_template(TableFunctionManager& mgr,

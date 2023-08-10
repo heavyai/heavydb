@@ -233,6 +233,7 @@ inline bool is_ext_arg_type_pointer(const ExtArgumentType ext_arg_type) {
   }
 }
 
+// TODO(pearu): rename is_ext_arg_type_scalar to is_ext_arg_type_literal
 inline bool is_ext_arg_type_scalar(const ExtArgumentType ext_arg_type) {
   switch (ext_arg_type) {
     case ExtArgumentType::Int8:
@@ -247,6 +248,15 @@ inline bool is_ext_arg_type_scalar(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::Timestamp:
     case ExtArgumentType::DayTimeInterval:
     case ExtArgumentType::YearMonthTimeInterval:
+    case ExtArgumentType::ArrayInt8:
+    case ExtArgumentType::ArrayInt16:
+    case ExtArgumentType::ArrayInt32:
+    case ExtArgumentType::ArrayInt64:
+    case ExtArgumentType::ArrayFloat:
+    case ExtArgumentType::ArrayDouble:
+    case ExtArgumentType::ArrayBool:
+    case ExtArgumentType::ArrayTextEncodingDict:
+    case ExtArgumentType::ArrayTextEncodingNone:
       return true;
 
     default:

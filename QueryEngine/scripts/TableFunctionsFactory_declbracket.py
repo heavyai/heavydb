@@ -209,8 +209,15 @@ class Bracket:
         return '%s<%s<%s>>' % (clsname, subclsname, ctype)
 
     def format_cpp_type(self, idx, use_generic_arg_name=False, real_arg_name=None, is_input=True):
-        col_typs = ('Column', 'ColumnList')
-        literal_ref_typs = ('TextEncodingNone',)
+        # Arguments that types are derived from arithmetic and bool
+        # types, should be passed by value:
+        pass_by_value_typs =(
+            'bool', 'int8_t', 'int16_t', 'int32_t', 'int64_t', 'float',
+            'double', 'Timestamp', 'DayTimeInterval', 'YearMonthTimeInterval', 'TextEncodingDict')
+        # Arguments that types are of struct type, should be passed by
+        # reference:
+        pass_by_reference_typs =('Column', 'ColumnList', 'TextEncodingNone', 'Array')
+
         if use_generic_arg_name:
             arg_name = 'input' + str(idx) if is_input else 'output' + str(idx)
         elif real_arg_name is not None:
@@ -220,15 +227,20 @@ class Bracket:
             arg_name = 'input' + str(idx) if is_input else 'output' + str(idx)
         const = 'const ' if is_input else ''
         cpp_type = self.get_cpp_type()
-        if any(cpp_type.startswith(t) for t in col_typs + literal_ref_typs):
+        if any(cpp_type.startswith(t) for t in pass_by_reference_typs):
             return '%s%s& %s' % (const, cpp_type, arg_name), arg_name
-        else:
+        elif any(cpp_type.startswith(t) for t in pass_by_value_typs):
             return '%s %s' % (cpp_type, arg_name), arg_name
+        else:
+            msg =('Argument passing policy for argument `%s` of C++ type `%s` is unspecified.'
+                  ' Update pass_by_value_typs or pass_by_reference_typs in'
+                  ' Declaration.format_cpp_type to indicate the desired argument'
+                  ' passing policy.') %(arg_name, cpp_type)
+            raise NotImplementedError(msg)
 
     @classmethod
     def parse(cls, typ):
         """typ is a string in format NAME<ARGS> or NAME
-
         Returns Bracket instance.
         """
         i = typ.find('<')

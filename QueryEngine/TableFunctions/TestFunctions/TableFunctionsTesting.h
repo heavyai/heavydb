@@ -1196,11 +1196,18 @@ NEVER_INLINE HOST int32_t array_copier__cpu_template(TableFunctionManager& mgr,
 /*
   UDTF: array_concat__cpu_template(TableFunctionManager mgr, ColumnList<Array<T>> input) -> Column<Array<T>> | input_id=args<0>,
           T=[float, double, int8_t, int16_t, int32_t, int64_t, bool, TextEncodingDict]
+  UDTF: array_append__cpu_template(TableFunctionManager mgr, Column<Array<T>> input1, Array<T> input2) -> Column<Array<T>> | input_id=args<0>,
+          T=[float, double, int8_t, int16_t, int32_t, int64_t, bool]
 */
 // clang-format on
 template <typename T>
 NEVER_INLINE HOST int32_t array_concat__cpu_template(TableFunctionManager& mgr,
                                                      const ColumnList<Array<T>>& inputs,
+                                                     Column<Array<T>>& output);
+template <typename T>
+NEVER_INLINE HOST int32_t array_append__cpu_template(TableFunctionManager& mgr,
+                                                     const Column<Array<T>>& input1,
+                                                     const Array<T>& input2,
                                                      Column<Array<T>>& output);
 
 // clang-format off
