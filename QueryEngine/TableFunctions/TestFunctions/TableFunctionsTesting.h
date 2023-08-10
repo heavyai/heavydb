@@ -929,6 +929,7 @@ ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
   UDTF: ct_require_str_diff__cpu_(Column<int>, TextEncodingNone i | require="i != \"MAX\"") -> Column<int>
   UDTF: ct_require_text_enc_dict__cpu_(Cursor<Column<TextEncodingDict>>, int64_t x | require="x >= 1") -> Column<int64_t>
   UDTF: ct_require_text_collist_enc_dict__cpu_(Cursor<ColumnList<TextEncodingDict>>, int64_t x | require="x >= 1") -> Column<int64_t>
+  UDTF: ct_require_cursor__cpu_(Cursor<Column<int64_t> x | require="x.size() + y > 10">, int64_t y) -> Column<int64_t>
 */
 // clang-format on
 
@@ -973,6 +974,10 @@ EXTENSION_NOINLINE_HOST int32_t
 ct_require_text_collist_enc_dict__cpu_(const ColumnList<TextEncodingDict>& input,
                                        const int64_t x,
                                        Column<int64_t>& out);
+
+EXTENSION_NOINLINE_HOST int32_t ct_require_cursor__cpu_(const Column<int64_t>& input,
+                                                        int64_t y,
+                                                        Column<int64_t>& out);
 
 /*
   UDTF: ct_test_allocator(TableFunctionManager, Column<int32_t>, TextEncodingNone) ->

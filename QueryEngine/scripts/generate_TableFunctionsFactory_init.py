@@ -126,6 +126,7 @@ def find_signatures(input_file):
                     transformers.DefaultValueAnnotationTransformer,
                     transformers.SupportedAnnotationsTransformer,
                     transformers.RangeAnnotationTransformer,
+                    transformers.CursorAnnotationTransformer,
                     transformers.FixRowMultiplierPosArgTransformer,
                     transformers.RenameNodesTransformer,
                     transformers.AstPrinter)(ast)
@@ -149,6 +150,7 @@ def find_signatures(input_file):
                 transformers.DefaultValueAnnotationTransformer,
                 transformers.SupportedAnnotationsTransformer,
                 transformers.RangeAnnotationTransformer,
+                transformers.CursorAnnotationTransformer,
                 transformers.FixRowMultiplierPosArgTransformer,
                 transformers.RenameNodesTransformer,
                 transformers.DeclBracketTransformer)(ast)

@@ -413,6 +413,14 @@ ct_require_text_collist_enc_dict__cpu_(const ColumnList<TextEncodingDict>& input
   return 1;
 }
 
+EXTENSION_NOINLINE_HOST int32_t ct_require_cursor__cpu_(const Column<int64_t>& input,
+                                                        int64_t y,
+                                                        Column<int64_t>& out) {
+  set_output_row_size(1);
+  out[0] = 12;
+  return 1;
+}
+
 EXTENSION_NOINLINE_HOST int32_t ct_test_allocator(TableFunctionManager& mgr,
                                                   const Column<int32_t>& input,
                                                   const TextEncodingNone& t,
