@@ -184,11 +184,17 @@ class TableFunctions : public ::testing::Test {
           "CREATE TABLE arr_test ("
           "barr BOOLEAN[], sum_along_row_barr BOOLEAN, concat_barr BOOLEAN[], "
           "carr TINYINT[], sum_along_row_carr TINYINT, concat_carr TINYINT[], "
+          "concat_carr_literal TINYINT[], "
           "sarr SMALLINT[], sum_along_row_sarr SMALLINT, concat_sarr SMALLINT[], "
-          "iarr INT[], sum_along_row_iarr INT, concat_iarr INT[], "
+          "concat_sarr_literal SMALLINT[], "
+          "iarr INT[], sum_along_row_iarr INT, concat_iarr INT[], concat_iarr_literal "
+          "INT[], "
           "larr BIGINT[], sum_along_row_larr BIGINT, concat_larr  BIGINT[], "
+          "concat_larr_literal BIGINT[], "
           "farr FLOAT[], sum_along_row_farr FLOAT, concat_farr FLOAT[], "
+          "concat_farr_literal FLOAT[], "
           "darr DOUBLE[], sum_along_row_darr DOUBLE, concat_darr DOUBLE[], "
+          "concat_darr_literal DOUBLE[], "
           "tarr TEXT[] ENCODING DICT(32), sum_along_row_tarr TEXT ENCODING DICT(32), "
           "concat_tarr TEXT[] ENCODING DICT(32), "
           "l BIGINT, asarray_l BIGINT[],"
@@ -203,21 +209,27 @@ class TableFunctions : public ::testing::Test {
                            "{1, 2}",
                            3,
                            "{1, 2, 1, 2}",
+                           "{1, 2, NULL, 99, 88}",
                            "{1, 2}",
                            3,
                            "{1, 2, 1, 2}",
+                           "{1, 2, NULL, 99, 88}",
                            "{1, 2}",
                            3,
                            "{1, 2, 1, 2}",
+                           "{1, 2, NULL, 99, 88}",
                            "{1, 2}",
                            3,
                            "{1, 2, 1, 2}",
+                           "{1, 2, NULL, 99, 88}",
                            "{1.0, 2.0}",
                            "3.0",
                            "{1.0, 2.0, 1.0, 2.0}",
+                           "{1.0, 2.0, NULL, 99.0, 88.0}",
                            "{1.0, 2.0}",
                            "3.0",
                            "{1.0, 2.0, 1.0, 2.0}",
+                           "{1.0, 2.0, NULL, 99.0, 88.0}",
                            "{'a', 'bc'}",
                            "'abc'",
                            "{'a', 'bc', 'a', 'bc'}",
@@ -232,21 +244,27 @@ class TableFunctions : public ::testing::Test {
                            "{1, NULL, 2}",
                            3,
                            "{1, NULL, 2, 1, NULL, 2}",
+                           "{1, NULL, 2, NULL, 99, 88}",
                            "{1, NULL, 2}",
                            3,
                            "{1, NULL, 2, 1, NULL, 2}",
+                           "{1, NULL, 2, NULL, 99, 88}",
                            "{1, NULL, 2}",
                            3,
                            "{1, NULL, 2, 1, NULL, 2}",
+                           "{1, NULL, 2, NULL, 99, 88}",
                            "{1, NULL, 2}",
                            3,
                            "{1, NULL, 2, 1, NULL, 2}",
+                           "{1, NULL, 2, NULL, 99, 88}",
                            "{1.0, NULL, 2.0}",
                            "3.0",
                            "{1.0, NULL, 2.0, 1.0, NULL, 2.0}",
+                           "{1.0, NULL, 2.0, NULL, 99.0, 88.0}",
                            "{1.0, NULL, 2.0}",
                            "3.0",
                            "{1.0, NULL, 2.0, 1.0, NULL, 2.0}",
+                           "{1.0, NULL, 2.0, NULL, 99.0, 88.0}",
                            "{'a', NULL, 'bc'}",
                            "'abc'",
                            "{'a', NULL, 'bc', 'a', NULL, 'bc'}",
@@ -261,21 +279,27 @@ class TableFunctions : public ::testing::Test {
                            "{}",
                            "0",
                            "{}",
+                           "{NULL, 99, 88}",
                            "{}",
                            "0",
                            "{}",
+                           "{NULL, 99, 88}",
                            "{}",
                            "0",
                            "{}",
+                           "{NULL, 99, 88}",
                            "{}",
                            "0",
                            "{}",
+                           "{NULL, 99, 88}",
                            "{}",
                            "0.0",
                            "{}",
+                           "{NULL, 99.0, 88.0}",
                            "{}",
                            "0.0",
                            "{}",
+                           "{NULL, 99.0, 88.0}",
                            "{}",
                            "''",
                            "{}",
@@ -291,21 +315,27 @@ class TableFunctions : public ::testing::Test {
                            "NULL",
                            "NULL",
                            "NULL",
+                           "{NULL, 99, 88}",
                            "NULL",
                            "NULL",
                            "NULL",
+                           "{NULL, 99, 88}",
                            "NULL",
                            "NULL",
                            "NULL",
+                           "{NULL, 99, 88}",
                            "NULL",
                            "NULL",
                            "NULL",
+                           "{NULL, 99, 88}",
                            "NULL",
                            "NULL",
                            "NULL",
+                           "{NULL, 99.0, 88.0}",
                            "NULL",
                            "NULL",
                            "NULL",
+                           "{NULL, 99.0, 88.0}",
                            "NULL",
                            "NULL",
                            "NULL",
@@ -3701,6 +3731,37 @@ TEST_F(TableFunctions, ColumnArrayConcat) {
     COLUMNARRAYCONCATTEST(farr, float);
     COLUMNARRAYCONCATTEST(darr, double);
     COLUMNARRAYCONCATTEST(tarr, int32_t);
+  }
+}
+
+TEST_F(TableFunctions, ColumnArrayAppendLiteralArray) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+#define COLUMNARRAYCONCATLITERALARRAYTEST(COLNAME, CTYPE, SQLTYPE)                     \
+  {                                                                                    \
+    const auto rows =                                                                  \
+        run_multiple_agg("SELECT out0 FROM TABLE(array_append(cursor(SELECT " #COLNAME \
+                         " FROM arr_test), ARRAY[CAST(NULL AS " #SQLTYPE               \
+                         "), CAST(99 AS " #SQLTYPE "), CAST(88 AS " #SQLTYPE ")]));",  \
+                         dt);                                                          \
+    const auto result_rows =                                                           \
+        run_multiple_agg("SELECT concat_" #COLNAME "_literal FROM arr_test;", dt);     \
+    assert_equal<CTYPE>(rows, result_rows);                                            \
+  }
+    COLUMNARRAYCONCATLITERALARRAYTEST(carr, int8_t, TINYINT);
+    COLUMNARRAYCONCATLITERALARRAYTEST(sarr, int16_t, SMALLINT);
+    COLUMNARRAYCONCATLITERALARRAYTEST(iarr, int32_t, INT);
+    COLUMNARRAYCONCATLITERALARRAYTEST(larr, int64_t, BIGINT);
+    COLUMNARRAYCONCATLITERALARRAYTEST(farr, float, FLOAT);
+    COLUMNARRAYCONCATLITERALARRAYTEST(darr, double, DOUBLE);
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(array_append(cursor(SELECT barr FROM arr_test), "
+          "ARRAY[]));",
+          dt);
+      const auto result_rows = run_multiple_agg("SELECT barr FROM arr_test;", dt);
+      assert_equal<bool>(rows, result_rows);
+    }
   }
 }
 

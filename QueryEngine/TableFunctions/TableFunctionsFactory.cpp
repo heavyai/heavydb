@@ -90,6 +90,9 @@ SQLTypeInfo TableFunction::getOutputSQLType(const size_t idx) const {
   return ext_arg_type_to_type_info_output(output_args_[idx]);
 }
 
+// TODO(pearu): rename to countLiteralArgs as the relevant argument
+// types include TextEncodingNone, Array, etc literals that are not
+// scalars.
 int32_t TableFunction::countScalarArgs() const {
   int32_t scalar_args = 0;
   for (const auto& ext_arg : input_args_) {

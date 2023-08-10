@@ -28,65 +28,49 @@
 
 namespace {
 
-template <typename T>
-const int8_t* create_literal_buffer(const T literal,
-                                    const ExecutorDeviceType device_type,
-                                    std::vector<std::unique_ptr<char[]>>& literals_owner,
-                                    CudaAllocator* gpu_allocator) {
-  CHECK_LE(sizeof(T), sizeof(int64_t));  // pad to 8 bytes
-  switch (device_type) {
-    case ExecutorDeviceType::CPU: {
-      literals_owner.emplace_back(std::make_unique<char[]>(sizeof(int64_t)));
-      std::memcpy(literals_owner.back().get(), &literal, sizeof(T));
-      return reinterpret_cast<const int8_t*>(literals_owner.back().get());
+void append_literal_buffer(const Datum& d,
+                           const SQLTypeInfo& ti,
+                           int8_t* literal_buffer,
+                           int64_t offset) {
+  if (ti.is_fp()) {
+    switch (get_bit_width(ti)) {
+      case 32:
+        std::memcpy(literal_buffer + offset, &d.floatval, sizeof(float));
+        break;
+      case 64:
+        std::memcpy(literal_buffer + offset, &d.doubleval, sizeof(double));
+        break;
+      default:
+        UNREACHABLE();
     }
-    case ExecutorDeviceType::GPU: {
-      CHECK(gpu_allocator);
-      const auto gpu_literal_buf_ptr = gpu_allocator->alloc(sizeof(int64_t));
-      gpu_allocator->copyToDevice(
-          gpu_literal_buf_ptr, reinterpret_cast<const int8_t*>(&literal), sizeof(T));
-      return gpu_literal_buf_ptr;
+  } else if (ti.is_integer() || ti.is_timestamp() || ti.is_timeinterval()) {
+    switch (get_bit_width(ti)) {
+      case 8:
+        std::memcpy(literal_buffer + offset, &d.tinyintval, sizeof(int8_t));
+        break;
+      case 16:
+        std::memcpy(literal_buffer + offset, &d.smallintval, sizeof(int16_t));
+        break;
+      case 32:
+        std::memcpy(literal_buffer + offset, &d.intval, sizeof(int32_t));
+        break;
+      case 64:
+        std::memcpy(literal_buffer + offset, &d.bigintval, sizeof(int64_t));
+        break;
+      default:
+        UNREACHABLE();
     }
+  } else if (ti.is_boolean()) {
+    std::memcpy(literal_buffer + offset, &d.boolval, sizeof(int8_t));
+  } else if (ti.is_text_encoding_none()) {
+    auto string_size = d.stringval->size();
+    std::memcpy(literal_buffer + offset, &string_size, sizeof(int64_t));
+    std::memcpy(
+        literal_buffer + offset + sizeof(int64_t), d.stringval->data(), string_size);
+  } else {
+    throw TableFunctionError("Literal value " + DatumToString(d, ti) +
+                             " is not yet supported.");
   }
-  UNREACHABLE();
-  return nullptr;
-}
-
-// Specialization for std::string. Currently we simply hand the UDTF a char* to the
-// first char of a c-style null-terminated string we copy out of the std::string.
-// May want to evaluate moving to sending in the ptr and size
-template <>
-const int8_t* create_literal_buffer(std::string* const literal,
-                                    const ExecutorDeviceType device_type,
-                                    std::vector<std::unique_ptr<char[]>>& literals_owner,
-                                    CudaAllocator* gpu_allocator) {
-  const int64_t string_size = literal->size();
-  const int64_t padded_string_size =
-      (string_size + 7) / 8 * 8;  // round up to the next multiple of 8
-  switch (device_type) {
-    case ExecutorDeviceType::CPU: {
-      literals_owner.emplace_back(
-          std::make_unique<char[]>(sizeof(int64_t) + padded_string_size));
-      std::memcpy(literals_owner.back().get(), &string_size, sizeof(int64_t));
-      std::memcpy(
-          literals_owner.back().get() + sizeof(int64_t), literal->data(), string_size);
-      return reinterpret_cast<const int8_t*>(literals_owner.back().get());
-    }
-    case ExecutorDeviceType::GPU: {
-      CHECK(gpu_allocator);
-      const auto gpu_literal_buf_ptr =
-          gpu_allocator->alloc(sizeof(int64_t) + padded_string_size);
-      gpu_allocator->copyToDevice(gpu_literal_buf_ptr,
-                                  reinterpret_cast<const int8_t*>(&string_size),
-                                  sizeof(int64_t));
-      gpu_allocator->copyToDevice(gpu_literal_buf_ptr + sizeof(int64_t),
-                                  reinterpret_cast<const int8_t*>(literal->data()),
-                                  string_size);
-      return gpu_literal_buf_ptr;
-    }
-  }
-  UNREACHABLE();
-  return nullptr;
 }
 
 size_t get_output_row_count(const TableFunctionExecutionUnit& exe_unit,
@@ -209,77 +193,85 @@ ResultSetPtr TableFunctionExecutionContext::execute(
         input_str_dict_proxy_ptrs.push_back(input_str_dict_proxy_ptr);
       }
       col_sizes.push_back(buf_elem_count);
-    } else if (const auto& constant_val = dynamic_cast<Analyzer::Constant*>(input_expr)) {
-      // TODO(adb): Unify literal handling with rest of system, either in Codegen or as a
-      // separate serialization component
+    } else {
+      // literals
       col_sizes.push_back(0);
       input_str_dict_proxy_ptrs.push_back(nullptr);
-      const auto const_val_datum = constant_val->get_constval();
-      const auto& ti = constant_val->get_type_info();
-      if (ti.is_fp()) {
-        switch (get_bit_width(ti)) {
-          case 32:
-            col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.floatval,
-                                                         device_type,
-                                                         literals_owner,
-                                                         device_allocator.get()));
-            break;
-          case 64:
-            col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.doubleval,
-                                                         device_type,
-                                                         literals_owner,
-                                                         device_allocator.get()));
-            break;
-          default:
-            UNREACHABLE();
+      size_t literal_buffer_size = 0;
+      int8_t* cpu_literal_buf_ptr = nullptr;
+
+      if (const auto& constant_val = dynamic_cast<Analyzer::Constant*>(input_expr)) {
+        // TODO(adb): Unify literal handling with rest of system, either in Codegen or as
+        // a separate serialization component
+        const auto const_val_datum = constant_val->get_constval();
+        const auto& ti = constant_val->get_type_info();
+        if (ti.is_text_encoding_none()) {
+          // clang-format off
+          /*
+            Literal string is encoded in a contiguous buffer with the
+            following memory layout:
+
+            | <string size> | <string data>       |
+            |<-- 8 bytes -->|<-- <string size> -->|
+          */
+          // clang-format on
+          literal_buffer_size =
+              sizeof(int64_t) + ((const_val_datum.stringval->size() + 7) / 8) * 8;
+        } else {
+          literal_buffer_size = ((get_bit_width(ti) / 8 + 7) / 8) * 8;
         }
-      } else if (ti.is_integer() || ti.is_timestamp() || ti.is_timeinterval()) {
-        switch (get_bit_width(ti)) {
-          case 8:
-            col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.tinyintval,
-                                                         device_type,
-                                                         literals_owner,
-                                                         device_allocator.get()));
-            break;
-          case 16:
-            col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.smallintval,
-                                                         device_type,
-                                                         literals_owner,
-                                                         device_allocator.get()));
-            break;
-          case 32:
-            col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.intval,
-                                                         device_type,
-                                                         literals_owner,
-                                                         device_allocator.get()));
-            break;
-          case 64:
-            col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.bigintval,
-                                                         device_type,
-                                                         literals_owner,
-                                                         device_allocator.get()));
-            break;
-          default:
+        // literal_buffer_size is round up to the next multiple of 8
+        literals_owner.emplace_back(std::make_unique<char[]>(literal_buffer_size));
+        cpu_literal_buf_ptr = reinterpret_cast<int8_t*>(literals_owner.back().get());
+        append_literal_buffer(const_val_datum, ti, cpu_literal_buf_ptr, 0);
+      } else if (const auto& array_expr =
+                     dynamic_cast<Analyzer::ArrayExpr*>(input_expr)) {
+        const auto& ti = input_expr->get_type_info().get_elem_type();
+        // clang-format off
+        /*
+          Literal array expression is encoded in a contiguous buffer
+          with the following memory layout:
+
+          | <array size> | <array is_null> |  <array data>                             |
+          |<-- 8 bytes ->|<-- 8 bytes ---->|<-- <array size> * <array element size> -->|
+        */
+        // clang-format on
+        int64_t size = array_expr->getElementCount();
+        int64_t is_null = (array_expr->isNull() ? 0xffffffffffffffff : 0);
+        const auto elem_size = get_bit_width(ti) / 8;
+        // literal_buffer_size is round up to the next multiple of 8
+        literal_buffer_size = 2 * sizeof(int64_t) + (((size + 7) / 8) * 8) * elem_size;
+        literals_owner.emplace_back(std::make_unique<char[]>(literal_buffer_size));
+        cpu_literal_buf_ptr = reinterpret_cast<int8_t*>(literals_owner.back().get());
+        std::memcpy(cpu_literal_buf_ptr, &size, sizeof(int64_t));
+        std::memcpy(cpu_literal_buf_ptr + sizeof(int64_t), &is_null, sizeof(int64_t));
+        for (int64_t i = 0; i < size; i++) {
+          if (const auto& constant_val =
+                  dynamic_cast<const Analyzer::Constant*>(array_expr->getElement(i))) {
+            const auto const_val_datum = constant_val->get_constval();
+            append_literal_buffer(const_val_datum,
+                                  ti,
+                                  cpu_literal_buf_ptr,
+                                  sizeof(int64_t) * 2 + i * elem_size);
+          } else {
             UNREACHABLE();
+          }
         }
-      } else if (ti.is_boolean()) {
-        col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.boolval,
-                                                     device_type,
-                                                     literals_owner,
-                                                     device_allocator.get()));
-      } else if (ti.is_text_encoding_none()) {
-        col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.stringval,
-                                                     device_type,
-                                                     literals_owner,
-                                                     device_allocator.get()));
       } else {
-        throw TableFunctionError("Literal value " + constant_val->toString() +
-                                 " is not yet supported.");
+        throw TableFunctionError("Unsupported expression as input to table function: " +
+                                 input_expr->toString() +
+                                 "\n Only literal constants and columns are supported!");
       }
-    } else {
-      throw TableFunctionError(
-          "Unsupported expression as input to table function: " + input_expr->toString() +
-          "\n Only literal constants and columns are supported!");
+      if (device_type == ExecutorDeviceType::GPU) {
+        auto* gpu_allocator = device_allocator.get();
+        const auto gpu_literal_buf_ptr = gpu_allocator->alloc(literal_buffer_size);
+        gpu_allocator->copyToDevice(
+            gpu_literal_buf_ptr, cpu_literal_buf_ptr, literal_buffer_size);
+        col_buf_ptrs.push_back(gpu_literal_buf_ptr);
+      } else {
+        CHECK_EQ(device_type, ExecutorDeviceType::CPU);
+        col_buf_ptrs.push_back(cpu_literal_buf_ptr);
+      }
     }
   }
   CHECK_EQ(col_buf_ptrs.size(), exe_unit.input_exprs.size());

@@ -3486,8 +3486,9 @@ std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
         byte_stream_arg->getType()->getScalarType()->getPointerElementType(),
         byte_stream_arg,
         llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), col_id));
-    col_heads.emplace_back(
-        ir_builder.CreateLoad(gep->getType()->getPointerElementType(), gep));
+    auto* load_gep = ir_builder.CreateLoad(gep->getType()->getPointerElementType(), gep);
+    load_gep->setName(byte_stream_arg->getName() + "_" + std::to_string(col_id) + "_ptr");
+    col_heads.emplace_back(load_gep);
   }
   return col_heads;
 }

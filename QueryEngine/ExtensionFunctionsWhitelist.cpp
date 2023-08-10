@@ -361,6 +361,7 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
     type = kARRAY;                                                    \
     c = kENCODING_##ENCODING;                                         \
     subtype = ELEMTYPE;                                               \
+    n = true;                                                         \
     break;                                                            \
   case ExtArgumentType::Column##EXTARGTYPE:                           \
     type = kCOLUMN;                                                   \

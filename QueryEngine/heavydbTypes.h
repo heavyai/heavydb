@@ -1291,6 +1291,11 @@ struct Column {
     this_item += item;
   }
 
+  DEVICE inline void concatItem(int64_t index, const RowStruct& item) {
+    RowType this_item = getItem(index);
+    this_item += item;
+  }
+
   // Return row object with the specified extra number of elements.
   DEVICE RowType getItem(const int64_t index, const int64_t extra_numel) const {
     auto result = (*this)[index];
