@@ -3213,6 +3213,10 @@ bool first_oe_is_desc(const std::list<Analyzer::OrderEntry>& order_entries) {
   return !order_entries.empty() && order_entries.front().is_desc;
 }
 
+bool is_none_encoded_text(TargetMetaInfo const& target_meta_info) {
+  return target_meta_info.get_type_info().is_none_encoded_string();
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
@@ -3313,13 +3317,20 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
       const auto source_work_unit = createSortInputWorkUnit(sort, order_entries, eo);
       is_desc = first_oe_is_desc(order_entries);
       ExecutionOptions eo_copy = eo;
+      CompilationOptions co_copy = co;
       eo_copy.just_validate = eo.just_validate || sort->isEmptyResult();
+      if (hasStepForUnion() &&
+          boost::algorithm::any_of(source->getOutputMetainfo(), is_none_encoded_text)) {
+        co_copy.device_type = ExecutorDeviceType::CPU;
+        VLOG(1) << "Punt sort's input query to CPU: detect union(-all) of none-encoded "
+                   "text column";
+      }
 
       groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
       source_result = executeWorkUnit(source_work_unit,
                                       source->getOutputMetainfo(),
                                       is_aggregate,
-                                      co,
+                                      co_copy,
                                       eo_copy,
                                       render_info,
                                       queue_time_ms);
