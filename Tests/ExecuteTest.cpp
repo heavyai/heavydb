@@ -26045,11 +26045,9 @@ TEST_F(Select, UnionAll) {
           "SELECT str FROM test UNION ALL SELECT real_str FROM test ORDER BY str;",
           dt));
 
-    if (dt == ExecutorDeviceType::CPU) {
-      c("SELECT real_str FROM test UNION ALL "
-        "SELECT real_str FROM test ORDER BY real_str;",
-        dt);
-    }
+    c("SELECT real_str FROM test UNION ALL "
+      "SELECT real_str FROM test ORDER BY real_str;",
+      dt);
 
     // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
     SKIP_ON_AGGREGATOR(
