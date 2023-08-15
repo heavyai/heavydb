@@ -22,14 +22,23 @@
 #include <string>
 #include "Shared/base64.h"
 
+namespace {
+std::string default_metadata(const std::string& metadata) {
+  if (metadata == "" || metadata == "DEFAULT") {
+    return "{}";
+  }
+  return shared::decode_base64(metadata);
+}
+}  // namespace
+
 class AbstractMLModel {
  public:
   AbstractMLModel(const std::string& model_metadata)
-      : model_metadata_(shared::decode_base64(model_metadata)) {}
+      : model_metadata_(default_metadata(model_metadata)) {}
 
   AbstractMLModel(const std::string& model_metadata,
                   const std::vector<std::vector<std::string>>& cat_feature_keys)
-      : model_metadata_(shared::decode_base64(model_metadata))
+      : model_metadata_(default_metadata(model_metadata))
       , cat_feature_keys_(cat_feature_keys) {}
   virtual MLModelType getModelType() const = 0;
   virtual std::string getModelTypeString() const = 0;

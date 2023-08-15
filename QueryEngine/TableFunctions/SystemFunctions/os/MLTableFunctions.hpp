@@ -332,12 +332,10 @@ linear_reg_fit_impl(TableFunctionManager& mgr,
    TextEncodingNone model_name,
    Cursor<Column<T> labels, ColumnList<T> features> data,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -498,12 +496,10 @@ struct CategoricalFeaturesBuilder {
    int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
    float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -541,12 +537,10 @@ linear_reg_fit__cpu_template(TableFunctionManager& mgr,
    int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
    float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -689,12 +683,10 @@ decision_tree_reg_impl(TableFunctionManager& mgr,
    int64_t max_tree_depth | require="max_tree_depth >= 0" | default=0,
    int64_t min_obs_per_leaf_node | require="min_obs_per_leaf_node >= 0" | default=5,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -730,12 +722,10 @@ decision_tree_reg_fit__cpu_template(TableFunctionManager& mgr,
    int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
    float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t decision_tree_reg_fit__cpu_template(
@@ -779,12 +769,10 @@ NEVER_INLINE HOST int32_t decision_tree_reg_fit__cpu_template(
    int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
    float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t decision_tree_reg_fit__cpu_template(
@@ -971,12 +959,10 @@ gbt_reg_fit__cpu_template(TableFunctionManager& mgr,
    int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
    float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -1043,12 +1029,10 @@ gbt_reg_fit__cpu_template(TableFunctionManager& mgr,
    int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
    float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -1229,12 +1213,10 @@ random_forest_reg_fit_impl(TableFunctionManager& mgr,
    bool use_histogram | default=false,
    TextEncodingNone var_importance_metric | default="MDI",
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -1303,12 +1285,10 @@ random_forest_reg_fit__cpu_template(TableFunctionManager& mgr,
    int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
    float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t random_forest_reg_fit__cpu_template(
@@ -1384,12 +1364,10 @@ NEVER_INLINE HOST int32_t random_forest_reg_fit__cpu_template(
    int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
    float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t random_forest_reg_fit__cpu_template(
@@ -1512,12 +1490,10 @@ pca_fit_impl(TableFunctionManager& mgr,
    TextEncodingNone model_name,
    Cursor<ColumnList<T> features> data,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -1545,12 +1521,10 @@ pca_fit__cpu_template(TableFunctionManager& mgr,
    int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
    float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>, T=[double]
  */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 template <typename T>
 NEVER_INLINE HOST int32_t
@@ -1585,12 +1559,10 @@ pca_fit__cpu_template(TableFunctionManager& mgr,
    int32_t cat_top_k | require="cat_top_k >= 1" | default=10,
    float cat_min_fraction | require="cat_min_fraction > 0.0" | require="cat_min_fraction <= 1.0" | default=0.01,
    TextEncodingNone preferred_ml_framework | default="DEFAULT",
-   TextEncodingNone model_metadata | default="e30=") ->
+   TextEncodingNone model_metadata | default="DEFAULT") ->
    Column<TextEncodingDict> model_name | input_id=args<>
 */
 // clang-format on
-
-// default value for model_metadata of "e30=" is base64 encoded "{}"
 
 EXTENSION_NOINLINE_HOST int32_t
 pca_fit__cpu_1(TableFunctionManager& mgr,
