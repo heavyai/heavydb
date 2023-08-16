@@ -47,6 +47,7 @@ extern bool g_enable_system_tables;
 extern bool g_read_only;
 
 namespace {
+using ColumnPair = std::pair<std::string, std::string>;
 
 std::vector<std::string> split_on_regex(const std::string& in, const std::string& regex) {
   std::vector<std::string> tokens;
