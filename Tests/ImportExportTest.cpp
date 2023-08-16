@@ -956,12 +956,12 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     enableAllFsiImportCodePaths();
     ImportExportTestBase::SetUp();
     ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS import_test_new;"));
-    if (g_run_odbc && isOdbc(param_.import_type)) {
+    if (g_run_odbc && is_odbc(param_.import_type)) {
     }
   }
 
   void TearDown() override {
-    if (g_run_odbc && isOdbc(param_.import_type)) {
+    if (g_run_odbc && is_odbc(param_.import_type)) {
     }
     ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS import_test_new;"));
     ImportExportTestBase::TearDown();
@@ -1099,7 +1099,7 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
 
     auto copy_from_source = "'" + file_path + "'";
 
-    if (isOdbc(import_type)) {
+    if (is_odbc(import_type)) {
       UNREACHABLE();
     }
 

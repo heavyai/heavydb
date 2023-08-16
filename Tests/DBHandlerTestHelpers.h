@@ -49,6 +49,20 @@ extern bool g_read_only;
 namespace {
 using ColumnPair = std::pair<std::string, std::string>;
 
+inline bool is_odbc(const std::string& data_wrapper_type) {
+  const std::vector<std::string> odbc_wrappers{
+    "sqlite", "postgres", "redshift", "snowflake", "bigquery", "hive"};
+  return std::find(odbc_wrappers.begin(), odbc_wrappers.end(), data_wrapper_type) !=
+    odbc_wrappers.end();
+}
+
+inline bool does_wrapper_support_geo_type(const std::string& wrapper_type) {
+  if (wrapper_type == "sqlite" || wrapper_type == "hive") {
+    return false;
+  }
+  return true;
+}
+
 std::vector<std::string> split_on_regex(const std::string& in, const std::string& regex) {
   std::vector<std::string> tokens;
   boost::split_regex(tokens, in, boost::regex{regex});

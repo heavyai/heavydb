@@ -1029,9 +1029,6 @@ class DataTypeFragmentSizeAndDataWrapperTest
   }
 
   void TearDown() override {
-    if (boost::filesystem::exists(test_dir_)) {
-      boost::filesystem::remove_all(test_dir_);
-    }
     if (skip_teardown_) {
       return;
     }
