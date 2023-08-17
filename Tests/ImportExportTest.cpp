@@ -1373,17 +1373,19 @@ TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
 
 TEST_P(ImportAndSelectTest, ScalarTypes) {
   std::string sql_select_stmt = "";
-  auto query = createTableCopyFromAndSelect(
-      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
-      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
-      "txt_2 TEXT ENCODING NONE",
-      "scalar_types",
-      "SELECT * FROM import_test_new ORDER BY s;",
-      get_line_regex(12),
-      14,
-      false,
-      sql_select_stmt,
-      "s");
+  std::string schema =
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
+      "DECIMAL(10,5), tm " +
+      std::string(param_.import_type == "hive" ? "TEXT" : "TIME") +
+      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE";
+  auto query = createTableCopyFromAndSelect(schema,
+                                            "scalar_types",
+                                            "SELECT * FROM import_test_new ORDER BY s;",
+                                            get_line_regex(12),
+                                            14,
+                                            false,
+                                            sql_select_stmt,
+                                            "s");
 
   // clang-format off
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
@@ -1824,21 +1826,23 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
 
 TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
   std::string sql_select_stmt = "";
-  auto query = createTableCopyFromAndSelect(
-      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
-      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
-      "txt_2 TEXT ENCODING NONE, shard key(txt)",
-      "invalid_records/scalar_types",
-      "SELECT * FROM import_test_new ORDER BY s;",
-      get_line_regex(12),
-      14,
-      false,
-      sql_select_stmt,
-      "s",
-      "SHARD_COUNT=2",
-      false,
-      std::nullopt,
-      {{"INTEGER", "BIGINT"}});
+  std::string schema =
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
+      "DECIMAL(10,5), tm " +
+      std::string(param_.import_type == "hive" ? "TEXT" : "TIME") +
+      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE, shard key(txt)";
+  auto query = createTableCopyFromAndSelect(schema,
+                                            "invalid_records/scalar_types",
+                                            "SELECT * FROM import_test_new ORDER BY s;",
+                                            get_line_regex(12),
+                                            14,
+                                            false,
+                                            sql_select_stmt,
+                                            "s",
+                                            "SHARD_COUNT=2",
+                                            false,
+                                            std::nullopt,
+                                            {{"INTEGER", "BIGINT"}});
 
   // clang-format off
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
