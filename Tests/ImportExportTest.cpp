@@ -1377,7 +1377,7 @@ TEST_P(ImportAndSelectTest, ScalarTypes) {
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
       "DECIMAL(10,5), tm " +
       std::string(param_.import_type == "hive" ? "TEXT" : "TIME") +
-      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE, shard key(txt)";
+      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE";
   auto query = createTableCopyFromAndSelect(schema,
                                             "scalar_types",
                                             "SELECT * FROM import_test_new ORDER BY s;",
@@ -1843,9 +1843,9 @@ TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
                                             false,
                                             sql_select_stmt,
                                             "s",
-                                            {},
+                                            "SHARD_COUNT=2",
                                             false,
-                                            /*max_reject*/0,
+                                            std::nullopt,
                                             {{"INTEGER", "BIGINT"}});
 
   // clang-format off
