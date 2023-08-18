@@ -76,6 +76,7 @@ class CommandLineOptions {
   bool renderer_prefer_igpu = false;
   unsigned renderer_vulkan_timeout_ms = 60000;  // in milliseconds
   bool renderer_use_parallel_executors = true;
+  bool renderer_enable_slab_allocation = false;  // until proven fully working
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
   size_t watchdog_none_encoded_string_translation_limit = 1000000;

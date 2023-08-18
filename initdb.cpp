@@ -75,6 +75,7 @@ static void loadGeo(std::string base_path) {
   const size_t render_mem_bytes{500000000};
   const size_t max_concurrent_render_sessions{500};
   const bool render_compositor_use_last_gpu{false};
+  const bool renderer_enable_slab_allocation{true};
   const size_t reserved_gpu_mem{134217728};
   const size_t num_reader_threads{0};
   const bool legacy_syntax{true};
@@ -112,6 +113,7 @@ static void loadGeo(std::string base_path) {
                                                 max_concurrent_render_sessions,
                                                 reserved_gpu_mem,
                                                 render_compositor_use_last_gpu,
+                                                renderer_enable_slab_allocation,
                                                 num_reader_threads,
                                                 auth_metadata,
                                                 system_parameters,

@@ -183,6 +183,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const size_t max_concurrent_render_sessions,
                      const size_t reserved_gpu_mem,
                      const bool render_compositor_use_last_gpu,
+                     const bool renderer_enable_slab_allocation,
                      const size_t num_reader_threads,
                      const AuthMetadata& authMetadata,
                      SystemParameters& system_parameters,
@@ -225,10 +226,11 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , renderer_use_parallel_executors_(renderer_use_parallel_executors)
     , enable_auto_clear_render_mem_(enable_auto_clear_render_mem)
     , render_oom_retry_threshold_(render_oom_retry_threshold)
+    , render_mem_bytes_(render_mem_bytes)
     , max_concurrent_render_sessions_(max_concurrent_render_sessions)
     , reserved_gpu_mem_(reserved_gpu_mem)
     , render_compositor_use_last_gpu_(render_compositor_use_last_gpu)
-    , render_mem_bytes_(render_mem_bytes)
+    , renderer_enable_slab_allocation_{renderer_enable_slab_allocation}
     , num_reader_threads_(num_reader_threads)
 #ifdef ENABLE_GEOS
     , libgeos_so_filename_(libgeos_so_filename)
@@ -553,7 +555,8 @@ void DBHandler::initialize(const bool is_new_db) {
                                               renderer_prefer_igpu_,
                                               renderer_vulkan_timeout_,
                                               renderer_use_parallel_executors_,
-                                              system_parameters_));
+                                              system_parameters_,
+                                              renderer_enable_slab_allocation_));
     } catch (const std::exception& e) {
       LOG(ERROR) << "Backend rendering disabled: " << e.what();
     }
