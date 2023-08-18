@@ -182,6 +182,7 @@ class DBHandler : public HeavyIf {
             const size_t max_concurrent_render_sessions,
             const size_t reserved_gpu_mem,
             const bool render_compositor_use_last_gpu,
+            const bool renderer_enable_slab_allocation,
             const size_t num_reader_threads,
             const AuthMetadata& authMetadata,
             SystemParameters& system_parameters,
@@ -964,10 +965,11 @@ class DBHandler : public HeavyIf {
   const bool renderer_use_parallel_executors_;
   const bool enable_auto_clear_render_mem_;
   const int render_oom_retry_threshold_;
+  const size_t render_mem_bytes_;
   const size_t max_concurrent_render_sessions_;
   const size_t reserved_gpu_mem_;
   const bool render_compositor_use_last_gpu_;
-  const size_t render_mem_bytes_;
+  const bool renderer_enable_slab_allocation_;
   const size_t num_reader_threads_;
 #ifdef ENABLE_GEOS
   const std::string& libgeos_so_filename_;
