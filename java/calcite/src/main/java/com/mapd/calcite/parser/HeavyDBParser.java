@@ -40,8 +40,11 @@ import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.RelShuttleImpl;
+import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.core.TableModify.Operation;
+import org.apache.calcite.rel.externalize.HeavyDBRelWriterImpl;
+import org.apache.calcite.rel.externalize.RelWriterImpl;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.rel.rules.CoreRules;
@@ -80,6 +83,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -491,14 +496,19 @@ public final class HeavyDBParser {
 
     final RelRoot sqlRel = convertSqlToRelNode(sqlNode, planner, parserOptions);
     RelNode project = sqlRel.project();
-
-    if (parserOptions.isExplain()) {
+    if (project == null) {
+      throw new RuntimeException("Cannot convert the sql to AST");
+    }
+    if (parserOptions.isExplainDetail()) {
+      StringWriter sw = new StringWriter();
+      RelWriter planWriter = new HeavyDBRelWriterImpl(
+              new PrintWriter(sw), SqlExplainLevel.EXPPLAN_ATTRIBUTES, false);
+      project.explain(planWriter);
+      return sw.toString();
+    } else if (parserOptions.isExplain()) {
       return RelOptUtil.toString(sqlRel.project());
     }
-
-    String res = HeavyDBSerializer.toString(project);
-
-    return res;
+    return HeavyDBSerializer.toString(project);
   }
 
   public HeavyDBPlanner.CompletionResult getCompletionHints(

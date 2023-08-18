@@ -31,6 +31,7 @@ namespace {  // anonymous namespace
 
 const std::string explain_str = {"explain"};
 const std::string calcite_explain_str = {"explain calcite"};
+const std::string calcite_explain_detailed_str = {"explain calcite detailed"};
 const std::string optimized_explain_str = {"explain optimized"};
 const std::string plan_explain_str = {"explain plan"};
 const std::string plan_explain_detailed_str = {"explain plan detailed"};
@@ -44,8 +45,14 @@ ExplainInfo::ExplainInfo(std::string query_string) {
 
   if (boost::istarts_with(query_string, explain_str)) {
     if (boost::istarts_with(query_string, calcite_explain_str)) {
-      actual_query_ = boost::trim_copy(query_string.substr(calcite_explain_str.size()));
-      explain_type_ = ExplainType::Calcite;
+      if (boost::istarts_with(query_string, calcite_explain_detailed_str)) {
+        explain_type_ = ExplainType::CalciteDetail;
+        actual_query_ =
+            boost::trim_copy(query_string.substr(calcite_explain_detailed_str.size()));
+      } else {
+        actual_query_ = boost::trim_copy(query_string.substr(calcite_explain_str.size()));
+        explain_type_ = ExplainType::Calcite;
+      }
     } else if (boost::istarts_with(query_string, optimized_explain_str)) {
       actual_query_ = boost::trim_copy(query_string.substr(optimized_explain_str.size()));
       explain_type_ = ExplainType::OptimizedIR;

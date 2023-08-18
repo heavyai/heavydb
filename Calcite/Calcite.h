@@ -99,7 +99,8 @@ class Calcite final {
   }
   TQueryParsingOption getCalciteQueryParsingOption(bool legacy_syntax,
                                                    bool is_explain,
-                                                   bool check_privileges);
+                                                   bool check_privileges,
+                                                   bool is_explain_detail);
   TOptimizationOption getCalciteOptimizationOption(
       bool is_view_optimize,
       bool enable_watchdog,

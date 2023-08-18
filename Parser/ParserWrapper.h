@@ -33,7 +33,15 @@
 
 class ExplainInfo {
  public:
-  enum class ExplainType { None, IR, OptimizedIR, Calcite, ExecutionPlan, Other };
+  enum class ExplainType {
+    None,
+    IR,
+    OptimizedIR,
+    Calcite,
+    CalciteDetail,
+    ExecutionPlan,
+    Other
+  };
 
   ExplainInfo() : explain_type_(ExplainType::None), actual_query_("") {}
   ExplainInfo(ExplainType type) : explain_type_(type), actual_query_("") {}
@@ -51,6 +59,7 @@ class ExplainInfo {
     return explain_type_ == ExplainType::IR ||
            explain_type_ == ExplainType::OptimizedIR ||
            explain_type_ == ExplainType::Calcite ||
+           explain_type_ == ExplainType::CalciteDetail ||
            explain_type_ == ExplainType::ExecutionPlan;
   }
 
@@ -59,7 +68,13 @@ class ExplainInfo {
   }
 
   bool isOptimizedExplain() const { return explain_type_ == ExplainType::OptimizedIR; }
-  bool isCalciteExplain() const { return explain_type_ == ExplainType::Calcite; }
+  bool isCalciteExplain() const {
+    return explain_type_ == ExplainType::Calcite ||
+           explain_type_ == ExplainType::CalciteDetail;
+  }
+  bool isCalciteExplainDetail() const {
+    return explain_type_ == ExplainType::CalciteDetail;
+  }
   bool isPlanExplain() const { return explain_type_ == ExplainType::ExecutionPlan; }
   bool isOtherExplain() const { return explain_type_ == ExplainType::Other; }
 

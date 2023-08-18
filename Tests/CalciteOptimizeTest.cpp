@@ -94,7 +94,7 @@ TEST_F(ViewObject, BasicTest) {
   CHECK(session);
 
   auto calciteQueryParsingOption =
-      g_calcite->getCalciteQueryParsingOption(true, false, true);
+      g_calcite->getCalciteQueryParsingOption(true, false, true, false);
   auto calciteOptimizationOption =
       g_calcite->getCalciteOptimizationOption(false, false, {}, false);
 
@@ -144,7 +144,7 @@ TEST_F(ViewObject, Joins) {
   CHECK(session);
 
   auto calciteQueryParsingOption =
-      g_calcite->getCalciteQueryParsingOption(true, false, true);
+      g_calcite->getCalciteQueryParsingOption(true, false, true, false);
   auto calciteOptimizationOption =
       g_calcite->getCalciteOptimizationOption(true, false, {}, false);
 
