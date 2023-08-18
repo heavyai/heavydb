@@ -1769,7 +1769,7 @@ ExecutionResult ShowCreateTableCommand::execute(bool read_only_mode) {
     auto query_state_proxy = query_state->createQueryStateProxy();
     auto calcite_mgr = catalog.getCalciteMgr();
     const auto calciteQueryParsingOption =
-        calcite_mgr->getCalciteQueryParsingOption(true, false, false);
+        calcite_mgr->getCalciteQueryParsingOption(true, false, false, false);
     const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
         false,
         g_enable_watchdog,

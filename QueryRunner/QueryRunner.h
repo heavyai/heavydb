@@ -268,7 +268,8 @@ class QueryRunner {
   RaExecutionSequence getRaExecutionSequence(const std::string& query_str);
   virtual std::shared_ptr<ResultSet> getCalcitePlan(const std::string& query_str,
                                                     bool enable_watchdog,
-                                                    bool as_json_str) const;
+                                                    bool is_explain_as_json_str,
+                                                    bool is_explain_detailed) const;
 
   std::tuple<QueryPlanHash,
              std::shared_ptr<HashTable>,

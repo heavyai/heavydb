@@ -202,6 +202,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       HeavyDBParserOptions parserOptions = new HeavyDBParserOptions(filterPushDownInfo,
               queryParsingOption.legacy_syntax,
               queryParsingOption.is_explain,
+              queryParsingOption.is_explain_detail,
               optimizationOption.is_view_optimize,
               optimizationOption.enable_watchdog,
               optimizationOption.distributed_mode);

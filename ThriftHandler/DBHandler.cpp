@@ -6821,8 +6821,11 @@ TPlanResult DBHandler::processCalciteRequest(
   ExplainInfo explain(query_str);
   std::string const actual_query{explain.isSelectExplain() ? explain.ActualQuery()
                                                            : query_str};
-  auto query_parsing_option = calcite_->getCalciteQueryParsingOption(
-      legacy_syntax_, explain.isCalciteExplain(), check_privileges);
+  auto query_parsing_option =
+      calcite_->getCalciteQueryParsingOption(legacy_syntax_,
+                                             explain.isCalciteExplain(),
+                                             check_privileges,
+                                             explain.isCalciteExplainDetail());
   auto optimization_option = calcite_->getCalciteOptimizationOption(
       system_parameters.enable_calcite_view_optimize,
       g_enable_watchdog,

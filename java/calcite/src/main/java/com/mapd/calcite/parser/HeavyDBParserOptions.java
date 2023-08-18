@@ -28,6 +28,7 @@ public final class HeavyDBParserOptions {
   private List<FilterPushDownInfo> filterPushDownInfo;
   private boolean legacySyntax;
   private boolean isExplain;
+  private boolean isExplainDetail;
   private boolean isViewOptimizeEnabled;
   private boolean isWatchdogEnabled;
   private boolean distributedMode;
@@ -35,12 +36,14 @@ public final class HeavyDBParserOptions {
   public HeavyDBParserOptions(List<FilterPushDownInfo> inFilterPushDownInfo,
           boolean inLegacySyntax,
           boolean inIsExplain,
+          boolean inIsExplainDetail,
           boolean inIsViewOptimzeEnabled,
           boolean inWatchdogEnabled,
           boolean inDistributedMode) {
     filterPushDownInfo = inFilterPushDownInfo;
     legacySyntax = inLegacySyntax;
     isExplain = inIsExplain;
+    isExplainDetail = inIsExplainDetail;
     isViewOptimizeEnabled = inIsViewOptimzeEnabled;
     isWatchdogEnabled = inWatchdogEnabled;
     distributedMode = inDistributedMode;
@@ -50,6 +53,7 @@ public final class HeavyDBParserOptions {
     filterPushDownInfo = new ArrayList<>();
     legacySyntax = true;
     isExplain = false;
+    isExplainDetail = false;
     isViewOptimizeEnabled = false;
     isWatchdogEnabled = false;
     distributedMode = false;
@@ -88,6 +92,10 @@ public final class HeavyDBParserOptions {
    */
   public boolean isExplain() {
     return isExplain;
+  }
+
+  public boolean isExplainDetail() {
+    return isExplainDetail;
   }
 
   /**

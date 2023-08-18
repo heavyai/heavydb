@@ -20,7 +20,7 @@ struct TPlanResult {
   2: i64 execution_time_ms;
      // these are the primary objects accessed in this query without resolving views
   3: TAccessedQueryObjects primary_accessed_objects;
-     // these are the accessed objects during this query after resolving all views 
+     // these are the accessed objects during this query after resolving all views
   4: TAccessedQueryObjects resolved_accessed_objects;
 }
 
@@ -41,6 +41,7 @@ struct TQueryParsingOption {
  1: bool legacy_syntax;
  2: bool is_explain;
  3: bool check_privileges;
+ 4: bool is_explain_detail;
 }
 
 struct TOptimizationOption {

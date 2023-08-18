@@ -1383,7 +1383,7 @@ TEST_F(ViewObject, CalciteViewResolution) {
   }
 
   auto calciteQueryParsingOption =
-      g_calcite->getCalciteQueryParsingOption(true, false, true);
+      g_calcite->getCalciteQueryParsingOption(true, false, true, false);
   auto calciteOptimizationOption =
       g_calcite->getCalciteOptimizationOption(false, false, {}, false);
 

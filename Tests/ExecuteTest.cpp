@@ -13073,7 +13073,7 @@ TEST_F(Select, CalciteNullRejectionRuleCastIssue) {
   std::string query{
       "SELECT v FROM (SELECT R.a v FROM outer_join_foo R LEFT JOIN left_join_geo1 S "
       "ON (R.a = S.x) WHERE ST_X(loc) IS NOT NULL);"};
-  auto const calcite_plan = QR::get()->getCalcitePlan(query, false, false);
+  auto const calcite_plan = QR::get()->getCalcitePlan(query, false, false, false);
   EXPECT_EQ(size_t(1), calcite_plan->rowCount(false));
   const auto crt_row = calcite_plan->getNextRow(true, false);
   EXPECT_EQ(size_t(1), crt_row.size());
@@ -21090,7 +21090,7 @@ TEST_F(Select, TemporarilyDisableInClauseDecorrelationInDistMode) {
       g_enable_watchdog = watchdog_flag;
       for (const auto& test_cond : test_query) {
         const auto query_explain_result =
-            QR::get()->getCalcitePlan(test_cond.query, g_enable_watchdog, false);
+            QR::get()->getCalcitePlan(test_cond.query, g_enable_watchdog, true, false);
         EXPECT_EQ(size_t(1), query_explain_result->rowCount(false));
         const auto crt_row = query_explain_result->getNextRow(true, false);
         EXPECT_EQ(size_t(1), crt_row.size());
@@ -21149,7 +21149,7 @@ TEST_F(Select, InClauseDecorrelationUnderWatchdog) {
     // defined between hash joinable columns, i.e., integer type columns
     for (const auto& test_cond : test_query) {
       const auto query_explain_result =
-          QR::get()->getCalcitePlan(test_cond.query, g_enable_watchdog, false);
+          QR::get()->getCalcitePlan(test_cond.query, g_enable_watchdog, true, false);
       EXPECT_EQ(size_t(1), query_explain_result->rowCount(false));
       const auto crt_row = query_explain_result->getNextRow(true, false);
       EXPECT_EQ(size_t(1), crt_row.size());
@@ -25753,6 +25753,24 @@ TEST_F(Select, Explain_Query_Session) {
   QR::get()->runSQL("SELECT COUNT(*) FROM test", co, eo);
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   EXPECT_EQ(executor->getNumCurentSessionsEnrolled(), static_cast<size_t>(0));
+}
+
+TEST_F(Select, ExplainCalcite) {
+  std::string query{"SELECT x FROM test"};
+  for (bool is_detail : {true, false}) {
+    auto const calcite_plan = QR::get()->getCalcitePlan(query, false, false, is_detail);
+    EXPECT_EQ(size_t(1), calcite_plan->rowCount(false));
+    const auto crt_row = calcite_plan->getNextRow(true, false);
+    EXPECT_EQ(size_t(1), crt_row.size());
+    const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+    if (is_detail) {
+      EXPECT_EQ(explain_str,
+                "LogicalProject(x=[$0])\t{[$0->db:heavyai,tableName:test,colName:x]}\n  "
+                "LogicalTableScan(table=[[heavyai, test]])\n");
+    } else {
+      EXPECT_EQ(explain_str.find("->db:"), std::string::npos) << explain_str;
+    }
+  }
 }
 
 TEST_F(Select, ProjectMoreThan1MVarlenTypeColumn) {

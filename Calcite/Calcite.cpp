@@ -719,11 +719,15 @@ void Calcite::setRuntimeExtensionFunctions(
 
 TQueryParsingOption Calcite::getCalciteQueryParsingOption(bool legacy_syntax,
                                                           bool is_explain,
-                                                          bool check_privileges) {
+                                                          bool check_privileges,
+                                                          bool is_explain_detail) {
   TQueryParsingOption query_parsing_info;
   query_parsing_info.legacy_syntax = legacy_syntax;
   query_parsing_info.is_explain = is_explain;
   query_parsing_info.check_privileges = check_privileges;
+  query_parsing_info.is_explain_detail = is_explain_detail;
+  // `EXPLAIN CALCITE DETAIL` requires `is_explain` set to TRUE
+  CHECK_LE(is_explain_detail, is_explain);
   return query_parsing_info;
 }
 

@@ -252,6 +252,7 @@ public class TestServer {
       queryParsingOption.legacy_syntax = false;
       queryParsingOption.is_explain = false;
       queryParsingOption.check_privileges = false;
+      queryParsingOption.is_explain_detail = false;
 
       TOptimizationOption optimizationOption = new TOptimizationOption();
       optimizationOption.is_view_optimize = false;
