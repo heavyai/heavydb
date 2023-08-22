@@ -57,14 +57,14 @@ std::string pg_shim_impl(const std::string& query) {
   }
   {
     static const auto& ilike_expr = *new boost::regex(
-        R"((\s+|\()((?!\()[^\s]+)\s+ilike\s+('(?:[^']+|'')+')(\s+escape(\s+('[^']+')))?)",
+        R"((\s+|\()((?!\()[^\s]+)\s+(not\s)?\s*ilike\s+('(?:[^']+|'')+')(\s+escape(\s+('[^']+')))?)",
         boost::regex::perl | boost::regex::icase);
     static_assert(std::is_trivially_destructible_v<decltype(ilike_expr)>);
     apply_shim(result, ilike_expr, [](std::string& result, const boost::smatch& what) {
       std::string esc = what[6];
       result.replace(what.position(),
                      what.length(),
-                     what[1] + "PG_ILIKE(" + what[2] + ", " + what[3] +
+                     what[1] + what[3] + "PG_ILIKE(" + what[2] + ", " + what[4] +
                          (esc.empty() ? "" : ", " + esc) + ")");
     });
   }
