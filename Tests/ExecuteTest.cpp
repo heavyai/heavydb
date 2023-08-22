@@ -5127,6 +5127,46 @@ TEST_F(Select, Strings) {
   }
 }
 
+TEST_F(Select, NotILikeDictEncodedText) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_EQ(static_cast<int64_t>(10),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE str NOT ILIKE 'F%';", dt)));
+  }
+}
+
+TEST_F(Select, NotILikeDictEncodedTextWithParenthesis) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_EQ(static_cast<int64_t>(10),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE ( str NOT ILIKE 'F%' );", dt)));
+  }
+}
+
+TEST_F(Select, NotILikeNoneEncodedText) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_EQ(15,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE real_str NOT ILIKE '%BaZ%';", dt)));
+  }
+}
+
+TEST_F(Select, NotILikeNoneEncodedTextWithParenthesis) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_EQ(15,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE (real_str NOT ILIKE '%bAz%');", dt)));
+  }
+}
+
 TEST_F(Select, SharedDictionary) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
