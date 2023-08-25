@@ -25795,23 +25795,69 @@ TEST_F(Select, Explain_Query_Session) {
   EXPECT_EQ(executor->getNumCurentSessionsEnrolled(), static_cast<size_t>(0));
 }
 
-TEST_F(Select, ExplainCalcite) {
-  std::string query{"SELECT x FROM test"};
-  for (bool is_detail : {true, false}) {
-    auto const calcite_plan = QR::get()->getCalcitePlan(query, false, false, is_detail);
-    EXPECT_EQ(size_t(1), calcite_plan->rowCount(false));
-    const auto crt_row = calcite_plan->getNextRow(true, false);
-    EXPECT_EQ(size_t(1), crt_row.size());
-    const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
-    if (is_detail) {
-      EXPECT_EQ(explain_str,
-                "LogicalProject(x=[$0])\t{[$0->db:heavyai,tableName:test,colName:x]}\n  "
-                "LogicalTableScan(table=[[heavyai, test]])\n");
-    } else {
-      EXPECT_EQ(explain_str.find("->db:"), std::string::npos) << explain_str;
+// Test EXPLAIN CALCITE and EXPLAIN CALCITE DETAILED.
+class CalcitePlan : public Select, public testing::WithParamInterface<bool> {
+  // Erase substrings between '\t' and '\n'. Keep the '\n'.
+  static void eraseDetails(std::string& explain) {
+    size_t tab_pos = 0u;
+    while ((tab_pos = explain.find('\t', tab_pos)) != std::string::npos) {
+      size_t newline_pos = explain.find('\n', tab_pos);  // ok if npos
+      explain.erase(tab_pos, newline_pos - tab_pos);
     }
   }
+
+ public:
+  static void test(bool const is_detail, std::string const& query, std::string expected) {
+    auto const calcite_plan = QR::get()->getCalcitePlan(query, false, false, is_detail);
+    EXPECT_EQ(1u, calcite_plan->rowCount(false));
+    auto const crt_row = calcite_plan->getNextRow(true, false);
+    EXPECT_EQ(1u, crt_row.size());
+    auto actual = boost::get<std::string>(v<NullableString>(crt_row[0]));
+    if (!is_detail) {
+      EXPECT_EQ(std::string::npos, actual.find("->db:")) << actual;
+      eraseDetails(expected);
+    }
+    EXPECT_EQ(expected, actual);
+  }
+};
+
+TEST_P(CalcitePlan, Simple) {
+  bool const is_detail = GetParam();
+  char const* query = "SELECT x FROM test";
+  char const* expected =
+      "LogicalProject(x=[$0])\t{[$0->db:heavyai,tableName:test,colName:x]}\n"
+      "  LogicalTableScan(table=[[heavyai, test]])\n";
+  CalcitePlan::test(is_detail, query, expected);
 }
+
+TEST_P(CalcitePlan, FilterCrossJoin) {
+  bool const is_detail = GetParam();
+  char const* query = "SELECT a.x, b.y, a.z FROM test a, test b wHERE a.x=b.y";
+  char const* expected =
+      // clang-format off
+      "LogicalProject(x=[$0], y=[$42], z=[$3])\t{[$0->db:heavyai,tableName:test,colName:x], [$3->db:heavyai,tableName:test,colName:z], [$42->db:heavyai,tableName:test,colName:y]}\n"
+      "  LogicalFilter(condition=[=($0, $42)])\t{[$0->db:heavyai,tableName:test,colName:x], [$42->db:heavyai,tableName:test,colName:y]}\n"
+      "    LogicalJoin(condition=[true], joinType=[inner])\n"
+      "      LogicalTableScan(table=[[heavyai, test]])\n"
+      "      LogicalTableScan(table=[[heavyai, test]])\n";
+  // clang-format on
+  CalcitePlan::test(is_detail, query, expected);
+}
+
+TEST_P(CalcitePlan, InnerJoin) {
+  bool const is_detail = GetParam();
+  char const* query = "SELECT a.x, b.y, a.z FROM test a JOIN test b ON a.x=b.y";
+  char const* expected =
+      // clang-format off
+      "LogicalProject(x=[$0], y=[$42], z=[$3])\t{[$0->db:heavyai,tableName:test,colName:x], [$3->db:heavyai,tableName:test,colName:z], [$42->db:heavyai,tableName:test,colName:y]}\n"
+      "  LogicalJoin(condition=[=($0, $42)], joinType=[inner])\t{[$0->db:heavyai,tableName:test,colName:x], [$42->db:heavyai,tableName:test,colName:y]}\n"
+      "    LogicalTableScan(table=[[heavyai, test]])\n"
+      "    LogicalTableScan(table=[[heavyai, test]])\n";
+  // clang-format on
+  CalcitePlan::test(is_detail, query, expected);
+}
+
+INSTANTIATE_TEST_SUITE_P(Test, CalcitePlan, testing::Bool() /* is_detail */);
 
 TEST_F(Select, ProjectMoreThan1MVarlenTypeColumn) {
   // this test checks that we can safely fallback to row-wise output mode
