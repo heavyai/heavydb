@@ -40,6 +40,7 @@ if [[ "$HAS_PYTHON_3_10" != "false" ]]; then
   PID3=$!
   sleep 5
   if [[ $(ps -h -p $PID3) ]]; then
+    echo "HeavyIQ HTTP:  localhost:${MAPD_HEAVYIQ_PORT}"
     echo "- heavy_iq $PID3 started"
   else
     echo "Warning: An error occurred when starting up HeavyIQ. See the $GUNICORN_LOG_FILE logs for more details."

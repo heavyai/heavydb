@@ -85,7 +85,6 @@ echo "Backend TCP:  localhost:${MAPD_TCP_PORT}"
 echo "Backend HTTP: localhost:${MAPD_HTTP_PORT}"
 echo "Frontend Web: localhost:${MAPD_WEB_PORT}"
 echo "Calcite TCP:  localhost:${MAPD_CALCITE_PORT}"
-echo "HeavyIQ HTTP:  localhost:${MAPD_HEAVYIQ_PORT}"
 
 if [ ! -d $MAPD_DATA ]; then
     mkdir -p $MAPD_DATA
@@ -174,7 +173,7 @@ if [ -d frontend ] && [ -e ./bin/heavy_web_server ]; then
     fi
 fi
 
-if [[ -d heavyiq ]]; then
+if [[ -d heavyiq && -f "$CONFIG_FILE" ]] && grep -qF "[iq]" "$CONFIG_FILE"; then
   # Execute the HeavyIQ startup script in a subshell in order to avoid
   # possible conflicts from virtual environment activation.
   ($DIR/scripts/ee/start_heavyiq.sh)
