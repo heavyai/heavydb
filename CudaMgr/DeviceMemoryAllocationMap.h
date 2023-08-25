@@ -37,7 +37,7 @@ class DeviceMemoryAllocationMap {
   };
   using Map = std::map<DevicePtr, Allocation>;
   using MapChangedCBID = uint32_t;
-  using MapChangedCB = std::function<void(const int, const bool)>;
+  using MapChangedCB = std::function<void(const heavyai::UUID, const bool)>;
 
   DeviceMemoryAllocationMap();
   ~DeviceMemoryAllocationMap() = default;
@@ -56,7 +56,7 @@ class DeviceMemoryAllocationMap {
 
   const MapChangedCBID registerMapChangedCB(MapChangedCB cb);
   void unregisterMapChangedCB(const MapChangedCBID cbid);
-  void notifyMapChanged(const int gpu_id, const bool is_slab) const;
+  void notifyMapChanged(const heavyai::UUID device_uuid, const bool is_slab) const;
 
  private:
   Map map_;
