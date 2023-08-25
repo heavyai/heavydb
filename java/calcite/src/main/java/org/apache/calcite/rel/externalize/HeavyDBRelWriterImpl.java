@@ -69,30 +69,31 @@ public class HeavyDBRelWriterImpl implements RelWriter {
     Set<RelColumnOrigin> columnOrigins = new HashSet<>();
     Map<String, Set<String>> originInfoMap = new HashMap<>();
     Set<String> originInfo = new HashSet<>();
-    if (!rel.getInputs().isEmpty()) {
-      try {
-        RelNode childNode = rel.getInput(0);
-        columnOrigins = mq.getColumnOrigins(childNode, targetColumnIndex);
-      } catch (Exception ignoreException) {
+    try {
+      if (!rel.getInputs().isEmpty()) {
+        RelNode sourceNode = rel.getInputs().size() == 1 ? rel.getInput(0) : rel;
+        columnOrigins = mq.getColumnOrigins(sourceNode, targetColumnIndex);
       }
-    }
-    for (RelColumnOrigin rco : columnOrigins) {
-      RelOptTable relOptTable = rco.getOriginTable();
-      String dbName = relOptTable.getQualifiedName().get(0);
-      String tableName = relOptTable.getQualifiedName().get(1);
-      String colName = relOptTable.getRowType()
-                               .getFieldList()
-                               .get(rco.getOriginColumnOrdinal())
-                               .getName();
-      String key = "$" + targetColumnIndex;
-      String info = "db:" + dbName + ",tableName:" + tableName + ",colName:" + colName;
-      if (originInfoMap.containsKey(key)) {
-        originInfoMap.get(key).add(info);
-      } else {
-        Set<String> originList = new HashSet<>();
-        originList.add(info);
-        originInfoMap.put(key, originList);
+      for (RelColumnOrigin rco : columnOrigins) {
+        RelOptTable relOptTable = rco.getOriginTable();
+        String dbName = relOptTable.getQualifiedName().get(0);
+        String tableName = relOptTable.getQualifiedName().get(1);
+        String colName = relOptTable.getRowType()
+                                 .getFieldList()
+                                 .get(rco.getOriginColumnOrdinal())
+                                 .getName();
+        String key = "$" + targetColumnIndex;
+        String info = "db:" + dbName + ",tableName:" + tableName + ",colName:" + colName;
+        if (originInfoMap.containsKey(key)) {
+          originInfoMap.get(key).add(info);
+        } else {
+          Set<String> originList = new HashSet<>();
+          originList.add(info);
+          originInfoMap.put(key, originList);
+        }
       }
+    } catch (Exception ex) {
+      throw new RuntimeException("EXPLAIN CALCITE DETAILED error: " + ex.getMessage());
     }
 
     for (Map.Entry<String, Set<String>> entry : originInfoMap.entrySet()) {
