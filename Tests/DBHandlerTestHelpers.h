@@ -24,9 +24,6 @@
 #include "QueryRunner/TestProcessSignalHandler.h"
 #include "Shared/clean_boost_regex.hpp"
 #include "ThriftHandler/DBHandler.h"
-// TODO: remove OdbcFsiTestHelper.h dependency once all ODBC related functionality has
-// been moved out of here and into OdbcFsiTestHelper
-#include "ee/OdbcFsiTestHelper.h"
 
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
