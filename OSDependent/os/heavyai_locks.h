@@ -18,10 +18,6 @@
 
 #include <filesystem>
 
-inline bool g_multi_instance{
-    false};  // TODO(sy): set true after internal testing is complete
-inline size_t g_lockfile_lock_extension_milliseconds{1000};
-
 namespace heavyai {
 
 // MutexInterface:
