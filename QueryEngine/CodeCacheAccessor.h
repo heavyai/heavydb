@@ -36,7 +36,7 @@ class CodeCacheAccessor {
 
   // TODO: replace get_value/put with get_or_wait/reset workflow.
   CodeCacheVal<CompilationContext> get_value(const CodeCacheKey& key);
-  void put(const CodeCacheKey& key, CodeCacheVal<CompilationContext>& value);
+  bool put(const CodeCacheKey& key, CodeCacheVal<CompilationContext>& value);
 
   // get_or_wait and reset/erase should be used in pair.
   CodeCacheVal<CompilationContext>* get_or_wait(const CodeCacheKey& key);
