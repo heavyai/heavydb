@@ -20,9 +20,11 @@
 #include "../Parser/ParserNode.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/CgenState.h"
+#include "../QueryEngine/CodeCacheAccessor.h"
 #include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/ExpressionRange.h"
+#include "../QueryEngine/QueryEngine.h"
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/DateConverters.h"
@@ -18515,6 +18517,21 @@ TEST_F(Select, IsoDow) {
   }
   if (!g_keep_test_data) {
     run_ddl_statement("DROP TABLE test_isodow;");
+  }
+}
+
+TEST_F(Select, GPUKernelCodeCache) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto dt = ExecutorDeviceType::GPU;
+  if (!skip_tests(dt)) {
+    run_multiple_agg("SELECT x FROM test;", dt);
+    auto const sz1 = QueryEngine::getInstance()->getGpuKernelCacheSize();
+    run_multiple_agg("SELECT x FROM test;", dt);
+    auto const sz2 = QueryEngine::getInstance()->getGpuKernelCacheSize();
+    EXPECT_EQ(sz1, sz2);
+    run_multiple_agg("SELECT x,y,z FROM test group by 1,2,3;", dt);
+    auto const sz3 = QueryEngine::getInstance()->getGpuKernelCacheSize();
+    EXPECT_LT(sz2, sz3);
   }
 }
 

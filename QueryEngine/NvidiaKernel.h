@@ -62,7 +62,7 @@ class GpuDeviceCompilationContext {
   CUfunction kernel() { return kernel_; }
   CUmodule module() { return module_; }
   std::string const& name() const { return kernel_name_; }
-  size_t getModulesize() const { return module_size_; }
+  size_t getModuleSize() const { return module_size_; }
 
  private:
   CUmodule module_;
@@ -105,7 +105,7 @@ class GpuCompilationContext : public CompilationContext {
   }
 
   size_t getMemSize() const {
-    return contexts_per_device_.begin()->get()->getModulesize();
+    return contexts_per_device_.begin()->get()->getModuleSize();
   }
 
  private:

@@ -113,6 +113,11 @@ class QueryEngine {
     cached_gpu_kernel_total_size_ -= sz;
   }
 
+  size_t getGpuKernelCacheSize() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return cached_gpu_kernel_total_size_;
+  }
+
  private:
   CudaMgr_Namespace::CudaMgr* cuda_mgr_;
   std::vector<CUstream> cuda_streams_;

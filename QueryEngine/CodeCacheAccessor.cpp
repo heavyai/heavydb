@@ -32,7 +32,7 @@ CodeCacheVal<CompilationContext> CodeCacheAccessor<CompilationContext>::get_valu
 }
 
 template <typename CompilationContext>
-void CodeCacheAccessor<CompilationContext>::put(const CodeCacheKey& key,
+bool CodeCacheAccessor<CompilationContext>::put(const CodeCacheKey& key,
                                                 CodeCacheVal<CompilationContext>& value) {
   bool warn = false;
   {
@@ -50,7 +50,9 @@ void CodeCacheAccessor<CompilationContext>::put(const CodeCacheKey& key,
   }
   if (warn) {
     LOG(WARNING) << *this << ": code already in cache, ignoring.\n";
+    return false;
   }
+  return true;
 }
 
 template <typename CompilationContext>

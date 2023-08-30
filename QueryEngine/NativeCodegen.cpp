@@ -1389,16 +1389,6 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   }
 
   checkCudaErrors(cuLinkDestroy(link_state));
-  try {
-    QueryEngine::getInstance()->addGpuKernelSize(cubin_result.cubin_size);
-  } catch (std::runtime_error const& e) {
-    if (strcmp(e.what(), "QueryEngine instance hasn't been created")) {
-      LOG(WARNING) << "QueryEngine::getInstance() failed: " << e.what();
-    }
-  } catch (...) {
-    LOG(WARNING) << "Fail to get QueryEngine instance";
-    throw;
-  }
   return gpu_compilation_context;
 #else
   return {};
@@ -1494,7 +1484,18 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
       throw;
     }
   }
-  QueryEngine::getInstance()->gpu_code_accessor->put(key, compilation_context);
+  if (QueryEngine::getInstance()->gpu_code_accessor->put(key, compilation_context)) {
+    try {
+      QueryEngine::getInstance()->addGpuKernelSize(compilation_context->getMemSize());
+    } catch (std::runtime_error const& e) {
+      if (strcmp(e.what(), "QueryEngine instance hasn't been created")) {
+        LOG(WARNING) << "QueryEngine::getInstance() failed: " << e.what();
+      }
+    } catch (...) {
+      LOG(WARNING) << "Fail to get QueryEngine instance";
+      throw;
+    }
+  }
   return std::dynamic_pointer_cast<CompilationContext>(compilation_context);
 #else
   return nullptr;
