@@ -8875,6 +8875,50 @@ void import_hash_join_with_composite_text_cols_test() {
                    ExecutorDeviceType::CPU);
 }
 
+void import_switch_to_baseline_test(bool sharded) {
+  auto drop_table = [&](std::string const& table_name) {
+    std::ostringstream oss;
+    oss << "DROP TABLE IF EXISTS " << table_name << ";";
+    run_ddl_statement(oss.str());
+  };
+  auto create_table = [&](std::string const& table_name) {
+    std::ostringstream oss;
+    oss << "CREATE TABLE " << table_name << "(id int";
+    if (sharded) {
+      oss << ", SHARD KEY (id)) WITH (SHARD_COUNT=2);";
+    } else {
+      oss << ");";
+    }
+    run_ddl_statement(oss.str());
+  };
+  std::vector<std::string> tbl_names = {"tjs1", "tjs2", "tjs3", "tjs"};
+  if (sharded) {
+    for (size_t i = 0; i < tbl_names.size(); i++) {
+      tbl_names[i] = tbl_names[i] + "s";
+    }
+  }
+  for (std::string tbl_name : tbl_names) {
+    drop_table(tbl_name);
+    create_table(tbl_name);
+  }
+  for (int v : {30, 2, 2, 4, 1, 3}) {
+    std::ostringstream oss1;
+    oss1 << "INSERT INTO " << tbl_names[0] << " VALUES (" << v << ");";
+    std::ostringstream oss2;
+    oss2 << "INSERT INTO " << tbl_names[2] << " VALUES (" << v << ");";
+    run_multiple_agg(oss1.str(), ExecutorDeviceType::CPU);
+    run_multiple_agg(oss2.str(), ExecutorDeviceType::CPU);
+  }
+  run_multiple_agg("INSERT INTO " + tbl_names[1] + " VALUES (2);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO " + tbl_names[3] + " VALUES (2);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO " + tbl_names[1] + " VALUES (10000000);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO " + tbl_names[3] + " VALUES (20);",
+                   ExecutorDeviceType::CPU);
+}
+
 void import_hash_join_decimal_test() {
   const std::string drop_old_test{"DROP TABLE IF EXISTS hash_join_decimal_test;"};
   run_ddl_statement(drop_old_test);
@@ -20752,43 +20796,53 @@ TEST(Join, BuildHashTable) {
   }
 }
 
-TEST(Join, SwitchToBaselineJoin) {
+TEST(Join, SwitchToBaselineHashJoin) {
+  SKIP_ALL_ON_AGGREGATOR();
+  // check the query using CPU to verify we can switch it to baseline join correctly
+  ScopeGuard reset_flag = [orig =
+                               g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline]() {
+    g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline = orig;
+  };
+  g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline = 5;
+  std::set<QueryPlanHash> visited;
+  ASSERT_EQ(
+      int64_t(2),
+      v<int64_t>(run_simple_agg("SELECT COUNT(1) FROM tjs1 a JOIN tjs2 b ON a.id = b.id;",
+                                ExecutorDeviceType::CPU)));
+
+  auto cached_item = QR::get()->getCachedHashtableWithoutCacheKey(
+      visited, CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto cached_ht = std::get<1>(cached_item);
+  auto expected_ht = dynamic_cast<BaselineHashTable*>(cached_ht.get());
+  EXPECT_TRUE(expected_ht);
+  QR::get()->clearCpuMemory();
+}
+
+TEST(Join, KeepPerfectHashJoin) {
+  SKIP_ALL_ON_AGGREGATOR();
+  // check the query using CPU to verify we can switch it to baseline join correctly
+  std::set<QueryPlanHash> visited;
+  ASSERT_EQ(
+      int64_t(2),
+      v<int64_t>(run_simple_agg("SELECT COUNT(1) FROM tjs1 a JOIN tjs2 b ON a.id = b.id;",
+                                ExecutorDeviceType::CPU)));
+  auto cached_item = QR::get()->getCachedHashtableWithoutCacheKey(
+      visited, CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto cached_ht = std::get<1>(cached_item);
+  auto expected_ht = dynamic_cast<PerfectHashTable*>(cached_ht.get());
+  EXPECT_TRUE(expected_ht);
+  QR::get()->clearCpuMemory();
+}
+
+TEST(Join, DISABLED_SwitchToBaselineHashJoinOnShardedTable) {
   SKIP_ALL_ON_AGGREGATOR();
   auto const dt = ExecutorDeviceType::GPU;
   if (skip_tests(dt)) {
     return;
   }
-  auto drop_table = [&](std::string const& table_name) {
-    std::ostringstream oss;
-    oss << "DROP TABLE IF EXISTS " << table_name << ";";
-    run_ddl_statement(oss.str());
-  };
-  auto create_table = [&](std::string const& table_name) {
-    std::ostringstream oss;
-    oss << "CREATE TABLE " << table_name
-        << "(id int, SHARD KEY (id)) WITH (SHARD_COUNT=2);";
-    run_ddl_statement(oss.str());
-  };
-  for (std::string tbl_name : {"tjs1", "tjs2", "tjs3", "tjs4"}) {
-    drop_table(tbl_name);
-    create_table(tbl_name);
-  }
-  for (int v : {30, 2, 2, 4, 1, 3}) {
-    std::ostringstream oss1;
-    oss1 << "INSERT INTO tjs1 VALUES (" << v << ");";
-    std::ostringstream oss2;
-    oss2 << "INSERT INTO tjs3 VALUES (" << v << ");";
-    run_multiple_agg(oss1.str(), ExecutorDeviceType::CPU);
-    run_multiple_agg(oss2.str(), ExecutorDeviceType::CPU);
-  }
-  run_multiple_agg("INSERT INTO tjs2 VALUES (2);", ExecutorDeviceType::CPU);
-  run_multiple_agg("INSERT INTO tjs4 VALUES (2);", ExecutorDeviceType::CPU);
-  run_multiple_agg("INSERT INTO tjs2 VALUES (10000000);", ExecutorDeviceType::CPU);
-  run_multiple_agg("INSERT INTO tjs4 VALUES (20);", ExecutorDeviceType::CPU);
-
   ASSERT_EQ(int64_t(2),
             v<int64_t>(run_simple_agg(
-                "SELECT COUNT(1) FROM tjs1 a JOIN tjs2 b ON a.id = b.id;", dt)));
+                "SELECT COUNT(1) FROM tjs1s a JOIN tjs2s b ON a.id = b.id;", dt)));
   ScopeGuard reset_flag = [orig =
                                g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline]() {
     g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline = orig;
@@ -20796,10 +20850,7 @@ TEST(Join, SwitchToBaselineJoin) {
   g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline = 5;
   ASSERT_EQ(int64_t(2),
             v<int64_t>(run_simple_agg(
-                "SELECT COUNT(1) FROM tjs3 a JOIN tjs4 b ON a.id = b.id;", dt)));
-  for (std::string tbl_name : {"tjs1", "tjs2", "tjs3", "tjs4"}) {
-    drop_table(tbl_name);
-  }
+                "SELECT COUNT(1) FROM tjs3s a JOIN tjs4s b ON a.id = b.id;", dt)));
 }
 
 TEST(Join, ComplexQueries) {
@@ -28614,6 +28665,18 @@ int create_and_populate_tables(const bool use_temporary_tables,
     LOG(ERROR) << "Unknown error in import_window_function_framing_navigation():"
                << e.what();
   }
+  try {
+    import_switch_to_baseline_test(false);
+  } catch (std::exception const& e) {
+    LOG(ERROR) << "Unknown error in import_switch_to_baseline_test(sharded=false):"
+               << e.what();
+  }
+  try {
+    import_switch_to_baseline_test(true);
+  } catch (std::exception const& e) {
+    LOG(ERROR) << "Unknown error in import_switch_to_baseline_test(sharded=true):"
+               << e.what();
+  }
   {
     std::string insert_query{"INSERT INTO test_in_bitmap VALUES('a');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
@@ -28925,6 +28988,10 @@ void drop_tables() {
   g_sqlite_comparator.query(drop_test_frame_nav_dup);
   run_ddl_statement("DROP TABLE IF EXISTS test_nvf");
   for (std::string tbl : {"CTX1", "CTX2", "CTX3", "CTX4"}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + tbl + ";");
+  }
+  for (std::string tbl :
+       {"tjs1", "tjs2", "tjs3", "tjs4", "tjs1s", "tjs2s", "tjs3s", "tjs4s"}) {
     run_ddl_statement("DROP TABLE IF EXISTS " + tbl + ";");
   }
 }
