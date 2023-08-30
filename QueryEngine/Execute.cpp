@@ -1709,34 +1709,50 @@ namespace {
 // Compute a very conservative entry count for the output buffer entry count using no
 // other information than the number of tuples in each table and multiplying them
 // together.
-size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos) {
+size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos,
+                                  const RelAlgExecutionUnit& ra_exe_unit) {
+  // we can use filtered_count_all's result if available
+  if (ra_exe_unit.scan_limit) {
+    VLOG(1)
+        << "Exploiting a result of filtered count query as output buffer entry count: "
+        << ra_exe_unit.scan_limit;
+    return ra_exe_unit.scan_limit;
+  }
   using Fragmenter_Namespace::FragmentInfo;
-  // Check for overflows since we're multiplying potentially big table sizes.
   using checked_size_t = boost::multiprecision::number<
       boost::multiprecision::cpp_int_backend<64,
                                              64,
                                              boost::multiprecision::unsigned_magnitude,
                                              boost::multiprecision::checked,
                                              void>>;
-  checked_size_t max_groups_buffer_entry_guess = 1;
-  for (const auto& query_info : query_infos) {
-    CHECK(!query_info.info.fragments.empty());
-    auto it = std::max_element(query_info.info.fragments.begin(),
-                               query_info.info.fragments.end(),
-                               [](const FragmentInfo& f1, const FragmentInfo& f2) {
-                                 return f1.getNumTuples() < f2.getNumTuples();
-                               });
-    max_groups_buffer_entry_guess *= it->getNumTuples();
-  }
+  checked_size_t checked_max_groups_buffer_entry_guess = 1;
   // Cap the rough approximation to 100M entries, it's unlikely we can do a great job for
   // baseline group layout with that many entries anyway.
   constexpr size_t max_groups_buffer_entry_guess_cap = 100000000;
+  // Check for overflows since we're multiplying potentially big table sizes.
   try {
-    return std::min(static_cast<size_t>(max_groups_buffer_entry_guess),
-                    max_groups_buffer_entry_guess_cap);
+    for (const auto& table_info : query_infos) {
+      CHECK(!table_info.info.fragments.empty());
+      checked_size_t table_cardinality = 0;
+      std::for_each(table_info.info.fragments.begin(),
+                    table_info.info.fragments.end(),
+                    [&table_cardinality](const FragmentInfo& frag_info) {
+                      table_cardinality += frag_info.getNumTuples();
+                    });
+      checked_max_groups_buffer_entry_guess *= table_cardinality;
+    }
   } catch (...) {
-    return max_groups_buffer_entry_guess_cap;
+    checked_max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_cap;
+    VLOG(1) << "Detect overflow when approximating output buffer entry count, "
+               "resetting it as "
+            << max_groups_buffer_entry_guess_cap;
   }
+  size_t max_groups_buffer_entry_guess =
+      std::min(static_cast<size_t>(checked_max_groups_buffer_entry_guess),
+               max_groups_buffer_entry_guess_cap);
+  VLOG(1) << "Set an approximated output entry count as: "
+          << max_groups_buffer_entry_guess;
+  return max_groups_buffer_entry_guess;
 }
 
 std::string get_table_name(const InputDescriptor& input_desc) {
@@ -2101,7 +2117,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     // of group by slots. Make the conservative choice: allocate fragment size
     // slots and run on the CPU.
     CHECK(device_type == ExecutorDeviceType::CPU);
-    max_groups_buffer_entry_guess = compute_buffer_entry_guess(query_infos);
+    max_groups_buffer_entry_guess =
+        compute_buffer_entry_guess(query_infos, ra_exe_unit_in);
   }
 
   int8_t crt_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
