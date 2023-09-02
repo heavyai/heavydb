@@ -120,6 +120,7 @@ bool g_restrict_ml_model_metadata_to_superusers{false};
 bool g_enable_dev_table_functions{false};
 bool g_enable_geo_ops_on_uncompressed_coords{true};
 bool g_enable_rf_prop_table_functions{true};
+bool g_allow_memory_status_log{true};
 size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
 size_t g_min_memory_allocation_size{
     256};  // minimum memory allocation required for projection query output buffer
@@ -190,6 +191,7 @@ bool g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency{f
 double g_executor_resource_mgr_max_available_resource_use_ratio{0.8};
 
 extern bool g_cache_string_hash;
+extern bool g_allow_memory_status_log;
 
 int const Executor::max_gpu_count;
 
@@ -718,6 +720,45 @@ const TableGeneration& Executor::getTableGeneration(
 
 ExpressionRange Executor::getColRange(const PhysicalInput& phys_input) const {
   return agg_col_range_cache_.getColRange(phys_input);
+}
+
+namespace {
+
+void log_system_memory_info_impl(std::string const& mem_log,
+                                 size_t executor_id,
+                                 size_t log_time_ms,
+                                 std::string const& log_tag,
+                                 size_t const thread_idx) {
+  std::ostringstream oss;
+  oss << mem_log;
+  oss << " (" << log_tag << ", EXECUTOR-" << executor_id << ", THREAD-" << thread_idx
+      << ", TOOK: " << log_time_ms << " ms)";
+  VLOG(1) << oss.str();
+}
+}  // namespace
+
+void Executor::logSystemCPUMemoryStatus(std::string const& log_tag,
+                                        size_t const thread_idx) const {
+  if (g_allow_memory_status_log && getDataMgr()) {
+    auto timer = timer_start();
+    std::ostringstream oss;
+    oss << getDataMgr()->getSystemMemoryUsage();
+    log_system_memory_info_impl(
+        oss.str(), executor_id_, timer_stop(timer), log_tag, thread_idx);
+  }
+}
+
+void Executor::logSystemGPUMemoryStatus(std::string const& log_tag,
+                                        size_t const thread_idx) const {
+#ifdef HAVE_CUDA
+  if (g_allow_memory_status_log && getDataMgr() && getDataMgr()->gpusPresent() &&
+      getDataMgr()->getCudaMgr()) {
+    auto timer = timer_start();
+    auto mem_log = getDataMgr()->getCudaMgr()->getCudaMemoryUsageInString();
+    log_system_memory_info_impl(
+        mem_log, executor_id_, timer_stop(timer), log_tag, thread_idx);
+  }
+#endif
 }
 
 namespace {
@@ -4884,8 +4925,8 @@ TableGenerations Executor::computeTableGenerations(
 
 void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
                             const std::unordered_set<shared::TableKey>& phys_table_ids) {
-  row_set_mem_owner_ =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), cpu_threads());
+  row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), executor_id_, cpu_threads());
   row_set_mem_owner_->setDictionaryGenerations(
       computeStringDictionaryGenerations(phys_inputs));
   agg_col_range_cache_ = computeColRangesCache(phys_inputs);

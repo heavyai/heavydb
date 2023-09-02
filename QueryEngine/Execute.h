@@ -726,6 +726,10 @@ class Executor {
 
   int deviceCount(const ExecutorDeviceType) const;
 
+  void logSystemCPUMemoryStatus(std::string const& tag, size_t const thread_idx) const;
+
+  void logSystemGPUMemoryStatus(std::string const& tag, size_t const thread_idx) const;
+
  private:
   void clearMetaInfoCache();
 

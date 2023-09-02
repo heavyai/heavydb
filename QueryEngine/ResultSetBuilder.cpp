@@ -196,7 +196,7 @@ ResultSet* ResultSetLogicalValuesBuilder::create(
       std::make_shared<RelLogicalValues>(label_infos, logical_values);
 
   const auto row_set_mem_owner =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), 0);
 
   // Construct ResultSet
   ResultSet* rsp(ResultSetLogicalValuesBuilder(rel_logical_values.get(),

@@ -237,7 +237,9 @@ class CudaMgr {
     size_t total;  // total GPU RAM memory on active card in bytes
   };
 
-  static CudaMemoryUsage getCudaMemoryUsage();
+  std::vector<CudaMgr::CudaMemoryUsage> getCudaMemoryUsage();
+
+  std::string getCudaMemoryUsageInString();
 
   DeviceMemoryAllocationMap& getDeviceMemoryAllocationMap();
   int exportHandle(const uint64_t handle) const;

@@ -226,10 +226,32 @@ void CudaMgr::unloadGpuModuleData(CUmodule* module, const int device_id) const {
   }
 }
 
-CudaMgr::CudaMemoryUsage CudaMgr::getCudaMemoryUsage() {
-  CudaMemoryUsage usage;
-  cuMemGetInfo(&usage.free, &usage.total);
-  return usage;
+std::vector<CudaMgr::CudaMemoryUsage> CudaMgr::getCudaMemoryUsage() {
+  std::vector<CudaMgr::CudaMemoryUsage> m;
+  std::lock_guard<std::mutex> map_lock(device_mutex_);
+  CUcontext cnow;
+  checkError(cuCtxGetCurrent(&cnow));
+  for (int device_num = 0; device_num < device_count_; ++device_num) {
+    setContext(device_num);
+    CudaMemoryUsage usage;
+    cuMemGetInfo(&usage.free, &usage.total);
+    m.push_back(usage);
+  }
+  cuCtxSetCurrent(cnow);
+  return m;
+}
+
+std::string CudaMgr::getCudaMemoryUsageInString() {
+  auto const device_mem_status = getCudaMemoryUsage();
+  std::ostringstream oss;
+  int device_id = 0;
+  oss << "{ \"name\": \"GPU Memory Info\", ";
+  for (auto& info : device_mem_status) {
+    oss << "{\"device_id\": " << device_id++ << ", \"freeMB:\": " << info.free / 1048576.0
+        << ", \"totalMB\": " << info.total / 1048576.0 << "} ";
+  }
+  oss << "}";
+  return oss.str();
 }
 
 void CudaMgr::fillDeviceProperties() {

@@ -326,8 +326,8 @@ void perform_test_and_verify_results(TestInputData input) {
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
   module->setTargetTriple("nvptx64-nvidia-cuda");
   auto cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(1);
-  const auto row_set_mem_owner =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), executor->getExecutorId());
   auto query_mem_desc = perfect_hash_one_col_desc(
       input.target_infos, input.suggested_agg_widths, input.min_entry, input.max_entry);
   if (input.keyless_hash) {

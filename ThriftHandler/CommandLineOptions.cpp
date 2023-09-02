@@ -68,6 +68,7 @@ extern bool g_columnar_large_projections;
 extern size_t g_columnar_large_projections_threshold;
 extern bool g_enable_system_tables;
 extern bool g_allow_system_dashboard_update;
+extern bool g_allow_memory_status_log;
 extern bool g_enable_logs_system_tables;
 extern size_t g_logs_system_tables_max_files_count;
 extern bool g_uniform_request_ids_per_thrift_call;
@@ -1137,6 +1138,12 @@ void CommandLineOptions::fillDeveloperOptions() {
           ->default_value(g_columnar_large_projections_threshold),
       "Threshold (in minimum number of rows) to prefer columnar output for projections. "
       "Requires --columnar-large-projections to be set.");
+
+  desc.add_options()(
+      "allow-memory-status-log",
+      po::value<bool>(&g_allow_memory_status_log)
+          ->default_value(g_allow_memory_status_log),
+      "Allow CPU (and GPU if necessary) memory status before/after the query execution.");
 
   desc.add_options()(
       "allow-query-step-cpu-retry",

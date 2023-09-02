@@ -199,6 +199,10 @@ void ExecutionKernel::runImpl(Executor* executor,
   CHECK_LT(chosen_device_id, Executor::max_gpu_count);
 
   auto data_mgr = executor->getDataMgr();
+  executor->logSystemCPUMemoryStatus("Before Query Execution", thread_idx);
+  if (chosen_device_type == ExecutorDeviceType::GPU) {
+    executor->logSystemGPUMemoryStatus("Before Query Execution", thread_idx);
+  }
 
   // need to own them while query executes
   auto chunk_iterators_ptr = std::make_shared<std::list<ChunkIter>>();
@@ -406,6 +410,8 @@ void ExecutionKernel::runImpl(Executor* executor,
       chosen_device_type == ExecutorDeviceType::GPU &&
       eo.optimize_cuda_block_and_grid_sizes;
 
+  executor->logSystemCPUMemoryStatus("After Query Memory Initialization", thread_idx);
+
   if (ra_exe_unit_.groupby_exprs.empty()) {
     err = executor->executePlanWithoutGroupBy(ra_exe_unit_,
                                               compilation_result,
@@ -468,6 +474,10 @@ void ExecutionKernel::runImpl(Executor* executor,
     throw QueryExecutionError(err);
   }
   shared_context.addDeviceResults(std::move(device_results_), outer_tab_frag_ids);
+  executor->logSystemCPUMemoryStatus("After Query Execution", thread_idx);
+  if (chosen_device_type == ExecutorDeviceType::GPU) {
+    executor->logSystemGPUMemoryStatus("After Query Execution", thread_idx);
+  }
 }
 
 #ifdef HAVE_TBB

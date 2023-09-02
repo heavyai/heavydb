@@ -33,6 +33,8 @@ class PMemArena : public Arena {
 
   size_t bytesUsed() const override;
 
+  size_t totalBytes() const override;
+
   MemoryType getMemoryType() const override { return MemoryType::PMEM; }
 
  private:

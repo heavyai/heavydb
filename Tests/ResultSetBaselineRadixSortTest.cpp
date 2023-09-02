@@ -222,7 +222,7 @@ void SortBaselineIntegersTestImpl(const bool desc) {
   const auto target_infos = get_sort_int_target_infos();
   const auto query_mem_desc = baseline_sort_desc(target_infos, 400, sizeof(K));
   const auto row_set_mem_owner =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), 0);
   const int64_t upper_bound = 200;
   const int64_t lower_bound = 1;
   std::unique_ptr<ResultSet> rs(new ResultSet(
@@ -260,7 +260,7 @@ TEST(SortBaseline, Floats) {
       const auto target_infos = get_sort_fp_target_infos();
       const auto query_mem_desc = baseline_sort_desc(target_infos, 400, 8);
       const auto row_set_mem_owner =
-          std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+          std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), 0);
       const int64_t upper_bound = 200;
       std::unique_ptr<ResultSet> rs(new ResultSet(target_infos,
                                                   ExecutorDeviceType::CPU,
@@ -289,7 +289,7 @@ TEST(SortBaseline, FloatsNotNull) {
       const auto target_infos = get_sort_notnull_fp_target_infos();
       const auto query_mem_desc = baseline_sort_desc(target_infos, 400, 8);
       const auto row_set_mem_owner =
-          std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+          std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), 0);
       const int64_t upper_bound = 200;
       std::unique_ptr<ResultSet> rs(new ResultSet(target_infos,
                                                   ExecutorDeviceType::CPU,

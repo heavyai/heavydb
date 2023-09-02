@@ -71,7 +71,7 @@ void test_columnar_conversion(const std::vector<TargetInfo>& target_infos,
                               const size_t non_empty_step_size,
                               const bool is_parallel_conversion = false) {
   auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
-      Executor::getArenaBlockSize(), /*num_threads=*/1);
+      Executor::getArenaBlockSize(), 0, /*num_threads=*/1);
   ResultSet result_set(
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
 
@@ -164,7 +164,7 @@ TEST(Construct, Empty) {
   std::vector<SQLTypeInfo> sql_type_infos;
   QueryMemoryDescriptor query_mem_desc;
   auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
-      Executor::getArenaBlockSize(), /*num_threads=*/1);
+      Executor::getArenaBlockSize(), 0, /*num_threads=*/1);
   ResultSet result_set(
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   ColumnarResultsTester columnar_results(

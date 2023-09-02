@@ -65,7 +65,8 @@ TEST(Construct, Allocate) {
   ResultSet result_set(target_infos,
                        ExecutorDeviceType::CPU,
                        query_mem_desc,
-                       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize()),
+                       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(),
+                                                           Executor::UNITARY_EXECUTOR_ID),
                        0,
                        0);
   result_set.allocateStorage();
@@ -880,8 +881,8 @@ std::shared_ptr<StringDictionary> g_sd =
 void test_iterate(const std::vector<TargetInfo>& target_infos,
                   const QueryMemoryDescriptor& query_mem_desc) {
   SQLTypeInfo double_ti(kDOUBLE, false);
-  auto row_set_mem_owner =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
   StringDictionaryProxy* sdp =
       row_set_mem_owner->addStringDict(g_sd, {0, 1}, g_sd->storageEntryCount());
   ResultSet result_set(
@@ -998,8 +999,8 @@ void run_reduction(const std::vector<TargetInfo>& target_infos,
                    const int step) {
   const ResultSetStorage* storage1{nullptr};
   const ResultSetStorage* storage2{nullptr};
-  const auto row_set_mem_owner =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
   row_set_mem_owner->addStringDict(g_sd, {1, 1}, g_sd->storageEntryCount());
   const auto rs1 = std::make_unique<ResultSet>(
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
@@ -1025,8 +1026,8 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
                  const bool sort) {
   const ResultSetStorage* storage1{nullptr};
   const ResultSetStorage* storage2{nullptr};
-  const auto row_set_mem_owner =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
   row_set_mem_owner->addStringDict(g_sd, {1, 1}, g_sd->storageEntryCount());
   const auto rs1 = std::make_unique<ResultSet>(
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
@@ -1118,8 +1119,8 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
   const ResultSetStorage* storage2{nullptr};
   std::unique_ptr<ResultSet> rs1;
   std::unique_ptr<ResultSet> rs2;
-  const auto row_set_mem_owner =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
   switch (query_mem_desc.getQueryDescriptionType()) {
     case QueryDescriptionType::GroupByPerfectHash: {
       rs1.reset(new ResultSet(target_infos,
@@ -1864,8 +1865,8 @@ TEST(MoreReduce, MissingValues) {
   target_infos.push_back(TargetInfo{true, kCOUNT, bigint_ti, null_ti, true, false});
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
   query_mem_desc.setHasKeylessHash(false);
-  const auto row_set_mem_owner =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
   const auto rs1 = std::make_unique<ResultSet>(
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage1 = rs1->allocateStorage();
@@ -1928,8 +1929,8 @@ TEST(MoreReduce, MissingValuesKeyless) {
   target_infos.push_back(TargetInfo{true, kCOUNT, bigint_ti, null_ti, true, false});
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
   query_mem_desc.setHasKeylessHash(true);
-  const auto row_set_mem_owner =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
   const auto rs1 = std::make_unique<ResultSet>(
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage1 = rs1->allocateStorage();
@@ -1988,8 +1989,8 @@ TEST(MoreReduce, OffsetRewrite) {
   target_infos.push_back(TargetInfo{true, kSAMPLE, real_str_ti, null_ti, true, false});
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
   query_mem_desc.setHasKeylessHash(false);
-  const auto row_set_mem_owner =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
   const auto rs1 = std::make_unique<ResultSet>(
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage1 = rs1->allocateStorage();
@@ -2083,8 +2084,8 @@ TEST(MoreReduce, OffsetRewriteGeo) {
 
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
   query_mem_desc.setHasKeylessHash(false);
-  const auto row_set_mem_owner =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
   const auto rs1 = std::make_unique<ResultSet>(
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage1 = rs1->allocateStorage();
@@ -2186,8 +2187,8 @@ TEST(MoreReduce, OffsetRewriteGeoKeyless) {
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
   query_mem_desc.setHasKeylessHash(true);
   query_mem_desc.setTargetIdxForKey(0);
-  const auto row_set_mem_owner =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
   const auto rs1 = std::make_unique<ResultSet>(
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   const auto storage1 = rs1->allocateStorage();

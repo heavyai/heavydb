@@ -64,3 +64,7 @@ void* PMemArena::allocateAndZero(const size_t num_bytes) {
 size_t PMemArena::bytesUsed() const {
   return size_;
 }
+
+size_t PMemArena::totalBytes() const {
+  return 0;
+}

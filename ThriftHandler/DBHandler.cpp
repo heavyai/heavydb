@@ -123,6 +123,7 @@ extern bool g_allow_s3_server_privileges;
 extern bool g_enable_system_tables;
 bool g_allow_system_dashboard_update{false};
 bool g_uniform_request_ids_per_thrift_call{true};
+extern bool g_allow_memory_status_log;
 
 using Catalog_Namespace::Catalog;
 using Catalog_Namespace::SysCatalog;
@@ -3163,6 +3164,74 @@ std::vector<int> column_ids_by_names(const std::list<const ColumnDescriptor*>& d
   return desc_to_column_ids;
 }
 
+void log_cache_size(const Catalog_Namespace::Catalog& cat) {
+  std::ostringstream oss;
+  oss << "Cache size information {";
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  // 1. Data recycler
+  // 1.a Resultset Recycler
+  auto resultset_cache_size =
+      executor->getResultSetRecyclerHolder()
+          .getResultSetRecycler()
+          ->getResultSetRecyclerMetricTracker()
+          .getCurrentCacheSize(DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  if (resultset_cache_size) {
+    oss << "\"query_resultset\": " << *resultset_cache_size << " bytes, ";
+  }
+
+  // 1.b Join Hash Table Recycler
+  auto perfect_join_ht_cache_size =
+      PerfectJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
+          CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto baseline_join_ht_cache_size =
+      BaselineJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
+          CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto bbox_intersect_ht_cache_size =
+      BoundingBoxIntersectJoinHashTable::getHashTableCache()
+          ->getCurrentCacheSizeForDevice(CacheItemType::BBOX_INTERSECT_HT,
+                                         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto bbox_intersect_ht_tuner_cache_size =
+      BoundingBoxIntersectJoinHashTable::getBoundingBoxIntersectTuningParamCache()
+          ->getCurrentCacheSizeForDevice(CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM,
+                                         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto sum_hash_table_cache_size =
+      perfect_join_ht_cache_size + baseline_join_ht_cache_size +
+      bbox_intersect_ht_cache_size + bbox_intersect_ht_tuner_cache_size;
+  oss << "\"hash_tables\": " << sum_hash_table_cache_size << " bytes, ";
+
+  // 1.c Chunk Metadata Recycler
+  auto chunk_metadata_cache_size =
+      executor->getResultSetRecyclerHolder()
+          .getChunkMetadataRecycler()
+          ->getCurrentCacheSizeForDevice(CacheItemType::CHUNK_METADATA,
+                                         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  oss << "\"chunk_metadata\": " << chunk_metadata_cache_size << " bytes, ";
+
+  // 2. Query Plan Dag
+  auto query_plan_dag_cache_size =
+      executor->getQueryPlanDagCache().getCurrentNodeMapSize();
+  oss << "\"query_plan_dag\": " << query_plan_dag_cache_size << " bytes, ";
+
+  // 3. Compiled Code
+  oss << "\"compiled_GPU code\": " << QueryEngine::getInstance()->getTotalCacheKeySize()
+      << " bytes, ";
+
+  // 4. String Dictionary
+  oss << "\"string_dictionary\": " << cat.getTotalMemorySizeForDictionariesForDatabase()
+      << " bytes";
+  oss << "}";
+  LOG(INFO) << oss.str();
+}
+
+void log_system_cpu_memory_status(std::string const& query,
+                                  const Catalog_Namespace::Catalog& cat) {
+  if (g_allow_memory_status_log) {
+    std::ostringstream oss;
+    oss << query << "\n" << cat.getDataMgr().getSystemMemoryUsage();
+    LOG(INFO) << oss.str();
+    log_cache_size(cat);
+  }
+}
 }  // namespace
 
 void DBHandler::fillGeoColumns(
@@ -3236,6 +3305,22 @@ void DBHandler::fillMissingBuffers(
   }
 }
 
+namespace {
+std::string get_load_tag(const std::string& load_tag, const std::string& table_name) {
+  std::ostringstream oss;
+  oss << load_tag << "(" << table_name << ")";
+  return oss.str();
+}
+
+std::string get_import_tag(const std::string& import_tag,
+                           const std::string& table_name,
+                           const std::string& file_path) {
+  std::ostringstream oss;
+  oss << import_tag << "(" << table_name << ", file_path:" << file_path << ")";
+  return oss.str();
+}
+}  // namespace
+
 void DBHandler::load_table_binary(const TSessionId& session_id_or_json,
                                   const std::string& table_name,
                                   const std::vector<TRow>& rows,
@@ -3267,6 +3352,11 @@ void DBHandler::load_table_binary(const TSessionId& session_id_or_json,
     auto desc_id_to_column_id = column_ids_by_names(col_descs, column_names);
 
     size_t rows_completed = 0;
+    auto const load_tag = get_load_tag("load_table_binary", table_name);
+    log_system_cpu_memory_status("start_" + load_tag, session_ptr->getCatalog());
+    ScopeGuard cleanup = [&load_tag, &session_ptr]() {
+      log_system_cpu_memory_status("finish_" + load_tag, session_ptr->getCatalog());
+    };
     for (auto const& row : rows) {
       size_t col_idx = 0;
       try {
@@ -3402,6 +3492,11 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session_id_or_json,
   size_t num_rows = get_column_size(cols.front());
   size_t import_idx = 0;  // index into the TColumn vector being loaded
   size_t col_idx = 0;     // index into column description vector
+  auto const load_tag = get_load_tag("load_table_binary_columnar", table_name);
+  log_system_cpu_memory_status("start_" + load_tag, session_ptr->getCatalog());
+  ScopeGuard cleanup = [&load_tag, &session_ptr]() {
+    log_system_cpu_memory_status("finish_" + load_tag, session_ptr->getCatalog());
+  };
   try {
     size_t skip_physical_cols = 0;
     for (auto cd : loader->get_column_descs()) {
@@ -3547,7 +3642,11 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session_id_or_json,
 
   // col_idx indexes "desc_id_to_column_id"
   size_t col_idx = 0;
-
+  auto const load_tag = get_load_tag("load_table_binary_arrow", table_name);
+  log_system_cpu_memory_status("start_" + load_tag, session_ptr->getCatalog());
+  ScopeGuard cleanup = [&load_tag, &session_ptr]() {
+    log_system_cpu_memory_status("finish_" + load_tag, session_ptr->getCatalog());
+  };
   try {
     for (auto cd : loader->get_column_descs()) {
       if (cd->isGeoPhyCol) {
@@ -3623,7 +3722,11 @@ void DBHandler::load_table(const TSessionId& session_id_or_json,
     if (rows.empty()) {
       THROW_DB_EXCEPTION("No rows to insert");
     }
-
+    auto const load_tag = get_load_tag("load_table", table_name);
+    log_system_cpu_memory_status("start_" + load_tag, session_ptr->getCatalog());
+    ScopeGuard cleanup = [&load_tag, &session_ptr]() {
+      log_system_cpu_memory_status("finish_" + load_tag, session_ptr->getCatalog());
+    };
     const auto execute_read_lock = legacylockmgr::getExecuteReadLock();
     std::unique_ptr<import_export::Loader> loader;
     std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
@@ -5241,7 +5344,11 @@ void DBHandler::import_table(const TSessionId& session_id_or_json,
       }
       copy_from_source = file_path.string();
     }
-
+    auto const load_tag = get_import_tag("import_table", table_name, copy_from_source);
+    log_system_cpu_memory_status("start_" + load_tag, session_ptr->getCatalog());
+    ScopeGuard cleanup = [&load_tag, &session_ptr]() {
+      log_system_cpu_memory_status("finish_" + load_tag, session_ptr->getCatalog());
+    };
     const auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
     std::unique_ptr<import_export::AbstractImporter> importer;
@@ -5410,7 +5517,11 @@ void DBHandler::importGeoTableSingle(const TSessionId& session_id,
   VLOG(1) << "import_geo_table: Original filename: " << file_name_in;
   VLOG(1) << "import_geo_table: Actual filename: " << file_name;
   VLOG(1) << "import_geo_table: Raster: " << is_raster;
-
+  auto const load_tag = get_import_tag("import_geo_table", table_name, file_name);
+  log_system_cpu_memory_status("start_" + load_tag, session_ptr->getCatalog());
+  ScopeGuard cleanup = [&load_tag, &session_ptr]() {
+    log_system_cpu_memory_status("finish_" + load_tag, session_ptr->getCatalog());
+  };
   // use GDAL to check the primary file exists (even if on S3 and/or in archive)
   auto file_path = boost::filesystem::path(file_name);
   if (!import_export::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
@@ -6090,69 +6201,6 @@ void DBHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* sessio
   }
 }
 
-namespace {
-
-void log_cache_size(const Catalog_Namespace::Catalog& cat) {
-  std::ostringstream oss;
-  oss << "Cache size information {";
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-  // 1. Data recycler
-  // 1.a Resultset Recycler
-  auto resultset_cache_size =
-      executor->getResultSetRecyclerHolder()
-          .getResultSetRecycler()
-          ->getResultSetRecyclerMetricTracker()
-          .getCurrentCacheSize(DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  if (resultset_cache_size) {
-    oss << "\"query_resultset\": " << *resultset_cache_size << " bytes, ";
-  }
-
-  // 1.b Join Hash Table Recycler
-  auto perfect_join_ht_cache_size =
-      PerfectJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
-          CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  auto baseline_join_ht_cache_size =
-      BaselineJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
-          CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  auto bbox_intersect_ht_cache_size =
-      BoundingBoxIntersectJoinHashTable::getHashTableCache()
-          ->getCurrentCacheSizeForDevice(CacheItemType::BBOX_INTERSECT_HT,
-                                         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  auto bbox_intersect_ht_tuner_cache_size =
-      BoundingBoxIntersectJoinHashTable::getBoundingBoxIntersectTuningParamCache()
-          ->getCurrentCacheSizeForDevice(CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM,
-                                         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  auto sum_hash_table_cache_size =
-      perfect_join_ht_cache_size + baseline_join_ht_cache_size +
-      bbox_intersect_ht_cache_size + bbox_intersect_ht_tuner_cache_size;
-  oss << "\"hash_tables\": " << sum_hash_table_cache_size << " bytes, ";
-
-  // 1.c Chunk Metadata Recycler
-  auto chunk_metadata_cache_size =
-      executor->getResultSetRecyclerHolder()
-          .getChunkMetadataRecycler()
-          ->getCurrentCacheSizeForDevice(CacheItemType::CHUNK_METADATA,
-                                         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  oss << "\"chunk_metadata\": " << chunk_metadata_cache_size << " bytes, ";
-
-  // 2. Query Plan Dag
-  auto query_plan_dag_cache_size =
-      executor->getQueryPlanDagCache().getCurrentNodeMapSize();
-  oss << "\"query_plan_dag\": " << query_plan_dag_cache_size << " bytes, ";
-
-  // 3. Compiled Code
-  oss << "\"compiled_GPU code\": " << QueryEngine::getInstance()->getTotalCacheKeySize()
-      << " bytes, ";
-
-  // 4. String Dictionary
-  oss << "\"string_dictionary\": " << cat.getTotalMemorySizeForDictionariesForDatabase()
-      << " bytes";
-  oss << "}";
-  LOG(INFO) << oss.str();
-}
-
-}  // namespace
-
 std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
     ExecutionResult& _return,
     QueryStateProxy query_state_proxy,
@@ -6166,11 +6214,8 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
     const ExplainInfo& explain_info,
     const std::optional<size_t> executor_index) const {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
-
   VLOG(1) << "Table Schema Locks:\n" << lockmgr::TableSchemaLockMgr::instance();
   VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
-
-  auto& cat = query_state_proxy->getConstSessionInfo()->getCatalog();
   auto executor = Executor::getExecutor(
       executor_index ? *executor_index : Executor::UNITARY_EXECUTOR_ID,
       jit_debug_ ? "/tmp" : "",
@@ -6220,8 +6265,6 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
     execution_time_ms -= rs->getQueueTime();
   }
   _return.setExecutionTime(execution_time_ms);
-  log_cache_size(cat);
-  VLOG(1) << cat.getDataMgr().getSystemMemoryUsage();
   const auto& filter_push_down_info = _return.getPushedDownFilterInfo();
   if (!filter_push_down_info.empty()) {
     return filter_push_down_info;
@@ -6412,11 +6455,18 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   auto session_ptr = query_state_proxy->getConstSessionInfo();
   // Call to DistributedValidate() below may change cat.
   auto& cat = session_ptr->getCatalog();
-
   legacylockmgr::ExecutorWriteLock execute_write_lock;
   legacylockmgr::ExecutorReadLock execute_read_lock;
 
   ParserWrapper pw{query_str};
+  auto [query_substr, post_fix] = ::substring(query_str, g_max_log_length);
+  std::ostringstream oss;
+  oss << query_substr << post_fix;
+  auto const reduced_query_str = oss.str();
+  log_system_cpu_memory_status("Start query execution: " + reduced_query_str, cat);
+  ScopeGuard cpu_system_memory_logging = [&cat, &reduced_query_str]() {
+    log_system_cpu_memory_status("Finish query execution: " + reduced_query_str, cat);
+  };
 
   // test to see if db/catalog is writable before execution of a writable SQL/DDL command
   //   TODO: move to execute() (?)
