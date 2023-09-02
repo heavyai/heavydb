@@ -121,7 +121,6 @@ DataMgr::~DataMgr() {
 
 DataMgr::SystemMemoryUsage DataMgr::getSystemMemoryUsage() const {
   SystemMemoryUsage usage;
-
 #ifdef __linux__
 
   // Determine Linux available memory and total memory.

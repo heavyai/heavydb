@@ -223,6 +223,7 @@ extern bool g_enable_ml_functions;
 extern bool g_restrict_ml_model_metadata_to_superusers;
 extern bool g_enable_dev_table_functions;
 extern bool g_enable_geo_ops_on_uncompressed_coords;
+extern bool g_allow_memory_status_log;
 
 extern size_t g_max_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;

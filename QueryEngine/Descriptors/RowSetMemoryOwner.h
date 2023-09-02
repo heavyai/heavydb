@@ -49,9 +49,14 @@ class ResultSet;
  */
 class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
  public:
-  RowSetMemoryOwner(const size_t arena_block_size, const size_t num_kernel_threads = 0)
+  RowSetMemoryOwner(const size_t arena_block_size,
+                    const size_t executor_id,
+                    const size_t num_kernel_threads = 0)
       : non_owned_group_by_buffers_(num_kernel_threads + 1, nullptr)
-      , arena_block_size_(arena_block_size) {
+      , arena_block_size_(arena_block_size)
+      , executor_id_(executor_id) {
+    VLOG(2) << "Prepare " << num_kernel_threads + 1
+            << " allocators from RowSetMemoryOwner attached to Executor-" << executor_id_;
     allocators_.reserve(num_kernel_threads + 1);
     for (size_t i = 0; i < num_kernel_threads + 1; i++) {
       allocators_.emplace_back(std::make_unique<DramArena>(arena_block_size));
@@ -286,6 +291,19 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   }
 
   ~RowSetMemoryOwner() {
+    std::ostringstream oss;
+    oss << "Destruct RowSetMemoryOwner attached to Executor-" << executor_id_ << "{\t";
+    int allocator_id = 0;
+    for (auto const& allocator : allocators_) {
+      auto const usedBytes = allocator->bytesUsed();
+      if (usedBytes > 0) {
+        oss << "allocator-" << allocator_id << ", byteUsed: " << usedBytes << "/"
+            << allocator->totalBytes() << "\t";
+      }
+      ++allocator_id;
+    }
+    oss << "}";
+    VLOG(2) << oss.str();
     for (auto count_distinct_set : count_distinct_sets_) {
       delete count_distinct_set;
     }
@@ -302,7 +320,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   }
 
   std::shared_ptr<RowSetMemoryOwner> cloneStrDictDataOnly() {
-    auto rtn = std::make_shared<RowSetMemoryOwner>(arena_block_size_, /*num_kernels=*/1);
+    auto rtn = std::make_shared<RowSetMemoryOwner>(
+        arena_block_size_, executor_id_, /*num_kernels=*/1);
     rtn->str_dict_proxy_owned_ = str_dict_proxy_owned_;
     rtn->lit_str_dict_proxy_ = lit_str_dict_proxy_;
     return rtn;
@@ -384,6 +403,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   size_t arena_block_size_;  // for cloning
   std::vector<std::unique_ptr<Arena>> allocators_;
+  size_t executor_id_;
 
   mutable std::mutex state_mutex_;
 

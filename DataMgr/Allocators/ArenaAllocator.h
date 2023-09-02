@@ -49,6 +49,7 @@ class Arena {
   virtual void* allocate(size_t size) = 0;
   virtual void* allocateAndZero(const size_t size) = 0;
   virtual size_t bytesUsed() const = 0;
+  virtual size_t totalBytes() const = 0;
   virtual MemoryType getMemoryType() const = 0;
 };
 
@@ -90,6 +91,10 @@ class DramArena : public Arena, public folly::Arena<::SysAllocator<AllocatorType
 
   size_t bytesUsed() const override {
     return folly::Arena<::SysAllocator<AllocatorType>>::bytesUsed();
+  }
+
+  size_t totalBytes() const override {
+    return folly::Arena<::SysAllocator<AllocatorType>>::totalSize();
   }
 
   MemoryType getMemoryType() const override { return MemoryType::DRAM; }
@@ -140,6 +145,8 @@ class DramArena : public Arena {
   }
 
   size_t bytesUsed() const override { return size_; }
+
+  size_t totalBytes() const override { return size_; }
 
   MemoryType getMemoryType() const override { return MemoryType::DRAM; }
 

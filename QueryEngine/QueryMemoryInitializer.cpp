@@ -244,6 +244,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     , device_allocator_(device_allocator)
     , thread_idx_(thread_idx) {
   CHECK(!sort_on_gpu || output_columnar);
+  executor->logSystemCPUMemoryStatus("Before Query Memory Initialization", thread_idx);
 
   const auto& consistent_frag_sizes = get_consistent_frags_sizes(frag_offsets);
   if (consistent_frag_sizes.empty()) {
@@ -351,8 +352,10 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   if (query_mem_desc.hasVarlenOutput()) {
     const auto varlen_buffer_elem_size_opt = query_mem_desc.varlenOutputBufferElemSize();
     CHECK(varlen_buffer_elem_size_opt);  // TODO(adb): relax
-    auto varlen_output_buffer = reinterpret_cast<int64_t*>(row_set_mem_owner_->allocate(
-        query_mem_desc.getEntryCount() * varlen_buffer_elem_size_opt.value()));
+    auto const varlen_buffer_sz =
+        query_mem_desc.getEntryCount() * varlen_buffer_elem_size_opt.value();
+    auto varlen_output_buffer =
+        reinterpret_cast<int64_t*>(row_set_mem_owner_->allocate(varlen_buffer_sz));
     num_buffers_ += 1;
     group_by_buffers_.push_back(varlen_output_buffer);
   }
@@ -826,7 +829,6 @@ void QueryMemoryInitializer::allocateCountDistinctGpuMem(
   device_allocator_->zeroDeviceMem(
       reinterpret_cast<int8_t*>(count_distinct_bitmap_device_mem_ptr_),
       count_distinct_bitmap_mem_size_);
-
   count_distinct_bitmap_host_crt_ptr_ = count_distinct_bitmap_host_mem_ptr_ =
       row_set_mem_owner_->allocate(count_distinct_bitmap_mem_size_, thread_idx_);
 }

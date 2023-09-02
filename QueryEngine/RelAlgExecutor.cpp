@@ -879,8 +879,8 @@ void RelAlgExecutor::prepareLeafExecution(
     executor_->resetInterrupt();
   }
   queue_time_ms_ = timer_stop(clock_begin);
-  executor_->row_set_mem_owner_ =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), cpu_threads());
+  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), executor_->executor_id_, cpu_threads());
   executor_->row_set_mem_owner_->setDictionaryGenerations(string_dictionary_generations);
   executor_->table_generations_ = table_generations;
   executor_->agg_col_range_cache_ = agg_col_range;

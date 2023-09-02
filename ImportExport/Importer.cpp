@@ -3989,10 +3989,10 @@ void Importer::import_local_parquet(const std::string& file_path,
       if (total_file_offset) {
         import_status_.rows_estimated =
             (float)total_file_size / total_file_offset * import_status_.rows_completed;
-        VLOG(3) << "rows_completed " << import_status_.rows_completed
-                << ", rows_estimated " << import_status_.rows_estimated
-                << ", total_file_size " << total_file_size << ", total_file_offset "
-                << total_file_offset;
+        LOG(INFO) << "rows_completed " << import_status_.rows_completed
+                  << ", rows_estimated " << import_status_.rows_estimated
+                  << ", total_file_size " << total_file_size << ", total_file_offset "
+                  << total_file_offset;
       }
     }
   });
@@ -4500,10 +4500,11 @@ ImportStatus Importer::importDelimited(
                                 : (float)file_size / current_pos) *
                   import_status_.rows_completed;
             }
-            VLOG(3) << "rows_completed " << import_status_.rows_completed
-                    << ", rows_estimated " << import_status_.rows_estimated
-                    << ", total_file_size " << total_file_size << ", total_file_offset "
-                    << total_file_offset;
+
+            LOG(INFO) << "rows_completed " << import_status_.rows_completed
+                      << ", rows_estimated " << import_status_.rows_estimated
+                      << ", total_file_size " << total_file_size << ", total_file_offset "
+                      << total_file_offset;
             set_import_status(import_id, import_status_);
             // recall thread_id for reuse
             stack_thread_ids.push(ret_import_status.thread_id);
