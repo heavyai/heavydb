@@ -155,6 +155,17 @@ void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table
   getStorageMgrForTableKey({db_id, table_id})->removeTableRelatedDS(db_id, table_id);
 }
 
+void PersistentStorageMgr::removeMutableTableCacheData(const int db_id,
+                                                       const int tb_id) const {
+  if (disk_cache_config_.isEnabledForMutableTables()) {
+    // If the disk cache supports mutable tables then clear the cached data.
+    if (auto cfm =
+            dynamic_cast<File_Namespace::CachingGlobalFileMgr*>(global_file_mgr_.get())) {
+      cfm->removeCachedData(db_id, tb_id);
+    }
+  }
+}
+
 bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) const {
   CHECK(has_table_prefix(chunk_key));
   auto db_id = chunk_key[CHUNK_KEY_DB_IDX];

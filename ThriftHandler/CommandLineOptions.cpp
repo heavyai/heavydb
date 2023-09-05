@@ -1785,22 +1785,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
           CacheItemType::BBOX_INTERSECT_HT, g_max_cacheable_hashtable_size_bytes);
     }
     g_optimize_cuda_block_and_grid_sizes = optimize_cuda_block_and_grid_sizes;
-
-    if (g_multi_instance) {
-      LOG(INFO) << "Disabling FSI and Disk Cache as they are not currently supported "
-                   "with multi-instance.";
-      // Fsi & disk cache currently unsupported in multi-instance.  The other option
-      // configs are required because they require fsi support.
-      g_enable_fsi = false;
-      g_enable_fsi_regex_import = false;
-      g_enable_system_tables = false;
-      g_enable_legacy_delimited_import = true;
-#ifdef ENABLE_IMPORT_PARQUET
-      g_enable_legacy_parquet_import = true;
-#endif
-      disk_cache_level = "none";
-    }
-
   } catch (po::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;

@@ -227,6 +227,7 @@ class DataMgr {
                                        const ChunkKey& keyPrefix);
   inline bool gpusPresent() const { return hasGpus_; }
   void removeTableRelatedDS(const int db_id, const int tb_id);
+  void removeMutableTableDiskCacheData(const int db_id, const int tb_id) const;
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
   size_t getTableEpoch(const int db_id, const int tb_id);
   void resetTableEpochFloor(const int32_t db_id, const int32_t tb_id);
