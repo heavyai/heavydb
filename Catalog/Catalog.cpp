@@ -1101,35 +1101,22 @@ void Catalog::reloadTableMetadataUnlocked(int table_id) {
   // Reload dictionaries first.
   // TODO(sy): Does dictionary reloading really belong here?
   //           We don't have dictionary locks in the system but maybe we need them.
-  list<DictDescriptor> dicts;
-  std::string dictQuery(
-      "SELECT dictid, name, nbits, is_shared, refcount from mapd_dictionaries");
-  sqliteConnector_.query(dictQuery);
-  auto numRows = sqliteConnector_.getNumRows();
-  for (size_t r = 0; r < numRows; ++r) {
-    auto dictId = sqliteConnector_.getData<int>(r, 0);
-    auto dictName = sqliteConnector_.getData<string>(r, 1);
-    auto dictNBits = sqliteConnector_.getData<int>(r, 2);
-    auto is_shared = sqliteConnector_.getData<bool>(r, 3);
-    auto refcount = sqliteConnector_.getData<int>(r, 4);
-    auto fname = g_base_path + "/" + shared::kDataDirectoryName + "/DB_" +
-                 std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
-    DictRef dict_ref(currentDB_.dbId, dictId);
-    DictDescriptor dd(dict_ref, dictName, dictNBits, is_shared, refcount, fname, false);
-    if (auto it = dictDescriptorMapByRef_.find(dict_ref);
-        it == dictDescriptorMapByRef_.end()) {
-      dictDescriptorMapByRef_[dict_ref] = std::make_unique<DictDescriptor>(dd);
-    } else {
-      *it->second = dd;
-    }
-  }
+  reloadDictionariesFromDiskUnlocked();
 
   // Delete this table's metadata from the in-memory cache before reloading.
-  TableDescriptor* original_td;
+  TableDescriptor* original_td = nullptr;
   std::list<ColumnDescriptor*> original_cds;
   if (auto it1 = tableDescriptorMapById_.find(table_id);
       it1 != tableDescriptorMapById_.end()) {
     original_td = it1->second;
+    if (dynamic_cast<foreign_storage::ForeignTable*>(original_td)) {
+      // If have a foreign table then we need to destroy the local data wrapper or it will
+      // contain (potentially invalid) cached data.  This needs to be done before we
+      // remove the table descriptors.
+      dataMgr_->removeTableRelatedDS(currentDB_.dbId, table_id);
+    } else {
+      dataMgr_->removeMutableTableDiskCacheData(currentDB_.dbId, table_id);
+    }
     tableDescriptorMapById_.erase(it1);
     if (auto it2 = tableDescriptorMap_.find(to_upper(original_td->tableName));
         it2 != tableDescriptorMap_.end()) {
@@ -1150,66 +1137,12 @@ void Catalog::reloadTableMetadataUnlocked(int table_id) {
     }
   }
 
-  // Reload the table descriptor.
-  std::string tableQuery(
-      "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
-      "max_chunk_size, frag_page_size, max_rows, partitions, shard_column_id, shard, "
-      "num_shards, key_metainfo, userid, sort_column_id, storage_type, "
-      "max_rollback_epochs, is_system_table from mapd_tables WHERE tableid = " +
-      std::to_string(table_id));
-  sqliteConnector_.query(tableQuery);
-  numRows = sqliteConnector_.getNumRows();
-  if (!numRows) {
-    return;  // Table was deleted by another node.
-  }
-
   TableDescriptor* td;
-  const auto& storage_type = sqliteConnector_.getData<string>(0, 17);
-  if (!storage_type.empty() && storage_type != StorageType::FOREIGN_TABLE) {
-    const auto& table_name = sqliteConnector_.getData<string>(0, 1);
-    LOG(FATAL) << "Unable to read Catalog metadata: storage type is currently not a "
-                  "supported table option (table "
-               << table_name << " [" << table_id << "] in database " << currentDB_.dbName
-               << ").";
-  }
-
-  if (storage_type == StorageType::FOREIGN_TABLE) {
-    td = new foreign_storage::ForeignTable();
-  } else {
-    td = new TableDescriptor();
-  }
-
-  td->storageType = storage_type;
-  td->tableId = sqliteConnector_.getData<int>(0, 0);
-  td->tableName = sqliteConnector_.getData<string>(0, 1);
-  td->nColumns = sqliteConnector_.getData<int>(0, 2);
-  td->isView = sqliteConnector_.getData<bool>(0, 3);
-  td->fragments = sqliteConnector_.getData<string>(0, 4);
-  td->fragType =
-      (Fragmenter_Namespace::FragmenterType)sqliteConnector_.getData<int>(0, 5);
-  td->maxFragRows = sqliteConnector_.getData<int>(0, 6);
-  td->maxChunkSize = sqliteConnector_.getData<int64_t>(0, 7);
-  td->fragPageSize = sqliteConnector_.getData<int>(0, 8);
-  td->maxRows = sqliteConnector_.getData<int64_t>(0, 9);
-  td->partitions = sqliteConnector_.getData<string>(0, 10);
-  td->shardedColumnId = sqliteConnector_.getData<int>(0, 11);
-  td->shard = sqliteConnector_.getData<int>(0, 12);
-  td->nShards = sqliteConnector_.getData<int>(0, 13);
-  td->keyMetainfo = sqliteConnector_.getData<string>(0, 14);
-  td->userId = sqliteConnector_.getData<int>(0, 15);
-  td->sortedColumnId =
-      sqliteConnector_.isNull(0, 16) ? 0 : sqliteConnector_.getData<int>(0, 16);
-  if (!td->isView) {
-    td->fragmenter = nullptr;
-  }
-  td->maxRollbackEpochs = sqliteConnector_.getData<int>(0, 18);
-  td->is_system_table = sqliteConnector_.getData<bool>(0, 19);
-  td->hasDeletedCol = false;
-
-  if (td->isView) {
-    // If we have a view, then we need to refresh the viewSQL from the mapd_views table,
-    // since this value is not contained in the mapd_tables table.
-    updateViewUnlocked(*td);
+  try {
+    td = createTableFromDiskUnlocked(table_id);
+  } catch (const NoTableFoundException& e) {
+    // No entry found for table on disk.  Another node may have deleted it.
+    return;
   }
 
   if (auto tableDescIt = tableDescriptorMapById_.find(table_id);
@@ -1219,43 +1152,7 @@ void Catalog::reloadTableMetadataUnlocked(int table_id) {
   }
 
   // Reload the column descriptors.
-  std::list<ColumnDescriptor*> cds;
-  std::string columnQuery(
-      "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, "
-      "is_notnull, compression, comp_param, size, chunks, is_systemcol, is_virtualcol, "
-      "virtual_expr, is_deletedcol, default_value from mapd_columns WHERE tableid = " +
-      std::to_string(table_id) + " ORDER BY tableid, columnid");
-  sqliteConnector_.query(columnQuery);
-  numRows = sqliteConnector_.getNumRows();
-  int32_t skip_physical_cols = 0;
-  for (size_t r = 0; r < numRows; ++r) {
-    ColumnDescriptor* cd = new ColumnDescriptor();
-    cd->tableId = sqliteConnector_.getData<int>(r, 0);
-    cd->columnId = sqliteConnector_.getData<int>(r, 1);
-    cd->columnName = sqliteConnector_.getData<string>(r, 2);
-    cd->columnType.set_type((SQLTypes)sqliteConnector_.getData<int>(r, 3));
-    cd->columnType.set_subtype((SQLTypes)sqliteConnector_.getData<int>(r, 4));
-    cd->columnType.set_dimension(sqliteConnector_.getData<int>(r, 5));
-    cd->columnType.set_scale(sqliteConnector_.getData<int>(r, 6));
-    cd->columnType.set_notnull(sqliteConnector_.getData<bool>(r, 7));
-    cd->columnType.set_compression((EncodingType)sqliteConnector_.getData<int>(r, 8));
-    cd->columnType.set_comp_param(sqliteConnector_.getData<int>(r, 9));
-    cd->columnType.set_size(sqliteConnector_.getData<int>(r, 10));
-    cd->chunks = sqliteConnector_.getData<string>(r, 11);
-    cd->isSystemCol = sqliteConnector_.getData<bool>(r, 12);
-    cd->isVirtualCol = sqliteConnector_.getData<bool>(r, 13);
-    cd->virtualExpr = sqliteConnector_.getData<string>(r, 14);
-    cd->isDeletedCol = sqliteConnector_.getData<bool>(r, 15);
-    if (sqliteConnector_.isNull(r, 16)) {
-      cd->default_value = std::nullopt;
-    } else {
-      cd->default_value = std::make_optional(sqliteConnector_.getData<string>(r, 16));
-    }
-    cd->isGeoPhyCol = skip_physical_cols-- > 0;
-    cd->db_id = getDatabaseId();
-    set_dict_key(*cd);
-    cds.push_back(cd);
-  }
+  auto cds = sqliteGetColumnsForTableUnlocked(table_id);
 
   // Store the descriptors into the cache.
   if (original_td) {
@@ -1269,7 +1166,7 @@ void Catalog::reloadTableMetadataUnlocked(int table_id) {
   original_cds.clear();
   tableDescriptorMap_[to_upper(td->tableName)] = td;
   tableDescriptorMapById_[td->tableId] = td;
-  skip_physical_cols = 0;
+  int32_t skip_physical_cols = 0;
   for (ColumnDescriptor* cd : cds) {
     addToColumnMap(cd);
 
@@ -4351,7 +4248,12 @@ void Catalog::invalidateCachesForTable(const int table_id) {
   }
   getDataMgr().getGlobalFileMgr()->closeFileMgr(table_key[CHUNK_KEY_DB_IDX],
                                                 table_key[CHUNK_KEY_TABLE_IDX]);
-  // getMetadataForTable(table_key[CHUNK_KEY_TABLE_IDX], /*populateFragmenter=*/true);
+  if (dynamic_cast<foreign_storage::ForeignTable*>(td)) {
+    dataMgr_->getPersistentStorageMgr()->getForeignStorageMgr()->refreshTable(table_key,
+                                                                              true);
+  } else {
+    dataMgr_->removeMutableTableDiskCacheData(currentDB_.dbId, table_id);
+  }
   instantiateFragmenter(td);
 }
 
@@ -5262,6 +5164,174 @@ void Catalog::updateForeignTablesInMapUnlocked() {
                            foreign_table->foreign_server->data_wrapper_type);
     }
   }
+}
+
+void Catalog::reloadForeignTableUnlocked(foreign_storage::ForeignTable& foreign_table) {
+  CHECK(g_enable_fsi);
+  CHECK_NE(foreign_table.tableId, 0)
+      << "reloadForeignTable expects a table with valid id";
+  sqliteConnector_.query(
+      "SELECT server_id, options, last_refresh_time, next_refresh_time from "
+      "omnisci_foreign_tables WHERE table_id == " +
+      std::to_string(foreign_table.tableId));
+  auto num_rows = sqliteConnector_.getNumRows();
+  CHECK_EQ(num_rows, 1U) << "Expected single entry in omnisci_foreign_tables for table'"
+                         << foreign_table.tableName << "', instead got " << num_rows;
+  const auto server_id = sqliteConnector_.getData<int32_t>(0, 0);
+  const auto& options = sqliteConnector_.getData<std::string>(0, 1);
+  const auto last_refresh_time = sqliteConnector_.getData<int64_t>(0, 2);
+  const auto next_refresh_time = sqliteConnector_.getData<int64_t>(0, 3);
+
+  foreign_table.foreign_server = foreignServerMapById_[server_id].get();
+  CHECK(foreign_table.foreign_server);
+  foreign_table.populateOptionsMap(options);
+  foreign_table.last_refresh_time = last_refresh_time;
+  foreign_table.next_refresh_time = next_refresh_time;
+  if (foreign_table.is_system_table) {
+    foreign_table.is_in_memory_system_table =
+        shared::contains(foreign_storage::DataWrapperType::IN_MEMORY_DATA_WRAPPERS,
+                         foreign_table.foreign_server->data_wrapper_type);
+  }
+}
+
+void Catalog::reloadDictionariesFromDiskUnlocked() {
+  std::string dictQuery(
+      "SELECT dictid, name, nbits, is_shared, refcount from mapd_dictionaries");
+  sqliteConnector_.query(dictQuery);
+  auto numRows = sqliteConnector_.getNumRows();
+  for (size_t r = 0; r < numRows; ++r) {
+    auto dictId = sqliteConnector_.getData<int>(r, 0);
+    auto dictName = sqliteConnector_.getData<string>(r, 1);
+    auto dictNBits = sqliteConnector_.getData<int>(r, 2);
+    auto is_shared = sqliteConnector_.getData<bool>(r, 3);
+    auto refcount = sqliteConnector_.getData<int>(r, 4);
+    auto fname = g_base_path + "/" + shared::kDataDirectoryName + "/DB_" +
+                 std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
+    DictRef dict_ref(currentDB_.dbId, dictId);
+    DictDescriptor dd(dict_ref, dictName, dictNBits, is_shared, refcount, fname, false);
+    if (auto it = dictDescriptorMapByRef_.find(dict_ref);
+        it == dictDescriptorMapByRef_.end()) {
+      dictDescriptorMapByRef_[dict_ref] = std::make_unique<DictDescriptor>(dd);
+    } else {
+      *it->second = dd;
+    }
+  }
+}
+
+std::list<ColumnDescriptor*> Catalog::sqliteGetColumnsForTableUnlocked(int32_t table_id) {
+  std::list<ColumnDescriptor*> cds;
+  // TODO(Misiu): Change ColumnDescriptorMap_ to use smartpointers.  Right now we use
+  // temporary smartpointers that release their memory once initialized.
+  std::list<std::unique_ptr<ColumnDescriptor>> smart_cds;
+  std::string columnQuery(
+      "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, "
+      "is_notnull, compression, comp_param, size, chunks, is_systemcol, is_virtualcol, "
+      "virtual_expr, is_deletedcol, default_value from mapd_columns WHERE tableid = " +
+      std::to_string(table_id) + " ORDER BY tableid, columnid");
+  sqliteConnector_.query(columnQuery);
+  auto numRows = sqliteConnector_.getNumRows();
+  int32_t skip_physical_cols = 0;
+  for (size_t r = 0; r < numRows; ++r) {
+    std::unique_ptr<ColumnDescriptor> cd = std::make_unique<ColumnDescriptor>();
+    cd->tableId = sqliteConnector_.getData<int>(r, 0);
+    cd->columnId = sqliteConnector_.getData<int>(r, 1);
+    cd->columnName = sqliteConnector_.getData<string>(r, 2);
+    cd->columnType.set_type((SQLTypes)sqliteConnector_.getData<int>(r, 3));
+    cd->columnType.set_subtype((SQLTypes)sqliteConnector_.getData<int>(r, 4));
+    cd->columnType.set_dimension(sqliteConnector_.getData<int>(r, 5));
+    cd->columnType.set_scale(sqliteConnector_.getData<int>(r, 6));
+    cd->columnType.set_notnull(sqliteConnector_.getData<bool>(r, 7));
+    cd->columnType.set_compression((EncodingType)sqliteConnector_.getData<int>(r, 8));
+    cd->columnType.set_comp_param(sqliteConnector_.getData<int>(r, 9));
+    cd->columnType.set_size(sqliteConnector_.getData<int>(r, 10));
+    cd->chunks = sqliteConnector_.getData<string>(r, 11);
+    cd->isSystemCol = sqliteConnector_.getData<bool>(r, 12);
+    cd->isVirtualCol = sqliteConnector_.getData<bool>(r, 13);
+    cd->virtualExpr = sqliteConnector_.getData<string>(r, 14);
+    cd->isDeletedCol = sqliteConnector_.getData<bool>(r, 15);
+    if (sqliteConnector_.isNull(r, 16)) {
+      cd->default_value = std::nullopt;
+    } else {
+      cd->default_value = std::make_optional(sqliteConnector_.getData<string>(r, 16));
+    }
+    cd->isGeoPhyCol = skip_physical_cols-- > 0;
+    cd->db_id = getDatabaseId();
+    set_dict_key(*cd);
+    smart_cds.emplace_back(std::move(cd));
+  }
+  // Once we have correctly initialized all columns, release their ownership as we
+  // currently handle them as free pointers.
+  for (auto& cd : smart_cds) {
+    cds.emplace_back(cd.release());
+  }
+  return cds;
+}
+
+TableDescriptor* Catalog::createTableFromDiskUnlocked(int32_t table_id) {
+  std::string query(
+      "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
+      "max_chunk_size, frag_page_size, max_rows, partitions, shard_column_id, shard, "
+      "num_shards, key_metainfo, userid, sort_column_id, storage_type, "
+      "max_rollback_epochs, is_system_table from mapd_tables WHERE tableid = " +
+      std::to_string(table_id));
+  sqliteConnector_.query(query);
+  auto numRows = sqliteConnector_.getNumRows();
+  if (!numRows) {
+    throw NoTableFoundException(table_id);
+  }
+
+  const auto& storage_type = sqliteConnector_.getData<string>(0, 17);
+  if (!storage_type.empty() && storage_type != StorageType::FOREIGN_TABLE) {
+    const auto& table_name = sqliteConnector_.getData<string>(0, 1);
+    LOG(FATAL) << "Unable to read Catalog metadata: storage type is currently not a "
+                  "supported table option (table "
+               << table_name << " [" << table_id << "] in database " << currentDB_.dbName
+               << ").";
+  }
+
+  // TODO(Misiu): Get rid of manual memory allocation and use smart pointers for
+  // TableDecriptorMap_.  Currently we use a smartpointer to cleanup if we catch
+  // exceptions during initialization and then release ownership into the existing system.
+  std::unique_ptr<TableDescriptor> td;
+  td = (storage_type == StorageType::FOREIGN_TABLE)
+           ? std::make_unique<foreign_storage::ForeignTable>()
+           : std::make_unique<TableDescriptor>();
+
+  td->tableId = sqliteConnector_.getData<int>(0, 0);
+  td->tableName = sqliteConnector_.getData<string>(0, 1);
+  td->nColumns = sqliteConnector_.getData<int>(0, 2);
+  td->isView = sqliteConnector_.getData<bool>(0, 3);
+  td->fragments = sqliteConnector_.getData<string>(0, 4);
+  td->fragType = static_cast<Fragmenter_Namespace::FragmenterType>(
+      sqliteConnector_.getData<int>(0, 5));
+  td->maxFragRows = sqliteConnector_.getData<int>(0, 6);
+  td->maxChunkSize = sqliteConnector_.getData<int64_t>(0, 7);
+  td->fragPageSize = sqliteConnector_.getData<int>(0, 8);
+  td->maxRows = sqliteConnector_.getData<int64_t>(0, 9);
+  td->partitions = sqliteConnector_.getData<string>(0, 10);
+  td->shardedColumnId = sqliteConnector_.getData<int>(0, 11);
+  td->shard = sqliteConnector_.getData<int>(0, 12);
+  td->nShards = sqliteConnector_.getData<int>(0, 13);
+  td->keyMetainfo = sqliteConnector_.getData<string>(0, 14);
+  td->userId = sqliteConnector_.getData<int>(0, 15);
+  td->sortedColumnId =
+      sqliteConnector_.isNull(0, 16) ? 0 : sqliteConnector_.getData<int>(0, 16);
+  td->storageType = storage_type;
+  td->maxRollbackEpochs = sqliteConnector_.getData<int>(0, 18);
+  td->is_system_table = sqliteConnector_.getData<bool>(0, 19);
+  td->hasDeletedCol = false;
+
+  if (td->isView) {
+    updateViewUnlocked(*td);
+  } else {
+    td->fragmenter = nullptr;
+  }
+
+  if (auto ftd = dynamic_cast<foreign_storage::ForeignTable*>(td.get())) {
+    reloadForeignTableUnlocked(*ftd);
+  }
+
+  return td.release();
 }
 
 void Catalog::setForeignServerProperty(const std::string& server_name,

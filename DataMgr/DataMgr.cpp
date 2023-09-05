@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2022 HEAVY.AI, Inc.
  *
@@ -618,6 +619,10 @@ void DataMgr::checkpoint() {
 void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
   std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   bufferMgrs_[0][0]->removeTableRelatedDS(db_id, tb_id);
+}
+
+void DataMgr::removeMutableTableDiskCacheData(const int db_id, const int tb_id) const {
+  getPersistentStorageMgr()->removeMutableTableCacheData(db_id, tb_id);
 }
 
 void DataMgr::setTableEpoch(const int db_id, const int tb_id, const int start_epoch) {

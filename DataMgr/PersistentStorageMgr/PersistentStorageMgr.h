@@ -58,6 +58,7 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   std::string getStringMgrType() override;
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
+  void removeMutableTableCacheData(const int db_id, const int table_id) const;
 
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
   foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;

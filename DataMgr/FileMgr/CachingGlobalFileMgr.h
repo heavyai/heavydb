@@ -58,6 +58,8 @@ class CachingGlobalFileMgr : public GlobalFileMgr {
 
   void removeTableRelatedDS(const int db_id, const int table_id) override;
 
+  void removeCachedData(const int db_id, const int table_id);
+
  private:
   bool isChunkPrefixCacheable(const ChunkKey& chunk_prefix) const;
 

@@ -744,6 +744,10 @@ class Catalog final {
   template <class T>
   friend class lockmgr::TableLockMgrImpl;  // for reloadTableMetadataUnlocked()
   void reloadTableMetadataUnlocked(int table_id);
+  TableDescriptor* createTableFromDiskUnlocked(int32_t table_id);
+  void reloadDictionariesFromDiskUnlocked();
+  std::list<ColumnDescriptor*> sqliteGetColumnsForTableUnlocked(int32_t table_id);
+  void reloadForeignTableUnlocked(foreign_storage::ForeignTable& foreign_table);
   void reloadCatalogMetadata(const std::map<int32_t, std::string>& user_name_by_user_id);
   void reloadCatalogMetadataUnlocked(
       const std::map<int32_t, std::string>& user_name_by_user_id);
@@ -865,6 +869,13 @@ class Catalog final {
   std::string dumpCreateTableUnlocked(const TableDescriptor* td,
                                       bool multiline_formatting,
                                       bool dump_defaults) const;
+
+  void removeDiskCachedDataForMutableTable(int32_t table_id) const;
+
+  struct NoTableFoundException : std::runtime_error {
+    NoTableFoundException(int32_t table_id)
+        : std::runtime_error{"No entry found for table: " + std::to_string(table_id)} {}
+  };
 
   static constexpr const char* CATALOG_SERVER_NAME{"system_catalog_server"};
   static constexpr const char* MEMORY_STATS_SERVER_NAME{"system_memory_stats_server"};

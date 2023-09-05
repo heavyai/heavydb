@@ -167,7 +167,7 @@ void CachingGlobalFileMgr::checkpoint(const int db_id, const int tb_id) {
   GlobalFileMgr::checkpoint(db_id, tb_id);
 }
 
-void CachingGlobalFileMgr::removeTableRelatedDS(const int db_id, const int table_id) {
+void CachingGlobalFileMgr::removeCachedData(const int db_id, const int table_id) {
   if (isChunkPrefixCacheable({db_id, table_id})) {
     const ChunkKey table_key{db_id, table_id};
     disk_cache_->clearForTablePrefix(table_key);
@@ -180,6 +180,10 @@ void CachingGlobalFileMgr::removeTableRelatedDS(const int db_id, const int table
       chunk_key_it = cached_chunk_keys_.erase(chunk_key_it);
     }
   }
+}
+
+void CachingGlobalFileMgr::removeTableRelatedDS(const int db_id, const int table_id) {
+  removeCachedData(db_id, table_id);
   GlobalFileMgr::removeTableRelatedDS(db_id, table_id);
 }
 

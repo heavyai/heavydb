@@ -253,14 +253,13 @@ void CachingForeignStorageMgr::refreshTableInCache(const ChunkKey& table_key) {
 void CachingForeignStorageMgr::eraseDataWrapper(const ChunkKey& key) {
   CHECK(is_table_key(key));
   std::lock_guard data_wrapper_lock(data_wrapper_mutex_);
-  // May not be created yet
-  if (data_wrapper_map_.find(key) != data_wrapper_map_.end()) {
-    auto [db, tb] = get_table_prefix(key);
-    // Need to erase serialized version on disk if it exists so we don't accidentally
-    // recover it after deleting.
-    boost::filesystem::remove_all(disk_cache_->getSerializedWrapperPath(db, tb));
-    data_wrapper_map_.erase(key);
-  }
+  auto [db, tb] = get_table_prefix(key);
+  // Need to erase serialized version on disk if it exists so we don't accidentally
+  // recover it after deleting.  It is possible for a cached wrapper file to exist without
+  // a wrapper (in multi-instance-mode for instance, so we make sure to remove the file
+  // regardless).
+  boost::filesystem::remove_all(disk_cache_->getSerializedWrapperPath(db, tb));
+  data_wrapper_map_.erase(key);
 }
 
 void CachingForeignStorageMgr::clearTable(const ChunkKey& table_key) {
@@ -403,6 +402,7 @@ bool CachingForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chun
 
 void CachingForeignStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
   disk_cache_->clearForTablePrefix({db_id, table_id});
+  eraseDataWrapper({db_id, table_id});
   ForeignStorageMgr::removeTableRelatedDS(db_id, table_id);
 }
 
