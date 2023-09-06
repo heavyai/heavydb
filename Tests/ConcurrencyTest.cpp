@@ -218,9 +218,9 @@ class ConcurrencyTestEnv : public DBHandlerTestFixture {
  private:
   const std::string table_name{"test_concurrency"};
   const std::string slow_query_sql =
-      "SELECT SUM(ct_sleep_us(5000000)) AS res FROM test_concurrency WHERE i64 < 50;";
+      "SELECT SUM(ct_sleep_us(100000)) AS res FROM test_concurrency WHERE i64 < 10;";
   const std::string fast_query_sql =
-      "SELECT SUM(1) AS res FROM test_concurrency WHERE i64 < 50;";
+      "SELECT SUM(i64) AS res FROM test_concurrency WHERE i64 < 10;";
   const char* table_schema = R"(
     (
         i64 BIGINT,
