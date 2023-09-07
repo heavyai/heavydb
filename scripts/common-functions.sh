@@ -556,7 +556,7 @@ EOF
   fi
 }
 
-TBB_VERSION=2021.8.0
+TBB_VERSION=2021.9.0
 
 function install_tbb() {
   patch_old_thrust_tbb
@@ -673,34 +673,44 @@ function install_blosc() {
   check_artifact_cleanup  v${BLOSC_VERSION}.tar.gz $BDIR
 }
 
-oneDAL_VERSION=2023.0.1
+oneDAL_VERSION=2023.1.1
 function install_onedal() {
   download https://github.com/oneapi-src/oneDAL/archive/refs/tags/${oneDAL_VERSION}.tar.gz
   extract ${oneDAL_VERSION}.tar.gz
   pushd oneDAL-${oneDAL_VERSION}
   ./dev/download_micromkl.sh
-  if [ "$ID" == "ubuntu"  ] ; then
-    ONEDAL_LIBDIR="lib"
-  else
-    ONEDAL_LIBDIR="lib64"
+  if [ "$ID" != "ubuntu"  ] ; then
     # oneDAL makefile only detects libTBB built as shared lib, so we hack it to allow static built
     sed -i -E s/libtbb.so\(\.[1-9]+\)?/libtbb\.a/g makefile
     sed -i -E s/libtbbmalloc.so\(\.[1-9]+\)?/libtbbmalloc\.a/g makefile
 
+    # do not release shared library targets on CentOS
+    sed -i '/foreach t,\$(releasetbb\.LIBS_Y)/d' makefile
+    sed -i 's/$(core_y) \\//g' makefile
+    sed -i 's/:= $(oneapi_y)/:= /g' makefile
+    sed -i '/$(thr_$(i)_y))/d' makefile
+
     # oneDAL always builds static and shared versions of its libraries by default, so hack the
-    # makefile again to remove shared library building
-    sed -i 's/$(WORKDIR\.lib)\/$(core_y)//g' makefile
-    sed -i 's/$(WORKDIR\.lib)\/$(thr_tbb_y)//g' makefile
-    sed -i 's/\?= a y/\?= a/g' makefile
+    # makefile again to remove shared library building (the preceding spaces matter here)
+    sed -i 's/ $(WORKDIR\.lib)\/$(core_y)//g' makefile
+    sed -i 's/ $(WORKDIR\.lib)\/$(thr_tbb_y)//g' makefile
   fi
+
+  # oneDAL's makefile hardcodes its libTBB directory to /gcc4.8/, make it so it looks in the
+  # root PREFIX (where we install TBB)
+  sed -i 's/$(_IA)\/gcc4\.8//g' makefile
+
+  # building oneAPI triggers deprecated implicit copy constructor warnings, which fail the build
+  # due to -Werror, so add a -Wno-error=deprecated-copy flag to compilation command
+  sed -i -E s/\-Wreturn\-type/\-Wreturn\-type\ \-Wno\-error=deprecated\-copy/g dev/make/cmplr.gnu.mk
 
   # these exports will only be valid in the subshell that builds oneDAL
   (export TBBROOT=${PREFIX}; \
-   export LD_LIBRARY_PATH="${PREFIX}/${ONEDAL_LIBDIR}:${LD_LIBRARY_PATH}"; \
-   export LIBRARY_PATH="${PREFIX}/${ONEDAL_LIBDIR}:${LIBRARY_PATH}"; \
+   export LD_LIBRARY_PATH="${PREFIX}/lib64:${PREFIX}/lib:${LD_LIBRARY_PATH}"; \
+   export LIBRARY_PATH="${PREFIX}/lib64:${PREFIX}/lib:${LIBRARY_PATH}"; \
    export CPATH="${PREFIX}/include:${CPATH}"; \
    export PATH="${PREFIX}/bin:${PATH}"; \
-   make -f makefile _daal PLAT=lnx32e REQCPU="avx2 avx" COMPILER=gnu -j)
+   make -f makefile daal_c oneapi_c PLAT=lnx32e REQCPU="avx2 avx512" COMPILER=gnu -j)
 
   # remove deprecated compression methods as they generate DEPRECATED warnings/errors
   sed -i '/bzip2compression\.h/d' __release_lnx_gnu/daal/latest/include/daal.h
@@ -708,10 +718,9 @@ function install_onedal() {
 
   mkdir -p $PREFIX/include
   cp -r __release_lnx_gnu/daal/latest/include/* $PREFIX/include
-  cp -r __work_gnu/md/lnx32e/daal/lib/* $PREFIX/lib
-  cmake -P cmake/scripts/generate_config.cmake
+  cp -r __release_lnx_gnu/daal/latest/lib/intel64/* $PREFIX/lib
   mkdir -p ${PREFIX}/lib/cmake/oneDAL
-  cp cmake/*.cmake ${PREFIX}/lib/cmake/oneDAL/.
+  cp __release_lnx_gnu/daal/latest/lib/cmake/oneDAL/*.cmake ${PREFIX}/lib/cmake/oneDAL/.
   popd
   check_artifact_cleanup ${oneDAL_VERSION}.tar.gz oneDAL-${oneDAL_VERSION}
 }
