@@ -229,6 +229,11 @@ class SQLImporter_args {
                             + "use it only when casting is impossible")
                     .longOpt("AllowIntegerNarrowing")
                     .build());
+
+    options.addOption(Option.builder("nlj")
+                              .desc("Omit JDBC connection string from logs.")
+                              .longOpt("no-log-jdbc-connection-string")
+                              .build());
   }
 
   private Option setOptionRequired(Option option) {
@@ -352,7 +357,11 @@ public class SQLImporter {
 
     try {
       // Open a connection
-      LOGGER.info("Connecting to database url :" + cmd.getOptionValue("jdbcConnect"));
+      if (cmd.hasOption("nlj")) {
+        LOGGER.info("Connecting to source database.");
+      } else {
+        LOGGER.info("Connecting to database url :" + cmd.getOptionValue("jdbcConnect"));
+      }
       conn = DriverManager.getConnection(cmd.getOptionValue("jdbcConnect"),
               cmd.getOptionValue("sourceUser"),
               cmd.getOptionValue("sourcePasswd"));
