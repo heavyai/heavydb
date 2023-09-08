@@ -2244,7 +2244,7 @@ TEST_F(StringFunctionTest, ExplicitCastToNumeric) {
   }
 }
 
-TEST_F(StringFunctionTest, ImplictCastToNumeric) {
+TEST_F(StringFunctionTest, ImplicitCastToNumeric) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     {
