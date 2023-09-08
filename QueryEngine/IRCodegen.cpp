@@ -598,6 +598,11 @@ void check_valid_join_qual(std::shared_ptr<Analyzer::BinOper>& bin_oper) {
           "indexed array columns (i.e., R.arr[1] = S.arr[2]) is not supported yet.");
     }
   }
+  auto const lhs_et =
+      dynamic_cast<const Analyzer::ExpressionTuple*>(bin_oper->get_left_operand());
+  if (lhs_et) {
+    CHECK_LE(lhs_et->getTuple().size(), g_maximum_conditions_to_coalesce);
+  }
 }
 
 }  // namespace

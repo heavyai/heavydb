@@ -180,11 +180,6 @@ struct JoinColumnTupleIterator {
                                  size_t start,
                                  size_t step)
       : num_cols(num_cols) {
-#ifndef __CUDACC__
-    CHECK_LE(num_cols, g_maximum_conditions_to_coalesce);
-#else
-    assert(num_cols <= g_maximum_conditions_to_coalesce);
-#endif
     for (size_t i = 0; i < num_cols; ++i) {
       join_column_iterators[i] =
           JoinColumnIterator(&join_column_per_key[i],
@@ -211,9 +206,7 @@ struct JoinColumnTupleIterator {
     return *this;
   }
 
-  DEVICE FORCE_INLINE JoinColumnTupleIterator& operator*() {
-    return *this;
-  }
+  DEVICE FORCE_INLINE JoinColumnTupleIterator& operator*() { return *this; }
 };  // struct JoinColumnTupleIterator
 
 //! Helper class for viewing multiple JoinColumns and their matching JoinColumnTypeInfos
