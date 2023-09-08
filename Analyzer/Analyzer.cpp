@@ -797,7 +797,7 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
       new_type_info.getStringDictKey().dict_id <= TRANSIENT_DICT_ID) {
     if (type_info.is_string() && type_info.get_compression() != kENCODING_DICT) {
       throw std::runtime_error(
-          "Implict casts of TEXT ENCODING NONE to TEXT ENCODED DICT are not allowed "
+          "Implicit casts of TEXT ENCODING NONE to TEXT ENCODED DICT are not allowed "
           "for non-literal arguments. Consider adding an explicit conversion to a "
           "dictionary-encoded text type with ENCODE_TEXT(<none-encoded text arg>).");
     }
