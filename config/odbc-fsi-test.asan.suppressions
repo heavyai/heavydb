@@ -2,3 +2,4 @@
 leak:libamazonredshiftodbc64
 leak:liblzma
 leak:libpgodbc
+leak:libclouderahiveodbc64

@@ -28,3 +28,8 @@ race:ResultSet::parallelTop
 race:rml::internal::BootStrapBlocks::allocate
 # QE-891
 race:daal::*
+# 2023-06-13 Ignore issues reported in third-party ODBC drivers
+race:libSnowflake.so
+deadlock:libSnowflake.so
+deadlock:libamazonredshiftodbc64.so
+deadlock:libclouderahiveodbc64.so
