@@ -420,8 +420,8 @@ class Executor {
 
  public:
   using ExecutorId = size_t;
-  static const ExecutorId UNITARY_EXECUTOR_ID = 0;
-  static const ExecutorId INVALID_EXECUTOR_ID = SIZE_MAX;
+  static constexpr ExecutorId UNITARY_EXECUTOR_ID = 0;
+  static constexpr ExecutorId INVALID_EXECUTOR_ID = SIZE_MAX;
 
   Executor(const ExecutorId id,
            Data_Namespace::DataMgr* data_mgr,
