@@ -627,6 +627,15 @@ TEST_F(DumpAndRestoreTest, DropRenderGroupColumnsBad) {
                std::runtime_error);
 }
 
+TEST_F(DumpAndRestoreTest, QuotedColumnNames) {
+  run_ddl_statement("CREATE TABLE test_table(\"integer\" integer);");
+  run_ddl_statement("DUMP TABLE test_table to '" + tar_ball_path +
+                    "' with (compression = 'gzip')");
+  run_ddl_statement("RESTORE TABLE test_table_2 from '" + tar_ball_path +
+                    "' WITH (compression = 'gzip');");
+  sqlAndCompareResult("SELECT COUNT(*) FROM test_table_2;", std::vector<long int>{0});
+}
+
 #ifdef HAVE_AWS_S3
 class S3RestoreTest : public DumpAndRestoreTest {
  protected:

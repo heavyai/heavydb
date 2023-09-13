@@ -5478,7 +5478,7 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
   for (const auto cd : cds) {
     if (!(cd->isSystemCol || cd->isVirtualCol)) {
       const auto& ti = cd->columnType;
-      os << comma << cd->columnName;
+      os << comma << quoteIfRequired(cd->columnName);
       // CHAR is perculiar... better dump it as TEXT(32) like \d does
       if (ti.get_type() == SQLTypes::kCHAR) {
         os << " "
