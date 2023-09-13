@@ -18,9 +18,14 @@ package com.mapd.tests;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
+import java.util.*;
+
+import ai.heavy.thrift.server.*;
 
 public class CatalogConcurrencyTest {
+  final static String defPwd = "HyperInteractive", local = "localhost", defDb = "heavyai",
+                      admin = "admin";
+  final static int port = 6274;
   final static Logger logger = LoggerFactory.getLogger(CatalogConcurrencyTest.class);
 
   public static void main(String[] args) throws Exception {
@@ -28,33 +33,39 @@ public class CatalogConcurrencyTest {
     test.testCatalogConcurrency();
   }
 
-  private void run_test(
-          HeavyDBTestClient dba, HeavyDBTestClient user, String prefix, int max)
-          throws Exception {
+  private void run_test(HeavyDBTestClient dba,
+          HeavyDBTestClient user,
+          String prefix,
+          int max,
+          List<Integer> dashboardIds) throws Exception {
     final String sharedTableName = "table_shared";
     for (int i = 0; i < max; i++) {
-      String tableName = "table_" + prefix + "_" + i;
-      String viewName = "view_" + prefix + "_" + i;
-      String dashName = "dash_" + prefix + "_" + i;
-      long tid = Thread.currentThread().getId();
+      final long tid = Thread.currentThread().getId();
+      final String threadPrefix = "[" + tid + "] ",
+                   tableName = "table_" + prefix + "_" + i,
+                   viewName = "view_" + prefix + "_" + i,
+                   dashName = "dash_" + prefix + "_" + i;
 
-      logger.info("[" + tid + "]"
-              + "CREATE " + tableName);
+      // Modify the fixed id dashboards in parallel.
+      for (int id : dashboardIds) {
+        TDashboard board = dba.get_dashboard(id);
+        logger.info("REPLACE DASHBOARD id (" + id + ") " + board.dashboard_name);
+        dba.replace_dashboard(board.dashboard_id, board.dashboard_name + "_", admin);
+      }
+
+      logger.info(threadPrefix + "CREATE TABLE " + tableName);
       user.runSql("CREATE TABLE " + tableName + " (id text);");
       HeavyDBAsserts.assertEqual(true, null != dba.get_table_details(tableName));
-      logger.info("[" + tid + "]"
-              + "INSERT INTO " + tableName);
+      logger.info(threadPrefix + "INSERT INTO " + tableName);
       user.runSql("INSERT INTO " + tableName + " VALUES(1);");
       dba.runSql("GRANT SELECT ON TABLE " + tableName + " TO bob;");
 
-      logger.info("[" + tid + "]"
-              + "CREATE " + viewName);
+      logger.info(threadPrefix + "CREATE VIEW " + viewName);
       user.runSql("CREATE VIEW " + viewName + " AS SELECT * FROM " + tableName + ";");
       HeavyDBAsserts.assertEqual(true, null != dba.get_table_details(viewName));
       dba.runSql("GRANT SELECT ON VIEW " + viewName + " TO bob;");
 
-      logger.info("[" + tid + "]"
-              + "CREATE " + dashName);
+      logger.info(threadPrefix + "CREATE DASHBOARD " + dashName);
       int dash_id = user.create_dashboard(dashName);
       HeavyDBAsserts.assertEqual(true, null != dba.get_dashboard(dash_id));
       dba.runSql("GRANT VIEW ON DASHBOARD " + dash_id + " TO bob;");
@@ -63,31 +74,28 @@ public class CatalogConcurrencyTest {
       dba.runSql("REVOKE SELECT ON VIEW " + viewName + " FROM bob;");
       dba.runSql("REVOKE SELECT ON TABLE " + tableName + " FROM bob;");
 
-      logger.info("[" + tid + "]"
-              + "DROP " + dashName);
+      logger.info(threadPrefix + "DELETE DASHBOARD " + dashName);
       dba.delete_dashboard(dash_id);
-      logger.info("[" + tid + "]"
-              + "DROP " + viewName);
+      logger.info(threadPrefix + "DROP VIEW " + viewName);
       dba.runSql("DROP VIEW " + viewName + ";");
-      logger.info("[" + tid + "]"
-              + "DROP " + tableName);
+      logger.info(threadPrefix + "DROP TABLE " + tableName);
       dba.runSql("DROP TABLE " + tableName + ";");
 
-      logger.info("[" + tid + "]"
-              + "CREATE IF NOT EXISTS " + sharedTableName);
+      logger.info(threadPrefix + "CREATE IF NOT EXISTS " + sharedTableName);
       dba.runSql("CREATE TABLE IF NOT EXISTS " + sharedTableName + " (id INTEGER);");
 
-      logger.info("[" + tid + "]"
-              + "DROP IF EXISTS " + sharedTableName);
+      logger.info(threadPrefix + "DROP IF EXISTS " + sharedTableName);
       dba.runSql("DROP TABLE IF EXISTS " + sharedTableName + ";");
     }
   }
 
-  private void runTest(
-          String db, String dbaUser, String dbaPassword, String dbUser, String dbPassword)
-          throws Exception {
-    int num_threads = 5;
-    final int runs = 25;
+  private void runTest(String db,
+          String dbaUser,
+          String dbaPassword,
+          String dbUser,
+          String dbPassword,
+          List<Integer> dashboardIds) throws Exception {
+    final int num_threads = 5, runs = 25;
     Exception exceptions[] = new Exception[num_threads];
 
     ArrayList<Thread> threads = new ArrayList<>();
@@ -99,11 +107,11 @@ public class CatalogConcurrencyTest {
         @Override
         public void run() {
           try {
-            HeavyDBTestClient dba = HeavyDBTestClient.getClient(
-                    "localhost", 6274, db, dbaUser, dbaPassword);
-            HeavyDBTestClient user = HeavyDBTestClient.getClient(
-                    "localhost", 6274, db, dbUser, dbPassword);
-            run_test(dba, user, prefix, runs);
+            HeavyDBTestClient dba =
+                    HeavyDBTestClient.getClient(local, port, db, dbaUser, dbaPassword);
+            HeavyDBTestClient user =
+                    HeavyDBTestClient.getClient(local, port, db, dbUser, dbPassword);
+            run_test(dba, user, prefix, runs, dashboardIds);
           } catch (Exception e) {
             logger.error("[" + Thread.currentThread().getId() + "]"
                             + "Caught Exception: " + e.getMessage(),
@@ -131,8 +139,12 @@ public class CatalogConcurrencyTest {
   public void testCatalogConcurrency() throws Exception {
     logger.info("testCatalogConcurrency()");
 
-    HeavyDBTestClient su = HeavyDBTestClient.getClient(
-            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(local, port, defDb, admin, defPwd);
+
+    su.runSql("DROP USER IF EXISTS bob;");
+    su.runSql("DROP USER IF EXISTS dba;");
+    su.runSql("DROP DATABASE IF EXISTS db1;");
+
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
 
@@ -159,18 +171,37 @@ public class CatalogConcurrencyTest {
     su.runSql("GRANT ACCESS on database db1 TO dba;");
     su.runSql("GRANT ACCESS on database db1 TO bob;");
 
-    runTest("db1", "admin", "HyperInteractive", "admin", "HyperInteractive");
-    runTest("db1", "admin", "HyperInteractive", "dba", "password");
-    runTest("db1", "admin", "HyperInteractive", "bob", "password");
-    runTest("db1", "dba", "password", "admin", "HyperInteractive");
-    runTest("db1", "dba", "password", "bob", "password");
+    // We create a series of dashboards with fixed ids to be modified in parallel.
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient(local, port, "db1", admin, defPwd);
+    for (TDashboard board : dba.get_dashboards()) {
+      logger.info("DROP DASHBOARD " + board.dashboard_name);
+      dba.delete_dashboard(board.dashboard_id);
+    }
+    ArrayList<Integer> dashboardIds = new ArrayList<>();
+    for (int i = 0; i < 5; ++i) {
+      String dashName = "dash_" + i;
+      logger.info("CREATE DASHBOARD " + dashName);
+      dashboardIds.add(dba.create_dashboard(dashName));
+    }
+    HeavyDBAsserts.assertEqual(5, dba.get_dashboards().size());
 
-    runTest("heavyai", "admin", "HyperInteractive", "admin", "HyperInteractive");
-    runTest("heavyai", "admin", "HyperInteractive", "dba", "password");
-    runTest("heavyai", "admin", "HyperInteractive", "bob", "password");
-    runTest("heavyai", "dba", "password", "admin", "HyperInteractive");
-    runTest("heavyai", "dba", "password", "bob", "password");
+    runTest("db1", admin, defPwd, admin, defPwd, dashboardIds);
+    runTest("db1", admin, defPwd, "dba", "password", dashboardIds);
+    runTest("db1", admin, defPwd, "bob", "password", dashboardIds);
+    runTest("db1", "dba", "password", admin, defPwd, dashboardIds);
+    runTest("db1", "dba", "password", "bob", "password", dashboardIds);
 
+    runTest(defDb, admin, defPwd, admin, defPwd, dashboardIds);
+    runTest(defDb, admin, defPwd, "dba", "password", dashboardIds);
+    runTest(defDb, admin, defPwd, "bob", "password", dashboardIds);
+    runTest(defDb, "dba", "password", admin, defPwd, dashboardIds);
+    runTest(defDb, "dba", "password", "bob", "password", dashboardIds);
+
+    for (TDashboard board : dba.get_dashboards()) {
+      logger.info("DROP DASHBOARD " + board.dashboard_name);
+      dba.delete_dashboard(board.dashboard_id);
+    }
     su.runSql("DROP DATABASE db1;");
     su.runSql("DROP USER bob;");
     su.runSql("DROP USER dba;");

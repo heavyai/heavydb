@@ -187,7 +187,7 @@ class Catalog final {
   void dropTable(const TableDescriptor* td);
   void truncateTable(const TableDescriptor* td);
   void renameTable(const TableDescriptor* td, const std::string& newTableName);
-  void renameTable(std::vector<std::pair<std::string, std::string>>& names);
+  void renameTables(const std::vector<std::pair<std::string, std::string>>& names);
   void renameColumn(const TableDescriptor* td,
                     const ColumnDescriptor* cd,
                     const std::string& newColumnName);
@@ -265,6 +265,11 @@ class Catalog final {
   const DBMetadata& getCurrentDB() const { return currentDB_; }
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   std::shared_ptr<Calcite> getCalciteMgr() const { return calciteMgr_; }
+  void setCalciteMgr(const std::shared_ptr<Calcite>& new_calcite_mgr) {
+    // Used for testing.
+    calciteMgr_ = new_calcite_mgr;
+  }
+
   const std::string& getCatalogBasePath() const { return basePath_; }
 
   const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;
@@ -675,8 +680,8 @@ class Catalog final {
   void executeDropTableSqliteQueries(const TableDescriptor* td);
   void doTruncateTable(const TableDescriptor* td);
   void renamePhysicalTable(const TableDescriptor* td, const std::string& newTableName);
-  void renamePhysicalTable(std::vector<std::pair<std::string, std::string>>& names,
-                           std::vector<int>& tableIds);
+  void renamePhysicalTables(std::vector<std::pair<std::string, std::string>>& names,
+                            std::vector<int>& tableIds);
   void instantiateFragmenter(TableDescriptor* td) const;
   void getAllColumnMetadataForTableImpl(const TableDescriptor* td,
                                         std::list<const ColumnDescriptor*>& colDescs,
@@ -685,7 +690,7 @@ class Catalog final {
                                         const bool fetchPhysicalColumns) const;
   std::string calculateSHA1(const std::string& data);
   std::string generatePhysicalTableName(const std::string& logicalTableName,
-                                        const int32_t& shardNumber);
+                                        const size_t shardNumber);
   std::vector<DBObject> parseDashboardObjects(const std::string& view_meta,
                                               const int& user_id);
   void createOrUpdateDashboardSystemRole(const std::string& view_meta,
@@ -876,6 +881,13 @@ class Catalog final {
     NoTableFoundException(int32_t table_id)
         : std::runtime_error{"No entry found for table: " + std::to_string(table_id)} {}
   };
+
+  template <typename F, typename... Args>
+  void execInTransaction(F&& f, Args&&... args);
+
+  const TableDescriptor* getCachedTableDescriptor(
+      const std::map<std::string, int>& cached_table_map,
+      const std::string& cur_table_name);
 
   static constexpr const char* CATALOG_SERVER_NAME{"system_catalog_server"};
   static constexpr const char* MEMORY_STATS_SERVER_NAME{"system_memory_stats_server"};

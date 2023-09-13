@@ -59,7 +59,7 @@ class TFilterPushDownInfo;
 class TPlanResult;
 class TCompletionHint;
 
-class Calcite final {
+class Calcite {
  public:
   Calcite(const int db_port,
           const int port,
@@ -71,6 +71,7 @@ class Calcite final {
   Calcite(const SystemParameters& db_parameters,
           const std::string& data_dir,
           const std::string& udf_filename = "");
+  Calcite() {}
   // sql_string may differ from what is in query_state due to legacy_syntax option.
   TPlanResult process(query_state::QueryStateProxy,
                       std::string sql_string,
@@ -86,9 +87,9 @@ class Calcite final {
       const int cursor);
   std::string getExtensionFunctionWhitelist();
   std::string getUserDefinedFunctionWhitelist();
-  void updateMetadata(std::string catalog, std::string table);
+  virtual void updateMetadata(std::string catalog, std::string table);
   void close_calcite_server(bool log = true);
-  ~Calcite();
+  virtual ~Calcite();
   std::string getRuntimeExtensionFunctionWhitelist();
   void setRuntimeExtensionFunctions(const std::vector<TUserDefinedFunction>& udfs,
                                     const std::vector<TUserDefinedTableFunction>& udtfs,
