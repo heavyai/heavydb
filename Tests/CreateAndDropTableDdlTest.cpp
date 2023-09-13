@@ -23,13 +23,25 @@
 #include <gtest/gtest.h>
 #include <boost/filesystem.hpp>
 
+#include "Calcite/Calcite.h"
 #include "Catalog/ForeignTable.h"
 #include "Catalog/TableDescriptor.h"
 #include "DBHandlerTestHelpers.h"
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Shared/SysDefinitions.h"
+#include "Shared/scope.h"
 #include "TestHelpers.h"
 #include "Utils/DdlUtils.h"
+
+class MockCalcite : public Calcite {
+ public:
+  struct UpdateMetadataError : public std::runtime_error {
+    UpdateMetadataError() : std::runtime_error("UpdateMetadataError") {}
+  };
+  void updateMetadata(std::string catalog, std::string table) override {
+    throw UpdateMetadataError();
+  }
+};
 
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
@@ -1916,6 +1928,21 @@ TEST_F(RenameTableTest, SimpleRename) {
 
   // reset
   sql("RENAME TABLE F TO A, G TO B, H TO C;");
+}
+
+TEST_F(RenameTableTest, RenameCalciteError) {
+  // Inject a calcite conenction issue so that updating calcite metadata will throw.
+  // TODO(Misiu): Replace this with proper Catalog unit tests.
+  auto& cat = getCatalog();
+  auto old_calcite = cat.getCalciteMgr();
+  cat.setCalciteMgr(std::make_shared<MockCalcite>());
+  ScopeGuard scope = [&] { cat.setCalciteMgr(old_calcite); };
+
+  queryAndAssertException("RENAME TABLE A to F;", "UpdateMetadataError");
+  sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'A';", {{i(1)}});
+  queryAndAssertException(
+      "SELECT count(*) from F;",
+      "SQL Error: From line 2, column 6 to line 2, column 8: Object 'F' not found");
 }
 
 TEST_F(RenameTableTest, SwapRename) {

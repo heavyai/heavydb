@@ -5303,7 +5303,7 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
   checkNameSubstition(tableSubtituteMap);
 
-  catalog.renameTable(names);
+  catalog.renameTables(names);
 
   // just to be explicit, clean out the list, the unique_ptr will delete
   while (!tablesToRename_.empty()) {

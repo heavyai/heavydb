@@ -398,8 +398,8 @@ void SysCatalog::importDataFromOldMapdDB() {
   std::string mapd_db_path = basePath_ + "/" + shared::kCatalogDirectoryName + "/mapd";
   sqliteConnector_->query("ATTACH DATABASE `" + mapd_db_path + "` as old_cat");
   sqliteConnector_->query("BEGIN TRANSACTION");
-  LOG(INFO) << "Moving global metadata into a separate catalog";
   try {
+    LOG(INFO) << "Moving global metadata into a separate catalog";
     auto moveTableIfExists = [conn = sqliteConnector_.get()](const std::string& tableName,
                                                              bool deleteOld = true) {
       conn->query("SELECT sql FROM old_cat.sqlite_master WHERE type='table' AND name='" +
@@ -419,8 +419,8 @@ void SysCatalog::importDataFromOldMapdDB() {
     moveTableIfExists("mapd_privileges");
     moveTableIfExists("mapd_version_history", false);
   } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to move global metadata into a separate catalog: " << e.what();
     sqliteConnector_->query("ROLLBACK TRANSACTION");
+    LOG(ERROR) << "Failed to move global metadata into a separate catalog: " << e.what();
     try {
       sqliteConnector_->query("DETACH DATABASE old_cat");
     } catch (const std::exception&) {
@@ -719,8 +719,8 @@ void SysCatalog::updatePasswordsToHashes() {
     sqliteConnector_->query("DROP TABLE mapd_users");
     sqliteConnector_->query("ALTER TABLE mapd_users_tmp RENAME TO mapd_users");
   } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to hash passwords: " << e.what();
     sqliteConnector_->query("ROLLBACK TRANSACTION");
+    LOG(ERROR) << "Failed to hash passwords: " << e.what();
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
@@ -768,8 +768,8 @@ void SysCatalog::updateBlankPasswordsToRandom() {
         std::vector<std::string>{std::to_string(MAPD_VERSION),
                                  UPDATE_BLANK_PASSWORDS_TO_RANDOM});
   } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to fix blank passwords: " << e.what();
     sqliteConnector_->query("ROLLBACK TRANSACTION");
+    LOG(ERROR) << "Failed to fix blank passwords: " << e.what();
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
@@ -795,8 +795,8 @@ void SysCatalog::updateSupportUserDeactivation() {
         std::vector<std::string>{std::to_string(MAPD_VERSION),
                                  UPDATE_SUPPORT_USER_DEACTIVATION});
   } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to add support for user deactivation: " << e.what();
     sqliteConnector_->query("ROLLBACK TRANSACTION");
+    LOG(ERROR) << "Failed to add support for user deactivation: " << e.what();
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
@@ -872,8 +872,8 @@ void SysCatalog::migrateDBAccessPrivileges() {
       }
     }
   } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to migrate db access privileges: " << e.what();
     sqliteConnector_->query("ROLLBACK TRANSACTION");
+    LOG(ERROR) << "Failed to migrate db access privileges: " << e.what();
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");

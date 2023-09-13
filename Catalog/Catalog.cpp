@@ -566,8 +566,8 @@ void Catalog::updateDefaultColumnValues() {
       sqliteConnector_.query("ALTER TABLE mapd_columns ADD default_value TEXT");
     }
   } catch (std::exception& e) {
-    LOG(ERROR) << "Failed to make metadata update for default values` support";
     sqliteConnector_.query("ROLLBACK TRANSACTION");
+    LOG(ERROR) << "Failed to make metadata update for default values` support";
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
@@ -4441,30 +4441,24 @@ void Catalog::renameTable(const TableDescriptor* td, const string& newTableName)
   }
 }
 
-void Catalog::renamePhysicalTable(std::vector<std::pair<std::string, std::string>>& names,
-                                  std::vector<int>& tableIds) {
+void Catalog::renamePhysicalTables(
+    std::vector<std::pair<std::string, std::string>>& names,
+    std::vector<int>& tableIds) {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(getObjForLock());
 
   // execute the SQL query
-  try {
-    for (size_t i = 0; i < names.size(); i++) {
-      int tableId = tableIds[i];
-      std::string& newTableName = names[i].second;
-
-      sqliteConnector_.query_with_text_params(
-          "UPDATE mapd_tables SET name = ? WHERE tableid = ?",
-          std::vector<std::string>{newTableName, std::to_string(tableId)});
-    }
-  } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
+  for (size_t i = 0; i < names.size(); i++) {
+    int tableId = tableIds[i];
+    const std::string& newTableName = names[i].second;
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_tables SET name = ? WHERE tableid = ?",
+        std::vector<std::string>{newTableName, std::to_string(tableId)});
   }
 
   // reset the table descriptors, give Calcite a kick
   for (size_t i = 0; i < names.size(); i++) {
-    std::string& curTableName = names[i].first;
-    std::string& newTableName = names[i].second;
+    const auto& [curTableName, newTableName] = names[i];
 
     TableDescriptorMap::iterator tableDescIt =
         tableDescriptorMap_.find(to_upper(curTableName));
@@ -4483,38 +4477,31 @@ void Catalog::renamePhysicalTable(std::vector<std::pair<std::string, std::string
 // Collect an 'overlay' mapping of the tableNames->tableId
 //    to account for possible chained renames
 //    (for swap:  a->b, b->c, c->d, d->a)
-
-const TableDescriptor* lookupTableDescriptor(Catalog* cat,
-                                             std::map<std::string, int>& cachedTableMap,
-                                             std::string& curTableName) {
-  auto iter = cachedTableMap.find(curTableName);
-  if ((iter != cachedTableMap.end())) {
-    // get the cached tableId
-    //   and use that to lookup the TableDescriptor
-    int tableId = (*iter).second;
-    if (tableId == -1) {
-      return NULL;
-    } else {
-      return cat->getMetadataForTable(tableId);
-    }
+const TableDescriptor* Catalog::getCachedTableDescriptor(
+    const std::map<std::string, int>& cached_table_map,
+    const std::string& cur_table_name) {
+  if (auto it = cached_table_map.find(cur_table_name); it != cached_table_map.end()) {
+    auto table_id = it->second;
+    return (table_id == -1) ? NULL : getMetadataForTable(table_id);
   }
-
-  // else ... lookup in standard location
-  return cat->getMetadataForTable(curTableName);
+  return getMetadataForTable(cur_table_name);
 }
 
-void replaceTableName(std::map<std::string, int>& cachedTableMap,
-                      std::string& curTableName,
-                      std::string& newTableName,
-                      int tableId) {
+namespace {
+void replace_cached_table_name(std::map<std::string, int>& cachedTableMap,
+                               const std::string& curTableName,
+                               const std::string& newTableName,
+                               int tableId) {
   // mark old/cur name as deleted
   cachedTableMap[curTableName] = -1;
 
   // insert the 'new' name
   cachedTableMap[newTableName] = tableId;
 }
+}  // namespace
 
-void Catalog::renameTable(std::vector<std::pair<std::string, std::string>>& names) {
+void Catalog::renameTables(
+    const std::vector<std::pair<std::string, std::string>>& names) {
   // tableId of all tables being renamed
   //    ... in matching order to 'names'
   std::vector<int> tableIds;
@@ -4533,12 +4520,11 @@ void Catalog::renameTable(std::vector<std::pair<std::string, std::string>>& name
 
   // gather tableIds pre-execute; build maps
   for (size_t i = 0; i < names.size(); i++) {
-    std::string& curTableName = names[i].first;
-    std::string& newTableName = names[i].second;
+    const auto& [curTableName, newTableName] = names[i];
 
     // make sure the table being renamed exists,
     //    or will exist when executed in 'name' order
-    auto td = lookupTableDescriptor(this, cachedTableMap, curTableName);
+    auto td = getCachedTableDescriptor(cachedTableMap, curTableName);
     CHECK(td);
 
     tableIds.push_back(td->tableId);
@@ -4546,7 +4532,7 @@ void Catalog::renameTable(std::vector<std::pair<std::string, std::string>>& name
       // don't overwrite as it should map to the first names index 'i'
       uniqueOrderedTableIds[td->tableId] = i;
     }
-    replaceTableName(cachedTableMap, curTableName, newTableName, td->tableId);
+    replace_cached_table_name(cachedTableMap, curTableName, newTableName, td->tableId);
   }
 
   CHECK_EQ(tableIds.size(), names.size());
@@ -4564,7 +4550,7 @@ void Catalog::renameTable(std::vector<std::pair<std::string, std::string>>& name
   // acquire the locks for all tables being renamed
   lockmgr::LockedTableDescriptors tableLocks;
   for (auto& idPair : uniqueOrderedTableIds) {
-    std::string& tableName = names[idPair.second].first;
+    const std::string& tableName = names[idPair.second].first;
     tableLocks.emplace_back(
         std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
             lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
@@ -4575,18 +4561,13 @@ void Catalog::renameTable(std::vector<std::pair<std::string, std::string>>& name
 
   {
     cat_write_lock write_lock(this);
-    cat_sqlite_lock sqlite_lock(getObjForLock());
-
-    sqliteConnector_.query("BEGIN TRANSACTION");
-
     // collect all (tables + physical tables) into a single list
     std::vector<std::pair<std::string, std::string>> allNames;
     std::vector<int> allTableIds;
 
     for (size_t i = 0; i < names.size(); i++) {
       int tableId = tableIds[i];
-      std::string& curTableName = names[i].first;
-      std::string& newTableName = names[i].second;
+      const auto& [curTableName, newTableName] = names[i];
 
       // rename all corresponding physical tables if this is a logical table
       const auto physicalTableIt = logicalToPhysicalTableMapById_.find(tableId);
@@ -4597,8 +4578,7 @@ void Catalog::renameTable(std::vector<std::pair<std::string, std::string>>& name
           int32_t physical_tb_id = physicalTables[k];
           const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
           CHECK(phys_td);
-          std::string newPhysTableName =
-              generatePhysicalTableName(newTableName, static_cast<int32_t>(k + 1));
+          std::string newPhysTableName = generatePhysicalTableName(newTableName, (k + 1));
           allNames.emplace_back(phys_td->tableName, newPhysTableName);
           allTableIds.push_back(phys_td->tableId);
         }
@@ -4606,43 +4586,36 @@ void Catalog::renameTable(std::vector<std::pair<std::string, std::string>>& name
       allNames.emplace_back(curTableName, newTableName);
       allTableIds.push_back(tableId);
     }
-    // rename all tables in one shot
-    renamePhysicalTable(allNames, allTableIds);
 
-    sqliteConnector_.query("END TRANSACTION");
-    //  cat write/sqlite locks are released when they go out scope
+    // rename all tables in one transaction
+    execInTransaction(&Catalog::renamePhysicalTables, allNames, allTableIds);
   }
-  {
-    // now update the SysCatalog
-    for (size_t i = 0; i < names.size(); i++) {
-      int tableId = tableIds[i];
-      std::string& newTableName = names[i].second;
-      {
-        // update table name in direct and effective priv map
-        DBObjectKey key;
-        key.dbId = currentDB_.dbId;
-        key.objectId = tableId;
-        key.permissionType = static_cast<int>(DBObjectType::TableDBObjectType);
 
-        DBObject object(newTableName, TableDBObjectType);
-        object.setObjectKey(key);
+  // now update the SysCatalog
+  for (size_t i = 0; i < names.size(); i++) {
+    int tableId = tableIds[i];
+    const std::string& newTableName = names[i].second;
+    {
+      // update table name in direct and effective priv map
+      DBObjectKey key;
+      key.dbId = currentDB_.dbId;
+      key.objectId = tableId;
+      key.permissionType = static_cast<int>(DBObjectType::TableDBObjectType);
 
-        auto objdescs = SysCatalog::instance().getMetadataForObject(
-            currentDB_.dbId, static_cast<int>(DBObjectType::TableDBObjectType), tableId);
-        for (auto obj : objdescs) {
-          Grantee* grnt = SysCatalog::instance().getGrantee(obj->roleName);
-          if (grnt) {
-            grnt->renameDbObject(object);
-          }
+      DBObject object(newTableName, TableDBObjectType);
+      object.setObjectKey(key);
+
+      auto objdescs = SysCatalog::instance().getMetadataForObject(
+          currentDB_.dbId, static_cast<int>(DBObjectType::TableDBObjectType), tableId);
+      for (auto obj : objdescs) {
+        Grantee* grnt = SysCatalog::instance().getGrantee(obj->roleName);
+        if (grnt) {
+          grnt->renameDbObject(object);
         }
-        SysCatalog::instance().renameObjectsInDescriptorMap(object, *this);
       }
+      SysCatalog::instance().renameObjectsInDescriptorMap(object, *this);
     }
   }
-
-  // -------- Cleanup --------
-
-  // table locks are released when 'tableLocks' goes out of scope
 }
 
 void Catalog::renameColumn(const TableDescriptor* td,
@@ -5110,7 +5083,7 @@ void Catalog::eraseTablePhysicalData(const TableDescriptor* td) {
 }
 
 std::string Catalog::generatePhysicalTableName(const std::string& logicalTableName,
-                                               const int32_t& shardNumber) {
+                                               const size_t shardNumber) {
   std::string physicalTableName =
       logicalTableName + physicalTableNameTag_ + std::to_string(shardNumber);
   return (physicalTableName);
@@ -7022,5 +6995,20 @@ void Catalog::removeFromColumnMap(ColumnDescriptor* cd) {
   }
   columnDescriptorMap_.erase(ColumnKey{cd->tableId, to_upper(cd->columnName)});
   columnDescriptorMapById_.erase(ColumnIdKey{cd->tableId, cd->columnId});
+}
+
+// TODO(Misiu): Replace most sqlite transactions with this idiom.
+template <typename F, typename... Args>
+void Catalog::execInTransaction(F&& f, Args&&... args) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    (this->*f)(std::forward<Args>(args)...);
+  } catch (std::exception&) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
 }
 }  // namespace Catalog_Namespace
