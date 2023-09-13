@@ -308,9 +308,9 @@ The [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) and [scripts/mapd
 
 ## Arch
 
-[scripts/mapd-deps-arch.sh](scripts/mapd-deps-arch.sh) is provided that will use [yay](https://aur.archlinux.org/packages/yay/) to install packages from the [Arch User Repository](https://wiki.archlinux.org/index.php/Arch_User_Repository) and a custom PKGBUILD script for Apache Arrow. If you don't have yay yet, install it first: https://github.com/Jguer/yay#installation
+[scripts/mapd-deps-arch.sh](scripts/mapd-deps-arch.sh) is provided that will use [yay](https://aur.archlinux.org/packages/yay/) to install packages from the [Arch User Repository](https://wiki.archlinux.org/index.php/Arch_User_Repository) and custom PKGBUILD scripts for a few packages listed below. If you don't have `yay` yet, install it first: https://github.com/Jguer/yay#installation
 
-Note: Apache Arrow, while available in the AUR, requires a few custom build flags in order to be used with Core. A custom PKGBUILD for it is included.
+### Package Version Requirements:
 
 ### CUDA
 

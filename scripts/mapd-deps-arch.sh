@@ -38,8 +38,9 @@ yay -Suy \
     blosc \
     boost \
     c-ares \
-    clang \
+    clang14 \
     cmake \
+    compiler-rt14 \
     cuda \
     doxygen \
     flex \
@@ -55,7 +56,7 @@ yay -Suy \
     jdk-openjdk \
     libiodbc \
     librdkafka \
-    llvm \
+    llvm14 \
     lz4 \
     maven \
     ninja \
@@ -70,6 +71,7 @@ yay -Suy \
 
 # Install Arrow
 ( cd arch/arrow
+  patch -p4 < heavyai.patch
   makepkg -cis
 )
 
@@ -78,11 +80,7 @@ yay -Suy \
   makepkg -cis
 )
 
-# Install Bison++ from source
-wget --continue https://dependencies.mapd.com/thirdparty/bisonpp-1.21-45.tar.gz
-tar xvf bisonpp-1.21-45.tar.gz
-pushd bison++-1.21
-./configure
-make -j $(nproc)
-sudo make install
-popd
+# Install Bison++
+( cd arch/bison++
+  makepkg -cis
+)

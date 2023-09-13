@@ -1,0 +1,69 @@
+diff --git a/scripts/arch/arrow/PKGBUILD b/scripts/arch/arrow/PKGBUILD
+index 9184af8f6..b8e122df8 100644
+--- a/scripts/arch/arrow/PKGBUILD
++++ b/scripts/arch/arrow/PKGBUILD
+@@ -3,27 +3,27 @@
+ 
+ pkgname=arrow
+ pkgver=13.0.0
+-pkgrel=2
++pkgrel=100
+ pkgdesc="Columnar in-memory analytics layer for big data."
+ arch=(x86_64)
+ url="https://arrow.apache.org"
+ license=(Apache)
+-depends=(apache-orc brotli bzip2 gflags grpc google-glog libutf8proc
++depends=(brotli bzip2 gflags grpc libutf8proc
+          lz4 openssl protobuf re2 snappy thrift zlib zstd)
+ provides=(parquet-cpp)
+ conflicts=(parquet-cpp)
+-makedepends=(boost clang cmake flatbuffers git gmock rapidjson xsimd)
+-source=(https://archive.apache.org/dist/${pkgname}/${pkgname}-${pkgver}/apache-${pkgname}-${pkgver}.tar.gz{,.asc}
++makedepends=(boost cmake flatbuffers git gmock rapidjson xsimd)
++source=(https://archive.apache.org/dist/${pkgname}/${pkgname}-${pkgver}/apache-${pkgname}-${pkgver}.tar.gz
+         git+https://github.com/apache/parquet-testing.git
+         git+https://github.com/apache/arrow-testing.git)
+ sha512sums=('3314d79ef20ac2cfc63f2c16fafb30c3f6187c10c6f5ea6ff036f6db766621d7c65401d85bf1e979bd0ecf831fbb0a785467642792d6bf77016f9807243c064e'
+-            'SKIP'
+             'SKIP'
+             'SKIP')
+ validpgpkeys=(265F80AB84FE03127E14F01125BCCA5220D84079  # Krisztian Szucs (apache) <szucs.krisztian@gmail.com>
+               08D3564B7C6A9CAFBFF6A66791D18FCF079F8007) # Kouhei Sutou <kou@cozmixng.org>
+ 
+ build(){
++  export PATH=/usr/lib/llvm14/bin:$PATH
+   CC=clang \
+   CXX=clang++ \
+   cmake \
+@@ -37,16 +37,16 @@ build(){
+     -DARROW_COMPUTE=ON \
+     -DARROW_CSV=ON \
+     -DARROW_SUBSTRAIT=ON \
+-    -DARROW_FLIGHT=ON \
+-    -DARROW_FLIGHT_SQL=ON \
++    -DARROW_FLIGHT=OFF \
++    -DARROW_FLIGHT_SQL=OFF \
+     -DARROW_GANDIVA=OFF \
+     -DARROW_HDFS=ON \
+     -DARROW_IPC=ON \
+     -DARROW_JEMALLOC=ON \
+-    -DARROW_ORC=ON \
++    -DARROW_ORC=OFF \
+     -DARROW_PARQUET=ON \
+     -DARROW_TENSORFLOW=ON \
+-    -DARROW_USE_GLOG=ON \
++    -DARROW_USE_GLOG=OFF \
+     -DARROW_WITH_BROTLI=ON \
+     -DARROW_WITH_BZ2=ON \
+     -DARROW_WITH_LZ4=ON \
+@@ -54,6 +54,10 @@ build(){
+     -DARROW_WITH_ZLIB=ON \
+     -DARROW_WITH_ZSTD=ON \
+     -DPARQUET_REQUIRE_ENCRYPTION=ON \
++    -DARROW_ALTIVEC=OFF \
++    -DARROW_CUDA=ON \
++    -DARROW_JSON=ON \
++    -DBUILD_SHARED_LIBS=ON \
+     -Wno-dev
+   make -C build
+ }

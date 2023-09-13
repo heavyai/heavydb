@@ -1,0 +1,24 @@
+pkgname='bison++'
+pkgver=1.21
+pkgrel=1
+pkgdesc='Bison for C++'
+arch=('x86_64')
+url='https://code.google.com/archive/p/flexpp-bisonpp/'
+license=('GNU GPL v2')
+source=('https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz')
+sha256sums=('a6d2b04aa22c91c8b09cb2205c0a4148e289ea8e4127d8f05fb2e4c5b45ed791')
+
+build() {
+  cd "$srcdir/$pkgname-$pkgver"
+
+  ./configure
+  make
+}
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+
+  make prefix="$pkgdir/usr/" install
+}
+
+# vim:ts=2:sw=2:et:
