@@ -1,66 +1,70 @@
-# Maintainer: Guillaume Horel <guillaume.horel@gmail.com>
+# Maintainer: Bruno Pagani <archange@archlinux.org>
+# Contributor: Guillaume Horel <guillaume.horel@gmail.com>
 
-pkgname='arrow'
-pkgver=5.0.0
-pkgrel=1
-pkgdesc="A columnar in-memory analytics layer for big data."
-arch=('x86_64')
+pkgname=arrow
+pkgver=13.0.0
+pkgrel=2
+pkgdesc="Columnar in-memory analytics layer for big data."
+arch=(x86_64)
 url="https://arrow.apache.org"
-license=('Apache')
-depends=('boost-libs' 'double-conversion' 'c-ares' 'gflags' 'google-glog' 'libutf8proc' 'lz4' 'protobuf' 'rapidjson' 'thrift' 'uriparser' 'zstd')
-checkdepends=('git')
-optdepends=()
-provides=('parquet-cpp')
-conflicts=('parquet-cpp')
-makedepends=('boost' 'cmake' 'flatbuffers' 'python-numpy')
-source=("https://github.com/apache/arrow/archive/apache-arrow-$pkgver.tar.gz")
-sha256sums=('ec3bdae6ccc08de5b5adcf9cbe7cbc085cab0ba06c8e6d3abfc3ed1cd4c1c9a2')
+license=(Apache)
+depends=(apache-orc brotli bzip2 gflags grpc google-glog libutf8proc
+         lz4 openssl protobuf re2 snappy thrift zlib zstd)
+provides=(parquet-cpp)
+conflicts=(parquet-cpp)
+makedepends=(boost clang cmake flatbuffers git gmock rapidjson xsimd)
+source=(https://archive.apache.org/dist/${pkgname}/${pkgname}-${pkgver}/apache-${pkgname}-${pkgver}.tar.gz{,.asc}
+        git+https://github.com/apache/parquet-testing.git
+        git+https://github.com/apache/arrow-testing.git)
+sha512sums=('3314d79ef20ac2cfc63f2c16fafb30c3f6187c10c6f5ea6ff036f6db766621d7c65401d85bf1e979bd0ecf831fbb0a785467642792d6bf77016f9807243c064e'
+            'SKIP'
+            'SKIP'
+            'SKIP')
+validpgpkeys=(265F80AB84FE03127E14F01125BCCA5220D84079  # Krisztian Szucs (apache) <szucs.krisztian@gmail.com>
+              08D3564B7C6A9CAFBFF6A66791D18FCF079F8007) # Kouhei Sutou <kou@cozmixng.org>
 
 build(){
-  cd "$srcdir"
-  patch -p1 $pkgname-apache-$pkgname-$pkgver/cpp/src/arrow/util/tdigest.cc < ../add-missing-limits-include.patch
-  mkdir -p build
-  cd "$srcdir/build"
-  ARROW_BUILD_TOOLCHAIN=/usr DOUBLE_CONVERSION_HOME=/usr cmake \
-    ../$pkgname-apache-$pkgname-$pkgver/cpp -DARROW_DEPENDENCY_SOURCE=SYSTEM \
-                                      -DCMAKE_GENERATOR="Unix Makefiles" \
-                                      -DARROW_PYTHON=ON \
-                                      -DCMAKE_BUILD_TYPE=Release \
-                                      -DBUILD_SHARED_LIBS=ON \
-                                      -DARROW_BUILD_TESTS=OFF \
-                                      -DARROW_ALTIVEC=OFF \
-                                      -DCMAKE_INSTALL_PREFIX="/usr" \
-                                      -DCMAKE_INSTALL_LIBDIR="lib" \
-                                      -DARROW_COMPUTE=ON \
-                                      -DARROW_IPC=ON \
-                                      -DARROW_JEMALLOC=ON \
-                                      -DARROW_ORC=OFF \
-                                      -DARROW_PARQUET=ON \
-                                      -DARROW_PLASMA=ON \
-                                      -DARROW_TENSORFLOW=ON \
-                                      -DARROW_FLIGHT=OFF \
-                                      -DARROW_GANDIVA=OFF \
-                                      -DARROW_PROTOBUF_USE_SHARED=ON \
-                                      -DARROW_GFLAGS_USE_SHARED=ON \
-                                      -DARROW_USE_GLOG=OFF \
-                                      -DARROW_WITH_ZSTD=BUNDLED \
-                                      -DARROW_WITH_SNAPPY=BUNDLED \
-                                      -DARROW_WITH_BROTLI=BUNDLED \
-                                      -DARROW_WITH_ZLIB=BUNDLED \
-                                      -DGTest_SOURCE=BUNDLED \
-                                      -DgRPC_SOURCE=BUNDLED \
-                                      -DARROW_S3=OFF \
-                                      -DARROW_FILESYSTEM=OFF \
-                                      -DARROW_CUDA=ON
+  CC=clang \
+  CXX=clang++ \
+  cmake \
+    -B build -S apache-${pkgname}-${pkgver}/cpp \
+    -DCMAKE_INSTALL_PREFIX="/usr" \
+    -DCMAKE_INSTALL_LIBDIR="lib" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DARROW_BUILD_STATIC=OFF \
+    -DARROW_DEPENDENCY_SOURCE=SYSTEM \
+    -DARROW_BUILD_TESTS=ON \
+    -DARROW_COMPUTE=ON \
+    -DARROW_CSV=ON \
+    -DARROW_SUBSTRAIT=ON \
+    -DARROW_FLIGHT=ON \
+    -DARROW_FLIGHT_SQL=ON \
+    -DARROW_GANDIVA=OFF \
+    -DARROW_HDFS=ON \
+    -DARROW_IPC=ON \
+    -DARROW_JEMALLOC=ON \
+    -DARROW_ORC=ON \
+    -DARROW_PARQUET=ON \
+    -DARROW_TENSORFLOW=ON \
+    -DARROW_USE_GLOG=ON \
+    -DARROW_WITH_BROTLI=ON \
+    -DARROW_WITH_BZ2=ON \
+    -DARROW_WITH_LZ4=ON \
+    -DARROW_WITH_SNAPPY=ON \
+    -DARROW_WITH_ZLIB=ON \
+    -DARROW_WITH_ZSTD=ON \
+    -DPARQUET_REQUIRE_ENCRYPTION=ON \
+    -Wno-dev
+  make -C build
+}
 
-  make -j $(nproc)
+check(){
+  PARQUET_TEST_DATA="${srcdir}"/parquet-testing/data \
+  ARROW_TEST_DATA="${srcdir}"/arrow-testing/data \
+  ctest --test-dir build --output-on-failure
 }
 
 package(){
-  cd "$srcdir/build"
-  make -j $(nproc) DESTDIR="${pkgdir}" install
-  find "${pkgdir}/usr/lib/" -name "*testing*" -delete
+  DESTDIR="$pkgdir" cmake --install build
+  find "${pkgdir}"/usr/lib/ -name '*testing*' -delete
 }
-
-
-# vim:ts=2:sw=2:et:
