@@ -5207,6 +5207,21 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayUnsignedIntegerTypes) {
   // clang-format on
 }
 
+TEST_F(SelectQueryTest, ParquetIncorrectArrayMapping) {
+  const auto& query = getCreateForeignTableQuery(
+      "( index INT, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER, bi BIGINT[], f "
+      "FLOAT[], tm TIME[], tp TIMESTAMP[], d DATE[], txt TEXT[], fixedpoint "
+      "DECIMAL(10,5)[] )",
+      "array_types",
+      "parquet");
+  sql(query);
+  queryAndAssertPartialException(
+      "SELECT COUNT(*) FROM " + default_table_name,
+      "Unsupported mapping detected. Column 'int.list.item' detected to be a parquet "
+      "list but HeavyDB mapped column 'i' is not an array. Parquet column: "
+      "int.list.item, HeavyDB column: i");
+}
+
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
   auto [fragment_size, data_wrapper_type, extension] = GetParam();
   if (is_odbc(data_wrapper_type)) {
