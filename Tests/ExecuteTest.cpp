@@ -18564,21 +18564,6 @@ TEST_F(Select, IsoDow) {
   }
 }
 
-TEST_F(Select, GPUKernelCodeCache) {
-  SKIP_ALL_ON_AGGREGATOR();
-  auto dt = ExecutorDeviceType::GPU;
-  if (!skip_tests(dt)) {
-    run_multiple_agg("SELECT x FROM test;", dt);
-    auto const sz1 = QueryEngine::getInstance()->getGpuKernelCacheSize();
-    run_multiple_agg("SELECT x FROM test;", dt);
-    auto const sz2 = QueryEngine::getInstance()->getGpuKernelCacheSize();
-    EXPECT_EQ(sz1, sz2);
-    run_multiple_agg("SELECT x,y,z FROM test group by 1,2,3;", dt);
-    auto const sz3 = QueryEngine::getInstance()->getGpuKernelCacheSize();
-    EXPECT_LT(sz2, sz3);
-  }
-}
-
 TEST(Truncate, Count) {
   run_ddl_statement("create table trunc_test (i1 integer, t1 text);");
   run_multiple_agg("insert into trunc_test values(1, '1');", ExecutorDeviceType::CPU);

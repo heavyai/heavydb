@@ -19,7 +19,7 @@
 #include <boost/functional/hash.hpp>
 #include <memory>
 
-#include "StringDictionary/LruCache.hpp"
+#include "Shared/LruCache.h"
 
 using CodeCacheKey = std::vector<std::string>;
 template <typename CC>

@@ -18,21 +18,46 @@
 #define QUERYENGINE_CODECACHEACCESSOR_HPP
 
 #include <mutex>
+#include <sstream>
 #include <string>
+
 #include "QueryEngine/CodeCache.h"
+
+extern bool g_is_test_env;
+
+struct CodeCacheMetric {
+  int64_t get_count{0};
+  int64_t found_count{0};
+  int64_t put_count{0};
+  int64_t ignore_count{0};
+  int64_t overwrite_count{0};
+  int64_t evict_count{0};
+};
 
 template <typename CompilationContext>
 class CodeCacheAccessor {
  public:
-  CodeCacheAccessor(size_t cache_size, std::string name = "")
-      : code_cache_(cache_size)
+  CodeCacheAccessor(EvictionMetricType eviction_metric_type,
+                    size_t max_cache_size,
+                    std::string name)
+      : code_cache_(eviction_metric_type, max_cache_size)
+      , eviction_metric_type_(eviction_metric_type)
       , get_count_(0)
       , found_count_(0)
       , put_count_(0)
       , ignore_count_(0)
       , overwrite_count_(0)
       , evict_count_(0)
-      , name_(std::move(name)) {}
+      , name_(std::move(name)) {
+    std::ostringstream oss;
+    std::string eviction_type = eviction_metric_type_ == EvictionMetricType::EntryCount
+                                    ? "EntryCount"
+                                    : "ByteSize";
+    oss << "Initialize a code cache (name: " << name_
+        << ", eviction_metric_type: " << eviction_type
+        << ", max_cache_size: " << max_cache_size << ")";
+    LOG(INFO) << oss.str();
+  }
 
   // TODO: replace get_value/put with get_or_wait/reset workflow.
   CodeCacheVal<CompilationContext> get_value(const CodeCacheKey& key);
@@ -56,19 +81,6 @@ class CodeCacheAccessor {
     code_cache_.evictNEntries(n);
   }
 
-  size_t getSumSizeEvicted(const size_t n) {
-    std::lock_guard<std::mutex> lock(code_cache_mutex_);
-    auto last = code_cache_.cend();
-    size_t visited = 0;
-    size_t ret = 0;
-    while (visited < n && last != code_cache_.cbegin()) {
-      last--;
-      ret += last->second->getMemSize();
-      visited++;
-    }
-    return ret;
-  }
-
   friend std::ostream& operator<<(std::ostream& os, CodeCacheAccessor& c) {
     std::lock_guard<std::mutex> lock(c.code_cache_mutex_);
     os << "CodeCacheAccessor<" << c.name_ << ">[current size=" << c.code_cache_.size()
@@ -78,8 +90,30 @@ class CodeCacheAccessor {
     return os;
   }
 
+  size_t getCacheSize() {
+    std::lock_guard<std::mutex> lock(code_cache_mutex_);
+    return code_cache_.size();
+  }
+
+  void resetCache(size_t new_max_size) {
+    CHECK(g_is_test_env) << "Call the resetCache function from non-test env.";
+    std::lock_guard<std::mutex> lock(code_cache_mutex_);
+    code_cache_ = CodeCache<CompilationContext>(eviction_metric_type_, new_max_size);
+  }
+
+  CodeCacheMetric getCodeCacheMetric() {
+    std::lock_guard<std::mutex> lock(code_cache_mutex_);
+    return {get_count_,
+            found_count_,
+            put_count_,
+            ignore_count_,
+            overwrite_count_,
+            evict_count_};
+  }
+
  private:
   CodeCache<CompilationContext> code_cache_;
+  EvictionMetricType const eviction_metric_type_;
   // cumulative statistics of code cache usage
   int64_t get_count_, found_count_, put_count_, ignore_count_, overwrite_count_,
       evict_count_;

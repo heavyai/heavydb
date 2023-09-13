@@ -72,6 +72,8 @@ extern bool g_allow_memory_status_log;
 extern bool g_enable_logs_system_tables;
 extern size_t g_logs_system_tables_max_files_count;
 extern bool g_uniform_request_ids_per_thrift_call;
+extern size_t g_gpu_code_cache_max_size_in_bytes;
+
 #ifdef ENABLE_MEMKIND
 extern std::string g_pmem_path;
 #endif
@@ -976,6 +978,12 @@ void CommandLineOptions::fillDeveloperOptions() {
                      po::value<std::string>(&system_parameters.ssl_cert_file)
                          ->default_value(std::string("")),
                      "SSL Validated public certficate.");
+
+  desc.add_options()(
+      "gpu-code-cache-max-size-in-bytes",
+      po::value<size_t>(&g_gpu_code_cache_max_size_in_bytes)
+          ->default_value(g_gpu_code_cache_max_size_in_bytes),
+      "The maximum size of cached compiled codes for the gpu code cache in bytes.");
 
   desc.add_options()("ssl-private-key",
                      po::value<std::string>(&system_parameters.ssl_key_file)

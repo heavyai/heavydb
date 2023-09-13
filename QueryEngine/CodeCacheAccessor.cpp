@@ -25,7 +25,7 @@ CodeCacheVal<CompilationContext> CodeCacheAccessor<CompilationContext>::get_valu
   auto it = code_cache_.find(key);
   if (it != code_cache_.cend()) {
     found_count_++;
-    VLOG(1) << "Reuse cached compiled kernel";
+    VLOG(1) << name_ << ": Reuse cached compiled kernel";
     return it->second;
   }
   return {};
@@ -41,8 +41,8 @@ bool CodeCacheAccessor<CompilationContext>::put(const CodeCacheKey& key,
     auto it = code_cache_.find(key);
     put_count_++;
     if (it == code_cache_.cend()) {
-      VLOG(1) << "Add compiled kernel to code cache";
-      code_cache_.put(key, value);
+      VLOG(1) << name_ << ": Add compiled kernel to code cache";
+      evict_count_ += code_cache_.put(key, value);
     } else {
       ignore_count_++;
       warn = true;
@@ -76,7 +76,7 @@ CodeCacheVal<CompilationContext>* CodeCacheAccessor<CompilationContext>::get_or_
       CHECK(cached_code->get());
     }
     found_count_++;
-    VLOG(1) << "Reuse a cached compiled code";
+    VLOG(1) << name_ << ": Reuse a cached compiled code";
     return cached_code;
   }
   // This is the first time the key is used to acquire code from
@@ -84,7 +84,7 @@ CodeCacheVal<CompilationContext>* CodeCacheAccessor<CompilationContext>::get_or_
   // the same key will wait (see above) until the code is put to the
   // cache:
   CodeCacheVal<CompilationContext> not_a_code(nullptr);
-  code_cache_.put(key, std::move(not_a_code));
+  evict_count_ += code_cache_.put(key, std::move(not_a_code));
   // returning nullptr will notify caller to trigger code compilation
   // for the given key:
   return nullptr;
