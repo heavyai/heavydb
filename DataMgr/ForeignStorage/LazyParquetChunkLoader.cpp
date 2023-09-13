@@ -1118,7 +1118,7 @@ void set_definition_levels_for_zero_max_definition_level_case(
     if (!parquet_column_descriptor->schema_node()->is_required()) {
       throw std::runtime_error(
           "Unsupported parquet column detected. Column '" +
-          parquet_column_descriptor->name() +
+          parquet_column_descriptor->path()->ToDotString() +
           "' detected to have max definition level of 0 but is optional.");
     }
     def_levels.assign(def_levels.size(), 1);
@@ -1131,7 +1131,8 @@ void validate_max_repetition_and_definition_level(
   bool is_valid_parquet_list = is_valid_parquet_list_column(parquet_column_descriptor);
   if (is_valid_parquet_list && !omnisci_column_descriptor->columnType.is_array()) {
     throw std::runtime_error(
-        "Unsupported mapping detected. Column '" + parquet_column_descriptor->name() +
+        "Unsupported mapping detected. Column '" +
+        parquet_column_descriptor->path()->ToDotString() +
         "' detected to be a parquet list but HeavyDB mapped column '" +
         omnisci_column_descriptor->columnName + "' is not an array.");
   }
@@ -1140,7 +1141,7 @@ void validate_max_repetition_and_definition_level(
         parquet_column_descriptor->max_definition_level() != 3) {
       throw std::runtime_error(
           "Incorrect schema max repetition level detected in column '" +
-          parquet_column_descriptor->name() +
+          parquet_column_descriptor->path()->ToDotString() +
           "'. Expected a max repetition level of 1 and max definition level of 3 for "
           "list column but column has a max "
           "repetition level of " +
@@ -1154,7 +1155,7 @@ void validate_max_repetition_and_definition_level(
           parquet_column_descriptor->max_definition_level() == 0)) {
       throw std::runtime_error(
           "Incorrect schema max repetition level detected in column '" +
-          parquet_column_descriptor->name() +
+          parquet_column_descriptor->path()->ToDotString() +
           "'. Expected a max repetition level of 0 and max definition level of 1 or 0 "
           "for "
           "flat column but column has a max "
@@ -1283,7 +1284,7 @@ SQLTypeInfo suggest_integral_mapping(const parquet::ColumnDescriptor* parquet_co
     if (!int_logical_column->is_signed()) {
       if (within_range(33, 64, bit_width)) {
         throw ForeignStorageException(
-            "Unsigned integer column \"" + parquet_column->name() +
+            "Unsigned integer column \"" + parquet_column->path()->ToDotString() +
             "\" in Parquet file with 64 bit-width has no supported type for ingestion "
             "that will not result in data loss");
       } else if (within_range(17, 32, bit_width)) {
@@ -1486,17 +1487,6 @@ SQLTypeInfo suggest_string_mapping(const parquet::ColumnDescriptor* parquet_colu
   return type;
 }
 
-bool validate_array_mapping(const ColumnDescriptor* omnisci_column,
-                            const parquet::ColumnDescriptor* parquet_column) {
-  if (is_valid_parquet_list_column(parquet_column) &&
-      omnisci_column->columnType.is_array()) {
-    auto omnisci_column_sub_type_column = get_sub_type_column_descriptor(omnisci_column);
-    return LazyParquetChunkLoader::isColumnMappingSupported(
-        omnisci_column_sub_type_column.get(), parquet_column);
-  }
-  return false;
-}
-
 bool validate_geospatial_mapping(const ColumnDescriptor* omnisci_column,
                                  const parquet::ColumnDescriptor* parquet_column) {
   return is_valid_parquet_string(parquet_column) &&
@@ -1531,11 +1521,21 @@ void validate_equal_schema(const parquet::arrow::FileReader* reference_file_read
 
 void validate_allowed_mapping(const parquet::ColumnDescriptor* parquet_column,
                               const ColumnDescriptor* omnisci_column) {
-  parquet::Type::type physical_type = parquet_column->physical_type();
-  auto logical_type = parquet_column->logical_type();
-  bool allowed_type =
-      LazyParquetChunkLoader::isColumnMappingSupported(omnisci_column, parquet_column);
+  validate_max_repetition_and_definition_level(omnisci_column, parquet_column);
+  bool allowed_type = false;
+  if (omnisci_column->columnType.is_array()) {
+    if (is_valid_parquet_list_column(parquet_column)) {
+      auto omnisci_column_sub_type_column =
+          get_sub_type_column_descriptor(omnisci_column);
+      allowed_type = LazyParquetChunkLoader::isColumnMappingSupported(
+          omnisci_column_sub_type_column.get(), parquet_column);
+    }
+  } else {
+    allowed_type =
+        LazyParquetChunkLoader::isColumnMappingSupported(omnisci_column, parquet_column);
+  }
   if (!allowed_type) {
+    auto logical_type = parquet_column->logical_type();
     if (logical_type->is_timestamp()) {
       auto timestamp_type =
           dynamic_cast<const parquet::TimestampLogicalType*>(logical_type.get());
@@ -1548,6 +1548,7 @@ void validate_allowed_mapping(const parquet::ColumnDescriptor* parquet_column,
       }
     }
     std::string parquet_type;
+    parquet::Type::type physical_type = parquet_column->physical_type();
     if (parquet_column->logical_type()->is_none()) {
       parquet_type = parquet::TypeToString(physical_type);
     } else {
@@ -1659,7 +1660,7 @@ MaxRowGroupSizeStats validate_column_mapping_and_row_group_metadata(
       validate_allowed_mapping(descr, *column_it);
     } catch (std::runtime_error& e) {
       std::stringstream error_message;
-      error_message << e.what() << " Parquet column: " << descr->name()
+      error_message << e.what() << " Parquet column: " << descr->path()->ToDotString()
                     << ", HeavyDB column: " << (*column_it)->columnName
                     << ", Parquet file: " << file_path << ".";
       throw std::runtime_error(error_message.str());
@@ -1988,10 +1989,9 @@ SQLTypeInfo LazyParquetChunkLoader::suggestColumnMapping(
 bool LazyParquetChunkLoader::isColumnMappingSupported(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column) {
+  CHECK(!omnisci_column->columnType.is_array())
+      << "isColumnMappingSupported should not be called on arrays";
   if (validate_geospatial_mapping(omnisci_column, parquet_column)) {
-    return true;
-  }
-  if (validate_array_mapping(omnisci_column, parquet_column)) {
     return true;
   }
   if (validate_decimal_mapping(omnisci_column, parquet_column)) {
@@ -2167,7 +2167,8 @@ std::pair<size_t, size_t> LazyParquetChunkLoader::loadRowGroups(
       validate_allowed_mapping(parquet_column, column_descriptor);
     } catch (std::runtime_error& e) {
       std::stringstream error_message;
-      error_message << e.what() << " Parquet column: " << parquet_column->name()
+      error_message << e.what()
+                    << " Parquet column: " << parquet_column->path()->ToDotString()
                     << ", HeavyDB column: " << column_descriptor->columnName
                     << ", Parquet file: " << file_path << ".";
       throw std::runtime_error(error_message.str());
