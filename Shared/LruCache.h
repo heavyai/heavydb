@@ -5,12 +5,21 @@
  * Created on June 20, 2013, 5:09 PM
  */
 
-#ifndef STRINGDICTIONARY_LRUCACHE_HPP
-#define STRINGDICTIONARY_LRUCACHE_HPP
+#pragma once
 
 #include <cstddef>
 #include <list>
+#include <memory>
+#include <type_traits>
 #include <unordered_map>
+
+template <class T>
+struct is_shared_ptr : std::false_type {};
+
+template <class T>
+struct is_shared_ptr<std::shared_ptr<T>> : std::true_type {};
+
+enum class EvictionMetricType { EntryCount, ByteSize };
 
 template <typename key_t, typename value_t, class hash_t = std::hash<key_t>>
 class LruCache {
@@ -22,23 +31,29 @@ class LruCache {
   using map_t_iterator = typename map_t::iterator;
 
  public:
-  LruCache(const size_t max_size) : max_size_(max_size) {}
+  LruCache(EvictionMetricType eviction_metric_type, const size_t max_size)
+      : eviction_metric_type_(eviction_metric_type)
+      , max_size_(max_size)
+      , total_byte_size_(0) {}
 
-  void put(const key_t& key, value_t&& value) {
+  size_t put(const key_t& key, value_t&& value) {
+    total_byte_size_ += getValueSize(value);
     auto it = cache_items_map_.find(key);
     cache_items_list_.emplace_front(key, std::forward<value_t&&>(value));
-    putCommon(it, key);
+    return putCommon(it, key);
   }
 
-  void put(const key_t& key, const value_t& value) {
+  size_t put(const key_t& key, const value_t& value) {
+    total_byte_size_ += getValueSize(value);
     auto it = cache_items_map_.find(key);
     cache_items_list_.emplace_front(key, std::forward<const value_t&&>(value));
-    putCommon(it, key);
+    return putCommon(it, key);
   }
 
   void erase(const key_t& key) {
     auto it = cache_items_map_.find(key);
     if (it != cache_items_map_.end()) {
+      total_byte_size_ -= getValueSize(it->second);
       cache_items_list_.erase(it->second);
       cache_items_map_.erase(it);
     }
@@ -70,6 +85,7 @@ class LruCache {
   void clear() {
     cache_items_list_.clear();
     cache_items_map_.clear();
+    total_byte_size_ = 0;
   }
 
   size_t computeNumEntriesToEvict(const float fraction) {
@@ -80,40 +96,67 @@ class LruCache {
         cache_items_map_.size());
   }
 
-  void evictNEntries(const size_t n) { evictCommon(n); }
+  size_t evictNEntries(const size_t n) { return evictCommon(n); }
 
-  size_t size() const { return cache_items_list_.size(); }
+  size_t size() const {
+    return eviction_metric_type_ == EvictionMetricType::EntryCount
+               ? cache_items_list_.size()
+               : total_byte_size_;
+  }
 
  private:
-  void putCommon(map_t_iterator& it, key_t const& key) {
+  size_t putCommon(map_t_iterator& it, key_t const& key) {
+    size_t entries_erased = 0;
     if (it != cache_items_map_.end()) {
+      total_byte_size_ -= getValueSize(it->second);
       cache_items_list_.erase(it->second);
       cache_items_map_.erase(it);
+      entries_erased++;
     }
     cache_items_map_[key] = cache_items_list_.begin();
 
-    if (cache_items_map_.size() > max_size_) {
+    while ((eviction_metric_type_ == EvictionMetricType::EntryCount &&
+            cache_items_map_.size() > max_size_) ||
+           (eviction_metric_type_ == EvictionMetricType::ByteSize &&
+            total_byte_size_ > max_size_)) {
       auto last = cache_items_list_.end();
       last--;
-      cache_items_map_.erase(last->first);
+      auto target_it = cache_items_map_.find(last->first);
+      total_byte_size_ -= getValueSize(target_it->second);
+      cache_items_map_.erase(target_it);
       cache_items_list_.pop_back();
+      entries_erased++;
     }
+    return entries_erased;
   }
 
-  void evictCommon(const size_t entries_to_evict) {
+  size_t evictCommon(const size_t entries_to_evict) {
     auto last = cache_items_list_.end();
     size_t entries_erased = 0;
     while (entries_erased < entries_to_evict && last != cache_items_list_.begin()) {
       last--;
+      total_byte_size_ -= getValueSize(last->second);
       cache_items_map_.erase(last->first);
       last = cache_items_list_.erase(last);
       entries_erased++;
     }
+    return entries_erased;
   }
+
+  size_t getValueSize(const value_t& value) {
+    if constexpr (std::is_pointer_v<value_t> || is_shared_ptr<value_t>::value) {
+      // 'value == nullptr' represents a call from the `get_or_wait` function
+      return value ? value->size() : 0;
+    } else {
+      return value.size();
+    }
+  }
+
+  size_t getValueSize(const list_iterator_t& it) { return getValueSize(it->second); }
 
   cache_list_t cache_items_list_;
   map_t cache_items_map_;
+  EvictionMetricType eviction_metric_type_;
   size_t max_size_;
+  size_t total_byte_size_;
 };
-
-#endif  // STRINGDICTIONARY_LRUCACHE_HPP

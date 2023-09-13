@@ -5,28 +5,36 @@
 #include "CudaMgr/CudaMgr.h"
 #include "QueryEngine/CodeCacheAccessor.h"
 #include "QueryEngine/NvidiaKernel.h"
+#include "Shared/LruCache.h"
 
 inline bool g_query_engine_cuda_streams{false};
+inline size_t g_code_cache_max_num_items{1000};
+inline size_t g_gpu_code_cache_max_size_in_bytes{size_t(1) << 27};  // 128MB
 
 class QueryEngine {
  public:
   QueryEngine(CudaMgr_Namespace::CudaMgr* cuda_mgr, bool cpu_only)
       : cuda_mgr_(cuda_mgr)
-      , s_stubs_accessor(
-            std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(code_cache_size,
-                                                                       "s_stubs_cache"))
-      , s_code_accessor(
-            std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(code_cache_size,
-                                                                       "s_code_cache"))
-      , cpu_code_accessor(
-            std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(code_cache_size,
-                                                                       "cpu_code_cache"))
-      , gpu_code_accessor(
-            std::make_unique<CodeCacheAccessor<GpuCompilationContext>>(code_cache_size,
-                                                                       "gpu_code_cache"))
-      , tf_code_accessor(
-            std::make_unique<CodeCacheAccessor<CompilationContext>>(code_cache_size,
-                                                                    "tf_code_cache")) {
+      , s_stubs_accessor(std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
+            EvictionMetricType::EntryCount,
+            g_code_cache_max_num_items,
+            "s_stubs_cache"))
+      , s_code_accessor(std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
+            EvictionMetricType::EntryCount,
+            g_code_cache_max_num_items,
+            "s_code_cache"))
+      , cpu_code_accessor(std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
+            EvictionMetricType::EntryCount,
+            g_code_cache_max_num_items,
+            "cpu_code_cache"))
+      , gpu_code_accessor(std::make_unique<CodeCacheAccessor<GpuCompilationContext>>(
+            EvictionMetricType::ByteSize,
+            g_gpu_code_cache_max_size_in_bytes,
+            "gpu_code_cache"))
+      , tf_code_accessor(std::make_unique<CodeCacheAccessor<CompilationContext>>(
+            EvictionMetricType::EntryCount,
+            g_code_cache_max_num_items,
+            "tf_code_cache")) {
     if (cpu_only) {
       g_query_engine_cuda_streams = false;
     }
@@ -78,11 +86,6 @@ class QueryEngine {
     }
   }
 
-  size_t getTotalCacheKeySize() const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return cached_gpu_kernel_total_size_;
-  }
-
   static std::shared_ptr<QueryEngine> getInstance() {
     if (auto s = instance_.lock()) {
       return s;
@@ -103,34 +106,12 @@ class QueryEngine {
     }
   }
 
-  void addGpuKernelSize(size_t sz) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    cached_gpu_kernel_total_size_ += sz;
-  }
-
-  void subGpuKernelSize(size_t sz) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    cached_gpu_kernel_total_size_ -= sz;
-  }
-
-  size_t getGpuKernelCacheSize() const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return cached_gpu_kernel_total_size_;
-  }
-
  private:
   CudaMgr_Namespace::CudaMgr* cuda_mgr_;
   std::vector<CUstream> cuda_streams_;
 
   inline static std::mutex mutex_;  // TODO(sy): use atomics instead?
   inline static std::weak_ptr<QueryEngine> instance_;
-
-  // todo (yoonmin) : avoid hard-coded max cache entries
-  static constexpr size_t code_cache_size{1000};
-
-  // we currently only track GPU kernel cache size
-  // todo (yoonmin): add CPU kernel size calculator
-  size_t cached_gpu_kernel_total_size_{0};
 
  public:
   std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> s_stubs_accessor;

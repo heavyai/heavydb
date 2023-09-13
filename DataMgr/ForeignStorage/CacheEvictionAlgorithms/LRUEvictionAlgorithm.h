@@ -21,7 +21,7 @@
  * This file includes the class specification for the Least Recently Used cache eviction
  * algorithm used by the Foreign Storage Interface (FSI).
  *
- * // TODO(Misiu): A lot of the code here is replicated from StringDictionary/LruCache.hpp
+ * // TODO(Misiu): A lot of the code here is replicated from Shared/LruCache.h
  * with some minor extensions for deletion and changed to use a set.  It should be merged.
  *
  * This algorithm tracks which chunks were the least recently used by relying on the

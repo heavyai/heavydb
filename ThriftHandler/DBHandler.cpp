@@ -3212,9 +3212,9 @@ void log_cache_size(const Catalog_Namespace::Catalog& cat) {
       executor->getQueryPlanDagCache().getCurrentNodeMapSize();
   oss << "\"query_plan_dag\": " << query_plan_dag_cache_size << " bytes, ";
 
-  // 3. Compiled Code
-  oss << "\"compiled_GPU code\": " << QueryEngine::getInstance()->getTotalCacheKeySize()
-      << " bytes, ";
+  // 3. Compiled (GPU) Code
+  oss << "\"compiled_GPU code\": "
+      << QueryEngine::getInstance()->gpu_code_accessor->getCacheSize() << " bytes, ";
 
   // 4. String Dictionary
   oss << "\"string_dictionary\": " << cat.getTotalMemorySizeForDictionariesForDatabase()

@@ -136,6 +136,13 @@ list(APPEND SANITY_TEST_PROGRAMS CatalogMigrationTest)
 
 ##########
 
+add_executable(CodeCacheTest CodeCacheTest.cpp)
+target_link_libraries(CodeCacheTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(CodeCacheTest CodeCacheTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS CodeCacheTest)
+
+##########
+
 add_executable(CodeGeneratorTest CodeGeneratorTest.cpp)
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS} ${LibAwsS3_LIBRARIES})
 add_test(CodeGeneratorTest CodeGeneratorTest ${TEST_ARGS})

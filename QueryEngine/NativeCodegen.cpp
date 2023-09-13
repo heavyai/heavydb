@@ -508,6 +508,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
   if (cached_code) {
     return cached_code;
   }
+
   if (cgen_state_->needs_geos_) {
 #ifdef ENABLE_GEOS
     auto llvm_module = multifrag_query_func->getParent();
@@ -1419,6 +1420,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
   if (cached_code) {
     return cached_code;
   }
+
   bool row_func_not_inlined = false;
   if (no_inline) {
     for (auto it = llvm::inst_begin(cgen_state_->row_func_),
@@ -1458,20 +1460,6 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
       auto& code_cache_accessor = QueryEngine::getInstance()->gpu_code_accessor;
       auto const num_entries_to_evict =
           code_cache_accessor->computeNumEntriesToEvict(g_fraction_code_cache_to_evict);
-      auto evicted_kernels_size =
-          code_cache_accessor->getSumSizeEvicted(num_entries_to_evict);
-      LOG(WARNING) << "Failed to allocate GPU memory for generated code. Evicting "
-                   << num_entries_to_evict << " (" << evicted_kernels_size
-                   << " bytes) cached GPU code and re-trying.";
-      try {
-        QueryEngine::getInstance()->subGpuKernelSize(evicted_kernels_size);
-      } catch (std::runtime_error const& e) {
-        if (strcmp(e.what(), "QueryEngine instance hasn't been created")) {
-          LOG(WARNING) << "QueryEngine::getInstance() failed: " << e.what();
-        }
-      } catch (...) {
-        LOG(WARNING) << "Fail to get QueryEngine instance";
-      }
       code_cache_accessor->evictEntries(num_entries_to_evict);
       compilation_context = CodeGenerator::generateNativeGPUCode(this,
                                                                  query_func,
@@ -1484,18 +1472,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
       throw;
     }
   }
-  if (QueryEngine::getInstance()->gpu_code_accessor->put(key, compilation_context)) {
-    try {
-      QueryEngine::getInstance()->addGpuKernelSize(compilation_context->getMemSize());
-    } catch (std::runtime_error const& e) {
-      if (strcmp(e.what(), "QueryEngine instance hasn't been created")) {
-        LOG(WARNING) << "QueryEngine::getInstance() failed: " << e.what();
-      }
-    } catch (...) {
-      LOG(WARNING) << "Fail to get QueryEngine instance";
-      throw;
-    }
-  }
+  QueryEngine::getInstance()->gpu_code_accessor->put(key, compilation_context);
   return std::dynamic_pointer_cast<CompilationContext>(compilation_context);
 #else
   return nullptr;

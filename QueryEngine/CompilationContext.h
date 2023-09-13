@@ -26,6 +26,7 @@ class CompilationContext {
  public:
   virtual ~CompilationContext() {}
   virtual size_t getMemSize() const = 0;
+  size_t size() const { return getMemSize(); }
 };
 
 struct CompilationOptions;
