@@ -3,6 +3,7 @@ package com.mapd.calcite.parser;
 import static com.mapd.parser.server.ExtensionFunction.*;
 
 import com.mapd.calcite.parser.HeavyDBSqlOperatorTable.ExtTableFunction;
+import com.mapd.parser.server.ExtensionFunction.ExtArgumentType;
 
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -108,6 +109,12 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
     String formalOperandName = udtf.getExtendedParamNames().get(index);
     List<ExtArgumentType> formalFieldTypes =
             udtf.getCursorFieldTypes().get(formalOperandName);
+
+    // If we are typechecking a CURSOR parameter for an overload where this parameter is
+    // not a CURSOR/Column type, then it can never typecheck.
+    if (udtf.getArgTypes().get(index) != ExtArgumentType.Cursor) {
+      return -1;
+    }
 
     if (formalFieldTypes == null || formalFieldTypes.size() == 0) {
       System.out.println(
