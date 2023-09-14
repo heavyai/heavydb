@@ -4319,8 +4319,6 @@ TEST_F(TableFunctions, ColumnTextEncodingNoneConcat) {
       assert_equal<double>(rows, expected_rows);
     }
     {
-      // FIXME: Warning: UDTF has no CURSOR field subtype data. Proceeding assuming CURSOR
-      // typechecks.
       std::string q1 = "SELECT t1abc FROM bytes_test;";
       std::string q2 =
           "SELECT outputs FROM TABLE(CT_CONCAT(CURSOR(SELECT t1 FROM bytes_test), "
