@@ -3622,6 +3622,43 @@ TEST_F(Select, CountIf) {
   }
 }
 
+TEST_F(Select, DivisionBetweenCountExprs) {
+  const std::string sqlite_query = "SELECT 1";
+  for (std::string op : {"COUNT(*)",
+                         "COUNT(DISTINCT y)",
+                         "COUNT(DISTINCT x)",
+                         "APPROX_COUNT_DISTINCT(x)",
+                         "APPROX_COUNT_DISTINCT(y)"}) {
+    std::ostringstream q1_oss, q2_oss;
+    q1_oss << "SELECT CAST(" << op << " AS DOUBLE) / CAST(" << op
+           << " AS BIGINT) FROM test";
+    q2_oss << "SELECT CAST(" << op << " AS DOUBLE) / " << op << " FROM test";
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      c(q1_oss.str(), sqlite_query, dt);
+      c(q2_oss.str(), sqlite_query, dt);
+    }
+  }
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) / COUNT(*) FROM test;", dt);
+    c("SELECT COUNT(*) / COUNT(*) FROM test GROUP BY x", dt);
+  }
+}
+
+TEST_F(Select, DivisionBetweenCountExprsWithGroupby) {
+  const std::string sqlite_query = "SELECT 1 FROM test GROUP BY x";
+  for (std::string op : {"COUNT(*)", "COUNT(DISTINCT x)", "APPROX_COUNT_DISTINCT(x)"}) {
+    std::ostringstream query;
+    query << "SELECT " << op << " / " << op << " FROM test GROUP BY x";
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      c(query.str(), sqlite_query, dt);
+    }
+  }
+}
+
 TEST_F(Select, SumIf) {
   // 1. non-group by
   {
@@ -21989,13 +22026,11 @@ TEST_F(Select, WindowFunctionEmptyPartitions) {
       // TODO(todd): Rework to also run in SQLite, which doesn't support DATE_TRUNC
       std::string query =
           "SELECT DATE_TRUNC(DAY, d) AS binned_day, COUNT(*) AS n, SUM(x) AS sum_x, "
-          "COUNT(*) - LAG(COUNT(*)) OVER ( ORDER BY DATE_TRUNC(DAY, d) ) AS "
+          "(x*2+1) - LAG((x*2+1)) OVER ( ORDER BY DATE_TRUNC(DAY, d) ) AS "
           "lag_n_order_by_d, SUM(x) / SUM(SUM(x+1)) OVER ( ORDER BY DATE_TRUNC(DAY, d)) "
-          "AS "
-          "sum_over_lag_sum_x FROM " +
+          "AS sum_over_lag_sum_x FROM " +
           table_name +
-          " GROUP BY DATE_TRUNC(DAY, d) ORDER BY "
-          "DATE_TRUNC(DAY, d) NULLS FIRST;";
+          " GROUP BY DATE_TRUNC(DAY, d), x ORDER BY DATE_TRUNC(DAY, d) NULLS FIRST;";
       EXPECT_NO_THROW(run_multiple_agg(query, dt));
     }
   }

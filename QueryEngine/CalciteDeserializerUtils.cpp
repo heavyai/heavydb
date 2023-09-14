@@ -26,6 +26,7 @@ extern bool g_bigint_count;
 SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr) {
   switch (agg_kind) {
     case kCOUNT:
+      return SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, true);
     case kCOUNT_IF:
       return SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false);
     case kMIN:
@@ -38,7 +39,7 @@ SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr) 
     case kAVG:
       return SQLTypeInfo(kDOUBLE, false);
     case kAPPROX_COUNT_DISTINCT:
-      return SQLTypeInfo(kBIGINT, false);
+      return SQLTypeInfo(kBIGINT, true);
     case kAPPROX_QUANTILE:
       return SQLTypeInfo(kDOUBLE, false);
     case kSINGLE_VALUE:

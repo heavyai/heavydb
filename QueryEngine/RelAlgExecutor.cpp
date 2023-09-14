@@ -1952,22 +1952,24 @@ bool is_agg(const Analyzer::Expr* expr) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(expr);
   if (agg_expr && agg_expr->get_contains_agg()) {
     auto agg_type = agg_expr->get_aggtype();
-    if (agg_type == SQLAgg::kMIN || agg_type == SQLAgg::kMAX ||
-        agg_type == SQLAgg::kSUM || agg_type == SQLAgg::kSUM_IF ||
-        agg_type == SQLAgg::kAVG) {
+    if (shared::is_any<SQLAgg::kMIN,
+                       SQLAgg::kMAX,
+                       SQLAgg::kSUM,
+                       SQLAgg::kSUM_IF,
+                       SQLAgg::kAVG>(agg_type)) {
       return true;
     }
   }
   return false;
 }
 
-inline SQLTypeInfo get_logical_type_for_expr(const Analyzer::Expr& expr) {
-  if (is_count_distinct(&expr)) {
-    return SQLTypeInfo(kBIGINT, false);
-  } else if (is_agg(&expr)) {
-    return get_nullable_logical_type_info(expr.get_type_info());
+inline SQLTypeInfo get_logical_type_for_expr(const Analyzer::Expr* expr) {
+  if (is_count_distinct(expr)) {
+    return SQLTypeInfo(kBIGINT, true);
+  } else if (is_agg(expr)) {
+    return get_nullable_logical_type_info(expr->get_type_info());
   }
-  return get_logical_type_info(expr.get_type_info());
+  return get_logical_type_info(expr->get_type_info());
 }
 
 template <class RA>
@@ -1979,7 +1981,7 @@ std::vector<TargetMetaInfo> get_targets_meta(
   for (size_t i = 0; i < ra_node->size(); ++i) {
     CHECK(target_exprs[i]);
     // TODO(alex): remove the count distinct type fixup.
-    auto ti = get_logical_type_for_expr(*target_exprs[i]);
+    auto ti = get_logical_type_for_expr(target_exprs[i]);
     targets_meta.emplace_back(
         ra_node->getFieldName(i), ti, target_exprs[i]->get_type_info());
   }
