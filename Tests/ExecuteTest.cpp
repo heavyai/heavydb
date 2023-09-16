@@ -26012,6 +26012,18 @@ TEST_F(Select, InfNanTest) {
   }
 }
 
+// Use a non-empty session_id to test call to Executor::removeFromQuerySessionList().
+// This test verifies QE-952 fixes a valgrind error.
+TEST_F(Select, RemoveFromQuerySessionList) {
+  SKIP_ALL_ON_AGGREGATOR();
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    char const* query = "SELECT COUNT(*) FROM test;";
+    char const* session_id = "0123456789ABCDEF0123456789ABCDEF";  // len=32
+    QR::get()->runSQLWithAllowingInterrupt(query, session_id, dt);
+  }
+}
+
 class DateAndTimeFunctionsTest : public QRExecutorDeviceParamTest {};
 
 TEST_P(DateAndTimeFunctionsTest, CastLiteralToDate) {
