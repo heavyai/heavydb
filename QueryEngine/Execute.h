@@ -1540,7 +1540,7 @@ class Executor {
   static uint32_t gpu_active_modules_device_mask_;
   static void* gpu_active_modules_[max_gpu_count];
   // indicates whether this executor has been interrupted
-  std::atomic<bool> interrupted_;
+  std::atomic<bool> interrupted_{false};
 
   mutable std::mutex str_dict_mutex_;
 
