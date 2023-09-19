@@ -269,6 +269,10 @@ bool is_agg_supported_for_type(const SQLAgg& agg_kind, const SQLTypeInfo& arg_ti
          !shared::is_any<kAVG, kMIN, kMAX, kSUM, kAPPROX_QUANTILE, kMODE>(agg_kind);
 }
 
+bool is_distinct_supported(SQLAgg const agg_kind) {
+  return shared::is_any<kMIN, kMAX, kCOUNT, kAPPROX_COUNT_DISTINCT>(agg_kind);
+}
+
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
@@ -328,10 +332,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
         }
         break;
       case kCOUNT_IF:
-        if (rex->isDistinct()) {
-          throw std::runtime_error(
-              "Currently, COUNT_IF function does not support DISTINCT qualifier.");
-        } else if (arg_expr->get_type_info().is_geometry()) {
+        if (arg_expr->get_type_info().is_geometry()) {
           throw std::runtime_error(
               "COUNT_IF does not currently support geospatial types.");
         }
@@ -349,6 +350,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     if (!is_agg_supported_for_type(agg_kind, arg_ti)) {
       throw std::runtime_error("Aggregate on " + arg_ti.get_type_name() +
                                " is not supported yet.");
+    }
+    if (is_distinct && !is_distinct_supported(agg_kind)) {
+      throw std::runtime_error(toString(agg_kind) +
+                               " does not currently support the DISTINCT qualifier.");
     }
   }
   const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
