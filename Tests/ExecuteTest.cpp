@@ -3852,6 +3852,86 @@ TEST_F(Select, ApproxCountDistinct) {
                        false));
 }
 
+class AggDistinct
+    : public Select,
+      public testing::WithParamInterface<std::tuple<ExecutorDeviceType, SQLAgg>> {
+ public:
+  // NOTE: test names must be non-empty, unique, and may only contain ASCII alphanumeric
+  // characters. [Use underscores carefully.]
+  static std::string testName(testing::TestParamInfo<ParamType> const& info) {
+    std::ostringstream oss;
+    oss << std::get<0>(info.param) << '_' << toString(std::get<1>(info.param));
+    return oss.str();
+  }
+};
+
+class AggDistinctSupported : public AggDistinct {
+ public:
+  static void testTableColumn(ExecutorDeviceType const dt, SQLAgg const sql_agg) {
+    std::string const query = "SELECT " + toString(sql_agg) + "(DISTINCT f) FROM test;";
+    std::string sqlite_query = query;
+    if (sql_agg == kAPPROX_COUNT_DISTINCT) {
+      // Replace APPROX_COUNT_DISTINCT w/ COUNT for SQLite.
+      std::string const replace("APPROX_COUNT_DISTINCT");
+      sqlite_query.replace(sqlite_query.find(replace), replace.size(), "COUNT");
+    }
+    // This should not throw an exception, so test for correctness too.
+    c(query, sqlite_query, dt);
+  }
+};
+
+TEST_P(AggDistinctSupported, TestTableColumn) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto const [dt, sql_agg] = GetParam();
+  AggDistinctSupported::testTableColumn(dt, sql_agg);
+}
+
+// Tested agg types mirror is_distinct_supported() in QueryEngine/RelAlgTranslator.cpp
+INSTANTIATE_TEST_SUITE_P(
+    Select,
+    AggDistinctSupported,
+    testing::Combine(testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+                     testing::Values(kMIN, kMAX, kCOUNT, kAPPROX_COUNT_DISTINCT)),
+    AggDistinctSupported::testName);
+
+class AggDistinctUnsupported : public AggDistinct {
+ public:
+  static std::string errorMessage(SQLAgg const sql_agg) {
+    return toString(sql_agg) + " does not currently support the DISTINCT qualifier.";
+  }
+
+  // Exception is expected to be thrown since DISTINCT is not supported.
+  static void testTableColumn(ExecutorDeviceType const dt, SQLAgg const sql_agg) {
+    // APPROX_MEDIAN is the 1-parameter form of APPROX_QUANTILE/PERCENTILE
+    std::string const func =
+        sql_agg == kAPPROX_QUANTILE ? std::string("APPROX_MEDIAN") : toString(sql_agg);
+    std::string const query = "SELECT " + func + "(DISTINCT f) FROM test;";
+    run_simple_agg(query, dt);
+  }
+};
+
+TEST_P(AggDistinctUnsupported, TestTableColumn) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto const [dt, sql_agg] = GetParam();
+  try {
+    AggDistinctUnsupported::testTableColumn(dt, sql_agg);
+    FAIL() << "Exception expected.";
+  } catch (std::runtime_error const& e) {
+    auto const expected = AggDistinctUnsupported::errorMessage(sql_agg);
+    EXPECT_EQ(expected, std::string(e.what()));
+  } catch (...) {
+    FAIL() << "Unexpected exception type thrown.";
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    Select,
+    AggDistinctUnsupported,
+    testing::Combine(
+        testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+        testing::Values(kAVG, kSUM, kAPPROX_QUANTILE, kSAMPLE, kSINGLE_VALUE, kMODE)),
+    AggDistinctUnsupported::testName);
+
 // Additional unit tests for APPROX_MEDIAN are in Quantile/.
 TEST_F(Select, ApproxMedianSanity) {
   auto dt = ExecutorDeviceType::CPU;
