@@ -46,6 +46,7 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/DataframeTableDescriptor.h"
 #include "Catalog/SharedDictionaryValidator.h"
+#include "DataMgr/FileMgr/FileBuffer.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "Fragmenter/TargetValueConvertersFactories.h"
@@ -2933,8 +2934,14 @@ decltype(auto) get_header_def(DataframeTableDescriptor& df_td,
 decltype(auto) get_page_size_def(TableDescriptor& td,
                                  const NameValueAssign* p,
                                  const std::list<ColumnDescriptor>& columns) {
-  return get_property_value<IntLiteral>(p,
-                                        [&td](const auto val) { td.fragPageSize = val; });
+  return get_property_value<IntLiteral>(p, [&td](const auto val) {
+    const auto min_page_size = File_Namespace::FileBuffer::getMinPageSize();
+    if (val < min_page_size) {
+      throw std::runtime_error("page_size cannot be less than " +
+                               std::to_string(min_page_size));
+    }
+    td.fragPageSize = val;
+  });
 }
 decltype(auto) get_max_rows_def(TableDescriptor& td,
                                 const NameValueAssign* p,

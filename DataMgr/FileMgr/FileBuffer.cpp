@@ -46,7 +46,7 @@ FileBuffer::FileBuffer(FileMgr* fm,
     , chunkKey_(chunkKey) {
   // Create a new FileBuffer
   CHECK(fm_);
-  calcHeaderBuffer();
+  setBufferHeaderSize();
   CHECK_GT(pageSize_, reservedHeaderSize_);
   pageDataSize_ = pageSize_ - reservedHeaderSize_;
   //@todo reintroduce initialSize - need to develop easy way of
@@ -76,7 +76,7 @@ FileBuffer::FileBuffer(FileMgr* fm,
     , pageSize_(pageSize)
     , chunkKey_(chunkKey) {
   CHECK(fm_);
-  calcHeaderBuffer();
+  setBufferHeaderSize();
   pageDataSize_ = pageSize_ - reservedHeaderSize_;
 }
 
@@ -93,7 +93,7 @@ FileBuffer::FileBuffer(FileMgr* fm,
   // We are being assigned an existing FileBuffer on disk
 
   CHECK(fm_);
-  calcHeaderBuffer();
+  setBufferHeaderSize();
   int32_t lastPageId = -1;
   int32_t curPageId = 0;
   for (auto vecIt = headerStartIt; vecIt != headerEndIt; ++vecIt) {
@@ -142,14 +142,25 @@ void FileBuffer::reserve(const size_t numBytes) {
   }
 }
 
-void FileBuffer::calcHeaderBuffer() {
-  // 3 * sizeof(int32_t) is for headerSize, for pageId and versionEpoch
-  // sizeof(size_t) is for chunkSize
-  reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int32_t);
-  size_t headerMod = reservedHeaderSize_ % headerBufferOffset_;
-  if (headerMod > 0) {
-    reservedHeaderSize_ += headerBufferOffset_ - headerMod;
+namespace {
+size_t calculate_buffer_header_size(size_t chunk_size) {
+  // Additional 3 * sizeof(int32_t) is for headerSize, pageId, and versionEpoch
+  size_t header_size = (chunk_size + 3) * sizeof(int32_t);
+  size_t header_mod = header_size % FileBuffer::kHeaderBufferOffset;
+  if (header_mod > 0) {
+    header_size += FileBuffer::kHeaderBufferOffset - header_mod;
   }
+  return header_size;
+}
+}  // namespace
+
+void FileBuffer::setBufferHeaderSize() {
+  reservedHeaderSize_ = calculate_buffer_header_size(chunkKey_.size());
+}
+
+size_t FileBuffer::getMinPageSize() {
+  constexpr size_t max_chunk_size{5};
+  return calculate_buffer_header_size(max_chunk_size) + 1;
 }
 
 void FileBuffer::freePage(const Page& page) {

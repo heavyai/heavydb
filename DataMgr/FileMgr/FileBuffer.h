@@ -159,10 +159,12 @@ class FileBuffer : public AbstractBuffer {
   size_t numChunkPages() const;
   std::string dump() const;
 
+  static size_t getMinPageSize();
+
   // Used for testing
   void freePage(const Page& page);
 
-  static constexpr size_t headerBufferOffset_ = 32;
+  static constexpr size_t kHeaderBufferOffset{32};
 
  private:
   // FileBuffer(const FileBuffer&);      // private copy constructor
@@ -178,7 +180,7 @@ class FileBuffer : public AbstractBuffer {
                    const bool writeMetadata = false);
   void writeMetadata(const int32_t epoch);
   void readMetadata(const Page& page);
-  void calcHeaderBuffer();
+  void setBufferHeaderSize();
 
   void freePage(const Page& page, const bool isRolloff);
   void freePagesBeforeEpochForMultiPage(MultiPage& multiPage,

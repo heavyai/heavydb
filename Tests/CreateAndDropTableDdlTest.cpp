@@ -27,6 +27,7 @@
 #include "Catalog/ForeignTable.h"
 #include "Catalog/TableDescriptor.h"
 #include "DBHandlerTestHelpers.h"
+#include "DataMgr/FileMgr/FileBuffer.h"
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/scope.h"
@@ -75,7 +76,7 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
   std::string getCreateTableQuery(const ddl_utils::TableType table_type,
                                   const std::string& table_name,
                                   const std::string& columns,
-                                  bool if_not_exists = false) {
+                                  bool if_not_exists = false) const {
     return getCreateTableQuery(table_type, table_name, columns, {}, if_not_exists);
   }
 
@@ -83,7 +84,7 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
                                   const std::string& table_name,
                                   const std::string& columns,
                                   std::map<std::string, std::string> options,
-                                  bool if_not_exists = false) {
+                                  bool if_not_exists = false) const {
     std::string query{"CREATE "};
     if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
       query += "FOREIGN TABLE ";
@@ -132,7 +133,7 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
     return query;
   }
 
-  std::string getTestFilePath() {
+  std::string getTestFilePath() const {
     return bf::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
   }
 
@@ -2437,6 +2438,85 @@ TEST_F(CommentsBeforeCommandTest, MultiLineCommentBeforeCommand) {
       "/* test comment 1\n test comment2*/" + kCreateTableCommand,
       "SQL statements starting with comments are currently not allowed.");
 }
+
+class TableOptionsValidationTest : public CreateAndDropTableDdlTest {
+ protected:
+  void TearDown() override {
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "test_table", true));
+    CreateAndDropTableDdlTest::TearDown();
+  }
+
+  std::string getCreateTableQuery(
+      const std::map<std::string, std::string>& options) const {
+    return CreateAndDropTableDdlTest::getCreateTableQuery(
+        ddl_utils::TableType::TABLE, "test_table", "(i INTEGER)", options);
+  }
+};
+
+class PageSizeValidationTest : public TableOptionsValidationTest {
+ protected:
+  std::string getCreateTableQuery(size_t page_size) const {
+    return TableOptionsValidationTest::getCreateTableQuery(
+        {{"page_size", std::to_string(page_size)}});
+  }
+};
+
+TEST_F(PageSizeValidationTest, BelowMinPageSize) {
+  const auto min_page_size = File_Namespace::FileBuffer::getMinPageSize();
+  queryAndAssertException(
+      PageSizeValidationTest::getCreateTableQuery(min_page_size - 1),
+      "page_size cannot be less than " + std::to_string(min_page_size));
+}
+
+TEST_F(PageSizeValidationTest, MinPageSize) {
+  sql(PageSizeValidationTest::getCreateTableQuery(
+      File_Namespace::FileBuffer::getMinPageSize()));
+  sql("INSERT INTO test_table VALUES (1);");
+  sqlAndCompareResult("SELECT * FROM test_table;", {{i(1)}});
+}
+
+class StringTypeErrorValidationTest : public TableOptionsValidationTest,
+                                      public testing::WithParamInterface<std::string> {};
+
+TEST_P(StringTypeErrorValidationTest, StringOptions) {
+  const auto& option_name = GetParam();
+  queryAndAssertException(getCreateTableQuery({{option_name, "0"}}),
+                          "The \"" + option_name + "\" option must be a string.");
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    OptionTypeValidation,
+    StringTypeErrorValidationTest,
+    ::testing::Values("partitions", "sort_column", "storage_type", "vacuum"));
+
+class IntTypeErrorValidationTest : public TableOptionsValidationTest,
+                                   public testing::WithParamInterface<std::string> {
+ protected:
+  std::string getCreateTableQuery(const std::map<std::string, std::string>& options,
+                                  bool include_shard_key) const {
+    return CreateAndDropTableDdlTest::getCreateTableQuery(
+        ddl_utils::TableType::TABLE,
+        "test_table",
+        "(i INTEGER"s + (include_shard_key ? ", SHARD KEY (i)" : "") + ")",
+        options);
+  }
+};
+
+TEST_P(IntTypeErrorValidationTest, IntegerOptions) {
+  const auto& option_name = GetParam();
+  queryAndAssertException(
+      getCreateTableQuery({{option_name, "'test'"}}, option_name == "shard_count"),
+      to_upper(option_name) + " must be an integer literal.");
+}
+
+INSTANTIATE_TEST_SUITE_P(OptionTypeValidation,
+                         IntTypeErrorValidationTest,
+                         ::testing::Values("fragment_size",
+                                           "max_chunk_size",
+                                           "page_size",
+                                           "max_rows",
+                                           "shard_count",
+                                           "max_rollback_epochs"));
 
 int main(int argc, char** argv) {
   g_enable_fsi = true;

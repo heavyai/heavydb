@@ -55,7 +55,7 @@ class CachingFileMgrTest : public testing::Test {
   // Keep page size small for these tests so we can hit limits more easily.
   static constexpr size_t page_size_ = 64;
   static constexpr size_t page_data_size_ =
-      page_size_ - fn::FileBuffer::headerBufferOffset_;
+      page_size_ - fn::FileBuffer::kHeaderBufferOffset;
   static constexpr size_t data_file_size_ =
       page_size_ * fn::CachingFileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE;
   static constexpr size_t meta_file_size_ =
