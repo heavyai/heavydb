@@ -2240,11 +2240,24 @@ struct PositiveOrZeroValidate {
   }
 };
 
+namespace {
+template <typename T>
+const std::string* validate_and_get_str(T name_value_assign) {
+  auto str = dynamic_cast<const StringLiteral*>(name_value_assign->get_value());
+  if (!str) {
+    auto option_name = name_value_assign->get_name();
+    CHECK(option_name);
+    throw std::runtime_error("The \"" + *option_name + "\" option must be a string.");
+  }
+  return str->get_stringval();
+}
+}  // namespace
+
 template <>
 struct DefaultValidate<StringLiteral> {
   template <typename T>
   decltype(auto) operator()(T t) {
-    const auto val = static_cast<const StringLiteral*>(t->get_value())->get_stringval();
+    const auto val = validate_and_get_str(t);
     CHECK(val);
     const auto val_upper = boost::to_upper_copy<std::string>(*val);
     return val_upper;
@@ -2254,7 +2267,7 @@ struct DefaultValidate<StringLiteral> {
 struct CaseSensitiveValidate {
   template <typename T>
   decltype(auto) operator()(T t) {
-    const auto val = static_cast<const StringLiteral*>(t->get_value())->get_stringval();
+    const auto val = validate_and_get_str(t);
     CHECK(val);
     return *val;
   }
