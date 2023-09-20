@@ -1367,29 +1367,23 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   }
   LOG(PTX) << "PTX for the GPU:\n" << ptx << "\nEnd of PTX";
 
-  auto cubin_result = ptx_to_cubin(ptx, gpu_target.cuda_mgr);
-  auto& option_keys = cubin_result.option_keys;
-  auto& option_values = cubin_result.option_values;
-  auto cubin = cubin_result.cubin;
-  auto link_state = cubin_result.link_state;
-  const auto num_options = option_keys.size();
-
+  CubinResult cubin_result = ptx_to_cubin(ptx, gpu_target.cuda_mgr);
   auto func_name = wrapper_func->getName().str();
   auto gpu_compilation_context = std::make_shared<GpuCompilationContext>();
   for (int device_id = 0; device_id < gpu_target.cuda_mgr->getDeviceCount();
        ++device_id) {
     gpu_compilation_context->addDeviceCode(
-        std::make_unique<GpuDeviceCompilationContext>(cubin,
+        std::make_unique<GpuDeviceCompilationContext>(cubin_result.cubin,
                                                       cubin_result.cubin_size,
                                                       func_name,
                                                       device_id,
                                                       gpu_target.cuda_mgr,
-                                                      num_options,
-                                                      &option_keys[0],
-                                                      &option_values[0]));
+                                                      cubin_result.option_keys.size(),
+                                                      cubin_result.option_keys.data(),
+                                                      cubin_result.option_values.data()));
   }
 
-  checkCudaErrors(cuLinkDestroy(link_state));
+  checkCudaErrors(cuLinkDestroy(cubin_result.link_state));
   return gpu_compilation_context;
 #else
   return {};

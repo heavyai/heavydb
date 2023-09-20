@@ -14,42 +14,47 @@
  * limitations under the License.
  */
 
-#include <sstream>
-
 #include "NvidiaKernel.h"
-
 #include "Logger/Logger.h"
 #include "OSDependent/heavyai_path.h"
 
 #include <boost/filesystem/operations.hpp>
 
+#include <sstream>
+
 #ifdef HAVE_CUDA
-namespace {
 
-#define JIT_LOG_SIZE 8192
-
-void fill_options(std::vector<CUjit_option>& option_keys,
-                  std::vector<void*>& option_values,
-                  char* info_log,
-                  char* error_log) {
-  option_keys.push_back(CU_JIT_LOG_VERBOSE);
-  option_values.push_back(reinterpret_cast<void*>(1));
-  option_keys.push_back(CU_JIT_THREADS_PER_BLOCK);
-  // fix the minimum # threads per block to the hardware-limit maximum num threads
-  // to avoid recompiling jit module even if we manipulate it via query hint
-  // (and allowed `CU_JIT_THREADS_PER_BLOCK` range is between 1 and 1024 by query hint)
-  option_values.push_back(reinterpret_cast<void*>(1024));
-  option_keys.push_back(CU_JIT_WALL_TIME);
-  option_values.push_back(reinterpret_cast<void*>(0));
-  option_keys.push_back(CU_JIT_INFO_LOG_BUFFER);
-  option_values.push_back(reinterpret_cast<void*>(info_log));
-  option_keys.push_back(CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES);
-  option_values.push_back(reinterpret_cast<void*>((long)JIT_LOG_SIZE));
-  option_keys.push_back(CU_JIT_ERROR_LOG_BUFFER);
-  option_values.push_back(reinterpret_cast<void*>(error_log));
-  option_keys.push_back(CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES);
-  option_values.push_back(reinterpret_cast<void*>((long)JIT_LOG_SIZE));
+CubinResult::CubinResult()
+    : cubin(nullptr), link_state(CUlinkState{}), cubin_size(0u), jit_wall_time_idx(0u) {
+  constexpr size_t JIT_LOG_SIZE = 8192u;
+  static_assert(0u < JIT_LOG_SIZE);
+  info_log.resize(JIT_LOG_SIZE - 1u);  // minus 1 for null terminator
+  error_log.resize(JIT_LOG_SIZE - 1u);
+  std::pair<CUjit_option, void*> options[] = {
+      {CU_JIT_LOG_VERBOSE, reinterpret_cast<void*>(1)},
+      // fix the minimum # threads per block to the hardware-limit maximum num threads to
+      // avoid recompiling jit module even if we manipulate it via query hint (and allowed
+      // `CU_JIT_THREADS_PER_BLOCK` range is between 1 and 1024 by query hint)
+      {CU_JIT_THREADS_PER_BLOCK, reinterpret_cast<void*>(1024)},
+      {CU_JIT_WALL_TIME, nullptr},  // input not read, only output
+      {CU_JIT_INFO_LOG_BUFFER, reinterpret_cast<void*>(&info_log[0])},
+      {CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES, reinterpret_cast<void*>(JIT_LOG_SIZE)},
+      {CU_JIT_ERROR_LOG_BUFFER, reinterpret_cast<void*>(&error_log[0])},
+      {CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES, reinterpret_cast<void*>(JIT_LOG_SIZE)}};
+  constexpr size_t n_options = sizeof(options) / sizeof(*options);
+  option_keys.reserve(n_options);
+  option_values.reserve(n_options);
+  for (size_t i = 0; i < n_options; ++i) {
+    option_keys.push_back(options[i].first);
+    option_values.push_back(options[i].second);
+    if (options[i].first == CU_JIT_WALL_TIME) {
+      jit_wall_time_idx = i;
+    }
+  }
+  CHECK_EQ(CU_JIT_WALL_TIME, option_keys[jit_wall_time_idx]) << jit_wall_time_idx;
 }
+
+namespace {
 
 boost::filesystem::path get_gpu_rt_path() {
   boost::filesystem::path gpu_rt_path{heavyai::get_root_abs_path()};
@@ -77,38 +82,38 @@ boost::filesystem::path get_cuda_table_functions_path() {
 }  // namespace
 
 void nvidia_jit_warmup() {
-  std::vector<CUjit_option> option_keys;
-  std::vector<void*> option_values;
-  char info_log[JIT_LOG_SIZE];
-  char error_log[JIT_LOG_SIZE];
-  fill_options(option_keys, option_values, info_log, error_log);
-  CHECK_EQ(option_values.size(), option_keys.size());
-  unsigned num_options = option_keys.size();
-  CUlinkState link_state;
-  checkCudaErrors(
-      cuLinkCreate(num_options, &option_keys[0], &option_values[0], &link_state))
-      << ": " << std::string(error_log);
-  VLOG(1) << "CUDA JIT time to create link: "
-          << *reinterpret_cast<float*>(&option_values[2]);
+  CubinResult cubin_result{};
+  CHECK_EQ(cubin_result.option_values.size(), cubin_result.option_keys.size());
+  unsigned const num_options = cubin_result.option_keys.size();
+  checkCudaErrors(cuLinkCreate(num_options,
+                               cubin_result.option_keys.data(),
+                               cubin_result.option_values.data(),
+                               &cubin_result.link_state))
+      << ": " << cubin_result.error_log.c_str();
+  VLOG(1) << "CUDA JIT time to create link: " << cubin_result.jitWallTime();
   boost::filesystem::path gpu_rt_path = get_gpu_rt_path();
   boost::filesystem::path cuda_table_functions_path = get_cuda_table_functions_path();
   CHECK(!gpu_rt_path.empty());
   CHECK(!cuda_table_functions_path.empty());
-  checkCudaErrors(cuLinkAddFile(
-      link_state, CU_JIT_INPUT_FATBINARY, gpu_rt_path.c_str(), 0, nullptr, nullptr))
-      << ": " << std::string(error_log);
-  VLOG(1) << "CUDA JIT time to add RT fatbinary: "
-          << *reinterpret_cast<float*>(&option_values[2]);
-  checkCudaErrors(cuLinkAddFile(link_state,
+  checkCudaErrors(cuLinkAddFile(cubin_result.link_state,
+                                CU_JIT_INPUT_FATBINARY,
+                                gpu_rt_path.c_str(),
+                                0,
+                                nullptr,
+                                nullptr))
+      << ": " << cubin_result.error_log.c_str();
+  VLOG(1) << "CUDA JIT time to add RT fatbinary: " << cubin_result.jitWallTime();
+  checkCudaErrors(cuLinkAddFile(cubin_result.link_state,
                                 CU_JIT_INPUT_LIBRARY,
                                 cuda_table_functions_path.c_str(),
                                 0,
                                 nullptr,
                                 nullptr))
-      << ": " << std::string(error_log);
+      << ": " << cubin_result.error_log.c_str();
   VLOG(1) << "CUDA JIT time to add GPU table functions library: "
-          << *reinterpret_cast<float*>(&option_values[2]);
-  checkCudaErrors(cuLinkDestroy(link_state)) << ": " << std::string(error_log);
+          << cubin_result.jitWallTime();
+  checkCudaErrors(cuLinkDestroy(cubin_result.link_state))
+      << ": " << cubin_result.error_log.c_str();
 }
 
 std::string add_line_numbers(const std::string& text) {
@@ -130,19 +135,14 @@ CubinResult ptx_to_cubin(const std::string& ptx,
   CHECK(!ptx.empty());
   CHECK(cuda_mgr && cuda_mgr->getDeviceCount() > 0);
   cuda_mgr->setContext(0);
-  std::vector<CUjit_option> option_keys;
-  std::vector<void*> option_values;
-  char info_log[JIT_LOG_SIZE];
-  char error_log[JIT_LOG_SIZE];
-  fill_options(option_keys, option_values, info_log, error_log);
-  CHECK_EQ(option_values.size(), option_keys.size());
-  unsigned num_options = option_keys.size();
-  CUlinkState link_state;
-  checkCudaErrors(
-      cuLinkCreate(num_options, &option_keys[0], &option_values[0], &link_state))
-      << ": " << std::string(error_log);
-  VLOG(1) << "CUDA JIT time to create link: "
-          << *reinterpret_cast<float*>(&option_values[2]);
+  CubinResult cubin_result{};
+  CHECK_EQ(cubin_result.option_values.size(), cubin_result.option_keys.size());
+  checkCudaErrors(cuLinkCreate(cubin_result.option_keys.size(),
+                               cubin_result.option_keys.data(),
+                               cubin_result.option_values.data(),
+                               &cubin_result.link_state))
+      << ": " << cubin_result.error_log.c_str();
+  VLOG(1) << "CUDA JIT time to create link: " << cubin_result.jitWallTime();
 
   boost::filesystem::path gpu_rt_path = get_gpu_rt_path();
   boost::filesystem::path cuda_table_functions_path = get_cuda_table_functions_path();
@@ -152,21 +152,26 @@ CubinResult ptx_to_cubin(const std::string& ptx,
   // 1. nvcc -std=c++11 -arch=sm_35 --device-link -c [list of .cu files]
   // 2. nvcc -std=c++11 -arch=sm_35 -lib [list of .o files generated by step 1] -o
   // [library_name.a]
-  checkCudaErrors(cuLinkAddFile(
-      link_state, CU_JIT_INPUT_FATBINARY, gpu_rt_path.c_str(), 0, nullptr, nullptr))
-      << ": " << std::string(error_log);
-  VLOG(1) << "CUDA JIT time to add RT fatbinary: "
-          << *reinterpret_cast<float*>(&option_values[2]);
-  checkCudaErrors(cuLinkAddFile(link_state,
+  checkCudaErrors(cuLinkAddFile(cubin_result.link_state,
+                                CU_JIT_INPUT_FATBINARY,
+                                gpu_rt_path.c_str(),
+                                0,
+                                nullptr,
+                                nullptr))
+      << ": " << cubin_result.error_log.c_str();
+  VLOG(1) << "CUDA JIT time to add RT fatbinary: " << cubin_result.jitWallTime();
+  checkCudaErrors(cuLinkAddFile(cubin_result.link_state,
                                 CU_JIT_INPUT_LIBRARY,
                                 cuda_table_functions_path.c_str(),
                                 0,
                                 nullptr,
                                 nullptr))
-      << ": " << std::string(error_log);
+      << ": " << cubin_result.error_log.c_str();
   VLOG(1) << "CUDA JIT time to add GPU table functions library: "
-          << *reinterpret_cast<float*>(&option_values[2]);
-  checkCudaErrors(cuLinkAddData(link_state,
+          << cubin_result.jitWallTime();
+  // The ptx.length() + 1 follows the example in
+  // https://developer.nvidia.com/blog/discovering-new-features-in-cuda-11-4/
+  checkCudaErrors(cuLinkAddData(cubin_result.link_state,
                                 CU_JIT_INPUT_PTX,
                                 static_cast<void*>(const_cast<char*>(ptx.c_str())),
                                 ptx.length() + 1,
@@ -174,23 +179,19 @@ CubinResult ptx_to_cubin(const std::string& ptx,
                                 0,
                                 nullptr,
                                 nullptr))
-      << ": " << std::string(error_log) << "\nPTX:\n"
+      << ": " << cubin_result.error_log.c_str() << "\nPTX:\n"
       << add_line_numbers(ptx) << "\nEOF PTX";
-  VLOG(1) << "CUDA JIT time to add generated code: "
-          << *reinterpret_cast<float*>(&option_values[2]);
-  void* cubin{nullptr};
-  size_t cubinSize{0};
-  checkCudaErrors(cuLinkComplete(link_state, &cubin, &cubinSize))
-      << ": " << std::string(error_log);
-  VLOG(1) << "CUDA Linker completed: " << info_log;
-  CHECK(cubin);
-  CHECK_GT(cubinSize, size_t(0));
-  VLOG(1) << "Generated GPU binary code size: " << cubinSize << " bytes";
-  return {cubin, option_keys, option_values, link_state, cubinSize};
+  VLOG(1) << "CUDA JIT time to add generated code: " << cubin_result.jitWallTime();
+  checkCudaErrors(cuLinkComplete(
+      cubin_result.link_state, &cubin_result.cubin, &cubin_result.cubin_size))
+      << ": " << cubin_result.error_log.c_str();
+  VLOG(1) << "CUDA Linker completed: " << cubin_result.info_log.c_str();
+  CHECK(cubin_result.cubin);
+  CHECK_LT(0u, cubin_result.cubin_size);
+  VLOG(1) << "Generated GPU binary code size: " << cubin_result.cubin_size << " bytes";
+  return cubin_result;
 }
-#endif
 
-#ifdef HAVE_CUDA
 GpuDeviceCompilationContext::GpuDeviceCompilationContext(const void* image,
                                                          const size_t module_size,
                                                          const std::string& kernel_name,

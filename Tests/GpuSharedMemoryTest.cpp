@@ -182,23 +182,18 @@ std::unique_ptr<GpuDeviceCompilationContext> compile_and_link_gpu_code(
   const auto ptx =
       CodeGenerator::generatePTX(cuda_llir, nvptx_target_machine.get(), context);
 
-  auto cubin_result = ptx_to_cubin(ptx, cuda_mgr);
-  auto& option_keys = cubin_result.option_keys;
-  auto& option_values = cubin_result.option_values;
-  auto cubin = cubin_result.cubin;
-  auto link_state = cubin_result.link_state;
-  const auto num_options = option_keys.size();
+  CubinResult cubin_result = ptx_to_cubin(ptx, cuda_mgr);
   auto gpu_context =
-      std::make_unique<GpuDeviceCompilationContext>(cubin,
+      std::make_unique<GpuDeviceCompilationContext>(cubin_result.cubin,
                                                     cubin_result.cubin_size,
                                                     kernel_name,
                                                     gpu_device_idx,
                                                     cuda_mgr,
-                                                    num_options,
-                                                    &option_keys[0],
-                                                    &option_values[0]);
+                                                    cubin_result.option_keys.size(),
+                                                    cubin_result.option_keys.data(),
+                                                    cubin_result.option_values.data());
 
-  checkCudaErrors(cuLinkDestroy(link_state));
+  checkCudaErrors(cuLinkDestroy(cubin_result.link_state));
   return gpu_context;
 }
 
