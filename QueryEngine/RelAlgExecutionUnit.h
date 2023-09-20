@@ -35,6 +35,7 @@
 
 #include <boost/graph/adjacency_list.hpp>
 
+#include <functional>
 #include <list>
 #include <memory>
 #include <optional>
@@ -187,6 +188,20 @@ struct RelAlgExecutionUnit {
   RelAlgExecutionUnit createNdvExecutionUnit(const int64_t range) const;
   RelAlgExecutionUnit createCountAllExecutionUnit(
       Analyzer::Expr* replacement_target) const;
+
+  // Call lambda() for each aggregate target_expr of SQLAgg type AggType.
+  template <SQLAgg AggType>
+  void eachAggTarget(
+      std::function<void(Analyzer::AggExpr const*, size_t target_idx)> lambda) const {
+    for (size_t target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
+      Analyzer::Expr const* target_expr = target_exprs[target_idx];
+      if (auto const* agg_expr = dynamic_cast<Analyzer::AggExpr const*>(target_expr)) {
+        if (agg_expr->get_aggtype() == AggType) {
+          lambda(agg_expr, target_idx);
+        }
+      }
+    }
+  }
 };
 
 std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_unit);

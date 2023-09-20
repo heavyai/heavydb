@@ -463,8 +463,11 @@ extern "C" RUNTIME_EXPORT void approx_quantile_jit_rt(const int64_t new_set_hand
   auto* incoming = reinterpret_cast<quantile::TDigest*>(new_set_handle);
   if (incoming->centroids().capacity()) {
     auto* accumulator = reinterpret_cast<quantile::TDigest*>(old_set_handle);
-    accumulator->allocate();
-    accumulator->mergeTDigest(*incoming);
+    if (accumulator->centroids().capacity() == 0u) {
+      *accumulator = std::move(*incoming);
+    } else {
+      accumulator->mergeTDigest(*incoming);
+    }
   }
 }
 

@@ -189,15 +189,16 @@ class TDigest {
   Centroids<RealType, IndexType> centroids_;
   bool forward_{true};  // alternate direction on each call to mergeCentroids().
 #ifndef __CUDACC__
-  std::once_flag merge_buffer_final_once_;
+  std::mutex merge_buffer_final_called_mutex_;
 #endif
+  bool merge_buffer_final_called_{false};
 
   // simple_allocator_, buf_allocate_, centroids_allocate_ are used only by allocate().
-  std::optional<RealType> const q_{std::nullopt};  // Optional preset quantile parameter.
-  bool const use_linear_scaling_function_{false};
-  SimpleAllocator* const simple_allocator_{nullptr};
-  IndexType const buf_allocate_{0};
-  IndexType const centroids_allocate_{0};
+  std::optional<RealType> q_{std::nullopt};  // Optional preset quantile parameter.
+  bool use_linear_scaling_function_{false};
+  SimpleAllocator* simple_allocator_{nullptr};
+  IndexType buf_allocate_{0};
+  IndexType centroids_allocate_{0};
 
   DEVICE RealType max() const {
     return centroids_.max_;
@@ -241,6 +242,25 @@ class TDigest {
       , simple_allocator_(simple_allocator)
       , buf_allocate_(buf_allocate)
       , centroids_allocate_(centroids_allocate) {}
+
+  // Called by approx_quantile_jit_rt().  Move everything except the unmovable mutex.
+  TDigest& operator=(TDigest&& rhs) {
+    buf_ = std::move(rhs.buf_);
+    centroids_ = std::move(rhs.centroids_);
+    forward_ = std::move(rhs.forward_);
+    merge_buffer_final_called_ = std::move(rhs.merge_buffer_final_called_);
+    q_ = std::move(rhs.q_);
+    use_linear_scaling_function_ = std::move(rhs.use_linear_scaling_function_);
+    simple_allocator_ = std::move(rhs.simple_allocator_);
+    buf_allocate_ = std::move(rhs.buf_allocate_);
+    centroids_allocate_ = std::move(rhs.centroids_allocate_);
+    return *this;
+  }
+
+  // Size of reserved buffer+centroids space used for each TDigest in bytes.
+  static IndexType nbytes(IndexType buf_allocate, IndexType centroids_allocate) {
+    return (buf_allocate + centroids_allocate) * (sizeof(RealType) + sizeof(IndexType));
+  }
 
   DEVICE Centroids<RealType, IndexType>& centroids() {
     return centroids_;
@@ -661,16 +681,15 @@ DEVICE void TDigest<RealType, IndexType>::mergeBuffer() {
 // [QE-383] Make concurrent calls to mergeBufferFinal() thread-safe.
 template <typename RealType, typename IndexType>
 DEVICE void TDigest<RealType, IndexType>::mergeBufferFinal() {
-  auto const call_once = [this] {
+#ifndef __CUDACC__
+  std::lock_guard<std::mutex> lock_guard(merge_buffer_final_called_mutex_);
+#endif
+  if (!merge_buffer_final_called_) {
     mergeBuffer();
     assert(centroids_.size() <= buf_.capacity());
     partialSumOfCounts(buf_.counts_.data());
-  };
-#ifdef __CUDACC__
-  call_once();
-#else
-  std::call_once(merge_buffer_final_once_, call_once);
-#endif
+    merge_buffer_final_called_ = true;
+  }
 }
 
 template <typename RealType, typename IndexType>

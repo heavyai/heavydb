@@ -26,12 +26,12 @@
 #include <chrono>
 #include <ctime>
 #include <future>
-#include <iostream>
 #include <memory>
 #include <mutex>
 #include <numeric>
 #include <set>
 #include <thread>
+#include <type_traits>
 
 #include "Catalog/Catalog.h"
 #include "CudaMgr/CudaMgr.h"
@@ -670,12 +670,33 @@ RowSetMemoryOwner::getOrAddStringProxyNumericTranslationMap(
   return addStringProxyNumericTranslationMap(source_proxy, string_op_infos);
 }
 
-quantile::TDigest* RowSetMemoryOwner::nullTDigest(double const q) {
+quantile::TDigest* RowSetMemoryOwner::initTDigest(size_t const thread_idx,
+                                                  ApproxQuantileDescriptor const desc,
+                                                  double const q) {
+  static_assert(std::is_trivially_copyable_v<ApproxQuantileDescriptor>);
   std::lock_guard<std::mutex> lock(state_mutex_);
-  return t_digests_
-      .emplace_back(std::make_unique<quantile::TDigest>(
-          q, this, g_approx_quantile_buffer, g_approx_quantile_centroids))
-      .get();
+  auto t_digest = std::make_unique<quantile::TDigest>(
+      q, &t_digest_allocators_[thread_idx], desc.buffer_size, desc.centroids_size);
+  return t_digests_.emplace_back(std::move(t_digest)).get();
+}
+
+void RowSetMemoryOwner::reserveTDigestMemory(size_t thread_idx, size_t capacity) {
+  std::unique_lock<std::mutex> lock(state_mutex_);
+  if (t_digest_allocators_.size() <= thread_idx) {
+    t_digest_allocators_.resize(thread_idx + 1u);
+  }
+  if (t_digest_allocators_[thread_idx].capacity()) {
+    // This can only happen when a thread_idx is re-used.  In other words,
+    // two or more kernels have launched (serially!) using the same thread_idx.
+    // This is ok since TDigestAllocator does not own the memory it allocates.
+    VLOG(2) << "Replacing t_digest_allocators_[" << thread_idx << "].";
+  }
+  lock.unlock();
+  // This is not locked due to use of same state_mutex_ during allocation.
+  // The corresponding deallocation happens in ~DramArena().
+  int8_t* const buffer = allocate(capacity, thread_idx);
+  lock.lock();
+  t_digest_allocators_[thread_idx] = TDigestAllocator(buffer, capacity);
 }
 
 bool Executor::isCPUOnly() const {

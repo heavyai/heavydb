@@ -250,6 +250,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     const size_t shard_count,
     const size_t max_groups_buffer_entry_count,
     RenderInfo* render_info,
+    const ApproxQuantileDescriptors& approx_quantile_descriptors,
     const CountDistinctDescriptors count_distinct_descriptors,
     const bool must_use_baseline_sort,
     const bool output_columnar_hint,
@@ -288,6 +289,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         /*group_col_compact_width=*/0,
         std::vector<int64_t>{},
         /*entry_count=*/1,
+        approx_quantile_descriptors,
         count_distinct_descriptors,
         false,
         output_columnar_hint,
@@ -428,6 +430,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
                                                  group_col_compact_width,
                                                  target_groupby_indices,
                                                  entry_count,
+                                                 approx_quantile_descriptors,
                                                  count_distinct_descriptors,
                                                  sort_on_gpu_hint,
                                                  output_columnar,
@@ -461,6 +464,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const int8_t group_col_compact_width,
     const std::vector<int64_t>& target_groupby_indices,
     const size_t entry_count,
+    const ApproxQuantileDescriptors& approx_quantile_descriptors,
     const CountDistinctDescriptors count_distinct_descriptors,
     const bool sort_on_gpu_hint,
     const bool output_columnar_hint,
@@ -482,6 +486,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , max_val_(col_range_info.max)
     , bucket_(col_range_info.bucket)
     , has_nulls_(col_range_info.has_nulls)
+    , approx_quantile_descriptors_(approx_quantile_descriptors)
     , count_distinct_descriptors_(count_distinct_descriptors)
     , output_columnar_(false)
     , render_output_(render_output)

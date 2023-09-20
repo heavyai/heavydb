@@ -103,6 +103,83 @@ size_t choose_shard_count() {
   return g_num_leafs * (device_count > 1 ? device_count : 1);
 }
 
+enum class ColumnDefinitionEnum : unsigned {
+  NAME = 0,  // column name
+  HEAVY,     // column definition as used in heavydb CREATE TABLE
+  SQLITE,    // column definition as used in SQLite CREATE TABLE
+  N
+};
+
+// Indexed by ColumnDefinitionEnum
+using ColumnDefinition = std::array<std::string_view, unsigned(ColumnDefinitionEnum::N)>;
+
+struct TableDefinition {
+  std::vector<ColumnDefinition> column_definitions;
+  // Add metadata as needed
+
+  // Return column definitions for e = HEAVY or SQLITE.
+  std::string columnDefinitions(ColumnDefinitionEnum const e) const {
+    std::ostringstream oss;
+    for (size_t i = 0; i < column_definitions.size(); ++i) {
+      oss << (i ? ", " : "")
+          << column_definitions[i][unsigned(ColumnDefinitionEnum::NAME)] << ' '
+          << column_definitions[i][unsigned(e)];
+    }
+    return oss.str();
+  }
+};
+
+// clang-format off
+// table name -> TableDefinition
+std::map<std::string_view, TableDefinition> const g_table_definitions =
+{
+  { "test", TableDefinition
+    { // NAME, HEAVY type, SQLITE type
+      { { "x", "int not null", "int not null" }
+      , { "w", "tinyint", "tinyint" }
+      , { "y", "int", "int" }
+      , { "z", "smallint", "smallint" }
+      , { "t", "bigint", "bigint" }
+      , { "b", "boolean", "boolean" }
+      , { "f", "float", "float" }
+      , { "ff", "float", "float" }
+      , { "fn", "float", "float" }
+      , { "d", "double", "double" }
+      , { "dn", "double", "double" }
+      , { "str", "varchar(10)", "varchar(10)" }
+      , { "null_str", "text encoding dict", "text" }
+      , { "fixed_str", "text encoding dict(16)", "text" }
+      , { "fixed_null_str", "text encoding dict(16)", "text" }
+      , { "real_str", "text encoding none", "text" }
+      , { "shared_dict", "text", "text" }
+      , { "m", "timestamp(0)", "timestamp(0)" }
+      , { "me", "timestamp(0) encoding fixed(32)", "timestamp(0)" }
+      , { "m_3", "timestamp(3)", "timestamp(3)" }
+      , { "m_6", "timestamp(6)", "timestamp(6)" }
+      , { "m_9", "timestamp(9)", "timestamp(9)" }
+      , { "n", "time(0)", "time(0)" }
+      , { "ne", "time encoding fixed(32)", "time(0)" }
+      , { "o", "date", "date" }
+      , { "o1", "date encoding fixed(16)", "date" }
+      , { "o2", "date encoding fixed(32)", "date" }
+      , { "fx", "int encoding fixed(16)", "int" }
+      , { "dd", "decimal(10, 2)", "decimal(10, 2)" }
+      , { "dd_notnull", "decimal(10, 2) not null", "decimal(10, 2) not null" }
+      , { "ss", "text encoding dict", "text" }
+      , { "u", "int", "int" }
+      , { "ofd", "int", "int" }
+      , { "ufd", "int not null", "int not null" }
+      , { "ofq", "bigint", "bigint" }
+      , { "ufq", "bigint not null", "bigint not null" }
+      , { "smallint_nulls", "smallint", "smallint" }
+      , { "bn", "boolean not null", "boolean not null" }
+      , { "num_text", "text encoding dict", "text" }
+      }
+    }
+  }
+};
+// clang-format on
+
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool allow_loop_joins) {
@@ -3932,16 +4009,73 @@ INSTANTIATE_TEST_SUITE_P(
         testing::Values(kAVG, kSUM, kAPPROX_QUANTILE, kSAMPLE, kSINGLE_VALUE, kMODE)),
     AggDistinctUnsupported::testName);
 
-// Additional unit tests for APPROX_MEDIAN are in Quantile/.
-TEST_F(Select, ApproxMedianSanity) {
-  auto dt = ExecutorDeviceType::CPU;
-  auto approx_median = [dt](std::string const col) {
-    std::string const query = "SELECT APPROX_MEDIAN(" + col + ") FROM test;";
-    return v<double>(run_simple_agg(query, dt));
-  };
+struct TestParam {
+  double expected;
+  char const* column;
+};
+
+using ApproxMedianParam = std::tuple<ExecutorDeviceType, TestParam>;
+
+class ApproxMedian : public Select,
+                     public testing::WithParamInterface<ApproxMedianParam> {
+ public:
+  static void executeQueryAndAssertResult(ExecutorDeviceType const dt,
+                                          TestParam const params) {
+    auto query = "SELECT APPROX_MEDIAN(" + std::string(params.column) + ") FROM test;";
+    double actual = v<double>(run_simple_agg(query, dt));
+    EXPECT_EQ(params.expected, actual);
+  }
+
+  // Replace non-alphanumeric chars w/ underscore. Don't repeat underscores.
+  static std::string escape(std::string_view const sv) {
+    std::string escaped;
+    escaped.reserve(sv.size());
+    bool last_was_underscore = false;
+    for (char const c : sv) {
+      if (std::isalnum(c)) {
+        escaped.push_back(c);
+        last_was_underscore = false;
+      } else {
+        if (!last_was_underscore) {
+          escaped.push_back('_');
+        }
+        last_was_underscore = true;
+      }
+    }
+    if (last_was_underscore) {
+      escaped.pop_back();
+    }
+    return escaped;
+  }
+
+  // Return map of name -> column type for given table.
+  static std::map<std::string_view, std::string_view> getColType(std::string_view table) {
+    std::map<std::string_view, std::string_view> col_type;
+    for (ColumnDefinition const cd : g_table_definitions.at(table).column_definitions) {
+      col_type.emplace(cd[unsigned(ColumnDefinitionEnum::NAME)],
+                       cd[unsigned(ColumnDefinitionEnum::HEAVY)]);
+    }
+    return col_type;
+  }
+
+  // NOTE: test names must be non-empty, unique, and may only contain ASCII alphanumeric
+  // characters. In particular, they should not contain underscores*
+  // https://google.github.io/googletest/faq.html#why-should-test-suite-names-and-test-names-not-contain-underscore
+  static std::string testName(testing::TestParamInfo<ParamType> const& info) {
+    static std::map<std::string_view, std::string_view> const col_type =
+        getColType("test");
+    std::ostringstream oss;
+    char const* column_name = std::get<1>(info.param).column;
+    oss << std::get<0>(info.param) << '_' << column_name << '_'
+        << escape(col_type.at(column_name));
+    return oss.str();
+  }
+};
+
+TEST_P(ApproxMedian, AllColumnTypes) {
   if (g_aggregator) {
     try {
-      approx_median("w");
+      executeQueryAndAssertResult(std::get<0>(GetParam()), std::get<1>(GetParam()));
       EXPECT_TRUE(false) << "Exception expected for approx_median query.";
     } catch (std::runtime_error const& e) {
       EXPECT_EQ(std::string(e.what()),
@@ -3952,26 +4086,34 @@ TEST_F(Select, ApproxMedianSanity) {
       EXPECT_TRUE(false) << "std::runtime_error expected for approx_median query.";
     }
   } else {
-    EXPECT_EQ(-7.5, approx_median("w"));
-    EXPECT_EQ(7.0, approx_median("x"));
-    EXPECT_EQ(42.5, approx_median("y"));
-    EXPECT_EQ(101.0, approx_median("z"));
-    EXPECT_EQ(1001.5, approx_median("t"));
-    EXPECT_EQ((double(1.1f) + double(1.2f)) / 2, approx_median("f"));
-    EXPECT_EQ((double(1.1f) + double(101.2f)) / 2, approx_median("ff"));
-    EXPECT_EQ((double(-101.2f) + double(-1000.3f)) / 2, approx_median("fn"));
-    EXPECT_EQ(2.3, approx_median("d"));
-    EXPECT_EQ(-1111.5, approx_median("dn"));
-    EXPECT_EQ((11110.0 / 100 + 22220.0 / 100) / 2, approx_median("dd"));
-    EXPECT_EQ((11110.0 / 100 + 22220.0 / 100) / 2, approx_median("dd_notnull"));
-    EXPECT_EQ(NULL_DOUBLE, approx_median("u"));
-    EXPECT_EQ(2147483647.0, approx_median("ofd"));
-    EXPECT_EQ(-2147483647.5, approx_median("ufd"));
-    EXPECT_EQ(4611686018427387904.0, approx_median("ofq"));
-    EXPECT_EQ(-4611686018427387904.5, approx_median("ufq"));
-    EXPECT_EQ(32767.0, approx_median("smallint_nulls"));
+    executeQueryAndAssertResult(std::get<0>(GetParam()), std::get<1>(GetParam()));
   }
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    Select,  // Just a name - not the class. This can be any symbol.
+    ApproxMedian,
+    testing::Combine(testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+                     testing::Values(TestParam{-7.5, "w"},
+                                     TestParam{7.0, "x"},
+                                     TestParam{42.5, "y"},
+                                     TestParam{101.0, "z"},
+                                     TestParam{1001.5, "t"},
+                                     TestParam{(double(1.1f) + double(1.2f)) / 2, "f"},
+                                     TestParam{(double(1.1f) + double(101.2f)) / 2, "ff"},
+                                     TestParam{(double(-101.2f) + double(-1000.3f)) / 2,
+                                               "fn"},
+                                     TestParam{2.3, "d"},
+                                     TestParam{-1111.5, "dn"},
+                                     TestParam{(111.1 + 222.2) / 2, "dd"},
+                                     TestParam{(111.1 + 222.2) / 2, "dd_notnull"},
+                                     TestParam{NULL_DOUBLE, "u"},
+                                     TestParam{2147483647.0, "ofd"},
+                                     TestParam{-2147483647.5, "ufd"},
+                                     TestParam{4611686018427387904.0, "ofq"},
+                                     TestParam{-4611686018427387904.5, "ufq"},
+                                     TestParam{32767.0, "smallint_nulls"})),
+    ApproxMedian::testName);
 
 TEST_F(Select, ApproxMedianLargeInts) {
   if (g_aggregator) {
@@ -28117,25 +28259,9 @@ int create_and_populate_tables(const bool use_temporary_tables,
     const std::string drop_old_test{"DROP TABLE IF EXISTS test;"};
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
-    std::string columns_definition{
-        "x int not null, w tinyint, y int, z smallint, t bigint, b boolean, f float, "
-        "ff "
-        "float, fn "
-        "float, d double, dn double, str "
-        "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), "
-        "fixed_null_str text encoding "
-        "dict(16), real_str text encoding none, shared_dict text, m timestamp(0), me "
-        "timestamp(0) encoding fixed(32), m_3 "
-        "timestamp(3), m_6 timestamp(6), "
-        "m_9 timestamp(9), n time(0), ne time encoding fixed(32), o date, o1 date "
-        "encoding fixed(16), o2 date "
-        "encoding fixed(32), fx int "
-        "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
-        "text encoding dict, u int, ofd "
-        "int, ufd int not null, ofq bigint, ufq bigint not null, smallint_nulls "
-        "smallint, bn boolean not null, num_text text encoding dict"};
+    TableDefinition const& test_definition = g_table_definitions.at("test");
     const std::string create_test = build_create_table_statement(
-        columns_definition,
+        test_definition.columnDefinitions(ColumnDefinitionEnum::HEAVY),
         "test",
         {g_shard_count ? "str" : "", g_shard_count},
         {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
@@ -28144,20 +28270,9 @@ int create_and_populate_tables(const bool use_temporary_tables,
         with_delete_support);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
-        "CREATE TABLE test(x int not null, w tinyint, y int, z smallint, t bigint, b "
-        "boolean, f "
-        "float, ff float, fn float, d "
-        "double, dn double, str varchar(10), null_str text, fixed_str text, "
-        "fixed_null_str text, real_str text, "
-        "shared_dict "
-        "text, m timestamp(0), me timestamp(0), m_3 timestamp(3), m_6 timestamp(6), "
-        "m_9 "
-        "timestamp(9), n "
-        "time(0), ne time(0), o date, o1 date, o2 date, "
-        "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
-        "null, ss "
-        "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null, "
-        "smallint_nulls smallint, bn boolean not null, num_text text);");
+        "CREATE TABLE test(" +
+        test_definition.columnDefinitions(ColumnDefinitionEnum::SQLITE) + ");");
+
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
