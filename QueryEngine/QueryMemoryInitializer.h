@@ -42,7 +42,7 @@ class QueryMemoryInitializer {
     bool has_tdigest{false};
     std::vector<int64_t> count_distinct_buf_size;
     ModeIndexSet mode_index_set;
-    std::vector<QuantileParam> qualtile_params;
+    std::vector<QuantileParam> quantile_params;
   };
 
   // Row-based execution constructor

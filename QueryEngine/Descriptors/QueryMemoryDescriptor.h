@@ -25,6 +25,7 @@
 
 #include "../CompilationOptions.h"
 #include "../CountDistinct.h"
+#include "ApproxQuantileDescriptor.h"
 #include "ColSlotContext.h"
 #include "Types.h"
 
@@ -81,7 +82,8 @@ class QueryMemoryDescriptor {
                         const int8_t group_col_compact_width,
                         const std::vector<int64_t>& target_groupby_indices,
                         const size_t entry_count,
-                        const CountDistinctDescriptors count_distinct_descriptors,
+                        const ApproxQuantileDescriptors&,
+                        const CountDistinctDescriptors,
                         const bool sort_on_gpu_hint,
                         const bool output_columnar,
                         const bool render_output,
@@ -118,7 +120,8 @@ class QueryMemoryDescriptor {
       const size_t shard_count,
       const size_t max_groups_buffer_entry_count,
       RenderInfo* render_info,
-      const CountDistinctDescriptors count_distinct_descriptors,
+      const ApproxQuantileDescriptors&,
+      const CountDistinctDescriptors,
       const bool must_use_baseline_sort,
       const bool output_columnar_hint,
       const bool streaming_top_n_hint,
@@ -263,6 +266,10 @@ class QueryMemoryDescriptor {
 
   bool hasNulls() const { return has_nulls_; }
 
+  const ApproxQuantileDescriptors& getApproxQuantileDescriptors() const {
+    return approx_quantile_descriptors_;
+  }
+
   const CountDistinctDescriptor& getCountDistinctDescriptor(const size_t idx) const {
     CHECK_LT(idx, count_distinct_descriptors_.size());
     return count_distinct_descriptors_[idx];
@@ -398,6 +405,7 @@ class QueryMemoryDescriptor {
   int64_t max_val_;
   int64_t bucket_;
   bool has_nulls_;
+  ApproxQuantileDescriptors approx_quantile_descriptors_;
   CountDistinctDescriptors count_distinct_descriptors_;
   bool sort_on_gpu_;
   bool output_columnar_;

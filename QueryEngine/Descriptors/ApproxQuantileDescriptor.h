@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
+ * Copyright 2023 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,11 @@
 
 #pragma once
 
-class SimpleAllocator {
- public:
-  virtual ~SimpleAllocator() = default;
-  virtual int8_t* allocate(const size_t num_bytes) = 0;
+#include <vector>
+
+struct ApproxQuantileDescriptor {
+  size_t buffer_size;     // number of elements in TDigest buffer
+  size_t centroids_size;  // number of elements in TDigest centroids
 };
+
+using ApproxQuantileDescriptors = std::vector<ApproxQuantileDescriptor>;

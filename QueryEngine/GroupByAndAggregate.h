@@ -80,6 +80,8 @@ class GroupByAndAggregate {
  private:
   bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);
 
+  ApproxQuantileDescriptors initApproxQuantileDescriptors();
+
   std::unique_ptr<QueryMemoryDescriptor> initQueryMemoryDescriptor(
       const bool allow_multifrag,
       const size_t max_groups_buffer_entry_count,

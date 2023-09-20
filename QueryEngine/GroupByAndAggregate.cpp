@@ -54,7 +54,10 @@ bool g_cluster{false};
 bool g_bigint_count{false};
 int g_hll_precision_bits{11};
 size_t g_watchdog_baseline_max_groups{120000000};
+extern size_t g_approx_quantile_buffer;
+extern size_t g_approx_quantile_centroids;
 extern int64_t g_bitmap_memory_limit;
+extern size_t g_default_max_groups_buffer_entry_guess;
 extern size_t g_leaf_count;
 
 bool ColRangeInfo::isEmpty() const {
@@ -888,6 +891,25 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
   return query_mem_desc;
 }
 
+ApproxQuantileDescriptors GroupByAndAggregate::initApproxQuantileDescriptors() {
+  // Count APPROX_QUANTILE targets
+  size_t target_count = 0u;
+  auto count_target = [&](Analyzer::AggExpr const*, size_t) { ++target_count; };
+  ra_exe_unit_.eachAggTarget<kAPPROX_QUANTILE>(count_target);
+  if (target_count == 0u) {
+    return {};
+  }
+
+  // Reserve and fill descriptors
+  std::vector<ApproxQuantileDescriptor> descriptors;
+  descriptors.reserve(target_count);
+  auto add_descriptor = [&](Analyzer::AggExpr const*, size_t) {
+    descriptors.push_back({g_approx_quantile_buffer, g_approx_quantile_centroids});
+  };
+  ra_exe_unit_.eachAggTarget<kAPPROX_QUANTILE>(add_descriptor);
+  return descriptors;
+}
+
 std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescriptorImpl(
     const bool allow_multifrag,
     const size_t max_groups_buffer_entry_count,
@@ -936,6 +958,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
 
   const auto count_distinct_descriptors = init_count_distinct_descriptors(
       ra_exe_unit_, query_infos_, col_range_info, device_type_, executor_);
+  auto approx_quantile_descriptors = initApproxQuantileDescriptors();
   try {
     return QueryMemoryDescriptor::init(executor_,
                                        ra_exe_unit_,
@@ -949,6 +972,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                        shard_count,
                                        max_groups_buffer_entry_count,
                                        render_info,
+                                       approx_quantile_descriptors,
                                        count_distinct_descriptors,
                                        must_use_baseline_sort,
                                        output_columnar_hint,
@@ -968,6 +992,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                        shard_count,
                                        max_groups_buffer_entry_count,
                                        render_info,
+                                       approx_quantile_descriptors,
                                        count_distinct_descriptors,
                                        must_use_baseline_sort,
                                        output_columnar_hint,

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <boost/noncopyable.hpp>
+#include <deque>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -24,8 +25,10 @@
 #include <unordered_map>
 #include <vector>
 
+#include "ApproxQuantileDescriptor.h"
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
+#include "DataMgr/Allocators/FastAllocator.h"
 #include "DataMgr/DataMgr.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/AggMode.h"
@@ -66,7 +69,12 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   enum class StringTranslationType { SOURCE_INTERSECTION, SOURCE_UNION };
 
-  int8_t* allocate(const size_t num_bytes, const size_t thread_idx = 0) override {
+  int8_t* allocate(const size_t num_bytes) override {
+    constexpr size_t thread_idx = 0u;
+    return allocate(num_bytes, thread_idx);
+  }
+
+  int8_t* allocate(const size_t num_bytes, const size_t thread_idx) {
     CHECK_LT(thread_idx, allocators_.size());
     auto allocator = allocators_[thread_idx].get();
     std::lock_guard<std::mutex> lock(state_mutex_);
@@ -335,7 +343,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return string_dictionary_generations_;
   }
 
-  quantile::TDigest* nullTDigest(double const q);
+  quantile::TDigest* initTDigest(size_t thread_idx, ApproxQuantileDescriptor, double q);
+  void reserveTDigestMemory(size_t thread_idx, size_t capacity);
 
   //
   // key/value store for table function intercommunication
@@ -396,7 +405,11 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   StringDictionaryGenerations string_dictionary_generations_;
   std::vector<void*> col_buffers_;
   std::vector<Data_Namespace::AbstractBuffer*> varlen_input_buffers_;
+
+  using TDigestAllocator = FastAllocator<int8_t>;
+  std::deque<TDigestAllocator> t_digest_allocators_;
   std::vector<std::unique_ptr<quantile::TDigest>> t_digests_;
+
   std::map<std::string, std::shared_ptr<StringOps_Namespace::StringOps>>
       string_ops_owned_;
   std::list<AggMode> mode_maps_;
