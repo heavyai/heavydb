@@ -33,6 +33,15 @@ struct CubinResult {
   std::vector<void*> option_values;
   CUlinkState link_state;
   size_t cubin_size;
+
+  std::string info_log;
+  std::string error_log;
+  size_t jit_wall_time_idx;
+
+  CubinResult();
+  inline float jitWallTime() const {
+    return *reinterpret_cast<float const*>(&option_values[jit_wall_time_idx]);
+  }
 };
 
 /**
