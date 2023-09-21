@@ -15,15 +15,23 @@ if [ "$NOCUDA" = "true" ]; then
 fi
 
 function generate_deps_version_file() {
-  # get the git hash 
-  pushd $SCRIPTS_DIR >/dev/null
-  # For some version of git when run by Jenkins
-  # this command will fail and return an error.  
-  # Better to carry on report what is known.
-  SHORT_HASH=$(git rev-parse --short HEAD || echo "UNKOWN")
-  popd >/dev/null
-  echo "Deps generated for git hash [$SHORT_HASH] and SUFFIX [$SUFFIX]" > $PREFIX/mapd_deps_version.txt
+  # SUFFIX, BRANCH_NAME, GIT_COMMIT and BUILD_CONTAINER_NAME are set as environment variables not as parameters and
+  # are generally set 'on' the calling docker container.
+  echo "Public Release:Deps generated for prefix [$PREFIX], commit [$GIT_COMMIT] and SUFFIX [$SUFFIX]" > $PREFIX/mapd_deps_version.txt
+  # BUILD_CONTAINER_IMAGE will only be set if called from heavyai-dependency-tar-builder.sh
+  if [[ -n $BUILD_CONTAINER_IMAGE_ID ]] ; then
+    echo "Public Release:Using build image id [${BUILD_CONTAINER_IMAGE_ID}]" >> $PREFIX/mapd_deps_version.txt
+  fi
+  if [[ -n $BUILD_CONTAINER_IMAGE ]] ; then
+    # Not copied to released version of this file
+    echo "Using build image [${BUILD_CONTAINER_IMAGE}]" >> $PREFIX/mapd_deps_version.txt
+  fi
+  echo "Component version information:" >> $PREFIX/mapd_deps_version.txt
   # Grab all the _VERSION variables and print them to the file
+  # This isn't a complete list of all software and versions.  For example openssl either uses
+  # the version that ships with the OS or it is installed from the OS specific file and
+  # doesn't use an _VERSION variable.
+  # Not to be copied to released version of this file
   for i in $(compgen -A variable | grep _VERSION) ; do echo  $i "${!i}" ; done >> $PREFIX/mapd_deps_version.txt
 }      
 

@@ -134,6 +134,30 @@ macro(set_alternate_linker linker)
   endif()
 endmacro()
 
+macro(InstallVersionFile)
+  find_file(MapdDepsVersion_FILE mapd_deps_version.txt NO_CACHE)
+
+  if(NOT MapdDepsVersion_FILE)
+    message(WARNING "Build could NOT find deps version file mapd_deps_version.txt")
+  else()
+    message(STATUS "Found deps version file ${MapdDepsVersion_FILE}")
+    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/version)
+    set(HEAVY_DEPS_CUSTOM ${CMAKE_BINARY_DIR}/version/heavyai_deps_version.txt)
+    # cp mapd_version data to heavyai deps, removing un-tagged lines.
+    add_custom_command(OUTPUT ${HEAVY_DEPS_CUSTOM}
+      DEPENDS ${MapdDepsVersion_FILE}
+      COMMAND ${CMAKE_COMMAND} -E copy ${MapdDepsVersion_FILE} ${HEAVY_DEPS_CUSTOM}
+      # In the copied deps files leave the first line with the deps generated info
+      # and any other line starting with 'Public Release:', though remove the public release tag
+      VERBATIM
+      COMMAND "sed" "-i" "-n" "/^Public Release:/s/^Public Release://p" ${HEAVY_DEPS_CUSTOM})
+
+    add_custom_target(HeavyDepsVersionTarget DEPENDS ${HEAVY_DEPS_CUSTOM})
+    add_dependencies(heavydb HeavyDepsVersionTarget)
+    install(FILES ${HEAVY_DEPS_CUSTOM} DESTINATION "."  COMPONENT "doc")
+  endif()
+endmacro()
+
 set(USE_ALTERNATE_LINKER "" CACHE STRING "Use alternate linker. Leave empty for system default; alternatives are 'gold', 'lld', 'bfd', 'mold'")
 if(NOT "${USE_ALTERNATE_LINKER}" STREQUAL "")
   set_alternate_linker(${USE_ALTERNATE_LINKER})
@@ -1107,6 +1131,7 @@ endif()
 
 add_executable(heavydb HeavyDB.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
 set_target_properties(heavydb PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
+InstallVersionFile()
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/heavy.thrift
