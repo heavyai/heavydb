@@ -105,15 +105,25 @@ sudo docker pull $BUILD_CONTAINER_IMAGE
 
 # strip verion number from os
 OPERATING_SYSTEM=$(echo $OPERATING_SYSTEM | sed 's/[0-9,\.]*$//')
+#
+# Note we use two methods to pass run information to the docker container.
+# Firstly via options on the command the docker container runs - 'docker_cmd'
+# and secondly via environment varibles on the docker command itself (-e options)
+# The value set in the environment, with the -e options are intended for use by the
+# common-functions.sh script sourced by the 'main' mapd-deps-${OPERATING_SYSTEM}
+# script.
+#
 if [[ $OPERATING_SYSTEM == "centos" ]] ; then
  docker_cmd="yum install sudo -y && ./mapd-deps-${OPERATING_SYSTEM}.sh --savespace --compress $TSAN_PARAM --cache=/dep_cache"
 else
-  docker_cmd='echo -e "#!/bin/sh\n\${@}" > /usr/sbin/sudo && chmod +x /usr/sbin/sudo && ./mapd-deps-'${OPERATING_SYSTEM}'.sh --savespace --compress'
+  docker_cmd='echo -e "#!/bin/sh\n\${@}" > /usr/sbin/sudo && chmod +x /usr/sbin/sudo && ./mapd-deps-'${OPERATING_SYSTEM}'.sh --savespace --compress --cache=/dep_cache'
 fi
 PACKAGE_CACHE=/theHoard/export/dep_cache
 
 echo "Running [$docker_cmd] in $BUILD_CONTAINER_IMAGE"
-
+BUILD_CONTAINER_IMAGE_ID=$(docker images -q $BUILD_CONTAINER_IMAGE --no-trunc)
+# Note - to log the container image name pass it 
+# in as an environmemt.
 sudo docker run --rm --runtime=nvidia \
   -v $BUILD_TMP_DIR:/build \
   -v $PACKAGE_CACHE:/dep_cache \
@@ -121,6 +131,10 @@ sudo docker run --rm --runtime=nvidia \
   -e USER=root \
   --memory=64G --cpuset-cpus=$CPU_SET \
   -e SUFFIX=${SUFFIX} \
+  -e BUILD_CONTAINER_IMAGE_ID=${BUILD_CONTAINER_IMAGE_ID} \
+  -e BUILD_CONTAINER_IMAGE=${BUILD_CONTAINER_IMAGE} \
+  -e BRANCH_NAME=${BRANCH_NAME} \
+  -e GIT_COMMIT=${GIT_COMMIT} \
   --name $BUILD_CONTAINER_NAME \
   $BUILD_CONTAINER_IMAGE \
   bash -c "$docker_cmd"
