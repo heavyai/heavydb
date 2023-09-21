@@ -161,10 +161,13 @@ class RelAlgTranslator {
   std::shared_ptr<Analyzer::Expr> translateWindowFunction(
       const RexWindowFunctionOperator*) const;
 
+  std::tuple<bool, bool, std::shared_ptr<Analyzer::Expr>> translateFrameBoundExpr(
+      const RexScalar* bound_expr) const;
+
   std::shared_ptr<Analyzer::Expr> translateIntervalExprForWindowFraming(
       std::shared_ptr<Analyzer::Expr> order_key,
       bool for_preceding_bound,
-      const Analyzer::BinOper* frame_bound_expr) const;
+      const Analyzer::Expr* expr) const;
 
   Analyzer::ExpressionPtrVector translateFunctionArgs(const RexFunctionOperator*) const;
 

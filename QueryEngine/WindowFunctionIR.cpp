@@ -182,8 +182,14 @@ llvm::Value* get_null_value_by_size(CgenState* cgen_state, SQLTypeInfo col_ti) {
       case kTINYINT:
         return cgen_state->llInt((int8_t)inline_int_null_value<int8_t>());
       case kSMALLINT:
+        if (col_ti.get_compression() == kENCODING_FIXED) {
+          return cgen_state->llInt((int16_t)(inline_fixed_encoding_null_val(col_ti)));
+        }
         return cgen_state->llInt((int16_t)inline_int_null_value<int16_t>());
       case kINT:
+        if (col_ti.get_compression() == kENCODING_FIXED) {
+          return cgen_state->llInt((int32_t)(inline_fixed_encoding_null_val(col_ti)));
+        }
         return cgen_state->llInt((int32_t)inline_int_null_value<int32_t>());
       case kTIME:
       case kTIMESTAMP:
@@ -191,6 +197,10 @@ llvm::Value* get_null_value_by_size(CgenState* cgen_state, SQLTypeInfo col_ti) {
           return cgen_state->llInt((int64_t)(inline_fixed_encoding_null_val(col_ti)));
         }
       case kBIGINT:
+        if (col_ti.get_compression() == kENCODING_FIXED) {
+          return cgen_state->llInt((int64_t)(inline_fixed_encoding_null_val(col_ti)));
+        }
+        return cgen_state->llInt((int64_t)inline_int_null_value<int64_t>());
       case kINTERVAL_DAY_TIME:
       case kINTERVAL_YEAR_MONTH:
       case kDECIMAL:
