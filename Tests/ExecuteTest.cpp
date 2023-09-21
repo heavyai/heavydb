@@ -22255,6 +22255,17 @@ TEST_F(Select, WindowFunctionEmptyPartitions) {
           " GROUP BY DATE_TRUNC(DAY, d), x ORDER BY DATE_TRUNC(DAY, d) NULLS FIRST;";
       EXPECT_NO_THROW(run_multiple_agg(query, dt));
     }
+
+    {
+      std::string query =
+          "SELECT DATE_TRUNC(DAY, d) AS binned_day, COUNT(*) AS n, SUM(x) AS sum_x, "
+          "COUNT(*) - LAG(COUNT(*)) OVER ( ORDER BY DATE_TRUNC(DAY, d) ) AS "
+          "lag_n_order_by_d, SUM(x) / SUM(SUM(x+1)) OVER ( ORDER BY DATE_TRUNC(DAY, d)) "
+          "AS sum_over_lag_sum_x FROM " +
+          table_name +
+          " GROUP BY DATE_TRUNC(DAY, d) ORDER BY DATE_TRUNC(DAY, d) NULLS FIRST;";
+      EXPECT_NO_THROW(run_multiple_agg(query, dt));
+    }
   }
 }
 
@@ -22481,6 +22492,16 @@ TEST_F(Select, WindowFunctionLag) {
         }
       }
     }
+
+    {
+      std::string q1 = "SELECT LAG(COUNT(*), 1) OVER (ORDER BY x ASC NULLS FIRST) FROM " +
+                       table_name + " GROUP BY x ORDER BY x ASC NULLS FIRST;";
+      c(q1, q1, dt);
+      std::string q2 =
+          "SELECT COUNT(*) - LAG(COUNT(*), 1) OVER (ORDER BY x ASC NULLS FIRST) FROM " +
+          table_name + " GROUP BY x ORDER BY x ASC NULLS FIRST;";
+      c(q2, q2, dt);
+    }
   }
 }
 
@@ -22584,6 +22605,16 @@ TEST_F(Select, WindowFunctionLead) {
           c(part1, dt);
         }
       }
+    }
+    {
+      std::string q1 =
+          "SELECT LEAD(COUNT(*), 1) OVER (ORDER BY x ASC NULLS FIRST) FROM " +
+          table_name + " GROUP BY x ORDER BY x ASC NULLS FIRST;";
+      c(q1, q1, dt);
+      std::string q2 =
+          "SELECT COUNT(*) - LEAD(COUNT(*), 1) OVER (ORDER BY x ASC NULLS FIRST) FROM " +
+          table_name + " GROUP BY x ORDER BY x ASC NULLS FIRST;";
+      c(q2, q2, dt);
     }
   }
 }
@@ -22967,6 +22998,13 @@ TEST_F(Select, WindowFunctionSum) {
           "x, y "
           "FROM " +
           table_name + ")) ORDER BY total ASC NULLS FIRST";
+      c(query, query, dt);
+    }
+    {
+      std::string query =
+          "SELECT x, COUNT(*) - SUM(COUNT(*)) OVER (ORDER BY COUNT(*) DESC, x NULLS "
+          "FIRST) FROM " +
+          table_name + " GROUP BY x ORDER BY COUNT(*) DESC, x NULLS FIRST;";
       c(query, query, dt);
     }
   }

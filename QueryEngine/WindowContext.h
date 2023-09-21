@@ -33,6 +33,24 @@ inline bool window_function_is_value(const SqlWindowFunctionKind kind) {
     case SqlWindowFunctionKind::FIRST_VALUE:
     case SqlWindowFunctionKind::LAST_VALUE:
     case SqlWindowFunctionKind::NTH_VALUE:
+    case SqlWindowFunctionKind::LAG_IN_FRAME:
+    case SqlWindowFunctionKind::LEAD_IN_FRAME:
+    case SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME:
+    case SqlWindowFunctionKind::LAST_VALUE_IN_FRAME:
+    case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME:
+      return true;
+    default:
+      return false;
+  }
+}
+
+inline bool window_function_is_value_with_frame(const SqlWindowFunctionKind kind) {
+  switch (kind) {
+    case SqlWindowFunctionKind::LAG_IN_FRAME:
+    case SqlWindowFunctionKind::LEAD_IN_FRAME:
+    case SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME:
+    case SqlWindowFunctionKind::LAST_VALUE_IN_FRAME:
+    case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME:
       return true;
     default:
       return false;
