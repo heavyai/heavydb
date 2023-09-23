@@ -773,18 +773,17 @@ void QueryMemoryInitializer::initColumnsPerRow(
        col_ptr += query_mem_desc.getNextColOffInBytesRowOnly(col_ptr, col_idx++)) {
     int64_t init_val{0};
     if (query_mem_desc.isGroupBy()) {
-      if (agg_op_metadata.has_count_distinct) {
+      if (agg_op_metadata.has_count_distinct &&
+          agg_op_metadata.count_distinct_buf_size[col_idx]) {
         // COUNT DISTINCT / APPROX_COUNT_DISTINCT
         // create a data structure for count_distinct operator per entries
         const int64_t bm_sz{agg_op_metadata.count_distinct_buf_size[col_idx]};
-        if (bm_sz) {
-          CHECK_EQ(static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(col_idx)),
-                   sizeof(int64_t));
-          init_val =
-              bm_sz > 0 ? allocateCountDistinctBitmap(bm_sz) : allocateCountDistinctSet();
-          CHECK_NE(init_val, 0);
-          ++init_vec_idx;
-        }
+        CHECK_EQ(static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(col_idx)),
+                 sizeof(int64_t));
+        init_val =
+            bm_sz > 0 ? allocateCountDistinctBitmap(bm_sz) : allocateCountDistinctSet();
+        CHECK_NE(init_val, 0);
+        ++init_vec_idx;
       } else if (agg_op_metadata.has_tdigest &&
                  agg_op_metadata.quantile_params[col_idx]) {
         auto const q = *agg_op_metadata.quantile_params[col_idx];
