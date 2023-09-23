@@ -4431,6 +4431,42 @@ TEST_F(Select, ModeOrderBy) {
   }
 }
 
+TEST_F(Select, TypeCAggregates) {
+  SKIP_ALL_ON_AGGREGATOR();  // APPROX_MEDIAN() is not supported in distributed mode.
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // GROUP BY + ORDER BY aggregate
+    c("SELECT w, APPROX_MEDIAN(x), MODE(y) FROM test GROUP BY w"
+      " ORDER BY COUNT(DISTINCT z);",
+      "SELECT * FROM (VALUES (-8, 7.0, 42), (-7, 7.5, 43));",
+      dt);
+    // Non-group-by aggregate
+    c("SELECT APPROX_MEDIAN(x), COUNT(DISTINCT y), MODE(z) FROM test;",
+      "SELECT * FROM (VALUES (7.0, 2, 101));",
+      dt);
+    // Non-group-by aggregate w/ JOIN ON
+    c("SELECT APPROX_MEDIAN(test.x), MODE(test.y), COUNT(DISTINCT test.z)"
+      " FROM test JOIN test_inner ON test.y=test_inner.y;",
+      "SELECT * FROM (VALUES (7.5, 43, 2));",
+      dt);
+    // Non-group-by aggregate w/ CROSS JOIN filter
+    c("SELECT APPROX_MEDIAN(test.x), MODE(test.y), COUNT(DISTINCT test.z)"
+      " FROM test, test_inner WHERE test.y=test_inner.y;",
+      "SELECT * FROM (VALUES (7.5, 43, 2));",
+      dt);
+    // GROUP BY w/ JOIN ON
+    c("SELECT APPROX_MEDIAN(test.w), test.x, MODE(test.y), COUNT(DISTINCT test.z) FROM"
+      " test JOIN test_inner ON test.y=test_inner.y GROUP BY test.x ORDER BY test.x;",
+      "SELECT * FROM (VALUES (-7.0, 7, 43, 1), (-7.0, 8, 43, 1));",
+      dt);
+    // GROUP BY w/ CROSS JOIN filter
+    c("SELECT APPROX_MEDIAN(test.w), test.x, MODE(test.y), COUNT(DISTINCT test.z) FROM"
+      " test, test_inner WHERE test.y=test_inner.y GROUP BY test.x ORDER BY test.x;",
+      "SELECT * FROM (VALUES (-7.0, 7, 43, 1), (-7.0, 8, 43, 1));",
+      dt);
+  }
+}
+
 TEST_F(Select, ScanNoAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
