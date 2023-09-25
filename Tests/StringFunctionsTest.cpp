@@ -1635,6 +1635,101 @@ TEST_F(StringFunctionTest, Base64) {
   }
 }
 
+class UrlEncodeDecode : public StringFunctionTest {
+ public:
+  struct Test {
+    std::string_view decoded;
+    std::string_view encoded;
+    std::string_view test_name;
+  };
+  using Param = std::tuple<ExecutorDeviceType, Test>;
+  // NOTE: test names must be non-empty, unique, and may only contain ASCII alphanumeric
+  // characters. [Use underscores carefully.]
+  static std::string testName(testing::TestParamInfo<Param> const& info) {
+    std::ostringstream oss;
+    oss << std::get<0>(info.param) << '_' << std::get<1>(info.param).test_name;
+    return oss.str();
+  }
+};
+
+class UrlEncode : public UrlEncodeDecode,
+                  public testing::WithParamInterface<UrlEncodeDecode::Param> {
+ public:
+  void test_encode(ExecutorDeviceType const dt, Test const test) {
+    std::ostringstream query;
+    query << "SELECT '" << test.encoded << "' = URL_ENCODE('" << test.decoded << "');";
+    EXPECT_TRUE(v<int64_t>(run_simple_agg(query.str(), dt))) << query.str();
+  }
+};
+
+TEST_P(UrlEncode, Test) {
+  auto const [dt, test] = GetParam();
+  if (!skip_tests(dt)) {
+    test_encode(dt, test);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    StringFunctionTest,
+    UrlEncode,
+    testing::Combine(testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+                     testing::Values(UrlEncode::Test{"Hello World!",
+                                                     "Hello+World%21",
+                                                     "hello_world"})),
+    UrlEncode::testName);
+
+class UrlDecode : public UrlEncodeDecode,
+                  public testing::WithParamInterface<UrlEncodeDecode::Param> {
+ public:
+  void test_decode(ExecutorDeviceType const dt, Test const test) {
+    std::ostringstream query;
+    query << "SELECT '" << test.decoded << "' = URL_DECODE('" << test.encoded << "');";
+    EXPECT_TRUE(v<int64_t>(run_simple_agg(query.str(), dt))) << query.str();
+  }
+};
+
+TEST_P(UrlDecode, Test) {
+  auto const [dt, test] = GetParam();
+  if (!skip_tests(dt)) {
+    test_decode(dt, test);
+  }
+}
+
+// If % is one of the last two characters, it should not be decoded by URL_DECODE().
+INSTANTIATE_TEST_SUITE_P(
+    StringFunctionTest,
+    UrlDecode,
+    testing::Combine(
+        testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+        testing::Values(UrlDecode::Test{"100%", "%3100%", "100_percent"},
+                        UrlDecode::Test{"100%!", "%3100%!", "100_percent_exclaim"},
+                        UrlDecode::Test{"100A", "%3100%41", "100A"})),
+    UrlDecode::testName);
+
+TEST_F(StringFunctionTest, UrlEncodeAndDecodeInversesAndNull) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Verify URL_DECODE() is inverse of URL_ENCODE()
+    char const* query =
+        "SELECT COUNT(*) = COUNT_IF(personal_motto = "
+        "URL_DECODE(URL_ENCODE(personal_motto))) FROM string_function_test_people;";
+    EXPECT_TRUE(v<int64_t>(run_simple_agg(query, dt))) << query;
+    // Verify empty string and NULL behavior
+    query =
+        "SELECT URL_ENCODE(b_str) IS NULL FROM numeric_to_string_test ORDER BY b_str "
+        "NULLS FIRST LIMIT 1;";
+    EXPECT_TRUE(v<int64_t>(run_simple_agg(query, dt))) << query;
+    query =
+        "SELECT URL_DECODE(b_str) IS NULL FROM numeric_to_string_test ORDER BY b_str "
+        "NULLS FIRST LIMIT 1;";
+    EXPECT_TRUE(v<int64_t>(run_simple_agg(query, dt))) << query;
+    query = "SELECT URL_ENCODE('') IS NULL;";
+    EXPECT_TRUE(v<int64_t>(run_simple_agg(query, dt))) << query;
+    query = "SELECT URL_DECODE('') IS NULL;";
+    EXPECT_TRUE(v<int64_t>(run_simple_agg(query, dt))) << query;
+  }
+}
+
 TEST_F(StringFunctionTest, TryCastIntegerTypes) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

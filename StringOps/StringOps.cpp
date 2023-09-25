@@ -832,6 +832,78 @@ NullableStrType Base64Decode::operator()(const std::string& str) const {
   return shared::decode_base64(str);
 }
 
+namespace {
+// Unreserved characters https://www.rfc-editor.org/rfc/rfc3986#section-2.3
+bool is_normal(char const c) {
+  return std::isalnum(c) || c == '-' || c == '.' || c == '_' || c == '~';
+}
+
+// True iff c will be encoded into a single character.
+bool is_singular(char const c) {
+  return is_normal(c) || c == ' ';
+}
+
+// Count % chars that are eligible to begin a url-encoded triplet.
+size_t count_percents(std::string const& str) {
+  size_t n_percents = 0u;
+  if (2u < str.size()) {
+    for (size_t i = 0u; i < str.size() - 2u; ++i) {
+      if (str[i] == '%') {
+        ++n_percents;
+        i += 2u;
+      }
+    }
+  }
+  return n_percents;
+}
+
+// If hex is a hex digit, return int value from 0-15. Otherwise undefined.
+int nibble(char const hex) {
+  return 'A' <= hex ? std::toupper(hex) + (10 - 'A') : hex - '0';
+}
+}  // namespace
+
+// Encode unreserved characters (RFC 3986 Sec. 2.3) into themselves.
+// Encode space ' ' into plus '+'.
+// Encode all other characters c into "%XX" where XX is the hex value of c.
+NullableStrType UrlEncode::operator()(const std::string& str) const {
+  constexpr char const* tr = "0123456789ABCDEF";
+  // Number of characters in string that will be copied/translated into a single char.
+  size_t const n_singular = std::count_if(str.begin(), str.end(), is_singular);
+  std::string encoded;
+  encoded.reserve(str.size() + 2u * (str.size() - n_singular));
+  for (char const c : str) {
+    if (is_normal(c)) {
+      encoded.append(1u, c);
+    } else if (c == ' ') {
+      encoded.append(1u, '+');
+    } else {
+      encoded.append(1u, '%');
+      encoded.append(1u, tr[(c >> 4) & 0xf]);
+      encoded.append(1u, tr[c & 0xf]);
+    }
+  }
+  return encoded;
+}
+
+// Inverse of UrlEncode::operator(). Garbage in, garbage out, but must never segfault.
+NullableStrType UrlDecode::operator()(const std::string& str) const {
+  size_t const n_percents = count_percents(str);
+  std::string decoded;
+  decoded.reserve(str.size() - 2u * n_percents);
+  for (size_t i = 0u; i < str.size(); ++i) {
+    if (str[i] == '%' && i + 2u < str.size()) {
+      decoded.append(1u, nibble(str[i + 1u]) << 4 ^ nibble(str[i + 2u]));
+      i += 2u;  // Skip the two hexadecimal digits
+    } else if (str[i] == '+') {
+      decoded.append(1u, ' ');
+    } else {  // Append normal characters, or % if one of last two characters.
+      decoded.append(1u, str[i]);
+    }
+  }
+  return decoded;
+}
+
 std::string StringOps::operator()(const std::string& str) const {
   NullableStrType modified_str(str);
   if (modified_str.is_null) {
@@ -1080,6 +1152,14 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
     case SqlStringOpKind::BASE64_DECODE: {
       CHECK_EQ(num_non_variable_literals, 0UL);
       return std::make_unique<const Base64Decode>(var_string_optional_literal);
+    }
+    case SqlStringOpKind::URL_ENCODE: {
+      CHECK_EQ(num_non_variable_literals, 0UL);
+      return std::make_unique<const UrlEncode>(var_string_optional_literal);
+    }
+    case SqlStringOpKind::URL_DECODE: {
+      CHECK_EQ(num_non_variable_literals, 0UL);
+      return std::make_unique<const UrlDecode>(var_string_optional_literal);
     }
     case SqlStringOpKind::TRY_STRING_CAST: {
       CHECK_EQ(num_non_variable_literals, 0UL);

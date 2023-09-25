@@ -233,6 +233,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new RegexpMatch());
     addOperator(new Base64Encode());
     addOperator(new Base64Decode());
+    addOperator(new UrlEncode());
+    addOperator(new UrlDecode());
     addOperator(new JarowinklerSimilarity());
     addOperator(new LevenshteinDistance());
     addOperator(new Likely());
@@ -1467,6 +1469,52 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public static class Base64Decode extends SqlFunction {
     public Base64Decode() {
       super("BASE64_DECODE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class UrlEncode extends SqlFunction {
+    public UrlEncode() {
+      super("URL_ENCODE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class UrlDecode extends SqlFunction {
+    public UrlDecode() {
+      super("URL_DECODE",
               SqlKind.OTHER_FUNCTION,
               null,
               null,
