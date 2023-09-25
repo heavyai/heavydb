@@ -1529,6 +1529,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
       return makeExpr<Analyzer::JarowinklerSimilarityStringOper>(args);
     case SqlStringOpKind::LEVENSHTEIN_DISTANCE:
       return makeExpr<Analyzer::LevenshteinDistanceStringOper>(args);
+    case SqlStringOpKind::URL_ENCODE:
+      return makeExpr<Analyzer::UrlEncodeStringOper>(args);
+    case SqlStringOpKind::URL_DECODE:
+      return makeExpr<Analyzer::UrlDecodeStringOper>(args);
     default: {
       throw std::runtime_error("Unsupported string function.");
     }
@@ -1788,6 +1792,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "JSON_VALUE"sv,
                    "BASE64_ENCODE"sv,
                    "BASE64_DECODE"sv,
+                   "URL_ENCODE"sv,
+                   "URL_DECODE"sv,
                    "TRY_CAST"sv,
                    "POSITION"sv,
                    "JAROWINKLER_SIMILARITY"sv,

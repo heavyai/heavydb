@@ -112,6 +112,8 @@ enum class SqlStringOpKind {
   JSON_VALUE,
   BASE64_ENCODE,
   BASE64_DECODE,
+  URL_ENCODE,
+  URL_DECODE,
   TRY_STRING_CAST,         // string-to-numeric
   POSITION,                // string-to-numeric
   JAROWINKLER_SIMILARITY,  // string-to-numeric
@@ -369,6 +371,10 @@ inline std::ostream& operator<<(std::ostream& os, const SqlStringOpKind kind) {
       return os << "BASE64_ENCODE";
     case SqlStringOpKind::BASE64_DECODE:
       return os << "BASE64_DECODE";
+    case SqlStringOpKind::URL_ENCODE:
+      return os << "URL_ENCODE";
+    case SqlStringOpKind::URL_DECODE:
+      return os << "URL_DECODE";
     case SqlStringOpKind::TRY_STRING_CAST:
       return os << "TRY_STRING_CAST";
     case SqlStringOpKind::POSITION:
@@ -448,6 +454,12 @@ inline SqlStringOpKind name_to_string_op_kind(const std::string& func_name) {
   }
   if (func_name == "BASE64_DECODE") {
     return SqlStringOpKind::BASE64_DECODE;
+  }
+  if (func_name == "URL_ENCODE") {
+    return SqlStringOpKind::URL_ENCODE;
+  }
+  if (func_name == "URL_DECODE") {
+    return SqlStringOpKind::URL_DECODE;
   }
   if (func_name == "TRY_CAST") {
     return SqlStringOpKind::TRY_STRING_CAST;

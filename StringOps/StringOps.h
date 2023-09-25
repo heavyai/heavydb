@@ -577,6 +577,20 @@ struct Base64Decode : public StringOp {
   NullableStrType operator()(const std::string& str) const override;
 };
 
+struct UrlEncode : public StringOp {
+  UrlEncode(const std::optional<std::string>& var_str_optional_literal)
+      : StringOp(SqlStringOpKind::URL_ENCODE, var_str_optional_literal) {}
+
+  NullableStrType operator()(const std::string& str) const override;
+};
+
+struct UrlDecode : public StringOp {
+  UrlDecode(const std::optional<std::string>& var_str_optional_literal)
+      : StringOp(SqlStringOpKind::URL_DECODE, var_str_optional_literal) {}
+
+  NullableStrType operator()(const std::string& str) const override;
+};
+
 struct NullOp : public StringOp {
   NullOp(const std::optional<std::string>& var_str_optional_literal,
          const SqlStringOpKind op_kind)
