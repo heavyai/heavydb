@@ -652,7 +652,6 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
     return nullptr;
   }
   const auto execution_result = runSelectQuery(query_str, std::move(co), std::move(eo));
-  VLOG(1) << session_info_->getCatalog().getDataMgr().getSystemMemoryUsage();
   return execution_result->getRows();
 }
 

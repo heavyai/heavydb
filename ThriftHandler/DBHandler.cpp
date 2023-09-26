@@ -6463,10 +6463,19 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   std::ostringstream oss;
   oss << query_substr << post_fix;
   auto const reduced_query_str = oss.str();
-  log_system_cpu_memory_status("Start query execution: " + reduced_query_str, cat);
-  ScopeGuard cpu_system_memory_logging = [&cat, &reduced_query_str]() {
-    log_system_cpu_memory_status("Finish query execution: " + reduced_query_str, cat);
+  bool show_cpu_memory_stat_after_finishing_query = false;
+  ScopeGuard cpu_system_memory_logging = [&show_cpu_memory_stat_after_finishing_query,
+                                          &cat,
+                                          &reduced_query_str]() {
+    if (show_cpu_memory_stat_after_finishing_query) {
+      log_system_cpu_memory_status("Finish query execution: " + reduced_query_str, cat);
+    }
   };
+  auto log_cpu_memory_status =
+      [&reduced_query_str, &cat, &show_cpu_memory_stat_after_finishing_query]() {
+        log_system_cpu_memory_status("Start query execution: " + reduced_query_str, cat);
+        show_cpu_memory_stat_after_finishing_query = true;
+      };
 
   // test to see if db/catalog is writable before execution of a writable SQL/DDL command
   //   TODO: move to execute() (?)
@@ -6493,6 +6502,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     CHECK(ddl_query.HasMember("payload"));
     CHECK(ddl_query["payload"].IsObject());
     auto stmt = Parser::InsertIntoTableAsSelectStmt(ddl_query["payload"].GetObject());
+    log_cpu_memory_status();
     _return.addExecutionTime(
         measure<>::execution([&]() { stmt.execute(*session_ptr, read_only_); }));
     return;
@@ -6514,6 +6524,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       CHECK(ddl_query.HasMember("payload"));
       CHECK(ddl_query["payload"].IsObject());
       auto stmt = Parser::CreateTableAsSelectStmt(ddl_query["payload"].GetObject());
+      log_cpu_memory_status();
       _return.addExecutionTime(
           measure<>::execution([&]() { stmt.execute(*session_ptr, read_only_); }));
     }
@@ -6533,6 +6544,9 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     CHECK(ddl_query.HasMember("payload"));
     CHECK(ddl_query["payload"].IsObject());
     auto stmt = Parser::InsertValuesStmt(cat, ddl_query["payload"].GetObject());
+    if (stmt.get_value_lists().size() > 1) {
+      log_cpu_memory_status();
+    }
     _return.addExecutionTime(
         measure<>::execution([&]() { stmt.execute(*session_ptr, read_only_); }));
     return;
@@ -6586,6 +6600,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
         _return.addExecutionTime(measure<>::execution(
             [&]() { execute_distributed_copy_statement(import_stmt, *session_ptr); }));
       } else {
+        log_cpu_memory_status();
         _return.addExecutionTime(measure<>::execution(
             [&]() { import_stmt->execute(*session_ptr, read_only_); }));
       }
@@ -6764,6 +6779,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
     }
+    log_cpu_memory_status();
     dispatch_queue_->submit(execute_rel_alg_task,
                             pw.getDMLType() == ParserWrapper::DMLType::Update ||
                                 pw.getDMLType() == ParserWrapper::DMLType::Delete);
