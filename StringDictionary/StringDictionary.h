@@ -99,11 +99,19 @@ class StringDictionary {
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const;
 
-  std::vector<int32_t> getLike(const std::string& pattern,
-                               const bool icase,
-                               const bool is_simple,
-                               const char escape,
-                               const size_t generation) const;
+  template <typename T>
+  std::vector<T> getLike(const std::string& pattern,
+                         const bool icase,
+                         const bool is_simple,
+                         const char escape,
+                         const size_t generation) const;
+
+  template <typename T>
+  std::vector<T> getLikeImpl(const std::string& pattern,
+                             const bool icase,
+                             const bool is_simple,
+                             const char escape,
+                             const size_t generation) const;
 
   std::vector<int32_t> getCompare(const std::string& pattern,
                                   const std::string& comp_operator,
@@ -284,7 +292,9 @@ class StringDictionary {
   size_t payload_file_off_;
   mutable std::shared_mutex rw_mutex_;
   mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int32_t>>
-      like_cache_;
+      like_i32_cache_;
+  mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int64_t>>
+      like_i64_cache_;
   mutable size_t like_cache_size_;
   mutable std::map<std::pair<std::string, char>, std::vector<int32_t>> regex_cache_;
   mutable size_t regex_cache_size_;

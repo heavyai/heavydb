@@ -38,10 +38,13 @@ DEVICE static int inline lowercase(char c) {
   return c;
 }
 
+// escape_char does nothing, it's a placeholder to fit # arguments for both
+// string_like and string_like_simple functions
 extern "C" RUNTIME_EXPORT DEVICE bool string_like_simple(const char* str,
                                                          const int32_t str_len,
                                                          const char* pattern,
-                                                         const int32_t pat_len) {
+                                                         const int32_t pat_len,
+                                                         char escape_char) {
   int i, j;
   int search_len = str_len - pat_len + 1;
   for (i = 0; i < search_len; ++i) {
@@ -54,10 +57,12 @@ extern "C" RUNTIME_EXPORT DEVICE bool string_like_simple(const char* str,
   return false;
 }
 
+// escape_char does nothing and it is intentional as describe above
 extern "C" RUNTIME_EXPORT DEVICE bool string_ilike_simple(const char* str,
                                                           const int32_t str_len,
                                                           const char* pattern,
-                                                          const int32_t pat_len) {
+                                                          const int32_t pat_len,
+                                                          char escape_char) {
   int i, j;
   int search_len = str_len - pat_len + 1;
   for (i = 0; i < search_len; ++i) {
@@ -75,11 +80,12 @@ extern "C" RUNTIME_EXPORT DEVICE bool string_ilike_simple(const char* str,
                                                                const int32_t lhs_len,    \
                                                                const char* rhs,          \
                                                                const int32_t rhs_len,    \
+                                                               char escape_char,         \
                                                                const int8_t bool_null) { \
     if (!lhs || !rhs) {                                                                  \
       return bool_null;                                                                  \
     }                                                                                    \
-    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                                \
+    return base_func(lhs, lhs_len, rhs, rhs_len, escape_char) ? 1 : 0;                   \
   }
 
 STR_LIKE_SIMPLE_NULLABLE(string_like_simple)

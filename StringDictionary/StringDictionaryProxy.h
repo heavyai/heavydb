@@ -207,10 +207,11 @@ class StringDictionaryProxy {
 
   void updateGeneration(const int64_t generation) noexcept;
 
-  std::vector<int32_t> getLike(const std::string& pattern,
-                               const bool icase,
-                               const bool is_simple,
-                               const char escape) const;
+  template <typename T>
+  std::vector<T> getLike(const std::string& pattern,
+                         const bool icase,
+                         const bool is_simple,
+                         const char escape) const;
 
   std::vector<int32_t> getCompare(const std::string& pattern,
                                   const std::string& comp_operator) const;

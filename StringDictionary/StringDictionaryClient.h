@@ -47,14 +47,24 @@ class StringDictionaryClient {
     return 0;
   };
 
-  std::vector<int32_t> get_like(const std::string& pattern,
-                                const bool icase,
-                                const bool is_simple,
-                                const char escape,
-                                const int64_t generation) {
+  std::vector<int32_t> get_like_i32(const std::string& pattern,
+                                    const bool icase,
+                                    const bool is_simple,
+                                    const char escape,
+                                    const int64_t generation) {
     CHECK(false);
     return std::vector<int32_t>{};
-  };
+  }
+
+  std::vector<int64_t> get_like_i64(const std::string& pattern,
+                                    const bool icase,
+                                    const bool is_simple,
+                                    const char escape,
+                                    const int64_t generation) {
+    CHECK(false);
+    return std::vector<int64_t>{};
+  }
+
 
   std::vector<int32_t> get_compare(const std::string& pattern,
                                    const std::string& comp_operator,
