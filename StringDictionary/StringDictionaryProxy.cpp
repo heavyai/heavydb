@@ -465,45 +465,36 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOt
   return id_map;
 }
 
-namespace {
-
-bool is_like(const std::string& str,
-             const std::string& pattern,
-             const bool icase,
-             const bool is_simple,
-             const char escape) {
-  return icase
-             ? (is_simple ? string_ilike_simple(
-                                str.c_str(), str.size(), pattern.c_str(), pattern.size())
-                          : string_ilike(str.c_str(),
-                                         str.size(),
-                                         pattern.c_str(),
-                                         pattern.size(),
-                                         escape))
-             : (is_simple ? string_like_simple(
-                                str.c_str(), str.size(), pattern.c_str(), pattern.size())
-                          : string_like(str.c_str(),
-                                        str.size(),
-                                        pattern.c_str(),
-                                        pattern.size(),
-                                        escape));
-}
-
-}  // namespace
-
-std::vector<int32_t> StringDictionaryProxy::getLike(const std::string& pattern,
-                                                    const bool icase,
-                                                    const bool is_simple,
-                                                    const char escape) const {
+template <typename T>
+std::vector<T> StringDictionaryProxy::getLike(const std::string& pattern,
+                                              const bool icase,
+                                              const bool is_simple,
+                                              const char escape) const {
   CHECK_GE(generation_, 0);
-  auto result = string_dict_->getLike(pattern, icase, is_simple, escape, generation_);
+  auto result = string_dict_->getLike<T>(pattern, icase, is_simple, escape, generation_);
+  auto is_like_impl = icase       ? is_simple ? string_ilike_simple : string_ilike
+                      : is_simple ? string_like_simple
+                                  : string_like;
   for (unsigned index = 0; index < transient_string_vec_.size(); ++index) {
-    if (is_like(*transient_string_vec_[index], pattern, icase, is_simple, escape)) {
+    auto const str = *transient_string_vec_[index];
+    if (is_like_impl(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape)) {
       result.push_back(transientIndexToId(index));
     }
   }
   return result;
 }
+
+template std::vector<int32_t> StringDictionaryProxy::getLike<int32_t>(
+    const std::string& pattern,
+    const bool icase,
+    const bool is_simple,
+    const char escape) const;
+
+template std::vector<int64_t> StringDictionaryProxy::getLike<int64_t>(
+    const std::string& pattern,
+    const bool icase,
+    const bool is_simple,
+    const char escape) const;
 
 namespace {
 

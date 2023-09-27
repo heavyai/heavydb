@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
+#include <boost/iterator/transform_iterator.hpp>
 #include <boost/sort/spreadsort/string_sort.hpp>
 #include <functional>
 #include <future>
@@ -49,6 +50,7 @@
 #include "Utils/StringLike.h"
 
 #include "LeafHostInfo.h"
+#include "Shared/measure.h"
 
 bool g_cache_string_hash{true};
 
@@ -812,80 +814,103 @@ size_t StringDictionary::storageEntryCount() const {
   return str_count_;
 }
 
-namespace {
+template <typename T>
+std::vector<T> StringDictionary::getLikeImpl(const std::string& pattern,
+                                             const bool icase,
+                                             const bool is_simple,
+                                             const char escape,
+                                             const size_t generation) const {
+  constexpr size_t grain_size{1000};
+  auto is_like_impl = icase       ? is_simple ? string_ilike_simple : string_ilike
+                      : is_simple ? string_like_simple
+                                  : string_like;
+  auto const num_threads = static_cast<size_t>(cpu_threads());
+  std::vector<std::vector<T>> worker_results(num_threads);
+  tbb::task_arena limited_arena(num_threads);
+  limited_arena.execute([&] {
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, generation, grain_size),
+        [&is_like_impl, &pattern, &escape, &worker_results, this](
+            const tbb::blocked_range<size_t>& range) {
+          auto& result_vector =
+              worker_results[tbb::this_task_arena::current_thread_index()];
+          for (size_t i = range.begin(); i < range.end(); ++i) {
+            const auto str = getStringUnlocked(i);
+            if (is_like_impl(
+                    str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape)) {
+              result_vector.push_back(i);
+            }
+          }
+        });
+  });
+  // partial_sum to get 1) a start offset for each thread and 2) the total # elems
+  std::vector<size_t> start_offsets(num_threads + 1, 0);
+  auto vec_size = [](std::vector<T> const& vec) { return vec.size(); };
+  auto begin = boost::make_transform_iterator(worker_results.begin(), vec_size);
+  auto end = boost::make_transform_iterator(worker_results.end(), vec_size);
+  std::partial_sum(begin, end, start_offsets.begin() + 1);  // first element is 0
 
-bool is_like(const std::string& str,
-             const std::string& pattern,
-             const bool icase,
-             const bool is_simple,
-             const char escape) {
-  return icase
-             ? (is_simple ? string_ilike_simple(
-                                str.c_str(), str.size(), pattern.c_str(), pattern.size())
-                          : string_ilike(str.c_str(),
-                                         str.size(),
-                                         pattern.c_str(),
-                                         pattern.size(),
-                                         escape))
-             : (is_simple ? string_like_simple(
-                                str.c_str(), str.size(), pattern.c_str(), pattern.size())
-                          : string_like(str.c_str(),
-                                        str.size(),
-                                        pattern.c_str(),
-                                        pattern.size(),
-                                        escape));
+  std::vector<T> result(start_offsets[num_threads]);
+  limited_arena.execute([&] {
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, num_threads, 1),
+        [&worker_results, &result, &start_offsets](
+            const tbb::blocked_range<size_t>& range) {
+          auto& result_vector = worker_results[range.begin()];
+          auto const start_offset = start_offsets[range.begin()];
+          std::copy(
+              result_vector.begin(), result_vector.end(), result.begin() + start_offset);
+        },
+        tbb::static_partitioner());
+  });
+  return result;
 }
-
-}  // namespace
-
-std::vector<int32_t> StringDictionary::getLike(const std::string& pattern,
-                                               const bool icase,
-                                               const bool is_simple,
-                                               const char escape,
-                                               const size_t generation) const {
+template <>
+std::vector<int32_t> StringDictionary::getLike<int32_t>(const std::string& pattern,
+                                                        const bool icase,
+                                                        const bool is_simple,
+                                                        const char escape,
+                                                        const size_t generation) const {
   std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
   if (isClient()) {
-    return client_->get_like(pattern, icase, is_simple, escape, generation);
+    return client_->get_like_i32(pattern, icase, is_simple, escape, generation);
   }
   const auto cache_key = std::make_tuple(pattern, icase, is_simple, escape);
-  const auto it = like_cache_.find(cache_key);
-  if (it != like_cache_.end()) {
+  const auto it = like_i32_cache_.find(cache_key);
+  if (it != like_i32_cache_.end()) {
     return it->second;
   }
-  std::vector<int32_t> result;
-  std::vector<std::thread> workers;
-  int worker_count = cpu_threads();
-  CHECK_GT(worker_count, 0);
-  std::vector<std::vector<int32_t>> worker_results(worker_count);
-  CHECK_LE(generation, str_count_);
-  for (int worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
-    workers.emplace_back([&worker_results,
-                          &pattern,
-                          generation,
-                          icase,
-                          is_simple,
-                          escape,
-                          worker_idx,
-                          worker_count,
-                          this]() {
-      for (size_t string_id = worker_idx; string_id < generation;
-           string_id += worker_count) {
-        const auto str = getStringUnlocked(string_id);
-        if (is_like(str, pattern, icase, is_simple, escape)) {
-          worker_results[worker_idx].push_back(string_id);
-        }
-      }
-    });
-  }
-  for (auto& worker : workers) {
-    worker.join();
-  }
-  for (const auto& worker_result : worker_results) {
-    result.insert(result.end(), worker_result.begin(), worker_result.end());
-  }
+
+  auto result = getLikeImpl<int32_t>(pattern, icase, is_simple, escape, generation);
   // place result into cache for reuse if similar query
-  const auto it_ok = like_cache_.insert(std::make_pair(cache_key, result));
+  const auto it_ok = like_i32_cache_.insert(std::make_pair(cache_key, result));
   like_cache_size_ += (pattern.size() + 3 + (result.size() * sizeof(int32_t)));
+
+  CHECK(it_ok.second);
+
+  return result;
+}
+
+template <>
+std::vector<int64_t> StringDictionary::getLike<int64_t>(const std::string& pattern,
+                                                        const bool icase,
+                                                        const bool is_simple,
+                                                        const char escape,
+                                                        const size_t generation) const {
+  std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
+  if (isClient()) {
+    return client_->get_like_i64(pattern, icase, is_simple, escape, generation);
+  }
+  const auto cache_key = std::make_tuple(pattern, icase, is_simple, escape);
+  const auto it = like_i64_cache_.find(cache_key);
+  if (it != like_i64_cache_.end()) {
+    return it->second;
+  }
+
+  auto result = getLikeImpl<int64_t>(pattern, icase, is_simple, escape, generation);
+  // place result into cache for reuse if similar query
+  const auto it_ok = like_i64_cache_.insert(std::make_pair(cache_key, result));
+  like_cache_size_ += (pattern.size() + 3 + (result.size() * sizeof(int64_t)));
 
   CHECK(it_ok.second);
 
@@ -1599,8 +1624,11 @@ void* StringDictionary::addMemoryCapacity(void* addr,
 }
 
 void StringDictionary::invalidateInvertedIndex() noexcept {
-  if (!like_cache_.empty()) {
-    decltype(like_cache_)().swap(like_cache_);
+  if (!like_i32_cache_.empty()) {
+    decltype(like_i32_cache_)().swap(like_i32_cache_);
+  }
+  if (!like_i64_cache_.empty()) {
+    decltype(like_i64_cache_)().swap(like_i64_cache_);
   }
   if (!regex_cache_.empty()) {
     decltype(regex_cache_)().swap(regex_cache_);

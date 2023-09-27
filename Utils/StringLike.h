@@ -55,12 +55,14 @@ extern "C" RUNTIME_EXPORT DEVICE bool string_ilike(const char* str,
 extern "C" RUNTIME_EXPORT DEVICE bool string_like_simple(const char* str,
                                                          const int32_t str_len,
                                                          const char* pattern,
-                                                         const int32_t pat_len);
+                                                         const int32_t pat_len,
+                                                         char escape_char);
 
 extern "C" RUNTIME_EXPORT DEVICE bool string_ilike_simple(const char* str,
                                                           const int32_t str_len,
                                                           const char* pattern,
-                                                          const int32_t pat_len);
+                                                          const int32_t pat_len,
+                                                          char escape_char);
 
 extern "C" RUNTIME_EXPORT DEVICE bool string_lt(const char* lhs,
                                                 const int32_t lhs_len,

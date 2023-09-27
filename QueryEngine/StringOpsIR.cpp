@@ -631,13 +631,14 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
   auto like_expr_arg_lvs = codegen(expr->get_like_expr(), true, co);
   CHECK_EQ(size_t(3), like_expr_arg_lvs.size());
   const bool is_nullable{!expr->get_arg()->get_type_info().get_notnull()};
-  std::vector<llvm::Value*> str_like_args{
-      str_lv[1], str_lv[2], like_expr_arg_lvs[1], like_expr_arg_lvs[2]};
+  std::vector<llvm::Value*> str_like_args{str_lv[1],
+                                          str_lv[2],
+                                          like_expr_arg_lvs[1],
+                                          like_expr_arg_lvs[2],
+                                          cgen_state_->llInt(int8_t(escape_char))};
   std::string fn_name{expr->get_is_ilike() ? "string_ilike" : "string_like"};
   if (expr->get_is_simple()) {
     fn_name += "_simple";
-  } else {
-    str_like_args.push_back(cgen_state_->llInt(int8_t(escape_char)));
   }
   if (is_nullable) {
     fn_name += "_nullable";
@@ -714,12 +715,14 @@ llvm::Value* CodeGenerator::codegenDictLike(
   CHECK_EQ(kENCODING_NONE, pattern_ti.get_compression());
   const auto& pattern_datum = pattern->get_constval();
   const auto& pattern_str = *pattern_datum.stringval;
-  const auto matching_ids = sdp->getLike(pattern_str, ilike, is_simple, escape_char);
-  // InIntegerSet requires 64-bit values
-  std::vector<int64_t> matching_ids_64(matching_ids.size());
-  std::copy(matching_ids.begin(), matching_ids.end(), matching_ids_64.begin());
+  auto work_timer = timer_start();
+  const auto matching_ids =
+      sdp->getLike<int64_t>(pattern_str, ilike, is_simple, escape_char);
+  auto const work_ms = timer_stop(work_timer);
+  VLOG(3) << "Processing like operator with the pattern " << pattern_str << " took "
+          << work_ms << " ms (# matching elems: " << matching_ids.size() << ")";
   const auto in_values = std::make_shared<Analyzer::InIntegerSet>(
-      dict_like_arg, matching_ids_64, dict_like_arg_ti.get_notnull());
+      dict_like_arg, matching_ids, dict_like_arg_ti.get_notnull());
   return codegen(in_values.get(), co);
 }
 
