@@ -142,6 +142,13 @@ class BaseTestFixture : public DBHandlerTestFixture,
     check_returned_rows("SELECT d, f, COUNT(*) FROM " + table_name +
                             " GROUP BY d, f ORDER BY f DESC NULLS LAST LIMIT 5;",
                         5);
+    sqlAndCompareResult("SELECT COUNT(*) FROM " + table_name + " WHERE str like 'hello';",
+                        {{i(10)}});
+    sqlAndCompareResult(
+        "SELECT COUNT(*) FROM " + table_name + " WHERE str ilike 'hello';", {{i(10)}});
+    sqlAndCompareResult(
+        "SELECT COUNT(*) FROM " + table_name + " WHERE str REGEXP '^[a-z]+r$';",
+        {{i(0)}});
     check_returned_rows(
         "SELECT approx_count_distinct(d), approx_count_distinct(str), i64, i32, "
         "i16 FROM " +

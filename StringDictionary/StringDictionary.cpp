@@ -2081,6 +2081,7 @@ void translate_string_ids(std::vector<int32_t>& dest_ids,
 }
 
 size_t StringDictionary::computeCacheSize() const {
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   return string_id_string_dict_hash_table_.size() * sizeof(int32_t) +
          hash_cache_.size() * sizeof(string_dict_hash_t) +
          sorted_cache.size() * sizeof(int32_t) + like_cache_size_ + regex_cache_size_ +
