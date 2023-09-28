@@ -3621,6 +3621,7 @@ class CtasTableTest : public DBHandlerTestFixture,
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     // Default connection string outside of thrift
+    ASSERT_NO_THROW(sql("drop table if exists test_table;"));
     ASSERT_NO_THROW(sql("drop table if exists ctas_test;"));
     ASSERT_NO_THROW(sql("drop table if exists ctas_test_empty;"));
     ASSERT_NO_THROW(sql("drop table if exists ctas_test_full;"));
@@ -3628,6 +3629,7 @@ class CtasTableTest : public DBHandlerTestFixture,
   }
 
   void TearDown() override {
+    ASSERT_NO_THROW(sql("drop table if exists test_table;"));
     ASSERT_NO_THROW(sql("drop table if exists ctas_test;"));
     ASSERT_NO_THROW(sql("drop table if exists ctas_test_empty;"));
     ASSERT_NO_THROW(sql("drop table if exists ctas_test_full;"));
@@ -3813,6 +3815,18 @@ TEST_F(CtasTableTest, CreateTableAsSelect) {
   sql("SELECT m, m_3, m_6, m_9, n, o, o1, o2 FROM ctas_test_full ORDER BY m, m_3, m_6, "
       "m_9, n, o, o1, o2;");
   // }
+}
+
+TEST_F(CtasTableTest, CreateOrReplaceCtasTable) {
+  sql("CREATE TABLE test_table (idx integer)");
+  sql("INSERT INTO test_table (idx) VALUES (1), (2), (3)");
+  auto query = std::string(
+      "CREATE OR REPLACE TABLE test_table_as_select AS SELECT * FROM test_table");
+  // using a partial exception for the sake of brevity
+  queryAndAssertPartialException(query,
+                                 R"(SQL Error: Encountered "TABLE" at line 1, column 19.
+Was expecting:
+    "MODEL" ...)");
 }
 
 class NullTextArrayTest : public DBHandlerTestFixture {

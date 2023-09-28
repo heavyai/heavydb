@@ -21,7 +21,7 @@
  *   FOREIGN DATA WRAPPER <foreign_data_wrapper_name>
  *   WITH ( <option> = <value> [, ... ] )
  */
-SqlCreate SqlCreateServer(Span s, boolean replace) :
+SqlCreate SqlCreateServer(Span s) :
 {
     SqlCreateServer.Builder sqlCreateServerBuilder = new SqlCreateServer.Builder();
     SqlIdentifier sqlIdentifier;

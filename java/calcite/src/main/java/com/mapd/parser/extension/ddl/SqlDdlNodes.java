@@ -36,7 +36,6 @@ public class SqlDdlNodes {
 
   /** Creates a CREATE TABLE. */
   public static SqlCreateTable createTable(SqlParserPos pos,
-          boolean replace,
           boolean temporary,
           boolean ifNotExists,
           SqlIdentifier name,
@@ -44,17 +43,16 @@ public class SqlDdlNodes {
           HeavyDBOptionsMap withOptions,
           SqlNode query) {
     return new SqlCreateTable(
-            pos, replace, temporary, ifNotExists, name, columnList, withOptions, query);
+            pos, temporary, ifNotExists, name, columnList, withOptions, query);
   }
 
   /** Creates a CREATE VIEW. */
   public static SqlCreateView createView(SqlParserPos pos,
-          boolean replace,
           boolean ifNotExists,
           SqlIdentifier name,
           SqlNodeList columnList,
           SqlNode query) {
-    return new SqlCreateView(pos, replace, ifNotExists, name, columnList, query);
+    return new SqlCreateView(pos, ifNotExists, name, columnList, query);
   }
 
   /** Creates a CREATE MODEL. */

@@ -569,7 +569,7 @@ boolean TemporaryOpt() :
  *
  * CREATE TABLE [ IF NOT EXISTS ] <table_name> AS <select>
  */
-SqlCreate SqlCreateTable(Span s, boolean replace) :
+SqlDdl SqlCreateTable(Span s) :
 {
     boolean temporary = false;
     boolean ifNotExists = false;
@@ -590,8 +590,47 @@ SqlCreate SqlCreateTable(Span s, boolean replace) :
     )
     [ <WITH> withOptions = OptionsOpt() ]
     {
-        return SqlDdlNodes.createTable(s.end(this), replace, temporary, ifNotExists, id,
+        return SqlDdlNodes.createTable(s.end(this), temporary, ifNotExists, id,
             tableElementList, withOptions, query);
+    }
+}
+
+/**
+ * Parses a CREATE statement.
+ *
+ * This broke away from the default Calcite implementation because we do
+ * not allow the the optional "OR REPLACE" clause. 
+ *
+ */
+SqlDdl SqlCustomCreate(Span s) :
+{
+    final SqlDdl create;
+}
+{
+    <CREATE>
+    (
+        LOOKAHEAD(1) create = SqlCreateDB(s)
+        |
+        LOOKAHEAD(1) create = SqlCreateTable(s)
+        |
+        LOOKAHEAD(1) create = SqlCreateView(s)
+        |
+        LOOKAHEAD(1) create = SqlCreateRole(s)
+        |
+        LOOKAHEAD(1) create = SqlCreateDataframe(s)
+        |
+        LOOKAHEAD(1) create = SqlCreatePolicy(s)
+        |
+        LOOKAHEAD(1) create = SqlCreateServer(s)
+        |
+        LOOKAHEAD(1) create = SqlCreateForeignTable(s)
+        |
+        LOOKAHEAD(2) create = SqlCreateUserMapping(s)
+        |
+        LOOKAHEAD(2) create = SqlCreateUser(s)
+    )
+    {
+        return create;
     }
 }
 
@@ -914,7 +953,7 @@ SqlDdl SqlEvaluateModel(Span s) :
  *
  * CREATE VIEW [ IF NOT EXISTS ] <view_name> [(columns)] AS <query>
  */
-SqlCreate SqlCreateView(Span s, boolean replace) :
+SqlDdl SqlCreateView(Span s) :
 {
     final boolean ifNotExists;
     final SqlIdentifier id;
@@ -928,7 +967,7 @@ SqlCreate SqlCreateView(Span s, boolean replace) :
         if (columnList != null && columnList.size() > 0) {
             throw new ParseException("Column list aliases in views are not yet supported.");
         }
-        return SqlDdlNodes.createView(s.end(this), replace, ifNotExists, id, columnList,
+        return SqlDdlNodes.createView(s.end(this), ifNotExists, id, columnList,
             query);
     }
 }
@@ -994,10 +1033,8 @@ SqlDdl SqlDropModel(Span s) :
  * Create a database using the following syntax:
  *
  * CREATE DATABASE ...
- *
- *  "replace" option required by SqlCreate, but unused
  */
-SqlCreate SqlCreateDB(Span s, boolean replace) :
+SqlDdl SqlCreateDB(Span s) :
 {
     final boolean ifNotExists;
     final SqlIdentifier dbName;
@@ -1077,10 +1114,8 @@ SqlDdl SqlAlterDatabase(Span s) :
  * Create a user using the following syntax:
  *
  * CREATE USER ["]<name>["] (<property> = value,...);
- *
- *  "replace" option required by SqlCreate, but unused
  */
-SqlCreate SqlCreateUser(Span s, boolean replace) :
+SqlDdl SqlCreateUser(Span s) :
 {
     final SqlIdentifier userName;
     HeavyDBOptionsMap userOptions = null;
@@ -1255,7 +1290,7 @@ SqlIdentifier HyphenatedCompoundIdentifier() :
  * CREATE ROLE <role_name>
  *
  */
-SqlCreate SqlCreateRole(Span s, boolean replace) :
+SqlDdl SqlCreateRole(Span s) :
 {
     final SqlIdentifier role;
 }
@@ -1513,7 +1548,7 @@ SqlDdl SqlRevokePrivilege(Span s, SqlNodeList privileges) :
  *
  *		CREATE DATAFRAME table '(' base_table_element_commalist ')' FROM STRING opt_with_option_list
  */
-SqlCreate SqlCreateDataframe(Span s, boolean replace) :
+SqlDdl SqlCreateDataframe(Span s) :
 {
     SqlIdentifier name;
     SqlNodeList elementList = null;
@@ -1535,7 +1570,7 @@ SqlCreate SqlCreateDataframe(Span s, boolean replace) :
 /*
  * CREATE POLICY
  */
-SqlCreate SqlCreatePolicy(Span s, boolean replace) :
+SqlDdl SqlCreatePolicy(Span s) :
 {
     SqlIdentifier columnName = null;
     SqlIdentifier granteeName = null;

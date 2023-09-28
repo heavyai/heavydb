@@ -569,8 +569,9 @@ data: {
       ]
 
       # List of methods for parsing custom SQL statements.
-      # Note that DROP commands are handled specially by SqlCustomDrop
-      # and SHOW commands are handled specially by SqlCustomShow because
+      # Note that CREATE commands are handled by SqlCustomCreate, 
+      # DROP commands are handled by SqlCustomDrop and SHOW
+      # commands are handled specially by SqlCustomShow because
       # all of the statements listed here have LOOKAHEAD(2) which is
       # hardcoded in Calcite's Parser.jj source code.
       statementParserMethods: [
@@ -584,6 +585,7 @@ data: {
         "SqlRenameTable(span())"
         "SqlInsertIntoTable(span())"
         "SqlKillQuery(span())"
+        "SqlCustomCreate(span())"
         "SqlCustomDrop(span())"
         "SqlCustomShow(span())"
         "SqlGrant(span())"
@@ -625,18 +627,16 @@ data: {
 
       # List of methods for parsing extensions to "CREATE [OR REPLACE]" calls.
       # Each must accept arguments "(SqlParserPos pos, boolean replace)".
+      # ----------------------------------------------------
+      # No longer used in cases where REPLACE is unsupported.
+      #
+      #  This broke away from the default Calcite implementation because we do
+      #     not allow the optional "OR REPLACE" clause which is allowed by
+      #     Calcite's default implementation of create.
+      #  See: SqlCustomCreate()
+      # ----------------------------------------------------
       createStatementParserMethods: [
-        "SqlCreateDataframe"
-        "SqlCreateDB"
-        "SqlCreateServer"
-        "SqlCreateForeignTable"
-        "SqlCreateUserMapping"
-        "SqlCreateTable"
-        "SqlCreateUser"
-        "SqlCreateView"
         "SqlCreateModel"
-        "SqlCreateRole"
-        "SqlCreatePolicy"
       ]
 
       # List of methods for parsing extensions to "DROP" calls.

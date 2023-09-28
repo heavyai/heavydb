@@ -184,6 +184,17 @@ TEST_F(CreateForeignServerTest, MissingWithClause) {
   queryAndAssertException(query, "Foreign server options must contain \"STORAGE_TYPE\".");
 }
 
+TEST_F(CreateForeignServerTest, CreateOrReplaceServer) {
+  std::string query{
+      "CREATE OR REPLACE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
+  // using a partial exception for the sake of brevity
+  queryAndAssertPartialException(query,
+                                 R"(SQL Error: Encountered "SERVER" at line 1, column 19.
+Was expecting:
+    "MODEL" ...)");
+}
+
 class ReservedServerNamePrefixTest : public DBHandlerTestFixture,
                                      public ::testing::WithParamInterface<std::string> {};
 
