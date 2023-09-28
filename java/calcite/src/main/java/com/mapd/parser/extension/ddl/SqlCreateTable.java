@@ -55,14 +55,13 @@ public class SqlCreateTable extends SqlCreate {
 
   /** Creates a SqlCreateTable. */
   protected SqlCreateTable(SqlParserPos pos,
-          boolean replace,
           boolean temporary,
           boolean ifNotExists,
           SqlIdentifier name,
           SqlNodeList columnList,
           HeavyDBOptionsMap withOptions,
           SqlNode query) {
-    super(OPERATOR, pos, replace, ifNotExists);
+    super(OPERATOR, pos, false, ifNotExists);
     this.temporary = temporary;
     this.name = Objects.requireNonNull(name);
     this.options = withOptions;
@@ -137,7 +136,6 @@ public class SqlCreateTable extends SqlCreate {
       }
     }
     jsonBuilder.put(map, "elements", elements_list);
-
     jsonBuilder.put(map, "temporary", this.temporary);
     jsonBuilder.put(map, "ifNotExists", this.ifNotExists);
 

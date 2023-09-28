@@ -48,12 +48,11 @@ public class SqlCreateView extends SqlCreate {
 
   /** Creates a SqlCreateView. */
   SqlCreateView(SqlParserPos pos,
-          boolean replace,
           boolean ifNotExists,
           SqlIdentifier name,
           SqlNodeList columnList,
           SqlNode query) {
-    super(OPERATOR, pos, replace, ifNotExists);
+    super(OPERATOR, pos, false, ifNotExists);
     this.name = Objects.requireNonNull(name);
     this.columnList = columnList; // may be null
     this.query = Objects.requireNonNull(query);
@@ -65,12 +64,7 @@ public class SqlCreateView extends SqlCreate {
 
   @Override
   public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
-    if (getReplace()) {
-      writer.keyword("CREATE OR REPLACE");
-    } else {
-      writer.keyword("CREATE");
-    }
-    writer.keyword("VIEW");
+    writer.keyword("CREATE VIEW");
     name.unparse(writer, leftPrec, rightPrec);
     if (columnList != null) {
       SqlWriter.Frame frame = writer.startList("(", ")");
@@ -101,7 +95,6 @@ public class SqlCreateView extends SqlCreate {
     SqlPrettyWriter writer = new SqlPrettyWriter(c);
     this.query.unparse(writer, 0, 0);
     jsonBuilder.put(map, "query", writer.toString());
-
     jsonBuilder.put(map, "ifNotExists", this.ifNotExists);
 
     map.put("command", "CREATE_VIEW");

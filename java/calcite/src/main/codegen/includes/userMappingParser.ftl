@@ -21,7 +21,7 @@
  *   SERVER <server_name>
  *   WITH ( <option> = <value> [, ... ] )
  */
-SqlCreate SqlCreateUserMapping(Span s, boolean replace) :
+SqlCreate SqlCreateUserMapping(Span s) :
 {
     SqlCreateUserMapping.Builder sqlCreateUserMappingBuilder = new SqlCreateUserMapping.Builder();
     final String user;

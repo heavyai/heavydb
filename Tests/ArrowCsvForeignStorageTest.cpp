@@ -559,6 +559,38 @@ TEST_F(BooleanTest, CheckWithoutNulls) {
                        {1, 1, 1, 0, 0, 1, 0, 1});
 }
 
+class CreateDataframeTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists test_dataframe;"));
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists test_dataframe;"));
+  }
+
+  void queryAndAssertPartialException(const std::string& query,
+                                      const std::string& error_message) {
+    try {
+      run_ddl_statement(query);
+      FAIL() << "An exception should have been thrown for this test case";
+    } catch (const std::exception& e) {
+      std::string exception_message{e.what()};
+      ASSERT_TRUE(exception_message.find(error_message) != std::string::npos)
+          << "Exception message: " << exception_message
+          << ", expected partial error message: " << error_message;
+    }
+  }
+};
+TEST_F(CreateDataframeTest, CreateOrReplaceDataframe) {
+  queryAndAssertPartialException(
+      "CREATE OR REPLACE DATAFRAME test_dataframe(idx "
+      "integer) FROM 'CSV:../../Tests/FsiDataFiles/0.csv';",
+      R"(SQL Error: Encountered "DATAFRAME" at line 1, column 19.
+Was expecting:
+    "MODEL" ...)");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {

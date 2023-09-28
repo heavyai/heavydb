@@ -4722,11 +4722,30 @@ TEST(SyncUserWithRemoteProvider, IS_SUPER) {
   ASSERT_EQ(u2->isSuper, false);
 }
 
-class DropUserTest : public DBHandlerTestFixture {};
+class CreateDropUserTest : public DBHandlerTestFixture {
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("drop user if exists test_user");
+  }
 
-TEST_F(DropUserTest, DropAdmin) {
+  void TearDown() override {
+    sql("drop user if exists test_user");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(CreateDropUserTest, DropAdmin) {
   queryAndAssertException("DROP USER admin;",
                           "Cannot drop user. User admin is required to exist.");
+}
+
+TEST_F(CreateDropUserTest, CreateOrReplaceUser) {
+  auto query = std::string("CREATE OR REPLACE USER test_user");
+  // using a partial exception for the sake of brevity
+  queryAndAssertPartialException(query,
+                                 R"(SQL Error: Encountered "USER" at line 1, column 19.
+Was expecting:
+    "MODEL" ...)");
 }
 
 class CreateDropDatabaseTest : public DBHandlerTestFixture {
@@ -4789,6 +4808,16 @@ TEST_F(CreateDropDatabaseTest, LegacyOrphanedDB) {
                       {{"heavyai", "admin"},
                        {"information_schema", "admin"},
                        {"orphan_db", "<DELETED>"}});
+}
+
+TEST_F(CreateDropDatabaseTest, CreateOrReplaceDatabase) {
+  auto query = std::string("CREATE OR REPLACE DATABASE orphan_db");
+  // using a partial exception for the sake of brevity
+  queryAndAssertPartialException(
+      query,
+      R"(SQL Error: Encountered "DATABASE" at line 1, column 19.
+Was expecting:
+    "MODEL" ...)");
 }
 
 class DatabaseCaseSensitiveTest : public DBHandlerTestFixture {
@@ -4931,6 +4960,55 @@ TEST_F(DatabaseCaseSensitiveTest, GetInternalTableDetailsForDatabase) {
   ASSERT_EQ(table_details.row_desc.size(), size_t(2));
   ASSERT_EQ(table_details.row_desc[0].col_name, "test_db_table_col");
   ASSERT_EQ(table_details.row_desc[1].col_name, "rowid");
+}
+
+class CreatePolicy : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS test_table");
+    sql("DROP USER IF EXISTS test_user");
+    sql("CREATE TABLE test_table(idx INTEGER)");
+    sql("CREATE USER test_user");
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS test_table");
+    sql("DROP USER IF EXISTS test_user");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(CreatePolicy, CreateOrReplacePolicy) {
+  auto query = std::string(
+      "CREATE OR REPLACE POLICY ON COLUMN test_table.idx TO test_user VALUES(0)");
+  // using a partial exception for the sake of brevity
+  queryAndAssertPartialException(query,
+                                 R"(SQL Error: Encountered "POLICY" at line 1, column 19.
+Was expecting:
+    "MODEL" ...)");
+}
+
+class CreateRole : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP ROLE IF EXISTS test_role");
+  }
+
+  void TearDown() override {
+    sql("DROP ROLE IF EXISTS test_role");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(CreateRole, CreateOrReplaceRole) {
+  auto query = std::string("CREATE OR REPLACE ROLE test_role");
+  // using a partial exception for the sake of brevity
+  queryAndAssertPartialException(query,
+                                 R"(SQL Error: Encountered "ROLE" at line 1, column 19.
+Was expecting:
+    "MODEL" ...)");
 }
 
 int main(int argc, char* argv[]) {

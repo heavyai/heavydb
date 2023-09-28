@@ -32,7 +32,7 @@
  * SERVER <server_name>
  * [ WITH ( <option> = <value> [, ... ] ) ]
  */
-SqlCreateForeignTable SqlCreateForeignTable(Span s, boolean replace) :
+SqlCreateForeignTable SqlCreateForeignTable(Span s) :
 {
     boolean ifNotExists = false;
     SqlIdentifier tableName = null;

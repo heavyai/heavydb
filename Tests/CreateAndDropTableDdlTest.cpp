@@ -76,16 +76,27 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
   std::string getCreateTableQuery(const ddl_utils::TableType table_type,
                                   const std::string& table_name,
                                   const std::string& columns,
-                                  bool if_not_exists = false) const {
-    return getCreateTableQuery(table_type, table_name, columns, {}, if_not_exists);
+                                  bool if_not_exists = false,
+                                  bool or_replace = false,
+                                  bool temporary_table = false) const {
+    return getCreateTableQuery(
+        table_type, table_name, columns, {}, if_not_exists, or_replace, temporary_table);
   }
 
   std::string getCreateTableQuery(const ddl_utils::TableType table_type,
                                   const std::string& table_name,
                                   const std::string& columns,
                                   std::map<std::string, std::string> options,
-                                  bool if_not_exists = false) const {
+                                  bool if_not_exists = false,
+                                  bool or_replace = false,
+                                  bool temporary_table = false) const {
     std::string query{"CREATE "};
+    if (or_replace) {
+      query += "OR REPLACE ";
+    }
+    if (temporary_table) {
+      query += "TEMPORARY ";
+    }
     if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
       query += "FOREIGN TABLE ";
     } else {
@@ -167,12 +178,14 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
  protected:
   void SetUp() override {
     CreateAndDropTableDdlTest::SetUp();
+    sql("DROP VIEW IF EXISTS test_view");
     sql(getDropTableQuery(GetParam(), "test_table", true));
     dropTestUser();
   }
 
   void TearDown() override {
     g_enable_fsi = true;
+    sql("DROP VIEW IF EXISTS test_view");
     sql(getDropTableQuery(GetParam(), "test_table", true));
     dropTestUser();
     CreateAndDropTableDdlTest::TearDown();
@@ -1722,6 +1735,49 @@ TEST_P(CreateTableTest, RealAlias) {
   auto cd = getCatalog().getMetadataForColumn(td->tableId, "f");
   ASSERT_TRUE(cd);
   ASSERT_EQ(cd->columnType.get_type(), kFLOAT);
+}
+
+TEST_P(CreateTableTest, CreateOrReplaceTable) {
+  auto query =
+      getCreateTableQuery(GetParam(), "test_table", "(idx INTEGER)", false, true);
+  // using a partial exception for the sake of brevity
+  if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
+    queryAndAssertPartialException(
+        query,
+        R"(SQL Error: Encountered "FOREIGN" at line 1, column 19.
+Was expecting:
+    "MODEL" ...)");
+  } else {
+    queryAndAssertPartialException(query,
+                                   R"(SQL Error: Encountered "TABLE" at line 1, column 19.
+Was expecting:
+    "MODEL" ...)");
+  }
+}
+
+TEST_P(CreateTableTest, CreateOrReplaceTemporaryTable) {
+  if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
+    GTEST_SKIP() << "Foreign tables can't be temporary.";
+  }
+  auto query =
+      getCreateTableQuery(GetParam(), "test_table", "(idx INTEGER)", false, true, true);
+  // using a partial exception for the sake of brevity
+  queryAndAssertPartialException(
+      query,
+      R"(SQL Error: Encountered "TEMPORARY" at line 1, column 19.
+Was expecting:
+    "MODEL" ...)");
+}
+
+TEST_P(CreateTableTest, CreateOrReplaceView) {
+  sql(getCreateTableQuery(GetParam(), "test_table", "(idx INTEGER)"));
+  auto query =
+      std::string("CREATE OR REPLACE VIEW test_view AS SELECT * FROM test_table");
+  // using a partial exception for the sake of brevity
+  queryAndAssertPartialException(query,
+                                 R"(SQL Error: Encountered "VIEW" at line 1, column 19.
+Was expecting:
+    "MODEL" ...)");
 }
 
 INSTANTIATE_TEST_SUITE_P(CreateAndDropTableDdlTest,
