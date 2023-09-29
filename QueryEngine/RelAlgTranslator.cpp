@@ -556,7 +556,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
     const RexOperator* rex_operator) const {
   CHECK_EQ(size_t(1), rex_operator->size());
-  const auto operand_expr = translateScalarRex(rex_operator->getOperand(0));
+  auto operand_expr = translateScalarRex(rex_operator->getOperand(0));
   const auto sql_op = rex_operator->getOperator();
   switch (sql_op) {
     case kCAST: {
@@ -580,7 +580,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
       return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
     }
     case kENCODE_TEXT: {
-      const auto& target_ti = rex_operator->getType();
+      SQLTypeInfo target_ti = rex_operator->getType();
+      if (target_ti.get_type() == kNULLT) {
+        if (auto const_expr =
+                dynamic_cast<const Analyzer::Constant*>(operand_expr.get())) {
+          if (const_expr->get_type_info() == kNULLT && const_expr->get_is_null()) {
+            // make a typed NULL constant and sync it to target_ti
+            operand_expr = makeExpr<Analyzer::Constant>(kTEXT, true);
+            target_ti.set_type(kTEXT);
+          }
+        }
+      }
       CHECK_NE(kNULLT, target_ti.get_type());
       const auto& operand_ti = operand_expr->get_type_info();
       CHECK(operand_ti.is_string());

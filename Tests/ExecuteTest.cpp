@@ -5421,6 +5421,11 @@ TEST_F(Select, Strings) {
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE str || ' ' || real_str = 'foo real_foo';",
             dt))));
+
+    EXPECT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM (SELECT ENCODE_TEXT(NULL) "
+                                        "v FROM test) WHERE v IS NULL;",
+                                        dt)),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test", dt)));
   }
 }
 
