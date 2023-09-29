@@ -973,8 +973,38 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
   }
 }
 
+namespace {
+size_t validate_and_get_column_data_size(const SQLTypeInfo& type,
+                                         const TColumnData& data) {
+  size_t data_size;
+  if (type.is_boolean() || type.is_integer() || type.is_decimal() || type.is_time()) {
+    data_size = data.int_col.size();
+  } else if (type.is_fp()) {
+    data_size = data.real_col.size();
+  } else if (type.is_string() || type.is_geometry()) {
+    data_size = data.str_col.size();
+  } else if (type.is_array()) {
+    data_size = data.arr_col.size();
+  } else {
+    UNREACHABLE() << "Unexpected column type: " << type;
+    data_size = 0;
+  }
+  auto total_data_size = data.int_col.size() + data.real_col.size() +
+                         data.str_col.size() + data.arr_col.size();
+  if (data_size != total_data_size) {
+    throw std::runtime_error("Column data set for the wrong type.");
+  }
+  return data_size;
+}
+}  // namespace
+
 // this is exclusively used by load_table_binary_columnar
 size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& col) {
+  CHECK(cd);
+  if (col.nulls.size() != validate_and_get_column_data_size(cd->columnType, col.data)) {
+    throw std::runtime_error("Column nulls vector and data vector sizes do not match.");
+  }
+
   size_t dataSize = 0;
   if (cd->columnType.get_notnull()) {
     // We can't have any null values for this column; to have them is an error
