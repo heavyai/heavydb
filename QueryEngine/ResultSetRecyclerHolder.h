@@ -32,18 +32,21 @@ class ResultSetRecyclerHolder {
   static auto markCachedItemAsDirty(size_t table_key) {
     CHECK(query_resultset_cache_);
     CHECK(chunk_metadata_cache_);
-    auto candidate_table_keys =
+    auto resultset_cache_tbl_key =
         query_resultset_cache_->getMappedQueryPlanDagsWithTableKey(table_key);
-    if (candidate_table_keys.has_value()) {
+    if (resultset_cache_tbl_key.has_value()) {
       query_resultset_cache_->markCachedItemAsDirty(
           table_key,
-          *candidate_table_keys,
+          *resultset_cache_tbl_key,
           CacheItemType::QUERY_RESULTSET,
           DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-
+    }
+    auto chunk_metadata_cache_tbl_key =
+        chunk_metadata_cache_->getMappedQueryPlanDagsWithTableKey(table_key);
+    if (chunk_metadata_cache_tbl_key.has_value()) {
       chunk_metadata_cache_->markCachedItemAsDirty(
           table_key,
-          *candidate_table_keys,
+          *chunk_metadata_cache_tbl_key,
           CacheItemType::CHUNK_METADATA,
           DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     }

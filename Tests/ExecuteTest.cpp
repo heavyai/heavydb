@@ -25860,6 +25860,43 @@ TEST_F(Select, ResultsetAndChunkMetadataRecycling) {
   clearCache();
 }
 
+TEST_F(Select, ChunkMetadataCacheFromSubQuery) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  ScopeGuard reset_global_flag_state = [orig_data_recycler = g_enable_data_recycler,
+                                        orig_chunk_metadata_recycler =
+                                            g_use_chunk_metadata_cache] {
+    g_enable_data_recycler = orig_data_recycler;
+    g_use_chunk_metadata_cache = orig_chunk_metadata_recycler;
+  };
+  g_enable_data_recycler = true;
+  g_use_chunk_metadata_cache = true;
+
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto& recycler_holder = executor->getResultSetRecyclerHolder();
+  auto chunk_metadata_recycler = recycler_holder.getChunkMetadataRecycler();
+  CHECK(chunk_metadata_recycler);
+
+  auto clearCache = [&executor] {
+    executor->clearMemory(MemoryLevel::CPU_LEVEL);
+    executor->getQueryPlanDagCache().clearQueryPlanCache();
+  };
+  clearCache();
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // check if we can recycle chunk metadata of the subquery
+    c("select R.x, R.y, S.x, S.y, sum(R.xx) from test_inner R, test S where R.x in "
+      "(select x from test group by x having sum(w) > 0) group by 1, 2, 3, 4",
+      dt);
+    EXPECT_GT(chunk_metadata_recycler->getCurrentNumCachedItems(
+                  CacheItemType::CHUNK_METADATA, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER),
+              static_cast<size_t>(0));
+    clearCache();
+  }
+}
+
 TEST_F(Select, QueryStepSkipping) {
   SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();

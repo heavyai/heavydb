@@ -2415,27 +2415,29 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
   auto query_exec_time = timer_stop(query_exec_time_begin);
   result.setQueueTime(queue_time_ms);
   auto resultset_ptr = result.getDataPtr();
-  auto allow_auto_caching_resultset = resultset_ptr && resultset_ptr->hasValidBuffer() &&
-                                      g_allow_auto_resultset_caching &&
-                                      resultset_ptr->getBufferSizeBytes(co.device_type) <=
-                                          g_auto_resultset_caching_threshold;
   bool keep_result = global_hint->isHintRegistered(QueryHint::kKeepTableFuncResult);
-  if (use_resultset_recycler && (keep_result || allow_auto_caching_resultset) &&
-      !hasStepForUnion()) {
+  if (use_resultset_recycler && !hasStepForUnion()) {
     resultset_ptr->setExecTime(query_exec_time);
     resultset_ptr->setQueryPlanHash(table_func_work_unit.exe_unit.query_plan_dag_hash);
     resultset_ptr->setTargetMetaInfo(body->getOutputMetainfo());
     auto input_table_keys = ScanNodeTableKeyCollector::getScanNodeTableKey(body);
     resultset_ptr->setInputTableKeys(std::move(input_table_keys));
-    if (allow_auto_caching_resultset) {
-      VLOG(1) << "Automatically keep table function's query resultset to recycler";
+    auto allow_auto_caching_resultset =
+        resultset_ptr && resultset_ptr->hasValidBuffer() &&
+        g_allow_auto_resultset_caching &&
+        resultset_ptr->getBufferSizeBytes(co.device_type) <=
+            g_auto_resultset_caching_threshold;
+    if (keep_result || allow_auto_caching_resultset) {
+      if (allow_auto_caching_resultset) {
+        VLOG(1) << "Automatically keep table function's query resultset to recycler";
+      }
+      executor_->getResultSetRecyclerHolder().putQueryResultSetToCache(
+          table_func_work_unit.exe_unit.query_plan_dag_hash,
+          resultset_ptr->getInputTableKeys(),
+          resultset_ptr,
+          resultset_ptr->getBufferSizeBytes(co.device_type),
+          target_exprs_owned_);
     }
-    executor_->getResultSetRecyclerHolder().putQueryResultSetToCache(
-        table_func_work_unit.exe_unit.query_plan_dag_hash,
-        resultset_ptr->getInputTableKeys(),
-        resultset_ptr,
-        resultset_ptr->getBufferSizeBytes(co.device_type),
-        target_exprs_owned_);
   } else {
     if (eo.keep_result) {
       if (g_cluster) {
@@ -3969,27 +3971,29 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   }
 
   const auto res = result.getDataPtr();
-  auto allow_auto_caching_resultset =
-      res && res->hasValidBuffer() && g_allow_auto_resultset_caching &&
-      res->getBufferSizeBytes(co.device_type) <= g_auto_resultset_caching_threshold;
-  if (use_resultset_cache && (eo.keep_result || allow_auto_caching_resultset)) {
+  if (use_resultset_cache) {
     auto query_exec_time = timer_stop(query_exec_time_begin);
     res->setExecTime(query_exec_time);
     res->setQueryPlanHash(ra_exe_unit.query_plan_dag_hash);
     res->setTargetMetaInfo(body->getOutputMetainfo());
     auto input_table_keys = ScanNodeTableKeyCollector::getScanNodeTableKey(body);
     res->setInputTableKeys(std::move(input_table_keys));
-    if (allow_auto_caching_resultset) {
-      VLOG(1) << "Automatically keep query resultset to recycler";
+    auto allow_auto_caching_resultset =
+        res && res->hasValidBuffer() && g_allow_auto_resultset_caching &&
+        res->getBufferSizeBytes(co.device_type) <= g_auto_resultset_caching_threshold;
+    if (eo.keep_result || allow_auto_caching_resultset) {
+      if (allow_auto_caching_resultset) {
+        VLOG(1) << "Automatically keep query resultset to recycler";
+      }
+      res->setUseSpeculativeTopNSort(
+          use_speculative_top_n(ra_exe_unit, res->getQueryMemDesc()));
+      executor_->getResultSetRecyclerHolder().putQueryResultSetToCache(
+          ra_exe_unit.query_plan_dag_hash,
+          res->getInputTableKeys(),
+          res,
+          res->getBufferSizeBytes(co.device_type),
+          target_exprs_owned_);
     }
-    res->setUseSpeculativeTopNSort(
-        use_speculative_top_n(ra_exe_unit, res->getQueryMemDesc()));
-    executor_->getResultSetRecyclerHolder().putQueryResultSetToCache(
-        ra_exe_unit.query_plan_dag_hash,
-        res->getInputTableKeys(),
-        res,
-        res->getBufferSizeBytes(co.device_type),
-        target_exprs_owned_);
   } else {
     if (eo.keep_result) {
       if (g_cluster) {
