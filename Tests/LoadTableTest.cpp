@@ -396,6 +396,100 @@ TEST_F(LoadTableTest, BinaryDefaultString) {
   sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "default str", "nns"}});
 }
 
+TEST_F(LoadTableTest, ColumnarNullsEmpty) {
+  executeLambdaAndAssertException(
+      [&]() {
+        std::vector<std::string> column_names{"nns"};
+        auto [handler, session] = getDbHandlerAndSessionId();
+        auto nns_nulls_empty = nns_column;
+        nns_nulls_empty.nulls.clear();
+        handler->load_table_binary_columnar(
+            session, "load_test", {nns_nulls_empty}, column_names);
+      },
+      "load_table_binary_columnar: Input exception thrown: Column nulls vector and data "
+      "vector sizes do not match.. Issue at column : 3. Import aborted");
+  sqlAndCompareResult("SELECT * FROM load_test;", {});
+}
+
+TEST_F(LoadTableTest, ColumnarNullsCountMismatch) {
+  executeLambdaAndAssertException(
+      [&]() {
+        std::vector<std::string> column_names{"nns"};
+        auto [handler, session] = getDbHandlerAndSessionId();
+        auto nns = nns_column;
+        nns.data.str_col.emplace_back("nns");
+        // Do not add null.
+        handler->load_table_binary_columnar(session, "load_test", {nns}, column_names);
+      },
+      "load_table_binary_columnar: Input exception thrown: Column nulls vector and data "
+      "vector sizes do not match.. Issue at column : 3. Import aborted");
+  sqlAndCompareResult("SELECT * FROM load_test;", {});
+}
+
+TEST_F(LoadTableTest, ColumnarInconsistentRowCount) {
+  executeLambdaAndAssertPartialException(
+      [&]() {
+        std::vector<std::string> column_names{"nns", "i1"};
+        auto [handler, session] = getDbHandlerAndSessionId();
+        auto nns = nns_column;
+        nns.data.str_col.emplace_back("nns");
+        nns.nulls.emplace_back(false);
+        handler->load_table_binary_columnar(
+            session, "load_test", {nns, i1_column}, column_names);
+      },
+      "load_table_binary_columnar: Inconsistent number of rows in column i1 ,  expecting "
+      "2 rows, column 0 has 1 rows). Issue at column : 1. Import aborted");
+  sqlAndCompareResult("SELECT * FROM load_test;", {});
+}
+
+TEST_F(LoadTableTest, ColumnarWrongColumnTypeData) {
+  executeLambdaAndAssertException(
+      [&]() {
+        std::vector<std::string> column_names{"nns"};
+        auto [handler, session] = getDbHandlerAndSessionId();
+        auto nns = nns_column;
+        // Add an integer row instead of a string row.
+        nns.data.int_col.emplace_back(10);
+        nns.nulls.emplace_back(false);
+        handler->load_table_binary_columnar(session, "load_test", {nns}, column_names);
+      },
+      "load_table_binary_columnar: Input exception thrown: Column data set for the wrong "
+      "type.. Issue at column : 3. Import aborted");
+  sqlAndCompareResult("SELECT * FROM load_test;", {});
+}
+
+TEST_F(LoadTableTest, ColumnarCorrectAndWrongColumnTypeData) {
+  executeLambdaAndAssertException(
+      [&]() {
+        std::vector<std::string> column_names{"nns"};
+        auto [handler, session] = getDbHandlerAndSessionId();
+        auto nns = nns_column;
+        // Correctly add a string row, but also incorrectly add an integer row.
+        nns.data.str_col.emplace_back("nns");
+        nns.data.int_col.emplace_back(10);
+        nns.nulls.emplace_back(false);
+        handler->load_table_binary_columnar(session, "load_test", {nns}, column_names);
+      },
+      "load_table_binary_columnar: Input exception thrown: Column data set for the wrong "
+      "type.. Issue at column : 3. Import aborted");
+  sqlAndCompareResult("SELECT * FROM load_test;", {});
+}
+
+TEST_F(LoadTableTest, ColumnarWrongColumnTypeDataAndMissingNullFlag) {
+  executeLambdaAndAssertException(
+      [&]() {
+        std::vector<std::string> column_names{"nns"};
+        auto [handler, session] = getDbHandlerAndSessionId();
+        auto nns = nns_column;
+        // Add an integer row instead of a string row.
+        nns.data.int_col.emplace_back(10);
+        handler->load_table_binary_columnar(session, "load_test", {nns}, column_names);
+      },
+      "load_table_binary_columnar: Input exception thrown: Column data set for the wrong "
+      "type.. Issue at column : 3. Import aborted");
+  sqlAndCompareResult("SELECT * FROM load_test;", {});
+}
+
 TEST_F(LoadTableTest, ColumnarAllColumnsNoGeo) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
