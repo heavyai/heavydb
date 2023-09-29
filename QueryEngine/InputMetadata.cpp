@@ -358,6 +358,13 @@ ChunkMetadataMap synthesize_metadata_table_function(const ResultSet* rows) {
   return chunk_metadata_map;
 }
 
+namespace {
+union Number64 {
+  double as_double;
+  int64_t as_int64;
+};
+}  // namespace
+
 ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
   auto timer = DEBUG_TIMER(__func__);
   ChunkMetadataMap metadata_map;
@@ -394,40 +401,54 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
   }
   rows->moveToBegin();
 
+  std::vector<SQLTypeInfo> row_col_ti;
+  std::vector<Number64> col_null_vals(rows->colCount());
+  for (size_t i = 0; i < rows->colCount(); i++) {
+    auto const col_ti = rows->getColType(i);
+    row_col_ti.push_back(col_ti);
+    if (uses_int_meta(col_ti)) {
+      col_null_vals[i].as_int64 = inline_int_null_val(col_ti);
+    } else if (col_ti.is_fp()) {
+      col_null_vals[i].as_double = inline_fp_null_val(col_ti);
+    } else {
+      throw std::runtime_error(col_ti.get_type_name() +
+                               " is not supported in temporary table.");
+    }
+  }
+
   // Code in the do_work lambda runs for and processes each row.
-  const auto do_work = [rows](const std::vector<TargetValue>& crt_row,
-                              std::vector<std::unique_ptr<Encoder>>& dummy_encoders) {
+  const auto do_work = [rows, &row_col_ti, &col_null_vals](
+                           const std::vector<TargetValue>& crt_row,
+                           std::vector<std::unique_ptr<Encoder>>& dummy_encoders) {
     for (size_t i = 0; i < rows->colCount(); ++i) {
-      const auto& col_ti = rows->getColType(i);
+      const auto& col_ti = row_col_ti[i];
       const auto& col_val = crt_row[i];
       const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
       CHECK(scalar_col_val);
       if (uses_int_meta(col_ti)) {
         const auto i64_p = boost::get<int64_t>(scalar_col_val);
         CHECK(i64_p);
-        dummy_encoders[i]->updateStats(*i64_p, *i64_p == inline_int_null_val(col_ti));
-      } else if (col_ti.is_fp()) {
+        dummy_encoders[i]->updateStats(*i64_p, *i64_p == col_null_vals[i].as_int64);
+      } else {
+        CHECK(col_ti.is_fp());
         switch (col_ti.get_type()) {
           case kFLOAT: {
             const auto float_p = boost::get<float>(scalar_col_val);
             CHECK(float_p);
             dummy_encoders[i]->updateStats(*float_p,
-                                           *float_p == inline_fp_null_val(col_ti));
+                                           *float_p == col_null_vals[i].as_double);
             break;
           }
           case kDOUBLE: {
             const auto double_p = boost::get<double>(scalar_col_val);
             CHECK(double_p);
             dummy_encoders[i]->updateStats(*double_p,
-                                           *double_p == inline_fp_null_val(col_ti));
+                                           *double_p == col_null_vals[i].as_double);
             break;
           }
           default:
             CHECK(false);
         }
-      } else {
-        throw std::runtime_error(col_ti.get_type_name() +
-                                 " is not supported in temporary table.");
       }
     }
   };
