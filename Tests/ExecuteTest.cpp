@@ -26516,6 +26516,29 @@ TEST_F(Select, RemoveFromQuerySessionList) {
   }
 }
 
+TEST_F(Select, OstensibleTautologyPredicate) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    const auto result =
+        run_multiple_agg("SELECT COUNT_IF(ofd IS NULL), COUNT(*) FROM test;", dt);
+    ASSERT_EQ(result->rowCount(), size_t(1));
+
+    const auto row = result->getNextRow(false, false);
+    ASSERT_EQ(row.size(), size_t(2));
+
+    const auto null_count = v<int64_t>(row[0]);
+    EXPECT_GT(null_count, 0);
+
+    const auto total_row_count = v<int64_t>(row[1]);
+    EXPECT_GT(total_row_count, 0);
+
+    const auto row_count =
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE ofd = ofd;", dt));
+    EXPECT_EQ(row_count, total_row_count - null_count);
+  }
+}
+
 class DateAndTimeFunctionsTest : public QRExecutorDeviceParamTest {};
 
 TEST_P(DateAndTimeFunctionsTest, CastLiteralToDate) {
