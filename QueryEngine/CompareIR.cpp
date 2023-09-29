@@ -386,9 +386,7 @@ llvm::Value* CodeGenerator::codegenStrCmp(const SQLOps optype,
       rhs_ti.get_compression() == kENCODING_DICT) {
     if (lhs_ti.getStringDictKey() == rhs_ti.getStringDictKey()) {
       // Both operands share a dictionary
-
-      // check if query is trying to compare a columnt against literal
-
+      // check if query is trying to compare a column against literal
       auto ir = codegenDictStrCmp(lhs, rhs, optype, co);
       if (ir) {
         return ir;
@@ -454,6 +452,33 @@ llvm::Value* CodeGenerator::codegenCmpDecimalConst(const SQLOps optype,
   return codegenCmp(optype, qualifier, {lhs_lv}, new_ti, new_rhs_lit.get(), co);
 }
 
+namespace {
+void unpack_none_encoded_string(CgenState* cgen_state, std::vector<llvm::Value*>& lvs) {
+  if (lvs.size() != 3) {
+    CHECK_EQ(size_t(1), lvs.size());
+    lvs.push_back(cgen_state->ir_builder_.CreateExtractValue(lvs[0], 0));
+    lvs.push_back(cgen_state->ir_builder_.CreateExtractValue(lvs[0], 1));
+    lvs.back() = cgen_state->ir_builder_.CreateTrunc(
+        lvs.back(), llvm::Type::getInt32Ty(cgen_state->context_));
+  }
+  CHECK_EQ(lvs.size(), size_t(3));
+}
+void unpack_dict_encoded_string(CgenState* cgen_state,
+                                Executor* executor,
+                                SQLTypeInfo const ti,
+                                llvm::StructType* string_view_struct_type,
+                                std::vector<llvm::Value*>& lvs) {
+  const auto sdp_ptr = reinterpret_cast<int64_t>(executor->getStringDictionaryProxy(
+      ti.getStringDictKey(), executor->getRowSetMemoryOwner(), true));
+  const auto sv = cgen_state->emitExternalCall(
+      "string_decompress", string_view_struct_type, {lvs[0], cgen_state->llInt(sdp_ptr)});
+  lvs.push_back(cgen_state->ir_builder_.CreateExtractValue(sv, 0));
+  lvs.push_back(cgen_state->ir_builder_.CreateExtractValue(sv, 1));
+  lvs.back() = cgen_state->ir_builder_.CreateTrunc(
+      lvs.back(), llvm::Type::getInt32Ty(cgen_state->context_));
+}
+}  // namespace
+
 llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
                                        const SQLQualifier qualifier,
                                        std::vector<llvm::Value*> lhs_lvs,
@@ -481,23 +506,31 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
       lhs_ti.is_boolean() || lhs_ti.is_string() || lhs_ti.is_timeinterval()) {
     if (lhs_ti.is_string()) {
       CHECK(rhs_ti.is_string());
+      // we sync two string col's encoding scheme
+      // if one of them is dict-encoded before reaching here,
+      // i.e., call `codegenCastNonStringToString` or `codegenCastFromString`
       CHECK_EQ(lhs_ti.get_compression(), rhs_ti.get_compression());
+      bool unpack_strings = true;
       if (lhs_ti.get_compression() == kENCODING_NONE) {
-        // unpack pointer + length if necessary
-        if (lhs_lvs.size() != 3) {
-          CHECK_EQ(size_t(1), lhs_lvs.size());
-          lhs_lvs.push_back(cgen_state_->ir_builder_.CreateExtractValue(lhs_lvs[0], 0));
-          lhs_lvs.push_back(cgen_state_->ir_builder_.CreateExtractValue(lhs_lvs[0], 1));
-          lhs_lvs.back() = cgen_state_->ir_builder_.CreateTrunc(
-              lhs_lvs.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
+        unpack_none_encoded_string(cgen_state_, lhs_lvs);
+        unpack_none_encoded_string(cgen_state_, rhs_lvs);
+      } else if (lhs_ti.get_compression() == kENCODING_DICT) {
+        if (IS_EQUIVALENCE(optype) || optype == kNE) {
+          // we use `StringDictionaryTranslationMgr` to translate
+          // dict-encoded lhs against rhs's string dictionary
+          // and then compare their string ids without unpacking strings
+          // i.e., call `eq_int32_t_nullable` instead of `string_eq_nullable`
+          unpack_strings = false;
+        } else {
+          auto sv_struct_type_lv = createStringViewStructType();
+          unpack_dict_encoded_string(
+              cgen_state_, executor_, lhs_ti, sv_struct_type_lv, lhs_lvs);
+          unpack_dict_encoded_string(
+              cgen_state_, executor_, rhs_ti, sv_struct_type_lv, rhs_lvs);
         }
-        if (rhs_lvs.size() != 3) {
-          CHECK_EQ(size_t(1), rhs_lvs.size());
-          rhs_lvs.push_back(cgen_state_->ir_builder_.CreateExtractValue(rhs_lvs[0], 0));
-          rhs_lvs.push_back(cgen_state_->ir_builder_.CreateExtractValue(rhs_lvs[0], 1));
-          rhs_lvs.back() = cgen_state_->ir_builder_.CreateTrunc(
-              rhs_lvs.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
-        }
+      }
+      if (unpack_strings) {
+        // we directly compare two unpacked (i.e., raw) strings
         std::vector<llvm::Value*> str_cmp_args{
             lhs_lvs[1], lhs_lvs[2], rhs_lvs[1], rhs_lvs[2]};
         if (!null_check_suffix.empty()) {
@@ -507,8 +540,6 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
         return cgen_state_->emitCall(
             string_cmp_func(optype) + (null_check_suffix.empty() ? "" : "_nullable"),
             str_cmp_args);
-      } else {
-        CHECK(optype == kEQ || optype == kNE);
       }
     }
 

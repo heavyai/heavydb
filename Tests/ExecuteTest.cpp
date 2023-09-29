@@ -5699,16 +5699,13 @@ TEST_F(Select, DictionaryStringEquality) {
   // execute between two text columns even when they do not share
   // dictionaries, with watchdog both on and off and without punting
   // to CPU
-  const auto watchdog_state = g_enable_watchdog;
-  const auto cpu_retry_state = g_allow_cpu_retry;
-  const auto cpu_step_retry_state = g_allow_query_step_cpu_retry;
-
-  ScopeGuard reset_global_state =
-      [&watchdog_state, &cpu_retry_state, &cpu_step_retry_state] {
-        g_enable_watchdog = watchdog_state;
-        g_allow_cpu_retry = cpu_retry_state;
-        g_allow_query_step_cpu_retry = cpu_step_retry_state;
-      };
+  ScopeGuard reset_global_state = [watchdog_state = g_enable_watchdog,
+                                   cpu_retry_state = g_allow_cpu_retry,
+                                   cpu_step_retry_state = g_allow_query_step_cpu_retry] {
+    g_enable_watchdog = watchdog_state;
+    g_allow_cpu_retry = cpu_retry_state;
+    g_allow_query_step_cpu_retry = cpu_step_retry_state;
+  };
 
   g_allow_cpu_retry = false;
   g_allow_query_step_cpu_retry = false;
@@ -5725,6 +5722,30 @@ TEST_F(Select, DictionaryStringEquality) {
       c("SELECT COUNT(*) FROM test WHERE str <> null_str", dt);
       c("SELECT COUNT(*) FROM test WHERE null_str = str", dt);
       c("SELECT COUNT(*) FROM test WHERE null_str <> str", dt);
+    }
+  }
+}
+
+TEST_F(Select, DictionaryStringNonEquality) {
+  ScopeGuard reset_global_state = [watchdog_state = g_enable_watchdog,
+                                   cpu_retry_state = g_allow_cpu_retry,
+                                   cpu_step_retry_state = g_allow_query_step_cpu_retry] {
+    g_enable_watchdog = watchdog_state;
+    g_allow_cpu_retry = cpu_retry_state;
+    g_allow_query_step_cpu_retry = cpu_step_retry_state;
+  };
+
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = true;
+
+  for (auto enable_watchdog : {true, false}) {
+    g_enable_watchdog = enable_watchdog;
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      THROW_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE null_str > real_str", dt));
+      THROW_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE null_str >= real_str", dt));
+      THROW_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE null_str < real_str", dt));
+      THROW_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE null_str <= real_str", dt));
     }
   }
 }
