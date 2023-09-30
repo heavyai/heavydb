@@ -5403,6 +5403,14 @@ TEST_F(Select, Strings) {
               v<int64_t>(run_simple_agg(
                   "SELECT SUM(TRY_CAST(num_text AS INT)) FROM test;", dt)));
 
+    for (std::string col_name : {"str", "fixed_str", "real_str"}) {
+      std::string common_part = " FROM test ORDER BY 1 ASC NULLS FIRST";
+      std::ostringstream oss1, oss2;
+      oss1 << "SELECT TRY_CAST(" << col_name << " AS TEXT)" << common_part;
+      oss2 << "SELECT " << col_name << common_part;
+      c(oss1.str(), oss2.str(), dt);
+    }
+
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE POSITION('foo' IN str) > 0;", dt)));

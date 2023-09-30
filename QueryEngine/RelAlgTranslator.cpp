@@ -1532,6 +1532,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
     case SqlStringOpKind::BASE64_DECODE:
       return makeExpr<Analyzer::Base64DecodeStringOper>(args);
     case SqlStringOpKind::TRY_STRING_CAST:
+      if (rex_function->getType().is_string() &&
+          args.front()->get_type_info().is_string()) {
+        // ignore try_cast and return string as is
+        return args.front();
+      }
       return makeExpr<Analyzer::TryStringCastOper>(rex_function->getType(), args);
     case SqlStringOpKind::POSITION:
       return makeExpr<Analyzer::PositionStringOper>(args);
