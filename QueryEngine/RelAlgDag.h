@@ -600,7 +600,7 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
 
   // default constructor used for deserialization only
   RexWindowFunctionOperator()
-      : RexFunctionOperator(), kind_{SqlWindowFunctionKind::INVALID}, is_rows_{false} {}
+      : RexFunctionOperator(), kind_{SqlWindowFunctionKind::UNKNOWN}, is_rows_{false} {}
 
   RexWindowFunctionOperator(const SqlWindowFunctionKind kind,
                             ConstRexScalarPtrVector& operands,

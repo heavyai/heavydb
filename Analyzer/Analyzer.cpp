@@ -3107,24 +3107,27 @@ std::string OffsetInFragment::toString() const {
 }
 
 std::string WindowFrame::toString() const {
+  std::ostringstream oss;
   auto bound_str = bound_expr_ ? bound_expr_->toString() : "None";
-  return ::toString(bound_type_) + " " + bound_str;
+  oss << bound_type_ << " " << bound_str;
+  return oss.str();
 }
 
 std::string WindowFunction::toString() const {
-  std::string result = "WindowFunction(" + ::toString(kind_);
+  std::ostringstream oss;
+  oss << "WindowFunction(" << kind_;
   for (const auto& arg : args_) {
-    result += " " + arg->toString();
+    oss << " " << arg->toString();
   }
   if (hasFraming()) {
-    result += " Frame{";
+    oss << " Frame{";
     switch (frame_bound_type_) {
       case FrameBoundType::ROW: {
-        result += "ROW";
+        oss << "ROW";
         break;
       }
       case FrameBoundType::RANGE: {
-        result += "RANGE";
+        oss << "RANGE";
         break;
       }
       default: {
@@ -3133,17 +3136,17 @@ std::string WindowFunction::toString() const {
         break;
       }
     }
-    result += " BETWEEN : " + frame_start_bound_->toString();
-    result += " AND : " + frame_end_bound_->toString();
+    oss << " BETWEEN : " + frame_start_bound_->toString();
+    oss << " AND : " + frame_end_bound_->toString();
   } else {
     if (!order_keys_.empty()) {
-      result += " (RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)";
+      oss << " (RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)";
     } else {
-      result += " (RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)";
+      oss << " (RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)";
     }
   }
-  result += "} ";
-  return result + ") ";
+  oss << "} )";
+  return oss.str();
 }
 
 std::string ArrayExpr::toString() const {

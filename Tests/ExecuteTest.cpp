@@ -23269,6 +23269,105 @@ TEST_F(Select, WindowFunctionNested) {
     dt);
 }
 
+class WindowFunctionLiteralArg : public ::testing::Test {
+ public:
+  struct Test {
+    SqlWindowFunctionKind window_func_kind{SqlWindowFunctionKind::UNKNOWN};
+    size_t num_args{0};
+    bool throw_exception{false};
+    std::optional<int64_t> expected_res{std::nullopt};
+  };
+  using Param = std::tuple<ExecutorDeviceType, Test>;
+  static std::string testName(testing::TestParamInfo<Param> const& info) {
+    std::ostringstream oss;
+    auto const window_function_kind = std::get<1>(info.param).window_func_kind;
+    CHECK_NE(window_function_kind, SqlWindowFunctionKind::UNKNOWN);
+    oss << std::get<0>(info.param) << '_' << window_function_kind;
+    return oss.str();
+  }
+};
+
+std::ostream& operator<<(std::ostream& os, WindowFunctionLiteralArg::Test const& test) {
+  std::string res_str =
+      test.expected_res.has_value() ? std::to_string(*test.expected_res) : "N/A";
+  return os << test.window_func_kind << ", " << test.num_args << ", "
+            << std::to_string(test.throw_exception) << ", " << res_str;
+}
+
+class WindowFunctionLiteralArgTest
+    : public WindowFunctionLiteralArg,
+      public testing::WithParamInterface<WindowFunctionLiteralArg::Param> {
+ public:
+  static void performTest(ExecutorDeviceType const dt, Test const& test) {
+    std::ostringstream oss;
+    oss << "SELECT " << test.window_func_kind << "(";
+    if (test.num_args > 0) {
+      std::vector<std::string> args_vec(test.num_args, "2");
+      oss << boost::join(args_vec, ",");
+    }
+    oss << ") OVER () FROM test ORDER BY 1 ASC LIMIT 1";
+    auto const query = oss.str();
+    if (test.throw_exception) {
+      EXPECT_ANY_THROW(run_multiple_agg(query, dt));
+    } else {
+      CHECK(test.expected_res.has_value());
+      if (test.window_func_kind == SqlWindowFunctionKind::AVG) {
+        EXPECT_EQ(static_cast<double>(*test.expected_res),
+                  v<double>(run_simple_agg(query, dt)))
+            << query;
+      } else {
+        EXPECT_EQ(*test.expected_res, v<int64_t>(run_simple_agg(query, dt))) << query;
+      }
+    }
+  }
+};
+
+TEST_P(WindowFunctionLiteralArgTest, Test) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto const [dt, test_args] = GetParam();
+  WindowFunctionLiteralArgTest::performTest(dt, test_args);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    Select,
+    WindowFunctionLiteralArgTest,
+    testing::Combine(
+        testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+        testing::Values(
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::ROW_NUMBER,
+                                           0,
+                                           false,
+                                           1},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::MIN, 1, false, 2},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::MAX, 1, false, 2},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::AVG, 1, false, 2},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::SUM, 1, false, 40},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::COUNT_IF, 1, false, 20},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::COUNT, 1, false, 20},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::NTILE, 1, false, 1},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::LAG, 1, false, 2},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::LEAD, 1, false, 2},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::FIRST_VALUE,
+                                           1,
+                                           false,
+                                           2},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::LAST_VALUE,
+                                           1,
+                                           false,
+                                           2},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::FORWARD_FILL, 1, true},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::BACKWARD_FILL, 1, true},
+            WindowFunctionLiteralArg::Test{
+                SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT,
+                1,
+                true},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::NTH_VALUE, 2, false, 2},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::LAG_IN_FRAME, 2, true},
+            WindowFunctionLiteralArg::Test{SqlWindowFunctionKind::LEAD_IN_FRAME,
+                                           2,
+                                           true})),
+    WindowFunctionLiteralArg::testName);
+
 TEST_F(Select, WindowFunctionFraming) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   // to make a stable test result, we use a table having non-peer row

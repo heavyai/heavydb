@@ -913,8 +913,8 @@ inline AGG_TYPE compute_window_func_via_aggregation_tree(
     if (!aggregated_tree_for_partition || query_range_start_idx > query_range_end_idx) { \
       return null_val;                                                                   \
     }                                                                                    \
-    switch (agg_type) {                                                                  \
-      case 1: {                                                                          \
+    switch (static_cast<AggFuncType>(agg_type)) {                                        \
+      case AggFuncType::MIN:                                                             \
         return compute_window_func_via_aggregation_tree<AggFuncType::MIN>(               \
             aggregated_tree_for_partition,                                               \
             query_range_start_idx,                                                       \
@@ -924,8 +924,7 @@ inline AGG_TYPE compute_window_func_via_aggregation_tree(
             std::numeric_limits<agg_value_type>::max(),                                  \
             invalid_val,                                                                 \
             null_val);                                                                   \
-      }                                                                                  \
-      case 2: {                                                                          \
+      case AggFuncType::MAX:                                                             \
         return compute_window_func_via_aggregation_tree<AggFuncType::MAX>(               \
             aggregated_tree_for_partition,                                               \
             query_range_start_idx,                                                       \
@@ -935,8 +934,7 @@ inline AGG_TYPE compute_window_func_via_aggregation_tree(
             std::numeric_limits<agg_value_type>::lowest(),                               \
             invalid_val,                                                                 \
             null_val);                                                                   \
-      }                                                                                  \
-      default: {                                                                         \
+      default:                                                                           \
         return compute_window_func_via_aggregation_tree<AggFuncType::SUM>(               \
             aggregated_tree_for_partition,                                               \
             query_range_start_idx,                                                       \
@@ -946,7 +944,6 @@ inline AGG_TYPE compute_window_func_via_aggregation_tree(
             static_cast<agg_value_type>(0),                                              \
             invalid_val,                                                                 \
             null_val);                                                                   \
-      }                                                                                  \
     }                                                                                    \
   }
 

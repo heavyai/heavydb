@@ -2776,7 +2776,8 @@ void add_window_function_pre_project(
       window_func_project_node->replaceInput(prev_node, new_project);
       window_func_project_node->setExpressions(scalar_exprs_for_window_project);
     } else {
-      // only push rex_inputs listed in the window function down to a new project node
+      // try to push rex_inputs listed in the projection target exprs down to a new
+      // project node
       RexInputSet inputs;
       RexInputCollector input_collector;
       for (size_t i = 0; i < window_func_project_node->size(); i++) {
@@ -2784,26 +2785,45 @@ void add_window_function_pre_project(
             input_collector.visit(window_func_project_node->getProjectAt(i));
         inputs.insert(new_inputs.begin(), new_inputs.end());
       }
-
-      // Note: Technically not required since we are mapping old inputs to new input
-      // indices, but makes the re-mapping of inputs easier to follow.
-      std::vector<RexInput> sorted_inputs(inputs.begin(), inputs.end());
-      std::sort(sorted_inputs.begin(),
-                sorted_inputs.end(),
-                [](const auto& a, const auto& b) { return a.getIndex() < b.getIndex(); });
-
       std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
       std::vector<std::string> fields;
       std::unordered_map<unsigned, unsigned> old_index_to_new_index;
-      for (auto& input : sorted_inputs) {
-        CHECK_EQ(input.getSourceNode(), prev_node.get());
-        CHECK(old_index_to_new_index
-                  .insert(std::make_pair(input.getIndex(), scalar_exprs.size()))
-                  .second);
-        scalar_exprs.emplace_back(input.deepCopy());
-        fields.emplace_back("");
-      }
 
+      if (inputs.empty()) {
+        // this case only happens when the input is multi-fragmented but has no expr(s)
+        // to push down in the window_func_project_node's target exprs such as
+        // SELECT SUM(1), ROW_NUMBER() over () FROM test where test is multi-fragmented
+        // to handle this, we push an artificial literal down to the child project node
+        // to make an input of window_func_project_node a single-fragmented table
+        CHECK(has_multi_fragment_scan_input);
+        CHECK(!needs_expr_pushdown);
+        auto const bool_scale = std::numeric_limits<int32_t>::min();
+        scalar_exprs.push_back(std::make_unique<RexLiteral>(
+            true, SQLTypes::kBOOLEAN, SQLTypes::kBOOLEAN, bool_scale, 1, bool_scale, 1));
+        old_index_to_new_index.insert(std::make_pair(0, 0));
+        fields.emplace_back("");
+      } else {
+        // we have at least one rex_input to pushdown
+        // let's make sure we have the correct # of exprs to pushdown
+        std::vector<RexInput> sorted_inputs(inputs.begin(), inputs.end());
+        std::sort(
+            sorted_inputs.begin(), sorted_inputs.end(), [](const auto& a, const auto& b) {
+              return a.getIndex() < b.getIndex();
+            });
+
+        for (auto& input : sorted_inputs) {
+          CHECK_EQ(input.getSourceNode(), prev_node.get());
+          CHECK(old_index_to_new_index
+                    .insert(std::make_pair(input.getIndex(), scalar_exprs.size()))
+                    .second);
+          scalar_exprs.emplace_back(input.deepCopy());
+          fields.emplace_back("");
+        }
+      }
+      // modify window_func_project_node's target exprs to refer to push-downed expr in
+      // the new projection node
+      CHECK_GT(scalar_exprs.size(), 0UL);
+      CHECK_EQ(scalar_exprs.size(), fields.size());
       auto new_project = std::make_shared<RelProject>(scalar_exprs, fields, prev_node);
       propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
       new_project->setPushedDownWindowExpr();
