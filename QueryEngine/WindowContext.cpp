@@ -1444,8 +1444,9 @@ void WindowFunctionContext::computePartitionBuffer(
       break;
     }
     default: {
-      throw std::runtime_error("Window function not supported yet: " +
-                               ::toString(window_func->getKind()));
+      std::ostringstream oss;
+      oss << "Window function not supported yet: " << window_func_->getKind();
+      throw std::runtime_error(oss.str());
     }
   }
 }

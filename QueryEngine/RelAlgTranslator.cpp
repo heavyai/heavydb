@@ -2352,7 +2352,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
     }
   }
 
-  auto const func_name = ::toString(window_func_kind);
+  std::string const func_name = toString(window_func_kind);
   auto const num_args = args.size();
   bool need_order_by_clause = false;
   bool need_frame_def = false;
@@ -2474,12 +2474,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
     case SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT:
       if (order_keys.empty()) {
         throw std::runtime_error(
-            ::toString(window_func_kind) +
-            " requires an ORDER BY sub-clause within the window clause");
+            func_name + " requires an ORDER BY sub-clause within the window clause");
       }
       if (has_framing_clause) {
         LOG(INFO)
-            << ::toString(window_func_kind)
+            << window_func_kind
             << " must use a pre-defined window frame range (e.g., ROWS BETWEEN "
                "UNBOUNDED PRECEDING AND CURRENT ROW). "
                "Thus, we skip the user-defined window frame for this window function";

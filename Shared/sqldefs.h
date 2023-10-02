@@ -20,8 +20,11 @@
  *
  */
 
-#ifndef SQLDEFS_H
-#define SQLDEFS_H
+#pragma once
+
+#include <cstdio>
+#include <ostream>
+#include <sstream>
 
 // must not change the order without keeping the array in OperExpr::to_string
 // in sync.
@@ -122,10 +125,7 @@ enum class SqlStringOpKind {
 };
 
 enum class SqlWindowFunctionKind {
-  // set MIN's enum val as one, and we use window function kind's enum vals
-  // to classify a behavior of our runtime code for window framing
-  // i.e., aggregate_##value_type##_values functions
-  MIN = 1,
+  MIN = 0,
   MAX,
   AVG,
   SUM,
@@ -153,17 +153,77 @@ enum class SqlWindowFunctionKind {
   SUM_INTERNAL,  // For deserialization from Calcite only. Gets rewritten to a regular
                  // SUM.
   CONDITIONAL_CHANGE_EVENT,
-  INVALID
+  UNKNOWN,
 };
 
+constexpr char const* toString(SqlWindowFunctionKind const kind) {
+  constexpr char const* strings[]{"MIN",
+                                  "MAX",
+                                  "AVG",
+                                  "SUM",
+                                  "COUNT",
+                                  "ROW_NUMBER",
+                                  "RANK",
+                                  "DENSE_RANK",
+                                  "PERCENT_RANK",
+                                  "CUME_DIST",
+                                  "NTILE",
+                                  "LAG",
+                                  "LAG_IN_FRAME",
+                                  "LEAD",
+                                  "LEAD_IN_FRAME",
+                                  "FIRST_VALUE",
+                                  "FIRST_VALUE_IN_FRAME",
+                                  "LAST_VALUE",
+                                  "LAST_VALUE_IN_FRAME",
+                                  "NTH_VALUE",
+                                  "NTH_VALUE_IN_FRAME",
+                                  "FORWARD_FILL",
+                                  "BACKWARD_FILL",
+                                  "COUNT_IF",
+                                  "SUM_IF",
+                                  "SUM_INTERNAL",
+                                  "CONDITIONAL_CHANGE_EVENT",
+                                  "UNKNOWN"};
+  constexpr size_t nstrings = ((sizeof strings) / (sizeof *strings));
+  constexpr size_t max_str_idx = nstrings - 1;
+  static_assert(max_str_idx == size_t(SqlWindowFunctionKind::UNKNOWN));
+  return strings[size_t(kind)];
+}
+
+#ifndef __CUDACC__
+inline std::ostream& operator<<(std::ostream& os, SqlWindowFunctionKind const kind) {
+  return os << toString(kind);
+}
+#endif
+
 enum class SqlWindowFrameBoundType {
-  UNBOUNDED_PRECEDING = 1,
+  UNBOUNDED_PRECEDING = 0,
   EXPR_PRECEDING,
   CURRENT_ROW,
   EXPR_FOLLOWING,
   UNBOUNDED_FOLLOWING,
   UNKNOWN
 };
+
+constexpr char const* toString(SqlWindowFrameBoundType const kind) {
+  constexpr char const* strings[]{"UNBOUNDED_PRECEDING",
+                                  "EXPR_PRECEDING",
+                                  "CURRENT_ROW",
+                                  "EXPR_FOLLOWING",
+                                  "UNBOUNDED_FOLLOWING",
+                                  "UNKNOWN"};
+  constexpr size_t nstrings = ((sizeof strings) / (sizeof *strings));
+  constexpr size_t max_str_idx = nstrings - 1;
+  static_assert(max_str_idx == size_t(SqlWindowFrameBoundType::UNKNOWN));
+  return strings[size_t(kind)];
+}
+
+#ifndef __CUDACC__
+inline std::ostream& operator<<(std::ostream& os, SqlWindowFrameBoundType const kind) {
+  return os << toString(kind);
+}
+#endif
 
 enum SQLStmtType { kSELECT, kUPDATE, kINSERT, kDELETE, kCREATE_TABLE };
 
@@ -487,88 +547,4 @@ inline bool string_op_returns_string(const SqlStringOpKind kind) {
   }
 }
 
-inline std::string toString(const SqlWindowFunctionKind& kind) {
-  switch (kind) {
-    case SqlWindowFunctionKind::ROW_NUMBER:
-      return "ROW_NUMBER";
-    case SqlWindowFunctionKind::RANK:
-      return "RANK";
-    case SqlWindowFunctionKind::DENSE_RANK:
-      return "DENSE_RANK";
-    case SqlWindowFunctionKind::PERCENT_RANK:
-      return "PERCENT_RANK";
-    case SqlWindowFunctionKind::CUME_DIST:
-      return "CUME_DIST";
-    case SqlWindowFunctionKind::NTILE:
-      return "NTILE";
-    case SqlWindowFunctionKind::LAG:
-      return "LAG";
-    case SqlWindowFunctionKind::LEAD:
-      return "LEAD";
-    case SqlWindowFunctionKind::FIRST_VALUE:
-      return "FIRST_VALUE";
-    case SqlWindowFunctionKind::FIRST_VALUE_IN_FRAME:
-      return "FIRST_VALUE_IN_FRAME";
-    case SqlWindowFunctionKind::LAST_VALUE:
-      return "LAST_VALUE";
-    case SqlWindowFunctionKind::LAST_VALUE_IN_FRAME:
-      return "LAST_VALUE_IN_FRAME";
-    case SqlWindowFunctionKind::NTH_VALUE:
-      return "NTH_VALUE";
-    case SqlWindowFunctionKind::NTH_VALUE_IN_FRAME:
-      return "NTH_VALUE_IN_FRAME";
-    case SqlWindowFunctionKind::AVG:
-      return "AVG";
-    case SqlWindowFunctionKind::MIN:
-      return "MIN";
-    case SqlWindowFunctionKind::MAX:
-      return "MAX";
-    case SqlWindowFunctionKind::SUM:
-      return "SUM";
-    case SqlWindowFunctionKind::COUNT:
-      return "COUNT";
-    case SqlWindowFunctionKind::SUM_INTERNAL:
-      return "SUM_INTERNAL";
-    case SqlWindowFunctionKind::LEAD_IN_FRAME:
-      return "LEAD_IN_FRAME";
-    case SqlWindowFunctionKind::LAG_IN_FRAME:
-      return "LAG_IN_FRAME";
-    case SqlWindowFunctionKind::COUNT_IF:
-      return "COUNT_IF";
-    case SqlWindowFunctionKind::SUM_IF:
-      return "SUM_IF";
-    case SqlWindowFunctionKind::FORWARD_FILL:
-      return "FORWARD_FILL";
-    case SqlWindowFunctionKind::BACKWARD_FILL:
-      return "BACKWARD_FILL";
-    case SqlWindowFunctionKind::CONDITIONAL_CHANGE_EVENT:
-      return "CONDITIONAL_CHANGE_EVENT";
-    case SqlWindowFunctionKind::INVALID:
-      return "INVALID";
-  }
-  LOG(FATAL) << "Invalid window function kind.";
-  return "";
-}
-
-inline std::string toString(const SqlWindowFrameBoundType& kind) {
-  switch (kind) {
-    case SqlWindowFrameBoundType::UNBOUNDED_PRECEDING:
-      return "UNBOUNDED_PRECEDING";
-    case SqlWindowFrameBoundType::EXPR_PRECEDING:
-      return "EXPR_PRECEDING";
-    case SqlWindowFrameBoundType::CURRENT_ROW:
-      return "CURRENT_ROW";
-    case SqlWindowFrameBoundType::EXPR_FOLLOWING:
-      return "EXPR_FOLLOWING";
-    case SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING:
-      return "UNBOUNDED_FOLLOWING";
-    case SqlWindowFrameBoundType::UNKNOWN:
-      return "UNKNOWN";
-  }
-  LOG(FATAL) << "Invalid window function bound type.";
-  return "";
-}
-
 #endif  // #if !(defined(__CUDACC__) || defined(NO_BOOST))
-
-#endif  // SQLDEFS_H
