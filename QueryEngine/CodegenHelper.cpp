@@ -72,4 +72,18 @@ std::vector<llvm::Value*> createPtrWithHoistedMemoryAddr(
   return hoisted_ptrs;
 }
 
+// todo (yoonmin): support String literal
+std::vector<llvm::Value*> hoistLiteral(CodeGenerator* code_generator,
+                                       CompilationOptions const& co,
+                                       Datum d,
+                                       SQLTypeInfo type,
+                                       size_t num_devices_to_hoist_literal) {
+  CHECK(co.hoist_literals);
+  CHECK(type.is_integer() || type.is_decimal() || type.is_fp() || type.is_boolean());
+  auto literal_expr = makeExpr<Analyzer::Constant>(type, false, d);
+  std::vector<Analyzer::Constant const*> literals(num_devices_to_hoist_literal,
+                                                  literal_expr.get());
+  return code_generator->codegenHoistedConstants(literals, kENCODING_NONE, {});
+}
+
 }  // namespace CodegenUtil

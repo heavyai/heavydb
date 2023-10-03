@@ -36,5 +36,10 @@ std::vector<llvm::Value*> createPtrWithHoistedMemoryAddr(
     llvm::ConstantInt* ptr,
     llvm::Type* type,
     size_t num_devices_to_hoist_literal);
+std::vector<llvm::Value*> hoistLiteral(CodeGenerator* code_generator,
+                                       CompilationOptions const& co,
+                                       Datum d,
+                                       SQLTypeInfo type,
+                                       size_t num_devices_to_hoist_literal);
 
 }  // namespace CodegenUtil

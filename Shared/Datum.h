@@ -25,6 +25,8 @@
 
 #include "funcannotations.h"
 
+#include <type_traits>
+
 #ifndef __CUDACC__
 #include <string_view>
 #endif
@@ -79,3 +81,41 @@ union Datum {
   std::string* stringval;  // string value
 #endif
 };
+
+template <typename T>
+Datum make_datum(T val) {
+  static_assert(std::is_same_v<T, bool> || std::is_same_v<T, int8_t> ||
+                    std::is_same_v<T, int16_t> || std::is_same_v<T, int32_t> ||
+                    std::is_same_v<T, int64_t> || std::is_same_v<T, float> ||
+                    std::is_same_v<T, double> || std::is_same_v<T, VarlenDatum*>
+#ifndef __CUDACC__
+                    || std::is_same_v<T, std::string*>
+#endif
+                ,
+                "Type T must be one of the allowed types");
+  Datum d;
+  if constexpr (std::is_same_v<T, bool>) {
+    d.boolval = static_cast<int8_t>(val);
+  } else if constexpr (std::is_same_v<T, int8_t>) {
+    d.tinyintval = val;
+  } else if constexpr (std::is_same_v<T, int16_t>) {
+    d.smallintval = val;
+  } else if constexpr (std::is_same_v<T, int32_t>) {
+    d.intval = val;
+  } else if constexpr (std::is_same_v<T, int64_t>) {
+    d.bigintval = val;
+  } else if constexpr (std::is_same_v<T, float>) {
+    d.floatval = val;
+  } else if constexpr (std::is_same_v<T, double>) {
+    d.doubleval = val;
+  } else if constexpr (std::is_same_v<T, VarlenDatum*>) {
+    // deleting `arrayval` is caller's responsibility
+    d.arrayval = val;
+#ifndef __CUDACC__
+  } else if constexpr (std::is_same_v<T, std::string*>) {
+    // deleting `stringval` is caller's responsibility
+    d.stringval = val;
+#endif
+  }
+  return d;
+}

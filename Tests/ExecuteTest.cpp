@@ -5477,6 +5477,32 @@ TEST_F(Select, NotILikeNoneEncodedTextWithParenthesis) {
   }
 }
 
+TEST_F(Select, CanReuseCompiledCodeForStringPatternMatchQuery) {
+  SKIP_ALL_ON_AGGREGATOR();
+  CodeCacheMetric q1_cache_metric, q2_cache_metric;
+  auto qe_instance = QueryEngine::getInstance();
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(10,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(1) FROM TEST WHERE shared_dict LIKE '%foo';", dt)));
+    if (dt == ExecutorDeviceType::CPU) {
+      q1_cache_metric = qe_instance->cpu_code_accessor->getCodeCacheMetric();
+    } else {
+      q1_cache_metric = qe_instance->gpu_code_accessor->getCodeCacheMetric();
+    }
+    ASSERT_EQ(5,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(1) FROM TEST WHERE shared_dict LIKE '%baz';", dt)));
+    if (dt == ExecutorDeviceType::CPU) {
+      q2_cache_metric = qe_instance->cpu_code_accessor->getCodeCacheMetric();
+    } else {
+      q2_cache_metric = qe_instance->gpu_code_accessor->getCodeCacheMetric();
+    }
+    ASSERT_GT(q2_cache_metric.found_count, q1_cache_metric.found_count);
+  }
+}
+
 TEST_F(Select, SharedDictionary) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
