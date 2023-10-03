@@ -24,6 +24,7 @@
 #define QUERYENGINE_INVALUESBITMAP_H
 
 #include "../DataMgr/DataMgr.h"
+#include "ThriftHandler/CommandLineOptions.h"
 
 #include <llvm/IR/Value.h>
 
@@ -44,7 +45,8 @@ class InValuesBitmap {
                  const int64_t null_val,
                  const Data_Namespace::MemoryLevel memory_level,
                  const int device_count,
-                 Data_Namespace::DataMgr* data_mgr);
+                 Data_Namespace::DataMgr* data_mgr,
+                 CompilationOptions const& co);
   ~InValuesBitmap();
 
   llvm::Value* codegen(llvm::Value* needle, Executor* executor) const;
@@ -54,6 +56,17 @@ class InValuesBitmap {
   bool hasNull() const;
 
   size_t gpuBuffers() const { return gpu_buffers_.size(); }
+
+  struct BitIsSetParams {
+    llvm::Value* bitmap_ptr_lv;
+    llvm::Value* min_val_lv;
+    llvm::Value* max_val_lv;
+    llvm::Value* null_val_lv;
+  };
+
+  BitIsSetParams prepareBitIsSetParams(
+      Executor* executor,
+      std::vector<std::shared_ptr<const Analyzer::Constant>> const& constant_owned) const;
 
  private:
   std::vector<Data_Namespace::AbstractBuffer*> gpu_buffers_;
@@ -65,6 +78,7 @@ class InValuesBitmap {
   const Data_Namespace::MemoryLevel memory_level_;
   const int device_count_;
   Data_Namespace::DataMgr* data_mgr_;
+  CompilationOptions co_;
 };
 
 #endif  // QUERYENGINE_INVALUESBITMAP_H

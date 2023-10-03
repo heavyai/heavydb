@@ -24,6 +24,7 @@
 #include "../Shared/checked_alloc.h"
 #include "GroupByAndAggregate.h"
 #include "Logger/Logger.h"
+#include "QueryEngine/CodegenHelper.h"
 #include "QueryEngine/QueryEngine.h"
 #include "RuntimeFunctions.h"
 
@@ -35,12 +36,14 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
                                const int64_t null_val,
                                const Data_Namespace::MemoryLevel memory_level,
                                const int device_count,
-                               Data_Namespace::DataMgr* data_mgr)
+                               Data_Namespace::DataMgr* data_mgr,
+                               CompilationOptions const& co)
     : rhs_has_null_(false)
     , null_val_(null_val)
     , memory_level_(memory_level)
     , device_count_(device_count)
-    , data_mgr_(data_mgr) {
+    , data_mgr_(data_mgr)
+    , co_(co) {
 #ifdef HAVE_CUDA
   CHECK(memory_level_ == Data_Namespace::CPU_LEVEL ||
         memory_level == Data_Namespace::GPU_LEVEL);
@@ -120,10 +123,50 @@ InValuesBitmap::~InValuesBitmap() {
   }
 }
 
+InValuesBitmap::BitIsSetParams InValuesBitmap::prepareBitIsSetParams(
+    Executor* executor,
+    std::vector<std::shared_ptr<const Analyzer::Constant>> const& constant_owned) const {
+  BitIsSetParams params;
+  auto pi8_ty =
+      llvm::PointerType::get(get_int_type(8, executor->cgen_state_->context_), 0);
+  CodeGenerator code_generator(executor);
+  params.null_val_lv =
+      CodegenUtil::hoistLiteral(
+          &code_generator, co_, make_datum<int64_t>(null_val_), kBIGINT, device_count_)
+          .front();
+  if (bitsets_.empty()) {
+    auto const zero_lvs = CodegenUtil::hoistLiteral(
+        &code_generator, co_, make_datum<int64_t>(0), kBIGINT, device_count_);
+    params.min_val_lv = zero_lvs.front();
+    params.max_val_lv = zero_lvs.front();
+    params.bitmap_ptr_lv =
+        executor->cgen_state_->ir_builder_.CreateIntToPtr(zero_lvs.front(), pi8_ty);
+  } else {
+    params.min_val_lv =
+        CodegenUtil::hoistLiteral(
+            &code_generator, co_, make_datum<int64_t>(min_val_), kBIGINT, device_count_)
+            .front();
+    params.max_val_lv =
+        CodegenUtil::hoistLiteral(
+            &code_generator, co_, make_datum<int64_t>(max_val_), kBIGINT, device_count_)
+            .front();
+    auto to_raw_ptr = [](const auto& ptr) { return ptr.get(); };
+    auto begin = boost::make_transform_iterator(constant_owned.begin(), to_raw_ptr);
+    auto end = boost::make_transform_iterator(constant_owned.end(), to_raw_ptr);
+    std::vector<const Analyzer::Constant*> bitmap_constants(begin, end);
+    const auto bitset_handle_lvs =
+        code_generator.codegenHoistedConstants(bitmap_constants, kENCODING_NONE, {});
+    CHECK_EQ(size_t(1), bitset_handle_lvs.size());
+    params.bitmap_ptr_lv = executor->cgen_state_->ir_builder_.CreateIntToPtr(
+        bitset_handle_lvs.front(), pi8_ty);
+  }
+  return params;
+}
+
 llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) const {
-  AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
+  auto cgen_state = executor->getCgenStatePtr();
+  AUTOMATIC_IR_METADATA(cgen_state);
   std::vector<std::shared_ptr<const Analyzer::Constant>> constants_owned;
-  std::vector<const Analyzer::Constant*> constants;
   for (const auto bitset : bitsets_) {
     const int64_t bitset_handle = reinterpret_cast<int64_t>(bitset);
     const auto bitset_handle_literal = std::dynamic_pointer_cast<Analyzer::Constant>(
@@ -131,38 +174,18 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) co
     CHECK(bitset_handle_literal);
     CHECK_EQ(kENCODING_NONE, bitset_handle_literal->get_type_info().get_compression());
     constants_owned.push_back(bitset_handle_literal);
-    constants.push_back(bitset_handle_literal.get());
   }
-  const auto needle_i64 = executor->cgen_state_->castToTypeIn(needle, 64);
+  const auto needle_i64 = cgen_state->castToTypeIn(needle, 64);
   const auto null_bool_val =
       static_cast<int8_t>(inline_int_null_val(SQLTypeInfo(kBOOLEAN, false)));
-  auto pi8_ty =
-      llvm::PointerType::get(get_int_type(8, executor->cgen_state_->context_), 0);
-  if (bitsets_.empty()) {
-    auto empty_bitmap = executor->cgen_state_->llInt(int64_t(0));
-    auto empty_bitmap_ptr =
-        executor->cgen_state_->ir_builder_.CreateIntToPtr(empty_bitmap, pi8_ty);
-    return executor->cgen_state_->emitCall("bit_is_set",
-                                           {empty_bitmap_ptr,
-                                            needle_i64,
-                                            executor->cgen_state_->llInt(int64_t(0)),
-                                            executor->cgen_state_->llInt(int64_t(0)),
-                                            executor->cgen_state_->llInt(null_val_),
-                                            executor->cgen_state_->llInt(null_bool_val)});
-  }
-  CodeGenerator code_generator(executor);
-  const auto bitset_handle_lvs =
-      code_generator.codegenHoistedConstants(constants, kENCODING_NONE, {});
-  CHECK_EQ(size_t(1), bitset_handle_lvs.size());
-  auto bitset_ptr = executor->cgen_state_->ir_builder_.CreateIntToPtr(
-      bitset_handle_lvs.front(), pi8_ty);
-  return executor->cgen_state_->emitCall("bit_is_set",
-                                         {bitset_ptr,
-                                          needle_i64,
-                                          executor->cgen_state_->llInt(min_val_),
-                                          executor->cgen_state_->llInt(max_val_),
-                                          executor->cgen_state_->llInt(null_val_),
-                                          executor->cgen_state_->llInt(null_bool_val)});
+  auto const func_params = prepareBitIsSetParams(executor, constants_owned);
+  return cgen_state->emitCall("bit_is_set",
+                              {func_params.bitmap_ptr_lv,
+                               needle_i64,
+                               func_params.min_val_lv,
+                               func_params.max_val_lv,
+                               func_params.null_val_lv,
+                               cgen_state->llInt(null_bool_val)});
 }
 
 bool InValuesBitmap::isEmpty() const {
