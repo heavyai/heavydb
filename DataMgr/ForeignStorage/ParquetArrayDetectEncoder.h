@@ -48,6 +48,8 @@ class ParquetArrayDetectEncoder : public ParquetArrayEncoder {
     updateMetadataForAppendedArrayItem(encoded_index);
   }
 
+  size_t getArraysCount() const { return detect_buffer_->getStrings().size(); }
+
  protected:
   void encodeAllValues(const int8_t* values, const int64_t values_read) override {
     if (!is_string_array_) {
