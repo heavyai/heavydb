@@ -135,7 +135,8 @@ macro(set_alternate_linker linker)
 endmacro()
 
 macro(InstallVersionFile)
-  find_file(MapdDepsVersion_FILE mapd_deps_version.txt NO_CACHE)
+  # `touch mapd_deps_version.txt` from build dir to silence warning.
+  find_file(MapdDepsVersion_FILE mapd_deps_version.txt PATH ${CMAKE_BINARY_DIR} NO_CACHE)
 
   if(NOT MapdDepsVersion_FILE)
     message(WARNING "Build could NOT find deps version file mapd_deps_version.txt")
