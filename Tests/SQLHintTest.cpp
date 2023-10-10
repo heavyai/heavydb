@@ -243,6 +243,16 @@ TEST(QueryHint, ForceToCPUMode) {
                                            {{QueryHint::kCpuMode, false}}));
 }
 
+TEST(QueryHint, DisableTableReordering) {
+  const auto q =
+      "SELECT /*+ table_reordering_off */ * FROM JOIN_HINT_TEST R, JOIN_HINT_TEST S "
+      "WHERE R.v = S.v";
+  auto query_hints = QR::get()->getParsedQueryHint(q);
+  const bool hint_enabled = query_hints.isHintRegistered(QueryHint::kTableReorderingOff);
+  EXPECT_TRUE(hint_enabled);
+  EXPECT_TRUE(check_serialized_rel_alg_dag(q, {{QueryHint::kTableReorderingOff, false}}));
+}
+
 TEST(QueryHint, QueryHintForBoundingBoxIntersection) {
   ScopeGuard reset_loop_join_state = [orig_bbox_intersect_hash_join =
                                           g_enable_bbox_intersect_hashjoin] {

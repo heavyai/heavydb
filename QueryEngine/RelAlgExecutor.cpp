@@ -1128,6 +1128,11 @@ void handle_query_hint(RegisteredQueryHint const& query_hints,
       eo.optimize_cuda_block_and_grid_sizes = true;
     }
   }
+  if (query_hints.isHintRegistered(QueryHint::kTableReorderingOff)) {
+    // disable table reordering if `table_reordering_off` is enabled
+    VLOG(1) << "A user disables table reordering listed in the FROM clause";
+    eo.table_reordering = false;
+  }
   if (query_hints.isHintRegistered(QueryHint::kColumnarOutput)) {
     VLOG(1) << "A user forces the query to run with columnar output";
     columnar_output_hint_enabled = true;
@@ -4564,7 +4569,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
     left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
     left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
-    if (g_from_table_reordering &&
+    if (eo.table_reordering &&
         std::find(join_types.begin(), join_types.end(), JoinType::LEFT) ==
             join_types.end()) {
       input_permutation = do_table_reordering(input_descs,
@@ -4964,7 +4969,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
     left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
     left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
-    if (g_from_table_reordering) {
+    if (eo.table_reordering) {
       input_permutation = do_table_reordering(input_descs,
                                               input_col_descs,
                                               left_deep_join_quals,

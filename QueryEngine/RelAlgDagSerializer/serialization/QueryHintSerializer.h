@@ -34,8 +34,12 @@ void serialize(Archive& ar, RegisteredQueryHint& query_hint, const unsigned int 
   (ar & query_hint.watchdog);
   (ar & query_hint.dynamic_watchdog);
   (ar & query_hint.query_time_limit);
+  (ar & query_hint.watchdog_max_projected_rows_per_device);
+  (ar & query_hint.preflight_count_query_threshold);
+  (ar & query_hint.table_reordering_off);
   (ar & query_hint.cuda_block_size);
   (ar & query_hint.cuda_grid_size_multiplier);
+  (ar & query_hint.opt_cuda_grid_and_block_size);
   (ar & query_hint.aggregate_tree_fanout);
   (ar & query_hint.bbox_intersect_bucket_threshold);
   (ar & query_hint.bbox_intersect_max_size);
@@ -43,8 +47,10 @@ void serialize(Archive& ar, RegisteredQueryHint& query_hint, const unsigned int 
   (ar & query_hint.bbox_intersect_no_cache);
   (ar & query_hint.bbox_intersect_keys_per_bin);
   (ar & query_hint.use_loop_join);
-  (ar & query_hint.max_join_hash_table_size);
   (ar & query_hint.loop_join_inner_table_max_num_rows);
+  (ar & query_hint.max_join_hash_table_size);
+  (ar & query_hint.force_baseline_hash_join);
+  (ar & query_hint.force_one_to_many_hash_join);
   (ar & query_hint.registered_hint);
 }
 
