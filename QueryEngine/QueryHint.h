@@ -54,6 +54,7 @@ enum QueryHint {
   kforceOneToManyHashJoin,
   kWatchdogMaxProjectedRowsPerDevice,
   kPreflightCountQueryThreshold,
+  kTableReorderingOff,
   kHintCount,   // should be at the last elem before INVALID enum value to count #
                 // supported hints correctly
   kInvalidHint  // this should be the last elem of this enum
@@ -87,7 +88,8 @@ static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"force_one_to_many_hash_join", QueryHint::kforceOneToManyHashJoin},
     {"watchdog_max_projected_rows_per_device",
      QueryHint::kWatchdogMaxProjectedRowsPerDevice},
-    {"preflight_count_query_threshold", QueryHint::kPreflightCountQueryThreshold}};
+    {"preflight_count_query_threshold", QueryHint::kPreflightCountQueryThreshold},
+    {"table_reordering_off", QueryHint::kTableReorderingOff}};
 
 struct HintIdentifier {
   bool global_hint;
@@ -202,6 +204,7 @@ struct RegisteredQueryHint {
       , query_time_limit(0)
       , watchdog_max_projected_rows_per_device(g_watchdog_max_projected_rows_per_device)
       , preflight_count_query_threshold(g_preflight_count_query_threshold)
+      , table_reordering_off(false)
       , cuda_block_size(0)
       , cuda_grid_size_multiplier(0.0)
       , opt_cuda_grid_and_block_size(false)
@@ -316,6 +319,9 @@ struct RegisteredQueryHint {
             updated_query_hints.preflight_count_query_threshold =
                 global_hints.preflight_count_query_threshold;
             break;
+          case QueryHint::kTableReorderingOff:
+            updated_query_hints.table_reordering_off = global_hints.table_reordering_off;
+            break;
           default:
             UNREACHABLE();
         }
@@ -335,6 +341,7 @@ struct RegisteredQueryHint {
   size_t query_time_limit;
   size_t watchdog_max_projected_rows_per_device;
   size_t preflight_count_query_threshold;
+  bool table_reordering_off;
 
   // control CUDA behavior
   size_t cuda_block_size;

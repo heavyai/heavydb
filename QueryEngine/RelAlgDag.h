@@ -3243,6 +3243,15 @@ class RelAlgDag : public boost::noncopyable {
           }
           break;
         }
+        case QueryHint::kTableReorderingOff: {
+          query_hint.registerHint(QueryHint::kTableReorderingOff);
+          query_hint.table_reordering_off = true;
+          if (target.isGlobalHint()) {
+            global_query_hint.registerHint(QueryHint::kTableReorderingOff);
+            global_query_hint.table_reordering_off = true;
+          }
+          break;
+        }
         default:
           break;
       }
