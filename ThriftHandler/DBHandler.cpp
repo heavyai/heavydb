@@ -6770,7 +6770,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
           executor->checkPendingQueryStatus(query_session);
         } catch (QueryExecutionError& e) {
           executor->clearQuerySessionStatus(query_session, submitted_time_str);
-          if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+          if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
             throw std::runtime_error(
                 "Query execution has been interrupted (pending query).");
           }

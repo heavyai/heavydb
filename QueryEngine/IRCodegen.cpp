@@ -487,7 +487,7 @@ llvm::Value* CodeGenerator::codegenWidthBucketExpr(const Analyzer::WidthBucketEx
                                         width_bucket_partition_count_ok_bb);
   cgen_state_->ir_builder_.SetInsertPoint(width_bucket_argument_check_fail_bb);
   cgen_state_->ir_builder_.CreateRet(
-      cgen_state_->llInt(Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT));
+      cgen_state_->llInt(int32_t(heavyai::ErrorCode::WIDTH_BUCKET_INVALID_ARGUMENT)));
   cgen_state_->ir_builder_.SetInsertPoint(width_bucket_partition_count_ok_bb);
 
   llvm::BasicBlock* width_bucket_bound_check_ok_bb =

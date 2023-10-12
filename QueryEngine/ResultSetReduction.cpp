@@ -164,10 +164,9 @@ void run_reduction_code(const size_t executor_id,
     err = ret.int_val;
   }
   if (err) {
-    if (err == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES) {
+    if (err == int32_t(heavyai::ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES)) {
       throw std::runtime_error("Multiple distinct values encountered");
-    }
-    if (err == Executor::ERR_INTERRUPTED) {
+    } else if (err == int32_t(heavyai::ErrorCode::INTERRUPTED)) {
       throw std::runtime_error(
           "Query execution has interrupted during result set reduction");
     }

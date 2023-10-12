@@ -494,7 +494,7 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
               for (size_t i = start; i < end; ++i, ++local_idx) {
                 if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
                              executor_->checkNonKernelTimeInterrupted())) {
-                  throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+                  throw QueryExecutionError(ErrorCode::INTERRUPTED);
                 }
                 do_work(i);
               }
@@ -513,8 +513,8 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
         child.wait();
       }
     } catch (QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
-        throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
+        throw QueryExecutionError(ErrorCode::INTERRUPTED);
       }
       throw e;
     } catch (...) {
@@ -543,7 +543,7 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
     while (!done) {
       if (UNLIKELY((row_idx & 0xFFFF) == 0 &&
                    executor_->checkNonKernelTimeInterrupted())) {
-        throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+        throw QueryExecutionError(ErrorCode::INTERRUPTED);
       }
       do_work();
     }
@@ -1205,7 +1205,7 @@ void ColumnarResults::materializeAllLazyColumns(
               for (size_t i = start; i < end; ++i, ++local_idx) {
                 if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
                              executor_->checkNonKernelTimeInterrupted())) {
-                  throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+                  throw QueryExecutionError(ErrorCode::INTERRUPTED);
                 }
                 do_work_just_lazy_columns(i, targets_to_skip);
               }
@@ -1224,8 +1224,8 @@ void ColumnarResults::materializeAllLazyColumns(
         child.wait();
       }
     } catch (QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
-        throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
+        throw QueryExecutionError(ErrorCode::INTERRUPTED);
       }
       throw e;
     } catch (...) {
@@ -1304,7 +1304,7 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
                entry_idx++, local_idx++) {
             if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
                          executor_->checkNonKernelTimeInterrupted())) {
-              throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+              throw QueryExecutionError(ErrorCode::INTERRUPTED);
             }
             do_work(total_non_empty, local_idx, entry_idx, thread_idx);
           }
@@ -1330,8 +1330,8 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
       child.wait();
     }
   } catch (QueryExecutionError& e) {
-    if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
-      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+    if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
+      throw QueryExecutionError(ErrorCode::INTERRUPTED);
     }
     throw e;
   } catch (...) {
@@ -1485,7 +1485,7 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
            entry_idx++, local_idx++) {
         if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
                      executor_->checkNonKernelTimeInterrupted())) {
-          throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+          throw QueryExecutionError(ErrorCode::INTERRUPTED);
         }
         do_work(
             non_empty_idx, total_non_empty, local_idx, entry_idx, thread_idx, end_index);
@@ -1512,8 +1512,8 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
       child.wait();
     }
   } catch (QueryExecutionError& e) {
-    if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
-      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+    if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
+      throw QueryExecutionError(ErrorCode::INTERRUPTED);
     }
     throw e;
   } catch (...) {
@@ -1587,7 +1587,7 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
            entry_idx++, local_idx++) {
         if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
                      executor_->checkNonKernelTimeInterrupted())) {
-          throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+          throw QueryExecutionError(ErrorCode::INTERRUPTED);
         }
         do_work(
             entry_idx, non_empty_idx, total_non_empty, local_idx, thread_idx, end_index);
@@ -1614,8 +1614,8 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
       child.wait();
     }
   } catch (QueryExecutionError& e) {
-    if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
-      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+    if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
+      throw QueryExecutionError(ErrorCode::INTERRUPTED);
     }
     throw e;
   } catch (...) {

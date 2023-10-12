@@ -1612,23 +1612,6 @@ class Executor {
   static QueryPlanDAG latest_query_plan_extracted_;
 
  public:
-  static const int32_t ERR_DIV_BY_ZERO{1};
-  static const int32_t ERR_OUT_OF_GPU_MEM{2};
-  static const int32_t ERR_OUT_OF_SLOTS{3};
-  static const int32_t ERR_UNSUPPORTED_SELF_JOIN{4};
-  static const int32_t ERR_OUT_OF_RENDER_MEM{5};
-  static const int32_t ERR_OUT_OF_CPU_MEM{6};
-  static const int32_t ERR_OVERFLOW_OR_UNDERFLOW{7};
-  static const int32_t ERR_OUT_OF_TIME{9};
-  static const int32_t ERR_INTERRUPTED{10};
-  static const int32_t ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED{11};
-  static const int32_t ERR_TOO_MANY_LITERALS{12};
-  static const int32_t ERR_STRING_CONST_IN_RESULTSET{13};
-  static const int32_t ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY{14};
-  static const int32_t ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES{15};
-  static const int32_t ERR_GEOS{16};
-  static const int32_t ERR_WIDTH_BUCKET_INVALID_ARGUMENT{17};
-
   // Although compilation is Executor-local, an executor may trigger
   // threaded compilations (see executeWorkUnitPerFragment) that share
   // executor cgen_state and LLVM context, for instance.
