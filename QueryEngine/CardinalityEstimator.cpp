@@ -75,10 +75,10 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
     }
     return estimator_result->getNDVEstimator();
   } catch (const QueryExecutionError& e) {
-    if (e.getErrorCode() == Executor::ERR_OUT_OF_TIME) {
+    if (e.hasErrorCode(ErrorCode::OUT_OF_TIME)) {
       throw std::runtime_error("Cardinality estimation query ran out of time");
     }
-    if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+    if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
       throw std::runtime_error("Cardinality estimation query has been interrupted");
     }
     throw std::runtime_error("Failed to run the cardinality estimation query: " +

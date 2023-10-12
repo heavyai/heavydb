@@ -180,7 +180,7 @@ JoinColumn ColumnFetcher::makeJoinColumn(
   for (auto& frag : fragments) {
     if (g_enable_non_kernel_time_query_interrupt &&
         executor->checkNonKernelTimeInterrupted()) {
-      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+      throw QueryExecutionError(ErrorCode::INTERRUPTED);
     }
     auto [col_buff, elem_count] = getOneColumnFragment(
         executor,
@@ -308,7 +308,7 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
       for (size_t frag_id = 0; frag_id < frag_count; ++frag_id) {
         if (g_enable_non_kernel_time_query_interrupt &&
             executor_->checkNonKernelTimeInterrupted()) {
-          throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+          throw QueryExecutionError(ErrorCode::INTERRUPTED);
         }
         std::list<std::shared_ptr<Chunk_NS::Chunk>> chunk_holder;
         std::list<ChunkIter> chunk_iter_holder;
@@ -711,7 +711,7 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
        chunk_holder_it++, chunk_iter_holder_it++, chunk_num_tuple_it++) {
     if (g_enable_non_kernel_time_query_interrupt &&
         executor_->checkNonKernelTimeInterrupted()) {
-      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+      throw QueryExecutionError(ErrorCode::INTERRUPTED);
     }
     auto target_chunk = chunk_holder_it->get();
     auto target_chunk_data_buffer = target_chunk->getBuffer();
@@ -965,7 +965,7 @@ MergedChunk ColumnFetcher::linearizeFixedLenArrayColFrags(
     for (; chunk_holder_it != local_chunk_holder.end();
          chunk_holder_it++, chunk_iter_holder_it++) {
       if (g_enable_non_kernel_time_query_interrupt && check_interrupt()) {
-        throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+        throw QueryExecutionError(ErrorCode::INTERRUPTED);
       }
       auto target_chunk = chunk_holder_it->get();
       auto target_chunk_data_buffer = target_chunk->getBuffer();

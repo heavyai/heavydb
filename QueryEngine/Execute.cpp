@@ -195,8 +195,6 @@ extern bool g_allow_memory_status_log;
 
 int const Executor::max_gpu_count;
 
-const int32_t Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES;
-
 std::map<Executor::ExtModuleKinds, std::string> Executor::extension_module_sources;
 
 extern std::unique_ptr<llvm::Module> read_llvm_module_from_bc_file(
@@ -1504,7 +1502,7 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
           if (agg_result == agg_init_val) {
             agg_result = out_vec[i];
           } else if (out_vec[i] != agg_result) {
-            return {agg_result, Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES};
+            return {agg_result, int32_t(ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES)};
           }
         }
       }
@@ -2273,13 +2271,13 @@ ResultSetPtr Executor::executeWorkUnitImpl(
 
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_.load() &&
-            e.getErrorCode() == ERR_OUT_OF_TIME) {
-          throw QueryExecutionError(ERR_INTERRUPTED);
+            e.hasErrorCode(ErrorCode::OUT_OF_TIME)) {
+          throw QueryExecutionError(ErrorCode::INTERRUPTED);
         }
-        if (e.getErrorCode() == ERR_INTERRUPTED) {
-          throw QueryExecutionError(ERR_INTERRUPTED);
+        if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
+          throw QueryExecutionError(ErrorCode::INTERRUPTED);
         }
-        if (e.getErrorCode() == ERR_OVERFLOW_OR_UNDERFLOW &&
+        if (e.hasErrorCode(ErrorCode::OVERFLOW_OR_UNDERFLOW) &&
             static_cast<size_t>(crt_min_byte_width << 1) <= sizeof(int64_t)) {
           crt_min_byte_width <<= 1;
           continue;
@@ -2332,7 +2330,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                        query_comp_desc_owned->getDeviceType(),
                                        row_set_mem_owner);
       } catch (ReductionRanOutOfSlots&) {
-        throw QueryExecutionError(ERR_OUT_OF_SLOTS);
+        throw QueryExecutionError(ErrorCode::OUT_OF_SLOTS);
       } catch (OverflowOrUnderflow&) {
         crt_min_byte_width <<= 1;
         continue;
@@ -3486,11 +3484,11 @@ FetchResult Executor::fetchChunks(
               checkIsQuerySessionInterrupted(query_session, session_read_lock);
         }
         if (isInterrupted) {
-          throw QueryExecutionError(ERR_INTERRUPTED);
+          throw QueryExecutionError(ErrorCode::INTERRUPTED);
         }
       }
       if (g_enable_dynamic_watchdog && interrupted_.load()) {
-        throw QueryExecutionError(ERR_INTERRUPTED);
+        throw QueryExecutionError(ErrorCode::INTERRUPTED);
       }
       CHECK(col_id);
       const auto cd = try_get_column_descriptor(col_id.get());
@@ -3680,7 +3678,7 @@ FetchResult Executor::fetchUnionChunks(
       isInterrupted = checkIsQuerySessionInterrupted(query_session, session_read_lock);
     }
     if (isInterrupted) {
-      throw QueryExecutionError(ERR_INTERRUPTED);
+      throw QueryExecutionError(ErrorCode::INTERRUPTED);
     }
   }
   std::vector<const int8_t*> frag_col_buffers(
@@ -3870,11 +3868,11 @@ int32_t Executor::executePlanWithoutGroupBy(
       isInterrupted = checkIsQuerySessionInterrupted(query_session, session_read_lock);
     }
     if (isInterrupted) {
-      throw QueryExecutionError(ERR_INTERRUPTED);
+      throw QueryExecutionError(ErrorCode::INTERRUPTED);
     }
   }
   if (g_enable_dynamic_watchdog && interrupted_.load()) {
-    throw QueryExecutionError(ERR_INTERRUPTED);
+    throw QueryExecutionError(ErrorCode::INTERRUPTED);
   }
   if (device_type == ExecutorDeviceType::CPU) {
     CpuCompilationContext* cpu_generated_code =
@@ -3921,18 +3919,18 @@ int32_t Executor::executePlanWithoutGroupBy(
           optimize_cuda_block_and_grid_sizes);
       output_memory_scope.reset(new OutVecOwner(out_vec));
     } catch (const OutOfMemory&) {
-      return ERR_OUT_OF_GPU_MEM;
+      return int32_t(ErrorCode::OUT_OF_GPU_MEM);
     } catch (const std::exception& e) {
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
   }
-  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW ||
-      error_code == Executor::ERR_DIV_BY_ZERO ||
-      error_code == Executor::ERR_OUT_OF_TIME ||
-      error_code == Executor::ERR_INTERRUPTED ||
-      error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES ||
-      error_code == Executor::ERR_GEOS ||
-      error_code == Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT) {
+  if (heavyai::IsAny<ErrorCode::OVERFLOW_OR_UNDERFLOW,
+                     ErrorCode::DIV_BY_ZERO,
+                     ErrorCode::OUT_OF_TIME,
+                     ErrorCode::INTERRUPTED,
+                     ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES,
+                     ErrorCode::GEOS,
+                     ErrorCode::WIDTH_BUCKET_INVALID_ARGUMENT>::check(error_code)) {
     return error_code;
   }
   if (ra_exe_unit.estimator) {
@@ -4091,11 +4089,11 @@ int32_t Executor::executePlanWithGroupBy(
       isInterrupted = checkIsQuerySessionInterrupted(query_session, session_read_lock);
     }
     if (isInterrupted) {
-      throw QueryExecutionError(ERR_INTERRUPTED);
+      throw QueryExecutionError(ErrorCode::INTERRUPTED);
     }
   }
   if (g_enable_dynamic_watchdog && interrupted_.load()) {
-    return ERR_INTERRUPTED;
+    return int32_t(ErrorCode::INTERRUPTED);
   }
 
   RenderAllocatorMap* render_allocator_map_ptr = nullptr;
@@ -4190,28 +4188,28 @@ int32_t Executor::executePlanWithGroupBy(
           render_allocator_map_ptr,
           optimize_cuda_block_and_grid_sizes);
     } catch (const OutOfMemory&) {
-      return ERR_OUT_OF_GPU_MEM;
+      return int32_t(ErrorCode::OUT_OF_GPU_MEM);
     } catch (const OutOfRenderMemory&) {
-      return ERR_OUT_OF_RENDER_MEM;
+      return int32_t(ErrorCode::OUT_OF_RENDER_MEM);
     } catch (const StreamingTopNNotSupportedInRenderQuery&) {
-      return ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY;
+      return int32_t(ErrorCode::STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY);
     } catch (const std::exception& e) {
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
   }
 
-  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW ||
-      error_code == Executor::ERR_DIV_BY_ZERO ||
-      error_code == Executor::ERR_OUT_OF_TIME ||
-      error_code == Executor::ERR_INTERRUPTED ||
-      error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES ||
-      error_code == Executor::ERR_GEOS ||
-      error_code == Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT) {
+  if (heavyai::IsAny<ErrorCode::OVERFLOW_OR_UNDERFLOW,
+                     ErrorCode::DIV_BY_ZERO,
+                     ErrorCode::OUT_OF_TIME,
+                     ErrorCode::INTERRUPTED,
+                     ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES,
+                     ErrorCode::GEOS,
+                     ErrorCode::WIDTH_BUCKET_INVALID_ARGUMENT>::check(error_code)) {
     return error_code;
   }
 
-  if (results && error_code != Executor::ERR_OVERFLOW_OR_UNDERFLOW &&
-      error_code != Executor::ERR_DIV_BY_ZERO && !render_allocator_map_ptr) {
+  if (results && error_code != int32_t(ErrorCode::OVERFLOW_OR_UNDERFLOW) &&
+      error_code != int32_t(ErrorCode::DIV_BY_ZERO) && !render_allocator_map_ptr) {
     *results = query_exe_context->getRowSet(ra_exe_unit_copy,
                                             query_exe_context->query_mem_desc_);
     CHECK(*results);
@@ -4308,7 +4306,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
             "Bounding box intersection disabled, attempting to fall back to loop join"};
   }
   if (g_enable_dynamic_watchdog && interrupted_.load()) {
-    throw QueryExecutionError(ERR_INTERRUPTED);
+    throw QueryExecutionError(ErrorCode::INTERRUPTED);
   }
   try {
     auto tbl = HashJoin::getInstance(qual_bin_oper,
@@ -5041,7 +5039,7 @@ void Executor::checkPendingQueryStatus(const QuerySessionId& query_session) {
     return;
   }
   if (queries_interrupt_flag_[query_session]) {
-    throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+    throw QueryExecutionError(ErrorCode::INTERRUPTED);
   }
 }
 

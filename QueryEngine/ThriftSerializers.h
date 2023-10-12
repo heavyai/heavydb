@@ -29,12 +29,12 @@
 #include "QueryEngine/AggregatedColRange.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Descriptors/CountDistinctDescriptor.h"
-#include "QueryEngine/Descriptors/Types.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/TargetMetaInfo.h"
 #include "Shared/ThriftTypesConvert.h"
+#include "enums.h"
 
 namespace ThriftSerializers {
 

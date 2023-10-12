@@ -78,6 +78,8 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include "Shared/MathUtils.h"
 #include "StreamingTopN.h"
 
+using heavyai::ErrorCode;
+
 float g_fraction_code_cache_to_evict = 0.2;
 
 #ifdef ENABLE_GEOS
@@ -2123,7 +2125,9 @@ void Executor::createErrorCheckControlFlow(
           auto detected_timeout = watchdog_ir_builder.CreateCall(
               cgen_state_->module_->getFunction("dynamic_watchdog"), {});
           auto timeout_err_lv = watchdog_ir_builder.CreateSelect(
-              detected_timeout, cgen_state_->llInt(Executor::ERR_OUT_OF_TIME), err_lv);
+              detected_timeout,
+              cgen_state_->llInt(int32_t(ErrorCode::OUT_OF_TIME)),
+              err_lv);
           watchdog_ir_builder.CreateBr(error_check_bb);
 
           llvm::ReplaceInstWithInst(
@@ -2160,7 +2164,7 @@ void Executor::createErrorCheckControlFlow(
                 cgen_state_->module_->getFunction("check_interrupt"), {});
             interrupt_err_lv = interrupt_checker_ir_builder.CreateSelect(
                 detected_interrupt,
-                cgen_state_->llInt(Executor::ERR_INTERRUPTED),
+                cgen_state_->llInt(int32_t(ErrorCode::INTERRUPTED)),
                 err_lv);
             interrupt_checker_ir_builder.CreateBr(error_check_bb);
           };
@@ -2268,9 +2272,10 @@ void Executor::createErrorCheckControlFlow(
           // let kernel execution finish as expected, regardless of the observed error,
           // unless it is from the dynamic watchdog where all threads within that block
           // return together.
-          err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
-                                         err_lv,
-                                         cgen_state_->llInt(Executor::ERR_OUT_OF_TIME));
+          err_lv =
+              ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
+                                    err_lv,
+                                    cgen_state_->llInt(int32_t(ErrorCode::OUT_OF_TIME)));
         } else {
           err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE,
                                          err_lv,
@@ -3273,7 +3278,7 @@ void Executor::insertErrorCodeChecker(llvm::Function* query_func,
               std::vector<llvm::Value*>{error_code_arg});
           err_code = interrupt_checker_ir_builder.CreateSelect(
               detected_interrupt,
-              cgen_state_->llInt(Executor::ERR_INTERRUPTED),
+              cgen_state_->llInt(int32_t(ErrorCode::INTERRUPTED)),
               detected_error);
           interrupt_checker_ir_builder.CreateBr(error_check_bb);
           llvm::ReplaceInstWithInst(&check_interrupt_br_instr,

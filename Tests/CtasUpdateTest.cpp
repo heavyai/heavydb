@@ -3124,7 +3124,7 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
         lockmgr::LockedTableDescriptors locks;
         db_handler->sql_execute(result, session_id, query, false, -1, -1, locks);
       } catch (const QueryExecutionError& e) {
-        if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
           catchInterruption.store(true);
         } else if (e.getErrorCode() < 0) {
           std::cout << "Detect out of slot issue in the query output buffer while "
@@ -3235,7 +3235,7 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
         lockmgr::LockedTableDescriptors locks;
         db_handler->sql_execute(result, session_id, query, false, -1, -1, locks);
       } catch (const QueryExecutionError& e) {
-        if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
           catchInterruption.store(true);
         } else if (e.getErrorCode() < 0) {
           std::cout << "Detect out of slot issue in the query output buffer while "

@@ -23,14 +23,16 @@
 #ifndef QUERYENGINE_QUERYMEMORYDESCRIPTOR_H
 #define QUERYENGINE_QUERYMEMORYDESCRIPTOR_H
 
-#include "../CompilationOptions.h"
-#include "../CountDistinct.h"
 #include "ApproxQuantileDescriptor.h"
 #include "ColSlotContext.h"
-#include "Types.h"
+#include "Logger/Logger.h"
+#include "QueryEngine/CompilationOptions.h"
+#include "QueryEngine/CountDistinct.h"
+#include "QueryEngine/enums.h"
+#include "Shared/SqlTypesLayout.h"
+#include "Shared/TargetInfo.h"
 
 #include <boost/optional.hpp>
-#include "Logger/Logger.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -39,9 +41,6 @@
 #include <numeric>
 #include <unordered_map>
 #include <vector>
-
-#include <Shared/SqlTypesLayout.h>
-#include <Shared/TargetInfo.h>
 
 extern bool g_cluster;
 
@@ -55,6 +54,8 @@ class TResultSetBufferDescriptor;
 class GroupByAndAggregate;
 struct ColRangeInfo;
 struct KeylessInfo;
+
+using heavyai::QueryDescriptionType;
 
 class StreamingTopNOOM : public std::runtime_error {
  public:

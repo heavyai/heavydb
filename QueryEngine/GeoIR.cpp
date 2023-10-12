@@ -20,6 +20,8 @@
 #include "QueryEngine/GeoOperators/API.h"
 #include "QueryEngine/GeoOperators/Codegen.h"
 
+using heavyai::ErrorCode;
+
 ArrayLoadCodegen CodeGenerator::codegenGeoArrayLoadAndNullcheck(llvm::Value* byte_stream,
                                                                 llvm::Value* pos,
                                                                 const SQLTypeInfo& ti,
@@ -472,7 +474,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosPredicateCall(
   }
   cgen_state_->ir_builder_.CreateCondBr(status_lv, geos_pred_ok_bb, geos_pred_fail_bb);
   cgen_state_->ir_builder_.SetInsertPoint(geos_pred_fail_bb);
-  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(Executor::ERR_GEOS));
+  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(int32_t(ErrorCode::GEOS)));
   cgen_state_->needs_error_check_ = true;
   cgen_state_->ir_builder_.SetInsertPoint(geos_pred_ok_bb);
   auto res = cgen_state_->ir_builder_.CreateLoad(
@@ -533,7 +535,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosConstructorCall(
   }
   cgen_state_->ir_builder_.CreateCondBr(status_lv, geos_ok_bb, geos_fail_bb);
   cgen_state_->ir_builder_.SetInsertPoint(geos_fail_bb);
-  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(Executor::ERR_GEOS));
+  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(int32_t(ErrorCode::GEOS)));
   cgen_state_->needs_error_check_ = true;
   cgen_state_->ir_builder_.SetInsertPoint(geos_ok_bb);
 

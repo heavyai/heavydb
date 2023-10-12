@@ -134,24 +134,24 @@ void ExecutionKernel::run(Executor* executor,
   try {
     runImpl(executor, thread_idx, shared_context);
   } catch (const OutOfHostMemory& e) {
-    throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM, e.what());
+    throw QueryExecutionError(ErrorCode::OUT_OF_CPU_MEM, e.what());
   } catch (const std::bad_alloc& e) {
-    throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM, e.what());
+    throw QueryExecutionError(ErrorCode::OUT_OF_CPU_MEM, e.what());
   } catch (const OutOfRenderMemory& e) {
-    throw QueryExecutionError(Executor::ERR_OUT_OF_RENDER_MEM, e.what());
+    throw QueryExecutionError(ErrorCode::OUT_OF_RENDER_MEM, e.what());
   } catch (const OutOfMemory& e) {
     throw QueryExecutionError(
-        Executor::ERR_OUT_OF_GPU_MEM,
+        ErrorCode::OUT_OF_GPU_MEM,
         e.what(),
         QueryExecutionProperties{
             query_mem_desc.getQueryDescriptionType(),
             kernel_dispatch_mode == ExecutorDispatchMode::MultifragmentKernel});
   } catch (const ColumnarConversionNotSupported& e) {
-    throw QueryExecutionError(Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED, e.what());
+    throw QueryExecutionError(ErrorCode::COLUMNAR_CONVERSION_NOT_SUPPORTED, e.what());
   } catch (const TooManyLiterals& e) {
-    throw QueryExecutionError(Executor::ERR_TOO_MANY_LITERALS, e.what());
+    throw QueryExecutionError(ErrorCode::TOO_MANY_LITERALS, e.what());
   } catch (const StringConstInResultSet& e) {
-    throw QueryExecutionError(Executor::ERR_STRING_CONST_IN_RESULTSET, e.what());
+    throw QueryExecutionError(ErrorCode::STRING_CONST_IN_RESULTSET, e.what());
   } catch (const QueryExecutionError& e) {
     throw e;
   }
@@ -257,8 +257,8 @@ void ExecutionKernel::runImpl(Executor* executor,
     }
   } catch (const OutOfMemory&) {
     throw QueryExecutionError(
-        memory_level == Data_Namespace::GPU_LEVEL ? Executor::ERR_OUT_OF_GPU_MEM
-                                                  : Executor::ERR_OUT_OF_CPU_MEM,
+        memory_level == Data_Namespace::GPU_LEVEL ? ErrorCode::OUT_OF_GPU_MEM
+                                                  : ErrorCode::OUT_OF_CPU_MEM,
         QueryExecutionProperties{
             query_mem_desc.getQueryDescriptionType(),
             kernel_dispatch_mode == ExecutorDispatchMode::MultifragmentKernel});
@@ -400,7 +400,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                   thread_idx,
                                                   do_render ? render_info_ : nullptr);
     } catch (const OutOfHostMemory& e) {
-      throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM);
+      throw QueryExecutionError(ErrorCode::OUT_OF_CPU_MEM);
     }
   }
   QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
@@ -486,24 +486,24 @@ void KernelSubtask::run(Executor* executor) {
   try {
     runImpl(executor);
   } catch (const OutOfHostMemory& e) {
-    throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM, e.what());
+    throw QueryExecutionError(ErrorCode::OUT_OF_CPU_MEM, e.what());
   } catch (const std::bad_alloc& e) {
-    throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM, e.what());
+    throw QueryExecutionError(ErrorCode::OUT_OF_CPU_MEM, e.what());
   } catch (const OutOfRenderMemory& e) {
-    throw QueryExecutionError(Executor::ERR_OUT_OF_RENDER_MEM, e.what());
+    throw QueryExecutionError(ErrorCode::OUT_OF_RENDER_MEM, e.what());
   } catch (const OutOfMemory& e) {
     throw QueryExecutionError(
-        Executor::ERR_OUT_OF_GPU_MEM,
+        ErrorCode::OUT_OF_GPU_MEM,
         e.what(),
         QueryExecutionProperties{
             kernel_.query_mem_desc.getQueryDescriptionType(),
             kernel_.kernel_dispatch_mode == ExecutorDispatchMode::MultifragmentKernel});
   } catch (const ColumnarConversionNotSupported& e) {
-    throw QueryExecutionError(Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED, e.what());
+    throw QueryExecutionError(ErrorCode::COLUMNAR_CONVERSION_NOT_SUPPORTED, e.what());
   } catch (const TooManyLiterals& e) {
-    throw QueryExecutionError(Executor::ERR_TOO_MANY_LITERALS, e.what());
+    throw QueryExecutionError(ErrorCode::TOO_MANY_LITERALS, e.what());
   } catch (const StringConstInResultSet& e) {
-    throw QueryExecutionError(Executor::ERR_STRING_CONST_IN_RESULTSET, e.what());
+    throw QueryExecutionError(ErrorCode::STRING_CONST_IN_RESULTSET, e.what());
   } catch (const QueryExecutionError& e) {
     throw e;
   }
@@ -545,7 +545,7 @@ void KernelSubtask::runImpl(Executor* executor) {
           thread_idx_,
           do_render ? kernel_.render_info_ : nullptr);
     } catch (const OutOfHostMemory& e) {
-      throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM);
+      throw QueryExecutionError(ErrorCode::OUT_OF_CPU_MEM);
     }
   }
 

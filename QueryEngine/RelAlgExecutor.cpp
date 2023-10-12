@@ -678,7 +678,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     try {
       executor_->checkPendingQueryStatus(query_session);
     } catch (QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
         throw std::runtime_error("Query execution has been interrupted (pending query)");
       }
       throw e;
@@ -2414,7 +2414,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
               body->getOutputMetainfo()};
   } catch (const QueryExecutionError& e) {
     handlePersistentError(e.getErrorCode());
-    CHECK(e.getErrorCode() == Executor::ERR_OUT_OF_GPU_MEM);
+    CHECK(e.hasErrorCode(ErrorCode::OUT_OF_GPU_MEM)) << e.getErrorCode();
     throw std::runtime_error("Table function ran out of memory during execution");
   }
   auto query_exec_time = timer_stop(query_exec_time_begin);
@@ -4270,7 +4270,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
 void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
   LOG(ERROR) << "Query execution failed with error "
              << getErrorMessageFromCode(error_code);
-  if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
+  if (error_code == int32_t(ErrorCode::OUT_OF_GPU_MEM)) {
     // We ran out of GPU memory, this doesn't count as an error if the query is
     // allowed to continue on CPU because retry on CPU is explicitly allowed through
     // --allow-cpu-retry.
@@ -4292,54 +4292,12 @@ struct ErrorInfo {
 ErrorInfo getErrorDescription(const int32_t error_code) {
   // 'designated initializers' don't compile on Windows for std 17
   // They require /std:c++20.  They been removed for the windows port.
-  switch (error_code) {
-    case Executor::ERR_DIV_BY_ZERO:
-      return {"ERR_DIV_BY_ZERO", "Division by zero"};
-    case Executor::ERR_OUT_OF_GPU_MEM:
-      return {"ERR_OUT_OF_GPU_MEM",
-
-              "Query couldn't keep the entire working set of columns in GPU memory"};
-    case Executor::ERR_UNSUPPORTED_SELF_JOIN:
-      return {"ERR_UNSUPPORTED_SELF_JOIN", "Self joins not supported yet"};
-    case Executor::ERR_OUT_OF_CPU_MEM:
-      return {"ERR_OUT_OF_CPU_MEM", "Not enough host memory to execute the query"};
-    case Executor::ERR_OVERFLOW_OR_UNDERFLOW:
-      return {"ERR_OVERFLOW_OR_UNDERFLOW", "Overflow or underflow"};
-    case Executor::ERR_OUT_OF_TIME:
-      return {"ERR_OUT_OF_TIME", "Query execution has exceeded the time limit"};
-    case Executor::ERR_INTERRUPTED:
-      return {"ERR_INTERRUPTED", "Query execution has been interrupted"};
-    case Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED:
-      return {"ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED",
-              "Columnar conversion not supported for variable length types"};
-    case Executor::ERR_TOO_MANY_LITERALS:
-      return {"ERR_TOO_MANY_LITERALS", "Too many literals in the query"};
-    case Executor::ERR_STRING_CONST_IN_RESULTSET:
-      return {"ERR_STRING_CONST_IN_RESULTSET",
-
-              "NONE ENCODED String types are not supported as input result set."};
-    case Executor::ERR_OUT_OF_RENDER_MEM:
-      return {"ERR_OUT_OF_RENDER_MEM",
-
-              "Insufficient GPU memory for query results in render output buffer "
-              "sized by render-mem-bytes"};
-    case Executor::ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY:
-      return {"ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY",
-              "Streaming-Top-N not supported in Render Query"};
-    case Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES:
-      return {"ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES",
-              "Multiple distinct values encountered"};
-    case Executor::ERR_GEOS:
-      return {"ERR_GEOS", "ERR_GEOS"};
-    case Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT:
-      return {"ERR_WIDTH_BUCKET_INVALID_ARGUMENT",
-
-              "Arguments of WIDTH_BUCKET function does not satisfy the condition"};
-    default:
-      return {nullptr, nullptr};
+  if (0 < error_code && error_code < int32_t(ErrorCode::N_)) {
+    auto const ec = static_cast<ErrorCode>(error_code);
+    return {to_string(ec), to_description(ec)};
   }
+  return {nullptr, nullptr};
 }
-
 }  // namespace
 
 std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {

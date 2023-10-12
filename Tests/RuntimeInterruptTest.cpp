@@ -585,7 +585,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV) {
     try {
       QR::get()->runDDLStatement(import_very_large_table_str);
     } catch (const QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
         catchInterruption.store(true);
       } else {
         throw e;
@@ -667,7 +667,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
     try {
       QR::get()->runDDLStatement(import_very_large_parquet_table_str);
     } catch (const QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
         catchInterruption.store(true);
       } else {
         throw e;
@@ -750,7 +750,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV_Sharded) {
     try {
       QR::get()->runDDLStatement(import_very_large_sharded_table_str);
     } catch (const QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
         catchInterruption.store(true);
       } else {
         throw e;
@@ -833,7 +833,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_GDAL) {
     try {
       geofile_importer_for_interrupt_test(session1);
     } catch (const QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
         catchInterruption.store(true);
       } else {
         throw e;
@@ -914,7 +914,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Geo) {
     try {
       QR::get()->runDDLStatement(import_geo_table_str);
     } catch (const QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
         catchInterruption.store(true);
       } else {
         throw e;
@@ -1017,7 +1017,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
                 session1);
       CHECK_EQ(assigned_executor_ids.size(), static_cast<size_t>(1));
     } catch (const QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
         // timing issue... the query is interrupted before entering the reduction
         catchInterruption.store(true);
       } else {

@@ -21,6 +21,8 @@
 
 // Code generation routines and helpers for basic arithmetic and unary minus.
 
+using heavyai::ErrorCode;
+
 namespace {
 
 std::string numeric_or_time_interval_type_name(const SQLTypeInfo& ti1,
@@ -270,7 +272,7 @@ llvm::Value* CodeGenerator::codegenAdd(const Analyzer::BinOper* bin_oper,
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(add_fail);
     cgen_state_->ir_builder_.CreateRet(
-        cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+        cgen_state_->llInt(int32_t(ErrorCode::OVERFLOW_OR_UNDERFLOW)));
     cgen_state_->ir_builder_.SetInsertPoint(add_ok);
   }
   return ret;
@@ -334,7 +336,7 @@ llvm::Value* CodeGenerator::codegenSub(const Analyzer::BinOper* bin_oper,
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(sub_fail);
     cgen_state_->ir_builder_.CreateRet(
-        cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+        cgen_state_->llInt(int32_t(ErrorCode::OVERFLOW_OR_UNDERFLOW)));
     cgen_state_->ir_builder_.SetInsertPoint(sub_ok);
   }
   return ret;
@@ -422,7 +424,7 @@ llvm::Value* CodeGenerator::codegenMul(const Analyzer::BinOper* bin_oper,
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(mul_fail);
     cgen_state_->ir_builder_.CreateRet(
-        cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+        cgen_state_->llInt(int32_t(ErrorCode::OVERFLOW_OR_UNDERFLOW)));
     cgen_state_->ir_builder_.SetInsertPoint(mul_ok);
   }
   return ret;
@@ -473,7 +475,7 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
 
       cgen_state_->ir_builder_.SetInsertPoint(decimal_div_fail);
       cgen_state_->ir_builder_.CreateRet(
-          cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+          cgen_state_->llInt(int32_t(ErrorCode::OVERFLOW_OR_UNDERFLOW)));
 
       cgen_state_->ir_builder_.SetInsertPoint(decimal_div_ok);
 
@@ -531,7 +533,7 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
                         ti.get_type() == kFLOAT ? cgen_state_->llFp(NULL_FLOAT)
                                                 : cgen_state_->llFp(NULL_DOUBLE)}));
   cgen_state_->ir_builder_.SetInsertPoint(div_zero);
-  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(Executor::ERR_DIV_BY_ZERO));
+  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(int32_t(ErrorCode::DIV_BY_ZERO)));
   cgen_state_->ir_builder_.SetInsertPoint(div_ok);
   return ret;
 }
@@ -619,7 +621,7 @@ llvm::Value* CodeGenerator::codegenMod(llvm::Value* lhs_lv,
                        "mod_" + null_typename + null_check_suffix,
                        {lhs_lv, rhs_lv, cgen_state_->llInt(inline_int_null_val(ti))});
   cgen_state_->ir_builder_.SetInsertPoint(mod_zero);
-  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(Executor::ERR_DIV_BY_ZERO));
+  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(int32_t(ErrorCode::DIV_BY_ZERO)));
   cgen_state_->ir_builder_.SetInsertPoint(mod_ok);
   return ret;
 }
@@ -696,7 +698,7 @@ llvm::Value* CodeGenerator::codegenUMinus(const Analyzer::UOper* uoper,
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(uminus_fail);
     cgen_state_->ir_builder_.CreateRet(
-        cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+        cgen_state_->llInt(int32_t(ErrorCode::OVERFLOW_OR_UNDERFLOW)));
     cgen_state_->ir_builder_.SetInsertPoint(uminus_ok);
   }
   return ret;
@@ -757,7 +759,7 @@ llvm::Value* CodeGenerator::codegenBinOpWithOverflowForCPU(
   cgen_state_->ir_builder_.CreateCondBr(overflow, check_fail, check_ok);
   cgen_state_->ir_builder_.SetInsertPoint(check_fail);
   cgen_state_->ir_builder_.CreateRet(
-      cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+      cgen_state_->llInt(int32_t(ErrorCode::OVERFLOW_OR_UNDERFLOW)));
 
   cgen_state_->ir_builder_.SetInsertPoint(check_ok);
 

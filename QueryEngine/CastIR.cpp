@@ -550,7 +550,7 @@ void CodeGenerator::codegenCastBetweenIntTypesOverflowChecks(
 
   cgen_state_->ir_builder_.SetInsertPoint(cast_fail);
   cgen_state_->ir_builder_.CreateRet(
-      cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+      cgen_state_->llInt(int32_t(heavyai::ErrorCode::OVERFLOW_OR_UNDERFLOW)));
 
   cgen_state_->ir_builder_.SetInsertPoint(cast_ok);
 }

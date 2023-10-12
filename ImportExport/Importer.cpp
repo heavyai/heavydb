@@ -2385,7 +2385,7 @@ static ImportStatus import_thread_shapefile(
                      check_session_interrupted(query_session, executor))) {
           thread_import_status.load_failed = true;
           thread_import_status.load_msg = "Table load was cancelled via Query Interrupt";
-          throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+          throw QueryExecutionError(ErrorCode::INTERRUPTED);
         }
 
         uint32_t field_column_count{0u};
@@ -2624,7 +2624,7 @@ static ImportStatus import_thread_shapefile(
         }
         thread_import_status.rows_completed++;
       } catch (QueryExecutionError& e) {
-        if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
           throw e;
         }
       } catch (ColumnNotGeoError& e) {
@@ -6065,7 +6065,7 @@ ImportStatus Importer::importGDALRaster(
     if (UNLIKELY(check_session_interrupted(query_session, executor.get()))) {
       import_status_.load_failed = true;
       import_status_.load_msg = "Raster Import interrupted";
-      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+      throw QueryExecutionError(ErrorCode::INTERRUPTED);
     }
 
     // hit max_reject?
