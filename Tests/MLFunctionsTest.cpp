@@ -1245,8 +1245,9 @@ TEST_P(MLRegressionFunctionsTest, R2_SCORE) {
         EXPECT_EQ(r2_rows->rowCount(), 1UL);
         EXPECT_EQ(r2_rows->colCount(), 1UL);
         auto r2_row = r2_rows->getNextRow(true, true);
+        // Non-deterministic, and has been seen as low as 0.945691.
         const double actual_r2 = TestHelpers::v<double>(r2_row[0]);
-        const double expected_min_r2{0.95};
+        const double expected_min_r2{0.93};
         EXPECT_GE(actual_r2, expected_min_r2);
       }
     }
