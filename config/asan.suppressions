@@ -6,3 +6,7 @@ leak:daal::algorithms::engines::mt2203::interface1::Batch
 leak:daal::algorithms::engines::mt2203::interface1::BatchContainer
 leak:daal::algorithms::interface1::AlgorithmDispatchContainer
 leak:daal::algorithms::interface1::Argument::Argument
+# QE-1008 applies to next 3 lines
+leak:_GLOBAL__sub_I_common.cpp
+leak:_GLOBAL__sub_I_register_serializable.cpp
+leak:oneapi::dal::detail::serializable_registry::register_default_factory

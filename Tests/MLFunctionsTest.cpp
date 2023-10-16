@@ -355,15 +355,21 @@ std::vector<std::string> get_supported_ml_frameworks() {
 }
 
 TEST_F(MLTableFunctionsTest, SupportedMLFrameworks) {
-  const std::vector<std::string> expected_ml_frameworks = {"onedal", "mlpack"};
+  const std::vector<std::string> expected_ml_frameworks = {"onedal", "oneapi", "mlpack"};
   std::vector<bool> expected_is_available;
   std::vector<bool> expected_is_default;
   bool found_ml_framework = false;
 #ifdef HAVE_ONEDAL
   expected_is_available.emplace_back(true);
-  expected_is_default.emplace_back(!found_ml_framework);
+  expected_is_default.emplace_back(
+      found_ml_framework);  // onedal should be available but not default
+  expected_is_available.emplace_back(true);
+  expected_is_default.emplace_back(
+      !found_ml_framework);  // oneapi should be available and default
   found_ml_framework = true;
 #else
+  expected_is_available.emplace_back(false);
+  expected_is_default.emplace_back(false);
   expected_is_available.emplace_back(false);
   expected_is_default.emplace_back(false);
 #endif
@@ -383,7 +389,7 @@ TEST_F(MLTableFunctionsTest, SupportedMLFrameworks) {
         "TABLE(supported_ml_frameworks()) ORDER BY ml_framework DESC;";
     const auto rows = run_multiple_agg(query, dt);
     const size_t num_rows = rows->rowCount();
-    EXPECT_EQ(num_rows, size_t(2));
+    EXPECT_EQ(num_rows, size_t(3));
     EXPECT_EQ(rows->colCount(), size_t(3));
     for (size_t row_idx = 0; row_idx < num_rows; ++row_idx) {
       auto crt_row = rows->getNextRow(true, true);
@@ -863,6 +869,13 @@ TEST_P(MLRegressionFunctionsTest, REG_MODEL_FIT_NO_ROWS) {
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
+
+    // oneAPI does not support boosted trees or decision trees yet
+    if (ml_framework == "'oneapi'" && (model_type == MLModelType::GBT_REG ||
+                                       model_type == MLModelType::DECISION_TREE_REG)) {
+      continue;
+    }
+
     for (bool use_create_syntax : {false, true}) {
       for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
         SKIP_NO_GPU();
@@ -915,6 +928,13 @@ TEST_P(MLRegressionFunctionsTest, REG_MODEL_FIT) {
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
+
+    // oneAPI does not support boosted trees or decision trees yet
+    if (ml_framework == "'oneapi'" && (model_type == MLModelType::GBT_REG ||
+                                       model_type == MLModelType::DECISION_TREE_REG)) {
+      continue;
+    }
+
     for (bool use_create_syntax : {false, true}) {
       for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
         SKIP_NO_GPU();
@@ -1139,6 +1159,13 @@ TEST_P(MLRegressionFunctionsTest, MLRegPredict) {
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
+
+    // oneAPI does not support boosted trees or decision trees yet
+    if (ml_framework == "'oneapi'" && (model_type == MLModelType::GBT_REG ||
+                                       model_type == MLModelType::DECISION_TREE_REG)) {
+      continue;
+    }
+
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
       for (bool make_args_named : {false, true}) {
@@ -1209,6 +1236,13 @@ TEST_P(MLRegressionFunctionsTest, R2_SCORE) {
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
+
+    // oneAPI does not support boosted trees or decision trees yet
+    if (ml_framework == "'oneapi'" && (model_type == MLModelType::GBT_REG ||
+                                       model_type == MLModelType::DECISION_TREE_REG)) {
+      continue;
+    }
+
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       for (std::string numeric_data_type : {"DOUBLE"}) {
         const auto train_cursor_query = generate_cursor_query(
@@ -1274,6 +1308,13 @@ TEST_P(MLRegressionFunctionsTest, ML_PREDICT_WRONG_NUM_REGRESSORS) {
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
+
+    // oneAPI does not support boosted trees or decision trees yet
+    if (ml_framework == "'oneapi'" && (model_type == MLModelType::GBT_REG ||
+                                       model_type == MLModelType::DECISION_TREE_REG)) {
+      continue;
+    }
+
     const std::string train_query("SELECT * FROM TABLE(" + model_fit_func +
                                   "(model_name =>'" + model_name +
                                   "', "
@@ -1302,6 +1343,13 @@ TEST_P(MLRegressionFunctionsTest, ML_PREDICT) {
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
+
+    // oneAPI does not support boosted trees or decision trees yet
+    if (ml_framework == "'oneapi'" && (model_type == MLModelType::GBT_REG ||
+                                       model_type == MLModelType::DECISION_TREE_REG)) {
+      continue;
+    }
+
     const std::string train_query(
         "SELECT * FROM TABLE(" + model_fit_func + "(model_name =>'" + model_name +
         "', "
@@ -1325,6 +1373,7 @@ TEST_P(MLRegressionFunctionsTest, ML_PREDICT) {
     const double allowed_epsilon{0.1};
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
+      std::cerr << "train_query: " << train_query << "\n";
       EXPECT_NO_THROW(run_multiple_agg(train_query, dt));
       const auto row_wise_prediction_avg =
           TestHelpers::v<double>(run_simple_agg(row_wise_predict_query, dt));
@@ -1346,6 +1395,13 @@ TEST_P(MLRegressionFunctionsTest, ML_PREDICT_NULLS) {
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
+
+    // oneAPI does not support boosted trees or decision trees yet
+    if (ml_framework == "'oneapi'" && (model_type == MLModelType::GBT_REG ||
+                                       model_type == MLModelType::DECISION_TREE_REG)) {
+      continue;
+    }
+
     const std::string train_query(
         "SELECT * FROM TABLE(" + model_fit_func + "(model_name =>'" + model_name +
         "', "
@@ -1420,6 +1476,13 @@ TEST_P(MLCategoricalRegressionFunctionsTest, ML_PREDICT_CATEGORICAL_FEATURES_MIS
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
+
+    // oneAPI does not support boosted trees or decision trees yet
+    if (ml_framework == "'oneapi'" && (model_type == MLModelType::GBT_REG ||
+                                       model_type == MLModelType::DECISION_TREE_REG)) {
+      continue;
+    }
+
     const std::string train_query("SELECT * FROM TABLE(" + model_fit_func +
                                   "(model_name =>'" + model_name +
                                   "', "
@@ -1455,6 +1518,13 @@ TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT_CAT_FEATURES_ONLY) {
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
+
+    // oneAPI does not support boosted trees or decision trees yet
+    if (ml_framework == "'oneapi'" && (model_type == MLModelType::GBT_REG ||
+                                       model_type == MLModelType::DECISION_TREE_REG)) {
+      continue;
+    }
+
     for (bool use_create_syntax : {false, true}) {
       for (std::string numeric_data_type : {"DOUBLE"}) {
         const auto data_query = generate_cursor_query(
@@ -1515,6 +1585,22 @@ TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT_MIXED_FEATURES) {
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
+
+    // oneAPI does not support boosted trees or decision trees yet
+    if (ml_framework == "'oneapi'" && (model_type == MLModelType::GBT_REG ||
+                                       model_type == MLModelType::DECISION_TREE_REG)) {
+      continue;
+    }
+
+    // FIXME: The oneAPI implementation of Linear Regression seems to be somewhat
+    // experimental, as for large models it finds different coefficients than the DAAL
+    // implementation, regardless of solver algorithm used. For now, we default to the
+    // DAAL implementation and skip testing the OneAPI versions. Once oneDAL is updated,
+    // this should be revisited to check the state of the Linear Regression models.
+    if (ml_framework == "'oneapi'" && model_type == MLModelType::LINEAR_REG) {
+      continue;
+    }
+
     for (bool use_create_syntax : {false, true}) {
       for (std::string numeric_data_type : {"DOUBLE"}) {
         const auto data_query = generate_cursor_query("craigslist_f150s",
@@ -1571,7 +1657,7 @@ TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT_MIXED_FEATURES) {
                 1, 1, 2, 3, 4, 5, 6, 7, 8, 9,  10, 1, 2, 3, 4, 5,
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1,  2, 3, 4, 1, 1};
 
-            const std::vector<double> expected_coefs = {
+            std::vector<double> expected_coefs = {
                 -2681553.0554, 1725.9846, 782.4798,   1086.2600,  -2629.4910, -1294.4318,
                 2935.9767,     3032.3311, 524.7911,   -482.2400,  4439.0142,  5996.3565,
                 273.6281,      656.8885,  8127.7868,  22739.9185, -107.2775,  1322.8270,
@@ -1698,6 +1784,13 @@ TEST_P(MLCategoricalRegressionFunctionsTest, ML_PREDICT) {
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
+
+    // oneAPI does not support boosted trees or decision trees yet
+    if (ml_framework == "'oneapi'" && (model_type == MLModelType::GBT_REG ||
+                                       model_type == MLModelType::DECISION_TREE_REG)) {
+      continue;
+    }
+
     for (std::string numeric_data_type : {"DOUBLE"}) {
       // Test two different orders of features, one categorical predictors first and the
       // other in mixed order
@@ -1763,6 +1856,13 @@ TEST_P(MLCategoricalRegressionFunctionsTest, R2_SCORE) {
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
     }
+
+    // oneAPI does not support boosted trees or decision trees yet
+    if (ml_framework == "'oneapi'" && (model_type == MLModelType::GBT_REG ||
+                                       model_type == MLModelType::DECISION_TREE_REG)) {
+      continue;
+    }
+
     for (std::string numeric_data_type : {"DOUBLE"}) {
       const std::string train_query(
           "SELECT * FROM TABLE(" + model_fit_func + "(model_name =>'" + model_name +

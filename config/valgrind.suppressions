@@ -59,3 +59,14 @@
    ...
    fun:runtime.*
 }
+{
+   # QE-1008
+   onedal_api_global_common
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:_Znwm
+   ...
+   fun:_GLOBAL__sub_I_common.cpp
+   fun:__libc_csu_init
+   fun:(below main)
+}

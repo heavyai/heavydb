@@ -9,7 +9,7 @@ int32_t supported_ml_frameworks__cpu_(TableFunctionManager& mgr,
                                       Column<TextEncodingDict>& output_ml_frameworks,
                                       Column<bool>& output_availability,
                                       Column<bool>& output_default) {
-  const std::vector<std::string> ml_frameworks = {"onedal", "mlpack"};
+  const std::vector<std::string> ml_frameworks = {"oneapi", "onedal", "mlpack"};
   const int32_t num_frameworks = ml_frameworks.size();
   mgr.set_output_row_size(num_frameworks);
   const std::vector<int32_t> ml_framework_string_ids =
@@ -40,7 +40,8 @@ int32_t supported_ml_frameworks__cpu_(TableFunctionManager& mgr,
 
   for (int32_t out_row_idx = 0; out_row_idx < num_frameworks; ++out_row_idx) {
     output_ml_frameworks[out_row_idx] = ml_framework_string_ids[out_row_idx];
-    if (ml_frameworks[out_row_idx] == "onedal") {
+    if (ml_frameworks[out_row_idx] == "onedal" ||
+        ml_frameworks[out_row_idx] == "oneapi") {
 #ifdef HAVE_ONEDAL
       framework_found_actions(out_row_idx);
 #else
@@ -185,12 +186,12 @@ random_forest_reg_var_importance__cpu_1(TableFunctionManager& mgr,
 #ifdef HAVE_ONEDAL
     const auto base_model = g_ml_models.getModel(model_name);
     const auto rand_forest_model =
-        std::dynamic_pointer_cast<RandomForestRegressionModel>(base_model);
+        std::dynamic_pointer_cast<AbstractRandomForestModel>(base_model);
     if (!rand_forest_model) {
       throw std::runtime_error("Model is not of type random forest.");
     }
     const auto& variable_importance_scores =
-        onedal_random_forest_reg_var_importance_impl(rand_forest_model);
+        rand_forest_model->getVariableImportanceScores();
     const int64_t num_features = variable_importance_scores.size();
     mgr.set_output_row_size(num_features);
     if (num_features == 0) {

@@ -85,6 +85,30 @@ class CommandLineTestcase {
   std::string std_out_line_, std_err_line_, std_out_string_ = "", std_err_string_ = "";
   bp::ipstream std_out_pipe_, std_err_pipe_;
 
+#ifdef HAVE_ASAN
+  // clang-format off
+  // If any ASAN suppressions were used, it will be added to stderr. Example:
+  // -----------------------------------------------------
+  // Suppressions used:
+  //   count      bytes template
+  //       6        144 _GLOBAL__sub_I_common.cpp
+  //       3         72 _GLOBAL__sub_I_register_serializable.cpp
+  //       2         48 oneapi::dal::detail::serializable_registry::register_default_factory
+  // -----------------------------------------------------
+  // Erase these from std_err_string.
+  // clang-format on
+  void erase_asan_report(std::string& std_err_string) {
+    std::string const delimiter = "-----------------------------------------------------";
+    size_t start_pos = std_err_string.find(delimiter);
+    if (start_pos != std::string::npos) {
+      size_t end_pos = std_err_string.find(delimiter, start_pos + delimiter.length());
+      if (end_pos != std::string::npos) {
+        std_err_string.erase(start_pos, end_pos - start_pos + delimiter.length());
+      }
+    }
+  }
+#endif
+
   // Runs the testcase and evalutates return code, stdErr, and stdOut.
   void evaluate() {
     int returnCode = bp::system(executable_.string() + " " + flags,
@@ -96,6 +120,9 @@ class CommandLineTestcase {
     while (std::getline(std_err_pipe_, std_err_line_)) {
       std_err_string_ += std_err_line_;
     }
+#ifdef HAVE_ASAN
+    erase_asan_report(std_err_string_);
+#endif
     // Since we are using raw strings, prune out any newlines.
     boost::erase_all(expected_std_out_, "\n");
     boost::erase_all(expected_std_err_, "\n");

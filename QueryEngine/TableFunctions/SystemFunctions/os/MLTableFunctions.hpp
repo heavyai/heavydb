@@ -26,6 +26,7 @@
 #include "QueryEngine/TableFunctions/SystemFunctions/os/ML/OneHotEncoder.h"
 
 #ifdef HAVE_ONEDAL
+#include "QueryEngine/TableFunctions/SystemFunctions/os/ML/OneAPIFunctions.hpp"
 #include "QueryEngine/TableFunctions/SystemFunctions/os/ML/OneDalFunctions.hpp"
 #endif
 
@@ -112,7 +113,7 @@ kmeans__cpu_template(TableFunctionManager& mgr,
   output_ids = input_ids;
   const auto kmeans_init_strategy = get_kmeans_init_type(init_type_str);
   if (kmeans_init_strategy == KMeansInitStrategy::INVALID) {
-    return mgr.ERROR_MESSAGE("Invalid KMeans initializaiton strategy: " +
+    return mgr.ERROR_MESSAGE("Invalid KMeans initialization strategy: " +
                              init_type_str.getString());
   }
 
@@ -137,8 +138,16 @@ kmeans__cpu_template(TableFunctionManager& mgr,
 
     bool did_execute = false;
 #ifdef HAVE_ONEDAL
-    if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
+    if (!did_execute && (preferred_ml_framework == MLFramework::ONEAPI ||
                          preferred_ml_framework == MLFramework::DEFAULT)) {
+      onedal_oneapi_kmeans_impl(normalized_ptrs,
+                                denulled_output,
+                                num_rows,
+                                num_clusters,
+                                num_iterations,
+                                kmeans_init_strategy);
+      did_execute = true;
+    } else if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL)) {
       onedal_kmeans_impl(normalized_ptrs,
                          denulled_output,
                          num_rows,
@@ -224,8 +233,12 @@ dbscan__cpu_template(TableFunctionManager& mgr,
 
     bool did_execute = false;
 #ifdef HAVE_ONEDAL
-    if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
+    if (!did_execute && (preferred_ml_framework == MLFramework::ONEAPI ||
                          preferred_ml_framework == MLFramework::DEFAULT)) {
+      onedal_oneapi_dbscan_impl(
+          normalized_ptrs, denulled_output, num_rows, epsilon, min_observations);
+      did_execute = true;
+    } else if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL)) {
       onedal_dbscan_impl(
           normalized_ptrs, denulled_output, num_rows, epsilon, min_observations);
       did_execute = true;
@@ -287,6 +300,10 @@ linear_reg_fit_impl(TableFunctionManager& mgr,
   try {
     bool did_execute = false;
 #ifdef HAVE_ONEDAL
+    // FIXME: We default to legacy DAAL Linear Regression, as the oneAPI implementation
+    // seems to be experimental. It crashes on a few small toy models (such as datasets
+    // with 1 datapoint) and finds different coefficients for large models, when compared
+    // with the DAAL implementation. This should be revisited when oneDAL is updated.
     if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
                          preferred_ml_framework == MLFramework::DEFAULT)) {
       onedal_linear_reg_fit_impl(labels_ptrs[0],
@@ -294,6 +311,13 @@ linear_reg_fit_impl(TableFunctionManager& mgr,
                                  coef_idxs.data(),
                                  coefs.data(),
                                  denulled_data.masked_num_rows);
+      did_execute = true;
+    } else if (!did_execute && (preferred_ml_framework == MLFramework::ONEAPI)) {
+      onedal_oneapi_linear_reg_fit_impl(labels_ptrs[0],
+                                        features_ptrs,
+                                        coef_idxs.data(),
+                                        coefs.data(),
+                                        denulled_data.masked_num_rows);
       did_execute = true;
     }
 #endif
@@ -1132,8 +1156,58 @@ random_forest_reg_fit_impl(TableFunctionManager& mgr,
                                var_importance_metric_str.getString());
     }
 #ifdef HAVE_ONEDAL
-    if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
+    if (!did_execute && (preferred_ml_framework == MLFramework::ONEAPI ||
                          preferred_ml_framework == MLFramework::DEFAULT)) {
+      if (use_histogram) {
+        onedal_oneapi_random_forest_reg_fit_impl<
+            T,
+            oneapi::dal::decision_forest::method::hist>(
+            model_name,
+            labels_ptrs[0],
+            features_ptrs,
+            model_metadata,
+            cat_feature_keys,
+            denulled_data.masked_num_rows,
+            num_trees,
+            obs_per_tree_fraction,
+            max_tree_depth,
+            features_per_node,
+            impurity_threshold,
+            bootstrap,
+            min_obs_per_leaf_node,
+            min_obs_per_split_node,
+            min_weight_fraction_in_leaf_node,
+            min_impurity_decrease_in_split_node,
+            max_leaf_nodes,
+            var_importance_metric);
+      } else {
+        onedal_oneapi_random_forest_reg_fit_impl<
+            T,
+            oneapi::dal::decision_forest::method::dense>(
+            model_name,
+            labels_ptrs[0],
+            features_ptrs,
+            model_metadata,
+            cat_feature_keys,
+            denulled_data.masked_num_rows,
+            num_trees,
+            obs_per_tree_fraction,
+            max_tree_depth,
+            features_per_node,
+            impurity_threshold,
+            bootstrap,
+            min_obs_per_leaf_node,
+            min_obs_per_split_node,
+            min_weight_fraction_in_leaf_node,
+            min_impurity_decrease_in_split_node,
+            max_leaf_nodes,
+            var_importance_metric);
+      }
+      const TextEncodingDict model_name_str_id =
+          output_model_name.getOrAddTransient(model_name);
+      output_model_name[0] = model_name_str_id;
+      did_execute = true;
+    } else if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL)) {
       if (use_histogram) {
         onedal_random_forest_reg_fit_impl<T, decision_forest::regression::training::hist>(
             model_name,
@@ -1456,8 +1530,19 @@ pca_fit_impl(TableFunctionManager& mgr,
                    z_std_norm_summary_stats.normalized_data.size());
     bool did_execute = false;
 #ifdef HAVE_ONEDAL
-    if (preferred_ml_framework == MLFramework::ONEDAL ||
+    if (preferred_ml_framework == MLFramework::ONEAPI ||
         preferred_ml_framework == MLFramework::DEFAULT) {
+      const auto [eigenvectors, eigenvalues] =
+          onedal_oneapi_pca_impl(normalized_ptrs, denulled_data.masked_num_rows);
+      auto model = std::make_shared<PcaModel>(z_std_norm_summary_stats.means,
+                                              z_std_norm_summary_stats.std_devs,
+                                              eigenvectors,
+                                              eigenvalues,
+                                              model_metadata,
+                                              cat_feature_keys);
+      g_ml_models.addModel(model_name, model);
+      did_execute = true;
+    } else if (preferred_ml_framework == MLFramework::ONEDAL) {
       const auto [eigenvectors, eigenvalues] =
           onedal_pca_impl(normalized_ptrs, denulled_data.masked_num_rows);
       auto model = std::make_shared<PcaModel>(z_std_norm_summary_stats.means,
@@ -1607,8 +1692,12 @@ ml_reg_predict_impl(TableFunctionManager& mgr,
             std::dynamic_pointer_cast<LinearRegressionModel>(model);
         CHECK(linear_reg_model);
 #ifdef HAVE_ONEDAL
-        if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
+        if (!did_execute && (preferred_ml_framework == MLFramework::ONEAPI ||
                              preferred_ml_framework == MLFramework::DEFAULT)) {
+          onedal_oneapi_linear_reg_predict_impl(
+              linear_reg_model, features_ptrs, denulled_output, num_rows);
+          did_execute = true;
+        } else if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL)) {
           onedal_linear_reg_predict_impl(
               linear_reg_model, features_ptrs, denulled_output, num_rows);
           did_execute = true;
@@ -1655,11 +1744,19 @@ ml_reg_predict_impl(TableFunctionManager& mgr,
 #ifdef HAVE_ONEDAL
         const auto random_forest_reg_model =
             std::dynamic_pointer_cast<RandomForestRegressionModel>(model);
-        CHECK(random_forest_reg_model);
-        if (!did_execute && (preferred_ml_framework == MLFramework::ONEDAL ||
+        const auto oneapi_random_forest_reg_model =
+            std::dynamic_pointer_cast<OneAPIRandomForestRegressionModel>(model);
+        CHECK(random_forest_reg_model || oneapi_random_forest_reg_model);
+        if (!did_execute && (preferred_ml_framework == MLFramework::ONEAPI ||
+                             preferred_ml_framework == MLFramework::ONEDAL ||
                              preferred_ml_framework == MLFramework::DEFAULT)) {
-          onedal_random_forest_reg_predict_impl(
-              random_forest_reg_model, features_ptrs, denulled_output, num_rows);
+          if (random_forest_reg_model) {
+            onedal_random_forest_reg_predict_impl(
+                random_forest_reg_model, features_ptrs, denulled_output, num_rows);
+          } else {
+            onedal_oneapi_random_forest_reg_predict_impl(
+                oneapi_random_forest_reg_model, features_ptrs, denulled_output, num_rows);
+          }
           did_execute = true;
         }
 #endif

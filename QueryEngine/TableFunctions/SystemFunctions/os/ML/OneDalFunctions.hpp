@@ -19,19 +19,320 @@
 #ifndef __CUDACC__
 #ifdef HAVE_ONEDAL
 
+#include <cstring>
+
 #include "MLModel.h"
 #include "QueryEngine/TableFunctions/SystemFunctions/os/ML/MLTableFunctionsCommon.h"
 #include "QueryEngine/heavydbTypes.h"
 #include "daal.h"
 
+#include <iomanip>
+#include <iostream>
+
 using namespace daal::algorithms;
 using namespace daal::data_management;
+
+inline void printAprioriItemsets(
+    daal::data_management::NumericTablePtr largeItemsetsTable,
+    daal::data_management::NumericTablePtr largeItemsetsSupportTable,
+    size_t nItemsetToPrint = 20) {
+  using namespace daal::data_management;
+
+  size_t largeItemsetCount = largeItemsetsSupportTable->getNumberOfRows();
+  size_t nItemsInLargeItemsets = largeItemsetsTable->getNumberOfRows();
+
+  BlockDescriptor<int> block1;
+  largeItemsetsTable->getBlockOfRows(0, nItemsInLargeItemsets, readOnly, block1);
+  int* largeItemsets = block1.getBlockPtr();
+
+  BlockDescriptor<int> block2;
+  largeItemsetsSupportTable->getBlockOfRows(0, largeItemsetCount, readOnly, block2);
+  int* largeItemsetsSupportData = block2.getBlockPtr();
+
+  std::vector<std::vector<size_t>> largeItemsetsVector;
+  largeItemsetsVector.resize(largeItemsetCount);
+
+  for (size_t i = 0; i < nItemsInLargeItemsets; i++) {
+    largeItemsetsVector[largeItemsets[2 * i]].push_back(largeItemsets[2 * i + 1]);
+  }
+
+  std::vector<size_t> supportVector;
+  supportVector.resize(largeItemsetCount);
+
+  for (size_t i = 0; i < largeItemsetCount; i++) {
+    supportVector[largeItemsetsSupportData[2 * i]] = largeItemsetsSupportData[2 * i + 1];
+  }
+
+  std::cout << std::endl << "Apriori example program results" << std::endl;
+
+  std::cout << std::endl
+            << "Last " << nItemsetToPrint << " large itemsets: " << std::endl;
+  std::cout << std::endl
+            << "Itemset"
+            << "\t\t\tSupport" << std::endl;
+
+  size_t iMin = (((largeItemsetCount > nItemsetToPrint) && (nItemsetToPrint != 0))
+                     ? largeItemsetCount - nItemsetToPrint
+                     : 0);
+  for (size_t i = iMin; i < largeItemsetCount; i++) {
+    std::cout << "{";
+    for (size_t l = 0; l < largeItemsetsVector[i].size() - 1; l++) {
+      std::cout << largeItemsetsVector[i][l] << ", ";
+    }
+    std::cout << largeItemsetsVector[i][largeItemsetsVector[i].size() - 1] << "}\t\t";
+
+    std::cout << supportVector[i] << std::endl;
+  }
+
+  largeItemsetsTable->releaseBlockOfRows(block1);
+  largeItemsetsSupportTable->releaseBlockOfRows(block2);
+}
+
+inline void printAprioriRules(daal::data_management::NumericTablePtr leftItemsTable,
+                              daal::data_management::NumericTablePtr rightItemsTable,
+                              daal::data_management::NumericTablePtr confidenceTable,
+                              size_t nRulesToPrint = 20) {
+  using namespace daal::data_management;
+
+  size_t nRules = confidenceTable->getNumberOfRows();
+  size_t nLeftItems = leftItemsTable->getNumberOfRows();
+  size_t nRightItems = rightItemsTable->getNumberOfRows();
+
+  BlockDescriptor<int> block1;
+  leftItemsTable->getBlockOfRows(0, nLeftItems, readOnly, block1);
+  int* leftItems = block1.getBlockPtr();
+
+  BlockDescriptor<int> block2;
+  rightItemsTable->getBlockOfRows(0, nRightItems, readOnly, block2);
+  int* rightItems = block2.getBlockPtr();
+
+  BlockDescriptor<DAAL_DATA_TYPE> block3;
+  confidenceTable->getBlockOfRows(0, nRules, readOnly, block3);
+  DAAL_DATA_TYPE* confidence = block3.getBlockPtr();
+
+  std::vector<std::vector<size_t>> leftItemsVector;
+  leftItemsVector.resize(nRules);
+
+  if (nRules == 0) {
+    std::cout << std::endl << "No association rules were found " << std::endl;
+    return;
+  }
+
+  for (size_t i = 0; i < nLeftItems; i++) {
+    leftItemsVector[leftItems[2 * i]].push_back(leftItems[2 * i + 1]);
+  }
+
+  std::vector<std::vector<size_t>> rightItemsVector;
+  rightItemsVector.resize(nRules);
+
+  for (size_t i = 0; i < nRightItems; i++) {
+    rightItemsVector[rightItems[2 * i]].push_back(rightItems[2 * i + 1]);
+  }
+
+  std::vector<DAAL_DATA_TYPE> confidenceVector;
+  confidenceVector.resize(nRules);
+
+  for (size_t i = 0; i < nRules; i++) {
+    confidenceVector[i] = confidence[i];
+  }
+
+  std::cout << std::endl
+            << "Last " << nRulesToPrint << " association rules: " << std::endl;
+  std::cout << std::endl
+            << "Rule"
+            << "\t\t\t\tConfidence" << std::endl;
+  size_t iMin =
+      (((nRules > nRulesToPrint) && (nRulesToPrint != 0)) ? (nRules - nRulesToPrint) : 0);
+
+  for (size_t i = iMin; i < nRules; i++) {
+    std::cout << "{";
+    for (size_t l = 0; l < leftItemsVector[i].size() - 1; l++) {
+      std::cout << leftItemsVector[i][l] << ", ";
+    }
+    std::cout << leftItemsVector[i][leftItemsVector[i].size() - 1] << "} => {";
+
+    for (size_t l = 0; l < rightItemsVector[i].size() - 1; l++) {
+      std::cout << rightItemsVector[i][l] << ", ";
+    }
+    std::cout << rightItemsVector[i][rightItemsVector[i].size() - 1] << "}\t\t";
+
+    std::cout << confidenceVector[i] << std::endl;
+  }
+
+  leftItemsTable->releaseBlockOfRows(block1);
+  rightItemsTable->releaseBlockOfRows(block2);
+  confidenceTable->releaseBlockOfRows(block3);
+}
+
+inline bool isFull(daal::data_management::NumericTableIface::StorageLayout layout) {
+  int layoutInt = (int)layout;
+  if (daal::data_management::packed_mask & layoutInt) {
+    return false;
+  }
+  return true;
+}
+
+inline bool isUpper(daal::data_management::NumericTableIface::StorageLayout layout) {
+  using daal::data_management::NumericTableIface;
+
+  if (layout == NumericTableIface::upperPackedSymmetricMatrix ||
+      layout == NumericTableIface::upperPackedTriangularMatrix) {
+    return true;
+  }
+  return false;
+}
+
+inline bool isLower(daal::data_management::NumericTableIface::StorageLayout layout) {
+  using daal::data_management::NumericTableIface;
+
+  if (layout == NumericTableIface::lowerPackedSymmetricMatrix ||
+      layout == NumericTableIface::lowerPackedTriangularMatrix) {
+    return true;
+  }
+  return false;
+}
+
+template <typename T>
+inline void printArray(T* array,
+                       const size_t nPrintedCols,
+                       const size_t nPrintedRows,
+                       const size_t nCols,
+                       std::string message,
+                       size_t interval = 10) {
+  std::cout << std::setiosflags(std::ios::left);
+  std::cout << message << std::endl;
+  for (size_t i = 0; i < nPrintedRows; i++) {
+    for (size_t j = 0; j < nPrintedCols; j++) {
+      std::cout << std::setw(interval) << std::setiosflags(std::ios::fixed)
+                << std::setprecision(3);
+      std::cout << array[i * nCols + j];
+    }
+    std::cout << std::endl;
+  }
+  std::cout << std::endl;
+}
+
+template <typename T>
+inline void printArray(T* array,
+                       const size_t nCols,
+                       const size_t nRows,
+                       std::string message,
+                       size_t interval = 10) {
+  printArray(array, nCols, nRows, nCols, message, interval);
+}
+
+template <typename T>
+inline void printLowerArray(T* array,
+                            const size_t nPrintedRows,
+                            std::string message,
+                            size_t interval = 10) {
+  std::cout << std::setiosflags(std::ios::left);
+  std::cout << message << std::endl;
+  int ind = 0;
+  for (size_t i = 0; i < nPrintedRows; i++) {
+    for (size_t j = 0; j <= i; j++) {
+      std::cout << std::setw(interval) << std::setiosflags(std::ios::fixed)
+                << std::setprecision(3);
+      std::cout << array[ind++];
+    }
+    std::cout << std::endl;
+  }
+  std::cout << std::endl;
+}
+
+template <typename T>
+inline void printUpperArray(T* array,
+                            const size_t nPrintedCols,
+                            const size_t nPrintedRows,
+                            const size_t nCols,
+                            std::string message,
+                            size_t interval = 10) {
+  std::cout << std::setiosflags(std::ios::left);
+  std::cout << message << std::endl;
+  int ind = 0;
+  for (size_t i = 0; i < nPrintedRows; i++) {
+    for (size_t j = 0; j < i; j++) {
+      std::cout << "          ";
+    }
+    for (size_t j = i; j < nPrintedCols; j++) {
+      std::cout << std::setw(interval) << std::setiosflags(std::ios::fixed)
+                << std::setprecision(3);
+      std::cout << array[ind++];
+    }
+    for (size_t j = nPrintedCols; j < nCols; j++) {
+      ind++;
+    }
+    std::cout << std::endl;
+  }
+  std::cout << std::endl;
+}
+
+inline void printNumericTable(daal::data_management::NumericTable* dataTable,
+                              const char* message = "",
+                              size_t nPrintedRows = 0,
+                              size_t nPrintedCols = 0,
+                              size_t interval = 10) {
+  using namespace daal::data_management;
+
+  size_t nRows = dataTable->getNumberOfRows();
+  size_t nCols = dataTable->getNumberOfColumns();
+  NumericTableIface::StorageLayout layout = dataTable->getDataLayout();
+
+  if (nPrintedRows != 0) {
+    nPrintedRows = std::min(nRows, nPrintedRows);
+  } else {
+    nPrintedRows = nRows;
+  }
+
+  if (nPrintedCols != 0) {
+    nPrintedCols = std::min(nCols, nPrintedCols);
+  } else {
+    nPrintedCols = nCols;
+  }
+
+  BlockDescriptor<DAAL_DATA_TYPE> block;
+  if (isFull(layout) || layout == NumericTableIface::csrArray) {
+    dataTable->getBlockOfRows(0, nRows, readOnly, block);
+    printArray<DAAL_DATA_TYPE>(
+        block.getBlockPtr(), nPrintedCols, nPrintedRows, nCols, message, interval);
+    dataTable->releaseBlockOfRows(block);
+  } else {
+    PackedArrayNumericTableIface* packedTable =
+        dynamic_cast<PackedArrayNumericTableIface*>(dataTable);
+    packedTable->getPackedArray(readOnly, block);
+    if (isLower(layout)) {
+      printLowerArray<DAAL_DATA_TYPE>(
+          block.getBlockPtr(), nPrintedRows, message, interval);
+    } else if (isUpper(layout)) {
+      printUpperArray<DAAL_DATA_TYPE>(
+          block.getBlockPtr(), nPrintedCols, nPrintedRows, nCols, message, interval);
+    }
+    packedTable->releasePackedArray(block);
+  }
+}
+
+inline void printNumericTable(daal::data_management::NumericTable& dataTable,
+                              const char* message = "",
+                              size_t nPrintedRows = 0,
+                              size_t nPrintedCols = 0,
+                              size_t interval = 10) {
+  printNumericTable(&dataTable, message, nPrintedRows, nPrintedCols, interval);
+}
+
+inline void printNumericTable(const daal::data_management::NumericTablePtr& dataTable,
+                              const char* message = "",
+                              size_t nPrintedRows = 0,
+                              size_t nPrintedCols = 0,
+                              size_t interval = 10) {
+  printNumericTable(dataTable.get(), message, nPrintedRows, nPrintedCols, interval);
+}
 
 template <typename T>
 const NumericTablePtr prepare_data_table(const T* data, const int64_t num_rows) {
   // Prepare input data as structure of arrays (SOA) as columnar format (zero-copy)
   const auto data_table = SOANumericTable::create(1 /* num_columns */, num_rows);
   data_table->setArray<T>(const_cast<T*>(data), 0);
+
   return data_table;
 }
 
@@ -237,6 +538,7 @@ onedal_linear_reg_fit_impl(const T* input_labels,
     const auto training_result = algorithm.getResult();
     const auto coefs_table =
         training_result->get(linear_regression::training::model)->getBeta();
+
     return extract_model_coefs<T>(coefs_table, output_coef_idxs, output_coefs);
   } catch (std::exception& e) {
     throw std::runtime_error(e.what());
@@ -256,6 +558,7 @@ NEVER_INLINE HOST linear_regression::ModelPtr build_linear_reg_model(
   }
   const auto betas_table =
       prepare_pivoted_data_table(casted_model_coefs.data(), num_coefs);
+
   CHECK_EQ(betas_table->getNumberOfColumns(), num_coefs);
 
   // Create model builder with true intercept flag
@@ -588,15 +891,11 @@ NEVER_INLINE HOST int32_t onedal_random_forest_reg_predict_impl(
     result->set(decision_forest::regression::prediction::prediction, predictions_table);
     algorithm.setResult(result);
     algorithm.compute();
+
     return num_rows;
   } catch (std::exception& e) {
     throw std::runtime_error(e.what());
   }
-}
-
-inline const std::vector<double>& onedal_random_forest_reg_var_importance_impl(
-    const std::shared_ptr<RandomForestRegressionModel>& rand_forest_model) {
-  return rand_forest_model->getVariableImportanceScores();
 }
 
 #endif  // #ifdef HAVE_ONEDAL

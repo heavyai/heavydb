@@ -791,6 +791,11 @@ target_link_libraries(TableUpdateDeleteBenchmark benchmark ${EXECUTE_TEST_LIBS})
 
 ##########
 
+add_executable(OneDALBenchmark OneDALBenchmark.cpp)
+target_link_libraries(OneDALBenchmark benchmark ${EXECUTE_TEST_LIBS})
+
+##########
+
 add_executable(UtilTest UtilTest.cpp)
 target_link_libraries(UtilTest Utils gtest Logger Shared ${Boost_LIBRARIES} OSDependent)
 add_test(UtilTest UtilTest ${TEST_ARGS})
