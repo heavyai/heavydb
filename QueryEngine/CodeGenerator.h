@@ -23,6 +23,7 @@
 #include "Shared/DbObjectKeys.h"
 
 class AbstractMLModel;
+class AbstractTreeModel;
 
 // Code generation utility to be used for queries and scalar expressions.
 class CodeGenerator {
@@ -233,13 +234,11 @@ class CodeGenerator {
   llvm::Value* codegen(const Analyzer::PCAProjectExpr*, const CompilationOptions&);
 
   llvm::Value* codegenLinRegPredict(const Analyzer::MLPredictExpr*,
-                                    const std::string& model_name,
                                     const std::shared_ptr<AbstractMLModel>& model,
                                     const CompilationOptions&);
 
   llvm::Value* codegenTreeRegPredict(const Analyzer::MLPredictExpr*,
-                                     const std::string& model_name,
-                                     const std::shared_ptr<AbstractMLModel>& model,
+                                     const std::shared_ptr<AbstractTreeModel>& tree_model,
                                      const CompilationOptions&);
 
   llvm::Value* codegen(const Analyzer::StringOper*, const CompilationOptions&);

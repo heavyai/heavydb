@@ -30,6 +30,7 @@
 
 #ifdef HAVE_ONEDAL
 #include "daal.h"
+#include "oneapi/dal/algo/decision_forest.hpp"
 #endif
 
 class MLModelMap {
@@ -148,10 +149,27 @@ class LinearRegressionModel : public AbstractMLModel {
   std::vector<double> coefs_;
 };
 
+// In scenarios where oneDAL is not available, users still need a full definition of
+// AbstractTreeModel to compile.
+class TreeModelVisitor;
+
+class AbstractTreeModel : public virtual AbstractMLModel {
+ public:
+  virtual MLModelType getModelType() const = 0;
+  virtual std::string getModelTypeString() const = 0;
+  virtual int64_t getNumFeatures() const = 0;
+  virtual int64_t getNumTrees() const = 0;
+  virtual ~AbstractTreeModel() = default;
+  virtual void traverseDF(const int64_t tree_idx,
+                          TreeModelVisitor& tree_node_visitor) const = 0;
+};
+
 #ifdef HAVE_ONEDAL
 
 using namespace daal::algorithms;
 using namespace daal::data_management;
+
+namespace df = oneapi::dal::decision_forest;
 
 class TreeModelVisitor : public daal::algorithms::regression::TreeNodeVisitor {
  public:
@@ -188,21 +206,36 @@ class TreeModelVisitor : public daal::algorithms::regression::TreeNodeVisitor {
     return true;
   }
 
+  bool operator()(const df::leaf_node_info<df::task::regression>& info) {
+    decision_table_.emplace_back(DecisionTreeEntry(info.get_response()));
+    if (last_node_leaf_) {
+      decision_table_[parent_nodes_.top()].right_child_row_idx =
+          static_cast<int64_t>(decision_table_.size() - 1);
+      parent_nodes_.pop();
+    }
+    last_node_leaf_ = true;
+    return true;
+  }
+
+  bool operator()(const df::split_node_info<df::task::regression>& info) {
+    decision_table_.emplace_back(
+        DecisionTreeEntry(info.get_feature_value(),
+                          static_cast<int64_t>(info.get_feature_index()),
+                          static_cast<int64_t>(decision_table_.size() + 1)));
+    if (last_node_leaf_) {
+      decision_table_[parent_nodes_.top()].right_child_row_idx =
+          static_cast<int64_t>(decision_table_.size() - 1);
+      parent_nodes_.pop();
+    }
+    last_node_leaf_ = false;
+    parent_nodes_.emplace(decision_table_.size() - 1);
+    return true;
+  }
+
  private:
   std::vector<DecisionTreeEntry>& decision_table_;
   std::stack<size_t> parent_nodes_;
   bool last_node_leaf_{false};
-};
-
-class AbstractTreeModel : public virtual AbstractMLModel {
- public:
-  virtual MLModelType getModelType() const = 0;
-  virtual std::string getModelTypeString() const = 0;
-  virtual int64_t getNumFeatures() const = 0;
-  virtual int64_t getNumTrees() const = 0;
-  virtual void traverseDF(const int64_t tree_idx,
-                          TreeModelVisitor& tree_node_visitor) const = 0;
-  virtual ~AbstractTreeModel() = default;
 };
 
 class DecisionTreeRegressionModel : public virtual AbstractTreeModel {
@@ -272,7 +305,13 @@ class GbtRegressionModel : public virtual AbstractTreeModel {
   gbt::regression::interface1::ModelPtr model_ptr_;
 };
 
-class RandomForestRegressionModel : public virtual AbstractTreeModel {
+class AbstractRandomForestModel : public virtual AbstractTreeModel {
+ public:
+  virtual const std::vector<double>& getVariableImportanceScores() const = 0;
+  virtual const double getOutOfBagError() const = 0;
+};
+
+class RandomForestRegressionModel : public virtual AbstractRandomForestModel {
  public:
   RandomForestRegressionModel(
       decision_forest::regression::interface1::ModelPtr& model_ptr,
@@ -311,20 +350,78 @@ class RandomForestRegressionModel : public virtual AbstractTreeModel {
     model_ptr_->traverseDF(tree_idx, tree_node_visitor);
   }
 
-  const decision_forest::regression::interface1::ModelPtr getModelPtr() const {
-    return model_ptr_;
-  }
-
-  const std::vector<double>& getVariableImportanceScores() const {
+  virtual const std::vector<double>& getVariableImportanceScores() const override {
     return variable_importance_;
   }
 
-  const double getOutOfBagError() const { return out_of_bag_error_; }
+  virtual const double getOutOfBagError() const override { return out_of_bag_error_; }
+
+  const decision_forest::regression::interface1::ModelPtr getModelPtr() const {
+    return model_ptr_;
+  }
 
  private:
   decision_forest::regression::interface1::ModelPtr model_ptr_;
   std::vector<double> variable_importance_;
   double out_of_bag_error_;
+};
+
+class OneAPIRandomForestRegressionModel : public virtual AbstractRandomForestModel {
+ public:
+  OneAPIRandomForestRegressionModel(
+      const std::shared_ptr<const df::model<df::task::regression>> model,
+      const std::string& model_metadata,
+      const std::vector<double>& variable_importance,
+      const double out_of_bag_error,
+      const int64_t num_features)
+      : AbstractMLModel(model_metadata)
+      , model_(std::move(model))
+      , variable_importance_(variable_importance)
+      , out_of_bag_error_(out_of_bag_error)
+      , num_features_(num_features) {}
+
+  OneAPIRandomForestRegressionModel(
+      const std::shared_ptr<const df::model<df::task::regression>> model,
+      const std::string& model_metadata,
+      const std::vector<std::vector<std::string>>& cat_feature_keys,
+      const std::vector<double>& variable_importance,
+      const double out_of_bag_error,
+      const int64_t num_features)
+      : AbstractMLModel(model_metadata, cat_feature_keys)
+      , model_(std::move(model))
+      , variable_importance_(variable_importance)
+      , out_of_bag_error_(out_of_bag_error)
+      , num_features_(num_features) {}
+
+  virtual MLModelType getModelType() const override {
+    return MLModelType::RANDOM_FOREST_REG;
+  }
+
+  virtual std::string getModelTypeString() const override {
+    return "Random Forest Regression";
+  }
+  virtual int64_t getNumFeatures() const override { return num_features_; }
+  virtual int64_t getNumTrees() const override { return model_->get_tree_count(); }
+  virtual void traverseDF(const int64_t tree_idx,
+                          TreeModelVisitor& tree_node_visitor) const override {
+    model_->traverse_depth_first(tree_idx, tree_node_visitor);
+  }
+
+  virtual const std::vector<double>& getVariableImportanceScores() const override {
+    return variable_importance_;
+  }
+
+  virtual const double getOutOfBagError() const override { return out_of_bag_error_; }
+
+  const std::shared_ptr<const df::model<df::task::regression>> getModel() const {
+    return model_;
+  }
+
+ private:
+  const std::shared_ptr<const df::model<df::task::regression>> model_;
+  std::vector<double> variable_importance_;
+  double out_of_bag_error_;
+  int64_t num_features_;  // oneapi::df::models do not store number of features
 };
 
 #endif  // #ifdef HAVE_ONEDAL

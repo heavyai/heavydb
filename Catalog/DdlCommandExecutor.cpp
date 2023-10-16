@@ -2241,7 +2241,7 @@ ShowModelFeatureDetailsCommand::extractExtraMetadata(
 #ifdef HAVE_ONEDAL
     case MLModelType::RANDOM_FOREST_REG: {
       const auto random_forest_reg_model =
-          std::dynamic_pointer_cast<RandomForestRegressionModel>(model);
+          std::dynamic_pointer_cast<AbstractRandomForestModel>(model);
       extra_metadata = random_forest_reg_model->getVariableImportanceScores();
       if (!extra_metadata.empty()) {
         label_infos.emplace_back("feature_importance", SQLTypeInfo(kDOUBLE, true));

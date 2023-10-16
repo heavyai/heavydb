@@ -118,7 +118,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> generated_encoded_and_casted_featur
 
 llvm::Value* CodeGenerator::codegenLinRegPredict(
     const Analyzer::MLPredictExpr* expr,
-    const std::string& model_name,
     const std::shared_ptr<AbstractMLModel>& abstract_model,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
@@ -181,15 +180,9 @@ llvm::Value* CodeGenerator::codegenLinRegPredict(
 
 llvm::Value* CodeGenerator::codegenTreeRegPredict(
     const Analyzer::MLPredictExpr* expr,
-    const std::string& model_name,
-    const std::shared_ptr<AbstractMLModel>& model,
+    const std::shared_ptr<AbstractTreeModel>& tree_model,
     const CompilationOptions& co) {
 #ifdef HAVE_ONEDAL
-  const auto tree_model = std::dynamic_pointer_cast<AbstractTreeModel>(model);
-  // The parent codegen function called this function `codegenTreeRegPredict`
-  // iff we a tree reg MLModelType, so below is just a sanity
-  // check
-  CHECK(tree_model);
   const int64_t num_trees = static_cast<int64_t>(tree_model->getNumTrees());
   const auto& regressor_exprs = expr->get_regressor_values();
   const auto& cat_feature_keys = tree_model->getCatFeatureKeys();
@@ -318,12 +311,19 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::MLPredictExpr* expr,
 
   switch (model_type) {
     case MLModelType::LINEAR_REG: {
-      return codegenLinRegPredict(expr, model_name, abstract_model, co);
+      return codegenLinRegPredict(expr, abstract_model, co);
     }
     case MLModelType::DECISION_TREE_REG:
     case MLModelType::GBT_REG:
     case MLModelType::RANDOM_FOREST_REG: {
-      return codegenTreeRegPredict(expr, model_name, abstract_model, co);
+      if (auto tree_model =
+              std::dynamic_pointer_cast<AbstractTreeModel>(abstract_model)) {
+        return codegenTreeRegPredict(expr, tree_model, co);
+      } else {
+        throw std::runtime_error(
+            "Invalid ML model codegen call. Input model is not of expected type "
+            "TreeModel.");
+      }
     }
     default: {
       throw std::runtime_error("Unsupported model type.");

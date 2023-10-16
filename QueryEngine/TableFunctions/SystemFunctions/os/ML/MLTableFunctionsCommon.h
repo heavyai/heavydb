@@ -20,13 +20,14 @@
 
 #include <map>
 
-enum class MLFramework { DEFAULT, ONEDAL, MLPACK, INVALID };
+enum class MLFramework { DEFAULT, ONEDAL, ONEAPI, MLPACK, INVALID };
 
 inline MLFramework get_ml_framework(const std::string& ml_framework_str) {
   const auto upper_ml_framework_str = to_upper(ml_framework_str);
   const static std::map<std::string, MLFramework> ml_framework_map = {
       {"DEFAULT", MLFramework::DEFAULT},
       {"ONEDAL", MLFramework::ONEDAL},
+      {"ONEAPI", MLFramework::ONEAPI},
       {"MLPACK", MLFramework::MLPACK}};
   const auto itr = ml_framework_map.find(upper_ml_framework_str);
   if (itr == ml_framework_map.end()) {
