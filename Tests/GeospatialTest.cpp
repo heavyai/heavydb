@@ -254,12 +254,11 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
   const std::string geospatial_null_test("DROP TABLE IF EXISTS geospatial_null_test;");
   run_ddl_statement(geospatial_null_test);
   const auto create_ddl = build_create_table_statement(
-      "id INT, p POINT, mp MULTIPOINT, l LINESTRING, ml MULTILINESTRING, "
-      "poly POLYGON, mpoly MULTIPOLYGON, gpnotnull GEOMETRY(POINT) NOT NULL, "
-      "gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), "
-      "gp4326none GEOMETRY(POINT,4326) ENCODING NONE, "
-      "gp900913 GEOMETRY(POINT,900913), gmp4326 GEOMETRY(MULTIPOINT,4326), "
-      "gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, "
+      "id INT, x DOUBLE, y DOUBLE, p POINT, mp MULTIPOINT, l LINESTRING, ml "
+      "MULTILINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gpnotnull GEOMETRY(POINT) NOT "
+      "NULL, gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none "
+      "GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gmp4326 "
+      "GEOMETRY(MULTIPOINT,4326), gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, "
       "gml4326 GEOMETRY(MULTILINESTRING,4326), gpoly4326 GEOMETRY(POLYGON,4326)",
       "geospatial_null_test",
       {"", 0},
@@ -271,6 +270,8 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_null_test");
   for (size_t i = 0; i < g_num_rows; ++i) {
+    const std::string x = std::to_string(10 * i);
+    const std::string y = std::to_string(i);
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
                             ")'"};
     const std::string multipoint{
@@ -296,6 +297,8 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
     const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " +
                             std::to_string(i + 1) + ", 0 0)))'"};
     run_multiple_agg(gen(i,
+                         (i == 8) ? "NULL" : x,
+                         (i == 9) ? "NULL" : y,
                          (i % 2 == 0) ? "NULL" : point,
                          (i % 2 == 0) ? "NULL" : multipoint,
                          (i == 1) ? "NULL" : linestring,
@@ -1677,6 +1680,33 @@ TEST_P(GeoSpatialNullTablesFixture, GeoWithNulls) {
     ASSERT_EQ("POINT (1 1)",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
                   "SELECT p FROM geospatial_null_test WHERE id = 1;", dt, false))));
+
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(
+        "SELECT ST_Point(1.0, CAST(NULL AS DOUBLE)) IS NULL;", dt, false)));
+
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(
+        "SELECT ST_Point(CAST(NULL AS DOUBLE), 1.0) IS NULL;", dt, false)));
+
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT_IF(ST_Point(x, y) IS NULL) FROM geospatial_null_test;",
+                  dt,
+                  false)));
+
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT_IF(ST_X(ST_Point(x, y)) IS NULL) FROM geospatial_null_test;",
+            dt,
+            false)));
+
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT_IF(ST_Y(ST_Point(x, y)) IS NULL) FROM geospatial_null_test;",
+            dt,
+            false)));
+
     auto p = v<NullableString>(
         run_simple_agg("SELECT p FROM geospatial_null_test WHERE id = 2;", dt, false));
     auto p_v = boost::get<void*>(&p);

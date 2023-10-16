@@ -92,41 +92,12 @@ class PointConstructor : public Codegen {
                        // function as position argumnts are not used here
     CHECK_EQ(arg_lvs.size(), size_t(2));
 
-    auto& builder = cgen_state->ir_builder_;
-
-    llvm::Value* is_null{nullptr};
-    auto x_operand = getOperand(0);
-    const auto& x_ti = x_operand->get_type_info();
-    if (!x_ti.get_notnull()) {
-      CHECK(x_ti.is_integer() || x_ti.is_fp());
-      // TODO: centralize nullcheck logic for all sqltypes
-      is_null = x_ti.is_integer()
-                    ? builder.CreateICmp(llvm::CmpInst::ICMP_EQ,
-                                         arg_lvs.front(),
-                                         cgen_state->llInt(inline_int_null_val(x_ti)))
-                    : builder.CreateFCmp(llvm::FCmpInst::FCMP_OEQ,
-                                         arg_lvs.front(),
-                                         cgen_state->llFp(inline_fp_null_val(x_ti)));
-    }
-
-    auto y_operand = getOperand(1);
-    const auto& y_ti = y_operand->get_type_info();
-    if (!y_ti.get_notnull()) {
-      auto y_is_null =
-          y_ti.is_integer()
-              ? builder.CreateICmp(llvm::CmpInst::ICMP_EQ,
-                                   arg_lvs.front(),
-                                   cgen_state->llInt(inline_int_null_val(y_ti)))
-              : builder.CreateFCmp(llvm::FCmpInst::FCMP_OEQ,
-                                   arg_lvs.front(),
-                                   cgen_state->llFp(inline_fp_null_val(y_ti)));
-      if (is_null) {
-        // the point is null if at least one of its coordinate has null value
-        is_null = builder.CreateOr(is_null, y_is_null);
-      } else {
-        is_null = y_is_null;
-      }
-    }
+    // TODO(adb): centralize nullcheck logic for all sqltypes
+    llvm::Value* const x_is_null = codegenOperandIsNull(0u, arg_lvs[0], cgen_state);
+    llvm::Value* const y_is_null = codegenOperandIsNull(1u, arg_lvs[1], cgen_state);
+    llvm::Value* const is_null =
+        x_is_null && y_is_null ? cgen_state->ir_builder_.CreateOr(x_is_null, y_is_null)
+                               : std::max(x_is_null, y_is_null);
 
     if (is_nullable_ && !is_null) {
       // if the inputs are not null, set the output to be not null
@@ -147,8 +118,8 @@ class PointConstructor : public Codegen {
       auto elem_ty = llvm::Type::getDoubleTy(cgen_state->context_);
       arr_type = llvm::ArrayType::get(elem_ty, 2);
     }
-    pt_local_storage_lv_ =
-        builder.CreateAlloca(arr_type, nullptr, operator_->getName() + "_Local_Storage");
+    pt_local_storage_lv_ = cgen_state->ir_builder_.CreateAlloca(
+        arr_type, nullptr, operator_->getName() + "_Local_Storage");
 
     return std::make_tuple(arg_lvs, is_null);
   }
@@ -213,6 +184,24 @@ class PointConstructor : public Codegen {
   }
 
  private:
+  llvm::Value* codegenOperandIsNull(size_t idx,
+                                    llvm::Value* value,
+                                    CgenState* cgen_state) {
+    auto const& ti = getOperand(idx)->get_type_info();
+    if (ti.get_notnull()) {
+      return nullptr;
+    } else if (ti.is_integer()) {
+      return cgen_state->ir_builder_.CreateICmpEQ(
+          value, cgen_state->llInt(inline_int_null_val(ti)));
+    } else if (ti.is_fp()) {
+      return cgen_state->ir_builder_.CreateFCmpOEQ(
+          value, cgen_state->llFp(inline_fp_null_val(ti)));
+    } else {
+      UNREACHABLE() << "Type is expected to be integer or floating point.";
+      return {};
+    }
+  }
+
   llvm::AllocaInst* pt_local_storage_lv_{nullptr};
 };
 
