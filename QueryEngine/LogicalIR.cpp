@@ -395,7 +395,12 @@ llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
   }
   llvm::Value* operand_lv = codegen(operand, true, co).front();
   // NULL-check array or geo's coords array
-  if (ti.is_array() || ti.is_geometry()) {
+  if (ti.get_type() == kPOINT && dynamic_cast<Analyzer::GeoOperator const*>(operand)) {
+    char const* fname = ti.get_compression() == kENCODING_GEOINT
+                            ? "point_pair_int32_is_null"
+                            : "point_pair_double_is_null";
+    return cgen_state_->emitCall(fname, {operand_lv});
+  } else if (ti.is_array() || ti.is_geometry()) {
     // POINT [un]compressed coord check requires custom checker and chunk iterator
     // Non-POINT NULL geographies will have a normally encoded null coord array
     auto fname =

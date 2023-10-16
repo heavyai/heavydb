@@ -416,6 +416,8 @@ class SQLTypeInfo {
     return false;
   }
 
+  inline bool is_variable_size() const { return size == -1; }
+
   inline int get_logical_size() const {
     if (compression == kENCODING_FIXED || compression == kENCODING_DATE_IN_DAYS) {
       SQLTypeInfo ti(type, dimension, scale, notnull, kENCODING_NONE, 0, subtype);

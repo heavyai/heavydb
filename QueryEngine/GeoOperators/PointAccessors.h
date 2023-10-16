@@ -31,6 +31,12 @@ class PointAccessors : public Codegen {
 
   SQLTypeInfo getNullType() const final { return SQLTypeInfo(kBOOLEAN); }
 
+  llvm::Value* codegenCmpEqNullptr(llvm::IRBuilder<>& builder, llvm::Value* arg_lv) {
+    auto* const ptr_type = llvm::dyn_cast<llvm::PointerType>(arg_lv->getType());
+    CHECK(ptr_type);
+    return builder.CreateICmpEQ(arg_lv, llvm::ConstantPointerNull::get(ptr_type));
+  }
+
   // returns arguments lvs and null lv
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
@@ -47,14 +53,8 @@ class PointAccessors : public Codegen {
     llvm::Value* is_null{nullptr};
     if (arg_lvs.size() == 1) {
       if (dynamic_cast<const Analyzer::GeoExpr*>(operand)) {
-        const auto ptr_type =
-            llvm::dyn_cast<llvm::PointerType>(arg_lvs.front()->getType());
-        CHECK(ptr_type);
-        const auto is_null_lv =
-            builder.CreateICmp(llvm::CmpInst::ICMP_EQ,
-                               arg_lvs.front(),
-                               llvm::ConstantPointerNull::get(ptr_type));
-        return std::make_tuple(arg_lvs, is_null_lv);
+        is_null = codegenCmpEqNullptr(builder, arg_lvs.front());
+        return std::make_tuple(arg_lvs, is_null);
       }
       // col byte stream, get the array buffer ptr and is null attributes and cache
       auto arr_load_lvs = CodeGenerator::codegenGeoArrayLoadAndNullcheck(
@@ -65,16 +65,19 @@ class PointAccessors : public Codegen {
       // ptr and size
       CHECK_EQ(arg_lvs.size(), size_t(2));
       if (dynamic_cast<const Analyzer::GeoOperator*>(operand)) {
-        // null check will be if the ptr is a nullptr
-        is_null = builder.CreateICmp(
-            llvm::CmpInst::ICMP_EQ,
-            arg_lvs.front(),
-            llvm::ConstantPointerNull::get(  // TODO: check ptr address space
-                geo_ti.get_compression() == kENCODING_GEOINT
-                    ? llvm::Type::getInt32PtrTy(cgen_state->context_)
-                    : llvm::Type::getDoublePtrTy(cgen_state->context_)));
+        if (geo_ti.get_type() == kPOINT && !geo_ti.is_variable_size()) {
+          char const* fname = geo_ti.get_compression() == kENCODING_GEOINT
+                                  ? "point_pair_int32_is_null"
+                                  : "point_pair_double_is_null";
+          is_null = cgen_state->emitCall(fname, {arg_lvs.front()});
+        } else {
+          // The above branch tests for both nullptr and null sentinel, whereas this
+          // branch only tests for nullptr. If not for this branch, the GeospatialTest
+          // LLVMOptimization test fails due to non-removal of the
+          // decompress_{x,y}_coord_geoint function call in the generated IR. See QE-1007.
+          is_null = codegenCmpEqNullptr(builder, arg_lvs.front());
+        }
       }
-
       // TODO: nulls from other types not yet supported
       array_buff_ptr = arg_lvs.front();
     }
