@@ -2392,9 +2392,10 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
                                                      executor_->gridSize()),
                          {}};
 
-  auto global_hint = getGlobalQueryHint();
-  auto use_resultset_recycler = canUseResultsetCache(eo, nullptr);
-  if (use_resultset_recycler && has_valid_query_plan_dag(table_func)) {
+  auto const global_hint = getGlobalQueryHint();
+  auto const use_resultset_recycler =
+      canUseResultsetCache(eo, nullptr) && has_valid_query_plan_dag(table_func);
+  if (use_resultset_recycler) {
     auto cached_resultset =
         executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(
             table_func->getQueryPlanDagHash());
@@ -2420,8 +2421,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
   auto query_exec_time = timer_stop(query_exec_time_begin);
   result.setQueueTime(queue_time_ms);
   auto resultset_ptr = result.getDataPtr();
-  bool keep_result = global_hint->isHintRegistered(QueryHint::kKeepTableFuncResult);
-  if (use_resultset_recycler && !hasStepForUnion()) {
+  if (use_resultset_recycler) {
     resultset_ptr->setExecTime(query_exec_time);
     resultset_ptr->setQueryPlanHash(table_func_work_unit.exe_unit.query_plan_dag_hash);
     resultset_ptr->setTargetMetaInfo(body->getOutputMetainfo());
@@ -2432,7 +2432,8 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
         g_allow_auto_resultset_caching &&
         resultset_ptr->getBufferSizeBytes(co.device_type) <=
             g_auto_resultset_caching_threshold;
-    if (keep_result || allow_auto_caching_resultset) {
+    if (global_hint->isHintRegistered(QueryHint::kKeepTableFuncResult) ||
+        allow_auto_caching_resultset) {
       if (allow_auto_caching_resultset) {
         VLOG(1) << "Automatically keep table function's query resultset to recycler";
       }
@@ -3302,8 +3303,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
     auto source_query_plan_dag = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
         source_node->getQueryPlanDagHash(), sort_info);
-    bool enable_resultset_recycler = canUseResultsetCache(eo, render_info);
-    if (enable_resultset_recycler && has_valid_query_plan_dag(source_node) &&
+    if (canUseResultsetCache(eo, render_info) && has_valid_query_plan_dag(source_node) &&
         !sort->isEmptyResult()) {
       if (auto cached_resultset =
               executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(
@@ -3976,7 +3976,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   }
 
   const auto res = result.getDataPtr();
-  if (use_resultset_cache) {
+  if (use_resultset_cache && has_valid_query_plan_dag(body)) {
     auto query_exec_time = timer_stop(query_exec_time_begin);
     res->setExecTime(query_exec_time);
     res->setQueryPlanHash(ra_exe_unit.query_plan_dag_hash);
