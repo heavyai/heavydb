@@ -299,6 +299,33 @@ TEST_F(GeospatialJoinTest, InnerJoinPolyInPointIntersects) {
   });
 }
 
+TEST_F(GeospatialJoinTest, InnerHashJoinPolyInPointIntersects) {
+  ASSERT_EQ(static_cast<int64_t>(3),
+            v<int64_t>(execSQL("SELECT COUNT(*) FROM does_intersect_a",
+                               ExecutorDeviceType::CPU)));
+  ASSERT_EQ(static_cast<int64_t>(2),
+            v<int64_t>(execSQL("SELECT COUNT(*) FROM does_intersect_b",
+                               ExecutorDeviceType::CPU)));
+  ScopeGuard reset = [orig = g_from_table_reordering] { g_from_table_reordering = orig; };
+  g_from_table_reordering = true;
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
+    for (std::string geometry : {"poly", "mpoly"}) {
+      for (bool param : {true, false}) {
+        std::ostringstream oss;
+        oss << "SELECT COUNT(1) FROM does_intersect_a R, does_intersect_b S WHERE "
+               "ST_INTERSECTS(";
+        if (param) {
+          oss << "R." << geometry << ", S.pt);";
+        } else {
+          oss << "S.pt, R." << geometry << ");";
+        }
+        ASSERT_EQ(static_cast<int64_t>(3),
+                  v<int64_t>(execSQL(oss.str(), ctx.device_type)));
+      }
+    }
+  });
+}
+
 TEST_F(GeospatialJoinTest, InnerJoinPolyPolyIntersects) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
@@ -499,6 +526,26 @@ TEST_F(GeospatialJoinTest, EmptyPolyPolyJoin) {
         "JOIN empty_table as b "
         "ON ST_Intersects(a.poly, b.poly);";
     ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, ctx.device_type)));
+  });
+}
+
+TEST_F(GeospatialJoinTest, InnerJoinPolyPointContains) {
+  ASSERT_EQ(static_cast<int64_t>(3),
+            v<int64_t>(execSQL("SELECT COUNT(*) FROM does_intersect_a",
+                               ExecutorDeviceType::CPU)));
+  ASSERT_EQ(static_cast<int64_t>(2),
+            v<int64_t>(execSQL("SELECT COUNT(*) FROM does_intersect_b",
+                               ExecutorDeviceType::CPU)));
+  ScopeGuard reset = [orig = g_from_table_reordering] { g_from_table_reordering = orig; };
+  g_from_table_reordering = true;
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
+    for (std::string geometry : {"poly", "mpoly"}) {
+      auto q =
+          "SELECT count(*) from does_intersect_a a, does_intersect_b b WHERE "
+          "ST_Contains(a." +
+          geometry + ", b.pt);";
+      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(q, ctx.device_type)));
+    }
   });
 }
 

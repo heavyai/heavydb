@@ -161,6 +161,21 @@ struct BoundingBoxIntersectJoinSupportedFunction {
       ST_DISTANCE_sv,
       ST_DWITHIN_POINT_POINT_sv};
 
+  static constexpr std::array<std::string_view, 4>
+      ST_CONTAIN_FORCE_TABLE_REORDERING_TARGET_FUNC{ST_CONTAINS_POLYGON_POINT_sv,
+                                                    ST_CONTAINS_MULTIPOLYGON_POINT_sv,
+                                                    ST_CCONTAINS_POLYGON_POINT_sv,
+                                                    ST_CCONTAINS_MULTIPOLYGON_POINT_sv};
+
+  static constexpr std::array<std::string_view, 6>
+      ST_INTERSECTS_FORCE_TABLE_REORDERING_TARGET_FUNC{
+          ST_INTERSECTS_POINT_POLYGON_sv,
+          ST_INTERSECTS_POINT_MULTIPOLYGON_sv,
+          ST_INTERSECTS_POLYGON_POINT_sv,
+          ST_INTERSECTS_MULTIPOLYGON_POINT_sv,
+          ST_CINTERSECTS_POLYGON_POINT_sv,
+          ST_CINTERSECTS_MULTIPOLYGON_POINT_sv};
+
   static bool is_bbox_intersect_supported_func(std::string_view target_func_name) {
     return std::any_of(
         BoundingBoxIntersectJoinSupportedFunction::BBOX_INTERSECT_SUPPORTED_FUNC.begin(),
