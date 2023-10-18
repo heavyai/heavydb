@@ -29,11 +29,87 @@ namespace {
 using cost_t = unsigned;
 using node_t = size_t;
 
+const Analyzer::ColumnVar* get_geo_cv(
+    std::vector<const Analyzer::ColumnVar*> const& geo_args,
+    shared::TableKey const& table_key) {
+  auto it = std::find_if(
+      geo_args.begin(), geo_args.end(), [&table_key](const Analyzer::ColumnVar* cv) {
+        return cv->getTableKey() == table_key;
+      });
+  return it == geo_args.end() ? nullptr : *it;
+}
+
 static std::unordered_map<SQLTypes, cost_t> GEO_TYPE_COSTS{{kPOINT, 60},
                                                            {kARRAY, 60},
                                                            {kLINESTRING, 70},
                                                            {kPOLYGON, 80},
                                                            {kMULTIPOLYGON, 90}};
+
+static bool force_table_reordering_st_contain_func(std::string_view target_func_name) {
+  return std::any_of(BoundingBoxIntersectJoinSupportedFunction::
+                         ST_CONTAIN_FORCE_TABLE_REORDERING_TARGET_FUNC.begin(),
+                     BoundingBoxIntersectJoinSupportedFunction::
+                         ST_CONTAIN_FORCE_TABLE_REORDERING_TARGET_FUNC.end(),
+                     [target_func_name](std::string_view func_name) {
+                       return target_func_name == func_name;
+                     });
+}
+
+static bool force_table_reordering_st_intersects_func(std::string_view target_func_name) {
+  return std::any_of(BoundingBoxIntersectJoinSupportedFunction::
+                         ST_INTERSECTS_FORCE_TABLE_REORDERING_TARGET_FUNC.begin(),
+                     BoundingBoxIntersectJoinSupportedFunction::
+                         ST_INTERSECTS_FORCE_TABLE_REORDERING_TARGET_FUNC.end(),
+                     [target_func_name](std::string_view func_name) {
+                       return target_func_name == func_name;
+                     });
+}
+
+bool should_force_table_reordering(shared::TableKey const& inner_arg_key,
+                                   SQLTypes const inner_type,
+                                   shared::TableKey const& outer_arg_key,
+                                   SQLTypes const outer_type,
+                                   std::string const& geo_func_name,
+                                   const std::vector<InputTableInfo>& table_infos) {
+  // if, |R| > |S|
+  // case-1: SELECT ... FROM R, S WHERE ST_...(R.c, S.c);
+  // case-2: SELECT ... FROM R, S WHERE ST_...(S.c, R.c);
+  // case-3: SELECT ... FROM S, R WHERE ST_...(R.c, S.c);
+  // case-4: SELECT ... FROM S, R WHERE ST_...(S.c, R.c);
+  auto const inner_poly_outer_pt_pair =
+      shared::is_any<kPOLYGON, kMULTIPOLYGON>(inner_type) && outer_type == kPOINT;
+  auto const outer_poly_inner_pt_pair =
+      shared::is_any<kPOLYGON, kMULTIPOLYGON>(outer_type) && inner_type == kPOINT;
+  auto const force_swap_st_contains =
+      force_table_reordering_st_contain_func(geo_func_name);
+  auto const force_swap_st_intersects =
+      force_table_reordering_st_intersects_func(geo_func_name);
+  size_t inner_idx = 0;
+  size_t outer_idx = 0;
+  for (size_t i = 0; i < table_infos.size(); i++) {
+    if (table_infos[i].table_key == inner_arg_key) {
+      inner_idx = i;
+    } else if (table_infos[i].table_key == outer_arg_key) {
+      outer_idx = i;
+    }
+  }
+  size_t first_listed_idx = std::min(inner_idx, outer_idx);
+  size_t first_listed_card = table_infos[first_listed_idx].info.getNumTuples();
+  size_t last_listed_idx = std::max(inner_idx, outer_idx);
+  size_t last_listed_card = table_infos[last_listed_idx].info.getNumTuples();
+  if (first_listed_card > last_listed_card) {
+    if (inner_arg_key == table_infos[first_listed_idx].table_key) {
+      // case 1
+      return inner_poly_outer_pt_pair &&
+             (force_swap_st_contains || force_swap_st_intersects);
+    } else {
+      // case 2
+      CHECK_EQ(outer_arg_key, table_infos[first_listed_idx].table_key);
+      return outer_poly_inner_pt_pair && force_swap_st_intersects;
+    }
+  }
+  return false;
+}
 
 // Returns a lhs/rhs cost for the given qualifier. Must be strictly greater than 0.
 // todo (yoonmin): compute the cost of inner join edge and outer join edge
@@ -41,6 +117,7 @@ static std::unordered_map<SQLTypes, cost_t> GEO_TYPE_COSTS{{kPOINT, 60},
 // for geometries, we use types of geometries as its cost factor
 std::tuple<cost_t, cost_t, InnerQualDecision> get_join_qual_cost(
     const Analyzer::Expr* qual,
+    const std::vector<InputTableInfo>& table_infos,
     const Executor* executor) {
   if (executor) {
     GeospatialFunctionFinder geo_func_finder;
@@ -64,15 +141,8 @@ std::tuple<cost_t, cost_t, InnerQualDecision> get_join_qual_cost(
       // but |R| is not that larger than |S|, i.e., |R| / |S| < 10.0
       // in this case, it might be better if keeping the existing ordering
       // to exploit bounding-box intersection w/ hash join framework instead of loop join
-      const auto& geo_args = geo_func_finder.getGeoArgCvs();
-      const auto inner_cv_it =
-          std::find_if(geo_args.begin(),
-                       geo_args.end(),
-                       [&inner_table_key](const Analyzer::ColumnVar* cv) {
-                         return cv->getTableKey() == inner_table_key;
-                       });
-      CHECK(inner_cv_it != geo_args.end());
-      const auto inner_cv = *inner_cv_it;
+      const auto inner_cv = get_geo_cv(geo_func_finder.getGeoArgCvs(), inner_table_key);
+      CHECK(inner_cv);
       bool needs_table_reordering = inner_table_cardinality < outer_table_cardinality;
       const auto outer_inner_card_ratio =
           outer_table_cardinality / static_cast<double>(inner_table_cardinality);
@@ -96,6 +166,8 @@ std::tuple<cost_t, cost_t, InnerQualDecision> get_join_qual_cost(
             // to avoid too expensive hash join
             // so let's try to set inner table as poly table to invalidate
             // rte index requirement
+            VLOG(1) << "Force loop-join to avoid unexpected overhead of building large "
+                       "hash table";
             return {200, 200, InnerQualDecision::RHS};
           } else {
             // otherwise, try to keep the existing ordering
@@ -104,9 +176,28 @@ std::tuple<cost_t, cost_t, InnerQualDecision> get_join_qual_cost(
         } else {
           // poly is the inner table, so we need to reorder tables to use
           // bbox-intersection
+          auto const geo_func_name = geo_func_finder.getGeoFunctionName();
+          const auto outer_cv =
+              get_geo_cv(geo_func_finder.getGeoArgCvs(), outer_table_key);
+          CHECK(outer_cv);
+          auto const inner_type = inner_cv->get_type_info().get_type();
+          auto const outer_type = outer_cv->get_type_info().get_type();
+          if (!needs_table_reordering && should_force_table_reordering(inner_table_key,
+                                                                       inner_type,
+                                                                       outer_table_key,
+                                                                       outer_type,
+                                                                       geo_func_name,
+                                                                       table_infos)) {
+            VLOG(1) << "Force reordering tables to enable a hash join for "
+                    << geo_func_name;
+            // let's reorder them regardless of table cardinality to build a hash table on
+            // polygon side which can exploit bounding-box intersection
+            return {190, 180, InnerQualDecision::RHS};
+          }
           if (needs_table_reordering) {
             // outer point table is larger than inner poly table, so let's reorder them
             // by table cardinality
+            VLOG(1) << "Try to reorder tables based on table cardinality";
             return {200, 200, InnerQualDecision::RHS};
           } else {
             // otherwise, try to keep the existing ordering
@@ -208,9 +299,8 @@ std::vector<std::map<node_t, cost_t>> build_join_cost_graph(
       qual_nest_levels.erase(qual_nest_levels.begin());
       int rhs_nest_level = *qual_nest_levels.begin();
       CHECK_GE(rhs_nest_level, 0);
-
       // Get the {lhs, rhs} cost for the qual
-      const auto qual_costing = get_join_qual_cost(qual.get(), executor);
+      const auto qual_costing = get_join_qual_cost(qual.get(), table_infos, executor);
       qual_detection_res[lhs_nest_level][rhs_nest_level] = std::get<2>(qual_costing);
       qual_detection_res[rhs_nest_level][lhs_nest_level] = std::get<2>(qual_costing);
       const auto edge_it = join_cost_graph[lhs_nest_level].find(rhs_nest_level);
