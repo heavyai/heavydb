@@ -98,6 +98,9 @@ bool g_enable_s3_fsi{false};
 int32_t g_distributed_leaf_idx{-1};
 int32_t g_distributed_num_leaves{0};
 bool g_enable_logs_system_tables{false};
+bool g_enable_logs_system_tables_auto_refresh{false};
+// 10 minutes refresh interval by default
+std::string g_logs_system_tables_refresh_interval{"600S"};
 extern bool g_cache_string_hash;
 extern bool g_enable_system_tables;
 
@@ -6435,8 +6438,19 @@ inline SQLTypeInfo get_var_encoded_text_array_type() {
 
 void set_common_log_system_table_options(foreign_storage::ForeignTable& foreign_table) {
   using foreign_storage::ForeignTable;
-  foreign_table.options[ForeignTable::REFRESH_TIMING_TYPE_KEY] =
-      ForeignTable::MANUAL_REFRESH_TIMING_TYPE;
+  if (g_enable_logs_system_tables_auto_refresh) {
+    foreign_table.options[ForeignTable::REFRESH_TIMING_TYPE_KEY] =
+        ForeignTable::SCHEDULE_REFRESH_TIMING_TYPE;
+    // Set start date time to 1 minute from now.
+    auto start_epoch = foreign_storage::RefreshTimeCalculator::getCurrentTime() + 60;
+    foreign_table.options[ForeignTable::REFRESH_START_DATE_TIME_KEY] =
+        shared::convert_temporal_to_iso_format({kTIMESTAMP}, start_epoch);
+    foreign_table.options[ForeignTable::REFRESH_INTERVAL_KEY] =
+        g_logs_system_tables_refresh_interval;
+  } else {
+    foreign_table.options[ForeignTable::REFRESH_TIMING_TYPE_KEY] =
+        ForeignTable::MANUAL_REFRESH_TIMING_TYPE;
+  }
   foreign_table.options[ForeignTable::REFRESH_UPDATE_TYPE_KEY] =
       ForeignTable::APPEND_REFRESH_UPDATE_TYPE;
   using foreign_storage::AbstractFileStorageDataWrapper;
