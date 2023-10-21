@@ -1676,6 +1676,11 @@ TEST_P(GeoSpatialNullTablesFixture, GeoWithNulls) {
                   "SELECT COUNT(*) FROM geospatial_null_test "
                   "WHERE ST_Distance('MULTILINESTRING((-1 0, 0 1))', p) < 6.0;",
                   dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM (SELECT ST_Distance(ST_Point(x, y), ST_Point(x, "
+                  "y)) v FROM geospatial_null_test) WHERE v IS NULL;",
+                  dt)));
 
     ASSERT_EQ("POINT (1 1)",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
