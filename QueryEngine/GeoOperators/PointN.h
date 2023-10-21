@@ -51,6 +51,24 @@ class PointN : public Codegen {
     return SQLTypeInfo(kBOOLEAN);
   }
 
+  llvm::Value* codegenIndexOutOfBoundCheck(CgenState* cgen_state,
+                                           llvm::Value* index_lv,
+                                           llvm::Value* geosize_lv) {
+    llvm::Value* is_null_lv = cgen_state->llBool(false);
+    is_null_lv = cgen_state->ir_builder_.CreateOr(
+        is_null_lv,
+        cgen_state->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SLT,
+                                           index_lv,
+                                           cgen_state->llInt(static_cast<int32_t>(0))));
+    return cgen_state->ir_builder_.CreateOr(
+        is_null_lv,
+        cgen_state->ir_builder_.CreateICmp(
+            llvm::ICmpInst::ICMP_SGE,
+            cgen_state->ir_builder_.CreateMul(index_lv,
+                                              cgen_state->llInt(static_cast<int32_t>(8))),
+            geosize_lv));
+  }
+
   // returns arguments lvs and null lv
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
@@ -70,6 +88,7 @@ class PointN : public Codegen {
     auto index_lv = builder.CreateMul(
         builder.CreateSub(arg_lvs.back(), cgen_state->llInt(static_cast<int32_t>(1))),
         cgen_state->llInt(static_cast<int32_t>(2)));
+
     llvm::Value* is_null_lv{nullptr};
     if (arg_lvs.size() == 2) {
       // col byte stream from column on disk
@@ -95,10 +114,9 @@ class PointN : public Codegen {
 
       auto geo_size_lv = array_operand_lvs.back();
       // convert the index to a byte index
-      const auto outside_linestring_bounds_lv = builder.CreateNot(builder.CreateICmp(
-          llvm::ICmpInst::ICMP_SLT,
-          builder.CreateMul(index_lv, cgen_state->llInt(static_cast<int32_t>(8))),
-          geo_size_lv));
+      index_lv = builder.CreateMul(index_lv, cgen_state->llInt(static_cast<int32_t>(8)));
+      const auto outside_linestring_bounds_lv =
+          codegenIndexOutOfBoundCheck(cgen_state, index_lv, geo_size_lv);
       outside_linestring_bounds_lv->setName("outside_linestring_bounds");
       const auto input_is_null_lv = builder.CreateICmp(
           llvm::ICmpInst::ICMP_EQ,
@@ -114,8 +132,7 @@ class PointN : public Codegen {
       const auto geo_size_lv = arg_lvs[1];
       // TODO: bounds indices are 64 bits but should be 32 bits, as array length is
       // limited to 32 bits
-      is_null_lv = builder.CreateNot(
-          builder.CreateICmp(llvm::ICmpInst::ICMP_SLT, index_lv, geo_size_lv));
+      is_null_lv = codegenIndexOutOfBoundCheck(cgen_state, index_lv, geo_size_lv);
     }
     array_operand_lvs.push_back(index_lv);
     return std::make_tuple(array_operand_lvs, is_null_lv);

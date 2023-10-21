@@ -2579,6 +2579,63 @@ TEST(GeoSpatial, Projections) {
   }
 }
 
+TEST(GeoSpatial, PointNOutOfBoundCheckNegativeIndex) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM (SELECT ST_PointN(ST_GeomFromText('LINESTRING(-1 1, 1 "
+            "1)', 4326), -1) IS NULL as v) WHERE v IS TRUE;",
+            dt,
+            false)),
+        static_cast<int64_t>(1));
+  }
+}
+
+TEST(GeoSpatial, PointNIndexOverflow) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM (select ST_PointN(ST_GeomFromText('LINESTRING(-1 1, 1 "
+            "1)', 4326), 1241231231) IS NULL as v) WHERE v IS TRUE;",
+            dt,
+            false)),
+        static_cast<int64_t>(1));
+  }
+}
+
+TEST(GeoSpatial, PointNInvalidIndex) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM (select ST_PointN(ST_GeomFromText('LINESTRING(-1 1, 1 "
+            "1)', 4326), 0) IS NULL as v) WHERE v IS TRUE;",
+            dt,
+            false)),
+        static_cast<int64_t>(1));
+    ASSERT_EQ(
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM (select ST_PointN(ST_GeomFromText('LINESTRING(-1 1, 1 "
+            "1)', 4326), 3) IS NULL as v) WHERE v IS TRUE;",
+            dt,
+            false)),
+        static_cast<int64_t>(1));
+  }
+}
+
+TEST(GeoSpatial, PointNIndexLargerThanInt) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // ST_PointN expecting integer index
+    ASSERT_ANY_THROW(run_simple_agg(
+        "SELECT ST_PointN(ST_GeomFromText('LINESTRING(-1 1, 1 1)', 4326), 2147483648);",
+        dt,
+        false));
+  }
+}
+
 class GeoSpatialTempTables : public ::testing::Test {
  protected:
   void SetUp() override { import_geospatial_test(/*with_temporary_tables=*/false); }

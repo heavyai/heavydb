@@ -548,24 +548,10 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                 ": second argument is expected to be a literal");
       }
       const auto e = translateLiteral(rex_literal);
-      auto ce = std::dynamic_pointer_cast<Analyzer::Constant>(e);
-      if (!ce || !e->get_type_info().is_integer()) {
+      if (!e ||
+          !shared::is_any<kSMALLINT, kTINYINT, kINT>(e->get_type_info().get_type())) {
         throw QueryNotSupported(rex_function->getName() +
-                                ": expecting integer index as second argument");
-      }
-      int32_t index = 0;
-      if (e->get_type_info().get_type() == kSMALLINT) {
-        index = static_cast<int32_t>(ce->get_constval().smallintval);
-      } else if (e->get_type_info().get_type() == kTINYINT) {
-        index = static_cast<int32_t>(ce->get_constval().tinyintval);
-      } else if (e->get_type_info().get_type() == kINT) {
-        index = static_cast<int32_t>(ce->get_constval().intval);
-      } else {
-        throw QueryNotSupported(rex_function->getName() + " expecting integer index");
-      }
-      if (index == 0) {
-        // maybe we will just return NULL here?
-        throw QueryNotSupported(rex_function->getName() + ": invalid index");
+                                " expecting integer index as second argument");
       }
       arg0.push_back(e);
       auto oper_ti =
