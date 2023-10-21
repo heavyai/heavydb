@@ -100,16 +100,16 @@ class Distance : public Codegen {
                   cgen_state->llInt(
                       static_cast<int32_t>(inline_int_null_value<int32_t>())));
             }
+            CHECK(operand_is_null_lv);
             is_null = builder.CreateOr(is_null, operand_is_null_lv);
           }
           is_coords_lv = false;
         }
       } else {
-        bool is_coords_lv{true};
         for (size_t j = 0; j < num_physical_coord_lvs; j++) {
           // ptr
           CHECK_LT(arg_lvs_index, arg_lvs.size());
-          auto array_buff_lv = arg_lvs[arg_lvs_index++];
+          auto array_buff_lv = arg_lvs[arg_lvs_index];
           if (j == 0) {
             // cast alloca to i8*
             array_buff_lv = builder.CreateBitCast(
@@ -121,14 +121,25 @@ class Distance : public Codegen {
           }
           operand_lvs.push_back(array_buff_lv);
           if (is_nullable_ && is_coords_lv) {
-            auto coords_array_type =
-                llvm::dyn_cast<llvm::PointerType>(operand_lvs.back()->getType());
-            CHECK(coords_array_type);
-            is_null = builder.CreateOr(
-                is_null,
-                builder.CreateICmpEQ(operand_lvs.back(),
-                                     llvm::ConstantPointerNull::get(coords_array_type)));
+            auto const geo_oper = dynamic_cast<const Analyzer::GeoOperator*>(operand);
+            if (geo_oper && geo_oper->getName() == "ST_Point") {
+              // ST_Point stores null_sentinel to its storage if it is null
+              CHECK_EQ(operand->get_type_info().get_compression(), kENCODING_NONE);
+              auto null_check_lv = cgen_state->emitCall("point_pair_double_is_null",
+                                                        {arg_lvs[arg_lvs_index]});
+              is_null = builder.CreateOr(is_null, null_check_lv);
+            } else {
+              auto coords_array_type =
+                  llvm::dyn_cast<llvm::PointerType>(operand_lvs.back()->getType());
+              CHECK(coords_array_type);
+              is_null = builder.CreateOr(
+                  is_null,
+                  builder.CreateICmpEQ(
+                      operand_lvs.back(),
+                      llvm::ConstantPointerNull::get(coords_array_type)));
+            }
           }
+          arg_lvs_index++;
           is_coords_lv = false;
           CHECK_LT(arg_lvs_index, arg_lvs.size());
           operand_lvs.push_back(arg_lvs[arg_lvs_index++]);
