@@ -317,13 +317,15 @@ class ForeignTablesTest : public DBHandlerTestFixture {
   }
 
   void TearDown() override {
+    g_enable_fsi = true;
+    g_enable_system_tables = true;
+    g_enable_s3_fsi = true;
     dropTestTables();
     DBHandlerTestFixture::TearDown();
   }
 
  private:
   void dropTestTables() {
-    g_enable_fsi = true;
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     sql("DROP TABLE IF EXISTS test_table;");
     sql("DROP VIEW IF EXISTS test_view;");
@@ -347,6 +349,10 @@ TEST_F(ForeignTablesTest, ForeignTablesAreNotDroppedWhenFsiIsDisabled) {
   ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_view", false));
 
   g_enable_fsi = false;
+  // The following flags should be false when FSI is disabled.
+  g_enable_system_tables = false;
+  g_enable_s3_fsi = false;
+
   resetCatalog();
   loginAdmin();
 
