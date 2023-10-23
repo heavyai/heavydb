@@ -1083,10 +1083,7 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
               v<int64_t>(run_simple_agg("SELECT ST_NPoints(mpoly) FROM geospatial_test "
                                         "ORDER BY ST_NPoints(l) DESC LIMIT 1;",
                                         dt)));
-    // null
-    // for a POINT, this still returns 1 even if the point value is NULL
-    // @TODO check the required behavior here and fix separately if required
-    ASSERT_EQ(static_cast<int64_t>(1),
+    ASSERT_EQ(inline_int_null_value<int>(),
               v<int64_t>(run_simple_agg(
                   "SELECT ST_NPoints(p_null) from geospatial_test limit 1", dt)));
     ASSERT_EQ(inline_int_null_value<int>(),
@@ -1104,6 +1101,9 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     ASSERT_EQ(inline_int_null_value<int>(),
               v<int64_t>(run_simple_agg(
                   "SELECT ST_NPoints(mpoly_null) from geospatial_test limit 1", dt)));
+    ASSERT_EQ(inline_int_null_value<int>(),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NPoints(ST_Point(CAST(NULL AS DOUBLE), 1.0))", dt)));
 
     // ST_SRID, ST_SetSRID
     ASSERT_EQ(static_cast<int64_t>(0),
@@ -3396,6 +3396,32 @@ TEST(GeoSpatial, DISABLED_UTMTransformCoords) {
   for (auto const dt : {ExecutorDeviceType::GPU, ExecutorDeviceType::CPU}) {
     SKIP_NO_GPU();
     ASSERT_NEAR(one_degree_in_meters, v<double>(run_simple_agg(query, dt, false)), eps);
+  }
+}
+
+TEST(GeoSpatial, PointNGeoConstant) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // expected to return 1
+    ASSERT_ANY_THROW(
+        run_simple_agg(R"(SELECT ST_NPOINTS(ST_GeomFromText('POINT(0 0)'));)", dt));
+    // expected to return 2
+    ASSERT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_NPOINTS(ST_GeomFromText('MULTIPOINT(0 0, 1 1)'));)", dt));
+    // expected to return 2
+    ASSERT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_NPOINTS(ST_GeomFromText('LINESTRING(0 0, 1 1)'));)", dt));
+    // expected to return 4
+    ASSERT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_NPOINTS(ST_GeomFromText('MULTILINESTRING((0 0, 1 1),(2 2, 3 3))'));)",
+        dt));
+    // expected to return 4
+    ASSERT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_NPOINTS(ST_GeomFromText('POLYGON((0 0, 1 1, 2 2, 0 0))'));)", dt));
+    // expected to return 7
+    ASSERT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_NPOINTS(ST_GeomFromText('MULTIPOLYGON(((5 5, 6 6, 5 6)), ((0 0, 1 0, 0 1, 0 0)))'));)",
+        dt));
   }
 }
 

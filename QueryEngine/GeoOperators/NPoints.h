@@ -30,51 +30,73 @@ class NPoints : public Codegen {
 
   const Analyzer::Expr* getOperand(const size_t index) final {
     CHECK_EQ(index, size_t(0));
-    if (operand_owned_) {
-      return operand_owned_.get();
+    if (col_var_owned_) {
+      return col_var_owned_.get();
     }
-
     const auto operand = operator_->getOperand(0);
-    auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(operand);
-    CHECK(col_var);
-
-    geo_ti_ = col_var->get_type_info();
+    geo_ti_ = operand->get_type_info();
     CHECK(geo_ti_.is_geometry());
     is_nullable_ = !geo_ti_.get_notnull();
-
-    // create a new operand which is just the coords and codegen it
-    auto column_key = col_var->getColumnKey();
-    column_key.column_id = column_key.column_id + 1;  // + 1 for coords
-    const auto coords_cd = get_column_descriptor(column_key);
-    CHECK(coords_cd);
-
-    operand_owned_ = std::make_unique<Analyzer::ColumnVar>(
-        coords_cd->columnType, column_key, col_var->get_rte_idx());
-    return operand_owned_.get();
+    if (auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(operand)) {
+      // create a new operand which is just the coords and codegen it
+      auto column_key = col_var->getColumnKey();
+      column_key.column_id = column_key.column_id + 1;  // + 1 for coords
+      const auto coords_cd = get_column_descriptor(column_key);
+      CHECK(coords_cd);
+      col_var_owned_ = std::make_unique<Analyzer::ColumnVar>(
+          coords_cd->columnType, column_key, col_var->get_rte_idx());
+      return col_var_owned_.get();
+    }
+    return operand;
   }
 
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
       const std::vector<llvm::Value*>& pos_lvs,
       CgenState* cgen_state) final {
-    CHECK_EQ(arg_lvs.size(), size_t(1));
-    auto& argument_lv = arg_lvs.front();
-    std::string fn_name("array_size");
-
-    const auto& elem_ti = getOperand(0)->get_type_info().get_elem_type();
-    std::vector<llvm::Value*> array_size_args{
-        argument_lv,
-        pos_lvs.front(),
-        cgen_state->llInt(log2_bytes(elem_ti.get_logical_size()))};
-
-    const bool is_nullable = isNullable();
-
-    if (is_nullable) {
-      fn_name += "_nullable";
-      array_size_args.push_back(cgen_state->inlineIntNull(getTypeInfo()));
+    llvm::Value* coords_arr_sz_lv{nullptr};
+    if (dynamic_cast<const Analyzer::GeoConstant*>(getOperand(0))) {
+      throw QueryNotSupported("ST_NPoints does not support GeoConstant");
     }
-    const auto coords_arr_sz_lv = cgen_state->emitExternalCall(
-        fn_name, get_int_type(32, cgen_state->context_), array_size_args);
+    if (arg_lvs.size() == size_t(1)) {
+      std::string fn_name("array_size");
+      bool is_nullable = isNullable();
+      if (auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(getOperand(0))) {
+        auto column_key = col_var->getColumnKey();
+        column_key.column_id = column_key.column_id - 1;
+        const auto type_cd = get_column_descriptor(column_key);
+        CHECK(type_cd);
+        if (type_cd->columnType.get_type() == kPOINT) {
+          fn_name = "point_coord_array_size";
+        }
+      }
+      auto& argument_lv = arg_lvs.front();
+      const auto& elem_ti = getOperand(0)->get_type_info().get_elem_type();
+      std::vector<llvm::Value*> array_size_args{
+          argument_lv,
+          pos_lvs.front(),
+          cgen_state->llInt(log2_bytes(elem_ti.get_logical_size()))};
+      if (is_nullable) {
+        fn_name += "_nullable";
+        array_size_args.push_back(cgen_state->inlineIntNull(getTypeInfo()));
+      }
+      coords_arr_sz_lv = cgen_state->emitExternalCall(
+          fn_name, get_int_type(32, cgen_state->context_), array_size_args);
+    } else if (arg_lvs.size() == size_t(2)) {
+      auto child_geo_oper =
+          dynamic_cast<const Analyzer::GeoOperator*>(operator_->getOperand(0));
+      CHECK(child_geo_oper);
+      if (child_geo_oper->getName() == "ST_Point") {
+        coords_arr_sz_lv = cgen_state->ir_builder_.CreateSelect(
+            cgen_state->emitCall("point_pair_double_is_null", {arg_lvs.front()}),
+            cgen_state->inlineIntNull(getTypeInfo()),
+            cgen_state->llInt(static_cast<int32_t>(16)));
+      } else {
+        CHECK(false) << "Not supported geo operator w/ ST_NPoints: "
+                     << child_geo_oper->getName();
+      }
+    }
+    CHECK(coords_arr_sz_lv);
     return std::make_tuple(std::vector<llvm::Value*>{coords_arr_sz_lv}, coords_arr_sz_lv);
   }
 
@@ -105,7 +127,7 @@ class NPoints : public Codegen {
 
  protected:
   SQLTypeInfo geo_ti_;
-  std::unique_ptr<Analyzer::ColumnVar> operand_owned_;
+  std::unique_ptr<Analyzer::ColumnVar> col_var_owned_;
 };
 
 }  // namespace spatial_type
