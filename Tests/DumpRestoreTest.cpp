@@ -792,6 +792,7 @@ int main(int argc, char** argv) {
 
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
+  log_options.set_base_path(BASE_PATH);
   desc.add(log_options.get_options());
 
   po::variables_map vm;

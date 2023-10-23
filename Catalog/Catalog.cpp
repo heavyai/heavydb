@@ -97,7 +97,7 @@ bool g_enable_fsi{true};
 bool g_enable_s3_fsi{false};
 int32_t g_distributed_leaf_idx{-1};
 int32_t g_distributed_num_leaves{0};
-bool g_enable_logs_system_tables{false};
+bool g_enable_logs_system_tables{true};
 bool g_enable_logs_system_tables_auto_refresh{false};
 // 10 minutes refresh interval by default
 std::string g_logs_system_tables_refresh_interval{"600S"};
@@ -6481,6 +6481,8 @@ void clear_cached_table_data(const Data_Namespace::DataMgr* data_mgr,
 void drop_tables(Catalog& catalog, const std::vector<std::string>& table_names) {
   for (const auto& table_name : table_names) {
     if (auto td = catalog.getMetadataForTable(table_name)) {
+      clear_cached_table_data(
+          &catalog.getDataMgr(), catalog.getDatabaseId(), td->tableId);
       catalog.dropTable(td);
     }
   }

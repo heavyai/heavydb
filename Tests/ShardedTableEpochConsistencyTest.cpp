@@ -1156,6 +1156,7 @@ int main(int argc, char** argv) {
 
   logger::LogOptions log_options(argv[0]);
   log_options.severity_ = logger::Severity::FATAL;
+  log_options.set_base_path(BASE_PATH);
   log_options.set_options();  // update default values
   desc.add(log_options.get_options());
 
