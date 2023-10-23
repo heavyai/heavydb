@@ -1167,8 +1167,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
                                            /*is_projection=*/false,
                                            /*use_geo_expressions=*/true);
     CHECK_EQ(geoargs.size(), size_t(1));
+    auto expr_ti = rex_function->getType();
+    expr_ti.set_notnull(arg_ti.get_notnull());
     return makeExpr<Analyzer::GeoOperator>(
-        rex_function->getType(),
+        expr_ti,
         rex_function->getName(),
         std::vector<std::shared_ptr<Analyzer::Expr>>{geoargs.front()});
   } else if (func_resolve(rex_function->getName(), "ST_Perimeter"sv, "ST_Area"sv)) {
