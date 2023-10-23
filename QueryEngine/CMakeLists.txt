@@ -427,10 +427,6 @@ set(QUERY_ENGINE_LIBS
 
 list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})
 
-if(ENABLE_OMNIVERSE_CONNECTOR)
-  list(APPEND QUERY_ENGINE_LIBS poly2tri)
-endif()
-
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
 add_custom_command(
