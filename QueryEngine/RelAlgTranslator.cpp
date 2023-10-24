@@ -1525,6 +1525,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
       return makeExpr<Analyzer::RegexpReplaceStringOper>(args);
     case SqlStringOpKind::REGEXP_SUBSTR:
       return makeExpr<Analyzer::RegexpSubstrStringOper>(args);
+    case SqlStringOpKind::REGEXP_COUNT:
+      return makeExpr<Analyzer::RegexpCountStringOper>(args);
     case SqlStringOpKind::JSON_VALUE:
       return makeExpr<Analyzer::JsonValueStringOper>(args);
     case SqlStringOpKind::BASE64_ENCODE:
@@ -1804,6 +1806,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "REGEXP_REPLACE"sv,
                    "REGEXP_SUBSTR"sv,
                    "REGEXP_MATCH"sv,
+                   "REGEXP_COUNT"sv,
                    "JSON_VALUE"sv,
                    "BASE64_ENCODE"sv,
                    "BASE64_DECODE"sv,

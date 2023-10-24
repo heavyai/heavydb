@@ -231,6 +231,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new RegexpReplace());
     addOperator(new RegexpSubstr());
     addOperator(new RegexpMatch());
+    addOperator(new RegexpCount());
     addOperator(new Base64Encode());
     addOperator(new Base64Decode());
     addOperator(new UrlEncode());
@@ -1443,6 +1444,65 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       super("REGEXP_MATCH");
     }
   }
+
+  public static class RegexpCount extends SqlFunction {
+    public RegexpCount() {
+      super("REGEXP_COUNT",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.INTEGER);
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public SqlCall createCall(@Nullable SqlLiteral functionQualifier,
+            SqlParserPos pos,
+            @Nullable SqlNode... operands) {
+      assert functionQualifier == null;
+      final int num_operands = operands.length;
+      if (num_operands < 2 || num_operands > 4) {
+        throw new IllegalArgumentException(
+                "Invalid operand count " + Arrays.toString(operands));
+      }
+      SqlNode[] new_operands = new SqlNode[4];
+      // operand string
+      new_operands[0] = operands[0];
+      // pattern
+      new_operands[1] = operands[1];
+      // position
+      if (num_operands < 3 || operands[2] == null) {
+        new_operands[2] = SqlLiteral.createExactNumeric("1", pos);
+      } else {
+        new_operands[2] = operands[2];
+      }
+      // parameters
+      if (num_operands < 4 || operands[3] == null) {
+        new_operands[3] = SqlLiteral.createCharString("c", pos);
+      } else {
+        new_operands[3] = operands[3];
+      }
+      return super.createCall(functionQualifier, pos, new_operands);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      RelDataType dataType = typeFactory.createSqlType(SqlTypeName.BIGINT);
+      return typeFactory.createTypeWithNullability(dataType, true);
+    }
+  }
+
   public static class Base64Encode extends SqlFunction {
     public Base64Encode() {
       super("BASE64_ENCODE",
@@ -1557,7 +1617,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 2;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.BIGINT);
+      RelDataType dataType = typeFactory.createSqlType(SqlTypeName.BIGINT);
+      return typeFactory.createTypeWithNullability(dataType, true);
     }
   }
 
@@ -1583,7 +1644,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 2;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.BIGINT);
+      RelDataType dataType = typeFactory.createSqlType(SqlTypeName.BIGINT);
+      return typeFactory.createTypeWithNullability(dataType, true);
     }
   }
 

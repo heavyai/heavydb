@@ -327,6 +327,7 @@ static std::set<std::string> reserved_keywords{
     "REF",
     "REFERENCES",
     "REFERENCING",
+    "REGEXP_COUNT",
     "REGEXP_REPLACE",
     "REGEXP_SUBSTR",
     "REGEXP_MATCH"

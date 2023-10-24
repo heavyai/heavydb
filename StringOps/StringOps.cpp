@@ -672,6 +672,31 @@ std::pair<bool, int64_t> RegexpSubstr::set_sub_match_info(
       true, sub_match_group_idx > 0L ? sub_match_group_idx - 1 : sub_match_group_idx);
 }
 
+NullableStrType RegexpCount::operator()(const std::string& str) const {
+  UNREACHABLE() << "Invalid string output for RegexpCount";
+  return {};
+}
+
+Datum RegexpCount::numericEval(const std::string_view str_view) const {
+  if (str_view.empty()) {
+    return NullDatum(return_ti_);
+  }
+
+  Datum return_datum;
+  const int64_t str_len = str_view.size();
+  const int64_t pos = start_pos_ < 0 ? str_len + start_pos_ : start_pos_;
+  const size_t wrapped_start = std::clamp(pos, int64_t(0), str_len);
+  auto search_start = str_view.data() + wrapped_start;
+  auto search_end = str_view.data() + str_len;
+  boost::cregex_iterator iter(search_start, search_end, regex_pattern_);
+  boost::cregex_iterator end;
+
+  int64_t num_matches = std::distance(iter, end);
+  return_datum.bigintval = num_matches;
+
+  return return_datum;
+}
+
 // json_path must start with "lax $", "strict $" or "$" (case-insensitive).
 JsonValue::JsonParseMode JsonValue::parse_json_parse_mode(std::string_view json_path) {
   size_t const string_pos = json_path.find('$');
@@ -997,7 +1022,8 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
   const auto& return_ti = string_op_info.getReturnType();
 
   if (string_op_info.hasNullLiteralArg()) {
-    return std::make_unique<const NullOp>(var_string_optional_literal, op_kind);
+    return std::make_unique<const NullOp>(
+        return_ti, var_string_optional_literal, op_kind);
   }
 
   const auto num_non_variable_literals = string_op_info.numNonVariableLiterals();
@@ -1139,6 +1165,17 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
                                                   regex_params_literal,
                                                   sub_match_idx_literal);
     }
+    case SqlStringOpKind::REGEXP_COUNT: {
+      CHECK_GE(num_non_variable_literals, 3UL);
+      CHECK_LE(num_non_variable_literals, 3UL);
+      const auto pattern_literal = string_op_info.getStringLiteral(1);
+      const auto start_pos_literal = string_op_info.getIntLiteral(2);
+      const auto regex_params_literal = string_op_info.getStringLiteral(3);
+      return std::make_unique<const RegexpCount>(var_string_optional_literal,
+                                                 pattern_literal,
+                                                 start_pos_literal,
+                                                 regex_params_literal);
+    }
     case SqlStringOpKind::JSON_VALUE: {
       CHECK_EQ(num_non_variable_literals, 1UL);
       const auto json_path_literal = string_op_info.getStringLiteral(1);
@@ -1202,13 +1239,10 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
         return std::make_unique<const LevenshteinDistance>(var_string_optional_literal);
       }
     }
-    default: {
+    default:
       UNREACHABLE();
-      return std::make_unique<NullOp>(var_string_optional_literal, op_kind);
-    }
+      return {};
   }
-  // Make compiler happy
-  return std::make_unique<NullOp>(var_string_optional_literal, op_kind);
 }
 
 std::pair<std::string, bool /* is null */> apply_string_op_to_literals(

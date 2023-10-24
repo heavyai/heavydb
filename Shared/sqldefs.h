@@ -112,6 +112,7 @@ enum class SqlStringOpKind {
   /* 6 args */
   REGEXP_REPLACE,
   REGEXP_SUBSTR,
+  REGEXP_COUNT,
   JSON_VALUE,
   BASE64_ENCODE,
   BASE64_DECODE,
@@ -425,6 +426,8 @@ inline std::ostream& operator<<(std::ostream& os, const SqlStringOpKind kind) {
       return os << "REGEXP_REPLACE";
     case SqlStringOpKind::REGEXP_SUBSTR:
       return os << "REGEXP_SUBSTR";
+    case SqlStringOpKind::REGEXP_COUNT:
+      return os << "REGEXP_COUNT";
     case SqlStringOpKind::JSON_VALUE:
       return os << "JSON_VALUE";
     case SqlStringOpKind::BASE64_ENCODE:
@@ -506,6 +509,9 @@ inline SqlStringOpKind name_to_string_op_kind(const std::string& func_name) {
   if (func_name == "REGEXP_MATCH") {
     return SqlStringOpKind::REGEXP_SUBSTR;
   }
+  if (func_name == "REGEXP_COUNT") {
+    return SqlStringOpKind::REGEXP_COUNT;
+  }
   if (func_name == "JSON_VALUE") {
     return SqlStringOpKind::JSON_VALUE;
   }
@@ -541,6 +547,9 @@ inline bool string_op_returns_string(const SqlStringOpKind kind) {
   switch (kind) {
     case SqlStringOpKind::TRY_STRING_CAST:
     case SqlStringOpKind::POSITION:
+    case SqlStringOpKind::JAROWINKLER_SIMILARITY:
+    case SqlStringOpKind::LEVENSHTEIN_DISTANCE:
+    case SqlStringOpKind::REGEXP_COUNT:
       return false;
     default:
       return true;
