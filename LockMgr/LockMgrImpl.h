@@ -23,9 +23,7 @@
 #include <type_traits>
 
 #include "Catalog/Catalog.h"
-#include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "OSDependent/heavyai_locks.h"
-#include "QueryEngine/ExternalCacheInvalidators.h"
 #include "Shared/heavyai_shared_mutex.h"
 #include "Shared/types.h"
 
@@ -42,63 +40,13 @@ class MutexTracker : public heavyai::SharedMutexInterface {
   MutexTracker(std::unique_ptr<heavyai::DistributedSharedMutex> dmutex)
       : ref_count_(0u), dmutex_(std::move(dmutex)) {}
 
-  virtual void lock() {
-    ref_count_.fetch_add(1u);
-    if (!g_multi_instance) {
-      mutex_.lock();
-    } else {
-      dmutex_->lock();
-    }
-  }
-  virtual bool try_lock() {
-    bool gotlock{false};
-    if (!g_multi_instance) {
-      gotlock = mutex_.try_lock();
-    } else {
-      gotlock = dmutex_->try_lock();
-    }
-    if (gotlock) {
-      ref_count_.fetch_add(1u);
-    }
-    return gotlock;
-  }
-  virtual void unlock() {
-    if (!g_multi_instance) {
-      mutex_.unlock();
-    } else {
-      dmutex_->unlock();
-    }
-    ref_count_.fetch_sub(1u);
-  }
+  virtual void lock();
+  virtual bool try_lock();
+  virtual void unlock();
 
-  virtual void lock_shared() {
-    ref_count_.fetch_add(1u);
-    if (!g_multi_instance) {
-      mutex_.lock_shared();
-    } else {
-      dmutex_->lock_shared();
-    }
-  }
-  virtual bool try_lock_shared() {
-    bool gotlock{false};
-    if (!g_multi_instance) {
-      gotlock = mutex_.try_lock_shared();
-    } else {
-      gotlock = dmutex_->try_lock_shared();
-    }
-    if (gotlock) {
-      ref_count_.fetch_add(1u);
-    }
-    return gotlock;
-  }
-  virtual void unlock_shared() {
-    if (!g_multi_instance) {
-      mutex_.unlock_shared();
-    } else {
-      dmutex_->unlock_shared();
-    }
-    ref_count_.fetch_sub(1u);
-  }
+  virtual void lock_shared();
+  virtual bool try_lock_shared();
+  virtual void unlock_shared();
 
   virtual bool isAcquired() const { return ref_count_.load() > 0; }
 
@@ -188,196 +136,42 @@ class TableLockMgrImpl {
                 std::is_same_v<T, InsertDataLockMgr>);
 
  public:
-  static T& instance() {
-    static T mgr;
-    return mgr;
-  }
+  static T& instance();
+
   virtual ~TableLockMgrImpl() = default;
 
-  virtual MutexTracker* getTableMutex(const ChunkKey table_key) {
-    std::lock_guard<std::mutex> access_map_lock(map_mutex_);
-    auto mutex_it = table_mutex_map_.find(table_key);
-    if (mutex_it != table_mutex_map_.end()) {
-      return mutex_it->second.get();
-    }
+  virtual MutexTracker* getTableMutex(const ChunkKey& table_key);
 
-    // NOTE(sy): Only used by --multi-instance clusters.
-    std::unique_ptr<heavyai::DistributedSharedMutex> dmutex =
-        getClusterTableMutex(table_key);
-
-    return table_mutex_map_
-        .emplace(table_key, std::make_unique<MutexTracker>(std::move(dmutex)))
-        .first->second.get();
-  }
-
-  std::set<ChunkKey> getLockedTables() const {
-    std::set<ChunkKey> ret;
-    std::lock_guard<std::mutex> access_map_lock(map_mutex_);
-    for (const auto& kv : table_mutex_map_) {
-      if (kv.second->isAcquired()) {
-        ret.insert(kv.first);
-      }
-    }
-
-    return ret;
-  }
+  std::set<ChunkKey> getLockedTables() const;
 
   static WriteLock getWriteLockForTable(const Catalog_Namespace::Catalog& cat,
-                                        const std::string& table_name) {
-    auto lock = WriteLock(getMutexTracker(cat, table_name));
-    // Ensure table still exists after lock is acquired.
-    validateExistingTable(cat, table_name);
-    return lock;
-  }
+                                        const std::string& table_name);
 
-  static WriteLock getWriteLockForTable(const ChunkKey table_key) {
-    auto& table_lock_mgr = T::instance();
-    return WriteLock(table_lock_mgr.getTableMutex(table_key));
-  }
+  static WriteLock getWriteLockForTable(const ChunkKey table_key);
 
   static ReadLock getReadLockForTable(Catalog_Namespace::Catalog& cat,
-                                      const std::string& table_name) {
-    auto lock = ReadLock(getMutexTracker(cat, table_name));
-    // Ensure table still exists after lock is acquired.
-    validateAndGetExistingTableId(cat, table_name);
-    return lock;
-  }
+                                      const std::string& table_name);
 
-  static ReadLock getReadLockForTable(const ChunkKey table_key) {
-    auto& table_lock_mgr = T::instance();
-    return ReadLock(table_lock_mgr.getTableMutex(table_key));
-  }
+  static ReadLock getReadLockForTable(const ChunkKey table_key);
 
  protected:
   TableLockMgrImpl() {}
 
   virtual std::unique_ptr<heavyai::DistributedSharedMutex> getClusterTableMutex(
-      const ChunkKey table_key) {
-    std::unique_ptr<heavyai::DistributedSharedMutex> table_mutex;
-
-    std::string table_key_as_text;
-    for (auto n : table_key) {
-      table_key_as_text += (!table_key_as_text.empty() ? "_" : "") + std::to_string(n);
-    }
-
-    // A callback used for syncing with most of the changed Catalog metadata, in-general,
-    // such as the list of tables that exist, dashboards, etc. This is accomplished by
-    // read locking, and immediately unlocking, dcatalogMutex_, so
-    // cat->reloadCatalogMetadataUnlocked() will be called.
-    auto cb_reload_catalog_metadata = [table_key](bool write) {
-      if constexpr (T::kind == "insert") {
-        CHECK(write);  // The insert lock is for writing, never for reading.
-      }
-      auto cat = Catalog_Namespace::SysCatalog::instance().getCatalog(
-          table_key[CHUNK_KEY_DB_IDX]);
-      CHECK(cat);
-      heavyai::shared_lock<heavyai::DistributedSharedMutex> dread_lock(
-          *cat->dcatalogMutex_);
-    };
-
-    if constexpr (T::kind == "schema") {
-      // A callback used for reloading the Catalog schema for the one table being locked.
-      auto cb_reload_table_metadata = [table_key, table_key_as_text](size_t version) {
-        VLOG(2) << "reloading table metadata for: table_" << table_key_as_text;
-        CHECK_EQ(table_key.size(), 2U);
-        auto cat = Catalog_Namespace::SysCatalog::instance().getCatalog(
-            table_key[CHUNK_KEY_DB_IDX]);
-        CHECK(cat);
-        heavyai::shared_lock<heavyai::DistributedSharedMutex> dread_lock(
-            *cat->dcatalogMutex_);
-        cat->reloadTableMetadataUnlocked(table_key[CHUNK_KEY_TABLE_IDX]);
-      };
-
-      // Create the table mutex.
-      heavyai::DistributedSharedMutex::Callbacks cbs{
-          /*pre_lock_callback=*/cb_reload_catalog_metadata,
-          /*reload_cache_callback=*/cb_reload_table_metadata};
-      auto schema_lockfile{
-          std::filesystem::path(g_base_path) / shared::kLockfilesDirectoryName /
-          shared::kCatalogDirectoryName /
-          ("table_" + table_key_as_text + "." + T::kind.data() + ".lockfile")};
-      table_mutex = std::make_unique<heavyai::DistributedSharedMutex>(
-          schema_lockfile.string(), cbs);
-    } else if constexpr (T::kind == "data" || T::kind == "insert") {
-      // A callback used for reloading the DataMgr data for the one table being locked.
-      auto cb_reload_table_data = [table_key, table_key_as_text](size_t version) {
-        VLOG(2) << "invalidating table caches for new version " << version
-                << " of: table_" << table_key_as_text;
-        CHECK_EQ(table_key.size(), 2U);
-        auto cat = Catalog_Namespace::SysCatalog::instance().getCatalog(
-            table_key[CHUNK_KEY_DB_IDX]);
-        CHECK(cat);
-        cat->invalidateCachesForTable(table_key[CHUNK_KEY_TABLE_IDX]);
-      };
-
-      // Create the rows mutex.
-      auto rows_lockfile{std::filesystem::path(g_base_path) /
-                         shared::kLockfilesDirectoryName / shared::kDataDirectoryName /
-                         ("table_" + table_key_as_text + ".rows.lockfile")};
-      std::shared_ptr<heavyai::DistributedSharedMutex> rows_mutex =
-          std::make_shared<heavyai::DistributedSharedMutex>(
-              rows_lockfile.string(),
-              /*reload_cache_callback=*/cb_reload_table_data);
-
-      // A callback used for syncing with outside changes to this table's row data.
-      auto cb_reload_row_data = [table_key, rows_mutex](bool /*write*/) {
-        heavyai::shared_lock<heavyai::DistributedSharedMutex> rows_read_lock(*rows_mutex);
-      };
-
-      // A callback to notify other nodes about our changes to this table's row data.
-      auto cb_notify_about_row_data = [table_key, rows_mutex](bool write) {
-        if (write) {
-          heavyai::unique_lock<heavyai::DistributedSharedMutex> rows_write_lock(
-              *rows_mutex);
-        }
-      };
-
-      // Create the table mutex.
-      heavyai::DistributedSharedMutex::Callbacks cbs{
-          /*pre_lock_callback=*/cb_reload_catalog_metadata,
-          {},
-          /*post_lock_callback=*/cb_reload_row_data,
-          /*pre_unlock_callback=*/cb_notify_about_row_data};
-      auto table_lockfile{
-          std::filesystem::path(g_base_path) / shared::kLockfilesDirectoryName /
-          shared::kDataDirectoryName /
-          ("table_" + table_key_as_text + "." + T::kind.data() + ".lockfile")};
-      table_mutex =
-          std::make_unique<heavyai::DistributedSharedMutex>(table_lockfile.string(), cbs);
-    } else {
-      UNREACHABLE() << "unexpected lockmgr kind: " << T::kind;
-    }
-
-    return table_mutex;
-  }
+      const ChunkKey table_key) const;
 
   mutable std::mutex map_mutex_;
   std::map<ChunkKey, std::unique_ptr<MutexTracker>> table_mutex_map_;
 
  private:
   static MutexTracker* getMutexTracker(const Catalog_Namespace::Catalog& catalog,
-                                       const std::string& table_name) {
-    ChunkKey chunk_key{catalog.getDatabaseId(),
-                       validateAndGetExistingTableId(catalog, table_name)};
-    auto& table_lock_mgr = T::instance();
-    MutexTracker* tracker = table_lock_mgr.getTableMutex(chunk_key);
-    CHECK(tracker);
-    return tracker;
-  }
+                                       const std::string& table_name);
 
   static void validateExistingTable(const Catalog_Namespace::Catalog& catalog,
-                                    const std::string& table_name) {
-    validateAndGetExistingTableId(catalog, table_name);
-  }
+                                    const std::string& table_name);
 
   static int32_t validateAndGetExistingTableId(const Catalog_Namespace::Catalog& catalog,
-                                               const std::string& table_name) {
-    auto table_id = catalog.getTableId(table_name);
-    if (!table_id.has_value()) {
-      throw Catalog_Namespace::TableNotFoundException(table_name, catalog.name());
-    }
-    return table_id.value();
-  }
+                                               const std::string& table_name);
 };
 
 template <typename T>

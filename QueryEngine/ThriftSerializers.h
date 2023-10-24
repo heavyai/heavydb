@@ -33,16 +33,18 @@
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/TargetMetaInfo.h"
+#include "Shared/TargetInfo.h"
 #include "Shared/ThriftTypesConvert.h"
 #include "enums.h"
 
 namespace ThriftSerializers {
 
-#define THRIFT_LAYOUT_CASE(layout)   \
-  case QueryDescriptionType::layout: \
+#define THRIFT_LAYOUT_CASE(layout)            \
+  case heavyai::QueryDescriptionType::layout: \
     return TResultSetLayout::layout;
 
-inline TResultSetLayout::type layout_to_thrift(const QueryDescriptionType layout) {
+inline TResultSetLayout::type layout_to_thrift(
+    const heavyai::QueryDescriptionType layout) {
   switch (layout) {
     THRIFT_LAYOUT_CASE(GroupByPerfectHash)
     THRIFT_LAYOUT_CASE(GroupByBaselineHash)
@@ -58,9 +60,10 @@ inline TResultSetLayout::type layout_to_thrift(const QueryDescriptionType layout
 
 #define UNTHRIFT_LAYOUT_CASE(layout) \
   case TResultSetLayout::layout:     \
-    return QueryDescriptionType::layout;
+    return heavyai::QueryDescriptionType::layout;
 
-inline QueryDescriptionType layout_from_thrift(const TResultSetLayout::type layout) {
+inline heavyai::QueryDescriptionType layout_from_thrift(
+    const TResultSetLayout::type layout) {
   switch (layout) {
     UNTHRIFT_LAYOUT_CASE(GroupByPerfectHash)
     UNTHRIFT_LAYOUT_CASE(GroupByBaselineHash)
