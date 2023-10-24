@@ -22,8 +22,9 @@ if [[ "$HAS_PYTHON_3_10" != "false" ]]; then
     fi
     source .venv/bin/activate
 
+    echo "Installing HeavyIQ dependencies."
     PIP_ERROR=false
-    pip install -r requirements.txt &>> $BUILD_LOG_FILE || PIP_ERROR=true
+    pip install -r requirements.txt -r requirements-linux.txt &>> $BUILD_LOG_FILE || PIP_ERROR=true
     if $PIP_ERROR; then
       echo "Warning: An error occurred when installing HeavyIQ dependencies." \
            "See the $BUILD_LOG_FILE logs for more details."
