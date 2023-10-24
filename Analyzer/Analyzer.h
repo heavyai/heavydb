@@ -2359,6 +2359,46 @@ class RegexpSubstrStringOper : public StringOper {
             "sub-match group index"};
   }
 };
+
+class RegexpCountStringOper : public StringOper {
+ public:
+  RegexpCountStringOper(const std::shared_ptr<Analyzer::Expr>& operand,
+                        const std::shared_ptr<Analyzer::Expr>& regex_pattern,
+                        const std::shared_ptr<Analyzer::Expr>& start_pos,
+                        const std::shared_ptr<Analyzer::Expr>& regex_params)
+      : StringOper(SqlStringOpKind::REGEXP_COUNT,
+                   SQLTypeInfo(kBIGINT),
+                   {operand, regex_pattern, start_pos, regex_params},
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  RegexpCountStringOper(const std::vector<std::shared_ptr<Analyzer::Expr>>& operands)
+      : StringOper(SqlStringOpKind::REGEXP_COUNT,
+                   SQLTypeInfo(kBIGINT),
+                   operands,
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  RegexpCountStringOper(const std::shared_ptr<Analyzer::StringOper>& string_oper)
+      : StringOper(string_oper) {}
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  size_t getMinArgs() const override { return 4UL; }
+
+  std::vector<OperandTypeFamily> getExpectedTypeFamilies() const override {
+    return {OperandTypeFamily::STRING_FAMILY,
+            OperandTypeFamily::STRING_FAMILY,
+            OperandTypeFamily::INT_FAMILY,
+            OperandTypeFamily::STRING_FAMILY};
+  }
+  std::vector<std::string> getArgNames() const override {
+    return {"operand", "regex pattern", "start position", "regex parameters"};
+  }
+};
+
 class JsonValueStringOper : public StringOper {
  public:
   JsonValueStringOper(const std::shared_ptr<Analyzer::Expr>& operand,

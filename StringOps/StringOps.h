@@ -52,7 +52,7 @@ struct StringOp {
   StringOp(const SqlStringOpKind op_kind,
            const std::optional<std::string>& var_str_optional_literal)
       : op_kind_(op_kind)
-      , return_ti_(SQLTypeInfo(kTEXT))
+      , return_ti_(SQLTypeInfo(kTEXT, false, kENCODING_DICT))
       , has_var_str_literal_(var_str_optional_literal.has_value())
       , var_str_literal_(!var_str_optional_literal.has_value()
                              ? NullableStrType()
@@ -80,10 +80,10 @@ struct StringOp {
   }
 
   virtual NullableStrType operator()() const {
-    CHECK(hasVarStringLiteral());
     if (var_str_literal_.is_null) {
       return var_str_literal_;
     }
+    CHECK(hasVarStringLiteral());
     return operator()(var_str_literal_.str);
   }
 
@@ -101,10 +101,10 @@ struct StringOp {
   }
 
   virtual Datum numericEval() const {
-    CHECK(hasVarStringLiteral());
     if (var_str_literal_.is_null) {
       return NullDatum(return_ti_);
     }
+    CHECK(hasVarStringLiteral());
     return numericEval(var_str_literal_.str);
   }
 
@@ -439,8 +439,7 @@ struct RegexpSubstr : public StringOp {
                const std::string& regex_params,
                const int64_t sub_match_group_idx)
       : StringOp(SqlStringOpKind::REGEXP_SUBSTR, var_str_optional_literal)
-      , regex_pattern_str_(
-            regex_pattern)  // for toString() as std::regex does not have str() method
+      , regex_pattern_str_(regex_pattern)
       , regex_pattern_(
             StringOp::generateRegex("REGEXP_SUBSTR", regex_pattern, regex_params, true))
       , start_pos_(start_pos > 0 ? start_pos - 1 : start_pos)
@@ -472,8 +471,7 @@ struct RegexpReplace : public StringOp {
                 const int64_t occurrence,
                 const std::string& regex_params)
       : StringOp(SqlStringOpKind::REGEXP_REPLACE, var_str_optional_literal)
-      , regex_pattern_str_(
-            regex_pattern)  // for toString() as std::regex does not have str() method
+      , regex_pattern_str_(regex_pattern)
       , regex_pattern_(
             StringOp::generateRegex("REGEXP_REPLACE", regex_pattern, regex_params, false))
       , replacement_(replacement)
@@ -493,6 +491,29 @@ struct RegexpReplace : public StringOp {
   const std::string replacement_;
   const int64_t start_pos_;
   const int64_t occurrence_;
+};
+
+struct RegexpCount : public StringOp {
+ public:
+  RegexpCount(const std::optional<std::string>& var_str_optional_literal,
+              const std::string& regex_pattern,
+              const int64_t start_pos,
+              const std::string& regex_params)
+      : StringOp(SqlStringOpKind::REGEXP_COUNT,
+                 SQLTypeInfo(kBIGINT),
+                 var_str_optional_literal)
+      , regex_pattern_str_(regex_pattern)
+      , regex_pattern_(
+            StringOp::generateRegex("REGEXP_COUNT", regex_pattern, regex_params, true))
+      , start_pos_(start_pos > 0 ? start_pos - 1 : start_pos) {}
+
+  NullableStrType operator()(const std::string& str) const override;
+  Datum numericEval(const std::string_view str) const override;
+
+ private:
+  const std::string regex_pattern_str_;
+  const boost::regex regex_pattern_;
+  const int64_t start_pos_;
 };
 
 // We currently do not allow strict mode JSON parsing per the SQL standard, as
@@ -592,9 +613,11 @@ struct UrlDecode : public StringOp {
 };
 
 struct NullOp : public StringOp {
-  NullOp(const std::optional<std::string>& var_str_optional_literal,
+  NullOp(const SQLTypeInfo& return_ti,
+         const std::optional<std::string>& var_str_optional_literal,
          const SqlStringOpKind op_kind)
-      : StringOp(SqlStringOpKind::INVALID, var_str_optional_literal), op_kind_(op_kind) {}
+      : StringOp(SqlStringOpKind::INVALID, return_ti, var_str_optional_literal)
+      , op_kind_(op_kind) {}
 
   NullableStrType operator()(const std::string& str) const override {
     return NullableStrType();  // null string

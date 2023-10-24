@@ -1397,9 +1397,87 @@ TEST_F(StringFunctionTest, RegexpSubstrLiteral) {
     SKIP_NO_GPU();
     auto result_set =
         sql("select regexp_substr('Feel free to send us an email at spam@devnull.com!', "
-            "'[[:alnum:]]+@[[:alnum:]]+.[[:alnum:]]+',  1, -1, 'i', 0);",
+            "'[[:alnum:]]+@[[:alnum:]]+\\.[[:alnum:]]+',  1, -1, 'i', 0);",
             dt);
     std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"spam@devnull.com"}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, RegexpCount2Args) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set =
+        sql("select regexp_count(json_data_none, 'in') "
+            "from string_function_test_countries order by id asc;",
+            dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+        {int64_t(4)}, {int64_t(6)}, {int64_t(3)}, {int64_t(4)}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, RegexpCount3Args) {
+  // 3rd argument to RegexpCount is starting position to search for matches
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set =
+        sql("select regexp_count(json_data_none, 'in', 50) "
+            "from string_function_test_countries order by id asc;",
+            dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+        {int64_t(3)}, {int64_t(5)}, {int64_t(2)}, {int64_t(2)}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, RegexpCount4Args) {
+  // 4th argument to RegexpCount is for regex parameters.
+  // Notably 'c' specifies case sensitive, and 'i' specifies case insensitive
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Case-senstive default
+      auto result_set =
+          sql("select regexp_count(personal_motto, 'one', 1) from "
+              "string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(2)}, {int64_t(1)}, {int64_t(1)}, {int64_t(1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Case-senstive default
+      auto result_set =
+          sql("select regexp_count(personal_motto, 'one', 1, 'c') from "
+              "string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(2)}, {int64_t(1)}, {int64_t(1)}, {int64_t(1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Case-insenstive search
+      auto result_set =
+          sql("select regexp_count(personal_motto, 'one', 1, 'i') from "
+              "string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(2)}, {int64_t(2)}, {int64_t(1)}, {int64_t(1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, RegexpCountLiteral) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set =
+        sql("select regexp_count('Feel free to send us an email at spam@devnull.com or "
+            "to morespam@doa.com!', "
+            "'[[:alnum:]]+@[[:alnum:]]+\\.[[:alnum:]]+',  1, 'i');",
+            dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(2)}};
     compare_result_set(expected_result_set, result_set);
   }
 }
@@ -2302,6 +2380,45 @@ TEST_F(StringFunctionTest, LevenshteinDistance) {
               dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {int64_t(6)}, {int64_t(6)}, {int64_t(7)}, {int64_t(6)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, NullLiteralTest) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      auto result_set =
+          sql("SELECT COUNT(str_fn) FROM (SELECT short_name, REGEXP_COUNT(CAST(NULL AS "
+              "TEXT),'u',0,'i') AS str_fn FROM string_function_test_countries);",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set =
+          sql("SELECT COUNT(str_fn) FROM (SELECT short_name, REGEXP_SUBSTR(CAST(NULL AS "
+              "TEXT),'u', 1, -1,'i', 0) AS str_fn FROM string_function_test_countries);",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set =
+          sql("SELECT COUNT(str_fn) FROM (SELECT short_name, POSITION('hi' in CAST(NULL "
+              "AS TEXT)) AS str_fn FROM string_function_test_countries);",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set =
+          sql("SELECT COUNT(str_fn) FROM (SELECT short_name, "
+              "JAROWINKLER_SIMILARITY(CAST(NULL AS TEXT), CAST(NULL AS TEXT)) AS str_fn "
+              "FROM string_function_test_countries);",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(0)}};
       compare_result_set(expected_result_set, result_set);
     }
   }
