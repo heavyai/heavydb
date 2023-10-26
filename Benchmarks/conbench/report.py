@@ -213,17 +213,7 @@ print("""<!DOCTYPE html>
 <html>
 <head>
   <title>Benchmarks for {branch} / {short_sha} on {host}</title>
-  <style>
-body {{ font-family: sans-serif }}
-table {{ border-collapse: collapse }}
-th {{ text-align: right; padding-right: 1em }}
-td {{ font-family: monospace; text-align: right; padding-right: 1em }}
-td.fixed {{ background-color: LightGreen }}
-td.check {{ background-color: Khaki }}
-td.warning {{ background-color: Yellow }}
-td.error {{ background-color: Red }}
-tr:nth-child(even) {{ background-color: LightCyan }}
-  </style>
+  <link rel="stylesheet" href="report.css">
 </head>
 <body>
 <h1>Benchmarks for {branch} / <a href="{commit_url}">{short_sha}</a> on {host}</h1>
