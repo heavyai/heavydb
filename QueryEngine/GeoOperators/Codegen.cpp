@@ -66,6 +66,12 @@ const Analyzer::Expr* Codegen::getOperand(const size_t index) {
   return operator_->getOperand(index);
 }
 
+char const* Codegen::pointIsNullFunctionName(SQLTypeInfo const& geo_ti) {
+  CHECK_EQ(kPOINT, geo_ti.get_type());
+  return geo_ti.get_compression() == kENCODING_GEOINT ? "point_int32_is_null"
+                                                      : "point_double_is_null";
+}
+
 std::string suffix(SQLTypes type) {
   if (type == kPOINT) {
     return std::string("_Point");

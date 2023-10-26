@@ -2495,16 +2495,17 @@ extern "C" RUNTIME_EXPORT void multifrag_query(int32_t* error_code,
 // It may build fine, but during runtime results in
 // CUDA_ERROR_INVALID_PTX (218): a PTX JIT compilation failed: ptxas application ptx
 // input, line 10; fatal   : Parsing error near '.globl': syntax error
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE bool point_pair_int32_is_null(
-    int32_t* point_pair) {
+
+// See spatial_type::Codegen::pointIsNullFunctionName() for selecting
+// which of the following two functions to use to determine point IS NULL.
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE bool point_int32_is_null(int32_t* point) {
   constexpr uint32_t null_array_compressed_32 = 0x80000000U;  // Shared/InlineNullValues.h
-  return point_pair == nullptr || uint32_t(*point_pair) == null_array_compressed_32;
+  return point == nullptr || uint32_t(*point) == null_array_compressed_32;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE bool point_pair_double_is_null(
-    double* point_pair) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE bool point_double_is_null(double* point) {
   constexpr double null_array_double = 2 * DBL_MIN;  // Shared/InlineNullValues.h
-  return point_pair == nullptr || *point_pair == null_array_double;
+  return point == nullptr || *point == null_array_double;
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE bool check_interrupt() {

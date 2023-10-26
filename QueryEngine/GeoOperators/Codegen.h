@@ -63,6 +63,8 @@ class Codegen {
 
   virtual ~Codegen() {}
 
+  static char const* pointIsNullFunctionName(SQLTypeInfo const&);
+
  protected:
   const Analyzer::GeoOperator* operator_;
   bool is_nullable_{true};
