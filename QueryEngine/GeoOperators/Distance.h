@@ -125,8 +125,8 @@ class Distance : public Codegen {
             if (geo_oper && geo_oper->getName() == "ST_Point") {
               // ST_Point stores null_sentinel to its storage if it is null
               CHECK_EQ(operand->get_type_info().get_compression(), kENCODING_NONE);
-              auto null_check_lv = cgen_state->emitCall("point_pair_double_is_null",
-                                                        {arg_lvs[arg_lvs_index]});
+              auto null_check_lv =
+                  cgen_state->emitCall("point_double_is_null", {arg_lvs[arg_lvs_index]});
               is_null = builder.CreateOr(is_null, null_check_lv);
             } else {
               auto coords_array_type =

@@ -66,9 +66,7 @@ class PointAccessors : public Codegen {
       CHECK_EQ(arg_lvs.size(), size_t(2));
       if (dynamic_cast<const Analyzer::GeoOperator*>(operand)) {
         if (geo_ti.get_type() == kPOINT && !geo_ti.is_variable_size()) {
-          char const* fname = geo_ti.get_compression() == kENCODING_GEOINT
-                                  ? "point_pair_int32_is_null"
-                                  : "point_pair_double_is_null";
+          char const* const fname = pointIsNullFunctionName(geo_ti);
           is_null = cgen_state->emitCall(fname, {arg_lvs.front()});
         } else {
           // The above branch tests for both nullptr and null sentinel, whereas this

@@ -70,19 +70,10 @@ class Transform : public Codegen {
             arg_lvs.size() == size_t(2));  // ptr or ptr, size
       // coming from a temporary, can modify the memory pointer directly
       can_transform_in_place_ = true;
-      auto& builder = cgen_state->ir_builder_;
-
-      const auto is_null = builder.CreateICmp(
-          llvm::CmpInst::ICMP_EQ,
-          arg_lvs.front(),
-          llvm::ConstantPointerNull::get(  // TODO: check ptr address space
-              operand_ti.get_compression() == kENCODING_GEOINT
-                  ? llvm::Type::getInt32PtrTy(cgen_state->context_)
-                  : llvm::Type::getDoublePtrTy(cgen_state->context_)));
+      char const* const fname = pointIsNullFunctionName(operand_ti);
+      llvm::Value* const is_null = cgen_state->emitCall(fname, {arg_lvs.front()});
       return std::make_tuple(std::vector<llvm::Value*>{arg_lvs.front()}, is_null);
     }
-    UNREACHABLE();
-    return std::make_tuple(std::vector<llvm::Value*>{}, nullptr);
   }
 
   std::vector<llvm::Value*> codegen(const std::vector<llvm::Value*>& args,

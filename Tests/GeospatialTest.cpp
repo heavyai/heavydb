@@ -1758,6 +1758,30 @@ TEST_P(GeoSpatialNullTablesFixture, Constructors) {
         R"(SELECT ST_Transform(gp900913, 4326) FROM geospatial_null_test WHERE id = 6;)",
         dt,
         false)));
+    nullcheck_result(v<NullableString>(run_simple_agg(
+        R"(SELECT ST_Transform(ST_SetSRID(ST_Point(1.0, CAST(NULL AS DOUBLE)), 4326), 900913);)",
+        dt,
+        false)));
+    nullcheck_result(v<NullableString>(run_simple_agg(
+        R"(SELECT ST_Transform(ST_SetSRID(ST_Point(CAST(NULL AS DOUBLE), 1.0), 900913), 32601);)",
+        dt,
+        false)));
+    nullcheck_result(v<NullableString>(run_simple_agg(
+        R"(SELECT ST_Transform(ST_SetSRID(ST_Point(CAST(NULL AS DOUBLE), 1.0), 32601), 4326);)",
+        dt,
+        false)));
+    nullcheck_result(v<NullableString>(run_simple_agg(  // x IS NULL for id=8
+        R"(SELECT ST_Transform(ST_SetSRID(ST_Point(x, y), 4326), 32601) FROM geospatial_null_test WHERE id = 8;)",
+        dt,
+        false)));
+    nullcheck_result(v<NullableString>(run_simple_agg(  // y IS NULL for id=9
+        R"(SELECT ST_Transform(ST_SetSRID(ST_Point(x, y), 32601), 900913) FROM geospatial_null_test WHERE id = 9;)",
+        dt,
+        false)));
+    nullcheck_result(v<NullableString>(run_simple_agg(  // x IS NULL for id=8
+        R"(SELECT ST_Transform(ST_SetSRID(ST_Point(x, y), 900913), 32601) FROM geospatial_null_test WHERE id = 8;)",
+        dt,
+        false)));
   }
 }
 

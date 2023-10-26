@@ -88,7 +88,7 @@ class NPoints : public Codegen {
       CHECK(child_geo_oper);
       if (child_geo_oper->getName() == "ST_Point") {
         coords_arr_sz_lv = cgen_state->ir_builder_.CreateSelect(
-            cgen_state->emitCall("point_pair_double_is_null", {arg_lvs.front()}),
+            cgen_state->emitCall("point_double_is_null", {arg_lvs.front()}),
             cgen_state->inlineIntNull(getTypeInfo()),
             cgen_state->llInt(static_cast<int32_t>(16)));
       } else {

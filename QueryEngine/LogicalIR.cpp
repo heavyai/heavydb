@@ -16,6 +16,7 @@
 
 #include "CodeGenerator.h"
 #include "Execute.h"
+#include "GeoOperators/Codegen.h"
 #include "NullableValue.h"
 
 #include <llvm/IR/MDBuilder.h>
@@ -396,9 +397,7 @@ llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
   llvm::Value* operand_lv = codegen(operand, true, co).front();
   // NULL-check array or geo's coords array
   if (ti.get_type() == kPOINT && dynamic_cast<Analyzer::GeoOperator const*>(operand)) {
-    char const* fname = ti.get_compression() == kENCODING_GEOINT
-                            ? "point_pair_int32_is_null"
-                            : "point_pair_double_is_null";
+    char const* const fname = spatial_type::Codegen::pointIsNullFunctionName(ti);
     return cgen_state_->emitCall(fname, {operand_lv});
   } else if (ti.is_array() || ti.is_geometry()) {
     // POINT [un]compressed coord check requires custom checker and chunk iterator
