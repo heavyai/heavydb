@@ -81,8 +81,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     auto allocator = allocators_[thread_idx].get();
     std::lock_guard<std::mutex> lock(state_mutex_);
     if (g_allow_memory_status_log) {
-      VLOG(1) << "Try to allocate CPU memory: " << num_bytes
-              << " bytes (THREAD-: " << thread_idx << ")";
+      VLOG(1) << "Try to allocate CPU memory: " << num_bytes << " bytes (THREAD-"
+              << thread_idx << ")";
     }
     return reinterpret_cast<int8_t*>(allocator->allocate(num_bytes));
   }
@@ -98,8 +98,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     // Was not in cache so must allocate
     auto allocator = allocators_[thread_idx].get();
     if (g_allow_memory_status_log) {
-      VLOG(1) << "Try to allocate CPU memory: " << num_bytes
-              << " bytes (THREAD-: " << thread_idx << ")";
+      VLOG(1) << "Try to allocate CPU memory: " << num_bytes << " bytes (THREAD-"
+              << thread_idx << ")";
     }
     int64_t* group_by_buffer = reinterpret_cast<int64_t*>(allocator->allocate(num_bytes));
     CHECK(group_by_buffer);
