@@ -45,6 +45,15 @@ NEVER_INLINE HOST ColumnStats<T> get_column_stats(
                         int64_t local_col_non_null_or_filtered_count = 0;
                         for (int64_t r = start_idx; r < end_idx; ++r) {
                           const T val = data[r];
+                          if constexpr (std::is_same_v<T, float>) {
+                            if (isinff(val)) {
+                              continue;
+                            }
+                          } else if constexpr (std::is_same_v<T, double>) {
+                            if (isinf(val)) {
+                              continue;
+                            }
+                          }
                           if (val == inline_null_value<T>()) {
                             continue;
                           }
