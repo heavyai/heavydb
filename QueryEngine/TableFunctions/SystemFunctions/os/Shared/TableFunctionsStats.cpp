@@ -35,51 +35,48 @@ NEVER_INLINE HOST ColumnStats<T> get_column_stats(
   std::vector<int64_t> local_col_non_null_or_filtered_counts(num_threads, 0L);
   tbb::task_arena limited_arena(num_threads);
   limited_arena.execute([&] {
-    tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
-                      [&](const tbb::blocked_range<int64_t>& r) {
-                        const int64_t start_idx = r.begin();
-                        const int64_t end_idx = r.end();
-                        T local_col_min = std::numeric_limits<T>::max();
-                        T local_col_max = std::numeric_limits<T>::lowest();
-                        double local_col_sum = 0.;
-                        int64_t local_col_non_null_or_filtered_count = 0;
-                        for (int64_t r = start_idx; r < end_idx; ++r) {
-                          const T val = data[r];
-                          if constexpr (std::is_same_v<T, float>) {
-                            if (isinff(val)) {
-                              continue;
-                            }
-                          } else if constexpr (std::is_same_v<T, double>) {
-                            if (isinf(val)) {
-                              continue;
-                            }
-                          }
-                          if (val == inline_null_value<T>()) {
-                            continue;
-                          }
-                          if (!predicate(val)) {
-                            continue;
-                          }
-                          if (val < local_col_min) {
-                            local_col_min = val;
-                          }
-                          if (val > local_col_max) {
-                            local_col_max = val;
-                          }
-                          local_col_sum += data[r];
-                          local_col_non_null_or_filtered_count++;
-                        }
-                        size_t thread_idx = tbb::this_task_arena::current_thread_index();
-                        if (local_col_min < local_col_mins[thread_idx]) {
-                          local_col_mins[thread_idx] = local_col_min;
-                        }
-                        if (local_col_max > local_col_maxes[thread_idx]) {
-                          local_col_maxes[thread_idx] = local_col_max;
-                        }
-                        local_col_sums[thread_idx] += local_col_sum;
-                        local_col_non_null_or_filtered_counts[thread_idx] +=
-                            local_col_non_null_or_filtered_count;
-                      });
+    tbb::parallel_for(
+        tbb::blocked_range<int64_t>(0, num_rows),
+        [&](const tbb::blocked_range<int64_t>& r) {
+          const int64_t start_idx = r.begin();
+          const int64_t end_idx = r.end();
+          T local_col_min = std::numeric_limits<T>::max();
+          T local_col_max = std::numeric_limits<T>::lowest();
+          double local_col_sum = 0.;
+          int64_t local_col_non_null_or_filtered_count = 0;
+          for (int64_t r = start_idx; r < end_idx; ++r) {
+            const T val = data[r];
+            if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
+              if (std::isnan(val) || std::isinf(val)) {
+                continue;
+              }
+            }
+            if (val == inline_null_value<T>()) {
+              continue;
+            }
+            if (!predicate(val)) {
+              continue;
+            }
+            if (val < local_col_min) {
+              local_col_min = val;
+            }
+            if (val > local_col_max) {
+              local_col_max = val;
+            }
+            local_col_sum += data[r];
+            local_col_non_null_or_filtered_count++;
+          }
+          size_t thread_idx = tbb::this_task_arena::current_thread_index();
+          if (local_col_min < local_col_mins[thread_idx]) {
+            local_col_mins[thread_idx] = local_col_min;
+          }
+          if (local_col_max > local_col_maxes[thread_idx]) {
+            local_col_maxes[thread_idx] = local_col_max;
+          }
+          local_col_sums[thread_idx] += local_col_sum;
+          local_col_non_null_or_filtered_counts[thread_idx] +=
+              local_col_non_null_or_filtered_count;
+        });
   });
 
   ColumnStats<T> column_stats;
