@@ -209,6 +209,7 @@ static std::set<std::string> reserved_keywords{
     "GROUP",
     "GROUPING",
     "GROUPS",
+    "HASH",
     "HAVING",
     "HOLD",
     "HOUR",

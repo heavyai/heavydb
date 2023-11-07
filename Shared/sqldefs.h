@@ -122,6 +122,7 @@ enum class SqlStringOpKind {
   POSITION,                // string-to-numeric
   JAROWINKLER_SIMILARITY,  // string-to-numeric
   LEVENSHTEIN_DISTANCE,    // string-to-numeric
+  HASH,                    // string-to-numeric
   INVALID
 };
 
@@ -446,6 +447,8 @@ inline std::ostream& operator<<(std::ostream& os, const SqlStringOpKind kind) {
       return os << "JAROWINKLER_SIMILARITY";
     case SqlStringOpKind::LEVENSHTEIN_DISTANCE:
       return os << "LEVENSHTEIN_DISTANCE";
+    case SqlStringOpKind::HASH:
+      return os << "HASH";
     case SqlStringOpKind::INVALID:
       return os << "INVALID";
   }
@@ -539,6 +542,9 @@ inline SqlStringOpKind name_to_string_op_kind(const std::string& func_name) {
   if (func_name == "LEVENSHTEIN_DISTANCE") {
     return SqlStringOpKind::LEVENSHTEIN_DISTANCE;
   }
+  if (func_name == "HASH") {
+    return SqlStringOpKind::HASH;
+  }
   LOG(FATAL) << "Invalid string function " << func_name << ".";
   return SqlStringOpKind::INVALID;
 }
@@ -550,6 +556,7 @@ inline bool string_op_returns_string(const SqlStringOpKind kind) {
     case SqlStringOpKind::JAROWINKLER_SIMILARITY:
     case SqlStringOpKind::LEVENSHTEIN_DISTANCE:
     case SqlStringOpKind::REGEXP_COUNT:
+    case SqlStringOpKind::HASH:
       return false;
     default:
       return true;

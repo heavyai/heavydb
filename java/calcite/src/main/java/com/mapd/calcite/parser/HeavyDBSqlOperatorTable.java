@@ -27,6 +27,7 @@ import com.mapd.parser.extension.ddl.SqlFirstLastValueInFrame;
 import com.mapd.parser.extension.ddl.SqlLeadLag;
 import com.mapd.parser.extension.ddl.SqlNthValueInFrame;
 import com.mapd.parser.server.ExtensionFunction;
+import com.mapd.parser.server.ExtensionFunction.ExtArgumentType;
 
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.rel.metadata.RelColumnMapping;
@@ -238,6 +239,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new UrlDecode());
     addOperator(new JarowinklerSimilarity());
     addOperator(new LevenshteinDistance());
+    addOperator(new Hash());
     addOperator(new Likely());
     addOperator(new Unlikely());
     addOperator(new Sign());
@@ -1743,6 +1745,35 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       }
       call.operand(1).unparse(writer, 0, 0);
       writer.endFunCall(frame);
+    }
+  }
+
+  public static class Hash extends SqlFunction {
+    public Hash() {
+      super("HASH",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      // Todo(todd): Support any input type for HASH function
+      // families.add(SqlTypeFamily.ANY);
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.BIGINT),
+              opBinding.getOperandType(0).isNullable());
     }
   }
 

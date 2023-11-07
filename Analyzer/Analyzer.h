@@ -2703,6 +2703,37 @@ class LevenshteinDistanceStringOper : public StringOper {
       const std::vector<std::shared_ptr<Analyzer::Expr>>& operands);
 };
 
+class HashStringOper : public StringOper {
+ public:
+  HashStringOper(const std::shared_ptr<Analyzer::Expr>& operand)
+      : StringOper(SqlStringOpKind::HASH,
+                   SQLTypeInfo(kBIGINT),
+                   {operand},
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  HashStringOper(const std::vector<std::shared_ptr<Analyzer::Expr>>& operands)
+      : StringOper(SqlStringOpKind::HASH,
+                   SQLTypeInfo(kBIGINT),
+                   operands,
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  HashStringOper(const std::shared_ptr<Analyzer::StringOper>& string_oper)
+      : StringOper(string_oper) {}
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  size_t getMinArgs() const override { return 1UL; }
+
+  std::vector<OperandTypeFamily> getExpectedTypeFamilies() const override {
+    return {OperandTypeFamily::STRING_FAMILY};
+  }
+  std::vector<std::string> getArgNames() const override { return {"operand"}; }
+};
+
 class FunctionOper : public Expr {
  public:
   FunctionOper(const SQLTypeInfo& ti,

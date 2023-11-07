@@ -1546,6 +1546,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
       return makeExpr<Analyzer::JarowinklerSimilarityStringOper>(args);
     case SqlStringOpKind::LEVENSHTEIN_DISTANCE:
       return makeExpr<Analyzer::LevenshteinDistanceStringOper>(args);
+    case SqlStringOpKind::HASH:
+      return makeExpr<Analyzer::HashStringOper>(args);
     case SqlStringOpKind::URL_ENCODE:
       return makeExpr<Analyzer::UrlEncodeStringOper>(args);
     case SqlStringOpKind::URL_DECODE:
@@ -1815,7 +1817,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "TRY_CAST"sv,
                    "POSITION"sv,
                    "JAROWINKLER_SIMILARITY"sv,
-                   "LEVENSHTEIN_DISTANCE"sv)) {
+                   "LEVENSHTEIN_DISTANCE"sv,
+                   "HASH"sv)) {
     return translateStringOper(rex_function);
   }
   if (func_resolve(rex_function->getName(), "CARDINALITY"sv, "ARRAY_LENGTH"sv)) {

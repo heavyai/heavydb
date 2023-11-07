@@ -315,6 +315,26 @@ Datum LevenshteinDistance::numericEval(const std::string_view str1,
   return return_datum;
 }
 
+NullableStrType Hash::operator()(const std::string& str) const {
+  UNREACHABLE() << "Invalid string output for Hash";
+  return {};
+}
+
+Datum Hash::numericEval(const std::string_view str) const {
+  if (str.empty()) {
+    return NullDatum(return_ti_);
+  } else {
+    uint64_t str_hash = 1;
+    // rely on fact that unsigned overflow is defined and wraps
+    for (size_t i = 0; i < str.size(); ++i) {
+      str_hash = str_hash * 997u + static_cast<unsigned char>(str[i]);
+    }
+    Datum return_datum;
+    return_datum.bigintval = static_cast<int64_t>(str_hash);
+    return return_datum;
+  }
+}
+
 NullableStrType Lower::operator()(const std::string& str) const {
   std::string output_str(str);
   std::transform(
@@ -1238,6 +1258,10 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       } else {
         return std::make_unique<const LevenshteinDistance>(var_string_optional_literal);
       }
+    }
+    case SqlStringOpKind::HASH: {
+      CHECK_EQ(num_non_variable_literals, 0UL);
+      return std::make_unique<const Hash>(var_string_optional_literal);
     }
     default:
       UNREACHABLE();
