@@ -206,6 +206,15 @@ struct LevenshteinDistance : public StringOp {
   const std::string str_literal_;
 };
 
+struct Hash : public StringOp {
+ public:
+  Hash(const std::optional<std::string>& var_str_optional_literal)
+      : StringOp(SqlStringOpKind::HASH, SQLTypeInfo(kBIGINT), var_str_optional_literal) {}
+
+  NullableStrType operator()(const std::string& str) const override;
+  Datum numericEval(const std::string_view str) const override;
+};
+
 struct Lower : public StringOp {
   Lower(const std::optional<std::string>& var_str_optional_literal)
       : StringOp(SqlStringOpKind::LOWER, var_str_optional_literal) {}

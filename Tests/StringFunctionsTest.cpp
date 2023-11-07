@@ -248,11 +248,11 @@ class StringFunctionTest : public TestHelpers::TbbPrivateServerKiller {
           insert into string_function_test_people values(3, 'JOHN', 'Wilson', 'John WILSON', 20, 'cA', '555-614-9814', null, 'What is the sound of one hand clapping?', 'JOHN.WILSON@geops.net');
           insert into string_function_test_people values(4, 'Sue', 'Smith', 'Sue SMITH', 25, 'CA', '555-614-2282', null, 'Nothing exists entirely alone. Everything is always in relation to everything else.', 'Find me at sue4tw@example.com, or reach me at sue.smith@example.com. I''d love to hear from you!'); 
           drop table if exists string_function_test_countries;
-          create table string_function_test_countries(id int, code text, arrow_code text, name text, short_name text encoding none, capital text, largest_city text encoding none, lang text encoding none, json_data_none text encoding none);
-          insert into string_function_test_countries values(1, 'US', '>>US<<', 'United States', null, 'Washington', 'New York City', 'en', '{"capital": "Washington D.C.", "pop": 329500000, "independence_day": "1776-07-04",  "has_prime_minister": false, "prime_minister": null, "factoids": {"gdp_per_cap_2015_2020": [56863, 58021, 60110, 63064, 65280, 63544], "Last 3 leaders": ["Barack Obama", "Donald Trump", "Joseph Biden"], "most_valuable_crop": "corn"}}');
-          insert into string_function_test_countries values(2, 'ca', '>>CA<<', 'Canada', 'Canada', 'Ottawa', 'TORONTO', 'EN', '{"capital": "Toronto", "pop": 38010000, "independence_day": "07/01/1867", "exchange_rate_usd": "0.78125", "has_prime_minister": true, "prime_minister": "Justin Trudeau", "factoids": {"gdp_per_cap_2015_2020": [43596, 42316, 45129, 46454, 46327, 43242], "Last 3 leaders": ["Paul Martin", "Stephen Harper", "Justin Trudeau"], "most valuable crop": "wheat"}}');
-          insert into string_function_test_countries values(3, 'Gb', '>>GB<<', 'United Kingdom', 'UK', 'London', 'LONDON', 'en', '{"capital": "London", "pop": 67220000, "independence_day": "N/A", "exchange_rate_usd": 1.21875, "prime_minister": "Boris Johnson", "has_prime_minister": true, "factoids": {"gdp_per_cap_2015_2020": [45039, 41048, 40306, 42996, 42354, 40285], "most valuable crop": "wheat"}}');
-          insert into string_function_test_countries values(4, 'dE', '>>DE<<', 'Germany', 'Germany', 'Berlin', 'Berlin', 'de', '{"capital":"Berlin", "independence_day": "1990-10-03", "exchange_rate_usd": 1.015625, "has_prime_minister": false, "prime_minister": null, "factoids": {"gdp_per_cap_2015_2020": [41103, 42136, 44453, 47811, 46468, 45724], "most valuable crop": "wheat"}}');
+          create table string_function_test_countries(id int, code text, arrow_code text, name text, short_name text encoding none, capital text, capital_none text encoding none, largest_city text encoding none, lang text encoding none, json_data_none text encoding none);
+          insert into string_function_test_countries values(1, 'US', '>>US<<', 'United States', null, 'Washington', 'Washington', 'New York City', 'en', '{"capital": "Washington D.C.", "pop": 329500000, "independence_day": "1776-07-04",  "has_prime_minister": false, "prime_minister": null, "factoids": {"gdp_per_cap_2015_2020": [56863, 58021, 60110, 63064, 65280, 63544], "Last 3 leaders": ["Barack Obama", "Donald Trump", "Joseph Biden"], "most_valuable_crop": "corn"}}');
+          insert into string_function_test_countries values(2, 'ca', '>>CA<<', 'Canada', 'Canada', 'Ottawa', 'Ottawa', 'TORONTO', 'EN', '{"capital": "Toronto", "pop": 38010000, "independence_day": "07/01/1867", "exchange_rate_usd": "0.78125", "has_prime_minister": true, "prime_minister": "Justin Trudeau", "factoids": {"gdp_per_cap_2015_2020": [43596, 42316, 45129, 46454, 46327, 43242], "Last 3 leaders": ["Paul Martin", "Stephen Harper", "Justin Trudeau"], "most valuable crop": "wheat"}}');
+          insert into string_function_test_countries values(3, 'Gb', '>>GB<<', 'United Kingdom', 'UK', 'London', 'London', 'LONDON', 'en', '{"capital": "London", "pop": 67220000, "independence_day": "N/A", "exchange_rate_usd": 1.21875, "prime_minister": "Boris Johnson", "has_prime_minister": true, "factoids": {"gdp_per_cap_2015_2020": [45039, 41048, 40306, 42996, 42354, 40285], "most valuable crop": "wheat"}}');
+          insert into string_function_test_countries values(4, 'dE', '>>DE<<', 'Germany', 'Germany', 'Berlin', 'Berlin', 'Berlin', 'de', '{"capital":"Berlin", "independence_day": "1990-10-03", "exchange_rate_usd": 1.015625, "has_prime_minister": false, "prime_minister": null, "factoids": {"gdp_per_cap_2015_2020": [41103, 42136, 44453, 47811, 46468, 45724], "most valuable crop": "wheat"}}');
           drop table if exists numeric_to_string_test;
           create table numeric_to_string_test(b boolean, ti tinyint, si smallint, i int, bi bigint, flt float, dbl double, dec_5_2 decimal(5, 2), dec_18_10 decimal(18, 10), dt date, ts_0 timestamp(0), ts_3 timestamp(3), tm time, b_str text, ti_str text, si_str text, i_str text, bi_str text, flt_str text, dbl_str text, dec_5_2_str text, dec_18_10_str text, dt_str text, ts_0_str text, ts_3_str text, tm_str text) with (fragment_size=2);
           insert into numeric_to_string_test values (true, 21, 21, 21, 21, 1.25, 1.25, 1.25, 1.25, '2013-09-10', '2013-09-10 12:43:23', '2013-09-10 12:43:23.123', '12:43:23', 'true', '21', '21', '21', '21', '1.250000', '1.250000', ' 1.25', '      1.2500000000', '2013-09-10', '2013-09-10 12:43:23', '2013-09-10 12:43:23.123', '12:43:23');
@@ -2380,6 +2380,93 @@ TEST_F(StringFunctionTest, LevenshteinDistance) {
               dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {int64_t(6)}, {int64_t(6)}, {int64_t(7)}, {int64_t(6)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, Hash) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Literal hash
+      auto result_set = sql("select hash('hi');", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(1097802)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Literal null
+      auto result_set = sql("select coalesce(hash(CAST(NULL AS TEXT)), 0);", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Dictionary-encoded text column
+      auto result_set = sql(
+          "select hash(capital) from string_function_test_countries order by id;", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(5703505280371710991)},
+          {int64_t(1060071279222666409)},
+          {int64_t(1057111063818803959)},
+          {int64_t(1047250289947889561)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // None-encoded text column
+      auto result_set = sql(
+          "select hash(capital_none) from string_function_test_countries order by id;",
+          dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(5703505280371710991)},
+          {int64_t(1060071279222666409)},
+          {int64_t(1057111063818803959)},
+          {int64_t(1047250289947889561)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Dictionary-encoded text column with nulls
+      auto result_set =
+          sql("select coalesce(hash(zip_plus_4), 0) from string_function_test_people "
+              "order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(6345224789068548647)},
+          {int64_t(-3868673234647279706)},
+          {int64_t(0)},
+          {int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // None-encoded text column with nulls
+      auto result_set =
+          sql("select coalesce(hash(short_name), 0) from string_function_test_countries "
+              "order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(0)},
+          {int64_t(1048231423487679005)},
+          {int64_t(1078829)},
+          {int64_t(-2445200816347761128)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Hash comparison
+      auto result_set =
+          sql("select count(*) from string_function_test_countries where "
+              "hash(capital) = hash(capital_none);",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(4)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set =
+          sql("select hash(lower(first_name)), any_value(lower(first_name)), count(*) "
+              "from string_function_test_people group by  hash(lower(first_name)) order "
+              "by count(*) desc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(1093213190016), "john", int64_t(3)},
+          {int64_t(1105454758), "sue", int64_t(1)}};
       compare_result_set(expected_result_set, result_set);
     }
   }
