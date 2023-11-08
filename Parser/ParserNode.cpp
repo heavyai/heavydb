@@ -4754,6 +4754,10 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
                                  std::to_string(sql_constants::kMaxNumericPrecision) +
                                  ".");
       }
+      // flatbuffer storage in real tables is not implemented, so we
+      // reset the flatbuffer storage flag for CTAS cases that select
+      // from UDTF columns which may use flatbuffer storage:
+      cd.columnType.setUsesFlatBuffer(false);
     }
 
     TableDescriptor td;
