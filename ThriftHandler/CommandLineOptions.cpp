@@ -426,8 +426,8 @@ void CommandLineOptions::fillOptions() {
                          ->implicit_value(true),
                      "Enable watchdog.");
   desc.add_options()("watchdog-max-projected-rows-per-device",
-                     po::value<size_t>(&watchdog_max_projected_rows_per_device)
-                         ->default_value(watchdog_max_projected_rows_per_device),
+                     po::value<size_t>(&g_watchdog_max_projected_rows_per_device)
+                         ->default_value(g_watchdog_max_projected_rows_per_device),
                      "Max number of rows allowed to be projected when running a query "
                      "with watchdog enabled.");
   desc.add_options()(
@@ -435,11 +435,12 @@ void CommandLineOptions::fillOptions() {
       po::value<size_t>(&preflight_count_query_threshold)
           ->default_value(preflight_count_query_threshold),
       "Threshold to run pre-flight count query which computes # output rows accurately.");
-  desc.add_options()("watchdog-none-encoded-string-translation-limit",
-                     po::value<size_t>(&watchdog_none_encoded_string_translation_limit)
-                         ->default_value(watchdog_none_encoded_string_translation_limit),
-                     "Max number of none-encoded strings allowed to be translated "
-                     "to dictionary-encoded with watchdog enabled");
+  desc.add_options()(
+      "watchdog-none-encoded-string-translation-limit",
+      po::value<size_t>(&g_watchdog_none_encoded_string_translation_limit)
+          ->default_value(g_watchdog_none_encoded_string_translation_limit),
+      "Max number of none-encoded strings allowed to be translated "
+      "to dictionary-encoded with watchdog enabled");
   desc.add_options()("filter-push-down-low-frac",
                      po::value<float>(&g_filter_push_down_low_frac)
                          ->default_value(g_filter_push_down_low_frac)
@@ -471,6 +472,26 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(system_parameters.gpu_input_mem_limit),
                      "Force query to CPU when input data memory usage exceeds this "
                      "percentage of available GPU memory.");
+  desc.add_options()("watchdog-in-clause-max-num-elem-non-bitmap",
+                     po::value<size_t>(&g_watchdog_in_clause_max_num_elem_non_bitmap)
+                         ->default_value(g_watchdog_in_clause_max_num_elem_non_bitmap),
+                     "Max number of unique values allowed to process IN-clause without "
+                     "using a bitmap when watchdog is enabled.");
+  desc.add_options()("watchdog-in-clause-max-num-elem-bitmap",
+                     po::value<size_t>(&g_watchdog_in_clause_max_num_elem_bitmap)
+                         ->default_value(g_watchdog_in_clause_max_num_elem_bitmap),
+                     "Max number of unique values allowed to "
+                     "process IN-clause using a bitmap when watchdog is enabled.");
+  desc.add_options()(
+      "watchdog-in-clause-max-num-input-rows",
+      po::value<size_t>(&g_watchdog_in_clause_max_num_input_rows)
+          ->default_value(g_watchdog_in_clause_max_num_input_rows),
+      "Max number of input rows allowed to process IN-clause when watchdog is enabled");
+  desc.add_options()("in-clause-num-elem-skip-bitmap",
+                     po::value<size_t>(&g_in_clause_num_elem_skip_bitmap)
+                         ->default_value(g_in_clause_num_elem_skip_bitmap),
+                     "# values to skip constructing a bitmap to process IN-clause");
+
   desc.add_options()(
       "hll-precision-bits",
       po::value<int>(&g_hll_precision_bits)
@@ -1794,8 +1815,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     }
 
     g_enable_watchdog = enable_watchdog;
-    g_watchdog_none_encoded_string_translation_limit =
-        watchdog_none_encoded_string_translation_limit;
     g_watchdog_max_projected_rows_per_device = watchdog_max_projected_rows_per_device;
     g_preflight_count_query_threshold = preflight_count_query_threshold;
     g_enable_dynamic_watchdog = enable_dynamic_watchdog;

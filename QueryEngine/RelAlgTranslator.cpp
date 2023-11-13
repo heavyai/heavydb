@@ -36,7 +36,10 @@
 #include <sstream>
 
 extern bool g_enable_watchdog;
-
+extern size_t g_watchdog_in_clause_max_num_elem_bitmap;
+extern size_t g_watchdog_in_clause_max_num_elem_non_bitmap;
+extern size_t g_watchdog_in_clause_max_num_input_rows;
+extern size_t g_in_clause_num_elem_skip_bitmap;
 bool g_enable_string_functions{true};
 
 namespace {
@@ -644,9 +647,12 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
   if (!result_set::can_use_parallel_algorithms(val_set)) {
     return nullptr;
   }
-  if (val_set.rowCount() > 5000000 && g_enable_watchdog) {
-    throw std::runtime_error(
-        "Unable to handle 'expr IN (subquery)', subquery returned 5M+ rows.");
+  if (val_set.rowCount() > g_watchdog_in_clause_max_num_input_rows && g_enable_watchdog) {
+    std::ostringstream oss;
+    oss << "Unable to handle 'expr IN (subquery)': # input rows (" << val_set.rowCount()
+        << ") is larger than threshold 'g_watchdog_in_clause_max_num_input_rows':"
+        << g_watchdog_in_clause_max_num_input_rows;
+    throw std::runtime_error(oss.str());
   }
   std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
   const size_t fetcher_count = cpu_threads();
@@ -731,18 +737,25 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
         "The two sides of the IN operator must have the same type; found " +
         ti.get_type_name() + " and " + rhs_ti.get_type_name());
   }
+  ScopeGuard elapsed_time_log = [clock_begin = timer_start()] {
+    VLOG(1) << "RelAlgTranslator::translateInOper: took " << timer_stop(clock_begin)
+            << " ms";
+  };
   row_set->moveToBegin();
-  if (row_set->entryCount() > 10000) {
-    std::shared_ptr<Analyzer::Expr> expr;
-    if ((ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) &&
-        !row_set->getQueryMemDesc().didOutputColumnar()) {
-      expr = getInIntegerSetExpr(lhs, *row_set);
-      // Handle the highly unlikely case when the InIntegerSet ended up being tiny.
-      // Just let it fall through the usual InValues path at the end of this method,
-      // its codegen knows to use inline comparisons for few values.
-      if (expr && std::static_pointer_cast<Analyzer::InIntegerSet>(expr)
-                          ->get_value_list()
-                          .size() <= 100) {
+  std::shared_ptr<Analyzer::Expr> expr;
+  if ((ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) &&
+      !row_set->didOutputColumnar()) {
+    expr = getInIntegerSetExpr(lhs, *row_set);
+    // Handle the highly unlikely case when the InIntegerSet ended up being tiny.
+    // Just let it fall through the usual InValues path at the end of this method,
+    // its codegen knows to use inline comparisons for few values.
+    if (expr) {
+      auto const num_values =
+          std::static_pointer_cast<Analyzer::InIntegerSet>(expr)->get_value_list().size();
+      if (num_values <= g_in_clause_num_elem_skip_bitmap) {
+        VLOG(1) << "Skip to build a bitmap for tiny integer-set case: # values ("
+                << ::toString(num_values) << ") <= threshold ("
+                << ::toString(g_in_clause_num_elem_skip_bitmap) << ")";
         expr = nullptr;
       }
     } else {
@@ -758,9 +771,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
     if (row.empty()) {
       break;
     }
-    if (g_enable_watchdog && value_exprs.size() >= 10000) {
-      throw std::runtime_error(
-          "Unable to handle 'expr IN (subquery)', subquery returned 10000+ rows.");
+    if (g_enable_watchdog &&
+        value_exprs.size() >= g_watchdog_in_clause_max_num_elem_non_bitmap) {
+      std::ostringstream oss;
+      oss << "Unable to handle 'expr IN (subquery)' via non-bitmap, # unique values ("
+          << value_exprs.size()
+          << ") is larger than the threshold "
+             "'g_watchdog_in_clause_max_num_elem_non_bitmap': "
+          << g_watchdog_in_clause_max_num_elem_non_bitmap;
+      throw std::runtime_error(oss.str());
     }
     auto scalar_tv = boost::get<ScalarTargetValue>(&row[0]);
     Datum d{0};
@@ -781,8 +800,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
 }
 
 namespace {
-
-const size_t g_max_integer_set_size{1 << 25};
 
 void fill_dictionary_encoded_in_vals(
     std::vector<int64_t>& in_vals,
@@ -812,9 +829,14 @@ void fill_dictionary_encoded_in_vals(
       }
     }
     if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
-                 total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
-      throw std::runtime_error(
-          "Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
+                 total_in_vals_count.fetch_add(1024) >=
+                     g_watchdog_in_clause_max_num_elem_bitmap)) {
+      std::ostringstream oss;
+      oss << "Unable to handle 'expr IN (subquery)' via bitmap, # unique encoded-string ("
+          << total_in_vals_count.load()
+          << ") is larger than the threshold 'g_watchdog_in_clause_max_num_elem_bitmap': "
+          << g_watchdog_in_clause_max_num_elem_bitmap;
+      throw std::runtime_error(oss.str());
     }
   }
 }
@@ -830,9 +852,16 @@ void fill_integer_in_vals(std::vector<int64_t>& in_vals,
     if (row.valid) {
       in_vals.push_back(row.value);
       if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
-                   total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
-        throw std::runtime_error(
-            "Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
+                   total_in_vals_count.fetch_add(1024) >=
+                       g_watchdog_in_clause_max_num_elem_bitmap)) {
+        std::ostringstream oss;
+        oss << "Unable to handle 'expr IN (subquery)' via bitmap, # unique integer "
+               "values ("
+            << total_in_vals_count.load()
+            << ") is larger than the threshold "
+               "'g_watchdog_in_clause_max_num_elem_bitmap': "
+            << g_watchdog_in_clause_max_num_elem_bitmap;
+        throw std::runtime_error(oss.str());
       }
     }
   }
@@ -871,9 +900,16 @@ void fill_dictionary_encoded_in_vals(
       if (row.value != needle_null_val) {
         in_vals.push_back(row.value);
         if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
-                     total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
-          throw std::runtime_error(
-              "Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
+                     total_in_vals_count.fetch_add(1024) >=
+                         g_watchdog_in_clause_max_num_elem_bitmap)) {
+          std::ostringstream oss;
+          oss << "Unable to handle 'expr IN (subquery)' via bitmap, # unique "
+                 "encoded-string values ("
+              << total_in_vals_count.load()
+              << ") is larger than the threshold "
+                 "'g_watchdog_in_clause_max_num_elem_bitmap': "
+              << g_watchdog_in_clause_max_num_elem_bitmap;
+          throw std::runtime_error(oss.str());
         }
       } else {
         has_nulls = true;
@@ -914,9 +950,16 @@ void fill_dictionary_encoded_in_vals(
     if (dest_id != StringDictionary::INVALID_STR_ID) {
       in_vals.push_back(dest_id);
       if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
-                   total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
-        throw std::runtime_error(
-            "Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
+                   total_in_vals_count.fetch_add(1024) >=
+                       g_watchdog_in_clause_max_num_elem_bitmap)) {
+        std::ostringstream oss;
+        oss << "Unable to handle 'expr IN (subquery)' via bitmap, # unique "
+               "encoded-string values ("
+            << total_in_vals_count.load()
+            << ") is larger than the threshold "
+               "'g_watchdog_in_clause_max_num_elem_bitmap': "
+            << g_watchdog_in_clause_max_num_elem_bitmap;
+        throw std::runtime_error(oss.str());
       }
     }
   }
@@ -969,8 +1012,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
           col_type.getStringDictKey(), val_set.getRowSetMemOwner(), true);
       CHECK(sd);
       const auto needle_null_val = inline_int_null_val(arg_type);
-      const auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(
-          col_expr->getColumnKey().db_id);
+      const auto catalog =
+          Catalog_Namespace::SysCatalog::instance().getCatalog(source_dict_key.db_id);
       CHECK(catalog);
       fetcher_threads.push_back(std::async(
           std::launch::async,
@@ -2055,8 +2098,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     throw;
   }
 
-  // By default, the extension function type will not allow nulls. If one of the arguments
-  // is nullable, the extension function must also explicitly allow nulls.
+  // By default, the extension function type will not allow nulls. If one of the
+  // arguments is nullable, the extension function must also explicitly allow nulls.
   bool arguments_not_null = true;
   for (const auto& arg_expr : arg_expr_list) {
     if (!arg_expr->get_type_info().get_notnull()) {
@@ -2262,10 +2305,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
   if (order_keys.empty()) {
     if (frame_start_bound_type == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
         frame_end_bound_type == SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING) {
-      // Calcite sets UNBOUNDED PRECEDING ~ UNBOUNDED_FOLLOWING as its default frame bound
-      // if the window context has no order by clause regardless of the existence of
-      // user-given window frame bound but at this point we have no way to recognize the
-      // absence of the frame definition of this window context
+      // Calcite sets UNBOUNDED PRECEDING ~ UNBOUNDED_FOLLOWING as its default frame
+      // bound if the window context has no order by clause regardless of the existence
+      // of user-given window frame bound but at this point we have no way to recognize
+      // the absence of the frame definition of this window context
       has_framing_clause = false;
     }
   } else {
