@@ -2194,6 +2194,15 @@ TEST_F(Select, InValues) {
   }
 }
 
+TEST_F(Select, InValuesDictEncodedStringColFromSubquery) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    c("select count(1) from (select R.fixed_str FROM test R JOIN test_inner S ON R.x = "
+      "S.x GROUP BY 1) T1 where T1.fixed_str NOT IN (select S.str FROM test R JOIN "
+      "test_inner S ON R.x = S.x WHERE R.fixed_str != 'FOO');",
+      dt);
+  }
+}
+
 TEST_F(Select, FilterAndMultipleAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

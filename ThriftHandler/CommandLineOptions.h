@@ -39,6 +39,10 @@ class LeafHostInfo;
 
 extern size_t g_watchdog_max_projected_rows_per_device;
 extern size_t g_preflight_count_query_threshold;
+extern size_t g_watchdog_in_clause_max_num_elem_non_bitmap;
+extern size_t g_watchdog_in_clause_max_num_elem_bitmap;
+extern size_t g_watchdog_in_clause_max_num_input_rows;
+extern size_t g_in_clause_num_elem_skip_bitmap;
 
 class CommandLineOptions {
  public:
@@ -177,6 +181,7 @@ extern unsigned g_dynamic_watchdog_time_limit;
 extern unsigned g_trivial_loop_join_threshold;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
 extern size_t g_watchdog_max_projected_rows_per_device;
+extern size_t g_watchdog_in_subquery_max_in_values;
 extern size_t g_preflight_count_query_threshold;
 extern bool g_from_table_reordering;
 extern bool g_enable_filter_push_down;
