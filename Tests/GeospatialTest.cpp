@@ -2606,13 +2606,17 @@ TEST(GeoSpatial, Projections) {
 TEST(GeoSpatial, PointNOutOfBoundCheckNegativeIndex) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    ASSERT_EQ(
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM (SELECT ST_PointN(ST_GeomFromText('LINESTRING(-1 1, 1 "
-            "1)', 4326), -1) IS NULL as v) WHERE v IS TRUE;",
-            dt,
-            false)),
-        static_cast<int64_t>(1));
+    struct TestInfo {
+      int32_t index;
+      double expected_res;
+    };
+    for (auto const& test_info :
+         {TestInfo{-1, 3}, TestInfo{-2, 2}, TestInfo{-3, 1}, TestInfo{-4, NULL_DOUBLE}}) {
+      std::ostringstream oss;
+      oss << "SELECT ST_X(ST_POINTN('LINESTRING (1 0,2 2,3 3)'," << test_info.index
+          << "));";
+      ASSERT_EQ(v<double>(run_simple_agg(oss.str(), dt, false)), test_info.expected_res);
+    }
   }
 }
 
