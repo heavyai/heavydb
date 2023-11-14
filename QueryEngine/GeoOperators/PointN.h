@@ -51,6 +51,34 @@ class PointN : public Codegen {
     return SQLTypeInfo(kBOOLEAN);
   }
 
+  llvm::Value* codegenGeoSize(CgenState* cgen_state,
+                              SQLTypeInfo const& geo_ti,
+                              const std::vector<llvm::Value*>& arg_lvs,
+                              const std::vector<llvm::Value*>& pos_lvs) {
+    llvm::Value* geo_size_lv{nullptr};
+    if (arg_lvs.size() == 2) {
+      const bool is_nullable = !geo_ti.get_notnull();
+      std::string size_fn_name = "array_size";
+      if (is_nullable) {
+        size_fn_name += "_nullable";
+      }
+
+      uint32_t elem_sz = 1;  // TINYINT coords array
+      std::vector<llvm::Value*> array_sz_args{
+          arg_lvs.front(), pos_lvs.front(), cgen_state->llInt(log2_bytes(elem_sz))};
+      if (is_nullable) {
+        array_sz_args.push_back(
+            cgen_state->llInt(static_cast<int32_t>(inline_int_null_value<int32_t>())));
+      }
+      geo_size_lv = cgen_state->emitExternalCall(
+          size_fn_name, get_int_type(32, cgen_state->context_), array_sz_args);
+    } else {
+      geo_size_lv = arg_lvs[1];
+    }
+    CHECK(geo_size_lv);
+    return geo_size_lv;
+  }
+
   llvm::Value* codegenIndexOutOfBoundCheck(CgenState* cgen_state,
                                            llvm::Value* index_lv,
                                            llvm::Value* geosize_lv) {
@@ -85,56 +113,42 @@ class PointN : public Codegen {
 
     std::vector<llvm::Value*> array_operand_lvs;
     CHECK(!arg_lvs.empty());
-    auto index_lv = builder.CreateMul(
-        builder.CreateSub(arg_lvs.back(), cgen_state->llInt(static_cast<int32_t>(1))),
-        cgen_state->llInt(static_cast<int32_t>(2)));
-
-    llvm::Value* is_null_lv{nullptr};
+    llvm::Value* raw_index_lv = arg_lvs.back();
+    llvm::Value* geo_size_lv = codegenGeoSize(cgen_state, geo_ti, arg_lvs, pos_lvs);
+    llvm::Value* pt_size_lv = cgen_state->llInt(16);
+    llvm::Value* num_pts_lv = builder.CreateUDiv(geo_size_lv, pt_size_lv);
+    llvm::Value* is_negative_lv =
+        builder.CreateCmp(llvm::CmpInst::ICMP_SLT, raw_index_lv, cgen_state->llInt(0));
+    llvm::Value* negative_raw_index_lv = builder.CreateAdd(raw_index_lv, num_pts_lv);
+    llvm::Value* positive_raw_index_lv =
+        builder.CreateSub(raw_index_lv, cgen_state->llInt(1));
+    raw_index_lv = builder.CreateSelect(
+        is_negative_lv, negative_raw_index_lv, positive_raw_index_lv);
+    raw_index_lv =
+        builder.CreateMul(raw_index_lv, cgen_state->llInt(static_cast<int32_t>(2)));
+    llvm::Value* is_null_lv =
+        codegenIndexOutOfBoundCheck(cgen_state, raw_index_lv, geo_size_lv);
     if (arg_lvs.size() == 2) {
       // col byte stream from column on disk
       array_operand_lvs.push_back(
           cgen_state->emitExternalCall("array_buff",
                                        llvm::Type::getInt8PtrTy(cgen_state->context_),
                                        {arg_lvs.front(), pos_lvs.front()}));
-      const bool is_nullable = !geo_ti.get_notnull();
-      std::string size_fn_name = "array_size";
-      if (is_nullable) {
-        size_fn_name += "_nullable";
-      }
-
-      uint32_t elem_sz = 1;  // TINYINT coords array
-      std::vector<llvm::Value*> array_sz_args{
-          arg_lvs.front(), pos_lvs.front(), cgen_state->llInt(log2_bytes(elem_sz))};
-      if (is_nullable) {
-        array_sz_args.push_back(
-            cgen_state->llInt(static_cast<int32_t>(inline_int_null_value<int32_t>())));
-      }
-      array_operand_lvs.push_back(cgen_state->emitExternalCall(
-          size_fn_name, get_int_type(32, cgen_state->context_), array_sz_args));
-
-      auto geo_size_lv = array_operand_lvs.back();
+      array_operand_lvs.push_back(geo_size_lv);
       // convert the index to a byte index
-      index_lv = builder.CreateMul(index_lv, cgen_state->llInt(static_cast<int32_t>(8)));
-      const auto outside_linestring_bounds_lv =
-          codegenIndexOutOfBoundCheck(cgen_state, index_lv, geo_size_lv);
-      outside_linestring_bounds_lv->setName("outside_linestring_bounds");
+      raw_index_lv =
+          builder.CreateMul(raw_index_lv, cgen_state->llInt(static_cast<int32_t>(8)));
       const auto input_is_null_lv = builder.CreateICmp(
           llvm::ICmpInst::ICMP_EQ,
           geo_size_lv,
           cgen_state->llInt(static_cast<int32_t>(inline_int_null_value<int32_t>())));
-      input_is_null_lv->setName("input_is_null");
-      is_null_lv = builder.CreateOr(outside_linestring_bounds_lv, input_is_null_lv);
+      is_null_lv = builder.CreateOr(is_null_lv, input_is_null_lv);
     } else {
       CHECK_EQ(arg_lvs.size(), size_t(3));  // ptr, size, index
       array_operand_lvs.push_back(arg_lvs[0]);
       array_operand_lvs.push_back(arg_lvs[1]);
-
-      const auto geo_size_lv = arg_lvs[1];
-      // TODO: bounds indices are 64 bits but should be 32 bits, as array length is
-      // limited to 32 bits
-      is_null_lv = codegenIndexOutOfBoundCheck(cgen_state, index_lv, geo_size_lv);
     }
-    array_operand_lvs.push_back(index_lv);
+    array_operand_lvs.push_back(raw_index_lv);
     return std::make_tuple(array_operand_lvs, is_null_lv);
   }
 
