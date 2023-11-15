@@ -17,25 +17,30 @@
 #include "CalciteAdapter.h"
 
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/replace.hpp>
 
 #include "Logger/Logger.h"
 #include "Shared/StringTransform.h"
 #include "Shared/clean_boost_regex.hpp"
 
-namespace {
-
-std::string pg_shim_impl(const std::string& query) {
-  auto result = query;
-  {
+std::string pg_shim(std::string const& query) {
+  std::string result = query;
+  try {
     static const auto& unnest_expr = *new boost::regex(
         R"((\s+|,)(unnest)\s*\()", boost::regex::extended | boost::regex::icase);
     static_assert(std::is_trivially_destructible_v<decltype(unnest_expr)>);
     apply_shim(result, unnest_expr, [](std::string& result, const boost::smatch& what) {
       result.replace(what.position(), what.length(), what[1] + "PG_UNNEST(");
     });
+  } catch (const std::exception& e) {
+    // boost::regex throws an exception about the complexity of matching when
+    // the wrong type of quotes are used or they're mismatched. Let the query
+    // through unmodified
+    // this can be applied for all catch statements defined below
+    LOG(WARNING) << "Detect error while parsing PG_UNNEST: " << e.what();
+    return query;
   }
-  {
+
+  try {
     static const auto& cast_true_expr =
         *new boost::regex(R"(CAST\s*\(\s*'t'\s+AS\s+boolean\s*\))",
                           boost::regex::extended | boost::regex::icase);
@@ -44,8 +49,12 @@ std::string pg_shim_impl(const std::string& query) {
         result, cast_true_expr, [](std::string& result, const boost::smatch& what) {
           result.replace(what.position(), what.length(), "true");
         });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing CAST AS BOOLEAN(TRUE): " << e.what();
+    return query;
   }
-  {
+
+  try {
     static const auto& cast_false_expr =
         *new boost::regex(R"(CAST\s*\(\s*'f'\s+AS\s+boolean\s*\))",
                           boost::regex::extended | boost::regex::icase);
@@ -54,8 +63,12 @@ std::string pg_shim_impl(const std::string& query) {
         result, cast_false_expr, [](std::string& result, const boost::smatch& what) {
           result.replace(what.position(), what.length(), "false");
         });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing CAST AS BOOLEAN(FALSE): " << e.what();
+    return query;
   }
-  {
+
+  try {
     static const auto& ilike_expr = *new boost::regex(
         R"((\s+|\()((?!\()[^\s]+)\s+(not\s)?\s*ilike\s+('(?:[^']+|'')+')(\s+escape(\s+('[^']+')))?)",
         boost::regex::perl | boost::regex::icase);
@@ -67,8 +80,12 @@ std::string pg_shim_impl(const std::string& query) {
                      what[1] + what[3] + "PG_ILIKE(" + what[2] + ", " + what[4] +
                          (esc.empty() ? "" : ", " + esc) + ")");
     });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing PG_ILIKE: " << e.what();
+    return query;
   }
-  {
+
+  try {
     static const auto& regexp_expr = *new boost::regex(
         R"((\s+)([^\s]+)\s+REGEXP\s+('(?:[^']+|'')+')(\s+escape(\s+('[^']+')))?)",
         boost::regex::perl | boost::regex::icase);
@@ -80,8 +97,12 @@ std::string pg_shim_impl(const std::string& query) {
                      what[1] + "REGEXP_LIKE(" + what[2] + ", " + what[3] +
                          (esc.empty() ? "" : ", " + esc) + ")");
     });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing REGEXP_LIKE: " << e.what();
+    return query;
   }
-  {
+
+  try {
     // Comparison operator needed to distinguish from other uses of ALL (e.g. UNION ALL)
     static const auto& quant_expr =
         *new boost::regex(R"(([<=>]\s*)(any|all)\s+([^(\s|;)]+))",
@@ -92,8 +113,12 @@ std::string pg_shim_impl(const std::string& query) {
       result.replace(
           what.position(), what.length(), what[1] + quant_fname + what[3] + ')');
     });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing PG_ANY|PG_ALL: " << e.what();
+    return query;
   }
-  {
+
+  try {
     static const auto& immediate_cast_expr =
         *new boost::regex(R"(TIMESTAMP\(([0369])\)\s+('[^']+'))",
                           boost::regex::extended | boost::regex::icase);
@@ -104,8 +129,12 @@ std::string pg_shim_impl(const std::string& query) {
                          what.length(),
                          "CAST(" + what[2] + " AS TIMESTAMP(" + what[1] + "))");
         });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing CAST AS TIMESTAMP: " << e.what();
+    return query;
   }
-  {
+
+  try {
     static const auto& timestampadd_expr =
         *new boost::regex(R"(DATE(ADD|DIFF|PART|_TRUNC)\s*\(\s*(\w+)\s*,)",
                           boost::regex::extended | boost::regex::icase);
@@ -115,9 +144,12 @@ std::string pg_shim_impl(const std::string& query) {
           result.replace(
               what.position(), what.length(), "DATE" + what[1] + "('" + what[2] + "',");
         });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing DATE(ADD|DIFF|PART|_TRUNC): " << e.what();
+    return query;
   }
 
-  {
+  try {
     static const auto& pg_extract_expr = *new boost::regex(
         R"(PG_EXTRACT\s*\(\s*(\w+)\s*,)", boost::regex::extended | boost::regex::icase);
     static_assert(std::is_trivially_destructible_v<decltype(pg_extract_expr)>);
@@ -146,9 +178,12 @@ std::string pg_shim_impl(const std::string& query) {
                      what.length(),
                      "PG_EXTRACT('" + what[1] + "', " + what[2] + ")");
     });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing PG_EXTRACT: " << e.what();
+    return query;
   }
 
-  {
+  try {
     static const auto& date_trunc_expr = *new boost::regex(
         R"(([^_])date_trunc\s*)", boost::regex::extended | boost::regex::icase);
     static_assert(std::is_trivially_destructible_v<decltype(date_trunc_expr)>);
@@ -156,8 +191,11 @@ std::string pg_shim_impl(const std::string& query) {
         result, date_trunc_expr, [](std::string& result, const boost::smatch& what) {
           result.replace(what.position(), what.length(), what[1] + "PG_DATE_TRUNC");
         });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing PG_DATE_TRUNC: " << e.what();
+    return query;
   }
-  {
+  try {
     static const auto& timestampadd_expr_quoted =
         *new boost::regex(R"(TIMESTAMP(ADD|DIFF)\s*\(\s*'(\w+)'\s*,)",
                           boost::regex::extended | boost::regex::icase);
@@ -178,8 +216,11 @@ std::string pg_shim_impl(const std::string& query) {
           result.replace(
               what.position(), what.length(), "DATE" + what[1] + "('" + what[2] + "',");
         });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing TIMESTAMP(ADD|DIFF): " << e.what();
+    return query;
   }
-  {
+  try {
     static const auto& us_timestamp_cast_expr =
         *new boost::regex(R"(CAST\s*\(\s*('[^']+')\s*AS\s*TIMESTAMP\(6\)\s*\))",
                           boost::regex::extended | boost::regex::icase);
@@ -190,8 +231,11 @@ std::string pg_shim_impl(const std::string& query) {
                  result.replace(
                      what.position(), what.length(), "usTIMESTAMP(" + what[1] + ")");
                });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing usTIMESTAMP: " << e.what();
+    return query;
   }
-  {
+  try {
     static const auto& ns_timestamp_cast_expr =
         *new boost::regex(R"(CAST\s*\(\s*('[^']+')\s*AS\s*TIMESTAMP\(9\)\s*\))",
                           boost::regex::extended | boost::regex::icase);
@@ -202,36 +246,39 @@ std::string pg_shim_impl(const std::string& query) {
                  result.replace(
                      what.position(), what.length(), "nsTIMESTAMP(" + what[1] + ")");
                });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing nsTIMESTAMP: " << e.what();
+    return query;
   }
-  {
+  try {
     static const auto& corr_expr = *new boost::regex(
         R"((\s+|,|\()(corr)\s*\()", boost::regex::extended | boost::regex::icase);
     static_assert(std::is_trivially_destructible_v<decltype(corr_expr)>);
     apply_shim(result, corr_expr, [](std::string& result, const boost::smatch& what) {
       result.replace(what.position(), what.length(), what[1] + "CORRELATION(");
     });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing CORRELATION: " << e.what();
+    return query;
   }
-  {
-    try {
-      // the geography regex pattern is expensive and can sometimes run out of stack space
-      // on long queries. Treat it separately from the other shims.
-      static const auto& cast_to_geography_expr =
-          *new boost::regex(R"(CAST\s*\(\s*(((?!geography).)+)\s+AS\s+geography\s*\))",
-                            boost::regex::perl | boost::regex::icase);
-      static_assert(std::is_trivially_destructible_v<decltype(cast_to_geography_expr)>);
-      apply_shim(result,
-                 cast_to_geography_expr,
-                 [](std::string& result, const boost::smatch& what) {
-                   result.replace(what.position(),
-                                  what.length(),
-                                  "CastToGeography(" + what[1] + ")");
-                 });
-    } catch (const std::exception& e) {
-      LOG(WARNING) << "Error apply geography cast shim: " << e.what()
-                   << "\nContinuing query parse...";
-    }
+  try {
+    // the geography regex pattern is expensive and can sometimes run out of stack
+    // space on long queries. Treat it separately from the other shims.
+    static const auto& cast_to_geography_expr =
+        *new boost::regex(R"(CAST\s*\(\s*(((?!geography).)+)\s+AS\s+geography\s*\))",
+                          boost::regex::perl | boost::regex::icase);
+    static_assert(std::is_trivially_destructible_v<decltype(cast_to_geography_expr)>);
+    apply_shim(result,
+               cast_to_geography_expr,
+               [](std::string& result, const boost::smatch& what) {
+                 result.replace(
+                     what.position(), what.length(), "CastToGeography(" + what[1] + ")");
+               });
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Detect error while parsing CastToGeography: " << e.what();
+    return query;
   }
-  {
+  try {
     static const auto& interval_subsecond_expr =
         *new boost::regex(R"(interval\s+([0-9]+)\s+(millisecond|microsecond|nanosecond))",
                           boost::regex::extended | boost::regex::icase);
@@ -263,21 +310,9 @@ std::string pg_shim_impl(const std::string& query) {
                 what.position(), what.length(), "interval " + interval_str + " second");
           }
         });
-  }
-
-  return result;
-}
-
-}  // namespace
-
-std::string pg_shim(const std::string& query) {
-  try {
-    return pg_shim_impl(query);
   } catch (const std::exception& e) {
-    LOG(WARNING) << "Error applying shim: " << e.what() << "\nContinuing query parse...";
-    // boost::regex throws an exception about the complexity of matching when
-    // the wrong type of quotes are used or they're mismatched. Let the query
-    // through unmodified, the parser will throw a much more informative error.
+    LOG(WARNING) << "Detect error while parsing INTERVAL: " << e.what();
+    return query;
   }
-  return query;
+  return result;
 }

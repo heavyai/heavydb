@@ -26548,6 +26548,110 @@ TEST_F(Select, OstensibleTautologyPredicate) {
   }
 }
 
+TEST_F(Select, ComplexQueryWithEmptyStringLiteral) {
+  // this test is to check the regex matching functionality of
+  // our find_string_literals function which previously had an issue
+  // of throwing infinite exception while handling the following query pattern
+  SKIP_ALL_ON_AGGREGATOR();
+  std::string tbl1_ddl{
+      "CREATE TABLE aaa_aaaa_aa_aaaaaaaaa_aa_a2 (\n"
+      "aaa_aa DATE ENCODING DAYS(32),\n"
+      "bbbbbb_bb DATE ENCODING DAYS(32),\n"
+      "cccc_ccc DATE ENCODING DAYS(32),\n"
+      "ddd_ddd TEXT ENCODING DICT(32),\n"
+      "eee_eee TEXT ENCODING DICT(32),\n"
+      "fffff TEXT ENCODING DICT(32),\n"
+      "gggg TEXT ENCODING DICT(32),\n"
+      "gggg_ggggg TEXT ENCODING DICT(32),\n"
+      "hhhhhhhh TEXT ENCODING DICT(32),\n"
+      "hhhhhhhh_hhhhhhh TEXT ENCODING DICT(32),\n"
+      "iiiiiiiiiiii TEXT ENCODING DICT(32),\n"
+      "iiiiiiiiiiii_iiiiiii TEXT ENCODING DICT(32),\n"
+      "jj TEXT ENCODING DICT(32),\n"
+      "kkkkkkk_kkkkk_kkkk_kkkkk TEXT ENCODING DICT(32),\n"
+      "ll_lll_llllllll TEXT ENCODING DICT(32),\n"
+      "mmmmmmm_mmm TEXT ENCODING DICT(32),\n"
+      "ooo_ooo_oooooo TEXT ENCODING DICT(32),\n"
+      "pppp_ppppppp_pppppppppp_ppp TEXT ENCODING DICT(32),\n"
+      "qqqqqqqqqq_qqqqqq_qqq TEXT ENCODING DICT(32),\n"
+      "rrrrrr_rrr_rrr INTEGER,\n"
+      "sssssss TEXT ENCODING DICT(32),\n"
+      "ttttttt_ttttttt_tttt TEXT ENCODING DICT(32),\n"
+      "vvvvvv_vvvvv_vvvvvv TEXT ENCODING DICT(32),\n"
+      "xxxxx_xxxxx INTEGER,\n"
+      "yyy_yyyyy BIGINT,\n"
+      "zzzz_zzzzz BIGINT,\n"
+      "ababa_bab DOUBLE,\n"
+      "cdcdc_dcd BIGINT);"};
+  std::string tbl2_ddl{
+      "CREATE TABLE bbb_bb_bb_bbbbbbbbb (\n"
+      "ef_ef_efe TEXT ENCODING DICT(16),\n"
+      "ghghg_hghgh TEXT ENCODING DICT(8),\n"
+      "ikikik_ik_ikikiki TEXT ENCODING DICT(8),\n"
+      "ll_lll_llllllll TEXT ENCODING DICT(8),\n"
+      "qwqwqwq TEXT ENCODING DICT(8),\n"
+      "er_er TEXT ENCODING DICT(16));"};
+  run_ddl_statement("DROP TABLE IF EXISTS aaa_aaaa_aa_aaaaaaaaa_aa_a2;");
+  run_ddl_statement("DROP TABLE IF EXISTS bbb_bb_bb_bbbbbbbbb;");
+  run_ddl_statement(tbl1_ddl);
+  run_ddl_statement(tbl2_ddl);
+  std::string query(
+      "SELECT(CASE WHEN ((CASE WHEN (\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"jj\" = "
+      "'AAAAAAAAAAA BBBBBBBBBBBB CCC. - DDDDD 2 EEEEE') THEN 'FFF-EEEEE' WHEN "
+      "(\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"pppp_ppppppp_pppppppppp_ppp\" = 'QWEQWE') "
+      "THEN 'FEF CXZCXZC' WHEN ((CAST(\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"aaa_aa\" AS "
+      "DATE) >= CAST('2022-08-01' AS DATE)) AND "
+      "(\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"pppp_ppppppp_pppppppppp_ppp\" = 'FFF-EEEEE')) "
+      "THEN 'FFF-ZAXAXA' WHEN ((CAST(\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"aaa_aa\" AS "
+      "DATE) >= CAST('2022-08-01' AS DATE)) AND (\"bbb_bb_bb_bbbbbbbbb1\".\"er_er\" = "
+      "'CCC WWW. - FFFFF')) THEN 'J6W-EEEEE' ELSE "
+      "\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"pppp_ppppppp_pppppppppp_ppp\" END) <> '') THEN "
+      "'ZAXAXA' ELSE (CASE WHEN (\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"ddd_ddd\" = 'QWE') "
+      "THEN 'QWE' WHEN ((\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"ddd_ddd\" = 'QWERTTYU') AND "
+      "(\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"eee_eee\" = 'ASD')) THEN 'ASD' WHEN "
+      "((\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"ddd_ddd\" = 'QWERTTYU') AND "
+      "COALESCE((\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"eee_eee\" IN ('CC-GRTGTRGTRG', "
+      "'CC-YTRYTRYTRYT', 'CC-RYRYRYR YRYRYRY', 'BB-QWEQWEQWEQWER & REWREWREWR', 'ZZ-AAA "
+      "ACCACCAC & ACACACACACA', 'CA-CACACAC', 'CA-CACACACAC CACACACA')), FALSE)) THEN "
+      "'CC' WHEN ((\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"ddd_ddd\" = 'QWERTTYU') AND "
+      "(COALESCE((\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"eee_eee\" IN ('AMBULANT', 'IA')), "
+      "FALSE) OR (\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"eee_eee\" IS NULL))) THEN "
+      "'ABABABAB' ELSE 'IYUITG' END) END) AS \"FDFDFDFDFDF_5123970507839131648\", "
+      "SUM((CASE WHEN (\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"xxxxx_xxxxx\" = 1) THEN 0 ELSE "
+      "\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"ababa_bab\" END)) AS \"NBNB(NBNBNBN BNBNB "
+      "NBNBN BNBNBN (NBNBN) (copy)_61080138207346689)(480704438)(0)\", SUM((CASE WHEN "
+      "((CASE WHEN (\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"ddd_ddd\" IN ('EWQEWQ BVBVBVB', "
+      "'TGTGTGTG', 'NBNBN BNBNB')) THEN 'IYUITG' ELSE "
+      "\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"ddd_ddd\" END) = 'QWERTTYU') THEN "
+      "\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"ababa_bab\" ELSE 0 END)) AS "
+      "\"TEMP(Calculation_114771454018420739)(4174943029)(0)\", "
+      "MAX(\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"aaa_aa\") AS "
+      "\"ZAZA(HJHJHJHJH_2940991320156753920)(166123433)(0)\", "
+      "SUM(\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"ababa_bab\") AS "
+      "\"ZAZA(HJHJHJHJH_2940991320156753920)(3328816748)(0)\", "
+      "MIN(\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"aaa_aa\") AS "
+      "\"ZAZA(HJHJHJHJH_2940991320156753920)(784626528)(0)\", "
+      "\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"kkkkkkk_kkkkk_kkkk_kkkkk\" AS "
+      "\"kkkkkkk_kkkkk_kkkk_kkkkk\", \"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"iiiiiiiiiiii\" "
+      "AS \"iiiiiiiiiiii\", \"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"hhhhhhhh\" AS "
+      "\"hhhhhhhh\", DATE_TRUNC( MONTH, \"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"aaa_aa\" ) AS "
+      "\"tmn:aaa_aa:ok\" FROM \"aaa_aaaa_aa_aaaaaaaaa_aa_a2\" "
+      "\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\" LEFT JOIN \"bbb_bb_bb_bbbbbbbbb\" "
+      "\"bbb_bb_bb_bbbbbbbbb1\" ON (\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"jj\" = "
+      "\"bbb_bb_bb_bbbbbbbbb1\".\"ef_ef_efe\") WHERE "
+      "(((\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"kkkkkkk_kkkkk_kkkk_kkkkk\" IN ('CE VIS', "
+      "'MIN', 'W VIS')) AND (CASE WHEN ((\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"fffff\" IN "
+      "('PHW_BRO_PRE')) OR (\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"fffff\" IS NULL)) THEN "
+      "FALSE ELSE TRUE END)) AND ((DATE_TRUNC( MONTH, "
+      "\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"aaa_aa\" ) >= (TIMESTAMP '2022-01-01 "
+      "00:00:00.000')) AND (DATE_TRUNC( MONTH, "
+      "\"aaa_aaaa_aa_aaaaaaaaa_aa_a21\".\"aaa_aa\" ) <= (TIMESTAMP '2023-09-01 "
+      "00:00:00.000')))) GROUP BY 1,7,8,9,10 LIMIT 100000;");
+  EXPECT_NO_THROW(run_multiple_agg(query, ExecutorDeviceType::CPU));
+  run_ddl_statement("DROP TABLE IF EXISTS aaa_aaaa_aa_aaaaaaaaa_aa_a2;");
+  run_ddl_statement("DROP TABLE IF EXISTS bbb_bb_bb_bbbbbbbbb;");
+}
+
 class DateAndTimeFunctionsTest : public QRExecutorDeviceParamTest {};
 
 TEST_P(DateAndTimeFunctionsTest, CastLiteralToDate) {
