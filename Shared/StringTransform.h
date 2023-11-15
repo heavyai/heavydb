@@ -56,7 +56,7 @@ std::string format_num_bytes(const size_t bytes);
 std::optional<size_t> inside_string_literal(
     const size_t start,
     const size_t length,
-    const std::vector<std::pair<size_t, size_t>>& literal_positions);
+    std::vector<std::pair<size_t, size_t>> const& literal_positions);
 #endif  // __CUDACC__
 
 template <typename T>

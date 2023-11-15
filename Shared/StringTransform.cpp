@@ -17,16 +17,11 @@
 #include "StringTransform.h"
 #include "Logger/Logger.h"
 
-#include <boost/algorithm/string/classification.hpp>  // Include boost::for is_any_of
-#include <boost/algorithm/string/split.hpp>           // Include for boost::split
-
 #include <numeric>
 #include <random>
 #include <regex>
-#include <string>
 
-#include <cmath>   // format_bytes round call
-#include <vector>  // format_bytes
+#include <cmath>  // format_bytes round call
 
 #ifndef __CUDACC__
 #include <boost/filesystem.hpp>
@@ -37,7 +32,7 @@ void apply_shim(std::string& result,
                 const boost::regex& reg_expr,
                 const std::function<void(std::string&, const boost::smatch&)>& shim_fn) {
   boost::smatch what;
-  std::vector<std::pair<size_t, size_t>> lit_pos = find_string_literals(result);
+  auto lit_pos = find_string_literals(result);
   auto start_it = result.cbegin();
   auto end_it = result.cend();
   while (true) {
@@ -57,8 +52,10 @@ void apply_shim(std::string& result,
   }
 }
 
+// Scan query and save all single-quoted string literals as [begin,end) index pairs into
+// lit_pos, including the surrounding quotes.
 std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& query) {
-  boost::regex literal_string_regex{R"(([^']+)('(?:[^']+|'')+'))", boost::regex::perl};
+  boost::regex literal_string_regex{R"(([^']+)('(?:[^']+|'')*'))", boost::regex::perl};
   boost::smatch what;
   auto it = query.begin();
   auto prev_it = it;
@@ -69,13 +66,14 @@ std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& q
         break;
       }
     } catch (const std::exception& e) {
-      LOG(WARNING) << "Error processing literals: " << e.what()
-                   << "\nContinuing query parse...";
       // boost::regex throws an exception about the complexity of matching when
       // the wrong type of quotes are used or they're mismatched. Let the query
       // through unmodified, the parser will throw a much more informative error.
       // This can also throw on very long queries
-      break;
+      std::ostringstream oss;
+      oss << "Detecting an error while processing string literal regex search: "
+          << e.what();
+      throw std::runtime_error(oss.str());
     }
     CHECK_GT(what[1].length(), 0);
     prev_it = it;
@@ -235,7 +233,7 @@ std::string strip(std::string_view str) {
 std::optional<size_t> inside_string_literal(
     const size_t start,
     const size_t length,
-    const std::vector<std::pair<size_t, size_t>>& literal_positions) {
+    std::vector<std::pair<size_t, size_t>> const& literal_positions) {
   const auto end = start + length;
   for (const auto& literal_position : literal_positions) {
     if (literal_position.first <= start && end <= literal_position.second) {

@@ -18,4 +18,4 @@
 
 #include <string>
 
-std::string pg_shim(const std::string&);
+std::string pg_shim(std::string const&);
