@@ -118,7 +118,7 @@ class PointN : public Codegen {
     llvm::Value* pt_size_lv = cgen_state->llInt(16);
     llvm::Value* num_pts_lv = builder.CreateUDiv(geo_size_lv, pt_size_lv);
     llvm::Value* is_negative_lv =
-        builder.CreateCmp(llvm::CmpInst::ICMP_SLT, raw_index_lv, cgen_state->llInt(0));
+        builder.CreateICmpSLT(raw_index_lv, cgen_state->llInt(0));
     llvm::Value* negative_raw_index_lv = builder.CreateAdd(raw_index_lv, num_pts_lv);
     llvm::Value* positive_raw_index_lv =
         builder.CreateSub(raw_index_lv, cgen_state->llInt(1));
