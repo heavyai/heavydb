@@ -464,7 +464,7 @@ std::map<int32_t, std::vector<DashboardDescriptor>> get_all_dashboards() {
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
     if (catalog->name() != shared::kInfoSchemaDbName) {
-      for (const auto& dashboard : catalog->getAllDashboardsMetadataCopy()) {
+      for (const auto& dashboard : catalog->getAllDashboardsMetadataForSysTable()) {
         dashboards_by_database[catalog->getDatabaseId()].emplace_back(dashboard);
       }
     }

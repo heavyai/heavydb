@@ -2217,12 +2217,19 @@ list<const DashboardDescriptor*> Catalog::getAllDashboardsMetadata() const {
   return dashboards;
 }
 
-std::vector<DashboardDescriptor> Catalog::getAllDashboardsMetadataCopy() const {
+std::vector<DashboardDescriptor> Catalog::getAllDashboardsMetadataForSysTable() const {
   cat_read_lock read_lock(this);
   std::vector<DashboardDescriptor> dashboards;
   dashboards.reserve(dashboardDescriptorMap_.size());
   for (auto dashboard_entry : dashboardDescriptorMap_) {
-    dashboards.emplace_back(*dashboard_entry.second);
+    const auto& cat_dashboard = dashboard_entry.second;
+    dashboards.emplace_back();
+    auto& dashboard = dashboards.back();
+    dashboard.dashboardId = cat_dashboard->dashboardId;
+    dashboard.dashboardName = cat_dashboard->dashboardName;
+    dashboard.userId = cat_dashboard->userId;
+    dashboard.updateTime = cat_dashboard->updateTime;
+    dashboard.dashboardMetadata = cat_dashboard->dashboardMetadata;
   }
   return dashboards;
 }
