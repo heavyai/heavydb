@@ -261,7 +261,7 @@ class Catalog final {
   std::list<const TableDescriptor*> getAllTableMetadata() const;
   std::vector<TableDescriptor> getAllTableMetadataCopy() const;
   std::list<const DashboardDescriptor*> getAllDashboardsMetadata() const;
-  std::vector<DashboardDescriptor> getAllDashboardsMetadataCopy() const;
+  std::vector<DashboardDescriptor> getAllDashboardsMetadataForSysTable() const;
   const DBMetadata& getCurrentDB() const { return currentDB_; }
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   std::shared_ptr<Calcite> getCalciteMgr() const { return calciteMgr_; }
