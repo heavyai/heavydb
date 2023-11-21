@@ -121,6 +121,7 @@ struct HashJoinMatchingSet {
   llvm::Value* elements;
   llvm::Value* count;
   llvm::Value* slot;
+  llvm::Value* error_code;
 };
 
 struct CompositeKeyInfo {

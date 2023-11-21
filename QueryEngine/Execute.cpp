@@ -3934,7 +3934,8 @@ int32_t Executor::executePlanWithoutGroupBy(
                      ErrorCode::INTERRUPTED,
                      ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES,
                      ErrorCode::GEOS,
-                     ErrorCode::WIDTH_BUCKET_INVALID_ARGUMENT>::check(error_code)) {
+                     ErrorCode::WIDTH_BUCKET_INVALID_ARGUMENT,
+                     ErrorCode::BBOX_OVERLAPS_LIMIT_EXCEEDED>::check(error_code)) {
     return error_code;
   }
   if (ra_exe_unit.estimator) {
@@ -4208,7 +4209,8 @@ int32_t Executor::executePlanWithGroupBy(
                      ErrorCode::INTERRUPTED,
                      ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES,
                      ErrorCode::GEOS,
-                     ErrorCode::WIDTH_BUCKET_INVALID_ARGUMENT>::check(error_code)) {
+                     ErrorCode::WIDTH_BUCKET_INVALID_ARGUMENT,
+                     ErrorCode::BBOX_OVERLAPS_LIMIT_EXCEEDED>::check(error_code)) {
     return error_code;
   }
 

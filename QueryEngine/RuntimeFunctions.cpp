@@ -1856,6 +1856,7 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE void record_error_code(const int32_t err
   }
 }
 
+// error_codes points to an array on GPU, but a single value on CPU.
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t get_error_code(int32_t* error_codes) {
   return error_codes[pos_start_impl(nullptr)];
 }
@@ -2382,7 +2383,7 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void linear_probabilistic_count(
 
 // First 3 parameters are output, the rest are input.
 extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
-    int32_t* error_code,
+    int32_t* error_codes,
     int32_t* total_matched,
     int64_t** out,
     const uint32_t frag_idx,
@@ -2396,7 +2397,7 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
     const int64_t* join_hash_tables,
     const int8_t* row_func_mgr) {
 #ifndef _WIN32
-  assert(error_code || total_matched || out || frag_idx || row_index_resume ||
+  assert(error_codes || total_matched || out || frag_idx || row_index_resume ||
          col_buffers || literals || num_rows || frag_row_offsets || max_matched ||
          init_agg_value || join_hash_tables || row_func_mgr);
 #endif
@@ -2404,7 +2405,7 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
 
 // First 3 parameters are output, the rest are input.
 extern "C" RUNTIME_EXPORT void multifrag_query_hoisted_literals(
-    int32_t* error_code,
+    int32_t* error_codes,
     int32_t* total_matched,
     int64_t** out,
     const uint32_t* num_fragments_ptr,
@@ -2421,8 +2422,10 @@ extern "C" RUNTIME_EXPORT void multifrag_query_hoisted_literals(
   uint32_t const num_fragments = *num_fragments_ptr;
   uint32_t const num_tables = *num_tables_ptr;
   // num_fragments_ptr and num_tables_ptr are replaced by frag_idx when passed below.
-  for (uint32_t frag_idx = 0; frag_idx < num_fragments; ++frag_idx) {
-    query_stub_hoisted_literals(error_code,
+  for (uint32_t frag_idx = 0;
+       frag_idx < num_fragments && get_error_code(error_codes) == 0;
+       ++frag_idx) {
+    query_stub_hoisted_literals(error_codes,
                                 total_matched,
                                 out,
                                 frag_idx,
@@ -2439,7 +2442,7 @@ extern "C" RUNTIME_EXPORT void multifrag_query_hoisted_literals(
 }
 
 // First 3 parameters are output, the rest are input.
-extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(int32_t* error_code,
+extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(int32_t* error_codes,
                                                        int32_t* total_matched,
                                                        int64_t** out,
                                                        const uint32_t frag_idx,
@@ -2452,14 +2455,14 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(int32_t* error_code,
                                                        const int64_t* join_hash_tables,
                                                        const int8_t* row_func_mgr) {
 #ifndef _WIN32
-  assert(error_code || total_matched || out || frag_idx || row_index_resume ||
+  assert(error_codes || total_matched || out || frag_idx || row_index_resume ||
          col_buffers || num_rows || frag_row_offsets || max_matched || init_agg_value ||
          join_hash_tables || row_func_mgr);
 #endif
 }
 
 // First 3 parameters are output, the rest are input.
-extern "C" RUNTIME_EXPORT void multifrag_query(int32_t* error_code,
+extern "C" RUNTIME_EXPORT void multifrag_query(int32_t* error_codes,
                                                int32_t* total_matched,
                                                int64_t** out,
                                                const uint32_t* num_fragments_ptr,
@@ -2475,8 +2478,10 @@ extern "C" RUNTIME_EXPORT void multifrag_query(int32_t* error_code,
   uint32_t const num_fragments = *num_fragments_ptr;
   uint32_t const num_tables = *num_tables_ptr;
   // num_fragments_ptr and num_tables_ptr are replaced by frag_idx when passed below.
-  for (uint32_t frag_idx = 0; frag_idx < num_fragments; ++frag_idx) {
-    query_stub(error_code,
+  for (uint32_t frag_idx = 0;
+       frag_idx < num_fragments && get_error_code(error_codes) == 0;
+       ++frag_idx) {
+    query_stub(error_codes,
                total_matched,
                out,
                frag_idx,

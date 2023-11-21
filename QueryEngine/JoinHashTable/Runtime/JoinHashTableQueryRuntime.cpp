@@ -288,6 +288,7 @@ struct Bounds {
 /// The number of row ids in this array is returned.
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
 get_candidate_rows(int32_t* out_arr,
+                   int32_t* error_code,
                    const uint32_t max_arr_size,
                    const int8_t* range_bytes,
                    const int32_t range_component_index,
@@ -298,7 +299,8 @@ get_candidate_rows(int32_t* out_arr,
                    int64_t* hash_table_ptr,
                    const int64_t entry_count,
                    const int64_t offset_buffer_ptr_offset,
-                   const int64_t sub_buff_size) {
+                   const int64_t sub_buff_size,
+                   const int32_t max_bbox_overlaps_error_code) {
   const auto range = reinterpret_cast<const double*>(range_bytes);
 
   size_t elem_count = 0;
@@ -325,7 +327,10 @@ get_candidate_rows(int32_t* out_arr,
       for (int64_t j = 0; j < buffer_range.element_count; j++) {
         const auto rowid = buffer_range.buffer[j];
         elem_count += insert_sorted(out_arr, elem_count, rowid);
-        assert(max_arr_size >= elem_count);
+        if (elem_count > max_arr_size) {
+          *error_code = max_bbox_overlaps_error_code;
+          return 0;
+        }
       }
     }
   }

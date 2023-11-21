@@ -736,6 +736,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                   co, current_hash_table_idx);
               domain.values_buffer = matching_set.elements;
               domain.element_count = matching_set.count;
+              domain.error_code = matching_set.error_code;
               return domain;
             },
             /*outer_condition_match=*/

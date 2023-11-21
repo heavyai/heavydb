@@ -21,6 +21,11 @@
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 
+// NOTE(jclay): A fixed array of size 200 is allocated on the stack.
+// this is likely the maximum value we can do that is safe to use across
+// all supported GPU architectures.
+constexpr int32_t kMaxBBoxOverlapsCount{200};
+
 class BoundingBoxIntersectJoinHashTable : public HashJoin {
  public:
   BoundingBoxIntersectJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,

@@ -50,7 +50,9 @@ HEAVYAI_DEFINE_ENUM_CLASS_WITH_DESCRIPTIONS(
     (SINGLE_VALUE_FOUND_MULTIPLE_VALUES, "Multiple distinct values encountered"),
     (GEOS, "Geo-related error"),
     (WIDTH_BUCKET_INVALID_ARGUMENT,
-     "Arguments of WIDTH_BUCKET function does not satisfy the condition"))
+     "Arguments of WIDTH_BUCKET function does not satisfy the condition"),
+    (BBOX_OVERLAPS_LIMIT_EXCEEDED,
+     "Maximum supported number of bounding box overlaps exceeded"))
 
 HEAVYAI_DEFINE_ENUM_CLASS(QueryDescriptionType,
                           GroupByPerfectHash,

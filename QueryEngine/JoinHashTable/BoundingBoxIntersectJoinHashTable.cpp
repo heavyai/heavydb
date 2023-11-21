@@ -26,6 +26,7 @@
 #include "QueryEngine/JoinHashTable/RangeJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinKeyHandlers.h"
 #include "QueryEngine/JoinHashTable/Runtime/JoinHashTableGpuUtils.h"
+#include "QueryEngine/enums.h"
 
 std::unique_ptr<HashtableRecycler> BoundingBoxIntersectJoinHashTable::hash_table_cache_ =
     std::make_unique<HashtableRecycler>(CacheItemType::BBOX_INTERSECT_HT,
@@ -1669,11 +1670,7 @@ HashJoinMatchingSet BoundingBoxIntersectJoinHashTable::codegenMatchingSet(
     one_to_many_ptr =
         LL_BUILDER.CreateAdd(one_to_many_ptr, LL_INT(composite_key_dict_size));
 
-    // NOTE(jclay): A fixed array of size 200 is allocated on the stack.
-    // this is likely the maximum value we can do that is safe to use across
-    // all supported GPU architectures.
-    const int max_array_size = 200;
-    const auto arr_type = get_int_array_type(32, max_array_size, LL_CONTEXT);
+    const auto arr_type = get_int_array_type(32, kMaxBBoxOverlapsCount, LL_CONTEXT);
     const auto out_arr_lv = LL_BUILDER.CreateAlloca(arr_type);
     out_arr_lv->setName("out_arr");
 
@@ -1685,27 +1682,32 @@ HashJoinMatchingSet BoundingBoxIntersectJoinHashTable::codegenMatchingSet(
     auto rowid_ptr_i32 =
         LL_BUILDER.CreatePointerCast(element_ptr, llvm::Type::getInt32PtrTy(LL_CONTEXT));
 
+    const auto error_code_ptr = LL_BUILDER.CreateAlloca(
+        get_int_type(32, LL_CONTEXT), nullptr, "candidate_rows_error_code");
+    LL_BUILDER.CreateStore(LL_INT(int32_t(0)), error_code_ptr);
+
     const auto candidate_count_lv = executor_->cgen_state_->emitExternalCall(
         "get_candidate_rows",
         llvm::Type::getInt64Ty(LL_CONTEXT),
-        {
-            rowid_ptr_i32,
-            LL_INT(max_array_size),
-            many_to_many_args[1],
-            LL_INT(0),
-            LL_FP(inverse_bucket_sizes_for_dimension_[0]),
-            LL_FP(inverse_bucket_sizes_for_dimension_[1]),
-            many_to_many_args[0],
-            LL_INT(key_component_count),               // key_component_count
-            composite_key_dict,                        // ptr to hash table
-            LL_INT(getEntryCount()),                   // entry_count
-            LL_INT(composite_key_dict_size),           // offset_buffer_ptr_offset
-            LL_INT(getEntryCount() * sizeof(int32_t))  // sub_buff_size
-        });
+        {rowid_ptr_i32,
+         error_code_ptr,
+         LL_INT(kMaxBBoxOverlapsCount),
+         many_to_many_args[1],
+         LL_INT(0),
+         LL_FP(inverse_bucket_sizes_for_dimension_[0]),
+         LL_FP(inverse_bucket_sizes_for_dimension_[1]),
+         many_to_many_args[0],
+         LL_INT(key_component_count),                // key_component_count
+         composite_key_dict,                         // ptr to hash table
+         LL_INT(getEntryCount()),                    // entry_count
+         LL_INT(composite_key_dict_size),            // offset_buffer_ptr_offset
+         LL_INT(getEntryCount() * sizeof(int32_t)),  // sub_buff_size
+         LL_INT(int32_t(heavyai::ErrorCode::BBOX_OVERLAPS_LIMIT_EXCEEDED))});
 
     const auto slot_lv = LL_INT(int64_t(0));
-
-    return {rowid_ptr_i32, candidate_count_lv, slot_lv};
+    auto error_code_lv = LL_BUILDER.CreateLoad(
+        error_code_ptr->getType()->getPointerElementType(), error_code_ptr);
+    return {rowid_ptr_i32, candidate_count_lv, slot_lv, error_code_lv};
   } else {
     VLOG(1) << "Building codegenMatchingSet for Baseline";
     // TODO: duplicated w/ BaselineJoinHashTable -- push into the hash table builder?
