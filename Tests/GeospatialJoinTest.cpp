@@ -24,6 +24,7 @@
 
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 #include "Shared/scope.h"
 #include "TestHelpers.h"
 
@@ -66,8 +67,10 @@ struct ExecutionContext {
 };
 
 template <typename TEST_BODY>
-void executeAllScenarios(TEST_BODY fn) {
-  for (const auto bbox_intersect_state : {true, false}) {
+void executeAllScenarios(TEST_BODY fn,
+                         std::initializer_list<bool> bbox_intersect_states = {true,
+                                                                              false}) {
+  for (const auto bbox_intersect_state : bbox_intersect_states) {
     const auto enable_bbox_intersect_hashjoin = g_enable_bbox_intersect_hashjoin;
     const auto enable_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many;
 
@@ -1674,6 +1677,125 @@ TEST_F(MultiFragGeospatialJoinTest, Nullable_Geo_Exhaustive) {
     ASSERT_EQ(single_frag_res4, multi_frag_res4) << mq4.str();
   });
 }
+
+class MaxBBoxOverlapsExceededTest : public ::testing::TestWithParam<bool> {
+ protected:
+  static void SetUpTestSuite() {
+    createTable("polys_max_bbox_overlaps_1");
+    createTable("polys_max_bbox_overlaps_2");
+    createTable("polys_max_bbox_overlaps_3");
+
+    populateTables();
+  }
+
+  static void TearDownTestSuite() {
+    dropTable("polys_max_bbox_overlaps_1");
+    dropTable("polys_max_bbox_overlaps_2");
+    dropTable("polys_max_bbox_overlaps_3");
+  }
+
+  static void createTable(const std::string& table_name) {
+    QR::get()->runDDLStatement(
+        "create table " + table_name +
+        " (id int, poly geometry(polygon, 4326)) with (fragment_size = 10);");
+  }
+
+  static void dropTable(const std::string& table_name) {
+    QR::get()->runDDLStatement("drop table if exists " + table_name + ";");
+  }
+
+  static void populateTables() {
+    for (const auto& table : {"polys_max_bbox_overlaps_1",
+                              "polys_max_bbox_overlaps_2",
+                              "polys_max_bbox_overlaps_3"}) {
+      std::string insert_stmt{"insert into " + std::string{table} + " values "};
+      for (size_t i = 0; i <= kMaxBBoxOverlapsCount; i++) {
+        if (i > 0) {
+          insert_stmt += ", ";
+        }
+        std::string polygon;
+        if (table == "polys_max_bbox_overlaps_1"s) {
+          // All left table polygons intersect with all right table polygons.
+          polygon = "POLYGON ((0 0,5 0,5 5,0 5,0 0))";
+        } else if (table == "polys_max_bbox_overlaps_3"s) {
+          if (i < kMaxBBoxOverlapsCount / 2) {
+            polygon = "POLYGON ((0 0,1 0,1 1,0 1,0 0))";
+          } else {
+            polygon = "POLYGON ((2 2,3 2,3 3,2 3,2 2))";
+          }
+        } else {
+          polygon = "POLYGON ((0 0,3 0,3 3,0 3,0 0))";
+        }
+        insert_stmt += "(" + std::to_string(i) + ", '" + polygon + "')";
+      }
+      insert_stmt += ";";
+      QR::get()->runSQL(insert_stmt, ExecutorDeviceType::CPU);
+    }
+  }
+
+  void queryAndAssertError(const std::string& query,
+                           ExecutorDeviceType device_type,
+                           const std::string& error_message) {
+    try {
+      QR::get()->runSQL(query, device_type, true, false);
+      FAIL() << "An exception should have been thrown for this test case.";
+    } catch (const std::exception& e) {
+      EXPECT_EQ(error_message, std::string{e.what()});
+    }
+  }
+
+  std::string getHashedTable() {
+    std::string table_name;
+    if (GetParam()) {
+      table_name = "polys_max_bbox_overlaps_2";
+    } else {
+      table_name = "polys_max_bbox_overlaps_3";
+    }
+    return table_name;
+  }
+
+  static constexpr char const* kMaxBBoxOverlapsError{
+      "BBOX_OVERLAPS_LIMIT_EXCEEDED: Maximum supported number of bounding box "
+      "overlaps exceeded"};
+};
+
+TEST_P(MaxBBoxOverlapsExceededTest, NonGroupByAggregate) {
+  executeAllScenarios(
+      [this](const ExecutionContext ctx) -> void {
+        auto sql = "SELECT count(*) FROM polys_max_bbox_overlaps_1 AS a JOIN " +
+                   getHashedTable() + " AS b ON ST_Intersects(a.poly, b.poly);";
+        queryAndAssertError(sql, ctx.device_type, kMaxBBoxOverlapsError);
+      },
+      {true});
+}
+
+TEST_P(MaxBBoxOverlapsExceededTest, GroupByAggregate) {
+  executeAllScenarios(
+      [this](const ExecutionContext ctx) -> void {
+        auto sql = "SELECT count(*) FROM polys_max_bbox_overlaps_1 AS a JOIN " +
+                   getHashedTable() +
+                   " AS b ON ST_Intersects(a.poly, b.poly) GROUP BY a.id;";
+        queryAndAssertError(sql, ctx.device_type, kMaxBBoxOverlapsError);
+      },
+      {true});
+}
+
+TEST_P(MaxBBoxOverlapsExceededTest, NonAggregateProjection) {
+  executeAllScenarios(
+      [this](const ExecutionContext ctx) -> void {
+        auto sql = "SELECT * FROM polys_max_bbox_overlaps_1 AS a JOIN " +
+                   getHashedTable() + " AS b ON ST_Intersects(a.poly, b.poly) LIMIT 1;";
+        queryAndAssertError(sql, ctx.device_type, kMaxBBoxOverlapsError);
+      },
+      {true});
+}
+
+INSTANTIATE_TEST_SUITE_P(SingleAndMultipleBins,
+                         MaxBBoxOverlapsExceededTest,
+                         ::testing::Bool(),
+                         [](const auto& info) {
+                           return info.param ? "SingleBin" : "MultipleBins";
+                         });
 
 class ParallelLinearization : public ::testing::Test {
  protected:

@@ -106,9 +106,25 @@ llvm::BasicBlock* JoinLoop::codegen(
         }
         builder.CreateStore(ll_int(int64_t(0), context), iteration_counter_ptr);
         const auto iteration_domain = join_loop.iteration_domain_codegen_(iterators);
+
         const auto head_bb = llvm::BasicBlock::Create(
             context, "ub_iter_head_" + join_loop.name_, parent_func);
-        builder.CreateBr(head_bb);
+
+        if (iteration_domain.error_code) {
+          cgen_state->needs_error_check_ = true;
+          auto ub_iter_success_code = ll_int(int32_t(0), context);
+          const auto ub_iter_error_condition =
+              builder.CreateICmpEQ(iteration_domain.error_code, ub_iter_success_code);
+          auto error_bb =
+              llvm::BasicBlock::Create(context, "ub_iter_error_exit", parent_func);
+          builder.CreateCondBr(ub_iter_error_condition, head_bb, error_bb);
+
+          builder.SetInsertPoint(error_bb);
+          builder.CreateRet(iteration_domain.error_code);
+        } else {
+          builder.CreateBr(head_bb);
+        }
+
         builder.SetInsertPoint(head_bb);
         llvm::Value* iteration_counter =
             builder.CreateLoad(iteration_counter_ptr->getType()->getPointerElementType(),

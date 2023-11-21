@@ -253,7 +253,7 @@ HashJoinMatchingSet HashJoin::codegenMatchingSet(
       rowid_base_i32->getType()->getScalarType()->getPointerElementType(),
       rowid_base_i32,
       slot_lv);
-  return {rowid_ptr_i32, row_count_lv, slot_lv};
+  return {rowid_ptr_i32, row_count_lv, slot_lv, nullptr};
 }
 
 llvm::Value* HashJoin::codegenHashTableLoad(const size_t table_idx, Executor* executor) {
