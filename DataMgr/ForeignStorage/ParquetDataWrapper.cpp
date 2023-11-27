@@ -634,16 +634,27 @@ void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_b
         chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
   }
 
+  const logger::ThreadLocalIds parent_thread_local_ids = logger::thread_local_ids();
+
   std::function<void(const std::set<ForeignStorageMgr::ParallelismHint>&)> lambda =
       [&, this](const std::set<ForeignStorageMgr::ParallelismHint>& hint_set) {
+        // Enable debug timers
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+        DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
+
         for (const auto& [col_id, frag_id] : hint_set) {
           loadBuffersUsingLazyParquetChunkLoader(
               col_id, frag_id, buffers_to_load, delete_buffer);
+          VLOG(1) << "Loaded key " << db_id_ << "," << foreign_table_->tableId << ","
+                  << col_id << "," << frag_id;
         }
       };
 
   CHECK(foreign_table_);
   auto num_threads = foreign_storage::get_num_threads(*foreign_table_);
+
+  VLOG(1) << "Populating chunk from parquet source using " + std::to_string(num_threads) +
+                 " threads.";
   auto futures = create_futures_for_workers(col_frag_hints, num_threads, lambda);
 
   // We wait on all futures, then call get because we want all threads to have finished
