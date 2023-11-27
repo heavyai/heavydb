@@ -668,9 +668,11 @@ Duration* newDuration(DebugTimerParams const debug_timer_params) {
       return duration_tree_ptr->newDuration(debug_timer_params);
     }
     LOG(ERROR) << "DEBUG_TIMER(" << debug_timer_params.name_
-               << ") must not be called from the root thread(0) at "
+               << ") is being called on a child thread nested within an existing "
+                  "DEBUG_TIMER call at "
                << debug_timer_params.file_ << ':' << debug_timer_params.line_
-               << ". New threads require DEBUG_TIMER_NEW_THREAD() to be called first.";
+               << ".  New threads require DEBUG_TIMER_NEW_THREAD() to be called first to "
+                  "guarantee accurate reporting.";
   }
   return nullptr;  // Inactive - don't measure or report timing.
 }

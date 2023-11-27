@@ -44,6 +44,7 @@
 #include "ParquetTimeEncoder.h"
 #include "ParquetTimestampEncoder.h"
 #include "ParquetVariableLengthArrayEncoder.h"
+#include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "StringDictionary/StringDictionary.h"
 #include "TypedParquetDetectBuffer.h"
@@ -1842,6 +1843,17 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
   std::vector<int16_t> rep_levels(LazyParquetChunkLoader::batch_reader_num_elements);
   std::vector<int8_t> values;
 
+  // Timing information used in logging
+  Timer<> summary_timer;
+  Timer<> initialization_timer_ms;
+  Timer<> validation_timer_ms;
+  Timer<> parquet_read_timer_ms;
+  Timer<> encoding_timer_ms;
+  size_t total_row_groups_read = 0;
+
+  summary_timer.start();
+
+  initialization_timer_ms.start();
   CHECK(!row_group_intervals.empty());
   const auto& first_file_path = row_group_intervals.front().file_path;
 
@@ -1867,10 +1879,12 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
     encoder->initializeErrorTracking();
   }
   encoder->initializeColumnType(column_descriptor->columnType);
+  initialization_timer_ms.stop();
 
   bool early_exit = false;
   int64_t total_rows_read = 0;
   for (const auto& row_group_interval : row_group_intervals) {
+    initialization_timer_ms.start();
     const auto& file_path = row_group_interval.file_path;
     auto file_reader = file_reader_cache_->getOrInsert(file_path, file_system_);
 
@@ -1882,6 +1896,10 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
     parquet::ParquetFileReader* parquet_reader = file_reader->parquet_reader();
     auto parquet_column_descriptor =
         get_column_descriptor(file_reader, parquet_column_index);
+
+    initialization_timer_ms.stop();
+
+    validation_timer_ms.start();
     validate_equal_column_descriptor(first_parquet_column_descriptor,
                                      parquet_column_descriptor,
                                      first_file_path,
@@ -1891,17 +1909,22 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
                                                  parquet_column_descriptor);
     set_definition_levels_for_zero_max_definition_level_case(parquet_column_descriptor,
                                                              def_levels);
+    validation_timer_ms.stop();
 
     int64_t values_read = 0;
     for (int row_group_index = row_group_interval.start_index;
          row_group_index <= row_group_interval.end_index;
          ++row_group_index) {
+      total_row_groups_read++;
+      parquet_read_timer_ms.start();
       auto group_reader = parquet_reader->RowGroup(row_group_index);
       std::shared_ptr<parquet::ColumnReader> col_reader =
           group_reader->Column(parquet_column_index);
+      parquet_read_timer_ms.stop();
 
       try {
         while (col_reader->HasNext()) {
+          parquet_read_timer_ms.start();
           int64_t levels_read =
               parquet::ScanAllValues(LazyParquetChunkLoader::batch_reader_num_elements,
                                      def_levels.data(),
@@ -1909,7 +1932,9 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
                                      reinterpret_cast<uint8_t*>(values.data()),
                                      &values_read,
                                      col_reader.get());
+          parquet_read_timer_ms.stop();
 
+          encoding_timer_ms.start();
           if (rejected_row_indices) {  // error tracking is enabled
             encoder->appendDataTrackErrors(def_levels.data(),
                                            rep_levels.data(),
@@ -1931,6 +1956,7 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
                                 levels_read,
                                 values.data());
           }
+          encoding_timer_ms.stop();
 
           if (max_rows_to_read.has_value()) {
             if (column_descriptor->columnType.is_array()) {
@@ -1950,9 +1976,11 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
             }
           }
         }
+        encoding_timer_ms.start();
         if (auto array_encoder = dynamic_cast<ParquetArrayEncoder*>(encoder.get())) {
           array_encoder->finalizeRowGroup();
         }
+        encoding_timer_ms.stop();
       } catch (const std::exception& error) {
         // check for a specific error to detect a possible unexpected switch of data
         // source in order to respond with informative error message
@@ -1981,9 +2009,27 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
     }
   }
 
+  encoding_timer_ms.start();
   if (rejected_row_indices) {  // error tracking is enabled
     *rejected_row_indices = encoder->getRejectedRowIndices();
   }
+  encoding_timer_ms.stop();
+
+  summary_timer.stop();
+
+  VLOG(1) << "Appended " << total_row_groups_read
+          << " row groups to chunk. Column: " << column_descriptor->columnName
+          << ", Column id: " << column_descriptor->columnId << ", Parquet column: "
+          << first_parquet_column_descriptor->path()->ToDotString();
+  VLOG(1) << "Runtime summary:";
+  VLOG(1) << " Parquet chunk loading total time: " << summary_timer.elapsed() << "ms";
+  VLOG(1) << " Parquet encoder initialization time: " << initialization_timer_ms.elapsed()
+          << "ms";
+  VLOG(1) << " Parquet metadata validation time: " << validation_timer_ms.elapsed()
+          << "ms";
+  VLOG(1) << " Parquet column read time: " << parquet_read_timer_ms.elapsed() << "ms";
+  VLOG(1) << " Parquet data conversion time: " << encoding_timer_ms.elapsed() << "ms";
+
   return chunk_metadata;
 }
 
@@ -2485,6 +2531,12 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
                                 schema,
                                 do_metadata_stats_validation);
 
+  // Iterate asynchronously over any paths beyond the first.
+  auto table_ptr = schema.getForeignTable();
+  CHECK(table_ptr);
+  auto num_threads = foreign_storage::get_num_threads(*table_ptr);
+  VLOG(1) << "Metadata scan using " << num_threads << " threads";
+
   const bool geo_validate_geometry =
       foreign_table_->getOptionAsBool(ForeignTable::GEO_VALIDATE_GEOMETRY_KEY);
   auto encoder_map = populate_encoder_map_for_metadata_scan(column_interval,
@@ -2493,8 +2545,10 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
                                                             do_metadata_stats_validation,
                                                             geo_validate_geometry);
   const auto num_row_groups = get_parquet_table_size(first_reader).first;
+  VLOG(1) << "Starting metadata scan of path " << first_path;
   auto row_group_metadata = metadata_scan_rowgroup_interval(
       encoder_map, {first_path, 0, num_row_groups - 1}, first_reader, schema);
+  VLOG(1) << "Completed metadata scan of path " << first_path;
 
   // We want each (filepath->FileReader) pair in the cache to be initialized before we
   // multithread so that we are not adding keys in a concurrent environment, so we add
@@ -2508,10 +2562,6 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
     cache_subset.emplace_back(*path_it);
   }
 
-  // Iterate asyncronously over any paths beyond the first.
-  auto table_ptr = schema.getForeignTable();
-  CHECK(table_ptr);
-  auto num_threads = foreign_storage::get_num_threads(*table_ptr);
   auto paths_per_thread = partition_for_threads(cache_subset, num_threads);
   std::vector<std::future<std::pair<std::list<RowGroupMetadata>, MaxRowGroupSizeStats>>>
       futures;
@@ -2520,10 +2570,21 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
         std::launch::async,
         [&](const auto& paths, const auto& file_reader_cache)
             -> std::pair<std::list<RowGroupMetadata>, MaxRowGroupSizeStats> {
+          Timer<> summary_timer;
+          Timer<> get_or_insert_reader_timer_ms;
+          Timer<> validation_timer_ms;
+          Timer<> metadata_scan_timer;
+
+          summary_timer.start();
+
           std::list<RowGroupMetadata> reduced_metadata;
           MaxRowGroupSizeStats max_row_group_stats{0, 0};
           for (const auto& path : paths.get()) {
+            get_or_insert_reader_timer_ms.start();
             auto reader = file_reader_cache.get().getOrInsert(path, file_system_);
+            get_or_insert_reader_timer_ms.stop();
+
+            validation_timer_ms.start();
             validate_equal_schema(first_reader, reader, first_path, path);
             auto local_max_row_group_stats =
                 validate_parquet_metadata(reader->parquet_reader()->metadata(),
@@ -2534,12 +2595,33 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
                 max_row_group_stats.max_row_group_size) {
               max_row_group_stats = local_max_row_group_stats;
             }
+            validation_timer_ms.stop();
+
+            VLOG(1) << "Starting metadata scan of path " << path;
+
+            metadata_scan_timer.start();
             const auto num_row_groups = get_parquet_table_size(reader).first;
             const auto interval = RowGroupInterval{path, 0, num_row_groups - 1};
             reduced_metadata.splice(
                 reduced_metadata.end(),
                 metadata_scan_rowgroup_interval(encoder_map, interval, reader, schema));
+            metadata_scan_timer.stop();
+
+            VLOG(1) << "Completed metadata scan of path " << path;
           }
+
+          summary_timer.stop();
+
+          VLOG(1) << "Runtime summary:";
+          VLOG(1) << " Parquet metadata scan total time: " << summary_timer.elapsed()
+                  << "ms";
+          VLOG(1) << " Parquet file reader opening time: "
+                  << get_or_insert_reader_timer_ms.elapsed() << "ms";
+          VLOG(1) << " Parquet metadata validation time: "
+                  << validation_timer_ms.elapsed() << "ms";
+          VLOG(1) << " Parquet metadata processing time: "
+                  << validation_timer_ms.elapsed() << "ms";
+
           return {reduced_metadata, max_row_group_stats};
         },
         std::ref(path_group),

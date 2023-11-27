@@ -51,6 +51,32 @@ typename TypeR::rep timer_stop(Type clock_begin) {
   return duration.count();
 }
 
+template <typename TimeT = std::chrono::milliseconds>
+class Timer {
+ public:
+  Timer() : duration{0}, timer_started_(false) {}
+
+  void start() {
+    start_time_ = timer_start();
+    timer_started_ = true;
+  }
+
+  void stop() {
+    if (!timer_started_) {
+      LOG(WARNING) << " unexpected call to stop on a timer that has not started";
+    }
+    duration += timer_stop(start_time_);
+    timer_started_ = false;
+  }
+
+  typename TimeT::rep elapsed() { return duration; }
+
+ private:
+  std::chrono::steady_clock::time_point start_time_;
+  typename TimeT::rep duration;
+  bool timer_started_;
+};
+
 const auto timer_stop_microseconds =
     timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>;
 
