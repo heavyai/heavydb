@@ -18,7 +18,7 @@ build() {
 package() {
   cd "$srcdir/$pkgname-$pkgver"
 
-  make prefix="$pkgdir/usr/" install
+  make prefix="$pkgdir/usr" install -j 1
 }
 
 # vim:ts=2:sw=2:et:
