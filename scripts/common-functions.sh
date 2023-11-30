@@ -635,6 +635,29 @@ function install_memkind() {
   check_artifact_cleanup v${MEMKIND_VERSION}.tar.gz memkind-${MEMKIND_VERSION}
 }
 
+ABSEIL_VERSION=20230802.1
+
+function install_abseil() {
+  rm -rf abseil
+  mkdir -p abseil
+  pushd abseil
+  wget --continue https://github.com/abseil/abseil-cpp/archive/$ABSEIL_VERSION.tar.gz
+  tar xvf $ABSEIL_VERSION.tar.gz
+  pushd abseil-cpp-$ABSEIL_VERSION
+  mkdir build
+  pushd build
+  cmake \
+      -DCMAKE_INSTALL_PREFIX=$PREFIX \
+      -DABSL_BUILD_TESTING=off \
+      -DABSL_USE_GOOGLETEST_HEAD=off \
+      -DABSL_PROPAGATE_CXX_STD=on \
+      ..
+  make install
+  popd
+  popd
+  popd
+}
+
 VULKAN_VERSION=1.3.239.0 # 1/30/23
 
 function install_vulkan() {
