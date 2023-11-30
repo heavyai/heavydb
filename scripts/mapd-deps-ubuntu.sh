@@ -215,6 +215,9 @@ install_go
 # librdkafka
 install_rdkafka
 
+# abseil
+install_abseil
+
 # glslang (with spirv-tools)
 VERS=11.6.0 # stable 8/25/21
 rm -rf glslang

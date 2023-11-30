@@ -211,6 +211,9 @@ install_awscpp -j $(nproc)
 # Apache Arrow (see common-functions.sh)
 install_arrow
 
+# abseil
+install_abseil
+
 # glslang (with spirv-tools)
 VERS=11.6.0 # stable 8/25/21
 rm -rf glslang

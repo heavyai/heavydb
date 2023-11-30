@@ -37,6 +37,7 @@
   glslang                                   [BSD BSD-like MIT](https://github.com/KhronosGroup/glslang/blob/master/LICENSE.txt)                Rendering support
   spirv-tools                               [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Tools/blob/master/LICENSE)                      Rendering support
   spirv-cross                               [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Cross/blob/master/LICENSE)                      Rendering support
+  abseil                                    [Apache-2.0](https://github.com/abseil/abseil-cpp/blob/master/LICENSE)                             Rendering support
   Vulkan Loader                             [Apache-2.0](https://github.com/KhronosGroup/Vulkan-Loader/blob/main/LICENSE.txt)                  Rendering support
   Vulkan Memory Allocator                   [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt)   Rendering support
   GLM                                       [MIT](https://github.com/g-truc/glm/blob/master/copying.txt)                                       Rendering support
