@@ -52,6 +52,7 @@ yay -Suy \
     glm \
     glslang \
     go \
+    hdf5 \
     intel-tbb \
     jdk-openjdk \
     libiodbc \
@@ -66,6 +67,7 @@ yay -Suy \
     spirv-cross \
     thrift \
     vulkan-headers \
+    vulkan-utility-libraries \
     wget \
     zlib
 
