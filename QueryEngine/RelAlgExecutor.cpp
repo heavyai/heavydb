@@ -3883,7 +3883,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
           co,
           eo,
           render_info,
-          e.wasMultifragKernelLaunch(),
+          e,
           queue_time_ms);
     }
   };
@@ -4162,7 +4162,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
     const CompilationOptions& co,
     const ExecutionOptions& eo,
     RenderInfo* render_info,
-    const bool was_multifrag_kernel_launch,
+    const QueryExecutionError& e,
     const int64_t queue_time_ms) {
   // Disable the bump allocator
   // Note that this will have basically the same affect as using the bump allocator for
@@ -4185,7 +4185,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
   eo_no_multifrag.setNoExplainExecutionOptions(true);
   eo_no_multifrag.allow_multifrag = false;
   eo_no_multifrag.find_push_down_candidates = false;
-  if (was_multifrag_kernel_launch) {
+  if (e.wasMultifragKernelLaunch()) {
     try {
       // Attempt to retry using the kernel per fragment path. The smaller input size
       // required may allow the entire kernel to execute in GPU memory.
@@ -4204,8 +4204,8 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                            column_cache),
                 targets_meta};
       result.setQueueTime(queue_time_ms);
-    } catch (const QueryExecutionError& e) {
-      handlePersistentError(e.getErrorCode());
+    } catch (const QueryExecutionError& new_e) {
+      handlePersistentError(new_e.getErrorCode());
       LOG(WARNING) << "Kernel per fragment query ran out of memory, retrying on CPU.";
     }
   }
@@ -4215,13 +4215,14 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
   }
 
   const auto co_cpu = CompilationOptions::makeCpuOnly(co);
-  // Only reset the group buffer entry guess if we ran out of slots, which
-  // suggests a
-  // highly pathological input which prevented a good estimation of distinct tuple
-  // count. For projection queries, this will force a per-fragment scan limit, which is
-  // compatible with the CPU path
-  VLOG(1) << "Resetting max groups buffer entry guess.";
-  max_groups_buffer_entry_guess = 0;
+  if (e.getErrorCode() < 0) {
+    // Only reset the group buffer entry guess if we ran out of slots, which
+    // suggests a highly pathological input which prevented a good estimation of distinct
+    // tuple count. For projection queries, this will force a per-fragment scan limit,
+    // which is compatible with the CPU path
+    VLOG(1) << "Resetting max groups buffer entry guess.";
+    max_groups_buffer_entry_guess = 0;
+  }
 
   int iteration_ctr = -1;
   while (true) {
@@ -4239,9 +4240,9 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                            true,
                                            column_cache),
                 targets_meta};
-    } catch (const QueryExecutionError& e) {
+    } catch (const QueryExecutionError& new_e) {
       // Ran out of slots
-      if (e.getErrorCode() < 0) {
+      if (new_e.getErrorCode() < 0) {
         // Even the conservative guess failed; it should only happen when we group
         // by a huge cardinality array. Maybe we should throw an exception instead?
         // Such a heavy query is entirely capable of exhausting all the host memory.
@@ -4257,7 +4258,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                         "guess equal to "
                      << max_groups_buffer_entry_guess;
       } else {
-        handlePersistentError(e.getErrorCode());
+        handlePersistentError(new_e.getErrorCode());
       }
       continue;
     }
