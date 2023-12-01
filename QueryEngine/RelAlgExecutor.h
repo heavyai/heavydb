@@ -357,6 +357,7 @@ class RelAlgExecutor : private StorageIOFacility {
   bool isRowidLookup(const WorkUnit& work_unit);
 
   ExecutionResult handleOutOfMemoryRetry(const RelAlgExecutor::WorkUnit& work_unit,
+                                         ColumnCacheMap& column_cache,
                                          const std::vector<TargetMetaInfo>& targets_meta,
                                          const bool is_agg,
                                          const CompilationOptions& co,

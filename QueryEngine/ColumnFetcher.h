@@ -48,7 +48,7 @@ using MergedChunk = std::pair<AbstractBuffer*, AbstractBuffer*>;
 
 class ColumnFetcher {
  public:
-  ColumnFetcher(Executor* executor, const ColumnCacheMap& column_cache);
+  ColumnFetcher(Executor* executor, ColumnCacheMap& column_cache);
 
   //! Gets one chunk's pointer and element count on either CPU or GPU.
   static std::pair<const int8_t*, size_t> getOneColumnFragment(
@@ -183,7 +183,7 @@ class ColumnFetcher {
   mutable std::mutex linearization_mutex_;
   mutable std::mutex chunk_list_mutex_;
   mutable std::mutex linearized_col_cache_mutex_;
-  mutable ColumnCacheMap columnarized_table_cache_;
+  ColumnCacheMap& columnarized_table_cache_;
   mutable std::unordered_map<InputColDescriptor, std::unique_ptr<const ColumnarResults>>
       columnarized_scan_table_cache_;
   using DeviceMergedChunkIterMap = std::unordered_map<int, int8_t*>;

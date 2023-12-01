@@ -3877,6 +3877,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       handlePersistentError(e.getErrorCode());
       return handleOutOfMemoryRetry(
           {ra_exe_unit, work_unit.body, local_groups_buffer_entry_guess},
+          column_cache,
           targets_meta,
           is_agg,
           co,
@@ -4155,6 +4156,7 @@ bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {
 
 ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
     const RelAlgExecutor::WorkUnit& work_unit,
+    ColumnCacheMap& column_cache,
     const std::vector<TargetMetaInfo>& targets_meta,
     const bool is_agg,
     const CompilationOptions& co,
@@ -4191,7 +4193,6 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                       "kernels disabled.";
       const auto ra_exe_unit = decide_approx_count_distinct_implementation(
           ra_exe_unit_in, table_infos, executor_, co.device_type, target_exprs_owned_);
-      ColumnCacheMap column_cache;
       result = {executor_->executeWorkUnit(max_groups_buffer_entry_guess,
                                            is_agg,
                                            table_infos,
@@ -4227,7 +4228,6 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
     iteration_ctr++;
     auto ra_exe_unit = decide_approx_count_distinct_implementation(
         ra_exe_unit_in, table_infos, executor_, co_cpu.device_type, target_exprs_owned_);
-    ColumnCacheMap column_cache;
     try {
       result = {executor_->executeWorkUnit(max_groups_buffer_entry_guess,
                                            is_agg,
