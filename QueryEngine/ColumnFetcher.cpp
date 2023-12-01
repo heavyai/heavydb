@@ -62,7 +62,7 @@ std::string getMemoryLevelString(Data_Namespace::MemoryLevel memoryLevel) {
 }
 }  // namespace
 
-ColumnFetcher::ColumnFetcher(Executor* executor, const ColumnCacheMap& column_cache)
+ColumnFetcher::ColumnFetcher(Executor* executor, ColumnCacheMap& column_cache)
     : executor_(executor), columnarized_table_cache_(column_cache) {}
 
 //! Gets a column fragment chunk on CPU or on GPU depending on the effective
