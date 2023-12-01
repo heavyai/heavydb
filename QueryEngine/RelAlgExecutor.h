@@ -19,6 +19,7 @@
 
 #include "Distributed/AggregatedResult.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
+#include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinFilterPushDown.h"
@@ -363,7 +364,7 @@ class RelAlgExecutor : private StorageIOFacility {
                                          const CompilationOptions& co,
                                          const ExecutionOptions& eo,
                                          RenderInfo* render_info,
-                                         const bool was_multifrag_kernel_launch,
+                                         const QueryExecutionError& e,
                                          const int64_t queue_time_ms);
 
   // Allows an out of memory error through if CPU retry is enabled. Otherwise, throws an
