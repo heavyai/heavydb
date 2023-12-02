@@ -42,6 +42,7 @@ public class HeavyDBHintStrategyTable {
     supportedHints.add("watchdog_max_projected_rows_per_device");
     supportedHints.add("preflight_count_query_threshold");
     supportedHints.add("table_reordering_off");
+    supportedHints.add("ndv_groups_estimator_multiplier");
 
     for (String hint_name : supportedHints) {
       // add local / global hints, e.., cpu_mode / g_cpu_mode

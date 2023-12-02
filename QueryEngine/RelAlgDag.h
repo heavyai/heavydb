@@ -3252,6 +3252,26 @@ class RelAlgDag : public boost::noncopyable {
           }
           break;
         }
+        case QueryHint::kNDVGroupsEstimatorMultiplier: {
+          CHECK_EQ(1u, target.getListOptions().size());
+          double ndv_groups_estimator_multiplier = std::stod(target.getListOptions()[0]);
+          if (ndv_groups_estimator_multiplier < 1.0 ||
+              ndv_groups_estimator_multiplier > 2.0) {
+            VLOG(1) << "Skip the given query hint \"ndv_groups_estimator_multiplier\" ("
+                    << target.getListOptions()[0]
+                    << ") : the valid hint value range is 1.0 <= "
+                       "ndv_groups_estimator_multiplier <= 2.0";
+          } else {
+            query_hint.registerHint(QueryHint::kNDVGroupsEstimatorMultiplier);
+            query_hint.ndv_groups_estimator_multiplier = ndv_groups_estimator_multiplier;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kNDVGroupsEstimatorMultiplier);
+              global_query_hint.ndv_groups_estimator_multiplier =
+                  ndv_groups_estimator_multiplier;
+            }
+          }
+          break;
+        }
         default:
           break;
       }
