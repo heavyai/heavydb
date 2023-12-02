@@ -1377,6 +1377,33 @@ TEST(QueryHint, ProjectionScanLimit) {
   EXPECT_FALSE(projection_q2_hint.has_value());
 }
 
+TEST(QueryHint, NDVGroupsEstimatorCorrection) {
+  const auto q1 =
+      "SELECT /*+ ndv_groups_estimator_multiplier(1.0) */ * FROM JOIN_HINT_TEST R;";
+  auto q1_hints = QR::get()->getParsedQueryHint(q1);
+  EXPECT_TRUE(q1_hints.isHintRegistered(QueryHint::kNDVGroupsEstimatorMultiplier));
+
+  const auto q2 =
+      "SELECT /*+ ndv_groups_estimator_multiplier(0.9) */ * FROM JOIN_HINT_TEST R;";
+  auto q2_hints = QR::get()->getParsedQueryHint(q2);
+  EXPECT_FALSE(q2_hints.isHintRegistered(QueryHint::kNDVGroupsEstimatorMultiplier));
+
+  const auto q3 =
+      "SELECT /*+ ndv_groups_estimator_multiplier(-1.1) */ * FROM JOIN_HINT_TEST R;";
+  auto q3_hints = QR::get()->getParsedQueryHint(q3);
+  EXPECT_FALSE(q3_hints.isHintRegistered(QueryHint::kNDVGroupsEstimatorMultiplier));
+
+  const auto q4 =
+      "SELECT /*+ ndv_groups_estimator_multiplier(2.0) */ * FROM JOIN_HINT_TEST R;";
+  auto q4_hints = QR::get()->getParsedQueryHint(q4);
+  EXPECT_TRUE(q4_hints.isHintRegistered(QueryHint::kNDVGroupsEstimatorMultiplier));
+
+  const auto q5 =
+      "SELECT /*+ ndv_groups_estimator_multiplier(2.1) */ * FROM JOIN_HINT_TEST R;";
+  auto q5_hints = QR::get()->getParsedQueryHint(q5);
+  EXPECT_FALSE(q5_hints.isHintRegistered(QueryHint::kNDVGroupsEstimatorMultiplier));
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

@@ -55,6 +55,7 @@ bool g_skip_intermediate_count{true};
 bool g_enable_interop{false};
 bool g_enable_union{true};  // DEPRECATED
 size_t g_estimator_failure_max_groupby_size{256000000};
+double g_ndv_groups_estimator_multiplier{2.0};
 bool g_columnar_large_projections{true};
 size_t g_columnar_large_projections_threshold{1000000};
 
@@ -3931,9 +3932,17 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     } else {
       const auto ndv_groups_estimation =
           getNDVEstimation(work_unit, e.range(), is_agg, co, eo);
+      auto ndv_groups_estimator_multiplier = g_ndv_groups_estimator_multiplier;
+      if (query_hints.isHintRegistered(QueryHint::kNDVGroupsEstimatorMultiplier)) {
+        ndv_groups_estimator_multiplier = query_hints.ndv_groups_estimator_multiplier;
+        VLOG(1) << "Modify NDV groups estimator multiplier: "
+                << g_ndv_groups_estimator_multiplier << " -> "
+                << ndv_groups_estimator_multiplier;
+      }
       const auto estimated_groups_buffer_entry_guess =
           ndv_groups_estimation > 0
-              ? 2 * ndv_groups_estimation
+              ? static_cast<size_t>(static_cast<double>(ndv_groups_estimation) *
+                                    ndv_groups_estimator_multiplier)
               : std::min(groups_approx_upper_bound(table_infos).first,
                          g_estimator_failure_max_groupby_size);
       CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));

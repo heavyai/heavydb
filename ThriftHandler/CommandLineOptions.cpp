@@ -64,6 +64,7 @@ extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
 extern size_t g_streaming_topn_max;
 extern size_t g_estimator_failure_max_groupby_size;
+extern double g_ndv_groups_estimator_multiplier;
 extern bool g_columnar_large_projections;
 extern size_t g_columnar_large_projections_threshold;
 extern bool g_enable_system_tables;
@@ -1166,6 +1167,12 @@ void CommandLineOptions::fillDeveloperOptions() {
           ->default_value(g_estimator_failure_max_groupby_size),
       "Maximum size of the groupby buffer if the estimator fails. By default we use the "
       "number of tuples in the table up to this value.");
+  desc.add_options()("ndv-group-estimator-multiplier",
+                     po::value<double>(&g_ndv_groups_estimator_multiplier)
+                         ->default_value(g_ndv_groups_estimator_multiplier),
+                     "A non-negative threshold to control the result of ndv group "
+                     "estimator (default: 2.0). The value must be between 1.0 and 2.0");
+
   desc.add_options()("columnar-large-projections",
                      po::value<bool>(&g_columnar_large_projections)
                          ->default_value(g_columnar_large_projections)
@@ -1664,6 +1671,13 @@ void CommandLineOptions::validate() {
     }
   }
 #endif
+
+  if (g_ndv_groups_estimator_multiplier < 1.0 ||
+      g_ndv_groups_estimator_multiplier > 2.0) {
+    throw std::runtime_error(
+        "Invalid value provided for the \"ndv-groups-estimator-correction\" option. "
+        "Value must be between 1.0 and 2.0");
+  }
 }
 
 SystemParameters::RuntimeUdfRegistrationPolicy construct_runtime_udf_registration_policy(
