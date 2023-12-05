@@ -1394,8 +1394,11 @@ std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr,
     }
     return std::unique_ptr<const RexScalar>(parse_operator(expr, root_dag));
   }
-  throw QueryNotSupported("Expression node " + json_node_to_string(expr) +
-                          " not supported");
+  std::string const node_str = json_node_to_string(expr);
+  if (node_str.find("\"correl\":\"$cor") != std::string::npos) {
+    throw QueryNotSupported("Unable to decorrelate one of the correlated subqueries.");
+  }
+  throw QueryNotSupported("Expression node " + node_str + " not supported");
 }
 
 JoinType to_join_type(const std::string& join_type_name) {

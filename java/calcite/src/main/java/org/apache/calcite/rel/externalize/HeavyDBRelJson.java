@@ -275,6 +275,10 @@ public class HeavyDBRelJson {
     } else if (value instanceof Operation) {
       return value.toString();
     } else {
+      if (value.toString().contains("$cor")) {
+        throw new UnsupportedOperationException(
+                "Unable to decorrelate one of the correlated subqueries.");
+      }
       throw new UnsupportedOperationException("type not serializable: " + value
               + " (type " + value.getClass().getCanonicalName() + ")");
     }
