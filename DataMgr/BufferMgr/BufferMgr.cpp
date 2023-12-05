@@ -296,15 +296,15 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
   // If we're here then we didn't find a free segment of sufficient size
   // First we see if we can add another slab
   while (!allocations_capped_ && num_pages_allocated_ < max_buffer_pool_num_pages_) {
-    auto const slab_in_bytes = current_max_slab_page_size_ * page_size_;
     try {
-      size_t pagesLeft = max_buffer_pool_num_pages_ - num_pages_allocated_;
-      if (pagesLeft < current_max_slab_page_size_) {
-        current_max_slab_page_size_ = pagesLeft;
+      auto pages_left = max_buffer_pool_num_pages_ - num_pages_allocated_;
+      if (pages_left < current_max_slab_page_size_) {
+        current_max_slab_page_size_ = pages_left;
       }
       if (num_pages_requested <=
           current_max_slab_page_size_) {  // don't try to allocate if the
                                           // new slab won't be big enough
+        const auto slab_in_bytes = current_max_slab_page_size_ * page_size_;
         VLOG(1) << "Try to allocate SLAB of " << current_max_slab_page_size_ << " pages ("
                 << slab_in_bytes << " bytes) on " << getStringMgrType() << ":"
                 << device_id_;
@@ -323,8 +323,8 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
                                  // big enough to accomodate request
     } catch (std::runtime_error& error) {  // failed to allocate slab
       LOG(INFO) << "ALLOCATION Attempted slab of " << current_max_slab_page_size_
-                << " pages (" << slab_in_bytes << "B) failed " << getStringMgrType()
-                << ":" << device_id_;
+                << " pages (" << (current_max_slab_page_size_ * page_size_)
+                << "B) failed " << getStringMgrType() << ":" << device_id_;
       // check if there is any point halving currentMaxSlabSize and trying again
       // if the request wont fit in half available then let try once at full size
       // if we have already tries at full size and failed then break as
