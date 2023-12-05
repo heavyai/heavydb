@@ -625,6 +625,33 @@ TEST_P(BufferMgrTest, CreateBufferExistingSlabWithoutSufficientFreeSegment) {
       max_slab_size_ - page_size_ + test_buffer_size_, 2 * max_slab_size_, 2);
 }
 
+TEST_P(BufferMgrTest, CreateBufferNewSlabCreationAtMaxBufferPoolSize) {
+  const auto max_buffer_pool_size = 3 * test_buffer_size_;
+  const auto max_slab_size = 2 * test_buffer_size_;
+  buffer_mgr_ =
+      createBufferMgr(device_id_, max_buffer_pool_size, test_buffer_size_, max_slab_size);
+  buffer_mgr_->createBuffer(test_chunk_key_, page_size_, test_buffer_size_);
+  buffer_mgr_->createBuffer(test_chunk_key_2_, page_size_, test_buffer_size_);
+
+  assertSegmentCount(2);
+  assertSegmentAttributes(
+      0, 0, Buffer_Namespace::USED, test_chunk_key_, test_buffer_size_);
+  assertSegmentAttributes(
+      0, 1, Buffer_Namespace::USED, test_chunk_key_2_, test_buffer_size_);
+  assertExpectedBufferMgrAttributes(max_slab_size, max_slab_size, 2);
+
+  buffer_mgr_->createBuffer(test_chunk_key_3_, page_size_, test_buffer_size_);
+
+  assertSegmentCount(3);
+  assertSegmentAttributes(
+      0, 0, Buffer_Namespace::USED, test_chunk_key_, test_buffer_size_);
+  assertSegmentAttributes(
+      0, 1, Buffer_Namespace::USED, test_chunk_key_2_, test_buffer_size_);
+  assertSegmentAttributes(
+      1, 0, Buffer_Namespace::USED, test_chunk_key_3_, test_buffer_size_);
+  assertExpectedBufferMgrAttributes(max_buffer_pool_size, max_buffer_pool_size, 3);
+}
+
 TEST_P(BufferMgrTest, CreateBufferNewSlabCreationError) {
   buffer_mgr_ = createBufferMgr();
   EXPECT_FALSE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
