@@ -1646,6 +1646,40 @@ TEST(Select, InExpr_As_Child_Operand_Of_OR_Operator) {
   check_query(q4, true);
 }
 
+TEST(Select, NotSupportedDecorrelation) {
+  auto drop_table = []() {
+    for (std::string tbl : {"test_decor1", "test_decor2", "test_decor3"}) {
+      QR::get()->runDDLStatement("DROP TABLE IF EXISTS " + tbl + ";");
+    }
+  };
+  ScopeGuard drop_tbls = [drop_table] { drop_table(); };
+  drop_table();
+  QR::get()->runDDLStatement("CREATE TABLE test_decor1 (a int, b int, c int);");
+  QR::get()->runDDLStatement("CREATE TABLE test_decor2 (d int, e int, f int);");
+  QR::get()->runDDLStatement("CREATE TABLE test_decor3 (g int, h int, i int);");
+
+  EXPECT_ANY_THROW(QR::get()->runSQL(
+      "select COUNT(c) from test_decor1 where b > 0 and a in (select d from test_decor2 "
+      "where e > 0 and c in (select i from test_decor3));",
+      ExecutorDeviceType::CPU));
+  EXPECT_NO_THROW(
+      QR::get()->runSQL("select COUNT(c) from test_decor1 where b > 0 and a in (select d "
+                        "from test_decor2 where c in (select i from test_decor3));",
+                        ExecutorDeviceType::CPU));
+  ScopeGuard reset_flag = [orig = g_enable_watchdog]() { g_enable_watchdog = orig; };
+  std::string const q3 =
+      "select COUNT(c) from test_decor1 where b > 0 and a in (select d AS dd from "
+      "test_decor2 where c in (select i from test_decor3));";
+  for (bool watchdog : {false, true}) {
+    g_enable_watchdog = watchdog;
+    if (watchdog) {
+      EXPECT_ANY_THROW(QR::get()->runSQL(q3, ExecutorDeviceType::CPU));
+    } else {
+      EXPECT_NO_THROW(QR::get()->runSQL(q3, ExecutorDeviceType::CPU));
+    }
+  }
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
