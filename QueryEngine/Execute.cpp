@@ -2107,6 +2107,7 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
   ScopeGuard cleanup_post_execution = [this] {
     // cleanup/unpin GPU buffer allocations
     // TODO: separate out this state into a single object
+    VLOG(1) << "Perform post execution clearance for Executor " << executor_id_;
     plan_state_.reset(nullptr);
     if (cgen_state_) {
       cgen_state_->in_values_bitmaps_.clear();
@@ -2262,6 +2263,9 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      render_info,
                                      available_gpus,
                                      available_cpus);
+        if (!kernels.empty()) {
+          row_set_mem_owner_->setKernelMemoryAllocator(kernels.size());
+        }
         if (g_enable_executor_resource_mgr) {
           launchKernelsViaResourceMgr(shared_context,
                                       std::move(kernels),
@@ -2687,6 +2691,7 @@ ResultSetPtr build_row_for_empty_input(
   fill_entries_for_empty_input(target_infos, entry, target_exprs, query_mem_desc);
   const auto executor = query_mem_desc.getExecutor();
   CHECK(executor);
+  // todo(yoonmin): Can we avoid initialize DramArena for this empty result case?
   auto row_set_mem_owner = executor->getRowSetMemoryOwner();
   CHECK(row_set_mem_owner);
   auto rs = std::make_shared<ResultSet>(target_infos,
@@ -3024,7 +3029,6 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
     fragment_descriptor.assignFragsToKernelDispatch(fragment_per_kernel_dispatch,
                                                     ra_exe_unit);
   }
-
   return execution_kernels;
 }
 
@@ -4950,8 +4954,8 @@ TableGenerations Executor::computeTableGenerations(
 
 void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
                             const std::unordered_set<shared::TableKey>& phys_table_ids) {
-  row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
-      Executor::getArenaBlockSize(), executor_id_, cpu_threads());
+  row_set_mem_owner_ =
+      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), executor_id_);
   row_set_mem_owner_->setDictionaryGenerations(
       computeStringDictionaryGenerations(phys_inputs));
   agg_col_range_cache_ = computeColRangesCache(phys_inputs);

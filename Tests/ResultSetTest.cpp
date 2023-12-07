@@ -62,13 +62,10 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 TEST(Construct, Allocate) {
   std::vector<TargetInfo> target_infos;
   QueryMemoryDescriptor query_mem_desc;
-  ResultSet result_set(target_infos,
-                       ExecutorDeviceType::CPU,
-                       query_mem_desc,
-                       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(),
-                                                           Executor::UNITARY_EXECUTOR_ID),
-                       0,
-                       0);
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
+  ResultSet result_set(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   result_set.allocateStorage();
 }
 

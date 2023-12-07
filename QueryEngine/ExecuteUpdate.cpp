@@ -158,7 +158,6 @@ TableUpdateMetadata Executor::executeUpdate(
       continue;
     }
     fragments[0] = {outer_table_key, {fragment_index}};
-
     {
       ExecutionKernel current_fragment_kernel(ra_exe_unit,
                                               ExecutorDeviceType::CPU,

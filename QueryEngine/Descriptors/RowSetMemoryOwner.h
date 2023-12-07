@@ -54,28 +54,46 @@ class ResultSet;
  */
 class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
  public:
-  RowSetMemoryOwner(const size_t arena_block_size,
-                    const size_t executor_id,
-                    const size_t num_kernel_threads = 0)
-      : non_owned_group_by_buffers_(num_kernel_threads + 1, nullptr)
-      , arena_block_size_(arena_block_size)
-      , executor_id_(executor_id) {
-    VLOG(2) << "Prepare " << num_kernel_threads + 1
-            << " allocators from RowSetMemoryOwner attached to Executor-" << executor_id_;
-    allocators_.reserve(num_kernel_threads + 1);
-    for (size_t i = 0; i < num_kernel_threads + 1; i++) {
-      allocators_.emplace_back(std::make_unique<DramArena>(arena_block_size));
-    }
-    CHECK(!allocators_.empty());
+  RowSetMemoryOwner(const size_t arena_block_size, const size_t executor_id)
+      : arena_block_size_(arena_block_size), executor_id_(executor_id) {
+    // initialize shared allocator (i.e., allocators_[0])
+    allocators_.emplace_back(std::make_unique<DramArena>(arena_block_size_));
   }
 
   enum class StringTranslationType { SOURCE_INTERSECTION, SOURCE_UNION };
 
+  void setKernelMemoryAllocator(const size_t num_kernels) {
+    CHECK_GT(num_kernels, static_cast<size_t>(0));
+    CHECK_EQ(non_owned_group_by_buffers_.size(), static_cast<size_t>(0));
+    // buffer for kernels starts with one-based indexing
+    auto const required_num_kernels = num_kernels + 1;
+    non_owned_group_by_buffers_.resize(required_num_kernels, nullptr);
+    // sometimes the same RSMO instance handles multiple work units or even multiple query
+    // steps (this means the RSMO's owner, an Executor instance, takes a responsibility to
+    // proceed them) so, if the first query step has M allocators but if the second query
+    // step requires N allocators where N > M, let's allocate M - N allocators instead of
+    // recreating M new allocators
+    if (required_num_kernels > allocators_.size()) {
+      auto const required_num_allocators = required_num_kernels - allocators_.size();
+      VLOG(1) << "Prepare " << required_num_allocators
+              << " memory allocator(s) (Executor-" << executor_id_
+              << ", # existing allocator(s): " << allocators_.size()
+              << ", # requested allocator(s): " << required_num_kernels << ")";
+      for (size_t i = 0; i < required_num_allocators; i++) {
+        // todo (yoonmin): can we determine better default min_block_size per query?
+        allocators_.emplace_back(std::make_unique<DramArena>(arena_block_size_));
+      }
+    }
+    CHECK_GE(allocators_.size(), required_num_kernels);
+  }
+
+  // allocate memory via shared allocator
   int8_t* allocate(const size_t num_bytes) override {
     constexpr size_t thread_idx = 0u;
     return allocate(num_bytes, thread_idx);
   }
 
+  // allocate memory via thread's unique allocator
   int8_t* allocate(const size_t num_bytes, const size_t thread_idx) {
     CHECK_LT(thread_idx, allocators_.size());
     auto allocator = allocators_[thread_idx].get();
@@ -129,9 +147,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     count_distinct_sets_.push_back(count_distinct_set);
   }
 
-  void clearNonOwnedGroupByBuffers() {
-    non_owned_group_by_buffers_.assign(non_owned_group_by_buffers_.size(), nullptr);
-  }
+  void clearNonOwnedGroupByBuffers() { non_owned_group_by_buffers_.clear(); }
 
   void addVarlenBuffer(void* varlen_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
@@ -321,7 +337,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       ++allocator_id;
     }
     oss << "}";
-    VLOG(2) << oss.str();
+    allocators_.clear();
+    VLOG(1) << oss.str();
     for (auto count_distinct_set : count_distinct_sets_) {
       delete count_distinct_set;
     }
@@ -338,8 +355,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   }
 
   std::shared_ptr<RowSetMemoryOwner> cloneStrDictDataOnly() {
-    auto rtn = std::make_shared<RowSetMemoryOwner>(
-        arena_block_size_, executor_id_, /*num_kernels=*/1);
+    auto rtn = std::make_shared<RowSetMemoryOwner>(arena_block_size_, executor_id_);
     rtn->str_dict_proxy_owned_ = str_dict_proxy_owned_;
     rtn->lit_str_dict_proxy_ = lit_str_dict_proxy_;
     return rtn;
