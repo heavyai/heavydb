@@ -881,7 +881,7 @@ void RelAlgExecutor::prepareLeafExecution(
   }
   queue_time_ms_ = timer_stop(clock_begin);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
-      Executor::getArenaBlockSize(), executor_->executor_id_, cpu_threads());
+      Executor::getArenaBlockSize(), executor_->executor_id_);
   executor_->row_set_mem_owner_->setDictionaryGenerations(string_dictionary_generations);
   executor_->table_generations_ = table_generations;
   executor_->agg_col_range_cache_ = agg_col_range;
@@ -2787,7 +2787,6 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
                                          false,
                                          /*is_varlen_projection=*/false});
   }
-
   std::shared_ptr<ResultSet> rs{
       ResultSetLogicalValuesBuilder{logical_values,
                                     target_infos,

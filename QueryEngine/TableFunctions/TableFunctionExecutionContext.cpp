@@ -131,6 +131,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   // arguments are not supported on GPU atm.
   std::vector<std::vector<const int8_t*>> col_list_bufs;
   std::vector<std::vector<const int8_t*>> input_col_list_str_dict_proxy_ptrs;
+
   for (const auto& input_expr : exe_unit.input_exprs) {
     auto ti = input_expr->get_type_info();
     if (!ti.is_column_list()) {

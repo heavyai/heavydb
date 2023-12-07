@@ -155,8 +155,8 @@ void TableOptimizer::recomputeMetadata() const {
 
   for (const auto td : table_descriptors) {
     ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
-    executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
-        ROW_SET_SIZE, executor_->executor_id_, /*num_threads=*/1);
+    executor_->row_set_mem_owner_ =
+        std::make_shared<RowSetMemoryOwner>(ROW_SET_SIZE, executor_->executor_id_);
     const auto table_id = td->tableId;
     auto stats = recomputeDeletedColumnMetadata(td);
 
@@ -563,8 +563,8 @@ void TableOptimizer::vacuumFragmentsAboveMinSelectivity(
       heavyai::unique_lock<heavyai::shared_mutex> executor_lock(
           executor_->execute_mutex_);
       ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
-      executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
-          ROW_SET_SIZE, executor_->executor_id_, /*num_threads=*/1);
+      executor_->row_set_mem_owner_ =
+          std::make_shared<RowSetMemoryOwner>(ROW_SET_SIZE, executor_->executor_id_);
       deleted_column_stats =
           getDeletedColumnStats(td, getFragmentIndexes(td, fragment_ids));
       executor_->clearMetaInfoCache();

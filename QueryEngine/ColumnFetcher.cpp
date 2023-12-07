@@ -130,8 +130,8 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
             std::shared_ptr<const ColumnarResults>(columnarize_result(
                 executor->row_set_mem_owner_,
                 get_temporary_table(executor->temporary_tables_, table_key.table_id),
-                executor->executor_id_,
                 thread_idx,
+                executor->executor_id_,
                 frag_id))));
       }
       col_frag = column_cache[table_key][frag_id].get();
@@ -1133,8 +1133,8 @@ const int8_t* ColumnFetcher::getResultSetColumn(
                          std::shared_ptr<const ColumnarResults>(
                              columnarize_result(executor_->row_set_mem_owner_,
                                                 buffer,
-                                                executor_->executor_id_,
                                                 thread_idx,
+                                                executor_->executor_id_,
                                                 frag_id))));
     }
     CHECK_NE(size_t(0), columnarized_table_cache_.count(table_key));
