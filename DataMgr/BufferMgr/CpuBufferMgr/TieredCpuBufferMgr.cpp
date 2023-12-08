@@ -43,6 +43,7 @@ TieredCpuBufferMgr::TieredCpuBufferMgr(const int device_id,
                                        CudaMgr_Namespace::CudaMgr* cuda_mgr,
                                        const size_t min_slab_size,
                                        const size_t max_slab_size,
+                                       const size_t default_slab_size,
                                        const size_t page_size,
                                        const CpuTierSizeVector& cpu_tier_sizes,
                                        AbstractBufferMgr* parent_mgr)
@@ -51,14 +52,15 @@ TieredCpuBufferMgr::TieredCpuBufferMgr(const int device_id,
                    cuda_mgr,
                    min_slab_size,
                    max_slab_size,
+                   default_slab_size,
                    page_size,
                    parent_mgr) {
   CHECK(cpu_tier_sizes.size() == numCpuTiers);
   allocators_.emplace_back(
-      std::make_unique<DramArena>(max_slab_size_ + kArenaBlockOverhead),
+      std::make_unique<DramArena>(default_slab_size_ + kArenaBlockOverhead),
       cpu_tier_sizes[CpuTier::DRAM]);
   allocators_.emplace_back(
-      std::make_unique<PMemArena>(max_slab_size_ + kArenaBlockOverhead),
+      std::make_unique<PMemArena>(default_slab_size_ + kArenaBlockOverhead),
       cpu_tier_sizes[CpuTier::PMEM]);
 }
 
@@ -111,9 +113,9 @@ void TieredCpuBufferMgr::freeAllMem() {
 
 void TieredCpuBufferMgr::initializeMem() {
   allocators_[CpuTier::DRAM].first =
-      std::make_unique<DramArena>(max_slab_size_ + kArenaBlockOverhead);
+      std::make_unique<DramArena>(default_slab_size_ + kArenaBlockOverhead);
   allocators_[CpuTier::PMEM].first =
-      std::make_unique<PMemArena>(max_slab_size_ + kArenaBlockOverhead);
+      std::make_unique<PMemArena>(default_slab_size_ + kArenaBlockOverhead);
   slab_to_allocator_map_.clear();
 }
 

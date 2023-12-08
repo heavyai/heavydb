@@ -56,7 +56,7 @@ void CpuBufferMgr::allocateBuffer(BufferList::iterator seg_it,
 }
 
 void CpuBufferMgr::initializeMem() {
-  allocator_.reset(new DramArena(max_slab_size_ + kArenaBlockOverhead));
+  allocator_.reset(new DramArena(default_slab_size_ + kArenaBlockOverhead));
 }
 
 }  // namespace Buffer_Namespace

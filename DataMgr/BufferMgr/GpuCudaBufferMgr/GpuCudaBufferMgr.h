@@ -31,6 +31,7 @@ class GpuCudaBufferMgr : public BufferMgr {
                    CudaMgr_Namespace::CudaMgr* cuda_mgr,
                    const size_t min_slab_size,
                    const size_t max_slab_size,
+                   const size_t default_slab_size,
                    const size_t page_size,
                    AbstractBufferMgr* parent_mgr = 0);
   inline MgrType getMgrType() override { return GPU_MGR; }

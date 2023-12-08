@@ -280,8 +280,9 @@ class DataMgr {
   void createTopLevelMetadata() const;
   void allocateCpuBufferMgr(int32_t device_id,
                             size_t total_cpu_size,
-                            size_t minCpuSlabSize,
-                            size_t maxCpuSlabSize,
+                            size_t min_cpu_slab_size,
+                            size_t max_cpu_slab_size,
+                            size_t default_cpu_slab_size,
                             size_t page_size,
                             const std::vector<size_t>& cpu_tier_sizes);
 

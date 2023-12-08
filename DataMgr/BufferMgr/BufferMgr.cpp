@@ -48,33 +48,40 @@ BufferMgr::BufferMgr(const int device_id,
                      const size_t max_buffer_pool_size,
                      const size_t min_slab_size,
                      const size_t max_slab_size,
+                     const size_t default_slab_size,
                      const size_t page_size,
                      AbstractBufferMgr* parent_mgr)
     : AbstractBufferMgr(device_id)
     , max_buffer_pool_size_(max_buffer_pool_size)
     , min_slab_size_(min_slab_size)
     , max_slab_size_(max_slab_size)
+    , default_slab_size_(default_slab_size)
     , page_size_(page_size)
     , num_pages_allocated_(0)
     , allocations_capped_(false)
     , parent_mgr_(parent_mgr)
     , max_buffer_id_(0)
     , buffer_epoch_(0) {
-  CHECK(max_buffer_pool_size_ > 0);
-  CHECK(page_size_ > 0);
+  CHECK_GT(max_buffer_pool_size_, size_t(0));
+  CHECK_GT(page_size_, size_t(0));
   // TODO change checks on run-time configurable slab size variables to exceptions
-  CHECK(min_slab_size_ > 0);
-  CHECK(max_slab_size_ > 0);
-  CHECK(min_slab_size_ <= max_slab_size_);
-  CHECK(min_slab_size_ % page_size_ == 0);
-  CHECK(max_slab_size_ % page_size_ == 0);
+  CHECK_GT(min_slab_size_, size_t(0));
+  CHECK_GT(max_slab_size_, size_t(0));
+  CHECK_GT(default_slab_size_, size_t(0));
+  CHECK_LE(min_slab_size_, max_slab_size_);
+  CHECK_GE(default_slab_size_, min_slab_size_);
+  CHECK_LE(default_slab_size_, max_slab_size_);
+  CHECK_EQ(min_slab_size_ % page_size_, size_t(0));
+  CHECK_EQ(max_slab_size_ % page_size_, size_t(0));
+  CHECK_EQ(default_slab_size_ % page_size_, size_t(0));
 
   max_buffer_pool_num_pages_ = max_buffer_pool_size_ / page_size_;
   max_num_pages_per_slab_ = max_slab_size_ / page_size_;
   min_num_pages_per_slab_ = min_slab_size_ / page_size_;
-  current_max_slab_page_size_ =
-      max_num_pages_per_slab_;  // current_max_slab_page_size_ will drop as allocations
-                                // fail - this is the high water mark
+  default_num_pages_per_slab_ = default_slab_size_ / page_size_;
+  current_max_num_pages_per_slab_ =
+      max_num_pages_per_slab_;  // current_max_num_pages_per_slab_ will drop as
+                                // allocations fail - this is the high water mark
 }
 
 /// Frees the heap-allocated buffer pool memory
@@ -84,9 +91,9 @@ BufferMgr::~BufferMgr() {
 
 void BufferMgr::reinit() {
   num_pages_allocated_ = 0;
-  current_max_slab_page_size_ =
-      max_num_pages_per_slab_;  // current_max_slab_page_size_ will drop as allocations
-                                // fail - this is the high water mark
+  current_max_num_pages_per_slab_ =
+      max_num_pages_per_slab_;  // current_max_num_pages_per_slab_ will drop as
+                                // allocations fail - this is the high water mark
   allocations_capped_ = false;
 }
 
@@ -296,51 +303,58 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
   // If we're here then we didn't find a free segment of sufficient size
   // First we see if we can add another slab
   while (!allocations_capped_ && num_pages_allocated_ < max_buffer_pool_num_pages_) {
+    size_t allocated_num_pages{0};
     try {
       auto pages_left = max_buffer_pool_num_pages_ - num_pages_allocated_;
-      if (pages_left < current_max_slab_page_size_) {
-        current_max_slab_page_size_ = pages_left;
+      if (pages_left < current_max_num_pages_per_slab_) {
+        current_max_num_pages_per_slab_ = pages_left;
       }
       if (num_pages_requested <=
-          current_max_slab_page_size_) {  // don't try to allocate if the
-                                          // new slab won't be big enough
-        const auto slab_in_bytes = current_max_slab_page_size_ * page_size_;
-        VLOG(1) << "Try to allocate SLAB of " << current_max_slab_page_size_ << " pages ("
+          current_max_num_pages_per_slab_) {  // don't try to allocate if the
+                                              // new slab won't be big enough
+        if (default_num_pages_per_slab_ < current_max_num_pages_per_slab_) {
+          allocated_num_pages =
+              std::max(default_num_pages_per_slab_, num_pages_requested);
+        } else {
+          allocated_num_pages = current_max_num_pages_per_slab_;
+        }
+        const auto slab_in_bytes = allocated_num_pages * page_size_;
+        VLOG(1) << "Try to allocate SLAB of " << allocated_num_pages << " pages ("
                 << slab_in_bytes << " bytes) on " << getStringMgrType() << ":"
                 << device_id_;
         auto alloc_ms = measure<>::execution([&]() { addSlab(slab_in_bytes); });
-        LOG(INFO) << "ALLOCATION slab of " << current_max_slab_page_size_ << " pages ("
+        LOG(INFO) << "ALLOCATION slab of " << allocated_num_pages << " pages ("
                   << slab_in_bytes << "B) created in " << alloc_ms << " ms "
                   << getStringMgrType() << ":" << device_id_;
       } else {
         break;
       }
       // if here then addSlab succeeded
-      num_pages_allocated_ += current_max_slab_page_size_;
+      CHECK_GT(allocated_num_pages, size_t(0));
+      num_pages_allocated_ += allocated_num_pages;
       return findFreeBufferInSlab(
           num_slabs,
           num_pages_requested);  // has to succeed since we made sure to request a slab
                                  // big enough to accomodate request
     } catch (std::runtime_error& error) {  // failed to allocate slab
-      LOG(INFO) << "ALLOCATION Attempted slab of " << current_max_slab_page_size_
-                << " pages (" << (current_max_slab_page_size_ * page_size_)
-                << "B) failed " << getStringMgrType() << ":" << device_id_;
+      LOG(INFO) << "ALLOCATION Attempted slab of " << allocated_num_pages << " pages ("
+                << (allocated_num_pages * page_size_) << "B) failed "
+                << getStringMgrType() << ":" << device_id_;
       // check if there is any point halving currentMaxSlabSize and trying again
       // if the request wont fit in half available then let try once at full size
       // if we have already tries at full size and failed then break as
       // there could still be room enough for other later request but
       // not for his current one
-      if (num_pages_requested > current_max_slab_page_size_ / 2 &&
-          current_max_slab_page_size_ != num_pages_requested) {
-        current_max_slab_page_size_ = num_pages_requested;
+      if (num_pages_requested > current_max_num_pages_per_slab_ / 2 &&
+          current_max_num_pages_per_slab_ != num_pages_requested) {
+        current_max_num_pages_per_slab_ = num_pages_requested;
       } else {
-        current_max_slab_page_size_ /= 2;
-        if (current_max_slab_page_size_ <
-            (min_num_pages_per_slab_)) {  // should be a constant
+        current_max_num_pages_per_slab_ /= 2;
+        if (current_max_num_pages_per_slab_ < min_num_pages_per_slab_) {
           allocations_capped_ = true;
           // dump out the slabs and their sizes
-          LOG(INFO) << "ALLOCATION Capped " << current_max_slab_page_size_
-                    << " Minimum size = " << (min_num_pages_per_slab_) << " "
+          LOG(INFO) << "ALLOCATION Capped " << current_max_num_pages_per_slab_
+                    << " Minimum size = " << min_num_pages_per_slab_ << " "
                     << getStringMgrType() << ":" << device_id_;
         }
       }
