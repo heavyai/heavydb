@@ -315,6 +315,7 @@ class BufferMgrTest : public testing::TestWithParam<MgrType> {
       size_t max_buffer_pool_size = max_buffer_pool_size_,
       size_t min_slab_size = min_slab_size_,
       size_t max_slab_size = max_slab_size_,
+      size_t default_slab_size = default_slab_size_,
       size_t page_size = page_size_) {
     auto mgr_type = GetParam();
     if (mgr_type == MgrType::CPU_MGR) {
@@ -323,6 +324,7 @@ class BufferMgrTest : public testing::TestWithParam<MgrType> {
                                                               nullptr,
                                                               min_slab_size,
                                                               max_slab_size,
+                                                              default_slab_size,
                                                               page_size,
                                                               &mock_parent_mgr_);
 #ifdef HAVE_CUDA
@@ -333,6 +335,7 @@ class BufferMgrTest : public testing::TestWithParam<MgrType> {
                                                                   mock_cuda_mgr_.get(),
                                                                   min_slab_size,
                                                                   max_slab_size,
+                                                                  default_slab_size,
                                                                   page_size,
                                                                   &mock_parent_mgr_);
 #endif
@@ -424,6 +427,7 @@ class BufferMgrTest : public testing::TestWithParam<MgrType> {
   void assertExpectedBufferMgrAttributes(size_t used_size = test_buffer_size_,
                                          size_t allocated_size = max_slab_size_,
                                          size_t num_chunks = 1,
+                                         size_t slab_count = 1,
                                          bool is_allocation_capped = false) {
     EXPECT_EQ(buffer_mgr_->getInUseSize(), used_size);
     EXPECT_EQ(buffer_mgr_->getNumChunks(), num_chunks);
@@ -434,6 +438,7 @@ class BufferMgrTest : public testing::TestWithParam<MgrType> {
       EXPECT_TRUE(buffer_mgr_->getSlabSegments().empty());
     } else {
       EXPECT_FALSE(buffer_mgr_->getSlabSegments().empty());
+      EXPECT_EQ(buffer_mgr_->getSlabSegments().size(), slab_count);
     }
   }
 
@@ -513,6 +518,7 @@ class BufferMgrTest : public testing::TestWithParam<MgrType> {
   static constexpr size_t max_buffer_pool_size_{1000};
   static constexpr size_t min_slab_size_{100};
   static constexpr size_t max_slab_size_{500};
+  static constexpr size_t default_slab_size_{500};
   static constexpr size_t page_size_{10};
   static constexpr size_t test_buffer_size_{100};
   static inline const ChunkKey test_chunk_key_{1, 1, 1, 1};
@@ -530,6 +536,7 @@ TEST_P(BufferMgrTest, CreateBufferMgr) {
   buffer_mgr_ = createBufferMgr(test_device_id,
                                 test_max_buffer_pool_size,
                                 test_min_slab_size,
+                                test_max_slab_size,
                                 test_max_slab_size,
                                 test_page_size);
   EXPECT_EQ(buffer_mgr_->getDeviceId(), test_device_id);
@@ -622,14 +629,14 @@ TEST_P(BufferMgrTest, CreateBufferExistingSlabWithoutSufficientFreeSegment) {
 
   assertExpectedBufferAttributes(buffer);
   assertExpectedBufferMgrAttributes(
-      max_slab_size_ - page_size_ + test_buffer_size_, 2 * max_slab_size_, 2);
+      max_slab_size_ - page_size_ + test_buffer_size_, 2 * max_slab_size_, 2, 2);
 }
 
 TEST_P(BufferMgrTest, CreateBufferNewSlabCreationAtMaxBufferPoolSize) {
   const auto max_buffer_pool_size = 3 * test_buffer_size_;
   const auto max_slab_size = 2 * test_buffer_size_;
-  buffer_mgr_ =
-      createBufferMgr(device_id_, max_buffer_pool_size, test_buffer_size_, max_slab_size);
+  buffer_mgr_ = createBufferMgr(
+      device_id_, max_buffer_pool_size, test_buffer_size_, max_slab_size, max_slab_size);
   buffer_mgr_->createBuffer(test_chunk_key_, page_size_, test_buffer_size_);
   buffer_mgr_->createBuffer(test_chunk_key_2_, page_size_, test_buffer_size_);
 
@@ -638,7 +645,7 @@ TEST_P(BufferMgrTest, CreateBufferNewSlabCreationAtMaxBufferPoolSize) {
       0, 0, Buffer_Namespace::USED, test_chunk_key_, test_buffer_size_);
   assertSegmentAttributes(
       0, 1, Buffer_Namespace::USED, test_chunk_key_2_, test_buffer_size_);
-  assertExpectedBufferMgrAttributes(max_slab_size, max_slab_size, 2);
+  assertExpectedBufferMgrAttributes(max_slab_size, max_slab_size, 2, 1);
 
   buffer_mgr_->createBuffer(test_chunk_key_3_, page_size_, test_buffer_size_);
 
@@ -649,7 +656,7 @@ TEST_P(BufferMgrTest, CreateBufferNewSlabCreationAtMaxBufferPoolSize) {
       0, 1, Buffer_Namespace::USED, test_chunk_key_2_, test_buffer_size_);
   assertSegmentAttributes(
       1, 0, Buffer_Namespace::USED, test_chunk_key_3_, test_buffer_size_);
-  assertExpectedBufferMgrAttributes(max_buffer_pool_size, max_buffer_pool_size, 3);
+  assertExpectedBufferMgrAttributes(max_buffer_pool_size, max_buffer_pool_size, 3, 2);
 }
 
 TEST_P(BufferMgrTest, CreateBufferNewSlabCreationError) {
@@ -665,7 +672,7 @@ TEST_P(BufferMgrTest, CreateBufferNewSlabCreationError) {
       OutOfMemory);
   EXPECT_FALSE(buffer_mgr_->isBufferOnDevice(test_chunk_key_2_));
 
-  assertExpectedBufferMgrAttributes(max_slab_size_, max_slab_size_, 1, true);
+  assertExpectedBufferMgrAttributes(max_slab_size_, max_slab_size_, 1, 1, true);
 }
 
 TEST_P(BufferMgrTest, CreateBufferCannotCreateFirstSlabError) {
@@ -677,7 +684,7 @@ TEST_P(BufferMgrTest, CreateBufferCannotCreateFirstSlabError) {
                FailedToCreateFirstSlab);
   EXPECT_FALSE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
 
-  assertExpectedBufferMgrAttributes(0, 0, 0, true);
+  assertExpectedBufferMgrAttributes(0, 0, 0, 0, true);
 }
 
 TEST_P(BufferMgrTest, CreateBufferEviction) {
@@ -689,6 +696,7 @@ TEST_P(BufferMgrTest, CreateBufferEviction) {
   buffer_mgr_ = createBufferMgr(test_device_id,
                                 test_max_buffer_pool_size,
                                 test_min_slab_size,
+                                test_max_slab_size,
                                 test_max_slab_size,
                                 page_size_);
   createUnpinnedBuffers(2);
@@ -705,6 +713,102 @@ TEST_P(BufferMgrTest, CreateBufferEviction) {
   EXPECT_EQ(segments[0].begin()->buffer, buffer);
 
   assertExpectedBufferMgrAttributes(2 * test_buffer_size_, test_max_slab_size, 2);
+}
+
+TEST_P(BufferMgrTest, CreateBufferSizeAboveDefaultSlabSize) {
+  auto max_buffer_pool_size = 5 * test_buffer_size_;
+  auto min_slab_size = test_buffer_size_;
+  auto default_slab_size = 2 * test_buffer_size_;
+  auto buffer_size = 3 * test_buffer_size_;
+  auto max_slab_size = 4 * test_buffer_size_;
+
+  buffer_mgr_ = createBufferMgr(
+      device_id_, max_buffer_pool_size, min_slab_size, max_slab_size, default_slab_size);
+  EXPECT_FALSE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+
+  auto buffer = buffer_mgr_->createBuffer(test_chunk_key_, page_size_, buffer_size);
+  EXPECT_TRUE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+
+  assertExpectedBufferAttributes(buffer, true, buffer_size / page_size_, buffer_size);
+  assertExpectedBufferMgrAttributes(buffer_size, buffer_size);
+}
+
+TEST_P(BufferMgrTest, CreateBufferSizeEqualsDefaultSlabSize) {
+  auto max_buffer_pool_size = 5 * test_buffer_size_;
+  auto min_slab_size = test_buffer_size_;
+  auto default_slab_size = 2 * test_buffer_size_;
+  auto max_slab_size = 4 * test_buffer_size_;
+
+  buffer_mgr_ = createBufferMgr(
+      device_id_, max_buffer_pool_size, min_slab_size, max_slab_size, default_slab_size);
+  EXPECT_FALSE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+
+  auto buffer = buffer_mgr_->createBuffer(test_chunk_key_, page_size_, default_slab_size);
+  EXPECT_TRUE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+
+  assertExpectedBufferAttributes(
+      buffer, true, default_slab_size / page_size_, default_slab_size);
+  assertExpectedBufferMgrAttributes(default_slab_size, default_slab_size);
+}
+
+TEST_P(BufferMgrTest, CreateBufferSizeBelowDefaultSlabSize) {
+  auto max_buffer_pool_size = 5 * test_buffer_size_;
+  auto min_slab_size = test_buffer_size_;
+  auto default_slab_size = 2 * test_buffer_size_;
+  auto buffer_size = test_buffer_size_;
+  auto max_slab_size = 4 * test_buffer_size_;
+
+  buffer_mgr_ = createBufferMgr(
+      device_id_, max_buffer_pool_size, min_slab_size, max_slab_size, default_slab_size);
+  EXPECT_FALSE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+
+  auto buffer = buffer_mgr_->createBuffer(test_chunk_key_, page_size_, buffer_size);
+  EXPECT_TRUE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+
+  assertExpectedBufferAttributes(buffer, true, buffer_size / page_size_, buffer_size);
+  assertExpectedBufferMgrAttributes(buffer_size, default_slab_size);
+}
+
+// This test case covers the use case where the last allocation is less than both the
+// default slab size and initial max slab size. This occurs when the available space
+// in the buffer pool is less than both of these sizes (current_max_num_pages_per_slab_ is
+// updated to match available space in this case).
+TEST_P(BufferMgrTest, CreateBufferCurrentMaxSlabSizeLessThanDefaultSlabSize) {
+  auto max_buffer_pool_size = 3 * test_buffer_size_;
+  auto min_slab_size = test_buffer_size_;
+  auto default_slab_size = 2 * test_buffer_size_;
+  auto max_slab_size = 3 * test_buffer_size_;
+
+  buffer_mgr_ = createBufferMgr(
+      device_id_, max_buffer_pool_size, min_slab_size, max_slab_size, default_slab_size);
+  EXPECT_FALSE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+
+  auto buffer = buffer_mgr_->createBuffer(test_chunk_key_, page_size_, default_slab_size);
+  EXPECT_TRUE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+  assertExpectedBufferAttributes(
+      buffer, true, default_slab_size / page_size_, default_slab_size);
+
+  assertSegmentCount(1);
+  assertSegmentAttributes(
+      0, 0, Buffer_Namespace::USED, test_chunk_key_, default_slab_size);
+
+  assertExpectedBufferMgrAttributes(default_slab_size, default_slab_size);
+
+  EXPECT_FALSE(buffer_mgr_->isBufferOnDevice(test_chunk_key_2_));
+
+  auto buffer_2 =
+      buffer_mgr_->createBuffer(test_chunk_key_2_, page_size_, test_buffer_size_);
+  EXPECT_TRUE(buffer_mgr_->isBufferOnDevice(test_chunk_key_2_));
+  assertExpectedBufferAttributes(buffer_2);
+
+  assertSegmentCount(2);
+  assertSegmentAttributes(
+      0, 0, Buffer_Namespace::USED, test_chunk_key_, default_slab_size);
+  assertSegmentAttributes(
+      1, 0, Buffer_Namespace::USED, test_chunk_key_2_, test_buffer_size_);
+
+  auto total_buffer_size = default_slab_size + test_buffer_size_;
+  assertExpectedBufferMgrAttributes(total_buffer_size, total_buffer_size, 2, 2);
 }
 
 TEST_P(BufferMgrTest, ClearSlabs) {
@@ -1413,7 +1517,7 @@ TEST_P(BufferMgrTest, ReserveBufferFreeSegmentInSubsequentSlab) {
       1, 1, Buffer_Namespace::USED, test_chunk_key_2_, test_buffer_size_);
   assertSegmentAttributes(1, 2, Buffer_Namespace::FREE);
   assertExpectedBufferMgrAttributes(
-      max_slab_size_ + (2 * test_buffer_size_), 2 * max_slab_size_, 3);
+      max_slab_size_ + (2 * test_buffer_size_), 2 * max_slab_size_, 3, 2);
 
   auto slab_2_remaining_size = max_slab_size_ - (2 * test_buffer_size_);
 
@@ -1449,7 +1553,10 @@ TEST_P(BufferMgrTest, ReserveBufferFreeSegmentInSubsequentSlab) {
   ASSERT_EQ(segment_it->buffer, nullptr);
 
   assertExpectedBufferMgrAttributes(
-      max_slab_size_ + slab_2_remaining_size + test_buffer_size_, 2 * max_slab_size_, 3);
+      max_slab_size_ + slab_2_remaining_size + test_buffer_size_,
+      2 * max_slab_size_,
+      3,
+      2);
 }
 
 TEST_P(BufferMgrTest, ReserveBufferNewSlabCreation) {
@@ -1463,7 +1570,7 @@ TEST_P(BufferMgrTest, ReserveBufferNewSlabCreation) {
   assertSegmentAttributes(
       0, 1, Buffer_Namespace::USED, test_chunk_key_2_, test_buffer_size_);
   assertSegmentAttributes(0, 2, Buffer_Namespace::FREE);
-  assertExpectedBufferMgrAttributes(2 * test_buffer_size_, max_slab_size_, 2);
+  assertExpectedBufferMgrAttributes(2 * test_buffer_size_, max_slab_size_, 2, 1);
 
   auto segment_it = getSegmentAt(0, 0);
   segment_it = buffer_mgr_->reserveBuffer(segment_it, max_slab_size_);
@@ -1475,7 +1582,7 @@ TEST_P(BufferMgrTest, ReserveBufferNewSlabCreation) {
   assertSegmentAttributes(0, 2, Buffer_Namespace::FREE);
   assertSegmentAttributes(1, 0, Buffer_Namespace::USED, test_chunk_key_, max_slab_size_);
   assertExpectedBufferMgrAttributes(
-      max_slab_size_ + test_buffer_size_, 2 * max_slab_size_, 2);
+      max_slab_size_ + test_buffer_size_, 2 * max_slab_size_, 2, 2);
 }
 
 TEST_P(BufferMgrTest, ReserveBufferNewSlabCreationError) {
@@ -1528,7 +1635,7 @@ TEST_P(BufferMgrTest, ReserveBufferNewSlabCreationPreviouslyEmptyBuffer) {
   assertSegmentAttributes(0, 1, Buffer_Namespace::FREE);
   assertSegmentAttributes(1, 0, Buffer_Namespace::USED, test_chunk_key_, max_slab_size_);
   assertExpectedBufferMgrAttributes(
-      max_slab_size_ + test_buffer_size_, 2 * max_slab_size_, 2);
+      max_slab_size_ + test_buffer_size_, 2 * max_slab_size_, 2, 2);
 }
 
 TEST_P(BufferMgrTest, ReserveBufferWithBufferEviction) {
@@ -1540,6 +1647,7 @@ TEST_P(BufferMgrTest, ReserveBufferWithBufferEviction) {
   buffer_mgr_ = createBufferMgr(test_device_id,
                                 test_max_buffer_pool_size,
                                 test_min_slab_size,
+                                test_max_slab_size,
                                 test_max_slab_size,
                                 page_size_);
 
@@ -1579,6 +1687,7 @@ TEST_P(BufferMgrTest,
                                 test_max_buffer_pool_size,
                                 test_min_slab_size,
                                 test_max_slab_size,
+                                test_max_slab_size,
                                 page_size_);
   createUnpinnedBuffers(10);
   setSegmentScores({
@@ -1589,7 +1698,8 @@ TEST_P(BufferMgrTest,
   assertSegmentCount(10);
   assertSegmentAttributes(
       0, 0, Buffer_Namespace::USED, test_chunk_key_, test_buffer_size_);
-  assertExpectedBufferMgrAttributes(10 * test_buffer_size_, 2 * test_max_slab_size, 10);
+  assertExpectedBufferMgrAttributes(
+      10 * test_buffer_size_, 2 * test_max_slab_size, 10, 2);
 
   auto segment_it = getSegmentAt(0, 0);
   segment_it->buffer->pin();
@@ -1600,7 +1710,7 @@ TEST_P(BufferMgrTest,
   assertSegmentAttributes(0, 0, Buffer_Namespace::FREE, {}, test_buffer_size_);
   assertSegmentAttributes(
       1, 2, Buffer_Namespace::USED, test_chunk_key_, test_buffer_size_ * 3);
-  assertExpectedBufferMgrAttributes(9 * test_buffer_size_, 2 * test_max_slab_size, 7);
+  assertExpectedBufferMgrAttributes(9 * test_buffer_size_, 2 * test_max_slab_size, 7, 2);
 }
 
 TEST_P(BufferMgrTest, ReserveBufferWithBufferEvictionLastSegmentEvicted) {
@@ -1612,6 +1722,7 @@ TEST_P(BufferMgrTest, ReserveBufferWithBufferEvictionLastSegmentEvicted) {
   buffer_mgr_ = createBufferMgr(test_device_id,
                                 test_max_buffer_pool_size,
                                 test_min_slab_size,
+                                test_max_slab_size,
                                 test_max_slab_size,
                                 page_size_);
 
@@ -1647,6 +1758,7 @@ TEST_P(BufferMgrTest, ReserveBufferWithBufferEvictionNoBufferToEvict) {
   buffer_mgr_ = createBufferMgr(test_device_id,
                                 test_max_buffer_pool_size,
                                 test_min_slab_size,
+                                test_max_slab_size,
                                 test_max_slab_size,
                                 page_size_);
 
@@ -1958,7 +2070,7 @@ TEST_P(BufferMgrTest, GetBufferReentrantReserveFreeSegmentInSubsequentSlab) {
   buffer_mgr_->createBuffer(test_chunk_key_2_, page_size_, test_buffer_size_);
 
   assertExpectedBufferMgrAttributes(
-      max_slab_size_ + (2 * test_buffer_size_), 2 * max_slab_size_, 3);
+      max_slab_size_ + (2 * test_buffer_size_), 2 * max_slab_size_, 3, 2);
 
   auto new_reserved_size = max_slab_size_ - (2 * test_buffer_size_);
   mock_parent_mgr_.setReserveSize(new_reserved_size);
@@ -1974,7 +2086,7 @@ TEST_P(BufferMgrTest, GetBufferReentrantReserveFreeSegmentInSubsequentSlab) {
   EXPECT_EQ(read_content, new_source_content);
 
   assertExpectedBufferMgrAttributes(
-      max_slab_size_ + new_reserved_size + test_buffer_size_, 2 * max_slab_size_, 3);
+      max_slab_size_ + new_reserved_size + test_buffer_size_, 2 * max_slab_size_, 3, 2);
   assertParentMethodCalledWithParams(
       ParentMgrMethod::kFetchBuffer,
       {{test_chunk_key_, buffer, new_source_content.size()}});
@@ -2000,7 +2112,7 @@ TEST_P(BufferMgrTest, GetBufferReentrantReserveNewSlabCreation) {
   EXPECT_EQ(read_content, new_source_content);
 
   assertExpectedBufferMgrAttributes(
-      max_slab_size_ + test_buffer_size_, 2 * max_slab_size_, 2);
+      max_slab_size_ + test_buffer_size_, 2 * max_slab_size_, 2, 2);
   assertParentMethodCalledWithParams(
       ParentMgrMethod::kFetchBuffer,
       {{test_chunk_key_, buffer, new_source_content.size()}});
@@ -2037,6 +2149,7 @@ TEST_P(BufferMgrTest, GetBufferReentrantReserveWithEviction) {
   buffer_mgr_ = createBufferMgr(test_device_id,
                                 test_max_buffer_pool_size,
                                 test_min_slab_size,
+                                test_max_slab_size,
                                 test_max_slab_size,
                                 page_size_);
   auto buffer_1_size = test_max_slab_size * 3 / 4;
@@ -2077,6 +2190,7 @@ TEST_P(BufferMgrTest, GetBufferReentrantReserveWithEvictionOfLastSegmentInSlab) 
   buffer_mgr_ = createBufferMgr(test_device_id,
                                 test_max_buffer_pool_size,
                                 test_min_slab_size,
+                                test_max_slab_size,
                                 test_max_slab_size,
                                 page_size_);
 
@@ -2119,6 +2233,7 @@ TEST_P(BufferMgrTest, GetBufferReentrantReserveCannotEvict) {
   buffer_mgr_ = createBufferMgr(test_device_id,
                                 test_max_buffer_pool_size,
                                 test_min_slab_size,
+                                test_max_slab_size,
                                 test_max_slab_size,
                                 page_size_);
 

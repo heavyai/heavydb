@@ -37,6 +37,7 @@ class TieredCpuBufferMgr : public CpuBufferMgr {
                      CudaMgr_Namespace::CudaMgr* cuda_mgr,
                      const size_t min_slab_size,
                      const size_t max_slab_size,
+                     const size_t default_slab_size,
                      const size_t page_size,
                      const CpuTierSizeVector& cpu_tier_sizes,
                      AbstractBufferMgr* parent_mgr = nullptr);

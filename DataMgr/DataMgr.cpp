@@ -201,20 +201,23 @@ size_t DataMgr::getTotalSystemMemory() {
 
 void DataMgr::allocateCpuBufferMgr(int32_t device_id,
                                    size_t total_cpu_size,
-                                   size_t minCpuSlabSize,
-                                   size_t maxCpuSlabSize,
+                                   size_t min_cpu_slab_size,
+                                   size_t max_cpu_slab_size,
+                                   size_t default_cpu_slab_size,
                                    size_t page_size,
                                    const CpuTierSizeVector& cpu_tier_sizes) {
 #ifdef ENABLE_MEMKIND
   if (g_enable_tiered_cpu_mem) {
-    bufferMgrs_[1].push_back(new Buffer_Namespace::TieredCpuBufferMgr(0,
-                                                                      total_cpu_size,
-                                                                      cudaMgr_.get(),
-                                                                      minCpuSlabSize,
-                                                                      maxCpuSlabSize,
-                                                                      page_size,
-                                                                      cpu_tier_sizes,
-                                                                      bufferMgrs_[0][0]));
+    bufferMgrs_[1].push_back(
+        new Buffer_Namespace::TieredCpuBufferMgr(0,
+                                                 total_cpu_size,
+                                                 cudaMgr_.get(),
+                                                 min_cpu_slab_size,
+                                                 max_cpu_slab_size,
+                                                 default_cpu_slab_size,
+                                                 page_size,
+                                                 cpu_tier_sizes,
+                                                 bufferMgrs_[0][0]));
     return;
   }
 #endif
@@ -222,8 +225,9 @@ void DataMgr::allocateCpuBufferMgr(int32_t device_id,
   bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
                                                               total_cpu_size,
                                                               cudaMgr_.get(),
-                                                              minCpuSlabSize,
-                                                              maxCpuSlabSize,
+                                                              min_cpu_slab_size,
+                                                              max_cpu_slab_size,
+                                                              default_cpu_slab_size,
                                                               page_size,
                                                               bufferMgrs_[0][0]));
 }
@@ -243,6 +247,16 @@ void DataMgr::resetBufferMgrs(const File_Namespace::DiskCacheConfig& cache_confi
   createTopLevelMetadata();
 }
 
+namespace {
+size_t get_slab_size(size_t initial_slab_size,
+                     size_t buffer_pool_size,
+                     size_t page_size) {
+  auto slab_size = std::min(initial_slab_size, buffer_pool_size);
+  slab_size = (slab_size / page_size) * page_size;
+  return slab_size;
+}
+}  // namespace
+
 void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                            const size_t userSpecifiedNumReaderThreads,
                            const File_Namespace::DiskCacheConfig& cache_config) {
@@ -254,22 +268,28 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
   levelSizes_.push_back(1);
   auto page_size = system_parameters.buffer_page_size;
   CHECK_GT(page_size, size_t(0));
-  size_t cpuBufferSize = system_parameters.cpu_buffer_mem_bytes;
-  if (cpuBufferSize == 0) {  // if size is not specified
+  auto cpu_buffer_size = system_parameters.cpu_buffer_mem_bytes;
+  if (cpu_buffer_size == 0) {  // if size is not specified
     const auto total_system_memory = getTotalSystemMemory();
     VLOG(1) << "Detected " << (float)total_system_memory / (1024 * 1024)
             << "M of total system memory.";
-    cpuBufferSize = total_system_memory *
-                    0.8;  // should get free memory instead of this ugly heuristic
+    cpu_buffer_size = total_system_memory *
+                      0.8;  // should get free memory instead of this ugly heuristic
   }
-  size_t minCpuSlabSize = std::min(system_parameters.min_cpu_slab_size, cpuBufferSize);
-  minCpuSlabSize = (minCpuSlabSize / page_size) * page_size;
-  size_t maxCpuSlabSize = std::min(system_parameters.max_cpu_slab_size, cpuBufferSize);
-  maxCpuSlabSize = (maxCpuSlabSize / page_size) * page_size;
-  LOG(INFO) << "Min CPU Slab Size is " << (float)minCpuSlabSize / (1024 * 1024) << "MB";
-  LOG(INFO) << "Max CPU Slab Size is " << (float)maxCpuSlabSize / (1024 * 1024) << "MB";
-  LOG(INFO) << "Max memory pool size for CPU is " << (float)cpuBufferSize / (1024 * 1024)
+  auto min_cpu_slab_size =
+      get_slab_size(system_parameters.min_cpu_slab_size, cpu_buffer_size, page_size);
+  auto max_cpu_slab_size =
+      get_slab_size(system_parameters.max_cpu_slab_size, cpu_buffer_size, page_size);
+  auto default_cpu_slab_size =
+      get_slab_size(system_parameters.default_cpu_slab_size, cpu_buffer_size, page_size);
+  LOG(INFO) << "Min CPU Slab Size is " << float(min_cpu_slab_size) / (1024 * 1024)
             << "MB";
+  LOG(INFO) << "Max CPU Slab Size is " << float(max_cpu_slab_size) / (1024 * 1024)
+            << "MB";
+  LOG(INFO) << "Default CPU Slab Size is " << float(default_cpu_slab_size) / (1024 * 1024)
+            << "MB";
+  LOG(INFO) << "Max memory pool size for CPU is "
+            << float(cpu_buffer_size) / (1024 * 1024) << "MB";
 
   size_t total_cpu_size = 0;
 
@@ -286,47 +306,61 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
   }
 #else
   CpuTierSizeVector cpu_tier_sizes{};
-  total_cpu_size = cpuBufferSize;
+  total_cpu_size = cpu_buffer_size;
 #endif
 
   if (hasGpus_ || cudaMgr_) {
     LOG(INFO) << "Reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
               << "MB includes render buffer allocation";
     bufferMgrs_.resize(3);
-    allocateCpuBufferMgr(
-        0, total_cpu_size, minCpuSlabSize, maxCpuSlabSize, page_size, cpu_tier_sizes);
+    allocateCpuBufferMgr(0,
+                         total_cpu_size,
+                         min_cpu_slab_size,
+                         max_cpu_slab_size,
+                         default_cpu_slab_size,
+                         page_size,
+                         cpu_tier_sizes);
 
     levelSizes_.push_back(1);
-    int numGpus = cudaMgr_->getDeviceCount();
-    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-      size_t gpuMaxMemSize =
+    auto num_gpus = cudaMgr_->getDeviceCount();
+    for (int gpu_num = 0; gpu_num < num_gpus; ++gpu_num) {
+      auto gpu_max_mem_size =
           system_parameters.gpu_buffer_mem_bytes != 0
               ? system_parameters.gpu_buffer_mem_bytes
-              : (cudaMgr_->getDeviceProperties(gpuNum)->globalMem) - (reservedGpuMem_);
-      size_t minGpuSlabSize =
-          std::min(system_parameters.min_gpu_slab_size, gpuMaxMemSize);
-      minGpuSlabSize = (minGpuSlabSize / page_size) * page_size;
-      size_t maxGpuSlabSize =
-          std::min(system_parameters.max_gpu_slab_size, gpuMaxMemSize);
-      maxGpuSlabSize = (maxGpuSlabSize / page_size) * page_size;
-      LOG(INFO) << "Min GPU Slab size for GPU " << gpuNum << " is "
-                << (float)minGpuSlabSize / (1024 * 1024) << "MB";
-      LOG(INFO) << "Max GPU Slab size for GPU " << gpuNum << " is "
-                << (float)maxGpuSlabSize / (1024 * 1024) << "MB";
-      LOG(INFO) << "Max memory pool size for GPU " << gpuNum << " is "
-                << (float)gpuMaxMemSize / (1024 * 1024) << "MB";
-      bufferMgrs_[2].push_back(new Buffer_Namespace::GpuCudaBufferMgr(gpuNum,
-                                                                      gpuMaxMemSize,
-                                                                      cudaMgr_.get(),
-                                                                      minGpuSlabSize,
-                                                                      maxGpuSlabSize,
-                                                                      page_size,
-                                                                      bufferMgrs_[1][0]));
+              : (cudaMgr_->getDeviceProperties(gpu_num)->globalMem) - (reservedGpuMem_);
+      auto min_gpu_slab_size =
+          get_slab_size(system_parameters.min_gpu_slab_size, gpu_max_mem_size, page_size);
+      auto max_gpu_slab_size =
+          get_slab_size(system_parameters.max_gpu_slab_size, gpu_max_mem_size, page_size);
+      auto default_gpu_slab_size = get_slab_size(
+          system_parameters.default_gpu_slab_size, gpu_max_mem_size, page_size);
+      LOG(INFO) << "Min GPU Slab size for GPU " << gpu_num << " is "
+                << float(min_gpu_slab_size) / (1024 * 1024) << "MB";
+      LOG(INFO) << "Max GPU Slab size for GPU " << gpu_num << " is "
+                << float(max_gpu_slab_size) / (1024 * 1024) << "MB";
+      LOG(INFO) << "Default GPU Slab size for GPU " << gpu_num << " is "
+                << float(default_gpu_slab_size) / (1024 * 1024) << "MB";
+      LOG(INFO) << "Max memory pool size for GPU " << gpu_num << " is "
+                << float(gpu_max_mem_size) / (1024 * 1024) << "MB";
+      bufferMgrs_[2].push_back(
+          new Buffer_Namespace::GpuCudaBufferMgr(gpu_num,
+                                                 gpu_max_mem_size,
+                                                 cudaMgr_.get(),
+                                                 min_gpu_slab_size,
+                                                 max_gpu_slab_size,
+                                                 default_gpu_slab_size,
+                                                 page_size,
+                                                 bufferMgrs_[1][0]));
     }
-    levelSizes_.push_back(numGpus);
+    levelSizes_.push_back(num_gpus);
   } else {
-    allocateCpuBufferMgr(
-        0, total_cpu_size, minCpuSlabSize, maxCpuSlabSize, page_size, cpu_tier_sizes);
+    allocateCpuBufferMgr(0,
+                         total_cpu_size,
+                         min_cpu_slab_size,
+                         max_cpu_slab_size,
+                         default_cpu_slab_size,
+                         page_size,
+                         cpu_tier_sizes);
     levelSizes_.push_back(1);
   }
 }

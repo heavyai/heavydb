@@ -958,6 +958,13 @@ void CommandLineOptions::fillDeveloperOptions() {
       "there is not enough free memory to accomodate the target slab size, smaller "
       "slabs will be allocated, down to the minimum size specified by "
       "min-cpu-slab-size.");
+  desc.add_options()("default-cpu-slab-size",
+                     po::value<size_t>(&system_parameters.default_cpu_slab_size)
+                         ->default_value(system_parameters.default_cpu_slab_size),
+                     "Default CPU buffer pool slab size (size of memory allocations). "
+                     "Note that allocations above this size are allowed up to the size "
+                     "specified by max-cpu-slab-size.");
+
   desc.add_options()("min-gpu-slab-size",
                      po::value<size_t>(&system_parameters.min_gpu_slab_size)
                          ->default_value(system_parameters.min_gpu_slab_size),
@@ -970,6 +977,12 @@ void CommandLineOptions::fillDeveloperOptions() {
       "there is not enough free memory to accomodate the target slab size, smaller "
       "slabs will be allocated, down to the minimum size speified by "
       "min-gpu-slab-size.");
+  desc.add_options()("default-gpu-slab-size",
+                     po::value<size_t>(&system_parameters.default_gpu_slab_size)
+                         ->default_value(system_parameters.default_gpu_slab_size),
+                     "Default GPU buffer pool slab size (size of memory allocations). "
+                     "Note that allocations above this size are allowed up to the size "
+                     "specified by max-gpu-slab-size.");
 
   desc.add_options()(
       "max-output-projection-allocation-bytes",
@@ -1678,6 +1691,43 @@ void CommandLineOptions::validate() {
         "Invalid value provided for the \"ndv-groups-estimator-correction\" option. "
         "Value must be between 1.0 and 2.0");
   }
+
+  if (system_parameters.max_cpu_slab_size < system_parameters.min_cpu_slab_size) {
+    throw std::runtime_error("max-cpu-slab-size (" +
+                             std::to_string(system_parameters.max_cpu_slab_size) +
+                             ") cannot be less than min-cpu-slab-size (" +
+                             std::to_string(system_parameters.min_cpu_slab_size) + ").");
+  }
+  if (system_parameters.default_cpu_slab_size < system_parameters.min_cpu_slab_size) {
+    throw std::runtime_error("default-cpu-slab-size (" +
+                             std::to_string(system_parameters.default_cpu_slab_size) +
+                             ") cannot be less than min-cpu-slab-size (" +
+                             std::to_string(system_parameters.min_cpu_slab_size) + ").");
+  }
+  if (system_parameters.default_cpu_slab_size > system_parameters.max_cpu_slab_size) {
+    throw std::runtime_error("default-cpu-slab-size (" +
+                             std::to_string(system_parameters.default_cpu_slab_size) +
+                             ") cannot be greater than max-cpu-slab-size (" +
+                             std::to_string(system_parameters.max_cpu_slab_size) + ").");
+  }
+  if (system_parameters.max_gpu_slab_size < system_parameters.min_gpu_slab_size) {
+    throw std::runtime_error("max-gpu-slab-size (" +
+                             std::to_string(system_parameters.max_gpu_slab_size) +
+                             ") cannot be less than min-gpu-slab-size (" +
+                             std::to_string(system_parameters.min_gpu_slab_size) + ").");
+  }
+  if (system_parameters.default_gpu_slab_size < system_parameters.min_gpu_slab_size) {
+    throw std::runtime_error("default-gpu-slab-size (" +
+                             std::to_string(system_parameters.default_gpu_slab_size) +
+                             ") cannot be less than min-gpu-slab-size (" +
+                             std::to_string(system_parameters.min_gpu_slab_size) + ").");
+  }
+  if (system_parameters.default_gpu_slab_size > system_parameters.max_gpu_slab_size) {
+    throw std::runtime_error("default-gpu-slab-size (" +
+                             std::to_string(system_parameters.default_gpu_slab_size) +
+                             ") cannot be greater than max-gpu-slab-size (" +
+                             std::to_string(system_parameters.max_gpu_slab_size) + ").");
+  }
 }
 
 SystemParameters::RuntimeUdfRegistrationPolicy construct_runtime_udf_registration_policy(
@@ -1956,14 +2006,33 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   if (system_parameters.cuda_grid_size) {
     LOG(INFO) << " cuda grid size " << system_parameters.cuda_grid_size;
   }
+
+  if (!vm["max-cpu-slab-size"].defaulted() && vm["default-cpu-slab-size"].defaulted()) {
+    LOG(INFO) << "default-cpu-slab-size is not set while max-cpu-slab-size is set. "
+                 "Setting default-cpu-slab-size to the same value as max-cpu-slab-size ("
+              << system_parameters.max_cpu_slab_size << " bytes)";
+    system_parameters.default_cpu_slab_size = system_parameters.max_cpu_slab_size;
+  }
+
+  if (!vm["max-gpu-slab-size"].defaulted() && vm["default-gpu-slab-size"].defaulted()) {
+    LOG(INFO) << "default-gpu-slab-size is not set while max-gpu-slab-size is set. "
+                 "Setting default-gpu-slab-size to the same value as max-gpu-slab-size ("
+              << system_parameters.max_gpu_slab_size << " bytes)";
+    system_parameters.default_gpu_slab_size = system_parameters.max_gpu_slab_size;
+  }
+
   LOG(INFO) << " Min CPU buffer pool slab size (in bytes) "
             << system_parameters.min_cpu_slab_size;
   LOG(INFO) << " Max CPU buffer pool slab size (in bytes) "
             << system_parameters.max_cpu_slab_size;
+  LOG(INFO) << " Default CPU buffer pool slab size (in bytes) "
+            << system_parameters.default_cpu_slab_size;
   LOG(INFO) << " Min GPU buffer pool slab size (in bytes) "
             << system_parameters.min_gpu_slab_size;
   LOG(INFO) << " Max GPU buffer pool slab size (in bytes) "
             << system_parameters.max_gpu_slab_size;
+  LOG(INFO) << " Default GPU buffer pool slab size (in bytes) "
+            << system_parameters.default_gpu_slab_size;
   LOG(INFO) << " calcite JVM max memory (in MB) " << system_parameters.calcite_max_mem;
   LOG(INFO) << " HeavyDB Server Port " << system_parameters.omnisci_server_port;
   LOG(INFO) << " HeavyDB Calcite Port " << system_parameters.calcite_port;

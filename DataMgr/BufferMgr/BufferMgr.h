@@ -101,6 +101,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
             const size_t max_buffer_size,
             const size_t min_slab_size,
             const size_t max_slab_size,
+            const size_t default_slab_size,
             const size_t page_size,
             AbstractBufferMgr* parent_mgr = 0);
 
@@ -172,8 +173,11 @@ class BufferMgr : public AbstractBufferMgr {  // implements
       max_buffer_pool_size_;    /// max number of bytes allocated for the buffer pool
   const size_t min_slab_size_;  /// minimum size of the individual memory allocations that
                                 /// compose the buffer pool (up to maxBufferSize_)
-  const size_t max_slab_size_;  /// size of the individual memory allocations that compose
-                                /// the buffer pool (up to maxBufferSize_)
+  const size_t max_slab_size_;  /// max size of the individual memory allocations that
+                                /// compose the buffer pool (up to maxBufferSize_)
+  const size_t
+      default_slab_size_;  /// default size of the individual memory allocations that
+                           /// compose the buffer pool (up to maxBufferSize_)
   const size_t page_size_;
   std::vector<int8_t*> slabs_;  /// vector of beginning memory addresses for each
                                 /// allocation of the buffer pool
@@ -206,7 +210,8 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   size_t num_pages_allocated_;
   size_t min_num_pages_per_slab_;
   size_t max_num_pages_per_slab_;
-  size_t current_max_slab_page_size_;
+  size_t default_num_pages_per_slab_;
+  size_t current_max_num_pages_per_slab_;
   bool allocations_capped_;
   AbstractBufferMgr* parent_mgr_;
   int max_buffer_id_;

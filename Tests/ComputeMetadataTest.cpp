@@ -1985,6 +1985,7 @@ TEST_F(OpportunisticVacuumingMemoryUseTest, OneFragmentProcessedAtATime) {
   // Auto-vacuuming should pull in additional chunks of 34 bytes i.e. index chunk of 4
   // bytes (initial offset) + 5 * 4 bytes and data chunk of 5 * 2 bytes per fragment.
   system_parameters.max_cpu_slab_size = 84;
+  system_parameters.default_cpu_slab_size = system_parameters.max_cpu_slab_size;
   resetBufferMgrs(system_parameters);
 
   sql("delete from test_table where i <= 1 or i >= 8;");

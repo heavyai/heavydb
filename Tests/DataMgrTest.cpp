@@ -47,6 +47,7 @@ class DataMgrTest : public testing::Test {
   virtual void resetDataMgr(size_t num_slabs = 1) {
     boost::filesystem::remove_all(data_mgr_path_);
     system_params_.max_cpu_slab_size = slab_size_;
+    system_params_.default_cpu_slab_size = system_params_.max_cpu_slab_size;
     system_params_.min_cpu_slab_size = slab_size_;
     system_params_.cpu_buffer_mem_bytes = slab_size_ * num_slabs;
 #ifdef ENABLE_MEMKIND
