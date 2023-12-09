@@ -3453,6 +3453,17 @@ TEST(GeoSpatial, PointNGeoConstant) {
   }
 }
 
+TEST(GeoSpatial, InvalidGeoConstantInSTFunc) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_ANY_THROW(
+        run_simple_agg(R"(SELECT ST_NPoints(ST_GeomFromText('POLYGON((0 0))'));)", dt));
+    ASSERT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_Distance(ST_GeomFromText('POLYGON((0 0, 0 0))'), ST_GeomFromText('POLYGON((0 0, 0 0))'));)",
+        dt));
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(GeospatialMultiFragExecutionTests,
                          GeoSpatialMultiFragTestTablesFixture,
                          ::testing::Values(true, false));
