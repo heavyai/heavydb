@@ -4098,13 +4098,19 @@ std::shared_ptr<Analyzer::Constant> GeoConstant::makePhysicalConstant(
   std::vector<int> poly_rings;
 
   const bool validate_with_geos_if_available = false;
-  Geospatial::GeoTypesFactory::getGeoColumns(geo_->getWktString(),
-                                             ti,
-                                             coords,
-                                             bounds,
-                                             ring_sizes,
-                                             poly_rings,
-                                             validate_with_geos_if_available);
+  bool success =
+      Geospatial::GeoTypesFactory::getGeoColumns(geo_->getWktString(),
+                                                 ti,
+                                                 coords,
+                                                 bounds,
+                                                 ring_sizes,
+                                                 poly_rings,
+                                                 validate_with_geos_if_available);
+  if (!success) {
+    std::ostringstream oss;
+    oss << "Failed to create geometry from WKT string: " << geo_->getWktString();
+    throw std::runtime_error(oss.str());
+  }
 
   switch (index) {
     case 0:  // coords
