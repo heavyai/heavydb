@@ -40,6 +40,7 @@
 #include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
 #include "Shared/heavyai_shared_mutex.h"
+#include "Shared/misc.h"
 #include "Shared/scope.h"
 
 #include <boost/algorithm/string.hpp>
@@ -51,6 +52,10 @@
 
 #ifdef ENABLE_TBB
 #include <tbb/global_control.h>
+#endif
+
+#ifdef __linux__
+#include <unistd.h>
 #endif
 
 #include <csignal>
@@ -635,6 +640,14 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
   }
 }
 
+void log_startup_info() {
+#ifdef __linux__
+  VLOG(1) << "sysconf(_SC_PAGE_SIZE): " << sysconf(_SC_PAGE_SIZE);
+  VLOG(1) << "/proc/buddyinfo: " << shared::FileContentsEscaper{"/proc/buddyinfo"};
+  VLOG(1) << "/proc/meminfo: " << shared::FileContentsEscaper{"/proc/meminfo"};
+#endif
+}
+
 int main(int argc, char** argv) {
   bool has_clust_topo = false;
 
@@ -649,6 +662,7 @@ int main(int argc, char** argv) {
     if (!has_clust_topo) {
       prog_config_opts.validate_base_path();
       prog_config_opts.validate();
+      log_startup_info();
       return (startHeavyDBServer(prog_config_opts));
     }
   } catch (std::runtime_error& e) {

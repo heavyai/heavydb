@@ -34,10 +34,16 @@
 #include <sys/types.h>
 #endif
 
+#include <boost/container/small_vector.hpp>
 #include <boost/filesystem.hpp>
 
 #include <algorithm>
+#include <cctype>
+#include <charconv>
+#include <fstream>
 #include <limits>
+#include <numeric>
+#include <string_view>
 
 extern bool g_enable_fsi;
 
@@ -158,8 +164,11 @@ DataMgr::SystemMemoryUsage DataMgr::getSystemMemoryUsage() const {
   usage.regular = (resident - shared) * page_size;
   usage.shared = shared * page_size;
 
-  ProcBuddyinfoParser bi;
+  ProcBuddyinfoParser bi{};
+  bi.parseBuddyinfo();
   usage.frag = bi.getFragmentationPercent();
+  usage.avail_pages = bi.getSumAvailPages();
+  usage.high_blocks = bi.getSumHighestBlocks();
 
 #else
 
@@ -169,7 +178,9 @@ DataMgr::SystemMemoryUsage DataMgr::getSystemMemoryUsage() const {
   usage.vtotal = 0;
   usage.regular = 0;
   usage.shared = 0;
-  usage.frag = 0;
+  usage.frag = 0.0;
+  usage.avail_pages = 0;
+  usage.high_blocks = 0;
 
 #endif
 
@@ -704,6 +715,8 @@ std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem
   os << " \"ProcessPlusSwapMB\": " << mem_info.regular / (1024. * 1024.) << ",";
   os << " \"ProcessSharedMB\": " << mem_info.shared / (1024. * 1024.) << ",";
   os << " \"FragmentationPercent\": " << mem_info.frag;
+  os << ", \"BuddyinfoHighBlocks\": " << mem_info.high_blocks;
+  os << ", \"BuddyinfoAvailPages\": " << mem_info.avail_pages;
   os << " }";
   return os;
 }
@@ -743,6 +756,119 @@ Buffer_Namespace::GpuCudaBufferMgr* DataMgr::getGpuBufferMgr(int32_t device_id) 
   } else {
     return nullptr;
   }
+}
+
+namespace {
+constexpr unsigned kMaxBuddyinfoBlocks = 32;
+constexpr unsigned kMaxBuddyinfoTokens = kMaxBuddyinfoBlocks + 4;
+constexpr double kErrorCodeUnableToOpenFile = -1.0;
+constexpr double kErrorCodeOutOfMemory = -2.0;
+template <typename T, std::size_t N>
+using small_vector = boost::container::small_vector<T, N>;
+
+struct BuddyinfoBlocks {
+  small_vector<size_t, kMaxBuddyinfoBlocks> blocks;
+
+  // Sum total pages in BuddyinfoBlocks when iterated in reverse using Horner's method.
+  struct Horner {
+    size_t operator()(size_t sum, size_t blocks) const { return 2 * sum + blocks; }
+  };
+
+  BuddyinfoBlocks() = default;
+
+  // Set blocks from array of string_view tokens.
+  BuddyinfoBlocks(std::string_view const* const tokens, size_t const num_blocks) {
+    for (size_t i = 0; i < num_blocks; ++i) {
+      size_t block;
+      std::from_chars(tokens[i].data(), tokens[i].data() + tokens[i].size(), block);
+      blocks.push_back(block);
+    }
+  }
+
+  void addBlocks(BuddyinfoBlocks const& rhs) {
+    if (blocks.size() < rhs.blocks.size()) {
+      blocks.resize(rhs.blocks.size(), 0u);
+    }
+    for (size_t i = 0; i < rhs.blocks.size(); ++i) {
+      blocks[i] += rhs.blocks[i];
+    }
+  }
+
+  double fragPercent() const {
+    if (blocks.size() < 2u) {
+      return 0.0;  // No fragmentation is possible with only one block column.
+    }
+    size_t scaled = 0;
+    size_t total = 0;
+    for (size_t order = 0; order < blocks.size(); ++order) {
+      size_t const pages = blocks[order] << order;
+      scaled += pages * (blocks.size() - 1 - order) / (blocks.size() - 1);
+      total += pages;
+    }
+    return total ? scaled * 100.0 / total : kErrorCodeOutOfMemory;
+  }
+
+  size_t highestBlock() const { return blocks.empty() ? 0 : blocks.back(); }
+
+  size_t sumAvailPages() const {
+    return std::accumulate(blocks.rbegin(), blocks.rend(), size_t(0), Horner{});
+  }
+};
+
+// Split line on spaces into string_views.
+small_vector<std::string_view, kMaxBuddyinfoTokens> tokenize(std::string_view const str) {
+  small_vector<std::string_view, kMaxBuddyinfoTokens> tokens;
+  size_t start = 0;
+  while (start < str.size()) {
+    // Find the start of the next token
+    start = str.find_first_not_of(' ', start);
+    // Check if we're at the end
+    if (start == std::string_view::npos) {
+      break;
+    }
+    // Find the end of the token. std::string_view::npos is ok.
+    size_t end = str.find(' ', start);
+    tokens.push_back(str.substr(start, end - start));  // Add the token to our list
+    start = end;                                       // Set up for the next token
+  }
+  return tokens;
+}
+
+}  // namespace
+
+// Each row of /proc/buddyinfo is parsed into a BuddyinfoBlocks struct,
+// from which the member variables are calculated.
+void ProcBuddyinfoParser::parseBuddyinfo() {
+  std::ifstream file("/proc/buddyinfo");
+  if (!file.is_open()) {
+    frag_percent_ = kErrorCodeUnableToOpenFile;
+    sum_highest_blocks_ = 0;
+    return;
+  }
+
+  constexpr unsigned max_line_size = 256;
+  char line[max_line_size];
+
+  BuddyinfoBlocks frag;  // Used to calculate frag_percent_.
+
+  // Example: line = "Node 0, zone Normal 1 2 3 4 5 6 7 8 9 10 11"
+  // No CHECKs are done, and no exceptions are thrown. The worst that can happen is
+  // bad logs, which is not worth crashing the server or showing an error to the user.
+  while (file.getline(line, max_line_size)) {
+    auto tokens = tokenize(line);  // Split on spaces.
+    // Sanity check on tokens.size() and known tokens.
+    if (5u <= tokens.size() && tokens[0] == "Node" && tokens[2] == "zone") {
+      BuddyinfoBlocks row(tokens.data() + 4, tokens.size() - 4);
+
+      // Calculate member variables
+      frag.addBlocks(row);
+      if (tokens[3].substr(0, 3) != "DMA") {
+        sum_avail_pages_ += row.sumAvailPages();
+        sum_highest_blocks_ += row.highestBlock();
+      }
+    }
+  }
+  frag_percent_ = frag.fragPercent();
 }
 
 }  // namespace Data_Namespace
