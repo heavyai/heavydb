@@ -25,6 +25,7 @@
 #include <iterator>
 #include <list>
 #include <map>
+#include <ostream>
 #include <set>
 #include <string_view>
 #include <unordered_set>
@@ -143,6 +144,14 @@ OSTREAM& operator<<(OSTREAM& os, PrintContainer<CONTAINER> pc) {
     return os << ')';
   }
 }
+
+// Usage: ostream << FileContentsEscaper{"/path/to/file"};
+struct FileContentsEscaper {
+  char const* const filename;
+  // Escape as a json string
+  void quoteAndPrint(std::ostream&) const;
+};
+std::ostream& operator<<(std::ostream&, FileContentsEscaper const&);
 
 // Same as strftime(buf, max, "%F", tm) but guarantees that the year is
 // zero-padded to a minimum length of 4. Return the number of characters

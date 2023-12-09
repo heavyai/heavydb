@@ -108,76 +108,18 @@ class ProcMeminfoParser {
   auto end() { return items_.end(); }
 };
 
-//! Parse /proc/buddyinfo into a Fragmentation health score.
+//! Parse /proc/buddyinfo into a few fragmentation-related data.
 class ProcBuddyinfoParser {
-  std::string inputText_;
-  std::vector<size_t> orders_;
-  size_t fragmentationPercent_;
-
  public:
-  ProcBuddyinfoParser(std::string text = {}) {
-    if (text.empty()) {
-      std::ifstream f("/proc/buddyinfo");
-      std::stringstream ss;
-      ss << f.rdbuf();
-      text = ss.str();
-    }
-    inputText_ = text;
+  void parseBuddyinfo();  // Set member variables.
+  double getFragmentationPercent() const { return frag_percent_; }
+  size_t getSumAvailPages() const { return sum_avail_pages_; }
+  size_t getSumHighestBlocks() const { return sum_highest_blocks_; }
 
-    const size_t skipped_columns = 4;
-    // NOTE(sy): For now this calculation ignores the first four buddyinfo columns,
-    // but in the future we could break out subscores by node and/or by zone.
-    size_t number_of_columns = 0;
-    for (const std::string& line : split(text, "\n")) {
-      if (line.empty()) {
-        continue;
-      }
-      const auto columns = split(line);
-      CHECK_GT(columns.size(), skipped_columns) << "unexpected line format: " << line;
-      if (number_of_columns != 0) {
-        CHECK_EQ(columns.size(), number_of_columns)
-            << "expected line to have " << number_of_columns << " columns: " << line;
-      } else {
-        number_of_columns = columns.size();
-        orders_.resize(number_of_columns - skipped_columns, 0);
-      }
-      for (size_t i = skipped_columns; i < number_of_columns; ++i) {
-        orders_[i - skipped_columns] += strtoull(columns[i].c_str(), NULL, 10);
-      }
-    }
-#ifdef __linux__
-    const long page_size =
-        sysconf(_SC_PAGE_SIZE);  // in case x86-64 is configured to use 2MB pages
-#else
-    const long page_size = heavyai::get_page_size();
-#endif
-    size_t scaled = 0;
-    size_t total = 0;
-    for (size_t order = 0; order < orders_.size(); ++order) {
-      const size_t bytes = orders_[order] * (size_t(1) << order) * page_size;
-      scaled += (bytes * (orders_.size() - 1 - order)) / (orders_.size() - 1);
-      total += bytes;
-    }
-
-    CHECK_GT(total, size_t(0)) << "failed to parse:\n" << text;
-    fragmentationPercent_ = (scaled * 100) / total;
-  }
-
-  auto operator[](size_t order) {
-    return orders_[order];
-  }
-  auto begin() {
-    return orders_.begin();
-  }
-  auto end() {
-    return orders_.end();
-  }
-  auto getFragmentationPercent() {
-    return fragmentationPercent_;
-  }
-  auto getInputText() {
-    return inputText_;
-  }
+ private:
+  double frag_percent_{0};        // Weighted score of available memory.
+  size_t sum_avail_pages_{0};     // Sum of all available non-DMA pages.
+  size_t sum_highest_blocks_{0};  // Sum of highest non-DMA blocks.
 };
 
 class DataMgr {
@@ -243,13 +185,15 @@ class DataMgr {
   // NOTE(sy): Revisit how DataMgr should handle Cuda streams if Intel ever needs this.
 
   struct SystemMemoryUsage {
-    size_t free;      // available CPU RAM memory in bytes
-    size_t total;     // total CPU RAM memory in bytes
-    size_t resident;  // resident process memory in bytes
-    size_t vtotal;    // total process virtual memory in bytes
-    size_t regular;   // process bytes non-shared
-    size_t shared;    // process bytes shared (file maps + shmem)
-    size_t frag;      // fragmentation percent
+    size_t free;         // available CPU RAM memory in bytes
+    size_t total;        // total CPU RAM memory in bytes
+    size_t resident;     // resident process memory in bytes
+    size_t vtotal;       // total process virtual memory in bytes
+    size_t regular;      // process bytes non-shared
+    size_t shared;       // process bytes shared (file maps + shmem)
+    double frag;         // fragmentation percent
+    size_t avail_pages;  // sum of all non-dma pages in /proc/buddyinfo
+    size_t high_blocks;  // sum of highest non-dma blocks in /proc/buddyinfo
   };
 
   SystemMemoryUsage getSystemMemoryUsage() const;
