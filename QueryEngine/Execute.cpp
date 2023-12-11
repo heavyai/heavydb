@@ -194,6 +194,8 @@ bool g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency{false};
 bool g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency{false};
 double g_executor_resource_mgr_max_available_resource_use_ratio{0.8};
 
+bool g_use_cpu_mem_pool_for_output_buffers{false};
+
 extern bool g_cache_string_hash;
 extern bool g_allow_memory_status_log;
 
@@ -2628,9 +2630,12 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
           query_mem_desc.getCountDistinctDescriptor(target_idx);
       if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
         CHECK(row_set_mem_owner);
-        auto count_distinct_buffer = row_set_mem_owner->allocateCountDistinctBuffer(
-            count_distinct_desc.bitmapPaddedSizeBytes(),
-            /*thread_idx=*/0);  // TODO: can we detect thread idx here?
+        // TODO: can we detect thread idx here?
+        constexpr size_t thread_idx{0};
+        const auto bitmap_size = count_distinct_desc.bitmapPaddedSizeBytes();
+        row_set_mem_owner->initCountDistinctBufferAllocator(bitmap_size, thread_idx);
+        auto count_distinct_buffer =
+            row_set_mem_owner->allocateCountDistinctBuffer(bitmap_size, thread_idx);
         entry.push_back(reinterpret_cast<int64_t>(count_distinct_buffer));
         continue;
       }

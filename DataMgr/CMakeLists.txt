@@ -4,6 +4,7 @@ endif()
 
 set(datamgr_source_files
     AbstractBuffer.cpp
+    Allocators/CpuMgrArenaAllocator.cpp
     Allocators/CudaAllocator.cpp
     Allocators/ThrustAllocator.cpp
     Chunk/Chunk.cpp

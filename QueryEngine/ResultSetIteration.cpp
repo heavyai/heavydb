@@ -2377,8 +2377,11 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
           const auto bitmap_byte_sz = count_distinct_desc.sub_bitmap_count == 1
                                           ? count_distinct_desc.bitmapSizeBytes()
                                           : count_distinct_desc.bitmapPaddedSizeBytes();
-          auto count_distinct_buffer = row_set_mem_owner_->allocateCountDistinctBuffer(
-              bitmap_byte_sz, /*thread_idx=*/0);
+          constexpr size_t thread_idx{0};
+          row_set_mem_owner_->initCountDistinctBufferAllocator(bitmap_byte_sz,
+                                                               thread_idx);
+          auto count_distinct_buffer =
+              row_set_mem_owner_->allocateCountDistinctBuffer(bitmap_byte_sz, thread_idx);
           *count_distinct_ptr_ptr = reinterpret_cast<int64_t>(count_distinct_buffer);
         }
       }

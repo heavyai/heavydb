@@ -53,6 +53,8 @@ std::string g_pmem_path{};
 size_t g_pmem_size{0};
 #endif
 
+bool g_use_cpu_mem_pool_size_for_max_cpu_slab_size{false};
+
 namespace Data_Namespace {
 
 namespace {
@@ -290,7 +292,10 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
   auto min_cpu_slab_size =
       get_slab_size(system_parameters.min_cpu_slab_size, cpu_buffer_size, page_size);
   auto max_cpu_slab_size =
-      get_slab_size(system_parameters.max_cpu_slab_size, cpu_buffer_size, page_size);
+      g_use_cpu_mem_pool_size_for_max_cpu_slab_size
+          ? cpu_buffer_size
+          : get_slab_size(
+                system_parameters.max_cpu_slab_size, cpu_buffer_size, page_size);
   auto default_cpu_slab_size =
       get_slab_size(system_parameters.default_cpu_slab_size, cpu_buffer_size, page_size);
   LOG(INFO) << "Min CPU Slab Size is " << float(min_cpu_slab_size) / (1024 * 1024)

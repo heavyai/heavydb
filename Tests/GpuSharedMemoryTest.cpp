@@ -20,6 +20,7 @@
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
+#include "Tests/DataMgrTestHelpers.h"
 
 extern bool g_is_test_env;
 
@@ -609,6 +610,7 @@ int main(int argc, char** argv) {
 
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+  TestHelpers::init_sys_catalog();
 
   g_cuda_mgr.reset(new CudaMgr_Namespace::CudaMgr(0));
   g_query_engine = QueryEngine::createInstance(g_cuda_mgr.get(), /*cpu_only=*/false);

@@ -16,7 +16,11 @@
 
 #pragma once
 
+#include "Catalog/SysCatalog.h"
+#include "CudaMgr/CudaMgr.h"
 #include "DataMgr/AbstractBuffer.h"
+#include "DataMgr/DataMgr.h"
+#include "Shared/SystemParameters.h"
 
 namespace TestHelpers {
 
@@ -124,4 +128,11 @@ class TestBuffer : public Data_Namespace::AbstractBuffer {
   size_t reserved_size_{0};
 };
 
+void init_sys_catalog() {
+  SystemParameters sys_params;
+  auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(
+      BASE_PATH "/" + shared::kDataDirectoryName, sys_params, nullptr, false);
+  auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+  sys_catalog.init(BASE_PATH, data_mgr, {}, {}, false, false, {});
+}
 }  // namespace TestHelpers

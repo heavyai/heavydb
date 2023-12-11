@@ -21,6 +21,7 @@
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TargetValue.h"
 #include "Shared/TargetInfo.h"
+#include "Tests/DataMgrTestHelpers.h"
 #include "Tests/ResultSetTestUtils.h"
 #include "Tests/TestHelpers.h"
 
@@ -840,6 +841,7 @@ int main(int argc, char** argv) {
 
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+  TestHelpers::init_sys_catalog();
 
   int err{0};
   try {

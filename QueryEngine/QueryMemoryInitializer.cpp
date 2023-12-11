@@ -270,6 +270,16 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     if (device_type == ExecutorDeviceType::GPU) {
       allocateCountDistinctGpuMem(query_mem_desc);
     }
+    agg_op_metadata.count_distinct_buf_size =
+        calculateCountDistinctBufferSize(query_mem_desc, ra_exe_unit);
+    size_t total_buffer_size{0};
+    for (auto buffer_size : agg_op_metadata.count_distinct_buf_size) {
+      if (buffer_size > 0) {
+        total_buffer_size += buffer_size;
+      }
+    }
+    total_buffer_size *= query_mem_desc.getEntryCount();
+    row_set_mem_owner_->initCountDistinctBufferAllocator(total_buffer_size, thread_idx_);
   }
 
   if (agg_op_metadata.has_tdigest) {
@@ -300,10 +310,6 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   }
 
   if (query_mem_desc.isGroupBy()) {
-    if (agg_op_metadata.has_count_distinct) {
-      agg_op_metadata.count_distinct_buf_size =
-          calculateCountDistinctBufferSize(query_mem_desc, ra_exe_unit);
-    }
     if (agg_op_metadata.has_mode) {
       agg_op_metadata.mode_index_set =
           initializeModeIndexSet(query_mem_desc, ra_exe_unit);
