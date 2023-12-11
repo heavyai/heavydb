@@ -38,24 +38,34 @@ extern size_t g_pmem_size;
 extern std::string g_pmem_path;
 #endif
 
+extern bool g_use_cpu_mem_pool_size_for_max_cpu_slab_size;
+
 class DataMgrTest : public testing::Test {
  public:
   void SetUp() override { resetDataMgr(); }
 
-  void TearDown() override { boost::filesystem::remove_all(data_mgr_path_); }
+  void TearDown() override {
+    g_use_cpu_mem_pool_size_for_max_cpu_slab_size =
+        orig_use_cpu_mem_pool_size_for_max_cpu_slab_size_;
+    boost::filesystem::remove_all(data_mgr_path_);
+  }
 
   virtual void resetDataMgr(size_t num_slabs = 1) {
-    boost::filesystem::remove_all(data_mgr_path_);
     system_params_.max_cpu_slab_size = slab_size_;
     system_params_.default_cpu_slab_size = system_params_.max_cpu_slab_size;
     system_params_.min_cpu_slab_size = slab_size_;
     system_params_.cpu_buffer_mem_bytes = slab_size_ * num_slabs;
+    resetDataMgr(system_params_);
+  }
+
+  void resetDataMgr(const SystemParameters& sys_params) {
+    boost::filesystem::remove_all(data_mgr_path_);
 #ifdef ENABLE_MEMKIND
     g_pmem_size = slab_size_ * num_slabs;
 #endif
     std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
     data_mgr_ = std::make_unique<Data_Namespace::DataMgr>(data_mgr_path_,
-                                                          system_params_,
+                                                          sys_params,
                                                           std::move(cuda_mgr),
                                                           use_gpus_,
                                                           reserved_gpu_mem_,
@@ -86,6 +96,8 @@ class DataMgrTest : public testing::Test {
   // one page for simplicity.
   size_t slab_size_{512};
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;
+  const bool orig_use_cpu_mem_pool_size_for_max_cpu_slab_size_{
+      g_use_cpu_mem_pool_size_for_max_cpu_slab_size};
 };
 
 TEST_F(DataMgrTest, ReuseWithPinnedGaps) {
@@ -95,6 +107,17 @@ TEST_F(DataMgrTest, ReuseWithPinnedGaps) {
   auto chunk1 = writeChunkForKey({1, 1, 1, 1});  // pinned
   writeChunkForKey({1, 1, 1, 2});                // unpinned
   writeChunkForKey({1, 1, 1, 3});                // unpinned
+}
+
+TEST_F(DataMgrTest, UseCpuMemPoolSizeForMaxCpuSlabSizeNonMultipleOfPageSize) {
+  g_use_cpu_mem_pool_size_for_max_cpu_slab_size = true;
+  size_t page_size = 11;
+  SystemParameters sys_params;
+  sys_params.buffer_page_size = page_size;
+  sys_params.min_cpu_slab_size = page_size;
+  sys_params.max_cpu_slab_size = page_size * 2;
+  sys_params.cpu_buffer_mem_bytes = (page_size * 3) + 1;
+  resetDataMgr(sys_params);
 }
 
 #ifdef ENABLE_MEMKIND

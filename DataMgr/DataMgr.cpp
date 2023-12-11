@@ -289,6 +289,7 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
     cpu_buffer_size = total_system_memory *
                       0.8;  // should get free memory instead of this ugly heuristic
   }
+  cpu_buffer_size = (cpu_buffer_size / page_size) * page_size;
   auto min_cpu_slab_size =
       get_slab_size(system_parameters.min_cpu_slab_size, cpu_buffer_size, page_size);
   auto max_cpu_slab_size =
