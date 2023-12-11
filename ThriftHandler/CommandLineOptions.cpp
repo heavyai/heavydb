@@ -76,6 +76,8 @@ extern std::string g_logs_system_tables_refresh_interval;
 extern size_t g_logs_system_tables_max_files_count;
 extern bool g_uniform_request_ids_per_thrift_call;
 extern size_t g_gpu_code_cache_max_size_in_bytes;
+extern bool g_use_cpu_mem_pool_for_output_buffers;
+extern bool g_use_cpu_mem_pool_size_for_max_cpu_slab_size;
 
 #ifdef ENABLE_MEMKIND
 extern std::string g_pmem_path;
@@ -817,6 +819,16 @@ void CommandLineOptions::fillDeveloperOptions() {
                          ->default_value(g_enable_smem_group_by)
                          ->implicit_value(true),
                      "Enable using GPU shared memory for some GROUP BY queries.");
+  desc.add_options()(
+      "use-cpu-mem-pool-for-output-buffers",
+      po::value<bool>(&g_use_cpu_mem_pool_for_output_buffers)
+          ->default_value(g_use_cpu_mem_pool_for_output_buffers)
+          ->implicit_value(true),
+      "Use the CPU memory buffer pool (whose capacity is determined by the "
+      "cpu-buffer-mem-bytes configuration parameter) for output buffer allocations. "
+      "When this configuration parameter is set to false, output (e.g. result set) "
+      "buffer allocations will use heap memory outside the cpu-buffer-mem-bytes based "
+      "memory buffer pool.");
   desc.add_options()("num-executors",
                      po::value<int>(&system_parameters.num_executors)
                          ->default_value(system_parameters.num_executors),
@@ -1692,7 +1704,10 @@ void CommandLineOptions::validate() {
         "Value must be between 1.0 and 2.0");
   }
 
-  if (system_parameters.max_cpu_slab_size < system_parameters.min_cpu_slab_size) {
+  // Check for the g_use_cpu_mem_pool_size_for_max_cpu_slab_size flag, since DataMgr
+  // ensures that min_cpu_slab_size cannot be greater than the buffer pool size.
+  if (!g_use_cpu_mem_pool_size_for_max_cpu_slab_size &&
+      system_parameters.max_cpu_slab_size < system_parameters.min_cpu_slab_size) {
     throw std::runtime_error("max-cpu-slab-size (" +
                              std::to_string(system_parameters.max_cpu_slab_size) +
                              ") cannot be less than min-cpu-slab-size (" +
@@ -1704,7 +1719,10 @@ void CommandLineOptions::validate() {
                              ") cannot be less than min-cpu-slab-size (" +
                              std::to_string(system_parameters.min_cpu_slab_size) + ").");
   }
-  if (system_parameters.default_cpu_slab_size > system_parameters.max_cpu_slab_size) {
+  // Check for the g_use_cpu_mem_pool_size_for_max_cpu_slab_size flag, since DataMgr
+  // ensures that default_cpu_slab_size cannot be greater than the buffer pool size.
+  if (!g_use_cpu_mem_pool_size_for_max_cpu_slab_size &&
+      system_parameters.default_cpu_slab_size > system_parameters.max_cpu_slab_size) {
     throw std::runtime_error("default-cpu-slab-size (" +
                              std::to_string(system_parameters.default_cpu_slab_size) +
                              ") cannot be greater than max-cpu-slab-size (" +
@@ -2007,11 +2025,21 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     LOG(INFO) << " cuda grid size " << system_parameters.cuda_grid_size;
   }
 
-  if (!vm["max-cpu-slab-size"].defaulted() && vm["default-cpu-slab-size"].defaulted()) {
-    LOG(INFO) << "default-cpu-slab-size is not set while max-cpu-slab-size is set. "
-                 "Setting default-cpu-slab-size to the same value as max-cpu-slab-size ("
-              << system_parameters.max_cpu_slab_size << " bytes)";
-    system_parameters.default_cpu_slab_size = system_parameters.max_cpu_slab_size;
+  if (g_use_cpu_mem_pool_for_output_buffers) {
+    if (vm["max-cpu-slab-size"].defaulted()) {
+      LOG(INFO)
+          << "max-cpu-slab-size is not set while use-cpu-mem-pool-for-output-buffers is "
+             "true. Using the CPU memory buffer pool size for the max CPU slab size.";
+      g_use_cpu_mem_pool_size_for_max_cpu_slab_size = true;
+    }
+  } else {
+    if (!vm["max-cpu-slab-size"].defaulted() && vm["default-cpu-slab-size"].defaulted()) {
+      LOG(INFO)
+          << "default-cpu-slab-size is not set while max-cpu-slab-size is set. "
+             "Setting default-cpu-slab-size to the same value as max-cpu-slab-size ("
+          << system_parameters.max_cpu_slab_size << " bytes)";
+      system_parameters.default_cpu_slab_size = system_parameters.max_cpu_slab_size;
+    }
   }
 
   if (!vm["max-gpu-slab-size"].defaulted() && vm["default-gpu-slab-size"].defaulted()) {
@@ -2023,8 +2051,12 @@ boost::optional<int> CommandLineOptions::parse_command_line(
 
   LOG(INFO) << " Min CPU buffer pool slab size (in bytes) "
             << system_parameters.min_cpu_slab_size;
-  LOG(INFO) << " Max CPU buffer pool slab size (in bytes) "
-            << system_parameters.max_cpu_slab_size;
+  if (g_use_cpu_mem_pool_size_for_max_cpu_slab_size) {
+    LOG(INFO) << " Max CPU buffer pool slab size is set to the CPU buffer pool size";
+  } else {
+    LOG(INFO) << " Max CPU buffer pool slab size (in bytes) "
+              << system_parameters.max_cpu_slab_size;
+  }
   LOG(INFO) << " Default CPU buffer pool slab size (in bytes) "
             << system_parameters.default_cpu_slab_size;
   LOG(INFO) << " Min GPU buffer pool slab size (in bytes) "
@@ -2074,6 +2106,11 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     LOG(INFO) << " \t Use chunk metadata cache: "
               << (g_use_chunk_metadata_cache ? "enabled" : "disabled");
   }
+  LOG(INFO) << "Number of executors is set to " << system_parameters.num_executors;
+
+  LOG(INFO) << "Use CPU memory pool for output buffers is set to "
+            << g_use_cpu_mem_pool_for_output_buffers;
+
   LOG(INFO) << "Executor Resource Manager: "
             << (g_enable_executor_resource_mgr ? "enabled" : "disabled");
   if (g_enable_executor_resource_mgr) {

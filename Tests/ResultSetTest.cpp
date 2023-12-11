@@ -29,6 +29,7 @@
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryRunner/QueryRunner.h"
 #include "StringDictionary/StringDictionary.h"
+#include "Tests/DataMgrTestHelpers.h"
 #include "Tests/TestHelpers.h"
 
 #include <gtest/gtest.h>
@@ -3168,6 +3169,12 @@ int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 
   QR::init(BASE_PATH);
+
+  // Set a large enough max CPU slab size for the ReduceLargeBuffers* test cases.
+  SystemParameters sys_params;
+  sys_params.max_cpu_slab_size = 12500000000;
+  auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
+  data_mgr.resetBufferMgrs({}, 0, sys_params);
 
   int err{0};
   try {

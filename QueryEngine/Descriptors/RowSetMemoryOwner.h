@@ -28,6 +28,7 @@
 #include "ApproxQuantileDescriptor.h"
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
+#include "DataMgr/Allocators/CpuMgrArenaAllocator.h"
 #include "DataMgr/Allocators/FastAllocator.h"
 #include "DataMgr/DataMgr.h"
 #include "Logger/Logger.h"
@@ -41,6 +42,7 @@
 #include "StringOps/StringOps.h"
 
 extern bool g_allow_memory_status_log;
+extern bool g_use_cpu_mem_pool_for_output_buffers;
 
 namespace Catalog_Namespace {
 class Catalog;
@@ -57,7 +59,12 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   RowSetMemoryOwner(const size_t arena_block_size, const size_t executor_id)
       : arena_block_size_(arena_block_size), executor_id_(executor_id) {
     // initialize shared allocator (i.e., allocators_[0])
-    allocators_.emplace_back(std::make_unique<DramArena>(arena_block_size_));
+    if (g_use_cpu_mem_pool_for_output_buffers) {
+      allocators_.emplace_back(std::make_unique<CpuMgrArenaAllocator>());
+    } else {
+      allocators_.emplace_back(std::make_unique<DramArena>(arena_block_size_));
+    }
+    count_distinct_buffer_allocators_.resize(allocators_.size());
   }
 
   enum class StringTranslationType { SOURCE_INTERSECTION, SOURCE_UNION };
@@ -80,11 +87,16 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
               << ", # existing allocator(s): " << allocators_.size()
               << ", # requested allocator(s): " << required_num_kernels << ")";
       for (size_t i = 0; i < required_num_allocators; i++) {
-        // todo (yoonmin): can we determine better default min_block_size per query?
-        allocators_.emplace_back(std::make_unique<DramArena>(arena_block_size_));
+        if (g_use_cpu_mem_pool_for_output_buffers) {
+          allocators_.emplace_back(std::make_unique<CpuMgrArenaAllocator>());
+        } else {
+          // todo (yoonmin): can we determine better default min_block_size per query?
+          allocators_.emplace_back(std::make_unique<DramArena>(arena_block_size_));
+        }
       }
     }
     CHECK_GE(allocators_.size(), required_num_kernels);
+    count_distinct_buffer_allocators_.resize(allocators_.size());
   }
 
   // allocate memory via shared allocator
@@ -96,13 +108,21 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   // allocate memory via thread's unique allocator
   int8_t* allocate(const size_t num_bytes, const size_t thread_idx) {
     CHECK_LT(thread_idx, allocators_.size());
-    auto allocator = allocators_[thread_idx].get();
     std::lock_guard<std::mutex> lock(state_mutex_);
-    if (g_allow_memory_status_log) {
-      VLOG(1) << "Try to allocate CPU memory: " << num_bytes << " bytes (THREAD-"
-              << thread_idx << ")";
+    return allocateUnlocked(num_bytes, thread_idx);
+  }
+
+  void initCountDistinctBufferAllocator(size_t buffer_size, size_t thread_idx) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    VLOG(2) << "Count distinct buffer allocator initialized with buffer_size: "
+            << buffer_size << ", thread_idx: " << thread_idx;
+    CHECK_LT(thread_idx, count_distinct_buffer_allocators_.size());
+    if (count_distinct_buffer_allocators_[thread_idx]) {
+      VLOG(2) << "Replacing count_distinct_buffer_allocators_[" << thread_idx << "].";
     }
-    return reinterpret_cast<int8_t*>(allocator->allocate(num_bytes));
+    count_distinct_buffer_allocators_[thread_idx] =
+        std::make_unique<CountDistinctBufferAllocator>(
+            allocateUnlocked(buffer_size, thread_idx), buffer_size);
   }
 
   std::pair<int64_t*, bool> allocateCachedGroupByBuffer(const size_t num_bytes,
@@ -128,7 +148,9 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   int8_t* allocateCountDistinctBuffer(const size_t num_bytes,
                                       const size_t thread_idx = 0) {
-    int8_t* buffer = allocate(num_bytes, thread_idx);
+    CHECK_LT(thread_idx, count_distinct_buffer_allocators_.size());
+    CHECK(count_distinct_buffer_allocators_[thread_idx]);
+    int8_t* buffer = count_distinct_buffer_allocators_[thread_idx]->allocate(num_bytes);
     std::memset(buffer, 0, num_bytes);
     addCountDistinctBuffer(buffer, num_bytes, /*physical_buffer=*/true);
     return buffer;
@@ -407,6 +429,15 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   }
 
  private:
+  int8_t* allocateUnlocked(const size_t num_bytes, const size_t thread_idx) {
+    if (g_allow_memory_status_log) {
+      VLOG(1) << "Try to allocate CPU memory: " << num_bytes << " bytes (THREAD-"
+              << thread_idx << ")";
+    }
+    auto allocator = allocators_[thread_idx].get();
+    return reinterpret_cast<int8_t*>(allocator->allocate(num_bytes));
+  }
+
   struct CountDistinctBitmapBuffer {
     int8_t* ptr;
     const size_t size;
@@ -442,6 +473,11 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   size_t arena_block_size_;  // for cloning
   std::vector<std::unique_ptr<Arena>> allocators_;
+
+  using CountDistinctBufferAllocator = FastAllocator<int8_t>;
+  std::vector<std::unique_ptr<CountDistinctBufferAllocator>>
+      count_distinct_buffer_allocators_;
+
   size_t executor_id_;
 
   mutable std::mutex state_mutex_;

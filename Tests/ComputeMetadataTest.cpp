@@ -29,6 +29,7 @@
 #endif
 
 extern float g_vacuum_min_selectivity;
+extern bool g_use_cpu_mem_pool_for_output_buffers;
 
 namespace {
 
@@ -1870,6 +1871,13 @@ class OpportunisticVacuumingMemoryUseTest : public OpportunisticVacuumingTest {
     auto& data_mgr = getCatalog().getDataMgr();
     data_mgr.resetBufferMgrs(disk_cache_config, 0, system_parameters);
   }
+
+  void removeFragmenterForTable(const std::string& table_name) {
+    auto& catalog = getCatalog();
+    auto table_id = catalog.getTableId(table_name);
+    CHECK(table_id.has_value());
+    catalog.removeFragmenterForTable(table_id.value());
+  }
 };
 
 TEST_F(OpportunisticVacuumingMemoryUseTest, PulledInChunkDeleted) {
@@ -1973,7 +1981,25 @@ TEST_F(OpportunisticVacuumingMemoryUseTest, StaleChunkOnGpuDeleted) {
                       {{i(3)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}});
 }
 
-TEST_F(OpportunisticVacuumingMemoryUseTest, OneFragmentProcessedAtATime) {
+class OpportunisticVacuumingMemoryUseParamTest
+    : public OpportunisticVacuumingMemoryUseTest,
+      public testing::WithParamInterface<bool> {
+ public:
+  void SetUp() override {
+    g_use_cpu_mem_pool_for_output_buffers = GetParam();
+    OpportunisticVacuumingMemoryUseTest::SetUp();
+  }
+
+  static void TearDownTestSuite() {
+    g_use_cpu_mem_pool_for_output_buffers = orig_use_cpu_mem_pool_for_output_buffers;
+  }
+
+ private:
+  inline static const bool orig_use_cpu_mem_pool_for_output_buffers{
+      g_use_cpu_mem_pool_for_output_buffers};
+};
+
+TEST_P(OpportunisticVacuumingMemoryUseParamTest, OneFragmentProcessedAtATime) {
   sql("create table test_table (i int, t text encoding none) with (fragment_size = 5);");
   insertRange(0, 9, "a");
 
@@ -1990,15 +2016,36 @@ TEST_F(OpportunisticVacuumingMemoryUseTest, OneFragmentProcessedAtATime) {
 
   sql("delete from test_table where i <= 1 or i >= 8;");
 
-  // Assert that only one slab was used.
+  // One slab is used for chunks and 2 additional slabs are used for query output buffers.
   auto memory_info_vector =
       getCatalog().getDataMgr().getMemoryInfo(MemoryLevel::CPU_LEVEL);
   ASSERT_EQ(memory_info_vector.size(), size_t(1));
   for (const auto& memory_data : memory_info_vector[0].nodeMemoryData) {
-    EXPECT_EQ(memory_data.slabNum, size_t(0));
+    if (g_use_cpu_mem_pool_for_output_buffers) {
+      EXPECT_LE(memory_data.slabNum, size_t(2));
+      // The second and third slabs should be used for query output buffers that are freed
+      // at the end of the query.
+      if (memory_data.slabNum == 1 || memory_data.slabNum == 2) {
+        EXPECT_EQ(memory_data.memStatus, Buffer_Namespace::MemStatus::FREE);
+      }
+    } else {
+      EXPECT_EQ(memory_data.slabNum, size_t(0));
+    }
   }
 
-  sqlAndCompareResult("select * from test_table order by i;",
+  constexpr auto select_query{"select * from test_table order by i;"};
+  if (g_use_cpu_mem_pool_for_output_buffers) {
+    // An error should occur due to required output buffer size exceeding the max slab
+    // size.
+    queryAndAssertException(
+        select_query, "OUT_OF_CPU_MEM: Not enough host memory to execute the query");
+
+    // Reset to the default buffer manager parameters in order to ensure that the max slab
+    // size is big enough to contain the output buffers.
+    removeFragmenterForTable("test_table");
+    resetBufferMgrs(getSystemParameters());
+  }
+  sqlAndCompareResult(select_query,
                       {{i(2), "a2"},
                        {i(3), "a3"},
                        {i(4), "a4"},
@@ -2006,6 +2053,14 @@ TEST_F(OpportunisticVacuumingMemoryUseTest, OneFragmentProcessedAtATime) {
                        {i(6), "a6"},
                        {i(7), "a7"}});
 }
+
+INSTANTIATE_TEST_SUITE_P(DifferentOutputBufferAllocators,
+                         OpportunisticVacuumingMemoryUseParamTest,
+                         testing::Bool(),
+                         [](const auto& param_info) {
+                           return (param_info.param ? "LegacyAllocator"
+                                                    : "CpuBufferMgrAllocator");
+                         });
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
