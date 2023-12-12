@@ -1561,6 +1561,15 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
         if (bool_from_string_literal(str_literal)) {
           copy_params.raster_point_compute_angle = true;
         }
+      } else if (boost::iequals(*p->get_name(), "raster_drop_if_all_null")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'raster_drop_if_all_null' option must be a boolean.");
+        }
+        if (bool_from_string_literal(str_literal)) {
+          copy_params.raster_drop_if_all_null = true;
+        }
       } else if (boost::iequals(*p->get_name(), "sql_order_by")) {
         if (auto str_literal = dynamic_cast<const StringLiteral*>(p->get_value())) {
           copy_params.sql_order_by = *str_literal->get_stringval();

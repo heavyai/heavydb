@@ -5844,6 +5844,25 @@ ImportStatus Importer::importGDALRaster(
 
     bool read_block_failed = false;
 
+    // prepare to store which band values in which rows are null
+    boost::dynamic_bitset<> row_band_nulls;
+    if (copy_params.raster_drop_if_all_null) {
+      row_band_nulls.resize(num_elems * num_bands);
+    }
+
+    auto set_row_band_null = [&](const int row, const uint32_t band) {
+      auto const bit_index = (row * num_bands) + band;
+      row_band_nulls.set(bit_index);
+    };
+    auto all_row_bands_null = [&](const int row) -> bool {
+      auto const first_bit_index = row * num_bands;
+      bool all_null = true;
+      for (auto i = first_bit_index; i < first_bit_index + num_bands; i++) {
+        all_null = all_null && row_band_nulls.test(i);
+      }
+      return all_null;
+    };
+
     // for each band/column
     for (uint32_t band_idx = 0; band_idx < num_bands; band_idx++) {
       // the corresponding column
@@ -5884,6 +5903,9 @@ ImportStatus Importer::importGDALRaster(
             if (null_value_valid && value == static_cast<int16_t>(null_value)) {
               td.is_null = true;
               td.val.int_val = NULL_SMALLINT;
+              if (copy_params.raster_drop_if_all_null) {
+                set_row_band_null(idx, band_idx);
+              }
             } else {
               td.is_null = false;
               td.val.int_val = static_cast<int64_t>(value);
@@ -5899,6 +5921,9 @@ ImportStatus Importer::importGDALRaster(
             if (null_value_valid && value == static_cast<int32_t>(null_value)) {
               td.is_null = true;
               td.val.int_val = NULL_INT;
+              if (copy_params.raster_drop_if_all_null) {
+                set_row_band_null(idx, band_idx);
+              }
             } else {
               td.is_null = false;
               td.val.int_val = static_cast<int64_t>(value);
@@ -5914,6 +5939,9 @@ ImportStatus Importer::importGDALRaster(
             if (null_value_valid && value == static_cast<uint32_t>(null_value)) {
               td.is_null = true;
               td.val.int_val = NULL_INT;
+              if (copy_params.raster_drop_if_all_null) {
+                set_row_band_null(idx, band_idx);
+              }
             } else {
               td.is_null = false;
               td.val.int_val = static_cast<int64_t>(value);
@@ -5928,6 +5956,9 @@ ImportStatus Importer::importGDALRaster(
             if (null_value_valid && value == static_cast<float>(null_value)) {
               td.is_null = true;
               td.val.real_val = NULL_FLOAT;
+              if (copy_params.raster_drop_if_all_null) {
+                set_row_band_null(idx, band_idx);
+              }
             } else {
               td.is_null = false;
               td.val.real_val = static_cast<double>(value);
@@ -5942,6 +5973,9 @@ ImportStatus Importer::importGDALRaster(
             if (null_value_valid && value == null_value) {
               td.is_null = true;
               td.val.real_val = NULL_DOUBLE;
+              if (copy_params.raster_drop_if_all_null) {
+                set_row_band_null(idx, band_idx);
+              }
             } else {
               td.is_null = false;
               td.val.real_val = value;
@@ -5964,7 +5998,9 @@ ImportStatus Importer::importGDALRaster(
       for (auto& col_buffer : import_buffers) {
         col_buffer->clear();
       }
-      thread_import_status.rows_rejected += num_elems;
+      thread_import_status.rows_estimated = 0;
+      thread_import_status.rows_completed = 0;
+      thread_import_status.rows_rejected = num_elems;
     } else {
       // metadata columns?
       for (auto const& mci : metadata_column_infos) {
@@ -5975,8 +6011,50 @@ ImportStatus Importer::importGDALRaster(
         }
         col_idx++;
       }
-      thread_import_status.rows_estimated = num_elems;
-      thread_import_status.rows_completed = num_elems;
+
+      // drop rows where all band columns are null?
+      int num_dropped_as_all_null = 0;
+      if (copy_params.raster_drop_if_all_null) {
+        // capture rows where ALL the band values (only) were NULL
+        // count rows first (implies two passes on the bitset but
+        // still quicker than building the row set if not needed,
+        // in the case where ALL rows are to be dropped)
+        for (int row = 0; row < num_elems; row++) {
+          if (all_row_bands_null(row)) {
+            num_dropped_as_all_null++;
+          }
+        }
+        // delete those rows from ALL column buffers (including coords and metadata)
+        if (num_dropped_as_all_null == num_elems) {
+          // all rows need dropping, just clear (fast)
+          for (auto& col_buffer : import_buffers) {
+            col_buffer->clear();
+          }
+        } else if (num_dropped_as_all_null > 0) {
+          // drop "bad" rows selectively (slower)
+          // build row set to drop
+          BadRowsTracker bad_rows_tracker;
+          for (int row = 0; row < num_elems; row++) {
+            if (all_row_bands_null(row)) {
+              bad_rows_tracker.rows.emplace(static_cast<int64_t>(row));
+            }
+          }
+          // then delete rows
+          for (auto& col_buffer : import_buffers) {
+            auto const* cd = col_buffer->getColumnDesc();
+            CHECK(cd);
+            auto const col_type = cd->columnType.get_type();
+            col_buffer->del_values(col_type, &bad_rows_tracker);
+          }
+        }
+      }
+
+      // final count
+      CHECK_LE(num_dropped_as_all_null, num_elems);
+      auto const actual_num_elems = num_elems - num_dropped_as_all_null;
+      thread_import_status.rows_estimated = actual_num_elems;
+      thread_import_status.rows_completed = actual_num_elems;
+      thread_import_status.rows_rejected = 0;
     }
 
     // done
@@ -6005,7 +6083,6 @@ ImportStatus Importer::importGDALRaster(
     VLOG(1) << "Raster Importer: scanlines_in_block: " << scanlines_in_block
             << ", block_max_scanlines_per_thread:  " << block_max_scanlines_per_thread;
 
-    std::vector<size_t> rows_per_thread;
     auto block_wall_timer = timer_start();
     // run max_threads scanlines at once
     for (size_t thread_id = 0; thread_id < max_threads; thread_id++) {
@@ -6013,7 +6090,6 @@ ImportStatus Importer::importGDALRaster(
       if (y_start < band_size_y) {
         const int y_end = std::min(y_start + block_max_scanlines_per_thread, band_size_y);
         if (y_start < y_end) {
-          rows_per_thread.emplace_back((y_end - y_start) * band_size_x);
           futures.emplace_back(
               std::async(std::launch::async, import_rows, thread_id, y_start, y_end));
         }
@@ -6036,8 +6112,8 @@ ImportStatus Importer::importGDALRaster(
       // fashion so we can simultaneously read the next batch of data
       auto thread_load_timer = timer_start();
       // only try to load this thread's data if valid
-      if (import_status.rows_rejected == 0) {
-        load(import_buffers_vec[thread_idx], rows_per_thread[thread_idx], session_info);
+      if (import_status.rows_completed > 0) {
+        load(import_buffers_vec[thread_idx], import_status.rows_completed, session_info);
       }
       load_s += TIMER_STOP(thread_load_timer);
       ++thread_idx;

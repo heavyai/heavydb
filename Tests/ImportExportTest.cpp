@@ -5366,6 +5366,8 @@ TEST_F(BasicRasterImporterTest, HDF5ImageMultiThreaded) {
 
 static constexpr const char* kPNG = "beach.png";
 static constexpr const char* kGeoTIFF = "USGS_1m_x30y441_OH_Columbus_2019_small.tif";
+static constexpr const char* kGeoTIFFLastPixelNull =
+    "USGS_1m_x30y441_OH_Columbus_2019_small_last_pixel_null.tif";
 static constexpr const char* kGeoTIFFTruncated =
     "USGS_1m_x30y441_OH_Columbus_2019_small_truncated.tif";
 static constexpr const char* kGeoTIFFDir = "geotif/";
@@ -5799,6 +5801,13 @@ TEST_F(RasterImportTest, ImportGeoTIFFTest) {
       "",
       "SELECT max(raster_lon), max(raster_lat), max(band_1_1) FROM raster;",
       {{-83.222766892364277, 39.818764365787992, 287.54092407226562}}));
+}
+
+TEST_F(RasterImportTest, ImportGeoTIFFDropNullsTest) {
+  ASSERT_NO_THROW(importTestCommon(kGeoTIFFLastPixelNull,
+                                   ", raster_drop_if_all_null='true'",
+                                   "SELECT COUNT(*) FROM raster;",
+                                   {{39999L}}));
 }
 
 TEST_F(RasterImportTest, ImportGeoTIFFTruncatedTest) {

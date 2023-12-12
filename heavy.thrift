@@ -251,6 +251,7 @@ struct TCopyParams {
   40: string add_metadata_columns;
   41: bool trim_spaces=true;
   42: bool geo_validate_geometry=false;
+  43: bool raster_drop_if_all_null=false;
 }
 
 struct TCreateParams {
