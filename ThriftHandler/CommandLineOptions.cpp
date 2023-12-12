@@ -86,6 +86,9 @@ extern std::string g_pmem_path;
 namespace Catalog_Namespace {
 extern bool g_log_user_id;
 }
+namespace Geospatial {
+extern std::string g_importer_additional_proj_data_path;
+}
 
 unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};
@@ -768,6 +771,14 @@ void CommandLineOptions::fillOptions() {
   desc.add_options()("pmem-size", po::value<size_t>(&g_pmem_size)->default_value(0));
   desc.add_options()("pmem-path", po::value<std::string>(&g_pmem_path));
 #endif
+
+  desc.add_options()(
+      "importer-additional-proj-data-path",
+      po::value<std::string>(&Geospatial::g_importer_additional_proj_data_path)
+          ->default_value(Geospatial::g_importer_additional_proj_data_path),
+      "Additional path for helper files for PROJ geospatial transformations. If "
+      "provided, must point to a directory containing the contents of a proj-data bundle "
+      "downloaded from http://proj.org. See documentation for more details.");
 
   desc.add(log_options_.get_options());
 }
@@ -2168,6 +2179,14 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   boost::algorithm::trim_if(authMetadata.ldapQueryUrl, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.ldapRoleRegex, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.ldapSuperUserRole, boost::is_any_of("\"'"));
+
+  if (Geospatial::g_importer_additional_proj_data_path.length() &&
+      !boost::filesystem::is_directory(
+          Geospatial::g_importer_additional_proj_data_path)) {
+    LOG(ERROR) << "Invalid importer_additional_proj_data_path server config option "
+                  "value: path does not exist or is not readable";
+    return 1;
+  }
 
   return boost::none;
 }
