@@ -92,6 +92,7 @@ struct CopyParams {
   bool raster_point_compute_angle;
   std::string raster_import_dimensions;
   std::string add_metadata_columns;
+  bool raster_drop_if_all_null;
   // odbc parameters
   std::string sql_select;
   std::string sql_order_by;
@@ -138,7 +139,8 @@ struct CopyParams {
       , raster_point_type(RasterPointType::kAuto)
       , raster_scanlines_per_thread(32)
       , raster_point_transform(RasterPointTransform::kAuto)
-      , raster_point_compute_angle{false} {}
+      , raster_point_compute_angle{false}
+      , raster_drop_if_all_null{false} {}
 
   CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
       : delimiter(d)
@@ -172,7 +174,8 @@ struct CopyParams {
       , raster_point_type(RasterPointType::kAuto)
       , raster_scanlines_per_thread(32)
       , raster_point_transform(RasterPointTransform::kAuto)
-      , raster_point_compute_angle{false} {}
+      , raster_point_compute_angle{false}
+      , raster_drop_if_all_null{false} {}
 };
 
 }  // namespace import_export

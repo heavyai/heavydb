@@ -4042,6 +4042,7 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
   copy_params.add_metadata_columns = cp.add_metadata_columns;
   copy_params.trim_spaces = cp.trim_spaces;
   copy_params.geo_validate_geometry = cp.geo_validate_geometry;
+  copy_params.raster_drop_if_all_null = cp.raster_drop_if_all_null;
   return copy_params;
 }
 
@@ -4174,6 +4175,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   copy_params.add_metadata_columns = cp.add_metadata_columns;
   copy_params.trim_spaces = cp.trim_spaces;
   copy_params.geo_validate_geometry = cp.geo_validate_geometry;
+  copy_params.raster_drop_if_all_null = cp.raster_drop_if_all_null;
   return copy_params;
 }
 
