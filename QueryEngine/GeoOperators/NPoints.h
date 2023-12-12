@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <regex>
 #include "QueryEngine/GeoOperators/Codegen.h"
 
 namespace spatial_type {
@@ -55,10 +56,17 @@ class NPoints : public Codegen {
       const std::vector<llvm::Value*>& pos_lvs,
       CgenState* cgen_state) final {
     llvm::Value* coords_arr_sz_lv{nullptr};
-    if (dynamic_cast<const Analyzer::GeoConstant*>(getOperand(0))) {
-      throw QueryNotSupported("ST_NPoints does not support GeoConstant");
-    }
-    if (arg_lvs.size() == size_t(1)) {
+    if (auto geo_constant = dynamic_cast<const Analyzer::GeoConstant*>(getOperand(0))) {
+      // count points defined in the WKTString, i.e., POLYGON(1 1, 2 2, 3 3, 1 1)
+      // the validation of the WKTString must be checked before entering this logic
+      std::regex regex("-?[0-9]*\\.?[0-9]+\\s+-?[0-9]*\\.?[0-9]+");
+      auto target = geo_constant->getWKTString();
+      auto pt_begin = std::sregex_iterator(target.begin(), target.end(), regex);
+      auto pt_end = std::sregex_iterator();
+      auto num_pts = std::distance(pt_begin, pt_end);
+      CHECK_GT(num_pts, 0);
+      coords_arr_sz_lv = cgen_state->llInt(16 * num_pts);
+    } else if (arg_lvs.size() == size_t(1)) {
       std::string fn_name("array_size");
       bool is_nullable = isNullable();
       if (auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(getOperand(0))) {

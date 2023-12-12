@@ -3428,28 +3428,40 @@ TEST(GeoSpatial, DISABLED_UTMTransformCoords) {
 }
 
 TEST(GeoSpatial, PointNGeoConstant) {
+  auto perform_test =
+      [](std::string query, int64_t expected, ExecutorDeviceType const& dt) {
+        ASSERT_EQ(expected, v<int64_t>(run_simple_agg(query, dt)));
+      };
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    // expected to return 1
-    ASSERT_ANY_THROW(
-        run_simple_agg(R"(SELECT ST_NPOINTS(ST_GeomFromText('POINT(0 0)'));)", dt));
-    // expected to return 2
-    ASSERT_ANY_THROW(run_simple_agg(
-        R"(SELECT ST_NPOINTS(ST_GeomFromText('MULTIPOINT(0 0, 1 1)'));)", dt));
-    // expected to return 2
-    ASSERT_ANY_THROW(run_simple_agg(
-        R"(SELECT ST_NPOINTS(ST_GeomFromText('LINESTRING(0 0, 1 1)'));)", dt));
-    // expected to return 4
-    ASSERT_ANY_THROW(run_simple_agg(
-        R"(SELECT ST_NPOINTS(ST_GeomFromText('MULTILINESTRING((0 0, 1 1),(2 2, 3 3))'));)",
-        dt));
-    // expected to return 4
-    ASSERT_ANY_THROW(run_simple_agg(
-        R"(SELECT ST_NPOINTS(ST_GeomFromText('POLYGON((0 0, 1 1, 2 2, 0 0))'));)", dt));
-    // expected to return 7
-    ASSERT_ANY_THROW(run_simple_agg(
-        R"(SELECT ST_NPOINTS(ST_GeomFromText('MULTIPOLYGON(((5 5, 6 6, 5 6)), ((0 0, 1 0, 0 1, 0 0)))'));)",
-        dt));
+    perform_test("SELECT ST_NPOINTS(ST_GeomFromText('POINT(0 0)'));", 1, dt);
+    perform_test("SELECT ST_NPOINTS(ST_GeomFromText('MULTIPOINT(0 0, 1 1)'));", 2, dt);
+    perform_test("SELECT ST_NPOINTS(ST_GeomFromText('LINESTRING(0 0, 1 1)'));", 2, dt);
+    perform_test("SELECT ST_NPOINTS(ST_GeomFromText('LINESTRING(0 0, 1.1 1)'));", 2, dt);
+    perform_test(
+        "SELECT ST_NPOINTS(ST_GeomFromText('LINESTRING(0 0, 1 -1.12)'));", 2, dt);
+    perform_test(
+        "SELECT ST_NPOINTS(ST_GeomFromText('LINESTRING(0 0, 3.234E-2 -3)'));", 2, dt);
+    perform_test(
+        "SELECT ST_NPOINTS(ST_GeomFromText('LINESTRING(0 0, -3 3.234E-2)'));", 2, dt);
+    perform_test(
+        "SELECT ST_NPOINTS(ST_GeomFromText('LINESTRING(0 0, 3 -3.0E2)'));", 2, dt);
+    perform_test(
+        "SELECT ST_NPOINTS(ST_GeomFromText('MULTILINESTRING((0 0, 1 1),(2 2, 3 3))'));",
+        4,
+        dt);
+    perform_test(
+        "SELECT ST_NPOINTS(ST_GeomFromText('POLYGON((0 0, 1 1, 2 2, 0 0))'));", 4, dt);
+    perform_test(
+        "SELECT ST_NPOINTS(ST_GeomFromText('MULTIPOLYGON(((5 5, 6 6, 5 6)), ((0 0, 1 0, "
+        "0 1, 0 0)))'));",
+        7,
+        dt);
+    perform_test(
+        "SELECT ST_NPOINTS(ST_GeomFromText('MULTIPOLYGON (((9 0,9 9,0.12314124 "
+        "19.12412314,0 0,9 0),(3 3,2 2,1 1,3 3)))'));",
+        9,
+        dt);
   }
 }
 
