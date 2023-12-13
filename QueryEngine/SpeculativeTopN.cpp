@@ -158,10 +158,16 @@ std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
 void SpeculativeTopNBlacklist::add(const std::shared_ptr<Analyzer::Expr> expr,
                                    const bool desc) {
   std::lock_guard<std::mutex> lock(mutex_);
+  bool found_expr = false;
   for (const auto& e : blacklist_) {
-    CHECK(!(*e.first == *expr) || e.second != desc);
+    if (*e.first == *expr && e.second == desc) {
+      found_expr = true;
+      break;
+    }
   }
-  blacklist_.emplace_back(expr, desc);
+  if (!found_expr) {
+    blacklist_.emplace_back(expr, desc);
+  }
 }
 
 bool SpeculativeTopNBlacklist::contains(const std::shared_ptr<Analyzer::Expr> expr,
