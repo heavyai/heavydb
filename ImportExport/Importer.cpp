@@ -1605,6 +1605,59 @@ void TypedImportBuffer::addDefaultValues(const ColumnDescriptor* cd, size_t num_
   }
 }
 
+template <typename DATA_TYPE>
+auto TypedImportBuffer::del_values(
+    std::vector<DATA_TYPE>& buffer,
+    import_export::BadRowsTracker* const bad_rows_tracker) {
+  const auto old_size = buffer.size();
+  // erase backward to minimize memory movement overhead
+  for (auto rit = bad_rows_tracker->rows.crbegin(); rit != bad_rows_tracker->rows.crend();
+       ++rit) {
+    buffer.erase(buffer.begin() + *rit);
+  }
+  return std::make_tuple(old_size, buffer.size());
+}
+
+auto TypedImportBuffer::del_values(const SQLTypes type,
+                                   BadRowsTracker* const bad_rows_tracker) {
+  switch (type) {
+    case kBOOLEAN:
+      return del_values(*bool_buffer_, bad_rows_tracker);
+    case kTINYINT:
+      return del_values(*tinyint_buffer_, bad_rows_tracker);
+    case kSMALLINT:
+      return del_values(*smallint_buffer_, bad_rows_tracker);
+    case kINT:
+      return del_values(*int_buffer_, bad_rows_tracker);
+    case kBIGINT:
+    case kNUMERIC:
+    case kDECIMAL:
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return del_values(*bigint_buffer_, bad_rows_tracker);
+    case kFLOAT:
+      return del_values(*float_buffer_, bad_rows_tracker);
+    case kDOUBLE:
+      return del_values(*double_buffer_, bad_rows_tracker);
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      return del_values(*string_buffer_, bad_rows_tracker);
+    case kPOINT:
+    case kMULTIPOINT:
+    case kLINESTRING:
+    case kMULTILINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      return del_values(*geo_string_buffer_, bad_rows_tracker);
+    case kARRAY:
+      return del_values(*array_buffer_, bad_rows_tracker);
+    default:
+      throw std::runtime_error("Invalid Type");
+  }
+}
+
 bool importGeoFromLonLat(double lon,
                          double lat,
                          std::vector<double>& coords,
@@ -3766,59 +3819,6 @@ void Detector::import_local_parquet(const std::string& file_path,
         return;
       }
     }
-  }
-}
-
-template <typename DATA_TYPE>
-auto TypedImportBuffer::del_values(
-    std::vector<DATA_TYPE>& buffer,
-    import_export::BadRowsTracker* const bad_rows_tracker) {
-  const auto old_size = buffer.size();
-  // erase backward to minimize memory movement overhead
-  for (auto rit = bad_rows_tracker->rows.crbegin(); rit != bad_rows_tracker->rows.crend();
-       ++rit) {
-    buffer.erase(buffer.begin() + *rit);
-  }
-  return std::make_tuple(old_size, buffer.size());
-}
-
-auto TypedImportBuffer::del_values(const SQLTypes type,
-                                   BadRowsTracker* const bad_rows_tracker) {
-  switch (type) {
-    case kBOOLEAN:
-      return del_values(*bool_buffer_, bad_rows_tracker);
-    case kTINYINT:
-      return del_values(*tinyint_buffer_, bad_rows_tracker);
-    case kSMALLINT:
-      return del_values(*smallint_buffer_, bad_rows_tracker);
-    case kINT:
-      return del_values(*int_buffer_, bad_rows_tracker);
-    case kBIGINT:
-    case kNUMERIC:
-    case kDECIMAL:
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
-      return del_values(*bigint_buffer_, bad_rows_tracker);
-    case kFLOAT:
-      return del_values(*float_buffer_, bad_rows_tracker);
-    case kDOUBLE:
-      return del_values(*double_buffer_, bad_rows_tracker);
-    case kTEXT:
-    case kVARCHAR:
-    case kCHAR:
-      return del_values(*string_buffer_, bad_rows_tracker);
-    case kPOINT:
-    case kMULTIPOINT:
-    case kLINESTRING:
-    case kMULTILINESTRING:
-    case kPOLYGON:
-    case kMULTIPOLYGON:
-      return del_values(*geo_string_buffer_, bad_rows_tracker);
-    case kARRAY:
-      return del_values(*array_buffer_, bad_rows_tracker);
-    default:
-      throw std::runtime_error("Invalid Type");
   }
 }
 
