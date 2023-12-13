@@ -958,6 +958,8 @@ if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   option(ENABLE_RENDERING "Build backend renderer" OFF)
   if(ENABLE_RENDERING)
     option(ENABLE_RENDER_TESTS "Build backend renderer tests" ON)
+    option(ENABLE_RENDER_LOGGER "Enable detailed render logging in debug builds" OFF)
+    option(ENABLE_SHADER_DEBUG_PRINTF "Enable Vulkan Shader Debug printf extension" OFF)
 
     add_definitions("-DHAVE_RENDERING")
     add_subdirectory(Rendering)
