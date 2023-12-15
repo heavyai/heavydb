@@ -1,4 +1,5 @@
 set(OSDEPENDENT_SOURCE_FILES
+  heavyai_env.cpp
   heavyai_glob.cpp
   heavyai_path.cpp
   heavyai_hostname.cpp
