@@ -184,8 +184,8 @@ class QueryMemoryInitializer {
       const QueryMemoryDescriptor& query_mem_desc,
       const RelAlgExecutionUnit& ra_exe_unit) const;
 
-  void allocateCountDistinctBuffers(const QueryMemoryDescriptor& query_mem_desc,
-                                    const RelAlgExecutionUnit& ra_exe_unit);
+  void fastAllocateCountDistinctBuffers(const QueryMemoryDescriptor& query_mem_desc,
+                                        const RelAlgExecutionUnit& ra_exe_unit);
 
   int64_t allocateCountDistinctBitmap(const size_t bitmap_byte_sz);
 

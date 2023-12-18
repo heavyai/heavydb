@@ -64,7 +64,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     } else {
       allocators_.emplace_back(std::make_unique<DramArena>(arena_block_size_));
     }
-    count_distinct_buffer_allocators_.resize(allocators_.size());
+    count_distinct_buffer_fast_allocators_.resize(allocators_.size());
   }
 
   enum class StringTranslationType { SOURCE_INTERSECTION, SOURCE_UNION };
@@ -96,7 +96,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       }
     }
     CHECK_GE(allocators_.size(), required_num_kernels);
-    count_distinct_buffer_allocators_.resize(allocators_.size());
+    count_distinct_buffer_fast_allocators_.resize(allocators_.size());
   }
 
   // allocate memory via shared allocator
@@ -112,16 +112,16 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return allocateUnlocked(num_bytes, thread_idx);
   }
 
-  void initCountDistinctBufferAllocator(size_t buffer_size, size_t thread_idx) {
+  void initCountDistinctBufferFastAllocator(size_t buffer_size, size_t thread_idx) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     VLOG(2) << "Count distinct buffer allocator initialized with buffer_size: "
             << buffer_size << ", thread_idx: " << thread_idx;
-    CHECK_LT(thread_idx, count_distinct_buffer_allocators_.size());
-    if (count_distinct_buffer_allocators_[thread_idx]) {
+    CHECK_LT(thread_idx, count_distinct_buffer_fast_allocators_.size());
+    if (count_distinct_buffer_fast_allocators_[thread_idx]) {
       VLOG(2) << "Replacing count_distinct_buffer_allocators_[" << thread_idx << "].";
     }
-    count_distinct_buffer_allocators_[thread_idx] =
-        std::make_unique<CountDistinctBufferAllocator>(
+    count_distinct_buffer_fast_allocators_[thread_idx] =
+        std::make_unique<CountDistinctBufferFastAllocator>(
             allocateUnlocked(buffer_size, thread_idx), buffer_size);
   }
 
@@ -146,13 +146,20 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return std::make_pair(group_by_buffer, false);
   }
 
-  int8_t* allocateCountDistinctBuffer(const size_t num_bytes,
-                                      const size_t thread_idx = 0) {
-    CHECK_LT(thread_idx, count_distinct_buffer_allocators_.size());
-    CHECK(count_distinct_buffer_allocators_[thread_idx]);
-    int8_t* buffer = count_distinct_buffer_allocators_[thread_idx]->allocate(num_bytes);
-    std::memset(buffer, 0, num_bytes);
-    addCountDistinctBuffer(buffer, num_bytes, /*physical_buffer=*/true);
+  int8_t* fastAllocateCountDistinctBuffer(const size_t num_bytes,
+                                          const size_t thread_idx = 0) {
+    CHECK_LT(thread_idx, count_distinct_buffer_fast_allocators_.size());
+    CHECK(count_distinct_buffer_fast_allocators_[thread_idx]);
+    int8_t* buffer =
+        count_distinct_buffer_fast_allocators_[thread_idx]->allocate(num_bytes);
+    initAndAddCountDistinctBuffer(buffer, num_bytes);
+    return buffer;
+  }
+
+  int8_t* slowAllocateCountDistinctBuffer(const size_t num_bytes,
+                                          const size_t thread_idx = 0) {
+    int8_t* buffer = allocate(num_bytes, thread_idx);
+    initAndAddCountDistinctBuffer(buffer, num_bytes);
     return buffer;
   }
 
@@ -438,6 +445,11 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return reinterpret_cast<int8_t*>(allocator->allocate(num_bytes));
   }
 
+  void initAndAddCountDistinctBuffer(int8_t* buffer, size_t num_bytes) {
+    std::memset(buffer, 0, num_bytes);
+    addCountDistinctBuffer(buffer, num_bytes, /*physical_buffer=*/true);
+  }
+
   struct CountDistinctBitmapBuffer {
     int8_t* ptr;
     const size_t size;
@@ -474,9 +486,9 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   size_t arena_block_size_;  // for cloning
   std::vector<std::unique_ptr<Arena>> allocators_;
 
-  using CountDistinctBufferAllocator = FastAllocator<int8_t>;
-  std::vector<std::unique_ptr<CountDistinctBufferAllocator>>
-      count_distinct_buffer_allocators_;
+  using CountDistinctBufferFastAllocator = FastAllocator<int8_t>;
+  std::vector<std::unique_ptr<CountDistinctBufferFastAllocator>>
+      count_distinct_buffer_fast_allocators_;
 
   size_t executor_id_;
 

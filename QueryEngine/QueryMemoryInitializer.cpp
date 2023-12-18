@@ -279,7 +279,8 @@ QueryMemoryInitializer::QueryMemoryInitializer(
       }
     }
     total_buffer_size *= query_mem_desc.getEntryCount();
-    row_set_mem_owner_->initCountDistinctBufferAllocator(total_buffer_size, thread_idx_);
+    row_set_mem_owner_->initCountDistinctBufferFastAllocator(total_buffer_size,
+                                                             thread_idx_);
   }
 
   if (agg_op_metadata.has_tdigest) {
@@ -296,7 +297,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
 
   if (render_allocator_map || !query_mem_desc.isGroupBy()) {
     if (agg_op_metadata.has_count_distinct) {
-      allocateCountDistinctBuffers(query_mem_desc, ra_exe_unit);
+      fastAllocateCountDistinctBuffers(query_mem_desc, ra_exe_unit);
     }
     if (agg_op_metadata.has_mode) {
       allocateModeBuffer(query_mem_desc, ra_exe_unit);
@@ -887,7 +888,7 @@ std::vector<int64_t> QueryMemoryInitializer::calculateCountDistinctBufferSize(
   return agg_bitmap_size;
 }
 
-void QueryMemoryInitializer::allocateCountDistinctBuffers(
+void QueryMemoryInitializer::fastAllocateCountDistinctBuffers(
     const QueryMemoryDescriptor& query_mem_desc,
     const RelAlgExecutionUnit& ra_exe_unit) {
   for (size_t target_idx = 0; target_idx < ra_exe_unit.target_exprs.size();
@@ -919,7 +920,7 @@ int64_t QueryMemoryInitializer::allocateCountDistinctBitmap(const size_t bitmap_
     return reinterpret_cast<int64_t>(ptr);
   }
   return reinterpret_cast<int64_t>(
-      row_set_mem_owner_->allocateCountDistinctBuffer(bitmap_byte_sz, thread_idx_));
+      row_set_mem_owner_->fastAllocateCountDistinctBuffer(bitmap_byte_sz, thread_idx_));
 }
 
 int64_t QueryMemoryInitializer::allocateCountDistinctSet() {

@@ -2633,9 +2633,8 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
         // TODO: can we detect thread idx here?
         constexpr size_t thread_idx{0};
         const auto bitmap_size = count_distinct_desc.bitmapPaddedSizeBytes();
-        row_set_mem_owner->initCountDistinctBufferAllocator(bitmap_size, thread_idx);
         auto count_distinct_buffer =
-            row_set_mem_owner->allocateCountDistinctBuffer(bitmap_size, thread_idx);
+            row_set_mem_owner->slowAllocateCountDistinctBuffer(bitmap_size, thread_idx);
         entry.push_back(reinterpret_cast<int64_t>(count_distinct_buffer));
         continue;
       }
