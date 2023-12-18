@@ -50,6 +50,7 @@ size_t g_parallel_top_min = 100e3;
 size_t g_parallel_top_max = 20e6;  // In effect only with g_enable_watchdog.
 size_t g_streaming_topn_max = 100e3;
 constexpr int64_t uninitialized_cached_row_count{-1};
+constexpr size_t auto_parallel_row_count_threshold{20000UL};
 
 void ResultSet::keepFirstN(const size_t n) {
   invalidateCachedRowCount();
@@ -578,7 +579,6 @@ size_t ResultSet::rowCountImpl(const bool force_parallel) const {
     return binSearchRowCount();
   }
 
-  constexpr size_t auto_parallel_row_count_threshold{20000UL};
   if (force_parallel || entryCount() >= auto_parallel_row_count_threshold) {
     return parallelRowCount();
   }
@@ -1477,6 +1477,8 @@ ResultSet::getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const {
 bool ResultSet::isDirectColumnarConversionPossible() const {
   if (!g_enable_direct_columnarization) {
     return false;
+  } else if (isTruncated()) {
+    return false;
   } else if (query_mem_desc_.didOutputColumnar()) {
     return permutation_.empty() && (query_mem_desc_.getQueryDescriptionType() ==
                                         QueryDescriptionType::Projection ||
@@ -1598,5 +1600,6 @@ std::optional<size_t> result_set::first_dict_encoded_idx(
 }
 
 bool result_set::use_parallel_algorithms(const ResultSet& rows) {
-  return result_set::can_use_parallel_algorithms(rows) && rows.entryCount() >= 20000;
+  return result_set::can_use_parallel_algorithms(rows) &&
+         rows.entryCount() >= auto_parallel_row_count_threshold;
 }
