@@ -261,20 +261,20 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                  const size_t thread_idx,
                                  const bool is_parallel_execution_enforced)
     : column_buffers_(num_columns)
-    , num_rows_(result_set::use_parallel_algorithms(rows) ||
-                        rows.isDirectColumnarConversionPossible()
-                    ? rows.entryCount()
-                    : rows.rowCount())
-    , target_types_(target_types)
-    , parallel_conversion_(is_parallel_execution_enforced
-                               ? true
-                               : result_set::use_parallel_algorithms(rows))
     , direct_columnar_conversion_(rows.isDirectColumnarConversionPossible())
+    , num_rows_(direct_columnar_conversion_ ? rows.entryCount() : rows.rowCount())
+    , target_types_(target_types)
+    , parallel_conversion_(is_parallel_execution_enforced ||
+                           result_set::use_parallel_algorithms(rows))
     , thread_idx_(thread_idx)
     , padded_target_sizes_(get_padded_target_sizes(rows, target_types)) {
   auto timer = DEBUG_TIMER(__func__);
   column_buffers_.resize(num_columns);
   executor_ = Executor::getExecutor(executor_id);
+  VLOG(1) << "Columnarize resultset, # rows: " << num_rows_
+          << " (rowCount: " << rows.rowCount() << ", entryCount: " << rows.entryCount()
+          << "), direct columnarization? " << ::toString(direct_columnar_conversion_)
+          << ", parallel conversion? " << ::toString(parallel_conversion_);
   CHECK(executor_);
   CHECK_EQ(padded_target_sizes_.size(), target_types.size());
 
@@ -362,6 +362,9 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
       }
       // TODO: include sizes count to optimize flatbuffer size
       const int64_t flatbuffer_size = getFlatBufferSize(num_rows_, values_count, ti);
+      VLOG(1) << "Allocate " << flatbuffer_size
+              << " bytes for columnarized flat buffer of " << i
+              << "-th column (# values: " << values_count << ")";
       column_buffers_[i] = row_set_mem_owner->allocate(flatbuffer_size, thread_idx_);
       FlatBufferManager m{column_buffers_[i]};
       initializeFlatBuffer(m, num_rows_, values_count, ti);
@@ -374,8 +377,10 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
       }
       // The column buffer will be initialized either directly or
       // through iteration.
-      column_buffers_[i] =
-          row_set_mem_owner->allocate(num_rows_ * padded_target_sizes_[i], thread_idx_);
+      auto const buf_size = num_rows_ * padded_target_sizes_[i];
+      VLOG(1) << "Allocate " << buf_size << " bytes for columnarized buffer of " << i
+              << "-th column (column size: " << padded_target_sizes_[i] << ")";
+      column_buffers_[i] = row_set_mem_owner->allocate(buf_size, thread_idx_);
     }
   }
 
@@ -393,10 +398,10 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                  const size_t executor_id,
                                  const size_t thread_idx)
     : column_buffers_(1)
+    , direct_columnar_conversion_(false)
     , num_rows_(num_rows)
     , target_types_{target_type}
     , parallel_conversion_(false)
-    , direct_columnar_conversion_(false)
     , thread_idx_(thread_idx) {
   auto timer = DEBUG_TIMER(__func__);
   const bool is_varlen =
@@ -406,10 +411,15 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
   if (is_varlen) {
     throw ColumnarConversionNotSupported();
   }
+  VLOG(1) << "Columnarize resultset, # rows: " << num_rows_
+          << ", direct columnarization? false, parallel conversion? false";
   executor_ = Executor::getExecutor(executor_id);
   padded_target_sizes_.emplace_back(target_type.get_size());
   CHECK(executor_);
   const auto buf_size = num_rows * target_type.get_size();
+  VLOG(1) << "Allocate " << buf_size
+          << " bytes for columnarized buffer of a column (column size: "
+          << target_type.get_size() << ")";
   column_buffers_[0] =
       reinterpret_cast<int8_t*>(row_set_mem_owner->allocate(buf_size, thread_idx_));
   memcpy(((void*)column_buffers_[0]), one_col_buffer, buf_size);
@@ -418,6 +428,7 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
 std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const std::vector<std::unique_ptr<ColumnarResults>>& sub_results) {
+  auto timer = DEBUG_TIMER(__func__);
   // TODO: this method requires a safe guard when trying to merge
   // columns using FlatBuffer layout.
   if (sub_results.empty()) {
@@ -442,9 +453,13 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
   if (nonempty_it == sub_results.end()) {
     return nullptr;
   }
+  VLOG(1) << "Merge columnarized sub-resultsets, total # rows: " << total_row_count;
   for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
     const auto byte_width = merged_results->padded_target_sizes_[col_idx];
-    auto write_ptr = row_set_mem_owner->allocate(byte_width * total_row_count);
+    auto const buf_size = byte_width * total_row_count;
+    VLOG(1) << "Allocate " << buf_size << " bytes for columnarized buffer of " << col_idx
+            << "-th column (column size: " << byte_width << ")";
+    auto write_ptr = row_set_mem_owner->allocate(buf_size);
     merged_results->column_buffers_.push_back(write_ptr);
     for (auto& rs : sub_results) {
       CHECK_EQ(col_count, rs->column_buffers_.size());

@@ -108,6 +108,8 @@ class ColumnarResults {
 
  protected:
   std::vector<int8_t*> column_buffers_;
+  bool direct_columnar_conversion_;  // whether columnar conversion might happen directly
+                                     // with minimal usage of result set's iterator access
   size_t num_rows_;
 
  private:
@@ -201,9 +203,7 @@ class ColumnarResults {
                              const std::vector<bool>& targets_to_skip = {});
 
   const std::vector<SQLTypeInfo> target_types_;
-  bool parallel_conversion_;         // multi-threaded execution of columnar conversion
-  bool direct_columnar_conversion_;  // whether columnar conversion might happen directly
-  // with minimal usage of result set's iterator access
+  bool parallel_conversion_;  // multi-threaded execution of columnar conversion
   size_t thread_idx_;
   std::shared_ptr<Executor> executor_;
   std::vector<size_t> padded_target_sizes_;

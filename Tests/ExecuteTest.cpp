@@ -2054,6 +2054,19 @@ TEST_F(Select, LimitAndOffset) {
   }
 }
 
+TEST_F(Select, LimitAndOffsetFromSubquery) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // if we cannot handle LIMIT 1 OFFSET 1, it returns a NULL value of small_int
+    ASSERT_EQ(-16755,
+              v<int64_t>(run_simple_agg(
+                  "select R.Small_int from data_types_basic5 R JOIN data_types_basic5 S "
+                  "on R.int_ = S.int_ WHERE S.Big_int > 0 group by R.Small_int order by "
+                  "COUNT(*) DESC NULLS LAST LIMIT 1 OFFSET 1;",
+                  dt)));
+  }
+}
+
 TEST_F(Select, FloatAndDoubleTests) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -9852,7 +9865,11 @@ void import_test_table_with_various_data_types() {
       "Fault_length FLOAT,\n"
       "omnisci_geo_point GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32),\n"
       "omnisci_geo_linestring GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32),\n"
-      "omnisci_geo_multipolygon GEOMETRY(MULTIPOLYGON, 4326) ENCODING COMPRESSED(32));"};
+      "omnisci_geo_multipolygon GEOMETRY(MULTIPOLYGON, 4326) ENCODING COMPRESSED(32))"};
+  if (g_num_leafs > 0) {
+    data_types_basic5_ddl += " WITH (PARTITIONS='REPLICATED')";
+  }
+  data_types_basic5_ddl += ";";
   run_ddl_statement(data_types_basic5_ddl);
   run_ddl_statement(
       "COPY data_types_basic5 FROM "
