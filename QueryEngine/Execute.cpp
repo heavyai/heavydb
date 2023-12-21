@@ -107,7 +107,6 @@ bool g_enable_columnar_output{false};
 bool g_enable_left_join_filter_hoisting{true};
 bool g_optimize_row_initialization{true};
 bool g_enable_bbox_intersect_hashjoin{true};
-size_t g_num_tuple_threshold_switch_to_baseline{100000};
 size_t g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline{100};
 bool g_enable_distance_rangejoin{true};
 bool g_enable_hashjoin_many_to_many{true};

@@ -31,7 +31,6 @@
 #include <sstream>
 
 extern bool g_enable_bbox_intersect_hashjoin;
-extern size_t g_num_tuple_threshold_switch_to_baseline;
 extern size_t g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline;
 
 void ColumnsForDevice::setBucketInfo(
