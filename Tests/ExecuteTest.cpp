@@ -9290,7 +9290,7 @@ void import_switch_to_baseline_test(bool sharded) {
                    ExecutorDeviceType::CPU);
   run_multiple_agg("INSERT INTO " + tbl_names[3] + " VALUES (2);",
                    ExecutorDeviceType::CPU);
-  run_multiple_agg("INSERT INTO " + tbl_names[1] + " VALUES (10000000);",
+  run_multiple_agg("INSERT INTO " + tbl_names[1] + " VALUES (100);",
                    ExecutorDeviceType::CPU);
   run_multiple_agg("INSERT INTO " + tbl_names[3] + " VALUES (20);",
                    ExecutorDeviceType::CPU);
@@ -21201,11 +21201,14 @@ TEST(Join, BuildHashTable) {
 TEST(Join, SwitchToBaselineHashJoin) {
   SKIP_ALL_ON_AGGREGATOR();
   // check the query using CPU to verify we can switch it to baseline join correctly
-  ScopeGuard reset_flag = [orig =
-                               g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline]() {
+  ScopeGuard reset_flag = [orig = g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline,
+                           orig2 = g_is_test_env]() {
     g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline = orig;
+    g_is_test_env = orig2;
   };
   g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline = 5;
+  // to trigger baseline switch logic in the test code
+  g_is_test_env = false;
   std::set<QueryPlanHash> visited;
   ASSERT_EQ(
       int64_t(2),
@@ -21216,13 +21219,16 @@ TEST(Join, SwitchToBaselineHashJoin) {
       visited, CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
   auto cached_ht = std::get<1>(cached_item);
   auto expected_ht = dynamic_cast<BaselineHashTable*>(cached_ht.get());
-  EXPECT_TRUE(expected_ht);
+  EXPECT_TRUE(expected_ht != nullptr);
   QR::get()->clearCpuMemory();
 }
 
 TEST(Join, KeepPerfectHashJoin) {
   SKIP_ALL_ON_AGGREGATOR();
   // check the query using CPU to verify we can switch it to baseline join correctly
+  ScopeGuard reset_flag = [orig = g_is_test_env]() { g_is_test_env = orig; };
+  // to trigger baseline switch logic in the test code
+  g_is_test_env = false;
   std::set<QueryPlanHash> visited;
   ASSERT_EQ(
       int64_t(2),

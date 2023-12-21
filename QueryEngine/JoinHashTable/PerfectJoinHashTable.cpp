@@ -226,12 +226,14 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   auto const& inner_table_info =
       get_inner_query_info(inner_col->getTableKey(), query_infos).info;
   auto const num_inner_table_tuple = inner_table_info.getFragmentNumTuplesUpperBound();
-  // when a table is small but has too wide hash entry value range, it's better to deploy
-  // baseline hash join to save unnecessary memory space and expensive hash table
-  // initialization & building cost required to build a perfect join hash table
+  // when a table has too wide range of hash entries compared to the actual # rows,
+  // it's better to deploy baseline hash join to save computational cost w.r.t
+  // time and space to use perfect hash join layout
+  // i.e., a table has 100 rows but its range of hash entries is 1 ~ 10000000 (10M)
+  // then, perfect hash table layout uses a hash table having 10M slots (instead of 100)
+  // but baseline can use much smaller # slots to build its hash table
   auto const deploy_baseline_join =
       !g_is_test_env &&
-      num_inner_table_tuple < g_num_tuple_threshold_switch_to_baseline &&
       num_inner_table_tuple * g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline <
           bucketized_entry_count;
   if (deploy_baseline_join) {

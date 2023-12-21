@@ -845,17 +845,6 @@ void CommandLineOptions::fillDeveloperOptions() {
                          ->default_value(system_parameters.num_executors),
                      "Number of executors to run in parallel.");
   desc.add_options()(
-      "num-tuple-threshold-switch-to-baseline",
-      po::value<size_t>(&g_num_tuple_threshold_switch_to_baseline)
-          ->default_value(g_num_tuple_threshold_switch_to_baseline)
-          ->implicit_value(100000),
-      "Control a threshold to switch perfect hash join to baseline hash join by "
-      "comparing a hash entry range of the join column to the input table cardinality."
-      "This condition checks the following: |INPUT_TABLE| < {THIS_THRESHOLD}"
-      "We switch hash table layout when this condition and the condition related to "
-      "\'col-range-to-num-hash-entries-threshold-switch-to-baseline\' are satisfied "
-      "together.");
-  desc.add_options()(
       "ratio-num-hash-entry-to-num-tuple-switch-to-baseline",
       po::value<size_t>(&g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline)
           ->default_value(g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline)
