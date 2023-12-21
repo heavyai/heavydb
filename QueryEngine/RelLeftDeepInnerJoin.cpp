@@ -21,6 +21,9 @@
 
 #include <numeric>
 
+// todo (yoonmin): Can we remove this artificial left-deep join tree node from our query
+// plan? because it causes too much complexity when dealing w/ various edge cases of query
+// plans
 RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
     const std::shared_ptr<RelFilter>& filter,
     std::vector<std::shared_ptr<const RelAlgNode>> inputs,

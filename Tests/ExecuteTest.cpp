@@ -12634,6 +12634,42 @@ TEST_F(Select, Joins_LeftJoinFiltered) {
   }
 }
 
+TEST_F(Select, Joins_LeftJoinBetweenViewsFiltered) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto drop_tables = []() {
+    for (std::string tbl : {"T1;", "T2;"}) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + tbl);
+      g_sqlite_comparator.query("DROP TABLE IF EXISTS  " + tbl);
+    }
+  };
+  drop_tables();
+  for (std::string tbl_def : {"T1 (id INT, v INT);", "T2 (id INT, v INT, str TEXT);"}) {
+    run_ddl_statement("CREATE TABLE " + tbl_def);
+    g_sqlite_comparator.query("CREATE TABLE  " + tbl_def);
+  }
+
+  const std::string q1 =
+      "WITH v1 AS (SELECT v FROM T1), v2 AS (SELECT (SELECT MAX(v1.v) FROM v1 WHERE "
+      "v1.v < T1.v) AS g1 FROM T1 JOIN T2 ON T1.id = T2.id WHERE T2.str = 'v2'), v3 AS "
+      "(SELECT (SELECT MAX(v1.v) FROM v1 WHERE v1.v < T1.v) AS g1 FROM T1 JOIN T2 ON "
+      "T1.id = T2.id WHERE T2.str = 'v3') SELECT COUNT(*) FROM v2 LEFT JOIN v3 ON "
+      "v2.g1 = v3.g1 WHERE v3.g1 IS NULL;";
+  const std::string q2 =
+      "WITH v1 AS (SELECT v FROM T1), v2 AS (SELECT (SELECT MAX(v1.v) FROM v1 WHERE "
+      "v1.v < T1.v) AS g1 FROM T1 JOIN T2 ON T1.id = T2.id WHERE T2.str = 'v2'), v3 AS "
+      "(SELECT (SELECT MAX(v1.v) FROM v1 WHERE v1.v < T1.v) AS g1 FROM T1 JOIN T2 ON "
+      "T1.id = T2.id WHERE T2.str = 'v3') SELECT v2.g1, v3.g1, COUNT(*) FROM v2 LEFT "
+      "JOIN v3 ON "
+      "v2.g1 = v3.g1 WHERE v3.g1 IS NULL GROUP BY 1, 2;";
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c(q1, dt);
+    c(q2, dt);
+  }
+
+  drop_tables();
+}
+
 TEST_F(Select, Joins_LeftOuterJoin) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
