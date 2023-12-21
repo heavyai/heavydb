@@ -188,6 +188,17 @@ bool is_identical_copy(
   return false;
 }
 
+bool is_project_for_filtered_left_join(const RelProject* project) {
+  if (auto filter_node = dynamic_cast<const RelFilter*>(project->getInput(0))) {
+    if (auto join_node = dynamic_cast<const RelJoin*>(filter_node->getInput(0))) {
+      if (join_node->getJoinType() == JoinType::LEFT && filter_node->getCondition()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void propagate_rex_input_renumber(
     const RelFilter* excluded_root,
     const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>&
@@ -549,7 +560,8 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
         (!visible_projs.count(project.get()) || !project->isRenaming()) &&
         is_identical_copy(project.get(), web, projects, permutating_projects) &&
         !project_separates_sort(
-            project.get(), next_node_it == nodes.end() ? nullptr : next_node_it->get())) {
+            project.get(), next_node_it == nodes.end() ? nullptr : next_node_it->get()) &&
+        !is_project_for_filtered_left_join(project.get())) {
       projects.insert(project.get());
     }
   }
