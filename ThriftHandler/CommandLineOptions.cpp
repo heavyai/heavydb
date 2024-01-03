@@ -72,6 +72,7 @@ extern bool g_allow_system_dashboard_update;
 extern bool g_allow_memory_status_log;
 extern bool g_enable_logs_system_tables;
 extern bool g_enable_logs_system_tables_auto_refresh;
+extern bool g_enable_mode_on_gpu;
 extern std::string g_logs_system_tables_refresh_interval;
 extern size_t g_logs_system_tables_max_files_count;
 extern bool g_uniform_request_ids_per_thrift_call;
@@ -752,6 +753,11 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(g_enable_logs_system_tables_auto_refresh)
                          ->implicit_value(true),
                      "Enable automatic refreshes of logs system tables.");
+  desc.add_options()("enable-mode-on-gpu",
+                     po::value<bool>(&g_enable_mode_on_gpu)
+                         ->default_value(g_enable_mode_on_gpu)
+                         ->implicit_value(true),
+                     "Enable calculation of MODE (statistical function) on GPU.");
   desc.add_options()("logs-system-tables-refresh-interval",
                      po::value<std::string>(&g_logs_system_tables_refresh_interval)
                          ->default_value(g_logs_system_tables_refresh_interval),

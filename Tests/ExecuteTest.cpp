@@ -79,6 +79,7 @@ extern bool g_enable_union;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
 extern bool g_enable_table_functions;
 extern bool g_enable_executor_resource_mgr;
+extern bool g_enable_mode_on_gpu;
 
 extern size_t g_leaf_count;
 extern bool g_cluster;
@@ -643,6 +644,14 @@ void c_arrow_dict_check(
     CHECK(dt == ExecutorDeviceType::GPU);                    \
     LOG(WARNING) << "GPU not available, skipping GPU tests"; \
     continue;                                                \
+  }
+
+// SKIP_NO_GPU() but for parameterized tests which don't use a loop.
+#define SKIP_NO_GPU_P(dt)                                    \
+  if (skip_tests(dt)) {                                      \
+    CHECK_EQ(ExecutorDeviceType::GPU, dt);                   \
+    LOG(WARNING) << "GPU not available, skipping GPU tests"; \
+    return;                                                  \
   }
 
 #define SKIP_ALL_ON_AGGREGATOR()                         \
@@ -4346,6 +4355,7 @@ TEST_F(Select, ModeBasic) {
     LOG(WARNING) << "Skipping ModeBasic tests in distributed mode.";
     return;
   }
+  CHECK(g_enable_mode_on_gpu);
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     auto const x = select_mode<int64_t>("x", dt);
@@ -4444,6 +4454,7 @@ TEST_F(Select, ModeOrderBy) {
     LOG(WARNING) << "Skipping ModeOrderBy tests in distributed mode.";
     return;
   }
+  CHECK(g_enable_mode_on_gpu);
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     char const* query =
@@ -4452,6 +4463,79 @@ TEST_F(Select, ModeOrderBy) {
     EXPECT_EQ(42, v<int64_t>(run_simple_agg(query, dt))) << dt;
   }
 }
+
+class ModeTests
+    : public Select,
+      public testing::WithParamInterface<std::tuple<ExecutorDeviceType, int64_t>> {
+ public:
+  // NOTE: test names must be non-empty, unique, and may only contain ASCII alphanumeric
+  // characters. [Use underscores carefully.]
+  static std::string testName(testing::TestParamInfo<ParamType> const& info) {
+    std::ostringstream oss;
+    auto const [dt, nslots] = info.param;
+    oss << dt << "_Slots" << nslots;
+    return oss.str();
+  }
+};
+
+// Test proper handling of ErrorCode::PROBING_LENGTH_EXCEEDED.
+// nslots = Number of required slots per hash table, where there is one hash table per
+// group. These are warpcore hash tables, which by default allocate 16411 slots each. When
+// the probing length exceeds this value, it results in ErrorCode::PROBING_LENGTH_EXCEEDED
+TEST_P(ModeTests, ProbingLengthExceeded) {
+  SKIP_ALL_ON_AGGREGATOR();
+  CHECK(g_enable_mode_on_gpu);
+  auto const [dt, nslots] = GetParam();
+  // If we set g_allow_cpu_retry = g_allow_query_step_cpu_retry = false then the
+  // generate_series() step will fail since it cannot run on GPU. Thus it suffices
+  // to know that when the number of required slots 17000 exceeds the number of
+  // available slots, the query still succeeds by falling back to CPU. This can be
+  // confirmed in the logs by the pair of log lines
+
+  // clang-format off
+  // 2023-10-18T16:35:12.297811 I 44644 3 3 RelAlgExecutor.cpp:3878 PROBING_LENGTH_EXCEEDED: Hash table probing length exceeded on insert.
+  // 2023-10-18T16:35:12.297882 I 44644 3 3 RelAlgExecutor.cpp:957 Retrying current query step 5 / 5 on CPU
+  // clang-format on
+
+  SKIP_NO_GPU_P(dt);
+  auto query_template = [](size_t ngroups, int64_t nslots, int64_t offset) {
+    // clang-format off
+    std::ostringstream oss;
+    oss << "SELECT x, MODE(i), COUNT(DISTINCT i) "
+           "FROM ("
+           "  SELECT i % " << ngroups << " AS x, i"
+           "  FROM TABLE(generate_series(0," << nslots << "*" << ngroups << " - 1)) t(i)"
+           "  UNION ALL"
+           "  SELECT i, " << offset << " + i"  // Add repeated row that MODE will select
+           "  FROM TABLE(generate_series(0,"<< ngroups << " - 1)) t(i) "
+           ") "
+           "GROUP BY x;";
+    return oss.str();
+    // clang-format on
+  };
+  constexpr size_t ngroups = 10u;   // number of groups
+  constexpr int64_t offset = 1000;  // MODE(i) = offset + x, for each group value x
+  std::string query = query_template(ngroups, nslots, offset);
+  auto result = run_multiple_agg(query, dt);
+  EXPECT_EQ(ngroups, result->rowCount()) << query;
+  uint64_t x_bits = 0u;
+  static_assert(ngroups < sizeof(x_bits) * 8u);
+  for (size_t row_idx = 0; row_idx < ngroups; ++row_idx) {
+    auto x = v<int64_t>(result->getRowAt(row_idx, 0, true));  // in [0,ngroups)
+    x_bits |= 1ull << x;
+    EXPECT_EQ(offset + x, v<int64_t>(result->getRowAt(row_idx, 1, true))) << query;
+    EXPECT_EQ(nslots, v<int64_t>(result->getRowAt(row_idx, 2, true))) << query;
+  }
+  // Verify all expected x values were seen.
+  EXPECT_EQ(~(~0ull << ngroups), x_bits) << query;
+}
+
+INSTANTIATE_TEST_SUITE_P(Select,
+                         ModeTests,
+                         testing::Combine(testing::Values(ExecutorDeviceType::CPU,
+                                                          ExecutorDeviceType::GPU),
+                                          testing::Values(16000, 17000)),  // nslots
+                         ModeTests::testName);
 
 TEST_F(Select, TypeCAggregates) {
   SKIP_ALL_ON_AGGREGATOR();  // APPROX_MEDIAN() is not supported in distributed mode.
@@ -29804,6 +29888,7 @@ int main(int argc, char** argv) {
   g_enable_window_functions = true;
   g_enable_interop = false;
   g_enable_table_functions = true;
+  g_enable_mode_on_gpu = true;
 
   File_Namespace::DiskCacheConfig disk_cache_config{};
   if (vm.count("use-disk-cache")) {

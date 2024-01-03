@@ -2114,9 +2114,10 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   }
 
   // String dictionary keys are read as 32-bit values regardless of encoding
+  // For mode, extra bits are used for additional payload data.
   if (type_info.is_string() && type_info.get_compression() == kENCODING_DICT &&
       type_info.getStringDictKey().dict_id) {
-    actual_compact_sz = sizeof(int32_t);
+    actual_compact_sz = target_info.agg_kind == kMODE ? sizeof(int64_t) : sizeof(int32_t);
   }
 
   auto ival = read_int_from_buff(ptr, actual_compact_sz);
@@ -2144,9 +2145,10 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   }
   if (target_info.agg_kind == kMODE) {
     if (!isNullIval(chosen_type, translate_strings, ival)) {
-      auto const* const* const agg_mode = reinterpret_cast<AggMode const* const*>(ptr);
-      if (std::optional<int64_t> const mode = (*agg_mode)->mode()) {
-        return convertToScalarTargetValue(chosen_type, translate_strings, *mode);
+      if (AggMode const* const agg_mode = row_set_mem_owner_->getAggMode(ival)) {
+        if (std::optional<int64_t> const mode = agg_mode->mode()) {
+          return convertToScalarTargetValue(chosen_type, translate_strings, *mode);
+        }
       }
     }
     return nullScalarTargetValue(chosen_type, translate_strings);

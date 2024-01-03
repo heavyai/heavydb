@@ -430,9 +430,28 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     value_type = itr->second.second;
   }
 
-  AggMode* allocateMode() {
+  // Return (index_plus_one, AggMode*)
+  // index_plus_one is one-based to avoid conflict with 64-bit null sentinel.
+  std::pair<size_t, AggMode*> allocateMode() {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    return &mode_maps_.emplace_back();
+    AggMode* const agg_mode = &agg_modes_.emplace_back();
+    return {agg_modes_.size(), agg_mode};
+  }
+
+  AggMode const* getAggMode(int64_t const ival) const {
+    if (ival < 0) {
+      constexpr uint64_t mask = (uint64_t(1) << 32) - 1u;
+      uint64_t const index_plus_one = mask & ival;  // set in allocateMode() above.
+      uint64_t const index = index_plus_one - 1u;
+      CHECK_LT(index, agg_modes_.size()) << ival;
+      return &agg_modes_[index];
+    } else {
+      return reinterpret_cast<AggMode*>(ival);
+    }
+  }
+
+  AggMode* getAggMode(int64_t const ival) {
+    return const_cast<AggMode*>(std::as_const(*this).getAggMode(ival));
   }
 
  private:
@@ -481,7 +500,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   std::map<std::string, std::shared_ptr<StringOps_Namespace::StringOps>>
       string_ops_owned_;
-  std::list<AggMode> mode_maps_;
+  std::deque<AggMode> agg_modes_;  // references must remain valid on emplace_back().
 
   size_t arena_block_size_;  // for cloning
   std::vector<std::unique_ptr<Arena>> allocators_;

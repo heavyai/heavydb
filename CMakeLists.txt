@@ -219,9 +219,10 @@ option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   enable_language(CUDA)
   include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+  include_directories(ThirdParty/warpcore/include)
   list(APPEND CUDA_LIBRARIES cuda)
+  list(APPEND CMAKE_CUDA_FLAGS --extended-lambda)  # required by warpcore
   add_definitions("-DHAVE_CUDA")
-
 else()
   set(CUDA_LIBRARIES "")
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-cpu")
@@ -755,6 +756,13 @@ endif()
 # Boost
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams serialization REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
+
+if(Boost_VERSION LESS 107500)
+  # BOOST_PP_VARIADICS is incorrectly set to 0 by <boost/preprocessor/config/config.hpp>
+  # when defined(__CUDACC__) prior to 1.75. Set it to 1 here so that
+  # Shared/define_enum_class.h can be used by cuda modules.  This was fixed in Boost 1.75.
+  list(APPEND MAPD_DEFINITIONS "-DBOOST_PP_VARIADICS=1")
+endif()
 
 # Allow explicit include statements to access third party headers directly.
 # Ex: raft/canonical/include/raft.h

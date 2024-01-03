@@ -1445,13 +1445,6 @@ class Executor {
       const ExecutorResourceMgr_Namespace::ResourceType resource_type,
       const size_t resource_quantity);
 
-  static size_t getBaselineThreshold(bool for_count_distinct,
-                                     ExecutorDeviceType device_type) {
-    return for_count_distinct ? (device_type == ExecutorDeviceType::GPU
-                                     ? (Executor::baseline_threshold / 4)
-                                     : Executor::baseline_threshold)
-                              : Executor::baseline_threshold;
-  }
   static const ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy
   get_concurrent_resource_grant_policy(
       const ExecutorResourceMgr_Namespace::ResourceType resource_type);

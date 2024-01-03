@@ -179,6 +179,7 @@ set(SHARED_SQL_TYPES_H_AND_DEPS
   )
 
 set(query_engine_cuda_source_files
+  Aggregate/AggModeHashTableGpu.cu
   TopKSort.cu
   InPlaceSortImpl.cu
   ResultSetSortImpl.cu
@@ -435,12 +436,15 @@ add_custom_command(
   COMMAND ${CMAKE_CUDA_COMPILER}
   ARGS
   -I ${CMAKE_SOURCE_DIR}
+  -I ${CMAKE_SOURCE_DIR}/ThirdParty/warpcore/include
   -I ${CMAKE_CURRENT_BINARY_DIR}
   ${MAPD_HOST_COMPILER_FLAG}
   -Xcompiler -fPIC
   -D__STDC_LIMIT_MACROS
   -D__STDC_CONSTANT_MACROS
   -D_FORCE_INLINES
+  -DHAVE_CUDA
+  ${CMAKE_CUDA_FLAGS}
   -Xcompiler -Wno-return-type-c-linkage --expt-relaxed-constexpr
   ${MAPD_DEFINITIONS}
   -fatbin
@@ -500,6 +504,17 @@ if(ENABLE_CUDA)
     target_compile_options(QueryEngine PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:
       -DENABLE_UTM_TRANSFORM>)
   endif()
+
+  # Suppress
+  # /usr/include/boost/fusion/container/vector/vector.hpp(195):
+  # warning #20012-D: __host__ annotation is ignored on a function("vector_data")
+  # that is explicitly defaulted on its first declaration
+  # This appears to be caused by Aggregate/AggModeHashTableGpu.cu
+  # -> #include <boost/iterator/zip_iterator.hpp>
+  # -> #include <boost/fusion/ ...
+  # -> ...
+  # -> #include <boost/fusion/container/vector/vector.hpp>
+  target_compile_options(QueryEngine PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:--diag-suppress=20012>)
 
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a DESTINATION QueryEngine COMPONENT "QE")
 endif()

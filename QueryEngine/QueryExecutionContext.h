@@ -144,6 +144,8 @@ class QueryExecutionContext : boost::noncopyable {
                                      std::vector<int8_t*> const& join_hash_tables) const;
 
   size_t sizeofLiterals(std::vector<int8_t> const& literal_buff) const;
+  size_t copyCountDistinctBitmapLiteralsToDevice(int8_t* device_ptr) const;
+  size_t copyAggModeLiteralsToDevice(int8_t* device_ptr) const;
   int8_t* copyLiteralsToDevice(int8_t* device_ptr,
                                std::vector<int8_t> const& literal_buff) const;
 

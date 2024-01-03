@@ -3873,6 +3873,10 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     } catch (const QueryExecutionError& e) {
       if (!has_ndv_estimation && e.getErrorCode() < 0) {
         throw CardinalityEstimationRequired(/*range=*/0);
+      } else if (e.hasErrorCode(ErrorCode::PROBING_LENGTH_EXCEEDED)) {
+        constexpr auto err = ErrorCode::PROBING_LENGTH_EXCEEDED;
+        LOG(INFO) << err << ": " << to_description(err);
+        throw QueryMustRunOnCpu(to_string(err));
       }
       handlePersistentError(e.getErrorCode());
       return handleOutOfMemoryRetry(

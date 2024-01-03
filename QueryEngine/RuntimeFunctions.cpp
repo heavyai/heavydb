@@ -390,6 +390,12 @@ extern "C" GPU_RT_STUB void agg_count_distinct_bitmap_gpu(int64_t*,
                                                           const uint64_t,
                                                           const uint64_t) {}
 
+extern "C" GPU_RT_STUB int32_t agg_mode_func_gpu(int64_t* agg,
+                                                 int64_t const val,
+                                                 int64_t const base_dev_addr) {
+  return {};
+}
+
 extern "C" RUNTIME_EXPORT NEVER_INLINE void
 agg_approximate_count_distinct(int64_t* agg, const int64_t key, const uint32_t b) {
   const uint64_t hash = MurmurHash64A(&key, sizeof(key), 0);
