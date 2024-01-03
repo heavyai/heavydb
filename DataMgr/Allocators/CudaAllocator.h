@@ -67,6 +67,8 @@ class CudaAllocator : public DeviceAllocator {
                       const void* device_src,
                       const size_t num_bytes) const override;
 
+  CUstream cudaStream() const { return cuda_stream_; }
+
   void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const override;
 
   void setDeviceMem(int8_t* device_ptr,

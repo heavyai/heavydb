@@ -251,6 +251,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     const size_t max_groups_buffer_entry_count,
     RenderInfo* render_info,
     const ApproxQuantileDescriptors& approx_quantile_descriptors,
+    size_t nmode_targets,
     const CountDistinctDescriptors count_distinct_descriptors,
     const bool must_use_baseline_sort,
     const bool output_columnar_hint,
@@ -290,6 +291,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         std::vector<int64_t>{},
         /*entry_count=*/1,
         approx_quantile_descriptors,
+        nmode_targets,
         count_distinct_descriptors,
         false,
         output_columnar_hint,
@@ -363,7 +365,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
                                   (device_type == ExecutorDeviceType::GPU) &&
                                   QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
                                       count_distinct_descriptors) &&
-                                  !output_columnar;
+                                  nmode_targets == 0u && !output_columnar;
       }
       break;
     }
@@ -431,6 +433,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
                                                  target_groupby_indices,
                                                  entry_count,
                                                  approx_quantile_descriptors,
+                                                 nmode_targets,
                                                  count_distinct_descriptors,
                                                  sort_on_gpu_hint,
                                                  output_columnar,
@@ -465,6 +468,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const std::vector<int64_t>& target_groupby_indices,
     const size_t entry_count,
     const ApproxQuantileDescriptors& approx_quantile_descriptors,
+    const size_t nmode_targets,
     const CountDistinctDescriptors count_distinct_descriptors,
     const bool sort_on_gpu_hint,
     const bool output_columnar_hint,
@@ -487,6 +491,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , bucket_(col_range_info.bucket)
     , has_nulls_(col_range_info.has_nulls)
     , approx_quantile_descriptors_(approx_quantile_descriptors)
+    , nmode_targets_(nmode_targets)
     , count_distinct_descriptors_(count_distinct_descriptors)
     , output_columnar_(false)
     , render_output_(render_output)
@@ -1162,7 +1167,8 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
   return device_type == ExecutorDeviceType::GPU && !render_output_ &&
-         countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
+         countDescriptorsLogicallyEmpty(count_distinct_descriptors_) &&
+         getNumModeTargets() == 0u;
 }
 
 bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type) const {
@@ -1176,6 +1182,10 @@ bool QueryMemoryDescriptor::isWarpSyncRequired(
     return executor_->cudaMgr()->isArchVoltaOrGreaterForAll();
   }
   return false;
+}
+
+AggMode* QueryMemoryDescriptor::getAggMode(int64_t const ival) const {
+  return executor_->getRowSetMemoryOwner()->getAggMode(ival);
 }
 
 size_t QueryMemoryDescriptor::getColCount() const {
@@ -1241,7 +1251,8 @@ void QueryMemoryDescriptor::alignPaddedSlots() {
 bool QueryMemoryDescriptor::canOutputColumnar() const {
   return usesGetGroupValueFast() && threadsShareMemory() && blocksShareMemory() &&
          !interleavedBins(ExecutorDeviceType::GPU) &&
-         countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
+         countDescriptorsLogicallyEmpty(count_distinct_descriptors_) &&
+         getNumModeTargets() == 0u;
 }
 
 std::string QueryMemoryDescriptor::queryDescTypeToString() const {

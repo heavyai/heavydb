@@ -535,6 +535,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         reinterpret_cast<void*>(count_distinct_bitmap_device_mem),
         query_buffers_->getCountDistinctBitmapBytes());
   }
+  query_buffers_->copyFromDeviceForAggMode();
 
   const auto varlen_output_gpu_buf = query_buffers_->getVarlenOutputPtr();
   if (varlen_output_gpu_buf) {
@@ -800,39 +801,61 @@ int8_t* QueryExecutionContext::copyJoinHashTablesToDevice(
   }
 }
 
+namespace {
+using AggModeAddrs = int64_t[1];
+using CountDistinctAddrs = int64_t[2];
+}  // namespace
+
 size_t QueryExecutionContext::sizeofLiterals(
     std::vector<int8_t> const& literal_buff) const {
-  size_t const count_distinct_bytes =
-      query_buffers_->getCountDistinctBitmapDevicePtr() ? 2 * sizeof(int64_t) : 0u;
-  return count_distinct_bytes + literal_buff.size();
+  // If substantially more "additional literals" are added in the future,
+  // consider a way that only allocates memory when it is needed.
+  // It will have to work w/ calls to getAdditionalLiteral(i) in codegen.
+  return sizeof(AggModeAddrs) + sizeof(CountDistinctAddrs) + literal_buff.size();
 }
-// The count_distinct_addresses are considered "additional literals"
+
+// if device_ptr==nullptr then just return size in bytes without copying.
+size_t QueryExecutionContext::copyAggModeLiteralsToDevice(int8_t* device_ptr) const {
+  AggModeAddrs agg_mode_addrs;
+  std::vector<int8_t> const serialized_hash_tables =
+      query_buffers_->getAggModeHashTablesGpu();
+  if (size_t const size = serialized_hash_tables.size()) {
+    CHECK_EQ(0u, size % 8u) << size;
+    // These are container objects to the hash tables (~128 bytes each) not the content.
+    int8_t* const hash_tables_gpu = gpu_allocator_->alloc(size);
+    gpu_allocator_->copyToDevice(hash_tables_gpu, serialized_hash_tables.data(), size);
+    // getAdditionalLiteral(-3) in codegenMode()
+    agg_mode_addrs[0] = reinterpret_cast<int64_t>(hash_tables_gpu);
+    gpu_allocator_->copyToDevice(device_ptr, agg_mode_addrs, sizeof agg_mode_addrs);
+  }
+  return sizeof agg_mode_addrs;
+}
+
+// if device_ptr==nullptr then just return size in bytes without copying.
+size_t QueryExecutionContext::copyCountDistinctBitmapLiteralsToDevice(
+    int8_t* device_ptr) const {
+  CountDistinctAddrs count_distinct_addrs;
+  if (query_buffers_->getCountDistinctBitmapDevicePtr()) {
+    // Store host and device addresses
+    // getAdditionalLiteral(-2) and getAdditionalLiteral(-1) in codegenCountDistinct()
+    count_distinct_addrs[0] = int64_t(query_buffers_->getCountDistinctBitmapHostPtr());
+    count_distinct_addrs[1] = int64_t(query_buffers_->getCountDistinctBitmapDevicePtr());
+    CHECK(count_distinct_addrs[0]);
+    gpu_allocator_->copyToDevice(
+        device_ptr, count_distinct_addrs, sizeof count_distinct_addrs);
+  }
+  return sizeof count_distinct_addrs;
+}
+
+// The count_distinct_addrs are considered "additional literals"
 // and are retrieved as negative offsets relative to the "literals" pointer
 // via GroupByAndAggregate::getAdditionalLiteral().
 int8_t* QueryExecutionContext::copyLiteralsToDevice(
     int8_t* device_ptr,
     std::vector<int8_t> const& literal_buff) const {
-  // Calculate additional space
-  //  * Count Distinct Bitmap
-  int64_t count_distinct_addresses[2];
-  size_t const count_distinct_bytes = query_buffers_->getCountDistinctBitmapDevicePtr()
-                                          ? sizeof count_distinct_addresses
-                                          : 0u;
   CHECK_EQ(0u, uint64_t(device_ptr) % 8);
-  // Copy to device, literals last.
-  if (count_distinct_bytes) {
-    // Store host and device addresses
-    auto const count_distinct_bitmap_host_mem =
-        query_buffers_->getCountDistinctBitmapHostPtr();
-    CHECK(count_distinct_bitmap_host_mem);
-    count_distinct_addresses[0] =  // getAdditionalLiteral(-2) in codegenCountDistinct()
-        reinterpret_cast<int64_t>(count_distinct_bitmap_host_mem);
-    count_distinct_addresses[1] =  // getAdditionalLiteral(-1) in codegenCountDistinct()
-        static_cast<int64_t>(query_buffers_->getCountDistinctBitmapDevicePtr());
-    gpu_allocator_->copyToDevice(
-        device_ptr, count_distinct_addresses, count_distinct_bytes);
-    device_ptr += count_distinct_bytes;
-  }
+  device_ptr += copyAggModeLiteralsToDevice(device_ptr);
+  device_ptr += copyCountDistinctBitmapLiteralsToDevice(device_ptr);
   if (!literal_buff.empty()) {
     gpu_allocator_->copyToDevice(device_ptr, literal_buff.data(), literal_buff.size());
   }

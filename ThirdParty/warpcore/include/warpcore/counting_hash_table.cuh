@@ -9,6 +9,7 @@ namespace warpcore
 /*! \brief counting hash table
  * \tparam Key key type (\c std::uint32_t or \c std::uint64_t)
  * \tparam Value value type
+ * \tparam Allocator allocator of type int8_t.
  * \tparam EmptyKey key which represents an empty slot
  * \tparam TombstoneKey key which represents an erased slot
  * \tparam ProbingScheme probing scheme from \c warpcore::probing_schemes
@@ -18,6 +19,7 @@ namespace warpcore
 template<
     class Key,
     class Value = index_t,
+    class Allocator = nullptr_t,
     Key EmptyKey = defaults::empty_key<Key>(),
     Key TombstoneKey = defaults::tombstone_key<Key>(),
     class ProbingScheme = defaults::probing_scheme_t<Key, 4>,
@@ -26,7 +28,7 @@ template<
 class CountingHashTable
 {
     using base_type = SingleValueHashTable<
-        Key, Value, EmptyKey, TombstoneKey, ProbingScheme, TableStorage>;
+        Key, Value, Allocator, EmptyKey, TombstoneKey, ProbingScheme, TableStorage>;
 
     static_assert(
         checks::is_valid_counter_type<typename base_type::value_type>(),
@@ -74,10 +76,11 @@ public:
     HOSTQUALIFIER INLINEQUALIFIER
     explicit CountingHashTable(
         index_type min_capacity,
+        Allocator* allocator = nullptr,
         key_type seed = defaults::seed<key_type>(),
         value_type max_count = std::numeric_limits<value_type>::max(),
         bool no_init = false) noexcept :
-        base_table_(min_capacity, seed, true),
+        base_table_(min_capacity, allocator, seed, true),
         max_count_(max_count),
         is_copy_(false)
     {

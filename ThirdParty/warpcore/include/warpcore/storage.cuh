@@ -11,8 +11,10 @@ namespace storage
 
 /*! \brief thread-safe device-sided ring buffer without any overflow checks
  * \tparam T base type
+ * \tparam Allocator allocator of type int8_t. The memory owner is assumed to be external
+                     so no calls to deallocate() are made.
  */
-template<class T>
+template<class T, class Allocator=nullptr_t>
 class CyclicStore
 {
 public:
@@ -24,20 +26,26 @@ public:
      * \param[in] capacity buffer capacity
      */
     HOSTQUALIFIER INLINEQUALIFIER
-    explicit CyclicStore(const index_type capacity) noexcept :
+    explicit CyclicStore(const index_type capacity, Allocator* allocator=nullptr) noexcept :
+        allocator_(allocator),
         store_(nullptr),
         capacity_(capacity),
         current_(nullptr),
         status_(status_type::not_initialized()),
         is_copy_(false)
     {
-        if(capacity != 0)
+        if(0 < capacity_)
         {
             const auto total_bytes = sizeof(T) * capacity_;
-
-            if(helpers::available_gpu_memory() >= total_bytes && capacity_ > 0)
+            const auto available = std::is_null_pointer_v<Allocator> ? helpers::available_gpu_memory()
+                                                                     : allocator->available();
+            if(available >= total_bytes)
             {
-                cudaMalloc(&store_, sizeof(T) * capacity_);
+                if constexpr (std::is_null_pointer_v<Allocator>) {
+                    cudaMalloc(&store_, total_bytes);
+                } else {
+                    store_ = reinterpret_cast<decltype(store_)>(allocator_->allocate(total_bytes));
+                }
                 current_ = new index_type(0);
                 status_ = status_type::none();
             }
@@ -86,7 +94,9 @@ public:
     {
         if(!is_copy_)
         {
-            if(store_ != nullptr) cudaFree(store_);
+            if constexpr (std::is_null_pointer_v<Allocator>) {
+                if(store_ != nullptr) cudaFree(store_);
+            }
             delete current_;
         }
     }
@@ -139,6 +149,7 @@ public:
     }
 
 private:
+    Allocator * allocator_;
     base_type * store_; //< actual buffer
     const index_type capacity_; //< buffer capacity
     index_type * current_; //< current active buffer slot
@@ -156,7 +167,7 @@ namespace key_value
 template<class Key, class Value>
 class SoAStore;
 
-template<class Key, class Value>
+template<class Key, class Value, class Allocator=nullptr_t>
 class AoSStore;
 
 namespace detail
@@ -434,8 +445,9 @@ private:
 /*! \brief key/value store with array-of-structs memory layout
  * \tparam Key key type
  * \tparam Value value type
+ * \tparam Allocator allocator of type int8_t.
  */
-template<class Key, class Value>
+template<class Key, class Value, class Allocator>
 class AoSStore
 {
     using pair_t = detail::pair_t<Key, Value>;
@@ -451,19 +463,25 @@ public:
      * \param[in] capacity number of key/value slots
      */
     HOSTQUALIFIER INLINEQUALIFIER
-    explicit AoSStore(const index_type capacity) noexcept :
+    explicit AoSStore(const index_type capacity, Allocator* allocator=nullptr) noexcept :
+        allocator_(allocator),
         status_(status_type::not_initialized()),
         capacity_(capacity),
         pairs_(nullptr),
         is_copy_(false)
     {
-        if(capacity != 0)
+        if(0 < capacity)
         {
             const auto total_bytes = sizeof(pair_t) * capacity;
-
-            if(helpers::available_gpu_memory() >= total_bytes)
+            const auto available = std::is_null_pointer_v<Allocator> ? helpers::available_gpu_memory()
+                                                                     : allocator->available();
+            if(available >= total_bytes)
             {
-                cudaMalloc(&pairs_, sizeof(pair_t) * capacity);
+                if constexpr (std::is_null_pointer_v<Allocator>) {
+                    cudaMalloc(&pairs_, total_bytes);
+                } else {
+                    pairs_ = reinterpret_cast<decltype(pairs_)>(allocator_->allocate(total_bytes));
+                }
 
                 status_ = status_type::none();
             }
@@ -510,7 +528,9 @@ public:
     {
         if(!is_copy_)
         {
-            if(pairs_ != nullptr) cudaFree(pairs_);
+            if constexpr (std::is_null_pointer_v<Allocator>) {
+                if(pairs_ != nullptr) cudaFree(pairs_);
+            }
         }
     }
     #endif
@@ -637,6 +657,7 @@ public:
     }
 
 private:
+    Allocator * allocator_;
     status_type status_; //< storage status
     const index_type capacity_; //< storage capacity
     pair_t * pairs_; //< actual pair storage in AoS format

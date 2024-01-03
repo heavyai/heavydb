@@ -46,7 +46,7 @@ enum CacheItemType {
   CHUNK_METADATA,                   // query resultset's chunk metadata
   // TODO (yoonmin): support the following items for recycling
   // COUNTALL_CARD_EST,  Cardinality of query result
-  // NDV_CARD_EST,       # Non-distinct value
+  // NDV_CARD_EST,       # Number of distinct values cardinality estimate
   // FILTER_SEL          Selectivity of (push-downed) filter node
   NUM_CACHE_ITEM_TYPE
 };

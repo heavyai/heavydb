@@ -65,7 +65,6 @@ class NvidiaKernel : public DeviceKernel {
     if (optimize_block_and_grid_sizes) {
       int recommended_block_size;
       int recommended_grid_size;
-      std::ostringstream oss;
       checkCudaErrors(cuOccupancyMaxPotentialBlockSize(&recommended_grid_size,
                                                        &recommended_block_size,
                                                        function_ptr,
@@ -83,8 +82,9 @@ class NvidiaKernel : public DeviceKernel {
         gridDimX = recommended_grid_size;
       }
     }
-    VLOG(1) << "Launch GPU kernel compiled with the following block and grid sizes: "
-            << blockDimX << " and " << gridDimX;
+    VLOG(1) << "Launch GPU kernel on device " << device_id
+            << " compiled with the following grid and block sizes: " << gridDimX
+            << " and " << blockDimX;
     checkCudaErrors(cuLaunchKernel(function_ptr,
                                    gridDimX,
                                    gridDimY,

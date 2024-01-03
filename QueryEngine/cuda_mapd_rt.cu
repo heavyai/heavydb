@@ -3,10 +3,12 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <limits>
+#include "Aggregate/AggModeHashTableGpu.cuh"
 #include "BufferCompaction.h"
 #include "ExtensionFunctions.hpp"
 #include "GpuRtConstants.h"
 #include "HyperLogLogRank.h"
+#include "enums.h"
 
 #if CUDA_VERSION < 10000
 static_assert(false, "CUDA v10.0 or later is required.");
@@ -1355,6 +1357,18 @@ extern "C" __device__ void agg_approximate_count_distinct_gpu(
   const int64_t host_addr = *agg;
   int32_t* M = (int32_t*)(base_dev_addr + host_addr - base_host_addr);
   atomicMax(&M[index], rank);
+}
+
+// *agg = 1<<63 | i<<32 | j+1
+// where i is the base_dev_addr[] index.
+extern "C" __device__ int32_t agg_mode_func_gpu(int64_t* const agg,
+                                                int64_t const val,
+                                                int64_t const base_dev_addr) {
+  constexpr auto error_ple = int32_t(heavyai::ErrorCode::PROBING_LENGTH_EXCEEDED);
+  auto const index = static_cast<unsigned>(0x7fffffff & (*agg >> 32));
+  auto* const hash_table = reinterpret_cast<AggModeHashTableGpu*>(base_dev_addr) + index;
+  AggModeHashTableGpu::status_type const status = hash_table->insert(val);
+  return status.has_probing_length_exceeded() ? error_ple : 0;
 }
 
 extern "C" __device__ void force_sync() {

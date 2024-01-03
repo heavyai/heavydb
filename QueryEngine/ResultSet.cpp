@@ -1088,8 +1088,8 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxQuantileC
 
 namespace {
 // i1 is from InternalTargetValue
-int64_t materializeMode(int64_t const i1) {
-  if (auto const* const agg_mode = reinterpret_cast<AggMode const*>(i1)) {
+int64_t materialize_mode(RowSetMemoryOwner const* const rsmo, int64_t const i1) {
+  if (AggMode const* const agg_mode = rsmo->getAggMode(i1)) {
     if (std::optional<int64_t> const mode = agg_mode->mode()) {
       return *mode;
     }
@@ -1104,6 +1104,7 @@ template <typename BUFFER_ITERATOR_TYPE>
 struct ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::ModeScatter {
   logger::ThreadLocalIds const parent_thread_local_ids_;
   ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE> const* const rsc_;
+  RowSetMemoryOwner const* const rsmo_;
   Analyzer::OrderEntry const& order_entry_;
   ResultSet::ModeBuffers::value_type& materialized_buffer_;
 
@@ -1116,7 +1117,7 @@ struct ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::ModeScatter {
       auto const off = storage_lookup_result.fixedup_entry_idx;
       auto const value = rsc_->buffer_itr_.getColumnInternal(
           storage->buff_, off, order_entry_.tle_no - 1, storage_lookup_result);
-      materialized_buffer_[permuted_idx] = materializeMode(value.i1);
+      materialized_buffer_[permuted_idx] = materialize_mode(rsmo_, value.i1);
     }
   }
 };
@@ -1125,10 +1126,11 @@ template <typename BUFFER_ITERATOR_TYPE>
 ResultSet::ModeBuffers::value_type
 ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeModeColumn(
     const Analyzer::OrderEntry& order_entry) const {
+  RowSetMemoryOwner const* const rsmo = result_set_->getRowSetMemOwner().get();
   ResultSet::ModeBuffers::value_type materialized_buffer(
       result_set_->query_mem_desc_.getEntryCount());
   ModeScatter mode_scatter{
-      logger::thread_local_ids(), this, order_entry, materialized_buffer};
+      logger::thread_local_ids(), this, rsmo, order_entry, materialized_buffer};
   if (single_threaded_) {
     mode_scatter(ModeBlockedRange(0, permutation_.size()));  // Still has new thread_id.
   } else {
@@ -1217,7 +1219,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
       if (lhs_value == rhs_value) {
         continue;
         // MODE(x) can only be NULL when the group is empty, since it skips null values.
-      } else if (lhs_value == NULL_BIGINT) {  // NULL_BIGINT from materializeMode()
+      } else if (lhs_value == NULL_BIGINT) {  // NULL_BIGINT from materialize_mode()
         return order_entry.nulls_first;
       } else if (rhs_value == NULL_BIGINT) {
         return !order_entry.nulls_first;
