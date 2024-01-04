@@ -785,7 +785,7 @@ struct BuddyinfoBlocks {
   // Set blocks from array of string_view tokens.
   BuddyinfoBlocks(std::string_view const* const tokens, size_t const num_blocks) {
     for (size_t i = 0; i < num_blocks; ++i) {
-      size_t block;
+      size_t block{0};
       std::from_chars(tokens[i].data(), tokens[i].data() + tokens[i].size(), block);
       blocks.push_back(block);
     }
