@@ -193,7 +193,7 @@ bool g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency{false};
 bool g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency{false};
 double g_executor_resource_mgr_max_available_resource_use_ratio{0.8};
 
-bool g_use_cpu_mem_pool_for_output_buffers{false};
+bool g_use_cpu_mem_pool_for_output_buffers{true};
 
 extern bool g_cache_string_hash;
 extern bool g_allow_memory_status_log;
