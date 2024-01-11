@@ -117,6 +117,16 @@ add_custom_target(clean-all
   COMMAND ${CMAKE_BUILD_TOOL} clean
  )
 
+# Find dependency path (required for boost and geo files)
+find_file(MapdDepsVersion_FILE mapd_deps_version.txt CMAKE_PREFIX_PATH NO_CACHE)
+if(NOT MapdDepsVersion_FILE)
+  message(WARNING "Build could NOT find deps version file mapd_deps_version.txt in \"${CMAKE_PREFIX_PATH}\"")
+  message(WARNING "Unable to locate dependencies path")
+else()
+  get_filename_component(MAPD_DEPS_PATH "${MapdDepsVersion_FILE}" DIRECTORY)
+  message(STATUS "Found dependencies path: ${MAPD_DEPS_PATH}")
+endif()
+
 macro(set_alternate_linker linker)
   find_program(LINKER_EXECUTABLE ld.${USE_ALTERNATE_LINKER} ${USE_ALTERNATE_LINKER})
   if(LINKER_EXECUTABLE)
@@ -136,12 +146,7 @@ macro(set_alternate_linker linker)
 endmacro()
 
 macro(InstallVersionFile)
-  # `touch mapd_deps_version.txt` from build dir to silence warning.
-  find_file(MapdDepsVersion_FILE mapd_deps_version.txt PATH ${CMAKE_BINARY_DIR} NO_CACHE)
-
-  if(NOT MapdDepsVersion_FILE)
-    message(WARNING "Build could NOT find deps version file mapd_deps_version.txt")
-  else()
+  if(MapdDepsVersion_FILE)
     message(STATUS "Found deps version file ${MapdDepsVersion_FILE}")
     file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/version)
     set(HEAVY_DEPS_CUSTOM ${CMAKE_BINARY_DIR}/version/heavyai_deps_version.txt)

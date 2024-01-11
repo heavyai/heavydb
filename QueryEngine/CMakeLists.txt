@@ -438,6 +438,7 @@ add_custom_command(
   -I ${CMAKE_SOURCE_DIR}
   -I ${CMAKE_SOURCE_DIR}/ThirdParty/warpcore/include
   -I ${CMAKE_CURRENT_BINARY_DIR}
+  -I ${MAPD_DEPS_PATH}/include
   ${MAPD_HOST_COMPILER_FLAG}
   -Xcompiler -fPIC
   -D__STDC_LIMIT_MACROS
