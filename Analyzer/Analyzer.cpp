@@ -3796,6 +3796,11 @@ std::shared_ptr<Analyzer::Expr> UrlDecodeStringOper::deep_copy() const {
       std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
 }
 
+std::shared_ptr<Analyzer::Expr> LLMTransformStringOper::deep_copy() const {
+  return makeExpr<Analyzer::LLMTransformStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
 std::shared_ptr<Analyzer::Expr> TryStringCastOper::deep_copy() const {
   return makeExpr<Analyzer::TryStringCastOper>(
       std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));

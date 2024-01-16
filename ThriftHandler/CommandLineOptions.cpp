@@ -19,6 +19,7 @@
 #include <sys/types.h>
 
 #include <filesystem>
+#include <algorithm>
 #include <iostream>
 #include <string>
 

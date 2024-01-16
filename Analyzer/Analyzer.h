@@ -2549,6 +2549,26 @@ class UrlDecodeStringOper : public StringOper {
   std::vector<std::string> getArgNames() const override { return {"operand"}; }
 };
 
+class LLMTransformStringOper : public StringOper {
+ public:
+  LLMTransformStringOper(const std::vector<std::shared_ptr<Analyzer::Expr>>& operands)
+      : StringOper(SqlStringOpKind::LLM_TRANSFORM, operands) {
+    if (operands.size() != 2) {
+      throw std::runtime_error(
+          "LLM_TRANSFORM must contain two operands: a string column and a "
+          "prompt as string literal");
+    }
+    CHECK(operands.back()->get_type_info().is_none_encoded_string());
+  }
+
+  LLMTransformStringOper(const std::shared_ptr<Analyzer::StringOper>& string_oper)
+      : StringOper(string_oper) {}
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  std::vector<std::string> getArgNames() const override { return {"operand"}; }
+};
+
 class TryStringCastOper : public StringOper {
  public:
   TryStringCastOper(const SQLTypeInfo& ti, const std::shared_ptr<Analyzer::Expr>& operand)

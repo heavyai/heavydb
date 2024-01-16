@@ -40,6 +40,7 @@ extern bool g_enable_string_functions;
 extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_watchdog;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
+extern std::string g_heavyiq_url;
 
 constexpr int64_t True = 1;
 constexpr int64_t False = 0;
@@ -4227,6 +4228,23 @@ TEST_F(StringFunctionTest, TextEncodingDictCopyFromUDF) {
           {"copy: >>DE DEN<<"}};
       compare_result_set(expected_result_set, result_set);
     }
+  }
+}
+
+TEST(LLMTransform, CurlError) {
+  ScopeGuard reset = [orig = g_heavyiq_url]() { g_heavyiq_url = orig; };
+  g_heavyiq_url = "http://localhost:99999";
+  for (auto dt : {ExecutorDeviceType::CPU}) {
+    std::string error_msg{""};
+    try {
+      run_simple_agg(
+          "SELECT LLM_TRANSFORM(short_name, \'Return the capital of the following "
+          "state\') FROM text_enc_test",
+          dt);
+    } catch (std::runtime_error const& e) {
+      error_msg = e.what();
+    }
+    EXPECT_TRUE(error_msg.find("LLM_TRANSFORM failed") != std::string::npos);
   }
 }
 

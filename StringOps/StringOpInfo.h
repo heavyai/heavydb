@@ -20,6 +20,7 @@
 
 #include "Shared/sqldefs.h"
 #include "Shared/sqltypes.h"
+#include "ThirdParty/robin_hood/robin_hood.h"
 
 #include <map>
 #include <memory>
@@ -65,6 +66,16 @@ struct StringOpInfo {
 
   std::string toString() const;
 
+  void setTranslationCache(
+      robin_hood::unordered_map<std::string, std::string>* translation_cache) const {
+    translation_cache_ = translation_cache;
+  }
+
+  robin_hood::unordered_map<std::string, std::string>* getTranslationCache() const {
+    CHECK(translation_cache_);
+    return translation_cache_;
+  }
+
   friend std::ostream& operator<<(std::ostream& stream,
                                   const StringOpInfo& string_op_info);
 
@@ -77,6 +88,7 @@ struct StringOpInfo {
   const SQLTypeInfo return_ti_;
   const LiteralArgMap literal_arg_map_;
   const size_t num_null_literals_;
+  mutable robin_hood::unordered_map<std::string, std::string>* translation_cache_;
 };
 
 std::ostream& operator<<(std::ostream& stream,

@@ -57,7 +57,16 @@ std::list<const Analyzer::Expr*> find_function_oper(
 
 struct RowFunctionManager {
   RowFunctionManager(const Executor* executor, const RelAlgExecutionUnit& ra_exe_unit)
-      : executor_(executor), ra_exe_unit_(ra_exe_unit) {}
+      : executor_(executor) {
+    target_exprs_.reserve(ra_exe_unit.target_exprs.size() + ra_exe_unit.quals.size());
+    std::copy(ra_exe_unit.target_exprs.cbegin(),
+              ra_exe_unit.target_exprs.cend(),
+              std::back_inserter(target_exprs_));
+    std::transform(ra_exe_unit.quals.cbegin(),
+                   ra_exe_unit.quals.cend(),
+                   std::back_inserter(target_exprs_),
+                   [](auto& ptr) { return ptr.get(); });
+  }
 
   inline std::string getString(int32_t db_id, int32_t dict_id, int32_t string_id) {
     const auto proxy = executor_->getStringDictionaryProxy(
@@ -69,7 +78,7 @@ struct RowFunctionManager {
     std::string func_name_wo_suffix =
         boost::algorithm::to_lower_copy(drop_suffix_impl(func_name));
 
-    for (const auto& expr : ra_exe_unit_.target_exprs) {
+    for (const auto& expr : target_exprs_) {
       for (const auto* op : find_function_oper(expr, func_name_wo_suffix)) {
         const Analyzer::FunctionOper* function_oper =
             dynamic_cast<const Analyzer::FunctionOper*>(op);
@@ -87,7 +96,7 @@ struct RowFunctionManager {
     std::string func_name_wo_suffix =
         boost::algorithm::to_lower_copy(drop_suffix_impl(func_name));
 
-    for (const auto& expr : ra_exe_unit_.target_exprs) {
+    for (const auto& expr : target_exprs_) {
       for (const auto* op : find_function_oper(expr, func_name_wo_suffix)) {
         const Analyzer::FunctionOper* function_oper =
             dynamic_cast<const Analyzer::FunctionOper*>(op);
@@ -122,5 +131,5 @@ struct RowFunctionManager {
 
   // Executor
   const Executor* executor_;
-  const RelAlgExecutionUnit& ra_exe_unit_;
+  std::vector<const Analyzer::Expr*> target_exprs_;
 };
