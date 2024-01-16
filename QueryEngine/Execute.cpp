@@ -612,6 +612,11 @@ const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
   CHECK(row_set_mem_owner);
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
+  for (auto& string_op_info : string_op_infos) {
+    if (string_op_info.getOpKind() == SqlStringOpKind::LLM_TRANSFORM) {
+      string_op_info.setTranslationCache(row_set_mem_owner->allocateTranslationCache());
+    }
+  }
   return row_set_mem_owner->getOrAddStringProxyTranslationMap(
       source_dict_key, dest_dict_key, with_generation, translation_type, string_op_infos);
 }

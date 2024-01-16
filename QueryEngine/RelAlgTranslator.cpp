@@ -1595,6 +1595,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
       return makeExpr<Analyzer::UrlEncodeStringOper>(args);
     case SqlStringOpKind::URL_DECODE:
       return makeExpr<Analyzer::UrlDecodeStringOper>(args);
+    case SqlStringOpKind::LLM_TRANSFORM:
+      return makeExpr<Analyzer::LLMTransformStringOper>(args);
     default: {
       throw std::runtime_error("Unsupported string function.");
     }
@@ -1857,6 +1859,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "BASE64_DECODE"sv,
                    "URL_ENCODE"sv,
                    "URL_DECODE"sv,
+                   "LLM_TRANSFORM"sv,
                    "TRY_CAST"sv,
                    "POSITION"sv,
                    "JAROWINKLER_SIMILARITY"sv,

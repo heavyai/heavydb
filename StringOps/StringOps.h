@@ -21,6 +21,7 @@
 #include "Shared/sqldefs.h"
 #include "Shared/sqltypes.h"
 #include "StringOpInfo.h"
+#include "ThirdParty/robin_hood/robin_hood.h"
 
 #include <algorithm>
 #include <bitset>
@@ -29,6 +30,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -633,6 +635,21 @@ struct NullOp : public StringOp {
   }
 
   const SqlStringOpKind op_kind_;
+};
+
+struct LLMTransform : public StringOp {
+  LLMTransform(const std::optional<std::string>& var_str_optional_literal,
+               std::string const& input,
+               robin_hood::unordered_map<std::string, std::string>* translation_cache)
+      : StringOp(SqlStringOpKind::LLM_TRANSFORM, var_str_optional_literal)
+      , prompt_(input)
+      , translation_cache_(translation_cache) {}
+
+  NullableStrType operator()(const std::string& str) const override;
+
+  const std::string prompt_;
+  robin_hood::unordered_map<std::string, std::string>* translation_cache_;
+  mutable std::shared_mutex translation_cache_lock_;
 };
 
 std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info);

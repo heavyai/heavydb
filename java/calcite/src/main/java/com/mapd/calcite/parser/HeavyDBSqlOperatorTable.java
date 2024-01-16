@@ -323,6 +323,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new MLPredict());
     addOperator(new PCAProject());
 
+    addOperator(new LLMTransform());
+
     if (extSigs == null) {
       return;
     }
@@ -1648,6 +1650,50 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       RelDataType dataType = typeFactory.createSqlType(SqlTypeName.BIGINT);
       return typeFactory.createTypeWithNullability(dataType, true);
+    }
+  }
+
+  public static class LLMTransform extends SqlFunction {
+    public LLMTransform() {
+      super("LLM_TRANSFORM",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+
+    @Override
+    public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
+      final SqlValidator validator = callBinding.getValidator();
+
+      final int num_operands = callBinding.getOperandCount();
+      if (num_operands < 1) {
+        throw new IllegalArgumentException(
+                "At least 1 arguments are required: an input prompt.");
+      }
+      final SqlNode prompt_operand = callBinding.operand(num_operands - 1);
+      final SqlTypeName operand_type =
+              validator.getValidatedNodeType(prompt_operand).getSqlTypeName();
+      final SqlTypeFamily operand_type_family = operand_type.getFamily();
+      if (!prompt_operand.isA(EnumSet.of(SqlKind.LITERAL))
+              || operand_type_family != SqlTypeFamily.CHARACTER) {
+        throw new IllegalArgumentException("The input prompt must be a TEXT literal");
+      }
+      return true;
     }
   }
 

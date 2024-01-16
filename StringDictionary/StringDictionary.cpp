@@ -53,6 +53,7 @@
 #include "Shared/measure.h"
 
 bool g_cache_string_hash{true};
+size_t g_max_concurrent_llm_transform_call{16};
 
 namespace {
 
@@ -1924,8 +1925,14 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   const bool dest_dictionary_is_empty = (num_dest_strings == 0);
 
   constexpr int64_t target_strings_per_thread{1000};
-  const ThreadInfo thread_info(
+  ThreadInfo thread_info(
       std::thread::hardware_concurrency(), num_source_strings, target_strings_per_thread);
+  if (std::any_of(string_op_infos.begin(), string_op_infos.end(), [](auto const& info) {
+        return info.getOpKind() == SqlStringOpKind::LLM_TRANSFORM;
+      })) {
+    thread_info.num_threads = g_max_concurrent_llm_transform_call;
+    thread_info.num_elems_per_thread = 1;
+  }
   CHECK_GE(thread_info.num_threads, 1L);
   CHECK_GE(thread_info.num_elems_per_thread, 1L);
 
@@ -1934,7 +1941,7 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   // numbers of threads are needed than just letting tbb figure the number of threads,
   // but should benchmark in this specific context
 
-  const StringOps_Namespace::StringOps string_ops(string_op_infos);
+  StringOps_Namespace::StringOps string_ops(string_op_infos);
   const bool has_string_ops = string_ops.size();
 
   tbb::task_arena limited_arena(thread_info.num_threads);

@@ -611,7 +611,7 @@ else()
 endif()
 
 if (ENABLE_ML_MLPACK_TFS)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}") 
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
@@ -713,7 +713,7 @@ message(STATUS "Using CLANG_LIB: ${CLANG_LIB}")
 # Deps builds use separate libs for each clang component, while some distros now bundle into a single lib
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR NOT LLVM_LIB)
   set(LLVM_COMPONENTS support mcjit core irreader option linker)
-  if(MSVC) 
+  if(MSVC)
     list(APPEND LLVM_COMPONENTS Passes)
   endif(MSVC)
   option(ENABLE_INTEL_JIT_LISTENER "Enable Intel Vtune JIT Listener" OFF)
@@ -1360,7 +1360,7 @@ set (JDBC_JAR "heavyai-jdbc-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 set (UTILITY_JAR "heavyai-utility-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 
 set(MVN_PATH_COMMAND "")
-if(NOT MSVC) 
+if(NOT MSVC)
     set(MVN_PATH_COMMAND "MVNPATH=${CMAKE_SOURCE_DIR}/java")
 endif()
 

@@ -582,16 +582,13 @@ list(APPEND SANITY_TEST_PROGRAMS StorageTest)
 
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 if(ENABLE_FOLLY)
-  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary
-    StringOps Logger Utils
+  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils
     $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
-    ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES}
-    ${AwsS3_CURL_SUPPORT} ${CMAKE_DL_LIBS})
+    ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
 else()
-  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary
-    StringOps Logger Utils
+  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils
     $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
-    ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${AwsS3_CURL_SUPPORT} ${CMAKE_DL_LIBS})
+    ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
 endif()
 
 if(ENABLE_TSAN)

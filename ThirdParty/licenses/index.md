@@ -5,7 +5,7 @@ Apache Calcite | [Apache](<https://github.com/apache/calcite/blob/master/LICENSE
 Apache Thrift | [Apache](<https://github.com/apache/thrift/blob/master/LICENSE>) | RPC |
 Bcrypt | [CC0](https://github.com/rg3/bcrypt/blob/master/COPYING) | Password hashing |
 Boost | [Boost](<http://www.boost.org/LICENSE_1_0.txt>) | Multiple |
-cpr | [MIT](<https://github.com/whoshuu/cpr/blob/master/LICENSE>) | License verification |
+cpr | [MIT](<https://github.com/whoshuu/cpr/blob/master/LICENSE>) | License verification / Query execution support |
 crypto++ | [Boost](<http://www.cryptopp.com/License.txt>) | Signature verification |
 CUDA | [NVIDIA EULA](<http://docs.nvidia.com/cuda/eula/index.html#redistribution-rights>) | GPU access |
 double-conversion | [BSD-like](<https://github.com/google/double-conversion/blob/master/COPYING>) | Folly |
@@ -15,7 +15,7 @@ Folly | [Apache](https://github.com/facebook/folly/blob/master/LICENSE) | Multip
 gflags | [BSD-like](<https://github.com/gflags/gflags/blob/master/COPYING.txt>) | Folly |
 glog | [BSD-like](<https://github.com/google/glog/blob/master/COPYING>) | C++ logging |
 cpp-jwt | [MIT](<https://github.com/arun11299/cpp-jwt/blob/master/LICENSE>) | Elliptical Curve Digital Signature |
-libcurl | [MIT](<https://curl.haxx.se/docs/copyright.html>) | AWS metadata download |
+libcurl | [MIT](<https://curl.haxx.se/docs/copyright.html>) | AWS metadata download|
 libldap | varies, [OpenLDAP](<http://www.openldap.org/software/release/license.html>) | LDAP support; provided by OS (dynamic linked) |
 libnuma | [LGPL](<https://github.com/numactl/numactl/blob/master/LICENSE.LGPL2.1>) | Optane support, dynamic linked
 libpng | [libpng](<http://libpng.org/pub/png/src/libpng-LICENSE.txt>) | Render encoding / transport |
