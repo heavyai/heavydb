@@ -109,6 +109,9 @@ GpuGroupByBuffers create_dev_group_by_buffers(
                                 groups_buffer_size,
                                 query_mem_desc.blocksShareMemory() ? 1 : grid_size_x);
       // TODO(adb): render allocator support
+      VLOG(1) << "Prepare query output buffer on GPU, bump_allocator: on, dispatch_mode: "
+                 "KernelPerFragment, entry_count: "
+              << entry_count << ", buffer_size: " << mem_size << " bytes";
       group_by_dev_buffers_mem = device_allocator->alloc(mem_size);
     } else {
       // Attempt to allocate increasingly small buffers until we have less than 256B of
@@ -128,6 +131,9 @@ GpuGroupByBuffers create_dev_group_by_buffers(
           CHECK_LE(entry_count, std::numeric_limits<uint32_t>::max());
 
           // TODO(adb): render allocator support
+          VLOG(1) << "Allocating query output buffer on GPU, bump_allocator: on, "
+                     "entry_count: "
+                  << entry_count << ", buffer_size: " << mem_size << " bytes";
           group_by_dev_buffers_mem = device_allocator->alloc(mem_size);
         } catch (const OutOfMemory& e) {
           LOG(WARNING) << e.what();
@@ -158,12 +164,14 @@ GpuGroupByBuffers create_dev_group_by_buffers(
         prepend_index_buffer ? align_to_int64(entry_count * sizeof(int32_t)) : 0};
 
     int8_t* group_by_dev_buffers_allocation{nullptr};
+    auto const group_by_dev_buffer_size = mem_size + prepended_buff_size;
+    VLOG(1) << "Allocating query output buffer on GPU, entry_count: " << entry_count
+            << ", buffer_size: " << group_by_dev_buffer_size
+            << " bytes (prepend_index_buffer_size: " << prepended_buff_size << " bytes)";
     if (insitu_allocator) {
-      group_by_dev_buffers_allocation =
-          insitu_allocator->alloc(mem_size + prepended_buff_size);
+      group_by_dev_buffers_allocation = insitu_allocator->alloc(group_by_dev_buffer_size);
     } else {
-      group_by_dev_buffers_allocation =
-          device_allocator->alloc(mem_size + prepended_buff_size);
+      group_by_dev_buffers_allocation = device_allocator->alloc(group_by_dev_buffer_size);
     }
     CHECK(group_by_dev_buffers_allocation);
 
@@ -211,16 +219,21 @@ GpuGroupByBuffers create_dev_group_by_buffers(
   if (has_varlen_output) {
     const auto varlen_buffer_elem_size_opt = query_mem_desc.varlenOutputBufferElemSize();
     CHECK(varlen_buffer_elem_size_opt);  // TODO(adb): relax
-
-    group_by_dev_buffers[0] = device_allocator->alloc(
-        query_mem_desc.getEntryCount() * varlen_buffer_elem_size_opt.value());
+    auto const buf_size =
+        query_mem_desc.getEntryCount() * varlen_buffer_elem_size_opt.value();
+    VLOG(1) << "Allocating varlen output buffer on GPU, entry_count: "
+            << query_mem_desc.getEntryCount() << ", buffer_size: " << buf_size
+            << " bytes";
+    group_by_dev_buffers[0] = device_allocator->alloc(buf_size);
     varlen_output_buffer = group_by_dev_buffers[0];
   }
 
-  auto group_by_dev_ptr = device_allocator->alloc(num_ptrs * sizeof(CUdeviceptr));
+  auto const dev_ptr_buf_size = num_ptrs * sizeof(CUdeviceptr);
+  VLOG(1) << "Allocating CUDA dev_ptr buffer: " << dev_ptr_buf_size << " bytes";
+  auto group_by_dev_ptr = device_allocator->alloc(dev_ptr_buf_size);
   device_allocator->copyToDevice(group_by_dev_ptr,
                                  reinterpret_cast<int8_t*>(group_by_dev_buffers.data()),
-                                 num_ptrs * sizeof(CUdeviceptr));
+                                 dev_ptr_buf_size);
 
   return {group_by_dev_ptr, group_by_dev_buffers_mem, entry_count, varlen_output_buffer};
 }

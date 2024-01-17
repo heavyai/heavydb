@@ -45,6 +45,8 @@ Data_Namespace::AbstractBuffer* CudaAllocator::allocGpuAbstractBuffer(
     const size_t num_bytes,
     const int device_id) {
   CHECK(data_mgr);
+  VLOG(1) << "DataMgr allocating GPU memory: " << num_bytes << " bytes (device-"
+          << device_id << ")";
   auto ab = data_mgr->alloc(Data_Namespace::GPU_LEVEL, device_id, num_bytes);
   CHECK_EQ(ab->getPinCount(), 1);
   return ab;

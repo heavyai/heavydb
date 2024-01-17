@@ -916,6 +916,7 @@ QueryExecutionContext::KernelParams QueryExecutionContext::prepareKernelParams(
 
   KernelParams params;
   // Allocate one block for all kernel params and set pointers based on param_sizes.
+  VLOG(1) << "Prepare GPU kernel parameters: " << nbytes << " bytes";
   params[ERROR_CODE] = gpu_allocator_->alloc(nbytes);
   static_assert(ERROR_CODE == 0);
   for (size_t i = 1; i < params.size(); ++i) {
