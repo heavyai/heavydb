@@ -156,15 +156,6 @@ download_make_install https://github.com/libevent/libevent/releases/download/rel
 
 install_folly
 
-# llvm
-# http://thrysoee.dk/editline/libedit-20170329-3.1.tar.gz
-download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
-
-# (see common-functions.sh)
-install_llvm 
-
-install_iwyu 
-
 VERS=7.75.0
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
 download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
@@ -189,10 +180,18 @@ CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VE
 install_blosc
 
 # Geo Support
-install_gdal
+install_gdal_and_pdal static
+install_gdal_tools
 install_geos
-install_pdal
 
+# llvm
+# http://thrysoee.dk/editline/libedit-20170329-3.1.tar.gz
+download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
+
+# (see common-functions.sh)
+install_llvm 
+
+install_iwyu 
 
 download_make_install https://mirrors.sarata.com/gnu/binutils/binutils-2.32.tar.xz
 

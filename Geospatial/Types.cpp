@@ -116,6 +116,11 @@ std::mutex transformation_map_mutex_;
 std::map<std::tuple<int32_t, int32_t>, std::shared_ptr<OGRCoordinateTransformation>>
     transformation_map_;
 
+void clear_transformation_map() {
+  std::lock_guard<std::mutex> lock_guard(transformation_map_mutex_);
+  transformation_map_.clear();
+}
+
 std::string GeoTypesError::OGRErrorToStr(const int ogr_err) {
   switch (ogr_err) {
     case OGRERR_NOT_ENOUGH_DATA:

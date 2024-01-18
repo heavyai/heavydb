@@ -33,8 +33,13 @@ std::unique_ptr<QueryExporter> QueryExporter::create(FileType file_type) {
     case FileType::kGeoJSON:
     case FileType::kGeoJSONL:
     case FileType::kShapefile:
-    case FileType::kFlatGeobuf:
       return std::make_unique<QueryExporterGDAL>(file_type);
+    case FileType::kFlatGeobuf:
+#if ENABLE_FLATGEOBUF_EXPORT
+      return std::make_unique<QueryExporterGDAL>(file_type);
+#else
+      throw std::runtime_error("FlatGeobuf export disabled in this build");
+#endif
   }
   CHECK(false);
   return nullptr;

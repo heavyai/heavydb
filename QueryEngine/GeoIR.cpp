@@ -20,6 +20,10 @@
 #include "QueryEngine/GeoOperators/API.h"
 #include "QueryEngine/GeoOperators/Codegen.h"
 
+#ifdef ENABLE_GEOS
+#include <geos/version.h>
+#endif
+
 using heavyai::ErrorCode;
 
 ArrayLoadCodegen CodeGenerator::codegenGeoArrayLoadAndNullcheck(llvm::Value* byte_stream,

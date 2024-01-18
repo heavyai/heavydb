@@ -1038,6 +1038,11 @@ if(ENABLE_RUNTIME_LIBS)
   add_compile_definitions("HAVE_RUNTIME_LIBS")
 endif()
 
+option(ENABLE_FLATGEOBUF_EXPORT "Enable FlatGeobuf export (problematic with static deps)" OFF)
+if(ENABLE_FLATGEOBUF_EXPORT)
+  add_definitions("-DENABLE_FLATGEOBUF_EXPORT")
+endif()
+
 add_subdirectory(Catalog)
 add_subdirectory(StringOps)
 add_subdirectory(Parser)

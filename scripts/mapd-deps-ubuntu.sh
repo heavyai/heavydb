@@ -41,7 +41,8 @@ fi
 
 if [[ ! -x  "$(command -v sudo)" ]] ; then
   if [ "$EUID" -eq 0 ] ; then
-    yum install -y sudo
+    apt update -y
+    apt install -y sudo
   else
     echo "ERROR - sudo not installed and not running as root"
     exit
@@ -171,18 +172,17 @@ install_cmake
 
 install_memkind
 
-# llvm
-# (see common-functions.sh)
-LLVM_BUILD_DYLIB=true
-install_llvm
-
 # c-blosc
 install_blosc
 
 # Geo Support
-install_gdal
+install_gdal_and_pdal
 install_geos
-install_pdal
+
+# llvm
+# (see common-functions.sh)
+LLVM_BUILD_DYLIB=true
+install_llvm
 
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
