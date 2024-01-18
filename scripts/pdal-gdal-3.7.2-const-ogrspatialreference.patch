@@ -1,0 +1,20 @@
+--- a/pdal/Geometry.cpp	2023-11-16 17:50:17.834728261 -0800
++++ b/pdal/Geometry.cpp	2023-11-16 17:48:02.856448387 -0800
+@@ -140,7 +140,7 @@
+ 
+ bool Geometry::srsValid() const
+ {
+-    OGRSpatialReference *srs = m_geom->getSpatialReference();
++    const OGRSpatialReference *srs = m_geom->getSpatialReference();
+     return srs && srs->GetRoot();
+ }
+ 
+@@ -159,7 +159,7 @@
+         return StatusWithReason(-2,
+             "Geometry::transform() failed.  NULL target SRS.");
+ 
+-    OGRSpatialReference *inSrs = m_geom->getSpatialReference();
++    const OGRSpatialReference *inSrs = m_geom->getSpatialReference();
+     SrsTransform transform(*inSrs, OGRSpatialReference(out.getWKT().data()));
+     if (m_geom->transform(transform.get()) != OGRERR_NONE)
+         return StatusWithReason(-1, "Geometry::transform() failed.");

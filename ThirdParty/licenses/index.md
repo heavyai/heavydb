@@ -167,3 +167,9 @@ STB | [MIT](https://github.com/nothings/stb/blob/master/LICENSE) | Image file ut
 --- | --- | --- |
 | earcut  | [ISC](https://github.com/mapbox/earcut.hpp/blob/master/LICENSE) | Omniverse Export Polygon Triangulation |
 | kdtree-cpp | [BSD-3-Clause](https://github.com/cdalitz/kdtree-cpp/blob/master/LICENSE) | Cross-Section 2D |
+--- | --- | --- |
+| openjpeg  | [BSD](https://github.com/uclouvain/openjpeg/blob/master/LICENSE) | GDAL, JPEG2000 support  |
+| libcms2 | [MIT](https://github.com/mm2/Little-CMS/blob/master/COPYING) | GDAL, JPEG2000 support (dependency of openjpeg) |
+| libtiff | [MIT](http://www.libtiff.org/misc.html) | GDAL, JPEG2000 support (dependency of openjpeg) |
+| libwebp | [MIT](https://github.com/webmproject/libwebp/blob/main/COPYING) | GDAL, JPEG2000 support (dependency of openjpeg) |
+| libzstd | [MIT](https://github.com/facebook/zstd/blob/dev/LICENSE) | GDAL, JPEG2000 support (dependency of openjpeg) |

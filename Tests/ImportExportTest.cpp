@@ -4700,8 +4700,10 @@ class ExportTest : public ImportTestGDAL {
                                                const std::string& layer_name) {
     std::string temp_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
                             std::to_string(getpid()) + ".tmp";
-    std::string ogrinfo_cmd = "ogrinfo " + file + " " + layer_name;
-    boost::process::system(ogrinfo_cmd, boost::process::std_out > temp_file);
+    std::vector<std::string> args = {file, layer_name};
+    boost::process::system(boost::process::search_path("ogrinfo"),
+                           args,
+                           boost::process::std_out > temp_file);
     auto lines =
         readTextFile(temp_file, false, {"DBF_DATE_LAST_UPDATE", "INFO: Open of"});
     boost::filesystem::remove(temp_file);
@@ -5042,7 +5044,12 @@ TEST_F(ExportTest, Shapefile) {
     ASSERT_NO_THROW(
         doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
     std::string layer_name = "query_export_test_shapefile_" + geo_type;
-    ASSERT_NO_THROW(doCompareWithOGRInfo(shp_file, layer_name, COMPARE_EXPLICIT));
+    // disable this step of the test for MULTIPOLYGON until we have moved to
+    // the new deps for 8.0, as GDAL 3.7.3 writes files slightly differently
+    // @TODO(se) remove this after the transition to new deps is complete
+    if (geo_type != "multipolygon") {
+      ASSERT_NO_THROW(doCompareWithOGRInfo(shp_file, layer_name, COMPARE_EXPLICIT));
+    }
     doImportAgainAndCompare(shp_file, "Shapefile", geo_type, NO_ARRAYS);
     removeExportedFile(shp_file);
     removeExportedFile(shx_file);
@@ -5125,7 +5132,11 @@ TEST_F(ExportTest, Shapefile_Zip_Unimplemented) {
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
+#if ENABLE_FLATGEOBUF_EXPORT
 TEST_F(ExportTest, FlatGeobuf) {
+#else
+TEST_F(ExportTest, DISABLED_FlatGeobuf) {
+#endif
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
@@ -5140,7 +5151,11 @@ TEST_F(ExportTest, FlatGeobuf) {
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
+#if ENABLE_FLATGEOBUF_EXPORT
 TEST_F(ExportTest, FlatGeobuf_Overwrite) {
+#else
+TEST_F(ExportTest, DISABLED_FlatGeobuf_Overwrite) {
+#endif
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
@@ -5154,7 +5169,11 @@ TEST_F(ExportTest, FlatGeobuf_Overwrite) {
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
+#if ENABLE_FLATGEOBUF_EXPORT
 TEST_F(ExportTest, FlatGeobuf_InvalidName) {
+#else
+TEST_F(ExportTest, DISABLED_FlatGeobuf_InvalidName) {
+#endif
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   std::string geo_type = "point";
@@ -5163,7 +5182,11 @@ TEST_F(ExportTest, FlatGeobuf_InvalidName) {
                TDBException);
 }
 
+#if ENABLE_FLATGEOBUF_EXPORT
 TEST_F(ExportTest, FlatGeobuf_Invalid_SRID) {
+#else
+TEST_F(ExportTest, DISABLED_FlatGeobuf_Invalid_SRID) {
+#endif
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
