@@ -40,7 +40,6 @@ spirv-tools | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Tools/blob/mast
 spirv-cross | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Cross/blob/master/LICENSE) | Rendering support
 abseil | [Apache-2.0](https://github.com/abseil/abseil-cpp/blob/master/LICENSE) | Rendering support
 Vulkan Loader | [Apache-2.0](https://github.com/KhronosGroup/Vulkan-Loader/blob/main/LICENSE.txt) | Rendering support
-Vulkan Memory Allocator | [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt) | Rendering support
 GLM | [MIT](https://github.com/g-truc/glm/blob/master/copying.txt) | Rendering support
 GLFW | [zlib](https://github.com/glfw/glfw/blob/master/LICENSE.md) | Rendering tools
 ImGui | [MIT](https://github.com/ocornut/imgui/blob/master/LICENSE.txt) | Rendering tools
