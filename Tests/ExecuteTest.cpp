@@ -26795,6 +26795,35 @@ TEST_F(Select, ComplexQueryWithEmptyStringLiteral) {
   run_ddl_statement("DROP TABLE IF EXISTS bbb_bb_bb_bbbbbbbbb;");
 }
 
+TEST_F(Select, GeoScalarIntermediateProjection) {
+  SKIP_ALL_ON_AGGREGATOR();
+  std::string const q1{
+      "SELECT data_types_basic5.rowid, "
+      "ANY_VALUE(data_types_basic5.omnisci_geo_multipolygon) AS geom, CASE WHEN "
+      "data_types_basic5.rowid IN (35) THEN avg(test.z) ELSE NULL END AS color FROM test "
+      "INNER JOIN data_types_basic5 ON test.str = data_types_basic5.String_dict GROUP BY "
+      "data_types_basic5.rowid;"};
+  std::string const q2{
+      "SELECT omnisci_geo_multipolygon FROM data_types_basic5 ORDER BY Int_;"};
+  auto perform_test = [](std::string const& query, ExecutorDeviceType dt) {
+    try {
+      run_multiple_agg(query, dt);
+      FAIL() << "An exception should have been thrown for this test case.";
+    } catch (std::runtime_error const& e) {
+      EXPECT_EQ("Geospatial columns not yet supported in intermediate results.",
+                std::string(e.what()));
+    } catch (...) {
+      FAIL() << "Unexpected exception thrown for test case.";
+    }
+  };
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (auto const& query : {q1, q2}) {
+      perform_test(query, dt);
+    }
+  }
+}
+
 class DateAndTimeFunctionsTest : public QRExecutorDeviceParamTest {};
 
 TEST_P(DateAndTimeFunctionsTest, CastLiteralToDate) {
@@ -27214,83 +27243,69 @@ TEST_P(DateAndTimeFunctionsTest, DatePart) {
   ASSERT_EQ(2007,
             v<int64_t>(runSimpleAgg("SELECT DATEPART('yyyy', CAST('2007-10-30 "
                                     "12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      2007,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('yy', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(2007,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('yy', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
   ASSERT_EQ(4,
             v<int64_t>(runSimpleAgg("SELECT DATEPART('quarter', CAST('2007-10-30 "
                                     "12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      4,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('qq', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      4,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('q', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(4,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('qq', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(4,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('q', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
   ASSERT_EQ(10,
             v<int64_t>(runSimpleAgg("SELECT DATEPART('month', CAST('2007-10-30 "
                                     "12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      10,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('mm', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      10,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('m', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(10,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('mm', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(10,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('m', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
   ASSERT_EQ(303,
             v<int64_t>(runSimpleAgg("SELECT DATEPART('dayofyear', CAST('2007-10-30 "
                                     "12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      303,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('dy', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      303,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('y', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(303,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('dy', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(303,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('y', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
   ASSERT_EQ(30,
             v<int64_t>(runSimpleAgg("SELECT DATEPART('day', CAST('2007-10-30 12:15:32' "
                                     "AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      30,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('dd', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      30,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('d', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(30,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('dd', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(30,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('d', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
   ASSERT_EQ(12,
             v<int64_t>(runSimpleAgg("SELECT DATEPART('hour', CAST('2007-10-30 "
                                     "12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      12,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('hh', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(12,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('hh', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
   ASSERT_EQ(15,
             v<int64_t>(runSimpleAgg("SELECT DATEPART('minute', CAST('2007-10-30 "
                                     "12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      15,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('mi', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      15,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('n', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(15,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('mi', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(15,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('n', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
   ASSERT_EQ(32,
             v<int64_t>(runSimpleAgg("SELECT DATEPART('second', CAST('2007-10-30 "
                                     "12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      32,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('ss', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
-  ASSERT_EQ(
-      32,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('s', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(32,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('ss', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
+  ASSERT_EQ(32,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('s', CAST('2007-10-30 12:15:32' "
+                                    "AS TIMESTAMP)) FROM test;")));
   ASSERT_EQ(32,
             v<int64_t>(runSimpleAgg(
                 "SELECT DATEPART('s', TIMESTAMP '2007-10-30 12:15:32') FROM test;")));
@@ -27702,14 +27717,12 @@ TEST_P(DateAndTimeFunctionsTest, TimestampDiff) {
             v<int64_t>(runSimpleAgg(
                 "SELECT TIMESTAMPDIFF(month, TIMESTAMP '2003-05-01 12:05:55', TIMESTAMP "
                 "'2003-02-01 0:00:00') FROM TEST LIMIT 1;")));
-  ASSERT_EQ(
-      5,
-      v<int64_t>(runSimpleAgg(
-          "SELECT TIMESTAMPDIFF(month, m, m + INTERVAL '5' MONTH) FROM TEST LIMIT 1;")));
-  ASSERT_EQ(
-      -5,
-      v<int64_t>(runSimpleAgg(
-          "SELECT TIMESTAMPDIFF(month, m, m - INTERVAL '5' MONTH) FROM TEST LIMIT 1;")));
+  ASSERT_EQ(5,
+            v<int64_t>(runSimpleAgg("SELECT TIMESTAMPDIFF(month, m, m + INTERVAL '5' "
+                                    "MONTH) FROM TEST LIMIT 1;")));
+  ASSERT_EQ(-5,
+            v<int64_t>(runSimpleAgg("SELECT TIMESTAMPDIFF(month, m, m - INTERVAL '5' "
+                                    "MONTH) FROM TEST LIMIT 1;")));
   ASSERT_EQ(15,
             v<int64_t>(runSimpleAgg("select count(*) from test where TIMESTAMPDIFF(YEAR, "
                                     "m, CAST(o AS TIMESTAMP)) < 0;")));
@@ -27933,18 +27946,15 @@ TEST_P(DateAndTimeFunctionsTest, CompressedDateLimit_DatePart) {
       0,
       v<int64_t>(runSimpleAgg(
           "SELECT DATEPART('hour', CAST ('2617-12-23' as DATE)) from test limit 1;")));
-  ASSERT_EQ(
-      0,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('minute', CAST ('2617-12-23' as DATE)) from test limit 1;")));
-  ASSERT_EQ(
-      0,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('second', CAST ('2617-12-23' as DATE)) from test limit 1;")));
-  ASSERT_EQ(
-      6,
-      v<int64_t>(runSimpleAgg(
-          "SELECT DATEPART('weekday', CAST ('2011-12-31' as DATE)) from test limit 1;")));
+  ASSERT_EQ(0,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('minute', CAST ('2617-12-23' as "
+                                    "DATE)) from test limit 1;")));
+  ASSERT_EQ(0,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('second', CAST ('2617-12-23' as "
+                                    "DATE)) from test limit 1;")));
+  ASSERT_EQ(6,
+            v<int64_t>(runSimpleAgg("SELECT DATEPART('weekday', CAST ('2011-12-31' as "
+                                    "DATE)) from test limit 1;")));
   ASSERT_EQ(365,
             v<int64_t>(runSimpleAgg("SELECT DATEPART('dayofyear', CAST ('2011-12-31' "
                                     "as DATE)) from test limit 1;")));
@@ -29315,8 +29325,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
   try {
     import_hash_join_with_composite_text_cols_test();
   } catch (...) {
-    LOG(ERROR)
-        << "Failed to (re-)create table 'import_hash_join_with_composite_text_cols_test'";
+    LOG(ERROR) << "Failed to (re-)create table "
+                  "'import_hash_join_with_composite_text_cols_test'";
     return -EEXIST;
   }
   try {
