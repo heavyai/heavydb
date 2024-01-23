@@ -191,7 +191,8 @@ public class HeavyDBPlanner extends PlannerImpl {
     firstOptPhaseProgram.addRuleInstance(CoreRules.AGGREGATE_MERGE)
             .addRuleInstance(
                     new OuterJoinOptViaNullRejectionRule(RelFactories.LOGICAL_BUILDER))
-            .addRuleInstance(CoreRules.AGGREGATE_UNION_TRANSPOSE);
+            .addRuleInstance(CoreRules.AGGREGATE_UNION_TRANSPOSE)
+            .addRuleInstance(CoreRules.JOIN_PUSH_EXPRESSIONS);
     if (!viewOptimizationEnabled) {
       firstOptPhaseProgram.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE)
               .addRuleInstance(

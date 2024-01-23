@@ -10382,6 +10382,36 @@ void import_window_frame_navigation_table_with_dup_val2() {
   }
 }
 
+void import_push_down_on_join_column() {
+  run_ddl_statement(
+      "CREATE TABLE PDEJC1(tme0 timestamp(0), dne date, d16 date encoding days(16), d32 "
+      "date encoding days(32));");
+  run_ddl_statement(
+      "CREATE TABLE PDEJC2(tme0 timestamp(0), dne date, d16 date encoding days(16), d32 "
+      "date encoding days(32));");
+  g_sqlite_comparator.query(
+      "CREATE TABLE PDEJC1 (tme0 timestamp, dne date, d16 date, d32 date);");
+  g_sqlite_comparator.query(
+      "CREATE TABLE PDEJC2 (tme0 timestamp, dne date, d16 date, d32 date);");
+
+  std::vector<std::string> rows1{
+      "INSERT INTO PDEJC1 VALUES ('2024-01-16 14:22:00', '2024-01-16', '2024-01-16', "
+      "'2024-01-16');",
+      "INSERT INTO PDEJC1 VALUES ('2024-01-17 14:22:00', '2024-01-17', '2024-01-17', "
+      "'2024-01-17');"};
+  for (std::string row : rows1) {
+    run_multiple_agg(row, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(row);
+  }
+  run_multiple_agg(
+      "INSERT INTO PDEJC2 VALUES ('2024-01-16 14:22:00', '2024-01-16', '2024-01-16', "
+      "'2024-01-16');",
+      ExecutorDeviceType::CPU);
+  g_sqlite_comparator.query(
+      "INSERT INTO PDEJC2 VALUES ('2024-01-16 14:22:00', '2024-01-16', '2024-01-16', "
+      "'2024-01-16');");
+}
+
 }  // namespace
 
 TEST_F(Select, ArrayUnnest) {
@@ -21432,6 +21462,93 @@ TEST(Join, MultipleOuterExpressions) {
   }
 }
 
+using PushDownExprOnJoinColumnTestParam =
+    std::tuple<ExecutorDeviceType, std::string, std::string, bool>;
+enum PushDownExprOnJoinColumnTestParamName {
+  DT = 0,
+  JOIN_TYPE,
+  COL_NAME,
+  SWAP_COL_ORDER
+};
+
+class PushDownExprOnJoinColumnTest
+    : public ::testing::Test,
+      public ::testing::WithParamInterface<PushDownExprOnJoinColumnTestParam> {
+ protected:
+  PushDownExprOnJoinColumnTestParam param_;
+  ExecutorDeviceType dt_;
+  std::string join_type_;
+  std::string join_col_name_;
+  bool swap_col_order_;
+
+  void SetUp() override {
+    param_ = GetParam();
+    dt_ = std::get<PushDownExprOnJoinColumnTestParamName::DT>(param_);
+    join_type_ = std::get<PushDownExprOnJoinColumnTestParamName::JOIN_TYPE>(param_);
+    join_col_name_ = std::get<PushDownExprOnJoinColumnTestParamName::COL_NAME>(param_);
+    swap_col_order_ =
+        std::get<PushDownExprOnJoinColumnTestParamName::SWAP_COL_ORDER>(param_);
+  }
+
+  void TearDown() override {}
+};
+
+TEST_P(PushDownExprOnJoinColumnTest, PushDownExprOnJoinColumn) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_NO_GPU_P(dt_);
+  std::ostringstream oss1;
+  oss1 << "SELECT t1.tme0, " << join_col_name_ << " FROM PDEJC1 T1 " << join_type_
+       << " PDEJC2 T2 ON ";
+  std::ostringstream oss2;
+  oss2 << oss1.str();
+  if (swap_col_order_) {
+    oss1 << join_col_name_ << " = CAST(T1.tme0 AS DATE) ORDER BY 1";
+    oss2 << join_col_name_ << " = DATE(T1.tme0) ORDER BY 1";
+  } else {
+    oss1 << "CAST(T1.tme0 AS DATE) = " << join_col_name_ << " ORDER BY 1";
+    oss2 << "DATE(T1.tme0) = " << join_col_name_ << " ORDER BY 1";
+  }
+  c(oss1.str(), oss2.str(), dt_);
+}
+
+TEST(PushDownExprOnJoinColumnTest, NoCrash) {
+  SKIP_ALL_ON_AGGREGATOR();
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto res = run_multiple_agg(
+        "SELECT CAST(T1.generate_series AS date), T2.d32  FROM "
+        "TABLE(generate_series((SELECT MIN(CAST(d32 AS "
+        "TIMESTAMP(0))) FROM PDEJC1), (SELECT MAX(CAST(d32 AS timestamp(0))) "
+        "FROM PDEJC1), INTERVAL '1' DAY)) AS T1 LEFT JOIN (SELECT d32 FROM "
+        "PDEJC2) AS T2 ON CAST(T1.generate_series AS date) = T2.d32 ORDER BY 1;",
+        dt);
+    ASSERT_EQ(static_cast<size_t>(2), res->rowCount());
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    PushDownExprOnJoinColumn,
+    PushDownExprOnJoinColumnTest,
+    ::testing::Combine(
+        ::testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+        ::testing::Values("LEFT JOIN", "INNER JOIN"),
+        ::testing::Values("T2.dne", "T2.d16", "T2.d32", "T1.dne", "T1.d16", "T1.d32"),
+        ::testing::Bool()),
+    [](const ::testing::TestParamInfo<PushDownExprOnJoinColumnTestParam>& info) {
+      std::stringstream ss;
+      const auto& params = info.param;
+      std::string join_type =
+          std::get<PushDownExprOnJoinColumnTestParamName::JOIN_TYPE>(params);
+      std::replace(join_type.begin(), join_type.end(), ' ', '_');
+      std::string col_name =
+          std::get<PushDownExprOnJoinColumnTestParamName::COL_NAME>(params);
+      std::replace(col_name.begin(), col_name.end(), '.', '_');
+      ss << std::get<PushDownExprOnJoinColumnTestParamName::DT>(params) << "_"
+         << join_type << "_" << col_name << "_"
+         << std::get<PushDownExprOnJoinColumnTestParamName::SWAP_COL_ORDER>(params);
+      return ss.str();
+    });
+
 TEST(Delete, ExtraFragment) {
   auto insert_op = [](int random_val) -> std::string {
     std::ostringstream insert_string;
@@ -26726,6 +26843,7 @@ TEST_F(Select, ComplexQueryWithEmptyStringLiteral) {
       "zzzz_zzzzz BIGINT,\n"
       "ababa_bab DOUBLE,\n"
       "cdcdc_dcd BIGINT);"};
+
   std::string tbl2_ddl{
       "CREATE TABLE bbb_bb_bb_bbbbbbbbb (\n"
       "ef_ef_efe TEXT ENCODING DICT(16),\n"
@@ -29505,6 +29623,19 @@ int create_and_populate_tables(const bool use_temporary_tables,
     }
   }
 
+  try {
+    for (std::string tbl : {"PDEJC1", "PDEJC2"}) {
+      std::ostringstream oss;
+      oss << "DROP TABLE IF EXISTS " << tbl << ";";
+      run_ddl_statement(oss.str());
+      g_sqlite_comparator.query(oss.str());
+    }
+    import_push_down_on_join_column();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create tables for 'push_down_on_join_column_test'";
+    return -EEXIST;
+  }
+
   int ts_overflow_result = create_and_populate_datetime_overflow_table();
   if (ts_overflow_result) {
     return ts_overflow_result;
@@ -29779,6 +29910,12 @@ void drop_tables() {
   for (std::string tbl :
        {"tjs1", "tjs2", "tjs3", "tjs4", "tjs1s", "tjs2s", "tjs3s", "tjs4s"}) {
     run_ddl_statement("DROP TABLE IF EXISTS " + tbl + ";");
+  }
+  for (std::string tbl : {"PDEJC1", "PDEJC2"}) {
+    std::ostringstream oss;
+    oss << "DROP TABLE IF EXISTS " << tbl << ";";
+    run_ddl_statement(oss.str());
+    g_sqlite_comparator.query(oss.str());
   }
 }
 
