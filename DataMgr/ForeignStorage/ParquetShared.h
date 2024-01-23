@@ -69,34 +69,51 @@ class FileReaderMap {
  public:
   const ReaderPtr getOrInsert(const std::string& path,
                               std::shared_ptr<arrow::fs::FileSystem>& file_system) {
-    heavyai::unique_lock<std::mutex> cache_lock(mutex_);
-    if (map_.count(path) < 1 || !(map_.at(path))) {
-      map_[path] = open_parquet_table(path, file_system);
+    bool path_exists_and_is_open = true;
+    {
+      heavyai::shared_lock<heavyai::shared_mutex> cache_lock(mutex_);
+      if (map_.count(path) < 1 || !(map_.at(path))) {
+        path_exists_and_is_open = false;
+      }
     }
+
+    if (!path_exists_and_is_open) {
+      auto parquet_file_reader = open_parquet_table(path, file_system);
+      heavyai::unique_lock<heavyai::shared_mutex> cache_lock(mutex_);
+      // Check the `path_exists_and_is_open` condition again, it's possible
+      // another thread is competing with this thread in the case of concurrent
+      // `getOrInsert`
+      if (map_.count(path) < 1 || !(map_.at(path))) {
+        map_[path] = std::move(parquet_file_reader);
+      }
+    }
+
+    heavyai::unique_lock<heavyai::shared_mutex> cache_lock(mutex_);
     return map_.at(path).get();
   }
 
   const ReaderPtr insert(const std::string& path,
                          std::shared_ptr<arrow::fs::FileSystem>& file_system) {
-    heavyai::unique_lock<std::mutex> cache_lock(mutex_);
-    map_[path] = open_parquet_table(path, file_system);
+    auto parquet_file_reader = open_parquet_table(path, file_system);
+    heavyai::unique_lock<heavyai::shared_mutex> cache_lock(mutex_);
+    map_[path] = std::move(parquet_file_reader);
     return map_.at(path).get();
   }
 
   void initializeIfEmpty(const std::string& path) {
-    heavyai::unique_lock<std::mutex> cache_lock(mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> cache_lock(mutex_);
     if (map_.count(path) < 1) {
       map_.emplace(path, UniqueReaderPtr());
     }
   }
 
   void clear() {
-    heavyai::unique_lock<std::mutex> cache_lock(mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> cache_lock(mutex_);
     map_.clear();
   }
 
  private:
-  mutable std::mutex mutex_;
+  mutable heavyai::shared_mutex mutex_;
   std::map<const std::string, UniqueReaderPtr> map_;
 };
 }  // namespace foreign_storage
