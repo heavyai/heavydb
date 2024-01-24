@@ -921,7 +921,7 @@ function install_abseil() {
   popd
 }
 
-VULKAN_VERSION=1.3.268.0 # 10/16/23
+VULKAN_VERSION=1.3.275.0 # 12/22/23
 
 function install_vulkan() {
   rm -rf vulkan
