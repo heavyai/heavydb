@@ -7,8 +7,8 @@
 # docker run -it -v $REPO/scripts:/scripts docker-internal.mapd.com/cudagl:11.8.0-devel-ubuntu18.04 /scripts/build_vulkan_loader_dso.sh
 #
 
-VULKAN_VERSION=1.3.268.0
-DSO_VERSION=1.3.268
+VULKAN_VERSION=1.3.275.0
+DSO_VERSION=1.3.275
 BUILD_TYPE=Release
 BUILD_DIR=/build
 INSTALL_DIR=/scripts/vulkan_loader
@@ -21,7 +21,9 @@ cd ${BUILD_DIR}
 # install basics
 apt-get -y update
 apt-get -y upgrade
-apt-get -y install git build-essential libx11-xcb-dev libxkbcommon-dev libwayland-dev libxrandr-dev wget python3 libssl-dev
+# required for python 3.7 (required for 1.3.275)
+sudo add-apt-repository ppa:deadsnakes/ppa
+apt-get -y install git build-essential libx11-xcb-dev libxkbcommon-dev libwayland-dev libxrandr-dev wget python3.7 libssl-dev
 
 # install or build cmake
 BUILD_CMAKE=false
