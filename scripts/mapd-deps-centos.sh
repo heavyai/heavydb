@@ -69,7 +69,6 @@ sudo yum install -y \
     epel-release \
     which \
     libssh \
-    openssl-devel \
     ncurses-devel \
     git \
     java-1.8.0-openjdk-devel \
@@ -77,16 +76,15 @@ sudo yum install -y \
     gperftools \
     gperftools-devel \
     gperftools-libs \
-    python-devel \
     wget \
     curl \
     python3 \
     openldap-devel \
-    patchelf
+    patchelf \
+    perl-IPC-Cmd
 sudo yum install -y \
     jq \
     pxz
-
 generate_deps_version_file
 # mold fast linker
 install_mold_precompiled_x86_64
@@ -113,12 +111,13 @@ install_ninja
 
 install_maven
 
+install_openssl
+
 install_cmake
 
 install_boost
 
 download_make_install ftp://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz
-
 
 # http://zlib.net/zlib-1.2.8.tar.xz
 download_make_install ${HTTP_DEPS}/zlib-1.2.8.tar.xz
@@ -126,9 +125,6 @@ download_make_install ${HTTP_DEPS}/zlib-1.2.8.tar.xz
 install_memkind
 
 install_bzip2
-
-# https://www.openssl.org/source/openssl-1.0.2u.tar.gz
-download_make_install ${HTTP_DEPS}/openssl-1.0.2u.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 
 # libarchive
 CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared --with-pic"
@@ -153,6 +149,8 @@ CXXFLAGS="-fPIC -std=c++11" download_make_install https://github.com/google/glog
 # Libevent needed for folly
 VERS=2.1.10
 download_make_install https://github.com/libevent/libevent/releases/download/release-$VERS-stable/libevent-$VERS-stable.tar.gz
+
+install_fmt
 
 install_folly
 
@@ -274,7 +272,7 @@ makej
 make install
 popd
 
-download_make_install ${HTTP_DEPS}/xml-security-c-2.0.2.tar.gz "" "--without-xalan --enable-static --disable-shared"
+download_make_install ${HTTP_DEPS}/xml-security-c-2.0.4.tar.gz "" "--without-xalan --enable-static --disable-shared"
 download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz "" "--enable-static --disable-shared"
 CXXFLAGS="-std=c++14" download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz "" "--enable-static --disable-shared"
 

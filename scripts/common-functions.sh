@@ -122,7 +122,7 @@ function install_cmake() {
 }
 
 # gcc
-GCC_VERSION=11.1.0
+GCC_VERSION=11.4.0
 function install_centos_gcc() {
 
   download ftp://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz
@@ -151,7 +151,7 @@ function install_centos_gcc() {
   check_artifact_cleanup gcc-${GCC_VERSION}.tar.xz gcc-${GCC_VERSION}
 }
 
-BOOST_VERSION=1_72_0
+BOOST_VERSION=1_84_0
 function install_boost() {
   # http://downloads.sourceforge.net/project/boost/boost/${BOOST_VERSION//_/.}/boost_$${BOOST_VERSION}.tar.bz2
   download ${HTTP_DEPS}/boost_${BOOST_VERSION}.tar.bz2
@@ -161,6 +161,11 @@ function install_boost() {
   ./b2 cxxflags=-fPIC install --prefix=$PREFIX || true
   popd
   check_artifact_cleanup boost_${BOOST_VERSION}.tar.bz2 boost_${BOOST_VERSION}
+}
+
+function install_openssl() {
+  # https://www.openssl.org/source/old/3.0/openssl-3.0.10.tar.gz
+  download_make_install ${HTTP_DEPS}/openssl-3.0.10.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 }
 
 ARROW_VERSION=apache-arrow-9.0.0
@@ -321,7 +326,7 @@ function install_thrift() {
     fi
     source /etc/os-release
     if [ "$ID" == "ubuntu"  ] ; then
-      BOOST_LIBDIR=""
+      BOOST_LIBDIR="--with-boost=$PREFIX/include --with-boost-libdir=$PREFIX/lib"
     else
       BOOST_LIBDIR="--with-boost-libdir=$PREFIX/lib"
     fi
@@ -486,7 +491,20 @@ function install_gdal_and_pdal() {
     pushd gdal-${GDAL_VERSION}
     mkdir build
     pushd build
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DGDAL_USE_GEOS=off -DGDAL_USE_ARROW=off -DGDAL_USE_PARQUET=off -DGDAL_USE_TIFF=${PREFIX} -DGDAL_USE_GEOTIFF=${PREFIX} -DGDAL_USE_ARCHIVE=off -DGDAL_USE_PCRE=off -DGDAL_USE_OPENCL=off -DBUILD_APPS=${BUILD_PROJ_GDAL_APPS}
+    cmake .. -DCMAKE_BUILD_TYPE=Release \
+             -DCMAKE_INSTALL_PREFIX=$PREFIX \
+             -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
+             -DGDAL_USE_GEOS=off \
+             -DGDAL_USE_ARROW=off \
+             -DGDAL_USE_PARQUET=off \
+             -DGDAL_USE_TIFF=${PREFIX} \
+             -DGDAL_USE_GEOTIFF=${PREFIX} \
+             -DGDAL_USE_ARCHIVE=off \
+             -DGDAL_USE_PCRE=off \
+             -DGDAL_USE_OPENCL=off \
+             -DGDAL_USE_XERCESC=off \
+             -DBUILD_APPS=${BUILD_PROJ_GDAL_APPS} \
+             -DBUILD_PYTHON_BINDINGS=off
     cmake_build_and_install
     popd
     popd
@@ -626,9 +644,28 @@ function install_geos() {
     download_make_install ${HTTP_DEPS}/geos-${GEOS_VERSION}.tar.bz2 "" "--enable-shared --disable-static"
 }
 
-FOLLY_VERSION=2021.02.01.00
-FMT_VERSION=7.1.3
+FOLLY_VERSION=2023.01.16.00
+# FMT_VERSION must match the version required for folly
+# ExecuteTests requires fmt even if Folly is disabled
+FMT_VERSION=9.1.0
 GLOG_VERSION=0.5.0
+
+function install_fmt() {
+  # Folly depends on fmt
+  download https://github.com/fmtlib/fmt/archive/$FMT_VERSION.tar.gz
+  extract $FMT_VERSION.tar.gz
+  BUILD_DIR="fmt-$FMT_VERSION/build"
+  mkdir -p $BUILD_DIR
+  pushd $BUILD_DIR
+  cmake -GNinja \
+        -DFMT_DOC=OFF \
+        -DFMT_TEST=OFF \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+  cmake_build_and_install
+  popd
+}
+
 function install_folly() {
   # Build Glog statically to remove dependency on it from heavydb CMake
   download https://github.com/google/glog/archive/refs/tags/v$GLOG_VERSION.tar.gz
@@ -643,20 +680,6 @@ function install_folly() {
   cmake_build_and_install
   popd
 
-  # Folly depends on fmt
-  download https://github.com/fmtlib/fmt/archive/$FMT_VERSION.tar.gz
-  extract $FMT_VERSION.tar.gz
-  BUILD_DIR="fmt-$FMT_VERSION/build"
-  mkdir -p $BUILD_DIR
-  pushd $BUILD_DIR
-  cmake -GNinja \
-        -DFMT_DOC=OFF \
-        -DFMT_TEST=OFF \
-        -DBUILD_SHARED_LIBS=OFF \
-        -DCMAKE_INSTALL_PREFIX=$PREFIX ..
-  cmake_build_and_install
-  popd
-
   download https://github.com/facebook/folly/archive/v$FOLLY_VERSION.tar.gz
   extract v$FOLLY_VERSION.tar.gz
   pushd folly-$FOLLY_VERSION/build/
@@ -667,6 +690,7 @@ function install_folly() {
         -DCMAKE_CXX_FLAGS="-pthread" \
         -DFOLLY_USE_JEMALLOC=OFF \
         -DBUILD_SHARED_LIBS=OFF \
+        -DFOLLY_NO_EXCEPTION_TRACER:STRING=True \
         -DCMAKE_INSTALL_PREFIX=$PREFIX ..
   cmake_build_and_install
 
@@ -969,6 +993,10 @@ function install_onedal() {
   # oneDAL's makefile hardcodes its libTBB directory to /gcc4.8/, make it so it looks in the
   # root PREFIX (where we install TBB)
   sed -i 's/$(_IA)\/gcc4\.8//g' makefile
+
+  # explicitly use python3
+  # could install python-is-python3 module, but that's overkill if only this needs it
+  sed -i 's/python/python3/g' makefile
 
   # building oneAPI triggers deprecated implicit copy constructor warnings, which fail the build
   # due to -Werror, so add a -Wno-error=deprecated-copy flag to compilation command

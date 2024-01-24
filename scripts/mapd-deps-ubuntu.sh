@@ -61,8 +61,8 @@ source $SCRIPTS_DIR/common-functions.sh
 source /etc/os-release
 if [ "$ID" == "ubuntu" ] ; then
   PACKAGER="apt -y"
-  if [ "$VERSION_ID" != "20.04" ] && [ "$VERSION_ID" != "19.10" ] && [ "$VERSION_ID" != "19.04" ] && [ "$VERSION_ID" != "18.04" ]; then
-    echo "Ubuntu 20.04, 19.10, 19.04, and 18.04 are the only debian-based releases supported by this script"
+  if [ "$VERSION_ID" != "23.10" ] && [ "$VERSION_ID" != "22.04" ] && [ "$VERSION_ID" != "20.04" ]; then
+    echo "Ubuntu 23.10, 22.04, and 20.04 are the only debian-based releases supported by this script"
     exit 1
   fi
 else
@@ -86,8 +86,6 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     git \
     wget \
     curl \
-    libboost-all-dev \
-    libssl-dev \
     libevent-dev \
     default-jre \
     default-jre-headless \
@@ -107,7 +105,6 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     liblzma-dev \
     libbz2-dev \
     libarchive-dev \
-    libcurl4-openssl-dev \
     libedit-dev \
     uuid-dev \
     libsnappy-dev \
@@ -121,30 +118,32 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     rsync \
     unzip \
     jq \
-    python-dev \
-    python-yaml \
+    python3-dev \
+    python3-yaml \
     swig \
     pkg-config \
     libxerces-c-dev \
-    libxmlsec1-dev \
     libtool \
     patchelf \
     libxrandr-dev \
     libxinerama-dev \
     libxcursor-dev \
-    libxi-dev
+    libxi-dev \
+    libegl-dev \
+    binutils-dev \
+    libnuma-dev
 
-# required for gcc-11 on Ubuntu < 22.04
-if [ "$VERSION_ID" == "20.04" ] || [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ]; then
-  DEBIAN_FRONTEND=noninteractive sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+if [ "$VERSION_ID" == "20.04" ]; then
+  # required for gcc-11 on Ubuntu < 22.04
+  DEBIAN_FRONTEND=noninteractive sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
 fi
 
-sudo $PACKAGER install \
+DEBIAN_FRONTEND=noninteractive sudo apt install -y \
   gcc-11 \
   g++-11
 
 # Set up gcc-11 as default gcc
-sudo update-alternatives \
+DEBIAN_FRONTEND=noninteractive sudo update-alternatives \
   --install /usr/bin/gcc gcc /usr/bin/gcc-11 1100 \
   --slave /usr/bin/g++ g++ /usr/bin/g++-11
 
@@ -152,14 +151,8 @@ generate_deps_version_file
 
 # Needed to find sqlite3, xmltooling, xml_security_c, and LLVM (for iwyu)
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
-export PATH=$PREFIX/bin:$PATH
-
-if [ "$VERSION_ID" == "18.04" ]; then
-  # Required for TBB
-  download_make_install https://mirrors.sarata.com/gnu/binutils/binutils-2.32.tar.xz
-else
-  DEBIAN_FRONTEND=noninteractive sudo apt install -y binutils-dev
-fi
+export PATH=$PREFIX/bin:$PREFIX/include:$PATH
+export LD_LIBRARY_PATH=$PREFIX/lib64:$PREFIX/lib:$LD_LIBRARY_PATH
 
 # mold fast linker
 install_mold_precompiled_x86_64
@@ -168,9 +161,18 @@ install_ninja
 
 install_maven
 
+install_openssl
+
 install_cmake
 
+install_boost
+export BOOST_ROOT=$PREFIX/include
+
 install_memkind
+
+VERS=7.75.0
+# https://curl.haxx.se/download/curl-$VERS.tar.xz
+download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
 
 # c-blosc
 install_blosc
@@ -193,10 +195,15 @@ install_thrift
 VERS=3.52.16
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
 
+# fmt (must be installed before folly)
+install_fmt
+
 install_folly
 
+# Include What You Use
 install_iwyu
 
+# bison
 download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 
 # TBB
@@ -267,6 +274,7 @@ install_vulkan
 # GLM (GL Mathematics)
 install_glm
 
+# Rendering sandbox support
 # GLFW
 VERS=3.3.6
 download https://github.com/glfw/glfw/archive/refs/tags/${VERS}.tar.gz
@@ -308,7 +316,7 @@ wget --continue ${HTTP_DEPS}/implot.$VERS.tar.gz
 tar xvf implot.$VERS.tar.gz
 # Patch #includes for imgui.h / imgui_internal.h
 pushd implot.$VERS
-sudo patch -p0 < $SCRIPTS_DIR/implot-0.14_fix_imgui_includes.patch
+patch -p0 < $SCRIPTS_DIR/implot-0.14_fix_imgui_includes.patch
 popd
 mkdir -p $PREFIX/include
 mkdir -p $PREFIX/include/implot
@@ -316,10 +324,11 @@ rsync -av implot.$VERS/* $PREFIX/include/implot
 popd #implot
 
 # OpenSAML
-download_make_install ${HTTP_DEPS}/xml-security-c-2.0.2.tar.gz "" "--without-xalan"
+download_make_install ${HTTP_DEPS}/xml-security-c-2.0.4.tar.gz "" "--without-xalan"
 download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz
 CXXFLAGS="-std=c++14" download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz
 
+# Generate mapd-deps.sh
 cat > $PREFIX/mapd-deps.sh <<EOF
 HEAVY_PREFIX=$PREFIX
 

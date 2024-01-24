@@ -300,10 +300,10 @@ if(ENABLE_SYSTEM_TFS)
   endif()
 endif()
 
-find_program(PYTHON_EXECUTABLE python)
+find_package(Python REQUIRED)
 
 execute_process(
-  COMMAND ${PYTHON_EXECUTABLE}
+  COMMAND ${Python_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_TableFunctionsFactory_init.py
     ${TABLE_FUNCTION_HEADERS}
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp)
@@ -389,7 +389,7 @@ add_custom_command(
 add_custom_command(
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
-  COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/parse_ast.py ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
+  COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/parse_ast.py ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
 
 add_custom_target(QueryEngineFunctionsTargets
   DEPENDS
@@ -401,7 +401,7 @@ add_custom_target(QueryEngineFunctionsTargets
 add_custom_command(
   DEPENDS ${TABLE_FUNCTION_HEADERS}
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
-  COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_TableFunctionsFactory_init.py ${TABLE_FUNCTION_HEADERS} ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp)
+  COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_TableFunctionsFactory_init.py ${TABLE_FUNCTION_HEADERS} ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp)
 
 add_custom_target(QueryEngineTableFunctionsFactory_init
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp ${GENERATED_TF_FILES} ${GENERATED_TF_GPU_FILES} ${GENERATED_TF_ADD_FILES})
