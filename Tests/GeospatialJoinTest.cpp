@@ -1790,12 +1790,14 @@ TEST_P(MaxBBoxOverlapsExceededTest, NonAggregateProjection) {
       {true});
 }
 
+#ifndef HAVE_TSAN
 INSTANTIATE_TEST_SUITE_P(SingleAndMultipleBins,
                          MaxBBoxOverlapsExceededTest,
                          ::testing::Bool(),
                          [](const auto& info) {
                            return info.param ? "SingleBin" : "MultipleBins";
                          });
+#endif  // HAVE_TSAN
 
 class ParallelLinearization : public ::testing::Test {
  protected:
