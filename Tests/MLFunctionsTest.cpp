@@ -1459,12 +1459,14 @@ TEST_P(MLRegressionFunctionsTest, ML_PREDICT_NULLS) {
   }
 }
 
+#ifndef HAVE_TSAN
 INSTANTIATE_TEST_SUITE_P(MLRegressionTests,
                          MLRegressionFunctionsTest,
                          ::testing::Values(MLModelType::LINEAR_REG,
                                            MLModelType::DECISION_TREE_REG,
                                            MLModelType::GBT_REG,
                                            MLModelType::RANDOM_FOREST_REG));
+#endif  // HAVE_TSAN
 
 TEST_P(MLCategoricalRegressionFunctionsTest, ML_PREDICT_CATEGORICAL_FEATURES_MISORDERED) {
   const auto model_type = GetParam();
