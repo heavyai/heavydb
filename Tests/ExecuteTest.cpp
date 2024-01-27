@@ -2216,6 +2216,15 @@ TEST_F(Select, InValues) {
   }
 }
 
+TEST_F(Select, InValuesForGenericExpression) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT R.str FROM test R WHERE LOWER(str) NOT IN (SELECT str FROM test_inner) "
+      "ORDER BY 1 NULLS LAST;",
+      dt);
+  }
+}
+
 TEST_F(Select, InValuesDictEncodedStringColFromSubquery) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     c("select count(1) from (select R.fixed_str FROM test R JOIN test_inner S ON R.x = "
