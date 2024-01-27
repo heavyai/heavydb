@@ -1002,8 +1002,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
     const auto end_entry = std::min(start_entry + stride, entry_count);
     if (arg_type.is_string()) {
       CHECK_EQ(kENCODING_DICT, arg_type.get_compression());
-      auto col_expr = dynamic_cast<const Analyzer::ColumnVar*>(arg.get());
-      CHECK(col_expr);
       const auto& dest_dict_key = arg_type.getStringDictKey();
       const auto& source_dict_key = col_type.getStringDictKey();
       const auto dd = executor_->getStringDictionaryProxy(
