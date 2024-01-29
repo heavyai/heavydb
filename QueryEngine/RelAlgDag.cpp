@@ -2682,40 +2682,41 @@ class RexInputCollector : public RexVisitor<RexInputSet> {
 };
 
 namespace {
-bool find_generic_expr_in_window_func(RexWindowFunctionOperator const* window_expr,
-                                      bool& has_generic_expr_in_window_func) {
+// bits returned by get_conditions_of_window_func()
+constexpr unsigned kConditionNone = 0u;
+constexpr unsigned kNeedsExprPushdown = 1u;
+constexpr unsigned kHasGenericExprInWindowFunc = 1u << 1;
+
+unsigned get_conditions_of_window_func(RexWindowFunctionOperator const* window_expr) {
   for (auto const& partition_key : window_expr->getPartitionKeys()) {
     auto partition_input = dynamic_cast<RexInput const*>(partition_key.get());
     if (!partition_input) {
-      return true;
+      return kNeedsExprPushdown;
     }
   }
   for (auto const& order_key : window_expr->getOrderKeys()) {
     auto order_input = dynamic_cast<RexInput const*>(order_key.get());
     if (!order_input) {
-      return true;
+      return kNeedsExprPushdown;
     }
   }
   for (size_t k = 0; k < window_expr->size(); k++) {
     if (!shared::dynamic_castable_to_any<RexInput, RexLiteral>(
             window_expr->getOperand(k))) {
-      has_generic_expr_in_window_func = true;
-      return true;
+      return kNeedsExprPushdown | kHasGenericExprInWindowFunc;
     }
   }
-  return false;
+  return kConditionNone;
 }
 
 std::pair<bool, bool> need_pushdown_generic_expr(
     RelProject const* window_func_project_node) {
-  bool has_generic_expr_in_window_func = false;
-  bool res = false;
+  unsigned conditions{kConditionNone};
   for (size_t i = 0; i < window_func_project_node->size(); ++i) {
     auto const projected_target = window_func_project_node->getProjectAt(i);
     if (auto const* window_expr =
             dynamic_cast<RexWindowFunctionOperator const*>(projected_target)) {
-      res =
-          find_generic_expr_in_window_func(window_expr, has_generic_expr_in_window_func);
+      conditions |= get_conditions_of_window_func(window_expr);
     } else if (auto const* case_expr = dynamic_cast<RexCase const*>(projected_target)) {
       std::unordered_map<size_t, const RexScalar*> collected_window_func;
       WindowFunctionCollector collector(collected_window_func, true);
@@ -2724,12 +2725,15 @@ std::pair<bool, bool> need_pushdown_generic_expr(
         auto const* candidate_window_expr =
             dynamic_cast<RexWindowFunctionOperator const*>(kv.second);
         CHECK(candidate_window_expr);
-        res = find_generic_expr_in_window_func(candidate_window_expr,
-                                               has_generic_expr_in_window_func);
+        conditions |= get_conditions_of_window_func(candidate_window_expr);
       }
     }
+    // we do not need to check the expr further if both conditions are set to TRUE
+    if (conditions & kHasGenericExprInWindowFunc && conditions & kNeedsExprPushdown) {
+      break;
+    }
   }
-  return std::make_pair(has_generic_expr_in_window_func, res);
+  return {conditions & kHasGenericExprInWindowFunc, conditions & kNeedsExprPushdown};
 }
 };  // namespace
 /**
