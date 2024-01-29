@@ -532,6 +532,7 @@ int CudaMgr::getContext() const {
 }
 
 void CudaMgr::logDeviceProperties() const {
+  LOG(INFO) << "CUDA Driver version: " << gpu_driver_version_;
   LOG(INFO) << "Using " << device_count_ << " Gpus.";
   for (int d = 0; d < device_count_; ++d) {
     VLOG(1) << "Device: " << device_properties_[d].device;
