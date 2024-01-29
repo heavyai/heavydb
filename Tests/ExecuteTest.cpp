@@ -8196,7 +8196,7 @@ void run_skip_fragments_query(const std::string& query,
                               const size_t num_cols,
                               const size_t num_frags) {
   // Clear CPU memory and hash table caches
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   QR::get()->clearCpuMemory();
   {
     if (compare_with_sqlite) {
@@ -22525,7 +22525,7 @@ TEST_F(Select, DatesDaysEncodingTest) {
 }
 
 TEST_F(Select, WindowFunctionRank) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     std::string part1 =
         "SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC) r1, RANK() OVER "
@@ -22573,7 +22573,7 @@ TEST_F(Select, WindowFunctionJoins) {
 }
 
 TEST_F(Select, WindowFunctionOneRowPartitions) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     std::string part1 = "SELECT y, RANK() OVER (PARTITION BY y ORDER BY n ASC";
     std::string part2 =
@@ -22583,7 +22583,7 @@ TEST_F(Select, WindowFunctionOneRowPartitions) {
 }
 
 TEST_F(Select, WindowFunctionEmptyPartitions) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
 
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     {
@@ -22644,7 +22644,7 @@ TEST_F(Select, WindowFunctionEmptyPartitions) {
 }
 
 TEST_F(Select, WindowFunctionInitialGroupBy) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
 
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     {
@@ -22689,7 +22689,7 @@ TEST_F(Select, WindowFunctionInitialGroupBy) {
 }
 
 TEST_F(Select, WindowFunctionSubquery) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
 
   auto replace_date_trunc = [](const std::string& date_trunc_query) {
     const std::string date_trunc_day_expr{"DATE_TRUNC(DAY, d)"};
@@ -22765,7 +22765,7 @@ TEST_F(Select, WindowFunctionSubquery) {
 }
 
 TEST_F(Select, WindowFunctionPercentRank) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     std::string part1 =
         "SELECT x, y, PERCENT_RANK() OVER (PARTITION BY y ORDER BY x ASC) p FROM " +
@@ -22776,7 +22776,7 @@ TEST_F(Select, WindowFunctionPercentRank) {
 }
 
 TEST_F(Select, WindowFunctionTile) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     std::string part1 =
         "SELECT x, y, NTILE(2) OVER (PARTITION BY y ORDER BY x ASC) n FROM " +
@@ -22787,7 +22787,7 @@ TEST_F(Select, WindowFunctionTile) {
 }
 
 TEST_F(Select, WindowFunctionCumeDist) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     std::string part1 =
         "SELECT x, y, CUME_DIST() OVER (PARTITION BY y ORDER BY x ASC) c FROM " +
@@ -22798,7 +22798,7 @@ TEST_F(Select, WindowFunctionCumeDist) {
 }
 
 TEST_F(Select, WindowFunctionFiltered) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     std::string query =
         "SELECT MAX(CASE WHEN y <> 'aaa' THEN t ELSE NULL END) OVER (PARTITION BY x "
@@ -22819,7 +22819,7 @@ TEST_F(Select, WindowFunctionFiltered) {
 // OmniSci: ASC -> ASC NULLS LAST
 // and vice-versa for DESC. To prevent conflict, add NULLS FIRST/LAST if there are NULLS.
 TEST_F(Select, WindowFunctionLag) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     // First test default lag (1)
     {
@@ -22880,7 +22880,7 @@ TEST_F(Select, WindowFunctionLag) {
 }
 
 TEST_F(Select, WindowFunctionMultiOrderBy) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name :
        {"test_window_func_large", "test_window_func_large_multi_frag"}) {
     {
@@ -22933,7 +22933,7 @@ TEST_F(Select, WindowFunctionMultiOrderBy) {
 }
 
 TEST_F(Select, WindowFunctionLead) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     // First test default lead (1)
     {
@@ -22994,7 +22994,7 @@ TEST_F(Select, WindowFunctionLead) {
 }
 
 TEST_F(Select, WindowFunctionFirstLastAndNthValues) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     // Both postgres and SQLite apply the default frame bound for first_value and
     // last_value which represents a default (cumulative) window (i.e., rows between
@@ -23051,7 +23051,7 @@ TEST_F(Select, WindowFunctionFirstLastAndNthValues) {
 }
 
 TEST_F(Select, WindowFunctionAggregate) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     {
       std::string part1 =
@@ -23258,7 +23258,7 @@ TEST_F(Select, WindowFunctionAggregate) {
 }
 
 TEST_F(Select, WindowFunctionAggregateNoOrder) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     {
       std::string part1 =
@@ -23356,7 +23356,7 @@ TEST_F(Select, WindowFunctionAggregateNoOrder) {
 }
 
 TEST_F(Select, WindowFunctionSum) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     {
       std::string query =
@@ -23385,7 +23385,7 @@ TEST_F(Select, WindowFunctionSum) {
 }
 
 TEST_F(Select, WindowFunctionComplexExpressions) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     {
       std::string query =
@@ -23504,7 +23504,7 @@ TEST_F(Select, WindowFunctionComplexExpressions) {
 }
 
 TEST_F(Select, DISABLED_WindowFunctionParallelism) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   for (std::string table_name :
        {"test_window_func_large", "test_window_func_large_multi_frag"}) {
     // Sanity check to ensure tables are identical between sqlite and omnisci
@@ -23567,7 +23567,7 @@ TEST_F(Select, DISABLED_WindowFunctionParallelism) {
 }
 
 TEST_F(Select, WindowFunctionNested) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   c("SELECT CAST(SUM(x) OVER () as DOUBLE) v FROM test ORDER BY v ASC NULLS FIRST;", dt);
   c("SELECT CASE WHEN (y > 0) THEN lag(dn) OVER () ELSE MAX(x) OVER () END FROM test;",
     dt);
@@ -23673,7 +23673,7 @@ INSTANTIATE_TEST_SUITE_P(
     WindowFunctionLiteralArg::testName);
 
 TEST_F(Select, WindowFunctionFraming) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   // to make a stable test result, we use a table having non-peer row
   // (i.e., a set of rows having the same (order by) column values)
   // b/c each query engine may have different sorting
@@ -24017,7 +24017,7 @@ TEST_F(Select, WindowFunctionFraming) {
 }
 
 TEST_F(Select, WindowFunctionFramingWithDateAndTimeColumn) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
 
   std::vector<std::string> date_type_cols{"d16", "d32"};
 
@@ -24255,7 +24255,7 @@ TEST_F(Select, WindowFunctionFramingWithDateAndTimeColumn) {
 }
 
 TEST_F(Select, WindowFrameNavigationFunctionsLeadAndLag) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   std::vector<std::string> test_col1{"ti",   "si",   "si8",  "i",    "i8",   "i16", "bi",
                                      "bi8",  "bi16", "bi32", "f",    "d",    "dc5", "dc9",
                                      "dc15", "str",  "dt",   "dt16", "dt32", "tm",  "tme",
@@ -24350,7 +24350,7 @@ TEST_F(Select, WindowFrameNavigationFunctionsLeadAndLag) {
 }
 
 TEST_F(Select, WindowFrameNavigationFunctionsValueFunction) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   auto query_gen = [](const std::string& func,
                       const std::string& frame,
                       const std::string& order,
@@ -24539,7 +24539,7 @@ TEST_F(Select, WindowFrameNavigationFunctionsValueFunction) {
 }
 
 TEST_F(Select, FillNullValue) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   using VT = std::vector<std::string>;
   std::vector<std::string> rows{
       "INSERT INTO test_nvf VALUES(1,1,1,1, 1,1,1,1,1,1,1,1,1,1, "
@@ -24747,7 +24747,7 @@ TEST_F(Select, FillNullValue) {
 }
 
 TEST_F(Select, ConditionalWindowFunction) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
   struct TestQuery {
     std::string query;
     std::string alternative_query;
@@ -24910,6 +24910,14 @@ TEST_F(Select, ConditionalWindowFunction) {
   }
 }
 
+TEST_F(Select, MultiWindowFunctionsPushDownGenericExpr) {
+  auto dt = ExecutorDeviceType::CPU;
+  c("SELECT SUM(x), AVG(COUNT(*) * 100) OVER (ORDER BY SUM(x) RANGE BETWEEN 1 PRECEDING "
+    "AND CURRENT ROW), AVG(SUM(x)) OVER (ORDER BY SUM(x) RANGE BETWEEN 1 PRECEDING AND "
+    "CURRENT ROW) FROM test ORDER BY 1 NULLS LAST;",
+    dt);
+}
+
 TEST_F(Select, FilterNodeCoalesce) {
   // If we do not coalesce the filter with a subsequent project (manufacturing one if
   // neccessary), we currently pull all table columns into memory, which is highly
@@ -24928,7 +24936,7 @@ TEST_F(Select, FilterNodeCoalesce) {
   SKIP_ALL_ON_AGGREGATOR();
   // Running on GPU with new inter-mixed executon means memory is not all in one buffer
   // pool
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  auto dt = ExecutorDeviceType::CPU;
 
   // One-level projection - sanity test
   {
