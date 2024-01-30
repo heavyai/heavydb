@@ -25,15 +25,39 @@
 #include "ResultSet.h"
 
 #include <boost/core/noncopyable.hpp>
+#include <variant>
 #include <vector>
 
 class CompilationContext;
+struct CompilationResult;
 class GpuCompilationContext;
 class CpuCompilationContext;
 
 struct RelAlgExecutionUnit;
 class QueryMemoryDescriptor;
 class Executor;
+
+// For logging the KernelParams device addresses and data attributes.
+struct KernelParamsLog {
+  struct ColBuffer {
+    size_t size;                    // Size of each column buffer
+    std::vector<void const*> ptrs;  // Pointers to each column buffer
+  };
+  struct NamedSize {
+    char const* name;
+    size_t size;
+  };
+  using Value = std::variant<std::nullptr_t,  // Default to nullptr if not set
+                             ColBuffer,
+                             NamedSize,
+                             std::vector<void const*>,
+                             std::vector<std::vector<int64_t>>,
+                             std::vector<std::vector<uint64_t>>>;
+  std::array<void const*, size_t(heavyai::KernelParam::N_)> ptrs;
+  std::array<Value, size_t(heavyai::KernelParam::N_)> values;
+  bool hoist_literals;
+};
+std::ostream& operator<<(std::ostream&, KernelParamsLog const&);
 
 class QueryExecutionContext : boost::noncopyable {
  public:
@@ -61,7 +85,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   std::vector<int64_t*> launchGpuCode(
       const RelAlgExecutionUnit& ra_exe_unit,
-      const CompilationContext* compilation_context,
+      const CompilationResult& compilation_result,
       const bool hoist_literals,
       const std::vector<int8_t>& literal_buff,
       std::vector<std::vector<const int8_t*>> col_buffers,
@@ -72,7 +96,6 @@ class QueryExecutionContext : boost::noncopyable {
       const unsigned block_size_x,
       const unsigned grid_size_x,
       const int device_id,
-      const size_t shared_memory_size,
       int32_t* error_code,
       const uint32_t num_tables,
       const bool allow_runtime_interrupt,
@@ -98,26 +121,8 @@ class QueryExecutionContext : boost::noncopyable {
   int64_t getAggInitValForIndex(const size_t index) const;
 
  private:
-  // enum must be kept in sync w/ prepareKernelParams().
-  enum {
-    ERROR_CODE,
-    TOTAL_MATCHED,
-    GROUPBY_BUF,
-    NUM_FRAGMENTS,
-    NUM_TABLES,
-    ROW_INDEX_RESUME,
-    COL_BUFFERS,
-    LITERALS,
-    NUM_ROWS,
-    FRAG_ROW_OFFSETS,
-    MAX_MATCHED,
-    INIT_AGG_VALS,
-    JOIN_HASH_TABLES,
-    ROW_FUNC_MGR,
-    KERN_PARAM_COUNT
-  };
-  using KernelParamSizes = std::array<size_t, KERN_PARAM_COUNT>;
-  using KernelParams = std::array<int8_t*, KERN_PARAM_COUNT>;
+  using KernelParamSizes = std::array<size_t, size_t(heavyai::KernelParam::N_)>;
+  using KernelParams = std::array<int8_t*, size_t(heavyai::KernelParam::N_)>;
 
   size_t sizeofColBuffers(
       std::vector<std::vector<int8_t const*>> const& col_buffers) const;
@@ -157,7 +162,7 @@ class QueryExecutionContext : boost::noncopyable {
   template <typename T>
   void copyVectorToDevice(int8_t* device_ptr, std::vector<T> const& vec) const;
 
-  KernelParams prepareKernelParams(
+  std::pair<KernelParams, KernelParamsLog> prepareKernelParams(
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       const std::vector<int8_t>& literal_buff,
       const std::vector<std::vector<int64_t>>& num_rows,
@@ -187,6 +192,7 @@ class QueryExecutionContext : boost::noncopyable {
   mutable std::unique_ptr<ResultSet> estimator_result_set_;
 
   friend class Executor;
+  friend std::ostream& operator<<(std::ostream&, KernelParamsLog const&);
 };
 
 #endif  // QUERYENGINE_QUERYEXECUTIONCONTEXT_H

@@ -17,8 +17,11 @@
 #pragma once
 
 #include <memory>
+#include <ostream>
 
 class CompilationContext;
+struct CompilationResult;
+struct KernelParamsLog;
 
 class DeviceClock {
  public:
@@ -30,14 +33,15 @@ class DeviceClock {
 
 class DeviceKernel {
  public:
-  virtual void launch(unsigned int gridDimX,
-                      unsigned int gridDimY,
-                      unsigned int gridDimZ,
-                      unsigned int blockDimX,
-                      unsigned int blockDimY,
-                      unsigned int blockDimZ,
-                      unsigned int sharedMemBytes,
-                      void** kernelParams,
+  virtual void launch(unsigned int grid_dim_x,
+                      unsigned int grid_dim_y,
+                      unsigned int grid_dim_z,
+                      unsigned int block_dim_x,
+                      unsigned int block_dim_y,
+                      unsigned int block_dim_z,
+                      CompilationResult const& compilation_result,
+                      void** kernel_params,
+                      KernelParamsLog const&,
                       bool optimize_block_and_grid_sizes) = 0;
 
   virtual void initializeDynamicWatchdog(bool could_interrupt, uint64_t cycle_budget) = 0;
@@ -52,3 +56,22 @@ class DeviceKernel {
 
 std::unique_ptr<DeviceKernel> create_device_kernel(const CompilationContext* ctx,
                                                    int device_id);
+
+// Temp struct used to log information on a CUDA error after a kernel launch.
+struct DeviceKernelLaunchErrorLogDump {
+  CUresult const cu_result;
+  DeviceKernel* const device_kernel;
+  unsigned int const grid_dim_x;
+  unsigned int const grid_dim_y;
+  unsigned int const grid_dim_z;
+  unsigned int const block_dim_x;
+  unsigned int const block_dim_y;
+  unsigned int const block_dim_z;
+  CompilationResult const& compilation_result;
+  CUstream const qe_cuda_stream;
+  void** const kernel_params;
+  KernelParamsLog const& kernel_params_log;
+  bool const optimize_block_and_grid_sizes;
+};
+
+std::ostream& operator<<(std::ostream&, DeviceKernelLaunchErrorLogDump const&);

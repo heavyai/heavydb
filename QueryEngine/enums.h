@@ -57,4 +57,22 @@ HEAVYAI_DEFINE_ENUM_CLASS(QueryDescriptionType,
                           NonGroupedAggregate,
                           Estimator)
 
+// Enumerate the pointer parameters passed to the kernel.
+// LITERALS are included iff literals are hoisted.
+HEAVYAI_DEFINE_ENUM_CLASS(KernelParam,
+                          ERROR_CODE,
+                          TOTAL_MATCHED,
+                          GROUPBY_BUF,
+                          NUM_FRAGMENTS,
+                          NUM_TABLES,
+                          ROW_INDEX_RESUME,
+                          COL_BUFFERS,
+                          LITERALS,
+                          NUM_ROWS,
+                          FRAG_ROW_OFFSETS,
+                          MAX_MATCHED,
+                          INIT_AGG_VALS,
+                          JOIN_HASH_TABLES,
+                          ROW_FUNC_MGR)
+
 }  // namespace heavyai

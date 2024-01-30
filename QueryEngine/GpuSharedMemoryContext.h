@@ -17,6 +17,8 @@
 #pragma once
 #include "Logger/Logger.h"
 
+#include <ostream>
+
 class GpuSharedMemoryContext {
  public:
   GpuSharedMemoryContext() : shared_memory_size_(0) {}
@@ -31,3 +33,7 @@ class GpuSharedMemoryContext {
  private:
   size_t shared_memory_size_;
 };
+
+inline std::ostream& operator<<(std::ostream& os, GpuSharedMemoryContext const ctx) {
+  return os << "shared_memory_size=" << ctx.getSharedMemorySize();
+}

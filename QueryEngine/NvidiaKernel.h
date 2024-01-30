@@ -21,6 +21,7 @@
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
+#include <ostream>
 #else
 #include "../Shared/nocuda.h"
 #endif  // HAVE_CUDA
@@ -122,31 +123,25 @@ class GpuCompilationContext : public CompilationContext {
 };
 
 #ifdef HAVE_CUDA
-inline std::string ourCudaErrorStringHelper(CUresult error) {
-  char const* c1;
-  CUresult res1 = cuGetErrorName(error, &c1);
-  char const* c2;
-  CUresult res2 = cuGetErrorString(error, &c2);
-  std::string text;
-  if (res1 == CUDA_SUCCESS) {
-    text += c1;
-    text += " (";
-    text += std::to_string(error);
-    text += ")";
+struct CudaErrorLog {
+  CUresult cu_result;
+};
+inline std::ostream& operator<<(std::ostream& os, CudaErrorLog const cuda_error_log) {
+  char const* error_name{nullptr};
+  char const* error_string{nullptr};
+  cuGetErrorName(cuda_error_log.cu_result, &error_name);
+  cuGetErrorString(cuda_error_log.cu_result, &error_string);
+  os << (error_name ? error_name : "Unknown CUDA error") << ' '
+     << static_cast<int>(cuda_error_log.cu_result);
+  if (error_string) {
+    os << " (" << error_string << ')';
   }
-  if (res2 == CUDA_SUCCESS) {
-    if (!text.empty()) {
-      text += ": ";
-    }
-    text += c2;
-  }
-  if (text.empty()) {
-    text = std::to_string(error);  // never return an empty error string
-  }
-  return text;
+  return os;
 }
 
 #define checkCudaErrors(ARG)                                                \
   if (CUresult const err = static_cast<CUresult>(ARG); err != CUDA_SUCCESS) \
-  CHECK_EQ(err, CUDA_SUCCESS) << ourCudaErrorStringHelper(err)
+    CHECK_EQ(err, CUDA_SUCCESS) << CudaErrorLog {                           \
+      err                                                                   \
+    }
 #endif  // HAVE_CUDA
