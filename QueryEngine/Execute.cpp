@@ -3909,30 +3909,26 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                rows_to_process);
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
-    GpuCompilationContext* gpu_generated_code =
-        dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get());
-    CHECK(gpu_generated_code);
+    CHECK(dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get()));
     try {
-      out_vec = query_exe_context->launchGpuCode(
-          ra_exe_unit,
-          gpu_generated_code,
-          hoist_literals,
-          hoist_buf,
-          col_buffers,
-          num_rows,
-          frag_offsets,
-          0,
-          data_mgr,
-          blockSize(),
-          gridSize(),
-          device_id,
-          compilation_result.gpu_smem_context.getSharedMemorySize(),
-          &error_code,
-          num_tables,
-          allow_runtime_interrupt,
-          join_hash_table_ptrs,
-          render_allocator_map_ptr,
-          optimize_cuda_block_and_grid_sizes);
+      out_vec = query_exe_context->launchGpuCode(ra_exe_unit,
+                                                 compilation_result,
+                                                 hoist_literals,
+                                                 hoist_buf,
+                                                 col_buffers,
+                                                 num_rows,
+                                                 frag_offsets,
+                                                 0,
+                                                 data_mgr,
+                                                 blockSize(),
+                                                 gridSize(),
+                                                 device_id,
+                                                 &error_code,
+                                                 num_tables,
+                                                 allow_runtime_interrupt,
+                                                 join_hash_table_ptrs,
+                                                 render_allocator_map_ptr,
+                                                 optimize_cuda_block_and_grid_sizes);
       output_memory_scope.reset(new OutVecOwner(out_vec));
     } catch (const OutOfMemory&) {
       return int32_t(ErrorCode::OUT_OF_GPU_MEM);
@@ -4181,12 +4177,11 @@ int32_t Executor::executePlanWithGroupBy(
                                      rows_to_process);
   } else {
     try {
-      GpuCompilationContext* gpu_generated_code =
-          dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get());
-      CHECK(gpu_generated_code);
+      CHECK(
+          dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get()));
       query_exe_context->launchGpuCode(
           ra_exe_unit_copy,
-          gpu_generated_code,
+          compilation_result,
           hoist_literals,
           hoist_buf,
           col_buffers,
@@ -4197,7 +4192,6 @@ int32_t Executor::executePlanWithGroupBy(
           blockSize(),
           gridSize(),
           device_id,
-          compilation_result.gpu_smem_context.getSharedMemorySize(),
           &error_code,
           num_tables,
           allow_runtime_interrupt,

@@ -206,7 +206,7 @@ int32_t aggregate_error_codes(const std::vector<int32_t>& error_codes) {
 
 std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const RelAlgExecutionUnit& ra_exe_unit,
-    const CompilationContext* compilation_context,
+    const CompilationResult& compilation_result,
     const bool hoist_literals,
     const std::vector<int8_t>& literal_buff,
     std::vector<std::vector<const int8_t*>> col_buffers,
@@ -217,7 +217,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const unsigned block_size_x,
     const unsigned grid_size_x,
     const int device_id,
-    const size_t shared_memory_size,
     int32_t* error_code,
     const uint32_t num_tables,
     const bool allow_runtime_interrupt,
@@ -228,8 +227,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   INJECT_TIMER(lauchGpuCode);
   CHECK(gpu_allocator_);
   CHECK(query_buffers_);
+  CompilationContext const* compilation_context = compilation_result.generated_code.get();
   CHECK(compilation_context);
   const auto& init_agg_vals = query_buffers_->init_agg_vals_;
+  const size_t shared_memory_size =
+      compilation_result.gpu_smem_context.getSharedMemorySize();
 
   bool is_group_by{query_mem_desc_.isGroupBy()};
 
@@ -262,49 +264,53 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     kernel->initializeRuntimeInterrupter(device_id);
   }
 
-  auto kernel_params = prepareKernelParams(col_buffers,
-                                           literal_buff,
-                                           num_rows,
-                                           frag_offsets,
-                                           scan_limit,
-                                           init_agg_vals,
-                                           error_codes,
-                                           num_tables,
-                                           join_hash_tables,
-                                           data_mgr,
-                                           device_id,
-                                           hoist_literals,
-                                           is_group_by);
+  auto [kernel_params, kernel_params_log] = prepareKernelParams(col_buffers,
+                                                                literal_buff,
+                                                                num_rows,
+                                                                frag_offsets,
+                                                                scan_limit,
+                                                                init_agg_vals,
+                                                                error_codes,
+                                                                num_tables,
+                                                                join_hash_tables,
+                                                                data_mgr,
+                                                                device_id,
+                                                                hoist_literals,
+                                                                is_group_by);
 
-  static_assert(size_t(KERN_PARAM_COUNT) == kernel_params.size());
-  CHECK(!kernel_params[GROUPBY_BUF]);
+  using KP = heavyai::KernelParam;
+  CHECK_EQ(size_t(KP::N_), kernel_params.size());
+  CHECK(!kernel_params[int(KP::GROUPBY_BUF)]);
 
   const unsigned block_size_y = 1;
   const unsigned block_size_z = 1;
   const unsigned grid_size_y = 1;
   const unsigned grid_size_z = 1;
   const auto total_thread_count = block_size_x * grid_size_x;
-  const auto err_desc = kernel_params[ERROR_CODE];
+  const auto err_desc = kernel_params[int(KP::ERROR_CODE)];
   if (is_group_by) {
     CHECK(!(query_buffers_->getGroupByBuffersSize() == 0) || render_allocator);
     bool can_sort_on_gpu = query_mem_desc_.sortOnGpu();
-    auto gpu_group_by_buffers =
-        query_buffers_->createAndInitializeGroupByBufferGpu(ra_exe_unit,
-                                                            query_mem_desc_,
-                                                            kernel_params[INIT_AGG_VALS],
-                                                            device_id,
-                                                            dispatch_mode_,
-                                                            block_size_x,
-                                                            grid_size_x,
-                                                            executor_->warpSize(),
-                                                            can_sort_on_gpu,
-                                                            output_columnar_,
-                                                            render_allocator);
+    auto gpu_group_by_buffers = query_buffers_->createAndInitializeGroupByBufferGpu(
+        ra_exe_unit,
+        query_mem_desc_,
+        kernel_params[int(KP::INIT_AGG_VALS)],
+        device_id,
+        dispatch_mode_,
+        block_size_x,
+        grid_size_x,
+        executor_->warpSize(),
+        can_sort_on_gpu,
+        output_columnar_,
+        render_allocator);
     const auto max_matched = static_cast<int32_t>(gpu_group_by_buffers.entry_count);
     gpu_allocator_->copyToDevice(
-        kernel_params[MAX_MATCHED], &max_matched, sizeof(max_matched));
+        kernel_params[int(KP::MAX_MATCHED)], &max_matched, sizeof(max_matched));
 
-    kernel_params[GROUPBY_BUF] = gpu_group_by_buffers.ptrs;
+    kernel_params[int(KP::GROUPBY_BUF)] = gpu_group_by_buffers.ptrs;
+    kernel_params_log.ptrs[int(KP::GROUPBY_BUF)] = gpu_group_by_buffers.ptrs;
+    kernel_params_log.values[int(KP::GROUPBY_BUF)] =
+        KernelParamsLog::NamedSize{"EntryCount", gpu_group_by_buffers.entry_count};
     std::vector<void*> param_ptrs;
     for (auto& param : kernel_params) {
       param_ptrs.push_back(&param);
@@ -326,11 +332,12 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                      block_size_x,
                      block_size_y,
                      block_size_z,
-                     shared_memory_size,
+                     compilation_result,
                      &param_ptrs[0],
+                     kernel_params_log,
                      optimize_cuda_block_and_grid_sizes);
     } else {
-      param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
+      param_ptrs.erase(param_ptrs.begin() + int(KP::LITERALS));  // TODO(alex): remove
       VLOG(1) << "Launching(" << kernel->name() << ") on device_id(" << device_id << ')';
       kernel->launch(grid_size_x,
                      grid_size_y,
@@ -338,8 +345,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                      block_size_x,
                      block_size_y,
                      block_size_z,
-                     shared_memory_size,
+                     compilation_result,
                      &param_ptrs[0],
+                     kernel_params_log,
                      optimize_cuda_block_and_grid_sizes);
     }
     if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
@@ -386,13 +394,13 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                 data_mgr,
                 gpu_group_by_buffers,
                 get_num_allocated_rows_from_gpu(
-                    *gpu_allocator_, kernel_params[TOTAL_MATCHED], device_id),
+                    *gpu_allocator_, kernel_params[int(KP::TOTAL_MATCHED)], device_id),
                 device_id);
           } else {
             size_t num_allocated_rows{0};
             if (ra_exe_unit.use_bump_allocator) {
               num_allocated_rows = get_num_allocated_rows_from_gpu(
-                  *gpu_allocator_, kernel_params[TOTAL_MATCHED], device_id);
+                  *gpu_allocator_, kernel_params[int(KP::TOTAL_MATCHED)], device_id);
               // First, check the error code. If we ran out of slots, don't copy data back
               // into the ResultSet or update ResultSet entry count
               if (*error_code < 0) {
@@ -462,7 +470,10 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     gpu_allocator_->copyToDevice(out_vec_dev_ptr,
                                  reinterpret_cast<int8_t*>(out_vec_dev_buffers.data()),
                                  agg_col_count * sizeof(int8_t*));
-    kernel_params[GROUPBY_BUF] = out_vec_dev_ptr;
+    kernel_params[int(KP::GROUPBY_BUF)] = out_vec_dev_ptr;
+    kernel_params_log.ptrs[int(KP::GROUPBY_BUF)] = out_vec_dev_ptr;
+    kernel_params_log.values[int(KP::GROUPBY_BUF)] =
+        KernelParamsLog::NamedSize{"AggColCount", agg_col_count};
     std::vector<void*> param_ptrs;
     for (auto& param : kernel_params) {
       param_ptrs.push_back(&param);
@@ -484,11 +495,12 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                      block_size_x,
                      block_size_y,
                      block_size_z,
-                     shared_memory_size,
+                     compilation_result,
                      &param_ptrs[0],
+                     kernel_params_log,
                      optimize_cuda_block_and_grid_sizes);
     } else {
-      param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
+      param_ptrs.erase(param_ptrs.begin() + int(KP::LITERALS));  // TODO(alex): remove
       VLOG(1) << "Launching(" << kernel->name() << ") on device_id(" << device_id << ')';
       kernel->launch(grid_size_x,
                      grid_size_y,
@@ -496,8 +508,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                      block_size_x,
                      block_size_y,
                      block_size_z,
-                     shared_memory_size,
+                     compilation_result,
                      &param_ptrs[0],
+                     kernel_params_log,
                      optimize_cuda_block_and_grid_sizes);
     }
 
@@ -718,6 +731,26 @@ size_t QueryExecutionContext::sizeofColBuffers(
   }
   return 0;
 }
+// n = num_fragments
+// m = col_buffers.front().size()
+// Memory layout for column buffers:
+// d_ptr           -> d_ptr + n*8
+// d_ptr +     1*8 -> d_ptr + n 8 +     1*m*8
+// d_ptr +     2*8 -> d_ptr + n*8 +     2*m*8
+// d_ptr +     3*8 -> d_ptr + n*8 +     3*m*8
+// ...
+// d_ptr + (n-1)*8 -> d_ptr + n*8 + (n-1)*m*8
+//
+// d_ptr + n*8             -> col_buffer[0] (size m*8 bytes)
+// d_ptr + n*8 +     1*m*8 -> col_buffer[1] (size m*8 bytes)
+// d_ptr + n*8 +     2*m*8 -> col_buffer[2] (size m*8 bytes)
+// d_ptr + n*8 +     3*m*8 -> col_buffer[3] (size m*8 bytes)
+// ...
+// d_ptr + n*8 + (n-1)*m*8 -> col_buffer[n-1] (size m*8 bytes)
+//
+// In other words, two arrays are allocated and set:
+//  * n pointers pointing to the col_buffers.
+//  * n col_buffers.
 // Assumes all vectors in col_buffers are the same size.
 // Copy 2d vector to device without flattening.
 void QueryExecutionContext::copyColBuffersToDevice(
@@ -740,6 +773,23 @@ void QueryExecutionContext::copyColBuffersToDevice(
     }
   }
 }
+
+namespace {
+KernelParamsLog::ColBuffer col_buffers_log(
+    int8_t const* const d_ptr,
+    std::vector<std::vector<int8_t const*>> const& col_buffers) {
+  KernelParamsLog::ColBuffer cb{};
+  if (size_t const n = col_buffers.size()) {
+    size_t const m = col_buffers.front().size();
+    cb.ptrs.reserve(n);
+    cb.size = m;
+    for (size_t i = 0; i < n; ++i) {
+      cb.ptrs.push_back(static_cast<void const*>(d_ptr + (n + i * m) * sizeof(int8_t*)));
+    }
+  }
+  return cb;
+}
+}  // namespace
 
 template <typename T>
 size_t QueryExecutionContext::sizeofFlattened2dVec(
@@ -802,6 +852,22 @@ int8_t* QueryExecutionContext::copyJoinHashTablesToDevice(
 }
 
 namespace {
+// If there is 1 element, return its address. If more, then return the cardinality.
+// The multiple addresses can be inferred from the device address.
+KernelParamsLog::Value join_hash_tables_log(
+    std::vector<int8_t*> const& join_hash_tables) {
+  if (join_hash_tables.empty()) {
+    return nullptr;
+  }
+  std::vector<void const*> ptrs;
+  ptrs.reserve(join_hash_tables.size());
+  std::transform(join_hash_tables.begin(),
+                 join_hash_tables.end(),
+                 std::back_inserter(ptrs),
+                 [](int8_t* ptr) { return static_cast<void const*>(ptr); });
+  return ptrs;
+}
+
 using AggModeAddrs = int64_t[1];
 using CountDistinctAddrs = int64_t[2];
 }  // namespace
@@ -877,7 +943,8 @@ void QueryExecutionContext::copyVectorToDevice(int8_t* device_ptr,
   gpu_allocator_->copyToDevice(device_ptr, vec.data(), vec.size() * sizeof(T));
 }
 
-QueryExecutionContext::KernelParams QueryExecutionContext::prepareKernelParams(
+std::pair<QueryExecutionContext::KernelParams, KernelParamsLog>
+QueryExecutionContext::prepareKernelParams(
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<int8_t>& literal_buff,
     const std::vector<std::vector<int64_t>>& num_rows,
@@ -895,54 +962,145 @@ QueryExecutionContext::KernelParams QueryExecutionContext::prepareKernelParams(
   CHECK(literal_buff.empty() || hoist_literals) << literal_buff.size();
   CHECK_EQ(num_rows.size(), col_buffers.size());
   CHECK_EQ(frag_offsets.size(), col_buffers.size());
+  KernelParamsLog params_log{};  // Log values to report in case of cuda error.
+  params_log.hoist_literals = hoist_literals;
 
   // All sizes are in number of bytes and divisible by 8 (int64_t-aligned).
+  using KP = heavyai::KernelParam;
   KernelParamSizes param_sizes;
-  param_sizes[ERROR_CODE] = align_to<8>(sizeofVector(error_codes));
-  param_sizes[TOTAL_MATCHED] = align_to<8>(sizeof(uint32_t));
-  param_sizes[GROUPBY_BUF] = 0u;
-  param_sizes[NUM_FRAGMENTS] = align_to<8>(sizeof(uint32_t));
-  param_sizes[NUM_TABLES] = align_to<8>(sizeof(num_tables));
-  param_sizes[ROW_INDEX_RESUME] = align_to<8>(sizeof(uint32_t));
-  param_sizes[COL_BUFFERS] = sizeofColBuffers(col_buffers);
-  param_sizes[LITERALS] = align_to<8>(sizeofLiterals(literal_buff));
-  param_sizes[NUM_ROWS] = sizeofFlattened2dVec(num_tables, num_rows);
-  param_sizes[FRAG_ROW_OFFSETS] = sizeofFlattened2dVec(num_tables, frag_offsets);
-  param_sizes[MAX_MATCHED] = align_to<8>(sizeof(scan_limit));
-  param_sizes[INIT_AGG_VALS] = sizeofInitAggVals(is_group_by, init_agg_vals);
-  param_sizes[JOIN_HASH_TABLES] = sizeofJoinHashTables(join_hash_tables);
-  param_sizes[ROW_FUNC_MGR] = 0u;
+  param_sizes[int(KP::ERROR_CODE)] = align_to<8>(sizeofVector(error_codes));
+  param_sizes[int(KP::TOTAL_MATCHED)] = align_to<8>(sizeof(uint32_t));
+  param_sizes[int(KP::GROUPBY_BUF)] = 0u;
+  param_sizes[int(KP::NUM_FRAGMENTS)] = align_to<8>(sizeof(uint32_t));
+  param_sizes[int(KP::NUM_TABLES)] = align_to<8>(sizeof(num_tables));
+  param_sizes[int(KP::ROW_INDEX_RESUME)] = align_to<8>(sizeof(uint32_t));
+  param_sizes[int(KP::COL_BUFFERS)] = sizeofColBuffers(col_buffers);
+  param_sizes[int(KP::LITERALS)] = align_to<8>(sizeofLiterals(literal_buff));
+  param_sizes[int(KP::NUM_ROWS)] = sizeofFlattened2dVec(num_tables, num_rows);
+  param_sizes[int(KP::FRAG_ROW_OFFSETS)] = sizeofFlattened2dVec(num_tables, frag_offsets);
+  param_sizes[int(KP::MAX_MATCHED)] = align_to<8>(sizeof(scan_limit));
+  param_sizes[int(KP::INIT_AGG_VALS)] = sizeofInitAggVals(is_group_by, init_agg_vals);
+  param_sizes[int(KP::JOIN_HASH_TABLES)] = sizeofJoinHashTables(join_hash_tables);
+  param_sizes[int(KP::ROW_FUNC_MGR)] = 0u;
   auto const nbytes = std::accumulate(param_sizes.begin(), param_sizes.end(), size_t(0));
 
   KernelParams params;
   // Allocate one block for all kernel params and set pointers based on param_sizes.
   VLOG(1) << "Prepare GPU kernel parameters: " << nbytes << " bytes";
-  params[ERROR_CODE] = gpu_allocator_->alloc(nbytes);
-  static_assert(ERROR_CODE == 0);
+  params[int(KP::ERROR_CODE)] = gpu_allocator_->alloc(nbytes);
+  params_log.ptrs[int(KP::ERROR_CODE)] =
+      static_cast<void const*>(params[int(KP::ERROR_CODE)]);
+  static_assert(int(KP::ERROR_CODE) == 0);
   for (size_t i = 1; i < params.size(); ++i) {
     params[i] = params[i - 1] + param_sizes[i - 1];
+    params_log.ptrs[i] = static_cast<void const*>(params[i]);
   }
+
+  using KPL = KernelParamsLog;
+
   // Copy data to device based on params w/ adjustments to LITERALS and JOIN_HASH_TABLES.
-  copyVectorToDevice(params[ERROR_CODE], error_codes);
-  copyValueToDevice(params[TOTAL_MATCHED], int32_t(0));
-  params[GROUPBY_BUF] = nullptr;
-  copyValueToDevice(params[NUM_FRAGMENTS], uint32_t(col_buffers.size()));
-  copyValueToDevice(params[NUM_TABLES], num_tables);
-  copyValueToDevice(params[ROW_INDEX_RESUME], uint32_t(0));
-  copyColBuffersToDevice(params[COL_BUFFERS], col_buffers);
-  params[LITERALS] = copyLiteralsToDevice(params[LITERALS], literal_buff);
-  copyFlattened2dVecToDevice(params[NUM_ROWS], num_tables, num_rows);
-  copyFlattened2dVecToDevice(params[FRAG_ROW_OFFSETS], num_tables, frag_offsets);
+  copyVectorToDevice(params[int(KP::ERROR_CODE)], error_codes);
+  params_log.values[int(KP::ERROR_CODE)] = KPL::NamedSize{"Size", error_codes.size()};
+
+  copyValueToDevice(params[int(KP::TOTAL_MATCHED)], int32_t(0));
+  params_log.values[int(KP::TOTAL_MATCHED)] = KPL::NamedSize{"Value", size_t(int32_t(0))};
+
+  params[int(KP::GROUPBY_BUF)] = nullptr;
+  params_log.ptrs[int(KP::GROUPBY_BUF)] = nullptr;
+
+  copyValueToDevice(params[int(KP::NUM_FRAGMENTS)], uint32_t(col_buffers.size()));
+  params_log.values[int(KP::NUM_FRAGMENTS)] = KPL::NamedSize{"Size", col_buffers.size()};
+
+  copyValueToDevice(params[int(KP::NUM_TABLES)], num_tables);
+  params_log.values[int(KP::NUM_TABLES)] = KPL::NamedSize{"Size", num_tables};
+
+  copyValueToDevice(params[int(KP::ROW_INDEX_RESUME)], uint32_t(0));
+  params_log.values[int(KP::ROW_INDEX_RESUME)] = KPL::NamedSize{"Value", uint32_t(0)};
+
+  copyColBuffersToDevice(params[int(KP::COL_BUFFERS)], col_buffers);
+  params_log.values[int(KP::COL_BUFFERS)] =
+      col_buffers_log(params[int(KP::COL_BUFFERS)], col_buffers);
+
+  params[int(KP::LITERALS)] =
+      copyLiteralsToDevice(params[int(KP::LITERALS)], literal_buff);
+  params_log.ptrs[int(KP::LITERALS)] =
+      static_cast<void const*>(params[int(KP::LITERALS)]);
+  params_log.values[int(KP::LITERALS)] =
+      KPL::NamedSize{"Size", sizeofLiterals(literal_buff)};
+
+  copyFlattened2dVecToDevice(params[int(KP::NUM_ROWS)], num_tables, num_rows);
+  params_log.values[int(KP::NUM_ROWS)] = num_rows;
+
+  copyFlattened2dVecToDevice(params[int(KP::FRAG_ROW_OFFSETS)], num_tables, frag_offsets);
+  params_log.values[int(KP::FRAG_ROW_OFFSETS)] = frag_offsets;
+
   // Note that this will be overwritten if we are setting the entry count during group by
   // buffer allocation and initialization
-  copyValueToDevice(params[MAX_MATCHED], scan_limit);
-  copyInitAggValsToDevice(params[INIT_AGG_VALS], is_group_by, init_agg_vals);
-  params[JOIN_HASH_TABLES] =
-      copyJoinHashTablesToDevice(params[JOIN_HASH_TABLES], join_hash_tables);
+  copyValueToDevice(params[int(KP::MAX_MATCHED)], scan_limit);
+  params_log.values[int(KP::MAX_MATCHED)] =
+      KPL::NamedSize{"ScanLimit", size_t(scan_limit)};
+
+  copyInitAggValsToDevice(params[int(KP::INIT_AGG_VALS)], is_group_by, init_agg_vals);
+  params_log.values[int(KP::INIT_AGG_VALS)] =
+      KPL::NamedSize{"Size", param_sizes[int(KP::INIT_AGG_VALS)] / sizeof(int64_t)};
+
+  params[int(KP::JOIN_HASH_TABLES)] =
+      copyJoinHashTablesToDevice(params[int(KP::JOIN_HASH_TABLES)], join_hash_tables);
+  params_log.ptrs[int(KP::JOIN_HASH_TABLES)] =
+      static_cast<void const*>(params[int(KP::JOIN_HASH_TABLES)]);
+  params_log.values[int(KP::JOIN_HASH_TABLES)] = join_hash_tables_log(join_hash_tables);
 
   // RowFunctionManager is not supported in GPU. We just keep the argument
   // to avoid diverging from CPU generated code
-  params[ROW_FUNC_MGR] = nullptr;
+  params[int(KP::ROW_FUNC_MGR)] = nullptr;
+  params_log.ptrs[int(KP::ROW_FUNC_MGR)] = nullptr;
 
-  return params;
+  return std::make_pair(std::move(params), std::move(params_log));
+}
+
+namespace {
+std::ostream& operator<<(std::ostream& os, KernelParamsLog::ColBuffer const& cb) {
+  if (cb.ptrs.empty()) {
+    os << "empty";
+  } else {
+    os << "NumFragments(" << cb.ptrs.size() << ") NumColumns(" << cb.size << ") "
+       << shared::printContainer(cb.ptrs);
+  }
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, KernelParamsLog::NamedSize const ns) {
+  return os << ns.name << '(' << ns.size << ')';
+}
+
+std::ostream& operator<<(std::ostream& os, std::vector<void const*> const& ptrs) {
+  return os << ptrs.size() << ": " << shared::printContainer(ptrs);
+}
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, std::vector<std::vector<T>> const& vec2d) {
+  if (vec2d.empty()) {
+    os << "empty";
+  } else {
+    os << vec2d.size() << " x " << vec2d.front().size() << ": "
+       << shared::printContainer(vec2d);
+  }
+  return os;
+}
+}  // namespace
+
+std::ostream& operator<<(std::ostream& os, KernelParamsLog const& kpl) {
+  using KP = heavyai::KernelParam;
+  constexpr unsigned w = 17u;          // constant width to align pointer addresses
+  bool const c = !kpl.hoist_literals;  // correction to indices after excluded LITERALS
+  os << "hoist_literals=" << kpl.hoist_literals << ", " << (int(KP::N_) - c)
+     << " kernel parameters:" << std::left;
+  // Iterate through the heavyai::KernelParam enums, possibly skipping LITERALS.
+  for (int i = 0u; i < int(KP::N_); ++i) {
+    if (kpl.hoist_literals || i != int(KP::LITERALS)) {
+      os << '\n' << std::setw(w) << static_cast<KP>(i) << kpl.ptrs[i] << ' ';
+      std::visit([&](auto const& val) { os << val; }, kpl.values[i]);
+    }
+  }
+  return os << std::right;
 }

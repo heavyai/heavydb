@@ -36,19 +36,17 @@ struct CompilationResult {
   bool output_columnar;
   std::string llvm_ir;
   GpuSharedMemoryContext gpu_smem_context;
-
- public:
-  std::string toString() const {
-    auto result = ::typeName(this) + "{";
-    result += ::toString(generated_code);
-    result += ", literal_values=" + ::toString(literal_values);
-    result += ", toString(output_columnar=" + ::toString(output_columnar);
-    result += ", llvm_ir='''\n" + ::toString(llvm_ir) + "\n'''";
-    result += ", " + ::toString(gpu_smem_context);
-    result += "}";
-    return result;
-  };
 };
+
+inline std::ostream& operator<<(std::ostream& os, CompilationResult const& cr) {
+  // clang-format off
+  return os << "generated_code(" << static_cast<void*>(cr.generated_code.get())
+            << ") literal_values(" << ::toString(cr.literal_values)
+            << ") output_columnar(" << cr.output_columnar
+            << ") gpu_smem_context(" << cr.gpu_smem_context
+            << ")\nBEGIN LLVM IR\n" << cr.llvm_ir << "END LLVM IR";
+  // clang-format on
+}
 
 class QueryCompilationDescriptor {
  public:

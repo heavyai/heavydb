@@ -52,15 +52,18 @@ class NvidiaKernel : public DeviceKernel {
     module_ptr = static_cast<CUmodule>(native_code.second);
   }
 
-  void launch(unsigned int gridDimX,
-              unsigned int gridDimY,
-              unsigned int gridDimZ,
-              unsigned int blockDimX,
-              unsigned int blockDimY,
-              unsigned int blockDimZ,
-              unsigned int sharedMemBytes,
-              void** kernelParams,
+  void launch(unsigned int grid_dim_x,
+              unsigned int grid_dim_y,
+              unsigned int grid_dim_z,
+              unsigned int block_dim_x,
+              unsigned int block_dim_y,
+              unsigned int block_dim_z,
+              CompilationResult const& compilation_result,
+              void** kernel_params,
+              KernelParamsLog const& kernel_params_log,
               bool optimize_block_and_grid_sizes) override {
+    size_t const shared_memory_size =
+        compilation_result.gpu_smem_context.getSharedMemorySize();
     auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
     if (optimize_block_and_grid_sizes) {
       int recommended_block_size;
@@ -69,34 +72,48 @@ class NvidiaKernel : public DeviceKernel {
                                                        &recommended_block_size,
                                                        function_ptr,
                                                        nullptr,
-                                                       sharedMemBytes,
+                                                       shared_memory_size,
                                                        0));
-      if (static_cast<unsigned int>(recommended_block_size) != blockDimX) {
+      if (static_cast<unsigned int>(recommended_block_size) != block_dim_x) {
         VLOG(1) << "Apply a recommended CUDA block size: " << recommended_block_size
-                << " (current: " << blockDimX << ")";
-        blockDimX = recommended_block_size;
+                << " (current: " << block_dim_x << ")";
+        block_dim_x = recommended_block_size;
       }
-      if (static_cast<unsigned int>(recommended_grid_size) != gridDimX) {
+      if (static_cast<unsigned int>(recommended_grid_size) != grid_dim_x) {
         VLOG(1) << "Apply a recommended CUDA grid size: " << recommended_grid_size
-                << " (current: " << gridDimX << ")";
-        gridDimX = recommended_grid_size;
+                << " (current: " << grid_dim_x << ")";
+        grid_dim_x = recommended_grid_size;
       }
     }
     VLOG(1) << "Launch GPU kernel on device " << device_id
-            << " compiled with the following grid and block sizes: " << gridDimX
-            << " and " << blockDimX;
+            << " compiled with the following grid and block sizes: " << grid_dim_x
+            << " and " << block_dim_x;
     checkCudaErrors(cuLaunchKernel(function_ptr,
-                                   gridDimX,
-                                   gridDimY,
-                                   gridDimZ,
-                                   blockDimX,
-                                   blockDimY,
-                                   blockDimZ,
-                                   sharedMemBytes,
+                                   grid_dim_x,
+                                   grid_dim_y,
+                                   grid_dim_z,
+                                   block_dim_x,
+                                   block_dim_y,
+                                   block_dim_z,
+                                   shared_memory_size,
                                    qe_cuda_stream,
-                                   kernelParams,
+                                   kernel_params,
                                    nullptr));
-    checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
+    CUresult const cu_result = cuStreamSynchronize(qe_cuda_stream);
+    LOG_IF(FATAL, cu_result != CUDA_SUCCESS)
+        << DeviceKernelLaunchErrorLogDump{cu_result,
+                                          this,
+                                          grid_dim_x,
+                                          grid_dim_y,
+                                          grid_dim_z,
+                                          block_dim_x,
+                                          block_dim_y,
+                                          block_dim_z,
+                                          compilation_result,
+                                          qe_cuda_stream,
+                                          kernel_params,
+                                          kernel_params_log,
+                                          optimize_block_and_grid_sizes};
   }
 
   void initializeDynamicWatchdog(bool could_interrupt, uint64_t cycle_budget) override {
@@ -196,7 +213,35 @@ class NvidiaKernel : public DeviceKernel {
   CUmodule module_ptr;
   int device_id;
   std::string name_;
+
+  friend std::ostream& operator<<(std::ostream&, DeviceKernelLaunchErrorLogDump const&);
 };
+
+// Assumes DeviceKernelLaunchErrorLogDump is logged on FATAL severity.
+// Log any information that can help diagnose the cause of the CUDA error.
+std::ostream& operator<<(std::ostream& os, DeviceKernelLaunchErrorLogDump const& ld) {
+  // clang-format off
+  os << CudaErrorLog{ld.cu_result}
+     << "\ngrid_dim_x(" << ld.grid_dim_x
+     << ") grid_dim_y(" << ld.grid_dim_y
+     << ") grid_dim_z(" << ld.grid_dim_z
+     << ") block_dim_x(" << ld.block_dim_x
+     << ") block_dim_y(" << ld.block_dim_y
+     << ") block_dim_z(" << ld.block_dim_z
+     << ") qe_cuda_stream(" << static_cast<void*>(ld.qe_cuda_stream)
+     << ") optimize_block_and_grid_sizes(" << ld.optimize_block_and_grid_sizes
+     << ')';
+  if (auto* nvidia_kernel = dynamic_cast<NvidiaKernel*>(ld.device_kernel)) {
+    os << "\nfunction_ptr(" << static_cast<void*>(nvidia_kernel->function_ptr)
+       << ") module_ptr(" << static_cast<void*>(nvidia_kernel->module_ptr)
+       << ") device_id(" << nvidia_kernel->device_id
+       << ") name_(" << nvidia_kernel->name_
+       << ')';
+  }
+  return os << '\n' << "kernel_params_log(" << ld.kernel_params_log << ')'
+            << '\n' << "compilation_result(" << ld.compilation_result << ')';
+  // clang-format on
+}
 #endif
 
 std::unique_ptr<DeviceKernel> create_device_kernel(const CompilationContext* ctx,
