@@ -386,6 +386,9 @@ int8_t* CudaMgr::allocateDeviceMem(const size_t num_bytes,
       device_ptr, padded_num_bytes, handle, device_uuid, device_num, is_slab);
   // notify
   getDeviceMemoryAllocationMap().notifyMapChanged(device_uuid, is_slab);
+  VLOG(1) << "Allocate GPU memory: address: " << reinterpret_cast<void*>(device_ptr)
+          << ", requested: " << num_bytes << " bytes, allocated: " << padded_num_bytes
+          << ", device id: " << device_num << ", slab? " << is_slab;
   return reinterpret_cast<int8_t*>(device_ptr);
 }
 
@@ -406,6 +409,11 @@ void CudaMgr::freeDeviceMem(int8_t* device_ptr) {
   // notify
   getDeviceMemoryAllocationMap().notifyMapChanged(allocation.device_uuid,
                                                   allocation.is_slab);
+  std::ostringstream oss;
+  oss << "Deallocate GPU memory: address: " << static_cast<void*>(device_ptr)
+      << ", size: " << allocation.size << ", device id: " << allocation.device_num
+      << ", slab? " << allocation.is_slab;
+  VLOG(1) << oss.str();
 }
 
 void CudaMgr::zeroDeviceMem(int8_t* device_ptr,
