@@ -19,8 +19,6 @@ RUN yum install -y \
         zlib-devel \
         epel-release \
         libssh \
-        openssl-devel \
-        ncurses-devel \
         git \
         maven \
         java-1.8.0-openjdk-devel \
@@ -28,11 +26,9 @@ RUN yum install -y \
         gperftools \
         gperftools-devel \
         gperftools-libs \
-        python-devel \
         wget \
         curl \
         sudo \
-        openldap-devel \
         libX11-devel \
         mesa-libGL-devel \
         environment-modules \
