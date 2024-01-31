@@ -112,13 +112,15 @@ void TreeModelPredictionMgr::createKernelBuffers() {
                          reinterpret_cast<CUdeviceptr>(decision_tree_table_device_buffer),
                          reinterpret_cast<const int8_t*>(host_decision_tree_table_),
                          decision_tree_table_size_bytes_,
-                         device_id);
+                         device_id,
+                         "Tree model decision tree buffer");
       copy_to_nvidia_gpu(
           data_mgr_,
           reinterpret_cast<CUdeviceptr>(decision_tree_offsets_device_buffer),
           reinterpret_cast<const int8_t*>(host_decision_tree_offsets_),
           decision_tree_offsets_size_bytes_,
-          device_id);
+          device_id,
+          "Tree model decision tree offset");
       kernel_decision_tree_tables_.push_back(decision_tree_table_device_buffer);
       kernel_decision_tree_offsets_.push_back(decision_tree_offsets_device_buffer);
     }

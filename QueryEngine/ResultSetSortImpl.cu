@@ -117,7 +117,8 @@ thrust::device_ptr<T> get_device_copy_ptr(const thrust::host_vector<T>& host_vec
                      reinterpret_cast<CUdeviceptr>(dev_ptr),
                      &host_vec[0],
                      host_vec_bytes,
-                     thrust_allocator.getDeviceId());
+                     thrust_allocator.getDeviceId(),
+                     "thrust buffer");
   return thrust::device_ptr<T>(dev_ptr);
 }
 

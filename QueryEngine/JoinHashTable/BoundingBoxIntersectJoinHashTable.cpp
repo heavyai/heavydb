@@ -213,12 +213,14 @@ std::vector<double> compute_bucket_sizes(
     auto data_mgr = executor->getDataMgr();
     CudaAllocator allocator(
         data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-    auto device_bucket_sizes_gpu =
-        transfer_vector_of_flat_objects_to_gpu(bucket_sizes, allocator);
-    auto join_column_gpu = transfer_flat_object_to_gpu(join_column, allocator);
-    auto join_column_type_gpu = transfer_flat_object_to_gpu(join_column_type, allocator);
-    auto device_bucket_thresholds_gpu =
-        transfer_vector_of_flat_objects_to_gpu(bucket_thresholds, allocator);
+    auto device_bucket_sizes_gpu = transfer_vector_of_flat_objects_to_gpu(
+        bucket_sizes, allocator, "Boundingbox join hashtable bucket sizes");
+    auto join_column_gpu = transfer_flat_object_to_gpu(
+        join_column, allocator, "Boundingbox hash join input column(s)");
+    auto join_column_type_gpu = transfer_flat_object_to_gpu(
+        join_column_type, allocator, "Boundingbox hash join input column type(s)");
+    auto device_bucket_thresholds_gpu = transfer_vector_of_flat_objects_to_gpu(
+        bucket_thresholds, allocator, "Boundingbox join hashtable bucket thresholds");
 
     compute_bucket_sizes_on_device(device_bucket_sizes_gpu,
                                    join_column_gpu,
@@ -226,7 +228,8 @@ std::vector<double> compute_bucket_sizes(
                                    device_bucket_thresholds_gpu);
     allocator.copyFromDevice(reinterpret_cast<int8_t*>(bucket_sizes.data()),
                              reinterpret_cast<int8_t*>(device_bucket_sizes_gpu),
-                             bucket_sizes.size() * sizeof(double));
+                             bucket_sizes.size() * sizeof(double),
+                             "Boundingbox join hashtable bucket sizes");
   }
 #endif
   const auto corrected_bucket_sizes = correct_uninitialized_bucket_sizes_to_thresholds(
@@ -1103,7 +1106,9 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCou
               getQueryEngineCudaStreamForDevice(device_id));
           const auto& columns_for_device = columns_per_device[device_id];
           auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
-              columns_for_device.join_columns, *allocator);
+              columns_for_device.join_columns,
+              *allocator,
+              "Boundingbox hash join input column(s)");
 
           CHECK_GT(columns_for_device.join_buckets.size(), 0u);
           const auto& inverse_bucket_sizes_for_dimension =
@@ -1113,7 +1118,8 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCou
           allocator->copyToDevice(
               inverse_bucket_sizes_gpu,
               inverse_bucket_sizes_for_dimension.data(),
-              inverse_bucket_sizes_for_dimension.size() * sizeof(double));
+              inverse_bucket_sizes_for_dimension.size() * sizeof(double),
+              "Boundingbox join hashtable inverse bucket sizes");
           const size_t row_counts_buffer_sz =
               columns_per_device.front().join_columns[0].num_elems * sizeof(int32_t);
           auto row_counts_buffer = allocator->alloc(row_counts_buffer_sz);
@@ -1126,8 +1132,8 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCou
               inverse_bucket_sizes_for_dimension.size(),
               join_columns_gpu,
               reinterpret_cast<double*>(inverse_bucket_sizes_gpu));
-          const auto key_handler_gpu =
-              transfer_flat_object_to_gpu(key_handler, *allocator);
+          const auto key_handler_gpu = transfer_flat_object_to_gpu(
+              key_handler, *allocator, "Boundingbox hash join key handler");
           approximate_distinct_tuples_on_device_bbox_intersect(
               reinterpret_cast<uint8_t*>(device_hll_buffer),
               count_distinct_desc.bitmap_sz_bits,
@@ -1141,12 +1147,14 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCou
               row_counts_buffer +
                   (columns_per_device.front().join_columns[0].num_elems - 1) *
                       sizeof(int32_t),
-              sizeof(int32_t));
+              sizeof(int32_t),
+              "Boundingbox join hashtable emitted keys count");
 
           auto& host_hll_buffer = host_hll_buffers[device_id];
           allocator->copyFromDevice(&host_hll_buffer[0],
                                     device_hll_buffer,
-                                    count_distinct_desc.bitmapPaddedSizeBytes());
+                                    count_distinct_desc.bitmapPaddedSizeBytes(),
+                                    "Boundingbox join hashtable hyperloglog buffer");
         }));
   }
   for (auto& child : approximate_distinct_device_threads) {
@@ -1417,13 +1425,16 @@ std::shared_ptr<BaselineHashTable> BoundingBoxIntersectJoinHashTable::initHashTa
   auto data_mgr = executor_->getDataMgr();
   CudaAllocator allocator(
       data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-  auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
+  auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
+      join_columns, allocator, "Boundingbox hash join input column(s)");
   CHECK_EQ(join_columns.size(), 1u);
   CHECK(!join_bucket_info.empty());
   auto& inverse_bucket_sizes_for_dimension =
       join_bucket_info[0].inverse_bucket_sizes_for_dimension;
-  auto inverse_bucket_sizes_gpu = transfer_vector_of_flat_objects_to_gpu(
-      inverse_bucket_sizes_for_dimension, allocator);
+  auto inverse_bucket_sizes_gpu =
+      transfer_vector_of_flat_objects_to_gpu(inverse_bucket_sizes_for_dimension,
+                                             allocator,
+                                             "Boundingbox join hashtable bucket sizes");
   const auto key_handler =
       BoundingBoxIntersectKeyHandler(inverse_bucket_sizes_for_dimension.size(),
                                      join_columns_gpu,
@@ -1468,7 +1479,8 @@ BoundingBoxIntersectJoinHashTable::copyCpuHashTableToGpu(
   device_allocator->copyToDevice(
       gpu_buffer_ptr,
       cpu_hash_table->getCpuBuffer(),
-      cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU));
+      cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
+      "Boundingbox join hashtable");
   return gpu_hash_table;
 }
 
@@ -1774,7 +1786,8 @@ std::string BoundingBoxIntersectJoinHashTable::toString(
     auto device_allocator = std::make_unique<CudaAllocator>(
         data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
 
-    device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
+    device_allocator->copyFromDevice(
+        buffer_copy.get(), buffer, buffer_size, "Boundingbox join hashtable");
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else
@@ -1815,7 +1828,8 @@ std::set<DecodedJoinHashBufferEntry> BoundingBoxIntersectJoinHashTable::toSet(
     auto allocator = std::make_unique<CudaAllocator>(
         data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
 
-    allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
+    allocator->copyFromDevice(
+        buffer_copy.get(), buffer, buffer_size, "Boundingbox join hashtable");
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else

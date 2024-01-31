@@ -1089,8 +1089,10 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
   }
 
   auto dev_ptr = device_allocator_->alloc(thread_count * sizeof(int8_t*));
-  device_allocator_->copyToDevice(
-      dev_ptr, dev_buffers.data(), thread_count * sizeof(int8_t*));
+  device_allocator_->copyToDevice(dev_ptr,
+                                  dev_buffers.data(),
+                                  thread_count * sizeof(int8_t*),
+                                  "Streaming Top-N buffer ptrs");
 
   CHECK(query_mem_desc.lazyInitGroups(ExecutorDeviceType::GPU));
 
@@ -1192,8 +1194,10 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
         compact_col_widths[idx] = query_mem_desc.getPaddedSlotWidthBytes(idx);
       }
       col_widths_dev_ptr = device_allocator_->alloc(col_count * sizeof(int8_t));
-      device_allocator_->copyToDevice(
-          col_widths_dev_ptr, compact_col_widths.data(), col_count * sizeof(int8_t));
+      device_allocator_->copyToDevice(col_widths_dev_ptr,
+                                      compact_col_widths.data(),
+                                      col_count * sizeof(int8_t),
+                                      "Compact column widths");
     }
     const int8_t warp_count =
         query_mem_desc.interleavedBins(ExecutorDeviceType::GPU) ? warp_size : 1;
@@ -1271,8 +1275,10 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
     dev_buffers[col_idx] = dev_buffers_allocation + col_byte_offsets[col_idx];
   }
   auto dev_ptrs = device_allocator_->alloc(num_columns * sizeof(CUdeviceptr));
-  device_allocator_->copyToDevice(
-      dev_ptrs, dev_buffers.data(), num_columns * sizeof(CUdeviceptr));
+  device_allocator_->copyToDevice(dev_ptrs,
+                                  dev_buffers.data(),
+                                  num_columns * sizeof(CUdeviceptr),
+                                  "Table function input column ptrs");
 
   return {dev_ptrs, dev_buffers_mem, (size_t)num_rows_};
 }
@@ -1306,7 +1312,8 @@ void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
     const size_t output_host_col_size = entry_count * col_width;
     allocator->copyFromDevice(host_buffer + output_host_col_offset,
                               dev_buffer + output_device_col_offset,
-                              output_host_col_size);
+                              output_host_col_size,
+                              "Table function output column buffer");
     output_device_col_offset =
         align_to_int64(output_device_col_offset + output_device_col_size);
     output_host_col_offset =

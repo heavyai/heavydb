@@ -97,16 +97,19 @@ class CudaMgr {
                         const int8_t* host_ptr,
                         const size_t num_bytes,
                         const int device_num,
+                        std::string_view tag,
                         CUstream cuda_stream = 0);
   void copyDeviceToHost(int8_t* host_ptr,
                         const int8_t* device_ptr,
                         const size_t num_bytes,
+                        std::string_view tag,
                         CUstream cuda_stream = 0);
   void copyDeviceToDevice(int8_t* dest_ptr,
                           int8_t* src_ptr,
                           const size_t num_bytes,
                           const int dest_device_num,
                           const int src_device_num,
+                          std::string_view tag,
                           CUstream cuda_stream = 0);
 
   int8_t* allocatePinnedHostMem(const size_t num_bytes);
@@ -243,7 +246,8 @@ class CudaMgr {
 
   DeviceMemoryAllocationMap& getDeviceMemoryAllocationMap();
   int exportHandle(const uint64_t handle) const;
-
+  void enableMemoryActivityLog();
+  bool logMemoryActivity() const;
 #endif
 
  private:
@@ -254,6 +258,8 @@ class CudaMgr {
   size_t computeMinSharedMemoryPerBlockForAllDevices() const;
   size_t computeMinNumMPsForAllDevices() const;
   void checkError(CUresult cu_result) const;
+  int getDeviceNumFromDevicePtr(CUdeviceptr cu_device_ptr,
+                                const size_t allocated_mem_bytes);
 
   int gpu_driver_version_;
 #endif
@@ -268,6 +274,7 @@ class CudaMgr {
   mutable std::mutex device_mutex_;
 
 #ifdef HAVE_CUDA
+  bool log_memory_activity_;
   DeviceMemoryAllocationMapUqPtr device_memory_allocation_map_;
 #endif
 };

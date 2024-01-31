@@ -1155,7 +1155,8 @@ void PerfectJoinHashTable::copyCpuHashTableToGpu(
     device_allocator->copyToDevice(
         gpu_buffer_ptr,
         cpu_hash_table->getCpuBuffer(),
-        cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU));
+        cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
+        "Perfect join hashtable");
   }
   CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
   hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
@@ -1178,7 +1179,8 @@ std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
     auto data_mgr = executor_->getDataMgr();
     auto device_allocator = std::make_unique<CudaAllocator>(
         data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-    device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
+    device_allocator->copyFromDevice(
+        buffer_copy.get(), buffer, buffer_size, "Perfect join hashtable");
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else
@@ -1214,7 +1216,8 @@ std::set<DecodedJoinHashBufferEntry> PerfectJoinHashTable::toSet(
     auto data_mgr = executor_->getDataMgr();
     auto device_allocator = std::make_unique<CudaAllocator>(
         data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-    device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
+    device_allocator->copyFromDevice(
+        buffer_copy.get(), buffer, buffer_size, "Perfect join hashtable");
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else

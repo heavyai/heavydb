@@ -47,9 +47,15 @@ Data_Namespace::AbstractBuffer* CudaAllocator::allocGpuAbstractBuffer(
   CHECK(data_mgr);
   auto ab = data_mgr->alloc(Data_Namespace::GPU_LEVEL, device_id, num_bytes);
   CHECK_EQ(ab->getPinCount(), 1);
-  VLOG(1) << "DataMgr allocating GPU memory: " << num_bytes
-          << " bytes (address: " << static_cast<void*>(ab->getMemoryPtr()) << ", device-"
-          << device_id << ")";
+#ifdef HAVE_CUDA
+  auto cuda_mgr = data_mgr->getCudaMgr();
+  CHECK(cuda_mgr);
+  if (cuda_mgr->logMemoryActivity()) {
+    VLOG(1) << "DataMgr allocating GPU memory: " << num_bytes
+            << " bytes (address: " << static_cast<void*>(ab->getMemoryPtr())
+            << ", device-" << device_id << ")";
+  }
+#endif
   return ab;
 }
 
@@ -57,9 +63,15 @@ void CudaAllocator::freeGpuAbstractBuffer(Data_Namespace::DataMgr* data_mgr,
                                           Data_Namespace::AbstractBuffer* ab) {
   CHECK(data_mgr);
   data_mgr->free(ab);
-  VLOG(1) << "DataMgr freeing GPU memory: " << ab->size()
-          << " bytes (address: " << static_cast<void*>(ab->getMemoryPtr()) << ", device-"
-          << ab->getDeviceId() << ")";
+#ifdef HAVE_CUDA
+  auto cuda_mgr = data_mgr->getCudaMgr();
+  CHECK(cuda_mgr);
+  if (cuda_mgr->logMemoryActivity()) {
+    VLOG(1) << "DataMgr freeing GPU memory: " << ab->size()
+            << " bytes (address: " << static_cast<void*>(ab->getMemoryPtr())
+            << ", device-" << ab->getDeviceId() << ")";
+  }
+#endif
 }
 
 int8_t* CudaAllocator::alloc(const size_t num_bytes) {
@@ -71,27 +83,35 @@ int8_t* CudaAllocator::alloc(const size_t num_bytes) {
 
 void CudaAllocator::free(Data_Namespace::AbstractBuffer* ab) const {
   data_mgr_->free(ab);
-  VLOG(1) << "DataMgr freeing GPU memory: " << ab->size()
-          << " bytes (address: " << static_cast<void*>(ab->getMemoryPtr()) << ", device-"
-          << ab->getDeviceId() << ")";
+#ifdef HAVE_CUDA
+  auto cuda_mgr = data_mgr_->getCudaMgr();
+  CHECK(cuda_mgr);
+  if (ab->getType() == MemoryLevel::GPU_LEVEL && cuda_mgr->logMemoryActivity()) {
+    VLOG(1) << "DataMgr freeing GPU memory: " << ab->size()
+            << " bytes (address: " << static_cast<void*>(ab->getMemoryPtr())
+            << ", device-" << ab->getDeviceId() << ")";
+  }
+#endif
 }
 
 void CudaAllocator::copyToDevice(void* device_dst,
                                  const void* host_src,
-                                 const size_t num_bytes) const {
+                                 const size_t num_bytes,
+                                 std::string_view tag) const {
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   CHECK(cuda_mgr);
   cuda_mgr->copyHostToDevice(
-      (int8_t*)device_dst, (int8_t*)host_src, num_bytes, device_id_, cuda_stream_);
+      (int8_t*)device_dst, (int8_t*)host_src, num_bytes, device_id_, tag, cuda_stream_);
 }
 
 void CudaAllocator::copyFromDevice(void* host_dst,
                                    const void* device_src,
-                                   const size_t num_bytes) const {
+                                   const size_t num_bytes,
+                                   std::string_view tag) const {
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   CHECK(cuda_mgr);
   cuda_mgr->copyDeviceToHost(
-      (int8_t*)host_dst, (int8_t*)device_src, num_bytes, cuda_stream_);
+      (int8_t*)host_dst, (int8_t*)device_src, num_bytes, tag, cuda_stream_);
 }
 
 void CudaAllocator::zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const {
