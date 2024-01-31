@@ -156,7 +156,8 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
                          reinterpret_cast<CUdeviceptr>(device_buffer),
                          data(),
                          translation_map_size_bytes,
-                         device_id);
+                         device_id,
+                         "Dictionary translation buffer");
       kernel_translation_maps_.push_back(device_buffer);
     }
   }

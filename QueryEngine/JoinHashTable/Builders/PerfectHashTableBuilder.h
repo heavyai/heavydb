@@ -87,7 +87,8 @@ class PerfectJoinHashTableBuilder {
     int err{0};
     auto allocator = std::make_unique<CudaAllocator>(
         data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-    allocator->copyToDevice(dev_err_buff, &err, sizeof(err));
+    allocator->copyToDevice(
+        dev_err_buff, &err, sizeof(err), "Perfect join hashtable error buffer");
     CHECK(hash_table_);
     auto gpu_hash_table_buff = hash_table_->getGpuBuffer();
     {
@@ -171,7 +172,8 @@ class PerfectJoinHashTableBuilder {
         hash_table_fill_func(one_to_many_args);
       }
     }
-    allocator->copyFromDevice(&err, dev_err_buff, sizeof(err));
+    allocator->copyFromDevice(
+        &err, dev_err_buff, sizeof(err), "Baseline join hashtable error code");
     if (err) {
       if (hash_table_entry_info.getHashTableLayout() == HashType::OneToOne) {
         throw NeedsOneToManyHash();

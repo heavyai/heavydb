@@ -274,8 +274,10 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
       CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level);
       CHECK(allocator);
       auto chunk_iter_gpu = allocator->alloc(sizeof(ChunkIter));
-      allocator->copyToDevice(
-          chunk_iter_gpu, reinterpret_cast<int8_t*>(&chunk_iter), sizeof(ChunkIter));
+      allocator->copyToDevice(chunk_iter_gpu,
+                              reinterpret_cast<int8_t*>(&chunk_iter),
+                              sizeof(ChunkIter),
+                              "Chunk iterator");
       return chunk_iter_gpu;
     }
   } else {
@@ -412,8 +414,10 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
           // we just need to copy it to each device
           // chunk_iter already contains correct buffer addr depending on execution device
           auto chunk_iter_gpu = device_allocator->alloc(sizeof(ChunkIter));
-          device_allocator->copyToDevice(
-              chunk_iter_gpu, getChunkiter(col_desc, device_id), sizeof(ChunkIter));
+          device_allocator->copyToDevice(chunk_iter_gpu,
+                                         getChunkiter(col_desc, device_id),
+                                         sizeof(ChunkIter),
+                                         "Chunk iterator");
           return chunk_iter_gpu;
         }
       }
@@ -574,7 +578,7 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
     // so we need to copy this chunk_iter to each device explicitly
     auto chunk_iter_gpu = device_allocator->alloc(sizeof(ChunkIter));
     device_allocator->copyToDevice(
-        chunk_iter_gpu, merged_chunk_iter_ptr, sizeof(ChunkIter));
+        chunk_iter_gpu, merged_chunk_iter_ptr, sizeof(ChunkIter), "Chunk iterator");
     return chunk_iter_gpu;
   }
 }
@@ -858,7 +862,7 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
           memcpy((void*)dest, src, buf_size);
         } else {
           CHECK(memory_level == Data_Namespace::GPU_LEVEL);
-          device_allocator->copyToDevice(dest, src, buf_size);
+          device_allocator->copyToDevice(dest, src, buf_size, "Linearized column buffer");
         }
       };
   {
@@ -1007,7 +1011,8 @@ const int8_t* ColumnFetcher::transferColumnIfNeeded(
     }
     CHECK(device_allocator);
     auto gpu_col_buffer = device_allocator->alloc(num_bytes);
-    device_allocator->copyToDevice(gpu_col_buffer, col_buffers[col_id], num_bytes);
+    device_allocator->copyToDevice(
+        gpu_col_buffer, col_buffers[col_id], num_bytes, "Columnarized column buffer");
     return gpu_col_buffer;
   }
   return col_buffers[col_id];

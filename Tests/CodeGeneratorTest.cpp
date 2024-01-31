@@ -178,10 +178,14 @@ TEST(CodeGeneratorTest, IntegerConstantGPU) {
     cuLaunchKernel(func_ptr, 1, 1, 1, 1, 1, 1, 0, nullptr, &param_ptrs[0], nullptr);
     int32_t host_err;
     int32_t host_out;
-    code_generator.getCudaMgr()->copyDeviceToHost(
-        reinterpret_cast<int8_t*>(&host_err), reinterpret_cast<const int8_t*>(err), 4);
-    code_generator.getCudaMgr()->copyDeviceToHost(
-        reinterpret_cast<int8_t*>(&host_out), reinterpret_cast<const int8_t*>(out), 4);
+    code_generator.getCudaMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_err),
+                                                  reinterpret_cast<const int8_t*>(err),
+                                                  4,
+                                                  "");
+    code_generator.getCudaMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_out),
+                                                  reinterpret_cast<const int8_t*>(out),
+                                                  4,
+                                                  "");
 
     ASSERT_EQ(host_err, 0);
     ASSERT_EQ(host_out, d.intval);
@@ -222,10 +226,14 @@ TEST(CodeGeneratorTest, IntegerAddGPU) {
     cuLaunchKernel(func_ptr, 1, 1, 1, 1, 1, 1, 0, nullptr, &param_ptrs[0], nullptr);
     int32_t host_err;
     int32_t host_out;
-    code_generator.getCudaMgr()->copyDeviceToHost(
-        reinterpret_cast<int8_t*>(&host_err), reinterpret_cast<const int8_t*>(err), 4);
-    code_generator.getCudaMgr()->copyDeviceToHost(
-        reinterpret_cast<int8_t*>(&host_out), reinterpret_cast<const int8_t*>(out), 4);
+    code_generator.getCudaMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_err),
+                                                  reinterpret_cast<const int8_t*>(err),
+                                                  4,
+                                                  "");
+    code_generator.getCudaMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_out),
+                                                  reinterpret_cast<const int8_t*>(out),
+                                                  4,
+                                                  "");
 
     ASSERT_EQ(host_err, 0);
     ASSERT_EQ(host_out, d.intval + d.intval);
@@ -268,17 +276,22 @@ TEST(CodeGeneratorTest, IntegerColumnGPU) {
         reinterpret_cast<int8_t*>(in),
         reinterpret_cast<const int8_t*>(&host_in),
         4,
-        gpu_idx);
+        gpu_idx,
+        "");
     param_ptrs.push_back(&err);
     param_ptrs.push_back(&out);
     param_ptrs.push_back(&in);
     cuLaunchKernel(func_ptr, 1, 1, 1, 1, 1, 1, 0, nullptr, &param_ptrs[0], nullptr);
     int32_t host_err;
     int32_t host_out;
-    code_generator.getCudaMgr()->copyDeviceToHost(
-        reinterpret_cast<int8_t*>(&host_err), reinterpret_cast<const int8_t*>(err), 4);
-    code_generator.getCudaMgr()->copyDeviceToHost(
-        reinterpret_cast<int8_t*>(&host_out), reinterpret_cast<const int8_t*>(out), 4);
+    code_generator.getCudaMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_err),
+                                                  reinterpret_cast<const int8_t*>(err),
+                                                  4,
+                                                  "");
+    code_generator.getCudaMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_out),
+                                                  reinterpret_cast<const int8_t*>(out),
+                                                  4,
+                                                  "");
 
     ASSERT_EQ(host_err, 0);
     ASSERT_EQ(host_out, 17);
@@ -325,17 +338,22 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
         reinterpret_cast<int8_t*>(in),
         reinterpret_cast<const int8_t*>(&host_in),
         4,
-        gpu_idx);
+        gpu_idx,
+        "");
     param_ptrs.push_back(&err);
     param_ptrs.push_back(&out);
     param_ptrs.push_back(&in);
     cuLaunchKernel(func_ptr, 1, 1, 1, 1, 1, 1, 0, nullptr, &param_ptrs[0], nullptr);
     int32_t host_err;
     int32_t host_out;
-    code_generator.getCudaMgr()->copyDeviceToHost(
-        reinterpret_cast<int8_t*>(&host_err), reinterpret_cast<const int8_t*>(err), 4);
-    code_generator.getCudaMgr()->copyDeviceToHost(
-        reinterpret_cast<int8_t*>(&host_out), reinterpret_cast<const int8_t*>(out), 4);
+    code_generator.getCudaMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_err),
+                                                  reinterpret_cast<const int8_t*>(err),
+                                                  4,
+                                                  "");
+    code_generator.getCudaMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_out),
+                                                  reinterpret_cast<const int8_t*>(out),
+                                                  4,
+                                                  "");
 
     ASSERT_EQ(host_err, 0);
     ASSERT_EQ(host_out, 100);

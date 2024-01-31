@@ -524,13 +524,15 @@ class BaselineJoinHashTableBuilder {
     auto allocator = std::make_unique<CudaAllocator>(
         data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     auto dev_err_buff = allocator->alloc(sizeof(int));
-    allocator->copyToDevice(dev_err_buff, &err, sizeof(err));
+    allocator->copyToDevice(
+        dev_err_buff, &err, sizeof(err), "Baseline join hashtable error buffer");
     auto gpu_hash_table_buff = hash_table_->getGpuBuffer();
     CHECK(gpu_hash_table_buff);
     const bool for_semi_join =
         (join_type == JoinType::SEMI || join_type == JoinType::ANTI) &&
         hash_table_layout == HashType::OneToOne;
-    const auto key_handler_gpu = transfer_flat_object_to_gpu(*key_handler, *allocator);
+    const auto key_handler_gpu = transfer_flat_object_to_gpu(
+        *key_handler, *allocator, "Baseline hash join key handler");
     {
       auto timer_init = DEBUG_TIMER("Initialize GPU Baseline Join Hash Table");
       switch (hash_table_entry_info.getJoinKeysSize()) {
@@ -567,7 +569,8 @@ class BaselineJoinHashTableBuilder {
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
             join_columns.front().num_elems);
-        allocator->copyFromDevice(&err, dev_err_buff, sizeof(err));
+        allocator->copyFromDevice(
+            &err, dev_err_buff, sizeof(err), "Baseline join hashtable error code");
         break;
       }
       case 8: {
@@ -581,7 +584,8 @@ class BaselineJoinHashTableBuilder {
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
             join_columns.front().num_elems);
-        allocator->copyFromDevice(&err, dev_err_buff, sizeof(err));
+        allocator->copyFromDevice(
+            &err, dev_err_buff, sizeof(err), "Baseline join hashtable error code");
         break;
       }
       default:

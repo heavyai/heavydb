@@ -709,8 +709,10 @@ void ResultSet::syncEstimatorBuffer() const {
   auto device_buffer_ptr = device_estimator_buffer_->getMemoryPtr();
   auto allocator = std::make_unique<CudaAllocator>(
       data_mgr_, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
-  allocator->copyFromDevice(
-      host_estimator_buffer_, device_buffer_ptr, estimator_->getBufferSize());
+  allocator->copyFromDevice(host_estimator_buffer_,
+                            device_buffer_ptr,
+                            estimator_->getBufferSize(),
+                            "Estimator buffer");
 }
 
 void ResultSet::setQueueTime(const int64_t queue_time) {

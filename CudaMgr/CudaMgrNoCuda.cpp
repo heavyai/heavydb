@@ -43,12 +43,14 @@ void CudaMgr::copyHostToDevice(int8_t* device_ptr,
                                const int8_t* host_ptr,
                                const size_t num_bytes,
                                const int device_num,
+                               std::string_view tag,
                                CUstream cuda_stream) {
   CHECK(false);
 }
 void CudaMgr::copyDeviceToHost(int8_t* host_ptr,
                                const int8_t* device_ptr,
                                const size_t num_bytes,
+                               std::string_view tag,
                                CUstream cuda_stream) {
   CHECK(false);
 }
@@ -57,6 +59,7 @@ void CudaMgr::copyDeviceToDevice(int8_t* dest_ptr,
                                  const size_t num_bytes,
                                  const int dest_device_num,
                                  const int src_device_num,
+                                 std::string_view tag,
                                  CUstream cuda_stream) {
   CHECK(false);
 }

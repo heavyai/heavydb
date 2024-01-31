@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -50,7 +51,8 @@ void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
                         CUdeviceptr dst,
                         const void* src,
                         const size_t num_bytes,
-                        const int device_id);
+                        const int device_id,
+                        std::string_view tag);
 
 struct GpuGroupByBuffers {
   int8_t* ptrs;  // ptrs for individual outputs

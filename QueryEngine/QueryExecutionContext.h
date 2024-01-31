@@ -136,7 +136,8 @@ class QueryExecutionContext : boost::noncopyable {
   template <typename T>
   void copyFlattened2dVecToDevice(int8_t* device_ptr,
                                   uint32_t const expected_subvector_size,
-                                  std::vector<std::vector<T>> const& vec2d) const;
+                                  std::vector<std::vector<T>> const& vec2d,
+                                  std::string_view tag) const;
 
   size_t sizeofInitAggVals(bool const is_group_by,
                            std::vector<int64_t> const& init_agg_vals) const;
@@ -155,12 +156,14 @@ class QueryExecutionContext : boost::noncopyable {
                                std::vector<int8_t> const& literal_buff) const;
 
   template <typename T>
-  void copyValueToDevice(int8_t* device_ptr, T const value) const;
+  void copyValueToDevice(int8_t* device_ptr, T const value, std::string_view tag) const;
 
   template <typename T>
   size_t sizeofVector(std::vector<T> const& vec) const;
   template <typename T>
-  void copyVectorToDevice(int8_t* device_ptr, std::vector<T> const& vec) const;
+  void copyVectorToDevice(int8_t* device_ptr,
+                          std::vector<T> const& vec,
+                          std::string_view tag) const;
 
   std::pair<KernelParams, KernelParamsLog> prepareKernelParams(
       const std::vector<std::vector<const int8_t*>>& col_buffers,

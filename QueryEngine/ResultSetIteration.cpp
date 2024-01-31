@@ -635,8 +635,10 @@ InternalTargetValue ResultSet::getVarlenOrderEntry(const int64_t str_ptr,
     auto data_mgr = executor->getDataMgr();
     auto allocator = std::make_unique<CudaAllocator>(
         data_mgr, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
-    allocator->copyFromDevice(
-        &cpu_buffer[0], reinterpret_cast<int8_t*>(str_ptr), str_len);
+    allocator->copyFromDevice(&cpu_buffer[0],
+                              reinterpret_cast<int8_t*>(str_ptr),
+                              str_len,
+                              "Varlen order entry");
     host_str_ptr = reinterpret_cast<char*>(&cpu_buffer[0]);
   } else {
     CHECK(device_type_ == ExecutorDeviceType::CPU);
@@ -932,7 +934,8 @@ inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
       std::shared_ptr<int8_t>(new int8_t[length], std::default_delete<int8_t[]>());
   auto allocator = std::make_unique<CudaAllocator>(
       data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-  allocator->copyFromDevice(cpu_buf.get(), reinterpret_cast<int8_t*>(varlen_ptr), length);
+  allocator->copyFromDevice(
+      cpu_buf.get(), reinterpret_cast<int8_t*>(varlen_ptr), length, "Varlen data");
   // Just fetching the data from gpu, not checking geo nullness
   return std::make_unique<ArrayDatum>(length, cpu_buf, false);
 }
@@ -1473,7 +1476,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
         data_mgr, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
 
     allocator->copyFromDevice(
-        &cpu_buffer[0], reinterpret_cast<int8_t*>(varlen_ptr), length);
+        &cpu_buffer[0], reinterpret_cast<int8_t*>(varlen_ptr), length, "Varlen data");
     varlen_ptr = reinterpret_cast<int64_t>(&cpu_buffer[0]);
   }
   if (target_info.sql_type.is_array()) {
