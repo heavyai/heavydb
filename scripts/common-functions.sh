@@ -168,6 +168,20 @@ function install_openssl() {
   download_make_install ${HTTP_DEPS}/openssl-3.0.10.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 }
 
+LDAP_VERSION=2.5.16
+function install_openldap2() {
+  download https://www.openldap.org/software/download/OpenLDAP/openldap-release/openldap-$LDAP_VERSION.tgz
+  extract openldap-$LDAP_VERSION.tgz
+  mkdir -p openldap-$LDAP_VERSION/build
+  pushd openldap-$LDAP_VERSION/build
+  ../configure --prefix=$PREFIX --disable-shared --enable-static
+  make depend
+  make -j $(nproc)
+  make install
+  popd
+  check_artifact_cleanup openldap-$LDAP_VERSION.tar.gz openldap-$LDAP_VERSION
+}
+
 ARROW_VERSION=apache-arrow-9.0.0
 
 function install_arrow() {
@@ -792,45 +806,9 @@ function install_maven() {
     fi
 }
 
-# The version of Thrust included in CUDA 11.0 and CUDA 11.1 does not support newer TBB
-function patch_old_thrust_tbb() {
-  NVCC_VERSION=$(nvcc --version | grep release | grep -o '[0-9][0-9]\.[0-9]' | head -n1)
-
-  if [ "${NVCC_VERSION}" == "11.0" ] || [ "${NVCC_VERSION}" == "11.1" ]; then
-    pushd $(dirname $(which nvcc))/../include/
-		cat > /tmp/cuda-11.0-tbb-thrust.patch << EOF
-diff -ru thrust-old/system/tbb/detail/reduce_by_key.inl thrust/system/tbb/detail/reduce_by_key.inl
---- thrust-old/system/tbb/detail/reduce_by_key.inl      2021-10-12 15:59:23.693909272 +0000
-+++ thrust/system/tbb/detail/reduce_by_key.inl  2021-10-12 16:00:05.314080478 +0000
-@@ -27,8 +27,8 @@
- #include <thrust/detail/range/tail_flags.h>
- #include <tbb/blocked_range.h>
- #include <tbb/parallel_for.h>
--#include <tbb/tbb_thread.h>
- #include <cassert>
-+#include <thread>
- 
- 
- namespace thrust
-@@ -281,7 +281,7 @@
-   }
- 
-   // count the number of processors
--  const unsigned int p = thrust::max<unsigned int>(1u, ::tbb::tbb_thread::hardware_concurrency());
-+  const unsigned int p = thrust::max<unsigned int>(1u, std::thread::hardware_concurrency());
- 
-   // generate O(P) intervals of sequential work
-   // XXX oversubscribing is a tuning opportunity
-EOF
-		patch -p0 --forward -r- < /tmp/cuda-11.0-tbb-thrust.patch || true
-    popd
-  fi
-}
-
 TBB_VERSION=2021.9.0
 
 function install_tbb() {
-  patch_old_thrust_tbb
   download https://github.com/oneapi-src/oneTBB/archive/v${TBB_VERSION}.tar.gz
   extract v${TBB_VERSION}.tar.gz
   pushd oneTBB-${TBB_VERSION}

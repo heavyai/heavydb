@@ -158,9 +158,7 @@ elif [ "$ID" == "centos" ] ; then
     epel-release \
     which \
     libssh \
-    ncurses-devel \
     git \
-    maven \
     java-1.8.0-openjdk-devel \
     java-1.8.0-openjdk-headless \
     gperftools \
@@ -172,7 +170,6 @@ elif [ "$ID" == "centos" ] ; then
     libX11-devel \
     environment-modules \
     valgrind \
-    openldap-devel \
     patchelf \
     perl-IPC-Cmd
 

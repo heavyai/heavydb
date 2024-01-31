@@ -69,7 +69,6 @@ sudo yum install -y \
     epel-release \
     which \
     libssh \
-    ncurses-devel \
     git \
     java-1.8.0-openjdk-devel \
     java-1.8.0-openjdk-headless \
@@ -79,7 +78,6 @@ sudo yum install -y \
     wget \
     curl \
     python3 \
-    openldap-devel \
     patchelf \
     perl-IPC-Cmd
 sudo yum install -y \
@@ -113,6 +111,8 @@ install_maven
 
 install_openssl
 
+install_openldap2
+
 install_cmake
 
 install_boost
@@ -130,7 +130,7 @@ install_bzip2
 CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared --with-pic"
 CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libarchive-3.3.2.tar.gz "" "--without-openssl --disable-shared" 
 
-CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.1.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu" 
+CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.4.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu" 
 
 download_make_install ftp://ftp.gnu.org/gnu/bison/bison-3.4.2.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu" 
 
@@ -183,8 +183,8 @@ install_gdal_tools
 install_geos
 
 # llvm
-# http://thrysoee.dk/editline/libedit-20170329-3.1.tar.gz
-download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
+# http://thrysoee.dk/editline/libedit-20230828-3.1.tar.gz
+CPPFLAGS="-I$PREFIX/include/ncurses" download_make_install ${HTTP_DEPS}/libedit-20230828-3.1.tar.gz
 
 # (see common-functions.sh)
 install_llvm 
