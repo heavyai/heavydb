@@ -1,6 +1,6 @@
 # Copy and extract HEAVY.AI tarball. In own stage so that the temporary tarball
 # isn't included in a layer.
-FROM ubuntu:20.04 AS extract
+FROM ubuntu:22.04 AS extract
 
 WORKDIR /opt/heavyai/
 COPY heavyai-latest-Linux-x86_64.tar.gz /opt/heavyai/
@@ -8,7 +8,7 @@ RUN tar xvf heavyai-latest-Linux-x86_64.tar.gz --strip-components=1 && \
     rm -rf heavyai-latest-Linux-x86_64.tar.gz
 
 # Build final stage
-FROM docker-internal.mapd.com/cudagl:11.8.0-runtime-ubuntu20.04
+FROM docker-internal.mapd.com/cudagl:12.2.0-runtime-ubuntu22.04
 # Avoid display of additional CUDA information on server startup.
 ENTRYPOINT []
 LABEL maintainer "HEAVY.AI Support <support@heavy.ai>"
@@ -16,16 +16,14 @@ LABEL maintainer "HEAVY.AI Support <support@heavy.ai>"
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libldap-2.4-2 \
         bsdmainutils \
         libopengl0 \
         wget \
         curl \
-        clang-9 \
+        clang-14 \
         liblz4-tool \
         libgeos-dev \
         default-jre-headless \
-        libtinfo5 \
         software-properties-common && \
     add-apt-repository ppa:deadsnakes/ppa && \
     apt-get install -y --no-install-recommends \
@@ -38,8 +36,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=extract /opt/heavyai /opt/heavyai
 
 # UDF support
-RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-9 100
-ENV CPLUS_INCLUDE_PATH=/usr/lib/llvm-9/lib/clang/9.0.0/include
+RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 100
+ENV CPLUS_INCLUDE_PATH=/usr/lib/llvm-14/lib/clang/14.0.0/include
 
 RUN mkdir -p /etc/vulkan/icd.d && \
     echo '{ "file_format_version" : "1.0.0", "ICD" : { "library_path" : "libGLX_nvidia.so.0", "api_version" : "1.1.99" } }' > /etc/vulkan/icd.d/nvidia_icd.json
