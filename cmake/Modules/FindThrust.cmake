@@ -31,7 +31,6 @@
 #                       files will actually be in the thrust subdirectory.)
 # THRUST_VERSION -      Version of thrust in the form "major.minor.patch".
 #
-
 find_path( THRUST_INCLUDE_DIR
   HINTS
     /usr/local/cuda/include
@@ -61,7 +60,7 @@ if (THRUST_INCLUDE_DIR)
     )
 
   string( REGEX MATCH "^[0-9]" major ${version} )
-  string( REGEX REPLACE "^${major}00" "" version "${version}" )
+  string( SUBSTRING "${version}" 3 -1 version )
   string( REGEX MATCH "^[0-9]" minor ${version} )
   string( REGEX REPLACE "^${minor}0" "" version "${version}" )
   set( THRUST_VERSION "${major}.${minor}.${version}")
