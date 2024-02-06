@@ -21,7 +21,7 @@ source "${SCRIPT_DIR}"/functions.sh
 # as in:
 #     supported_versions="SUPPORTED_VERSIONS_${linux_distro}"
 #     ${!supported_versions}
-SUPPORTED_VERSIONS_Ubuntu=18.04,20.04
+SUPPORTED_VERSIONS_Ubuntu=20.04,22.04,23.10
 SUPPORTED_VERSIONS_CentOS=7,8
 
 # Can be overridden through environment variables

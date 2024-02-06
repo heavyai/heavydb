@@ -1011,6 +1011,9 @@ else()
   set(PROFILER_LIBS "")
 endif()
 
+# Set RPATH for all executables
+set(CMAKE_INSTALL_RPATH "$ORIGIN/../ThirdParty/lib")
+
 # Some subdirectories will add optional dependencies to initheavy so we want to declare
 # it before subdirs since it is otherwise independent.
 add_executable(initheavy initdb.cpp)
@@ -1143,10 +1146,6 @@ endif()
 if(ENABLE_RENDERING AND ENABLE_RENDER_TESTS)
   enable_testing()
   add_subdirectory(Tests/RenderTests)
-endif()
-
-if (ENABLE_MEMKIND OR ENABLE_RENDERING)
-  set(CMAKE_INSTALL_RPATH "$ORIGIN/../ThirdParty/lib")
 endif()
 
 add_executable(heavydb HeavyDB.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
