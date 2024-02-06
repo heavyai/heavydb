@@ -111,6 +111,7 @@ struct TableNotFoundException : public std::runtime_error {
 
 static constexpr const char* USERS_SYS_TABLE_NAME{"users"};
 static constexpr const char* TABLES_SYS_TABLE_NAME{"tables"};
+static constexpr const char* COLUMNS_SYS_TABLE_NAME{"columns"};
 static constexpr const char* DASHBOARDS_SYS_TABLE_NAME{"dashboards"};
 static constexpr const char* DATABASES_SYS_TABLE_NAME{"databases"};
 static constexpr const char* PERMISSIONS_SYS_TABLE_NAME{"permissions"};
@@ -260,6 +261,7 @@ class Catalog final {
 
   std::list<const TableDescriptor*> getAllTableMetadata() const;
   std::vector<TableDescriptor> getAllTableMetadataCopy() const;
+  std::vector<ColumnDescriptor> getAllColumnMetadataCopy() const;
   std::list<const DashboardDescriptor*> getAllDashboardsMetadata() const;
   std::vector<DashboardDescriptor> getAllDashboardsMetadataForSysTable() const;
   const DBMetadata& getCurrentDB() const { return currentDB_; }
@@ -836,6 +838,7 @@ class Catalog final {
   void initializePermissionsSystemTable();
   void initializeRolesSystemTable();
   void initializeTablesSystemTable();
+  void initializeColumnsSystemTable();
   void initializeDashboardsSystemTable();
   void initializeRoleAssignmentsSystemTable();
   void initializeMemorySummarySystemTable();

@@ -2197,6 +2197,16 @@ list<const TableDescriptor*> Catalog::getAllTableMetadata() const {
   return table_list;
 }
 
+std::vector<ColumnDescriptor> Catalog::getAllColumnMetadataCopy() const {
+  cat_read_lock read_lock(this);
+  std::vector<ColumnDescriptor> columns;
+  columns.reserve(columnDescriptorMapById_.size());
+  for (const auto& [_, cd] : columnDescriptorMapById_) {
+    columns.emplace_back(*cd);
+  }
+  return columns;
+}
+
 std::vector<TableDescriptor> Catalog::getAllTableMetadataCopy() const {
   cat_read_lock read_lock(this);
   std::vector<TableDescriptor> tables;
@@ -6502,6 +6512,7 @@ void Catalog::initializeSystemTables() {
   initializePermissionsSystemTable();
   initializeRolesSystemTable();
   initializeTablesSystemTable();
+  initializeColumnsSystemTable();
   initializeDashboardsSystemTable();
   initializeRoleAssignmentsSystemTable();
   initializeMemorySummarySystemTable();
@@ -6598,6 +6609,25 @@ void Catalog::initializeTablesSystemTable() {
                             {"max_rollback_epochs", {kINT}},
                             {"shard_count", {kINT}},
                             {"ddl_statement", get_encoded_text_type()}},
+                           true);
+  recreateSystemTableIfUpdated(foreign_table, columns);
+}
+
+void Catalog::initializeColumnsSystemTable() {
+  auto [foreign_table, columns] =
+      getSystemTableSchema(COLUMNS_SYS_TABLE_NAME,
+                           CATALOG_SERVER_NAME,
+                           {{"database_id", {kINT}},
+                            {"database_name", get_encoded_text_type()},
+                            {"table_id", {kINT}},
+                            {"table_name", get_encoded_text_type()},
+                            {"column_id", {kINT}},
+                            {"column_name", get_encoded_text_type()},
+                            {"data_type", get_encoded_text_type()},
+                            {"data_encoding", get_encoded_text_type()},
+                            {"data_size", {kINT}},
+                            {"is_nullable", {kBOOLEAN}},
+                            {"default_value", get_encoded_text_type()}},
                            true);
   recreateSystemTableIfUpdated(foreign_table, columns);
 }

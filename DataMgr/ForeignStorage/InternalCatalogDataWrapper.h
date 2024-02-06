@@ -41,6 +41,7 @@ class InternalCatalogDataWrapper : public InternalSystemDataWrapper {
   std::list<Catalog_Namespace::UserMetadata> users_;
   std::map<int32_t, std::vector<TableDescriptor>> tables_by_database_;
   std::map<int32_t, std::vector<DashboardDescriptor>> dashboards_by_database_;
+  std::vector<ColumnDescriptor> columns_;
   std::vector<ObjectRoleDescriptor> object_permissions_;
   std::list<Catalog_Namespace::DBMetadata> databases_;
   std::set<std::string> roles_;

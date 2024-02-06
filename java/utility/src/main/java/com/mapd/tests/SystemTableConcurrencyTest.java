@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class SystemTableConcurrencyTest {
   final static Logger logger = LoggerFactory.getLogger(SystemTableConcurrencyTest.class);
@@ -65,12 +66,15 @@ public class SystemTableConcurrencyTest {
                             "DROP ROLE role_2;")),
             new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE TABLE table_1 (i INTEGER, t TEXT);",
+                            "CREATE TABLE table_2 (i INTEGER[], pt POINT);",
                             "INSERT INTO table_1 VALUES (1, 'abc');",
+                            "INSERT INTO table_2 VALUES ({1,2}, 'POINT (1 1)');",
                             "SELECT AVG(i) FROM table_1;",
                             "CREATE VIEW view_1 AS SELECT * FROM table_1;",
                             "SELECT * FROM view_1;",
                             "DROP VIEW view_1;",
-                            "DROP TABLE table_1;")),
+                            "DROP TABLE table_1;",
+                            "DROP TABLE table_2;")),
             new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE USER user_4 (password = 'HyperInteractive');",
                             "CREATE USER user_5 (password = 'HyperInteractive');",
@@ -89,6 +93,7 @@ public class SystemTableConcurrencyTest {
             "SELECT * FROM databases;",
             "SELECT * FROM roles;",
             "SELECT * FROM tables;",
+            "SELECT * FROM columns;",
             "SELECT * FROM role_assignments;",
             "SELECT * FROM dashboards;",
             "SELECT * FROM memory_summary;",
@@ -146,8 +151,15 @@ public class SystemTableConcurrencyTest {
           HeavyDBTestClient user = HeavyDBTestClient.getClient(
                   "localhost", 6274, threadQueries.database, "admin", "HyperInteractive");
           barrier.await();
-          for (final String query : threadQueries.queries) {
-            runSqlAsUser(query, user, threadId);
+
+          final int repeatQueryCount = 10;
+          for (int irepeat = 0; irepeat < repeatQueryCount; ++irepeat) {
+            for (final String query : threadQueries.queries) {
+              runSqlAsUser(query, user, threadId);
+              Thread.sleep(ThreadLocalRandom.current().nextInt(
+                      0, 1000 + 1)); // Sleep up to one second randomly to allow random
+                                     // interleaving of queries between threads
+            }
           }
           logger.info("Finished thread[" + threadId + "]");
         } catch (Exception e) {

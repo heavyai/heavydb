@@ -4190,6 +4190,377 @@ TEST_F(SystemTablesTest, TablesSystemTable) {
   // clang-format on
 }
 
+TEST_F(SystemTablesTest, ColumnsSystemTable) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  std::string create_table_sql{
+      "CREATE TABLE test_table_1 (\n  i INTEGER DEFAULT -1, s TEXT ENCODING DICT(16), sa "
+      "TEXT[], mp GEOMETRY(MULTIPOLYGON,4326) NOT NULL);"};
+  sql(create_table_sql);
+
+  // NOTE: Views reference columns in existing tables, and so do not appear in
+  // the `columns` system table, this view is created to verify this negative
+  // result
+  std::string create_view_sql{"CREATE VIEW test_view_1 AS SELECT * FROM test_table_1;"};
+  sql(create_view_sql);
+  auto table_1_id = getTableId("test_table_1");
+
+  loginInformationSchema();
+  // Skip the shared::kDefaultDbName database, since it can contain default
+  // created tables and tables created by other test suites.
+
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+          {3L, "test_db_1", table_1_id, "test_table_1", 1L, "i", "INTEGER", "NONE", 4L, True,  "-1"},
+          {3L, "test_db_1", table_1_id, "test_table_1", 2L, "s", "TEXT", "DICT(16)", 2L, True,  Null},
+          {3L, "test_db_1", table_1_id, "test_table_1", 3L, "sa", "TEXT[]", "DICT(32)", Null, True,  Null},
+          {3L, "test_db_1", table_1_id, "test_table_1", 4L, "mp", "GEOMETRY(MULTIPOLYGON, 4326)", "COMPRESSED(32)", Null,
+           False,  Null},
+      }
+  );
+  // clang-format on
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  sql("ALTER TABLE test_table_1 RENAME TO test_table_2;");
+  sql("ALTER TABLE test_table_2 RENAME COLUMN sa TO sa_new;");
+  if (!isDistributedMode()) {
+    sql("ALTER TABLE test_table_2 ALTER COLUMN s TYPE BIGINT[1] NOT NULL DEFAULT {-1};");
+  }
+  create_table_sql = "CREATE TABLE test_table_2 (\n  i INTEGER);";
+  std::string create_temp_table_sql{
+      "CREATE TEMPORARY TABLE test_temp_table (\n  t TEXT ENCODING DICT(32));"};
+  sql(create_temp_table_sql);
+  std::string create_foreign_table_sql{
+      "CREATE FOREIGN TABLE test_foreign_table (\n  "
+      "i INTEGER)\nSERVER default_local_delimited\nWITH (FILE_PATH='" +
+      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() +
+      "', "
+      "REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"};
+  sql(create_foreign_table_sql);
+
+  auto foreign_table_id = getTableId("test_foreign_table");
+  auto temp_table_id = getTableId("test_temp_table");
+
+  loginInformationSchema();
+
+  std::vector<std::vector<NullableTargetValue>> expected_result;
+  // clang-format off
+  if ( !isDistributedMode() ) {
+      expected_result = {
+          {3L, "test_db_1", foreign_table_id, "test_foreign_table", 1L, "i", "INTEGER", "NONE", 4L, True,  Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 1L, "i", "INTEGER", "NONE", 4L, True,  "-1"},
+          {3L, "test_db_1", table_1_id, "test_table_2", 2L, "s", "BIGINT[1]", "NONE", 8L, False,  "ARRAY[-1]"},
+          {3L, "test_db_1", table_1_id, "test_table_2", 3L, "sa_new", "TEXT[]", "DICT(32)", Null, True,  Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 4L, "mp", "GEOMETRY(MULTIPOLYGON, 4326)", "COMPRESSED(32)", Null,
+           False,  Null},
+          {3L, "test_db_1", temp_table_id, "test_temp_table", 1L, "t", "TEXT", "DICT(32)", 4L, True, Null},
+      };
+  } else {
+      expected_result = {
+          {3L, "test_db_1", foreign_table_id, "test_foreign_table", 1L, "i", "INTEGER", "NONE", 4L, True,  Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 1L, "i", "INTEGER", "NONE", 4L, True,  "-1"},
+          {3L, "test_db_1", table_1_id, "test_table_2", 2L, "s", "TEXT", "DICT(16)", 2L, True,  Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 3L, "sa_new", "TEXT[]", "DICT(32)", Null, True,  Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 4L, "mp", "GEOMETRY(MULTIPOLYGON, 4326)", "COMPRESSED(32)", Null,
+           False,  Null},
+          {3L, "test_db_1", temp_table_id, "test_temp_table", 1L, "t", "TEXT", "DICT(32)", 4L, True, Null},
+      };
+  }
+  // clang-format on
+
+  sqlAndCompareResult("SELECT * FROM columns WHERE database_id <> " +
+                          std::to_string(getDbId(shared::kDefaultDbName)) +
+                          " ORDER BY table_name, column_id;",
+                      expected_result);
+}
+
+TEST_F(SystemTablesTest, ColumnsSystemTableScalarTypes) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  std::string create_table_scalars_sql{
+      "CREATE TABLE scalars ("
+      "b BOOLEAN,"
+      "t TINYINT,"
+      "s1 SMALLINT,"
+      "s2 SMALLINT ENCODING FIXED(8),"
+      "i1 INT,"
+      "i2 INT ENCODING FIXED(16),"
+      "i3 INT ENCODING FIXED(8),"
+      "bi1 BIGINT,"
+      "bi2 BIGINT ENCODING FIXED(32),"
+      "bi3 BIGINT ENCODING FIXED(16),"
+      "bi4 BIGINT ENCODING FIXED(8),"
+      "dec1 DECIMAL(4,2),"
+      "dec2 DECIMAL(9,5),"
+      "dec3 DECIMAL(18,12),"
+      "f FLOAT,"
+      "d DOUBLE,"
+      "tm TIME,"
+      "ts1 TIMESTAMP(0) ENCODING FIXED(32),"
+      "ts2 TIMESTAMP(0),"
+      "ts3 TIMESTAMP(3),"
+      "ts4 TIMESTAMP(6),"
+      "ts5 TIMESTAMP(9),"
+      "dt1 DATE,"
+      "dt2 DATE ENCODING DAYS(16),"
+      "dt3 DATE ENCODING DAYS(32),"
+      "txt TEXT ENCODING NONE,"
+      "td1 TEXT ENCODING DICT(8),"
+      "td2 TEXT ENCODING DICT(16),"
+      "td3 TEXT ENCODING DICT(32));"};
+
+  sql(create_table_scalars_sql);
+
+  auto scalars_table_id = getTableId("scalars");
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+        {3L,"test_db_1",scalars_table_id,"scalars",1L,"b","BOOLEAN","NONE",1L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",2L,"t","TINYINT","NONE",1L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",3L,"s1","SMALLINT","NONE",2L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",4L,"s2","SMALLINT","FIXED(8)",1L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",5L,"i1","INTEGER","NONE",4L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",6L,"i2","INTEGER","FIXED(16)",2L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",7L,"i3","INTEGER","FIXED(8)",1L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",8L,"bi1","BIGINT","NONE",8L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",9L,"bi2","BIGINT","FIXED(32)",4L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",10L,"bi3","BIGINT","FIXED(16)",2L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",11L,"bi4","BIGINT","FIXED(8)",1L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",12L,"dec1","DECIMAL(4,2)","FIXED(16)",2L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",13L,"dec2","DECIMAL(9,5)","FIXED(32)",4L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",14L,"dec3","DECIMAL(18,12)","NONE",8L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",15L,"f","FLOAT","NONE",4L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",16L,"d","DOUBLE","NONE",8L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",17L,"tm","TIME","NONE",8L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",18L,"ts1","TIMESTAMP(0)","FIXED(32)",4L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",19L,"ts2","TIMESTAMP(0)","NONE",8L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",20L,"ts3","TIMESTAMP(3)","NONE",8L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",21L,"ts4","TIMESTAMP(6)","NONE",8L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",22L,"ts5","TIMESTAMP(9)","NONE",8L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",23L,"dt1","DATE","DAYS(32)",4L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",24L,"dt2","DATE","DAYS(16)",2L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",25L,"dt3","DATE","DAYS(32)",4L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",26L,"txt","TEXT","NONE",Null,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",27L,"td1","TEXT","DICT(8)",1L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",28L,"td2","TEXT","DICT(16)",2L,True,Null},
+        {3L,"test_db_1",scalars_table_id,"scalars",29L,"td3","TEXT","DICT(32)",4L,True,Null},
+      }
+  );
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, ColumnsSystemTableArrayTypes) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  std::string create_table_arrays_sql{
+      "CREATE TABLE arrays ("
+      "b1 BOOLEAN[],"
+      "b2 BOOLEAN[42],"
+      "t1 TINYINT[],"
+      "t2 TINYINT[42],"
+      "s1 SMALLINT[],"
+      "s2 SMALLINT[42],"
+      "i1 INT[],"
+      "i2 INT[42],"
+      "bi1 BIGINT[],"
+      "bi2 BIGINT[42],"
+      "dec1 DECIMAL(4,2)[],"
+      "dec2 DECIMAL(4,2)[42],"
+      "dec3 DECIMAL(9,5)[],"
+      "dec4 DECIMAL(9,5)[42],"
+      "dec5 DECIMAL(18,12)[],"
+      "dec6 DECIMAL(18,12)[42],"
+      "f1 FLOAT[],"
+      "f2 FLOAT[42],"
+      "d1 DOUBLE[],"
+      "d2 DOUBLE[42],"
+      "tm1 TIME[],"
+      "tm2 TIME[42],"
+      "ts1 TIMESTAMP(0)[],"
+      "ts2 TIMESTAMP(0)[42],"
+      "ts3 TIMESTAMP(3)[],"
+      "ts4 TIMESTAMP(3)[42],"
+      "ts5 TIMESTAMP(6)[],"
+      "ts6 TIMESTAMP(6)[42],"
+      "ts7 TIMESTAMP(9)[],"
+      "ts8 TIMESTAMP(9)[42],"
+      "dt1 DATE[],"
+      "dt2 DATE[42],"
+      "td1 TEXT[],"
+      "td2 TEXT[42]"
+      ");"};
+
+  sql(create_table_arrays_sql);
+
+  auto arrays_table_id = getTableId("arrays");
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+        {3L,"test_db_1",arrays_table_id,"arrays",1L,"b1","BOOLEAN[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",2L,"b2","BOOLEAN[42]","NONE",42L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",3L,"t1","TINYINT[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",4L,"t2","TINYINT[42]","NONE",42L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",5L,"s1","SMALLINT[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",6L,"s2","SMALLINT[42]","NONE",84L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",7L,"i1","INTEGER[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",8L,"i2","INTEGER[42]","NONE",168L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",9L,"bi1","BIGINT[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",10L,"bi2","BIGINT[42]","NONE",336L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",11L,"dec1","DECIMAL(4,2)[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",12L,"dec2","DECIMAL(4,2)[42]","NONE",336L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",13L,"dec3","DECIMAL(9,5)[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",14L,"dec4","DECIMAL(9,5)[42]","NONE",336L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",15L,"dec5","DECIMAL(18,12)[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",16L,"dec6","DECIMAL(18,12)[42]","NONE",336L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",17L,"f1","FLOAT[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",18L,"f2","FLOAT[42]","NONE",168L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",19L,"d1","DOUBLE[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",20L,"d2","DOUBLE[42]","NONE",336L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",21L,"tm1","TIME[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",22L,"tm2","TIME[42]","NONE",336L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",23L,"ts1","TIMESTAMP(0)[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",24L,"ts2","TIMESTAMP(0)[42]","NONE",336L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",25L,"ts3","TIMESTAMP(3)[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",26L,"ts4","TIMESTAMP(3)[42]","NONE",336L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",27L,"ts5","TIMESTAMP(6)[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",28L,"ts6","TIMESTAMP(6)[42]","NONE",336L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",29L,"ts7","TIMESTAMP(9)[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",30L,"ts8","TIMESTAMP(9)[42]","NONE",336L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",31L,"dt1","DATE[]","NONE",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",32L,"dt2","DATE[42]","NONE",336L,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",33L,"td1","TEXT[]","DICT(32)",Null,True,Null},
+        {3L,"test_db_1",arrays_table_id,"arrays",34L,"td2","TEXT[42]","DICT(32)",168L,True,Null},
+
+      }
+  );
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, ColumnsSystemTableGeoTypes) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  std::string create_table_geo_sql{
+      "CREATE TABLE geo ("
+      "p1 POINT,"
+      "p2 GEOMETRY(POINT,4326),"
+      "p3 GEOMETRY(POINT,900913),"
+      "mp1 MULTIPOINT,"
+      "mp2 GEOMETRY(MULTIPOINT,4326),"
+      "mp3 GEOMETRY(MULTIPOINT,900913),"
+      "ls1 LINESTRING,"
+      "ls2 GEOMETRY(LINESTRING,4326),"
+      "ls3 GEOMETRY(LINESTRING,900913),"
+      "poly1 POLYGON,"
+      "poly2 GEOMETRY(POLYGON,4326),"
+      "poly3 GEOMETRY(POLYGON,900913),"
+      "mpoly1 MULTIPOLYGON,"
+      "mpoly2 GEOMETRY(MULTIPOLYGON,4326),"
+      "mpoly3 GEOMETRY(MULTIPOLYGON,900913)"
+      ");"};
+
+  sql(create_table_geo_sql);
+
+  auto geo_table_id = getTableId("geo");
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+        {3L,"test_db_1",geo_table_id,"geo",1L,"p1","GEOMETRY(POINT)","NONE",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",3L,"p2","GEOMETRY(POINT, 4326)","COMPRESSED(32)",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",5L,"p3","GEOMETRY(POINT, 900913)","NONE",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",7L,"mp1","GEOMETRY(MULTIPOINT)","NONE",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",10L,"mp2","GEOMETRY(MULTIPOINT, 4326)","COMPRESSED(32)",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",13L,"mp3","GEOMETRY(MULTIPOINT, 900913)","NONE",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",16L,"ls1","GEOMETRY(LINESTRING)","NONE",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",19L,"ls2","GEOMETRY(LINESTRING, 4326)","COMPRESSED(32)",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",22L,"ls3","GEOMETRY(LINESTRING, 900913)","NONE",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",25L,"poly1","GEOMETRY(POLYGON)","NONE",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",29L,"poly2","GEOMETRY(POLYGON, 4326)","COMPRESSED(32)",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",33L,"poly3","GEOMETRY(POLYGON, 900913)","NONE",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",37L,"mpoly1","GEOMETRY(MULTIPOLYGON)","NONE",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",42L,"mpoly2","GEOMETRY(MULTIPOLYGON, 4326)","COMPRESSED(32)",Null,True,Null},
+        {3L,"test_db_1",geo_table_id,"geo",47L,"mpoly3","GEOMETRY(MULTIPOLYGON, 900913)","NONE",Null,True,Null},
+      }
+  );
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, ColumnsSystemTableAddDropColumns) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  std::string create_table_sql{
+      "CREATE TABLE test_table_1 ("
+      "id INT,"
+      "dropped INT);"};
+
+  sql(create_table_sql);
+  auto test_table_1_id = getTableId("test_table_1");
+
+  // clang-format off
+  loginInformationSchema();
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+      {3L,"test_db_1",test_table_1_id,"test_table_1",1L,"id","INTEGER","NONE",4L,True,Null},
+      {3L,"test_db_1",test_table_1_id,"test_table_1",2L,"dropped","INTEGER","NONE",4L,True,Null},
+
+      }
+  );
+  // clang-format on
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  sql("ALTER TABLE test_table_1 ADD COLUMN added TEXT;");
+  sql("ALTER TABLE test_table_1 DROP COLUMN dropped;");
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+      {3L,"test_db_1",test_table_1_id,"test_table_1",1L,"id","INTEGER","NONE",4L,True,Null},
+      {3L,"test_db_1",test_table_1_id,"test_table_1",5L,"added","TEXT","DICT(32)",4L,True,Null},
+
+      }
+  );
+  // clang-format on
+}
+
 TEST_F(SystemTablesTest, TablesSystemTableDeletedOwner) {
   switchToAdmin();
   const std::string db_name{"test_db_1"};
