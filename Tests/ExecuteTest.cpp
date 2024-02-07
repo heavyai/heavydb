@@ -12025,6 +12025,10 @@ TEST_F(Select, Joins_Fragmented_SelfJoin_And_LoopJoin) {
         run_multiple_agg(
             "SELECT COUNT(*) FROM test a, test b WHERE b.x = b.x AND b.y = b.y;", dt),
         std::runtime_error);
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+        int64_t(-95),
+        v<int64_t>(run_simple_agg(
+            "SELECT t1.x-t2.z FROM test t1, test t2 ORDER BY t1.x-t2.z LIMIT 1;", dt))));
   }
 }
 
