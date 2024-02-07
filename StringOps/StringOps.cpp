@@ -1037,10 +1037,10 @@ NullableStrType LLMTransform::operator()(const std::string& str_val) const {
   rapidjson::Document input_json;
   input_json.SetObject();
   std::ostringstream oss;
-  oss << "<|prompt|>\n" << prompt_ << ":\n" << str_val << "\n<|answer|>\n";
+  oss << prompt_ << ":\n" << str_val;
   rapidjson::Document::AllocatorType& allocator = input_json.GetAllocator();
   input_json.AddMember(
-      "prompt", rapidjson::Value(oss.str().c_str(), allocator).Move(), allocator);
+      "question", rapidjson::Value(oss.str().c_str(), allocator).Move(), allocator);
   input_json.AddMember("temperature", rapidjson::Value(0).Move(), allocator);
   input_json.AddMember("max_tokens", rapidjson::Value(256).Move(), allocator);
   input_json.AddMember(
