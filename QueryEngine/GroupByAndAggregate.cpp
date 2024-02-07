@@ -1168,7 +1168,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
                 QueryDescriptionType::Projection &&
             query_mem_desc.useStreamingTopN()) {
           // Ignore rejection on pushing current row to top-K heap.
-          LL_BUILDER.CreateRet(LL_INT(int32_t(0)));
+          LL_BUILDER.CreateBr(filter_false);
         } else {
           CodeGenerator code_generator(executor_);
           LL_BUILDER.CreateRet(LL_BUILDER.CreateNeg(LL_BUILDER.CreateTrunc(
