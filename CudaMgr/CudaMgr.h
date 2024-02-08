@@ -248,6 +248,9 @@ class CudaMgr {
   int exportHandle(const uint64_t handle) const;
   void enableMemoryActivityLog();
   bool logMemoryActivity() const;
+
+  int getDeviceNumFromDevicePtr(CUdeviceptr cu_device_ptr,
+                                const size_t allocated_mem_bytes);
 #endif
 
  private:
@@ -258,8 +261,6 @@ class CudaMgr {
   size_t computeMinSharedMemoryPerBlockForAllDevices() const;
   size_t computeMinNumMPsForAllDevices() const;
   void checkError(CUresult cu_result) const;
-  int getDeviceNumFromDevicePtr(CUdeviceptr cu_device_ptr,
-                                const size_t allocated_mem_bytes);
 
   int gpu_driver_version_;
 #endif
