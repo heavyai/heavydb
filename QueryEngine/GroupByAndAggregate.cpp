@@ -60,6 +60,7 @@ extern size_t g_approx_quantile_centroids;
 extern int64_t g_bitmap_memory_limit;
 extern size_t g_default_max_groups_buffer_entry_guess;
 extern size_t g_leaf_count;
+extern size_t g_baseline_groupby_threshold;
 
 bool ColRangeInfo::isEmpty() const {
   return min == 0 && max == -1;
@@ -234,10 +235,10 @@ size_t GroupByAndAggregate::getBaselineThreshold(const RelAlgExecutionUnit& ra_e
                                                  ExecutorDeviceType device_type) {
   if (device_type == ExecutorDeviceType::GPU) {
     if (any<IsMode, IsCountDistinct>(ra_exe_unit.target_exprs)) {
-      return Executor::baseline_threshold / 4;
+      return g_baseline_groupby_threshold / 4;
     }
   }
-  return Executor::baseline_threshold;
+  return g_baseline_groupby_threshold;
 }
 
 ColRangeInfo GroupByAndAggregate::getColRangeInfo() {

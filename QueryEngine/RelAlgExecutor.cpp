@@ -3906,7 +3906,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       }
     }
   }
-
   CardinalityCacheKey cache_key{ra_exe_unit};
   try {
     auto cached_cardinality = executor_->getCachedCardinality(cache_key);

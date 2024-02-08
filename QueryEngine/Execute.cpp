@@ -116,6 +116,9 @@ bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
 size_t g_default_max_groups_buffer_entry_guess{16384};
 size_t g_big_group_threshold{g_default_max_groups_buffer_entry_guess};
+size_t g_baseline_groupby_threshold{
+    1000000};  // if a perfect hash needs more entries, use baseline
+
 bool g_enable_window_functions{true};
 bool g_enable_table_functions{true};
 bool g_enable_ml_functions{true};
@@ -2011,14 +2014,17 @@ CardinalityCacheKey::CardinalityCacheKey(const RelAlgExecutionUnit& ra_exe_unit)
   os << ::toString(ra_exe_unit.estimator == nullptr);
   os << std::to_string(ra_exe_unit.scan_limit);
   key = os.str();
+  query_plan_dag_hash = ra_exe_unit.query_plan_dag_hash;
 }
 
 bool CardinalityCacheKey::operator==(const CardinalityCacheKey& other) const {
-  return key == other.key;
+  return key == other.key && query_plan_dag_hash == other.query_plan_dag_hash;
 }
 
 size_t CardinalityCacheKey::hash() const {
-  return boost::hash_value(key);
+  auto hash = boost::hash_value(key);
+  boost::hash_combine(hash, query_plan_dag_hash);
+  return hash;
 }
 
 bool CardinalityCacheKey::containsTableKey(const shared::TableKey& table_key) const {
@@ -5287,18 +5293,28 @@ void Executor::addToCardinalityCache(const CardinalityCacheKey& cache_key,
                                      const size_t cache_value) {
   if (g_use_estimator_result_cache) {
     heavyai::unique_lock<heavyai::shared_mutex> lock(recycler_mutex_);
-    cardinality_cache_[cache_key] = cache_value;
-    VLOG(1) << "Put estimated cardinality to the cache";
+    auto const [itr, inserted] = cardinality_cache_.emplace(cache_key, cache_value);
+    if (inserted) {
+      VLOG(1) << "Put estimated cardinality to the cache (cache_key: " << cache_key.hash()
+              << ", value: " << cache_value << ')';
+    } else {
+      CHECK_EQ(itr->second, cache_value)
+          << "Cardinality cache contains unexpected pair (" << itr->first.hash() << ','
+          << itr->second << ')';
+    }
   }
 }
 
 Executor::CachedCardinality Executor::getCachedCardinality(
     const CardinalityCacheKey& cache_key) {
-  heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
-  if (g_use_estimator_result_cache &&
-      cardinality_cache_.find(cache_key) != cardinality_cache_.end()) {
-    VLOG(1) << "Reuse cached cardinality";
-    return {true, cardinality_cache_[cache_key]};
+  if (g_use_estimator_result_cache) {
+    heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
+    auto const itr = cardinality_cache_.find(cache_key);
+    if (itr != cardinality_cache_.end()) {
+      VLOG(1) << "Reuse cached cardinality (cache_key: " << itr->first.hash()
+              << ", value : " << itr->second << ")";
+      return {true, itr->second};
+    }
   }
   return {false, -1};
 }
@@ -5321,6 +5337,11 @@ void Executor::invalidateCardinalityCacheForTable(const shared::TableKey& table_
       }
     }
   }
+}
+
+size_t Executor::getNumCachedCardinality() const {
+  heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
+  return cardinality_cache_.size();
 }
 
 std::vector<QuerySessionStatus> Executor::getQuerySessionInfo(

@@ -400,6 +400,7 @@ struct CardinalityCacheKey {
 
  private:
   std::string key;
+  size_t query_plan_dag_hash;
   std::unordered_set<shared::TableKey> table_keys;
 };
 
@@ -1406,6 +1407,7 @@ class Executor {
   CachedCardinality getCachedCardinality(const CardinalityCacheKey& cache_key);
   static void clearCardinalityCache();
   static void invalidateCardinalityCacheForTable(const shared::TableKey& table_key);
+  size_t getNumCachedCardinality() const;
 
   heavyai::shared_mutex& getDataRecyclerLock();
   QueryPlanDagCache& getQueryPlanDagCache();
@@ -1538,9 +1540,6 @@ class Executor {
   mutable std::mutex str_dict_mutex_;
 
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
-
-  static const size_t baseline_threshold{
-      1000000};  // if a perfect hash needs more entries, use baseline
 
   unsigned block_size_x_;
   unsigned grid_size_x_;
