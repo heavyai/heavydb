@@ -51,6 +51,7 @@ size_t g_parallel_top_max = 20e6;  // In effect only with g_enable_watchdog.
 size_t g_streaming_topn_max = 100e3;
 constexpr int64_t uninitialized_cached_row_count{-1};
 constexpr size_t auto_parallel_row_count_threshold{20000UL};
+extern size_t g_baseline_groupby_threshold;
 
 void ResultSet::keepFirstN(const size_t n) {
   invalidateCachedRowCount();
@@ -819,7 +820,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     }
     parallelTop(order_entries, top_n, executor);
   } else {
-    if (g_enable_watchdog && Executor::baseline_threshold < entryCount()) {
+    if (g_enable_watchdog && g_baseline_groupby_threshold < entryCount()) {
       throw WatchdogException("Sorting the result would be too slow");
     }
     permutation_.resize(query_mem_desc_.getEntryCount());

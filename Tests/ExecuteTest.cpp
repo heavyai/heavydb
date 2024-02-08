@@ -64,6 +64,8 @@ extern bool g_allow_query_step_cpu_retry;
 extern bool g_enable_watchdog;
 extern bool g_skip_intermediate_count;
 extern bool g_enable_left_join_filter_hoisting;
+extern size_t g_default_max_groups_buffer_entry_guess;
+extern size_t g_baseline_groupby_threshold;
 
 extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_bbox_intersect_hashjoin;
@@ -11043,6 +11045,43 @@ TEST_F(Select, GroupByCardinalityCacheInvalidation) {
         v<int64_t>(run_simple_agg("select count(*) from (select i from "
                                   "cardinality_cache_test where t = 'b' group by i);",
                                   dt)));
+  }
+}
+
+TEST_F(Select, GroupByCardinalityCacheForSimilarSubquery) {
+  SKIP_ALL_ON_AGGREGATOR();
+  ScopeGuard reset_flag_and_drop_table = [orig1 = g_default_max_groups_buffer_entry_guess,
+                                          orig2 = g_big_group_threshold,
+                                          orig3 = g_baseline_groupby_threshold] {
+    g_default_max_groups_buffer_entry_guess = orig1;
+    g_big_group_threshold = orig2;
+    g_baseline_groupby_threshold = orig3;
+  };
+  g_default_max_groups_buffer_entry_guess = 1;
+  g_big_group_threshold = 1;
+  g_baseline_groupby_threshold = 0;
+
+  auto gen_query = [](const std::string filter_cond) {
+    std::ostringstream oss;
+    oss << "SELECT "
+           "reg_hex_horiz_pixel_bin_packed(conv_4326_900913_x(lon),-8228616.612772237,-"
+           "8207511.542993152,conv_4326_900913_y(lat),4951675.238110565,4965130."
+           "139511894,9.984126984126984,11.528676803818243,0,0,629,401) AS xy, "
+           "SUM(col_double_1)/SUM(col_double_2) FROM data_types_basic3 WHERE "
+           "(col_float_1 IS NOT NULL AND col_double_1 > -10000101.1213 AND col_integer_1 "
+           "IN (SELECT DISTINCT(col_integer_1) FROM data_types_basic3 WHERE lon >=";
+    oss << filter_cond
+        << "AND lon <= -70.35999 AND lat >= 0.1 AND lat <= 100.1 )) group by xy;";
+    return oss.str();
+  };
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    QR::get()->getExecutor()->clearCardinalityCache();
+    run_multiple_agg(gen_query("-76.6682"), dt);
+    run_multiple_agg(gen_query("-115.1523"), dt);
+    EXPECT_EQ(QR::get()->getExecutor()->getNumCachedCardinality(),
+              static_cast<size_t>(2));
   }
 }
 
