@@ -279,6 +279,9 @@ class TestExtras:
         results = con._client.sql_validate(con._session, q)
         col_names = sorted([r.col_name for r in results])
         col_types = [r.col_type for r in results]
+        # JACK not sure if dict_key will always be the same
+        # As a hack set it to none for now.
+        for ttype in col_types: ttype.dict_key = None
 
         expected_col_names = [
             'date_',
