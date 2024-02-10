@@ -111,6 +111,23 @@ class DropForeignTableCommand : public DdlCommand {
   ExecutionResult execute(bool read_only_mode) override;
 };
 
+class CommentCommand : public DdlCommand {
+ public:
+  CommentCommand(const DdlCommandData& ddl_data,
+                 std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+
+ private:
+  struct Identifiers {
+    std::string table_name;
+    std::optional<std::string> column_name;
+  };
+
+  Identifiers getObjectIdentifiers() const;
+  void setComment(const TableDescriptor* td, const Identifiers& ids) const;
+};
+
 class AlterTableAlterColumnCommand : public DdlCommand {
  public:
   AlterTableAlterColumnCommand(

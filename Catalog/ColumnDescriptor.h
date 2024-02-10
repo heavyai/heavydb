@@ -44,6 +44,7 @@ struct ColumnDescriptor {
   bool isGeoPhyCol{false};
   std::optional<std::string> default_value;
   int32_t db_id;
+  std::optional<std::string> comment;
 
   ColumnDescriptor() : isSystemCol(false), isVirtualCol(false), isDeletedCol(false) {}
   ColumnDescriptor(const int tableId,

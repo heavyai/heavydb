@@ -78,9 +78,10 @@ ExplainInfo::ExplainInfo(std::string query_string) {
 }
 
 const std::vector<std::string> ParserWrapper::ddl_cmd = {
-    "ARCHIVE", "ALTER",    "COPY",     "CREATE",   "DROP",   "DUMP",    "EVALUATE",
-    "GRANT",   "KILL",     "OPTIMIZE", "REFRESH",  "RENAME", "RESTORE", "REVOKE",
-    "SHOW",    "TRUNCATE", "REASSIGN", "VALIDATE", "CLEAR",  "PAUSE",   "RESUME"};
+    "ARCHIVE",  "ALTER",  "COPY",   "CREATE",   "DROP",     "DUMP",
+    "EVALUATE", "GRANT",  "KILL",   "OPTIMIZE", "REFRESH",  "RENAME",
+    "RESTORE",  "REVOKE", "SHOW",   "TRUNCATE", "REASSIGN", "VALIDATE",
+    "CLEAR",    "PAUSE",  "RESUME", "COMMENT"};
 
 const std::vector<std::string> ParserWrapper::update_dml_cmd = {"INSERT",
                                                                 "DELETE",

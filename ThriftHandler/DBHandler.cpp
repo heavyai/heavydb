@@ -2394,6 +2394,9 @@ TColumnType DBHandler::populateThriftColumnType(const Catalog* cat,
   if (cd->default_value.has_value()) {
     col_type.__set_default_value(cd->getDefaultValueLiteral());
   }
+  if (cd->comment.has_value()) {
+    col_type.__set_comment(cd->comment.value());
+  }
   return col_type;
 }
 
@@ -2610,6 +2613,9 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
                    ? TPartitionDetail::REPLICATED
                    : (td->partitions == "SHARDED" ? TPartitionDetail::SHARDED
                                                   : TPartitionDetail::OTHER));
+    if (td->comment.has_value()) {
+      _return.__set_comment(td->comment.value());
+    }
     if (td->isView) {
       _return.table_type = TTableType::VIEW;
     } else if (td->isTemporaryTable()) {

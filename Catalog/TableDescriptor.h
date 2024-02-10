@@ -78,6 +78,8 @@ struct TableDescriptor {
   bool is_system_table;
   bool is_in_memory_system_table;
 
+  std::optional<std::string> comment;
+
   // write mutex, only to be used inside catalog package
   std::shared_ptr<std::mutex> mutex_;
 
