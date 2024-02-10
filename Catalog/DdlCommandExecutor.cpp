@@ -655,6 +655,8 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     result = DropForeignTableCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_TABLES") {
     result = ShowTablesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "COMMENT") {
+    result = CommentCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_TABLE_DETAILS") {
     result = ShowTableDetailsCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_CREATE_TABLE") {
@@ -789,7 +791,7 @@ DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails()
       ddl_command_ == "DROP_FOREIGN_TABLE" || ddl_command_ == "CREATE_USER_MAPPING" ||
       ddl_command_ == "DROP_USER_MAPPING" || ddl_command_ == "ALTER_FOREIGN_TABLE" ||
       ddl_command_ == "ALTER_SERVER" || ddl_command_ == "REFRESH_FOREIGN_TABLES" ||
-      ddl_command_ == "ALTER_SYSTEM_CLEAR") {
+      ddl_command_ == "ALTER_SYSTEM_CLEAR" || ddl_command_ == "COMMENT") {
     // group user/role/db commands
     execution_details.execution_location = ExecutionLocation::ALL_NODES;
     execution_details.aggregation_type = AggregationType::NONE;
@@ -1424,6 +1426,116 @@ ExecutionResult CreateForeignTableCommand::execute(bool read_only_mode) {
       foreign_table.tableName,
       TableDBObjectType,
       catalog);
+
+  return ExecutionResult();
+}
+
+CommentCommand::CommentCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data);
+  CHECK(ddl_payload.HasMember("targetObjectType"));
+  CHECK(ddl_payload["targetObjectType"].IsString());
+  CHECK(ddl_payload.HasMember("tableName"));
+  CHECK(ddl_payload["tableName"].IsString());
+
+  std::string type = ddl_payload["targetObjectType"].GetString();
+  if (type == "COLUMN") {
+    CHECK(ddl_payload.HasMember("columnName"));
+    CHECK(ddl_payload["columnName"].IsString());
+  } else if (type != "TABLE") {
+    throw std::runtime_error("Unsupported type used with COMMENT ON command: " + type);
+  }
+
+  CHECK(ddl_payload.HasMember("setToNull"));
+  if (!ddl_payload["setToNull"].GetBool()) {
+    CHECK(ddl_payload.HasMember("comment"));
+    CHECK(ddl_payload["comment"].IsString());
+  }
+}
+
+void CommentCommand::setComment(const TableDescriptor* td, const Identifiers& ids) const {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  auto& catalog = session_ptr_->getCatalog();
+
+  std::string type = ddl_payload["targetObjectType"].GetString();
+  if (type == "TABLE") {
+    if (ddl_payload["setToNull"].GetBool()) {
+      catalog.setTableComment(td);
+    } else {
+      catalog.setTableComment(td, ddl_payload["comment"].GetString());
+    }
+  } else if (type == "COLUMN") {
+    CHECK(ids.column_name.has_value());
+    auto cd = catalog.getMetadataForColumn(td->tableId, ids.column_name.value());
+    if (!cd) {
+      throw std::runtime_error("Column " + ids.column_name.value() +
+                               " does not exist for table " + td->tableName + ".");
+    }
+    if (ddl_payload["setToNull"].GetBool()) {
+      catalog.setColumnComment(cd);
+    } else {
+      catalog.setColumnComment(cd, ddl_payload["comment"].GetString());
+    }
+  } else {
+    throw std::runtime_error("Unsupported type encountered in COMMENT ON command: " +
+                             type);
+  }
+}
+
+CommentCommand::Identifiers CommentCommand::getObjectIdentifiers() const {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string type = ddl_payload["targetObjectType"].GetString();
+  Identifiers ids;
+  ids.table_name = ddl_payload["tableName"].GetString();
+  CHECK(!ids.table_name.empty());
+  if (type == "COLUMN") {
+    ids.column_name = ddl_payload["columnName"].GetString();
+    CHECK(ids.column_name.has_value());
+    CHECK(!ids.column_name.value().empty());
+  }
+
+  return ids;
+}
+
+ExecutionResult CommentCommand::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
+  auto& catalog = session_ptr_->getCatalog();
+
+  if (read_only_mode) {
+    throw std::runtime_error("COMMENT ON invalid in read only mode.");
+  }
+
+  auto ids = getObjectIdentifiers();
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, ids.table_name, false);
+  const auto td = td_with_lock();
+
+  if (!td) {
+    throw std::runtime_error("Table " + ids.table_name + " does not exist.");
+  }
+  if (td->isView) {
+    throw std::runtime_error("COMMENT ON views is currently not supported.");
+  }
+
+  // Check permissions (ownership or super user only)
+  auto& cat = session_ptr_->getCatalog();
+  const auto& current_user = session_ptr_->get_currentUser();
+  if (!current_user.isSuper) {
+    std::string table_name = td->tableName;
+    if (!Catalog_Namespace::SysCatalog::instance().verifyDBObjectOwnership(
+            current_user, DBObject(table_name, TableDBObjectType), cat)) {
+      throw std::runtime_error(std::string("COMMENT ON failed on table \"") + table_name +
+                               "\". It can only be executed by super user or "
+                               "owner of the "
+                               "table.");
+    }
+  }
+
+  setComment(td, ids);
 
   return ExecutionResult();
 }
@@ -3029,18 +3141,18 @@ void AlterTableAlterColumnCommand::alterColumnTypes(const TableDescriptor* td,
 
 void AlterTableAlterColumnCommand::alterColumn() {
   auto& ddl_payload = extractPayload(ddl_data_);
-  const auto tableName = std::string(ddl_payload["tableName"].GetString());
+  const auto table_name = std::string(ddl_payload["tableName"].GetString());
 
   auto columns = Parser::get_columns_from_json_payload("alterData", ddl_payload);
 
   auto& catalog = session_ptr_->getCatalog();
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-          catalog, tableName, true);
+          catalog, table_name, true);
   const auto td = td_with_lock();
 
   if (!td) {
-    throw std::runtime_error("Table " + tableName + " does not exist.");
+    throw std::runtime_error("Table " + table_name + " does not exist.");
   } else {
     if (td->isView) {
       throw std::runtime_error("Altering columns in a view is not supported.");

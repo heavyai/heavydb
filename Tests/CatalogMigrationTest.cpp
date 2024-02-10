@@ -81,9 +81,10 @@ class CatalogTest : public DBHandlerTestFixture {
     return tables;
   }
 
-  std::unique_ptr<Catalog_Namespace::Catalog> initCatalog() {
+  std::unique_ptr<Catalog_Namespace::Catalog> initCatalog(
+      const std::string& db_name = shared::kDefaultDbName) {
     Catalog_Namespace::DBMetadata db_metadata;
-    db_metadata.dbName = shared::kDefaultDbName;
+    db_metadata.dbName = db_name;
     db_metadata.dbId = 1;
     std::vector<LeafHostInfo> leaves{};
     return std::make_unique<Catalog_Namespace::Catalog>(
@@ -377,6 +378,75 @@ TEST_F(DefaultForeignServersTest, DefaultServersAreCreatedWhenFsiIsEnabled) {
                               "default_local_parquet",
                               foreign_storage::DataWrapperType::PARQUET,
                               shared::kRootUserId);
+}
+
+class CommentSchemaTest : public CatalogTest {
+ protected:
+  void SetUp() override {
+    CatalogTest::SetUp();
+    sql("DROP DATABASE IF EXISTS test_database;");
+    initCatalogPreUpdate();
+  }
+
+  void TearDown() override {
+    sql("DROP DATABASE IF EXISTS test_database;");
+    CatalogTest::TearDown();
+  }
+
+  void initCatalogPreUpdate() {
+    sql("CREATE DATABASE test_database;");
+
+    auto catalog = SC::instance().getCatalog("test_database");
+    auto& connection = catalog->getSqliteConnector();
+
+    connection.query("DROP TABLE mapd_tables");
+    connection.query("DROP TABLE mapd_columns");
+    connection.query(
+        "CREATE TABLE mapd_tables (tableid integer primary key, name text unique, userid "
+        "integer, ncolumns integer, "
+        "isview boolean, "
+        "fragments text, frag_type integer, max_frag_rows integer, max_chunk_size "
+        "bigint, "
+        "frag_page_size integer, "
+        "max_rows bigint, partitions text, shard_column_id integer, shard integer, "
+        "sort_column_id integer default 0, storage_type text default '', "
+        "max_rollback_epochs integer default -1, "
+        "is_system_table boolean default 0, "
+        "num_shards integer, key_metainfo TEXT, version_num "
+        "BIGINT DEFAULT 1) ");
+    connection.query(
+        "CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid "
+        "integer, name text, coltype "
+        "integer, colsubtype integer, coldim integer, colscale integer, is_notnull "
+        "boolean, compression integer, "
+        "comp_param integer, size integer, chunks text, is_systemcol boolean, "
+        "is_virtualcol boolean, virtual_expr "
+        "text, is_deletedcol boolean, version_num BIGINT, default_value text,"
+        "primary key(tableid, columnid), unique(tableid, name))");
+  }
+
+  void checkCatalogTableHasColumn(Catalog_Namespace::Catalog* catalog,
+                                  const std::string& table,
+                                  const std::string& column) {
+    auto& connection = catalog->getSqliteConnector();
+    connection.query("PRAGMA TABLE_INFO(" + table + ")");
+    std::vector<std::string> cols;
+    for (size_t i = 0; i < connection.getNumRows(); i++) {
+      cols.push_back(connection.getData<std::string>(i, 1));
+    }
+    ASSERT_TRUE(std::find(cols.begin(), cols.end(), std::string(column)) != cols.end())
+        << " failed to find column " + column + " in catalog table " + table;
+  }
+};
+
+TEST_F(CommentSchemaTest, ValidateSchemaUpdateTablesTable) {
+  auto catalog = initCatalog("test_database");  // Performs migrations and schema updates
+  checkCatalogTableHasColumn(catalog.get(), "mapd_tables", "comment");
+}
+
+TEST_F(CommentSchemaTest, ValidateSchemaUpdateColumnsTable) {
+  auto catalog = initCatalog("test_database");  // Performs migrations and schema updates
+  checkCatalogTableHasColumn(catalog.get(), "mapd_columns", "comment");
 }
 
 class SystemTableMigrationTest : public SysCatalogTest {

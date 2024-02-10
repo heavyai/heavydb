@@ -190,6 +190,10 @@ void populate_import_buffers_for_catalog_tables(
         import_buffers["ddl_statement"]->addDictStringWithTruncation(
             get_table_ddl(db_id, table));
       }
+      if (import_buffers.find("comment") != import_buffers.end()) {
+        import_buffers["comment"]->addDictStringWithTruncation(
+            table.comment.has_value() ? table.comment.value() : std::string{});
+      }
     }
   }
 }
@@ -237,6 +241,10 @@ void populate_import_buffers_for_catalog_columns(
       import_buffers["default_value"]->addDictStringWithTruncation(
           column.default_value.has_value() ? column.getDefaultValueLiteral()
                                            : std::string{});
+    }
+    if (import_buffers.find("comment") != import_buffers.end()) {
+      import_buffers["comment"]->addDictStringWithTruncation(
+          column.comment.has_value() ? column.comment.value() : std::string{});
     }
   }
 }
@@ -542,7 +550,7 @@ std::vector<ColumnDescriptor> get_all_columns() {
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
     if (catalog->name() != shared::kInfoSchemaDbName) {
-      for (const auto& cd : catalog->getAllColumnMetadataCopy()) {
+      for (const auto& cd : catalog->getAllColumnMetadataCopyForColumnsSystemTable()) {
         if (!cd.isGeoPhyCol && !cd.isDeletedCol && !cd.isSystemCol && !cd.isVirtualCol) {
           columns.emplace_back(cd);
         }

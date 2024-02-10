@@ -1150,6 +1150,50 @@ SqlDdl SqlDropUser(Span s) :
     }
 }
 
+/*
+ * Set a comment on a database object using:
+ *
+ * COMMENT ON (TABLE | COLUMN)  <object_name> IS (<string_literal> | NULL);
+ *
+ */
+SqlDdl SqlComment(Span s) :
+{
+    SqlComment.Builder builder =
+        new SqlComment.Builder();
+    SqlIdentifier tableName;
+    SqlIdentifier columnName;
+    final SqlNode value;
+}
+{
+    <COMMENT> <ON> 
+    (
+       <TABLE>
+       { builder.setTableType(); }
+       tableName=SimpleIdentifier()
+       { builder.setTableName(tableName.toString()); }
+       |
+       <COLUMN>
+       { builder.setColumnType(); }
+       tableName=SimpleIdentifier()
+       { builder.setTableName(tableName.toString()); }
+       <DOT>
+       columnName=SimpleIdentifier()
+       { builder.setColumnName(columnName.toString()); }
+    )
+    <IS> 
+    (
+       <NULL>
+       { builder.setToNull(); }
+       |
+       value = StringLiteral()
+       { builder.setComment((new HeavySqlSanitizedString(value)).toString()); }
+    )
+    {
+        builder.setPos(s.end(this));
+        return builder.build();
+    }
+}
+
 
 /*
  * Alter user using the following syntax:

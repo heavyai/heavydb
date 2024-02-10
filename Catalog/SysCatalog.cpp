@@ -1504,7 +1504,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         "max_rollback_epochs integer default -1, "
         "is_system_table boolean default 0, "
         "num_shards integer, key_metainfo TEXT, version_num "
-        "BIGINT DEFAULT 1) ");
+        "BIGINT DEFAULT 1, comment TEXT DEFAULT NULL) ");
     dbConn->query(
         "CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid "
         "integer, name text, coltype "
@@ -1512,7 +1512,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         "boolean, compression integer, "
         "comp_param integer, size integer, chunks text, is_systemcol boolean, "
         "is_virtualcol boolean, virtual_expr "
-        "text, is_deletedcol boolean, version_num BIGINT, default_value text, "
+        "text, is_deletedcol boolean, version_num BIGINT, default_value text, comment "
+        "TEXT DEFAULT NULL, "
         "primary key(tableid, columnid), unique(tableid, name))");
     dbConn->query(
         "CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text)");

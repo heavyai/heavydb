@@ -1,0 +1,11 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "targetObjectType": "COLUMN",
+    "tableName": "test_table",
+    "columnName": "test_column",
+    "comment": "test comment",
+    "setToNull": false,
+    "command": "COMMENT"
+  }
+}
