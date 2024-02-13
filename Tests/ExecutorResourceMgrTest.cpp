@@ -960,6 +960,75 @@ TEST(ExecutorResourceMgr, ChangeTotalResource) {
                   default_gpu_buffer_pool_mem);
 }
 
+TEST(ExecutorResourceMgr, HandleFailedResourceRequest) {
+  // this is the same setup from problematic system's status
+  auto executor_resource_mgr = generate_executor_resource_mgr(40,
+                                                              1,
+                                                              10732475596,
+                                                              50979258598,
+                                                              6621341312,
+                                                              0.9,
+                                                              0.8,
+                                                              1,
+                                                              0.5,
+                                                              true,
+                                                              true,
+                                                              false,
+                                                              true,
+                                                              false,
+                                                              0.8);
+  ASSERT_TRUE(executor_resource_mgr != nullptr);
+
+  // Ensure exception is thrown for too large of a request
+  bool detect_exception = false;
+  try {
+    // we try to send the same resource request for processing problematic query
+    std::vector<std::pair<ChunkKey, size_t>> chunks_with_byte_sizes;
+    std::vector<size_t> chunks_sizes{
+        128000000, 128000000, 128000000, 128000000, 128000000, 128000000, 128000000,
+        128000000, 128000000, 128000000, 118686880, 256000000, 256000000, 256000000,
+        256000000, 256000000, 256000000, 256000000, 256000000, 256000000, 256000000,
+        237373760, 256000000, 256000000, 256000000, 256000000, 256000000, 256000000,
+        256000000, 256000000, 256000000, 237373760, 128000000, 128000000, 128000000,
+        128000000, 128000000, 128000000, 128000000, 128000000, 128000000, 128000000,
+        118686880, 64000000,  64000000,  64000000,  64000000,  64000000,  64000000,
+        64000000,  64000000,  64000000,  64000000,  59343440};
+    std::vector<size_t> bytes_per_kernel(11, 832000000);
+    ChunkRequestInfo chunk_request_info{ExecutorDeviceType::CPU,
+                                        chunks_with_byte_sizes,
+                                        55,
+                                        9091464720,
+                                        bytes_per_kernel,
+                                        832000000,
+                                        true};
+    RequestInfo request_info{ExecutorDeviceType::CPU,
+                             0,
+                             11,
+                             1,
+                             0,
+                             0,
+                             13017488704,
+                             1183408064,
+                             chunk_request_info,
+                             true};
+    // after sending the request_info, we expect to get the same exception from the issue
+    // report
+    auto const request_handle = executor_resource_mgr->request_resources(request_info);
+    CHECK(request_handle);
+  } catch (std::runtime_error const& e) {
+    std::string error_msg(e.what());
+    if (error_msg.find("RequestStats error: Query requested more CPU result memory") !=
+        std::string::npos) {
+      detect_exception = true;
+    }
+    // `requests_executing` should be zero, otherwise we cannot pause the ERM queue
+    // which is the main source of hanging when calling `clear cpu/gpu memory`
+    EXPECT_EQ(executor_resource_mgr->get_executor_stats().requests_executing,
+              static_cast<size_t>(0));
+  }
+  EXPECT_TRUE(detect_exception);
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 

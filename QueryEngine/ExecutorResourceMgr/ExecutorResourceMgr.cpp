@@ -20,6 +20,8 @@
 #include "ExecutorResourceMgr.h"
 #include "Logger/Logger.h"
 
+static const char* REQUEST_STATS_ERROR_MSG_PREFIX = "RequestStats error: ";
+
 namespace ExecutorResourceMgr_Namespace {
 
 ExecutorResourceMgr::ExecutorResourceMgr(
@@ -34,7 +36,7 @@ ExecutorResourceMgr::ExecutorResourceMgr(
   CHECK_GT(max_available_resource_use_ratio_, 0.0);
   CHECK_LE(max_available_resource_use_ratio_, 1.0);
   process_queue_thread_ = std::thread(&ExecutorResourceMgr::process_queue_loop, this);
-  LOG(EXECUTOR) << "Executor Resource Manager queue proccessing thread started";
+  LOG(EXECUTOR) << "Executor Resource Manager queue processing thread started";
 }
 
 ExecutorResourceMgr::~ExecutorResourceMgr() {
@@ -86,7 +88,11 @@ ExecutorResourceMgr::request_resources_with_timeout(const RequestInfo& request_i
   std::shared_lock<std::shared_mutex> queue_stats_read_lock(queue_stats_mutex_);
   RequestStats const& request_stats = requests_stats_[request_id];
   if (request_stats.error) {
-    throw std::runtime_error("RequestStats error: " + *request_stats.error);
+    // we throw `ExecutorResourceMgrError` to carry request_id
+    // instead of std::runtime_error to revert ERM's status outside from this function
+    // after releasing `queue_stats_mutex_` lock
+    throw ExecutorResourceMgrError(request_id,
+                                   REQUEST_STATS_ERROR_MSG_PREFIX + *request_stats.error);
   }
   const ResourceGrant& actual_resource_grant = request_stats.actual_resource_grant;
   // Ensure each resource granted was at least the minimum requested
@@ -100,9 +106,16 @@ ExecutorResourceMgr::request_resources_with_timeout(const RequestInfo& request_i
 
 std::unique_ptr<ExecutorResourceHandle> ExecutorResourceMgr::request_resources(
     const RequestInfo& request_info) {
-  return request_resources_with_timeout(
-      request_info,
-      static_cast<size_t>(0));  // 0 signifies no timeout
+  try {
+    return request_resources_with_timeout(
+        request_info,
+        static_cast<size_t>(0));  // 0 signifies no timeout
+  } catch (ExecutorResourceMgrError const& e) {
+    if (e.getErrorMsg().find(REQUEST_STATS_ERROR_MSG_PREFIX) == 0u) {
+      handle_resource_stat_error(e.getRequestId());
+    }
+    throw std::runtime_error(e.getErrorMsg());
+  }
 }
 
 void ExecutorResourceMgr::release_resources(const RequestId request_id,
@@ -512,6 +525,31 @@ void ExecutorResourceMgr::mark_request_timed_out(const RequestId request_id) {
     default:
       UNREACHABLE();
   }
+}
+
+void ExecutorResourceMgr::handle_resource_stat_error(const RequestId request_id) {
+  const std::chrono::steady_clock::time_point execution_finished_time =
+      std::chrono::steady_clock::now();
+  const size_t current_request_count = requests_count_.load(std::memory_order_relaxed);
+  CHECK_LT(request_id, current_request_count);
+  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
+  RequestStats& request_stats = requests_stats_[request_id];
+  request_stats.execution_finished_time = execution_finished_time;
+  request_stats.finished_executing = true;
+  request_stats.execution_time_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          request_stats.execution_finished_time - request_stats.deque_time)
+          .count();
+  request_stats.total_time_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          request_stats.execution_finished_time - request_stats.enqueue_time)
+          .count();
+  remove_request_from_stage(request_id, ExecutionRequestStage::EXECUTING);
+
+  executor_stats_.requests_executing--;
+  executor_stats_.requests_executed++;
+  executor_stats_.total_execution_time_ms += request_stats.execution_time_ms;
+  executor_stats_.total_time_ms += request_stats.total_time_ms;
 }
 
 void ExecutorResourceMgr::mark_request_finished(const RequestId request_id) {
