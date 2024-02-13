@@ -389,6 +389,15 @@ class ExecutorResourceMgr : public std::enable_shared_from_this<ExecutorResource
   void mark_request_finished(const RequestId request_id);
 
   /**
+   * @brief Internal method: Invoked when we have `ResourceStat` error in the middle of
+   * handling the request, removes request from `EXECUTING` stage and modify related
+   * executor_stats
+   *
+   * @param request_id - `RequestId` for the resource request that has finished executing
+   */
+  void handle_resource_stat_error(const RequestId request_id);
+
+  /**
    * @brief Internal method: Set the `should_process_queue_` flag to true, signifying that
    * the queue should be processed. Protected by a lock on `processor_queue_mutex_`.
    *
