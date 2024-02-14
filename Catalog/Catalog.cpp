@@ -5759,20 +5759,34 @@ std::optional<std::string> Catalog::dumpCreateTable(int32_t table_id,
   return dumpCreateTableUnlocked(td, multiline_formatting, dump_defaults);
 }
 
+namespace {
+std::string escape_comment_guards(const std::string& str) {
+  std::string out_str;
+  out_str = std::regex_replace(str, std::regex{"/\\*"}, "\\\\/*");
+  out_str = std::regex_replace(out_str, std::regex{"\\*/"}, "*\\\\/");
+  return out_str;
+}
+}  // namespace
+
 std::string Catalog::dumpCreateTableUnlocked(const TableDescriptor* td,
                                              bool multiline_formatting,
                                              bool dump_defaults) const {
   auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
   std::ostringstream os;
 
+  std::string table_comment = "";
+  if (td->comment.has_value()) {
+    table_comment = " /* " + escape_comment_guards(td->comment.value()) + " */";
+  }
+
   if (foreign_table && !td->is_system_table) {
-    os << "CREATE FOREIGN TABLE " << td->tableName << " (";
+    os << "CREATE FOREIGN TABLE " << td->tableName << table_comment << " (";
   } else if (!td->isView) {
     os << "CREATE ";
     if (td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL) {
       os << "TEMPORARY ";
     }
-    os << "TABLE " + td->tableName + " (";
+    os << "TABLE " + td->tableName + table_comment + " (";
   } else {
     os << "CREATE VIEW " + td->tableName + " AS " << td->viewSQL;
     return os.str();
@@ -5785,6 +5799,17 @@ std::string Catalog::dumpCreateTableUnlocked(const TableDescriptor* td,
 
   // gather column defines
   const auto cds = getAllColumnMetadataForTable(td->tableId, false, false, false);
+  bool force_multiline_formatting = false;
+  for (const auto cd : cds) {
+    if (!(cd->isSystemCol || cd->isVirtualCol)) {
+      if (cd->comment.has_value()) {
+        force_multiline_formatting = true;
+        break;
+      }
+    }
+  }
+  multiline_formatting = multiline_formatting || force_multiline_formatting;
+
   std::map<const std::string, const ColumnDescriptor*> dict_root_cds;
   bool first = true;
   for (const auto cd : cds) {
@@ -5840,6 +5865,9 @@ std::string Catalog::dumpCreateTableUnlocked(const TableDescriptor* td,
             os << " ENCODING NONE";
           }
         }
+      }
+      if (cd->comment.has_value()) {
+        os << " /* " << escape_comment_guards(cd->comment.value()) << " */";
       }
     }
   }

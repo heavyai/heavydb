@@ -1304,8 +1304,92 @@ class ShowCreateTableTest : public DBHandlerTestFixture {
     sql("DROP TABLE IF EXISTS showcreatetabletest2;");
     sql("DROP VIEW IF EXISTS showcreateviewtest;");
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    sql("DROP TABLE IF EXISTS test_temp_table;");
   }
 };
+
+TEST_F(ShowCreateTableTest, TableComment) {
+  sql("CREATE TABLE showcreatetabletest (id INT, txt TEXT);");
+  sql("COMMENT ON TABLE showcreatetabletest IS 'test comment';");
+  sqlAndCompareResult("SHOW CREATE TABLE showcreatetabletest;",
+                      {{"CREATE TABLE showcreatetabletest /* test comment */ (\n  id "
+                        "INTEGER,\n  txt TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(ShowCreateTableTest, ForeignTableComment) {
+  sql("CREATE FOREIGN TABLE test_foreign_table (id INT, bint BIGINT) SERVER "
+      "default_local_delimited "
+      "WITH (file_path='" +
+      test_source_path + "/two_col_1_2.csv',header='true');");
+  sql("COMMENT ON TABLE test_foreign_table IS 'test comment';");
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE test_foreign_table;",
+      {{"CREATE FOREIGN TABLE test_foreign_table /* test comment */ (\n  id INTEGER,\n  "
+        "bint BIGINT)\nSERVER default_local_delimited\nWITH (FILE_PATH='" +
+        test_source_path +
+        "/two_col_1_2.csv', HEADER='true', REFRESH_TIMING_TYPE='MANUAL', "
+        "REFRESH_UPDATE_TYPE='ALL');"}});
+}
+
+TEST_F(ShowCreateTableTest, TemporaryTableComment) {
+  sql("CREATE TEMPORARY TABLE test_temp_table (id INT, txt TEXT);");
+  sql("COMMENT ON TABLE test_temp_table IS 'test comment';");
+  sqlAndCompareResult("SHOW CREATE TABLE test_temp_table;",
+                      {{"CREATE TEMPORARY TABLE test_temp_table /* test comment */ (\n  "
+                        "id INTEGER,\n  txt TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(ShowCreateTableTest, TableColumnComment) {
+  sql("CREATE TABLE showcreatetabletest (id INT, txt TEXT);");
+  sql("COMMENT ON COLUMN showcreatetabletest.id IS 'test column comment';");
+  sqlAndCompareResult("SHOW CREATE TABLE showcreatetabletest;",
+                      {{"CREATE TABLE showcreatetabletest (\n  id INTEGER /* test column "
+                        "comment */,\n  txt TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(ShowCreateTableTest, ForeignTableColumnComment) {
+  sql("CREATE FOREIGN TABLE test_foreign_table (id INT, bint BIGINT) SERVER "
+      "default_local_delimited "
+      "WITH (file_path='" +
+      test_source_path + "/two_col_1_2.csv',header='true');");
+  sql("COMMENT ON COLUMN test_foreign_table.id IS 'test column comment';");
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE test_foreign_table;",
+      {{"CREATE FOREIGN TABLE test_foreign_table (\n  id INTEGER /* test column comment "
+        "*/,\n  bint BIGINT)\nSERVER default_local_delimited\nWITH (FILE_PATH='" +
+        test_source_path +
+        "/two_col_1_2.csv', HEADER='true', REFRESH_TIMING_TYPE='MANUAL', "
+        "REFRESH_UPDATE_TYPE='ALL');"}});
+}
+
+TEST_F(ShowCreateTableTest, TemporaryTableColumnComment) {
+  sql("CREATE TEMPORARY TABLE test_temp_table (id INT, txt TEXT);");
+  sql("COMMENT ON COLUMN test_temp_table.id IS 'test column comment';");
+  sqlAndCompareResult("SHOW CREATE TABLE test_temp_table;",
+                      {{"CREATE TEMPORARY TABLE test_temp_table (\n  id INTEGER /* test "
+                        "column comment */,\n  txt TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(ShowCreateTableTest, TableCommentControlCharacters) {
+  sql("CREATE TABLE showcreatetabletest (id INT, txt TEXT);");
+  sql("COMMENT ON TABLE showcreatetabletest IS 'test column comment\nwith "
+      "c\fontrol\rcharacters\nthat may be\b used';");
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE showcreatetabletest;",
+      {{"CREATE TABLE showcreatetabletest /* u&'test column comment\\000awith "
+        "c\\000control\\000dcharacters\\000athat may be\\0008 used' */ (\n  id "
+        "INTEGER,\n  txt TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(ShowCreateTableTest, TableCommentWithCommentGuards) {
+  sql("CREATE TABLE showcreatetabletest (id INT, txt TEXT);");
+  sql("COMMENT ON TABLE showcreatetabletest IS '/*This is a comment with /* nested "
+      "guards */ */';");
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE showcreatetabletest;",
+      {{"CREATE TABLE showcreatetabletest /* \\\\/*This is a comment with \\\\/* nested "
+        "guards *\\\\/ *\\\\/ */ (\n  id INTEGER,\n  txt TEXT ENCODING DICT(32));"}});
+}
 
 TEST_F(ShowCreateTableTest, Identity) {
   // clang-format off
@@ -4497,8 +4581,18 @@ TEST_F(SystemTablesTest, TablesSystemTableComments) {
 
   const std::string create_employees_sql =
       "CREATE TABLE employees (\n  id INTEGER,\n  salary BIGINT);";
+  const std::string create_employees_sql_with_comment =
+      "CREATE TABLE employees /* This table stores employee information, v1 */ (\n  id "
+      "INTEGER,\n  salary BIGINT);";
   const std::string create_employees_ft_sql =
       "CREATE FOREIGN TABLE employees_ft (\n  id INTEGER,\n  salary BIGINT)\nSERVER "
+      "default_local_delimited\nWITH (FILE_PATH='" +
+      test_source_path +
+      "/two_col_1_2.csv', HEADER='true', REFRESH_TIMING_TYPE='MANUAL', "
+      "REFRESH_UPDATE_TYPE='ALL');";
+  const std::string create_employees_ft_sql_with_comment =
+      "CREATE FOREIGN TABLE employees_ft /* This table stores employee information, v5 "
+      "*/ (\n  id INTEGER,\n  salary BIGINT)\nSERVER "
       "default_local_delimited\nWITH (FILE_PATH='" +
       test_source_path +
       "/two_col_1_2.csv', HEADER='true', REFRESH_TIMING_TYPE='MANUAL', "
@@ -4506,11 +4600,23 @@ TEST_F(SystemTablesTest, TablesSystemTableComments) {
   const std::string create_employees_sharded_sql =
       "CREATE TABLE employees_sharded (\n  id INTEGER,\n  salary BIGINT,\n  SHARD KEY "
       "(id))\nWITH (SHARD_COUNT=2);";
+  const std::string create_employees_sharded_sql_with_comment =
+      "CREATE TABLE employees_sharded /* This table stores employee information, v2 */ "
+      "(\n  id INTEGER,\n  salary BIGINT,\n  SHARD KEY "
+      "(id))\nWITH (SHARD_COUNT=2);";
   const std::string create_employees_sharded_1_sql =
       "CREATE TABLE employees_sharded_shard_#1 (\n  id INTEGER,\n  salary BIGINT,\n  "
       "SHARD KEY (id))\nWITH (SHARD_COUNT=2);";
+  const std::string create_employees_sharded_1_sql_with_comment =
+      "CREATE TABLE employees_sharded_shard_#1 /* This table stores employee "
+      "information, v2 */ (\n  id INTEGER,\n  salary BIGINT,\n  "
+      "SHARD KEY (id))\nWITH (SHARD_COUNT=2);";
   const std::string create_employees_sharded_2_sql =
       "CREATE TABLE employees_sharded_shard_#2 (\n  id INTEGER,\n  salary BIGINT,\n  "
+      "SHARD KEY (id))\nWITH (SHARD_COUNT=2);";
+  const std::string create_employees_sharded_2_sql_with_comment =
+      "CREATE TABLE employees_sharded_shard_#2 /* This table stores employee "
+      "information, v2 */ (\n  id INTEGER,\n  salary BIGINT,\n  "
       "SHARD KEY (id))\nWITH (SHARD_COUNT=2);";
   const std::string create_funniest_employees_sql =
       "CREATE TABLE \"the.funniest.employees\" (\n  id INTEGER,\n  \"really big salary\" "
@@ -4518,8 +4624,15 @@ TEST_F(SystemTablesTest, TablesSystemTableComments) {
   const std::string create_funniest_employees_sql_output =
       "CREATE TABLE the.funniest.employees (\n  id INTEGER,\n  \"really big salary\" "
       "BIGINT);";
+  const std::string create_funniest_employees_sql_output_with_comment =
+      "CREATE TABLE the.funniest.employees /* This table stores employee information, v3 "
+      "*/ (\n  id INTEGER,\n  \"really big salary\" "
+      "BIGINT);";
   const std::string create_employees_temp_sql =
       "CREATE TEMPORARY TABLE employees_temp (\n  id INTEGER,\n  salary BIGINT);";
+  const std::string create_employees_temp_sql_with_comment =
+      "CREATE TEMPORARY TABLE employees_temp /* This table stores employee information, "
+      "v4 */ (\n  id INTEGER,\n  salary BIGINT);";
 
   sql(create_employees_sql);
   sql(create_employees_sharded_sql);
@@ -4557,43 +4670,43 @@ TEST_F(SystemTablesTest, TablesSystemTableComments) {
         getUserId(shared::kRootUsername), shared::kRootUsername, 4L, "DEFAULT",
         Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS),
-        0L, create_employees_sql, "This table stores employee information, v1" },
+        0L, create_employees_sql_with_comment, "This table stores employee information, v1" },
       { 3L, "test_db_1", employees_ft_id, "employees_ft",
         getUserId(shared::kRootUsername), shared::kRootUsername, 3L, "FOREIGN",
         Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 0L, create_employees_ft_sql,
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 0L, create_employees_ft_sql_with_comment,
         "This table stores employee information, v5" },
       { 3L, "test_db_1", employees_sharded_id, "employees_sharded",
         getUserId(shared::kRootUsername), shared::kRootUsername, 4L, "DEFAULT",
         Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 2L, create_employees_sharded_sql,
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 2L, create_employees_sharded_sql_with_comment,
         "This table stores employee information, v2" },
       { 3L, "test_db_1", employees_sharded_shard_1_id,
         "employees_sharded_shard_#1", getUserId(shared::kRootUsername),
         shared::kRootUsername, 4L, "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
         i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 2L, create_employees_sharded_1_sql,
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 2L, create_employees_sharded_1_sql_with_comment,
         "This table stores employee information, v2" },
       { 3L, "test_db_1", employees_sharded_shard_2_id,
         "employees_sharded_shard_#2", getUserId(shared::kRootUsername),
         shared::kRootUsername, 4L, "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
         i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 2L, create_employees_sharded_2_sql,
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 2L, create_employees_sharded_2_sql_with_comment,
         "This table stores employee information, v2" },
       { 3L, "test_db_1", employees_temp_id, "employees_temp",
         getUserId(shared::kRootUsername), shared::kRootUsername, 4L,
         "TEMPORARY", Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 0L, create_employees_temp_sql,
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 0L, create_employees_temp_sql_with_comment,
         "This table stores employee information, v4" },
       { 3L, "test_db_1", funniest_employees_id, "the.funniest.employees",
         getUserId(shared::kRootUsername), shared::kRootUsername, 4L, "DEFAULT",
         Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
         i(DEFAULT_MAX_ROLLBACK_EPOCHS), 0L,
-        create_funniest_employees_sql_output,
+        create_funniest_employees_sql_output_with_comment,
         "This table stores employee information, v3" },
     }
   );
