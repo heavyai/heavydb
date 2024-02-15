@@ -4820,6 +4820,49 @@ Was expecting:
     "MODEL" ...)");
 }
 
+class GrantRevokeSelectColumnTest : public DBHandlerTestFixture {
+ protected:
+  static void SetUpTestSuite() {
+    loginAdmin();
+    sql("DROP TABLE IF EXISTS test_table;");
+    sql("DROP VIEW IF EXISTS test_view;");
+    sql("CREATE TABLE test_table ( id INT, val INT, str TEXT);");
+    sql("CREATE VIEW test_view AS ( SELECT * FROM test_table);");
+  }
+
+  static void TearDownTestSuite() {
+    loginAdmin();
+    sql("DROP TABLE IF EXISTS test_table;");
+    sql("DROP VIEW IF EXISTS test_view;");
+  }
+
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    loginAdmin();
+  }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+};
+
+// TODO: GRANT SELECT [VIEW] (col_1, col_2, ...) is unimplemented, when
+// implemented update these tests.
+
+TEST_F(GrantRevokeSelectColumnTest, GrantSelectColumnTable) {
+  queryAndAssertException("GRANT SELECT (test_col) ON TABLE test_table TO admin;",
+                          "Privilege type SELECT COLUMN is unsupported.");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, RevokeSelectColumnTable) {
+  queryAndAssertException("REVOKE SELECT (test_col) ON TABLE test_table FROM admin;",
+                          "Privilege type SELECT COLUMN is unsupported.");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, RevokeSelectColumnOnIllegalType) {
+  queryAndAssertException(
+      "REVOKE SELECT (test_col) ON DATABASE " + shared::kDefaultDbName + " FROM admin;",
+      "Privilege type SELECT COLUMN is unsupported.");
+}
+
 class DatabaseCaseSensitiveTest : public DBHandlerTestFixture {
  protected:
   static void SetUpTestSuite() {

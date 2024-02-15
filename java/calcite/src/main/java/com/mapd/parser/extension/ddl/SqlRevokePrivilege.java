@@ -4,7 +4,6 @@ import static java.util.Objects.requireNonNull;
 
 import com.google.gson.annotations.Expose;
 
-import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlDdl;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
@@ -13,7 +12,6 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.util.EscapedStringJsonBuilder;
-import org.apache.calcite.util.JsonBuilder;
 
 import java.util.List;
 import java.util.Map;
@@ -56,8 +54,10 @@ public class SqlRevokePrivilege extends SqlDdl {
 
     if (this.privileges != null) {
       List<Object> privilege_list = jsonBuilder.list();
-      for (SqlNode privilege : this.privileges) {
-        privilege_list.add(privilege.toString());
+      for (SqlNode node : this.privileges) {
+        assert node instanceof SqlPrivilege;
+        SqlPrivilege privilege = (SqlPrivilege) node;
+        privilege_list.add(privilege.toJson(jsonBuilder));
       }
       map.put("privileges", privilege_list);
     }

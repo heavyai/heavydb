@@ -1,0 +1,19 @@
+{
+  "payload": {
+    "privileges": [
+      {
+        "type": "SELECT COLUMN",
+        "columns": [
+          "the best column",
+          "the worst column"
+        ]
+      }
+    ],
+    "type": "TABLE",
+    "target": "test_table",
+    "grantees": [
+      "admin"
+    ],
+    "command": "GRANT_PRIVILEGE"
+  }
+}

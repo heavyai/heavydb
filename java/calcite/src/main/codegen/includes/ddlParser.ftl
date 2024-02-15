@@ -1455,9 +1455,28 @@ SqlDdl SqlRevokeRole(Span s, SqlNodeList roleList) :
     { return new SqlRevokeRole(s.end(this), roleList, granteeList); }
 }
 
+
+void GetColumnTargets(Span s, List<SqlIdentifier> columnTargets ) :
+{
+  SqlIdentifier columnName;
+}
+{
+  <LPAREN>
+  columnName = CompoundIdentifier()
+  { columnTargets.add(columnName); }
+  (
+    <COMMA>
+    columnName = CompoundIdentifier()
+    { columnTargets.add(columnName); }
+  )*
+  <RPAREN>
+  { s.end(this); }
+}
+
 SqlNode Privilege(Span s) :
 {
     String type;
+    List<SqlIdentifier> columnTargets = new ArrayList<SqlIdentifier>();
 }
 {
     (
@@ -1468,6 +1487,7 @@ SqlNode Privilege(Span s) :
     |   LOOKAHEAD(2) <CREATE> <VIEW> { type = "CREATE VIEW"; }
     |   LOOKAHEAD(2) <CREATE> <MODEL> { type = "CREATE MODEL"; }
     |   LOOKAHEAD(2) <SELECT> <VIEW> { type = "SELECT VIEW"; }
+    |   LOOKAHEAD(2) <SELECT> GetColumnTargets(s, columnTargets) { type = "SELECT COLUMN"; }
     |   LOOKAHEAD(2) <DROP> <VIEW> { type = "DROP VIEW"; }
     |   LOOKAHEAD(2) <DROP> <SERVER> { type = "DROP SERVER"; }
     |   LOOKAHEAD(2) <CREATE> <DASHBOARD> { type = "CREATE DASHBOARD"; }
@@ -1489,7 +1509,7 @@ SqlNode Privilege(Span s) :
     |   <USAGE> { type = "USAGE"; }
     |   <VIEW> { type = "VIEW"; }
     )
-    { return SqlLiteral.createCharString(type, s.end(this)); }
+    { return new SqlPrivilege(type,columnTargets,s.end(this)); }
 }
 
 SqlNodeList privilegeList() :
