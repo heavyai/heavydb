@@ -1,0 +1,21 @@
+{
+  "payload": {
+    "privileges": [
+      {
+        "type": "SELECT COLUMN",
+        "columns": [
+          "a"
+        ]
+      },
+      {
+        "type": "SELECT"
+      }
+    ],
+    "type": "TABLE",
+    "target": "test_table",
+    "grantees": [
+      "admin"
+    ],
+    "command": "GRANT_PRIVILEGE"
+  }
+}

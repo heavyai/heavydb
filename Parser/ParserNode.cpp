@@ -6011,6 +6011,12 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(
     const std::string& privs,
     const DBObjectType& objectType,
     const std::string& object_name) {
+  static const std::set<std::string> unimplemented_privileges = {"SELECT COLUMN"};
+
+  if (unimplemented_privileges.find(privs) != unimplemented_privileges.end()) {
+    throw std::runtime_error("Privilege type " + privs + " is unsupported.");
+  }
+
   static const std::map<std::pair<const std::string, const DBObjectType>,
                         std::pair<const AccessPrivileges, const DBObjectType>>
       privileges_lookup{
@@ -6162,10 +6168,9 @@ GrantPrivilegesStmt::GrantPrivilegesStmt(const rapidjson::Value& payload) {
   if (payload.HasMember("privileges")) {
     CHECK(payload["privileges"].IsArray());
     for (auto& privilege : payload["privileges"].GetArray()) {
-      auto r = json_str(privilege);
-      // privilege was a StringLiteral
-      //   and is wrapped with quotes which need to get removed
-      boost::algorithm::trim_if(r, boost::is_any_of(" \"'`"));
+      CHECK(privilege.IsObject());
+      CHECK(privilege.HasMember("type"));
+      auto r = json_str(privilege["type"]);
       privileges_.emplace_back(r);
     }
   }
@@ -6229,10 +6234,9 @@ RevokePrivilegesStmt::RevokePrivilegesStmt(const rapidjson::Value& payload) {
   if (payload.HasMember("privileges")) {
     CHECK(payload["privileges"].IsArray());
     for (auto& privilege : payload["privileges"].GetArray()) {
-      auto r = json_str(privilege);
-      // privilege was a StringLiteral
-      //   and is wrapped with quotes which need to get removed
-      boost::algorithm::trim_if(r, boost::is_any_of(" \"'`"));
+      CHECK(privilege.IsObject());
+      CHECK(privilege.HasMember("type"));
+      auto r = json_str(privilege["type"]);
       privileges_.emplace_back(r);
     }
   }
