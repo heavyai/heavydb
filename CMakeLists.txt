@@ -295,7 +295,10 @@ if(ENABLE_CUDA)
           60-virtual
           70-virtual
           75-virtual
-          80-virtual)
+          80-virtual
+          86-virtual
+          89-virtual
+          90-virtual)
       list(APPEND MAPD_CUDA_OPTIONS -Wno-deprecated-gpu-targets)
       message(STATUS "CUDA_ARCHITECTURES: ${CMAKE_CUDA_ARCHITECTURES}")
     else()
@@ -306,6 +309,9 @@ if(ENABLE_CUDA)
         -gencode=arch=compute_70,code=compute_70;
         -gencode=arch=compute_75,code=compute_75;
         -gencode=arch=compute_80,code=compute_80;
+        -gencode=arch=compute_86,code=compute_86;
+        -gencode=arch=compute_89,code=compute_89;
+        -gencode=arch=compute_90,code=compute_90;
         -Wno-deprecated-gpu-targets)
       message(STATUS "CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
       list(APPEND MAPD_CUDA_OPTIONS ${CUDA_COMPILATION_ARCH})
