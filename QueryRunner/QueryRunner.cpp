@@ -773,7 +773,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
                                QuerySessionStatus::QueryStatus::PENDING_QUEUE);
   CHECK(dispatch_queue_);
   dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
-  auto result_future = query_launch_task->get_future();
+  auto result_future = query_launch_task->get_future().share();
   result_future.get();
   CHECK(result);
   return result->getRows();
@@ -920,7 +920,7 @@ std::shared_ptr<ResultSet> QueryRunner::getCalcitePlan(const std::string& query_
       });
   CHECK(dispatch_queue_);
   dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
-  auto result_future = query_launch_task->get_future();
+  auto result_future = query_launch_task->get_future().share();
   result_future.get();
   CHECK(result);
   return result;
@@ -979,7 +979,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
       });
   CHECK(dispatch_queue_);
   dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
-  auto result_future = query_launch_task->get_future();
+  auto result_future = query_launch_task->get_future().share();
   result_future.get();
   CHECK(result);
   return result;
@@ -1039,7 +1039,7 @@ std::unique_ptr<RelAlgDag> QueryRunner::getRelAlgDag(const std::string& query_st
       });
   CHECK(dispatch_queue_);
   dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
-  auto result_future = query_launch_task->get_future();
+  auto result_future = query_launch_task->get_future().share();
   result_future.get();
   CHECK(rel_alg_dag);
   return rel_alg_dag;

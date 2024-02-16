@@ -1838,7 +1838,7 @@ TRowDescriptor DBHandler::validateRelAlg(const std::string& query_ra,
                         executor_index);
       });
   dispatch_query_task(execute_rel_alg_task, /*is_update_delete=*/false);
-  auto result_future = execute_rel_alg_task->get_future();
+  auto result_future = execute_rel_alg_task->get_future().share();
   result_future.get();
   DBHandler::convertData(query_result, execution_result, query_state_proxy, true, -1, -1);
 
@@ -6781,7 +6781,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     dispatch_queue_->submit(execute_rel_alg_task,
                             pw.getDMLType() == ParserWrapper::DMLType::Update ||
                                 pw.getDMLType() == ParserWrapper::DMLType::Delete);
-    auto result_future = execute_rel_alg_task->get_future();
+    auto result_future = execute_rel_alg_task->get_future().share();
     result_future.get();
     return;
   }
