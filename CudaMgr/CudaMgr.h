@@ -40,7 +40,9 @@ enum class NvidiaDeviceArch {
   Pascal,   // compute major = 6
   Volta,    // compute major = 7, compute minor = 0
   Turing,   // compute major = 7, compute minor = 5
-  Ampere    // compute major = 8
+  Ampere,   // compute major = 8, compute minor = 0
+  Ada,      // compute major = 8, compute minor = 9
+  Hopper    // compute major = 9
 };
 
 #ifdef HAVE_CUDA
@@ -176,7 +178,13 @@ class CudaMgr {
       case NvidiaDeviceArch::Turing:
         return "sm_75";
       case NvidiaDeviceArch::Ampere:
-        return "sm_75";
+        return "sm_80";
+      // For Ada and Hopper architectures, use the latest compute capability that is
+      // supported by the current LLVM version (LLVM 14). Update returned value when LLVM
+      // is updated.
+      case NvidiaDeviceArch::Ada:
+      case NvidiaDeviceArch::Hopper:
+        return "sm_86";
       default:
         LOG(WARNING) << "Unrecognized Nvidia device architecture, falling back to "
                         "Kepler-compatibility.";
@@ -203,7 +211,13 @@ class CudaMgr {
             return NvidiaDeviceArch::Turing;
           }
         case 8:
-          return NvidiaDeviceArch::Ampere;
+          if (device_properties.computeMinor < 9) {
+            return NvidiaDeviceArch::Ampere;
+          } else {
+            return NvidiaDeviceArch::Ada;
+          }
+        case 9:
+          return NvidiaDeviceArch::Hopper;
         default:
           return NvidiaDeviceArch::Kepler;
       }
