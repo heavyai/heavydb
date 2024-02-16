@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         bsdmainutils \
         wget \
         curl \
+        gpg-agent \
         libgeos-dev \
         default-jre-headless \
         software-properties-common && \
