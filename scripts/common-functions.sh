@@ -652,10 +652,23 @@ function install_gdal_tools() {
     check_artifact_cleanup gdal-${GDAL_VERSION}.tar.gz gdal-${GDAL_VERSION}
 }
 
-GEOS_VERSION=3.12.1
+GEOS_VERSION=3.11.1
 
 function install_geos() {
-    download_make_install ${HTTP_DEPS}/geos-${GEOS_VERSION}.tar.bz2 "" "--enable-shared --disable-static"
+    download ${HTTP_DEPS}/geos-${GEOS_VERSION}.tar.bz2
+    tar xvf geos-${GEOS_VERSION}.tar.bz2
+    pushd geos-${GEOS_VERSION}
+    mkdir build
+    pushd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release \
+             -DCMAKE_INSTALL_PREFIX=${PREFIX} \
+             -DBUILD_SHARED_LIBS=on \
+             -DBUILD_GEOSOP=off \
+             -DBUILD_TESTING=off
+    cmake_build_and_install
+    popd
+    popd
+    check_artifact_cleanup geos-${GEOS_VERSION}.tar.bz2 geos-${GEOS_VERSION}
 }
 
 FOLLY_VERSION=2023.01.16.00

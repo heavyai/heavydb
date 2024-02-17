@@ -16,14 +16,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
         curl \
         gpg-agent \
-        libgeos-dev \
         default-jre-headless \
         software-properties-common && \
     add-apt-repository ppa:deadsnakes/ppa && \
+    add-apt-repository ppa:ubuntugis/ppa && \
     apt-get install -y --no-install-recommends \
         python3.10 \
         python3.10-venv \
-        libpython3.10 && \
+        libpython3.10 \
+        libgeos-dev && \
     apt-get remove --purge -y && \
     rm -rf /var/lib/apt/lists/*
 
