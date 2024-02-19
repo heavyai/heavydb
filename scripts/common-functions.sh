@@ -957,7 +957,7 @@ function install_blosc() {
   check_artifact_cleanup  v${BLOSC_VERSION}.tar.gz $BDIR
 }
 
-oneDAL_VERSION=2023.1.1
+oneDAL_VERSION=2024.1.0
 function install_onedal() {
   download https://github.com/oneapi-src/oneDAL/archive/refs/tags/${oneDAL_VERSION}.tar.gz
   extract ${oneDAL_VERSION}.tar.gz
@@ -988,9 +988,10 @@ function install_onedal() {
   # could install python-is-python3 module, but that's overkill if only this needs it
   sed -i 's/python/python3/g' makefile
 
-  # building oneAPI triggers deprecated implicit copy constructor warnings, which fail the build
-  # due to -Werror, so add a -Wno-error=deprecated-copy flag to compilation command
-  sed -i -E s/\-Wreturn\-type/\-Wreturn\-type\ \-Wno\-error=deprecated\-copy/g dev/make/cmplr.gnu.mk
+  # fix issues with c++20
+  # remove c++ standard override in cmake
+  # remove unnecessary template params from contructor decls (gcc fix)
+  patch -p1 < $SCRIPTS_DIR/patch-onedal-cpp20.patch
 
   # these exports will only be valid in the subshell that builds oneDAL
   (export TBBROOT=${PREFIX}; \

@@ -1,0 +1,77 @@
+diff --git a/cmake/templates/oneDALConfig.cmake.in b/cmake/templates/oneDALConfig.cmake.in
+index 26ce3143a..1cd03dd58 100644
+--- a/cmake/templates/oneDALConfig.cmake.in
++++ b/cmake/templates/oneDALConfig.cmake.in
+@@ -169,13 +169,13 @@ if (ONEDAL_USE_DPCPP STREQUAL "yes")
+     set(CMAKE_CXX_FLAGS "-fsycl -fsycl-device-code-split=per_kernel ${CMAKE_CXX_FLAGS}")
+ endif()
+ 
+-if (ONEDAL_INTERFACE STREQUAL "yes")
+-    if (MSVC)
+-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
+-    else ()
+-        set(CMAKE_CXX_STANDARD 17)
+-    endif()
+-endif()
++# if (ONEDAL_INTERFACE STREQUAL "yes")
++#    if (MSVC)
++#        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
++#    else ()
++#        set(CMAKE_CXX_STANDARD 17)
++#    endif()
++#endif()
+ 
+ if(UNIX)
+     if(APPLE)
+diff --git a/cpp/daal/include/algorithms/covariance/covariance_distributed.h b/cpp/daal/include/algorithms/covariance/covariance_distributed.h
+index 3e0e8f562..62153ada3 100644
+--- a/cpp/daal/include/algorithms/covariance/covariance_distributed.h
++++ b/cpp/daal/include/algorithms/covariance/covariance_distributed.h
+@@ -564,7 +564,7 @@ public:
+     typedef typename super::ResultType ResultType;
+     typedef typename super::PartialResultType PartialResultType;
+ 
+-    Distributed<step1Local, algorithmFPType, method>() : Online<algorithmFPType, method>() {}
++    Distributed() : Online<algorithmFPType, method>() {}
+ 
+     /**
+      * Constructs an algorithm for correlation or variance-covariance matrix computation
+diff --git a/cpp/daal/include/algorithms/linear_regression/linear_regression_training_distributed.h b/cpp/daal/include/algorithms/linear_regression/linear_regression_training_distributed.h
+index 25909e86b..f51134125 100644
+--- a/cpp/daal/include/algorithms/linear_regression/linear_regression_training_distributed.h
++++ b/cpp/daal/include/algorithms/linear_regression/linear_regression_training_distributed.h
+@@ -145,7 +145,7 @@ public:
+     typedef typename super::PartialResultType PartialResultType;
+ 
+     /** Default constructor */
+-    Distributed<step1Local, algorithmFPType, method>() {}
++    Distributed() {}
+ 
+     /**
+      * Constructs a linear regression training algorithm in the first step of the distributed processing mode
+diff --git a/cpp/daal/include/algorithms/linear_regression/linear_regression_training_types.h b/cpp/daal/include/algorithms/linear_regression/linear_regression_training_types.h
+index daec99ca2..5ba0d20ed 100644
+--- a/cpp/daal/include/algorithms/linear_regression/linear_regression_training_types.h
++++ b/cpp/daal/include/algorithms/linear_regression/linear_regression_training_types.h
+@@ -284,7 +284,7 @@ template <>
+ class DAAL_EXPORT DistributedInput<step2Master> : public daal::algorithms::Input, public InputIface
+ {
+ public:
+-    DistributedInput<step2Master>();
++    DistributedInput();
+     /**
+      * Gets an input object for linear regression model-based training
+      * in the second step of the distributed processing mode
+diff --git a/cpp/daal/include/algorithms/ridge_regression/ridge_regression_training_distributed.h b/cpp/daal/include/algorithms/ridge_regression/ridge_regression_training_distributed.h
+index 80a6b7d8f..ffd3af1d7 100644
+--- a/cpp/daal/include/algorithms/ridge_regression/ridge_regression_training_distributed.h
++++ b/cpp/daal/include/algorithms/ridge_regression/ridge_regression_training_distributed.h
+@@ -138,7 +138,7 @@ public:
+     typedef typename super::PartialResultType PartialResultType;
+ 
+     /** Default constructor */
+-    Distributed<step1Local, algorithmFPType, method>() : Online<algorithmFPType, method>() {}
++    Distributed() : Online<algorithmFPType, method>() {}
+ 
+     /**
+      * Constructs a ridge regression training algorithm in the first step of the distributed processing mode by copying input objects and parameters
