@@ -384,8 +384,7 @@ function install_gdal_and_pdal() {
     fi
 
     # sqlite3 (for proj, gdal)
-    download_make_install https://sqlite.org/2023/sqlite-autoconf-3430200.tar.gz
-
+    download_make_install https://sqlite.org/2024/sqlite-autoconf-3450100.tar.gz
     # expat (for gdal)
     download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_5_0/expat-2.5.0.tar.bz2
 
