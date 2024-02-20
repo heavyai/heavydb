@@ -37,13 +37,13 @@
 
 namespace Geospatial {
 
-DEVICE inline double decompress_longitude_coord_geoint32(const int32_t compressed) {
+DEVICE constexpr double decompress_longitude_coord_geoint32(const int32_t compressed) {
   // decompress longitude: -2,147,483,647..2,147,483,647  --->  -180..180
   return static_cast<double>(compressed) *
          8.3819031754424345e-08;  // (180.0 / 2147483647.0)
 }
 
-DEVICE inline double decompress_latitude_coord_geoint32(const int32_t compressed) {
+DEVICE constexpr double decompress_latitude_coord_geoint32(const int32_t compressed) {
   // decompress latitude: -2,147,483,647..2,147,483,647  --->  -90..90
   return static_cast<double>(compressed) *
          4.1909515877212172e-08;  // // (90.0 / 2147483647.0)
