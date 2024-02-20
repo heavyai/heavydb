@@ -114,16 +114,21 @@ FORCE_INLINE DEVICE int64_t
 get_bucket_key_for_range_compressed_impl(const int8_t* range,
                                          const size_t range_component_index,
                                          const double bucket_size) {
-  const auto range_ptr = reinterpret_cast<const int32_t*>(range);
-  if (range_component_index % 2 == 0) {
-    return get_bucket_key_for_value_impl(
-        Geospatial::decompress_longitude_coord_geoint32(range_ptr[range_component_index]),
-        bucket_size);
+  bool const is_x = range_component_index % 2 == 0;
+  double coord;  // Calculate decompressed coordinate
+  if (const auto range_ptr = reinterpret_cast<const int32_t*>(range)) {
+    coord = is_x ? Geospatial::decompress_longitude_coord_geoint32(
+                       range_ptr[range_component_index])
+                 : Geospatial::decompress_latitude_coord_geoint32(
+                       range_ptr[range_component_index]);
   } else {
-    return get_bucket_key_for_value_impl(
-        Geospatial::decompress_latitude_coord_geoint32(range_ptr[range_component_index]),
-        bucket_size);
+    constexpr double x_null_coord = Geospatial::decompress_longitude_coord_geoint32(
+        static_cast<int32_t>(Geospatial::compress_null_point_longitude_geoint32()));
+    constexpr double y_null_coord = Geospatial::decompress_latitude_coord_geoint32(
+        static_cast<int32_t>(Geospatial::compress_null_point_latitude_geoint32()));
+    coord = is_x ? x_null_coord : y_null_coord;
   }
+  return get_bucket_key_for_value_impl(coord, bucket_size);
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
