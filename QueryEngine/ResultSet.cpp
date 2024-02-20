@@ -830,7 +830,11 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     if (top_n == 0) {
       top_n = pv.size();  // top_n == 0 implies a full sort
     }
-    pv = topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false));
+    {
+      auto top_permute_timer = DEBUG_TIMER("topPermutation");
+      pv =
+          topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false));
+    }
     if (pv.size() < permutation_.size()) {
       permutation_.resize(pv.size());
       permutation_.shrink_to_fit();
@@ -883,8 +887,11 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
                             const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
   const size_t nthreads = cpu_threads();
+  VLOG(1) << "Performing parallel top-k sort on CPU (# threads: " << nthreads
+          << ", entry_count: " << query_mem_desc_.getEntryCount() << ")";
 
   // Split permutation_ into nthreads subranges and top-sort in-place.
+  auto const phase1_begin = timer_start();
   permutation_.resize(query_mem_desc_.getEntryCount());
   std::vector<PermutationView> permutation_views(nthreads);
   threading::task_group top_sort_threads;
@@ -904,7 +911,7 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
     });
   }
   top_sort_threads.wait();
-
+  auto const phase1_ms = timer_stop(phase1_begin);
   // In case you are considering implementing a parallel reduction, note that the
   // ResultSetComparator constructor is O(N) in order to materialize some of the aggregate
   // columns as necessary to perform a comparison. This cost is why reduction is chosen to
@@ -912,18 +919,26 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
 
   // Left-copy disjoint top-sorted subranges into one contiguous range.
   // ++++....+++.....+++++...  ->  ++++++++++++............
+  auto const phase2_begin = timer_start();
   auto end = permutation_.begin() + permutation_views.front().size();
   for (size_t i = 1; i < nthreads; ++i) {
     std::copy(permutation_views[i].begin(), permutation_views[i].end(), end);
     end += permutation_views[i].size();
   }
+  auto const phase2_ms = timer_stop(phase2_begin);
 
   // Top sort final range.
+  auto const phase3_begin = timer_start();
   PermutationView pv(permutation_.data(), end - permutation_.begin());
   const auto compare = createComparator(order_entries, pv, executor, false);
   pv = topPermutation(pv, top_n, compare);
   permutation_.resize(pv.size());
   permutation_.shrink_to_fit();
+  auto const phase3_ms = timer_stop(phase3_begin);
+  auto const total_ms = phase1_ms + phase2_ms + phase3_ms;
+  VLOG(1) << "Parallel top-k sort on CPU finished, total_elapsed_time: " << total_ms
+          << " ms (phase1: " << phase1_ms << " ms, phase2: " << phase2_ms
+          << " ms, phase3: " << phase3_ms << " ms)";
 }
 
 std::pair<size_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) const {
@@ -1320,7 +1335,6 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
 PermutationView ResultSet::topPermutation(PermutationView permutation,
                                           const size_t n,
                                           const Comparator& compare) {
-  auto timer = DEBUG_TIMER(__func__);
   if (n < permutation.size()) {
     std::partial_sort(
         permutation.begin(), permutation.begin() + n, permutation.end(), compare);
