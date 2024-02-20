@@ -878,7 +878,6 @@ class ResultSet {
                               const PermutationView permutation,
                               const Executor* executor,
                               const bool single_threaded) {
-    auto timer = DEBUG_TIMER(__func__);
     if (query_mem_desc_.didOutputColumnar()) {
       return [rsc = ResultSetComparator<ColumnWiseTargetAccessor>(
                   order_entries, this, permutation, executor, single_threaded)](
