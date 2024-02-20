@@ -1427,6 +1427,7 @@ class Executor {
   static void init_resource_mgr(const size_t num_cpu_slots,
                                 const size_t num_gpu_slots,
                                 const size_t cpu_result_mem,
+                                const bool use_cpu_mem_pool_for_output_buffers,
                                 const size_t cpu_buffer_pool_mem,
                                 const size_t gpu_buffer_pool_mem,
                                 const double per_query_max_cpu_slots_ratio,

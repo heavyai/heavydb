@@ -206,8 +206,8 @@ using BufferPoolChunkMap =
  * GPU_BUFFER_POOL_MEM. Furthermore, a ResourceSubtype enum is used to represent more
  * granular sub-categories of the above. Namely, there exists ResourceSubtype
  * PINNED_CPU_BUFFER_POOL_MEM and PINNED_GPU_BUFFER_POOL_MEM to represent non-pageable
- * memory (specifcally for kernel results), and PAGEABLE_CPU_BUFFER_POOL_MEM and
- * PAGEABLE_GPU_BUFFER_POOL_MEM to represent data that could be evicted as neccessary.
+ * memory (specifically for kernel results), and PAGEABLE_CPU_BUFFER_POOL_MEM and
+ * PAGEABLE_GPU_BUFFER_POOL_MEM to represent data that could be evicted as necessary.
  *
  * Currently, a singleton ExecutorResourcePool is managed by ExecutorResourceMgr and is
  * initialized by the latter in the ExecutorResourceMgr constructor. Various parameters
@@ -240,7 +240,8 @@ class ExecutorResourcePool {
       const std::vector<std::pair<ResourceType, size_t>>& total_resources,
       const std::vector<ConcurrentResourceGrantPolicy>&
           concurrent_resource_grant_policies,
-      const std::vector<ResourceGrantPolicy>& max_per_request_resource_grant_policies);
+      const std::vector<ResourceGrantPolicy>& max_per_request_resource_grant_policies,
+      const CPUResultMemResourceType cpu_result_mem_resource_type);
 
   void log_parameters() const;
 
@@ -521,6 +522,7 @@ class ExecutorResourcePool {
     return --outstanding_per_resource_num_requests_[static_cast<size_t>(resource_type)];
   }
 
+  CPUResultMemResourceType cpu_result_mem_resource_type_;
   std::array<size_t, ResourceTypeSize>
       total_resources_{};  // Will be value initialized to 0s
   std::array<bool, ResourceTypeSize> resource_type_validity_{

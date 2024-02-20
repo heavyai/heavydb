@@ -2127,21 +2127,27 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     LOG(INFO) << "\tCPU-GPU kernel concurrency: "
               << (g_executor_resource_mgr_allow_cpu_gpu_kernel_concurrency ? "enabled"
                                                                            : "disabled");
-    if (g_executor_resource_mgr_cpu_result_mem_bytes != 0UL) {
-      LOG(INFO) << "\tCPU result set reserved allocation: "
-                << g_executor_resource_mgr_cpu_result_mem_bytes / (1024 * 1024) << " MB";
-    } else {
-      LOG(INFO) << "\tCPU result set reserved ratio of CPU buffer pool size: "
-                << g_executor_resource_mgr_cpu_result_mem_ratio;
-    }
     LOG(INFO) << "\tPer-query max CPU threads ratio: "
               << g_executor_resource_mgr_per_query_max_cpu_slots_ratio;
-    LOG(INFO) << "\tPer-query max CPU result memory ratio of allocated total: "
-              << g_executor_resource_mgr_per_query_max_cpu_result_mem_ratio;
     LOG(INFO) << "\tAllow concurrent CPU thread/slot oversubscription: "
               << (g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency
                       ? "enabled"
                       : "disabled");
+    if (g_use_cpu_mem_pool_for_output_buffers) {
+      LOG(INFO) << "\tCPU result set is managed by using CPU buffer pool memory";
+    } else {
+      if (g_executor_resource_mgr_cpu_result_mem_bytes != 0UL) {
+        LOG(INFO) << "\tCPU result set reserved allocation: "
+                  << g_executor_resource_mgr_cpu_result_mem_bytes / (1024 * 1024)
+                  << " MB";
+      } else {
+        LOG(INFO) << "\tCPU result set reserved ratio of CPU buffer pool size: "
+                  << g_executor_resource_mgr_cpu_result_mem_ratio;
+      }
+    }
+
+    LOG(INFO) << "\tPer-query max CPU result memory ratio of allocated total: "
+              << g_executor_resource_mgr_per_query_max_cpu_result_mem_ratio;
     LOG(INFO)
         << "\tAllow concurrent CPU result memory oversubscription: "
         << (g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency

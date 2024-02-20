@@ -28,10 +28,12 @@ ExecutorResourceMgr::ExecutorResourceMgr(
     const std::vector<std::pair<ResourceType, size_t>>& total_resources,
     const std::vector<ConcurrentResourceGrantPolicy>& concurrent_resource_grant_policies,
     const std::vector<ResourceGrantPolicy>& max_per_request_resource_grant_policies,
-    const double max_available_resource_use_ratio)
+    const double max_available_resource_use_ratio,
+    const CPUResultMemResourceType cpu_result_memory_resource_type)
     : executor_resource_pool_(total_resources,
                               concurrent_resource_grant_policies,
-                              max_per_request_resource_grant_policies)
+                              max_per_request_resource_grant_policies,
+                              cpu_result_memory_resource_type)
     , max_available_resource_use_ratio_(max_available_resource_use_ratio) {
   CHECK_GT(max_available_resource_use_ratio_, 0.0);
   CHECK_LE(max_available_resource_use_ratio_, 1.0);
@@ -648,6 +650,7 @@ std::shared_ptr<ExecutorResourceMgr> generate_executor_resource_mgr(
     const size_t num_cpu_slots,
     const size_t num_gpu_slots,
     const size_t cpu_result_mem,
+    const bool use_cpu_mem_pool_for_output_buffers,
     const size_t cpu_buffer_pool_mem,
     const size_t gpu_buffer_pool_mem,
     const double per_query_max_cpu_slots_ratio,
@@ -661,7 +664,17 @@ std::shared_ptr<ExecutorResourceMgr> generate_executor_resource_mgr(
     const bool allow_cpu_result_mem_oversubscription_concurrency,
     const double max_available_resource_use_ratio) {
   CHECK_GT(num_cpu_slots, size_t(0));
-  CHECK_GT(cpu_result_mem, size_t(0));
+  const auto cpu_result_mem_resource_type =
+      use_cpu_mem_pool_for_output_buffers
+          ? CPUResultMemResourceType{ResourceType::CPU_BUFFER_POOL_MEM,
+                                     ResourceSubtype::PINNED_CPU_BUFFER_POOL_MEM}
+          : CPUResultMemResourceType{ResourceType::CPU_RESULT_MEM,
+                                     ResourceSubtype::CPU_RESULT_MEM};
+  const size_t cpu_result_mem_bytes =
+      use_cpu_mem_pool_for_output_buffers ? 0u : cpu_result_mem;
+  if (!use_cpu_mem_pool_for_output_buffers) {
+    CHECK_GT(cpu_result_mem_bytes, 0u);
+  }
   CHECK_GT(cpu_buffer_pool_mem, size_t(0));
   CHECK_GT(per_query_max_cpu_slots_ratio, size_t(0));
   CHECK_EQ(!(allow_cpu_kernel_concurrency || allow_cpu_gpu_kernel_concurrency) &&
@@ -676,7 +689,7 @@ std::shared_ptr<ExecutorResourceMgr> generate_executor_resource_mgr(
   const std::vector<std::pair<ResourceType, size_t>> total_resources = {
       std::make_pair(ResourceType::CPU_SLOTS, num_cpu_slots),
       std::make_pair(ResourceType::GPU_SLOTS, num_gpu_slots),
-      std::make_pair(ResourceType::CPU_RESULT_MEM, cpu_result_mem),
+      std::make_pair(ResourceType::CPU_RESULT_MEM, cpu_result_mem_bytes),
       std::make_pair(ResourceType::CPU_BUFFER_POOL_MEM, cpu_buffer_pool_mem),
       std::make_pair(ResourceType::GPU_BUFFER_POOL_MEM, gpu_buffer_pool_mem)};
 
@@ -687,7 +700,7 @@ std::shared_ptr<ExecutorResourceMgr> generate_executor_resource_mgr(
   const auto max_per_request_gpu_slots_grant_policy =
       gen_unlimited_resource_grant_policy(ResourceSubtype::GPU_SLOTS);
   const auto max_per_request_cpu_result_mem_grant_policy =
-      gen_ratio_resource_grant_policy(ResourceSubtype::CPU_RESULT_MEM,
+      gen_ratio_resource_grant_policy(cpu_result_mem_resource_type.resource_subtype,
                                       per_query_max_cpu_result_mem_ratio);
 
   const auto max_per_request_pinned_cpu_buffer_pool_mem =
@@ -741,7 +754,7 @@ std::shared_ptr<ExecutorResourceMgr> generate_executor_resource_mgr(
       gpu_slots_oversubscription_concurrency_policy);
 
   const auto concurrent_cpu_result_mem_grant_policy =
-      ConcurrentResourceGrantPolicy(ResourceType::CPU_RESULT_MEM,
+      ConcurrentResourceGrantPolicy(cpu_result_mem_resource_type.resource_type,
                                     ResourceConcurrencyPolicy::ALLOW_CONCURRENT_REQUESTS,
                                     cpu_result_mem_oversubscription_concurrency_policy);
 
@@ -753,7 +766,8 @@ std::shared_ptr<ExecutorResourceMgr> generate_executor_resource_mgr(
   return std::make_shared<ExecutorResourceMgr>(total_resources,
                                                concurrent_resource_grant_policies,
                                                max_per_request_resource_grant_policies,
-                                               max_available_resource_use_ratio);
+                                               max_available_resource_use_ratio,
+                                               cpu_result_mem_resource_type);
 }
 
 }  // namespace ExecutorResourceMgr_Namespace
