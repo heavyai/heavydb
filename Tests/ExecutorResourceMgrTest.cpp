@@ -52,11 +52,13 @@ const bool default_output_buffers_reusable_intra_thread{false};
 
 const size_t ZERO_SIZE{0UL};
 
-std::shared_ptr<ExecutorResourceMgr> gen_resource_mgr_with_defaults() {
+std::shared_ptr<ExecutorResourceMgr> gen_resource_mgr_with_defaults(
+    bool enable_cpu_buffer_pool = false) {
   return generate_executor_resource_mgr(
       default_cpu_slots,
       default_gpu_slots,
       default_cpu_result_mem,
+      enable_cpu_buffer_pool,
       default_cpu_buffer_pool_mem,
       default_gpu_buffer_pool_mem,
       default_per_query_max_cpu_slots_ratio,
@@ -470,6 +472,7 @@ TEST(ExecutorResourceMgr, AllowPerQueryLargeRequestsWithSmallMinRequests) {
         default_cpu_slots,
         default_gpu_slots,
         default_cpu_result_mem,
+        false,
         default_cpu_buffer_pool_mem,
         default_gpu_buffer_pool_mem,
         default_per_query_max_cpu_slots_ratio,
@@ -965,6 +968,7 @@ TEST(ExecutorResourceMgr, HandleFailedResourceRequest) {
   auto executor_resource_mgr = generate_executor_resource_mgr(40,
                                                               1,
                                                               10732475596,
+                                                              false,
                                                               50979258598,
                                                               6621341312,
                                                               0.9,
@@ -1027,6 +1031,61 @@ TEST(ExecutorResourceMgr, HandleFailedResourceRequest) {
               static_cast<size_t>(0));
   }
   EXPECT_TRUE(detect_exception);
+}
+
+TEST(ExecutorResourceMgr, EnableCPUBufferPool) {
+  auto executor_resource_mgr = gen_resource_mgr_with_defaults(true);
+  ASSERT_TRUE(executor_resource_mgr != nullptr);
+  auto check_cpu_result_mem_stat = [executor_resource_mgr]() {
+    // allocated CPU_RESULT_MEM should always zero, we track this by using
+    // ResourceType::CPU_BUFFER_POOL_MEM
+    EXPECT_EQ(
+        executor_resource_mgr->get_resource_info(ResourceType::CPU_RESULT_MEM).first,
+        static_cast<size_t>(0));
+    // total size of CPU_RESULT_MEM pool should always zero
+    EXPECT_EQ(
+        executor_resource_mgr->get_resource_info(ResourceType::CPU_RESULT_MEM).second,
+        static_cast<size_t>(0));
+  };
+  check_cpu_result_mem_stat();
+  const auto request_info = gen_default_request_info();
+  {
+    const auto executor_resource_handle =
+        executor_resource_mgr->request_resources(request_info);
+    EXPECT_EQ(executor_resource_handle->get_request_id(), static_cast<size_t>(0));
+
+    const auto resource_grant = executor_resource_handle->get_resource_grant();
+    EXPECT_EQ(resource_grant.cpu_slots, default_cpu_slots_request);
+    EXPECT_EQ(resource_grant.gpu_slots, default_gpu_slots_request);
+
+    check_cpu_result_mem_stat();
+
+    const auto cpu_buffer_mem_info =
+        executor_resource_mgr->get_resource_info(ResourceType::CPU_BUFFER_POOL_MEM);
+    // CPU buffer pool should allocate the requested cpu result mem
+    EXPECT_EQ(cpu_buffer_mem_info.first, default_cpu_result_mem_request);
+    EXPECT_EQ(cpu_buffer_mem_info.second, default_cpu_buffer_pool_mem);
+  }
+
+  const auto post_resource_release_executor_stats =
+      executor_resource_mgr->get_executor_stats();
+  EXPECT_EQ(post_resource_release_executor_stats.requests, size_t(1));
+  EXPECT_EQ(post_resource_release_executor_stats.cpu_requests, size_t(1));
+  EXPECT_EQ(post_resource_release_executor_stats.gpu_requests, size_t(0));
+  EXPECT_EQ(
+      post_resource_release_executor_stats.queue_length,
+      size_t(
+          0));  // previous request should be out of queue already as resource was granted
+  EXPECT_EQ(post_resource_release_executor_stats.cpu_queue_length, size_t(0));
+  EXPECT_EQ(post_resource_release_executor_stats.gpu_queue_length, size_t(0));
+  // Request should be moved out of executing
+  EXPECT_EQ(post_resource_release_executor_stats.requests_executing, size_t(0));
+  EXPECT_EQ(post_resource_release_executor_stats.cpu_requests_executing, size_t(0));
+  EXPECT_EQ(post_resource_release_executor_stats.gpu_requests_executing, size_t(0));
+  // And into executed
+  EXPECT_EQ(post_resource_release_executor_stats.requests_executed, size_t(1));
+  EXPECT_EQ(post_resource_release_executor_stats.cpu_requests_executed, size_t(1));
+  EXPECT_EQ(post_resource_release_executor_stats.gpu_requests_executed, size_t(0));
 }
 
 int main(int argc, char** argv) {

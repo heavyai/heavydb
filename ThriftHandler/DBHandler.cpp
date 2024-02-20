@@ -333,13 +333,20 @@ void DBHandler::init_executor_resource_mgr() {
                  "memory to "
               << format_num_bytes(conservative_gpu_buffer_pool_mem) << ".";
   }
-  LOG(INFO) << "\tSetting Executor resource pool reserved space for CPU result memory to "
-            << format_num_bytes(cpu_result_mem) << ".";
+  if (g_use_cpu_mem_pool_for_output_buffers) {
+    cpu_result_mem = 0;
+    LOG(INFO) << "\tUse CPU buffer pool memory to manage CPU result memory";
+  } else {
+    LOG(INFO)
+        << "\tSetting Executor resource pool reserved space for CPU result memory to "
+        << format_num_bytes(cpu_result_mem) << ".";
+  }
 
   Executor::init_resource_mgr(
       num_cpu_slots,
       num_gpu_slots,
       cpu_result_mem,
+      g_use_cpu_mem_pool_for_output_buffers,
       conservative_cpu_buffer_pool_mem,
       conservative_gpu_buffer_pool_mem,
       g_executor_resource_mgr_per_query_max_cpu_slots_ratio,
@@ -347,7 +354,8 @@ void DBHandler::init_executor_resource_mgr() {
       g_executor_resource_mgr_allow_cpu_kernel_concurrency,
       g_executor_resource_mgr_allow_cpu_gpu_kernel_concurrency,
       g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency,
-      g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency,
+      !g_use_cpu_mem_pool_for_output_buffers &&
+          g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency,
       g_executor_resource_mgr_max_available_resource_use_ratio);
 }
 
