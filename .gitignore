@@ -91,3 +91,6 @@ data/
 
 # Python
 *.egg-info/
+
+# clangd
+.cache/
