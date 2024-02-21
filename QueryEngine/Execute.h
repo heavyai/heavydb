@@ -432,8 +432,6 @@ class Executor {
            const std::string& debug_dir,
            const std::string& debug_file);
 
-  void clearCaches(bool runtime_only = false);
-
   std::string dumpCache() const;
 
   static void clearExternalCaches(bool for_update,
@@ -642,8 +640,6 @@ class Executor {
   std::map<shared::ColumnKey, size_t> getColumnByteWidthMap(
       const std::set<shared::TableKey>& table_ids_to_fetch,
       const bool include_lazy_fetched_cols) const;
-
-  size_t getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetch) const;
 
   /**
    * @brief Determines a unique list of chunks and their associated byte sizes for a given
