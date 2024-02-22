@@ -80,6 +80,7 @@ extern bool g_uniform_request_ids_per_thrift_call;
 extern size_t g_gpu_code_cache_max_size_in_bytes;
 extern bool g_use_cpu_mem_pool_for_output_buffers;
 extern bool g_use_cpu_mem_pool_size_for_max_cpu_slab_size;
+extern bool g_verbose_lock_logging;
 
 #ifdef ENABLE_MEMKIND
 extern std::string g_pmem_path;
@@ -601,6 +602,11 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(verbose_logging)
                          ->implicit_value(true),
                      "Write additional debug log messages to server logs.");
+  desc.add_options()("verbose-lock-logging",
+                     po::value<bool>(&g_verbose_lock_logging)
+                         ->default_value(g_verbose_lock_logging)
+                         ->implicit_value(true),
+                     "Verbose logs for lock acquisition.");
   desc.add_options()(
       "enable-runtime-udf",
       po::value<bool>(&enable_runtime_udf)

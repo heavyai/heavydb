@@ -125,11 +125,12 @@ class TableSchemaLockContainer<ReadLock>
   static auto acquireTableDescriptor(Catalog_Namespace::Catalog& cat,
                                      const std::string& table_name,
                                      const bool populate_fragmenter = true) {
-    VLOG(1) << "Acquiring Table Schema Read Lock for table: " << table_name;
+    VLOG(1) << "Attempting to acquire Table Schema Read Lock for table: " << table_name;
     auto lock = TableSchemaLockMgr::getReadLockForTable(cat, table_name);
     auto ret = TableSchemaLockContainer<ReadLock>(
         cat.getMetadataForTable(table_name, populate_fragmenter), std::move(lock));
     validate_table_descriptor_after_lock(ret(), cat, table_name, populate_fragmenter);
+    VLOG(1) << "Acquired Table Schema Read Lock for table: " << table_name;
     return ret;
   }
 
@@ -156,11 +157,12 @@ class TableSchemaLockContainer<WriteLock>
   static auto acquireTableDescriptor(Catalog_Namespace::Catalog& cat,
                                      const std::string& table_name,
                                      const bool populate_fragmenter = true) {
-    VLOG(1) << "Acquiring Table Schema Write Lock for table: " << table_name;
+    VLOG(1) << "Attempting to acquire Table Schema Write Lock for table: " << table_name;
     auto lock = TableSchemaLockMgr::getWriteLockForTable(cat, table_name);
     auto ret = TableSchemaLockContainer<WriteLock>(
         cat.getMetadataForTable(table_name, populate_fragmenter), std::move(lock));
     validate_table_descriptor_after_lock(ret(), cat, table_name, populate_fragmenter);
+    VLOG(1) << "Acquired Table Schema Write Lock for table: " << table_name;
     return ret;
   }
 
@@ -197,9 +199,11 @@ class TableDataLockContainer<WriteLock>
   static auto acquire(const int db_id, const TableDescriptor* td) {
     CHECK(td);
     ChunkKey chunk_key{db_id, td->tableId};
-    VLOG(1) << "Acquiring Table Data Write Lock for table: " << td->tableName;
-    return TableDataLockContainer<WriteLock>(
+    VLOG(1) << "Attempting to acquire Table Data Write Lock for table: " << td->tableName;
+    auto ret = TableDataLockContainer<WriteLock>(
         td, TableDataLockMgr::getWriteLockForTable(chunk_key));
+    VLOG(1) << "Acquired Table Data Write Lock for table: " << td->tableName;
+    return ret;
   }
 
  private:
@@ -214,9 +218,11 @@ class TableDataLockContainer<ReadLock>
   static auto acquire(const int db_id, const TableDescriptor* td) {
     CHECK(td);
     ChunkKey chunk_key{db_id, td->tableId};
-    VLOG(1) << "Acquiring Table Data Read Lock for table: " << td->tableName;
-    return TableDataLockContainer<ReadLock>(
+    VLOG(1) << "Attempting to acquire Table Data Read Lock for table: " << td->tableName;
+    auto ret = TableDataLockContainer<ReadLock>(
         td, TableDataLockMgr::getReadLockForTable(chunk_key));
+    VLOG(1) << "Acquired Table Data Read Lock for table: " << td->tableName;
+    return ret;
   }
 
  private:
@@ -241,9 +247,12 @@ class TableInsertLockContainer<WriteLock>
   static auto acquire(const int db_id, const TableDescriptor* td) {
     CHECK(td);
     ChunkKey chunk_key{db_id, td->tableId};
-    VLOG(1) << "Acquiring Table Insert Write Lock for table: " << td->tableName;
-    return TableInsertLockContainer<WriteLock>(
+    VLOG(1) << "Attempting to acquire Table Insert Write Lock for table: "
+            << td->tableName;
+    auto ret = TableInsertLockContainer<WriteLock>(
         td, InsertDataLockMgr::getWriteLockForTable(chunk_key));
+    VLOG(1) << "Acquired Table Insert Write Lock for table: " << td->tableName;
+    return ret;
   }
 
  private:
@@ -258,9 +267,12 @@ class TableInsertLockContainer<ReadLock>
   static auto acquire(const int db_id, const TableDescriptor* td) {
     CHECK(td);
     ChunkKey chunk_key{db_id, td->tableId};
-    VLOG(1) << "Acquiring Table Insert Read Lock for table: " << td->tableName;
-    return TableInsertLockContainer<ReadLock>(
+    VLOG(1) << "Attempting to acquire Table Insert Read Lock for table: "
+            << td->tableName;
+    auto ret = TableInsertLockContainer<ReadLock>(
         td, InsertDataLockMgr::getReadLockForTable(chunk_key));
+    VLOG(1) << "Acquired Table Insert Read Lock for table: " << td->tableName;
+    return ret;
   }
 
  private:
