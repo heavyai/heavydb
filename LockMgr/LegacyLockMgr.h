@@ -128,13 +128,19 @@ using ExecutorWriteLock = std::unique_lock<WrapperType<std::shared_mutex>>;
 using ExecutorReadLock = std::shared_lock<WrapperType<std::shared_mutex>>;
 
 inline auto getExecuteWriteLock() {
-  return ExecutorWriteLock(
+  VLOG(1) << "Attempting to acquire the Executor Write Lock";
+  auto ret = ExecutorWriteLock(
       *LockMgr<std::shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+  VLOG(1) << "Acquired the ExecutorWriteLock";
+  return ret;
 }
 
 inline auto getExecuteReadLock() {
-  return ExecutorReadLock(
+  VLOG(1) << "Attempting to acquire the Executor Read Lock";
+  auto ret = ExecutorReadLock(
       *LockMgr<std::shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+  VLOG(1) << "Acquired the Executor Read Lock";
+  return ret;
 }
 
 }  // namespace legacylockmgr

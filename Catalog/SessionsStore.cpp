@@ -17,6 +17,7 @@
 #include "SessionsStore.h"
 #include "Catalog.h"
 #include "Shared/StringTransform.h"
+#include "Shared/scope.h"
 
 #include <boost/algorithm/string.hpp>
 #include <memory>
@@ -24,6 +25,8 @@
 #include <unordered_map>
 
 using namespace Catalog_Namespace;
+
+extern bool g_verbose_lock_logging;
 
 SessionInfo SessionsStore::getSessionCopy(const std::string& session_id) {
   auto origin = get(session_id);
@@ -35,7 +38,7 @@ SessionInfo SessionsStore::getSessionCopy(const std::string& session_id) {
 }
 
 void SessionsStore::erase(const std::string& session_id) {
-  heavyai::lock_guard<heavyai::shared_mutex> lock(getLock());
+  auto lock(getLockGuard());
   eraseUnlocked(session_id);
 }
 
@@ -52,7 +55,7 @@ void SessionsStore::eraseByDB(const std::string& db_name) {
 }
 
 void SessionsStore::disconnect(const std::string session_id) {
-  heavyai::lock_guard<heavyai::shared_mutex> lock(getLock());
+  auto lock(getLockGuard());
   auto session_ptr = getUnlocked(session_id);
   if (session_ptr) {
     const auto dbname = session_ptr->getCatalog().getCurrentDB().dbName;
@@ -125,7 +128,7 @@ class CachedSessionStore : public SessionsStore {
   SessionInfoPtr add(const Catalog_Namespace::UserMetadata& user_meta,
                      std::shared_ptr<Catalog> cat,
                      ExecutorDeviceType device) override {
-    heavyai::lock_guard<heavyai::shared_mutex> lock(mtx_);
+    auto lock(getLockGuard());
     if (int(sessions_.size()) >= capacity_) {
       std::vector<SessionInfoPtr> expired_sessions;
       for (auto it = sessions_.begin(); it != sessions_.end(); it++) {
@@ -160,7 +163,7 @@ class CachedSessionStore : public SessionsStore {
   }
 
   SessionInfoPtr get(const std::string& session_id) override {
-    heavyai::lock_guard<heavyai::shared_mutex> lock(mtx_);
+    auto lock(getLockGuard());
     auto session_ptr = getUnlocked(session_id);
     if (session_ptr) {
       if (SessionsStore::isSessionExpired(
@@ -180,10 +183,10 @@ class CachedSessionStore : public SessionsStore {
     return nullptr;
   }
 
-  heavyai::shared_mutex& getLock() override { return mtx_; }
+  heavyai::shared_mutex& getMutex() const override { return mtx_; }
 
   void eraseIf(std::function<bool(const SessionInfoPtr&)> predicate) override {
-    heavyai::lock_guard<heavyai::shared_mutex> lock(mtx_);
+    auto lock(getLockGuard());
     for (auto it = sessions_.begin(); it != sessions_.end();) {
       if (predicate(it->second)) {
         it = sessions_.erase(it);
@@ -194,7 +197,9 @@ class CachedSessionStore : public SessionsStore {
   }
 
   ~CachedSessionStore() override {
+    LOG_IF(INFO, g_verbose_lock_logging) << "Attempting to acquire sessions store lock";
     std::lock_guard lg(mtx_);
+    LOG_IF(INFO, g_verbose_lock_logging) << "Acquired sessions store lock";
     sessions_.clear();
   }
 
@@ -219,7 +224,7 @@ class CachedSessionStore : public SessionsStore {
   std::vector<SessionInfoPtr> getIf(
       std::function<bool(const SessionInfoPtr&)> predicate) override {
     std::vector<SessionInfoPtr> out;
-    heavyai::shared_lock<heavyai::shared_mutex> sessions_lock(getLock());
+    auto sessions_lock(getSharedLock());
     for (auto& [_, session] : sessions_) {
       heavyai::shared_lock<heavyai::shared_mutex> session_lock(session->getLock());
       if (predicate(session)) {
@@ -247,4 +252,22 @@ std::unique_ptr<SessionsStore> SessionsStore::create(
     DisconnectCallback disconnect_callback) {
   return std::make_unique<CachedSessionStore>(
       idle_session_duration, max_session_duration, capacity, disconnect_callback);
+}
+
+heavyai::shared_lock<heavyai::shared_mutex> SessionsStore::getSharedLock() const {
+  LOG_IF(INFO, g_verbose_lock_logging)
+      << "Attempting to acquire sessions store read lock";
+  ScopeGuard unlock_log = [] {
+    LOG_IF(INFO, g_verbose_lock_logging) << "Acquired sessions store read lock";
+  };
+  return heavyai::shared_lock<heavyai::shared_mutex>(getMutex());
+}
+
+heavyai::lock_guard<heavyai::shared_mutex> SessionsStore::getLockGuard() const {
+  LOG_IF(INFO, g_verbose_lock_logging)
+      << "Attempting to acquire sessions store write lock";
+  ScopeGuard unlock_log = [] {
+    LOG_IF(INFO, g_verbose_lock_logging) << "Acquired sessions store write lock";
+  };
+  return heavyai::lock_guard<heavyai::shared_mutex>(getMutex());
 }

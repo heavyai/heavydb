@@ -58,6 +58,8 @@ class SessionsStore {
   bool isSessionExpired(const SessionInfoPtr& session_ptr,
                         int idle_session_duration,
                         int max_session_duration);
+  heavyai::shared_lock<heavyai::shared_mutex> getSharedLock() const;
+  heavyai::lock_guard<heavyai::shared_mutex> getLockGuard() const;
   virtual bool isSessionInUse(const SessionInfoPtr& session_ptr) = 0;
   virtual SessionInfoPtr getUnlocked(const std::string& session_id) = 0;
   virtual void eraseUnlocked(const std::string& session_id) = 0;
@@ -65,7 +67,7 @@ class SessionsStore {
   virtual std::vector<SessionInfoPtr> getIf(
       std::function<bool(const SessionInfoPtr&)> predicate) = 0;
   virtual void eraseIf(std::function<bool(const SessionInfoPtr&)> predicate) = 0;
-  virtual heavyai::shared_mutex& getLock() = 0;
+  virtual heavyai::shared_mutex& getMutex() const = 0;
 };
 
 }  // namespace Catalog_Namespace

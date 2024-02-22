@@ -104,7 +104,7 @@ class SessionInfo {
   void set_connection_info(const std::string& connection) {
     connection_info_ = connection;
   }
-  heavyai::shared_mutex& getLock() { return mtx_; }
+  heavyai::shared_mutex& getLock() const { return mtx_; }
 
  private:
   // TODO(max): C++20 introduces atomic shared_ptr
