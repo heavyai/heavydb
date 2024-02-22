@@ -114,15 +114,29 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   void initCountDistinctBufferFastAllocator(size_t buffer_size, size_t thread_idx) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    VLOG(2) << "Count distinct buffer allocator initialized with buffer_size: "
+    VLOG(1) << "Count distinct buffer allocator initialized with buffer_size: "
             << buffer_size << ", thread_idx: " << thread_idx;
     CHECK_LT(thread_idx, count_distinct_buffer_fast_allocators_.size());
     if (count_distinct_buffer_fast_allocators_[thread_idx]) {
-      VLOG(2) << "Replacing count_distinct_buffer_allocators_[" << thread_idx << "].";
+      VLOG(1) << "Replacing count_distinct_buffer_allocators_[" << thread_idx << "].";
     }
     count_distinct_buffer_fast_allocators_[thread_idx] =
         std::make_unique<CountDistinctBufferFastAllocator>(
             allocateUnlocked(buffer_size, thread_idx), buffer_size);
+  }
+
+  std::optional<size_t> AddCountDistinctBufferFastAllocator(size_t buffer_size) {
+    if (buffer_size <= 0) {
+      return std::nullopt;
+    }
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    auto const allocator_idx = count_distinct_buffer_fast_allocators_.size();
+    VLOG(1) << "Count distinct buffer allocator initialized with buffer_size: "
+            << buffer_size << ", allocator_idx: " << allocator_idx;
+    count_distinct_buffer_fast_allocators_.emplace_back(
+        std::make_unique<RowSetMemoryOwner::CountDistinctBufferFastAllocator>(
+            allocateUnlocked(buffer_size, 0), buffer_size));
+    return allocator_idx;
   }
 
   std::pair<int64_t*, bool> allocateCachedGroupByBuffer(const size_t num_bytes,
