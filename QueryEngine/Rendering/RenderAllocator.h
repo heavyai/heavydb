@@ -33,7 +33,7 @@
 namespace QueryRenderer {
 class JSONLocation;
 class QueryRenderManager;
-struct QueryDataLayout;
+class QueryDataLayout;
 }  // namespace QueryRenderer
 
 class OutOfRenderMemory : public std::runtime_error {
