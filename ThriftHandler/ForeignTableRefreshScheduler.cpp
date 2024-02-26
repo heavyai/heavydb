@@ -40,16 +40,16 @@ void ForeignTableRefreshScheduler::start(std::atomic<bool>& is_program_running) 
           if (!is_program_running || !is_scheduler_running_) {
             return;
           }
-          auto tables = catalog->getAllForeignTablesForRefresh();
-          for (auto table : tables) {
+          auto table_names = catalog->getAllForeignTableNamesForRefresh();
+          for (auto table_name : table_names) {
             // Exit if scheduler has been stopped asynchronously
             if (!is_program_running || !is_scheduler_running_) {
               return;
             }
             try {
-              refresh_foreign_table(*catalog, table->tableName, false);
+              refresh_foreign_table(*catalog, table_name, false);
             } catch (std::runtime_error& e) {
-              LOG(ERROR) << "Scheduled refresh for table \"" << table->tableName
+              LOG(ERROR) << "Scheduled refresh for table \"" << table_name
                          << "\" resulted in an error. " << e.what();
             }
             has_refreshed_table_ = true;

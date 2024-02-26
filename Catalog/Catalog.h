@@ -522,7 +522,7 @@ class Catalog final {
    *
    * @return foreign tables pending refreshes
    */
-  std::vector<const TableDescriptor*> getAllForeignTablesForRefresh() const;
+  std::vector<std::string> getAllForeignTableNamesForRefresh() const;
 
   /**
    * Updates the last and next (if applicable) refresh times of the foreign table
