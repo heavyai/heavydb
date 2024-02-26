@@ -5985,9 +5985,9 @@ bool Catalog::validateNonExistentTableOrView(const std::string& name,
   return true;
 }
 
-std::vector<const TableDescriptor*> Catalog::getAllForeignTablesForRefresh() const {
+std::vector<std::string> Catalog::getAllForeignTableNamesForRefresh() const {
   cat_read_lock read_lock(this);
-  std::vector<const TableDescriptor*> tables;
+  std::vector<std::string> table_names;
   for (auto entry : tableDescriptorMapById_) {
     auto table_descriptor = entry.second;
     if (table_descriptor->storageType == StorageType::FOREIGN_TABLE) {
@@ -6000,11 +6000,11 @@ std::vector<const TableDescriptor*> Catalog::getAllForeignTablesForRefresh() con
       if (timing_type_entry->second ==
               foreign_storage::ForeignTable::SCHEDULE_REFRESH_TIMING_TYPE &&
           foreign_table->next_refresh_time <= current_time) {
-        tables.emplace_back(foreign_table);
+        table_names.emplace_back(foreign_table->tableName);
       }
     }
   }
-  return tables;
+  return table_names;
 }
 
 void Catalog::updateForeignTableRefreshTimes(const int32_t table_id) {
