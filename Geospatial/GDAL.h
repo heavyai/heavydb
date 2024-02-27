@@ -75,8 +75,6 @@ class GDAL {
  private:
   static bool initialized_;
   static std::mutex init_mutex_;
-
-  static void exitHandler();
 };
 
 }  // namespace Geospatial

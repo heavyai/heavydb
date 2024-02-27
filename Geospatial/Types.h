@@ -45,8 +45,6 @@ class GeoTypesError : public std::runtime_error {
   static std::string OGRErrorToStr(const int ogr_err);
 };
 
-void clear_transformation_map();
-
 class GeoTypesFactory;
 
 class GeoBase {
