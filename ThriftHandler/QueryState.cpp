@@ -132,7 +132,7 @@ Timer QueryStateProxy::createTimer(char const* event_name) {
 
 Timer::Timer(std::shared_ptr<QueryState>&& query_state, Events::iterator event)
     : query_state_(std::move(query_state)), event_(event) {
-  nvtx_helpers::omnisci_range_push(
+  nvtx_helpers::heavyai_range_push(
       nvtx_helpers::Category::kQueryStateTimer, event_->name, nullptr);
 }
 
@@ -142,7 +142,7 @@ QueryStateProxy Timer::createQueryStateProxy() {
 
 Timer::~Timer() {
   event_->stop();
-  nvtx_helpers::omnisci_range_pop();
+  nvtx_helpers::heavyai_range_pop();
 }
 
 std::atomic<int64_t> StdLogData::s_match{0};
