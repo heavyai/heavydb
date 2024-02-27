@@ -96,6 +96,7 @@ int safe_open(const char* path, int flags, mode_t mode) noexcept {
     return ret;
   }
   UNREACHABLE();
+  return {};
 }
 
 int safe_close(int fd) noexcept {
@@ -107,6 +108,7 @@ int safe_close(int fd) noexcept {
     return ret;
   }
   UNREACHABLE();
+  return {};
 }
 
 int safe_fcntl(int fd, int cmd, struct flock* fl) noexcept {
@@ -118,6 +120,7 @@ int safe_fcntl(int fd, int cmd, struct flock* fl) noexcept {
     return ret;
   }
   UNREACHABLE();
+  return {};
 }
 
 ssize_t safe_read(const int fd, void* buffer, const size_t buffer_size) noexcept {
@@ -139,6 +142,7 @@ ssize_t safe_read(const int fd, void* buffer, const size_t buffer_size) noexcept
     // either an EOF is coming or interrupted by signal
   }
   UNREACHABLE();
+  return {};
 }
 
 ssize_t safe_write(const int fd, const void* buffer, const size_t buffer_size) noexcept {
@@ -157,6 +161,7 @@ ssize_t safe_write(const int fd, const void* buffer, const size_t buffer_size) n
     // either an error is coming (such as disk full) or interrupted by signal
   }
   UNREACHABLE();
+  return {};
 }
 
 int32_t safe_ftruncate(const int32_t fd, int64_t length) noexcept {
@@ -168,6 +173,7 @@ int32_t safe_ftruncate(const int32_t fd, int64_t length) noexcept {
     return ret;
   }
   UNREACHABLE();
+  return {};
 }
 
 }  // namespace heavyai

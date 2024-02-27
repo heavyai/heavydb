@@ -66,14 +66,6 @@ bool GDAL::initialized_ = false;
 
 std::mutex GDAL::init_mutex_;
 
-void GDAL::exitHandler() {
-  std::lock_guard<std::mutex> lock_guard(init_mutex_);
-  if (initialized_) {
-    clear_transformation_map();
-    initialized_ = false;
-  }
-}
-
 void GDAL::init() {
   // this should not be called from multiple threads, but...
   std::lock_guard<std::mutex> guard(init_mutex_);
@@ -134,8 +126,6 @@ void GDAL::init() {
     GDALAllRegister();
     OGRRegisterAll();
     CPLSetErrorHandler(*gdal_error_handler);
-    // Register exit handler to clean up static data before the GDAL api at exit is called
-    std::atexit(exitHandler);
     LOG(INFO) << "GDAL Initialized: " << GDALVersionInfo("--version");
     initialized_ = true;
   }
