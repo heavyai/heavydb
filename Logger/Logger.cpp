@@ -829,12 +829,12 @@ void logAndEraseDurationTree(std::string* json_str) {
 
 DebugTimer::DebugTimer(Severity severity, char const* file, int line, char const* name)
     : duration_(newDuration({severity, file, line, name})) {
-  nvtx_helpers::omnisci_range_push(nvtx_helpers::Category::kDebugTimer, name, file);
+  nvtx_helpers::heavyai_range_push(nvtx_helpers::Category::kDebugTimer, name, file);
 }
 
 DebugTimer::~DebugTimer() {
   stop();
-  nvtx_helpers::omnisci_range_pop();
+  nvtx_helpers::heavyai_range_pop();
 }
 
 void DebugTimer::stop() {

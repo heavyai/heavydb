@@ -38,22 +38,22 @@ struct CategoryInfo {
 
 #define NUM_CATEGORIES 4u
 static std::array<CategoryInfo, NUM_CATEGORIES> g_category_infos = {};
-static nvtxDomainHandle_t g_omnisci_domain = nullptr;
+static nvtxDomainHandle_t g_heavyai_domain = nullptr;
 
-// Control whether or not to set the event category when using the Omnisci domain
+// Control whether or not to set the event category when using the HeavyAI domain
 // Setting the category can clutter the timeline event names. Colors will still be
 // used though so the visual organization remains
-#define SET_OMNISCI_EVENT_CATEGORY 0
+#define SET_HEAVYAI_EVENT_CATEGORY 0
 
 void init() {
   // The domain will be null if NVTX profiling is not enabled by the nsys launcher
-  g_omnisci_domain = nvtxDomainCreateA("Omnisci");
-  if (g_omnisci_domain) {
+  g_heavyai_domain = nvtxDomainCreateA("HEAVY.AI");
+  if (g_heavyai_domain) {
     auto create_category = [](Category c, const char* name, uint32_t color) {
       auto category_index = static_cast<uint32_t>(c);
       CHECK_LT(category_index, NUM_CATEGORIES);
       g_category_infos[category_index] = {category_index, color};
-      nvtxDomainNameCategoryA(g_omnisci_domain, category_index, name);
+      nvtxDomainNameCategoryA(g_heavyai_domain, category_index, name);
     };
     // skip category 0 (none), as trying to modify it triggers errors during nsight
     // analysis
@@ -64,18 +64,18 @@ void init() {
 }
 
 void shutdown() {
-  if (g_omnisci_domain) {
-    nvtxDomainDestroy(g_omnisci_domain);
-    g_omnisci_domain = nullptr;
+  if (g_heavyai_domain) {
+    nvtxDomainDestroy(g_heavyai_domain);
+    g_heavyai_domain = nullptr;
   }
 }
 
-const nvtxDomainHandle_t get_omnisci_domain() {
-  return g_omnisci_domain;
+const nvtxDomainHandle_t get_heavyai_domain() {
+  return g_heavyai_domain;
 }
 
 namespace {
-inline nvtxEventAttributes_t make_omnisci_event(Category c, const char* name) {
+inline nvtxEventAttributes_t make_heavyai_event(Category c, const char* name) {
   auto category_index = static_cast<uint32_t>(c);
   CHECK_LT(category_index, NUM_CATEGORIES);
   auto const& info = g_category_infos[category_index];
@@ -88,7 +88,7 @@ inline nvtxEventAttributes_t make_omnisci_event(Category c, const char* name) {
     event_attrib.colorType = NVTX_COLOR_ARGB;
     event_attrib.color = info.color;
   }
-#if SET_OMNISCI_EVENT_CATEGORY
+#if SET_HEAVYAI_EVENT_CATEGORY
   event_attrib.category = info.category;
 #endif
   return event_attrib;
@@ -100,47 +100,47 @@ std::string filename(char const* path) {
 }
 }  // namespace
 
-void omnisci_range_push(Category c, const char* name, const char* file) {
-  if (g_omnisci_domain) {
+void heavyai_range_push(Category c, const char* name, const char* file) {
+  if (g_heavyai_domain) {
     if (file) {
       std::stringstream ss;
       ss << name;
       ss << " | " << filename(file);
       auto str = ss.str();
-      auto event = make_omnisci_event(c, str.c_str());
-      nvtxDomainRangePushEx(g_omnisci_domain, &event);
+      auto event = make_heavyai_event(c, str.c_str());
+      nvtxDomainRangePushEx(g_heavyai_domain, &event);
     } else {
-      auto event = make_omnisci_event(c, name);
-      nvtxDomainRangePushEx(g_omnisci_domain, &event);
+      auto event = make_heavyai_event(c, name);
+      nvtxDomainRangePushEx(g_heavyai_domain, &event);
     }
   }
 }
 
-void omnisci_range_pop() {
-  if (g_omnisci_domain) {
-    nvtxDomainRangePop(g_omnisci_domain);
+void heavyai_range_pop() {
+  if (g_heavyai_domain) {
+    nvtxDomainRangePop(g_heavyai_domain);
   }
 }
 
-nvtxRangeId_t omnisci_range_start(Category c, const char* name) {
-  if (g_omnisci_domain) {
-    auto event = make_omnisci_event(c, name);
-    return nvtxDomainRangeStartEx(g_omnisci_domain, &event);
+nvtxRangeId_t heavyai_range_start(Category c, const char* name) {
+  if (g_heavyai_domain) {
+    auto event = make_heavyai_event(c, name);
+    return nvtxDomainRangeStartEx(g_heavyai_domain, &event);
   } else {
     return nvtxRangeId_t{};
   }
 }
 
-void omnisci_range_end(nvtxRangeId_t r) {
-  if (g_omnisci_domain) {
-    nvtxDomainRangeEnd(g_omnisci_domain, r);
+void heavyai_range_end(nvtxRangeId_t r) {
+  if (g_heavyai_domain) {
+    nvtxDomainRangeEnd(g_heavyai_domain, r);
   }
 }
 
-void omnisci_set_mark(Category c, const char* name) {
-  if (g_omnisci_domain) {
-    auto event = make_omnisci_event(c, name);
-    nvtxDomainMarkEx(g_omnisci_domain, &event);
+void heavyai_set_mark(Category c, const char* name) {
+  if (g_heavyai_domain) {
+    auto event = make_heavyai_event(c, name);
+    nvtxDomainMarkEx(g_heavyai_domain, &event);
   }
 }
 

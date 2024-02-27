@@ -32,7 +32,7 @@ using nvtxRangeId_t = uint64_t;
 
 namespace nvtx_helpers {
 
-// Standard categories for the Omnisci domain
+// Standard categories for the HeavyAI domain
 // Additional temporary categories can be named with name_domain_category().
 // Permanent categories should be aded to the enum here and in nvtx_helpers.cpp
 enum class Category { kNone, kDebugTimer, kQueryStateTimer, kRenderLogger };
@@ -45,7 +45,7 @@ void init();
 void shutdown();
 
 //
-// Omnisci domain
+// HEAVY.AI domain
 //
 
 // Get the domain handle
@@ -56,18 +56,18 @@ void shutdown();
 // NOTE: The domain will be null if NVTX profiling is not enabled by the nsys launcher.
 // The various nvtxDomain* function appear to check for this case, but if the caller does
 // extra work for NVTX it's a good idea to check if the domain pointer is null first
-const nvtxDomainHandle_t get_omnisci_domain();
+const nvtxDomainHandle_t get_heavyai_domain();
 
 // Push and pop ranges
 // Pass __FILE__ as the file param and it will be appended after name, or nullptr to
 // ignore
-void omnisci_range_push(Category c, const char* name, const char* file);
-void omnisci_range_pop();
+void heavyai_range_push(Category c, const char* name, const char* file);
+void heavyai_range_pop();
 
-[[nodiscard]] nvtxRangeId_t omnisci_range_start(Category c, const char* name);
-void omnisci_range_end(nvtxRangeId_t r);
+[[nodiscard]] nvtxRangeId_t heavyai_range_start(Category c, const char* name);
+void heavyai_range_end(nvtxRangeId_t r);
 
-void omnisci_set_mark(Category c, const char* message);
+void heavyai_set_mark(Category c, const char* message);
 
 //
 // Resource naming
@@ -96,7 +96,7 @@ inline void name_cuda_event(CUevent event, const char* name) {
 }
 #endif  // HAVE_CUDA
 
-// Name a category index. If using a custom category as part of the Omnisci domain, you
+// Name a category index. If using a custom category as part of the HeavyAI domain, you
 // must ensure the ID does not conflict with the Category enum above
 inline void name_category(uint32_t category, const char* name) {
   nvtxNameCategory(category, name);
@@ -109,7 +109,7 @@ inline void name_domain_category(nvtxDomainHandle_t domain,
 }
 
 //
-// Wrappers for custom timeline usage outside the Omnisci domain
+// Wrappers for custom timeline usage outside the HeavyAI domain
 //
 
 // Create a basic event object
@@ -227,13 +227,13 @@ inline void domain_range_end(nvtxDomainHandle_t domain, nvtxRangeId_t range) {
 inline void init() {}
 inline void shutdown() {}
 
-inline void omnisci_range_push(Category, const char*, const char*) {}
-inline void omnisci_range_pop() {}
-inline nvtxRangeId_t omnisci_range_start(Category, const char*) {
+inline void heavyai_range_push(Category, const char*, const char*) {}
+inline void heavyai_range_pop() {}
+inline nvtxRangeId_t heavyai_range_start(Category, const char*) {
   return nvtxRangeId_t{};
 }
-inline void omnisci_range_end(nvtxRangeId_t) {}
-inline void omnisci_set_mark(Category, const char*) {}
+inline void heavyai_range_end(nvtxRangeId_t) {}
+inline void heavyai_set_mark(Category, const char*) {}
 
 inline void name_current_thread(const char*) {}
 inline void name_category(uint32_t category, const char* name) {}
