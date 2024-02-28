@@ -180,6 +180,10 @@ static int match_numeric_argument(const SQLTypeInfo& arg_type_info,
         arg_type == kDOUBLE || arg_type == kDECIMAL || arg_type == kNUMERIC);
   // Todo (todd): Add support for timestamp, date, and time types
   const auto sig_type_info = ext_arg_type_to_type_info(sig_ext_arg_type);
+  if (sig_type_info.get_type() == kNULLT) {
+    // fundamental type mismatch, abort
+    return -1;
+  }
   const auto sig_type = sig_type_info.get_type();
 
   // If we can't legally auto-cast to sig_type, abort

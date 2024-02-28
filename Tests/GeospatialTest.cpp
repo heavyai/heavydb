@@ -2291,6 +2291,20 @@ TEST(GeoSpatial, Math) {
             R"(SELECT ST_Contains(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POINT(0 12)'));)",
             dt)));
 
+    // test temp geo -> ST_Contains
+    // add more variants as required
+    // added for BE-6529
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_Contains(ST_Buffer(ST_SetSRID(ST_Point(0, 0), 4326), 10.0), ST_SetSRID(ST_Point(0, 0), 4326));)",
+            dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(0),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_Contains(ST_Buffer(ST_SetSRID(ST_Point(0, 0), 4326), 10.0), ST_SetSRID(ST_Point(1, 0), 4326));)",
+            dt)));
+
     // ST_DWithin, ST_DFullyWithin
     ASSERT_EQ(
         static_cast<int64_t>(1),

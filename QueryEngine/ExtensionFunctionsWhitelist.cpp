@@ -433,9 +433,10 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
       EXTARGGEOTYPECASE(MultiLineString, kMULTILINESTRING);
       EXTARGGEOTYPECASE(MultiPolygon, kMULTIPOLYGON);
     default:
-      LOG(FATAL) << "ExtArgumentType `" << serialize_type(ext_arg_type)
-                 << "` cannot be converted to SQLTypes.";
-      UNREACHABLE();
+      // no need for a fatal error here
+      // just return kNULLT and catch it further up
+      // to cause a mismatch
+      break;
   }
   return SQLTypeInfo(type, d, s, n, c, p, subtype);
 }
