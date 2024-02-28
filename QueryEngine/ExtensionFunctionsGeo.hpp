@@ -4251,21 +4251,21 @@ DEVICE ALWAYS_INLINE bool Contains_MultiPolygon_Point_Impl(
 }
 
 EXTENSION_NOINLINE
-bool ST_Contains_MultiPolygon_Point(int8_t* mpoly_coords,
-                                    int64_t mpoly_coords_size,
-                                    int32_t* mpoly_ring_sizes,
-                                    int64_t mpoly_num_rings,
-                                    int32_t* mpoly_poly_sizes,
-                                    int64_t mpoly_num_polys,
-                                    double* mpoly_bounds,
-                                    int64_t mpoly_bounds_size,
-                                    int8_t* p,
-                                    int64_t psize,
-                                    int32_t ic1,
-                                    int32_t isr1,
-                                    int32_t ic2,
-                                    int32_t isr2,
-                                    int32_t osr) {
+bool ST_Contains_MultiPolygon_Point__bounds(int8_t* mpoly_coords,
+                                            int64_t mpoly_coords_size,
+                                            int32_t* mpoly_ring_sizes,
+                                            int64_t mpoly_num_rings,
+                                            int32_t* mpoly_poly_sizes,
+                                            int64_t mpoly_num_polys,
+                                            double* mpoly_bounds,
+                                            int64_t mpoly_bounds_size,
+                                            int8_t* p,
+                                            int64_t psize,
+                                            int32_t ic1,
+                                            int32_t isr1,
+                                            int32_t ic2,
+                                            int32_t isr2,
+                                            int32_t osr) {
   return Contains_MultiPolygon_Point_Impl<double, EdgeBehavior::kExcludePointOnEdge>(
       mpoly_coords,
       mpoly_coords_size,
@@ -4275,6 +4275,38 @@ bool ST_Contains_MultiPolygon_Point(int8_t* mpoly_coords,
       mpoly_num_polys,
       mpoly_bounds,
       mpoly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
+}
+
+EXTENSION_NOINLINE
+bool ST_Contains_MultiPolygon_Point__nobounds(int8_t* mpoly_coords,
+                                              int64_t mpoly_coords_size,
+                                              int32_t* mpoly_ring_sizes,
+                                              int64_t mpoly_num_rings,
+                                              int32_t* mpoly_poly_sizes,
+                                              int64_t mpoly_num_polys,
+                                              int8_t* p,
+                                              int64_t psize,
+                                              int32_t ic1,
+                                              int32_t isr1,
+                                              int32_t ic2,
+                                              int32_t isr2,
+                                              int32_t osr) {
+  return Contains_MultiPolygon_Point_Impl<double, EdgeBehavior::kExcludePointOnEdge>(
+      mpoly_coords,
+      mpoly_coords_size,
+      mpoly_ring_sizes,
+      mpoly_num_rings,
+      mpoly_poly_sizes,
+      mpoly_num_polys,
+      nullptr,  // no bounds provided
+      0LL,      // impl will brute-force
       p,
       psize,
       ic1,
