@@ -2249,7 +2249,6 @@ TEST_F(Select, FilterAndMultipleAggregation) {
   }
 }
 
-#ifndef HAVE_VALGRIND
 TEST_F(Select, GroupBy) {
   {  // generate dataset to test count distinct rewrite
     run_ddl_statement("DROP TABLE IF EXISTS count_distinct_rewrite;");
@@ -2461,7 +2460,6 @@ TEST_F(Select, GroupBy) {
 
   run_ddl_statement("DROP TABLE IF EXISTS count_distinct_rewrite;");
 }
-#endif  // HAVE_VALGRIND
 
 TEST_F(Select, ExecutePlanWithoutGroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
