@@ -634,10 +634,9 @@ void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_b
         chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
   }
 
-  const logger::ThreadLocalIds parent_thread_local_ids = logger::thread_local_ids();
-
   std::function<void(const std::set<ForeignStorageMgr::ParallelismHint>&)> lambda =
-      [&, this](const std::set<ForeignStorageMgr::ParallelismHint>& hint_set) {
+      [&, this, parent_thread_local_ids = logger::thread_local_ids()](
+          const std::set<ForeignStorageMgr::ParallelismHint>& hint_set) {
         // Enable debug timers
         logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
         DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
