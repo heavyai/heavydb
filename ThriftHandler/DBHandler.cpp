@@ -4345,6 +4345,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
                                     const TSessionId& session_id_or_json,
                                     const std::string& file_name_in,
                                     const TCopyParams& cp) {
+  auto timer = DEBUG_TIMER(__func__);
   heavyai::RequestInfo const request_info(session_id_or_json);
   SET_REQUEST_ID(request_info.requestId());
   auto stdlog = STDLOG(get_session_ptr(request_info.sessionId()));
