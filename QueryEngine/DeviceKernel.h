@@ -23,14 +23,6 @@ class CompilationContext;
 struct CompilationResult;
 struct KernelParamsLog;
 
-class DeviceClock {
- public:
-  virtual void start() = 0;
-  virtual int stop() = 0;
-
-  virtual ~DeviceClock() = default;
-};
-
 class DeviceKernel {
  public:
   virtual void launch(unsigned int grid_dim_x,
@@ -48,7 +40,6 @@ class DeviceKernel {
   virtual void initializeRuntimeInterrupter(const int device_id) = 0;
   virtual void resetRuntimeInterrupter(const int device_id) = 0;
 
-  virtual std::unique_ptr<DeviceClock> make_clock() = 0;
   virtual char const* name() const = 0;
 
   virtual ~DeviceKernel() = default;

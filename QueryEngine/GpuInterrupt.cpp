@@ -35,7 +35,7 @@ void Executor::unregisterActiveModule(const int device_id) {
     return;
   }
   gpu_active_modules_device_mask_ ^= (1 << device_id);
-  VLOG(1) << "Unregistered module on device " << std::to_string(device_id);
+  VLOG(1) << "Unregistered module on device " << device_id;
 #endif
 }
 
@@ -113,17 +113,13 @@ void Executor::interrupt(const std::string& query_session,
                   << executor_id_;
           CPU_execution_mode = false;
         }
+        auto send_signal_start = timer_start();
         cuda_mgr->setContext(device_id);
 
         // Create high priority non-blocking communication stream
         CUstream cu_stream1;
         checkCudaErrors(
             cuStreamCreateWithPriority(&cu_stream1, CU_STREAM_NON_BLOCKING, 1));
-
-        CUevent start, stop;
-        cuEventCreate(&start, 0);
-        cuEventCreate(&stop, 0);
-        cuEventRecord(start, cu_stream1);
 
         if (g_enable_dynamic_watchdog) {
           CUdeviceptr dw_abort;
@@ -138,8 +134,7 @@ void Executor::interrupt(const std::string& query_session,
                                               cu_stream1));
 
             if (device_id == 0) {
-              VLOG(1) << "GPU: Async Abort submitted to Device "
-                      << std::to_string(device_id);
+              VLOG(1) << "GPU: Async Abort submitted to Device " << device_id;
             }
           }
         }
@@ -162,13 +157,14 @@ void Executor::interrupt(const std::string& query_session,
                                               cu_stream1));
             if (device_id == 0) {
               VLOG(1) << "GPU: send interrupt signal from Executor " << executor_id_
-                      << " to Device " << std::to_string(device_id);
+                      << " to Device " << device_id;
             }
           } else if (status == CUDA_ERROR_NOT_FOUND) {
-            std::runtime_error(
-                "Runtime query interrupt on Executor " + std::to_string(executor_id_) +
-                " has failed: an interrupt flag on the GPU could "
-                "not be initialized (CUDA_ERROR_CODE: CUDA_ERROR_NOT_FOUND)");
+            std::ostringstream oss;
+            oss << "Runtime query interrupt on Executor " << executor_id_
+                << " has failed: an interrupt flag on the GPU could not be initialized "
+                   "(CUDA_ERROR_CODE: CUDA_ERROR_NOT_FOUND)";
+            throw std::runtime_error(oss.str());
           } else {
             // if we reach here, query runtime interrupt is failed due to
             // one of the following error: CUDA_ERROR_NOT_INITIALIZED,
@@ -179,22 +175,16 @@ void Executor::interrupt(const std::string& query_session,
             if (!error_ret_str) {
               error_ret_str = "UNKNOWN";
             }
-            std::string error_str(error_ret_str);
-            std::runtime_error(
-                "Runtime interrupt on Executor " + std::to_string(executor_id_) +
-                " has failed due to a device " + std::to_string(device_id) +
-                "'s issue "
-                "(CUDA_ERROR_CODE: " +
-                error_str + ")");
+            std::ostringstream oss;
+            oss << "Runtime query interrupt on Executor " << executor_id_
+                << " has failed due to a device " << device_id << "\'s issue ("
+                << error_ret_str << ")";
+            throw std::runtime_error(oss.str());
           }
 
-          cuEventRecord(stop, cu_stream1);
-          cuEventSynchronize(stop);
-          float milliseconds = 0;
-          cuEventElapsedTime(&milliseconds, start, stop);
-          VLOG(1) << "Device " << std::to_string(device_id)
+          VLOG(1) << "Device " << device_id
                   << ": submitted async interrupt request from Executor " << executor_id_
-                  << " : SUCCESS: " << std::to_string(milliseconds) << " ms";
+                  << " : SUCCESS: " << timer_stop(send_signal_start) << " ms";
           checkCudaErrors(cuStreamDestroy(cu_stream1));
         }
       }
