@@ -502,6 +502,8 @@ function install_gdal_and_pdal() {
     download https://github.com/OSGeo/gdal/releases/download/v${GDAL_VERSION}/gdal-${GDAL_VERSION}.tar.gz
     tar xzvf gdal-${GDAL_VERSION}.tar.gz
     pushd gdal-${GDAL_VERSION}
+    # patch flatbuffers namespace, per https://github.com/OSGeo/gdal/pull/9313
+    echo "target_compile_definitions(ogr_FlatGeobuf PRIVATE -Dflatbuffers=gdal_flatbuffers)" >> ogr/ogrsf_frmts/flatgeobuf/CMakeLists.txt
     mkdir build
     pushd build
     cmake .. -DCMAKE_BUILD_TYPE=Release \
@@ -625,6 +627,8 @@ function install_gdal_tools() {
     download https://github.com/OSGeo/gdal/releases/download/v${GDAL_VERSION}/gdal-${GDAL_VERSION}.tar.gz
     tar xzvf gdal-${GDAL_VERSION}.tar.gz
     pushd gdal-${GDAL_VERSION}
+    # patch flatbuffers namespace, per https://github.com/OSGeo/gdal/pull/9313
+    echo "target_compile_definitions(ogr_FlatGeobuf PRIVATE -Dflatbuffers=gdal_flatbuffers)" >> ogr/ogrsf_frmts/flatgeobuf/CMakeLists.txt
     mkdir build
     pushd build
     cmake .. -DCMAKE_BUILD_TYPE=Release \
