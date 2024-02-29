@@ -246,23 +246,17 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   uint32_t num_fragments = col_buffers.size();
   std::vector<int32_t> error_codes(grid_size_x * block_size_x);
 
-  auto prepareClock = kernel->make_clock();
-  auto launchClock = kernel->make_clock();
-  auto finishClock = kernel->make_clock();
-
-  if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
-    prepareClock->start();
-  }
-
   if (g_enable_dynamic_watchdog) {
     kernel->initializeDynamicWatchdog(
         executor_->interrupted_.load(),
         executor_->deviceCycles(g_dynamic_watchdog_time_limit));
   }
-
   if (allow_runtime_interrupt && !render_allocator) {
     kernel->initializeRuntimeInterrupter(device_id);
   }
+
+  auto prepare_start = timer_start();
+  auto query_resultset_copy_start = timer_start();
 
   auto [kernel_params, kernel_params_log] = prepareKernelParams(col_buffers,
                                                                 literal_buff,
@@ -317,14 +311,10 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     for (auto& param : kernel_params) {
       param_ptrs.push_back(&param);
     }
-
-    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
-      auto prepareTime = prepareClock->stop();
-      VLOG(1) << "Device " << std::to_string(device_id)
-              << ": launchGpuCode: group-by prepare: " << std::to_string(prepareTime)
-              << " ms";
-      launchClock->start();
-    }
+    VLOG(1) << "Device " << device_id
+            << ": launchGpuCode: prepare query execution: " << timer_stop(prepare_start)
+            << " ms";
+    auto kernel_start = timer_start();
     if (hoist_literals) {
       VLOG(1) << "Launching(" << kernel->name() << ") on device_id(" << device_id << ')';
       kernel->launch(grid_size_x,
@@ -351,13 +341,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                      kernel_params_log,
                      optimize_cuda_block_and_grid_sizes);
     }
-    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
-      auto launchTime = launchClock->stop();
-      VLOG(1) << "Device " << std::to_string(device_id)
-              << ": launchGpuCode: group-by cuLaunchKernel: "
-              << std::to_string(launchTime) << " ms";
-      finishClock->start();
-    }
+    VLOG(1) << "Device " << device_id
+            << ": launchGpuCode: query execution: " << timer_stop(kernel_start) << " ms";
+    query_resultset_copy_start = timer_start();
     gpu_allocator_->copyFromDevice(reinterpret_cast<int8_t*>(error_codes.data()),
                                    reinterpret_cast<int8_t*>(err_desc),
                                    error_codes.size() * sizeof(error_codes[0]),
@@ -485,14 +471,10 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       param_ptrs.push_back(&param);
     }
 
-    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
-      auto prepareTime = prepareClock->stop();
-
-      VLOG(1) << "Device " << std::to_string(device_id)
-              << ": launchGpuCode: prepare: " << std::to_string(prepareTime) << " ms";
-      launchClock->start();
-    }
-
+    VLOG(1) << "Device " << device_id
+            << ": launchGpuCode: prepare query execution: " << timer_stop(prepare_start)
+            << " ms";
+    auto kernel_start = timer_start();
     if (hoist_literals) {
       VLOG(1) << "Launching(" << kernel->name() << ") on device_id(" << device_id << ')';
       kernel->launch(grid_size_x,
@@ -520,14 +502,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                      optimize_cuda_block_and_grid_sizes);
     }
 
-    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
-      auto launchTime = launchClock->stop();
-      VLOG(1) << "Device " << std::to_string(device_id)
-              << ": launchGpuCode: cuLaunchKernel: " << std::to_string(launchTime)
-              << " ms";
-      finishClock->start();
-    }
-
+    VLOG(1) << "Device " << device_id
+            << ": launchGpuCode: query execution: " << timer_stop(kernel_start) << " ms";
+    query_resultset_copy_start = timer_start();
     gpu_allocator_->copyFromDevice(&error_codes[0],
                                    err_desc,
                                    error_codes.size() * sizeof(error_codes[0]),
@@ -573,16 +550,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                    varlen_output_buf_bytes,
                                    "Varlen output buffer");
   }
-
-  if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
-    if (allow_runtime_interrupt) {
-      kernel->resetRuntimeInterrupter(device_id);
-    }
-    auto finishTime = finishClock->stop();
-    VLOG(1) << "Device " << std::to_string(device_id)
-            << ": launchGpuCode: finish: " << std::to_string(finishTime) << " ms";
-  }
-
+  VLOG(1) << "Device " << device_id << ": launchGpuCode: copy query resultset: "
+          << timer_stop(query_resultset_copy_start) << " ms";
   return out_vec;
 }
 
