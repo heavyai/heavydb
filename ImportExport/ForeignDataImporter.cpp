@@ -713,77 +713,81 @@ ImportStatus ForeignDataImporter::importGeneralS3(
         }
       };
 
-  std::function<void()> import_local_files = [&]() {
-    for (size_t object_index = 0; object_index < object_count;) {
-      {
-        std::unique_lock communication_lock(communication_mutex);
-        files_download_condition.wait(
-            communication_lock,
-            [&download_exception_occured, object_index, &objects_to_process]() {
-              return objects_to_process[object_index].is_downloaded ||
-                     download_exception_occured;
-            });
-        if (download_exception_occured) {  // do not wait for object index if a download
-                                           // error has occured
-          return;
-        }
-      }
+  std::function<void()> import_local_files =
+      [&, parent_thread_local_ids = logger::thread_local_ids()]() {
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+        DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
+        for (size_t object_index = 0; object_index < object_count;) {
+          {
+            std::unique_lock communication_lock(communication_mutex);
+            files_download_condition.wait(
+                communication_lock,
+                [&download_exception_occured, object_index, &objects_to_process]() {
+                  return objects_to_process[object_index].is_downloaded ||
+                         download_exception_occured;
+                });
+            if (download_exception_occured) {  // do not wait for object index if a
+                                               // download error has occured
+              return;
+            }
+          }
 
-      // find largest range of files to import
-      size_t end_object_index = object_count;
-      for (size_t i = object_index + 1; i < object_count; ++i) {
-        if (!objects_to_process[i].is_downloaded) {
-          end_object_index = i;
-          break;
-        }
-      }
+          // find largest range of files to import
+          size_t end_object_index = object_count;
+          for (size_t i = object_index + 1; i < object_count; ++i) {
+            if (!objects_to_process[i].is_downloaded) {
+              end_object_index = i;
+              break;
+            }
+          }
 
-      ImportStatus local_import_status;
-      std::string local_import_dir;
-      try {
-        CopyParams local_copy_params;
-        std::tie(local_import_dir, local_copy_params) = get_local_copy_source_and_params(
-            copy_params_, objects_to_process, object_index, end_object_index);
-        local_import_status =
-            importGeneral(session_info, local_import_dir, local_copy_params);
-        // clean up temporary files
-        std::filesystem::remove_all(local_import_dir);
-      } catch (const std::exception& except) {
-        // replace all occurences of file names with the object keys for
-        // users
-        std::string what = except.what();
+          ImportStatus local_import_status;
+          std::string local_import_dir;
+          try {
+            CopyParams local_copy_params;
+            std::tie(local_import_dir, local_copy_params) =
+                get_local_copy_source_and_params(
+                    copy_params_, objects_to_process, object_index, end_object_index);
+            local_import_status =
+                importGeneral(session_info, local_import_dir, local_copy_params);
+            // clean up temporary files
+            std::filesystem::remove_all(local_import_dir);
+          } catch (const std::exception& except) {
+            // replace all occurences of file names with the object keys for
+            // users
+            std::string what = except.what();
 
-        for (size_t i = object_index; i < end_object_index; ++i) {
-          auto& object = objects_to_process[i];
-          what = boost::regex_replace(what,
-                                      boost::regex{object.import_file_path},
-                                      bucket_name + "/" + object.object_key);
-        }
-        {
-          std::unique_lock communication_lock(communication_mutex);
-          continue_downloading = false;
-        }
-        // clean up temporary files
-        std::filesystem::remove_all(local_import_dir);
-        throw std::runtime_error(what);
-      }
-      aggregate_import_status += local_import_status;
-      import_export::Importer::set_import_status(copy_from_source_,
-                                                 aggregate_import_status);
-      if (aggregate_import_status.load_failed) {
-        {
-          std::unique_lock communication_lock(communication_mutex);
-          continue_downloading = false;
-        }
-        return;
-      }
+            for (size_t i = object_index; i < end_object_index; ++i) {
+              auto& object = objects_to_process[i];
+              what = boost::regex_replace(what,
+                                          boost::regex{object.import_file_path},
+                                          bucket_name + "/" + object.object_key);
+            }
+            {
+              std::unique_lock communication_lock(communication_mutex);
+              continue_downloading = false;
+            }
+            // clean up temporary files
+            std::filesystem::remove_all(local_import_dir);
+            throw std::runtime_error(what);
+          }
+          aggregate_import_status += local_import_status;
+          import_export::Importer::set_import_status(copy_from_source_,
+                                                     aggregate_import_status);
+          if (aggregate_import_status.load_failed) {
+            {
+              std::unique_lock communication_lock(communication_mutex);
+              continue_downloading = false;
+            }
+            return;
+          }
 
-      object_index =
-          end_object_index;  // all objects in range [object_index,end_object_index)
-                             // correctly imported at this point in excecution, move onto
-                             // next range
-    }
-  };
+          object_index =
+              end_object_index;  // all objects in range [object_index,end_object_index)
+                                 // correctly imported at this point in excecution, move
+                                 // onto next range
+        }
+      };
 
   std::vector<size_t> partition_range(object_count);
   std::iota(partition_range.begin(), partition_range.end(), 0);
