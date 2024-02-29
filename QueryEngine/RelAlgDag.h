@@ -37,6 +37,7 @@
 #include "QueryEngine/TargetMetaInfo.h"
 #include "QueryEngine/TypePunning.h"
 #include "QueryHint.h"
+#include "Shared/MathUtils.h"
 #include "Shared/toString.h"
 #include "Utils/FsiUtils.h"
 
@@ -2990,10 +2991,13 @@ class RelAlgDag : public boost::noncopyable {
             break;
           }
           int aggregate_tree_fanout = std::stoi(target.getListOptions()[0]);
-          if (aggregate_tree_fanout < 0) {
-            VLOG(1) << "A fan-out of an aggregate tree should be larger than zero";
+          if (aggregate_tree_fanout < 2) {
+            VLOG(1) << "A fan-out of an aggregate tree should be larger than one";
           } else if (aggregate_tree_fanout > 1024) {
-            VLOG(1) << "Too large fanout is provided (i.e., fanout < 1024)";
+            VLOG(1) << "Too large aggregate tree fan-out is provided (i.e., "
+                       "aggregate_tree_fanout <= 1024)";
+          } else if (!shared::isPowOfTwo(aggregate_tree_fanout)) {
+            VLOG(1) << "A fan-out of an aggregate tree must be power of two";
           } else {
             query_hint.registerHint(QueryHint::kAggregateTreeFanout);
             query_hint.aggregate_tree_fanout = aggregate_tree_fanout;

@@ -778,13 +778,14 @@ class Executor {
                                      const CompilationOptions& co);
 
   // Generate code for a given frame bound
-  llvm::Value* codegenFrameBound(bool for_start_bound,
-                                 bool for_range_mode,
-                                 bool for_window_frame_naviation,
-                                 const Analyzer::WindowFrame* frame_bound,
-                                 bool is_timestamp_type_frame,
-                                 llvm::Value* order_key_null_val,
-                                 const WindowFrameBoundFuncArgs& args);
+  llvm::Value* codegenFrameBound(
+      bool for_start_bound,
+      bool for_range_mode,
+      bool for_window_frame_naviation,
+      const Analyzer::WindowFrame* frame_bound,
+      bool is_timestamp_type_frame,
+      llvm::Value* order_key_null_val,
+      const WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args);
 
   std::pair<std::string, llvm::Value*> codegenLoadOrderKeyBufPtr(
       WindowFunctionContext* window_func_context,
@@ -799,7 +800,7 @@ class Executor {
       llvm::Value* partition_index_lv) const;
 
   // Generate codes for loading various buffers of window partitions
-  WindowPartitionBufferPtrs codegenLoadPartitionBuffers(
+  WindowFunctionCtx::WindowPartitionBufferLLVMArgs codegenLoadPartitionBuffers(
       WindowFunctionContext* window_func_context,
       CodeGenerator* code_generator,
       const CompilationOptions& co,
@@ -811,7 +812,7 @@ class Executor {
       const Analyzer::WindowFrame* frame_start_bound,
       const Analyzer::WindowFrame* frame_end_bound,
       llvm::Value* order_key_col_null_val_lv,
-      WindowFrameBoundFuncArgs& args,
+      WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args,
       CodeGenerator& code_generator);
 
   // Generate codes for computing a pair of window frame bounds
@@ -824,18 +825,18 @@ class Executor {
   std::vector<llvm::Value*> prepareRowModeFuncArgs(
       bool for_start_bound,
       SqlWindowFrameBoundType bound_type,
-      const WindowFrameBoundFuncArgs& args) const;
+      const WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args) const;
   std::vector<llvm::Value*> prepareRangeModeFuncArgs(
       bool for_start_bound,
       const Analyzer::WindowFrame* frame_bound,
       bool is_timestamp_type_frame,
       llvm::Value* order_key_null_val,
-      const WindowFrameBoundFuncArgs& frame_args) const;
+      const WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& frame_args) const;
   const std::string getOrderKeyTypeName(WindowFunctionContext* window_func_context) const;
   llvm::Value* codegenLoadCurrentValueFromColBuf(
       WindowFunctionContext* window_func_context,
       CodeGenerator& code_generator,
-      WindowFrameBoundFuncArgs& args) const;
+      WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args) const;
   size_t getOrderKeySize(WindowFunctionContext* window_func_context) const;
   const SQLTypeInfo getFirstOrderColTypeInfo(
       WindowFunctionContext* window_func_context) const;

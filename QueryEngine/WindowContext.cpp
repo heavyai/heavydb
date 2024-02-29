@@ -28,14 +28,17 @@
 #include "Shared/Intervals.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/funcannotations.h"
+#include "Shared/scope.h"
 #include "Shared/sqltypes.h"
 #include "Shared/threading.h"
 
 #ifdef HAVE_TBB
-//#include <tbb/parallel_for.h>
+#include <tbb/parallel_for.h>
 #include <tbb/parallel_sort.h>
-#else
-#include <thrust/sort.h>
+#endif
+
+#ifdef HAVE_CUDA
+CUstream getQueryEngineCudaStreamForDevice(int device_num);
 #endif
 
 bool g_enable_parallel_window_partition_compute{true};
@@ -51,138 +54,120 @@ WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
     const size_t elem_count,
     const ExecutorDeviceType device_type,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    Data_Namespace::DataMgr* data_mgr,
+    DeviceAllocator* device_allocator,
+    const int device_id,
+    size_t aggregation_tree_fan_out)
     : window_func_(window_func)
     , partition_cache_key_(EMPTY_HASHED_PLAN_DAG_KEY)
     , sorted_partition_cache_key_(EMPTY_HASHED_PLAN_DAG_KEY)
-    , partitions_(nullptr)
     , elem_count_(elem_count)
-    , output_(nullptr)
-    , sorted_partition_buf_(nullptr)
-    , aggregate_trees_fan_out_(g_window_function_aggregation_tree_fanout)
-    , aggregate_trees_depth_(nullptr)
-    , ordered_partition_null_start_pos_(nullptr)
-    , ordered_partition_null_end_pos_(nullptr)
-    , partition_start_offset_(nullptr)
-    , partition_start_(nullptr)
-    , partition_end_(nullptr)
-    , device_type_(device_type)
+    , partitions_(nullptr)
     , row_set_mem_owner_(row_set_mem_owner)
-    , dummy_count_(elem_count)
-    , dummy_offset_(0)
-    , dummy_payload_(nullptr) {
+    , data_mgr_(data_mgr)
+    , device_type_(device_type)
+    , device_id_(device_id)
+    , device_allocator_(device_allocator)
+    , aggregate_trees_fan_out_(aggregation_tree_fan_out) {
   CHECK_LE(elem_count_, static_cast<size_t>(std::numeric_limits<int32_t>::max()));
-  dummy_payload_ =
-      reinterpret_cast<int32_t*>(checked_malloc(elem_count_ * sizeof(int32_t)));
-  std::iota(dummy_payload_, dummy_payload_ + elem_count_, int32_t(0));
+  auto const for_gpu = device_type_ == ExecutorDeviceType::GPU;
+  if (for_gpu) {
+    gpu_exec_ctx_.data_mgr_ = data_mgr_;
+  }
+  // a column becomes a single and whole partition
+  size_t partition_count = 1;
+  prepareEmptyPartition(for_gpu);
   if (window_func_->hasFraming() || window_func_->isMissingValueFillingFunction() ||
       window_func_->getKind() == SqlWindowFunctionKind::NTH_VALUE) {
-    // in this case, we consider all rows of the row belong to the same and only
-    // existing partition
-    partition_start_offset_ =
-        reinterpret_cast<int64_t*>(checked_calloc(2, sizeof(int64_t)));
-    partition_start_offset_[1] = elem_count_;
-    aggregate_trees_depth_ = reinterpret_cast<size_t*>(checked_calloc(1, sizeof(size_t)));
-    ordered_partition_null_start_pos_ =
-        reinterpret_cast<int64_t*>(checked_calloc(1, sizeof(int64_t)));
-    ordered_partition_null_end_pos_ =
-        reinterpret_cast<int64_t*>(checked_calloc(1, sizeof(int64_t)));
+    aggregate_trees_.data_mgr_ = data_mgr_;
+    preparePartitionStartOffsetBufs(for_gpu, partition_count);
+    prepareAggregateTreeBufs(for_gpu, partition_count);
   }
 }
 
 // Partitioned version
 WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
-    QueryPlanHash partition_cache_key,
-    const std::shared_ptr<HashJoin>& partitions,
+    QueryPlanHash cache_key,
+    std::shared_ptr<HashJoin> hash_table,
     const size_t elem_count,
     const ExecutorDeviceType device_type,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    Data_Namespace::DataMgr* data_mgr,
+    DeviceAllocator* device_allocator,
+    const int device_id,
     size_t aggregation_tree_fan_out)
     : window_func_(window_func)
-    , partition_cache_key_(partition_cache_key)
+    , partition_cache_key_(cache_key)
     , sorted_partition_cache_key_(EMPTY_HASHED_PLAN_DAG_KEY)
-    , partitions_(partitions)
     , elem_count_(elem_count)
-    , output_(nullptr)
-    , sorted_partition_buf_(nullptr)
-    , aggregate_trees_fan_out_(aggregation_tree_fan_out)
-    , aggregate_trees_depth_(nullptr)
-    , ordered_partition_null_start_pos_(nullptr)
-    , ordered_partition_null_end_pos_(nullptr)
-    , partition_start_offset_(nullptr)
-    , partition_start_(nullptr)
-    , partition_end_(nullptr)
-    , device_type_(device_type)
+    , partitions_(hash_table)
     , row_set_mem_owner_(row_set_mem_owner)
-    , dummy_count_(elem_count)
-    , dummy_offset_(0)
-    , dummy_payload_(nullptr) {
+    , data_mgr_(data_mgr)
+    , device_type_(device_type)
+    , device_id_(device_id)
+    , device_allocator_(device_allocator)
+    , aggregate_trees_fan_out_(aggregation_tree_fan_out) {
   CHECK(partitions_);  // This version should have hash table
-  size_t partition_count = partitionCount();
-  partition_start_offset_ =
-      reinterpret_cast<int64_t*>(checked_calloc(partition_count + 1, sizeof(int64_t)));
-  if (window_func_->hasFraming() || window_func_->isMissingValueFillingFunction()) {
-    aggregate_trees_depth_ =
-        reinterpret_cast<size_t*>(checked_calloc(partition_count, sizeof(size_t)));
-    ordered_partition_null_start_pos_ =
-        reinterpret_cast<int64_t*>(checked_calloc(partition_count, sizeof(int64_t)));
-    ordered_partition_null_end_pos_ =
-        reinterpret_cast<int64_t*>(checked_calloc(partition_count, sizeof(int64_t)));
+  auto const for_gpu = device_type_ == ExecutorDeviceType::GPU;
+  if (for_gpu) {
+    gpu_exec_ctx_.data_mgr_ = data_mgr_;
   }
-  // the first partition starts at zero position
-  std::partial_sum(counts(), counts() + partition_count, partition_start_offset_ + 1);
-}
-
-WindowFunctionContext::~WindowFunctionContext() {
-  free(partition_start_);
-  free(partition_end_);
-  if (dummy_payload_) {
-    free(dummy_payload_);
-  }
-  if (partition_start_offset_) {
-    free(partition_start_offset_);
-  }
-  if (aggregate_trees_depth_) {
-    free(aggregate_trees_depth_);
-  }
-  if (ordered_partition_null_start_pos_) {
-    free(ordered_partition_null_start_pos_);
-  }
-  if (ordered_partition_null_end_pos_) {
-    free(ordered_partition_null_end_pos_);
+  size_t partition_count = getNumWindowPartition();
+  if (window_func_->hasFraming() || window_func_->isMissingValueFillingFunction() ||
+      window_func_->getKind() == SqlWindowFunctionKind::NTH_VALUE) {
+    aggregate_trees_.data_mgr_ = data_mgr_;
+    preparePartitionStartOffsetBufs(for_gpu, partition_count);
+    prepareAggregateTreeBufs(for_gpu, partition_count);
   }
 }
 
 void WindowFunctionContext::addOrderColumn(
     const int8_t* column,
     const SQLTypeInfo& ti,
-    const std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
-  order_columns_owner_.push_back(chunks_owner);
-  order_columns_.push_back(column);
-  order_columns_ti_.push_back(ti);
+    const std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+    ExecutorDeviceType device_type) {
+  if (device_type == ExecutorDeviceType::CPU) {
+    column_chunk_owned_.order_columns_owner_.push_back(chunks_owner);
+    column_chunk_owned_.order_columns_.push_back(column);
+  } else {
+    column_chunk_owned_.order_columns_for_gpu_owner_.push_back(chunks_owner);
+    column_chunk_owned_.order_columns_for_gpu_.push_back(column);
+  }
+  column_chunk_owned_.order_columns_ti_.push_back(ti);
 }
 
 void WindowFunctionContext::addColumnBufferForWindowFunctionExpression(
     const int8_t* column,
-    const std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
-  window_func_expr_columns_owner_.push_back(chunks_owner);
-  window_func_expr_columns_.push_back(column);
+    const std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+    ExecutorDeviceType device_type) {
+  if (device_type == ExecutorDeviceType::CPU) {
+    column_chunk_owned_.window_func_expr_columns_owner_.push_back(chunks_owner);
+    column_chunk_owned_.window_func_expr_columns_.push_back(column);
+  } else {
+    column_chunk_owned_.window_func_expr_columns_for_gpu_owner_.push_back(chunks_owner);
+    column_chunk_owned_.window_func_expr_columns_for_gpu_.push_back(column);
+  }
 };
 
 const std::vector<const int8_t*>&
 WindowFunctionContext::getColumnBufferForWindowFunctionExpressions() const {
-  return window_func_expr_columns_;
+  return device_type_ == ExecutorDeviceType::CPU
+             ? column_chunk_owned_.window_func_expr_columns_
+             : column_chunk_owned_.window_func_expr_columns_for_gpu_;
 }
 
 const std::vector<const int8_t*>& WindowFunctionContext::getOrderKeyColumnBuffers()
     const {
-  return order_columns_;
+  return device_type_ == ExecutorDeviceType::CPU
+             ? column_chunk_owned_.order_columns_
+             : column_chunk_owned_.order_columns_for_gpu_;
 }
 
 const std::vector<SQLTypeInfo>& WindowFunctionContext::getOrderKeyColumnBufferTypes()
     const {
-  return order_columns_ti_;
+  return column_chunk_owned_.order_columns_ti_;
 }
 
 void WindowFunctionContext::setSortedPartitionCacheKey(QueryPlanHash cache_key) {
@@ -548,41 +533,52 @@ bool window_function_requires_peer_handling(const Analyzer::WindowFunction* wind
 
 void WindowFunctionContext::compute(
     std::unordered_map<QueryPlanHash, size_t>& sorted_partition_key_ref_count_map,
-    std::unordered_map<QueryPlanHash, std::shared_ptr<std::vector<int64_t>>>&
-        sorted_partition_cache,
-    std::unordered_map<size_t, AggregateTreeForWindowFraming>& aggregate_tree_map) {
-  auto timer = DEBUG_TIMER(__func__);
-  CHECK(!output_);
+    std::unordered_map<QueryPlanHash, int8_t*>& sorted_partition_cache,
+    std::unordered_map<size_t, WindowFunctionCtx::AggregateTreeForWindowFraming>&
+        aggregate_tree_map) {
+  // 1. init and precondition checking
+  auto compute_timer = DEBUG_TIMER(__func__);
+  CHECK(!cpu_exec_ctx_.output_);
   if (elem_count_ == 0) {
     return;
   }
+  // 2. output buffer allocation
   size_t output_buf_sz =
       elem_count_ * window_function_buffer_element_size(window_func_->getKind());
-  output_ = static_cast<int8_t*>(row_set_mem_owner_->allocate(output_buf_sz,
-                                                              /*thread_idx=*/0));
+  cpu_exec_ctx_.output_ =
+      static_cast<int8_t*>(row_set_mem_owner_->allocate(output_buf_sz,
+                                                        /*thread_idx=*/0));
+  // 3. determine window function's characteristics
   bool const is_agg_func = window_function_is_aggregate(window_func_->getKind());
-  bool const need_window_partition_buf =
+  bool const use_aggregation_tree =
       window_func_->hasFraming() || window_func_->isMissingValueFillingFunction();
-  if (is_agg_func || need_window_partition_buf) {
+
+  // 4. create two bitmaps to represent each window partition's start and end offsets
+  if (is_agg_func || use_aggregation_tree) {
     fillPartitionStart();
-    if (window_function_requires_peer_handling(window_func_) ||
-        need_window_partition_buf) {
+    if (window_function_requires_peer_handling(window_func_) || use_aggregation_tree) {
       fillPartitionEnd();
     }
   }
-  std::unique_ptr<int64_t[]> scratchpad;
-  int64_t* intermediate_output_buffer;
-  if (is_agg_func || need_window_partition_buf) {
-    intermediate_output_buffer = reinterpret_cast<int64_t*>(output_);
+
+  // 5. initialize intermediate output buffer to compute window function
+  std::unique_ptr<int64_t[]> intermediate_output_buffer_;
+  if (is_agg_func || use_aggregation_tree) {
+    cpu_exec_ctx_.intermediate_output_buffer_ =
+        reinterpret_cast<int64_t*>(cpu_exec_ctx_.output_);
   } else {
     output_buf_sz = sizeof(int64_t) * elem_count_;
-    scratchpad.reset(new int64_t[elem_count_]);
-    intermediate_output_buffer = scratchpad.get();
+    intermediate_output_buffer_ = std::make_unique<int64_t[]>(elem_count_);
+    cpu_exec_ctx_.intermediate_output_buffer_ = intermediate_output_buffer_.get();
   }
+  ScopeGuard invalidate_intermediate_output_buffer = [this] {
+    cpu_exec_ctx_.intermediate_output_buffer_ = nullptr;
+  };
+
+  // 6. sorting and caching window partitions if necessary
   const bool should_parallelize{g_enable_parallel_window_partition_compute &&
                                 elem_count_ >=
                                     g_parallel_window_partition_compute_threshold};
-
   auto cached_sorted_partition_it =
       sorted_partition_cache.find(sorted_partition_cache_key_);
   if (cached_sorted_partition_it != sorted_partition_cache.end()) {
@@ -591,50 +587,76 @@ void WindowFunctionContext::compute(
             << sorted_partition_cache_key_
             << ", ordering condition: " << ::toString(window_func_->getOrderKeys())
             << ")";
-    DEBUG_TIMER("Window Function Cached Sorted Partition Copy");
-    std::memcpy(intermediate_output_buffer, sorted_partition->data(), output_buf_sz);
-    if (need_window_partition_buf) {
-      sorted_partition_buf_ = sorted_partition;
-    }
+    auto partition_copy_timer =
+        DEBUG_TIMER("Window Function Cached Sorted Partition Copy");
+    std::memcpy(
+        cpu_exec_ctx_.intermediate_output_buffer_, sorted_partition, output_buf_sz);
   } else {
-    // ordering partitions if necessary
+    // to sort window partition, we first fill the `intermediate_output_buffer_`
+    // by calling std::iota (0 ~ N) where N is the # elems
+    // so each elem indicates the current row's index within a window partition
+    // now, if we have ordering column(s), we sort the window partition based on it/them
+    // the result of ordering changes the values stored in the
+    // `intermediate_output_buffer_` and it now represents a permutation index of the
+    // original ordering column here, values stored in the window partition for a
+    // specific partition-i (i.e., payload() + offsets()[i]) represent an actual row ids
+    // (0 ~ N) but in the corresponding permutation index for the same partition-i, it
+    // has 0 ~ counts()[i] where counts()[i] is the # elements in the partition-i
     const auto sort_partitions = [&](const size_t start, const size_t end) {
       for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
         sortPartition(partition_idx,
-                      intermediate_output_buffer + offsets()[partition_idx],
-                      should_parallelize);
+                      cpu_exec_ctx_.intermediate_output_buffer_ +
+                          getOffsetBuf(ExecutorDeviceType::CPU)[partition_idx]);
       }
     };
 
     if (should_parallelize) {
       auto sorted_partition_copy_timer =
           DEBUG_TIMER("Window Function Partition Sorting Parallelized");
-      tbb::parallel_for(tbb::blocked_range<int64_t>(0, partitionCount()),
+#if HAVE_TBB
+      tbb::parallel_for(tbb::blocked_range<int64_t>(0, getNumWindowPartition()),
                         [&, parent_thread_local_ids = logger::thread_local_ids()](
                             const tbb::blocked_range<int64_t>& r) {
                           logger::LocalIdsScopeGuard lisg =
                               parent_thread_local_ids.setNewThreadId();
                           sort_partitions(r.begin(), r.end());
                         });
+#else
+      std::vector<std::future<void>> workers;
+      auto const worker_count = cpu_threads();
+      for (auto interval :
+           makeIntervals(size_t(0), getNumWindowPartition(), worker_count)) {
+        workers.push_back(std::async(
+            std::launch::async, sort_partitions, interval.begin, interval.end));
+      }
+      for (auto& worker : workers) {
+        worker.get();
+      }
+#endif
     } else {
       auto sorted_partition_copy_timer =
           DEBUG_TIMER("Window Function  Partition Sorting Non-Parallelized");
-      sort_partitions(0, partitionCount());
+      sort_partitions(0, getNumWindowPartition());
     }
     auto sorted_partition_ref_cnt_it =
         sorted_partition_key_ref_count_map.find(sorted_partition_cache_key_);
-    bool can_access_sorted_partition =
+    bool keep_sorted_partition_in_cache =
         sorted_partition_ref_cnt_it != sorted_partition_key_ref_count_map.end() &&
-        sorted_partition_ref_cnt_it->second > 1;
-    if (can_access_sorted_partition || need_window_partition_buf) {
+        sorted_partition_ref_cnt_it->second > 1 &&
+        sorted_partition_cache.find(sorted_partition_cache_key_) ==
+            sorted_partition_cache.end();
+    if (keep_sorted_partition_in_cache) {
       // keep the sorted partition only if it will be reused from other window function
       // context of this query
-      sorted_partition_buf_ = std::make_shared<std::vector<int64_t>>(elem_count_);
-      DEBUG_TIMER("Window Function Sorted Partition Copy For Caching");
-      std::memcpy(
-          sorted_partition_buf_->data(), intermediate_output_buffer, output_buf_sz);
+      auto sorted_partition_memcpy_timer =
+          DEBUG_TIMER("Window Function Sorted Partition Caching");
+      auto copied_sorted_partition_buf =
+          static_cast<int8_t*>(row_set_mem_owner_->allocate(output_buf_sz, 0));
+      std::memcpy(copied_sorted_partition_buf,
+                  cpu_exec_ctx_.intermediate_output_buffer_,
+                  output_buf_sz);
       auto it = sorted_partition_cache.emplace(sorted_partition_cache_key_,
-                                               sorted_partition_buf_);
+                                               copied_sorted_partition_buf);
       if (it.second) {
         VLOG(1) << "Put sorted partition to cache (key: " << sorted_partition_cache_key_
                 << ", ordering condition: " << ::toString(window_func_->getOrderKeys())
@@ -642,46 +664,188 @@ void WindowFunctionContext::compute(
       }
     }
   }
+  {
+    auto sorted_partition_memcpy_timer =
+        DEBUG_TIMER("Window Function Sorted Partition Copy");
+    cpu_exec_ctx_.sorted_partition_buf_ =
+        static_cast<int8_t*>(row_set_mem_owner_->allocate(output_buf_sz, 0));
+    std::memcpy(cpu_exec_ctx_.sorted_partition_buf_,
+                cpu_exec_ctx_.intermediate_output_buffer_,
+                output_buf_sz);
+    if (device_type_ == ExecutorDeviceType::GPU) {
+      auto sorted_partition_d2h_timer =
+          DEBUG_TIMER("Window Function Sorted Partition Copy To Device");
+      gpu_exec_ctx_.sorted_partition_buf_gpu_ =
+          data_mgr_->alloc(MemoryLevel::GPU_LEVEL, device_id_, output_buf_sz);
+      device_allocator_->copyToDevice(
+          gpu_exec_ctx_.sorted_partition_buf_gpu_->getMemoryPtr(),
+          cpu_exec_ctx_.sorted_partition_buf_,
+          output_buf_sz,
+          "WindowFunc_SortedPartition");
+    }
+  }
 
-  if (need_window_partition_buf) {
+  // 7. build an aggregate tree if we need to compute this window function based on
+  // framing
+  if (use_aggregation_tree) {
     const auto compute_ordered_partition_null_range = [=](const size_t start,
                                                           const size_t end) {
       for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
         computeNullRangeOfSortedPartition(
             window_func_->getOrderKeys().front()->get_type_info(),
             partition_idx,
-            payload() + offsets()[partition_idx],
-            intermediate_output_buffer + offsets()[partition_idx]);
+            getPayloadBuf(ExecutorDeviceType::CPU) +
+                getOffsetBuf(ExecutorDeviceType::CPU)[partition_idx],
+            cpu_exec_ctx_.intermediate_output_buffer_ +
+                getOffsetBuf(ExecutorDeviceType::CPU)[partition_idx]);
       }
     };
-    auto partition_count = partitionCount();
+    auto partition_count = getNumWindowPartition();
 
     if (should_parallelize) {
-      auto partition_compuation_timer =
+      auto partition_computation_timer =
           DEBUG_TIMER("Window Function Ordered-Partition Null-Range Compute");
-      tbb::parallel_for(tbb::blocked_range<int64_t>(0, partitionCount()),
+#if HAVE_TBB
+      tbb::parallel_for(tbb::blocked_range<int64_t>(0, getNumWindowPartition()),
                         [&, parent_thread_local_ids = logger::thread_local_ids()](
                             const tbb::blocked_range<int64_t>& r) {
                           logger::LocalIdsScopeGuard lisg =
                               parent_thread_local_ids.setNewThreadId();
                           compute_ordered_partition_null_range(r.begin(), r.end());
                         });
+#else
+      std::vector<std::future<void>> workers;
+      auto const worker_count = cpu_threads();
+      for (auto interval :
+           makeIntervals(size_t(0), getNumWindowPartition(), worker_count)) {
+        workers.push_back(std::async(std::launch::async,
+                                     compute_ordered_partition_null_range,
+                                     interval.begin,
+                                     interval.end));
+      }
+      for (auto& worker : workers) {
+        worker.get();
+      }
+#endif
     } else {
-      auto partition_compuation_timer = DEBUG_TIMER(
+      auto partition_computation_timer = DEBUG_TIMER(
           "Window Function Non-Parallelized Ordered-Partition Null-Range Compute");
-      compute_ordered_partition_null_range(0, partitionCount());
+      compute_ordered_partition_null_range(0, getNumWindowPartition());
     }
+
     auto const cache_key = computeAggregateTreeCacheKey();
+    size_t total_buf_size = 0;
+    auto const agg_type = window_func_->getKind();
+    auto input_col_ti = window_func_->getArgs().front()->get_type_info();
+    auto const type = input_col_ti.is_decimal() ? decimal_to_int_type(input_col_ti)
+                      : input_col_ti.is_time_or_date()
+                          ? get_int_type_by_size(input_col_ti.get_size())
+                          : input_col_ti.get_type();
     auto const c_it = aggregate_tree_map.find(cache_key);
-    if (c_it != aggregate_tree_map.cend()) {
-      VLOG(1) << "Reuse aggregate tree for window function framing";
-      resizeStorageForWindowFraming(true);
-      aggregate_trees_ = c_it->second;
-      memcpy(aggregate_trees_depth_,
-             aggregate_trees_.aggregate_trees_depth_,
-             sizeof(size_t) * partition_count);
-    } else {
-      if (needsToBuildAggregateTree()) {
+    if (needsToBuildAggregateTree()) {
+      if (c_it != aggregate_tree_map.cend()) {
+        VLOG(1) << "Reuse aggregate tree for window function framing";
+        resizeStorageForWindowFraming(true);
+        aggregate_trees_ = c_it->second;
+        std::for_each(aggregate_trees_.aggregate_tree_sizes_in_byte_.begin(),
+                      aggregate_trees_.aggregate_tree_sizes_in_byte_.end(),
+                      [&total_buf_size](size_t size) { total_buf_size += size; });
+      } else {
+        // Allocate a contiguous memory space that holds all aggregate trees for the
+        // window framing First, calculate 1) the total size of memory we need to allocate
+        // and 2)
+        resizeStorageForWindowFraming();
+        // compute each aggregate tree's size
+        for (size_t partition_idx = 0; partition_idx < partition_count; ++partition_idx) {
+          auto const partition_size = getCountBuf(ExecutorDeviceType::CPU)[partition_idx];
+          auto const tree_info =
+              compute_segment_tree_info(partition_size, aggregate_trees_fan_out_);
+          aggregate_trees_.aggregate_tree_infos_[partition_idx] = tree_info;
+          size_t num_nodes_in_tree = tree_info.second.second;
+          aggregate_trees_.aggregate_tree_sizes_[partition_idx] = num_nodes_in_tree;
+          if (partition_size > 0) {
+            size_t tree_size = 0;
+            switch (type) {
+              case kBOOLEAN:
+              case kTINYINT:
+              case kSMALLINT:
+              case kINT:
+              case kDECIMAL:
+              case kNUMERIC:
+              case kBIGINT:
+                if (agg_type == SqlWindowFunctionKind::AVG) {
+                  tree_size = num_nodes_in_tree * sizeof(SumAndCountPair<int64_t>);
+                } else {
+                  tree_size = num_nodes_in_tree * sizeof(int64_t);
+                }
+                break;
+              case kFLOAT:
+              case kDOUBLE:
+                if (agg_type == SqlWindowFunctionKind::AVG) {
+                  tree_size = num_nodes_in_tree * sizeof(SumAndCountPair<double>);
+                } else {
+                  tree_size = num_nodes_in_tree * sizeof(double);
+                }
+                break;
+              default:
+                UNREACHABLE() << type;
+            }
+            aggregate_trees_.aggregate_tree_sizes_in_byte_[partition_idx] = tree_size;
+            total_buf_size += tree_size;
+          }
+        }
+        CHECK_EQ(aggregate_trees_.aggregate_tree_infos_.size(),
+                 static_cast<size_t>(partition_count));
+        // Second, compute start offsets for each chunk which is corresponding to an
+        // aggregate tree
+        std::exclusive_scan(aggregate_trees_.aggregate_tree_sizes_in_byte_.begin(),
+                            aggregate_trees_.aggregate_tree_sizes_in_byte_.end(),
+                            aggregate_trees_.aggregate_tree_start_offset_.begin(),
+                            static_cast<size_t>(0));
+        // Third, divide the contiguous memory into N chunks where N is equal to the
+        // partition count
+        VLOG(2) << "Allocate " << total_buf_size
+                << " bytes on CPU memory to build aggregate tree(s)";
+        aggregate_trees_.aggregate_tree_holder_ =
+            row_set_mem_owner_->allocate(total_buf_size, 0);
+        for (size_t partition_idx = 0; partition_idx < partition_count; ++partition_idx) {
+          auto const start_offset =
+              aggregate_trees_.aggregate_tree_start_offset_[partition_idx];
+          switch (type) {
+            case kBOOLEAN:
+            case kTINYINT:
+            case kSMALLINT:
+            case kINT:
+            case kDECIMAL:
+            case kNUMERIC:
+            case kBIGINT:
+              if (agg_type == SqlWindowFunctionKind::AVG) {
+                aggregate_trees_.derived_aggregate_tree_for_integer_type_[partition_idx] =
+                    reinterpret_cast<SumAndCountPair<int64_t>*>(
+                        aggregate_trees_.aggregate_tree_holder_ + start_offset);
+
+              } else {
+                aggregate_trees_.aggregate_tree_for_integer_type_[partition_idx] =
+                    reinterpret_cast<int64_t*>(aggregate_trees_.aggregate_tree_holder_ +
+                                               start_offset);
+              }
+              break;
+            case kFLOAT:
+            case kDOUBLE:
+              if (agg_type == SqlWindowFunctionKind::AVG) {
+                aggregate_trees_.derived_aggregate_tree_for_double_type_[partition_idx] =
+                    reinterpret_cast<SumAndCountPair<double>*>(
+                        aggregate_trees_.aggregate_tree_holder_ + start_offset);
+              } else {
+                aggregate_trees_.aggregate_tree_for_double_type_[partition_idx] =
+                    reinterpret_cast<double*>(aggregate_trees_.aggregate_tree_holder_ +
+                                              start_offset);
+              }
+              break;
+            default:
+              UNREACHABLE() << type;
+          }
+        }
         const auto build_aggregation_tree_for_partitions = [=](const size_t start,
                                                                const size_t end) {
           for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
@@ -690,76 +854,200 @@ void WindowFunctionContext::compute(
             // i.e., when window_func_expr_columns_.size() > 1
             SQLTypeInfo const input_col_ti =
                 window_func_->getArgs().front()->get_type_info();
-            const auto partition_size = counts()[partition_idx];
-            buildAggregationTreeForPartition(window_func_->getKind(),
-                                             partition_idx,
-                                             partition_size,
-                                             payload() + offsets()[partition_idx],
-                                             intermediate_output_buffer,
-                                             input_col_ti);
+            const auto partition_size =
+                getCountBuf(ExecutorDeviceType::CPU)[partition_idx];
+            buildAggregationTreeForPartition(
+                agg_type,
+                partition_idx,
+                partition_size,
+                getPayloadBuf(ExecutorDeviceType::CPU) +
+                    getOffsetBuf(ExecutorDeviceType::CPU)[partition_idx],
+                cpu_exec_ctx_.intermediate_output_buffer_,
+                input_col_ti);
           }
         };
-        resizeStorageForWindowFraming();
         if (should_parallelize) {
-          auto partition_compuation_timer = DEBUG_TIMER(
+          auto aggregate_tree_builder_timer = DEBUG_TIMER(
               "Window Function Parallelized Segment Tree Construction for Partitions");
-          tbb::parallel_for(tbb::blocked_range<int64_t>(0, partitionCount()),
+#if HAVE_TBB
+          tbb::parallel_for(tbb::blocked_range<int64_t>(0, getNumWindowPartition()),
                             [=, parent_thread_local_ids = logger::thread_local_ids()](
                                 const tbb::blocked_range<int64_t>& r) {
                               logger::LocalIdsScopeGuard lisg =
                                   parent_thread_local_ids.setNewThreadId();
                               build_aggregation_tree_for_partitions(r.begin(), r.end());
                             });
+#else
+          std::vector<std::future<void>> workers;
+          auto const worker_count = cpu_threads();
+          for (auto interval :
+               makeIntervals(size_t(0), getNumWindowPartition(), worker_count)) {
+            workers.push_back(std::async(std::launch::async,
+                                         build_aggregation_tree_for_partitions,
+                                         interval.begin,
+                                         interval.end));
+          }
+          for (auto& worker : workers) {
+            worker.get();
+          }
+#endif
         } else {
-          auto partition_compuation_timer = DEBUG_TIMER(
+          auto aggregate_tree_builder_timer = DEBUG_TIMER(
               "Window Function Non-Parallelized Segment Tree Construction for "
               "Partitions");
-          build_aggregation_tree_for_partitions(0, partition_count);
+          build_aggregation_tree_for_partitions(0, getNumWindowPartition());
+        }
+        CHECK(aggregate_tree_map.emplace(cache_key, aggregate_trees_).second);
+        VLOG(2) << "Put aggregate tree for the window framing";
+      }
+    }
+    if (device_type_ == ExecutorDeviceType::GPU) {
+      auto aggregate_tree_gpu_copy_timer =
+          DEBUG_TIMER("Window Function Segment Trees GPU Copy");
+      // 1. copy "all" aggregate trees to gpu
+      std::vector<void*> dev_buf_ptrs(partition_count);
+      aggregate_trees_.aggregate_trees_holder_gpu_ =
+          data_mgr_->alloc(MemoryLevel::GPU_LEVEL, device_id_, total_buf_size);
+      auto dev_aggregate_tree_ptr =
+          aggregate_trees_.aggregate_trees_holder_gpu_->getMemoryPtr();
+      device_allocator_->copyToDevice(dev_aggregate_tree_ptr,
+                                      aggregate_trees_.aggregate_tree_holder_,
+                                      total_buf_size,
+                                      "WindowFunc_AggTreePtrsBuf");
+      // 2. prepare each aggregate tree's ptr
+      for (size_t i = 0; i < partition_count; ++i) {
+        auto const tree_start_offset = aggregate_trees_.aggregate_tree_start_offset_[i];
+        auto const tree_size = aggregate_trees_.aggregate_tree_sizes_[i];
+        if (tree_size > 0) {
+          switch (type) {
+            case kFLOAT:
+            case kDOUBLE: {
+              if (window_func_->getKind() == SqlWindowFunctionKind::AVG) {
+                dev_buf_ptrs[i] = reinterpret_cast<SumAndCountPair<double>*>(
+                    dev_aggregate_tree_ptr + tree_start_offset);
+              } else {
+                dev_buf_ptrs[i] =
+                    reinterpret_cast<double*>(dev_aggregate_tree_ptr + tree_start_offset);
+              }
+              break;
+            }
+            default: {
+              if (window_func_->getKind() == SqlWindowFunctionKind::AVG) {
+                dev_buf_ptrs[i] = reinterpret_cast<SumAndCountPair<int64_t>*>(
+                    dev_aggregate_tree_ptr + tree_start_offset);
+              } else {
+                dev_buf_ptrs[i] = reinterpret_cast<int64_t*>(dev_aggregate_tree_ptr +
+                                                             tree_start_offset);
+              }
+              break;
+            }
+          }
+        } else {
+          dev_buf_ptrs[i] = nullptr;
         }
       }
-      CHECK(aggregate_tree_map.emplace(cache_key, aggregate_trees_).second);
-      VLOG(2) << "Put aggregate tree for the window framing";
+      // 3. copy device memory ptrs to device memory ptr holder
+      switch (type) {
+        case kFLOAT:
+        case kDOUBLE:
+          if (window_func_->getKind() == SqlWindowFunctionKind::AVG) {
+            device_allocator_->copyToDevice(
+                aggregate_trees_.derived_aggregate_tree_for_double_type_gpu_,
+                dev_buf_ptrs.data(),
+                sizeof(SumAndCountPair<double>*) * partition_count,
+                "WindowFunc_DerivedAggTreeForDoubleTy");
+          } else {
+            device_allocator_->copyToDevice(
+                aggregate_trees_.aggregate_tree_for_double_type_gpu_,
+                dev_buf_ptrs.data(),
+                sizeof(double*) * partition_count,
+                "WindowFunc_AggTreeForDoubleTy");
+          }
+          break;
+        default:
+          if (window_func_->getKind() == SqlWindowFunctionKind::AVG) {
+            device_allocator_->copyToDevice(
+                aggregate_trees_.derived_aggregate_tree_for_integer_type_gpu_,
+                dev_buf_ptrs.data(),
+                sizeof(SumAndCountPair<int64_t*>*) * partition_count,
+                "WindowFunc_DerivedAggTreeForIntTy");
+          } else {
+            device_allocator_->copyToDevice(
+                aggregate_trees_.aggregate_tree_for_integer_type_gpu_,
+                dev_buf_ptrs.data(),
+                sizeof(int64_t*) * partition_count,
+                "WindowFunc_AggTreeForIntTy");
+          }
+          break;
+      }
+      device_allocator_->copyToDevice(
+          aggregate_trees_.aggregate_trees_depth_gpu_->getMemoryPtr(),
+          aggregate_trees_.aggregate_trees_depth_.data(),
+          partition_count * sizeof(size_t),
+          "WindowFunc_AggTreeDepth");
+      device_allocator_->copyToDevice(
+          aggregate_trees_.aggregate_trees_leaf_start_offset_gpu_->getMemoryPtr(),
+          aggregate_trees_.aggregate_trees_leaf_start_offset_.data(),
+          partition_count * sizeof(size_t),
+          "WindowFunc_AggTreeLeftStartOffset");
     }
   }
-
+  // 8. compute window partition
   const auto compute_partitions = [=](const size_t start, const size_t end) {
     for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
       computePartitionBuffer(partition_idx,
-                             intermediate_output_buffer + offsets()[partition_idx],
+                             cpu_exec_ctx_.intermediate_output_buffer_ +
+                                 getOffsetBuf(ExecutorDeviceType::CPU)[partition_idx],
                              window_func_);
     }
   };
 
   if (should_parallelize) {
-    auto partition_compuation_timer = DEBUG_TIMER("Window Function Partition Compute");
-    tbb::parallel_for(tbb::blocked_range<int64_t>(0, partitionCount()),
+    auto partition_computation_timer = DEBUG_TIMER("Window Function Partition Compute");
+#if HAVE_TBB
+    tbb::parallel_for(tbb::blocked_range<int64_t>(0, getNumWindowPartition()),
                       [&, parent_thread_local_ids = logger::thread_local_ids()](
                           const tbb::blocked_range<int64_t>& r) {
                         logger::LocalIdsScopeGuard lisg =
                             parent_thread_local_ids.setNewThreadId();
                         compute_partitions(r.begin(), r.end());
                       });
+#else
+    std::vector<std::future<void>> workers;
+    auto const worker_count = cpu_threads();
+    for (auto interval :
+         makeIntervals(size_t(0), getNumWindowPartition(), worker_count)) {
+      workers.push_back(std::async(
+          std::launch::async, compute_partitions, interval.begin, interval.end));
+    }
+    for (auto& worker : workers) {
+      worker.get();
+    }
+#endif
   } else {
-    auto partition_compuation_timer =
+    auto partition_computation_timer =
         DEBUG_TIMER("Window Function Non-Parallelized Partition Compute");
-    compute_partitions(0, partitionCount());
+    compute_partitions(0, getNumWindowPartition());
   }
 
-  if (is_agg_func || need_window_partition_buf) {
+  // 9. finalize the computed window partition
+  if (is_agg_func || use_aggregation_tree) {
     // If window function is aggregate we were able to write to the final output buffer
     // directly in computePartition and we are done.
     return;
   }
 
-  auto output_i64 = reinterpret_cast<int64_t*>(output_);
+  auto output_i64 = reinterpret_cast<int64_t*>(cpu_exec_ctx_.output_);
   const auto payload_copy = [=](const size_t start, const size_t end) {
     for (size_t i = start; i < end; ++i) {
-      output_i64[payload()[i]] = intermediate_output_buffer[i];
+      output_i64[getPayloadBuf(ExecutorDeviceType::CPU)[i]] =
+          cpu_exec_ctx_.intermediate_output_buffer_[i];
     }
   };
   if (should_parallelize) {
     auto payload_copy_timer =
         DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Parallelized");
+#if HAVE_TBB
     tbb::parallel_for(tbb::blocked_range<int64_t>(0, elem_count_),
                       [&, parent_thread_local_ids = logger::thread_local_ids()](
                           const tbb::blocked_range<int64_t>& r) {
@@ -767,6 +1055,18 @@ void WindowFunctionContext::compute(
                             parent_thread_local_ids.setNewThreadId();
                         payload_copy(r.begin(), r.end());
                       });
+#else
+    std::vector<std::future<void>> workers;
+    auto const worker_count = cpu_threads();
+    for (auto interval :
+         makeIntervals(size_t(0), getNumWindowPartition(), worker_count)) {
+      workers.push_back(
+          std::async(std::launch::async, payload_copy, interval.begin, interval.end));
+    }
+    for (auto& worker : workers) {
+      worker.get();
+    }
+#endif
   } else {
     auto payload_copy_timer =
         DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Non-Parallelized");
@@ -852,7 +1152,7 @@ void WindowFunctionContext::computeNullRangeOfSortedPartition(
     const int32_t* original_col_idx_buf,
     const int64_t* ordered_col_idx_buf) {
   IndexPair null_range;
-  const auto partition_size = counts()[partition_idx];
+  const auto partition_size = getCountBuf(ExecutorDeviceType::CPU)[partition_idx];
   if (partition_size > 0) {
     if (order_col_ti.is_integer() || order_col_ti.is_decimal() ||
         order_col_ti.is_time_or_date() || order_col_ti.is_boolean()) {
@@ -860,20 +1160,20 @@ void WindowFunctionContext::computeNullRangeOfSortedPartition(
           original_col_idx_buf, ordered_col_idx_buf, partition_size};
       switch (order_col_ti.get_size()) {
         case 8:
-          null_range =
-              null_range_info.find_null_range_int<int64_t>(order_columns_.front());
+          null_range = null_range_info.find_null_range_int<int64_t>(
+              column_chunk_owned_.order_columns_.front());
           break;
         case 4:
-          null_range =
-              null_range_info.find_null_range_int<int32_t>(order_columns_.front());
+          null_range = null_range_info.find_null_range_int<int32_t>(
+              column_chunk_owned_.order_columns_.front());
           break;
         case 2:
-          null_range =
-              null_range_info.find_null_range_int<int16_t>(order_columns_.front());
+          null_range = null_range_info.find_null_range_int<int16_t>(
+              column_chunk_owned_.order_columns_.front());
           break;
         case 1:
-          null_range =
-              null_range_info.find_null_range_int<int8_t>(order_columns_.front());
+          null_range = null_range_info.find_null_range_int<int8_t>(
+              column_chunk_owned_.order_columns_.front());
           break;
         default:
           LOG(FATAL) << "Invalid type size: " << order_col_ti.get_size();
@@ -885,10 +1185,12 @@ void WindowFunctionContext::computeNullRangeOfSortedPartition(
           original_col_idx_buf, ordered_col_idx_buf, partition_size, null_bit_pattern};
       switch (order_col_ti.get_type()) {
         case kFLOAT:
-          null_range = null_range_info.find_null_range_fp<float>(order_columns_.front());
+          null_range = null_range_info.find_null_range_fp<float>(
+              column_chunk_owned_.order_columns_.front());
           break;
         case kDOUBLE:
-          null_range = null_range_info.find_null_range_fp<double>(order_columns_.front());
+          null_range = null_range_info.find_null_range_fp<double>(
+              column_chunk_owned_.order_columns_.front());
           break;
         default:
           LOG(FATAL) << "Invalid float type";
@@ -897,8 +1199,8 @@ void WindowFunctionContext::computeNullRangeOfSortedPartition(
       LOG(FATAL) << "Invalid column type for window aggregation over the frame";
     }
   }
-  ordered_partition_null_start_pos_[partition_idx] = null_range.first;
-  ordered_partition_null_end_pos_[partition_idx] = null_range.second + 1;
+  cpu_exec_ctx_.ordered_partition_null_start_pos_[partition_idx] = null_range.first;
+  cpu_exec_ctx_.ordered_partition_null_end_pos_[partition_idx] = null_range.second + 1;
 }
 
 std::vector<WindowFunctionContext::Comparator> WindowFunctionContext::createComparator(
@@ -908,18 +1210,21 @@ std::vector<WindowFunctionContext::Comparator> WindowFunctionContext::createComp
   const auto& order_keys = window_func_->getOrderKeys();
   const auto& collation = window_func_->getCollation();
   CHECK_EQ(order_keys.size(), collation.size());
-  for (size_t order_column_idx = 0; order_column_idx < order_columns_.size();
+  for (size_t order_column_idx = 0;
+       order_column_idx < column_chunk_owned_.order_columns_.size();
        ++order_column_idx) {
-    auto order_column_buffer = order_columns_[order_column_idx];
+    auto order_column_buffer = column_chunk_owned_.order_columns_[order_column_idx];
     const auto order_col =
         dynamic_cast<const Analyzer::ColumnVar*>(order_keys[order_column_idx].get());
     CHECK(order_col);
     const auto& order_col_collation = collation[order_column_idx];
-    auto comparator = makeComparator(order_col,
-                                     order_column_buffer,
-                                     payload() + offsets()[partition_idx],
-                                     !order_col_collation.is_desc,
-                                     order_col_collation.nulls_first);
+    auto comparator =
+        makeComparator(order_col,
+                       order_column_buffer,
+                       getPayloadBuf(ExecutorDeviceType::CPU) +
+                           getOffsetBuf(ExecutorDeviceType::CPU)[partition_idx],
+                       !order_col_collation.is_desc,
+                       order_col_collation.nulls_first);
     if (order_col_collation.is_desc) {
       comparator = [comparator](const int64_t lhs, const int64_t rhs) {
         return comparator(rhs, lhs);
@@ -931,9 +1236,9 @@ std::vector<WindowFunctionContext::Comparator> WindowFunctionContext::createComp
 }
 
 void WindowFunctionContext::sortPartition(const size_t partition_idx,
-                                          int64_t* output_for_partition_buff,
-                                          bool should_parallelize) {
-  const size_t partition_size{static_cast<size_t>(counts()[partition_idx])};
+                                          int64_t* output_for_partition_buff) {
+  const size_t partition_size{
+      static_cast<size_t>(getCountBuf(ExecutorDeviceType::CPU)[partition_idx])};
   if (partition_size == 0) {
     return;
   }
@@ -959,21 +1264,9 @@ void WindowFunctionContext::sortPartition(const size_t partition_idx,
       // return false as sort algo must enforce weak ordering
       return false;
     };
-    if (should_parallelize) {
-#ifdef HAVE_TBB
-      tbb::parallel_sort(output_for_partition_buff,
-                         output_for_partition_buff + partition_size,
-                         col_tuple_comparator);
-#else
-      thrust::sort(output_for_partition_buff,
-                   output_for_partition_buff + partition_size,
-                   col_tuple_comparator);
-#endif
-    } else {
-      std::sort(output_for_partition_buff,
-                output_for_partition_buff + partition_size,
-                col_tuple_comparator);
-    }
+    std::sort(output_for_partition_buff,
+              output_for_partition_buff + partition_size,
+              col_tuple_comparator);
   }
 }
 
@@ -982,12 +1275,20 @@ const Analyzer::WindowFunction* WindowFunctionContext::getWindowFunction() const
 }
 
 const int8_t* WindowFunctionContext::output() const {
-  return output_;
+  if (device_type_ == ExecutorDeviceType::CPU) {
+    return cpu_exec_ctx_.output_;
+  } else {
+    return gpu_exec_ctx_.output_gpu_->getMemoryPtr();
+  }
 }
 
 const int64_t* WindowFunctionContext::sortedPartition() const {
-  CHECK(sorted_partition_buf_);
-  return sorted_partition_buf_->data();
+  if (device_type_ == ExecutorDeviceType::CPU) {
+    return reinterpret_cast<const int64_t*>(cpu_exec_ctx_.sorted_partition_buf_);
+  } else {
+    return reinterpret_cast<const int64_t*>(
+        gpu_exec_ctx_.sorted_partition_buf_gpu_->getMemoryPtr());
+  }
 }
 
 const int64_t* WindowFunctionContext::aggregateState() const {
@@ -1001,13 +1302,17 @@ const int64_t* WindowFunctionContext::aggregateStateCount() const {
 }
 
 const int64_t* WindowFunctionContext::partitionStartOffset() const {
-  CHECK(partition_start_offset_);
-  return partition_start_offset_;
+  if (device_type_ == ExecutorDeviceType::CPU) {
+    return cpu_exec_ctx_.partition_start_offset_.data();
+  } else {
+    CHECK(gpu_exec_ctx_.partition_start_offset_gpu_);
+    return reinterpret_cast<int64_t*>(
+        gpu_exec_ctx_.partition_start_offset_gpu_->getMemoryPtr());
+  }
 }
 
 const int64_t* WindowFunctionContext::partitionNumCountBuf() const {
-  CHECK(partition_start_offset_);
-  return partition_start_offset_ + 1;
+  return partitionStartOffset() + 1;
 }
 
 int64_t WindowFunctionContext::aggregateStatePendingOutputs() const {
@@ -1015,12 +1320,42 @@ int64_t WindowFunctionContext::aggregateStatePendingOutputs() const {
   return reinterpret_cast<int64_t>(&aggregate_state_.outputs);
 }
 
-const int8_t* WindowFunctionContext::partitionStart() const {
-  return partition_start_;
+const int8_t* WindowFunctionContext::getPartitionStartBitmapBuf(
+    ExecutorDeviceType const dt) const {
+  if (elem_count_ == 0) {
+    return nullptr;
+  }
+  if (dt == ExecutorDeviceType::CPU) {
+    return cpu_exec_ctx_.partition_start_;
+  } else {
+    CHECK_EQ(dt, ExecutorDeviceType::GPU);
+    return gpu_exec_ctx_.partition_start_gpu_->getMemoryPtr();
+  }
 }
 
-const int8_t* WindowFunctionContext::partitionEnd() const {
-  return partition_end_;
+const int8_t* WindowFunctionContext::getPartitionEndBitmapBuf(
+    ExecutorDeviceType const dt) const {
+  if (elem_count_ == 0) {
+    return nullptr;
+  }
+  if (dt == ExecutorDeviceType::CPU) {
+    return cpu_exec_ctx_.partition_end_;
+  } else {
+    CHECK_EQ(dt, ExecutorDeviceType::GPU);
+    return gpu_exec_ctx_.partition_end_gpu_->getMemoryPtr();
+  }
+}
+
+void WindowFunctionContext::setPartitionStartBitmapSize(size_t sz) {
+  cpu_exec_ctx_.partition_start_sz_ = sz;
+}
+
+size_t WindowFunctionContext::partitionStartBitmapSize() const {
+  return cpu_exec_ctx_.partition_start_sz_;
+}
+
+void WindowFunctionContext::setPartitionEndBitmapSize(size_t sz) {
+  cpu_exec_ctx_.partition_end_sz_ = sz;
 }
 
 size_t WindowFunctionContext::elementCount() const {
@@ -1313,11 +1648,12 @@ void WindowFunctionContext::computePartitionBuffer(
     const size_t partition_idx,
     int64_t* output_for_partition_buff,
     const Analyzer::WindowFunction* window_func) {
-  const size_t partition_size{static_cast<size_t>(counts()[partition_idx])};
+  const size_t partition_size{
+      static_cast<size_t>(getCountBuf(ExecutorDeviceType::CPU)[partition_idx])};
   if (partition_size == 0) {
     return;
   }
-  const auto offset = offsets()[partition_idx];
+  const auto offset = getOffsetBuf(ExecutorDeviceType::CPU)[partition_idx];
   auto partition_comparator = createComparator(partition_idx);
   const auto col_tuple_comparator = [&partition_comparator](const int64_t lhs,
                                                             const int64_t rhs) {
@@ -1383,7 +1719,7 @@ void WindowFunctionContext::computePartitionBuffer(
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD: {
       const auto lag_or_lead = get_lag_or_lead_argument(window_func);
-      const auto partition_row_offsets = payload() + offset;
+      const auto partition_row_offsets = getPayloadBuf(ExecutorDeviceType::CPU) + offset;
       apply_lag_to_partition(
           lag_or_lead, partition_row_offsets, output_for_partition_buff, partition_size);
       break;
@@ -1392,7 +1728,7 @@ void WindowFunctionContext::computePartitionBuffer(
     case SqlWindowFunctionKind::LAST_VALUE: {
       const auto target_idx =
           get_target_idx_for_first_or_last_value_func(window_func, partition_size);
-      const auto partition_row_offsets = payload() + offset;
+      const auto partition_row_offsets = getPayloadBuf(ExecutorDeviceType::CPU) + offset;
       apply_nth_value_to_partition(
           partition_row_offsets, output_for_partition_buff, partition_size, target_idx);
       break;
@@ -1402,7 +1738,7 @@ void WindowFunctionContext::computePartitionBuffer(
           dynamic_cast<Analyzer::Constant*>(window_func_->getArgs()[1].get());
       CHECK(n_value_ptr);
       auto const n_value = static_cast<size_t>(n_value_ptr->get_constval().intval);
-      const auto partition_row_offsets = payload() + offset;
+      const auto partition_row_offsets = getPayloadBuf(ExecutorDeviceType::CPU) + offset;
       if (n_value < partition_size) {
         apply_nth_value_to_partition(
             partition_row_offsets, output_for_partition_buff, partition_size, n_value);
@@ -1431,14 +1767,14 @@ void WindowFunctionContext::computePartitionBuffer(
     case SqlWindowFunctionKind::SUM_IF:
     case SqlWindowFunctionKind::FORWARD_FILL:
     case SqlWindowFunctionKind::BACKWARD_FILL: {
-      const auto partition_row_offsets = payload() + offset;
       if (window_function_requires_peer_handling(window_func)) {
-        index_to_partition_end(partitionEnd(),
+        index_to_partition_end(getPartitionEndBitmapBuf(ExecutorDeviceType::CPU),
                                offset,
                                output_for_partition_buff,
                                partition_size,
                                col_tuple_comparator);
       }
+      const auto partition_row_offsets = getPayloadBuf(ExecutorDeviceType::CPU) + offset;
       apply_permutation_to_partition(
           output_for_partition_buff, partition_row_offsets, partition_size);
       break;
@@ -1452,10 +1788,10 @@ void WindowFunctionContext::computePartitionBuffer(
 }
 
 void WindowFunctionContext::resizeStorageForWindowFraming(bool for_reuse) {
-  auto const partition_count = partitionCount();
+  auto const partition_count = getNumWindowPartition();
   aggregate_trees_.resizeStorageForWindowFraming(partition_count);
   if (!for_reuse) {
-    segment_trees_owned_.resize(partition_count);
+    aggregate_trees_.segment_trees_owned_.resize(partition_count);
   }
 }
 
@@ -1497,146 +1833,139 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
                         ? get_int_type_by_size(input_col_ti.get_size())
                         : input_col_ti.get_type();
   if (partition_size > 0) {
-    IndexPair order_col_null_range{ordered_partition_null_start_pos_[partition_idx],
-                                   ordered_partition_null_end_pos_[partition_idx]};
     const int64_t* ordered_rowid_buf_for_partition =
-        ordered_rowid_buf + offsets()[partition_idx];
+        ordered_rowid_buf + getOffsetBuf(ExecutorDeviceType::CPU)[partition_idx];
     switch (type) {
       case kBOOLEAN:
       case kTINYINT: {
-        const auto segment_tree = std::make_shared<SegmentTree<int8_t, int64_t>>(
-            window_func_expr_columns_,
+        auto segment_tree = std::make_unique<SegmentTree<int8_t, int64_t>>(
+            column_chunk_owned_.window_func_expr_columns_,
             input_col_ti,
             original_rowid_buf,
             ordered_rowid_buf_for_partition,
             partition_size,
+            aggregate_trees_.aggregate_tree_infos_[partition_idx],
+            aggregate_trees_.aggregate_tree_sizes_in_byte_[partition_idx],
+            aggregate_trees_.aggregate_tree_start_offset_[partition_idx],
+            aggregate_trees_.aggregate_tree_holder_,
             agg_type,
             aggregate_trees_fan_out_);
-        aggregate_trees_depth_[partition_idx] =
+        aggregate_trees_.aggregate_trees_depth_[partition_idx] =
             segment_tree ? segment_tree->getLeafDepth() : 0;
-        if (agg_type == SqlWindowFunctionKind::AVG) {
-          aggregate_trees_.derived_aggregate_tree_for_integer_type_[partition_idx] =
-              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr;
-        } else {
-          aggregate_trees_.aggregate_tree_for_integer_type_[partition_idx] =
-              segment_tree ? segment_tree->getAggregatedValues() : nullptr;
-        }
-        segment_trees_owned_[partition_idx] = std::move(segment_tree);
+        aggregate_trees_.aggregate_trees_leaf_start_offset_[partition_idx] =
+            segment_tree ? segment_tree->computeLeafStartOffset() : 0;
+        aggregate_trees_.segment_trees_owned_[partition_idx] = std::move(segment_tree);
         break;
       }
       case kSMALLINT: {
-        const auto segment_tree = std::make_shared<SegmentTree<int16_t, int64_t>>(
-            window_func_expr_columns_,
+        auto segment_tree = std::make_unique<SegmentTree<int16_t, int64_t>>(
+            column_chunk_owned_.window_func_expr_columns_,
             input_col_ti,
             original_rowid_buf,
             ordered_rowid_buf_for_partition,
             partition_size,
+            aggregate_trees_.aggregate_tree_infos_[partition_idx],
+            aggregate_trees_.aggregate_tree_sizes_in_byte_[partition_idx],
+            aggregate_trees_.aggregate_tree_start_offset_[partition_idx],
+            aggregate_trees_.aggregate_tree_holder_,
             agg_type,
             aggregate_trees_fan_out_);
-        aggregate_trees_depth_[partition_idx] =
+        aggregate_trees_.aggregate_trees_depth_[partition_idx] =
             segment_tree ? segment_tree->getLeafDepth() : 0;
-        if (agg_type == SqlWindowFunctionKind::AVG) {
-          aggregate_trees_.derived_aggregate_tree_for_integer_type_[partition_idx] =
-              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr;
-        } else {
-          aggregate_trees_.aggregate_tree_for_integer_type_[partition_idx] =
-              segment_tree ? segment_tree->getAggregatedValues() : nullptr;
-        }
-        segment_trees_owned_[partition_idx] = std::move(segment_tree);
+        aggregate_trees_.aggregate_trees_leaf_start_offset_[partition_idx] =
+            segment_tree ? segment_tree->computeLeafStartOffset() : 0;
+        aggregate_trees_.segment_trees_owned_[partition_idx] = std::move(segment_tree);
         break;
       }
       case kINT: {
-        const auto segment_tree = std::make_shared<SegmentTree<int32_t, int64_t>>(
-            window_func_expr_columns_,
+        auto segment_tree = std::make_unique<SegmentTree<int32_t, int64_t>>(
+            column_chunk_owned_.window_func_expr_columns_,
             input_col_ti,
             original_rowid_buf,
             ordered_rowid_buf_for_partition,
             partition_size,
+            aggregate_trees_.aggregate_tree_infos_[partition_idx],
+            aggregate_trees_.aggregate_tree_sizes_in_byte_[partition_idx],
+            aggregate_trees_.aggregate_tree_start_offset_[partition_idx],
+            aggregate_trees_.aggregate_tree_holder_,
             agg_type,
             aggregate_trees_fan_out_);
-        aggregate_trees_depth_[partition_idx] =
+        aggregate_trees_.aggregate_trees_depth_[partition_idx] =
             segment_tree ? segment_tree->getLeafDepth() : 0;
-        if (agg_type == SqlWindowFunctionKind::AVG) {
-          aggregate_trees_.derived_aggregate_tree_for_integer_type_[partition_idx] =
-              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr;
-        } else {
-          aggregate_trees_.aggregate_tree_for_integer_type_[partition_idx] =
-              segment_tree ? segment_tree->getAggregatedValues() : nullptr;
-        }
-        segment_trees_owned_[partition_idx] = std::move(segment_tree);
+        aggregate_trees_.aggregate_trees_leaf_start_offset_[partition_idx] =
+            segment_tree ? segment_tree->computeLeafStartOffset() : 0;
+        aggregate_trees_.segment_trees_owned_[partition_idx] = std::move(segment_tree);
         break;
       }
       case kDECIMAL:
       case kNUMERIC:
       case kBIGINT: {
-        const auto segment_tree = std::make_shared<SegmentTree<int64_t, int64_t>>(
-            window_func_expr_columns_,
+        auto segment_tree = std::make_unique<SegmentTree<int64_t, int64_t>>(
+            column_chunk_owned_.window_func_expr_columns_,
             input_col_ti,
             original_rowid_buf,
             ordered_rowid_buf_for_partition,
             partition_size,
+            aggregate_trees_.aggregate_tree_infos_[partition_idx],
+            aggregate_trees_.aggregate_tree_sizes_in_byte_[partition_idx],
+            aggregate_trees_.aggregate_tree_start_offset_[partition_idx],
+            aggregate_trees_.aggregate_tree_holder_,
             agg_type,
             aggregate_trees_fan_out_);
-        aggregate_trees_depth_[partition_idx] =
+        aggregate_trees_.aggregate_trees_depth_[partition_idx] =
             segment_tree ? segment_tree->getLeafDepth() : 0;
-        if (agg_type == SqlWindowFunctionKind::AVG) {
-          aggregate_trees_.derived_aggregate_tree_for_integer_type_[partition_idx] =
-              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr;
-        } else {
-          aggregate_trees_.aggregate_tree_for_integer_type_[partition_idx] =
-              segment_tree ? segment_tree->getAggregatedValues() : nullptr;
-        }
-        segment_trees_owned_[partition_idx] = std::move(segment_tree);
+        aggregate_trees_.aggregate_trees_leaf_start_offset_[partition_idx] =
+            segment_tree ? segment_tree->computeLeafStartOffset() : 0;
+        aggregate_trees_.segment_trees_owned_[partition_idx] = std::move(segment_tree);
         break;
       }
       case kFLOAT: {
-        const auto segment_tree =
-            std::make_shared<SegmentTree<float, double>>(window_func_expr_columns_,
-                                                         input_col_ti,
-                                                         original_rowid_buf,
-                                                         ordered_rowid_buf_for_partition,
-                                                         partition_size,
-                                                         agg_type,
-                                                         aggregate_trees_fan_out_);
-        aggregate_trees_depth_[partition_idx] =
+        auto segment_tree = std::make_unique<SegmentTree<float, double>>(
+            column_chunk_owned_.window_func_expr_columns_,
+            input_col_ti,
+            original_rowid_buf,
+            ordered_rowid_buf_for_partition,
+            partition_size,
+            aggregate_trees_.aggregate_tree_infos_[partition_idx],
+            aggregate_trees_.aggregate_tree_sizes_in_byte_[partition_idx],
+            aggregate_trees_.aggregate_tree_start_offset_[partition_idx],
+            aggregate_trees_.aggregate_tree_holder_,
+            agg_type,
+            aggregate_trees_fan_out_);
+        aggregate_trees_.aggregate_trees_depth_[partition_idx] =
             segment_tree ? segment_tree->getLeafDepth() : 0;
-        if (agg_type == SqlWindowFunctionKind::AVG) {
-          aggregate_trees_.derived_aggregate_tree_for_double_type_[partition_idx] =
-              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr;
-        } else {
-          aggregate_trees_.aggregate_tree_for_double_type_[partition_idx] =
-              segment_tree ? segment_tree->getAggregatedValues() : nullptr;
-        }
-        segment_trees_owned_[partition_idx] = std::move(segment_tree);
+        aggregate_trees_.aggregate_trees_leaf_start_offset_[partition_idx] =
+            segment_tree ? segment_tree->computeLeafStartOffset() : 0;
+        aggregate_trees_.segment_trees_owned_[partition_idx] = std::move(segment_tree);
         break;
       }
       case kDOUBLE: {
-        const auto segment_tree =
-            std::make_shared<SegmentTree<double, double>>(window_func_expr_columns_,
-                                                          input_col_ti,
-                                                          original_rowid_buf,
-                                                          ordered_rowid_buf_for_partition,
-                                                          partition_size,
-                                                          agg_type,
-                                                          aggregate_trees_fan_out_);
-        aggregate_trees_depth_[partition_idx] =
+        auto segment_tree = std::make_unique<SegmentTree<double, double>>(
+            column_chunk_owned_.window_func_expr_columns_,
+            input_col_ti,
+            original_rowid_buf,
+            ordered_rowid_buf_for_partition,
+            partition_size,
+            aggregate_trees_.aggregate_tree_infos_[partition_idx],
+            aggregate_trees_.aggregate_tree_sizes_in_byte_[partition_idx],
+            aggregate_trees_.aggregate_tree_start_offset_[partition_idx],
+            aggregate_trees_.aggregate_tree_holder_,
+            agg_type,
+            aggregate_trees_fan_out_);
+        aggregate_trees_.aggregate_trees_depth_[partition_idx] =
             segment_tree ? segment_tree->getLeafDepth() : 0;
-        if (agg_type == SqlWindowFunctionKind::AVG) {
-          aggregate_trees_.derived_aggregate_tree_for_double_type_[partition_idx] =
-              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr;
-        } else {
-          aggregate_trees_.aggregate_tree_for_double_type_[partition_idx] =
-              segment_tree ? segment_tree->getAggregatedValues() : nullptr;
-        }
-        segment_trees_owned_[partition_idx] = std::move(segment_tree);
+        aggregate_trees_.aggregate_trees_leaf_start_offset_[partition_idx] =
+            segment_tree ? segment_tree->computeLeafStartOffset() : 0;
+        aggregate_trees_.segment_trees_owned_[partition_idx] = std::move(segment_tree);
         break;
       }
       default:
-        UNREACHABLE();
+        UNREACHABLE() << type;
     }
   } else {
     // handling a case of an empty partition
-    aggregate_trees_depth_[partition_idx] = 0;
+    aggregate_trees_.aggregate_trees_depth_[partition_idx] = 0;
+    aggregate_trees_.aggregate_trees_leaf_start_offset_[partition_idx] = 0;
     if (input_col_ti.is_integer() || input_col_ti.is_decimal() ||
         input_col_ti.is_boolean() || input_col_ti.is_time_or_date()) {
       if (agg_type == SqlWindowFunctionKind::AVG) {
@@ -1654,7 +1983,6 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
       }
     }
   }
-  aggregate_trees_.aggregate_trees_depth_ = aggregate_trees_depth_;
 }
 
 int64_t** WindowFunctionContext::getAggregationTreesForIntegerTypeWindowExpr() const {
@@ -1677,20 +2005,44 @@ WindowFunctionContext::getDerivedAggregationTreesForDoubleTypeWindowExpr() const
       aggregate_trees_.derived_aggregate_tree_for_double_type_.data());
 }
 
-size_t* WindowFunctionContext::getAggregateTreeDepth() const {
-  return aggregate_trees_depth_;
+const size_t* WindowFunctionContext::getAggregateTreeDepth() const {
+  if (device_type_ == ExecutorDeviceType::CPU) {
+    return aggregate_trees_.aggregate_trees_depth_.data();
+  } else {
+    return reinterpret_cast<size_t*>(
+        aggregate_trees_.aggregate_trees_depth_gpu_->getMemoryPtr());
+  }
+}
+
+const size_t* WindowFunctionContext::getAggregateTreeLeafStartOffset() const {
+  if (device_type_ == ExecutorDeviceType::CPU) {
+    return aggregate_trees_.aggregate_trees_leaf_start_offset_.data();
+  } else {
+    return reinterpret_cast<size_t*>(
+        aggregate_trees_.aggregate_trees_leaf_start_offset_gpu_->getMemoryPtr());
+  }
 }
 
 size_t WindowFunctionContext::getAggregateTreeFanout() const {
   return aggregate_trees_fan_out_;
 }
 
-int64_t* WindowFunctionContext::getNullValueStartPos() const {
-  return ordered_partition_null_start_pos_;
+const int64_t* WindowFunctionContext::getNullValueStartPos() const {
+  if (device_type_ == ExecutorDeviceType::CPU) {
+    return cpu_exec_ctx_.ordered_partition_null_start_pos_.data();
+  } else {
+    return reinterpret_cast<int64_t*>(
+        gpu_exec_ctx_.ordered_partition_null_start_pos_gpu_->getMemoryPtr());
+  }
 }
 
-int64_t* WindowFunctionContext::getNullValueEndPos() const {
-  return ordered_partition_null_end_pos_;
+const int64_t* WindowFunctionContext::getNullValueEndPos() const {
+  if (device_type_ == ExecutorDeviceType::CPU) {
+    return cpu_exec_ctx_.ordered_partition_null_end_pos_.data();
+  } else {
+    return reinterpret_cast<int64_t*>(
+        gpu_exec_ctx_.ordered_partition_null_end_pos_gpu_->getMemoryPtr());
+  }
 }
 
 void WindowFunctionContext::fillPartitionStart() {
@@ -1705,22 +2057,25 @@ void WindowFunctionContext::fillPartitionStart() {
   if (partitions_) {
     bitmap_sz += partitions_->isBitwiseEq() ? 1 : 0;
   }
-  partition_start_ = static_cast<int8_t*>(checked_calloc(bitmap_sz, 1));
-  int64_t partition_count = partitionCount();
-  auto partition_start_handle = reinterpret_cast<int64_t>(partition_start_);
+  setPartitionStartBitmapSize(bitmap_sz);
+  cpu_exec_ctx_.partition_start_ = static_cast<int8_t*>(checked_calloc(bitmap_sz, 1));
+  int64_t partition_count = getNumWindowPartition();
+  auto partition_start_handle = reinterpret_cast<int64_t>(cpu_exec_ctx_.partition_start_);
   agg_count_distinct_bitmap(&partition_start_handle, 0, 0, 0);
-  if (partition_start_offset_) {
+  if (!cpu_exec_ctx_.partition_start_offset_.empty()) {
     // if we have `partition_start_offset_`, we can reuse it for this logic
     // but note that it has partition_count + 1 elements where the first element is zero
     // which means the first partition's start offset is zero
     // and rest of them can represent values required for this logic
     for (int64_t i = 0; i < partition_count - 1; ++i) {
       agg_count_distinct_bitmap(
-          &partition_start_handle, partition_start_offset_[i + 1], 0, 0);
+          &partition_start_handle, cpu_exec_ctx_.partition_start_offset_[i + 1], 0, 0);
     }
   } else {
     std::vector<size_t> partition_offsets(partition_count);
-    std::partial_sum(counts(), counts() + partition_count, partition_offsets.begin());
+    std::partial_sum(getCountBuf(ExecutorDeviceType::CPU),
+                     getCountBuf(ExecutorDeviceType::CPU) + partition_count,
+                     partition_offsets.begin());
     for (int64_t i = 0; i < partition_count - 1; ++i) {
       agg_count_distinct_bitmap(&partition_start_handle, partition_offsets[i], 0, 0);
     }
@@ -1739,27 +2094,30 @@ void WindowFunctionContext::fillPartitionEnd() {
   if (partitions_) {
     bitmap_sz += partitions_->isBitwiseEq() ? 1 : 0;
   }
-  partition_end_ = static_cast<int8_t*>(checked_calloc(bitmap_sz, 1));
-  auto partition_end_handle = reinterpret_cast<int64_t>(partition_end_);
-  int64_t partition_count = partitionCount();
-  if (partition_start_offset_) {
+  setPartitionEndBitmapSize(bitmap_sz);
+  cpu_exec_ctx_.partition_end_ = static_cast<int8_t*>(checked_calloc(bitmap_sz, 1));
+  auto partition_end_handle = reinterpret_cast<int64_t>(cpu_exec_ctx_.partition_end_);
+  int64_t partition_count = getNumWindowPartition();
+  if (!cpu_exec_ctx_.partition_start_offset_.empty()) {
     // if we have `partition_start_offset_`, we can reuse it for this logic
     // but note that it has partition_count + 1 elements where the first element is zero
     // which means the first partition's start offset is zero
     // and rest of them can represent values required for this logic
     for (int64_t i = 0; i < partition_count - 1; ++i) {
-      if (partition_start_offset_[i + 1] == 0) {
+      if (cpu_exec_ctx_.partition_start_offset_[i + 1] == 0) {
         continue;
       }
       agg_count_distinct_bitmap(
-          &partition_end_handle, partition_start_offset_[i + 1] - 1, 0, 0);
+          &partition_end_handle, cpu_exec_ctx_.partition_start_offset_[i + 1] - 1, 0, 0);
     }
     if (elem_count_) {
       agg_count_distinct_bitmap(&partition_end_handle, elem_count_ - 1, 0, 0);
     }
   } else {
     std::vector<size_t> partition_offsets(partition_count);
-    std::partial_sum(counts(), counts() + partition_count, partition_offsets.begin());
+    std::partial_sum(getCountBuf(ExecutorDeviceType::CPU),
+                     getCountBuf(ExecutorDeviceType::CPU) + partition_count,
+                     partition_offsets.begin());
     for (int64_t i = 0; i < partition_count - 1; ++i) {
       if (partition_offsets[i] == 0) {
         continue;
@@ -1772,34 +2130,54 @@ void WindowFunctionContext::fillPartitionEnd() {
   }
 }
 
-const int32_t* WindowFunctionContext::payload() const {
-  if (partitions_) {
-    return reinterpret_cast<const int32_t*>(
-        partitions_->getJoinHashBuffer(device_type_, 0) +
-        partitions_->payloadBufferOff());
-  }
-  return dummy_payload_;  // non-partitioned window function
+const int8_t* WindowFunctionContext::getPartitionBuf(ExecutorDeviceType const dt) const {
+  CHECK(partitions_);
+  return partitions_->getJoinHashBuffer(dt, device_id_);
 }
 
-const int32_t* WindowFunctionContext::offsets() const {
+const int32_t* WindowFunctionContext::getPayloadBuf(ExecutorDeviceType const dt) const {
   if (partitions_) {
-    return reinterpret_cast<const int32_t*>(
-        partitions_->getJoinHashBuffer(device_type_, 0) + partitions_->offsetBufferOff());
+    return reinterpret_cast<const int32_t*>(getPartitionBuf(dt) +
+                                            partitions_->payloadBufferOff());
   }
-  return &dummy_offset_;
+  if (dt == ExecutorDeviceType::CPU) {
+    return cpu_exec_ctx_.dummy_payload_;
+  } else {
+    CHECK_EQ(dt, ExecutorDeviceType::GPU);
+    return reinterpret_cast<int32_t*>(gpu_exec_ctx_.dummy_payload_gpu_->getMemoryPtr());
+  }
 }
 
-const int32_t* WindowFunctionContext::counts() const {
+const int32_t* WindowFunctionContext::getOffsetBuf(ExecutorDeviceType const dt) const {
   if (partitions_) {
-    return reinterpret_cast<const int32_t*>(
-        partitions_->getJoinHashBuffer(device_type_, 0) + partitions_->countBufferOff());
+    return reinterpret_cast<const int32_t*>(getPartitionBuf(dt) +
+                                            partitions_->offsetBufferOff());
   }
-  return &dummy_count_;
+  if (dt == ExecutorDeviceType::CPU) {
+    return &cpu_exec_ctx_.dummy_offset_;
+  } else {
+    CHECK_EQ(dt, ExecutorDeviceType::GPU);
+    return reinterpret_cast<int32_t*>(gpu_exec_ctx_.dummy_offset_gpu_->getMemoryPtr());
+  }
 }
 
-size_t WindowFunctionContext::partitionCount() const {
+const int32_t* WindowFunctionContext::getCountBuf(ExecutorDeviceType const dt) const {
   if (partitions_) {
-    const auto partition_count = counts() - offsets();
+    return reinterpret_cast<const int32_t*>(getPartitionBuf(dt) +
+                                            partitions_->countBufferOff());
+  }
+  if (dt == ExecutorDeviceType::CPU) {
+    return &cpu_exec_ctx_.dummy_count_;
+  } else {
+    CHECK_EQ(dt, ExecutorDeviceType::GPU);
+    return reinterpret_cast<int32_t*>(gpu_exec_ctx_.dummy_count_gpu_->getMemoryPtr());
+  }
+}
+
+size_t WindowFunctionContext::getNumWindowPartition() const {
+  if (partitions_) {
+    auto constexpr cpu_dt = ExecutorDeviceType::CPU;
+    const auto partition_count = getCountBuf(cpu_dt) - getOffsetBuf(cpu_dt);
     CHECK_GE(partition_count, 0);
     return partition_count;
   }
@@ -1825,6 +2203,101 @@ QueryPlanHash const WindowFunctionContext::computeAggregateTreeCacheKey() const 
     boost::hash_combine(cache_key, order_entry.toString());
   }
   return cache_key;
+}
+
+void WindowFunctionContext::prepareEmptyPartition(bool for_gpu) {
+  cpu_exec_ctx_.dummy_count_ = elem_count_;
+  cpu_exec_ctx_.dummy_offset_ = 0;
+  cpu_exec_ctx_.dummy_payload_ =
+      reinterpret_cast<int32_t*>(checked_malloc(elem_count_ * sizeof(int32_t)));
+  // todo (yoonmin): parallelize this (std::iota)
+  std::iota(cpu_exec_ctx_.dummy_payload_,
+            cpu_exec_ctx_.dummy_payload_ + elem_count_,
+            int32_t(0));
+  if (for_gpu) {
+    gpu_exec_ctx_.dummy_payload_gpu_ = gpu_exec_ctx_.data_mgr_->alloc(
+        MemoryLevel::GPU_LEVEL, device_id_, elem_count_ * sizeof(int32_t));
+    device_allocator_->copyToDevice(gpu_exec_ctx_.dummy_payload_gpu_->getMemoryPtr(),
+                                    cpu_exec_ctx_.dummy_payload_,
+                                    sizeof(int32_t) * elem_count_,
+                                    "WindowFunc_DummyPayload");
+    gpu_exec_ctx_.dummy_count_gpu_ = gpu_exec_ctx_.data_mgr_->alloc(
+        MemoryLevel::GPU_LEVEL, device_id_, sizeof(int32_t));
+    device_allocator_->copyToDevice(gpu_exec_ctx_.dummy_count_gpu_->getMemoryPtr(),
+                                    &cpu_exec_ctx_.dummy_count_,
+                                    sizeof(int32_t),
+                                    "WindowFunc_DummyCount");
+    gpu_exec_ctx_.dummy_offset_gpu_ = gpu_exec_ctx_.data_mgr_->alloc(
+        MemoryLevel::GPU_LEVEL, device_id_, sizeof(int32_t));
+    device_allocator_->copyToDevice(gpu_exec_ctx_.dummy_offset_gpu_->getMemoryPtr(),
+                                    &cpu_exec_ctx_.dummy_offset_,
+                                    sizeof(int32_t),
+                                    "WindowFunc_DummyOffset");
+  }
+}
+
+void WindowFunctionContext::preparePartitionStartOffsetBufs(bool for_gpu,
+                                                            size_t partition_count) {
+  cpu_exec_ctx_.partition_start_offset_.resize(partition_count + 1);
+  // the first partition starts at zero position
+  std::exclusive_scan(getCountBuf(ExecutorDeviceType::CPU),
+                      getCountBuf(ExecutorDeviceType::CPU) + partition_count,
+                      cpu_exec_ctx_.partition_start_offset_.begin(),
+                      static_cast<size_t>(0));
+  if (for_gpu) {
+    gpu_exec_ctx_.partition_start_offset_gpu_ = gpu_exec_ctx_.data_mgr_->alloc(
+        MemoryLevel::GPU_LEVEL, device_id_, (partition_count + 1) * sizeof(int64_t));
+    device_allocator_->copyToDevice(
+        gpu_exec_ctx_.partition_start_offset_gpu_->getMemoryPtr(),
+        cpu_exec_ctx_.partition_start_offset_.data(),
+        (partition_count + 1) * sizeof(int64_t),
+        "WindowFunc_PartitionStartOffset");
+  }
+}
+
+void WindowFunctionContext::prepareAggregateTreeBufs(bool for_gpu,
+                                                     size_t const partition_count) {
+  aggregate_trees_.aggregate_trees_depth_.resize(partition_count);
+  aggregate_trees_.aggregate_trees_leaf_start_offset_.resize(partition_count);
+  cpu_exec_ctx_.ordered_partition_null_start_pos_.resize(partition_count);
+  cpu_exec_ctx_.ordered_partition_null_end_pos_.resize(partition_count);
+  if (for_gpu) {
+    aggregate_trees_.aggregate_trees_depth_gpu_ = gpu_exec_ctx_.data_mgr_->alloc(
+        MemoryLevel::GPU_LEVEL, device_id_, partition_count * sizeof(size_t));
+    aggregate_trees_.aggregate_trees_leaf_start_offset_gpu_ =
+        gpu_exec_ctx_.data_mgr_->alloc(
+            MemoryLevel::GPU_LEVEL, device_id_, partition_count * sizeof(size_t));
+    gpu_exec_ctx_.ordered_partition_null_start_pos_gpu_ = gpu_exec_ctx_.data_mgr_->alloc(
+        MemoryLevel::GPU_LEVEL, device_id_, partition_count * sizeof(size_t));
+    gpu_exec_ctx_.ordered_partition_null_end_pos_gpu_ = gpu_exec_ctx_.data_mgr_->alloc(
+        MemoryLevel::GPU_LEVEL, device_id_, partition_count * sizeof(size_t));
+    aggregate_trees_.resizeStorageForWindowFraming(partition_count);
+
+    aggregate_trees_.aggregate_tree_for_integer_type_buf_gpu_ = data_mgr_->alloc(
+        MemoryLevel::GPU_LEVEL, device_id_, partition_count * sizeof(int64_t*));
+    aggregate_trees_.aggregate_tree_for_double_type_buf_gpu_ = data_mgr_->alloc(
+        MemoryLevel::GPU_LEVEL, device_id_, partition_count * sizeof(double*));
+    aggregate_trees_.derived_aggregate_tree_for_integer_type_buf_gpu_ =
+        data_mgr_->alloc(MemoryLevel::GPU_LEVEL,
+                         device_id_,
+                         partition_count * sizeof(SumAndCountPair<int64_t>*));
+    aggregate_trees_.derived_aggregate_tree_for_double_type_buf_gpu_ =
+        data_mgr_->alloc(MemoryLevel::GPU_LEVEL,
+                         device_id_,
+                         partition_count * sizeof(SumAndCountPair<double>*));
+    aggregate_trees_.aggregate_tree_for_integer_type_gpu_ = reinterpret_cast<int64_t**>(
+        aggregate_trees_.aggregate_tree_for_integer_type_buf_gpu_->getMemoryPtr());
+    aggregate_trees_.aggregate_tree_for_double_type_gpu_ = reinterpret_cast<double**>(
+        aggregate_trees_.aggregate_tree_for_double_type_buf_gpu_->getMemoryPtr());
+    aggregate_trees_.derived_aggregate_tree_for_integer_type_gpu_ =
+        reinterpret_cast<SumAndCountPair<int64_t>**>(
+            aggregate_trees_.derived_aggregate_tree_for_integer_type_buf_gpu_
+                ->getMemoryPtr());
+    aggregate_trees_.derived_aggregate_tree_for_double_type_gpu_ =
+        reinterpret_cast<SumAndCountPair<double>**>(
+            aggregate_trees_.derived_aggregate_tree_for_double_type_buf_gpu_
+                ->getMemoryPtr());
+  }
 }
 
 void WindowProjectNodeContext::addWindowFunctionContext(
@@ -1866,4 +2339,34 @@ const WindowProjectNodeContext* WindowProjectNodeContext::get(Executor* executor
 void WindowProjectNodeContext::reset(Executor* executor) {
   executor->window_project_node_context_owned_ = nullptr;
   executor->active_window_function_ = nullptr;
+}
+
+#ifdef HAVE_CUDA
+void WindowProjectNodeContext::registerDeviceAllocator(
+    int device_id,
+    Data_Namespace::DataMgr* data_mgr) {
+  auto [itr, emplaced] = device_allocator_owned_.emplace(
+      device_id,
+      std::make_unique<CudaAllocator>(
+          data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
+  CHECK(emplaced);
+}
+
+CudaAllocator* WindowProjectNodeContext::getDeviceAllocator(int device_id) const {
+  auto it = device_allocator_owned_.find(device_id);
+  CHECK(it != device_allocator_owned_.end());
+  return it->second.get();
+}
+#endif
+
+void WindowProjectNodeContext::registerWindowPartition(
+    size_t const target_idx,
+    std::shared_ptr<HashJoin> partition) {
+  window_partition_owned_.emplace(target_idx, std::move(partition));
+}
+
+HashJoin* WindowProjectNodeContext::getWindowPartition(size_t const target_idx) const {
+  auto it = window_partition_owned_.find(target_idx);
+  CHECK(it != window_partition_owned_.end());
+  return it->second.get();
 }
