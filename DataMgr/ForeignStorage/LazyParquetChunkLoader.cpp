@@ -2372,6 +2372,8 @@ DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>&
   DataPreview data_preview;
   data_preview.num_rejected_rows = 0;
 
+  size_t total_rows_appended = 0;
+  size_t total_rows_rejected = 0;
   auto current_file_it = files.begin();
   while (data_preview.sample_rows.size() < max_num_rows &&
          current_file_it != files.end()) {
@@ -2419,7 +2421,10 @@ DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>&
     }
 
     std::function<void(const std::vector<int>&)> append_row_groups_for_column =
-        [&](const std::vector<int>& column_indices) {
+        [&, parent_thread_local_ids = logger::thread_local_ids()](
+            const std::vector<int>& column_indices) {
+          logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+          DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
           for (const auto& column_index : column_indices) {
             auto& chunk = preview_context.column_chunks[column_index];
             auto chunk_list = std::list<Chunk_NS::Chunk>{chunk};
@@ -2465,7 +2470,10 @@ DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>&
       if (i == 0) {
         num_rows = strings.size();
       } else {
-        CHECK_EQ(num_rows, strings.size());
+        // Each column may have a variable amount of data read, but each column
+        // must have at least `max_num_rows` rows read. The minimum row count
+        // among all columns is used as the num rows to detect.
+        num_rows = std::min(strings.size(), num_rows);
       }
     }
 
@@ -2477,10 +2485,12 @@ DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>&
     auto offset_row = data_preview.sample_rows.size();
     data_preview.sample_rows.resize(std::min(offset_row + row_count, max_num_rows));
 
-    for (size_t irow = 0, rows_appended = 0;
-         irow < num_rows && offset_row + rows_appended < max_num_rows;
+    size_t rows_appended = 0;
+    size_t rows_rejected = 0;
+    for (size_t irow = 0; irow < num_rows && offset_row + rows_appended < max_num_rows;
          ++irow) {
       if (rejected_row_indices->find(irow) != rejected_row_indices->end()) {
+        ++rows_rejected;
         continue;
       }
       auto& row_data = data_preview.sample_rows[offset_row + rows_appended];
@@ -2493,6 +2503,15 @@ DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>&
       }
       ++rows_appended;
     }
+    total_rows_appended += rows_appended;
+    total_rows_rejected += rows_rejected;
+  }
+
+  if (total_rows_appended == 0 && total_rows_rejected > 0) {
+    LOG(WARNING)
+        << "Failed to import any valid data during Parquet detect, all sampled "
+           "rows were rejected due to issues with data. Number of rows rejected: " +
+               std::to_string(total_rows_rejected);
   }
 
   // attempt to detect geo columns

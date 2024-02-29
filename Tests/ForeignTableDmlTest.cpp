@@ -23,7 +23,9 @@
 #include <regex>
 #include <string>
 
+#include <arrow/io/file.h>
 #include <gtest/gtest.h>
+#include <parquet/stream_writer.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
