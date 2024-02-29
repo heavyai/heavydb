@@ -303,8 +303,8 @@ std::pair<llvm::BasicBlock*, llvm::Value*> Executor::codegenWindowResetStateCont
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext(this);
   auto aggregate_state = aggregateWindowStatePtr(code_generator, co);
-  const auto bitset = cgen_state_->llInt(
-      reinterpret_cast<const int64_t>(window_func_context->partitionStart()));
+  const auto bitset = cgen_state_->llInt(reinterpret_cast<const int64_t>(
+      window_func_context->getPartitionStartBitmapBuf(ExecutorDeviceType::CPU)));
   const auto bitset_lv =
       CodegenUtil::createPtrWithHoistedMemoryAddr(
           cgen_state_.get(),
@@ -507,7 +507,7 @@ llvm::Value* Executor::codegenWindowNavigationFunctionOnFrame(
 
   // compute frame bound for the current row
   auto const int64_t_zero_val_lv = cgen_state_->llInt((int64_t)0);
-  WindowFrameBoundFuncArgs WindowFrameBoundFuncArgs{
+  WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs WindowFrameBoundFuncArgs{
       frame_start_bound_expr_lv,
       frame_end_bound_expr_lv,
       window_func->hasRangeModeFraming() ? current_row_pos_lv : cur_row_idx_in_frame_lv,
@@ -646,13 +646,14 @@ llvm::Value* Executor::codegenFrameBoundExpr(const Analyzer::WindowFunction* win
   return bound_expr_lv;
 }
 
-llvm::Value* Executor::codegenFrameBound(bool for_start_bound,
-                                         bool for_range_mode,
-                                         bool for_window_frame_naviation,
-                                         const Analyzer::WindowFrame* frame_bound,
-                                         bool is_timestamp_type_frame,
-                                         llvm::Value* order_key_null_val,
-                                         const WindowFrameBoundFuncArgs& args) {
+llvm::Value* Executor::codegenFrameBound(
+    bool for_start_bound,
+    bool for_range_mode,
+    bool for_window_frame_naviation,
+    const Analyzer::WindowFrame* frame_bound,
+    bool is_timestamp_type_frame,
+    llvm::Value* order_key_null_val,
+    const WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args) {
   const auto bound_type = frame_bound->getBoundType();
   auto adjust_frame_end_bound = [&](llvm::Value* target_bound_lv) {
     return cgen_state_->ir_builder_.CreateSub(target_bound_lv, args.int64_t_one_val_lv);
@@ -753,7 +754,7 @@ const std::string Executor::getOrderKeyTypeName(
 llvm::Value* Executor::codegenLoadCurrentValueFromColBuf(
     WindowFunctionContext* window_func_context,
     CodeGenerator& code_generator,
-    WindowFrameBoundFuncArgs& args) const {
+    WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args) const {
   llvm::Value* current_col_value_ptr_lv{nullptr};
   const auto order_key_size_in_byte = getOrderKeySize(window_func_context) * 8;
   auto const order_key_ptr =
@@ -805,8 +806,8 @@ llvm::Value* Executor::codegenCurrentPartitionIndex(
     // search over the entire window partition Instead, we collect a hash slot that each
     // row is assigned to and keep this info at the payload buffer
     // `hash_slot_idx_ptr_lv` and use it for computing window frame navigation functions
-    auto* const hash_slot_idx_ptr =
-        window_func_context->payload() + window_func_context->elementCount();
+    auto* const hash_slot_idx_ptr = window_func_context->getPayloadBuf(co.device_type) +
+                                    window_func_context->elementCount();
     auto hash_slot_idx_buf_lv =
         cgen_state_->llInt(reinterpret_cast<int64_t>(hash_slot_idx_ptr));
     auto hash_slot_idx_ptr_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
@@ -828,7 +829,8 @@ llvm::Value* Executor::codegenCurrentPartitionIndex(
             "cur_row_hash_slot_idx"),
         64);
   }
-  auto partition_count_lv = cgen_state_->llInt(window_func_context->partitionCount());
+  auto partition_count_lv =
+      cgen_state_->llInt(window_func_context->getNumWindowPartition());
   auto partition_num_count_buf_lv = cgen_state_->llInt(
       reinterpret_cast<int64_t>(window_func_context->partitionNumCountBuf()));
   auto partition_num_count_ptr_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
@@ -857,7 +859,7 @@ std::string Executor::getFramingFuncName(const std::string& bound_type,
 std::vector<llvm::Value*> Executor::prepareRowModeFuncArgs(
     bool for_start_bound,
     SqlWindowFrameBoundType bound_type,
-    const WindowFrameBoundFuncArgs& args) const {
+    const WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args) const {
   std::vector<llvm::Value*> frame_args{args.current_row_pos_lv,
                                        args.current_partition_start_offset_lv};
   if (bound_type == SqlWindowFrameBoundType::CURRENT_ROW) {
@@ -877,7 +879,7 @@ std::vector<llvm::Value*> Executor::prepareRangeModeFuncArgs(
     const Analyzer::WindowFrame* frame_bound,
     bool is_timestamp_type_frame,
     llvm::Value* order_key_null_val,
-    const WindowFrameBoundFuncArgs& args) const {
+    const WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args) const {
   llvm::Value* bound_expr_lv =
       for_start_bound ? args.frame_start_bound_expr_lv : args.frame_end_bound_expr_lv;
   llvm::Value* target_val_lv =
@@ -973,12 +975,12 @@ std::pair<std::string, llvm::Value*> Executor::codegenLoadOrderKeyBufPtr(
   return std::make_pair(order_col_type_name, order_key_buf_ptr_lv);
 }
 
-WindowPartitionBufferPtrs Executor::codegenLoadPartitionBuffers(
+WindowFunctionCtx::WindowPartitionBufferLLVMArgs Executor::codegenLoadPartitionBuffers(
     WindowFunctionContext* window_func_context,
     CodeGenerator* code_generator,
     const CompilationOptions& co,
     llvm::Value* partition_index_lv) const {
-  WindowPartitionBufferPtrs bufferPtrs;
+  WindowFunctionCtx::WindowPartitionBufferLLVMArgs bufferPtrs;
   const auto pi64_type =
       llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
   const auto pi32_type =
@@ -1006,8 +1008,8 @@ WindowPartitionBufferPtrs Executor::codegenLoadPartitionBuffers(
       current_partition_start_offset_ptr_lv);
 
   // row_id buf of the current partition
-  const auto partition_rowid_buf_lv =
-      cgen_state_->llInt(reinterpret_cast<int64_t>(window_func_context->payload()));
+  const auto partition_rowid_buf_lv = cgen_state_->llInt(
+      reinterpret_cast<int64_t>(window_func_context->getPayloadBuf(co.device_type)));
   const auto partition_rowid_ptr_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
                                           cgen_state_.get(),
                                           code_generator,
@@ -1038,8 +1040,8 @@ WindowPartitionBufferPtrs Executor::codegenLoadPartitionBuffers(
                                          bufferPtrs.current_partition_start_offset_lv);
 
   // # elems per partition
-  const auto partition_count_buf =
-      cgen_state_->llInt(reinterpret_cast<int64_t>(window_func_context->counts()));
+  const auto partition_count_buf = cgen_state_->llInt(
+      reinterpret_cast<int64_t>(window_func_context->getCountBuf(co.device_type)));
   auto partition_count_buf_ptr_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
                                         cgen_state_.get(),
                                         code_generator,
@@ -1082,7 +1084,7 @@ std::pair<llvm::Value*, llvm::Value*> Executor::codegenWindowFrameBounds(
     const Analyzer::WindowFrame* frame_start_bound,
     const Analyzer::WindowFrame* frame_end_bound,
     llvm::Value* order_key_col_null_val_lv,
-    WindowFrameBoundFuncArgs& args,
+    WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args,
     CodeGenerator& code_generator) {
   const auto window_func = window_func_context->getWindowFunction();
   CHECK(window_func);
@@ -1201,7 +1203,7 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
         window_func_context, &code_generator, co, partition_index_lv);
     auto nulls_first_lv = cgen_state_->llBool(ordering_spec.nulls_first);
 
-    WindowFrameBoundFuncArgs WindowFrameBoundFuncArgs{
+    WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs WindowFrameBoundFuncArgs{
         frame_start_bound_expr_lv,
         frame_end_bound_expr_lv,
         current_row_pos_lv,

@@ -25,10 +25,33 @@
 #include <sstream>
 #endif
 
+#include "QueryEngine/ExpressionRange.h"
 #include "SegmentTreeUtils.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/sqldefs.h"
 #include "Shared/sqltypes.h"
+
+// a utility function that computes a length and the start node index of a segment tree
+// to contain 'num_elem' with a given 'fan_out'
+static inline std::pair<size_t, IndexPair> compute_segment_tree_info(int64_t num_elem,
+                                                                     size_t fan_out) {
+  if (num_elem <= 0) {
+    return std::make_pair(0, std::make_pair(0, 0));
+  }
+  size_t depth = 0;
+  checked_size_t cur_level_start_offset = 0;
+  checked_size_t maximum_node_at_next_level = 1u;
+  while (maximum_node_at_next_level <= static_cast<size_t>(num_elem)) {
+    depth++;
+    cur_level_start_offset += maximum_node_at_next_level;
+    maximum_node_at_next_level *= fan_out;
+  }
+  IndexPair const index_pair =
+      std::make_pair(static_cast<size_t>(cur_level_start_offset),
+                     static_cast<size_t>(cur_level_start_offset) +
+                         static_cast<size_t>(maximum_node_at_next_level));
+  return std::make_pair(depth, index_pair);
+}
 
 // A generic segment tree class that builds a segment tree of a given input_col_buf
 // with a fan_out
@@ -42,6 +65,10 @@ class SegmentTree {
               int32_t const* original_input_col_idx_buf,
               int64_t const* ordered_input_col_idx_buf,
               int64_t num_elems,
+              std::pair<size_t, IndexPair> const tree_info,
+              size_t tree_size_in_bytes,
+              size_t aggregate_tree_buf_start_offset,
+              int8_t* aggregate_tree_buf,
               SqlWindowFunctionKind agg_type,
               size_t fan_out)
       : input_col_buf_(!input_col_bufs.empty()
@@ -52,6 +79,11 @@ class SegmentTree {
       , original_input_col_idx_buf_(original_input_col_idx_buf)
       , ordered_input_col_idx_buf_(ordered_input_col_idx_buf)
       , num_elems_(num_elems)
+      , leaf_depth_(tree_info.first)
+      , leaf_range_(tree_info.second)
+      , leaf_node_count_(leaf_range_.second - leaf_range_.first)
+      , tree_node_count_(leaf_range_.second)
+      , tree_size_in_bytes_(tree_size_in_bytes)
       , fan_out_(fan_out)
       , agg_type_(agg_type)
       , is_conditional_agg_(agg_type == SqlWindowFunctionKind::SUM_IF)
@@ -62,23 +94,24 @@ class SegmentTree {
                      : agg_type_ == SqlWindowFunctionKind::MAX
                          ? std::numeric_limits<INPUT_TYPE>::min()
                          : 0) {
-    CHECK_GT(num_elems_, (int64_t)0);
-    auto max_tree_height_and_leaf_range = findMaxTreeHeight(num_elems_, fan_out_);
-    leaf_depth_ = max_tree_height_and_leaf_range.first;
-    leaf_range_ = max_tree_height_and_leaf_range.second;
-    // the index of the last elem of the leaf level is the same as the tree's size
-    tree_size_ = leaf_range_.second;
-    leaf_size_ = leaf_range_.second - leaf_range_.first;
+    CHECK_GT(num_elems_, static_cast<int64_t>(0));
     // for derived aggregate, we maintain both "sum" aggregates and element counts
     // to compute the value correctly
     if (agg_type_ == SqlWindowFunctionKind::AVG) {
       derived_aggregated_ = reinterpret_cast<SumAndCountPair<AGG_TYPE>*>(
-          checked_malloc(tree_size_ * sizeof(SumAndCountPair<AGG_TYPE>)));
-      buildForDerivedAggregate(0, 0);
+          aggregate_tree_buf + aggregate_tree_buf_start_offset);
     } else {
       // we can use an array as a segment tree for the rest of aggregates
-      aggregated_values_ =
-          reinterpret_cast<AGG_TYPE*>(checked_malloc(tree_size_ * sizeof(AGG_TYPE)));
+      aggregated_values_ = reinterpret_cast<AGG_TYPE*>(aggregate_tree_buf +
+                                                       aggregate_tree_buf_start_offset);
+    }
+    buildAggregateTree();
+  }
+
+  void buildAggregateTree() {
+    if (agg_type_ == SqlWindowFunctionKind::AVG) {
+      buildForDerivedAggregate(0, 0);
+    } else {
       switch (agg_type_) {
         case SqlWindowFunctionKind::COUNT:
           buildForCount(0, 0);
@@ -97,26 +130,16 @@ class SegmentTree {
     }
   }
 
-  ~SegmentTree() {
-    if (num_elems_ > 0) {
-      if (agg_type_ == SqlWindowFunctionKind::AVG) {
-        free(derived_aggregated_);
-      } else {
-        free(aggregated_values_);
-      }
-    }
-  }
-
   // try to aggregate values of the given query range
   AGG_TYPE query(const IndexPair& query_range) const {
     if (query_range.first > query_range.second || query_range.first < 0 ||
-        query_range.second > leaf_size_) {
+        query_range.second > leaf_node_count_) {
       return null_val_;
     }
     // todo (yoonmin) : support more derived aggregate functions
     if (agg_type_ == SqlWindowFunctionKind::AVG) {
       SumAndCountPair<AGG_TYPE> sum_and_count_pair =
-          searchForDerivedAggregate(query_range, 0, 0, 0, leaf_size_);
+          searchForDerivedAggregate(query_range, 0, 0, 0, leaf_node_count_);
       if (sum_and_count_pair.sum == null_val_) {
         return null_val_;
       } else if (sum_and_count_pair.count == 0) {
@@ -131,7 +154,7 @@ class SegmentTree {
         }
       }
     } else {
-      const auto res = search(query_range, 0, 0, 0, leaf_size_);
+      const auto res = search(query_range, 0, 0, 0, leaf_node_count_);
       if (res == null_val_) {
         switch (agg_type_) {
           case SqlWindowFunctionKind::MIN:
@@ -151,9 +174,11 @@ class SegmentTree {
     return derived_aggregated_;
   }
 
-  size_t getLeafSize() const { return leaf_size_; }
+  size_t getLeafNodeCount() const { return leaf_node_count_; }
 
-  size_t getTreeSize() const { return tree_size_; }
+  size_t getTreeNodeCount() const { return tree_node_count_; }
+
+  size_t getTreeSizeInBytes() const { return tree_size_in_bytes_; }
 
   size_t getNumElems() const { return num_elems_; }
 
@@ -162,6 +187,8 @@ class SegmentTree {
   size_t getTreeFanout() const { return fan_out_; }
 
   IndexPair getLeafRange() const { return leaf_range_; }
+
+  size_t computeLeafStartOffset() { return tree_node_count_ - leaf_node_count_; }
 
  private:
   // build a segment tree for a given aggregate function recursively
@@ -647,30 +674,9 @@ class SegmentTree {
     return child_indexes;
   }
 
-  // a utility function that computes a length and the start node index of a segment tree
-  // to contain 'num_elem' with a given 'fan_out'
-  std::pair<size_t, IndexPair> findMaxTreeHeight(int64_t num_elem, int fan_out) {
-    if (num_elem <= 0) {
-      return std::make_pair(0, std::make_pair(0, 0));
-    }
-    int64_t cur_level_start_offset = 0;
-    size_t depth = 0;
-    IndexPair index_pair = std::make_pair(0, 0);
-    while (true) {
-      size_t maximum_node_at_next_level = pow(fan_out, depth);
-      if (num_elem < maximum_node_at_next_level) {
-        index_pair = std::make_pair(cur_level_start_offset,
-                                    cur_level_start_offset + maximum_node_at_next_level);
-        return std::make_pair(depth, index_pair);
-      }
-      depth++;
-      cur_level_start_offset += maximum_node_at_next_level;
-    }
-  }
-
-  // agg input column buffer and its type info
+  // agg input column buffer and its type info owned by `chunk_owner`
   const INPUT_TYPE* const input_col_buf_;
-  // to deal with conditional aggregate function
+  // to deal with conditional aggregate function owned by `chunk_owner`
   const int8_t* const cond_col_buf_;
   SQLTypeInfo const input_col_ti_;
   // the following two idx buffers are for accessing the sorted input column
@@ -680,8 +686,9 @@ class SegmentTree {
   // and use `t_idx` to get i-th row of the sorted column
   // otherwise, we can access the column when it keeps sorted values
   // original index (i.e., row_id) to access input_col_buf
+  // note that `RowSetMemOwner` owns below two `idx_buf_`s
   const int32_t* const original_input_col_idx_buf_;
-  // ordered index to access sorted input_col_buf
+  // the following idx buffer is used to access the input column in sorted manner
   const int64_t* const ordered_input_col_idx_buf_;
   // # input elements
   int64_t const num_elems_;
@@ -694,15 +701,17 @@ class SegmentTree {
   AGG_TYPE const null_val_;
   // invalid_val is required to fill an empty node for a correct aggregation
   INPUT_TYPE const invalid_val_;
-  // # nodes in the leaf level
-  size_t leaf_size_;
   // level of the leaf
   size_t leaf_depth_;
   // start ~ end indexes of the leaf level
   IndexPair leaf_range_;
+  // # nodes in the leaf level
+  size_t leaf_node_count_;
   // total number of nodes in the tree
-  size_t tree_size_;
+  size_t tree_node_count_;
+  size_t tree_size_in_bytes_;
   // depending on aggregate function, we use different aggregation logic
+  // note that below two are owned by `RowSetMemOwner`
   // 1) a segment tree for computing derived aggregates, i.e., avg and stddev
   SumAndCountPair<AGG_TYPE>* derived_aggregated_;
   // 2) rest of aggregate functions can use a vector of elements

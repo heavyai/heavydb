@@ -35,6 +35,7 @@ using namespace std::string_literals;
 #include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
 #include "Shared/Compressor.h"
+#include "Shared/MathUtils.h"
 #include "Shared/SysDefinitions.h"
 #include "StringDictionary/StringDictionary.h"
 #include "Utils/DdlUtils.h"
@@ -1589,6 +1590,20 @@ void CommandLineOptions::validate() {
         "Invalid value for executor-max-available-resource-use-ratio, must be greater "
         "than "
         "0. and less than or equal to 1.0");
+  }
+
+  if (g_window_function_aggregation_tree_fanout < 2) {
+    throw std::runtime_error(
+        "Invalid value for window-function-frame-aggregation-tree-fanout, must be "
+        "greater than 1.");
+  } else if (g_window_function_aggregation_tree_fanout > 1024) {
+    throw std::runtime_error(
+        "Invalid value for window-function-frame-aggregation-tree-fanout, must be "
+        "less than or equal to 1024.");
+  } else if (!shared::isPowOfTwo(g_window_function_aggregation_tree_fanout)) {
+    throw std::runtime_error(
+        "Invalid value for window-function-frame-aggregation-tree-fanout, must be a "
+        "power of two.");
   }
 
 #ifndef HAVE_SYSTEM_TFS

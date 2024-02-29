@@ -323,6 +323,8 @@ class RelAlgExecutor : private StorageIOFacility {
   // Creates the window context for the given window function.
   std::unique_ptr<WindowFunctionContext> createWindowFunctionContext(
       const Analyzer::WindowFunction* window_func,
+      WindowProjectNodeContext* window_project_node_ctx,
+      const size_t target_idx,
       const std::shared_ptr<Analyzer::BinOper>& partition_key_cond,
       std::unordered_map<QueryPlanHash, std::shared_ptr<HashJoin>>& partition_cache,
       std::unordered_map<QueryPlanHash, size_t>& sorted_partition_key_ref_count_map,
@@ -330,7 +332,9 @@ class RelAlgExecutor : private StorageIOFacility {
       const std::vector<InputTableInfo>& query_infos,
       const CompilationOptions& co,
       ColumnCacheMap& column_cache_map,
-      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
+      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+      Data_Namespace::DataMgr* data_mgr,
+      int device_id);
 
   size_t getNDVEstimation(const WorkUnit& work_unit,
                           const int64_t range,

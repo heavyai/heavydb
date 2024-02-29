@@ -28,6 +28,7 @@
 #include "QueryEngine/ExtensionFunctionsBinding.h"
 #include "QueryEngine/ExternalExecutor.h"
 #include "QueryEngine/FromTableReordering.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/QueryPhysicalInputsCollector.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
 #include "QueryEngine/RangeTableIndexVisitor.h"
@@ -2505,6 +2506,15 @@ void RelAlgExecutor::computeWindow(const WorkUnit& work_unit,
   }
   query_infos.push_back(query_infos.front());
   auto window_project_node_context = WindowProjectNodeContext::create(executor_);
+  // todo (yoonmin) : support execution of window function using multiple GPUs
+  constexpr int device_id = 0;
+  auto data_mgr = executor_->getDataMgr();
+  CHECK(data_mgr);
+  if (co.device_type == ExecutorDeviceType::GPU) {
+#ifdef HAVE_CUDA
+    window_project_node_context->registerDeviceAllocator(device_id, data_mgr);
+#endif
+  }
   // a query may hold multiple window functions having the same partition by condition
   // then after building the first hash partition we can reuse it for the rest of
   // the window functions
@@ -2513,12 +2523,12 @@ void RelAlgExecutor::computeWindow(const WorkUnit& work_unit,
   // output buffer
   // todo (yoonmin) : support recycler for window function computation?
   std::unordered_map<QueryPlanHash, std::shared_ptr<HashJoin>> partition_cache;
-  std::unordered_map<QueryPlanHash, std::shared_ptr<std::vector<int64_t>>>
-      sorted_partition_cache;
+  std::unordered_map<QueryPlanHash, int8_t*> sorted_partition_cache;
   std::unordered_map<QueryPlanHash, size_t> sorted_partition_key_ref_count_map;
   std::unordered_map<size_t, std::unique_ptr<WindowFunctionContext>>
       window_function_context_map;
-  std::unordered_map<QueryPlanHash, AggregateTreeForWindowFraming> aggregate_tree_map;
+  std::unordered_map<QueryPlanHash, WindowFunctionCtx::AggregateTreeForWindowFraming>
+      aggregate_tree_map;
   for (size_t target_index = 0; target_index < work_unit.exe_unit.target_exprs.size();
        ++target_index) {
     const auto& target_expr = work_unit.exe_unit.target_exprs[target_index];
@@ -2547,6 +2557,8 @@ void RelAlgExecutor::computeWindow(const WorkUnit& work_unit,
     }
     auto context =
         createWindowFunctionContext(window_func,
+                                    window_project_node_context,
+                                    target_index,
                                     partition_key_cond /*nullptr if no partition key*/,
                                     partition_cache,
                                     sorted_partition_key_ref_count_map,
@@ -2554,7 +2566,9 @@ void RelAlgExecutor::computeWindow(const WorkUnit& work_unit,
                                     query_infos,
                                     co,
                                     column_cache_map,
-                                    executor_->getRowSetMemoryOwner());
+                                    executor_->getRowSetMemoryOwner(),
+                                    data_mgr,
+                                    device_id);
     CHECK(window_function_context_map.emplace(target_index, std::move(context)).second);
   }
 
@@ -2567,6 +2581,8 @@ void RelAlgExecutor::computeWindow(const WorkUnit& work_unit,
 
 std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
+    WindowProjectNodeContext* window_project_node_ctx,
+    const size_t target_idx,
     const std::shared_ptr<Analyzer::BinOper>& partition_key_cond,
     std::unordered_map<QueryPlanHash, std::shared_ptr<HashJoin>>& partition_cache,
     std::unordered_map<QueryPlanHash, size_t>& sorted_partition_key_ref_count_map,
@@ -2574,11 +2590,20 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     const std::vector<InputTableInfo>& query_infos,
     const CompilationOptions& co,
     ColumnCacheMap& column_cache_map,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    Data_Namespace::DataMgr* data_mgr,
+    int device_id) {
   const size_t elem_count = query_infos.front().info.fragments.front().getNumTuples();
   const auto memory_level = co.device_type == ExecutorDeviceType::GPU
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
+  DeviceAllocator* device_allocator{nullptr};
+  if (memory_level == MemoryLevel::GPU_LEVEL) {
+#ifdef HAVE_CUDA
+    device_allocator = window_project_node_ctx->getDeviceAllocator(device_id);
+#endif
+    CHECK(device_allocator);
+  }
   std::unique_ptr<WindowFunctionContext> context;
   auto partition_cache_key = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
       work_unit.body->getQueryPlanDagHash(), work_unit.exe_unit.sort_info);
@@ -2601,7 +2626,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
       const auto hash_table_or_err = executor_->buildHashTableForQualifier(
           partition_key_cond,
           query_infos,
-          memory_level,
+          MemoryLevel::CPU_LEVEL,
           window_partition_type,
           HashType::OneToMany,
           column_cache_map,
@@ -2626,16 +2651,29 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
       aggregate_tree_fanout = work_unit.exe_unit.query_hint.aggregate_tree_fanout;
       VLOG(1) << "Aggregate tree's fanout is set to " << aggregate_tree_fanout;
     }
+    CHECK(shared::isPowOfTwo(aggregate_tree_fanout));
+    constexpr size_t fan_out_min_val = 2;
+    constexpr size_t fan_out_max_val = 1024;
+    CHECK_GE(aggregate_tree_fanout, fan_out_min_val);
+    CHECK_LE(aggregate_tree_fanout, fan_out_max_val);
     context = std::make_unique<WindowFunctionContext>(window_func,
                                                       partition_cache_key,
                                                       partition_ptr,
                                                       elem_count,
                                                       co.device_type,
                                                       row_set_mem_owner,
+                                                      data_mgr,
+                                                      device_allocator,
+                                                      device_id,
                                                       aggregate_tree_fanout);
   } else {
-    context = std::make_unique<WindowFunctionContext>(
-        window_func, elem_count, co.device_type, row_set_mem_owner);
+    context = std::make_unique<WindowFunctionContext>(window_func,
+                                                      elem_count,
+                                                      co.device_type,
+                                                      row_set_mem_owner,
+                                                      data_mgr,
+                                                      device_allocator,
+                                                      device_id);
   }
   const auto& order_keys = window_func->getOrderKeys();
   if (!order_keys.empty()) {
@@ -2665,15 +2703,34 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
           ColumnFetcher::getOneColumnFragment(executor_,
                                               *order_col,
                                               query_infos.front().info.fragments.front(),
-                                              memory_level,
-                                              0,
+                                              MemoryLevel::CPU_LEVEL,
+                                              /*device_id for CPU=*/0,
                                               nullptr,
                                               /*thread_idx=*/0,
                                               chunks_owner,
                                               column_cache_map);
 
       CHECK_EQ(col_elem_count, elem_count);
-      context->addOrderColumn(column, order_col->get_type_info(), chunks_owner);
+      context->addOrderColumn(
+          column, order_col->get_type_info(), chunks_owner, ExecutorDeviceType::CPU);
+      if (co.device_type == ExecutorDeviceType::GPU) {
+        // we need to load a column for GPU too
+        auto const [gpu_column, gpu_col_elem_count] = ColumnFetcher::getOneColumnFragment(
+            executor_,
+            *order_col,
+            query_infos.front().info.fragments.front(),
+            MemoryLevel::GPU_LEVEL,
+            device_id,
+            device_allocator,
+            /*thread_idx=*/0,
+            chunks_owner,
+            column_cache_map);
+        CHECK_EQ(gpu_col_elem_count, elem_count);
+        context->addOrderColumn(gpu_column,
+                                order_col->get_type_info(),
+                                chunks_owner,
+                                ExecutorDeviceType::GPU);
+      }
     }
   }
   if (context->getWindowFunction()->hasFraming() ||
@@ -2690,14 +2747,33 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
             executor_,
             *arg_col_var,
             query_infos.front().info.fragments.front(),
-            memory_level,
-            0,
+            MemoryLevel::CPU_LEVEL,
+            /*device_id for CPU=*/0,
             nullptr,
             /*thread_idx=*/0,
             chunks_owner,
             column_cache_map);
         CHECK_EQ(col_elem_count, elem_count);
-        context->addColumnBufferForWindowFunctionExpression(column, chunks_owner);
+        context->addColumnBufferForWindowFunctionExpression(
+            column, chunks_owner, ExecutorDeviceType::CPU);
+        if (co.device_type == ExecutorDeviceType::GPU) {
+          if (arg_col_var) {
+            auto const [gpu_column, gpu_col_elem_count] =
+                ColumnFetcher::getOneColumnFragment(
+                    executor_,
+                    *arg_col_var,
+                    query_infos.front().info.fragments.front(),
+                    MemoryLevel::GPU_LEVEL,
+                    /*device_id=*/device_id,
+                    device_allocator,
+                    /*thread_idx=*/0,
+                    chunks_owner,
+                    column_cache_map);
+            CHECK_EQ(gpu_col_elem_count, elem_count);
+            context->addColumnBufferForWindowFunctionExpression(
+                gpu_column, chunks_owner, ExecutorDeviceType::GPU);
+          }
+        }
       }
     }
   }

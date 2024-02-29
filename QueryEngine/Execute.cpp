@@ -1792,12 +1792,6 @@ size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos
     return ra_exe_unit.scan_limit;
   }
   using Fragmenter_Namespace::FragmentInfo;
-  using checked_size_t = boost::multiprecision::number<
-      boost::multiprecision::cpp_int_backend<64,
-                                             64,
-                                             boost::multiprecision::unsigned_magnitude,
-                                             boost::multiprecision::checked,
-                                             void>>;
   checked_size_t checked_max_groups_buffer_entry_guess = 1;
   // Cap the rough approximation to 100M entries, it's unlikely we can do a great job for
   // baseline group layout with that many entries anyway.
