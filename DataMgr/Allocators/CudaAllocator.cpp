@@ -97,7 +97,7 @@ void CudaAllocator::free(Data_Namespace::AbstractBuffer* ab) const {
 void CudaAllocator::copyToDevice(void* device_dst,
                                  const void* host_src,
                                  const size_t num_bytes,
-                                 std::string_view tag) const {
+                                 std::optional<std::string_view> tag) const {
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   CHECK(cuda_mgr);
   cuda_mgr->copyHostToDevice(
@@ -107,7 +107,7 @@ void CudaAllocator::copyToDevice(void* device_dst,
 void CudaAllocator::copyFromDevice(void* host_dst,
                                    const void* device_src,
                                    const size_t num_bytes,
-                                   std::string_view tag) const {
+                                   std::optional<std::string_view> tag) const {
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   CHECK(cuda_mgr);
   cuda_mgr->copyDeviceToHost(

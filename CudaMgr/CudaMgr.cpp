@@ -129,7 +129,7 @@ void CudaMgr::copyHostToDevice(int8_t* device_ptr,
                                const int8_t* host_ptr,
                                const size_t num_bytes,
                                const int device_num,
-                               std::string_view tag,
+                               std::optional<std::string_view> tag,
                                CUstream cuda_stream) {
   setContext(device_num);
   if (!cuda_stream) {
@@ -140,8 +140,8 @@ void CudaMgr::copyHostToDevice(int8_t* device_ptr,
         reinterpret_cast<CUdeviceptr>(device_ptr), host_ptr, num_bytes, cuda_stream));
     checkError(cuStreamSynchronize(cuda_stream));
   }
-  if (log_memory_activity_) {
-    VLOG(1) << "CUDA H2D, tag: " << tag
+  if (log_memory_activity_ && tag) {
+    VLOG(1) << "CUDA H2D, tag: " << *tag
             << ", host address: " << static_cast<const void*>(host_ptr)
             << ", size: " << num_bytes << ", device: " << device_num
             << ",  device address: " << static_cast<const void*>(device_ptr);
@@ -161,7 +161,7 @@ int CudaMgr::getDeviceNumFromDevicePtr(CUdeviceptr cu_device_ptr,
 void CudaMgr::copyDeviceToHost(int8_t* host_ptr,
                                const int8_t* device_ptr,
                                const size_t num_bytes,
-                               std::string_view tag,
+                               std::optional<std::string_view> tag,
                                CUstream cuda_stream) {
   // set device_num based on device_ptr
   auto const cu_device_ptr = reinterpret_cast<CUdeviceptr>(device_ptr);
@@ -174,8 +174,8 @@ void CudaMgr::copyDeviceToHost(int8_t* host_ptr,
     checkError(cuMemcpyDtoHAsync(host_ptr, cu_device_ptr, num_bytes, cuda_stream));
     checkError(cuStreamSynchronize(cuda_stream));
   }
-  if (log_memory_activity_) {
-    VLOG(1) << "CUDA D2H, tag: " << tag
+  if (log_memory_activity_ && tag) {
+    VLOG(1) << "CUDA D2H, tag: " << *tag
             << ", host address: " << static_cast<void*>(host_ptr)
             << ", size: " << num_bytes << ", device: " << device_num
             << ",  device address: " << static_cast<const void*>(device_ptr);
@@ -187,7 +187,7 @@ void CudaMgr::copyDeviceToDevice(int8_t* dest_ptr,
                                  const size_t num_bytes,
                                  const int dest_device_num,
                                  const int src_device_num,
-                                 std::string_view tag,
+                                 std::optional<std::string_view> tag,
                                  CUstream cuda_stream) {
   // dest_device_num and src_device_num are the device numbers relative to start_gpu_
   // (real_device_num - start_gpu_)
@@ -221,8 +221,8 @@ void CudaMgr::copyDeviceToDevice(int8_t* dest_ptr,
       checkError(cuStreamSynchronize(cuda_stream));
     }
   }
-  if (log_memory_activity_) {
-    VLOG(1) << "CUDA D2D, tag: " << tag << ", source device id: " << src_device_num
+  if (log_memory_activity_ && tag) {
+    VLOG(1) << "CUDA D2D, tag: " << *tag << ", source device id: " << src_device_num
             << ", destination device id: " << dest_device_num
             << ", source address: " << static_cast<void*>(src_ptr)
             << ", size: " << num_bytes
