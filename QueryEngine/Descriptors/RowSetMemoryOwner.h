@@ -474,8 +474,10 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   }
 
  private:
-  int8_t* allocateUnlocked(const size_t num_bytes, const size_t thread_idx) {
-    if (g_allow_memory_status_log) {
+  int8_t* allocateUnlocked(const size_t num_bytes,
+                           const size_t thread_idx,
+                           bool skip_allocation_log = false) {
+    if (g_allow_memory_status_log && !skip_allocation_log) {
       VLOG(1) << "Try to allocate CPU memory: " << num_bytes << " bytes (THREAD-"
               << thread_idx << ")";
     }
