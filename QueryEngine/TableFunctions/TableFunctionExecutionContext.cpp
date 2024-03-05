@@ -364,7 +364,8 @@ void TableFunctionExecutionContext::launchPreCodeOnCpu(
       executor,
       col_buf_ptrs,
       row_set_mem_owner_,
-      /*is_singleton=*/!exe_unit.table_func.usesManager());
+      /*is_singleton=*/!exe_unit.table_func.usesManager(),
+      nullptr);
 
   // setup the inputs
   // We can have an empty col_buf_ptrs vector if there are no arguments to the function
@@ -515,7 +516,8 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
       executor,
       col_buf_ptrs,
       row_set_mem_owner_,
-      /*is_singleton=*/!exe_unit.table_func.usesManager());
+      /*is_singleton=*/!exe_unit.table_func.usesManager(),
+      gfx_context_);
 
   if (exe_unit.table_func.hasOutputSizeKnownPreLaunch()) {
     // allocate output buffers because the size is known up front, from

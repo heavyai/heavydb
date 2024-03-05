@@ -35,6 +35,10 @@
 
 #include "StorageIOFacility.h"
 
+namespace gfx {
+class GfxContext;
+}
+
 extern bool g_skip_intermediate_count;
 
 enum class MergeType { Union, Reduce };
@@ -55,36 +59,42 @@ class RelAlgExecutor : private StorageIOFacility {
   using TargetInfoList = std::vector<TargetInfo>;
 
   RelAlgExecutor(Executor* executor,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr,
+                 gfx::GfxContext* gfx_context = nullptr)
       : StorageIOFacility(executor)
       , executor_(executor)
       , query_state_(std::move(query_state))
       , now_(0)
-      , queue_time_ms_(0) {
+      , queue_time_ms_(0)
+      , gfx_context_{gfx_context} {
     initializeParallelismHints();
   }
 
   RelAlgExecutor(Executor* executor,
                  const std::string& query_ra,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr,
+                 gfx::GfxContext* gfx_context = nullptr)
       : StorageIOFacility(executor)
       , executor_(executor)
       , query_dag_(RelAlgDagBuilder::buildDag(query_ra, true))
       , query_state_(std::move(query_state))
       , now_(0)
-      , queue_time_ms_(0) {
+      , queue_time_ms_(0)
+      , gfx_context_{gfx_context} {
     initializeParallelismHints();
   }
 
   RelAlgExecutor(Executor* executor,
                  std::unique_ptr<RelAlgDag> query_dag,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr,
+                 gfx::GfxContext* gfx_context = nullptr)
       : StorageIOFacility(executor)
       , executor_(executor)
       , query_dag_(std::move(query_dag))
       , query_state_(std::move(query_state))
       , now_(0)
-      , queue_time_ms_(0) {
+      , queue_time_ms_(0)
+      , gfx_context_{gfx_context} {
     initializeParallelismHints();
   }
 
@@ -454,6 +464,8 @@ class RelAlgExecutor : private StorageIOFacility {
 
   std::unique_ptr<TransactionParameters> dml_transaction_parameters_;
   std::optional<std::function<void()>> post_execution_callback_;
+
+  gfx::GfxContext* gfx_context_;
 
   friend class PendingExecutionClosure;
 };
