@@ -452,6 +452,7 @@ option(ENABLE_TORCH_TFS "Enable Torch system table functions" OFF)
 
 option(ENABLE_PDAL "Enable PDAL support" ON)
 option(ENABLE_POINT_CLOUD_TFS "Enable point cloud table functions" ON)
+option(ENABLE_GFX_TFS "Enable graphics table functions" ON)
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
   # Clang will not complile these tests quickly enough to avoid timeout

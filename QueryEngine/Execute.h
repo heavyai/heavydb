@@ -80,6 +80,10 @@
 #include "StringDictionary/StringDictionaryProxy.h"
 #include "ThriftHandler/CommandLineOptions.h"
 
+namespace gfx {
+class GfxContext;
+}
+
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
 class QueryMemoryDescriptor;
 using QueryMemoryDescriptorOwned = std::unique_ptr<QueryMemoryDescriptor>;
@@ -910,7 +914,8 @@ class Executor {
   ResultSetPtr executeTableFunction(const TableFunctionExecutionUnit exe_unit,
                                     const std::vector<InputTableInfo>& table_infos,
                                     const CompilationOptions& co,
-                                    const ExecutionOptions& eo);
+                                    const ExecutionOptions& eo,
+                                    gfx::GfxContext* gfx_context);
 
   ExecutorDeviceType getDeviceTypeForTargets(
       const RelAlgExecutionUnit& ra_exe_unit,

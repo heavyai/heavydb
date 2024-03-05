@@ -176,7 +176,7 @@ set(SHARED_SQL_TYPES_H_AND_DEPS
   ${CMAKE_CURRENT_SOURCE_DIR}/DateTruncate.h
   ${CMAKE_CURRENT_SOURCE_DIR}/ExtractFromTime.h
   ${CMAKE_CURRENT_SOURCE_DIR}/Utils/FlatBuffer.h
-  )
+)
 
 set(query_engine_cuda_source_files
   Aggregate/AggModeHashTableGpu.cu
@@ -292,6 +292,12 @@ if(ENABLE_SYSTEM_TFS)
       list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/Loaders/PdalLoader.cpp)
       list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/PointCloudTableFunctions.cpp)
     endif()
+
+    if(ENABLE_GFX_TFS AND ENABLE_RENDERING)
+      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/GfxDriverTableFunctions.hpp)
+      list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/TableFunctionRenderTest.cpp)
+    endif()
+
     if(ENABLE_OMNIVERSE_CONNECTOR)
       list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/OmniverseExportTableFunctions.hpp)
       list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/OmniverseConnector.cpp)
@@ -414,6 +420,8 @@ target_precompile_headers(QueryEngine PRIVATE
   [["QueryEngine/Execute.h"]]
 )
 
+set(QUERY_ENGINE_INCLUDES ".") # fails to find other stuff if just ""
+
 set(QUERY_ENGINE_LIBS
   OSDependent
   StringOps
@@ -428,6 +436,7 @@ set(QUERY_ENGINE_LIBS
 
 list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})
 
+target_include_directories(QueryEngine PRIVATE ${QUERY_ENGINE_INCLUDES})
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
 add_custom_command(

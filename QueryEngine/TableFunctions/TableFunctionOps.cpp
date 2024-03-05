@@ -240,6 +240,12 @@ TableFunctionManager_getOrAddTransient(int8_t* mgr_ptr,
   return mgr->getOrAddTransient(db_id, dict_id, str);
 }
 
+extern "C" DEVICE RUNTIME_EXPORT const gfx::GfxContext*
+TableFunctionManager_getGfxContext(int8_t* mgr_ptr) {
+  auto* mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
+  return mgr->getGfxContext();
+}
+
 extern "C" DEVICE RUNTIME_EXPORT void ColumnArray_getArray(int8_t* flatbuffer,
                                                            const int64_t index,
                                                            const int64_t expected_numel,

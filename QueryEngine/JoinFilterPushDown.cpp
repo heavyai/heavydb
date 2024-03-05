@@ -167,7 +167,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
     // Dispatch the subqueries first
     for (auto subquery : subqueries) {
       // Execute the subquery and cache the result.
-      RelAlgExecutor ra_executor(executor_);
+      RelAlgExecutor ra_executor(executor_, nullptr, gfx_context_);
       const auto subquery_ra = subquery->getRelAlg();
       CHECK(subquery_ra);
       RaExecutionSequence subquery_seq(subquery_ra, executor_);

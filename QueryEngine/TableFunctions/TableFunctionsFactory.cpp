@@ -383,6 +383,7 @@ bool is_table_function_whitelisted(std::string_view const function_name) {
        "tf_geo_multi_rasterize",
        "tf_geo_rasterize",
        "tf_geo_rasterize_slope",
+       "tf_gfxdriver_test",
        "tf_graph_shortest_path",
        "tf_graph_shortest_paths_distances",
        "tf_load_point_cloud",

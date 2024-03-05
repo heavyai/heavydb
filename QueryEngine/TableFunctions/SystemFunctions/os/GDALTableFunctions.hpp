@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <array>
 
-#include "GDALTableFunctions.hpp"
 #include "GeoRasterTableFunctions.hpp"
 
 #include "Geospatial/Compression.h"

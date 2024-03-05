@@ -80,6 +80,7 @@
 #include "Shared/scope.h"
 #include "UdfCompiler/UdfCompiler.h"
 
+
 #ifdef HAVE_AWS_S3
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #endif
@@ -542,24 +543,6 @@ void DBHandler::initialize(const bool is_new_db) {
 
   import_path_ = boost::filesystem::path(base_data_path_) / shared::kDefaultImportDirName;
   start_time_ = std::time(nullptr);
-
-  if (is_rendering_enabled) {
-    try {
-      render_handler_.reset(new RenderHandler(this,
-                                              render_mem_bytes_,
-                                              max_concurrent_render_sessions_,
-                                              render_compositor_use_last_gpu_,
-                                              false,
-                                              false,
-                                              renderer_prefer_igpu_,
-                                              renderer_vulkan_timeout_,
-                                              renderer_use_parallel_executors_,
-                                              system_parameters_,
-                                              renderer_enable_slab_allocation_));
-    } catch (const std::exception& e) {
-      LOG(ERROR) << "Backend rendering disabled: " << e.what();
-    }
-  }
 
   query_engine_ = QueryEngine::createInstance(data_mgr_->getCudaMgr(), cpu_mode_only_);
 
@@ -6229,8 +6212,10 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
       jit_debug_ ? "/tmp" : "",
       jit_debug_ ? "mapdquery" : "",
       system_parameters_);
-  RelAlgExecutor ra_executor(
-      executor.get(), query_ra, query_state_proxy->shared_from_this());
+  RelAlgExecutor ra_executor(executor.get(),
+                             query_ra,
+                             query_state_proxy->shared_from_this(),
+                             nullptr);
   CompilationOptions co = {executor_device_type,
                            /*hoist_literals=*/true,
                            ExecutorOptLevel::Default,
@@ -7564,6 +7549,7 @@ void DBHandler::shutdown() {
   if (render_handler_) {
     render_handler_->shutdown();
   }
+
 
   Catalog_Namespace::SysCatalog::destroy();
 }

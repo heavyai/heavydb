@@ -2450,7 +2450,8 @@ ResultSetPtr Executor::executeTableFunction(
     const TableFunctionExecutionUnit exe_unit,
     const std::vector<InputTableInfo>& table_infos,
     const CompilationOptions& co,
-    const ExecutionOptions& eo) {
+    const ExecutionOptions& eo,
+    gfx::GfxContext* gfx_context) {
   INJECT_TIMER(Exec_executeTableFunction);
   if (eo.just_validate) {
     QueryMemoryDescriptor query_mem_desc(this,
@@ -2477,7 +2478,7 @@ ResultSetPtr Executor::executeTableFunction(
                                 // framework, we may want to move this up a level
 
   ColumnFetcher column_fetcher(this, column_cache);
-  TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
+  TableFunctionExecutionContext exe_context(getRowSetMemoryOwner(), gfx_context);
 
   if (exe_unit.table_func.containsPreFlightFn()) {
     std::shared_ptr<CompilationContext> compilation_context;

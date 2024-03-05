@@ -24,10 +24,15 @@ class TableFunctionCompilationContext;
 class ColumnFetcher;
 class Executor;
 
+namespace gfx {
+class GfxContext;
+}
+
 class TableFunctionExecutionContext {
  public:
-  TableFunctionExecutionContext(std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
-      : row_set_mem_owner_(row_set_mem_owner) {}
+  TableFunctionExecutionContext(std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                gfx::GfxContext* gfx_context)
+      : row_set_mem_owner_{row_set_mem_owner}, gfx_context_{gfx_context} {}
 
   // non-copyable
   TableFunctionExecutionContext(const TableFunctionExecutionContext&) = delete;
@@ -73,4 +78,5 @@ class TableFunctionExecutionContext {
       Executor* executor);
 
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
+  gfx::GfxContext* gfx_context_;
 };

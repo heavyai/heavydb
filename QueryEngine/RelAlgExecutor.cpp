@@ -735,7 +735,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       continue;
     }
     // Execute the subquery and cache the result.
-    RelAlgExecutor subquery_executor(executor_, query_state_);
+    RelAlgExecutor subquery_executor(executor_, query_state_, gfx_context_);
     // Propagate global and local query hint if necessary
     const auto local_hints = getParsedQueryHint(subquery_ra);
     if (global_hints || local_hints) {
@@ -2413,7 +2413,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
   auto query_exec_time_begin = timer_start();
   try {
     result = {executor_->executeTableFunction(
-                  table_func_work_unit.exe_unit, table_infos, co, eo),
+                  table_func_work_unit.exe_unit, table_infos, co, eo, gfx_context_),
               body->getOutputMetainfo()};
   } catch (const QueryExecutionError& e) {
     handlePersistentError(e.getErrorCode());
