@@ -173,7 +173,7 @@ inline std::ostream& operator<<(std::ostream& out, const ChunkMetadata& chunk_me
     min = DatumToString(chunk_metadata.chunkStats.min, type);
     max = DatumToString(chunk_metadata.chunkStats.max, type);
   }
-  out << "type: " << chunk_metadata.sqlType.get_type_name()
+  out << "type: " << chunk_metadata.sqlType.toString()
       << " numBytes: " << chunk_metadata.numBytes << " numElements "
       << chunk_metadata.numElements << " min: " << min << " max: " << max
       << " has_nulls: " << std::to_string(chunk_metadata.chunkStats.has_nulls);
@@ -199,3 +199,12 @@ inline double extract_max_stat_fp_type(const ChunkStats& stats, const SQLTypeInf
 using ChunkMetadataMap = std::map<int, std::shared_ptr<ChunkMetadata>>;
 using ChunkMetadataVector =
     std::vector<std::pair<ChunkKey, std::shared_ptr<ChunkMetadata>>>;
+
+inline std::ostream& operator<<(std::ostream& os, const ChunkMetadataVector& meta_vec) {
+  os << "chunk metadata vector:\n";
+  for (const auto& chunk_meta : meta_vec) {
+    const auto& [key, meta] = chunk_meta;
+    os << "{" << show_chunk(key) << "}: " << *meta << "\n";
+  }
+  return os;
+}

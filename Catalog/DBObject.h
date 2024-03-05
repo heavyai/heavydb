@@ -242,6 +242,15 @@ class DBObject {
             objectKey_.dbId != -1);
   }
 
+  std::string dump() const {
+    return "name: " + objectName_ + " type: " + DBObjectTypeToString(objectType_) +
+           " perm type: " + std::to_string(objectKey_.permissionType) +
+           " dbId: " + std::to_string(objectKey_.dbId) +
+           " objectId: " + std::to_string(objectKey_.objectId) +
+           " privs: " + std::to_string(objectPrivs_.privileges) +
+           " ownerId: " + std::to_string(ownerId_);
+  }
+
  private:
   std::string objectName_;
   DBObjectType objectType_;

@@ -29,13 +29,7 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
                const ForeignServer* server,
                const std::string& options_str,
                const int64_t last_refresh,
-               const int64_t next_refresh)
-      : OptionsContainer(options_str)
-      , foreign_server(server)
-      , last_refresh_time(last_refresh)
-      , next_refresh_time(next_refresh) {
-    tableId = id;
-  }
+               const int64_t next_refresh);
 
   // Option keys
   static constexpr const char* FRAGMENT_SIZE_KEY = "FRAGMENT_SIZE";

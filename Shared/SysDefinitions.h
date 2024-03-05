@@ -43,4 +43,8 @@ inline const std::string kDataDirectoryName = "data";
 inline const std::string kLockfilesDirectoryName = "lockfiles";
 inline const std::string kDefaultLicenseFileName = "heavyai.license";
 static constexpr size_t kDefaultSampleRowsCount{100};
+inline const std::string kDefaultDelimitedServerName = "default_local_delimited";
+inline const std::string kDefaultParquetServerName = "default_local_parquet";
+inline const std::string kDefaultRegexServerName = "default_local_regex_parsed";
+inline const std::string kDefaultRasterServerName = "default_local_raster";
 }  // namespace shared

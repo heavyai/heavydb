@@ -3115,6 +3115,8 @@ void Catalog::createTable(
   std::set<std::string> toplevel_column_names;
   list<ColumnDescriptor> columns;
 
+  // TODO(Misiu): TableDescriptors should not be allowed to have empty storage types.
+  // Currently this semes to imply non-ForeignTable fsi, but we should change this.
   if (!td.storageType.empty() &&
       (!g_enable_fsi || td.storageType != StorageType::FOREIGN_TABLE)) {
     if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
@@ -5511,31 +5513,19 @@ void Catalog::createDefaultServersIfNotExists() {
   options[foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY] =
       foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE;
 
-  auto local_csv_server = std::make_unique<foreign_storage::ForeignServer>(
-      "default_local_delimited",
-      foreign_storage::DataWrapperType::CSV,
-      options,
-      shared::kRootUserId);
-  local_csv_server->validate();
-  createForeignServerNoLocks(std::move(local_csv_server), true);
-
+  std::vector<std::pair<std::string, std::string>> server_names_and_types{
+      {shared::kDefaultDelimitedServerName, foreign_storage::DataWrapperType::CSV},
 #ifdef ENABLE_IMPORT_PARQUET
-  auto local_parquet_server = std::make_unique<foreign_storage::ForeignServer>(
-      "default_local_parquet",
-      foreign_storage::DataWrapperType::PARQUET,
-      options,
-      shared::kRootUserId);
-  local_parquet_server->validate();
-  createForeignServerNoLocks(std::move(local_parquet_server), true);
+      {shared::kDefaultParquetServerName, foreign_storage::DataWrapperType::PARQUET},
 #endif
+      {shared::kDefaultRegexServerName, foreign_storage::DataWrapperType::REGEX_PARSER}};
 
-  auto local_regex_parser_server = std::make_unique<foreign_storage::ForeignServer>(
-      "default_local_regex_parsed",
-      foreign_storage::DataWrapperType::REGEX_PARSER,
-      options,
-      shared::kRootUserId);
-  local_regex_parser_server->validate();
-  createForeignServerNoLocks(std::move(local_regex_parser_server), true);
+  for (const auto& [name, type] : server_names_and_types) {
+    auto server = std::make_unique<foreign_storage::ForeignServer>(
+        name, type, options, shared::kRootUserId);
+    server->validate();
+    createForeignServerNoLocks(std::move(server), true);
+  }
 }
 
 // prepare a fresh file reload on next table access

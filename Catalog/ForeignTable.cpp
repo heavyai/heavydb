@@ -30,7 +30,22 @@ ForeignTable::ForeignTable()
     : OptionsContainer({{foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY,
                          foreign_storage::ForeignTable::MANUAL_REFRESH_TIMING_TYPE},
                         {foreign_storage::ForeignTable::REFRESH_UPDATE_TYPE_KEY,
-                         foreign_storage::ForeignTable::ALL_REFRESH_UPDATE_TYPE}}) {}
+                         foreign_storage::ForeignTable::ALL_REFRESH_UPDATE_TYPE}}) {
+  storageType = StorageType::FOREIGN_TABLE;
+}
+
+ForeignTable::ForeignTable(const int32_t id,
+                           const ForeignServer* server,
+                           const std::string& options_str,
+                           const int64_t last_refresh,
+                           const int64_t next_refresh)
+    : OptionsContainer(options_str)
+    , foreign_server(server)
+    , last_refresh_time(last_refresh)
+    , next_refresh_time(next_refresh) {
+  tableId = id;
+  storageType = StorageType::FOREIGN_TABLE;
+}
 
 void ForeignTable::validateOptionValues() const {
   validateRefreshOptionValues();
@@ -163,7 +178,7 @@ void ForeignTable::validateAlterOptions(const OptionsMap& options_map) const {
 void ForeignTable::validateSchema(const std::list<ColumnDescriptor>& columns) const {
   foreign_storage::ForeignDataWrapperFactory::createForValidation(
       foreign_server->data_wrapper_type, this)
-      ->validateSchema(columns);
+      ->validateSchema(columns, this);
 }
 
 }  // namespace foreign_storage

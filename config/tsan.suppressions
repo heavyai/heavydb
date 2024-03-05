@@ -5,6 +5,8 @@ deadlock:gdal
 deadlock:Geospatial::GeoBase::getTransformation
 # 2024-01-24 ImportExportTest / RasterImporter internal lock inversion. See BE-6511
 deadlock:import_export::RasterImporter::detect
+# 2024-03-01 RasterDataWrapper lock inversion, same issue as above
+deadlock:foreign_storage::RasterDataWrapper::populateChunkMetadata
 race:boost::*::saved_single_repeat
 race:boost::*::saved_state
 race:boost::*::perl_matcher
@@ -14,7 +16,7 @@ race:apache::thrift::server
 thread:libcuda.so
 race:libtbbmalloc*
 race:tbb::detail::*
-# TODO: remove TSAN wildcard after TSAN-enabled TBB deps go out 
+# TODO: remove TSAN wildcard after TSAN-enabled TBB deps go out
 race:^tbb*
 # mktime in libarchive uses tzset
 race:^tzset

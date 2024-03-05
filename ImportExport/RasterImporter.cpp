@@ -40,10 +40,11 @@
 #include "Shared/misc.h"
 #include "Shared/scope.h"
 
+#include "ImportExport/CopyParams.h"
+
 #define DEBUG_RASTER_IMPORT 0
 
 namespace import_export {
-
 GCPTransformer::GCPTransformer(OGRDataSource* datasource, const Mode mode)
     : transform_arg_{nullptr}, mode_{mode} {
   CHECK(datasource);
@@ -273,6 +274,54 @@ bool datasource_requires_libhdf(OGRDataSource* source) {
 // class RasterImporter
 //
 
+RasterImporter::PointType RasterImporter::createPointType(const std::string& str) {
+  auto upper_str = to_upper(str);
+  if (upper_str == "NONE") {
+    return RasterImporter::PointType::kNone;
+  } else if (upper_str == "AUTO") {
+    return RasterImporter::PointType::kAuto;
+  } else if (upper_str == "SMALLINT") {
+    return RasterImporter::PointType::kSmallInt;
+  } else if (upper_str == "INT") {
+    return RasterImporter::PointType::kInt;
+  } else if (upper_str == "FLOAT") {
+    return RasterImporter::PointType::kFloat;
+  } else if (upper_str == "DOUBLE") {
+    return RasterImporter::PointType::kDouble;
+  } else if (upper_str == "POINT") {
+    return RasterImporter::PointType::kPoint;
+  } else {
+    throw std::runtime_error(
+        "Invalid string for 'PointType' (must be 'NONE', 'AUTO', "
+        "'SMALLINT', 'INT', 'FLOAT', 'DOUBLE' or 'POINT'): " +
+        upper_str);
+  }
+}
+
+RasterPointType create_raster_point_type(const std::string& str) {
+  auto upper_str = to_upper(str);
+  if (upper_str == "NONE") {
+    return RasterPointType::kNone;
+  } else if (upper_str == "AUTO") {
+    return RasterPointType::kAuto;
+  } else if (upper_str == "SMALLINT") {
+    return RasterPointType::kSmallInt;
+  } else if (upper_str == "INT") {
+    return RasterPointType::kInt;
+  } else if (upper_str == "FLOAT") {
+    return RasterPointType::kFloat;
+  } else if (upper_str == "DOUBLE") {
+    return RasterPointType::kDouble;
+  } else if (upper_str == "POINT") {
+    return RasterPointType::kPoint;
+  } else {
+    throw std::runtime_error(
+        "Invalid string for 'RasterPointType' (must be 'NONE', 'AUTO', "
+        "'SMALLINT', 'INT', 'FLOAT', 'DOUBLE' or 'POINT'): " +
+        upper_str);
+  }
+}
+
 void RasterImporter::detect(const std::string& file_name,
                             const std::string& specified_band_names,
                             const std::string& specified_band_dimensions,
@@ -295,7 +344,7 @@ void RasterImporter::detect(const std::string& file_name,
 
 #if DEBUG_RASTER_IMPORT
     // log all its metadata
-    Geospatial::GDAL::logMetadata(datasource);
+    Geospatial::GDAL::logMetadata(datasource.get());
 #endif
 
     // get and add subdatasource datasource names
@@ -388,7 +437,8 @@ void RasterImporter::detect(const std::string& file_name,
 
       // report
       LOG(INFO) << "Raster Importer: Found Band '" << band_name << "', with dimensions "
-                << band_width << "x" << band_height;
+                << band_width << "x" << band_height << ", block size " << block_size_x
+                << "x" << block_size_y;
 
       // if there are specified band dimensions, and this band doesn't match, skip
       if (!shouldImportBandWithDimensions(band_width, band_height)) {
@@ -709,6 +759,7 @@ const RasterImporter::NullValue RasterImporter::getBandNullValue(
   return {info.null_value, info.null_value_valid};
 }
 
+// TODO(Misiu): This should be able to cache results.
 const RasterImporter::Coords RasterImporter::getProjectedPixelCoords(
     const uint32_t thread_idx,
     const int y) const {
@@ -776,7 +827,6 @@ const RasterImporter::Coords RasterImporter::getProjectedPixelCoords(
     }
   }
 
-  // done
   return coords;
 }
 
@@ -786,6 +836,24 @@ void RasterImporter::getRawPixels(const uint32_t thread_idx,
                                   const int num_rows,
                                   const SQLTypes column_sql_type,
                                   RawPixels& raw_pixel_bytes) {
+  getRawPixelsFineGrained(thread_idx,
+                          band_idx,
+                          0,
+                          y_start,
+                          bands_width_,
+                          num_rows,
+                          column_sql_type,
+                          raw_pixel_bytes);
+}
+
+void RasterImporter::getRawPixelsFineGrained(const uint32_t thread_idx,
+                                             const uint32_t band_idx,
+                                             const int x_start,
+                                             const int y_start,
+                                             const int x_size,
+                                             const int y_size,
+                                             const SQLTypes column_sql_type,
+                                             RawPixels& raw_pixel_bytes) {
   // get the band info
   CHECK_LT(band_idx, import_band_infos_.size());
   auto const band_info = import_band_infos_[band_idx];
@@ -806,22 +874,25 @@ void RasterImporter::getRawPixels(const uint32_t thread_idx,
   auto const gdal_data_type = sql_type_to_gdal_data_type(column_sql_type);
 
   // read the scanlines
-  auto result = band->RasterIO(GF_Read,
-                               0,
-                               y_start,
-                               bands_width_,
-                               num_rows,
-                               raw_pixel_bytes.data(),
-                               bands_width_,
-                               num_rows,
-                               gdal_data_type,
-                               0,
-                               0,
-                               nullptr);
+  auto result =
+      band->RasterIO(GF_Read,                 // R/W Flag
+                     x_start,                 // x-offset
+                     y_start,                 // y-offset
+                     x_size,                  // x-size
+                     y_size,                  // y-size
+                     raw_pixel_bytes.data(),  // data pointer
+                     x_size,                  // data pointer x-dimension
+                     y_size,                  // data pointer y-dimension
+                     gdal_data_type,
+                     0,
+                     0,  // GDALGetDataTypeSizeBytes(gdal_data_type) * bands_width_,
+                     nullptr);
+
   if (result != CE_None) {
-    throw std::runtime_error("Failed to read raster pixels, rows " +
-                             std::to_string(y_start) + " to " +
-                             std::to_string(y_start + num_rows));
+    throw std::runtime_error("Failed to read raster pixels: (" + std::to_string(x_start) +
+                             ", " + std::to_string(y_start) + ") to (" +
+                             std::to_string(x_start + x_size) + "," +
+                             std::to_string(y_start + y_size) + ")");
   }
 }
 

@@ -114,7 +114,8 @@ class ForeignDataWrapper {
     Verifies the schema is supported by this foreign table
     * @param columns - column descriptors for this table
    */
-  virtual void validateSchema(const std::list<ColumnDescriptor>& columns) const {};
+  virtual void validateSchema(const std::list<ColumnDescriptor>& columns,
+                              const ForeignTable* foreign_table) const {};
 
   /**
    * ParallelismLevel describes the desired level of parallelism of the data

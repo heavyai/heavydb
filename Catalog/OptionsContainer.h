@@ -20,11 +20,27 @@
 #include <unordered_map>
 
 #include "rapidjson/document.h"
+#include "rapidjson/error/en.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 
 #include "Logger/Logger.h"
 #include "Shared/StringTransform.h"
+
+namespace {
+rapidjson::Document parse_json_options(const std::string& options_json) {
+  CHECK(!options_json.empty());
+  rapidjson::Document options;
+  rapidjson::ParseResult parse_result = options.Parse(options_json);
+  if (!parse_result) {
+    throw std::runtime_error{
+        "failed to parse json: " +
+        std::string{rapidjson::GetParseError_En(parse_result.Code())} + " (" +
+        std::to_string(parse_result.Offset()) + ")"};
+  }
+  return options;
+}
+}  // namespace
 
 namespace foreign_storage {
 using OptionsMap = std::map<std::string, std::string, std::less<>>;
@@ -60,9 +76,7 @@ struct OptionsContainer {
   }
 
   void populateOptionsMap(const std::string& options_json, bool clear = false) {
-    CHECK(!options_json.empty());
-    rapidjson::Document options;
-    options.Parse(options_json);
+    auto options = parse_json_options(options_json);
     populateOptionsMap(options);
   }
 
