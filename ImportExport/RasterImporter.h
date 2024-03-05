@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <iostream>
 #include <map>
 #include <set>
 #include <string>
@@ -36,7 +37,6 @@ class OGRCoordinateTransformation;
 class OGRDataSource;
 
 namespace import_export {
-
 class GCPTransformer {
  public:
   enum class Mode { kPolynomial, kThinPlateSpline };
@@ -59,6 +59,8 @@ class RasterImporter {
 
   enum class PointType { kNone, kAuto, kSmallInt, kInt, kFloat, kDouble, kPoint };
   enum class PointTransform { kNone, kAuto, kFile, kWorld };
+
+  static PointType createPointType(const std::string& str);
 
   void detect(const std::string& file_name,
               const std::string& specified_band_names,
@@ -90,6 +92,14 @@ class RasterImporter {
                     const int num_rows,
                     const SQLTypes column_sql_type,
                     RawPixels& raw_pixel_bytes);
+  void getRawPixelsFineGrained(const uint32_t thread_idx,
+                               const uint32_t band_idx,
+                               const int x_offset,
+                               const int y_offset,
+                               const int x_size,
+                               const int y_size,
+                               const SQLTypes column_sql_type,
+                               RawPixels& raw_pixel_bytes);
 
  private:
   struct ImportBandInfo {
@@ -130,5 +140,42 @@ class RasterImporter {
   std::string getBandName(const uint32_t datasource_idx, const int band_idx);
   void checkSpecifiedBandNamesFound() const;
 };
-
 }  // namespace import_export
+
+inline std::ostream& operator<<(
+    std::ostream& os,
+    const import_export::RasterImporter::PointType& point_type) {
+  using PT = import_export::RasterImporter::PointType;
+  if (point_type == PT::kNone) {
+    os << "None";
+  } else if (point_type == PT::kAuto) {
+    os << "Auto";
+  } else if (point_type == PT::kSmallInt) {
+    os << "SmallInt";
+  } else if (point_type == PT::kInt) {
+    os << "Int";
+  } else if (point_type == PT::kFloat) {
+    os << "Float";
+  } else if (point_type == PT::kDouble) {
+    os << "Double";
+  } else if (point_type == PT::kPoint) {
+    os << "Point";
+  }
+  return os;
+}
+
+inline std::ostream& operator<<(
+    std::ostream& os,
+    const import_export::RasterImporter::PointTransform& point_trans) {
+  using PT = import_export::RasterImporter::PointTransform;
+  if (point_trans == PT::kNone) {
+    os << "None";
+  } else if (point_trans == PT::kAuto) {
+    os << "Auto";
+  } else if (point_trans == PT::kFile) {
+    os << "File";
+  } else if (point_trans == PT::kWorld) {
+    os << "World";
+  }
+  return os;
+}

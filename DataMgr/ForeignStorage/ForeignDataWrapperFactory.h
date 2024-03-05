@@ -76,21 +76,20 @@ struct DataWrapperType {
   static constexpr char const* INTERNAL_EXECUTOR_STATS = "INTERNAL_EXECUTOR_STATS";
   static constexpr char const* INTERNAL_ML_MODEL_METADATA = "INTERNAL_ML_MODEL_METADATA";
   static constexpr char const* INTERNAL_LOGS = "INTERNAL_LOGS";
+  static constexpr char const* RASTER = "RASTER_FILE";
 
-  static constexpr std::array<char const*, 6> INTERNAL_DATA_WRAPPERS{
-      INTERNAL_CATALOG,
-      INTERNAL_MEMORY_STATS,
-      INTERNAL_STORAGE_STATS,
-      INTERNAL_EXECUTOR_STATS,
-      INTERNAL_ML_MODEL_METADATA,
-      INTERNAL_LOGS};
+  static constexpr std::array INTERNAL_DATA_WRAPPERS{INTERNAL_CATALOG,
+                                                     INTERNAL_MEMORY_STATS,
+                                                     INTERNAL_STORAGE_STATS,
+                                                     INTERNAL_EXECUTOR_STATS,
+                                                     INTERNAL_ML_MODEL_METADATA,
+                                                     INTERNAL_LOGS};
 
-  static constexpr std::array<char const*, 5> IN_MEMORY_DATA_WRAPPERS{
-      INTERNAL_CATALOG,
-      INTERNAL_MEMORY_STATS,
-      INTERNAL_STORAGE_STATS,
-      INTERNAL_EXECUTOR_STATS,
-      INTERNAL_ML_MODEL_METADATA};
+  static constexpr std::array IN_MEMORY_DATA_WRAPPERS{INTERNAL_CATALOG,
+                                                      INTERNAL_MEMORY_STATS,
+                                                      INTERNAL_STORAGE_STATS,
+                                                      INTERNAL_EXECUTOR_STATS,
+                                                      INTERNAL_ML_MODEL_METADATA};
 
   static constexpr std::array<std::string_view, 9> supported_data_wrapper_types{
       PARQUET,
@@ -102,6 +101,17 @@ struct DataWrapperType {
       INTERNAL_EXECUTOR_STATS,
       INTERNAL_ML_MODEL_METADATA,
       INTERNAL_LOGS};
+
+  static constexpr std::array supported_data_wrapper_types{PARQUET,
+                                                           CSV,
+                                                           REGEX_PARSER,
+                                                           INTERNAL_CATALOG,
+                                                           INTERNAL_MEMORY_STATS,
+                                                           INTERNAL_STORAGE_STATS,
+                                                           INTERNAL_EXECUTOR_STATS,
+                                                           INTERNAL_ML_MODEL_METADATA,
+                                                           INTERNAL_LOGS,
+                                                           RASTER};
 };
 
 class ForeignDataWrapperFactory {

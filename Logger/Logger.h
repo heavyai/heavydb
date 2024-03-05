@@ -335,7 +335,8 @@ HEAVYDB_CHECKOP_FUNCTION(GT, >)
 HEAVYDB_CHECKOP_FUNCTION(GE, >=)
 #undef HEAVYDB_CHECKOP_FUNCTION
 
-#define UNREACHABLE() LOG(FATAL) << "UNREACHABLE "
+#define UNREACHABLE() \
+  LOG(FATAL) << "UNREACHABLE\n Stack trace:\n" << getCurrentStackTrace(1, nullptr, false)
 
 #else  // __CUDACC__
 

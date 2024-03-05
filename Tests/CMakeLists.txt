@@ -695,6 +695,11 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   target_link_libraries(UserMappingDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
   add_test(UserMappingDdlTest UserMappingDdlTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS UserMappingDdlTest)
+
+  add_executable(RasterTableTests ee/RasterTableTests.cpp)
+  target_link_libraries(RasterTableTests ${THRIFT_HANDLER_TEST_LIBRARIES})
+  add_test(RasterTableTests RasterTableTests ${TEST_ARGS})
+  list(APPEND SANITY_TEST_PROGRAMS RasterTableTests)
 endif()
 
 ##########
@@ -728,7 +733,6 @@ if(NOT MSVC)
 endif()
 
 ##########
-
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   add_executable(MultiInstanceTest ee/MultiInstanceTest.cpp)

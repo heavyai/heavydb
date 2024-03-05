@@ -6031,8 +6031,9 @@ class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
     parent_data_wrapper_->validateUserMappingOptions(user_mapping, foreign_server);
   }
 
-  void validateSchema(const std::list<ColumnDescriptor>& columns) const override {
-    parent_data_wrapper_->validateSchema(columns);
+  void validateSchema(const std::list<ColumnDescriptor>& columns,
+                      const ForeignTable* foreign_table) const override {
+    parent_data_wrapper_->validateSchema(columns, foreign_table);
   };
 
   ParallelismLevel getCachedParallelismLevel() const override {
