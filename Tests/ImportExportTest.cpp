@@ -5177,11 +5177,7 @@ TEST_F(ExportTest, Shapefile_Zip_Unimplemented) {
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
-#if ENABLE_FLATGEOBUF_EXPORT
 TEST_F(ExportTest, FlatGeobuf) {
-#else
-TEST_F(ExportTest, DISABLED_FlatGeobuf) {
-#endif
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
@@ -5196,11 +5192,7 @@ TEST_F(ExportTest, DISABLED_FlatGeobuf) {
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
-#if ENABLE_FLATGEOBUF_EXPORT
 TEST_F(ExportTest, FlatGeobuf_Overwrite) {
-#else
-TEST_F(ExportTest, DISABLED_FlatGeobuf_Overwrite) {
-#endif
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
@@ -5214,11 +5206,7 @@ TEST_F(ExportTest, DISABLED_FlatGeobuf_Overwrite) {
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
-#if ENABLE_FLATGEOBUF_EXPORT
 TEST_F(ExportTest, FlatGeobuf_InvalidName) {
-#else
-TEST_F(ExportTest, DISABLED_FlatGeobuf_InvalidName) {
-#endif
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   std::string geo_type = "point";
@@ -5227,11 +5215,7 @@ TEST_F(ExportTest, DISABLED_FlatGeobuf_InvalidName) {
                TDBException);
 }
 
-#if ENABLE_FLATGEOBUF_EXPORT
 TEST_F(ExportTest, FlatGeobuf_Invalid_SRID) {
-#else
-TEST_F(ExportTest, DISABLED_FlatGeobuf_Invalid_SRID) {
-#endif
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
