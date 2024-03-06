@@ -216,6 +216,15 @@ class RelAlgExecutor : private StorageIOFacility {
 
   void prepareForeignTable();
 
+  struct CapturedColumns {
+    std::string db_name;
+    std::string table_name;
+    std::vector<std::string> column_names;
+  };
+
+  static std::vector<RelAlgExecutor::CapturedColumns> captureColumns(
+      const std::string& query_ra);
+
   std::unordered_set<shared::TableKey> getPhysicalTableIds() const;
 
   void prepareForSystemTableExecution(const CompilationOptions& co) const;

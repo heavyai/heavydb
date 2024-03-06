@@ -5558,6 +5558,50 @@ void RelAlgExecutor::prepareForeignTables() {
   prepare_foreign_table_for_execution(ra);
 }
 
+namespace {
+
+std::map<std::pair<std::string, std::string>, std::set<std::string>>
+get_column_set_from_rel_alg_dag(RelAlgDag* query_dag) {
+  std::map<std::pair<std::string, std::string>, std::set<std::string>> columns_set;
+  const auto& ra_node = query_dag->getRootNode();
+  for (const auto [col_id, table_id, db_id] : get_physical_inputs(&ra_node)) {
+    const auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+    CHECK(catalog);
+    const auto table = catalog->getMetadataForTable(table_id, false);
+    const auto spi_col_id = catalog->getColumnIdBySpi(table_id, col_id);
+    auto column_name = catalog->getColumnName(table_id, spi_col_id);
+    CHECK(column_name.has_value());
+    auto table_name = table->tableName;
+    auto db_name = catalog->name();
+    columns_set[{db_name, table_name}].insert(column_name.value());
+  }
+  return columns_set;
+}
+
+std::vector<RelAlgExecutor::CapturedColumns> convert_column_set_to_captured_columns(
+    const std::map<std::pair<std::string, std::string>, std::set<std::string>>&
+        column_map) {
+  std::vector<RelAlgExecutor::CapturedColumns> captured_columns;
+  for (const auto& [db_table_pair, columns] : column_map) {
+    const auto [db_name, table_name] = db_table_pair;
+    auto& current_captured_columns = captured_columns.emplace_back();
+    current_captured_columns.db_name = db_name;
+    current_captured_columns.table_name = table_name;
+    current_captured_columns.column_names =
+        std::vector<std::string>{columns.begin(), columns.end()};
+  }
+  return captured_columns;
+}
+
+}  // namespace
+
+std::vector<RelAlgExecutor::CapturedColumns> RelAlgExecutor::captureColumns(
+    const std::string& query_ra) {
+  std::unique_ptr<RelAlgDag> query_dag = RelAlgDagBuilder::buildDag(query_ra, true);
+  auto column_set = get_column_set_from_rel_alg_dag(query_dag.get());
+  return convert_column_set_to_captured_columns(column_set);
+}
+
 std::unordered_set<shared::TableKey> RelAlgExecutor::getPhysicalTableIds() const {
   return get_physical_table_inputs(&getRootRelAlgNode());
 }
