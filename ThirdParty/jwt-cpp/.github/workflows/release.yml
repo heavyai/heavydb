@@ -1,0 +1,44 @@
+name: Nuget CD
+
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  # https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#release
+  release:
+    types: [published]
+
+jobs:
+  nuget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v1
+        with:
+          nuget-api-key: ${{ secrets.nuget_api_key }}
+          
+      - name: Create NuGet pkg
+        working-directory: ./nuget
+        run: nuget pack jwt-cpp.nuspec
+        
+      - name: Publish NuGet pkg
+        working-directory: ./nuget
+        run: nuget push *.nupkg -Source 'https://api.nuget.org/v3/index.json'
+        
+  release-asset:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: tar --exclude='./.git' -vczf /tmp/jwt-cpp-${{ github.event.release.tag_name }}.tar.gz .
+      - uses: shogo82148/actions-upload-release-asset@v1
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: /tmp/jwt-cpp-${{ github.event.release.tag_name }}.tar.gz
+          
+      - run: zip -x './.git/*' -r /tmp/jwt-cpp-${{ github.event.release.tag_name }}.zip .
+      - uses: shogo82148/actions-upload-release-asset@v1
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: /tmp/jwt-cpp-${{ github.event.release.tag_name }}.zip

@@ -1,0 +1,67 @@
+name: "Render `defaults.h` Template"
+description: "Generate the `defaults.h` header file for a JSON library"
+inputs:
+  traits_name:
+    description: "Name of the traits structure to be used. Typically in the format `author_repository` or equivilant"
+    required: true
+  library_name:
+    description: "Name of the JSON library."
+    required: true
+  library_url:
+    description: "URL to the JSON library."
+    required: true
+  disable_default_traits:
+    description: "Set the macro to disable the default traits"
+    required: false
+    default: "true"
+outputs:
+  file_path:
+    description: "Relative path which the 'defaults.h' was written to"
+    value: ${{ steps.script.outputs.result }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v3
+      with:
+        node-version: 14
+    - run: npm install mustache
+      shell: bash
+    - uses: actions/github-script@v6
+      id: script
+      env:
+        TRAITS_NAME: ${{ inputs.traits_name }}
+        LIBRARY_NAME: ${{ inputs.library_name }}
+        LIBRARY_URL: ${{ inputs.library_url }}
+        DISABLE_DEFAULT_TRAITS: ${{ inputs.disable_default_traits }}
+      with:
+        result-encoding: string
+        script: |
+          const mustache = require('mustache')
+          const path = require('path')
+          const fs = require('fs')
+
+          const { TRAITS_NAME, LIBRARY_NAME, LIBRARY_URL, DISABLE_DEFAULT_TRAITS } = process.env
+          console.log(`Rendering ${TRAITS_NAME}!`)
+
+          const disableDefault = DISABLE_DEFAULT_TRAITS === 'true'
+
+          const template = fs.readFileSync(path.join('include', 'jwt-cpp', 'traits', 'defaults.h.mustache'), 'utf8')
+          const content = mustache.render(template, {
+              traits_name: TRAITS_NAME,
+              traits_name_upper: TRAITS_NAME.toUpperCase(),
+              library_name: LIBRARY_NAME,
+              library_url: LIBRARY_URL,
+              disable_default_traits: disableDefault,
+          })
+          // https://dmitripavlutin.com/replace-all-string-occurrences-javascript/
+          function replaceAll(string, search, replace) {
+            return string.split(search).join(replace);
+          }
+
+          const outputDir = path.join('include', 'jwt-cpp', 'traits', replaceAll(TRAITS_NAME, '_', '-'))
+          fs.mkdirSync(outputDir, { recursive: true })
+          
+          const filePath = path.join(outputDir, 'defaults.h')
+          fs.writeFileSync(filePath, content)
+
+          return filePath
