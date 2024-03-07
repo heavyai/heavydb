@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "GfxDriver/DeviceContext.h"
 #include "GfxDriver/GfxContext.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/QueryMemoryInitializer.h"
@@ -87,7 +88,6 @@ struct TableFunctionManager {
       output_column_ptrs.emplace_back(nullptr);
       output_item_values_total_number_.emplace_back(-1);
     }
-
   }
 
   // Return the number of output columns
@@ -358,6 +358,12 @@ struct TableFunctionManager {
     return gfx_context_;
   }
 
+  gfx::CommandExecutionContext* getGfxCommandExecutionContext() {
+    CHECK(gfx_execution_context_)
+        << "TableFunctionManager::getGfxContext() called from non-CPU TF";
+    return gfx_execution_context_.get();
+  }
+
  private:
   void lock() {
     TableFunctionManager_singleton_mutex.lock();
@@ -402,4 +408,6 @@ struct TableFunctionManager {
   std::string error_message_;
   // GfxContext
   gfx::GfxContext* gfx_context_;
+  // gfx::CommandExecutionContext
+  gfx::CommandExecutionContextUqPtr gfx_execution_context_;
 };

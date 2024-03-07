@@ -51,7 +51,8 @@
 
 namespace gfx {
 class GfxContext;
-}
+class CommandExecutionContext;
+}  // namespace gfx
 
 // declaring CPU functions as __host__ can help catch erroneous compilation of
 // these being done by the CUDA compiler at build time
@@ -139,6 +140,10 @@ EXTENSION_NOINLINE_HOST int8_t* TableFunctionManager_makeBuffer(int8_t* mgr_ptr,
 
 EXTENSION_NOINLINE_HOST const gfx::GfxContext* TableFunctionManager_getGfxContext(
     int8_t* mgr_ptr);
+
+EXTENSION_NOINLINE_HOST gfx::CommandExecutionContext*
+TableFunctionManager_getGfxCommandExecutionContext(int8_t* mgr_ptr);
+
 /*
   Row function management functions and macros:
  */
@@ -440,6 +445,10 @@ struct TableFunctionManager {
   }
   const gfx::GfxContext* getGfxContext() {
     return TableFunctionManager_getGfxContext(reinterpret_cast<int8_t*>(this));
+  }
+  gfx::CommandExecutionContext* getGfxCommandExecutionContext() {
+    return TableFunctionManager_getGfxCommandExecutionContext(
+        reinterpret_cast<int8_t*>(this));
   }
 
 #ifdef HAVE_TOSTRING
