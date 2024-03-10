@@ -35,6 +35,9 @@
 class GDALRasterBand;
 class OGRCoordinateTransformation;
 class OGRDataSource;
+namespace Data_Namespace {
+class AbstractBuffer;
+}
 
 namespace import_export {
 class GCPTransformer {
@@ -45,11 +48,11 @@ class GCPTransformer {
   GCPTransformer() = delete;
   ~GCPTransformer();
 
-  void transform(double& x, double& y);
+  void transform(size_t num_elems, double* x, double* y);
 
  private:
   void* transform_arg_;
-  Mode mode_;
+  const Mode mode_;
 };
 
 class RasterImporter {
@@ -59,6 +62,17 @@ class RasterImporter {
 
   enum class PointType { kNone, kAuto, kSmallInt, kInt, kFloat, kDouble, kPoint };
   enum class PointTransform { kNone, kAuto, kFile, kWorld };
+
+  struct ChunkBoundingBox {
+    ChunkBoundingBox(int32_t x, int32_t y, int32_t w, int32_t h)
+        : x_offset(x), y_offset(y), width(w), height(h), num_pixels(width * height) {
+      CHECK_GT(width, 0);
+      CHECK_GT(height, 0);
+      CHECK_GE(x_offset, 0);
+      CHECK_GE(y_offset, 0);
+    }
+    int32_t x_offset, y_offset, width, height, num_pixels;
+  };
 
   static PointType createPointType(const std::string& str);
 
@@ -77,6 +91,9 @@ class RasterImporter {
   using RawPixels = std::vector<std::byte>;
   using NullValue = std::pair<double, bool>;
   using Coords = std::vector<std::tuple<double, double, float>>;
+  using CoordBuffers = std::tuple<std::unique_ptr<double[]>,
+                                  std::unique_ptr<double[]>,
+                                  std::unique_ptr<float[]>>;
 
   const uint32_t getNumBands() const;
   const PointTransform getPointTransform() const;
@@ -86,6 +103,15 @@ class RasterImporter {
   const int getBandsHeight() const { return bands_height_; }
   const NullValue getBandNullValue(const int band_idx) const;
   const Coords getProjectedPixelCoords(const uint32_t thread_idx, const int y) const;
+  const std::tuple<double, double> getProjectedPixelCoord(const uint32_t thread_idx,
+                                                          const int x,
+                                                          const int y) const;
+  CoordBuffers getProjectedPixelCoordChunks(
+      const ChunkBoundingBox& chunk_size,
+      const bool do_point_compute,
+      const double* const lons = nullptr,
+      const double* const lats = nullptr,
+      const ChunkBoundingBox* const prev_chunk_size = nullptr) const;
   void getRawPixels(const uint32_t thread_idx,
                     const uint32_t band_idx,
                     const int y_start,
@@ -94,12 +120,9 @@ class RasterImporter {
                     RawPixels& raw_pixel_bytes);
   void getRawPixelsFineGrained(const uint32_t thread_idx,
                                const uint32_t band_idx,
-                               const int x_offset,
-                               const int y_offset,
-                               const int x_size,
-                               const int y_size,
+                               const ChunkBoundingBox& chunk_size,
                                const SQLTypes column_sql_type,
-                               RawPixels& raw_pixel_bytes);
+                               int8_t* raw_pixel_bytes);
 
  private:
   struct ImportBandInfo {

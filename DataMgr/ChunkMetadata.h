@@ -169,6 +169,9 @@ inline std::ostream& operator<<(std::ostream& out, const ChunkMetadata& chunk_me
   } else if (type.is_string()) {
     min = to_string(chunk_metadata.chunkStats.min.intval);
     max = to_string(chunk_metadata.chunkStats.max.intval);
+  } else if (type.get_type() == kPOINT) {
+    min = "<NULL>";
+    max = "<NULL>";
   } else {
     min = DatumToString(chunk_metadata.chunkStats.min, type);
     max = DatumToString(chunk_metadata.chunkStats.max, type);

@@ -40,8 +40,6 @@ enum class ImportHeaderRow { kAutoDetect, kNoHeader, kHasHeader };
 enum class RasterPointType { kNone, kAuto, kSmallInt, kInt, kFloat, kDouble, kPoint };
 enum class RasterPointTransform { kNone, kAuto, kFile, kWorld };
 
-RasterPointType create_raster_point_type(const std::string& str);
-
 struct CopyParams {
   char delimiter;
   std::string null_str;

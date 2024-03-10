@@ -64,6 +64,14 @@ inline std::pair<int, int> get_table_prefix(const ChunkKey& key) {
   return std::pair<int, int>{key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX]};
 }
 
+inline std::tuple<int, int, int, int> split_key(const ChunkKey& key) {
+  CHECK(key.size() > CHUNK_KEY_FRAGMENT_IDX);
+  return {key[CHUNK_KEY_DB_IDX],
+          key[CHUNK_KEY_TABLE_IDX],
+          key[CHUNK_KEY_COLUMN_IDX],
+          key[CHUNK_KEY_FRAGMENT_IDX]};
+}
+
 inline bool is_column_key(const ChunkKey& key) {
   return key.size() == 3;
 }

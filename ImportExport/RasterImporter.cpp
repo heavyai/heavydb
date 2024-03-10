@@ -36,6 +36,7 @@
 #include <gdal_alg.h>
 #include <ogrsf_frmts.h>
 
+#include "DataMgr/AbstractBuffer.h"
 #include "Shared/import_helpers.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
@@ -76,17 +77,25 @@ GCPTransformer::~GCPTransformer() {
   }
 }
 
-void GCPTransformer::transform(double& x, double& y) {
-  int success{0};
+void GCPTransformer::transform(size_t num_elems, double* x, double* y) {
+  int success[num_elems];
+  bool failed{false};
   switch (mode_) {
     case Mode::kPolynomial:
-      GDALGCPTransform(transform_arg_, false, 1, &x, &y, nullptr, &success);
+      GDALGCPTransform(transform_arg_, false, num_elems, x, y, nullptr, success);
       break;
     case Mode::kThinPlateSpline:
-      GDALTPSTransform(transform_arg_, false, 1, &x, &y, nullptr, &success);
+      GDALTPSTransform(transform_arg_, false, num_elems, x, y, nullptr, success);
       break;
   }
-  if (!success) {
+  for (size_t i = 0; i < num_elems; ++i) {
+    if (!success[i]) {
+      failed = true;
+    }
+  }
+  if (failed) {
+    // We want this throw to be outside the comparison loop as it prevents vectorization
+    // (at least with Clang).
     throw std::runtime_error("Failed GCP/TPS Transform");
   }
 }
@@ -268,6 +277,184 @@ bool datasource_requires_libhdf(OGRDataSource* source) {
   return name == "HDF5Image" || name == "HDF5" || name == "BAG" || name == "KEA";
 }
 
+RasterImporter::CoordBuffers create_coord_buffers(size_t num_elems) {
+  RasterImporter::CoordBuffers coord_buffers;
+  auto& [lons, lats, angles] = coord_buffers;
+  lons = std::unique_ptr<double[]>(new double[num_elems]);
+  lats = std::unique_ptr<double[]>(new double[num_elems]);
+  angles = std::unique_ptr<float[]>(new float[num_elems]);
+  return coord_buffers;
+}
+
+// A specialized function for when we are starting at the beginning of a band.
+void point_compute_angle_from_zero(float* angles,
+                                   const double* lons,
+                                   const double* lats,
+                                   const RasterImporter::ChunkBoundingBox& chunk_size) {
+  const auto [x_start, y_start, width, height, num_pixels] = chunk_size;
+  CHECK_EQ(x_start, 0);
+  int32_t i = 0;
+  for (auto y = 0; y < height; y++) {
+    double prev_mx = conv_4326_900913_x(lons[y * width]);
+    double prev_my = conv_4326_900913_y(lats[y * width]);
+    i++;  // Skip for (x == 0) because it will be assigned later.
+    for (auto x = 1; x < width; x++) {
+      // Compute angle between this pixel's Mercator coords and the previous
+      // expressed as clockwise degrees for symbol rotation
+      auto const mx = conv_4326_900913_x(lons[(y * width) + x]);
+      auto const my = conv_4326_900913_y(lats[(y * width) + x]);
+      auto const angle = atan2f(my - prev_my, mx - prev_mx) * (-180.0f / M_PI);
+      prev_mx = mx;
+      prev_my = my;
+      angles[i] = angle;
+      i++;
+    }
+    // Reset the base case (x == 0) to the same as the second.
+    angles[(y * width)] = angles[(y * width) + 1];
+  }
+}
+
+void point_compute_angle_non_zero(float* angles,
+                                  const double* lons,
+                                  const double* lats,
+                                  const RasterImporter::ChunkBoundingBox& chunk_size,
+                                  const double* prev_lons,
+                                  const double* prev_lats,
+                                  const RasterImporter::ChunkBoundingBox& prev_chunk) {
+  const auto [x_start, y_start, width, height, num_pixels] = chunk_size;
+  CHECK_NE(x_start, 0);  // x == 0 is a special case so we have a separate function.
+  // The previous chunk is the chunk that comes immediately before this horizontally so
+  // they can have different widths, but not heights.
+  CHECK_EQ(height, prev_chunk.height);
+  CHECK_EQ(prev_chunk.x_offset + prev_chunk.width, x_start);  // Check for contiguity
+  int32_t i = 0;
+  for (auto y = 0; y < height; y++) {
+    // Peeled first iteration (x == x_start) because the prev values need to be set based
+    // on the previous values with the same y coordinate as represented in the previous
+    // arrays.
+    double prev_mx = conv_4326_900913_x(prev_lons[(y + 1) * prev_chunk.width - 1]);
+    double prev_my = conv_4326_900913_y(prev_lats[(y + 1) * prev_chunk.width - 1]);
+    for (auto x = 0; x < width; x++) {
+      // compute angle between this pixel's Mercator coords and the previous
+      // expressed as clockwise degrees for symbol rotation
+      auto const mx = conv_4326_900913_x(lons[(y * width) + x]);
+      auto const my = conv_4326_900913_y(lats[(y * width) + x]);
+      auto const angle = atan2f(my - prev_my, mx - prev_mx) * (-180.0f / M_PI);
+      prev_mx = mx;
+      prev_my = my;
+      angles[i] = angle;
+      i++;
+    }
+  }
+}
+
+void point_compute_angle(float* angles,
+                         const double* lons,
+                         const double* lats,
+                         const RasterImporter::ChunkBoundingBox& chunk_size,
+                         const double* const prev_lons,
+                         const double* const prev_lats,
+                         const RasterImporter::ChunkBoundingBox* const prev_chunk_size) {
+  if (chunk_size.x_offset == 0) {
+    // Zero is a special case because there is no previous value to iterate on.
+    point_compute_angle_from_zero(angles, lons, lats, chunk_size);
+  } else {
+    CHECK(prev_lons);
+    CHECK(prev_lats);
+    CHECK(prev_chunk_size);
+    point_compute_angle_non_zero(
+        angles, lons, lats, chunk_size, prev_lons, prev_lats, *prev_chunk_size);
+  }
+}
+
+void coordinate_transform(
+    size_t num_elems,
+    double* lons,
+    double* lats,
+    const std::vector<Geospatial::GDAL::CoordinateTransformationUqPtr>&
+        coordinate_transformers) {
+  if (coordinate_transformers.size() > 0) {
+    int success[num_elems];
+    bool failed{false};
+    coordinate_transformers[0]->Transform(num_elems, lons, lats, nullptr, success);
+    for (size_t i = 0; i < num_elems; ++i) {
+      if (!success[i]) {
+        failed = true;
+      }
+    }
+    if (failed) {
+      // We want this throw to be outside the comparison loop as it prevents vectorization
+      // (at least with Clang).
+      throw std::runtime_error("Failed GCP/TPS Transform");
+    }
+  }
+}
+
+void world_transform(double* lons,
+                     double* lats,
+                     const RasterImporter::PointTransform& point_transform,
+                     const std::vector<std::unique_ptr<GCPTransformer>>& gcp_transformers,
+                     const std::vector<Geospatial::GDAL::CoordinateTransformationUqPtr>&
+                         coordinate_transformers,
+                     const int32_t num_elems) {
+  // Do geo-spatial transform if we can (otherwise leave alone)
+  CHECK(point_transform == RasterImporter::PointTransform::kWorld);
+  // first any GCP transformation
+  if (gcp_transformers.size() > 0) {
+    gcp_transformers[0]->transform(num_elems, lons, lats);
+  }
+  // then any additional transformation to world space
+  if (coordinate_transformers.size() > 0) {
+    coordinate_transform(num_elems, lons, lats, coordinate_transformers);
+  }
+}
+
+void point_transform(double* lons,
+                     double* lats,
+                     const RasterImporter::PointTransform& point_transform,
+                     const std::array<double, 6>& affine_transform_matrix,
+                     const std::vector<std::unique_ptr<GCPTransformer>>& gcp_transformers,
+                     const std::vector<Geospatial::GDAL::CoordinateTransformationUqPtr>&
+                         coordinate_transformers,
+                     const RasterImporter::ChunkBoundingBox& chunk_size) {
+  const auto& [x_start, y_start, width, height, num_elems] = chunk_size;
+  // Note(Misiu): It seems very odd to need to do this optimization by hand, but the
+  // compiler seems to be having trouble hoisting these invariants out of the loop, as
+  // these array accesses show a major bottleneck when profiling some workloads.
+  // Redefining the affine_transform values as loop invariants gives us as much as a %30
+  // speed improvement in some cases.
+  const double a = affine_transform_matrix[0], b = affine_transform_matrix[1],
+               c = affine_transform_matrix[2], d = affine_transform_matrix[3],
+               e = affine_transform_matrix[4], f = affine_transform_matrix[5];
+  int32_t i = 0;
+  for (auto y = y_start; y < y_start + height; y++) {
+    for (auto x = x_start; x < x_start + width; x++) {
+      double dx = double(x);
+      double dy = double(y);
+      lons[i] = (a + (dx * b) + (dy * c));
+      lats[i] = (d + (dx * e) + (dy * f));
+      i++;
+    }
+  }
+
+  world_transform(
+      lons, lats, point_transform, gcp_transformers, coordinate_transformers, num_elems);
+}
+
+void populate_default_coordinates(double* lons,
+                                  double* lats,
+                                  const RasterImporter::ChunkBoundingBox& chunk_size) {
+  const auto [x_start, y_start, width, height, num_elems] = chunk_size;
+  int32_t i = 0;
+  for (auto y = y_start; y < y_start + height; y++) {
+    for (auto x = x_start; x < x_start + width; x++) {
+      lons[i] = double(x);
+      lats[i] = double(y);
+      i++;
+    }
+  }
+}
+
 }  // namespace
 
 //
@@ -293,30 +480,6 @@ RasterImporter::PointType RasterImporter::createPointType(const std::string& str
   } else {
     throw std::runtime_error(
         "Invalid string for 'PointType' (must be 'NONE', 'AUTO', "
-        "'SMALLINT', 'INT', 'FLOAT', 'DOUBLE' or 'POINT'): " +
-        upper_str);
-  }
-}
-
-RasterPointType create_raster_point_type(const std::string& str) {
-  auto upper_str = to_upper(str);
-  if (upper_str == "NONE") {
-    return RasterPointType::kNone;
-  } else if (upper_str == "AUTO") {
-    return RasterPointType::kAuto;
-  } else if (upper_str == "SMALLINT") {
-    return RasterPointType::kSmallInt;
-  } else if (upper_str == "INT") {
-    return RasterPointType::kInt;
-  } else if (upper_str == "FLOAT") {
-    return RasterPointType::kFloat;
-  } else if (upper_str == "DOUBLE") {
-    return RasterPointType::kDouble;
-  } else if (upper_str == "POINT") {
-    return RasterPointType::kPoint;
-  } else {
-    throw std::runtime_error(
-        "Invalid string for 'RasterPointType' (must be 'NONE', 'AUTO', "
         "'SMALLINT', 'INT', 'FLOAT', 'DOUBLE' or 'POINT'): " +
         upper_str);
   }
@@ -759,12 +922,90 @@ const RasterImporter::NullValue RasterImporter::getBandNullValue(
   return {info.null_value, info.null_value_valid};
 }
 
-// TODO(Misiu): This should be able to cache results.
+RasterImporter::CoordBuffers RasterImporter::getProjectedPixelCoordChunks(
+    const ChunkBoundingBox& chunk_size,
+    const bool do_point_compute,
+    const double* const prev_lons,
+    const double* const prev_lats,
+    const ChunkBoundingBox* const prev_chunk_size) const {
+  // TODO(Misiu):  If we can get rid of the cache then maybe we can have this write
+  // directly to the AbstractBuffers.  Currently the caching is too valuable.
+  auto coord_buffers = create_coord_buffers(chunk_size.num_pixels);
+  auto& [lons, lats, angles] = coord_buffers;
+
+  if (point_transform_ == PointTransform::kNone) {
+    populate_default_coordinates(lons.get(), lats.get(), chunk_size);
+  } else if (point_transform_ == PointTransform::kWorld) {
+    point_transform(lons.get(),
+                    lats.get(),
+                    point_transform_,
+                    affine_transform_matrix_,
+                    gcp_transformers_,
+                    coordinate_transformations_,
+                    chunk_size);
+  } else {
+    UNREACHABLE() << "Unknown Point Transform Type";
+  }
+
+  if (do_point_compute) {
+    CHECK(point_compute_angle_)
+        << "Point compute requested but undetected in raster file";
+    point_compute_angle(angles.get(),
+                        lons.get(),
+                        lats.get(),
+                        chunk_size,
+                        prev_lons,
+                        prev_lats,
+                        prev_chunk_size);
+  }
+
+  return coord_buffers;
+}
+
+// A specialized function for when we are only looking for lon/lat values for individual
+// points.
+const std::tuple<double, double> RasterImporter::getProjectedPixelCoord(
+    const uint32_t thread_idx,
+    const int x,
+    const int y) const {
+  // start with the pixel coord
+  double dx = double(x);
+  double dy = double(y);
+
+  if (point_transform_ != PointTransform::kNone) {
+    // affine transform to the file coordinate space
+    double fdx = affine_transform_matrix_[0] + (dx * affine_transform_matrix_[1]) +
+                 (dy * affine_transform_matrix_[2]);
+    double fdy = affine_transform_matrix_[3] + (dx * affine_transform_matrix_[4]) +
+                 (dy * affine_transform_matrix_[5]);
+    dx = fdx;
+    dy = fdy;
+
+    // do geo-spatial transform if we can (otherwise leave alone)
+    if (point_transform_ == PointTransform::kWorld) {
+      // first any GCP transformation
+      if (thread_idx < gcp_transformers_.size()) {
+        gcp_transformers_[thread_idx]->transform(1, &dx, &dy);
+      }
+      // then any additional transformation to world space
+      if (thread_idx < coordinate_transformations_.size()) {
+        int success{0};
+        coordinate_transformations_[thread_idx]->Transform(
+            1, &dx, &dy, nullptr, &success);
+        if (!success) {
+          throw std::runtime_error("Failed OGRCoordinateTransform");
+        }
+      }
+    }
+  }
+
+  return {dx, dy};
+}
+
 const RasterImporter::Coords RasterImporter::getProjectedPixelCoords(
     const uint32_t thread_idx,
     const int y) const {
   Coords coords(bands_width_);
-
   double prev_mx{0.0}, prev_my{0.0};
 
   for (int x = 0; x < bands_width_; x++) {
@@ -786,7 +1027,7 @@ const RasterImporter::Coords RasterImporter::getProjectedPixelCoords(
       if (point_transform_ == PointTransform::kWorld) {
         // first any GCP transformation
         if (thread_idx < gcp_transformers_.size()) {
-          gcp_transformers_[thread_idx]->transform(dx, dy);
+          gcp_transformers_[thread_idx]->transform(1, &dx, &dy);
         }
         // then any additional transformation to world space
         if (thread_idx < coordinate_transformations_.size()) {
@@ -838,22 +1079,18 @@ void RasterImporter::getRawPixels(const uint32_t thread_idx,
                                   RawPixels& raw_pixel_bytes) {
   getRawPixelsFineGrained(thread_idx,
                           band_idx,
-                          0,
-                          y_start,
-                          bands_width_,
-                          num_rows,
+                          ChunkBoundingBox(0, y_start, bands_width_, num_rows),
                           column_sql_type,
-                          raw_pixel_bytes);
+                          reinterpret_cast<int8_t*>(raw_pixel_bytes.data()));
 }
 
 void RasterImporter::getRawPixelsFineGrained(const uint32_t thread_idx,
                                              const uint32_t band_idx,
-                                             const int x_start,
-                                             const int y_start,
-                                             const int x_size,
-                                             const int y_size,
+                                             const ChunkBoundingBox& chunk_size,
                                              const SQLTypes column_sql_type,
-                                             RawPixels& raw_pixel_bytes) {
+                                             int8_t* raw_pixel_bytes) {
+  const auto [x_start, y_start, x_size, y_size, num_elems] = chunk_size;
+
   // get the band info
   CHECK_LT(band_idx, import_band_infos_.size());
   auto const band_info = import_band_infos_[band_idx];
@@ -874,19 +1111,18 @@ void RasterImporter::getRawPixelsFineGrained(const uint32_t thread_idx,
   auto const gdal_data_type = sql_type_to_gdal_data_type(column_sql_type);
 
   // read the scanlines
-  auto result =
-      band->RasterIO(GF_Read,                 // R/W Flag
-                     x_start,                 // x-offset
-                     y_start,                 // y-offset
-                     x_size,                  // x-size
-                     y_size,                  // y-size
-                     raw_pixel_bytes.data(),  // data pointer
-                     x_size,                  // data pointer x-dimension
-                     y_size,                  // data pointer y-dimension
-                     gdal_data_type,
-                     0,
-                     0,  // GDALGetDataTypeSizeBytes(gdal_data_type) * bands_width_,
-                     nullptr);
+  auto result = band->RasterIO(GF_Read,          // R/W Flag
+                               x_start,          // x-offset
+                               y_start,          // y-offset
+                               x_size,           // x-size
+                               y_size,           // y-size
+                               raw_pixel_bytes,  // data pointer
+                               x_size,           // data pointer x-dimension
+                               y_size,           // data pointer y-dimension
+                               gdal_data_type,
+                               0,
+                               0,
+                               nullptr);
 
   if (result != CE_None) {
     throw std::runtime_error("Failed to read raster pixels: (" + std::to_string(x_start) +
