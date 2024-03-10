@@ -36,7 +36,8 @@ T none_encoded_null_value() {
 template <typename T>
 class NoneEncoder : public Encoder {
  public:
-  NoneEncoder(Data_Namespace::AbstractBuffer* buffer) : Encoder(buffer) {
+  NoneEncoder(Data_Namespace::AbstractBuffer* buffer)
+      : Encoder(buffer), encoded_null_value_(none_encoded_null_value<T>()) {
     resetChunkStats();
   }
 
@@ -132,7 +133,7 @@ class NoneEncoder : public Encoder {
         [&](const auto& range, auto init) {
           auto [min, max, nulls] = init;
           for (size_t i = range.begin(); i < range.end(); i++) {
-            if (data[i] != none_encoded_null_value<T>()) {
+            if (data[i] != encoded_null_value_) {
               decimal_overflow_validator_.validate(data[i]);
               min = std::min(min, data[i]);
               max = std::max(max, data[i]);
@@ -266,7 +267,7 @@ class NoneEncoder : public Encoder {
 
   T validateDataAndUpdateStats(const T& unencoded_data,
                                const bool is_validated_data = false) {
-    if (unencoded_data == none_encoded_null_value<T>()) {
+    if (unencoded_data == encoded_null_value_) {
       has_nulls = true;
     } else {
       if (!is_validated_data) {  // does not need validation
@@ -286,6 +287,8 @@ class NoneEncoder : public Encoder {
       validateDataAndUpdateStats(unencoded_data[i], is_validated_data);
     }
   }
+
+  const T encoded_null_value_;
 };  // class NoneEncoder
 
 #endif  // NONE_ENCODER_H
