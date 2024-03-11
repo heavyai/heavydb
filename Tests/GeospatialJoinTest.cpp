@@ -427,14 +427,14 @@ TEST_F(GeospatialJoinTest, InnerJoinPolyPolyContains) {
 }
 
 // TODO(jclay): The following runtime functions are not implemented:
-// - ST_Contains_MultiPolygon_MultiPolygon
-// - ST_Contains_MultiPolygon_Polygon
+// - ST_Contains_MultiPolygon_Polygon and vice-versa
 // As a result, the following should succeed rather than throw error.
 TEST_F(GeospatialJoinTest, InnerJoinMPolyPolyContains) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   JOIN does_intersect_b as b
                   ON ST_Contains(a.mpoly, b.poly);)";
+    // should fail as unimplemented
     EXPECT_ANY_THROW(execSQL(sql, ctx.device_type));
   });
 }
@@ -443,19 +443,18 @@ TEST_F(GeospatialJoinTest, InnerJoinMPolyMPolyContains) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   JOIN does_intersect_b as b
-                  ON ST_Contains(a.mpoly, b.poly);)";
-    // should return 4
-    EXPECT_ANY_THROW(execSQL(sql, ctx.device_type));
+                  ON ST_Contains(a.mpoly, b.mpoly);)";
+    // should return 0
+    ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
-// NOTE(jclay): We don't support multipoly / poly ST_Contains
 TEST_F(GeospatialJoinTest, LeftJoinMPolyPolyContains) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_b as b
                   LEFT JOIN does_intersect_a as a
                   ON ST_Contains(a.mpoly, b.poly);)";
-    // should return 4
+    // should fail as unimplemented
     EXPECT_ANY_THROW(execSQL(sql, ctx.device_type));
   });
 }
@@ -465,8 +464,8 @@ TEST_F(GeospatialJoinTest, LeftJoinMPolyMPolyContains) {
     auto sql = R"(SELECT count(*) from does_intersect_b as b
                   LEFT JOIN does_intersect_a as a
                   ON ST_Contains(a.mpoly, b.mpoly);)";
-    // should return 4
-    EXPECT_ANY_THROW(execSQL(sql, ctx.device_type));
+    // should return 2
+    ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 

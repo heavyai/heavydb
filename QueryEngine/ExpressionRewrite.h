@@ -75,6 +75,8 @@ struct BoundingBoxIntersectJoinSupportedFunction {
       "ST_Contains_Polygon_Point"};
   static constexpr std::string_view ST_CONTAINS_POLYGON_POLYGON_sv{
       "ST_Contains_Polygon_Polygon"};
+  static constexpr std::string_view ST_CONTAINS_MULTIPOLYGON_MULTIPOLYGON_sv{
+      "ST_Contains_MultiPolygon_MultiPolygon"};
   static constexpr std::string_view ST_CONTAINS_MULTIPOLYGON_POINT_sv{
       "ST_Contains_MultiPolygon_Point"};
   static constexpr std::string_view ST_INTERSECTS_POINT_POLYGON_sv{
@@ -108,10 +110,11 @@ struct BoundingBoxIntersectJoinSupportedFunction {
       "ST_cIntersects_MultiPolygon_Point"};
   static constexpr std::string_view ST_DWITHIN_POINT_POINT_sv{"ST_DWithin_Point_Point"};
 
-  static constexpr std::array<std::string_view, 18> BBOX_INTERSECT_SUPPORTED_FUNC{
+  static constexpr std::array<std::string_view, 19> BBOX_INTERSECT_SUPPORTED_FUNC{
       ST_CONTAINS_POLYGON_POINT_sv,
       ST_CONTAINS_MULTIPOLYGON_POINT_sv,
       ST_CONTAINS_POLYGON_POLYGON_sv,
+      ST_CONTAINS_MULTIPOLYGON_MULTIPOLYGON_sv,
       ST_INTERSECTS_POINT_POLYGON_sv,
       ST_INTERSECTS_POINT_MULTIPOLYGON_sv,
       ST_INTERSECTS_POLYGON_POINT_sv,
@@ -128,15 +131,17 @@ struct BoundingBoxIntersectJoinSupportedFunction {
       ST_INTERSECTSBOX_sv,
       ST_DWITHIN_POINT_POINT_sv};
 
-  static constexpr std::array<std::string_view, 5> MANY_TO_MANY_BBOX_INTERSECT_FUNC{
+  static constexpr std::array<std::string_view, 6> MANY_TO_MANY_BBOX_INTERSECT_FUNC{
       ST_CONTAINS_POLYGON_POLYGON_sv,
+      ST_CONTAINS_MULTIPOLYGON_MULTIPOLYGON_sv,
       ST_INTERSECTS_POLYGON_POLYGON_sv,
       ST_INTERSECTS_POLYGON_MULTIPOLYGON_sv,
       ST_INTERSECTS_MULTIPOLYGON_MULTIPOLYGON_sv,
       ST_INTERSECTS_MULTIPOLYGON_POLYGON_sv};
 
-  static constexpr std::array<std::string_view, 5> POLY_MPOLY_REWRITE_TARGET_FUNC{
+  static constexpr std::array<std::string_view, 6> POLY_MPOLY_REWRITE_TARGET_FUNC{
       ST_CONTAINS_POLYGON_POLYGON_sv,
+      ST_CONTAINS_MULTIPOLYGON_MULTIPOLYGON_sv,
       ST_INTERSECTS_POLYGON_POLYGON_sv,
       ST_INTERSECTS_POLYGON_MULTIPOLYGON_sv,
       ST_INTERSECTS_MULTIPOLYGON_MULTIPOLYGON_sv,
