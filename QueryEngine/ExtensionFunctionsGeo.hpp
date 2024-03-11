@@ -2943,38 +2943,56 @@ double ST_Distance_Polygon_Polygon(int8_t* poly1_coords,
                                    int32_t isr2,
                                    int32_t osr,
                                    double threshold) {
-  // Check if poly1 contains the first point of poly2's shape, i.e. the external ring
+  // Check the first point of each poly against the other entire poly. If either is
+  // enclosed by the other, this indicates either partial overlap in the region of that
+  // first point, or complete enclosure, and we can early-out with zero. If both first
+  // points are outside the other poly, there may still be overlap elsewhere, so we fall
+  // through to the brute-force ring-to-ring tests.
+
+  auto poly1_first_point_coords = poly1_coords;
+  auto poly1_first_point_coords_size = compression_unit_size(ic1) * 2;
   auto poly2_first_point_coords = poly2_coords;
   auto poly2_first_point_coords_size = compression_unit_size(ic2) * 2;
-  auto min_distance = ST_Distance_Polygon_Point(poly1_coords,
-                                                poly1_coords_size,
-                                                poly1_ring_sizes,
-                                                poly1_num_rings,
-                                                poly2_first_point_coords,
-                                                poly2_first_point_coords_size,
-                                                ic1,
-                                                isr1,
-                                                ic2,
-                                                isr2,
-                                                osr,
-                                                threshold);
+  auto min_distance12 = ST_Distance_Polygon_Point(poly1_coords,
+                                                  poly1_coords_size,
+                                                  poly1_ring_sizes,
+                                                  poly1_num_rings,
+                                                  poly2_first_point_coords,
+                                                  poly2_first_point_coords_size,
+                                                  ic1,
+                                                  isr1,
+                                                  ic2,
+                                                  isr2,
+                                                  osr,
+                                                  threshold);
+  auto min_distance21 = ST_Distance_Polygon_Point(poly2_coords,
+                                                  poly2_coords_size,
+                                                  poly2_ring_sizes,
+                                                  poly2_num_rings,
+                                                  poly1_first_point_coords,
+                                                  poly1_first_point_coords_size,
+                                                  ic2,
+                                                  isr2,
+                                                  ic1,
+                                                  isr1,
+                                                  osr,
+                                                  threshold);
+  auto min_distance = std::min(min_distance12, min_distance21);
   if (tol_zero(min_distance)) {
-    // Polygons overlap
     return 0.0;
   }
   if (min_distance <= threshold) {
     return min_distance;
   }
 
-  // Poly2's first point is either outside poly1's external ring or inside one of the
-  // internal rings. Measure the smallest distance between a poly1 ring (external or
-  // internal) and a poly2 ring (external or internal). If poly2 is completely outside
-  // poly1, then the min distance would be between poly1's and poly2's external rings. If
-  // poly2 is completely inside one of poly1 internal rings then the min distance would be
-  // between that poly1 internal ring and poly2's external ring. If poly1 is completely
-  // inside one of poly2 internal rings, min distance is between that internal ring and
-  // poly1's external ring. In each case other rings don't get in the way. Any ring
-  // intersection means zero distance - short-circuit and return.
+  // If we get this far, then both poly's first points are exterior to the other poly,
+  // either outside their outer ring, or in a hole. This means there is no complete
+  // enclosure of one poly by the other, but there could still be overlap.
+  //
+  // Then we iterate all combinations of rings (outer and inner) and check distance. If
+  // all those distances are non-zero, there is no overlap, and the minimum distance found
+  // is the desired final value. If any of the distances are zero, this means touching or
+  // intersection, and we can early-out with zero.
 
   auto poly1_ring_coords = poly1_coords;
   for (auto r1 = 0; r1 < poly1_num_rings; r1++) {
@@ -4182,6 +4200,298 @@ bool ST_Contains_Polygon_Polygon(int8_t* poly1_coords,
                                         isr2,
                                         osr);
 }
+
+//
+// ST_Contains_MultiPolygon_MultiPolygon
+//
+
+template <typename T>
+DEVICE ALWAYS_INLINE bool Contains_MultiPolygon_MultiPolygon_Impl(
+    int8_t* mpoly1_coords,
+    int64_t mpoly1_coords_size,
+    int32_t* mpoly1_ring_sizes,
+    int64_t mpoly1_num_rings,
+    int32_t* mpoly1_poly_sizes,
+    int64_t mpoly1_num_polys,
+    double* mpoly1_bounds,
+    int64_t mpoly1_bounds_size,
+    int8_t* mpoly2_coords,
+    int64_t mpoly2_coords_size,
+    int32_t* mpoly2_ring_sizes,
+    int64_t mpoly2_num_rings,
+    int32_t* mpoly2_poly_sizes,
+    int64_t mpoly2_num_polys,
+    double* mpoly2_bounds,
+    int64_t mpoly2_bounds_size,
+    int32_t ic1,
+    int32_t isr1,
+    int32_t ic2,
+    int32_t isr2,
+    int32_t osr) {
+  // sanity check sizes
+  if (mpoly1_coords_size <= 0 || mpoly2_coords_size <= 0 || mpoly1_num_polys <= 0 ||
+      mpoly2_num_polys <= 0 || mpoly1_num_rings <= 0 || mpoly2_num_rings <= 0) {
+    return false;
+  }
+
+  // first check overall bounds
+  if (mpoly1_bounds && mpoly2_bounds) {
+    if (!box_contains_box(
+            mpoly1_bounds, mpoly1_bounds_size, mpoly2_bounds, mpoly2_bounds_size)) {
+      return false;
+    }
+  }
+
+  // if the mpolys only have one poly, we can pass their bounds down
+  // in order to speed up the child POLYGON/POLYGON test, as the overall
+  // bounds of the MULTIPOLYGON will be the same as of the single POLYGON
+  auto* a_bounds = (mpoly1_num_polys == 1) ? mpoly1_bounds : nullptr;
+  auto* b_bounds = (mpoly2_num_polys == 1) ? mpoly2_bounds : nullptr;
+  auto a_bounds_size = (mpoly1_num_polys == 1) ? mpoly1_bounds_size : 0LL;
+  auto b_bounds_size = (mpoly2_num_polys == 1) ? mpoly2_bounds_size : 0LL;
+
+  //
+  // for each poly in B, check that it is contained by exactly one poly in A
+  //
+
+  // loop over B
+  auto* next_b_coords = mpoly2_coords;
+  auto* next_b_ring_sizes = mpoly2_ring_sizes;
+  for (int64_t b = 0; b < mpoly2_num_polys; b++) {
+    // this poly from B
+    auto* b_coords = next_b_coords;
+    auto* b_ring_sizes = next_b_ring_sizes;
+    auto const b_num_rings = mpoly2_poly_sizes[b];
+    int32_t b_num_coords = 0;
+    for (auto ring = 0; ring < b_num_rings; ring++) {
+      b_num_coords += 2 * *next_b_ring_sizes++;
+    }
+    auto const b_coords_size = b_num_coords * compression_unit_size(ic2);
+    next_b_coords += b_coords_size;
+
+    bool a_contains_b{false};
+
+    // loop over A
+    auto* next_a_coords = mpoly1_coords;
+    auto* next_a_ring_sizes = mpoly1_ring_sizes;
+    for (int64_t a = 0; a < mpoly1_num_polys; a++) {
+      // this poly from A
+      auto* a_coords = next_a_coords;
+      auto* a_ring_sizes = next_a_ring_sizes;
+      auto const a_num_rings = mpoly1_poly_sizes[a];
+      int32_t a_num_coords = 0;
+      for (auto ring = 0; ring < a_num_rings; ring++) {
+        a_num_coords += 2 * *next_a_ring_sizes++;
+      }
+      auto const a_coords_size = a_num_coords * compression_unit_size(ic1);
+      next_a_coords += a_coords_size;
+
+      // check this pair
+      if (ST_Contains_Polygon_Polygon(a_coords,
+                                      a_coords_size,
+                                      a_ring_sizes,
+                                      a_num_rings,
+                                      a_bounds,
+                                      a_bounds_size,
+                                      b_coords,
+                                      b_coords_size,
+                                      b_ring_sizes,
+                                      b_num_rings,
+                                      b_bounds,
+                                      b_bounds_size,
+                                      ic1,
+                                      isr1,
+                                      ic2,
+                                      isr2,
+                                      osr)) {
+        a_contains_b = true;
+        break;
+      }
+    }
+
+    if (!a_contains_b) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+EXTENSION_NOINLINE
+bool ST_Contains_MultiPolygon_MultiPolygon__bounds12(int8_t* mpoly1_coords,
+                                                     int64_t mpoly1_coords_size,
+                                                     int32_t* mpoly1_ring_sizes,
+                                                     int64_t mpoly1_num_rings,
+                                                     int32_t* mpoly1_poly_sizes,
+                                                     int64_t mpoly1_num_polys,
+                                                     double* mpoly1_bounds,
+                                                     int64_t mpoly1_bounds_size,
+                                                     int8_t* mpoly2_coords,
+                                                     int64_t mpoly2_coords_size,
+                                                     int32_t* mpoly2_ring_sizes,
+                                                     int64_t mpoly2_num_rings,
+                                                     int32_t* mpoly2_poly_sizes,
+                                                     int64_t mpoly2_num_polys,
+                                                     double* mpoly2_bounds,
+                                                     int64_t mpoly2_bounds_size,
+                                                     int32_t ic1,
+                                                     int32_t isr1,
+                                                     int32_t ic2,
+                                                     int32_t isr2,
+                                                     int32_t osr) {
+  return Contains_MultiPolygon_MultiPolygon_Impl<double>(mpoly1_coords,
+                                                         mpoly1_coords_size,
+                                                         mpoly1_ring_sizes,
+                                                         mpoly1_num_rings,
+                                                         mpoly1_poly_sizes,
+                                                         mpoly1_num_polys,
+                                                         mpoly1_bounds,
+                                                         mpoly1_bounds_size,
+                                                         mpoly2_coords,
+                                                         mpoly2_coords_size,
+                                                         mpoly2_ring_sizes,
+                                                         mpoly2_num_rings,
+                                                         mpoly2_poly_sizes,
+                                                         mpoly2_num_polys,
+                                                         mpoly2_bounds,
+                                                         mpoly2_bounds_size,
+                                                         ic1,
+                                                         isr1,
+                                                         ic2,
+                                                         isr2,
+                                                         osr);
+}
+
+EXTENSION_NOINLINE
+bool ST_Contains_MultiPolygon_MultiPolygon__bounds1(int8_t* mpoly1_coords,
+                                                    int64_t mpoly1_coords_size,
+                                                    int32_t* mpoly1_ring_sizes,
+                                                    int64_t mpoly1_num_rings,
+                                                    int32_t* mpoly1_poly_sizes,
+                                                    int64_t mpoly1_num_polys,
+                                                    double* mpoly1_bounds,
+                                                    int64_t mpoly1_bounds_size,
+                                                    int8_t* mpoly2_coords,
+                                                    int64_t mpoly2_coords_size,
+                                                    int32_t* mpoly2_ring_sizes,
+                                                    int64_t mpoly2_num_rings,
+                                                    int32_t* mpoly2_poly_sizes,
+                                                    int64_t mpoly2_num_polys,
+                                                    int32_t ic1,
+                                                    int32_t isr1,
+                                                    int32_t ic2,
+                                                    int32_t isr2,
+                                                    int32_t osr) {
+  return Contains_MultiPolygon_MultiPolygon_Impl<double>(mpoly1_coords,
+                                                         mpoly1_coords_size,
+                                                         mpoly1_ring_sizes,
+                                                         mpoly1_num_rings,
+                                                         mpoly1_poly_sizes,
+                                                         mpoly1_num_polys,
+                                                         mpoly1_bounds,
+                                                         mpoly1_bounds_size,
+                                                         mpoly2_coords,
+                                                         mpoly2_coords_size,
+                                                         mpoly2_ring_sizes,
+                                                         mpoly2_num_rings,
+                                                         mpoly2_poly_sizes,
+                                                         mpoly2_num_polys,
+                                                         nullptr,
+                                                         0ULL,
+                                                         ic1,
+                                                         isr1,
+                                                         ic2,
+                                                         isr2,
+                                                         osr);
+}
+
+EXTENSION_NOINLINE
+bool ST_Contains_MultiPolygon_MultiPolygon__bounds2(int8_t* mpoly1_coords,
+                                                    int64_t mpoly1_coords_size,
+                                                    int32_t* mpoly1_ring_sizes,
+                                                    int64_t mpoly1_num_rings,
+                                                    int32_t* mpoly1_poly_sizes,
+                                                    int64_t mpoly1_num_polys,
+                                                    int8_t* mpoly2_coords,
+                                                    int64_t mpoly2_coords_size,
+                                                    int32_t* mpoly2_ring_sizes,
+                                                    int64_t mpoly2_num_rings,
+                                                    int32_t* mpoly2_poly_sizes,
+                                                    int64_t mpoly2_num_polys,
+                                                    double* mpoly2_bounds,
+                                                    int64_t mpoly2_bounds_size,
+                                                    int32_t ic1,
+                                                    int32_t isr1,
+                                                    int32_t ic2,
+                                                    int32_t isr2,
+                                                    int32_t osr) {
+  return Contains_MultiPolygon_MultiPolygon_Impl<double>(mpoly1_coords,
+                                                         mpoly1_coords_size,
+                                                         mpoly1_ring_sizes,
+                                                         mpoly1_num_rings,
+                                                         mpoly1_poly_sizes,
+                                                         mpoly1_num_polys,
+                                                         nullptr,
+                                                         0ULL,
+                                                         mpoly2_coords,
+                                                         mpoly2_coords_size,
+                                                         mpoly2_ring_sizes,
+                                                         mpoly2_num_rings,
+                                                         mpoly2_poly_sizes,
+                                                         mpoly2_num_polys,
+                                                         mpoly2_bounds,
+                                                         mpoly2_bounds_size,
+                                                         ic1,
+                                                         isr1,
+                                                         ic2,
+                                                         isr2,
+                                                         osr);
+}
+
+EXTENSION_NOINLINE
+bool ST_Contains_MultiPolygon_MultiPolygon__nobounds(int8_t* mpoly1_coords,
+                                                     int64_t mpoly1_coords_size,
+                                                     int32_t* mpoly1_ring_sizes,
+                                                     int64_t mpoly1_num_rings,
+                                                     int32_t* mpoly1_poly_sizes,
+                                                     int64_t mpoly1_num_polys,
+                                                     int8_t* mpoly2_coords,
+                                                     int64_t mpoly2_coords_size,
+                                                     int32_t* mpoly2_ring_sizes,
+                                                     int64_t mpoly2_num_rings,
+                                                     int32_t* mpoly2_poly_sizes,
+                                                     int64_t mpoly2_num_polys,
+                                                     int32_t ic1,
+                                                     int32_t isr1,
+                                                     int32_t ic2,
+                                                     int32_t isr2,
+                                                     int32_t osr) {
+  return Contains_MultiPolygon_MultiPolygon_Impl<double>(mpoly1_coords,
+                                                         mpoly1_coords_size,
+                                                         mpoly1_ring_sizes,
+                                                         mpoly1_num_rings,
+                                                         mpoly1_poly_sizes,
+                                                         mpoly1_num_polys,
+                                                         nullptr,
+                                                         0ULL,
+                                                         mpoly2_coords,
+                                                         mpoly2_coords_size,
+                                                         mpoly2_ring_sizes,
+                                                         mpoly2_num_rings,
+                                                         mpoly2_poly_sizes,
+                                                         mpoly2_num_polys,
+                                                         nullptr,
+                                                         0ULL,
+                                                         ic1,
+                                                         isr1,
+                                                         ic2,
+                                                         isr2,
+                                                         osr);
+}
+
+//
+// ST_Contains_MultiPolygon_Point
+//
 
 template <typename T, EdgeBehavior TEdgeBehavior>
 DEVICE ALWAYS_INLINE bool Contains_MultiPolygon_Point_Impl(
