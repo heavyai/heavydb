@@ -1935,6 +1935,39 @@ TEST(GeoSpatial, Math) {
             dt)),
         static_cast<double>(0.01));
 
+    // ST_Distance explicit tests for full poly/poly enclosure returning zero
+    ASSERT_NEAR(
+        // A completely encloses B
+        // this would have failed prior to BE-6530
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Distance('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))', 'POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))');)",
+            dt)),
+        static_cast<double>(0.01));
+    ASSERT_NEAR(
+        // B completely encloses A
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Distance('POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 'POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))');)",
+            dt)),
+        static_cast<double>(0.01));
+
+    // ST_Distance explicit tests for vertex/edge touching returning zero
+    ASSERT_NEAR(
+        // A and B share a vertex but do not overlap
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Distance('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))', 'POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))');)",
+            dt)),
+        static_cast<double>(0.01));
+    ASSERT_NEAR(
+        // A and B share an edge but do not overlap
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Distance('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))', 'POLYGON((1 0, 2 0, 2 1, 1 1, 1 0))');)",
+            dt)),
+        static_cast<double>(0.01));
+
     ASSERT_NEAR(
         static_cast<double>(25.4558441),
         v<double>(run_simple_agg(
@@ -3821,11 +3854,12 @@ class GeoFunctionsParamTypeTest : public ::testing::TestWithParam<TestParamType>
        {{"POINT", {"POINT", "LINESTRING", "POLYGON"}},
         {"LINESTRING", {"POINT", "POLYGON"}},
         {"POLYGON", {"POINT", "LINESTRING", "POLYGON"}},
-        {"MULTIPOLYGON", {"POINT", "LINESTRING"}}}},
+        {"MULTIPOLYGON", {"POINT", "LINESTRING", "MULTIPOLYGON"}}}},
       {"ST_WITHIN",
        {{"POINT", {"POINT", "LINESTRING", "POLYGON", "MULTIPOLYGON"}},
         {"LINESTRING", {"POINT", "POLYGON", "MULTIPOLYGON"}},
-        {"POLYGON", {"POINT", "LINESTRING", "POLYGON"}}}},
+        {"POLYGON", {"POINT", "LINESTRING", "POLYGON"}},
+        {"MULTIPOLYGON", {"MULTIPOLYGON"}}}},
       {"ST_DISTANCE",
        {{"POINT",
          {"POINT",
@@ -3873,12 +3907,16 @@ class GeoFunctionsParamTypeTest : public ::testing::TestWithParam<TestParamType>
       {"ST_CONTAINS",  // Smaller geo types cannot contain larger geo types.
        {{"POINT", {"LINESTRING", "POLYGON"}},
         {"LINESTRING", {"POLYGON"}},
-        {"POLYGON", {"POLYGON"}}}},  // TODO: This case should return true
-      {"ST_WITHIN",                  // Smaller geo types cannot contain larger geo types.
+        {"POLYGON", {"POLYGON"}},  // TODO: POLYGON/POLYGON and MULTIPOLYGON/MULTIPOLYGON
+                                   // cases should return true
+        {"MULTIPOLYGON", {"MULTIPOLYGON"}}}},
+      {"ST_WITHIN",  // Smaller geo types cannot contain larger geo types.
        {{"LINESTRING", {"POINT"}},
-        {"POLYGON", {"POINT", "LINESTRING", "POLYGON"}}}},  // TODO: POLYGON/POLYGON case
-                                                            // should return true
-      {"ST_DISJOINT",  // Values cannot be disjoint with themselves.
+        {"POLYGON", {"POINT", "LINESTRING", "POLYGON"}},
+        {"MULTIPOLYGON",
+         {"MULTIPOLYGON"}}}},  // TODO: POLYGON/POLYGON and MULTIPOLYGON/MULTIPOLYGON
+                               // cases should return true
+      {"ST_DISJOINT",          // Values cannot be disjoint with themselves.
        {{"POINT", {"POINT"}},
         {"LINESTRING", {"LINESTRING"}},
         {"POLYGON", {"POLYGON"}},
