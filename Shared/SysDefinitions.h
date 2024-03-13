@@ -47,4 +47,6 @@ inline const std::string kDefaultDelimitedServerName = "default_local_delimited"
 inline const std::string kDefaultParquetServerName = "default_local_parquet";
 inline const std::string kDefaultRegexServerName = "default_local_regex_parsed";
 inline const std::string kDefaultRasterServerName = "default_local_raster";
+inline const std::string kDeploymentDirectoryName = "deployment";
+inline const std::string kDeploymentIdFileName = "id.txt";
 }  // namespace shared
