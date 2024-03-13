@@ -21,9 +21,14 @@
 #include <filesystem>
 #include <algorithm>
 #include <iostream>
+#include <optional>
+#include <sstream>
 #include <string>
 
 using namespace std::string_literals;
+
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 #include "CommandLineOptions.h"
 #include "ImportExport/ForeignDataImporter.h"

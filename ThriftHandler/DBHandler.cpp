@@ -7552,6 +7552,8 @@ void DBHandler::shutdown() {
 
 
   Catalog_Namespace::SysCatalog::destroy();
+
+  license_claims_->deregisterDeployment();
 }
 
 void DBHandler::emergency_shutdown() {
