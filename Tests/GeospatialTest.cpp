@@ -22,6 +22,10 @@
 #include "Shared/clean_boost_regex.hpp"
 #include "Shared/scope.h"
 
+#include <boost/math/constants/constants.hpp>
+
+#include <optional>
+
 #ifdef ENABLE_GEOS
 #include <geos/version.h>
 #endif
@@ -59,6 +63,13 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     CHECK(dt == ExecutorDeviceType::GPU);                    \
     LOG(WARNING) << "GPU not available, skipping GPU tests"; \
     continue;                                                \
+  }
+
+#define SKIP_NO_GPU_IN_TEST_P()                              \
+  if (skip_tests(dt)) {                                      \
+    CHECK(dt == ExecutorDeviceType::GPU);                    \
+    LOG(WARNING) << "GPU not available, skipping GPU tests"; \
+    return;                                                  \
   }
 
 #define SKIP_ALL_ON_AGGREGATOR()                         \
@@ -127,6 +138,79 @@ TargetValue get_first_target(const std::string& query_str,
   auto crt_row = rows->getNextRow(true, true);
   CHECK_GE(crt_row.size(), size_t(1)) << query_str;
   return crt_row[0];
+}
+
+void setup_all_geo_types() {
+  std::string const all_geo_types_ddl =
+      std::string(
+          "CREATE TABLE AllGeoTypes (\n"
+          "v int,\n"
+          "pt point,\n"
+          "gpt geometry(point),\n"
+          "gpt4 geometry(point, 4326),\n"
+          "gpt4e geometry(point, 4326) encoding compressed (32),\n"
+          "gpt4n geometry(point, 4326) encoding none,\n"
+          "gpt9 geometry(point, 900913),\n"
+          "mpt multipoint,\n"
+          "gmpt geometry(multipoint),\n"
+          "gmpt4 geometry(multipoint, 4326),\n"
+          "gmpt4e geometry(multipoint, 4326) encoding compressed (32),\n"
+          "gmpt4n geometry(multipoint, 4326) encoding none,\n"
+          "gmpt9 geometry(multipoint, 900913),\n"
+          "l linestring,\n"
+          "gl geometry(linestring),\n"
+          "gl4 geometry(linestring, 4326),\n"
+          "gl4e geometry(linestring, 4326) encoding compressed (32),\n"
+          "gl4n geometry(linestring, 4326) encoding none,\n"
+          "gl9 geometry(linestring, 900913),\n"
+          "gl9n geometry(linestring, 900913) encoding none,\n"
+          "ml multilinestring,\n"
+          "gml geometry(multilinestring),\n"
+          "gml4 geometry(multilinestring, 4326),\n"
+          "gml4e geometry(multilinestring, 4326) encoding compressed (32),\n"
+          "gml4n geometry(multilinestring, 4326) encoding none,\n"
+          "gml9 geometry(multilinestring, 900913),\n"
+          "gml9n geometry(multilinestring, 900913) encoding none,\n"
+          "p polygon,\n"
+          "gp geometry(polygon),\n"
+          "gp4 geometry(polygon, 4326),\n"
+          "gp4e geometry(polygon, 4326) encoding compressed (32),\n"
+          "gp4n geometry(polygon, 4326) encoding none,\n"
+          "gp9 geometry(polygon, 900913),\n"
+          "gp9n geometry(polygon, 900913) encoding none,\n"
+          "mp multipolygon,\n"
+          "gmp geometry(multipolygon),\n"
+          "gmp4 geometry(multipolygon, 4326),\n"
+          "gmp4e geometry(multipolygon, 4326) encoding compressed (32),\n"
+          "gmp4n geometry(multipolygon, 4326) encoding none,\n"
+          "gmp9 geometry(multipolygon, 900913),\n"
+          "gmp9n geometry(multipolygon, 900913) encoding none)") +
+      (g_cluster ? " WITH(PARTITIONS='REPLICATED')" : "");
+  run_ddl_statement(all_geo_types_ddl);
+  run_multiple_agg(
+      "insert into AllGeoTypes values (\n"
+      "1,\n"
+      "'POINT(3 3)', 'POINT(3 3)', 'POINT(3 3)', 'POINT(3 3)', 'POINT(3 3)', 'POINT(3 "
+      "3)',\n"
+      "'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)', "
+      "'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)',\n"
+      "'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 6, 7 "
+      "7)', 'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 "
+      "6, 7 7)', 'LINESTRING(3 0, 6 6, 7 7)',\n"
+      "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, "
+      "7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', "
+      "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, "
+      "7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', "
+      "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))',\n"
+      "'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, "
+      "4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 "
+      "0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))',\n"
+      "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', 'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', "
+      "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', 'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', "
+      "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', 'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', "
+      "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))'\n"
+      ");",
+      ExecutorDeviceType::CPU);
 }
 
 void import_geospatial_test(const bool use_temporary_tables) {
@@ -3599,79 +3683,10 @@ TEST(GeoSpatial, ProjectGeoColAfterLeftJoin) {
   };
   drop_tables_ddl();
   run_ddl_statement("CREATE TABLE LFJ (v INT);");
-  std::string all_geo_types_ddl =
-      "CREATE TABLE AllGeoTypes (\n"
-      "v int,\n"
-      "pt point,\n"
-      "gpt geometry(point),\n"
-      "gpt4 geometry(point, 4326),\n"
-      "gpt4e geometry(point, 4326) encoding compressed (32),\n"
-      "gpt4n geometry(point, 4326) encoding none,\n"
-      "gpt9 geometry(point, 900913),\n"
-      "mpt multipoint,\n"
-      "gmpt geometry(multipoint),\n"
-      "gmpt4 geometry(multipoint, 4326),\n"
-      "gmpt4e geometry(multipoint, 4326) encoding compressed (32),\n"
-      "gmpt4n geometry(multipoint, 4326) encoding none,\n"
-      "gmpt9 geometry(multipoint, 900913),\n"
-      "l linestring,\n"
-      "gl geometry(linestring),\n"
-      "gl4 geometry(linestring, 4326),\n"
-      "gl4e geometry(linestring, 4326) encoding compressed (32),\n"
-      "gl4n geometry(linestring, 4326) encoding none,\n"
-      "gl9 geometry(linestring, 900913),\n"
-      "gl9n geometry(linestring, 900913) encoding none,\n"
-      "ml multilinestring,\n"
-      "gml geometry(multilinestring),\n"
-      "gml4 geometry(multilinestring, 4326),\n"
-      "gml4e geometry(multilinestring, 4326) encoding compressed (32),\n"
-      "gml4n geometry(multilinestring, 4326) encoding none,\n"
-      "gml9 geometry(multilinestring, 900913),\n"
-      "gml9n geometry(multilinestring, 900913) encoding none,\n"
-      "p polygon,\n"
-      "gp geometry(polygon),\n"
-      "gp4 geometry(polygon, 4326),\n"
-      "gp4e geometry(polygon, 4326) encoding compressed (32),\n"
-      "gp4n geometry(polygon, 4326) encoding none,\n"
-      "gp9 geometry(polygon, 900913),\n"
-      "gp9n geometry(polygon, 900913) encoding none,\n"
-      "mp multipolygon,\n"
-      "gmp geometry(multipolygon),\n"
-      "gmp4 geometry(multipolygon, 4326),\n"
-      "gmp4e geometry(multipolygon, 4326) encoding compressed (32),\n"
-      "gmp4n geometry(multipolygon, 4326) encoding none,\n"
-      "gmp9 geometry(multipolygon, 900913),\n"
-      "gmp9n geometry(multipolygon, 900913) encoding none)";
-  std::string replicated_dec{!g_cluster ? "" : " WITH(PARTITIONS='REPLICATED');"};
-  all_geo_types_ddl += replicated_dec;
-  run_ddl_statement(all_geo_types_ddl);
-
   run_multiple_agg("INSERT INTO LFJ VALUES (1);", ExecutorDeviceType::CPU);
   run_multiple_agg("INSERT INTO LFJ VALUES (2);", ExecutorDeviceType::CPU);
-  run_multiple_agg(
-      "insert into AllGeoTypes values (\n"
-      "1,\n"
-      "'POINT(3 3)', 'POINT(3 3)', 'POINT(3 3)', 'POINT(3 3)', 'POINT(3 3)', 'POINT(3 "
-      "3)',\n"
-      "'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)', "
-      "'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)',\n"
-      "'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 6, 7 "
-      "7)', 'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 "
-      "6, 7 7)', 'LINESTRING(3 0, 6 6, 7 7)',\n"
-      "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, "
-      "7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', "
-      "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, "
-      "7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', "
-      "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))',\n"
-      "'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, "
-      "4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 "
-      "0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))',\n"
-      "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', 'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', "
-      "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', 'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', "
-      "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', 'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', "
-      "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))'\n"
-      ");",
-      ExecutorDeviceType::CPU);
+
+  setup_all_geo_types();  // CREATE and INSERT into TABLE AllGeoTypes
 
   auto query1_gen = [](const std::string& col_name) {
     std::ostringstream oss;
@@ -4018,6 +4033,104 @@ INSTANTIATE_TEST_SUITE_P(
     UnsupportedGeoFunctionsParamTypeTest,
     ::testing::ValuesIn(UnsupportedGeoFunctionsParamTypeTest::getTestParams()),
     GeoFunctionsParamTypeTest::printTestParams);
+
+template <typename T>
+struct TestParam {
+  std::optional<T> expected;
+  char const* column;
+};
+
+using CTEParam = std::tuple<ExecutorDeviceType, TestParam<double>>;
+
+class CTE : public testing::TestWithParam<CTEParam> {
+ public:
+  static constexpr double sqrt2 = boost::math::constants::root_two<double>();
+  static constexpr double sqrt5 = 2 * boost::math::constants::phi<double>() - 1;
+  // Exact expression for ST_X(ST_CENTROID('LINESTRING(3 0, 6 6, 7 7)'))
+  static constexpr double l_centroid_x =
+      (4.5 * 3 * sqrt5 + 6.5 * sqrt2) / (3 * sqrt5 + sqrt2);
+  static void SetUpTestSuite() {
+    run_ddl_statement("DROP TABLE IF EXISTS AllGeoTypes;");
+    setup_all_geo_types();  // CREATE and INSERT into TABLE AllGeoTypes
+  }
+
+  static void TearDownTestSuite() {
+    if (!g_keep_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS AllGeoTypes;");
+    }
+  }
+
+  static std::string printTestParams(const ::testing::TestParamInfo<CTEParam>& info) {
+    const auto& param = info.param;
+    std::ostringstream ss;
+    ss << std::get<0>(param) << '_' << std::get<1>(param).column;
+    return ss.str();
+  }
+};
+
+TEST_P(CTE, ST_Centroid) {
+  constexpr double EPS = 1e-7;
+  auto const [dt, param] = GetParam();
+  SKIP_NO_GPU_IN_TEST_P();
+  std::ostringstream query;
+  query << "WITH boundsInnerQuery AS (\n";
+  query << "  SELECT ST_CENTROID(" << param.column << ") AS location\n";
+  query << "  FROM AllGeoTypes\n";
+  query << "  LIMIT 1\n";
+  query << ")\n";
+  query << "SELECT MIN(ST_X(location)) AS minX\n";
+  query << "FROM boundsInnerQuery;";
+  double const err = EPS * *param.expected;
+  ASSERT_NEAR(*param.expected, v<double>(run_simple_agg(query.str(), dt)), err)
+      << query.str();
+}
+
+// QE-1076: ST_Centroid crashes on MULTILINESTRING columns.
+// Comment-in the below commented-out tests when this is fixed.
+INSTANTIATE_TEST_SUITE_P(
+    GeoSpatial,
+    CTE,
+    testing::Combine(testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+                     testing::Values(TestParam<double>{3.0, "gpt"},
+                                     TestParam<double>{3.0, "gpt4"},
+                                     TestParam<double>{3.0, "gpt4e"},
+                                     TestParam<double>{3.0, "gpt4n"},
+                                     TestParam<double>{3.0, "gpt9"},
+                                     TestParam<double>{4.0, "mpt"},
+                                     TestParam<double>{4.0, "gmpt"},
+                                     TestParam<double>{4.0, "gmpt4"},
+                                     TestParam<double>{4.0, "gmpt4e"},
+                                     TestParam<double>{4.0, "gmpt4n"},
+                                     TestParam<double>{4.0, "gmpt9"},
+                                     TestParam<double>{CTE::l_centroid_x, "l"},
+                                     TestParam<double>{CTE::l_centroid_x, "gl"},
+                                     TestParam<double>{CTE::l_centroid_x, "gl4"},
+                                     TestParam<double>{CTE::l_centroid_x, "gl4e"},
+                                     TestParam<double>{CTE::l_centroid_x, "gl4n"},
+                                     TestParam<double>{CTE::l_centroid_x, "gl9"},
+                                     TestParam<double>{CTE::l_centroid_x, "gl9n"},
+                                     // TestParam<double>{0.0, "ml"},
+                                     // TestParam<double>{0.0, "gml"},
+                                     // TestParam<double>{0.0, "gml4"},
+                                     // TestParam<double>{0.0, "gml4e"},
+                                     // TestParam<double>{0.0, "gml4n"},
+                                     // TestParam<double>{0.0, "gml9"},
+                                     // TestParam<double>{0.0, "gml9n"},
+                                     TestParam<double>{4 / 3.0, "p"},
+                                     TestParam<double>{4 / 3.0, "gp"},
+                                     TestParam<double>{4 / 3.0, "gp4"},
+                                     TestParam<double>{4 / 3.0, "gp4e"},
+                                     TestParam<double>{4 / 3.0, "gp4n"},
+                                     TestParam<double>{4 / 3.0, "gp9"},
+                                     TestParam<double>{4 / 3.0, "gp9n"},
+                                     TestParam<double>{4 / 3.0, "mp"},
+                                     TestParam<double>{4 / 3.0, "gmp"},
+                                     TestParam<double>{4 / 3.0, "gmp4"},
+                                     TestParam<double>{4 / 3.0, "gmp4e"},
+                                     TestParam<double>{4 / 3.0, "gmp4n"},
+                                     TestParam<double>{4 / 3.0, "gmp9"},
+                                     TestParam<double>{4 / 3.0, "gmp9n"})),
+    CTE::printTestParams);
 
 int main(int argc, char** argv) {
   g_is_test_env = true;
