@@ -40,6 +40,24 @@ enum class ImportHeaderRow { kAutoDetect, kNoHeader, kHasHeader };
 enum class RasterPointType { kNone, kAuto, kSmallInt, kInt, kFloat, kDouble, kPoint };
 enum class RasterPointTransform { kNone, kAuto, kFile, kWorld };
 
+inline std::string to_string(const RasterPointTransform& pt) {
+  switch (pt) {
+    case RasterPointTransform::kNone:
+      return "NONE";
+    case RasterPointTransform::kAuto:
+      return "AUTO";
+    case RasterPointTransform::kFile:
+      return "FILE";
+    case RasterPointTransform::kWorld:
+      return "WORLD";
+    default:
+      UNREACHABLE();
+  }
+  return "";
+}
+
+RasterPointType create_raster_point_type(const std::string& str);
+
 struct CopyParams {
   char delimiter;
   std::string null_str;
@@ -91,6 +109,8 @@ struct CopyParams {
   RasterPointTransform raster_point_transform;
   bool raster_point_compute_angle;
   std::string raster_import_dimensions;
+  std::optional<int> raster_width{};
+  std::optional<int> raster_height{};
   std::string add_metadata_columns;
   bool raster_drop_if_all_null;
   // odbc parameters

@@ -101,6 +101,8 @@ class RasterImporter {
   const NamesAndSQLTypes getBandNamesAndSQLTypes() const;
   const int getBandsWidth() const { return bands_width_; }
   const int getBandsHeight() const { return bands_height_; }
+  const int getBlockWidth() const { return block_width_; }
+  const int getBlockHeight() const { return block_height_; }
   const NullValue getBandNullValue(const int band_idx) const;
   const Coords getProjectedPixelCoords(const uint32_t thread_idx, const int y) const;
   const std::tuple<double, double> getProjectedPixelCoord(const uint32_t thread_idx,
@@ -147,6 +149,8 @@ class RasterImporter {
 
   int bands_width_{-1};
   int bands_height_{-1};
+  int block_width_{-1};
+  int block_height_{-1};
   PointType point_type_{PointType::kNone};
   PointTransform point_transform_{PointTransform::kNone};
   std::vector<Geospatial::GDAL::CoordinateTransformationUqPtr>
