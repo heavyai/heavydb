@@ -671,6 +671,11 @@ class SQLTypeInfo {
     return subtype == other.get_subtype();
   }
 
+  inline bool is_extractable_int_type() const {
+    // Usable with extract_int_type_from_datum().
+    return (type == kBOOLEAN || is_integer() || is_dict_encoded_string() || is_time());
+  }
+
   HOST DEVICE inline bool operator!=(const SQLTypeInfo& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() ||
            dimension != rhs.get_dimension() || scale != rhs.get_scale() ||
