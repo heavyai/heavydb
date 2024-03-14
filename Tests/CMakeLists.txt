@@ -20,10 +20,10 @@ if(ENABLE_CUDA)
   endif()
 endif()
 
-find_package(fmt REQUIRED)
+find_package(absl REQUIRED)
 #set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 # If ENABLE_AWS_S3=off AwsS3_CURL_SUPPORT will be empty
-set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES}
+set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner absl::str_format ${MAPD_LIBRARIES}
   ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${AwsS3_CURL_SUPPORT})
 
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
@@ -721,7 +721,7 @@ endif()  # Partition 4
 
 if(NOT MSVC)
   add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
-  target_link_libraries(ArrowIpcIntegrationTest gtest fmt::fmt ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
+  target_link_libraries(ArrowIpcIntegrationTest gtest absl::str_format ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
   add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
 endif()
 

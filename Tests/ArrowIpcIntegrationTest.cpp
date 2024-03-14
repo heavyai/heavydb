@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <fmt/core.h>
-#include <fmt/format.h>
 #include "TestHelpers.h"
+
+#include <absl/strings/str_format.h>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -275,7 +275,7 @@ void test_scalar_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
 
     const auto arr = read_batch->column(i);
     ASSERT_EQ(arr->type()->id(), type)
-        << fmt::format("Expected column {} to have type {}", i, type_name);
+        << absl::StrFormat("Expected column %d to have type %s", i, type_name);
   }
 }
 
@@ -327,7 +327,7 @@ void test_array_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
     const auto arr = read_batch->column(i);
     const auto& list = static_cast<const arrow::ListArray&>(*arr);
     ASSERT_EQ(list.value_type()->id(), type)
-        << fmt::format("Expected column {} to have type {}", i, type_name);
+        << absl::StrFormat("Expected column %d to have type %s", i, type_name);
     std::string bool_expected = R"([
   [
     true,
@@ -489,8 +489,9 @@ class ArrowIpcBasic : public ::testing::Test {
                                 make_pair(null_elem_barr, null_elem_arr)};
       for (const auto& val : vals) {
         auto [b, i] = val;
-        std::string query = fmt::format(
-            "INSERT INTO test_data_array VALUES ({0}, {1}, {1}, {1}, {1}, {1}, {1});",
+        std::string query = absl::StrFormat(
+            "INSERT INTO test_data_array VALUES (%1$s, %2$s, %2$s, %2$s, %2$s, %2$s, "
+            "%2$s);",
             b,
             i);
         run_ddl_statement(query);
@@ -498,7 +499,7 @@ class ArrowIpcBasic : public ::testing::Test {
 
       for (const auto& t : {tarr, iarr, empty_arr, null_arr, null_elem_tarr}) {
         std::string query =
-            fmt::format("INSERT INTO test_data_array_text VALUES ({0});", t);
+            absl::StrFormat("INSERT INTO test_data_array_text VALUES (%s);", t);
         run_ddl_statement(query);
       }
     }
@@ -905,8 +906,8 @@ TEST_F(ArrowIpcBasic, EmptyResultSet) {
 
   for (const auto& [id, plane_model] : plane_models) {
     for (auto dest_city : {"Austin", "Dallas", "Chicago"}) {
-      std::string const insert = fmt::format(
-          "INSERT INTO flights VALUES ({}, '{}', '{}');", id, plane_model, dest_city);
+      std::string const insert = absl::StrFormat(
+          "INSERT INTO flights VALUES (%d, '%s', '%s');", id, plane_model, dest_city);
       run_multiple_agg(insert);
     }
   }
