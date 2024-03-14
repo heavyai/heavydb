@@ -16,7 +16,7 @@
 
 #include "QueryRunner/QueryRunner.h"
 
-#include <fmt/core.h>
+#include <absl/strings/str_format.h>
 #include <gtest/gtest.h>
 #include <functional>
 #include <iostream>
@@ -57,10 +57,10 @@ struct ExecutionContext {
   std::string toString() const {
     const auto device_str = device_type == ExecutorDeviceType::CPU ? "CPU" : "GPU";
 
-    return fmt::format(
+    return absl::StrFormat(
         "Execution Context:\n"
-        "  Device Type: {}\n"
-        "  Hash Join Enabled: {}\n",
+        "  Device Type: %s\n"
+        "  Hash Join Enabled: %v\n",
         device_str,
         hash_join_enabled);
   }
@@ -1965,10 +1965,10 @@ struct BoundsWithValues {
   int expected_value;
 
   std::string toString() const {
-    return fmt::format(
+    return absl::StrFormat(
         "BoundsWithValues:\n"
-        "  upper_bound: {}\n"
-        "  expected_value: {}\n",
+        "  upper_bound: %f\n"
+        "  expected_value: %d\n",
         upper_bound,
         expected_value);
   }
@@ -2041,9 +2041,17 @@ class RangeJoinTest : public ::testing::Test {
     return crt_row[0];
   }
 
-  void performTest(std::string_view tableA,
-                   std::string_view tableB,
-                   std::string_view query) {
+  static constexpr absl::string_view kDistanceQueryFormat =
+      "SELECT count(*) FROM %s, %s where ST_Distance(%s.p1, %s.p1) <= %f;"sv;
+  static constexpr absl::string_view kDWithinQueryFormat =
+      "SELECT count(*) FROM %s, %s where ST_DWithin(%s.p1, %s.p1, %f);"sv;
+  static constexpr absl::string_view kIncorrectNumberFormat =
+      "Returned incorrect # of cached tables. %s"sv;
+  static constexpr absl::string_view kFailedFormat = "Failed <= 1 \n%s\n%s"sv;
+
+  enum class Query { kDistance, kDWithin };
+
+  void performTest(std::string_view tableA, std::string_view tableB, const Query query) {
     executeAllScenarios([tableA, tableB, query, this](
                             const ExecutionContext ctx) -> void {
       size_t expected_hash_tables = 0;
@@ -2052,21 +2060,33 @@ class RangeJoinTest : public ::testing::Test {
         ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                    CacheItemType::BBOX_INTERSECT_HT),
                   expected_hash_tables)
-            << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+            << absl::StrFormat(kIncorrectNumberFormat, ctx.toString());
         expected_hash_tables++;
       }
 
       for (const auto& b : testBounds()) {
-        auto sql = fmt::format(query, tableA, tableB, tableA, tableB, b.upper_bound);
+        std::string sql;
+        switch (query) {
+          case Query::kDistance:
+            sql = absl::StrFormat(
+                kDistanceQueryFormat, tableA, tableB, tableA, tableB, b.upper_bound);
+            break;
+          case Query::kDWithin:
+            sql = absl::StrFormat(
+                kDWithinQueryFormat, tableA, tableB, tableA, tableB, b.upper_bound);
+            break;
+          default:
+            UNREACHABLE();
+        };
 
         ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-            << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+            << absl::StrFormat(kFailedFormat, ctx.toString(), b.toString());
 
         if (ctx.hash_join_enabled) {
           ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                      CacheItemType::BBOX_INTERSECT_HT),
                     expected_hash_tables)
-              << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+              << absl::StrFormat(kIncorrectNumberFormat, ctx.toString());
           expected_hash_tables++;
         }
       }
@@ -2075,58 +2095,38 @@ class RangeJoinTest : public ::testing::Test {
 };
 
 TEST_F(RangeJoinTest, DistanceLessThanEqCompressedCols) {
-  performTest("t1_comp32"sv,
-              "t2_comp32"sv,
-              "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};"sv);
+  performTest("t1_comp32"sv, "t2_comp32"sv, Query::kDistance);
 }
 
 TEST_F(RangeJoinTest, DistanceLessThanEqCompressedColsBySTDWithin) {
-  performTest("t1_comp32"sv,
-              "t2_comp32"sv,
-              "SELECT count(*) FROM {}, {} where ST_DWithin({}.p1, {}.p1, {});"sv);
+  performTest("t1_comp32"sv, "t2_comp32"sv, Query::kDWithin);
 }
 
 TEST_F(RangeJoinTest, DistanceLessThanEqUnCompressedCols) {
-  performTest("t1"sv,
-              "t2"sv,
-              "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};"sv);
+  performTest("t1"sv, "t2"sv, Query::kDistance);
 }
 
 TEST_F(RangeJoinTest, DistanceLessThanEqUnCompressedColsBySTDWithin) {
-  performTest("t1"sv,
-              "t2"sv,
-              "SELECT count(*) FROM {}, {} where ST_DWithin({}.p1, {}.p1, {});"sv);
+  performTest("t1"sv, "t2"sv, Query::kDWithin);
 }
 
 TEST_F(RangeJoinTest, DistanceLessThanMixedEncoding) {
   const auto tableA = "t1_comp32"sv;
   const auto tableB = "t2"sv;
-  {
-    performTest(tableA,
-                tableB,
-                "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};"sv);
-  }
+  { performTest(tableA, tableB, Query::kDistance); }
 
   {  // run same tests again, transpose LHS & RHS
-    performTest(tableB,
-                tableA,
-                "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};"sv);
+    performTest(tableB, tableA, Query::kDistance);
   }
 }
 
 TEST_F(RangeJoinTest, DistanceLessThanMixedEncodingBySTDWithin) {
   const auto tableA = "t1_comp32"sv;
   const auto tableB = "t2"sv;
-  {
-    performTest(tableA,
-                tableB,
-                "SELECT count(*) FROM {}, {} where ST_DWithin({}.p1, {}.p1, {});"sv);
-  }
+  { performTest(tableA, tableB, Query::kDWithin); }
 
   {  // run same tests again, transpose LHS & RHS
-    performTest(tableB,
-                tableA,
-                "SELECT count(*) FROM {}, {} where ST_DWithin({}.p1, {}.p1, {});"sv);
+    performTest(tableB, tableA, Query::kDWithin);
   }
 }
 
@@ -2142,28 +2142,23 @@ TEST_F(RangeJoinTest, IsEnabledByDefault) {
   ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                              CacheItemType::BBOX_INTERSECT_HT),
             expected_hash_tables)
-      << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+      << absl::StrFormat(kIncorrectNumberFormat, ctx.toString());
   expected_hash_tables++;
 
   const auto tableA = "t1_comp32";
   const auto tableB = "t2_comp32";
 
   for (const auto& b : testBounds()) {
-    auto sql =
-        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-                    tableA,
-                    tableB,
-                    tableA,
-                    tableB,
-                    b.upper_bound);
+    auto sql = absl::StrFormat(
+        kDistanceQueryFormat, tableA, tableB, tableA, tableB, b.upper_bound);
 
     ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+        << absl::StrFormat(kFailedFormat, ctx.toString(), b.toString());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
-        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        << absl::StrFormat(kIncorrectNumberFormat, ctx.toString());
     expected_hash_tables++;
   }
 }
@@ -2183,27 +2178,22 @@ TEST_F(RangeJoinTest, CanBeDisabled) {
   ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                              CacheItemType::BBOX_INTERSECT_HT),
             expected_hash_tables)
-      << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+      << absl::StrFormat(kIncorrectNumberFormat, ctx.toString());
 
   const auto tableA = "t1_comp32";
   const auto tableB = "t2_comp32";
 
   for (const auto& b : testBounds()) {
-    auto sql =
-        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-                    tableA,
-                    tableB,
-                    tableA,
-                    tableB,
-                    b.upper_bound);
+    auto sql = absl::StrFormat(
+        kDistanceQueryFormat, tableA, tableB, tableA, tableB, b.upper_bound);
 
     ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+        << absl::StrFormat(kFailedFormat, ctx.toString(), b.toString());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
-        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        << absl::StrFormat(kIncorrectNumberFormat, ctx.toString());
   }
 }
 
@@ -2220,13 +2210,7 @@ TEST_F(RangeJoinTest, BadOrdering) {
   const auto tableA = "t1_comp32";
   const auto tableB = "t2_comp32_small";
 
-  auto sql =
-      fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-                  tableA,
-                  tableB,
-                  tableB,
-                  tableA,
-                  10);
+  auto sql = absl::StrFormat(kDistanceQueryFormat, tableA, tableB, tableB, tableA, 10.0);
   EXPECT_NO_THROW(execSQL(sql, ctx));
 }
 
@@ -2248,22 +2232,17 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
   std::vector<size_t> ht_ref_cnts;
 
   for (const auto& b : testBounds()) {
-    auto sql =
-        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-                    tableA1,
-                    tableB1,
-                    tableA1,
-                    tableB1,
-                    b.upper_bound);
+    auto sql = absl::StrFormat(
+        kDistanceQueryFormat, tableA1, tableB1, tableA1, tableB1, b.upper_bound);
 
     ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+        << absl::StrFormat(kFailedFormat, ctx.toString(), b.toString());
     expected_hash_tables++;
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
-        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        << absl::StrFormat(kIncorrectNumberFormat, ctx.toString());
     auto ht_info = QR::get()->getCachedHashtableWithoutCacheKey(
         visited,
         CacheItemType::BBOX_INTERSECT_HT,
@@ -2279,16 +2258,11 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
   }
 
   for (const auto& b : testBounds()) {
-    auto sql =
-        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-                    tableA1,
-                    tableB2,
-                    tableA1,
-                    tableB2,
-                    b.upper_bound);
+    auto sql = absl::StrFormat(
+        kDistanceQueryFormat, tableA1, tableB2, tableA1, tableB2, b.upper_bound);
 
     ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+        << absl::StrFormat(kFailedFormat, ctx.toString(), b.toString());
     expected_hash_tables++;
     auto ht_info = QR::get()->getCachedHashtableWithoutCacheKey(
         visited,
@@ -2306,26 +2280,21 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
-        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        << absl::StrFormat(kIncorrectNumberFormat, ctx.toString());
   }
 
   size_t idx = 0;
   for (const auto& b : testBounds()) {
-    auto sql =
-        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-                    tableA1,
-                    tableB1,
-                    tableA1,
-                    tableB1,
-                    b.upper_bound);
+    auto sql = absl::StrFormat(
+        kDistanceQueryFormat, tableA1, tableB1, tableA1, tableB1, b.upper_bound);
 
     ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+        << absl::StrFormat(kFailedFormat, ctx.toString(), b.toString());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
-        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        << absl::StrFormat(kIncorrectNumberFormat, ctx.toString());
     auto cache_key = cache_keys[idx];
     auto ht_metrics =
         QR::get()->getCacheItemMetric(cache_key,
@@ -2338,21 +2307,16 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
   }
 
   for (const auto& b : testBounds()) {
-    auto sql =
-        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-                    tableA1,
-                    tableB2,
-                    tableA1,
-                    tableB2,
-                    b.upper_bound);
+    auto sql = absl::StrFormat(
+        kDistanceQueryFormat, tableA1, tableB2, tableA1, tableB2, b.upper_bound);
 
     ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+        << absl::StrFormat(kFailedFormat, ctx.toString(), b.toString());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
-        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        << absl::StrFormat(kIncorrectNumberFormat, ctx.toString());
     auto cache_key = cache_keys[idx];
     auto ht_metrics =
         QR::get()->getCacheItemMetric(cache_key,
@@ -2366,21 +2330,16 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
 
   idx = 0;
   for (const auto& b : testBounds()) {
-    auto sql =
-        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-                    tableA2,
-                    tableB1,
-                    tableA2,
-                    tableB1,
-                    b.upper_bound);
+    auto sql = absl::StrFormat(
+        kDistanceQueryFormat, tableA2, tableB1, tableA2, tableB1, b.upper_bound);
 
     ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+        << absl::StrFormat(kFailedFormat, ctx.toString(), b.toString());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
-        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        << absl::StrFormat(kIncorrectNumberFormat, ctx.toString());
     auto cache_key = cache_keys[idx];
     auto ht_metrics =
         QR::get()->getCacheItemMetric(cache_key,
@@ -2392,21 +2351,16 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
   }
 
   for (const auto& b : testBounds()) {
-    auto sql =
-        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-                    tableA2,
-                    tableB2,
-                    tableA2,
-                    tableB2,
-                    b.upper_bound);
+    auto sql = absl::StrFormat(
+        kDistanceQueryFormat, tableA2, tableB2, tableA2, tableB2, b.upper_bound);
 
     ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+        << absl::StrFormat(kFailedFormat, ctx.toString(), b.toString());
 
     ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::BBOX_INTERSECT_HT),
               expected_hash_tables)
-        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        << absl::StrFormat(kIncorrectNumberFormat, ctx.toString());
     auto cache_key = cache_keys[idx];
     auto ht_metrics =
         QR::get()->getCacheItemMetric(cache_key,
