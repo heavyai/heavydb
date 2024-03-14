@@ -6346,6 +6346,12 @@ std::unique_ptr<AbstractImporter> create_importer(
     }
   }
 
+  if (copy_params.source_type == import_export::SourceType::kRasterFile) {
+    throw std::runtime_error(
+        "HeavyConnect-based Raster file import only supported in Enterprise Edition.  "
+        "For legacy raster import, use the '--enable-legacy-raster-import' option.");
+  }
+
   return std::make_unique<import_export::Importer>(
       catalog, td, copy_from_source, copy_params);
 }

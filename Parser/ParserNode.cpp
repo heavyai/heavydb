@@ -78,6 +78,7 @@
 
 size_t g_leaf_count{0};
 bool g_test_drop_column_rollback{false};
+bool g_enable_legacy_raster_import{true};
 extern bool g_enable_string_functions;
 extern bool g_enable_fsi;
 
@@ -1421,6 +1422,18 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
           copy_params.raster_import_dimensions = *raster_import_dimensions;
         } else {
           throw std::runtime_error("Invalid value for 'raster_import_dimensions' option");
+        }
+      } else if (boost::iequals(*p->get_name(), "raster_tile_width")) {
+        if (auto int_literal = dynamic_cast<const IntLiteral*>(p->get_value())) {
+          copy_params.raster_width = int_literal->get_intval();
+        } else {
+          throw std::runtime_error("raster_tile_width must be an integer");
+        }
+      } else if (boost::iequals(*p->get_name(), "raster_tile_height")) {
+        if (auto int_literal = dynamic_cast<const IntLiteral*>(p->get_value())) {
+          copy_params.raster_height = int_literal->get_intval();
+        } else {
+          throw std::runtime_error("raster_tile_height must be an integer");
         }
       } else if (boost::iequals(*p->get_name(), "geo_coords_encoding")) {
         const StringLiteral* str_literal =
@@ -5842,7 +5855,8 @@ void CopyTableStmt::execute(
   }
 
   if (copy_params.source_type == import_export::SourceType::kGeoFile ||
-      copy_params.source_type == import_export::SourceType::kRasterFile) {
+      (g_enable_legacy_raster_import &&
+       copy_params.source_type == import_export::SourceType::kRasterFile)) {
     // geo import
     // we do nothing here, except stash the parameters so we can
     // do the import when we unwind to the top of the handler

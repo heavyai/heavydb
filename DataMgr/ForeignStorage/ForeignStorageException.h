@@ -37,6 +37,23 @@ class MetadataScanInfeasibleFragmentSizeException : public ForeignStorageExcepti
                                     // fragment size for metadata scan should be
 };
 
+struct InvalidIntOptionException : public ForeignStorageException {
+  InvalidIntOptionException(const std::string& table,
+                            const std::string& option,
+                            const std::string& value)
+      : ForeignStorageException("Foreign table '" + table + "' with " + option + "='" +
+                                value + "': " + option +
+                                " must be an integer value greater than zero") {}
+};
+
+struct ColumnTypeMismatchException : public ForeignStorageException {
+  ColumnTypeMismatchException(std::string msg) : ForeignStorageException(msg) {}
+};
+
+struct InvalidOptionException : public ForeignStorageException {
+  InvalidOptionException(std::string msg) : ForeignStorageException(msg) {}
+};
+
 inline void throw_unexpected_number_of_items(const size_t& num_expected,
                                              const size_t& num_loaded,
                                              const std::string& item_type) {

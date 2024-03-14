@@ -437,8 +437,14 @@ void point_transform(double* lons,
     }
   }
 
-  world_transform(
-      lons, lats, point_transform, gcp_transformers, coordinate_transformers, num_elems);
+  if (point_transform == RasterImporter::PointTransform::kWorld) {
+    world_transform(lons,
+                    lats,
+                    point_transform,
+                    gcp_transformers,
+                    coordinate_transformers,
+                    num_elems);
+  }
 }
 
 void populate_default_coordinates(double* lons,
@@ -597,6 +603,8 @@ void RasterImporter::detect(const std::string& file_name,
       auto const band_height = band->GetYSize();
       int block_size_x, block_size_y;
       band->GetBlockSize(&block_size_x, &block_size_y);
+      block_width_ = block_size_x;
+      block_height_ = block_size_y;
 
       // report
       LOG(INFO) << "Raster Importer: Found Band '" << band_name << "', with dimensions "
@@ -935,7 +943,7 @@ RasterImporter::CoordBuffers RasterImporter::getProjectedPixelCoordChunks(
 
   if (point_transform_ == PointTransform::kNone) {
     populate_default_coordinates(lons.get(), lats.get(), chunk_size);
-  } else if (point_transform_ == PointTransform::kWorld) {
+  } else {
     point_transform(lons.get(),
                     lats.get(),
                     point_transform_,
@@ -943,8 +951,6 @@ RasterImporter::CoordBuffers RasterImporter::getProjectedPixelCoordChunks(
                     gcp_transformers_,
                     coordinate_transformations_,
                     chunk_size);
-  } else {
-    UNREACHABLE() << "Unknown Point Transform Type";
   }
 
   if (do_point_compute) {

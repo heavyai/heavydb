@@ -5360,9 +5360,17 @@ TEST_F(TemporalColumnExportTest, Unquoted) {
 // Raster Tests
 //
 
-class BasicRasterImporterTest : public DBHandlerTestFixture {
+class BasicRasterImporterTest : public DBHandlerTestFixture,
+                                public ::testing::WithParamInterface<bool> {
+ public:
+  static void TearDownTestSuite() {
+    DBHandlerTestFixture::TearDownTestSuite();
+    g_enable_legacy_raster_import = false;
+  }
+
  protected:
   void SetUp() override {
+    g_enable_legacy_raster_import = GetParam();
     DBHandlerTestFixture::SetUp();
     sql("DROP TABLE IF EXISTS import_test_table;");
   }
@@ -5373,32 +5381,46 @@ class BasicRasterImporterTest : public DBHandlerTestFixture {
   }
 };
 
-TEST_F(BasicRasterImporterTest, HDF5Image) {
+INSTANTIATE_TEST_SUITE_P(BasicRasterImporterTest,
+                         BasicRasterImporterTest,
+                         ::testing::Values(true, false),
+                         [](const auto& param_info) {
+                           return std::to_string(param_info.param);
+                         });
+
+TEST_P(BasicRasterImporterTest, HDF5Image) {
   SKIP_ALL_ON_AGGREGATOR();
   auto hdf5_filename =
       boost::filesystem::canonical(
           "../../Tests/Import/datafiles/raster/Q2012034.L3m_DAY_SCI_V5.0_SSS_1deg.hdf5")
           .string();
+  sql("CREATE table import_test_table (raster_x smallint, raster_y smallint, band_1_1 "
+      "float);");
   sql("COPY import_test_table FROM '" + hdf5_filename +
       "' WITH (source_type='raster_file', raster_import_bands='band_1_1', threads=1);");
 
   sqlAndCompareResult("SELECT COUNT(*) FROM import_test_table;", {{64800L}});
 }
 
-TEST_F(BasicRasterImporterTest, HDF5ImageDefaultThreads) {
+TEST_P(BasicRasterImporterTest, HDF5ImageDefaultThreads) {
   SKIP_ALL_ON_AGGREGATOR();
   auto hdf5_filename =
       boost::filesystem::canonical(
           "../../Tests/Import/datafiles/raster/Q2012034.L3m_DAY_SCI_V5.0_SSS_1deg.hdf5")
           .string();
+  sql("CREATE table import_test_table (raster_x smallint, raster_y smallint, band_1_1 "
+      "float);");
   sql("COPY import_test_table FROM '" + hdf5_filename +
       "' WITH (source_type='raster_file', raster_import_bands='band_1_1');");
 
   sqlAndCompareResult("SELECT COUNT(*) FROM import_test_table;", {{64800L}});
 }
 
-TEST_F(BasicRasterImporterTest, HDF5ImageMultiThreaded) {
+TEST_P(BasicRasterImporterTest, HDF5ImageMultiThreaded) {
   SKIP_ALL_ON_AGGREGATOR();
+  if (!GetParam()) {
+    GTEST_SKIP() << "FSI Raster import is currently single-threaded";
+  }
   auto hdf5_filename =
       boost::filesystem::canonical(
           "../../Tests/Import/datafiles/raster/Q2012034.L3m_DAY_SCI_V5.0_SSS_1deg.hdf5")
@@ -5406,6 +5428,8 @@ TEST_F(BasicRasterImporterTest, HDF5ImageMultiThreaded) {
   // NOTE: A partial exception is checked for below due to the exception
   // arising from DBHandler, which is not typical in most cases of COPY FROM,
   // however, raster import is unique.
+  sql("CREATE table import_test_table (raster_x smallint, raster_y smallint, band_1_1 "
+      "float);");
   queryAndAssertPartialException(
       "COPY import_test_table FROM '" + hdf5_filename +
           "' WITH (source_type='raster_file', raster_import_bands='band_1_1', "
@@ -5793,9 +5817,20 @@ TEST_F(RasterImporterTest, GeoEnumsTest) {
 
 // Raster Import Tests
 
-class RasterImportTest : public DBHandlerTestFixture {
+class RasterImportTest : public DBHandlerTestFixture,
+                         public ::testing::WithParamInterface<bool> {
+ public:
+  static void TearDownTestSuite() {
+    DBHandlerTestFixture::TearDownTestSuite();
+    g_enable_legacy_raster_import = false;
+  }
+
  protected:
   void SetUp() override {
+    g_enable_legacy_raster_import = GetParam();
+    if (!g_enable_legacy_raster_import && isDistributedMode()) {
+      GTEST_SKIP() << "fsi raster not currently supported in distributed mode";
+    }
     DBHandlerTestFixture::SetUp();
     sql("drop table if exists raster;");
   }
@@ -5807,12 +5842,14 @@ class RasterImportTest : public DBHandlerTestFixture {
 
   void importTestCommon(
       const std::string& file_name,
+      const std::string& schema,
       const std::string& extra_with_options,
       const std::string& check_str,
       const std::vector<std::vector<NullableTargetValue>>& expected_result_set) {
     auto const abs_file_name =
         boost::filesystem::canonical("../../Tests/Import/datafiles/raster/" + file_name)
             .string();
+    sql("CREATE table raster (" + schema + ")");
     sql("COPY raster FROM '" + abs_file_name + "' WITH (source_type='raster_file'" +
         extra_with_options + ");");
     sqlAndCompareResult(check_str, expected_result_set);
@@ -5820,6 +5857,7 @@ class RasterImportTest : public DBHandlerTestFixture {
 
   void importTestCommonWithDir(
       const std::string& dirname,
+      const std::string& schema,
       const std::string& suffix,
       const std::string& extra_with_options,
       const std::string& check_str,
@@ -5828,98 +5866,143 @@ class RasterImportTest : public DBHandlerTestFixture {
         (boost::filesystem::canonical("../../Tests/Import/datafiles/raster/" + dirname) /
          suffix)
             .string();
+    sql("CREATE table raster (" + schema + ")");
     sql("COPY raster FROM '" + abs_file_name + "' WITH (source_type='raster_file'" +
         extra_with_options + ");");
     sqlAndCompareResult(check_str, expected_result_set);
   }
 };
 
-TEST_F(RasterImportTest, MissingColumnNameInSecondFile) {
-  ASSERT_NO_THROW(importTestCommonWithDir(
-      kGeoTIFFDir, "*.tif", "", "SELECT count(*) FROM raster;", {{93312L}}));
+INSTANTIATE_TEST_SUITE_P(RasterImportTest,
+                         RasterImportTest,
+                         ::testing::Values(true, false),
+                         [](const auto& param_info) {
+                           return std::to_string(param_info.param);
+                         });
+
+TEST_P(RasterImportTest, MissingColumnNameInSecondFile) {
+  if (!GetParam()) {
+    GTEST_SKIP() << "FSI Raster globbing not currently supported (comming soon).";
+  }
+  ASSERT_NO_THROW(
+      importTestCommonWithDir(kGeoTIFFDir,
+                              "raster_lon double, raster_lat double, band_1_1 float",
+                              "*.tif",
+                              "",
+                              "SELECT count(*) FROM raster;",
+                              {{93312L}}));
 }
 
-TEST_F(RasterImportTest, ImportPNGTest) {
+TEST_P(RasterImportTest, ImportPNGTest) {
   ASSERT_NO_THROW(
       importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
                        "",
                        "SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
                        {{319L, 224L, 243L}}));
 }
 
-TEST_F(RasterImportTest, ImportGeoTIFFTest) {
+TEST_P(RasterImportTest, ImportGeoTIFFTest) {
   ASSERT_NO_THROW(importTestCommon(
       kGeoTIFF,
+      "raster_lon double, raster_lat double, band_1_1 float",
       "",
       "SELECT max(raster_lon), max(raster_lat), max(band_1_1) FROM raster;",
       {{-83.222766892364277, 39.818764365787992, 287.54092407226562}}));
 }
 
-TEST_F(RasterImportTest, ImportGeoTIFFDropNullsTest) {
+TEST_P(RasterImportTest, ImportGeoTIFFDropNullsTest) {
+  if (!GetParam()) {
+    GTEST_SKIP() << "FSI Raster import does not currently support dropping nulls.";
+  }
   ASSERT_NO_THROW(importTestCommon(kGeoTIFFLastPixelNull,
+                                   "raster_lon double, raster_lat double, band_1_1 float",
                                    ", raster_drop_if_all_null='true'",
                                    "SELECT COUNT(*) FROM raster;",
                                    {{39999L}}));
 }
 
-TEST_F(RasterImportTest, ImportGeoTIFFTruncatedTest) {
+TEST_P(RasterImportTest, ImportGeoTIFFTruncatedTest) {
+  if (!GetParam()) {
+    GTEST_SKIP() << "Malformed raster not supported in FSI import yet.";
+  }
   ASSERT_NO_THROW(importTestCommon(kGeoTIFFTruncated,
+                                   "raster_lon double, raster_lat double, band_1_1 float",
                                    ", max_reject=1000000",
                                    "SELECT count(*) > 10000 FROM raster;",
                                    {{1L}}));
 }
 
-TEST_F(RasterImportTest, ImportGeoTIFFTruncatedFailTest) {
+TEST_P(RasterImportTest, ImportGeoTIFFTruncatedFailTest) {
+  if (!GetParam()) {
+    GTEST_SKIP() << "Malformed raster not supported in FSI import yet.";
+  }
   EXPECT_THROW(importTestCommon(kGeoTIFFTruncated,
+                                "raster_lon double, raster_lat double, band_1_1 float",
                                 ", max_reject=1000",
                                 "SELECT count(*) > 10000 FROM raster;",
                                 {{1L}}),
                TDBException);
 }
 
-TEST_F(RasterImportTest, ImportGeoTIFFPointTest) {
-  ASSERT_NO_THROW(
-      importTestCommon(kGeoTIFF,
-                       ", raster_point_type='point'",
-                       "SELECT max(ST_X(raster_point)), max(ST_Y(raster_point)), "
-                       "max(band_1_1) FROM raster;",
-                       {{-83.222766883309362, 39.818764333528826, 287.54092407226562}}));
+TEST_P(RasterImportTest, ImportGeoTIFFPointTest) {
+  ASSERT_NO_THROW(importTestCommon(
+      kGeoTIFF,
+      "raster_point GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32), band_1_1 float",
+      ", raster_point_type='point'",
+      "SELECT max(ST_X(raster_point)), max(ST_Y(raster_point)), "
+      "max(band_1_1) FROM raster;",
+      {{-83.222766883309362, 39.818764333528826, 287.54092407226562}}));
 }
 
-TEST_F(RasterImportTest, ImportGRIBTest) {
+TEST_P(RasterImportTest, ImportGRIBTest) {
+  std::string band_columns{"raster_lon double, raster_lat double"};
+  for (size_t i = 0; i < 49; ++i) {
+    band_columns += ", band_1_" + std::to_string(i) + " double";
+  }
   ASSERT_NO_THROW(importTestCommon(kGRIB,
+                                   band_columns,
                                    "",
                                    "SELECT max(raster_lon), max(raster_lat) FROM raster;",
                                    {{-110.58529479972468, 38.556625347271748}}));
 }
 
-TEST_F(RasterImportTest, ImportComputeAngleFailTest) {
-  EXPECT_THROW(importTestCommon(kPNG,
-                                ", raster_point_compute_angle='true'",
-                                "SELECT raster_x, raster_y FROM raster;",
-                                {}),
-               TDBException);
+TEST_P(RasterImportTest, ImportComputeAngleFailTest) {
+  EXPECT_THROW(
+      importTestCommon(
+          kPNG,
+          "raster_x double, raster_y double, compute_angle float, band_1_1 integer",
+          ", raster_point_compute_angle='true'",
+          "SELECT raster_x, raster_y FROM raster;",
+          {}),
+      TDBException);
 }
 
-TEST_F(RasterImportTest, ImportComputeAngleTest) {
+TEST_P(RasterImportTest, ImportComputeAngleTest) {
   ASSERT_NO_THROW(importTestCommon(
       kGeoTIFF,
+      "raster_lon double, raster_lat double, raster_angle float, band_1_1 float",
       ", raster_point_compute_angle='true'",
       "SELECT max(raster_lon), max(raster_lat), max(raster_angle) FROM raster;",
       {{-83.222766892364277, 39.818764365787992, -1.4294090270996094}}));
 }
 
-TEST_F(RasterImportTest, ImportSpecifiedBandsTest) {
+TEST_P(RasterImportTest, ImportSpecifiedBandsTest) {
   ASSERT_NO_THROW(importTestCommon(
       kGRIB,
+      "raster_lon double, raster_lat double, Pressure__Pa_ double, "
+      "Frozen_Rain__kg__m_2__ double, Temperature__C_ double",
       ", raster_import_bands='Pressure__Pa_,Frozen_Rain__kg__m_2__,Temperature__C_'",
       "SELECT max(Pressure__Pa_), max(Frozen_Rain__kg__m_2__), max(Temperature__C_) FROM "
       "raster;",
       {{86880.0, 0.0, 33.674859619140648}}));
 }
 
-TEST_F(RasterImportTest, ImportSpecifiedBandsBadTest) {
+TEST_P(RasterImportTest, ImportSpecifiedBandsBadTest) {
   EXPECT_THROW(importTestCommon(kGRIB,
+                                "raster_lon double, rater_lat double, bad double, worse "
+                                "double, terrible double",
                                 ", "
                                 "raster_import_bands='bad,worse,terrible'",
                                 "",
@@ -5927,24 +6010,76 @@ TEST_F(RasterImportTest, ImportSpecifiedBandsBadTest) {
                TDBException);
 }
 
-TEST_F(RasterImportTest, ImportSpecifiedBandsRenameTest) {
+TEST_P(RasterImportTest, ImportSpecifiedBandsRenameTest) {
   ASSERT_NO_THROW(importTestCommon(
       kGRIB,
+      "raster_lon double, raster_lat double, p double, r double, t double",
       ", "
       "raster_import_bands='Pressure__Pa_=p,Frozen_Rain__kg__m_2__=r,Temperature__C_=t'",
       "SELECT max(p), max(r), max(t) FROM raster;",
       {{86880.0, 0.0, 33.674859619140648}}));
 }
 
-TEST_F(RasterImportTest, CaseInsensitiveBandNamesTest) {
+TEST_P(RasterImportTest, CaseInsensitiveBandNamesTest) {
   auto do_test = []() {
     auto const abs_file_name =
         boost::filesystem::canonical(
             "../../Tests/Import/datafiles/raster/band_names_differing_only_by_case.grib2")
             .string();
+    sql("CREATE table raster (raster_lon double, raster_lat double,"
+        "Convective_precipitation_rate__kg__m_2_s__ DOUBLE,"
+        "Convective_Precipitation_Rate__kg__m_2_s___2 DOUBLE);");
     sql("COPY raster FROM '" + abs_file_name + "' WITH (source_type='raster_file');");
   };
   ASSERT_NO_THROW(do_test());
+}
+
+TEST_P(RasterImportTest, Filter) {
+  importTestCommon(kPNG,
+                   "raster_x SMALLINT, raster_y SMALLINT, band_1_2 SMALLINT",
+                   ", raster_import_bands='band_1_2'",
+                   "SELECT max(raster_x), max(raster_y), max(band_1_2) FROM raster",
+                   {{i(319), i(224), i(255)}});
+}
+
+TEST_P(RasterImportTest, FilterRemap) {
+  importTestCommon(kPNG,
+                   "raster_x SMALLINT, raster_y SMALLINT, band_1_2 SMALLINT",
+                   ", raster_import_bands='band_1_2=band_2'",
+                   "SELECT max(raster_x), max(raster_y), max(band_1_2) FROM raster",
+                   {{i(319), i(224), i(255)}});
+}
+
+TEST_P(RasterImportTest, PointTransformNone) {
+  importTestCommon(kGeoTIFF,
+                   "raster_x SMALLINT, raster_y SMALLINT, band_1 FLOAT",
+                   ", raster_point_transform='none'",
+                   "SELECT max(raster_x), max(raster_y), max(band_1) FROM raster",
+                   {{i(199), i(199), 287.54092407226562}});
+}
+
+TEST_P(RasterImportTest, PointTransformAuto) {
+  importTestCommon(kGeoTIFF,
+                   "raster_lon DOUBLE, raster_lat DOUBLE, band_1 FLOAT",
+                   ", raster_point_transform='auto'",
+                   "SELECT max(raster_lon), max(raster_lat), max(band_1) FROM raster",
+                   {{-83.222766892364277, 39.818764365787985, 287.54092407226562}});
+}
+
+TEST_P(RasterImportTest, PointTransformFile) {
+  importTestCommon(kGeoTIFF,
+                   "raster_x DOUBLE, raster_y DOUBLE, band_1 FLOAT",
+                   ", raster_point_transform='file'",
+                   "SELECT max(raster_x), max(raster_y), max(band_1) FROM raster",
+                   {{309751.0, 4410006.0, 287.54092407226562}});
+}
+
+TEST_P(RasterImportTest, PointTransformWorld) {
+  importTestCommon(kGeoTIFF,
+                   "raster_lon DOUBLE, raster_lat DOUBLE, band_1 FLOAT",
+                   ", raster_point_transform='world'",
+                   "SELECT max(raster_lon), max(raster_lat), max(band_1) FROM raster",
+                   {{-83.222766892364277, 39.818764365787985, 287.54092407226562}});
 }
 
 //
@@ -6333,6 +6468,8 @@ int main(int argc, char** argv) {
   logger::init(log_options);
 
   import_export::ForeignDataImporter::setDefaultImportPath(BASE_PATH);
+
+  g_enable_legacy_raster_import = true;
 
   int err{0};
   try {
