@@ -211,6 +211,13 @@ rapidjson::Document read_from_file(const std::string& file_path) {
   return d;
 }
 
+rapidjson::Document read_from_string(const std::string& input) {
+  rapidjson::StringStream iss(input.c_str());
+  rapidjson::Document d;
+  d.ParseStream(iss);
+  return d;
+}
+
 void write_to_file(const rapidjson::Document& document, const std::string& filepath) {
   std::ofstream ofs(filepath);
   if (!ofs) {
