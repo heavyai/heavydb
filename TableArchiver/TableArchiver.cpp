@@ -42,6 +42,7 @@
 #include "Logger/Logger.h"
 #include "Parser/ParserNode.h"
 #include "Shared/File.h"
+#include "Shared/JsonUtils.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/ThreadController.h"
@@ -54,13 +55,15 @@ extern bool g_cluster;
 extern std::string g_base_path;
 bool g_test_rollback_dump_restore{false};
 
-constexpr static int kDumpVersion = 1;
+constexpr static int kDumpVersion = 2;
 constexpr static int kDumpVersion_remove_render_group_columns = 1;
+constexpr static int kDumpVersion_load_metadata = 2;
 
 constexpr static char const* table_schema_filename = "_table.sql";
 constexpr static char const* table_oldinfo_filename = "_table.oldinfo";
 constexpr static char const* table_epoch_filename = "_table.epoch";
 constexpr static char const* table_dumpversion_filename = "_table.dumpversion";
+constexpr static char const* table_metadata_filename = "metadata.json";
 
 #if BOOST_VERSION < 107300
 namespace std {
@@ -179,13 +182,121 @@ inline std::string simple_file_cat(const std::string& archive_path,
   return output;
 }
 
+struct SerializableTableMetadata {
+  struct ColumnMetadata {
+    void serializeToJson(rapidjson::Value& json_val,
+                         rapidjson::Document::AllocatorType& allocator) const {
+      json_val.SetObject();
+      if (comment.has_value()) {
+        json_utils::add_value_to_object(json_val, comment.value(), "comment", allocator);
+      }
+      json_utils::add_value_to_object(
+          json_val, dictionary_directory, "dictionary_directory", allocator);
+      json_utils::add_value_to_object(json_val, id, "id", allocator);
+      json_utils::add_value_to_object(json_val, name, "name", allocator);
+    }
+
+    void deserializeFromJson(const rapidjson::Value& json_val) {
+      CHECK(json_val.IsObject());
+      if (json_val.HasMember("comment")) {
+        comment = std::string{};
+        json_utils::get_value_from_object(json_val, comment.value(), "comment");
+      } else {
+        comment = std::nullopt;
+      }
+      json_utils::get_value_from_object(
+          json_val, dictionary_directory, "dictionary_directory");
+      json_utils::get_value_from_object(json_val, id, "id");
+      json_utils::get_value_from_object(json_val, name, "name");
+    }
+
+    std::optional<std::string> comment;
+    std::string dictionary_directory;
+    int32_t id;
+    std::string name;
+  };
+
+  void serializeToJson(rapidjson::Value& json_val,
+                       rapidjson::Document::AllocatorType& allocator) const {
+    json_val.SetObject();
+    if (table_comment.has_value()) {
+      json_utils::add_value_to_object(
+          json_val, table_comment.value(), "comment", allocator);
+    }
+    json_utils::add_value_to_object(json_val, columns, "columns", allocator);
+    json_utils::add_value_to_object(json_val, table_epoch, "table_epoch", allocator);
+    json_utils::add_value_to_object(json_val, schema, "schema", allocator);
+  }
+
+  void deserializeFromJson(const rapidjson::Value& json_val) {
+    CHECK(json_val.IsObject());
+    if (json_val.HasMember("comment")) {
+      table_comment = std::string{};
+      json_utils::get_value_from_object(json_val, table_comment.value(), "comment");
+    } else {
+      table_comment = std::nullopt;
+    }
+    json_utils::get_value_from_object(json_val, columns, "columns");
+    json_utils::get_value_from_object(json_val, table_epoch, "table_epoch");
+    json_utils::get_value_from_object(json_val, schema, "schema");
+  }
+
+  static SerializableTableMetadata deserialize(const std::string& input) {
+    auto json = json_utils::read_from_string(input);
+    SerializableTableMetadata metadata;
+    json_utils::get_value_from_object(json, metadata, "table_metadata");
+    return metadata;
+  }
+
+  std::string serialize() {
+    rapidjson::Document d;
+    d.SetObject();
+    json_utils::add_value_to_object(d, *this, "table_metadata", d.GetAllocator());
+    return json_utils::write_to_string(d);
+  }
+
+  std::optional<std::string> table_comment;
+  std::vector<ColumnMetadata> columns;
+  int32_t table_epoch;
+  std::string schema;
+};
+
+int get_dump_version(const std::string& archive_path, const std::string& compression) {
+  int dump_version = -1;
+  try {
+    // attempt to read file, do not log if fail to read
+    auto const dump_version_str =
+        simple_file_cat(archive_path, table_dumpversion_filename, compression, false);
+    dump_version = std::stoi(dump_version_str);
+  } catch (std::runtime_error& e) {
+    // no dump version file found
+    dump_version = 0;
+  }
+
+  return dump_version;
+}
+
+inline std::string get_table_schema(const std::string& archive_path,
+                                    const std::string& table,
+                                    const std::string& compression,
+                                    const int dump_version) {
+  std::string schema_str;
+  if (dump_version >= kDumpVersion_load_metadata) {
+    schema_str = SerializableTableMetadata::deserialize(
+                     simple_file_cat(archive_path, table_metadata_filename, compression))
+                     .schema;
+  } else {
+    schema_str = simple_file_cat(archive_path, table_schema_filename, compression);
+  }
+  std::regex regex("@T");
+  return std::regex_replace(schema_str, regex, table);
+}
+
 inline std::string get_table_schema(const std::string& archive_path,
                                     const std::string& table,
                                     const std::string& compression) {
-  const auto schema_str =
-      simple_file_cat(archive_path, table_schema_filename, compression);
-  std::regex regex("@T");
-  return std::regex_replace(schema_str, regex, table);
+  auto dump_version = get_dump_version(archive_path, compression);
+  return get_table_schema(archive_path, table, compression, dump_version);
 }
 
 // If a table was altered there may be a mapping from old column ids to new ones these
@@ -419,18 +530,62 @@ std::unordered_map<int, int> find_render_group_columns(
 
 void drop_render_group_columns(
     const std::unordered_map<int, int>& render_group_column_ids,
-    const std::string& archive_path,
     const std::string& temp_data_dir,
-    const std::string& compression) {
+    const int32_t epoch) {
   // rewrite page files to drop the columns with IDs that are the keys of the map
   if (render_group_column_ids.size()) {
-    const auto epoch = boost::lexical_cast<int32_t>(
-        simple_file_cat(archive_path, table_epoch_filename, compression));
     const auto time_ms = measure<>::execution([&]() {
       update_or_drop_column_ids_in_table_files(
           epoch, temp_data_dir, render_group_column_ids, true /* drop */);
     });
     VLOG(3) << "drop render group columns: " << time_ms << " ms";
+  }
+}
+
+std::string serialize_table_metadata(const std::string& table_name,
+                                     const Catalog_Namespace::Catalog& catalog) {
+  auto td = catalog.getMetadataForTable(table_name);
+  CHECK(td) << "Table " + table_name + " does not exist in database " + catalog.name();
+
+  SerializableTableMetadata metadata;
+  metadata.table_comment = td->comment;
+  metadata.table_epoch = catalog.getTableEpoch(catalog.getCurrentDB().dbId, td->tableId);
+  metadata.schema = catalog.dumpSchema(td);
+
+  for (const auto cd :
+       catalog.getAllColumnMetadataForTable(td->tableId, true, true, true)) {
+    auto& column_metadata = metadata.columns.emplace_back();
+    column_metadata.comment = cd->comment;
+    column_metadata.id = cd->columnId;
+    column_metadata.name = cd->columnName;
+    column_metadata.dictionary_directory = catalog.getColumnDictDirectory(cd);
+  }
+
+  return metadata.serialize();
+}
+
+void set_comment_metadata(const SerializableTableMetadata& metadata,
+                          const std::string& table_name,
+                          Catalog_Namespace::Catalog& catalog) {
+  auto td = catalog.getMetadataForTable(table_name);
+  if (!td) {
+    throw std::runtime_error("Table " + table_name + " does not exist in database " +
+                             catalog.name());
+  }
+  if (metadata.table_comment.has_value()) {
+    catalog.setTableComment(td, metadata.table_comment);
+  }
+
+  for (const auto& column : metadata.columns) {
+    if (!column.comment.has_value()) {  // skip columns with no comment
+      continue;
+    }
+    auto cd = catalog.getMetadataForColumn(td->tableId, column.name);
+    if (!cd) {
+      throw std::runtime_error("Table " + table_name + " in database " + catalog.name() +
+                               " does not have column " + column.name);
+    }
+    catalog.setColumnComment(cd, column.comment);
   }
 }
 
@@ -498,24 +653,10 @@ void TableArchiver::dumpTable(const TableDescriptor* td,
     const auto dumpversion_str = std::to_string(kDumpVersion);
     file_writer(
         uuid_dir / table_dumpversion_filename, "table dumpversion", dumpversion_str);
-    // - gen schema file
-    const auto schema_str = cat_->dumpSchema(td);
-    file_writer(uuid_dir / table_schema_filename, "table schema", schema_str);
-    // - gen column-old-info file
-    const auto cds = cat_->getAllColumnMetadataForTable(td->tableId, true, true, true);
-    std::vector<std::string> column_oldinfo;
-    std::transform(cds.begin(),
-                   cds.end(),
-                   std::back_inserter(column_oldinfo),
-                   [&](const auto cd) -> std::string {
-                     return cd->columnName + ":" + std::to_string(cd->columnId) + ":" +
-                            cat_->getColumnDictDirectory(cd);
-                   });
-    const auto column_oldinfo_str = boost::algorithm::join(column_oldinfo, " ");
-    file_writer(uuid_dir / table_oldinfo_filename, "table old info", column_oldinfo_str);
-    // - gen table epoch
-    const auto epoch = cat_->getTableEpoch(cat_->getCurrentDB().dbId, td->tableId);
-    file_writer(uuid_dir / table_epoch_filename, "table epoch", std::to_string(epoch));
+    // - collect table metadata (includes column-old-info, schema and table epoch)
+    file_writer(uuid_dir / table_metadata_filename,
+                "table metadata",
+                serialize_table_metadata(table_name, *cat_));
     // - collect table data file paths ...
     const auto data_file_dirs = cat_->getTableDataDirectories(td);
     file_paths.insert(file_paths.end(), data_file_dirs.begin(), data_file_dirs.end());
@@ -580,8 +721,18 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
   const auto temp_data_dir = uuid_dir / temp_data_basename;
   const auto temp_back_dir = uuid_dir / temp_back_basename;
 
+  // fetch dump version
+  int dump_version = get_dump_version(archive_path, compression);
+  LOG(INFO) << "Dump Version: " << dump_version;
+
+  const bool do_load_metadata =
+      (dump_version >=
+       kDumpVersion_load_metadata);  // only load (json) metadata for dump files
+                                     // meeting a minimum version number
+
   // extract & parse schema
-  const auto schema_str = get_table_schema(archive_path, td->tableName, compression);
+  const auto schema_str =
+      get_table_schema(archive_path, td->tableName, compression, dump_version);
   std::unique_ptr<Parser::Stmt> stmt = Parser::create_stmt_for_query(schema_str, session);
   const auto create_table_stmt = dynamic_cast<Parser::CreateTableStmt*>(stmt.get());
   CHECK(create_table_stmt);
@@ -615,27 +766,24 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
       throw std::runtime_error("Incompatible types on column " + src_cd.columnName);
     }
   }
-  // extract src table column ids (ALL columns incl. system/virtual/phy geo cols)
-  const auto all_src_oldinfo_str =
-      simple_file_cat(archive_path, table_oldinfo_filename, compression);
   std::vector<std::string> src_oldinfo_strs;
-  boost::algorithm::split(src_oldinfo_strs,
-                          all_src_oldinfo_str,
-                          boost::is_any_of(" "),
-                          boost::token_compress_on);
-
-  // fetch dump version
-  int dump_version = -1;
-  try {
-    // attempt to read file, do not log if fail to read
-    auto const dump_version_str =
-        simple_file_cat(archive_path, table_dumpversion_filename, compression, false);
-    dump_version = std::stoi(dump_version_str);
-  } catch (std::runtime_error& e) {
-    // no dump version file found
-    dump_version = 0;
+  SerializableTableMetadata metadata;
+  if (do_load_metadata) {
+    metadata = SerializableTableMetadata::deserialize(
+        simple_file_cat(archive_path, table_metadata_filename, compression));
+    for (const auto& column : metadata.columns) {
+      src_oldinfo_strs.emplace_back(column.name + ":" + std::to_string(column.id) + ":" +
+                                    column.dictionary_directory);
+    }
+  } else {
+    // extract src table column ids (ALL columns incl. system/virtual/phy geo cols)
+    const auto all_src_oldinfo_str =
+        simple_file_cat(archive_path, table_oldinfo_filename, compression);
+    boost::algorithm::split(src_oldinfo_strs,
+                            all_src_oldinfo_str,
+                            boost::is_any_of(" "),
+                            boost::token_compress_on);
   }
-  LOG(INFO) << "Dump Version: " << dump_version;
 
   // version-specific behavior
   const bool do_drop_render_group_columns =
@@ -707,19 +855,21 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
   run("mkdir -p " + temp_data_dir.string());
   run("tar " + compression + " -xvf " + get_quoted_string(archive_path), temp_data_dir);
 
+  const auto table_epoch = do_load_metadata
+                               ? metadata.table_epoch
+                               : boost::lexical_cast<int32_t>(simple_file_cat(
+                                     archive_path, table_epoch_filename, compression));
+
   // drop the render group columns here
   if (do_drop_render_group_columns) {
-    drop_render_group_columns(
-        render_group_column_ids, archive_path, temp_data_dir, compression);
+    drop_render_group_columns(render_group_column_ids, temp_data_dir, table_epoch);
   }
 
   // if table was ever altered after it was created, update column ids in chunk headers.
   if (was_table_altered) {
-    const auto epoch = boost::lexical_cast<int32_t>(
-        simple_file_cat(archive_path, table_epoch_filename, compression));
     const auto time_ms = measure<>::execution([&]() {
       update_or_drop_column_ids_in_table_files(
-          epoch, temp_data_dir, column_ids_map, false /* update */);
+          table_epoch, temp_data_dir, column_ids_map, false /* update */);
     });
     VLOG(3) << "update_column_ids_table_files: " << time_ms << " ms";
   }
@@ -775,9 +925,11 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
     throw;
   }
   // set for reloading table from the restored/migrated files
-  const auto epoch = simple_file_cat(archive_path, table_epoch_filename, compression);
-  cat_->setTableEpoch(
-      cat_->getCurrentDB().dbId, td->tableId, boost::lexical_cast<int>(epoch));
+  cat_->setTableEpoch(cat_->getCurrentDB().dbId, td->tableId, table_epoch);
+  if (do_load_metadata) {
+    // set remaining metadata
+    set_comment_metadata(metadata, td->tableName, *cat_);
+  }
 }
 
 #ifdef HAVE_AWS_S3
