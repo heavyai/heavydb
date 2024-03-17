@@ -114,6 +114,20 @@ void get_value_from_object(const rapidjson::Value& json_val,
 
 void get_value(const rapidjson::Value& json_val, SQLTypeInfo& type_info);
 
+// general case (uses SFINAE to determine use, activated for objects with
+// `serializeToJson` and `deserializeFromJson`)
+template <class T>
+void set_value(rapidjson::Value& json_val,
+               const T& value,
+               rapidjson::Document::AllocatorType& allocator) {
+  value.serializeToJson(json_val, allocator);
+}
+
+template <class T>
+void get_value(const rapidjson::Value& json_val, T& value) {
+  value.deserializeFromJson(json_val);
+}
+
 // std::vector
 template <class T>
 void set_value(rapidjson::Value& json_val,
@@ -277,6 +291,9 @@ void get_value_from_object(const rapidjson::Value& object,
 
 // Read JSON content from the given file path
 rapidjson::Document read_from_file(const std::string& file_path);
+
+// Read JSON content from the input string
+rapidjson::Document read_from_string(const std::string& input);
 
 // Write JSON content (encapsulated by the given Document object) to the given file path
 void write_to_file(const rapidjson::Document& document, const std::string& file_path);

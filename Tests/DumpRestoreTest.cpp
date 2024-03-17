@@ -592,6 +592,14 @@ TEST_F(DumpAndRestoreTest, PreRebrandAlteredTable) {
   sqlAndCompareResult("SELECT * FROM test_table;", std::vector<int64_t>{1});
 }
 
+TEST_F(DumpAndRestoreTest, DumpVersion1) {
+  auto file_path =
+      boost::filesystem::canonical("../../Tests/Export/TableDump/dump_v1.gz").string();
+  run_ddl_statement("RESTORE TABLE test_table FROM '" + file_path + "';");
+  sqlAndCompareResult("SELECT * FROM test_table;",
+                      std::vector<std::string>{"test1", "test2"});
+}
+
 // Check for error when restoring a table that contains pages from a deleted column.
 TEST_F(DumpAndRestoreTest, DumpAlteredTable) {
   run_ddl_statement("CREATE TABLE test_table (c1 int, c2 int);");
@@ -634,6 +642,81 @@ TEST_F(DumpAndRestoreTest, QuotedColumnNames) {
   run_ddl_statement("RESTORE TABLE test_table_2 from '" + tar_ball_path +
                     "' WITH (compression = 'gzip');");
   sqlAndCompareResult("SELECT COUNT(*) FROM test_table_2;", std::vector<long int>{0});
+}
+
+class DumpAndRestoreMetadataTest : public DumpAndRestoreTest {
+ protected:
+  void verifyExpectedTableComment(const std::string& table_name,
+                                  const std::string& comment) {
+    auto catalog = QR::get()->getCatalog();
+    auto td = catalog->getMetadataForTable(table_name);
+    CHECK(td) << "table does not exist";
+    EXPECT_TRUE(td->comment.has_value());
+    EXPECT_EQ(td->comment.value(), comment);
+  }
+
+  void verifyExpectedColumnComment(const std::string& table_name,
+                                   const std::string& column_name,
+                                   const std::optional<std::string>& comment) {
+    auto catalog = QR::get()->getCatalog();
+    auto td = catalog->getMetadataForTable(table_name);
+    CHECK(td) << "table does not exist";
+    auto cd = catalog->getMetadataForColumn(td->tableId, column_name);
+    CHECK(cd) << "column does not exist for table";
+    if (comment.has_value()) {
+      EXPECT_TRUE(cd->comment.has_value());
+      EXPECT_EQ(cd->comment.value(), comment);
+    } else {
+      EXPECT_FALSE(cd->comment.has_value());
+    }
+  }
+};
+
+TEST_F(DumpAndRestoreMetadataTest, TableComment) {
+  run_ddl_statement("CREATE TABLE test_table(id integer);");
+  run_ddl_statement("COMMENT ON TABLE test_table IS 'this is a table comment'");
+  run_ddl_statement("DUMP TABLE test_table to '" + tar_ball_path +
+                    "' with (compression = 'gzip')");
+  run_ddl_statement("RESTORE TABLE test_table_2 from '" + tar_ball_path +
+                    "' WITH (compression = 'gzip');");
+  verifyExpectedTableComment("test_table_2", "this is a table comment");
+}
+
+TEST_F(DumpAndRestoreMetadataTest, ColumnComment) {
+  run_ddl_statement("CREATE TABLE test_table(id integer);");
+  run_ddl_statement("COMMENT ON COLUMN test_table.id IS 'this is a column comment'");
+  run_ddl_statement("DUMP TABLE test_table to '" + tar_ball_path +
+                    "' with (compression = 'gzip')");
+  run_ddl_statement("RESTORE TABLE test_table_2 from '" + tar_ball_path +
+                    "' WITH (compression = 'gzip');");
+  verifyExpectedColumnComment("test_table_2", "id", "this is a column comment");
+}
+
+TEST_F(DumpAndRestoreMetadataTest, MultipleComments) {
+  run_ddl_statement("CREATE TABLE test_table(id integer, str text, no_comment text);");
+  run_ddl_statement("COMMENT ON TABLE test_table IS 'this is a test table'");
+  run_ddl_statement("COMMENT ON COLUMN test_table.id IS 'this is the identifier'");
+  run_ddl_statement("COMMENT ON COLUMN test_table.str IS 'this is a string'");
+  run_ddl_statement("DUMP TABLE test_table to '" + tar_ball_path +
+                    "' with (compression = 'gzip')");
+  run_ddl_statement("RESTORE TABLE test_table_2 from '" + tar_ball_path +
+                    "' WITH (compression = 'gzip');");
+  verifyExpectedTableComment("test_table_2", "this is a test table");
+  verifyExpectedColumnComment("test_table_2", "id", "this is the identifier");
+  verifyExpectedColumnComment("test_table_2", "str", "this is a string");
+  verifyExpectedColumnComment("test_table_2", "no_comment", std::nullopt);
+}
+
+TEST_F(DumpAndRestoreMetadataTest, CommentWithControlCharacters) {
+  run_ddl_statement("CREATE TABLE test_table(id integer);");
+  run_ddl_statement(
+      "COMMENT ON TABLE test_table IS 'this is a\ncomment\twith \fcontrol\bchars'");
+  run_ddl_statement("DUMP TABLE test_table to '" + tar_ball_path +
+                    "' with (compression = 'gzip')");
+  run_ddl_statement("RESTORE TABLE test_table_2 from '" + tar_ball_path +
+                    "' WITH (compression = 'gzip');");
+  verifyExpectedTableComment(
+      "test_table_2", "u&'this is a\\000acomment\\0009with \\000ccontrol\\0008chars'");
 }
 
 #ifdef HAVE_AWS_S3
