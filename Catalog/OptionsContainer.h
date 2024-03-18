@@ -110,5 +110,10 @@ struct OptionsContainer {
     auto option = getOption(key);
     return option.has_value() && option.value() == "TRUE";
   }
+
+  std::string getOptionAsString(const std::string_view& key) const {
+    auto option = getOption(key);
+    return option.has_value() ? option.value() : "";
+  }
 };
 }  // namespace foreign_storage
