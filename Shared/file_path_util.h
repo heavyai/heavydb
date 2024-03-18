@@ -98,6 +98,9 @@ struct FilePathOptions {
 
 void validate_sort_options(const FilePathOptions& options);
 
+std::vector<std::string> glob_filter_sort_files(
+    const std::vector<std::string>& input_files,
+    const FilePathOptions& options);
 std::vector<std::string> local_glob_filter_sort_files(const std::string& file_path,
                                                       const FilePathOptions& options,
                                                       const bool recurse = true);
