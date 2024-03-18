@@ -19,14 +19,14 @@
 #include "Catalog/Catalog.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "JsonAccessors.h"
-#include "QueryEngine/Visitors/RelAlgDagViewer.h"
 #include "RelAlgOptimizer.h"
 #include "RelLeftDeepInnerJoin.h"
 #include "RexVisitor.h"
+#include "Shared/misc.h"
 #include "Shared/sqldefs.h"
+#include "Visitors/RelAlgDagViewer.h"
 
 #include <rapidjson/error/en.h>
-#include <rapidjson/error/error.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
@@ -2945,9 +2945,12 @@ int64_t get_int_literal_field(const rapidjson::Value& obj,
   }
   std::unique_ptr<RexLiteral> lit(parse_literal(it->value));
   CHECK_EQ(kDECIMAL, lit->getType());
-  CHECK_EQ(unsigned(0), lit->getScale());
-  CHECK_EQ(unsigned(0), lit->getTargetScale());
-  return lit->getVal<int64_t>();
+  CHECK_EQ(lit->getScale(), lit->getTargetScale());
+  auto const val = lit->getVal<int64_t>();
+  if (lit->getScale() > 0) {
+    return static_cast<int64_t>(val / shared::power10(lit->getScale()));
+  }
+  return val;
 }
 
 void check_empty_inputs_field(const rapidjson::Value& node) noexcept {
