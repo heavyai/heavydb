@@ -934,7 +934,8 @@ ImportStatus ForeignDataImporter::importParquet(
 
 ImportStatus ForeignDataImporter::import(
     const Catalog_Namespace::SessionInfo* session_info) {
-  if (shared::is_s3_uri(copy_from_source_)) {
+  if (shared::is_s3_uri(copy_from_source_)
+  ) {
     return importGeneralS3(session_info);
   }
   return importGeneral(session_info);

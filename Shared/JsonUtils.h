@@ -300,4 +300,17 @@ void write_to_file(const rapidjson::Document& document, const std::string& file_
 
 std::string write_to_string(const rapidjson::Document& document);
 
+class json_schema_error : public std::runtime_error {
+ public:
+  json_schema_error(std::string msg) : std::runtime_error("json parsing error: " + msg) {}
+};
+
+const rapidjson::Value& get_member(const rapidjson::Value& value, const std::string& key);
+
+int32_t get_int(const rapidjson::Value& value);
+
+int32_t get_int_member(const rapidjson::Value& value, const std::string& key);
+
+std::vector<int32_t> get_int_vector(const rapidjson::Value& value);
+
 }  // namespace json_utils
