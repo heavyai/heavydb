@@ -11258,6 +11258,22 @@ TEST_F(Select, BigintGroupByColCompactionTest) {
   run_ddl_statement("DROP TABLE IF EXISTS bigint_groupby_col_compaction_test;");
 }
 
+TEST_F(Select, ValidLimitAndOffsetIntegerLiteral) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto ra_dag = QR::get()->getRelAlgDag("SELECT x FROM test LIMIT 1.9;");
+  auto const* top_sort_node =
+      dynamic_cast<const RelSort*>(ra_dag->getRootNodeShPtr().get());
+  ASSERT_TRUE(top_sort_node) << ra_dag->getRootNodeShPtr()->toString();
+  ASSERT_TRUE(top_sort_node->getLimit());
+  ASSERT_EQ(*top_sort_node->getLimit(), static_cast<size_t>(1));
+
+  auto ra_dag2 = QR::get()->getRelAlgDag("SELECT x FROM test OFFSET 1.9;");
+  auto const* top_sort_node2 =
+      dynamic_cast<const RelSort*>(ra_dag2->getRootNodeShPtr().get());
+  ASSERT_TRUE(top_sort_node2) << ra_dag2->getRootNodeShPtr()->toString();
+  ASSERT_EQ(top_sort_node2->getOffset(), static_cast<size_t>(1));
+}
+
 TEST_F(Select, SortWithCPUQueryHint) {
   SKIP_ALL_ON_AGGREGATOR();
   if (!QR::get()->gpusPresent()) {
