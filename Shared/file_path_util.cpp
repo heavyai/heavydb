@@ -109,13 +109,12 @@ std::vector<std::string> regex_file_filter(const std::string& pattern,
 
 }  // namespace
 
-std::vector<std::string> local_glob_filter_sort_files(const std::string& file_path,
-                                                      const FilePathOptions& options,
-                                                      const bool recurse) {
-  auto result_files = glob_local_recursive_files(file_path, recurse);
-  if (options.filter_regex.has_value()) {
-    result_files = regex_file_filter(options.filter_regex.value(), result_files);
-  }
+std::vector<std::string> glob_filter_sort_files(
+    const std::vector<std::string>& input_files,
+    const FilePathOptions& options) {
+  auto result_files = options.filter_regex.has_value()
+                          ? regex_file_filter(options.filter_regex.value(), input_files)
+                          : input_files;
   // initial lexicographical order ensures a determinisitc ordering for files not matching
   // sort_regex
   FilePathOptions temp_options;
@@ -128,6 +127,13 @@ std::vector<std::string> local_glob_filter_sort_files(const std::string& file_pa
   auto comp = file_order.getFileComparator();
   std::stable_sort(result_files.begin(), result_files.end(), comp);
   return result_files;
+}
+
+std::vector<std::string> local_glob_filter_sort_files(const std::string& file_path,
+                                                      const FilePathOptions& options,
+                                                      const bool recurse) {
+  auto result_files = glob_local_recursive_files(file_path, recurse);
+  return glob_filter_sort_files(result_files, options);
 }
 
 #ifdef HAVE_AWS_S3
