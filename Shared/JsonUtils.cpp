@@ -244,4 +244,32 @@ std::optional<std::string> get_optional_string_value_from_object(
   }
   return {};
 }
+
+const rapidjson::Value& get_member(const rapidjson::Value& value,
+                                   const std::string& key) {
+  if (!value.HasMember(key)) {
+    throw json_schema_error(std::string{"value '"} + value.GetString() +
+                            "' does not contain member '" + key + "'.");
+  }
+  return value[key];
+}
+
+int32_t get_int(const rapidjson::Value& value) {
+  CHECK(value.IsInt()) << "value '" << value.GetString() << "' is not an int32_t.";
+  return value.GetInt();
+}
+
+int32_t get_int_member(const rapidjson::Value& value, const std::string& key) {
+  const auto& member = get_member(value, key);
+  return get_int(member);
+}
+
+std::vector<int32_t> get_int_vector(const rapidjson::Value& value) {
+  CHECK(value.IsArray()) << "value '" << value.GetString() << "' is not an array.";
+  std::vector<int32_t> ret;
+  for (rapidjson::SizeType i = 0; i < value.Size(); ++i) {
+    ret.emplace_back(get_int(value[i]));
+  }
+  return ret;
+}
 }  // namespace json_utils
