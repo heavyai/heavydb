@@ -430,6 +430,8 @@ void DBHandler::initialize(const bool is_new_db) {
       if (g_allow_memory_status_log) {
         cuda_mgr->enableMemoryActivityLog();
       }
+      license_claims_->setNumGpusInUse(cuda_mgr->getDeviceCount());
+      license_claims_->validateWithLicenseServer();
     } catch (const std::exception& e) {
       LOG(ERROR) << "Unable to instantiate CudaMgr, falling back to CPU-only mode. "
                  << e.what();
