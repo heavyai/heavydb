@@ -122,7 +122,7 @@ struct InjectTimer {
 #define INJECT_TIMER(DESC) InjectTimer DESC(#DESC, __LINE__, __FUNCTION__)
 
 template <typename Fn, Fn fn, typename... Args>
-typename std::result_of<Fn(Args...)>::type time_wrap(Args... args) {
+typename std::invoke_result<Fn, Args...>::type time_wrap(Args... args) {
   InjectTimer t("test", 1, "test");
   return fn(std::forward<Args>(args)...);
 }

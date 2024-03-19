@@ -69,7 +69,7 @@ struct future<void> {
 
 template <typename Fn,
           typename... Args,
-          typename Result = std::result_of_t<Fn && (Args && ...)>>
+          typename Result = std::invoke_result_t<Fn&&, Args&&...>>
 future<Result> async(Fn&& fn, Args&&... args) {
   auto f = std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...);
   auto ptask = std::make_unique<tbb_packaged_task<Result>>();

@@ -1231,7 +1231,7 @@ struct Column {
   int8_t* flatbuffer_;
   int64_t num_rows_;
 
-  Column<RowType, RowStruct>(int8_t* flatbuffer, int64_t num_rows)
+  Column(int8_t* flatbuffer, int64_t num_rows)
       : flatbuffer_(flatbuffer), num_rows_(num_rows) {}
 
   // Return true if index-th row is NULL.
@@ -2348,7 +2348,7 @@ struct Column<TextEncodingNone>
 
 template <typename T>
 struct Column<Array<T>> : public flatbuffer::Column<flatbuffer::Array<T>, Array<T>> {
-  Column<Array<T>>(int8_t* flatbuffer, int64_t num_rows)
+  Column(int8_t* flatbuffer, int64_t num_rows)
       : flatbuffer::Column<flatbuffer::Array<T>, Array<T>>(flatbuffer, num_rows) {}
 };
 
@@ -2356,7 +2356,7 @@ template <>
 struct Column<Array<TextEncodingDict>>
     : public flatbuffer::Column<flatbuffer::Array<TextEncodingDict>,
                                 Array<TextEncodingDict>> {
-  Column<Array<TextEncodingDict>>(int8_t* flatbuffer, int64_t num_rows)
+  Column(int8_t* flatbuffer, int64_t num_rows)
       : flatbuffer::Column<flatbuffer::Array<TextEncodingDict>, Array<TextEncodingDict>>(
             flatbuffer,
             num_rows) {}

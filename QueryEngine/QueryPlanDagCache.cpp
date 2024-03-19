@@ -88,7 +88,8 @@ size_t QueryPlanDagCache::getJoinColumnsInfoHash(const Analyzer::Expr* join_expr
   if (!join_expr) {
     return EMPTY_HASHED_PLAN_DAG_KEY;
   }
-  auto get_sorted_col_info = [=](const Analyzer::Expr* join_cols) -> size_t {
+  auto get_sorted_col_info = [extract_only_col_id,
+                              this](const Analyzer::Expr* join_cols) -> size_t {
     auto join_col_vars = collectColVars(join_cols);
     CHECK(!join_col_vars.empty())
         << "Join expression should have at least one join column variable";

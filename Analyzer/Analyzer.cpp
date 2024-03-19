@@ -2263,9 +2263,12 @@ bool ColumnVar::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(ColumnVar) && typeid(rhs) != typeid(Var)) {
     return false;
   }
-  const ColumnVar& rhs_cv = dynamic_cast<const ColumnVar&>(rhs);
+  return (*this == dynamic_cast<const ColumnVar&>(rhs));
+}
+
+bool ColumnVar::operator==(const ColumnVar& rhs) const {
   if (rte_idx_ != -1) {
-    return (column_key_ == rhs_cv.getColumnKey()) && (rte_idx_ == rhs_cv.get_rte_idx());
+    return (column_key_ == rhs.getColumnKey()) && (rte_idx_ == rhs.get_rte_idx());
   }
   const Var* v = dynamic_cast<const Var*>(this);
   if (v == nullptr) {
@@ -2561,17 +2564,20 @@ bool AggExpr::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(AggExpr)) {
     return false;
   }
-  const AggExpr& rhs_ae = dynamic_cast<const AggExpr&>(rhs);
-  if (aggtype != rhs_ae.get_aggtype() || is_distinct != rhs_ae.get_is_distinct()) {
+  return (*this == dynamic_cast<const AggExpr&>(rhs));
+}
+
+bool AggExpr::operator==(const AggExpr& rhs) const {
+  if (aggtype != rhs.get_aggtype() || is_distinct != rhs.get_is_distinct()) {
     return false;
   }
-  if (arg.get() == rhs_ae.get_arg()) {
+  if (arg.get() == rhs.get_arg()) {
     return true;
   }
-  if (arg == nullptr || rhs_ae.get_arg() == nullptr) {
+  if (arg == nullptr || rhs.get_arg() == nullptr) {
     return false;
   }
-  return *arg == *rhs_ae.get_arg();
+  return *arg == *rhs.get_arg();
 }
 
 bool CaseExpr::operator==(const Expr& rhs) const {
@@ -3870,18 +3876,22 @@ bool FunctionOper::operator==(const Expr& rhs) const {
   if (type_info != rhs.get_type_info()) {
     return false;
   }
-  const auto rhs_func_oper = dynamic_cast<const FunctionOper*>(&rhs);
+  auto const* rhs_func_oper = dynamic_cast<const FunctionOper*>(&rhs);
   if (!rhs_func_oper) {
     return false;
   }
-  if (getName() != rhs_func_oper->getName()) {
+  return (*this == *rhs_func_oper);
+}
+
+bool FunctionOper::operator==(const FunctionOper& rhs) const {
+  if (getName() != rhs.getName()) {
     return false;
   }
-  if (getArity() != rhs_func_oper->getArity()) {
+  if (getArity() != rhs.getArity()) {
     return false;
   }
   for (size_t i = 0; i < getArity(); ++i) {
-    if (!(*getArg(i) == *(rhs_func_oper->getArg(i)))) {
+    if (!(*getArg(i) == *(rhs.getArg(i)))) {
       return false;
     }
   }

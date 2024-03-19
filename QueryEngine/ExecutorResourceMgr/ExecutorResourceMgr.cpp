@@ -272,7 +272,7 @@ void ExecutorResourceMgr::pause_process_queue() {
 
   std::unique_lock<std::mutex> pause_queue_lock(pause_processor_queue_mutex_);
   pause_processor_queue_condition_.wait(pause_queue_lock,
-                                        [=] { return process_queue_is_paused_; });
+                                        [this] { return process_queue_is_paused_; });
 
   CHECK_EQ(executor_stats_.requests_executing, size_t(0));
 }
@@ -334,7 +334,7 @@ void ExecutorResourceMgr::process_queue_loop() {
       std::chrono::steady_clock::now();
   while (true) {
     std::unique_lock<std::mutex> queue_lock(processor_queue_mutex_);
-    processor_queue_condition_.wait(queue_lock, [=] {
+    processor_queue_condition_.wait(queue_lock, [this] {
       return should_process_queue_ || stop_process_queue_thread_ || pause_process_queue_;
     });
     // Use the following flag to know when to exit

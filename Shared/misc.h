@@ -19,6 +19,7 @@
 #include "funcannotations.h"
 
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <cstring>
 #include <deque>
@@ -303,23 +304,6 @@ inline TO reinterpret_bits(FROM const from) {
   return to;
 }
 
-template <typename TO, typename FROM>
-inline TO bit_cast(FROM&& from) {
-#if 202002L <= __cplusplus  // C++20
-  if constexpr (sizeof(TO) <= sizeof(FROM)) {
-    return std::bit_cast<TO>(std::forward<FROM>(from));
-  } else {
-    TO to{0};  // std::bit_cast() has the undesirable feature of indeterminate bits.
-    memcpy(&to, &from, sizeof(FROM));
-    return to;
-  }
-#else
-  TO to{0};
-  memcpy(&to, &from, sizeof(TO) < sizeof(FROM) ? sizeof(TO) : sizeof(FROM));
-  return to;
-#endif
-}
-
 template <typename... STR>
 constexpr std::array<std::string_view, sizeof...(STR)> string_view_array(STR&&... str) {
   return {std::forward<STR>(str)...};
@@ -373,8 +357,6 @@ void compute_unordered_set_intersection(std::unordered_set<T>* const dest,
 
 #if __cplusplus >= 202002L  // C++20
 
-#include <bit>
-
 namespace shared {
 
 using endian = std::endian;
@@ -411,6 +393,32 @@ enum class endian { little = 0, big = 1, native = little };
 
 #endif  // __cplusplus >= 202002L
 
+namespace shared {
+
+template <typename TO, typename FROM>
+TO bit_cast(FROM from) {
+#ifdef __cpp_lib_bit_cast
+  if constexpr (sizeof(TO) == sizeof(FROM)) {
+    return std::bit_cast<TO>(from);
+  }
+#endif
+  TO to{};
+  char* from_ptr = reinterpret_cast<char*>(&from);
+  char* to_ptr = reinterpret_cast<char*>(&to);
+  if constexpr (endian::native == endian::big) {
+    static_assert(sizeof(char) == 1u);
+    if constexpr (sizeof to < sizeof from) {
+      from_ptr += sizeof from - sizeof to;
+    } else {
+      to_ptr += sizeof to - sizeof from;
+    }
+  }
+  memcpy(to_ptr, from_ptr, sizeof to < sizeof from ? sizeof to : sizeof from);
+  return to;
+}
+
+}  // namespace shared
+
 ////////// std::byteswap //////////
 
 #if __cplusplus >= 202002L  // C++20
@@ -443,8 +451,6 @@ constexpr T byteswap(T n) noexcept {
 }  // namespace shared
 
 #else  // C++ standard
-
-#include <bit>
 
 namespace shared {
 

@@ -235,7 +235,7 @@ extern "C" DEVICE RUNTIME_EXPORT void ColumnTextEncodingNone_concatItem(
 
 // -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 
-volatile bool avoid_opt_address_geo(void* address) {
+bool avoid_opt_address_geo(void* address) {
   return address != nullptr;
 }
 

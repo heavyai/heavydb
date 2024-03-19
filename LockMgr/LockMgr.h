@@ -146,7 +146,7 @@ class TableSchemaLockContainer<ReadLock>
   }
 
  private:
-  TableSchemaLockContainer<ReadLock>(const TableDescriptor* obj, ReadLock&& lock)
+  TableSchemaLockContainer(const TableDescriptor* obj, ReadLock&& lock)
       : LockContainerImpl<const TableDescriptor*, ReadLock>(obj, std::move(lock)) {}
 };
 
@@ -178,7 +178,7 @@ class TableSchemaLockContainer<WriteLock>
   }
 
  private:
-  TableSchemaLockContainer<WriteLock>(const TableDescriptor* obj, WriteLock&& lock)
+  TableSchemaLockContainer(const TableDescriptor* obj, WriteLock&& lock)
       : LockContainerImpl<const TableDescriptor*, WriteLock>(obj, std::move(lock)) {}
 };
 
@@ -207,7 +207,7 @@ class TableDataLockContainer<WriteLock>
   }
 
  private:
-  TableDataLockContainer<WriteLock>(const TableDescriptor* obj, WriteLock&& lock)
+  TableDataLockContainer(const TableDescriptor* obj, WriteLock&& lock)
       : LockContainerImpl<const TableDescriptor*, WriteLock>(obj, std::move(lock)) {}
 };
 
@@ -226,7 +226,7 @@ class TableDataLockContainer<ReadLock>
   }
 
  private:
-  TableDataLockContainer<ReadLock>(const TableDescriptor* obj, ReadLock&& lock)
+  TableDataLockContainer(const TableDescriptor* obj, ReadLock&& lock)
       : LockContainerImpl<const TableDescriptor*, ReadLock>(obj, std::move(lock)) {}
 };
 
@@ -256,7 +256,7 @@ class TableInsertLockContainer<WriteLock>
   }
 
  private:
-  TableInsertLockContainer<WriteLock>(const TableDescriptor* obj, WriteLock&& lock)
+  TableInsertLockContainer(const TableDescriptor* obj, WriteLock&& lock)
       : LockContainerImpl<const TableDescriptor*, WriteLock>(obj, std::move(lock)) {}
 };
 
@@ -276,7 +276,7 @@ class TableInsertLockContainer<ReadLock>
   }
 
  private:
-  TableInsertLockContainer<ReadLock>(const TableDescriptor* obj, ReadLock&& lock)
+  TableInsertLockContainer(const TableDescriptor* obj, ReadLock&& lock)
       : LockContainerImpl<const TableDescriptor*, ReadLock>(obj, std::move(lock)) {}
 };
 
