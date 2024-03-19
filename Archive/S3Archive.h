@@ -68,6 +68,7 @@ class S3Archive : public Archive {
             const std::string& s3_session_token,
             const std::string& s3_region,
             const std::string& s3_endpoint,
+            const bool s3_use_virtual_addressing,
             const bool plain_text,
             const std::optional<std::string>& regex_path_filter,
             const std::optional<std::string>& file_sort_order_by,
@@ -79,6 +80,7 @@ class S3Archive : public Archive {
     this->s3_session_token = s3_session_token;
     this->s3_region = s3_region;
     this->s3_endpoint = s3_endpoint;
+    this->s3_use_virtual_addressing = s3_use_virtual_addressing;
     this->regex_path_filter = regex_path_filter;
     this->file_sort_order_by = file_sort_order_by;
     this->file_sort_regex = file_sort_regex;
@@ -149,6 +151,7 @@ class S3Archive : public Archive {
   std::string s3_region;
   std::string s3_endpoint;
   std::string s3_temp_dir;
+  bool s3_use_virtual_addressing;
 
   std::string bucket_name;
   std::string prefix_name;
@@ -168,6 +171,7 @@ class S3ParquetArchive : public S3Archive {
                    const std::string& s3_session_token,
                    const std::string& s3_region,
                    const std::string& s3_endpoint,
+                   const bool s3_use_virtual_addressing,
                    const bool plain_text,
                    const std::optional<std::string>& regex_path_filter,
                    const std::optional<std::string>& file_sort_order_by,
@@ -178,6 +182,7 @@ class S3ParquetArchive : public S3Archive {
                   s3_session_token,
                   s3_region,
                   s3_endpoint,
+                  s3_use_virtual_addressing,
                   plain_text,
                   regex_path_filter,
                   file_sort_order_by,
