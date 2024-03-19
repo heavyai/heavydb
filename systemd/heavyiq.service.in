@@ -1,0 +1,13 @@
+[Unit]
+Description=HeavyIQ Service
+After=network.target remote-fs.target
+
+[Service]
+User=@HEAVYAI_USER@
+Group=@HEAVYAI_GROUP@
+WorkingDirectory=@HEAVYAI_PATH@
+ExecStart=/usr/bin/env CONFIG_FILE=@HEAVYAI_BASE@/heavy.conf MAPD_DATA=@HEAVYAI_STORAGE@/data MAPD_HEAVYIQ_PORT=8000 @HEAVYAI_PATH@/scripts/ee/start_heavyiq.sh
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
