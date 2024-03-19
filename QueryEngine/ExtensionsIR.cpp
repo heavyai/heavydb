@@ -273,7 +273,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
 
   auto ret_ty = ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_);
   const auto current_bb = cgen_state_->ir_builder_.GetInsertBlock();
-  for (auto it : cgen_state_->ext_call_cache_) {
+  for (auto const it : cgen_state_->ext_call_cache_) {
     if (*it.foper == *function_oper) {
       auto inst = llvm::dyn_cast<llvm::Instruction>(it.lv);
       if (inst && inst->getParent() == current_bb) {
