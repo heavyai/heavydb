@@ -27,6 +27,7 @@ struct TableArchiverS3Options {
   std::string s3_session_token;
   std::string s3_region;
   std::string s3_endpoint;
+  bool s3_use_virtual_addressing = true;
 };
 
 class TableArchiver {

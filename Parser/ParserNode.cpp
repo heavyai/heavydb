@@ -1215,6 +1215,13 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
               "Invalid value for 's3_max_concurrent_downloads' option (must be > 0): " +
               std::to_string(s3_max_concurrent_downloads));
         }
+      } else if (boost::iequals(*p->get_name(), "s3_use_virtual_addressing")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("s3_use_virtual_addressing option must be a boolean.");
+        }
+        copy_params.s3_use_virtual_addressing = bool_from_string_literal(str_literal);
       } else if (boost::iequals(*p->get_name(), "quote")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -7151,6 +7158,13 @@ DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& paylo
       } else if (auto s3_endpoint = get_string_option(option.get(), "s3_endpoint");
                  s3_endpoint.has_value()) {
         s3_options_.s3_endpoint = s3_endpoint.value();
+      } else if (boost::iequals(*option->get_name(), "s3_use_virtual_addressing")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(option->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("s3_use_virtual_addressing option must be a boolean.");
+        }
+        s3_options_.s3_use_virtual_addressing = bool_from_string_literal(str_literal);
 #endif
       } else {
         throw std::runtime_error("Invalid WITH option: " + *option->get_name());

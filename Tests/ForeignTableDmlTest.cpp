@@ -61,6 +61,8 @@ extern std::optional<size_t> g_detect_test_sample_size;
 std::string test_binary_file_path;
 std::string test_temp_dir;
 bool g_run_odbc{false};
+bool g_run_minio{false};
+std::string g_minio_hostname{"localhost"};
 
 namespace bp = boost::process;
 namespace bf = boost::filesystem;
@@ -7709,6 +7711,14 @@ int main(int argc, char** argv) {
 
   po::options_description desc("Options");
   desc.add_options()("run-odbc-tests", "Run ODBC DML tests.");
+  desc.add_options()(
+      "run-minio-tests",
+      po::bool_switch(&g_run_minio)->default_value(g_run_minio)->implicit_value(true),
+      "Run Minio tests.");
+  desc.add_options()(
+      "minio-hostname",
+      po::value<std::string>(&g_minio_hostname)->default_value(g_minio_hostname),
+      "the hostname of the Minio storage server, only used by tests using it.");
   po::variables_map vm = DBHandlerTestFixture::initTestArgs(argc, argv, desc);
   g_run_odbc = (vm.count("run-odbc-tests"));
 

@@ -106,9 +106,14 @@ struct OptionsContainer {
     }
   }
 
-  bool getOptionAsBool(const std::string_view& key) const {
+  bool getOptionAsBool(const std::string_view& key,
+                       const bool default_value = false) const {
     auto option = getOption(key);
-    return option.has_value() && option.value() == "TRUE";
+    if (option.has_value()) {
+      return option.value() == "TRUE";
+    } else {
+      return default_value;
+    }
   }
 
   std::string getOptionAsString(const std::string_view& key) const {
