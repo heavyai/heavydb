@@ -7,7 +7,7 @@ using std::future;
 
 template <typename Fn,
           typename... Args,
-          typename Result = std::result_of_t<Fn && (Args && ...)>>
+          typename Result = std::invoke_result_t<Fn&&, Args&&...>>
 future<Result> async(Fn&& fn, Args&&... args) {
   std::promise<Result> pr;
   if constexpr (std::is_same<void, Result>::value) {

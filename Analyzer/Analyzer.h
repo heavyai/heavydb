@@ -233,6 +233,7 @@ class ColumnVar : public Expr {
   std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override;
   bool operator==(const Expr& rhs) const override;
+  bool operator==(const ColumnVar& rhs) const;
   std::string toString() const override;
 
  protected:
@@ -1355,6 +1356,8 @@ class AggExpr : public Expr {
   std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override;
   bool operator==(const Expr& rhs) const override;
+  bool operator==(const AggExpr& rhs) const;
+
   std::string toString() const override;
   void find_expr(std::function<bool(const Expr*)> f,
                  std::list<const Expr*>& expr_list) const override;
@@ -2785,6 +2788,7 @@ class FunctionOper : public Expr {
                  std::list<const Expr*>& expr_list) const override;
 
   bool operator==(const Expr& rhs) const override;
+  bool operator==(const FunctionOper& rhs) const;
   std::string toString() const override;
 
  private:
