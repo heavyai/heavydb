@@ -101,7 +101,7 @@ constexpr auto launch = std::launch::THREADING_STD_LAUNCH;
 
 template <typename Fn,
           typename... Args,
-          typename Result = std::result_of_t<Fn && (Args && ...)>>
+          typename Result = std::invoke_result_t<Fn&&, Args&&...>>
 future<Result> async(Fn&& fn, Args&&... args) {
   return std::async(launch, std::forward<Fn>(fn), std::forward<Args>(args)...);
 }

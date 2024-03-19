@@ -94,7 +94,7 @@ std::string hide_sensitive_data_from_query(std::string const& query_str) {
        "$1'XXXXXXXX'"},
       {std::regex(R"((\\set_license\s+)\S+)", flags), "$1XXXXXXXX"}};
   return std::accumulate(
-      rules.begin(), rules.end(), query_str, [](auto& str, auto& rule) {
+      rules.begin(), rules.end(), query_str, [](auto const& str, auto& rule) {
         return std::regex_replace(str, rule.first, rule.second);
       });
 }

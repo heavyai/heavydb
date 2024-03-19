@@ -540,6 +540,7 @@ class SortField {
             const NullSortedPosition nulls_pos)
       : field_(field), sort_dir_(sort_dir), nulls_pos_(nulls_pos) {}
 
+  virtual ~SortField() = default;
   bool operator==(const SortField& that) const {
     return field_ == that.field_ && sort_dir_ == that.sort_dir_ &&
            nulls_pos_ == that.nulls_pos_;
@@ -620,6 +621,8 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
       , frame_start_bound_(frame_start_bound)
       , frame_end_bound_(frame_end_bound)
       , is_rows_(is_rows) {}
+
+  virtual ~RexWindowFunctionOperator() = default;
 
   virtual void acceptChildren(Visitor& v) const override {
     for (auto const& partition_key : getPartitionKeys()) {

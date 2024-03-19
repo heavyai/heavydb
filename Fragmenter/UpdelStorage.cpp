@@ -683,8 +683,24 @@ std::optional<ChunkUpdateStats> InsertOrderFragmenter::updateColumn(
   dbuf->setUpdated();
   updel_roll.addDirtyChunk(chunk, fragment.fragmentId);
   for (size_t rbegin = 0, c = 0; rbegin < nrow; ++c, rbegin += segsz) {
+    // NOTE: Once c++20 is enabled, capture list can be simplfied to
+    // [=, this, &update_stats_per_thread, &frag_offsets, &rhs_values]
     threads.emplace_back(std::async(
-        std::launch::async, [=, &update_stats_per_thread, &frag_offsets, &rhs_values] {
+        std::launch::async,
+        [this,
+         td,
+         cd,
+         catalog,
+         c,
+         rbegin,
+         segsz,
+         nrow,
+         dbuf_addr,
+         n_rhs_values,
+         rhs_type,
+         &update_stats_per_thread,
+         &frag_offsets,
+         &rhs_values] {
           SQLTypeInfo lhs_type = cd->columnType;
 
           // !! not sure if this is a undocumented convention or a bug, but for a sharded
@@ -1302,48 +1318,70 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
     auto index_array = (StringOffsetT*)indices_addr;
     bool is_varlen = col_type.is_varlen_indeed();
 
-    auto fixlen_vacuum =
-        [=, &update_stats_per_thread, &updel_roll, &frag_offsets, &fragment] {
-          size_t nbytes_fix_data_to_keep;
-          if (nrows_to_keep == 0) {
-            nbytes_fix_data_to_keep = 0;
-          } else {
-            nbytes_fix_data_to_keep = vacuum_fixlen_rows(fragment, chunk, frag_offsets);
-          }
+    // NOTE: Once c++20 is enabled, capture list can be simplfied to
+    // [=, this, &update_stats_per_thread, &updel_roll, &frag_offsets, &fragment]
+    auto fixlen_vacuum = [this,
+                          nrows_to_keep,
+                          chunk,
+                          data_buffer,
+                          catalog,
+                          data_addr,
+                          col_type,
+                          ci,
+                          &update_stats_per_thread,
+                          &updel_roll,
+                          &frag_offsets,
+                          &fragment] {
+      size_t nbytes_fix_data_to_keep;
+      if (nrows_to_keep == 0) {
+        nbytes_fix_data_to_keep = 0;
+      } else {
+        nbytes_fix_data_to_keep = vacuum_fixlen_rows(fragment, chunk, frag_offsets);
+      }
 
-          data_buffer->getEncoder()->setNumElems(nrows_to_keep);
-          data_buffer->setSize(nbytes_fix_data_to_keep);
-          data_buffer->setUpdated();
+      data_buffer->getEncoder()->setNumElems(nrows_to_keep);
+      data_buffer->setSize(nbytes_fix_data_to_keep);
+      data_buffer->setUpdated();
 
-          set_chunk_metadata(catalog, fragment, chunk, nrows_to_keep, updel_roll);
+      set_chunk_metadata(catalog, fragment, chunk, nrows_to_keep, updel_roll);
 
-          auto daddr = data_addr;
-          auto element_size = col_type.is_fixlen_array() ? col_type.get_size()
-                                                         : get_element_size(col_type);
-          data_buffer->getEncoder()->resetChunkStats();
-          for (size_t irow = 0; irow < nrows_to_keep; ++irow, daddr += element_size) {
-            if (col_type.is_fixlen_array()) {
-              auto encoder =
-                  dynamic_cast<FixedLengthArrayNoneEncoder*>(data_buffer->getEncoder());
-              CHECK(encoder);
-              encoder->updateMetadata((int8_t*)daddr);
-            } else if (col_type.is_fp()) {
-              set_chunk_stats(col_type,
-                              daddr,
-                              update_stats_per_thread[ci].new_values_stats.has_null,
-                              update_stats_per_thread[ci].new_values_stats.min_double,
-                              update_stats_per_thread[ci].new_values_stats.max_double);
-            } else {
-              set_chunk_stats(col_type,
-                              daddr,
-                              update_stats_per_thread[ci].new_values_stats.has_null,
-                              update_stats_per_thread[ci].new_values_stats.min_int64t,
-                              update_stats_per_thread[ci].new_values_stats.max_int64t);
-            }
-          }
-        };
+      auto daddr = data_addr;
+      auto element_size =
+          col_type.is_fixlen_array() ? col_type.get_size() : get_element_size(col_type);
+      data_buffer->getEncoder()->resetChunkStats();
+      for (size_t irow = 0; irow < nrows_to_keep; ++irow, daddr += element_size) {
+        if (col_type.is_fixlen_array()) {
+          auto encoder =
+              dynamic_cast<FixedLengthArrayNoneEncoder*>(data_buffer->getEncoder());
+          CHECK(encoder);
+          encoder->updateMetadata((int8_t*)daddr);
+        } else if (col_type.is_fp()) {
+          set_chunk_stats(col_type,
+                          daddr,
+                          update_stats_per_thread[ci].new_values_stats.has_null,
+                          update_stats_per_thread[ci].new_values_stats.min_double,
+                          update_stats_per_thread[ci].new_values_stats.max_double);
+        } else {
+          set_chunk_stats(col_type,
+                          daddr,
+                          update_stats_per_thread[ci].new_values_stats.has_null,
+                          update_stats_per_thread[ci].new_values_stats.min_int64t,
+                          update_stats_per_thread[ci].new_values_stats.max_int64t);
+        }
+      }
+    };
 
-    auto varlen_vacuum = [=, &updel_roll, &frag_offsets, &fragment] {
+    // NOTE: Once c++20 is enabled, capture list can be simplfied to
+    // [=, this, &updel_roll, &frag_offsets, &fragment]
+    auto varlen_vacuum = [this,
+                          nrows_to_keep,
+                          chunk,
+                          data_buffer,
+                          index_buffer,
+                          catalog,
+                          &updel_roll,
+                          &frag_offsets,
+                          &fragment] {
       size_t nbytes_var_data_to_keep;
       if (nrows_to_keep == 0) {
         nbytes_var_data_to_keep = 0;
