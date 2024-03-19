@@ -76,6 +76,32 @@ extern bool g_enable_legacy_parquet_import;
 extern bool g_enable_fsi_regex_import;
 
 namespace {
+std::string get_source_type(const std::string& file_type) {
+  auto upper_type = to_upper(file_type);
+  if (upper_type == "CSV" || upper_type == "LEGACY_CSV") {
+    return "DELIMITED_FILE";
+  } else if (upper_type == "REGEX_PARSER") {
+    return "REGEX_PARSED_FILE";
+  } else if (upper_type == "PARQUET" || upper_type == "LEGACY_PARQUET") {
+    return "PARQUET_FILE";
+  } else {
+    UNREACHABLE();
+  }
+  return {};
+}
+
+std::string get_extension(const std::string& file_type) {
+  if (auto upper_type = to_upper(file_type);
+      upper_type == "CSV" || upper_type == "REGEX_PARSER" || upper_type == "LEGACY_CSV") {
+    return "csv";
+  } else if (upper_type == "PARQUET" || upper_type == "LEGACY_PARQUET") {
+    return "parquet";
+  } else {
+    UNREACHABLE();
+  }
+  return {};
+}
+
 std::string repeat_regex(size_t repeat_count, const std::string& regex) {
   std::string repeated_regex;
   for (size_t i = 0; i < repeat_count; i++) {
@@ -106,6 +132,8 @@ namespace {
 
 bool g_regenerate_export_test_reference_files = false;
 bool g_run_odbc{false};
+bool g_run_minio{false};
+std::string g_minio_hostname{"localhost"};
 
 #define SKIP_ALL_ON_AGGREGATOR()                         \
   if (isDistributedMode()) {                             \
@@ -4029,6 +4057,89 @@ TEST_F(ImportTest, S3_Endpoint_parquet) {
       2.2250738585072014e-308));
 }
 
+class MinioTest : public ImportTest, public ::testing::WithParamInterface<std::string> {
+ public:
+  void SetUp() override {
+    if (!g_run_minio) {
+      GTEST_SKIP() << "Minio tests disabled";
+      return;
+    }
+    stored_enable_legacy_parquet_import_ = g_enable_legacy_parquet_import;
+    stored_enable_legacy_delimited_import_ = g_enable_legacy_delimited_import;
+    if (GetParam() == "parquet") {
+      g_enable_legacy_parquet_import = false;
+    } else if (GetParam() == "legacy_parquet") {
+      g_enable_legacy_parquet_import = true;
+    } else if (GetParam() == "legacy_csv") {
+      g_enable_legacy_delimited_import = true;
+    } else if (GetParam() == "csv") {
+      g_enable_legacy_delimited_import = false;
+    }
+    ImportTest::SetUp();
+  }
+  void TearDown() override {
+    if (!g_run_minio) {
+      return;
+    }
+    ImportTest::TearDown();
+    g_enable_legacy_parquet_import = stored_enable_legacy_parquet_import_;
+    g_enable_legacy_delimited_import = stored_enable_legacy_delimited_import_;
+  }
+
+  std::string getLineRegexOptionIfApplicable() {
+    if (GetParam() == "regex_parser") {
+      return ",line_regex='" + get_line_regex(3) + "'";
+    }
+    return {};
+  }
+
+  bool runImportTestCommon(const bool virtual_addressing) {
+    return importTestCommon(
+        std::string("COPY example_2 FROM "
+                    "'s3://omnisci-fsi-test-public/FsiDataFiles/example_2." +
+                    get_extension(GetParam()) +
+                    "' "
+                    "WITH (header='true', "
+                    "source_type='" +
+                    get_source_type(GetParam()) +
+                    "', "
+                    "s3_region='us-east-1', "
+                    "s3_endpoint='http://" +
+                    g_minio_hostname +
+                    ":9000', "
+                    "s3_use_virtual_addressing='" +
+                    (virtual_addressing ? "true" : "false") + "'" +
+                    getLineRegexOptionIfApplicable() + ");"),
+        0,
+        2.2250738585072014e-308);
+  }
+
+ private:
+  bool stored_enable_legacy_parquet_import_;
+  bool stored_enable_legacy_delimited_import_;
+};
+
+TEST_P(MinioTest, VirtualAddressing) {
+  if (GetParam() == "legacy_parquet") {
+    // Legacy parquet appears to be an outlier where virtual addressing works without
+    // error in this case
+    EXPECT_TRUE(runImportTestCommon(true));
+  } else {
+    executeLambdaAndAssertPartialException([&] { runImportTestCommon(true); },
+                                           "Couldn't resolve host name");
+  }
+}
+
+TEST_P(MinioTest, NoVirtualAddressing) {
+  EXPECT_TRUE(runImportTestCommon(false));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    MinioTest,
+    MinioTest,
+    testing::Values("csv", "parquet", "legacy_csv", "legacy_parquet", "regex_parser"),
+    [](const auto& param_info) { return param_info.param; });
+
 class ImportServerPrivilegeTest : public ImportExportTestBase {
  protected:
   inline const static std::string AWS_DUMMY_CREDENTIALS_DIR =
@@ -6422,6 +6533,14 @@ int main(int argc, char** argv) {
       "Regenerate Export Test Reference Files (writes to source tree, use with care!)");
 
   desc.add_options()("run-odbc-tests", "Run ODBC Import tests.");
+  desc.add_options()(
+      "run-minio-tests",
+      po::bool_switch(&g_run_minio)->default_value(g_run_minio)->implicit_value(true),
+      "Run Minio tests.");
+  desc.add_options()(
+      "minio-hostname",
+      po::value<std::string>(&g_minio_hostname)->default_value(g_minio_hostname),
+      "the hostname of the Minio storage server, only used by tests using it.");
 
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
