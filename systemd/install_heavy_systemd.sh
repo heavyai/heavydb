@@ -74,7 +74,7 @@ if [[ -z "$icd_path" ]]; then
   See: ${LBLUE}https://docs.omnisci.com/troubleshooting/vulkan-graphics-api-beta#bare-metal-installs${NORMAL} for some installation and troubleshooting tips."
 fi
 
-for f in heavydb heavydb@ heavydb_sd_server heavydb_sd_server@ heavy_web_server heavy_web_server@ ; do
+for f in heavydb heavydb@ heavydb_sd_server heavydb_sd_server@ heavy_web_server heavy_web_server@ heavyiq ; do
   if [ -f $f.service.in ]; then
     if [[ "$f.service.in" == *"web_server"* ]]; then
       unset vulkan_envinment
