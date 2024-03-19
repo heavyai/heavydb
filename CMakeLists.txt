@@ -597,11 +597,11 @@ if(MSVC)
   add_compile_options(/EHsc /std:c++17 /Qspectre)
 else()
   option(ENABLE_WARNINGS_AS_ERRORS "Enable treat warnings as errors" ON)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -fdiagnostics-color=auto -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -Wvla -fdiagnostics-color=auto -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
   if (ENABLE_WARNINGS_AS_ERRORS)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
     if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
-      # Allow maybe-uninitialized warnings with GCC at it is prone to false positives
+      # Allow maybe-uninitialized warnings with GCC as it is prone to false positives
       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=maybe-uninitialized")
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
       # Disable warnings as errors for misleading-indentation due to a boost header issue
