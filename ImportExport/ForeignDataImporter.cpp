@@ -635,6 +635,7 @@ ImportStatus ForeignDataImporter::importGeneralS3(
                                                 copy_params_.s3_session_token,
                                                 copy_params_.s3_region,
                                                 copy_params_.s3_endpoint,
+                                                copy_params_.s3_use_virtual_addressing,
                                                 copy_params_.plain_text,
                                                 copy_params_.regex_path_filter,
                                                 copy_params_.file_sort_order_by,
