@@ -82,8 +82,8 @@ struct InsertionOrderedMap {
       CHECK(that_->m_.find(*v_it_) != that_->m_.end());
       return &*(that_->m_.find(*v_it_));
     }
-    bool operator==(const Iterator& peer) { return (v_it_ == peer.v_it_); }
-    bool operator!=(const Iterator& peer) { return (v_it_ != peer.v_it_); }
+    bool operator==(const Iterator& peer) const { return (v_it_ == peer.v_it_); }
+    bool operator!=(const Iterator& peer) const { return (v_it_ != peer.v_it_); }
   };
 
   auto begin() { return Iterator{this, v_.begin()}; }

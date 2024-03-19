@@ -522,7 +522,6 @@ __declspec(noinline)
 #pragma optimize("", off)
 #endif
 
-volatile
 NO_OPT_ATTRIBUTE bool avoid_opt_address(void *address) {
   return address != nullptr;
 }

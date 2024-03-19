@@ -1046,7 +1046,8 @@ bool get_license_claims(ClientContext& context) {
 std::string hide_sensitive_data_from_connect(const std::string& connect_str) {
   auto result = connect_str;
   boost::regex passwd{R"(^\\c\s+?.+?\s+?.+?\s+?(?<pwd>.+))",
-                      boost::regex_constants::perl | boost::regex::icase};
+                      static_cast<int>(boost::regex_constants::perl) |
+                          static_cast<int>(boost::regex::icase)};
   boost::smatch matches;
   if (boost::regex_search(connect_str, matches, passwd)) {
     result.replace(

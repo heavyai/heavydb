@@ -30,6 +30,7 @@
 
 class NumberGenerator {
  public:
+  virtual ~NumberGenerator() = default;
   virtual int64_t getNextValue() = 0;
 
   virtual void reset() = 0;

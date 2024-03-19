@@ -688,8 +688,8 @@ void WindowFunctionContext::compute(
   // 7. build an aggregate tree if we need to compute this window function based on
   // framing
   if (use_aggregation_tree) {
-    const auto compute_ordered_partition_null_range = [=](const size_t start,
-                                                          const size_t end) {
+    const auto compute_ordered_partition_null_range = [this](const size_t start,
+                                                             const size_t end) {
       for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
         computeNullRangeOfSortedPartition(
             window_func_->getOrderKeys().front()->get_type_info(),
@@ -846,26 +846,26 @@ void WindowFunctionContext::compute(
               UNREACHABLE() << type;
           }
         }
-        const auto build_aggregation_tree_for_partitions = [=](const size_t start,
-                                                               const size_t end) {
-          for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
-            // build a segment tree for the partition
-            // todo (yoonmin) : support generic window function expression
-            // i.e., when window_func_expr_columns_.size() > 1
-            SQLTypeInfo const input_col_ti =
-                window_func_->getArgs().front()->get_type_info();
-            const auto partition_size =
-                getCountBuf(ExecutorDeviceType::CPU)[partition_idx];
-            buildAggregationTreeForPartition(
-                agg_type,
-                partition_idx,
-                partition_size,
-                getPayloadBuf(ExecutorDeviceType::CPU) +
-                    getOffsetBuf(ExecutorDeviceType::CPU)[partition_idx],
-                cpu_exec_ctx_.intermediate_output_buffer_,
-                input_col_ti);
-          }
-        };
+        const auto build_aggregation_tree_for_partitions =
+            [this, agg_type](const size_t start, const size_t end) {
+              for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
+                // build a segment tree for the partition
+                // todo (yoonmin) : support generic window function expression
+                // i.e., when window_func_expr_columns_.size() > 1
+                SQLTypeInfo const input_col_ti =
+                    window_func_->getArgs().front()->get_type_info();
+                const auto partition_size =
+                    getCountBuf(ExecutorDeviceType::CPU)[partition_idx];
+                buildAggregationTreeForPartition(
+                    agg_type,
+                    partition_idx,
+                    partition_size,
+                    getPayloadBuf(ExecutorDeviceType::CPU) +
+                        getOffsetBuf(ExecutorDeviceType::CPU)[partition_idx],
+                    cpu_exec_ctx_.intermediate_output_buffer_,
+                    input_col_ti);
+              }
+            };
         if (should_parallelize) {
           auto aggregate_tree_builder_timer = DEBUG_TIMER(
               "Window Function Parallelized Segment Tree Construction for Partitions");
@@ -993,7 +993,7 @@ void WindowFunctionContext::compute(
     }
   }
   // 8. compute window partition
-  const auto compute_partitions = [=](const size_t start, const size_t end) {
+  const auto compute_partitions = [this](const size_t start, const size_t end) {
     for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
       computePartitionBuffer(partition_idx,
                              cpu_exec_ctx_.intermediate_output_buffer_ +
@@ -1038,7 +1038,7 @@ void WindowFunctionContext::compute(
   }
 
   auto output_i64 = reinterpret_cast<int64_t*>(cpu_exec_ctx_.output_);
-  const auto payload_copy = [=](const size_t start, const size_t end) {
+  const auto payload_copy = [this, output_i64](const size_t start, const size_t end) {
     for (size_t i = start; i < end; ++i) {
       output_i64[getPayloadBuf(ExecutorDeviceType::CPU)[i]] =
           cpu_exec_ctx_.intermediate_output_buffer_[i];
