@@ -41,8 +41,9 @@ omnisql_history.txt
 Debug/
 .settings/
 
-# VS code settings files
+# VS code settings files (and symlinks)
 .vscode/
+.vscode
 *.code-workspace
 
 # VS settings files
