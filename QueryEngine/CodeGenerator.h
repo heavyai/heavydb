@@ -415,9 +415,13 @@ class CodeGenerator {
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
                           const SQLTypeInfo&,
-                          bool upscale = true);
+                          const bool upscale = true);
 
   llvm::Value* codegenDeciDiv(const Analyzer::BinOper*, const CompilationOptions&);
+
+  llvm::Value* codegenDivisorWithoutUpscale(const CompilationOptions&,
+                                            const SQLTypeInfo& lhs_type,
+                                            const Analyzer::Expr* rhs);
 
   llvm::Value* codegenMod(llvm::Value*,
                           llvm::Value*,
