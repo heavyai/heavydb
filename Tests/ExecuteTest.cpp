@@ -7059,18 +7059,14 @@ TEST_F(Select, OverflowAndUnderFlow) {
         std::runtime_error);  // overflow in the cast due to higher precision
     c("SELECT dd / 2.00000009 FROM test ORDER BY dd ASC LIMIT 1;",
       dt);  // dividend still fits after cast and division upscaling
-    EXPECT_THROW(run_multiple_agg("SELECT dd / 2.000000099 FROM test LIMIT 1;", dt),
-                 std::runtime_error);  // dividend overflows after cast and division
-                                       // upscaling due to higher precision
+    c("SELECT dd / 2.000000099 FROM test ORDER BY dd ASC LIMIT 1;", dt);
     c("SELECT (dd - 40.6364668888) / 2 FROM test ORDER BY dd ASC LIMIT 1;",
       dt);  // decimal div by const optimization avoids overflow
     c("SELECT (dd - 40.6364668888) / x FROM test ORDER BY dd ASC LIMIT 1;",
       dt);  // decimal div by int cast optimization avoids overflow
     c("SELECT (dd - 40.63646688) / dd FROM test ORDER BY dd ASC LIMIT 1;",
       dt);  // dividend still fits after upscaling from cast and division
-    EXPECT_THROW(run_multiple_agg("select (dd-40.6364668888)/dd from test limit 1;", dt),
-                 std::runtime_error);  // dividend overflows on upscaling on a slightly
-                                       // higher precision, test detection
+    c("select (dd-40.6364668888)/dd from test ORDER BY dd ASC limit 1;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT CAST(x * 10000 AS SMALLINT) FROM test;", dt),
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT CAST(y * 1000 AS SMALLINT) FROM test;", dt),
@@ -28176,6 +28172,104 @@ INSTANTIATE_TEST_SUITE_P(CpuAndGpuExecutorDevices,
                          ::testing::Values(ExecutorDeviceType::CPU,
                                            ExecutorDeviceType::GPU),
                          ::testing::PrintToStringParamName());
+
+struct Arithmetic128BitsParam {
+  std::optional<double> expected;
+  char const* numerator;
+  char const* denominator;
+};
+
+using Arithmetic128BitsTuple = std::tuple<ExecutorDeviceType, Arithmetic128BitsParam>;
+
+class Arithmetic128Bits : public testing::TestWithParam<Arithmetic128BitsTuple> {
+ public:
+  // infinity as the expected value represents an expected OVERFLOW exception.
+  static constexpr double overflow = std::numeric_limits<double>::infinity();
+
+  static void SetUpTestSuite() {
+    run_ddl_statement("DROP TABLE IF EXISTS test_128bit;");
+    run_ddl_statement(
+        "CREATE TABLE test_128bit (n DECIMAL(18,9), small DECIMAL(18,9), "
+        "tenth DECIMAL(18,9), unit DECIMAL(18,9), ten DECIMAL(18,9));");
+    run_multiple_agg(
+        "INSERT INTO test_128bit VALUES (123456.123456789, 0.000001, 0.1, 1.0, 10.0)",
+        ExecutorDeviceType::CPU);
+  }
+
+  static void TearDownTestSuite() {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS test_128bit;");
+    }
+  }
+
+  static std::string printTestParams(
+      const ::testing::TestParamInfo<Arithmetic128BitsTuple>& info) {
+    auto const [dt, param] = info.param;
+    std::ostringstream ss;
+    ss << dt << '_' << param.numerator << '_' << param.denominator;
+    std::string str = ss.str();
+    std::replace(str.begin(), str.end(), '-', 'm');  // 'm' means "minus"
+    std::replace(str.begin(), str.end(), '.', 'p');  // 'p' means "point"
+    return str;
+  }
+};
+
+TEST_P(Arithmetic128Bits, LargeDivide) {
+  auto const [dt, param] = GetParam();
+  SKIP_NO_GPU_P(dt);
+  std::ostringstream query;
+  query << "SELECT " << param.numerator << '/' << param.denominator
+        << " FROM test_128bit;";
+  constexpr double EPS = 1e-13;
+  double const err = EPS * std::fabs(*param.expected);
+  if (std::isinf(*param.expected)) {
+    EXPECT_THROW(v<double>(run_simple_agg(query.str(), dt)), std::runtime_error)
+        << query.str();
+  } else {
+    ASSERT_NEAR(*param.expected, v<double>(run_simple_agg(query.str(), dt)), err)
+        << query.str();
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    TestSuite,
+    Arithmetic128Bits,
+    testing::Combine(
+        testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+        testing::Values(
+            Arithmetic128BitsParam{Arithmetic128Bits::overflow, "n", "small"},
+            Arithmetic128BitsParam{1234561.23456789, "n", "tenth"},
+            Arithmetic128BitsParam{123456.123456789, "n", "unit"},
+            Arithmetic128BitsParam{12345.6123456789, "n", "ten"},
+            Arithmetic128BitsParam{Arithmetic128Bits::overflow, "-n", "small"},
+            Arithmetic128BitsParam{-1234561.23456789, "-n", "tenth"},
+            Arithmetic128BitsParam{-123456.123456789, "-n", "unit"},
+            Arithmetic128BitsParam{-12345.6123456789, "-n", "ten"},
+            Arithmetic128BitsParam{Arithmetic128Bits::overflow, "n", "-small"},
+            Arithmetic128BitsParam{-1234561.23456789, "n", "-tenth"},
+            Arithmetic128BitsParam{-123456.123456789, "n", "-unit"},
+            Arithmetic128BitsParam{-12345.6123456789, "n", "-ten"},
+            Arithmetic128BitsParam{Arithmetic128Bits::overflow, "-n", "-small"},
+            Arithmetic128BitsParam{1234561.23456789, "-n", "-tenth"},
+            Arithmetic128BitsParam{123456.123456789, "-n", "-unit"},
+            Arithmetic128BitsParam{12345.6123456789, "-n", "-ten"},
+            Arithmetic128BitsParam{Arithmetic128Bits::overflow, "n", "0.000001"},
+            Arithmetic128BitsParam{1234561.23456789, "n", "0.1"},
+            Arithmetic128BitsParam{123456.123456789, "n", "1.0"},
+            Arithmetic128BitsParam{12345.6123456789, "n", "10.0"},
+            Arithmetic128BitsParam{Arithmetic128Bits::overflow, "-n", "0.000001"},
+            Arithmetic128BitsParam{-1234561.23456789, "-n", "0.1"},
+            Arithmetic128BitsParam{-123456.123456789, "-n", "1.0"},
+            Arithmetic128BitsParam{-12345.6123456789, "-n", "10.0"},
+            Arithmetic128BitsParam{Arithmetic128Bits::overflow, "n", "-0.000001"},
+            Arithmetic128BitsParam{-1234561.23456789, "n", "-0.1"},
+            Arithmetic128BitsParam{-123456.123456789, "n", "-1.0"},
+            Arithmetic128BitsParam{-12345.6123456789, "n", "-10.0"},
+            Arithmetic128BitsParam{Arithmetic128Bits::overflow, "-n", "-0.000001"},
+            Arithmetic128BitsParam{1234561.23456789, "-n", "-0.1"},
+            Arithmetic128BitsParam{123456.123456789, "-n", "-1.0"},
+            Arithmetic128BitsParam{12345.6123456789, "-n", "-10.0"})),
+    Arithmetic128Bits::printTestParams);
 
 class ValuesTest : public ::testing::Test {
  protected:
