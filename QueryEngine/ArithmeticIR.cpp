@@ -16,8 +16,9 @@
 
 #include "CodeGenerator.h"
 #include "Execute.h"
-
 #include "Parser/ParserNode.h"
+
+#include <cstdlib>
 
 // Code generation routines and helpers for basic arithmetic and unary minus.
 
@@ -46,10 +47,7 @@ llvm::Value* CodeGenerator::codegenArith(const Analyzer::BinOper* bin_oper,
   const auto& rhs_type = rhs->get_type_info();
 
   if (lhs_type.is_decimal() && rhs_type.is_decimal() && optype == kDIVIDE) {
-    const auto ret = codegenDeciDiv(bin_oper, co);
-    if (ret) {
-      return ret;
-    }
+    return codegenDeciDiv(bin_oper, co);
   }
 
   auto lhs_lv = codegen(lhs, true, co).front();
@@ -435,35 +433,49 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
                                        const std::string& null_typename,
                                        const std::string& null_check_suffix,
                                        const SQLTypeInfo& ti,
-                                       bool upscale) {
+                                       const bool upscale) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
+
   if (ti.is_decimal()) {
     if (upscale) {
+      // Ensure the left-hand side (lhs) value is an integer type
       CHECK(lhs_lv->getType()->isIntegerTy());
+      // Create a constant integer value representing the scale factor
       const auto scale_lv =
           llvm::ConstantInt::get(lhs_lv->getType(), exp_to_scale(ti.get_scale()));
-
+      // Extend the lhs value to 64-bit integer to prevent overflow during calculations
       lhs_lv = cgen_state_->ir_builder_.CreateSExt(
           lhs_lv, get_int_type(64, cgen_state_->context_));
+      // Initialize variables to hold the maximum and minimum values for the data type
       llvm::Value* chosen_max{nullptr};
       llvm::Value* chosen_min{nullptr};
+      // Retrieve the max and min values for an 8-byte integer, considering sign
       std::tie(chosen_max, chosen_min) = cgen_state_->inlineIntMaxMin(8, true);
+      // Create a basic block for handling successful decimal division
       auto decimal_div_ok = llvm::BasicBlock::Create(
           cgen_state_->context_, "decimal_div_ok", cgen_state_->current_func_);
+      // If a null check suffix is provided, skip overflow check for null values
       if (!null_check_suffix.empty()) {
         codegenSkipOverflowCheckForNull(lhs_lv, rhs_lv, decimal_div_ok, ti);
       }
+      // Create a basic block for handling decimal division failure (overflow)
       auto decimal_div_fail = llvm::BasicBlock::Create(
           cgen_state_->context_, "decimal_div_fail", cgen_state_->current_func_);
+      // Calculate the maximum lhs value adjusted for the decimal scale
       auto lhs_max = static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue() /
                      exp_to_scale(ti.get_scale());
+      // Create an LLVM value for the calculated maximum lhs value
       auto lhs_max_lv =
           llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), lhs_max);
+      // Initialize a variable to hold the overflow detection result
       llvm::Value* detected{nullptr};
+      // TODO: QE-1154 If this block of code is needed then add lower bound check as well.
+      // Currently this only checks if positive values overflow, not negative.
       if (ti.get_notnull()) {
         detected = cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, lhs_max_lv);
       } else {
+        // Otherwise, call a function to handle nullable types comparison
         detected = toBool(cgen_state_->emitCall(
             "gt_" + numeric_type_name(ti) + "_nullable",
             {lhs_lv,
@@ -471,14 +483,15 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
              cgen_state_->llInt(inline_int_null_val(ti)),
              cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))}));
       }
+      // Conditionally branch to the appropriate block based on overflow detection
       cgen_state_->ir_builder_.CreateCondBr(detected, decimal_div_fail, decimal_div_ok);
-
+      // Set the insertion point to the failure block and return an error code
       cgen_state_->ir_builder_.SetInsertPoint(decimal_div_fail);
       cgen_state_->ir_builder_.CreateRet(
           cgen_state_->llInt(int32_t(ErrorCode::OVERFLOW_OR_UNDERFLOW)));
-
+      // Set the insertion point to the successful division block for further instructions
       cgen_state_->ir_builder_.SetInsertPoint(decimal_div_ok);
-
+      // Multiply lhs value by the scale factor, handling nulls if necessary
       lhs_lv = null_typename.empty()
                    ? cgen_state_->ir_builder_.CreateMul(lhs_lv, scale_lv)
                    : cgen_state_->emitCall(
@@ -538,61 +551,181 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
   return ret;
 }
 
-// Handle decimal division by an integer (constant or cast), return null if
-// the expression doesn't match this pattern and let the general method kick in.
-// For said patterns, we can simply divide the decimal operand by the non-scaled
-// integer value instead of using the scaled value preceded by a multiplication.
-// It is both more efficient and avoids the overflow for a lot of practical cases.
+namespace {
+template <size_t N>
+// Return nullptr iff all N types are not nullable.
+// Return llvm::Value* for true iff any of the N values are null.
+// Assumes Decimal/Integer types.  Please add additional types as needed.
+llvm::Value* codegen_null_checks(CgenState* const cgen_state,
+                                 std::array<SQLTypeInfo const*, N> const types,
+                                 std::array<llvm::Value*, N> const values) {
+  llvm::Value* any_null_lv{nullptr};
+  for (size_t i = 0; i < N; ++i) {
+    if (!types[i]->get_notnull()) {
+      auto* null_lv = cgen_state->llInt(inline_int_null_val(*types[i]));
+      auto* is_null_lv =
+          cgen_state->ir_builder_.CreateICmpEQ(values[i], null_lv, "is_null");
+      any_null_lv = any_null_lv ? cgen_state->ir_builder_.CreateOr(
+                                      any_null_lv, is_null_lv, "any_null")
+                                : is_null_lv;
+    }
+  }
+  return any_null_lv;
+}
+}  // namespace
+
+/**
+ * Handle decimal / decimal division.
+ *
+ * Outline of steps:
+ * * Check if the upscale multiplication can be elided. If so, then
+ *   return codegenDiv() with upscale=false, skipping any 128-bit arithmetic.
+ * * Define BasicBlocks.
+ * * Check for NULL operands.
+ * * Check if denominator is 0. If it is, then either:
+ *   * Set result to NULL if g_null_div_by_zero, otherwise
+ *   * Return ErrorCode::DIV_BY_ZERO.
+ * * Handle typical case by calling decimal_division(). This calculates
+ *   lhs * pow10 / rhs where pow10=10^9 in the typical DECIMAL(19,9) case.
+ *   Use a custom Uint128 class to do the arithmetic.
+ *   If result is greater than 64 bits then return ErrorCode::OVERFLOW_OR_UNDERFLOW.
+ * * Final PHINode combines prior branches to the final value.
+ */
 llvm::Value* CodeGenerator::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
                                            const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
-  auto lhs = bin_oper->get_left_operand();
-  auto rhs = bin_oper->get_right_operand();
-  const auto& lhs_type = lhs->get_type_info();
-  const auto& rhs_type = rhs->get_type_info();
+  Analyzer::Expr const* const lhs = bin_oper->get_left_operand();
+  Analyzer::Expr const* const rhs = bin_oper->get_right_operand();
+  SQLTypeInfo const& lhs_type = lhs->get_type_info();
+  SQLTypeInfo const& rhs_type = rhs->get_type_info();
   CHECK(lhs_type.is_decimal() && rhs_type.is_decimal() &&
         lhs_type.get_scale() == rhs_type.get_scale());
 
-  auto rhs_constant = dynamic_cast<const Analyzer::Constant*>(rhs);
-  auto rhs_cast = dynamic_cast<const Analyzer::UOper*>(rhs);
-  if (rhs_constant && !rhs_constant->get_is_null() &&
-      rhs_constant->get_constval().bigintval != 0LL &&
-      (rhs_constant->get_constval().bigintval % exp_to_scale(rhs_type.get_scale())) ==
-          0LL) {
-    // can safely downscale a scaled constant
-  } else if (rhs_cast && rhs_cast->get_optype() == kCAST &&
-             rhs_cast->get_operand()->get_type_info().is_integer()) {
-    // can skip upscale in the int to dec cast
+  constexpr bool fetch_columns = true;
+  auto* lhs_lv = codegen(lhs, fetch_columns, co).front();
+
+  // Check if upscale multiplication can be elided. Skip 128-bit arithmetic if so.
+  if (auto* rhs_lv = codegenDivisorWithoutUpscale(co, lhs_type, rhs)) {
+    constexpr bool upscale = false;
+    const auto null_check_suffix = get_null_check_suffix(lhs_type, rhs_type);
+    const auto int_typename =
+        null_check_suffix.empty()
+            ? ""
+            : numeric_or_time_interval_type_name(lhs_type, rhs_type);
+    return codegenDiv(lhs_lv, rhs_lv, int_typename, null_check_suffix, lhs_type, upscale);
+  }
+  auto* rhs_lv = codegen(rhs, fetch_columns, co).front();
+
+  // Define BasicBlocks.
+  auto* done_bb =
+      llvm::BasicBlock::Create(cgen_state_->context_, "done", cgen_state_->current_func_);
+  auto* check_rhs_zero_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "check_rhs_zero", cgen_state_->current_func_);
+  auto* overflow_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "overflow", cgen_state_->current_func_);
+  cgen_state_->needs_error_check_ = true;
+  llvm::BasicBlock* phi_src0_bb{nullptr};  // First phi-incoming basic block below.
+
+  // Codegen NULL checks. Any NULL ? ->done_bb : ->check_rhs_zero_bb.
+  if (auto* is_null_lv = codegen_null_checks<2u>(
+          cgen_state_, {&lhs_type, &rhs_type}, {lhs_lv, rhs_lv})) {
+    cgen_state_->ir_builder_.CreateCondBr(is_null_lv, done_bb, check_rhs_zero_bb);
+    phi_src0_bb = cgen_state_->ir_builder_.GetInsertBlock();
   } else {
-    return nullptr;
+    // No operands can be null, so just branch to check_rhs_zero_bb.
+    cgen_state_->ir_builder_.CreateBr(check_rhs_zero_bb);
   }
 
-  auto lhs_lv = codegen(lhs, true, co).front();
-  llvm::Value* rhs_lv{nullptr};
-  if (rhs_constant) {
-    const auto rhs_lit = Parser::IntLiteral::analyzeValue(
-        rhs_constant->get_constval().bigintval / exp_to_scale(rhs_type.get_scale()));
-    auto rhs_lit_lv = CodeGenerator::codegenIntConst(
-        dynamic_cast<const Analyzer::Constant*>(rhs_lit.get()), cgen_state_);
-    rhs_lv = codegenCastBetweenIntTypes(
-        rhs_lit_lv, rhs_lit->get_type_info(), lhs_type, /*upscale*/ false);
-  } else if (rhs_cast) {
-    auto rhs_cast_oper = rhs_cast->get_operand();
-    const auto& rhs_cast_oper_ti = rhs_cast_oper->get_type_info();
-    auto rhs_cast_oper_lv = codegen(rhs_cast_oper, true, co).front();
-    rhs_lv = codegenCastBetweenIntTypes(
-        rhs_cast_oper_lv, rhs_cast_oper_ti, lhs_type, /*upscale*/ false);
-  } else {
-    CHECK(false);
+  // BasicBlock check_rhs_zero:
+  // Check if denominator (rhs) is 0 and handle based on g_null_div_by_zero.
+  cgen_state_->ir_builder_.SetInsertPoint(check_rhs_zero_bb);
+  auto* zero_lv = llvm::ConstantInt::get(rhs_lv->getType(), 0, true);
+  auto* is_rhs_zero_lv =
+      cgen_state_->ir_builder_.CreateICmpEQ(rhs_lv, zero_lv, "is_rhs_zero");
+  auto* rhs_zero_bb =
+      g_null_div_by_zero
+          ? done_bb
+          : llvm::BasicBlock::Create(
+                cgen_state_->context_, "rhs_zero", cgen_state_->current_func_);
+  auto* rhs_nonzero_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "rhs_nonzero", cgen_state_->current_func_);
+  cgen_state_->ir_builder_.CreateCondBr(is_rhs_zero_lv, rhs_zero_bb, rhs_nonzero_bb);
+
+  // If denominator is 0 and !g_null_div_by_zero then return ErrorCode::DIV_BY_ZERO.
+  if (!g_null_div_by_zero) {
+    cgen_state_->ir_builder_.SetInsertPoint(rhs_zero_bb);
+    cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(int(ErrorCode::DIV_BY_ZERO)));
   }
-  const auto int_typename = numeric_or_time_interval_type_name(lhs_type, rhs_type);
-  const auto null_check_suffix = get_null_check_suffix(lhs_type, rhs_type);
-  return codegenDiv(lhs_lv,
-                    rhs_lv,
-                    null_check_suffix.empty() ? "" : int_typename,
-                    null_check_suffix,
-                    lhs_type,
-                    /*upscale*/ false);
+
+  // BasicBlock rhs_nonzero: Typical case with nonnull values and nonzero denominator.
+  cgen_state_->ir_builder_.SetInsertPoint(rhs_nonzero_bb);
+  auto* pow10_lv = cgen_state_->llInt(int64_t(shared::power10(lhs_type.get_scale())));
+  auto* null_lv = cgen_state_->llInt(inline_int_null_val(lhs_type));
+  char const* const func_name = co.device_type == ExecutorDeviceType::GPU
+                                    ? "decimal_division_gpu"
+                                    : "decimal_division";
+  auto* result_lv = cgen_state_->emitCall(func_name, {lhs_lv, pow10_lv, rhs_lv, null_lv});
+  auto* is_null_lv = cgen_state_->ir_builder_.CreateICmpEQ(result_lv, null_lv, "is_null");
+  cgen_state_->ir_builder_.CreateCondBr(is_null_lv, overflow_bb, done_bb);
+
+  // BasicBlock overflow: decimal_division() result is greater than 64 bits.
+  cgen_state_->ir_builder_.SetInsertPoint(overflow_bb);
+  cgen_state_->ir_builder_.CreateRet(
+      cgen_state_->llInt(int(ErrorCode::OVERFLOW_OR_UNDERFLOW)));
+
+  // BasicBlock done: Set return value based on phi value
+  cgen_state_->ir_builder_.SetInsertPoint(done_bb);
+  unsigned const num_inputs = bool(phi_src0_bb) + !g_null_div_by_zero + 1u;
+  llvm::PHINode* phi =
+      cgen_state_->ir_builder_.CreatePHI(lhs_lv->getType(), num_inputs, "phi");
+  if (phi_src0_bb) {
+    phi->addIncoming(null_lv, phi_src0_bb);  // an operand is NULL
+  }
+  if (g_null_div_by_zero) {
+    phi->addIncoming(null_lv, check_rhs_zero_bb);  // NULL due to g_null_div_by_zero
+  }
+  phi->addIncoming(result_lv, rhs_nonzero_bb);  // Non-NULL result of division
+  return phi;
+}
+
+// When converting a value into a DECIMAL(precision,scale) type, the value is multiplied
+// by 10^scale. In the general case when dividing two decimal int64_t values, the
+// numerator is first multiplied by 10^scale. This is called "upscale". However if the
+// denominator is also a multiple of 10^scale, (which occurs when converting from INT to
+// DECIMAL, for instance) then the upscale multiplication can be elided and the 128-bit
+// arithmetic can be skipped.
+//
+// If the upscale multiplication can be elided, then return the rhs_lv value to be used
+// for the denominator of the division. Otherwise return nullptr.
+llvm::Value* CodeGenerator::codegenDivisorWithoutUpscale(
+    CompilationOptions const& co,
+    SQLTypeInfo const& lhs_type,
+    Analyzer::Expr const* const rhs) {
+  constexpr bool upscale = false;
+  if (auto* rhs_constant = dynamic_cast<Analyzer::Constant const*>(rhs)) {
+    if (!rhs_constant->get_is_null() && rhs_constant->get_constval().bigintval) {
+      int64_t const pow10 = int64_t(shared::power10(rhs->get_type_info().get_scale()));
+      auto const div = std::div(rhs_constant->get_constval().bigintval, pow10);
+      if (div.rem == 0) {
+        auto rhs_lit = Parser::IntLiteral::analyzeValue(div.quot);
+        auto* rhs_lit_lv = CodeGenerator::codegenIntConst(
+            dynamic_cast<Analyzer::Constant const*>(rhs_lit.get()), cgen_state_);
+        return codegenCastBetweenIntTypes(
+            rhs_lit_lv, rhs_lit->get_type_info(), lhs_type, upscale);
+      }
+    }
+  }
+  if (auto* rhs_cast = dynamic_cast<Analyzer::UOper const*>(rhs)) {
+    if (rhs_cast->get_optype() == kCAST &&
+        rhs_cast->get_operand()->get_type_info().is_integer()) {
+      Analyzer::Expr const* rhs_cast_oper = rhs_cast->get_operand();
+      constexpr bool fetch_columns = true;
+      auto* rhs_cast_oper_lv = codegen(rhs_cast_oper, fetch_columns, co).front();
+      return codegenCastBetweenIntTypes(
+          rhs_cast_oper_lv, rhs_cast_oper->get_type_info(), lhs_type, upscale);
+    }
+  }
+  return nullptr;
 }
 
 llvm::Value* CodeGenerator::codegenMod(llvm::Value* lhs_lv,

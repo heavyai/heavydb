@@ -154,6 +154,11 @@ extern "C" RUNTIME_EXPORT void agg_count_distinct_bitmap(int64_t* agg,
                                                          const int64_t min_val,
                                                          const int64_t bucket_size);
 
+extern "C" RUNTIME_EXPORT int64_t decimal_division(int64_t const a,
+                                                   int64_t const b,
+                                                   int64_t const denom,
+                                                   int64_t const null);
+
 #define EMPTY_KEY_64 std::numeric_limits<int64_t>::max()
 #define EMPTY_KEY_32 std::numeric_limits<int32_t>::max()
 #define EMPTY_KEY_16 std::numeric_limits<int16_t>::max()

@@ -863,6 +863,7 @@ declare void @agg_count_distinct_bitmap_gpu(i64*, i64, i64, i64, i64, i64, i64, 
 declare void @agg_count_distinct_bitmap_skip_val_gpu(i64*, i64, i64, i64, i64, i64, i64, i64, i64);
 declare void @agg_approximate_count_distinct_gpu(i64*, i64, i32, i64, i64);
 declare i32 @agg_mode_func_gpu(i64*, i64, i64);
+declare i64 @decimal_division_gpu(i64, i64, i64, i64);
 declare void @record_error_code(i32, i32*);
 declare i32 @get_error_code(i32*);
 declare i1 @dynamic_watchdog();

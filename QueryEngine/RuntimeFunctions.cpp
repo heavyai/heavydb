@@ -20,6 +20,7 @@
 
 #include "RuntimeFunctions.h"
 #include "BufferCompaction.h"
+#include "DecimalDivision.h"
 #include "DecisionTreeEntry.h"
 #include "HyperLogLogRank.h"
 #include "MurmurHash.h"
@@ -445,6 +446,23 @@ compute_int64_t_lower_bound(const int64_t entry_cnt,
     }
   }
   return l;
+}
+
+// Return a * b / denom.
+// Assumes all 3 values are nonnull and denom is nonzero.
+// Return null if result overflows int64_t.
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t decimal_division(int64_t const a,
+                                                                 int64_t const b,
+                                                                 int64_t const denom,
+                                                                 int64_t const null) {
+  return multiply_divide(a, b, denom, null);  // QueryEngine/DecimalDivision.h
+}
+
+extern "C" GPU_RT_STUB int64_t decimal_division_gpu(int64_t const a,
+                                                    int64_t const b,
+                                                    int64_t const denom,
+                                                    int64_t const null) {
+  return {};
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t

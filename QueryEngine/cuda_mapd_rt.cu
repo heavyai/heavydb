@@ -5,6 +5,7 @@
 #include <limits>
 #include "Aggregate/AggModeHashTableGpu.cuh"
 #include "BufferCompaction.h"
+#include "DecimalDivision.h"
 #include "ExtensionFunctions.hpp"
 #include "GpuRtConstants.h"
 #include "HyperLogLogRank.h"
@@ -1369,6 +1370,13 @@ extern "C" __device__ int32_t agg_mode_func_gpu(int64_t* const agg,
   auto* const hash_table = reinterpret_cast<AggModeHashTableGpu*>(base_dev_addr) + index;
   AggModeHashTableGpu::status_type const status = hash_table->insert(val);
   return status.has_probing_length_exceeded() ? error_ple : 0;
+}
+
+extern "C" __device__ int64_t decimal_division_gpu(int64_t const a,
+                                                   int64_t const b,
+                                                   int64_t const denom,
+                                                   int64_t const null) {
+  return multiply_divide(a, b, denom, null);  // QueryEngine/DecimalDivision.h
 }
 
 extern "C" __device__ void force_sync() {
