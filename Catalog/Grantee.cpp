@@ -196,7 +196,7 @@ static bool hasEnoughPrivs(const DBObject* real, const DBObject* requested) {
   }
 }
 
-static bool hasAnyPrivs(const DBObject* real, const DBObject* /* requested*/) {
+static bool hasAnyPrivs(const DBObject* real) {
   if (real) {
     return real->getPrivileges().hasAny();
   } else {
@@ -206,22 +206,32 @@ static bool hasAnyPrivs(const DBObject* real, const DBObject* /* requested*/) {
 
 bool Grantee::hasAnyPrivileges(const DBObject& objectRequested, bool only_direct) const {
   DBObjectKey objectKey = objectRequested.getObjectKey();
-  if (hasAnyPrivs(findDbObject(objectKey, only_direct), &objectRequested)) {
+
+  // Look for the exact DBObject key: permissionType.dbId.objectId.subObjectId
+  if (hasAnyPrivs(findDbObject(objectKey, only_direct))) {
     return true;
   }
 
-  // if we have an object associated -> ignore it
-  if (objectKey.objectId != -1) {
-    objectKey.objectId = -1;
-    if (hasAnyPrivs(findDbObject(objectKey, only_direct), &objectRequested)) {
+  // Look for a wildcard DBObject key for: permissionType.dbId.objectId.-1
+  if (objectKey.subObjectId != -1) {
+    objectKey.subObjectId = -1;
+    if (hasAnyPrivs(findDbObject(objectKey, only_direct))) {
       return true;
     }
   }
 
-  // if we have an
+  // Look for a wildcard DBObject key for: permissionType.dbId.-1.-1
+  if (objectKey.objectId != -1) {
+    objectKey.objectId = -1;
+    if (hasAnyPrivs(findDbObject(objectKey, only_direct))) {
+      return true;
+    }
+  }
+
+  // Look for a wildcard DBObject key for: permissionType.-1.-1.-1
   if (objectKey.dbId != -1) {
     objectKey.dbId = -1;
-    if (hasAnyPrivs(findDbObject(objectKey, only_direct), &objectRequested)) {
+    if (hasAnyPrivs(findDbObject(objectKey, only_direct))) {
       return true;
     }
   }
@@ -230,11 +240,21 @@ bool Grantee::hasAnyPrivileges(const DBObject& objectRequested, bool only_direct
 
 bool Grantee::checkPrivileges(const DBObject& objectRequested) const {
   DBObjectKey objectKey = objectRequested.getObjectKey();
+
+  // Look for the exact DBObject key: permissionType.dbId.objectId.subObjectId
   if (hasEnoughPrivs(findDbObject(objectKey, false), &objectRequested)) {
     return true;
   }
 
-  // if we have an object associated -> ignore it
+  // Look for a wildcard DBObject key for: permissionType.dbId.objectId.-1
+  if (objectKey.subObjectId != -1) {
+    objectKey.subObjectId = -1;
+    if (hasEnoughPrivs(findDbObject(objectKey, false), &objectRequested)) {
+      return true;
+    }
+  }
+
+  // Look for a wildcard DBObject key for: permissionType.dbId.-1.-1
   if (objectKey.objectId != -1) {
     objectKey.objectId = -1;
     if (hasEnoughPrivs(findDbObject(objectKey, false), &objectRequested)) {
@@ -242,7 +262,7 @@ bool Grantee::checkPrivileges(const DBObject& objectRequested) const {
     }
   }
 
-  // if we have an
+  // Look for a wildcard DBObject key for: permissionType.-1.-1.-1
   if (objectKey.dbId != -1) {
     objectKey.dbId = -1;
     if (hasEnoughPrivs(findDbObject(objectKey, false), &objectRequested)) {

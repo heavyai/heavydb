@@ -399,7 +399,9 @@ TEST_F(CrossDatabaseWriteQueryTest, UpdateTableNoUpdatePermissions) {
 TEST_F(CrossDatabaseWriteQueryTest, UpdateTableBothUpdateAndAccessPermissions) {
   createTestTable("db_1", "test_table");
   insertIntoTestTable("db_1", "test_table", {1, 2, 3}, {"a", "b", "c"});
-  sql("GRANT ACCESS, UPDATE ON DATABASE db_1 TO test_user;");
+  // NOTE: As of March 2024, UPDATE and DELETE require select privileges on the
+  // columns being accessed in the WHERE condition.
+  sql("GRANT ACCESS, UPDATE, SELECT ON DATABASE db_1 TO test_user;");
 
   login("test_user", "test_pass", shared::kDefaultDbName);
   sql("UPDATE db_1.test_table SET i = i * 2, t = upper(t);");
@@ -466,7 +468,9 @@ TEST_F(CrossDatabaseWriteQueryTest, DeleteNoDeletePermissions) {
 TEST_F(CrossDatabaseWriteQueryTest, DeleteBothAccessAndDeletePermissions) {
   createTestTable("db_1", "test_table");
   insertIntoTestTable("db_1", "test_table", {1, 2, 3}, {"a", "b", "c"});
-  sql("GRANT ACCESS, DELETE ON DATABASE db_1 TO test_user;");
+  // NOTE: As of March 2024, UPDATE and DELETE require select privileges on the
+  // columns being accessed in the WHERE condition.
+  sql("GRANT ACCESS, DELETE, SELECT ON DATABASE db_1 TO test_user;");
 
   login("test_user", "test_pass", shared::kDefaultDbName);
   sql("DELETE FROM db_1.test_table WHERE i > 2;");

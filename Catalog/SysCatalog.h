@@ -313,6 +313,11 @@ class SysCatalog : private CommonFileOperations {
   void revokeRole(const std::string& role,
                   const std::string& grantee,
                   const bool is_temporary = false);
+  /**
+   * @brief Check if a user has any privileges on a table
+   */
+  bool hasAnyTablePrivileges(const UserMetadata& user,
+                             std::vector<DBObject>& privObjects);
   // check if the user has any permissions on all the given objects
   bool hasAnyPrivileges(const UserMetadata& user, std::vector<DBObject>& privObjects);
   // check if the user has the requested permissions on all the given objects
@@ -325,7 +330,14 @@ class SysCatalog : private CommonFileOperations {
   User* getUserGrantee(const std::string& name) const;
   std::vector<ObjectRoleDescriptor*> getMetadataForObject(int32_t dbId,
                                                           int32_t dbType,
-                                                          int32_t objectId) const;
+                                                          int32_t objectId,
+                                                          int32_t subObjectId = -1) const;
+  /**
+   * Returns metadata for all subobjects that match `objectId`.
+   */
+  std::vector<ObjectRoleDescriptor*> getMetadataForSubObjects(int32_t dbId,
+                                                              int32_t dbType,
+                                                              int32_t objectId) const;
   std::vector<ObjectRoleDescriptor> getMetadataForAllObjects() const;
   bool isRoleGrantedToGrantee(const std::string& granteeName,
                               const std::string& roleName,
@@ -413,6 +425,7 @@ class SysCatalog : private CommonFileOperations {
   void fixRolesMigration();
   void addAdminUserRole();
   void migratePrivileges();
+  void migrateColumnLevelSecurity();
   void migratePrivileged_old();
   void updateUserSchema();
   void updatePasswordsToHashes();
@@ -488,6 +501,7 @@ class SysCatalog : private CommonFileOperations {
                                 const std::string& username,
                                 Catalog_Namespace::DBMetadata& db_meta,
                                 UserMetadata& user_meta);
+  const std::string getObjectPermissionsSchema();
   /**
    * For servers configured to use external authentication providers, determine whether
    * users will be allowed to fallback to local login accounts. If no external providers

@@ -17,6 +17,8 @@
 #include "DBObject.h"
 #include "Catalog.h"
 
+#include "Shared/QuotedIdentifierUtil.h"
+
 const AccessPrivileges AccessPrivileges::NONE = AccessPrivileges(0);
 
 const AccessPrivileges AccessPrivileges::ALL_DATABASE =
@@ -46,6 +48,11 @@ const AccessPrivileges AccessPrivileges::TRUNCATE_TABLE =
     AccessPrivileges(TablePrivileges::TRUNCATE_TABLE);
 const AccessPrivileges AccessPrivileges::ALTER_TABLE =
     AccessPrivileges(TablePrivileges::ALTER_TABLE);
+
+const AccessPrivileges AccessPrivileges::ALL_COLUMN =
+    AccessPrivileges(ColumnPrivileges::ALL);
+const AccessPrivileges AccessPrivileges::SELECT_COLUMN_FROM_TABLE =
+    AccessPrivileges(ColumnPrivileges::SELECT_COLUMN_FROM_TABLE);
 
 const AccessPrivileges AccessPrivileges::ALL_DASHBOARD =
     AccessPrivileges(DashboardPrivileges::ALL);
@@ -103,6 +110,8 @@ std::string DBObjectTypeToString(DBObjectType type) {
       return "SERVER";
     case AbstractDBObjectType:
       return "ABSTRACT";
+    case ColumnDBObjectType:
+      return "COLUMN";
     default:
       UNREACHABLE() << "Unknown DBObjectType: '" << std::to_string(type) << "'";
   }
@@ -120,6 +129,8 @@ DBObjectType DBObjectTypeFromString(const std::string& type) {
     return ViewDBObjectType;
   } else if (type.compare("SERVER") == 0) {
     return ServerDBObjectType;
+  } else if (type.compare("COLUMN") == 0) {
+    return ColumnDBObjectType;
   } else {
     throw std::runtime_error("DB object type " + type + " is not supported.");
   }
@@ -127,6 +138,15 @@ DBObjectType DBObjectTypeFromString(const std::string& type) {
 
 DBObject::DBObject(const std::string& name, const DBObjectType& objectAndPermissionType)
     : objectName_(name) {
+  objectType_ = objectAndPermissionType;
+  objectKey_.permissionType = objectAndPermissionType;
+  ownerId_ = 0;
+}
+
+DBObject::DBObject(const std::string& parent_name,
+                   const std::string& name,
+                   const DBObjectType& objectAndPermissionType)
+    : objectName_(shared::concatenate_identifiers({parent_name, name})) {
   objectType_ = objectAndPermissionType;
   objectKey_.permissionType = objectAndPermissionType;
   ownerId_ = 0;
@@ -181,6 +201,12 @@ std::vector<std::string> DBObject::toString() const {
       objectKey.push_back(std::to_string(objectKey_.permissionType));
       objectKey.push_back(std::to_string(objectKey_.dbId));
       objectKey.push_back(std::to_string(objectKey_.objectId));
+      break;
+    case ColumnDBObjectType:
+      objectKey.push_back(std::to_string(objectKey_.permissionType));
+      objectKey.push_back(std::to_string(objectKey_.dbId));
+      objectKey.push_back(std::to_string(objectKey_.objectId));
+      objectKey.push_back(std::to_string(objectKey_.subObjectId));
       break;
     default: {
       CHECK(false);
@@ -247,6 +273,39 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
 
       break;
     }
+    case ColumnDBObjectType: {
+      objectKey_.dbId = catalog.getCurrentDB().dbId;
+
+      if (!getName().empty()) {
+        auto identifiers = shared::split_identifiers(getName());
+        CHECK_EQ(identifiers.size(), 2UL)
+            << "expected two identifiers (table name & column name) for column";
+
+        auto table_name = identifiers[0];
+        auto column_name = identifiers[1];
+
+        auto table =
+            catalog.getMetadataForTable(table_name, /*populateFragmenter=*/false);
+        if (!table) {
+          throw std::runtime_error("Failure generating DB object key. Table/View " +
+                                   getName() + " does not exist.");
+        }
+
+        auto column = catalog.getMetadataForColumn(table->tableId, column_name);
+        if (!column) {
+          throw std::runtime_error("Failure generating DB object key. Column " +
+                                   getName() + " does not exist.");
+        }
+
+        objectKey_.objectId = table->tableId;
+        objectKey_.subObjectId = column->columnId;
+        ownerId_ = table->userId;
+      } else {
+        ownerId_ = catalog.getCurrentDB().dbOwner;
+      }
+
+      break;
+    }
     case DashboardDBObjectType: {
       objectKey_.dbId = catalog.getCurrentDB().dbId;
 
@@ -270,8 +329,8 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
   }
 }
 
-DBObjectKey DBObjectKey::fromString(const std::vector<std::string>& key,
-                                    const DBObjectType& type) {
+DBObjectKey DBObjectKey::fromStringVector(const std::vector<std::string>& key,
+                                          const DBObjectType& type) {
   DBObjectKey objectKey;
   switch (type) {
     case DatabaseDBObjectType:
@@ -286,8 +345,37 @@ DBObjectKey DBObjectKey::fromString(const std::vector<std::string>& key,
       objectKey.dbId = std::stoi(key[1]);
       objectKey.objectId = std::stoi(key[2]);
       break;
+    case ColumnDBObjectType:
+      objectKey.permissionType = std::stoi(key[0]);
+      objectKey.dbId = std::stoi(key[1]);
+      objectKey.objectId = std::stoi(key[2]);
+      objectKey.subObjectId = std::stoi(key[3]);
+      break;
     default:
       CHECK(false);
   }
   return objectKey;
+}
+
+bool DBObjectKey::operator<(const DBObjectKey& key) const {
+  bool b;
+  if (permissionType == key.permissionType) {
+    if (dbId == key.dbId) {
+      if (objectId == key.objectId) {
+        b = subObjectId < key.subObjectId;
+      } else {
+        b = objectId < key.objectId;
+      }
+    } else {
+      b = dbId < key.dbId;
+    }
+  } else {
+    b = permissionType < key.permissionType;
+  }
+  return b;
+}
+
+bool DBObjectKey::operator==(const DBObjectKey& key) const {
+  return permissionType == key.permissionType && dbId == key.dbId &&
+         objectId == key.objectId && subObjectId == key.subObjectId;
 }

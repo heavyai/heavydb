@@ -37,6 +37,7 @@ struct ObjectRoleDescriptor {
   AccessPrivileges privs;
   int32_t objectOwnerId;
   std::string objectName;
+  int32_t subObjectId;
 };
 
 #endif  // OBJECT_ROLE_DESCRIPTOR
