@@ -78,14 +78,14 @@ GCPTransformer::~GCPTransformer() {
 }
 
 void GCPTransformer::transform(size_t num_elems, double* x, double* y) {
-  int success[num_elems];
+  std::vector<int> success(num_elems);
   bool failed{false};
   switch (mode_) {
     case Mode::kPolynomial:
-      GDALGCPTransform(transform_arg_, false, num_elems, x, y, nullptr, success);
+      GDALGCPTransform(transform_arg_, false, num_elems, x, y, nullptr, success.data());
       break;
     case Mode::kThinPlateSpline:
-      GDALTPSTransform(transform_arg_, false, num_elems, x, y, nullptr, success);
+      GDALTPSTransform(transform_arg_, false, num_elems, x, y, nullptr, success.data());
       break;
   }
   for (size_t i = 0; i < num_elems; ++i) {
@@ -374,9 +374,9 @@ void coordinate_transform(
     const std::vector<Geospatial::GDAL::CoordinateTransformationUqPtr>&
         coordinate_transformers) {
   if (coordinate_transformers.size() > 0) {
-    int success[num_elems];
+    std::vector<int> success(num_elems);
     bool failed{false};
-    coordinate_transformers[0]->Transform(num_elems, lons, lats, nullptr, success);
+    coordinate_transformers[0]->Transform(num_elems, lons, lats, nullptr, success.data());
     for (size_t i = 0; i < num_elems; ++i) {
       if (!success[i]) {
         failed = true;
