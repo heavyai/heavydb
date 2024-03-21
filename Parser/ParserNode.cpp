@@ -67,6 +67,7 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "ReservedKeywords.h"
 #include "Shared/DbObjectKeys.h"
+#include "Shared/QuotedIdentifierUtil.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/measure.h"
@@ -3922,8 +3923,10 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  RelAlgExecutor ra_executor(
-      executor.get(), query_ra, query_state_proxy->shared_from_this());
+  RelAlgExecutor ra_executor(executor.get(),
+                             query_ra,
+                             *query_state_proxy->getConstSessionInfo(),
+                             query_state_proxy->shared_from_this());
   CompilationOptions co = CompilationOptions::defaults(device_type);
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
@@ -3991,7 +3994,7 @@ size_t LocalQueryConnector::getOuterFragmentCount(QueryStateProxy query_state_pr
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  RelAlgExecutor ra_executor(executor.get(), query_ra);
+  RelAlgExecutor ra_executor(executor.get(), query_ra, *session);
   CompilationOptions co = {device_type, true, ExecutorOptLevel::Default, false};
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
@@ -5988,56 +5991,54 @@ void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
 }
 
-std::vector<std::string> splitObjectHierName(const std::string& hierName) {
-  std::vector<std::string> componentNames;
-  boost::split(componentNames, hierName, boost::is_any_of("."));
-  return componentNames;
-}
-
-std::string extractObjectNameFromHierName(const std::string& objectHierName,
-                                          const std::string& objectType,
-                                          const Catalog_Namespace::Catalog& cat) {
-  std::string objectName;
-  std::vector<std::string> componentNames = splitObjectHierName(objectHierName);
-  if (objectType.compare("DATABASE") == 0) {
-    if (componentNames.size() == 1) {
-      objectName = componentNames[0];
+std::string extract_object_name_from_heir_name(
+    const std::string& object_heir_name,
+    const std::string& object_type,
+    const Catalog_Namespace::SessionInfo& session) {
+  std::string object_name;
+  std::vector<std::string> component_names = shared::split_identifiers(object_heir_name);
+  auto& catalog = session.getCatalog();
+  if (object_type.compare("DATABASE") == 0) {
+    if (component_names.size() == 1) {
+      object_name = component_names[0];
     } else {
-      throw std::runtime_error("DB object name is not correct " + objectHierName);
+      throw std::runtime_error("DB object name is not correct " + object_heir_name);
     }
   } else {
-    if (objectType.compare("TABLE") == 0 || objectType.compare("DASHBOARD") == 0 ||
-        objectType.compare("VIEW") == 0 || objectType.compare("SERVER") == 0) {
-      switch (componentNames.size()) {
+    if (object_type.compare("TABLE") == 0 || object_type.compare("DASHBOARD") == 0 ||
+        object_type.compare("VIEW") == 0 || object_type.compare("SERVER") == 0) {
+      switch (component_names.size()) {
         case (1): {
-          objectName = componentNames[0];
+          object_name = component_names[0];
           break;
         }
         case (2): {
-          objectName = componentNames[1];
+          if (to_upper(component_names[0]) != to_upper(catalog.name())) {
+            throw std::runtime_error("The identifier " + object_heir_name +
+                                     " references database " + component_names[0] +
+                                     " which does not match the current database " +
+                                     catalog.name() +
+                                     ". Cross database references in this context are "
+                                     "currently not supported.");
+          }
+          object_name = component_names[1];
           break;
         }
         default: {
-          throw std::runtime_error("DB object name is not correct " + objectHierName);
+          throw std::runtime_error("DB object name is not correct " + object_heir_name);
         }
       }
     } else {
-      throw std::runtime_error("DB object type " + objectType + " is not supported.");
+      throw std::runtime_error("DB object type " + object_type + " is not supported.");
     }
   }
-  return objectName;
+  return object_name;
 }
 
 static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(
     const std::string& privs,
     const DBObjectType& objectType,
     const std::string& object_name) {
-  static const std::set<std::string> unimplemented_privileges = {"SELECT COLUMN"};
-
-  if (unimplemented_privileges.find(privs) != unimplemented_privileges.end()) {
-    throw std::runtime_error("Privilege type " + privs + " is unsupported.");
-  }
-
   static const std::map<std::pair<const std::string, const DBObjectType>,
                         std::pair<const AccessPrivileges, const DBObjectType>>
       privileges_lookup{
@@ -6049,6 +6050,8 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(
           {{"ALL"s, ViewDBObjectType}, {AccessPrivileges::ALL_VIEW, ViewDBObjectType}},
           {{"ALL"s, ServerDBObjectType},
            {AccessPrivileges::ALL_SERVER, ServerDBObjectType}},
+          {{"ALL"s, ColumnDBObjectType},
+           {AccessPrivileges::ALL_COLUMN, ColumnDBObjectType}},
 
           {{"CREATE TABLE"s, DatabaseDBObjectType},
            {AccessPrivileges::CREATE_TABLE, TableDBObjectType}},
@@ -6093,6 +6096,9 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(
           {{"SELECT"s, ViewDBObjectType},
            {AccessPrivileges::SELECT_FROM_VIEW, ViewDBObjectType}},
           {{"DROP"s, ViewDBObjectType}, {AccessPrivileges::DROP_VIEW, ViewDBObjectType}},
+
+          {{"SELECT"s, ColumnDBObjectType},
+           {AccessPrivileges::SELECT_COLUMN_FROM_TABLE, ColumnDBObjectType}},
 
           {{"CREATE DASHBOARD"s, DatabaseDBObjectType},
            {AccessPrivileges::CREATE_DASHBOARD, DashboardDBObjectType}},
@@ -6178,6 +6184,46 @@ static void verifyObject(Catalog_Namespace::Catalog& sessionCatalog,
   }
 }
 
+namespace {
+
+void validate_columns_specified_in_privilege(const std::string& table_name,
+                                             const Privilege& priv,
+                                             Catalog_Namespace::Catalog& catalog) {
+  auto td = catalog.getMetadataForTable(table_name);
+  if (!td) {
+    throw std::runtime_error("Table " + table_name + " does not exist in database " +
+                             catalog.name());
+  }
+
+  for (auto& column_name : priv.sub_targets) {
+    auto cd = catalog.getMetadataForColumn(td->tableId, column_name);
+    if (!cd) {
+      throw std::runtime_error("Column " + column_name + " does not exist for table " +
+                               table_name + " in database " + catalog.name());
+    }
+  }
+}
+
+std::vector<DBObject> create_column_db_objects(Catalog_Namespace::Catalog& catalog,
+                                               const Privilege& priv,
+                                               const DBObject& parent_table) {
+  if (parent_table.getType() != DBObjectType::TableDBObjectType) {
+    throw std::runtime_error("SELECT COLUMN privileges are only supported for tables");
+  }
+
+  auto parent_table_name = parent_table.getName();
+  validate_columns_specified_in_privilege(parent_table_name, priv, catalog);
+
+  std::vector<DBObject> columns;
+  for (auto& column_name : priv.sub_targets) {
+    columns.emplace_back(
+        parent_table_name, column_name, DBObjectType::ColumnDBObjectType);
+    columns.back().loadKey(catalog);
+  }
+  return columns;
+}
+}  // namespace
+
 // GRANT SELECT/INSERT/CREATE ON TABLE payroll_table TO payroll_dept_role;
 GrantPrivilegesStmt::GrantPrivilegesStmt(const rapidjson::Value& payload) {
   CHECK(payload.HasMember("type"));
@@ -6189,10 +6235,19 @@ GrantPrivilegesStmt::GrantPrivilegesStmt(const rapidjson::Value& payload) {
   if (payload.HasMember("privileges")) {
     CHECK(payload["privileges"].IsArray());
     for (auto& privilege : payload["privileges"].GetArray()) {
+      Privilege priv;
       CHECK(privilege.IsObject());
       CHECK(privilege.HasMember("type"));
       auto r = json_str(privilege["type"]);
-      privileges_.emplace_back(r);
+      priv.privilege_type = r;
+      if (privilege.HasMember("columns")) {
+        CHECK(privilege["columns"].IsArray());
+        for (auto& column : privilege["columns"].GetArray()) {
+          std::string col = json_str(column);
+          priv.sub_targets.emplace_back(col);
+        }
+      }
+      privileges_.emplace_back(priv);
     }
   }
   if (payload.HasMember("grantees")) {
@@ -6209,11 +6264,11 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session,
   if (read_only_mode) {
     throw std::runtime_error("GRANT invalid in read only mode.");
   }
-  auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName =
-      extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
+      extract_object_name_from_heir_name(get_object(), parserObjectType, session);
+  auto& catalog = session.getCatalog();
   auto objectType = DBObjectTypeFromString(parserObjectType);
   if (objectType == ServerDBObjectType && !g_enable_fsi) {
     throw std::runtime_error("GRANT failed. SERVER object unrecognized.");
@@ -6230,15 +6285,31 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session,
           "object.");
     }
   }
+
+  dbObject.loadKey(catalog);
   /* set proper values of privileges & grant them to the object */
-  std::vector<DBObject> objects(get_privs().size(), dbObject);
-  for (size_t i = 0; i < get_privs().size(); ++i) {
-    std::pair<AccessPrivileges, DBObjectType> priv = parseStringPrivs(
-        boost::to_upper_copy<std::string>(get_privs()[i]), objectType, get_object());
-    objects[i].setPrivileges(priv.first);
-    objects[i].setPermissionType(priv.second);
-    if (priv.second == ServerDBObjectType && !g_enable_fsi) {
-      throw std::runtime_error("GRANT failed. SERVER object unrecognized.");
+  std::vector<DBObject> objects;
+  for (const auto& priv : privileges_) {
+    const std::string privilege = boost::to_upper_copy<std::string>(priv.privilege_type);
+    if (privilege == "SELECT COLUMN") {
+      auto column_objects = create_column_db_objects(catalog, priv, dbObject);
+      for (auto& column_object : column_objects) {
+        std::pair<AccessPrivileges, DBObjectType> priv_result =
+            parseStringPrivs("SELECT", column_object.getType(), column_object.getName());
+        column_object.setPrivileges(priv_result.first);
+        column_object.setPermissionType(priv_result.second);
+        objects.emplace_back(column_object);
+      }
+    } else {
+      std::pair<AccessPrivileges, DBObjectType> priv_result =
+          parseStringPrivs(privilege, objectType, get_object());
+      auto object = dbObject;
+      object.setPrivileges(priv_result.first);
+      object.setPermissionType(priv_result.second);
+      objects.emplace_back(object);
+      if (priv_result.second == ServerDBObjectType && !g_enable_fsi) {
+        throw std::runtime_error("GRANT failed. SERVER object unrecognized.");
+      }
     }
   }
   SysCatalog::instance().grantDBObjectPrivilegesBatch(grantees_, objects, catalog);
@@ -6255,10 +6326,19 @@ RevokePrivilegesStmt::RevokePrivilegesStmt(const rapidjson::Value& payload) {
   if (payload.HasMember("privileges")) {
     CHECK(payload["privileges"].IsArray());
     for (auto& privilege : payload["privileges"].GetArray()) {
+      Privilege priv;
       CHECK(privilege.IsObject());
       CHECK(privilege.HasMember("type"));
       auto r = json_str(privilege["type"]);
-      privileges_.emplace_back(r);
+      priv.privilege_type = r;
+      if (privilege.HasMember("columns")) {
+        CHECK(privilege["columns"].IsArray());
+        for (auto& column : privilege["columns"].GetArray()) {
+          std::string col = json_str(column);
+          priv.sub_targets.emplace_back(col);
+        }
+      }
+      privileges_.emplace_back(priv);
     }
   }
   if (payload.HasMember("grantees")) {
@@ -6275,11 +6355,11 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
   if (read_only_mode) {
     throw std::runtime_error("REVOKE invalid in read only mode.");
   }
-  auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName =
-      extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
+      extract_object_name_from_heir_name(get_object(), parserObjectType, session);
+  auto& catalog = session.getCatalog();
   auto objectType = DBObjectTypeFromString(parserObjectType);
   if (objectType == ServerDBObjectType && !g_enable_fsi) {
     throw std::runtime_error("REVOKE failed. SERVER object unrecognized.");
@@ -6296,15 +6376,31 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
           "object.");
     }
   }
+
+  dbObject.loadKey(catalog);
   /* set proper values of privileges & grant them to the object */
-  std::vector<DBObject> objects(get_privs().size(), dbObject);
-  for (size_t i = 0; i < get_privs().size(); ++i) {
-    std::pair<AccessPrivileges, DBObjectType> priv = parseStringPrivs(
-        boost::to_upper_copy<std::string>(get_privs()[i]), objectType, get_object());
-    objects[i].setPrivileges(priv.first);
-    objects[i].setPermissionType(priv.second);
-    if (priv.second == ServerDBObjectType && !g_enable_fsi) {
-      throw std::runtime_error("REVOKE failed. SERVER object unrecognized.");
+  std::vector<DBObject> objects;
+  for (const auto& priv : privileges_) {
+    const std::string privilege = boost::to_upper_copy<std::string>(priv.privilege_type);
+    if (privilege == "SELECT COLUMN") {
+      auto column_objects = create_column_db_objects(catalog, priv, dbObject);
+      for (auto& column_object : column_objects) {
+        std::pair<AccessPrivileges, DBObjectType> priv_result =
+            parseStringPrivs("SELECT", column_object.getType(), column_object.getName());
+        column_object.setPrivileges(priv_result.first);
+        column_object.setPermissionType(priv_result.second);
+        objects.emplace_back(column_object);
+      }
+    } else {
+      std::pair<AccessPrivileges, DBObjectType> priv_result =
+          parseStringPrivs(privilege, objectType, get_object());
+      auto object = dbObject;
+      object.setPrivileges(priv_result.first);
+      object.setPermissionType(priv_result.second);
+      objects.emplace_back(object);
+      if (priv_result.second == ServerDBObjectType && !g_enable_fsi) {
+        throw std::runtime_error("REVOKE failed. SERVER object unrecognized.");
+      }
     }
   }
   SysCatalog::instance().revokeDBObjectPrivilegesBatch(grantees_, objects, catalog);
@@ -6316,11 +6412,11 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session,
                                  bool read_only_mode) {
   // valid in read_only_mode
 
-  auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName =
-      extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
+      extract_object_name_from_heir_name(get_object(), parserObjectType, session);
+  auto& catalog = session.getCatalog();
   auto objectType = DBObjectTypeFromString(parserObjectType);
   /* verify object exists and is of proper type *before* trying to execute */
   verifyObject(catalog, objectName, objectType, "SHOW");

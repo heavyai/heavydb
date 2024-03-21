@@ -909,6 +909,8 @@ class DBHandler : public HeavyIf {
                                   const TDBObjectPermissions& permissions);
   static bool has_server_permission(const AccessPrivileges& privs,
                                     const TDBObjectPermissions& permissions);
+  static bool has_column_permission(const AccessPrivileges& privs,
+                                    const TDBObjectPermissions& permissions);
   // For the provided upper case column names `uc_column_names`, return
   // the tables from `table_names` which contain at least one of them.
   // Used to rank the TABLE auto-completion hints by the columns
@@ -1033,7 +1035,8 @@ class DBHandler : public HeavyIf {
       {"dashboard"s, has_dashboard_permission},
       {"table"s, has_table_permission},
       {"view"s, has_view_permission},
-      {"server"s, has_server_permission}};
+      {"server"s, has_server_permission},
+      {"column"s, has_column_permission}};
 
   void check_and_invalidate_sessions(Parser::DDLStmt* ddl);
 

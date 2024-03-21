@@ -43,7 +43,8 @@ enum DBObjectType {
   TableDBObjectType,
   DashboardDBObjectType,
   ViewDBObjectType,
-  ServerDBObjectType
+  ServerDBObjectType,
+  ColumnDBObjectType
 };
 
 std::string DBObjectTypeToString(DBObjectType type);
@@ -53,25 +54,16 @@ struct DBObjectKey {
   int32_t permissionType = -1;
   int32_t dbId = -1;
   int32_t objectId = -1;
+  int32_t subObjectId = -1;
 
-  static const size_t N_COLUMNS = 3;
+  bool operator<(const DBObjectKey& key) const;
+  bool operator==(const DBObjectKey& key) const;
 
-  bool operator<(const DBObjectKey& key) const {
-    int32_t ids_a[N_COLUMNS] = {permissionType, dbId, objectId};
-    int32_t ids_b[N_COLUMNS] = {key.permissionType, key.dbId, key.objectId};
-    return memcmp(ids_a, ids_b, N_COLUMNS * sizeof(int32_t)) < 0;
-  }
-
-  bool operator==(const DBObjectKey& key) const {
-    return permissionType == key.permissionType && dbId == key.dbId &&
-           objectId == key.objectId;
-  }
-
-  static DBObjectKey fromString(const std::vector<std::string>& key,
-                                const DBObjectType& type);
+  static DBObjectKey fromStringVector(const std::vector<std::string>& key,
+                                      const DBObjectType& type);
 };
 
-// Access privileges currently supported
+// Access privileges currently supported.
 
 struct DatabasePrivileges {
   static const int32_t ALL = -1;
@@ -94,6 +86,11 @@ struct TablePrivileges {
 
   static const int32_t ALL_MIGRATE =
       CREATE_TABLE | DROP_TABLE | SELECT_FROM_TABLE | INSERT_INTO_TABLE;
+};
+
+struct ColumnPrivileges {
+  static const int32_t ALL = -1;
+  static const int32_t SELECT_COLUMN_FROM_TABLE = 1 << 0;
 };
 
 struct DashboardPrivileges {
@@ -164,6 +161,10 @@ struct AccessPrivileges {
   static const AccessPrivileges TRUNCATE_TABLE;
   static const AccessPrivileges ALTER_TABLE;
 
+  // Column permissions
+  static const AccessPrivileges ALL_COLUMN;
+  static const AccessPrivileges SELECT_COLUMN_FROM_TABLE;
+
   // dashboard permissions
   static const AccessPrivileges ALL_DASHBOARD_MIGRATE;
   static const AccessPrivileges ALL_DASHBOARD;
@@ -194,6 +195,9 @@ struct AccessPrivileges {
 class DBObject {
  public:
   DBObject(const std::string& name, const DBObjectType& objectAndPermissionType);
+  DBObject(const std::string& name,
+           const std::string& subname,
+           const DBObjectType& objectAndPermissionType);
   DBObject(const int32_t id, const DBObjectType& objectAndPermissionType);
   DBObject(DBObjectKey key, AccessPrivileges privs, int32_t owner)
       : objectName_("")

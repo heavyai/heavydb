@@ -72,6 +72,7 @@ class RelAlgExecutor : private StorageIOFacility {
 
   RelAlgExecutor(Executor* executor,
                  const std::string& query_ra,
+                 const Catalog_Namespace::SessionInfo& session_info,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr,
                  gfx::GfxContext* gfx_context = nullptr)
       : StorageIOFacility(executor)
@@ -82,10 +83,12 @@ class RelAlgExecutor : private StorageIOFacility {
       , queue_time_ms_(0)
       , gfx_context_{gfx_context} {
     initializeParallelismHints();
+    checkTableAndColumnPrivileges(session_info);
   }
 
   RelAlgExecutor(Executor* executor,
                  std::unique_ptr<RelAlgDag> query_dag,
+                 const Catalog_Namespace::SessionInfo& session_info,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr,
                  gfx::GfxContext* gfx_context = nullptr)
       : StorageIOFacility(executor)
@@ -96,6 +99,7 @@ class RelAlgExecutor : private StorageIOFacility {
       , queue_time_ms_(0)
       , gfx_context_{gfx_context} {
     initializeParallelismHints();
+    checkTableAndColumnPrivileges(session_info);
   }
 
   size_t getOuterFragmentCount(const CompilationOptions& co, const ExecutionOptions& eo);
@@ -230,6 +234,8 @@ class RelAlgExecutor : private StorageIOFacility {
   void prepareForSystemTableExecution(const CompilationOptions& co) const;
 
  private:
+  void checkTableAndColumnPrivileges(const Catalog_Namespace::SessionInfo& session_info);
+
   void initializeParallelismHints();
 
   ExecutionResult executeRelAlgQueryNoRetry(const CompilationOptions& co,

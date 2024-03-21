@@ -389,7 +389,8 @@ RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
+  auto ra_executor =
+      RelAlgExecutor(executor.get(), query_ra, *session_info_, query_state);
   auto query_hints =
       ra_executor.getParsedQueryHint(ra_executor.getRootRelAlgNodeShPtr().get());
   return query_hints ? *query_hints : RegisteredQueryHint::defaults();
@@ -414,7 +415,8 @@ std::shared_ptr<const RelAlgNode> QueryRunner::getRootNodeFromParsedQuery(
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
+  auto ra_executor =
+      RelAlgExecutor(executor.get(), query_ra, *session_info_, query_state);
   return ra_executor.getRootRelAlgNodeShPtr();
 }
 
@@ -437,7 +439,8 @@ QueryRunner::getParsedQueryHints(const std::string& query_str) {
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
+  auto ra_executor =
+      RelAlgExecutor(executor.get(), query_ra, *session_info_, query_state);
   return ra_executor.getParsedQueryHints();
 }
 
@@ -459,7 +462,8 @@ std::optional<RegisteredQueryHint> QueryRunner::getParsedGlobalQueryHints(
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
+  auto ra_executor =
+      RelAlgExecutor(executor.get(), query_ra, *session_info_, query_state);
   return ra_executor.getGlobalQueryHint();
 }
 
@@ -480,7 +484,8 @@ RaExecutionSequence QueryRunner::getRaExecutionSequence(const std::string& query
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
+  auto ra_executor =
+      RelAlgExecutor(executor.get(), query_ra, *session_info_, query_state);
   return ra_executor.getRaExecutionSequence(ra_executor.getRootRelAlgNodeShPtr().get(),
                                             executor.get());
 }
@@ -528,7 +533,7 @@ std::shared_ptr<RelAlgTranslator> QueryRunner::getRelAlgTranslator(
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor, query_ra);
+  auto ra_executor = RelAlgExecutor(executor, query_ra, *session_info_);
   auto root_node_shared_ptr = ra_executor.getRootRelAlgNodeShPtr();
   return ra_executor.getRelAlgTranslator(root_node_shared_ptr.get());
 }
@@ -551,7 +556,7 @@ QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), query_ra);
+  auto ra_executor = RelAlgExecutor(executor.get(), query_ra, *session_info_);
   // note that we assume the test for data recycler that needs to have join_info
   // does not contain any ORDER BY clause; this is necessary to create work_unit
   // without actually performing the query
@@ -711,10 +716,12 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
   auto stdlog = STDLOG(query_state);
   auto& cat = query_state->getConstSessionInfo()->getCatalog();
   std::string query_ra{""};
+  const auto& session_ref = *session_info_;
 
   std::shared_ptr<ExecutionResult> result;
   auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
       [&cat,
+       &session_ref,
        &query_ra,
        &device_type,
        &query_state,
@@ -762,7 +769,8 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
                                    calciteOptimizationOption)
                          .plan_result;
         }
-        auto ra_executor = RelAlgExecutor(executor.get(), query_ra, query_state);
+        auto ra_executor =
+            RelAlgExecutor(executor.get(), query_ra, session_ref, query_state);
         result = std::make_shared<ExecutionResult>(
             ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
       });
@@ -848,7 +856,8 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), query_ra);
+  auto ra_executor =
+      RelAlgExecutor(executor.get(), query_ra, *query_state_proxy->getConstSessionInfo());
   auto result = std::make_shared<ExecutionResult>(
       ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
   const auto& filter_push_down_requests = result->getPushedDownFilterInfo();
@@ -871,7 +880,8 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
     auto eo_modified = eo;
     eo_modified.find_push_down_candidates = false;
     eo_modified.just_calcite_explain = false;
-    auto new_ra_executor = RelAlgExecutor(executor.get(), new_query_ra);
+    auto new_ra_executor = RelAlgExecutor(
+        executor.get(), new_query_ra, *query_state_proxy->getConstSessionInfo());
     return std::make_shared<ExecutionResult>(
         new_ra_executor.executeRelAlgQuery(co, eo_modified, false, false, nullptr));
   } else {
@@ -945,6 +955,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
   }
 
   auto& cat = session_info_->getCatalog();
+  const auto& session_ref = *session_info_;
 
   std::shared_ptr<ExecutionResult> result;
   auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
@@ -954,6 +965,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
        explain_type = this->explain_type_,
        &eo,
        &query_state,
+       &session_ref,
        &result,
        parent_thread_local_ids = logger::thread_local_ids()](const size_t worker_id) {
         logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
@@ -974,7 +986,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
                                             calciteQueryParsingOption,
                                             calciteOptimizationOption)
                                   .plan_result;
-        auto ra_executor = RelAlgExecutor(executor.get(), query_ra);
+        auto ra_executor = RelAlgExecutor(executor.get(), query_ra, session_ref);
         result = std::make_shared<ExecutionResult>(
             ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
       });
@@ -1013,6 +1025,7 @@ std::unique_ptr<RelAlgDag> QueryRunner::getRelAlgDag(const std::string& query_st
   auto query_state = create_query_state(session_info_, query_str);
   auto stdlog = STDLOG(query_state);
   auto& cat = session_info_->getCatalog();
+  const auto& session_ref = *session_info_;
 
   std::unique_ptr<RelAlgDag> rel_alg_dag;
   auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
@@ -1020,6 +1033,7 @@ std::unique_ptr<RelAlgDag> QueryRunner::getRelAlgDag(const std::string& query_st
        &query_str,
        &query_state,
        &rel_alg_dag,
+       &session_ref,
        parent_thread_local_ids = logger::thread_local_ids()](const size_t worker_id) {
         logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
         auto executor = Executor::getExecutor(worker_id);
@@ -1035,7 +1049,7 @@ std::unique_ptr<RelAlgDag> QueryRunner::getRelAlgDag(const std::string& query_st
                                             calciteQueryParsingOption,
                                             calciteOptimizationOption)
                                   .plan_result;
-        auto ra_executor = RelAlgExecutor(executor.get(), query_ra);
+        auto ra_executor = RelAlgExecutor(executor.get(), query_ra, session_ref);
         rel_alg_dag = ra_executor.getOwnedRelAlgDag();
       });
   CHECK(dispatch_queue_);

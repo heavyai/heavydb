@@ -2762,7 +2762,21 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
 
 void Catalog::dropColumnTransactional(const TableDescriptor& td,
                                       const ColumnDescriptor& cd) {
-  dropColumnPolicies(td, cd);
+  {
+    // In order to avoid a lock-order inversion, system catalog operations need
+    // to occur outside catalog locks
+    dropColumnPolicies(td, cd);
+    SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
+        DBObject(td.tableName, cd.columnName, ColumnDBObjectType), this);
+    if (td.nShards > 0 && td.shard < 0) {
+      for (const auto shard : getPhysicalTablesDescriptors(&td)) {
+        const auto shard_cd = getMetadataForColumn(shard->tableId, cd.columnId);
+        CHECK(shard_cd);
+        SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
+            DBObject(shard->tableName, shard_cd->columnName, ColumnDBObjectType), this);
+      }
+    }
+  }
 
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
@@ -4575,6 +4589,32 @@ void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTa
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
 }
 
+namespace {
+void rename_column(const std::string& renamed_table,
+                   const std::string& renamed_column,
+                   const int column_id,
+                   const int table_id,
+                   const int db_id,
+                   Catalog_Namespace::Catalog& catalog) {
+  DBObject object(renamed_table, renamed_column, ColumnDBObjectType);
+  DBObjectKey key;
+  key.dbId = db_id;
+  key.objectId = table_id;
+  key.subObjectId = column_id;
+  key.permissionType = static_cast<int>(DBObjectType::ColumnDBObjectType);
+  object.setObjectKey(key);
+  auto objdescs = SysCatalog::instance().getMetadataForObject(
+      db_id, static_cast<int>(DBObjectType::ColumnDBObjectType), table_id, column_id);
+  for (auto obj : objdescs) {
+    Grantee* grnt = SysCatalog::instance().getGrantee(obj->roleName);
+    if (grnt) {
+      grnt->renameDbObject(object);
+    }
+  }
+  SysCatalog::instance().renameObjectsInDescriptorMap(object, catalog);
+}
+}  // namespace
+
 void Catalog::renameTable(const TableDescriptor* td, const string& newTableName) {
   {
     cat_write_lock write_lock(this);
@@ -4612,6 +4652,21 @@ void Catalog::renameTable(const TableDescriptor* td, const string& newTableName)
       }
     }
     SysCatalog::instance().renameObjectsInDescriptorMap(object, *this);
+  }
+  {
+    // Rename all column objects
+    auto col_descs = SysCatalog::instance().getMetadataForSubObjects(
+        currentDB_.dbId, static_cast<int>(DBObjectType::ColumnDBObjectType), td->tableId);
+    for (const auto& col_desc : col_descs) {
+      auto column_descriptor = getMetadataForColumn(td->tableId, col_desc->subObjectId);
+      CHECK(column_descriptor);
+      rename_column(newTableName,
+                    column_descriptor->columnName,
+                    column_descriptor->columnId,
+                    td->tableId,
+                    currentDB_.dbId,
+                    *this);
+    }
   }
 }
 
@@ -4794,46 +4849,65 @@ void Catalog::renameTables(
       }
       SysCatalog::instance().renameObjectsInDescriptorMap(object, *this);
     }
+    {
+      // Rename all column objects
+      auto col_descs = SysCatalog::instance().getMetadataForSubObjects(
+          currentDB_.dbId, static_cast<int>(DBObjectType::ColumnDBObjectType), tableId);
+      for (const auto& col_desc : col_descs) {
+        auto column_descriptor = getMetadataForColumn(tableId, col_desc->subObjectId);
+        CHECK(column_descriptor);
+        rename_column(newTableName,
+                      column_descriptor->columnName,
+                      column_descriptor->columnId,
+                      tableId,
+                      currentDB_.dbId,
+                      *this);
+      }
+    }
   }
 }
 
 void Catalog::renameColumn(const TableDescriptor* td,
                            const ColumnDescriptor* cd,
                            const string& newColumnName) {
-  cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
+  {
+    cat_write_lock write_lock(this);
+    cat_sqlite_lock sqlite_lock(this);
+    sqliteConnector_.query("BEGIN TRANSACTION");
+    try {
+      for (int i = 0; i <= cd->columnType.get_physical_cols(); ++i) {
+        auto cdx = getMetadataForColumn(td->tableId, cd->columnId + i);
+        CHECK(cdx);
+        std::string new_column_name = cdx->columnName;
+        new_column_name.replace(0, cd->columnName.size(), newColumnName);
+        sqliteConnector_.query_with_text_params(
+            "UPDATE mapd_columns SET name = ? WHERE tableid = ? AND columnid = ?",
+            std::vector<std::string>{new_column_name,
+                                     std::to_string(td->tableId),
+                                     std::to_string(cdx->columnId)});
+      }
+    } catch (std::exception& e) {
+      sqliteConnector_.query("ROLLBACK TRANSACTION");
+      throw;
+    }
+    sqliteConnector_.query("END TRANSACTION");
+    calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
     for (int i = 0; i <= cd->columnType.get_physical_cols(); ++i) {
       auto cdx = getMetadataForColumn(td->tableId, cd->columnId + i);
       CHECK(cdx);
-      std::string new_column_name = cdx->columnName;
-      new_column_name.replace(0, cd->columnName.size(), newColumnName);
-      sqliteConnector_.query_with_text_params(
-          "UPDATE mapd_columns SET name = ? WHERE tableid = ? AND columnid = ?",
-          std::vector<std::string>{new_column_name,
-                                   std::to_string(td->tableId),
-                                   std::to_string(cdx->columnId)});
+      ColumnDescriptorMap::iterator columnDescIt = columnDescriptorMap_.find(
+          std::make_tuple(td->tableId, to_upper(cdx->columnName)));
+      CHECK(columnDescIt != columnDescriptorMap_.end());
+      ColumnDescriptor* changeCd = columnDescIt->second;
+      changeCd->columnName.replace(0, cd->columnName.size(), newColumnName);
+      columnDescriptorMap_.erase(columnDescIt);  // erase entry under old name
+      columnDescriptorMap_[std::make_tuple(td->tableId, to_upper(changeCd->columnName))] =
+          changeCd;
     }
-  } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
+    calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
   }
-  sqliteConnector_.query("END TRANSACTION");
-  calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
-  for (int i = 0; i <= cd->columnType.get_physical_cols(); ++i) {
-    auto cdx = getMetadataForColumn(td->tableId, cd->columnId + i);
-    CHECK(cdx);
-    ColumnDescriptorMap::iterator columnDescIt = columnDescriptorMap_.find(
-        std::make_tuple(td->tableId, to_upper(cdx->columnName)));
-    CHECK(columnDescIt != columnDescriptorMap_.end());
-    ColumnDescriptor* changeCd = columnDescIt->second;
-    changeCd->columnName.replace(0, cd->columnName.size(), newColumnName);
-    columnDescriptorMap_.erase(columnDescIt);  // erase entry under old name
-    columnDescriptorMap_[std::make_tuple(td->tableId, to_upper(changeCd->columnName))] =
-        changeCd;
-  }
-  calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
+  rename_column(
+      td->tableName, newColumnName, cd->columnId, td->tableId, currentDB_.dbId, *this);
 }
 
 int32_t Catalog::createDashboard(DashboardDescriptor& vd) {
@@ -5138,8 +5212,9 @@ bool Catalog::filterTableByTypeAndUser(const TableDescriptor* td,
   DBObject dbObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType);
   dbObject.loadKey(*this);
   std::vector<DBObject> privObjects = {dbObject};
-  if (!SysCatalog::instance().hasAnyPrivileges(user_metadata, privObjects)) {
-    // skip table, as there are no privileges to access it
+  if (!(td->isView
+            ? SysCatalog::instance().hasAnyPrivileges(user_metadata, privObjects)
+            : SysCatalog::instance().hasAnyTablePrivileges(user_metadata, privObjects))) {
     return false;
   }
   return true;
