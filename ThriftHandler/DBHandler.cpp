@@ -1953,6 +1953,11 @@ static TDBObject serialize_db_object(const std::string& roleName,
       outObject.privs.push_back(ap.hasPermission(ServerPrivileges::SERVER_USAGE));
 
       break;
+    case ColumnDBObjectType:
+      outObject.privilegeObjectType = TDBObjectType::ColumnDBObjectType;
+      outObject.privs.push_back(
+          ap.hasPermission(ColumnPrivileges::SELECT_COLUMN_FROM_TABLE));
+      break;
     default:
       CHECK(false);
   }
@@ -2047,6 +2052,17 @@ bool DBHandler::has_server_permission(const AccessPrivileges& privs,
   }
 }
 
+bool DBHandler::has_column_permission(const AccessPrivileges& privs,
+                                      const TDBObjectPermissions& permissions) {
+  CHECK(permissions.__isset.column_permissions_);
+  auto perms = permissions.column_permissions_;
+  if (perms.select_ && !privs.hasPermission(ColumnPrivileges::SELECT_COLUMN_FROM_TABLE)) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 bool DBHandler::has_object_privilege(const TSessionId& session_id_or_json,
                                      const std::string& granteeName,
                                      const std::string& objectName,
@@ -2096,6 +2112,10 @@ bool DBHandler::has_object_privilege(const TSessionId& session_id_or_json,
     case TDBObjectType::ServerDBObjectType:
       type = DBObjectType::ServerDBObjectType;
       func_name = "server";
+      break;
+    case TDBObjectType::ColumnDBObjectType:
+      type = DBObjectType::ColumnDBObjectType;
+      func_name = "column";
       break;
     default:
       THROW_DB_EXCEPTION("Invalid object type (" + std::to_string(objectType) + ").");
@@ -2167,6 +2187,9 @@ void DBHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
       break;
     case TDBObjectType::ServerDBObjectType:
       object_type = DBObjectType::ServerDBObjectType;
+      break;
+    case TDBObjectType::ColumnDBObjectType:
+      object_type = DBObjectType::ColumnDBObjectType;
       break;
     default:
       THROW_DB_EXCEPTION("Failed to get object privileges for " + objectName +
@@ -2658,7 +2681,9 @@ bool DBHandler::hasTableAccessPrivileges(
   dbObject.loadKey(cat);
   std::vector<DBObject> privObjects = {dbObject};
 
-  return SysCatalog::instance().hasAnyPrivileges(user_metadata, privObjects);
+  return td->isView
+             ? SysCatalog::instance().hasAnyPrivileges(user_metadata, privObjects)
+             : SysCatalog::instance().hasAnyTablePrivileges(user_metadata, privObjects);
 }
 
 void DBHandler::get_tables_impl(std::vector<std::string>& table_names,
@@ -6216,6 +6241,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
       system_parameters_);
   RelAlgExecutor ra_executor(executor.get(),
                              query_ra,
+                             *query_state_proxy->getConstSessionInfo(),
                              query_state_proxy->shared_from_this(),
                              nullptr);
   CompilationOptions co = {executor_device_type,

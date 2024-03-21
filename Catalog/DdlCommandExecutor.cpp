@@ -1872,8 +1872,10 @@ ExecutionResult ShowCreateTableCommand::execute(bool read_only_mode) {
   dbObject.loadKey(catalog);
   std::vector<DBObject> privObjects = {dbObject};
 
-  if (!Catalog_Namespace::SysCatalog::instance().hasAnyPrivileges(
-          session_ptr_->get_currentUser(), privObjects)) {
+  if (!(td->isView ? Catalog_Namespace::SysCatalog::instance().hasAnyPrivileges(
+                         session_ptr_->get_currentUser(), privObjects)
+                   : Catalog_Namespace::SysCatalog::instance().hasAnyTablePrivileges(
+                         session_ptr_->get_currentUser(), privObjects))) {
     throw std::runtime_error("Table/View " + table_name + " does not exist.");
   }
   if (td->isView && !session_ptr_->get_currentUser().isSuper) {

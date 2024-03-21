@@ -3227,10 +3227,16 @@ class TablePermissionsTest : public DBHandlerTestFixture {
     runQueryAndAssertException(query, exception);
   }
 
-  void queryAsTestUserWithPrivilege(const std::string& query,
-                                    const std::string& privilege) {
+  void queryAsTestUserWithPrivilege(
+      const std::string& query,
+      const std::string& privilege,
+      const std::optional<std::string>& secondary_required_privilege = std::nullopt) {
     switchToAdmin();
     sql("GRANT " + privilege + " ON TABLE test_table TO test_user;");
+    if (secondary_required_privilege.has_value()) {
+      sql("GRANT " + secondary_required_privilege.value() +
+          " ON TABLE test_table TO test_user;");
+    }
     login("test_user", "test_pass");
     runQuery(query);
   }
@@ -3244,10 +3250,20 @@ class TablePermissionsTest : public DBHandlerTestFixture {
     runQueryAndAssertException(query, exception);
   }
 
-  void grantThenRevokePrivilegeToTestUser(const std::string& privilege) {
+  void grantThenRevokePrivilegeToTestUser(
+      const std::string& privilege,
+      const std::optional<std::string>& secondary_required_privilege = std::nullopt) {
     switchToAdmin();
     sql("GRANT " + privilege + " ON TABLE test_table TO test_user;");
+    if (secondary_required_privilege.has_value()) {
+      sql("GRANT " + secondary_required_privilege.value() +
+          " ON TABLE test_table TO test_user;");
+    }
     sql("REVOKE " + privilege + " ON TABLE test_table FROM test_user;");
+    if (secondary_required_privilege.has_value()) {
+      sql("REVOKE " + secondary_required_privilege.value() +
+          " ON TABLE test_table FROM test_user;");
+    }
   }
 
   static void createTestUser() {
@@ -3406,6 +3422,7 @@ TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeDeletePrivilege) {
 
 TEST_F(TablePermissionsTest, TableGrantRevokeDeletePrivilege) {
   std::string privilege{"DELETE"};
+  std::string secondary_required_privilege{"SELECT"};
   std::string query{"DELETE FROM test_table WHERE i = 1;"};
   std::string no_privilege_exception{
       "Violation of access privileges: user test_user has no proper "
@@ -3413,9 +3430,9 @@ TEST_F(TablePermissionsTest, TableGrantRevokeDeletePrivilege) {
       "object test_table"};
   createTestTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  grantThenRevokePrivilegeToTestUser(privilege);
+  grantThenRevokePrivilegeToTestUser(privilege, secondary_required_privilege);
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  queryAsTestUserWithPrivilege(query, privilege);
+  queryAsTestUserWithPrivilege(query, privilege, secondary_required_privilege);
 }
 
 TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeInsertPrivilege) {
@@ -3491,6 +3508,7 @@ TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeUpdatePrivilege) {
 
 TEST_F(TablePermissionsTest, TableGrantRevokeUpdatePrivilege) {
   std::string privilege{"UPDATE"};
+  std::string secondary_required_privilege{"SELECT"};
   std::string query{"UPDATE test_table SET i = 2 WHERE i = 1;"};
   std::string no_privilege_exception{
       "Violation of access privileges: user test_user has no proper "
@@ -3498,9 +3516,9 @@ TEST_F(TablePermissionsTest, TableGrantRevokeUpdatePrivilege) {
       "object test_table"};
   createTestTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  grantThenRevokePrivilegeToTestUser(privilege);
+  grantThenRevokePrivilegeToTestUser(privilege, secondary_required_privilege);
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  queryAsTestUserWithPrivilege(query, privilege);
+  queryAsTestUserWithPrivilege(query, privilege, secondary_required_privilege);
 }
 
 TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeShowCreateTablePrivilege) {
@@ -4820,49 +4838,6 @@ Was expecting:
     "MODEL" ...)");
 }
 
-class GrantRevokeSelectColumnTest : public DBHandlerTestFixture {
- protected:
-  static void SetUpTestSuite() {
-    loginAdmin();
-    sql("DROP TABLE IF EXISTS test_table;");
-    sql("DROP VIEW IF EXISTS test_view;");
-    sql("CREATE TABLE test_table ( id INT, val INT, str TEXT);");
-    sql("CREATE VIEW test_view AS ( SELECT * FROM test_table);");
-  }
-
-  static void TearDownTestSuite() {
-    loginAdmin();
-    sql("DROP TABLE IF EXISTS test_table;");
-    sql("DROP VIEW IF EXISTS test_view;");
-  }
-
-  void SetUp() override {
-    DBHandlerTestFixture::SetUp();
-    loginAdmin();
-  }
-
-  void TearDown() override { DBHandlerTestFixture::TearDown(); }
-};
-
-// TODO: GRANT SELECT [VIEW] (col_1, col_2, ...) is unimplemented, when
-// implemented update these tests.
-
-TEST_F(GrantRevokeSelectColumnTest, GrantSelectColumnTable) {
-  queryAndAssertException("GRANT SELECT (test_col) ON TABLE test_table TO admin;",
-                          "Privilege type SELECT COLUMN is unsupported.");
-}
-
-TEST_F(GrantRevokeSelectColumnTest, RevokeSelectColumnTable) {
-  queryAndAssertException("REVOKE SELECT (test_col) ON TABLE test_table FROM admin;",
-                          "Privilege type SELECT COLUMN is unsupported.");
-}
-
-TEST_F(GrantRevokeSelectColumnTest, RevokeSelectColumnOnIllegalType) {
-  queryAndAssertException(
-      "REVOKE SELECT (test_col) ON DATABASE " + shared::kDefaultDbName + " FROM admin;",
-      "Privilege type SELECT COLUMN is unsupported.");
-}
-
 /**
  * Test to check column-capture parsing functionality required by column-level
  * permissions/security.
@@ -5121,6 +5096,580 @@ TEST_F(ColumnCapturerPermissionTest, CrossDbTables) {
       "SELECT s.id AS id, r.custid FROM db1.sales AS s, db2.reports AS r  WHERE s.id = "
       "r.id",
       {{{"CUSTID", "ID"}, "REPORTS", "DB2"}, {{"ID"}, "SALES", "DB1"}});
+}
+
+class GrantRevokeSelectColumnTest : public DBHandlerTestFixture {
+ protected:
+  static void SetUpTestSuite() {
+    loginAdmin();
+
+    sql("DROP USER IF EXISTS test_user;");
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  }
+
+  static void TearDownTestSuite() {
+    loginAdmin();
+    sql("DROP USER IF EXISTS test_user;");
+  }
+
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    loginAdmin();
+
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+
+    sql("DROP TABLE IF EXISTS test_table_quoted_id;");
+    sql("CREATE TABLE test_table_quoted_id ( id INT, \"special\"\".\"\"col\" INT);");
+
+    sql("DROP TABLE IF EXISTS created_test_table;");
+    sql("DROP TABLE IF EXISTS test_table;");
+    sql("DROP VIEW IF EXISTS test_view;");
+    sql("CREATE TABLE test_table ( id INT, val INT, str TEXT);");
+    sql("CREATE VIEW test_view AS ( SELECT * FROM test_table);");
+
+    sql("DROP DATABASE IF EXISTS db1;");
+    sql("CREATE DATABASE db1;");
+    sql("GRANT ACCESS ON DATABASE db1 TO test_user;");
+    sql("GRANT CREATE TABLE ON DATABASE db1 TO test_user;");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "db1");
+    sql("CREATE TABLE test_table ( id INT, val INT, str TEXT);");
+    sql("CREATE VIEW test_view AS ( SELECT * FROM test_table);");
+
+    loginAdmin();
+  }
+
+  void TearDown() override {
+    loginAdmin();
+    sql("DROP TABLE IF EXISTS created_test_table;");
+    sql("DROP TABLE IF EXISTS test_table;");
+    sql("DROP TABLE IF EXISTS new_test_table;");
+    sql("DROP VIEW IF EXISTS test_view;");
+    sql("DROP DATABASE IF EXISTS db1;");
+    sql("DROP TABLE IF EXISTS test_table_quoted_id;");
+    sql("REVOKE ALL ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  using UserLoginInfo = std::pair<std::string, std::string>;
+
+  const UserLoginInfo test_user_ = {shared::kDefaultDbName, "test_user"};
+
+  void loginUser(UserLoginInfo info) {
+    auto user = info.second;
+    CHECK(user_passwords.count(user));
+    login(user, user_passwords.at(user), info.first);
+  }
+
+  void loginTestUser() { loginUser(test_user_); }
+
+  const std::map<std::string, std::string> user_passwords = {{"test_user", "test_pass"}};
+};
+
+TEST_F(GrantRevokeSelectColumnTest, Grant) {
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+
+  loginAdmin();
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult("SELECT val FROM test_table;", {});
+  queryAndAssertException("SELECT id FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+  queryAndAssertException("SELECT str FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantMultiple) {
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+  queryAndAssertException("SELECT str FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+
+  loginAdmin();
+  sql("GRANT SELECT (val,str) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult("SELECT val,str FROM test_table;", {});
+  queryAndAssertException("SELECT id FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, RevokeColumnPrivilegesDirect) {
+  sql("GRANT SELECT (id,val,str) ON TABLE test_table TO test_user;");
+  Catalog_Namespace::SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
+      DBObject("test_table", DBObjectType::TableDBObjectType), &getCatalog());
+
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, DropTableRevokesColumnPrivileges) {
+  // Verify that there are no dangling privileges for columns after dropping table
+  sql("GRANT SELECT (id,val,str) ON TABLE test_table TO test_user;");
+  sql("DROP TABLE test_table;");
+  sql("CREATE TABLE test_table ( id INT, val INT, str TEXT);");
+
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, RevokeAllOnTableRevokesColumnPrivileges) {
+  sql("GRANT SELECT (id,val,str), INSERT ON TABLE test_table TO test_user;");
+  loginTestUser();
+  sql("INSERT INTO test_table VALUES (1,2,'text1');");
+
+  loginAdmin();
+  sql("REVOKE ALL ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+  queryAndAssertException("INSERT INTO test_table VALUES (1,2,'text1');",
+                          "User has no insert privileges on test_table.");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, RevokeAllOnDatabaseRevokesColumnPrivileges) {
+  sql("GRANT SELECT (id,val,str) ON TABLE test_table TO test_user;");
+  sql("REVOKE ALL ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
+  sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " to test_user;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, NonExistentTable) {
+  queryAndAssertException(
+      "GRANT SELECT (id,val,str) ON TABLE non_existent_table TO test_user;",
+      "GRANT failed. Object 'non_existent_table' of type TABLE not found.");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, QueryWithView) {
+  sql("GRANT SELECT ON VIEW test_view TO test_user;");
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  queryAndAssertException(
+      "SELECT t.val, (SELECT max(s.val) FROM test_view s) FROM test_table t;",
+      "Violation of access privileges: user test_user has no proper privileges for "
+      "object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, CrossDbGrantRevoke) {
+  loginAdmin();
+  queryAndAssertException("GRANT SELECT (val) ON TABLE db1.test_table TO test_user;",
+                          "The identifier db1.test_table references database db1 which "
+                          "does not match the current database heavyai. Cross database "
+                          "references in this context are currently not supported.");
+  queryAndAssertException("REVOKE SELECT (val) ON TABLE db1.test_table FROM test_user;",
+                          "The identifier db1.test_table references database db1 which "
+                          "does not match the current database heavyai. Cross database "
+                          "references in this context are currently not supported.");
+
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM db1.test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantRevoke) {
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+
+  loginAdmin();
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult("SELECT val FROM test_table;", {});
+
+  loginAdmin();
+  sql("REVOKE SELECT (val) ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantRevokeColumnWithIncorrectColumnIdentifier) {
+  queryAndAssertException(
+      "GRANT SELECT (db100.test_table_x.val) ON TABLE test_table TO test_user;",
+      "Column db100.test_table_x.val does not exist for table test_table in database "
+      "heavyai");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, RevokeNonExistentPrivilege) {
+  queryAndAssertException(
+      "REVOKE SELECT (val) ON TABLE test_table FROM test_user;",
+      "Can not revoke privileges because test_user has no privileges to test_table.val");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantRevokeNonExistentColumn) {
+  queryAndAssertException(
+      "GRANT SELECT (non_existent_col) ON TABLE test_table TO test_user;",
+      "Column non_existent_col does not exist for table test_table in database heavyai");
+  queryAndAssertException(
+      "REVOKE SELECT (non_existent_col) ON TABLE test_table FROM test_user;",
+      "Column non_existent_col does not exist for table test_table in database heavyai");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantOnTableAndRenameTable) {
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+
+  loginAdmin();
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+  sql("ALTER TABLE test_table RENAME TO new_test_table;");
+
+  loginTestUser();
+  sqlAndCompareResult("SELECT val FROM new_test_table;", {});
+}
+
+TEST_F(GrantRevokeSelectColumnTest, DropColumnReadd) {
+  loginAdmin();
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult("SELECT val FROM test_table;", {});
+
+  loginAdmin();
+  sql("ALTER TABLE test_table DROP COLUMN val;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "SQL Error: From line 1, column 8 to line 1, column 12: Column "
+                          "'val' not found in any table");
+
+  loginAdmin();
+  sql("ALTER TABLE test_table ADD COLUMN val INT;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, AlterColumn) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Alter column not supported in distributed mode";
+  }
+  loginTestUser();
+  queryAndAssertException("SELECT str FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+
+  loginAdmin();
+  sql("GRANT SELECT (str) ON TABLE test_table TO test_user;");
+  sql("INSERT INTO test_table(str) VALUES ('1'),('2'),('3');");
+  sql("ALTER TABLE test_table ALTER COLUMN str TYPE INT;");
+
+  loginTestUser();
+  sqlAndCompareResult("SELECT str FROM test_table;", {{1L}, {2L}, {3L}});
+}
+
+TEST_F(GrantRevokeSelectColumnTest, AlterColumnToGeo) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Alter column not supported in distributed mode";
+  }
+  // NOTE: this test differs from the `AlterColumn` test above in that this
+  // alters to a geo column type, which is an operation that results in columns
+  // being added (the pysical columns.) The behaviour expected here is that the
+  // column level permissions do not carry over to the new columns.
+  //
+  // TOOD: the above behaviour will be changed in the future to be more in line
+  // with what is expected (i.e. the privileges will carry over.)
+  loginTestUser();
+  queryAndAssertException("SELECT str FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+
+  loginAdmin();
+  sql("GRANT SELECT (str) ON TABLE test_table TO test_user;");
+  sql("INSERT INTO test_table(str) VALUES ('POINT(0 0) '),('POINT(1 1)'),('POINT(2 "
+      "2)');");
+  sql("ALTER TABLE test_table ALTER COLUMN str TYPE POINT;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantEmptyColumnsPrivilege) {
+  queryAndAssertException("GRANT SELECT () ON TABLE test_table TO test_user;",
+                          "SQL Error: Encountered \")\" at line 1, column 15.\nWas "
+                          "expecting one of:\n    <BRACKET_QUOTED_IDENTIFIER> ...\n    "
+                          "<QUOTED_IDENTIFIER> ...\n    <BACK_QUOTED_IDENTIFIER> ...\n   "
+                          " <IDENTIFIER> ...\n    <UNICODE_QUOTED_IDENTIFIER> ...\n    ");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantSelectColumnUnsupportedType) {
+  queryAndAssertException("GRANT SELECT (test_col) ON DATABASE db1 TO test_user;",
+                          "SELECT COLUMN privileges are only supported for tables");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantRevokeColumnAfterRenamed) {
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+
+  loginAdmin();
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+  sql("ALTER TABLE test_table RENAME COLUMN val TO new_val;");
+
+  loginTestUser();
+  sqlAndCompareResult("SELECT new_val FROM test_table;", {});
+
+  loginAdmin();
+  sql("REVOKE SELECT (new_val) ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT new_val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+
+  loginAdmin();
+  sql("ALTER TABLE test_table RENAME COLUMN new_val TO val;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantRevokeColumnBeforeRenamed) {
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+
+  loginAdmin();
+  sql("ALTER TABLE test_table RENAME COLUMN val TO new_val;");
+  sql("GRANT SELECT (new_val) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult("SELECT new_val FROM test_table;", {});
+
+  loginAdmin();
+  sql("ALTER TABLE test_table RENAME COLUMN new_val TO val;");
+  sql("REVOKE SELECT (val) ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT val FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantOnColumnListWithOneRevoke) {
+  loginTestUser();
+  queryAndAssertException("SELECT val, id, str FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+
+  loginAdmin();
+  sql("GRANT SELECT (id,val,str) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult("SELECT id,val,str FROM test_table;", {});
+
+  loginAdmin();
+  sql("REVOKE SELECT (val) ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT val, id, str FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, QuotedIdentifierColumnName) {
+  loginTestUser();
+  queryAndAssertException("SELECT \"special\"\".\"\"col\" FROM test_table_quoted_id;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table_quoted_id");
+
+  loginAdmin();
+  sql("GRANT SELECT (\"special\"\".\"\"col\") ON TABLE test_table_quoted_id TO "
+      "test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult("SELECT \"special\"\".\"\"col\" FROM test_table_quoted_id;", {});
+
+  loginAdmin();
+  sql("REVOKE SELECT (\"special\"\".\"\"col\") ON TABLE test_table_quoted_id FROM "
+      "test_user;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT \"special\"\".\"\"col\" FROM test_table_quoted_id;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table_quoted_id");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, NonImplementedPrivilege) {
+  queryAndAssertException("GRANT INSERT (val) ON TABLE test_table TO test_user;",
+                          "SQL Error: Encountered \"(\" at line 1, column 14.\nWas "
+                          "expecting one of:\n    \"ON\" ...\n    \",\" ...\n    ");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithUpdateQuery) {
+  loginAdmin();
+  sql("GRANT SELECT (val,id), UPDATE ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT str FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
+  sqlAndCompareResult(
+      "UPDATE test_table SET str = NULL WHERE val NOT IN (SELECT val FROM test_table "
+      "WHERE id = -1);",
+      {});
+
+  // Revoke select on one of two required columns
+  loginAdmin();
+  sql("REVOKE SELECT (val) ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  queryAndAssertException(
+      "UPDATE test_table SET str = NULL WHERE val NOT IN (SELECT val FROM test_table "
+      "WHERE id = -1);",
+      "Violation of access privileges: user test_user has no "
+      "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithDeleteQueryNoWhereCondition) {
+  loginAdmin();
+  sql("GRANT SELECT (val,id), DELETE ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult("DELETE FROM test_table;", {});
+
+  // Revoke select on one of two columns, but should not affect this case
+  loginAdmin();
+  sql("REVOKE SELECT (val) ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  loginTestUser();
+  sqlAndCompareResult("DELETE FROM test_table;", {});
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithDeleteQuery) {
+  loginAdmin();
+  sql("GRANT SELECT (val,id), DELETE ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult(
+      "DELETE FROM test_table WHERE val NOT IN (SELECT val FROM test_table WHERE id = "
+      "-1);",
+      {});
+
+  // Revoke select on one of two required columns
+  loginAdmin();
+  sql("REVOKE SELECT (val) ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  queryAndAssertException(
+      "DELETE FROM test_table WHERE val NOT IN (SELECT val FROM test_table WHERE id = "
+      "-1);",
+      "Violation of access privileges: user test_user has no "
+      "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithInsertQuery) {
+  loginAdmin();
+  sql("GRANT SELECT (val,id), INSERT ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult(
+      "INSERT INTO test_table(val,id) (SELECT val,id FROM test_table WHERE id = -1);",
+      {});
+
+  // Revoke select on one of two required columns
+  loginAdmin();
+  sql("REVOKE SELECT (val) ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  queryAndAssertException(
+      "INSERT INTO test_table(val,id) (SELECT val,id FROM test_table WHERE id = -1);",
+      "Violation of access privileges: user test_user has no "
+      "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithCTAS) {
+  loginAdmin();
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("GRANT SELECT (val,id) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult(
+      "CREATE TABLE created_test_table AS (SELECT val,id FROM test_table WHERE id = -1);",
+      {});
+  sql("DROP TABLE IF EXISTS created_test_table;");
+
+  // Revoke select on one of two required columns
+  loginAdmin();
+  sql("REVOKE SELECT (val) ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  queryAndAssertException(
+      "CREATE TABLE created_test_table AS (SELECT val,id FROM test_table WHERE id = -1);",
+      "Violation of access privileges: user test_user has no "
+      "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithCopyTo) {
+  loginAdmin();
+  sql("GRANT SELECT (val,id) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult(
+      "COPY (SELECT val,id FROM test_table WHERE id = -1) TO 'test_file.csv';", {});
+
+  // Revoke select on one of two required columns
+  loginAdmin();
+  sql("REVOKE SELECT (val) ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  queryAndAssertException(
+      "COPY (SELECT val,id FROM test_table WHERE id = -1) TO 'test_file.csv';",
+      "Violation of access privileges: user test_user has no "
+      "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, TableMetadataAcccessibleWithSelectColumnPrivilege) {
+  loginAdmin();
+  sql("GRANT SELECT (id) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult("SELECT COUNT(1) FROM test_table;", {{0L}});
+
+  // Revoke select on one of two required columns
+  loginAdmin();
+  sql("REVOKE SELECT (id) ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  queryAndAssertException("SELECT COUNT(1) FROM test_table;",
+                          "Violation of access privileges: user test_user has no "
+                          "proper privileges for object test_table");
 }
 
 class DatabaseCaseSensitiveTest : public DBHandlerTestFixture {

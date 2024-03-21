@@ -1548,23 +1548,19 @@ inline void parser_slistval_to_vector(std::list<std::string*>* l,
   delete l;
 }
 
+struct Privilege {
+  std::string privilege_type;
+  std::vector<std::string> sub_targets;
+};
+
 /*
  * @type GrantPrivilegesStmt
  * @brief GRANT PRIVILEGES statement
  */
 class GrantPrivilegesStmt : public DDLStmt {
  public:
-  GrantPrivilegesStmt(std::list<std::string*>* p,
-                      std::string* t,
-                      std::string* o,
-                      std::list<std::string*>* g)
-      : type_(t), target_(o) {
-    parser_slistval_to_vector(p, privileges_);
-    parser_slistval_to_vector(g, grantees_);
-  }
   GrantPrivilegesStmt(const rapidjson::Value& payload);
 
-  const std::vector<std::string>& get_privs() const { return privileges_; }
   const std::string& get_object_type() const { return *type_; }
   const std::string& get_object() const { return *target_; }
   const std::vector<std::string>& get_grantees() const { return grantees_; }
@@ -1572,10 +1568,10 @@ class GrantPrivilegesStmt : public DDLStmt {
                bool read_only_mode) override;
 
  private:
-  std::vector<std::string> privileges_;
   std::unique_ptr<std::string> type_;
   std::unique_ptr<std::string> target_;
   std::vector<std::string> grantees_;
+  std::vector<Privilege> privileges_;
 };
 
 /*
@@ -1584,17 +1580,8 @@ class GrantPrivilegesStmt : public DDLStmt {
  */
 class RevokePrivilegesStmt : public DDLStmt {
  public:
-  RevokePrivilegesStmt(std::list<std::string*>* p,
-                       std::string* t,
-                       std::string* o,
-                       std::list<std::string*>* g)
-      : type_(t), target_(o) {
-    parser_slistval_to_vector(p, privileges_);
-    parser_slistval_to_vector(g, grantees_);
-  }
   RevokePrivilegesStmt(const rapidjson::Value& payload);
 
-  const std::vector<std::string>& get_privs() const { return privileges_; }
   const std::string& get_object_type() const { return *type_; }
   const std::string& get_object() const { return *target_; }
   const std::vector<std::string>& get_grantees() const { return grantees_; }
@@ -1602,10 +1589,10 @@ class RevokePrivilegesStmt : public DDLStmt {
                bool read_only_mode) override;
 
  private:
-  std::vector<std::string> privileges_;
   std::unique_ptr<std::string> type_;
   std::unique_ptr<std::string> target_;
   std::vector<std::string> grantees_;
+  std::vector<Privilege> privileges_;
 };
 
 /*
