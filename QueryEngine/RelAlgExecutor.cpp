@@ -5593,13 +5593,68 @@ std::vector<RelAlgExecutor::CapturedColumns> convert_column_set_to_captured_colu
   return captured_columns;
 }
 
+std::vector<RelAlgExecutor::CapturedColumns> capture_columns(RelAlgDag* query_dag) {
+  auto column_set = get_column_set_from_rel_alg_dag(query_dag);
+  return convert_column_set_to_captured_columns(column_set);
+}
+
 }  // namespace
 
 std::vector<RelAlgExecutor::CapturedColumns> RelAlgExecutor::captureColumns(
     const std::string& query_ra) {
   std::unique_ptr<RelAlgDag> query_dag = RelAlgDagBuilder::buildDag(query_ra, true);
-  auto column_set = get_column_set_from_rel_alg_dag(query_dag.get());
-  return convert_column_set_to_captured_columns(column_set);
+  return capture_columns(query_dag.get());
+}
+
+void RelAlgExecutor::checkTableAndColumnPrivileges(
+    const Catalog_Namespace::SessionInfo& session_info) {
+  CHECK(query_dag_.get()) << "Query DAG must be initialzied prior to capturing columns";
+
+  auto captured_columns = capture_columns(query_dag_.get());
+  for (const auto& captured_column : captured_columns) {
+    const auto catalog =
+        Catalog_Namespace::SysCatalog::instance().getCatalog(captured_column.db_name);
+    CHECK(catalog);
+    const auto table = catalog->getMetadataForTable(captured_column.table_name, false);
+    CHECK(table);
+
+    DBObjectKey key;
+    key.dbId = catalog->getCurrentDB().dbId;
+    key.permissionType =
+        table->isView ? DBObjectType::ViewDBObjectType : DBObjectType::TableDBObjectType;
+    key.objectId = table->tableId;
+    AccessPrivileges privs = table->isView ? AccessPrivileges::SELECT_FROM_VIEW
+                                           : AccessPrivileges::SELECT_FROM_TABLE;
+    DBObject db_object(key, privs, table->userId);
+    std::vector<DBObject> priv_objects{db_object};
+
+    auto& current_user = session_info.get_currentUser();
+    if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(current_user,
+                                                                   priv_objects)) {
+      // Table level privilege failed, check column privileges
+      for (const auto& column_name : captured_column.column_names) {
+        const auto cd = catalog->getMetadataForColumn(table->tableId, column_name);
+        if (!cd) {
+          throw std::runtime_error("Encountered column " + column_name +
+                                   " reported by Calcite, but column "
+                                   "does not exist. Database: " +
+                                   catalog->name() + ", Table: " + table->tableName);
+        }
+        std::vector<DBObject> priv_objects;
+        DBObject column_object(
+            table->tableName, cd->columnName, DBObjectType::ColumnDBObjectType);
+        column_object.loadKey(*catalog);
+        column_object.setPrivileges(AccessPrivileges::SELECT_COLUMN_FROM_TABLE);
+        priv_objects.emplace_back(column_object);
+        if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(current_user,
+                                                                       priv_objects)) {
+          throw std::runtime_error(
+              "Violation of access privileges: user " + current_user.userLoggable() +
+              " has no proper privileges for object " + table->tableName);
+        }
+      }
+    }
+  }
 }
 
 std::unordered_set<shared::TableKey> RelAlgExecutor::getPhysicalTableIds() const {

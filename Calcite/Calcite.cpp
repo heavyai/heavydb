@@ -434,10 +434,61 @@ void check_db_access(const Catalog_Namespace::SessionInfo& session_info,
   }
 }
 
-void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info,
-                              std::vector<std::vector<std::string>> tableOrViewNames,
-                              AccessPrivileges tablePrivs,
-                              AccessPrivileges viewPrivs) {
+bool has_any_column_privilege(const Catalog_Namespace::Catalog* catalog,
+                              const TableDescriptor* table,
+                              const Catalog_Namespace::SessionInfo& session_info,
+                              const std::optional<AccessPrivileges>& column_privs) {
+  if (!column_privs.has_value()) {
+    return false;
+  }
+  CHECK(column_privs.value().hasAny())
+      << "No valid privilege defined for column privileges on table " + table->tableName;
+  for (const auto cd :
+       catalog->getAllColumnMetadataForTable(table->tableId, true, false, true)) {
+    std::vector<DBObject> priv_objects;
+    DBObject column_object(
+        table->tableName, cd->columnName, DBObjectType::ColumnDBObjectType);
+    column_object.loadKey(*catalog);
+    column_object.setPrivileges(column_privs.value());
+    priv_objects.emplace_back(column_object);
+    if (Catalog_Namespace::SysCatalog::instance().checkPrivileges(
+            session_info.get_currentUser(), priv_objects)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool is_view_in_use(const std::vector<std::vector<std::string>>& table_or_view_names,
+                    const Catalog_Namespace::SessionInfo& session_info) {
+  for (auto table_or_view : table_or_view_names) {
+    // Calcite returns table names in the form of a {table_name, database_name} vector.
+    const auto catalog =
+        Catalog_Namespace::SysCatalog::instance().getCatalog(table_or_view[1]);
+    CHECK(catalog);
+    check_db_access(session_info, *catalog);
+
+    const TableDescriptor* tableMeta =
+        catalog->getMetadataForTable(table_or_view[0], false);
+
+    if (!tableMeta) {
+      throw std::runtime_error("unknown table or view: " + table_or_view[0]);
+    }
+
+    if (tableMeta->isView) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void check_permissions_for_table(
+    const Catalog_Namespace::SessionInfo& session_info,
+    const std::vector<std::vector<std::string>>& tableOrViewNames,
+    AccessPrivileges tablePrivs,
+    AccessPrivileges viewPrivs,
+    const std::optional<AccessPrivileges>& column_privs = std::nullopt) {
+  const auto view_in_use = is_view_in_use(tableOrViewNames, session_info);
   for (auto tableOrViewName : tableOrViewNames) {
     // Calcite returns table names in the form of a {table_name, database_name} vector.
     const auto catalog =
@@ -449,7 +500,7 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
         catalog->getMetadataForTable(tableOrViewName[0], false);
 
     if (!tableMeta) {
-      throw std::runtime_error("unknown table of view: " + tableOrViewName[0]);
+      throw std::runtime_error("Unknown table or view: " + tableOrViewName[0]);
     }
 
     DBObjectKey key;
@@ -467,7 +518,9 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
     }
 
     if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(
-            session_info.get_currentUser(), privObjects)) {
+            session_info.get_currentUser(), privObjects) &&
+        (view_in_use || !has_any_column_privilege(
+                            catalog.get(), tableMeta, session_info, column_privs))) {
       throw std::runtime_error("Violation of access privileges: user " +
                                session_info.get_currentUser().userLoggable() +
                                " has no proper privileges for object " +
@@ -500,22 +553,23 @@ void Calcite::checkAccessedObjectsPrivileges(
   // check the individual tables
   auto const session_ptr = query_state_proxy->getConstSessionInfo();
   // TODO: Replace resolved tables vector with a `FullyQualifiedTableName` struct.
-  checkPermissionForTables(*session_ptr,
-                           plan.primary_accessed_objects.tables_selected_from,
-                           AccessPrivileges::SELECT_FROM_TABLE,
-                           AccessPrivileges::SELECT_FROM_VIEW);
-  checkPermissionForTables(*session_ptr,
-                           plan.primary_accessed_objects.tables_inserted_into,
-                           AccessPrivileges::INSERT_INTO_TABLE,
-                           NOOP);
-  checkPermissionForTables(*session_ptr,
-                           plan.primary_accessed_objects.tables_updated_in,
-                           AccessPrivileges::UPDATE_IN_TABLE,
-                           NOOP);
-  checkPermissionForTables(*session_ptr,
-                           plan.primary_accessed_objects.tables_deleted_from,
-                           AccessPrivileges::DELETE_FROM_TABLE,
-                           NOOP);
+  check_permissions_for_table(*session_ptr,
+                              plan.primary_accessed_objects.tables_selected_from,
+                              AccessPrivileges::SELECT_FROM_TABLE,
+                              AccessPrivileges::SELECT_FROM_VIEW,
+                              AccessPrivileges::SELECT_COLUMN_FROM_TABLE);
+  check_permissions_for_table(*session_ptr,
+                              plan.primary_accessed_objects.tables_inserted_into,
+                              AccessPrivileges::INSERT_INTO_TABLE,
+                              NOOP);
+  check_permissions_for_table(*session_ptr,
+                              plan.primary_accessed_objects.tables_updated_in,
+                              AccessPrivileges::UPDATE_IN_TABLE,
+                              NOOP);
+  check_permissions_for_table(*session_ptr,
+                              plan.primary_accessed_objects.tables_deleted_from,
+                              AccessPrivileges::DELETE_FROM_TABLE,
+                              NOOP);
 }
 
 std::vector<TCompletionHint> Calcite::getCompletionHints(
