@@ -15,6 +15,7 @@ set(shared_source_files
     TargetInfo.cpp
     JsonUtils.cpp
     DbObjectKeys.cpp
+    QuotedIdentifierUtil.cpp
     FullyQualifiedTableName.cpp)
 
 include_directories(${CMAKE_SOURCE_DIR})

@@ -27,6 +27,7 @@
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
 #include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
+#include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "SqliteConnector/SqliteConnector.h"
 #include "TestHelpers.h"
@@ -586,6 +587,170 @@ TEST_F(LegacyDataWrapperMigrationTest, LegacyDataWrappersAreRenamed) {
     assertForeignServerCount(mapping.test_server_name, mapping.old_data_wrapper_name, 0);
     assertForeignServerCount(mapping.test_server_name, mapping.new_data_wrapper_name, 1);
   }
+}
+
+class ColumnLevelSecurityMigrationTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    dirname_ = std::filesystem::path(BASE_PATH) / std::filesystem::path("catalogs");
+    dbname_ = "system_catalog";
+    dbname_old_ = "system_catalog_backup";
+
+    // NOTE: This test possibly puts the (global test) system catalog in an
+    // undefined state; in order to not affect other test cases, we restore the
+    // original system catalog after this test completes.
+    removeSysCatalogIfExists(dbname_old_);
+    snapshotSysCatalog();
+
+    destroyDBHandler();
+
+    sys_catalog_sqlite_connector_ = std::make_unique<SqliteConnector>(dbname_, dirname_);
+    sys_catalog_sqlite_connector_->query("DROP TABLE IF EXISTS mapd_object_permissions;");
+    sys_catalog_sqlite_connector_->query(
+        "CREATE TABLE mapd_object_permissions (roleName TEXT, roleType bool, dbId "
+        "integer references mapd_databases, objectName text, objectId integer, "
+        "objectPermissionsType integer, objectPermissions integer, objectOwnerId "
+        "integer, UNIQUE(roleName, objectPermissionsType, dbId, objectId))");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('admin',1,0,'heavyai',-1,1,0,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user1',1,0,'heavyai',-1,1,0,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user2',1,0,'heavyai',-1,1,0,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user1',1,1,'heavyai',-1,1,8,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user2',1,1,'heavyai',-1,1,8,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user1',1,1,'test_table1',4,2,4,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user2',1,1,'test_table2',5,2,8,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user2',1,1,'heavyai',-1,2,4,0)");
+  }
+
+  void TearDown() override {
+    DBHandlerTestFixture::TearDown();
+    removeSysCatalogIfExists(dbname_);
+    restoreSysCatalog();
+  }
+
+  void removeSysCatalogIfExists(const std::string& dbname) {
+    std::filesystem::path catalog_file = std::filesystem::path(dirname_) / dbname;
+    if (std::filesystem::exists(catalog_file)) {
+      std::filesystem::remove_all(catalog_file);
+    }
+  }
+
+  void snapshotSysCatalog() {
+    std::filesystem::copy(std::filesystem::path(dirname_) / dbname_,
+                          std::filesystem::path(dirname_) / dbname_old_);
+  }
+
+  void restoreSysCatalog() {
+    std::filesystem::copy(std::filesystem::path(dirname_) / dbname_old_,
+                          std::filesystem::path(dirname_) / dbname_);
+  }
+
+  void checkTableDoesNotExist(const std::string& table_name) {
+    sys_catalog_sqlite_connector_->query("PRAGMA TABLE_INFO(" + table_name + ")");
+    ASSERT_EQ(sys_catalog_sqlite_connector_->getNumRows(), 0UL);
+  }
+
+  void verifyUniqueConstraint() {
+    sys_catalog_sqlite_connector_->query("PRAGMA INDEX_LIST(mapd_object_permissions)");
+    ASSERT_EQ(sys_catalog_sqlite_connector_->getNumRows(), 1UL);
+    ASSERT_EQ(sys_catalog_sqlite_connector_->getNumCols(), 5UL);
+    ASSERT_EQ(sys_catalog_sqlite_connector_->getData<int>(0, 2),
+              1);  // This asserts the columns are sorted
+    auto index_name = sys_catalog_sqlite_connector_->getData<std::string>(0, 1);
+    assertExpectedQueryResult("PRAGMA INDEX_INFO(\"" + index_name + "\")",
+                              {{"0", "0", "roleName"},
+                               {"1", "5", "objectPermissionsType"},
+                               {"2", "2", "dbId"},
+                               {"3", "4", "objectId"},
+                               {"4", "8", "subObjectId"}});
+  }
+
+  void assertExpectedQueryResult(
+      const std::string query,
+      const std::vector<std::vector<std::string>>& expected_values,
+      const std::optional<std::vector<bool>>& case_insensitive_col_opt = std::nullopt) {
+    sys_catalog_sqlite_connector_->query(query);
+
+    size_t max_col_size = 0;
+    for (const auto& row : expected_values) {
+      max_col_size = std::max(row.size(), max_col_size);
+    }
+    ASSERT_EQ(sys_catalog_sqlite_connector_->getNumRows(), expected_values.size());
+    ASSERT_GE(sys_catalog_sqlite_connector_->getNumCols(), max_col_size);
+
+    std::vector<bool> case_insensitive_col;
+    if (case_insensitive_col_opt.has_value()) {
+      case_insensitive_col = case_insensitive_col_opt.value();
+    } else {
+      case_insensitive_col.assign(expected_values[0].size(), false);
+    }
+    for (size_t i = 0; i < expected_values.size(); ++i) {
+      CHECK_EQ(case_insensitive_col.size(), expected_values[i].size());
+    }
+
+    for (size_t irow = 0; irow < expected_values.size(); ++irow) {
+      auto& row = expected_values[irow];
+      for (size_t icol = 0; icol < row.size(); ++icol) {
+        auto value = sys_catalog_sqlite_connector_->getData<std::string>(irow, icol);
+        if (!case_insensitive_col[icol]) {
+          ASSERT_EQ(row[icol], value)
+              << " failed case sensitive equality at irow = " << irow
+              << " icol = " << icol;
+        } else {
+          ASSERT_EQ(to_upper(row[icol]), to_upper(value))
+              << " failed case insensitive equality at irow = " << irow
+              << " icol = " << icol;
+        }
+      }
+    }
+  }
+
+  std::unique_ptr<SqliteConnector> sys_catalog_sqlite_connector_;
+  std::string dirname_;
+  std::string dbname_;
+  std::string dbname_old_;
+};
+
+TEST_F(ColumnLevelSecurityMigrationTest, MockMigration) {
+  // The migration happens as part of creating the db handler below, see method
+  // `SetUp` for details of system catalog configuration prior to migration
+  createDBHandler();
+
+  assertExpectedQueryResult("PRAGMA TABLE_INFO(mapd_object_permissions)",
+                            {{"0", "roleName", "text"},
+                             {"1", "roleType", "bool"},
+                             {"2", "dbId", "integer"},
+                             {"3", "objectName", "text"},
+                             {"4", "objectId", "integer"},
+                             {"5", "objectPermissionsType", "integer"},
+                             {"6", "objectPermissions", "integer"},
+                             {"7", "objectOwnerId", "integer"},
+                             {"8", "subObjectId", "integer"}},
+                            std::vector<bool>{false, false, true});
+
+  assertExpectedQueryResult(
+      "SELECT * FROM mapd_object_permissions",
+      {
+          {"admin", "1", "0", "heavyai", "-1", "1", "0", "0", "-1"},
+          {"user1", "1", "0", "heavyai", "-1", "1", "0", "0", "-1"},
+          {"user2", "1", "0", "heavyai", "-1", "1", "0", "0", "-1"},
+          {"user1", "1", "1", "heavyai", "-1", "1", "8", "0", "-1"},
+          {"user2", "1", "1", "heavyai", "-1", "1", "8", "0", "-1"},
+          {"user1", "1", "1", "test_table1", "4", "2", "4", "0", "-1"},
+          {"user2", "1", "1", "test_table2", "5", "2", "8", "0", "-1"},
+          {"user2", "1", "1", "heavyai", "-1", "2", "4", "0", "-1"},
+      });
+
+  verifyUniqueConstraint();
+
+  checkTableDoesNotExist("mapd_object_permissions_original");
 }
 
 int main(int argc, char** argv) {

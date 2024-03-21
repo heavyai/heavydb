@@ -561,12 +561,17 @@ struct TServerPermissions {
   4: bool usage_;
 }
 
+struct TColumnPermissions {
+  1: bool select_;
+}
+
 union TDBObjectPermissions {
   1: TDatabasePermissions database_permissions_;
   2: TTablePermissions table_permissions_;
   3: TDashboardPermissions dashboard_permissions_;
   4: TViewPermissions view_permissions_;
   5: TServerPermissions server_permissions_;
+  6: TColumnPermissions column_permissions_;
 }
 
 enum TDBObjectType {
@@ -575,7 +580,8 @@ enum TDBObjectType {
   TableDBObjectType,
   DashboardDBObjectType,
   ViewDBObjectType,
-  ServerDBObjectType
+  ServerDBObjectType,
+  ColumnDBObjectType
 }
 
 struct TDBObject {

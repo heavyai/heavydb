@@ -620,7 +620,9 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
                                        const bool i_case = false) {
     try {
       lambda();
-      FAIL() << "An exception should have been thrown for this test case.";
+      FAIL() << "An exception should have been thrown for this test case, exception "
+                "expected: "
+             << error_message;
     } catch (const TDBException& e) {
       assertExceptionMessage(e, error_message, i_case);
     } catch (const std::runtime_error& e) {
