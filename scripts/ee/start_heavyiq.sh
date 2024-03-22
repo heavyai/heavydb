@@ -41,7 +41,7 @@ if [[ "$HAS_PYTHON_3_10" != "false" ]]; then
   fi
   GUNICORN_LOG_FILE=${HEAVYIQ_LOG_PREFIX}_gunicorn.log
   gunicorn --preload --log-file $GUNICORN_LOG_FILE --capture-output -t 0 -w 4 -k uvicorn.workers.UvicornWorker \
-  -b :$MAPD_HEAVYIQ_PORT -c "gunicorn.conf.py" "heavyiq.api:create_app(config_path=\"$CONFIG_FILE_ABS_PATH\")" &
+  -b :$MAPD_HEAVYIQ_PORT "heavyiq.api:create_app(config_path=\"$CONFIG_FILE_ABS_PATH\")" &
   PID3=$!
   sleep 5
   if [[ $(ps -h -p $PID3) ]]; then
