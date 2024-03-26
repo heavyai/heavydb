@@ -20,20 +20,22 @@
 
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
+#define BOOST_NO_CXX17_HDR_OPTIONAL
 #include <boost/serialization/optional.hpp>
 
 namespace boost {
 namespace serialization {
 
 /**
- * boost surprisingly does not have native support for serializing std::optional values
- * from STL. This is a workaround for that by converting a std::optional to a
- * boost::optional for serialization. There is a compilation issue with using the standard
- * boost::serialization::split_free to handle different pathways for load/store of a
- * std::optional. This compilation issue requires a workaround. The commented out code
- * below is what would be used if the split_free route compiles, so keeping it around in
- * case one day it does work as it would be preferred. More on the compilation issue in
- * comments below.
+ * Prior to boost 1.84, boost did not have native support for serializing std::optional
+ * values from STL. This is a workaround for that by converting a std::optional to a
+ * boost::optional for serialization.
+ * With boost 1.84 std::optional serialization is supported but there is a compilation
+ * issue with using the standard boost::serialization::split_free to handle different
+ * pathways for load/store of a std::optional. This compilation issue requires a
+ * workaround. The commented out code below is what would be used if the split_free route
+ * compiles, so keeping it around in case one day it does work as it would be preferred.
+ * More on the compilation issue in comments below.
  */
 
 // NOTE: uncomment if we find that a more recent gcc or boost works. For more, see
