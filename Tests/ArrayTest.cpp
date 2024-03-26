@@ -1533,6 +1533,18 @@ INSTANTIATE_TEST_SUITE_P(CpuAndGpuExecutorDevices,
                                            ExecutorDeviceType::GPU),
                          ::testing::PrintToStringParamName());
 
+TEST(Select, LiteralDecimals) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_NO_THROW(run_multiple_agg("SELECT {1.0, 10.00};", dt));
+    // Throws "Overflow in DECIMAL-to-DECIMAL conversion."
+    // since no valid DECIMAL type can hold both array values.
+    EXPECT_THROW(run_multiple_agg("SELECT {1234567890123456.0, 0.1234567890123456};", dt),
+                 std::runtime_error);
+  }
+}
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 

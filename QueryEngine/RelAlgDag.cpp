@@ -1096,12 +1096,69 @@ SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   return ti;
 }
 
+namespace {
+
+struct DecimalParams {
+  int precision;
+  int scale;
+};
+
+struct MaxDecimalParams {
+  DecimalParams operator()(DecimalParams dp,
+                           std::unique_ptr<RexScalar const> const& ptr) const {
+    if (auto* literal = dynamic_cast<RexLiteral const*>(ptr.get())) {
+      if (literal->getType() == kDECIMAL && literal->getTargetType() == kDECIMAL) {
+        dp.precision = std::max(dp.precision, int(literal->getTargetPrecision()));
+        dp.scale = std::max(dp.scale, int(literal->getTargetScale()));
+      }
+    }
+    return dp;
+  }
+};
+
+struct UpdateDecimalLiteralWithCommonParams {
+  DecimalParams dp;
+  void operator()(std::unique_ptr<RexScalar const>& scalar) const {
+    if (auto* literal = dynamic_cast<RexLiteral const*>(scalar.get())) {
+      if (literal->getType() == kDECIMAL && literal->getTargetType() == kDECIMAL &&
+          (dp.precision != int(literal->getTargetPrecision()) ||
+           dp.scale != int(literal->getTargetScale()))) {
+        scalar = std::make_unique<RexLiteral const>(literal->getVal<int64_t>(),
+                                                    kDECIMAL,
+                                                    kDECIMAL,
+                                                    literal->getScale(),
+                                                    literal->getPrecision(),
+                                                    dp.scale,
+                                                    dp.precision);
+      }
+    }
+  }
+};
+
+// Homogenize all literal decimals to common precision and scale.
+void homogenize_literal_decimals(std::vector<std::unique_ptr<const RexScalar>>& exprs) {
+  DecimalParams dp{0, 0};
+  // Find maximum precision and scale for all decimal literals.
+  dp = std::accumulate(exprs.begin(), exprs.end(), dp, MaxDecimalParams{});
+  // If any are decimal then update target precision and scale for all decimal literals.
+  if (dp.precision) {
+    std::for_each(exprs.begin(), exprs.end(), UpdateDecimalLiteralWithCommonParams{dp});
+  }
+}
+
+}  // namespace
+
 std::vector<std::unique_ptr<const RexScalar>> parse_expr_array(
+    const std::string& op_name,
     const rapidjson::Value& arr,
     RelAlgDag& root_dag) {
   std::vector<std::unique_ptr<const RexScalar>> exprs;
+  exprs.reserve(arr.Size());
   for (auto it = arr.Begin(); it != arr.End(); ++it) {
     exprs.emplace_back(parse_scalar_expr(*it, root_dag));
+  }
+  if (op_name == "ARRAY") {
+    homogenize_literal_decimals(exprs);
   }
   return exprs;
 }
@@ -1279,7 +1336,7 @@ std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
   const auto op = is_quantifier ? kFUNCTION : to_sql_op(op_name);
   const auto& operators_json_arr = field(expr, "operands");
   CHECK(operators_json_arr.IsArray());
-  auto operands = parse_expr_array(operators_json_arr, root_dag);
+  auto operands = parse_expr_array(op_name, operators_json_arr, root_dag);
   const auto type_it = expr.FindMember("type");
   CHECK(type_it != expr.MemberEnd());
   auto ti = parse_type(type_it->value);
@@ -1289,7 +1346,7 @@ std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
   }
   if (expr.FindMember("partition_keys") != expr.MemberEnd()) {
     const auto& partition_keys_arr = field(expr, "partition_keys");
-    auto partition_keys = parse_expr_array(partition_keys_arr, root_dag);
+    auto partition_keys = parse_expr_array(op_name, partition_keys_arr, root_dag);
     const auto& order_keys_arr = field(expr, "order_keys");
     auto order_keys = parse_window_order_exprs(order_keys_arr, root_dag);
     const auto collation = parse_window_order_collation(order_keys_arr, root_dag);
