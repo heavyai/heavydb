@@ -2129,19 +2129,6 @@ std::vector<DBObject> get_column_objects_for_table(
   return column_objects;
 }
 
-bool is_table_and_grantee_has_any_column_direct_priv(
-    const Catalog_Namespace::SysCatalog& sys_catalog,
-    const DBObject& object,
-    const Grantee* grantee) {
-  if (object.getObjectKey().permissionType == TableDBObjectType) {
-    for (const auto& object : get_column_objects_for_table(sys_catalog, object)) {
-      if (grantee->findDbObject(object.getObjectKey(), true)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
 }  // namespace
 
 // REVOKE INSERT ON TABLE payroll_table FROM payroll_dept_role;
@@ -2234,10 +2221,14 @@ void SysCatalog::revokeDBObjectPrivilegesFromAll_unsafe(DBObject dbObject,
                    : AccessPrivileges::ALL_TABLE;
   dbObject.setPrivileges(privs);
   for (const auto& grantee : granteeMap_) {
-    if (grantee.second->findDbObject(dbObject.getObjectKey(), true) ||
-        is_table_and_grantee_has_any_column_direct_priv(
-            *this, dbObject, grantee.second.get())) {
+    if (grantee.second->findDbObject(dbObject.getObjectKey(), true)) {
       revokeDBObjectPrivileges_unsafe(grantee.second->getName(), dbObject, *catalog);
+    }
+  }
+  // Tables require revoking privileges on sub-objects
+  if (dbObject.getObjectKey().permissionType == TableDBObjectType) {
+    for (const auto& object : get_column_objects_for_table(*this, dbObject)) {
+      revokeDBObjectPrivilegesFromAll_unsafe(object, catalog);
     }
   }
 }
@@ -2719,7 +2710,15 @@ std::vector<ObjectRoleDescriptor*> SysCatalog::getMetadataForSubObjects(
   sys_read_lock read_lock(this);
   std::vector<ObjectRoleDescriptor*> objects_list;
 
-  for (const auto& [key, desc] : objectDescriptorMap_) {
+  std::string lower_bound_key = std::to_string(db_id) + ":" + std::to_string(db_type) +
+                                ":" + std::to_string(object_id) + ":";
+  std::string upper_bound_key = std::to_string(db_id) + ":" + std::to_string(db_type) +
+                                ":" + std::to_string(object_id + 1);
+  auto lower_bound = objectDescriptorMap_.lower_bound(lower_bound_key);
+  auto upper_bound = objectDescriptorMap_.upper_bound(upper_bound_key);
+
+  for (auto it = lower_bound; it != upper_bound; ++it) {
+    auto& desc = it->second;
     if (desc->dbId == db_id && desc->objectType == db_type &&
         desc->objectId == object_id) {
       objects_list.emplace_back(desc.get());
