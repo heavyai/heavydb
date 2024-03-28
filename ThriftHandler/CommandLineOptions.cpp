@@ -2208,6 +2208,8 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   boost::algorithm::trim_if(authMetadata.ldapRoleRegex, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.ldapSuperUserRole, boost::is_any_of("\"'"));
 
+  boost::algorithm::trim_if(Geospatial::g_importer_additional_proj_data_path,
+                            boost::is_any_of("\"'"));
   if (Geospatial::g_importer_additional_proj_data_path.length() &&
       !boost::filesystem::is_directory(
           Geospatial::g_importer_additional_proj_data_path)) {
