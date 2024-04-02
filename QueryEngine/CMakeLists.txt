@@ -369,6 +369,7 @@ add_custom_command(
   ${CLANG_CRT_INC}
   ${MAPD_DEFINITIONS}
   -I ${CMAKE_SOURCE_DIR}
+  -I ${Boost_INCLUDE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
 add_custom_command(
@@ -448,6 +449,7 @@ add_custom_command(
   -I ${CMAKE_SOURCE_DIR}/ThirdParty/warpcore/include
   -I ${CMAKE_CURRENT_BINARY_DIR}
   -I ${MAPD_DEPS_PATH}/include
+  -I ${Boost_INCLUDE_DIR}
   ${MAPD_HOST_COMPILER_FLAG}
   -Xcompiler -fPIC
   -D__STDC_LIMIT_MACROS
