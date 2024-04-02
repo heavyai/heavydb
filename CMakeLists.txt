@@ -177,7 +177,15 @@ if(WIN32)
   add_definitions(-DBOOST_UUID_FORCE_AUTO_LINK)
 endif()
 
-option(PREFER_STATIC_LIBS "Prefer linking against static libraries" OFF)
+find_file(IS_CENTOS redhat-release PATHS /etc)
+if (IS_CENTOS)
+  # CentOS currently can't link without static libraries, so default to ON.
+  option(PREFER_STATIC_LIBS "Prefer linking against static libraries" ON)
+  message("Redhat/CentOS system detected, setting PREFER_STATIC_LIBS=ON by default.")
+else()
+  option(PREFER_STATIC_LIBS "Prefer linking against static libraries" OFF)
+endif (IS_CENTOS)
+
 if(PREFER_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
   set(Arrow_USE_STATIC_LIBS ON)
