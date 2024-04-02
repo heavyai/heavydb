@@ -165,7 +165,8 @@ void run_reduction_code(const size_t executor_id,
   }
   if (err) {
     if (err == int32_t(heavyai::ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES)) {
-      throw std::runtime_error("Multiple distinct values encountered");
+      throw std::runtime_error(
+          "SINGLE_VALUE_FOUND_MULTIPLE_VALUES: Multiple distinct values encountered");
     } else if (err == int32_t(heavyai::ErrorCode::INTERRUPTED)) {
       throw std::runtime_error(
           "Query execution has interrupted during result set reduction");
@@ -1422,7 +1423,8 @@ void ResultSetStorage::reduceOneSlotSingleValue(int8_t* this_ptr1,
     } else if (lhs_proj_col == init_val) {
       *reinterpret_cast<CastTarget*>(this_ptr1) = rhs_proj_col;
     } else if (lhs_proj_col != rhs_proj_col) {
-      throw std::runtime_error("Multiple distinct values encountered");
+      throw std::runtime_error(
+          "SINGLE_VALUE_FOUND_MULTIPLE_VALUES: Multiple distinct values encountered");
     }
   };
 
