@@ -28,14 +28,13 @@
 #include "Shared/quantile.h"
 #include "TypePunning.h"
 #include "Utils/SegmentTreeUtils.h"
+#include "enums.h"
 
 #include <atomic>
 #include <cfloat>
-#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <functional>
-#include <thread>
 #include <tuple>
 
 // decoder implementations
@@ -1195,8 +1194,7 @@ checked_single_agg_id(int64_t* agg, const int64_t val, const int64_t null_val) {
     *agg = val;
     return 0;
   } else {
-    // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
-    return 15;
+    return static_cast<int32_t>(heavyai::ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES);
   }
 }
 
@@ -1284,8 +1282,8 @@ DEF_AGG_MIN_INT(8)
       *agg = val;                                                               \
       return 0;                                                                 \
     } else {                                                                    \
-      /* see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES*/                  \
-      return 15;                                                                \
+      return static_cast<int32_t>(                                              \
+          heavyai::ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES);              \
     }                                                                           \
   }
 
@@ -1486,8 +1484,7 @@ checked_single_agg_id_double(int64_t* agg, const double val, const double null_v
     *agg = *(reinterpret_cast<const int64_t*>(may_alias_ptr(&val)));
     return 0;
   } else {
-    // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
-    return 15;
+    return static_cast<int32_t>(heavyai::ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES);
   }
 }
 
@@ -1538,8 +1535,7 @@ checked_single_agg_id_float(int32_t* agg, const float val, const float null_val)
     *agg = *(reinterpret_cast<const int32_t*>(may_alias_ptr(&val)));
     return 0;
   } else {
-    // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
-    return 15;
+    return static_cast<int32_t>(heavyai::ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES);
   }
 }
 

@@ -748,8 +748,8 @@ extern "C" __device__ int32_t checked_single_agg_id_shared(int64_t* agg,
   do {
     if (static_cast<int64_t>(old) != null_val) {
       if (static_cast<int64_t>(old) != val) {
-        // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
-        return 15;
+        return static_cast<int32_t>(
+            heavyai::ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES);
       } else {
         break;
       }
@@ -791,8 +791,8 @@ extern "C" __device__ int32_t checked_single_agg_id_double_shared(int64_t* agg,
   do {
     if (static_cast<int64_t>(old) != __double_as_longlong(null_val)) {
       if (static_cast<int64_t>(old) != __double_as_longlong(val)) {
-        // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
-        return 15;
+        return static_cast<int32_t>(
+            heavyai::ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES);
       } else {
         break;
       }
@@ -824,8 +824,8 @@ checked_single_agg_id_double_shared_slow(int64_t* agg,
   do {
     if (static_cast<int64_t>(old) != __double_as_longlong(null_val)) {
       if (static_cast<int64_t>(old) != __double_as_longlong(val)) {
-        // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
-        return 15;
+        return static_cast<int32_t>(
+            heavyai::ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES);
       } else {
         break;
       }
@@ -855,8 +855,8 @@ extern "C" __device__ int32_t checked_single_agg_id_float_shared(int32_t* agg,
   do {
     if (old != __float_as_int(null_val)) {
       if (old != __float_as_int(val)) {
-        // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
-        return 15;
+        return static_cast<int32_t>(
+            heavyai::ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES);
       } else {
         break;
       }

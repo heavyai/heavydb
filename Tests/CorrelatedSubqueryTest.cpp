@@ -104,11 +104,22 @@ auto getValue(const TargetValue& mapd_variant) {
   throw std::runtime_error("Unexpected variant");
 };
 
-void runSingleValueTestValidation(std::string colType, ExecutorDeviceType dt) {
-  ASSERT_ANY_THROW(QR::get()->runSQL("SELECT SINGLE_VALUE(id) FROM test_facts;", dt));
-  ASSERT_ANY_THROW(
-      QR::get()->runSQL("SELECT SINGLE_VALUE(id) FROM test_facts group by val;", dt));
+void checkSingleValueErrorCode(std::string const& query, ExecutorDeviceType dt) {
+  try {
+    QR::get()->runSQL(query, dt);
+  } catch (std::runtime_error const& e) {
+    std::string const error_msg(e.what());
+    auto check_error_code = error_msg.find("SINGLE_VALUE_FOUND_MULTIPLE_VALUES");
+    ASSERT_TRUE(check_error_code != std::string::npos) << error_msg;
+    return;
+  }
+  ASSERT_TRUE(false) << "The test should return std::runtime_error having error code: "
+                        "SINGLE_VALUE_FOUND_MULTIPLE_VALUES";
+}
 
+void runSingleValueTestValidation(std::string colType, ExecutorDeviceType dt) {
+  checkSingleValueErrorCode("SELECT SINGLE_VALUE(id) FROM test_facts;", dt);
+  checkSingleValueErrorCode("SELECT SINGLE_VALUE(id) FROM test_facts group by val;", dt);
   {
     auto results = QR::get()->runSQL("SELECT SINGLE_VALUE(val) FROM test_facts;", dt);
     ASSERT_EQ(uint64_t(1), results->rowCount());
@@ -187,13 +198,12 @@ void runSingleValueTest(std::string colType, ExecutorDeviceType dt) {
 
   QR::get()->runSQL("INSERT INTO test_facts VALUES(1, 2); ", ExecutorDeviceType::CPU);
 
-  ASSERT_ANY_THROW(QR::get()->runSQL("SELECT SINGLE_VALUE(id) FROM test_facts;", dt));
-  ASSERT_ANY_THROW(
-      QR::get()->runSQL("SELECT SINGLE_VALUE(id) FROM test_facts group by val;", dt));
+  checkSingleValueErrorCode("SELECT SINGLE_VALUE(id) FROM test_facts;", dt);
+  checkSingleValueErrorCode("SELECT SINGLE_VALUE(id) FROM test_facts group by val;", dt);
 
-  ASSERT_ANY_THROW(QR::get()->runSQL("SELECT SINGLE_VALUE(val) FROM test_facts;", dt));
-  ASSERT_ANY_THROW(QR::get()->runSQL(
-      "SELECT id, SINGLE_VALUE(val) FROM test_facts GROUP BY id ORDER BY id;", dt));
+  checkSingleValueErrorCode("SELECT SINGLE_VALUE(val) FROM test_facts;", dt);
+  checkSingleValueErrorCode(
+      "SELECT id, SINGLE_VALUE(val) FROM test_facts GROUP BY id ORDER BY id;", dt);
 
   {
     auto results = QR::get()->runSQL(
@@ -295,7 +305,7 @@ TEST(Select, CorrelatedWithInnerDuplicatesFails) {
   std::string sql =
       "SELECT id, val, (SELECT test_lookup.id FROM test_lookup WHERE test_lookup.val = "
       "test_facts.val) as lookup_id FROM test_facts";
-  ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  checkSingleValueErrorCode(sql, ExecutorDeviceType::CPU);
 }
 
 TEST(Select, CorrelatedWithInnerDuplicatesAndMinId) {
@@ -977,7 +987,7 @@ TEST(Update, CorrelatedWithInnerDuplicatesFails) {
   std::string sql =
       "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val)";
-  ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  checkSingleValueErrorCode(sql, ExecutorDeviceType::CPU);
 }
 
 TEST(Update, CorrelatedWithInnerDuplicatesAndMinId) {
