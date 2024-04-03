@@ -3774,6 +3774,16 @@ TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import_3857) {
   checkGeoNumRows(Geospatial::kGeoColumnName + ", trip", 10);
 }
 
+TEST_F(ImportTestGDAL, Shapefile_Invalid_CRS) {
+  SKIP_ALL_ON_AGGREGATOR();
+  // this file has a CRS (WKT text in the .prj file) which will cause GDAL's
+  // OGRSpatialReference::Validate() function to return an error. As of SIO-1713
+  // this function is no longer called, so this file should import without error.
+  const auto file_path = boost::filesystem::path("shapefile_with_invalid_crs.zip");
+  EXPECT_NO_THROW(
+      importTestGeofileImporter(file_path.string(), "geospatial", false, false));
+}
+
 TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Append) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
