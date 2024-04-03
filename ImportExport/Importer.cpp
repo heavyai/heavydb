@@ -5418,10 +5418,6 @@ ImportStatus Importer::importGDALGeo(
               !geometry_sr->IsEmpty() &&
 #endif
               !geometry_sr->IsSame(poGeographicSR.get())) {
-            // validate the SR before trying to use it
-            if (geometry_sr->Validate() != OGRERR_NONE) {
-              throw std::runtime_error("Incoming geo has invalid Spatial Reference");
-            }
             // create the OGRCoordinateTransformation that will be used for
             // all the features in this chunk
             coordinate_transformations[thread_id].reset(
