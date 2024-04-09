@@ -25,7 +25,6 @@
 #include "Logger/Logger.h"
 #include "Shared/DbObjectKeys.h"
 #include "Shared/sqldefs.h"
-#include "Shared/sqltypes.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -1039,6 +1038,62 @@ class CardinalityExpr : public Expr {
 
  private:
   std::shared_ptr<Analyzer::Expr> arg;
+};
+
+/*
+ * @type DotProduct
+ * @brief expression for the DOT_PRODUCT expression.
+ * 2 args must evaluate to arrays
+ */
+class DotProductExpr : public Expr {
+ public:
+  DotProductExpr(std::shared_ptr<Analyzer::Expr> a, std::shared_ptr<Analyzer::Expr> b)
+      : Expr(deriveReturnType(a->get_type_info(), b->get_type_info()), false)
+      , arg1(a)
+      , arg2(b) {}
+  const Expr* get_arg1() const { return arg1.get(); }
+  const Expr* get_arg2() const { return arg2.get(); }
+  const std::shared_ptr<Analyzer::Expr> get_own_arg1() const { return arg1; }
+  const std::shared_ptr<Analyzer::Expr> get_own_arg2() const { return arg2; }
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+  void group_predicates(std::list<const Expr*>& scan_predicates,
+                        std::list<const Expr*>& join_predicates,
+                        std::list<const Expr*>& const_predicates) const override;
+  void collect_rte_idx(std::set<int>& rte_idx_set) const override {
+    arg1->collect_rte_idx(rte_idx_set);
+    arg2->collect_rte_idx(rte_idx_set);
+  }
+  void collect_column_var(
+      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
+          colvar_set,
+      bool include_agg) const override {
+    arg1->collect_column_var(colvar_set, include_agg);
+    arg2->collect_column_var(colvar_set, include_agg);
+  }
+  std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    return makeExpr<DotProductExpr>(arg1->rewrite_with_targetlist(tlist),
+                                    arg2->rewrite_with_targetlist(tlist));
+  }
+  std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    return makeExpr<DotProductExpr>(arg1->rewrite_with_child_targetlist(tlist),
+                                    arg2->rewrite_with_child_targetlist(tlist));
+  }
+  std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    return makeExpr<DotProductExpr>(arg1->rewrite_agg_to_var(tlist),
+                                    arg2->rewrite_agg_to_var(tlist));
+  }
+  bool operator==(const Expr& rhs) const override;
+  std::string toString() const override;
+  void find_expr(std::function<bool(const Expr*)> f,
+                 std::list<const Expr*>& expr_list) const override;
+
+ private:
+  SQLTypes deriveReturnType(const SQLTypeInfo& arg1_ti, const SQLTypeInfo& arg2_ti);
+  std::shared_ptr<Analyzer::Expr> arg1;
+  std::shared_ptr<Analyzer::Expr> arg2;
 };
 
 /*
