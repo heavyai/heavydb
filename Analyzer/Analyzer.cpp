@@ -25,6 +25,7 @@
 #include "Geospatial/Conversion.h"
 #include "Geospatial/Types.h"
 #include "QueryEngine/DateTimeUtils.h"
+#include "QueryEngine/DotProductReturnTypes.h"
 #include "RangeTableEntry.h"
 #include "Shared/DateConverters.h"
 #include "Shared/misc.h"
@@ -164,6 +165,10 @@ std::shared_ptr<Analyzer::Expr> SampleRatioExpr::deep_copy() const {
 
 std::shared_ptr<Analyzer::Expr> CardinalityExpr::deep_copy() const {
   return makeExpr<CardinalityExpr>(arg->deep_copy());
+}
+
+std::shared_ptr<Analyzer::Expr> DotProductExpr::deep_copy() const {
+  return makeExpr<DotProductExpr>(arg1->deep_copy(), arg2->deep_copy());
 }
 
 std::shared_ptr<Analyzer::Expr> LikeExpr::deep_copy() const {
@@ -1812,6 +1817,21 @@ void CardinalityExpr::group_predicates(std::list<const Expr*>& scan_predicates,
   }
 }
 
+void DotProductExpr::group_predicates(std::list<const Expr*>& scan_predicates,
+                                      std::list<const Expr*>& join_predicates,
+                                      std::list<const Expr*>& const_predicates) const {
+  std::set<int> rte_idx_set;
+  arg1->collect_rte_idx(rte_idx_set);
+  arg2->collect_rte_idx(rte_idx_set);
+  if (rte_idx_set.size() > 1) {
+    join_predicates.push_back(this);
+  } else if (rte_idx_set.size() == 1) {
+    scan_predicates.push_back(this);
+  } else {
+    const_predicates.push_back(this);
+  }
+}
+
 void LikeExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                 std::list<const Expr*>& join_predicates,
                                 std::list<const Expr*>& const_predicates) const {
@@ -2468,6 +2488,20 @@ bool CardinalityExpr::operator==(const Expr& rhs) const {
   return true;
 }
 
+bool DotProductExpr::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(DotProductExpr)) {
+    return false;
+  }
+  const DotProductExpr& rhs_ca = dynamic_cast<const DotProductExpr&>(rhs);
+  if (!(*arg1 == *rhs_ca.get_arg1())) {
+    return false;
+  }
+  if (!(*arg2 == *rhs_ca.get_arg2())) {
+    return false;
+  }
+  return true;
+}
+
 bool LikeExpr::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(LikeExpr)) {
     return false;
@@ -2981,6 +3015,15 @@ std::string CardinalityExpr::toString() const {
   return str;
 }
 
+std::string DotProductExpr::toString() const {
+  std::string str{"DOT_PRODUCT("};
+  str += arg1->toString();
+  str += ", ";
+  str += arg2->toString();
+  str += ") ";
+  return str;
+}
+
 std::string LikeExpr::toString() const {
   std::string str{"(LIKE "};
   str += arg->toString();
@@ -3359,6 +3402,16 @@ void CardinalityExpr::find_expr(std::function<bool(const Expr*)> f,
     return;
   }
   arg->find_expr(f, expr_list);
+}
+
+void DotProductExpr::find_expr(std::function<bool(const Expr*)> f,
+                               std::list<const Expr*>& expr_list) const {
+  if (f(this)) {
+    add_unique(expr_list);
+    return;
+  }
+  arg1->find_expr(f, expr_list);
+  arg2->find_expr(f, expr_list);
 }
 
 void LikeExpr::find_expr(std::function<bool(const Expr*)> f,
@@ -4606,6 +4659,20 @@ LevenshteinDistanceStringOper::normalize_operands(
     return {operands[1], operands[0]};
   }
   return operands;
+}
+
+SQLTypes DotProductExpr::deriveReturnType(const SQLTypeInfo& arg1_ti,
+                                          const SQLTypeInfo& arg2_ti) {
+  using namespace heavyai::dot_product;  // see QueryEngine/DotProductReturnTypes.h
+  auto itr1 = std::find(types.begin(), types.end(), arg1_ti.get_elem_type().get_type());
+  size_t idx1 = std::distance(types.begin(), itr1);
+  auto itr2 = std::find(types.begin(), types.end(), arg2_ti.get_elem_type().get_type());
+  size_t idx2 = std::distance(types.begin(), itr2);
+  if (idx1 < types.size() && idx2 < types.size()) {
+    return ret_types[types.size() * idx1 + idx2];
+  }
+  throw std::runtime_error("Unsupported DotProduct pair " + arg1_ti.toString() + " and " +
+                           arg2_ti.toString());
 }
 
 }  // namespace Analyzer

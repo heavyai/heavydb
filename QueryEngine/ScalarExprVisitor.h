@@ -93,6 +93,10 @@ class ScalarExprVisitor {
     if (cardinality) {
       return visitCardinality(cardinality);
     }
+    const auto dot_product = dynamic_cast<const Analyzer::DotProductExpr*>(expr);
+    if (dot_product) {
+      return visitDotProduct(dot_product);
+    }
     const auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
     if (like_expr) {
       return visitLikeExpr(like_expr);
@@ -240,6 +244,13 @@ class ScalarExprVisitor {
   virtual T visitCardinality(const Analyzer::CardinalityExpr* cardinality) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(cardinality->get_arg()));
+    return result;
+  }
+
+  virtual T visitDotProduct(const Analyzer::DotProductExpr* dot_product) const {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(dot_product->get_arg1()));
+    result = aggregateResult(result, visit(dot_product->get_arg2()));
     return result;
   }
 

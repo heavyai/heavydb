@@ -66,6 +66,7 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include "CudaMgr/CudaMgr.h"
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/CodegenHelper.h"
+#include "QueryEngine/DotProductReturnTypes.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/GpuSharedMemoryUtils.h"
 #include "QueryEngine/LLVMFunctionAttributesUtil.h"
@@ -627,6 +628,48 @@ std::string gen_array_any_all_sigs() {
   return result;
 }
 
+struct DotProductType {
+  char const* long_name;
+  char const* short_name;
+  SQLTypes sql_type;
+};
+
+struct MatchesSQLType {
+  SQLTypes const sql_type;
+  bool operator()(DotProductType const dpt) const { return sql_type == dpt.sql_type; }
+};
+
+// Generate 84=2*2*(6*(6+1)/2) @array_dot_product_* declarations.
+std::string gen_array_dot_product_sigs() {
+  // Does not include DECIMAL because it has been converted to one of these types.
+  constexpr std::array<DotProductType, 6u> types{
+      DotProductType{"_int8_t", "i8", kTINYINT},
+      DotProductType{"_int16_t", "i16", kSMALLINT},
+      DotProductType{"_int32_t", "i32", kINT},
+      DotProductType{"_int64_t", "i64", kBIGINT},
+      DotProductType{"_float", "float", kFLOAT},
+      DotProductType{"_double", "double", kDOUBLE}};
+  static_assert(types.size() + /*decimal*/ 1u == heavyai::dot_product::types.size());
+  constexpr char const* structs[2]{"_Chunk", "_Literal"};
+  std::ostringstream oss;
+  for (unsigned i = 0; i < types.size(); ++i) {
+    for (unsigned j = 0; j <= i; ++j) {
+      SQLTypes ret_type =
+          heavyai::dot_product::ret_types[heavyai::dot_product::types.size() * i + j];
+      auto ritr = std::find_if(types.rbegin(), types.rend(), MatchesSQLType{ret_type});
+      assert(ritr != types.rend());
+      for (unsigned m = 0; m < 2; ++m) {
+        for (unsigned n = 0; n < 2; ++n) {
+          oss << "declare " << ritr->short_name << " @array_dot_product" << structs[m]
+              << types[i].long_name << structs[n] << types[j].long_name
+              << "(i8*, i64, i32, i8*, i64, i32, " << ritr->short_name << ");\n";
+        }
+      }
+    }
+  }
+  return oss.str();
+}
+
 std::string gen_translate_null_key_sigs() {
   std::string result;
   for (const std::string key_type : {"int8_t", "int16_t", "int32_t", "int64_t"}) {
@@ -883,7 +926,7 @@ declare i32 @compress_y_coord_geoint(double);
 declare i64 @fixed_width_date_encode(i64, i32, i64);
 declare i64 @fixed_width_date_decode(i64, i32, i64);
 )" + gen_array_any_all_sigs() +
-    gen_translate_null_key_sigs();
+    gen_array_dot_product_sigs() + gen_translate_null_key_sigs();
 
 #ifdef HAVE_CUDA
 

@@ -25,6 +25,8 @@
 #include "../Utils/ChunkIter.h"
 #include "TypePunning.h"
 
+#include <boost/preprocessor/seq/for_each_product.hpp>
+
 #ifdef EXECUTE_INCLUDE
 
 extern "C" DEVICE RUNTIME_EXPORT int32_t array_size(int8_t* chunk_iter_,
@@ -104,6 +106,138 @@ point_coord_array_size_nullable(int8_t* chunk_iter_,
   ChunkIter_get_nth_point_coords(chunk_iter, row_pos, &ad, &is_end);
   return ad.is_null ? null_val : ad.length >> elem_log_sz;
 }
+
+namespace dot_product {
+
+// Chunk data requires ChunkIter_get_nth() to access the array data.
+// Literal arrays are passed in by their array pointer directly.
+// Define structs to provide a uniform API to access the array data.
+
+template <typename T>
+struct Chunk {
+  ChunkIter* ptr;
+  uint64_t row_pos;
+  uint32_t elem_log_size;
+  DEVICE inline Chunk(int8_t* ptr, uint64_t row_pos, uint32_t elem_log_size)
+      : ptr(reinterpret_cast<ChunkIter*>(ptr))
+      , row_pos(row_pos)
+      , elem_log_size(elem_log_size) {}
+
+  DEVICE inline std::pair<T const*, size_t> getArrayPointerAndSize() const {
+    ArrayDatum array_datum;
+    bool is_end;
+    ChunkIter_get_nth(ptr, row_pos, &array_datum, &is_end);
+    size_t const array_size = array_datum.length >> elem_log_size;
+    return std::make_pair(reinterpret_cast<T const*>(array_datum.pointer), array_size);
+  }
+};
+
+template <typename T>
+struct Literal {
+  T const* ptr;
+  size_t array_size;
+  DEVICE inline Literal(int8_t* ptr, uint64_t array_size, uint32_t)
+      : ptr(reinterpret_cast<T const*>(ptr))
+      , array_size(static_cast<size_t>(array_size)) {}
+
+  DEVICE inline std::pair<T const*, size_t> getArrayPointerAndSize() const {
+    return std::make_pair(ptr, array_size);
+  }
+};
+
+template <typename T, typename STRUCT1, typename STRUCT2>
+DEVICE inline T calculate(STRUCT1 const arg1, STRUCT2 const arg2, T const null_val) {
+  if (arg1.ptr && arg2.ptr) {
+    auto [array_ptr1, array_size1] = arg1.getArrayPointerAndSize();
+    auto [array_ptr2, array_size2] = arg2.getArrayPointerAndSize();
+    if (array_size1 == array_size2) {
+      T sum{0};
+      for (size_t i = 0; i < array_size1; ++i) {
+        sum += static_cast<T>(array_ptr1[i]) * static_cast<T>(array_ptr2[i]);
+      }
+      return sum;
+    }
+  }
+  return null_val;
+}
+
+}  // namespace dot_product
+
+#define ARRAY_DOT_PRODUCT(ret_type, struct1, type1, struct2, type2)                      \
+  extern "C" DEVICE RUNTIME_EXPORT ret_type                                              \
+      array_dot_product_##struct1##_##type1##_##struct2##_##type2(                       \
+          int8_t* const ptr1,            /* ChunkIter or array ptr */                    \
+          uint64_t const n1,             /* row_pos or array_size */                     \
+          uint32_t const elem_log_size1, /* unused for Literal */                        \
+          int8_t* const ptr2,            /* ChunkIter or array ptr */                    \
+          uint64_t const n2,             /* row_pos or array_size */                     \
+          uint32_t const elem_log_size2, /* unused for Literal */                        \
+          ret_type const null_val) {                                                     \
+    return dot_product::calculate(dot_product::struct1<type1>{ptr1, n1, elem_log_size1}, \
+                                  dot_product::struct2<type2>{ptr2, n2, elem_log_size2}, \
+                                  null_val);                                             \
+  }
+
+#define EXPAND_ARRAY_DOT_PRODUCT(r, cross_product)                   \
+  EXPAND_ARRAY_DOT_PRODUCT_IMPL(BOOST_PP_SEQ_ELEM(0, cross_product), \
+                                BOOST_PP_SEQ_ELEM(1, cross_product), \
+                                BOOST_PP_SEQ_ELEM(2, cross_product), \
+                                BOOST_PP_SEQ_ELEM(3, cross_product), \
+                                BOOST_PP_SEQ_ELEM(4, cross_product))
+
+#define EXPAND_ARRAY_DOT_PRODUCT_IMPL(ret_type, struct1, type1, struct2, type2) \
+  ARRAY_DOT_PRODUCT(ret_type, struct1, type1, struct2, type2)
+
+// clang-format off
+// Define array_dot_product_* functions in sets of cartesian products.
+// Must match the ret_types table in QueryEngine/DotProductReturnTypes.h
+BOOST_PP_SEQ_FOR_EACH_PRODUCT(EXPAND_ARRAY_DOT_PRODUCT,
+    ((int32_t))         // ret_type
+    ((Chunk)(Literal))  // struct1
+    ((int8_t))          // type1
+    ((Chunk)(Literal))  // struct2
+    ((int8_t)))         // type2
+BOOST_PP_SEQ_FOR_EACH_PRODUCT(EXPAND_ARRAY_DOT_PRODUCT,
+    ((int32_t))
+    ((Chunk)(Literal))
+    ((int16_t))
+    ((Chunk)(Literal))
+    ((int8_t)(int16_t)))
+BOOST_PP_SEQ_FOR_EACH_PRODUCT(EXPAND_ARRAY_DOT_PRODUCT,
+    ((int64_t))
+    ((Chunk)(Literal))
+    ((int32_t))
+    ((Chunk)(Literal))
+    ((int8_t)(int16_t)(int32_t)))
+BOOST_PP_SEQ_FOR_EACH_PRODUCT(EXPAND_ARRAY_DOT_PRODUCT,
+    ((int64_t))
+    ((Chunk)(Literal))
+    ((int64_t))
+    ((Chunk)(Literal))
+    ((int8_t)(int16_t)(int32_t)(int64_t)))
+BOOST_PP_SEQ_FOR_EACH_PRODUCT(EXPAND_ARRAY_DOT_PRODUCT,
+    ((float))
+    ((Chunk)(Literal))
+    ((float))
+    ((Chunk)(Literal))
+    ((int8_t)(int16_t)(float)))
+BOOST_PP_SEQ_FOR_EACH_PRODUCT(EXPAND_ARRAY_DOT_PRODUCT,
+    ((double))
+    ((Chunk)(Literal))
+    ((float))
+    ((Chunk)(Literal))
+    ((int32_t)(int64_t)))
+BOOST_PP_SEQ_FOR_EACH_PRODUCT(EXPAND_ARRAY_DOT_PRODUCT,
+    ((double))
+    ((Chunk)(Literal))
+    ((double))
+    ((Chunk)(Literal))
+    ((int8_t)(int16_t)(int32_t)(int64_t)(float)(double)))
+// clang-format on
+
+#undef EXPAND_ARRAY_DOT_PRODUCT_IMPL
+#undef EXPAND_ARRAY_DOT_PRODUCT
+#undef ARRAY_DOT_PRODUCT
 
 #define ARRAY_AT(type)                                                        \
   extern "C" DEVICE RUNTIME_EXPORT type array_at_##type(                      \
