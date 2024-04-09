@@ -1098,51 +1098,113 @@ SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
 
 namespace {
 
-struct DecimalParams {
-  int precision;
-  int scale;
-};
+struct NumberTypes {
+  // precision = order + scale.  IOW scale is number of digits to the right of the decimal
+  // point, order is the number of digits to the left.
+  uint32_t max_order;                  // max order of all decimal types
+  uint32_t max_scale;                  // max scale of all decimal types
+  std::unordered_set<SQLTypes> types;  // all the SQLTypes encountered
 
-struct MaxDecimalParams {
-  DecimalParams operator()(DecimalParams dp,
-                           std::unique_ptr<RexScalar const> const& ptr) const {
-    if (auto* literal = dynamic_cast<RexLiteral const*>(ptr.get())) {
-      if (literal->getType() == kDECIMAL && literal->getTargetType() == kDECIMAL) {
-        dp.precision = std::max(dp.precision, int(literal->getTargetPrecision()));
-        dp.scale = std::max(dp.scale, int(literal->getTargetScale()));
-      }
+  /// Return the chosenType after all array element info have been accumulated.
+  std::optional<SQLTypes> chosenType() const {
+    constexpr size_t MAX_DIGITS = size_t(std::numeric_limits<int64_t>::digits10);  // 18
+    if (types.count(kDOUBLE) || ((types.count(kDECIMAL) || types.count(kNUMERIC)) &&
+                                 MAX_DIGITS < maxPrecision())) {
+      return kDOUBLE;
+    } else if (types.count(kFLOAT)) {
+      return kFLOAT;
+    } else if (types.count(kDECIMAL) || types.count(kNUMERIC)) {
+      return kDECIMAL;
+    } else if (types.count(kBIGINT)) {
+      return kBIGINT;
+    } else if (types.count(kINT)) {
+      return kINT;
+    } else if (types.count(kSMALLINT)) {
+      return kSMALLINT;
     }
-    return dp;
+    return std::nullopt;
+  }
+
+  size_t maxPrecision() const { return size_t(max_order) + size_t(max_scale); }
+
+  // Normalize values in case maxPrecision() is out of range of uint32_t.
+  void normalize() {
+    if (std::numeric_limits<uint32_t>::max() < maxPrecision()) {
+      max_order = std::min(max_order, std::numeric_limits<uint32_t>::max() / 2u);
+      max_scale = std::min(max_scale, std::numeric_limits<uint32_t>::max() / 2u);
+    }
   }
 };
 
-struct UpdateDecimalLiteralWithCommonParams {
-  DecimalParams dp;
+struct SetNumberTypes {
+  NumberTypes& nt;
+
+  /// For each RexLiteral, record the TargetType in nt,
+  /// and for each DECIMAL type, accumulate the max_order and max_scale.
+  void operator()(std::unique_ptr<RexScalar const> const& scalar) const {
+    if (auto* literal = dynamic_cast<RexLiteral const*>(scalar.get())) {
+      if (literal->getTargetType() == kDECIMAL) {
+        CHECK_LE(literal->getTargetScale(), literal->getTargetPrecision());
+        uint32_t const order = literal->getTargetPrecision() - literal->getTargetScale();
+        nt.max_order = std::max(nt.max_order, order);
+        nt.max_scale = std::max(nt.max_scale, literal->getTargetScale());
+      }
+      nt.types.insert(literal->getTargetType());
+    }
+  }
+};
+
+struct HomogenizeLiterals {
+  SQLTypes const chosen_type;
+  NumberTypes const& nt;
+
+  /// If needed, replace the scalar reference with a RexLiteral with the target
+  /// chosen_type, target precision, and target scale.
   void operator()(std::unique_ptr<RexScalar const>& scalar) const {
     if (auto* literal = dynamic_cast<RexLiteral const*>(scalar.get())) {
-      if (literal->getType() == kDECIMAL && literal->getTargetType() == kDECIMAL &&
-          (dp.precision != int(literal->getTargetPrecision()) ||
-           dp.scale != int(literal->getTargetScale()))) {
-        scalar = std::make_unique<RexLiteral const>(literal->getVal<int64_t>(),
-                                                    kDECIMAL,
-                                                    kDECIMAL,
-                                                    literal->getScale(),
-                                                    literal->getPrecision(),
-                                                    dp.scale,
-                                                    dp.precision);
+      if (literal->getTargetType() != chosen_type ||
+          nt.maxPrecision() != literal->getTargetPrecision() ||
+          nt.max_scale != literal->getTargetScale()) {
+        unsigned const target_scale = chosen_type == kDECIMAL ? nt.max_scale : 0u;
+        unsigned const target_precision =
+            chosen_type == kDECIMAL ? unsigned(nt.maxPrecision()) : 0u;
+        switch (literal->getType()) {
+          case kFLOAT:
+          case kDOUBLE:
+            scalar = std::make_unique<RexLiteral const>(literal->getVal<double>(),
+                                                        literal->getType(),
+                                                        chosen_type,
+                                                        0,
+                                                        0,
+                                                        target_scale,
+                                                        target_precision);
+            break;
+          case kDECIMAL:
+          case kNUMERIC:
+            scalar = std::make_unique<RexLiteral const>(literal->getVal<int64_t>(),
+                                                        literal->getType(),
+                                                        chosen_type,
+                                                        literal->getScale(),
+                                                        literal->getPrecision(),
+                                                        target_scale,
+                                                        target_precision);
+          default:
+            break;
+        }
       }
     }
   }
 };
 
-// Homogenize all literal decimals to common precision and scale.
-void homogenize_literal_decimals(std::vector<std::unique_ptr<const RexScalar>>& exprs) {
-  DecimalParams dp{0, 0};
-  // Find maximum precision and scale for all decimal literals.
-  dp = std::accumulate(exprs.begin(), exprs.end(), dp, MaxDecimalParams{});
+// Homogenize all literal number types (float, double, decimal) to a common type.
+void homogenize_number_literals(std::vector<std::unique_ptr<const RexScalar>>& exprs) {
+  NumberTypes nt{0u, 0u, {}};
+  // Find maximum precision and scale for all decimal literals and what other types exist
+  std::for_each(exprs.begin(), exprs.end(), SetNumberTypes{nt});
+  nt.normalize();
   // If any are decimal then update target precision and scale for all decimal literals.
-  if (dp.precision) {
-    std::for_each(exprs.begin(), exprs.end(), UpdateDecimalLiteralWithCommonParams{dp});
+  if (auto chosen_type = nt.chosenType()) {
+    std::for_each(exprs.begin(), exprs.end(), HomogenizeLiterals{*chosen_type, nt});
   }
 }
 
@@ -1158,7 +1220,7 @@ std::vector<std::unique_ptr<const RexScalar>> parse_expr_array(
     exprs.emplace_back(parse_scalar_expr(*it, root_dag));
   }
   if (op_name == "ARRAY") {
-    homogenize_literal_decimals(exprs);
+    homogenize_number_literals(exprs);
   }
   return exprs;
 }

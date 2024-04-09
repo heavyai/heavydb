@@ -206,6 +206,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new PgUnnest());
     addOperator(new Any());
     addOperator(new All());
+    addOperator(new DotProduct());
     addOperator(new Now());
     addOperator(new Datetime());
     addOperator(new PgExtract());
@@ -502,6 +503,70 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       RelDataType elem_type = opBinding.getOperandType(0).getComponentType();
       assert elem_type != null;
       return elem_type;
+    }
+  }
+
+  /* Array dot product */
+  public static class DotProduct extends SqlFunction {
+    public DotProduct() {
+      super("DOT_PRODUCT",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.and(
+                      OperandTypes.family(SqlTypeFamily.ARRAY, SqlTypeFamily.ARRAY),
+                      new SameOperandTypeChecker(2) {
+                        @Override
+                        protected List<Integer> getOperandList(int operandCount) {
+                          return ImmutableList.of(0, 1);
+                        }
+                      }),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    // This must be kept in sync with QueryEngine/DotProductReturnTypes.h.
+    // clang-format off
+    public static final List<SqlTypeName> retTypes = Arrays.asList
+      //            TINYINT              SMALLINT             INTEGER             BIGINT              FLOAT               DOUBLE              DECIMAL
+      ( SqlTypeName.INTEGER, SqlTypeName.INTEGER, SqlTypeName.BIGINT, SqlTypeName.BIGINT, SqlTypeName.FLOAT,  SqlTypeName.DOUBLE, SqlTypeName.FLOAT  // TINYINT
+      , SqlTypeName.INTEGER, SqlTypeName.INTEGER, SqlTypeName.BIGINT, SqlTypeName.BIGINT, SqlTypeName.FLOAT,  SqlTypeName.DOUBLE, SqlTypeName.FLOAT  // SMALLINT
+      , SqlTypeName.BIGINT,  SqlTypeName.BIGINT,  SqlTypeName.BIGINT, SqlTypeName.BIGINT, SqlTypeName.DOUBLE, SqlTypeName.DOUBLE, SqlTypeName.DOUBLE // INTEGER
+      , SqlTypeName.BIGINT,  SqlTypeName.BIGINT,  SqlTypeName.BIGINT, SqlTypeName.BIGINT, SqlTypeName.DOUBLE, SqlTypeName.DOUBLE, SqlTypeName.DOUBLE // BIGINT
+      , SqlTypeName.FLOAT,   SqlTypeName.FLOAT,   SqlTypeName.DOUBLE, SqlTypeName.DOUBLE, SqlTypeName.FLOAT,  SqlTypeName.DOUBLE, SqlTypeName.FLOAT  // FLOAT
+      , SqlTypeName.DOUBLE,  SqlTypeName.DOUBLE,  SqlTypeName.DOUBLE, SqlTypeName.DOUBLE, SqlTypeName.DOUBLE, SqlTypeName.DOUBLE, SqlTypeName.DOUBLE // DOUBLE
+      , SqlTypeName.FLOAT,   SqlTypeName.FLOAT,   SqlTypeName.DOUBLE, SqlTypeName.DOUBLE, SqlTypeName.FLOAT,  SqlTypeName.DOUBLE, SqlTypeName.DOUBLE // DECIMAL
+      );
+    // clang-format on
+    public static final List<SqlTypeName> types = Arrays.asList(SqlTypeName.TINYINT,
+            SqlTypeName.SMALLINT,
+            SqlTypeName.INTEGER,
+            SqlTypeName.BIGINT,
+            SqlTypeName.FLOAT,
+            SqlTypeName.DOUBLE,
+            SqlTypeName.DECIMAL);
+
+    public static SqlTypeName lookupReturnType(SqlTypeName type1, SqlTypeName type2) {
+      int idx1 = types.indexOf(type1);
+      int idx2 = types.indexOf(type2);
+      if (idx1 != -1 && idx2 != -1) {
+        return retTypes.get(types.size() * idx1 + idx2);
+      } else {
+        // If the types are non-numerical like DATE this will be caught in the C++ code.
+        return SqlTypeName.DOUBLE;
+      }
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      RelDataType elem1_type = opBinding.getOperandType(0).getComponentType();
+      RelDataType elem2_type = opBinding.getOperandType(1).getComponentType();
+      SqlTypeName ret_type =
+              lookupReturnType(elem1_type.getSqlTypeName(), elem2_type.getSqlTypeName());
+      // We always make the output nullable as that is how we handle
+      // arrays with different lengths, which is not a valid dot product
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(ret_type), true);
     }
   }
 
