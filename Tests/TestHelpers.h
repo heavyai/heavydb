@@ -24,8 +24,12 @@
 #include <gtest/gtest.h>
 #include <tbb/version.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include <boost/variant.hpp>
+
+#include <fstream>
+#include <regex>
 
 #define PRINT_TBB_TASK_SCHEDULER_HANDLE_DIAGNOSTICS 0
 
@@ -74,6 +78,45 @@ class TbbPrivateServerKiller : public ::testing::Test {
 #endif
   }
 #endif
+};
+
+/// Temporary file that is deleted upon destruction.
+class TempFile {
+  std::string path_;
+  std::ofstream stream_;
+
+ public:
+  TempFile()
+      : path_(
+            (boost::filesystem::temp_directory_path() / boost::filesystem::unique_path())
+                .string())
+      , stream_(path_) {
+    if (!stream_) {
+      throw std::runtime_error("Failed to create TempFile: " + path_);
+    }
+  }
+
+  ~TempFile() {
+    stream_.close();
+    if (!path_.empty()) {
+      boost::filesystem::remove(path_);
+    }
+  }
+
+  void close() { stream_.close(); }
+
+  std::string const& path() const { return path_; }
+
+  template <typename T>
+  inline TempFile& operator<<(T const& data) {
+    stream_ << data;
+    return *this;
+  }
+
+  TempFile& operator<<(std::ostream& (*manip)(std::ostream&)) {
+    manip(stream_);
+    return *this;
+  }
 };
 
 class ExecutorDeviceParameterizedTest
@@ -294,6 +337,13 @@ bool is_null_tv(const TargetValue& tv, const SQLTypeInfo& ti) {
   }
   CHECK(false);
   return false;
+}
+
+// Example: "{1, 2, 3}" -> "_1_2_3_" for replacement='_'.
+void replace_consecutive_non_alphaum(std::string& str, char const replacement) {
+  std::regex const non_alphanum_regex(R"(\W+)");
+  std::string const replacement_str(1, replacement);
+  str = std::regex_replace(str, non_alphanum_regex, replacement_str);
 }
 
 struct ValuesGenerator {

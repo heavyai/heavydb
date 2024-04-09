@@ -135,6 +135,8 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateCardinality(const RexFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateDotProduct(const RexFunctionOperator*) const;
+
   std::shared_ptr<Analyzer::Expr> translateItem(const RexFunctionOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateCurrentDate() const;

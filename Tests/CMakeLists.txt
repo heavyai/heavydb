@@ -745,6 +745,11 @@ endif()
 
 ##########
 
+add_executable(DotProductBenchmark DotProductBenchmark.cpp)
+target_link_libraries(DotProductBenchmark benchmark ${EXECUTE_TEST_LIBS})
+
+##########
+
 add_executable(GeospatialBenchmark GeospatialBenchmark.cpp)
 target_link_libraries(GeospatialBenchmark benchmark ${EXECUTE_TEST_LIBS})
 

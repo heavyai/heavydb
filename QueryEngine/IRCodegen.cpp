@@ -161,6 +161,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (cardinality_expr) {
     return {codegen(cardinality_expr, co)};
   }
+  auto dot_product_expr = dynamic_cast<const Analyzer::DotProductExpr*>(expr);
+  if (dot_product_expr) {
+    return {codegen(dot_product_expr, co)};
+  }
   auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
   if (like_expr) {
     return {codegen(like_expr, co)};
