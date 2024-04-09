@@ -1628,6 +1628,27 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateCardinality(
   return makeExpr<Analyzer::CardinalityExpr>(arg);
 }
 
+Analyzer::ExpressionPtr RelAlgTranslator::translateDotProduct(
+    const RexFunctionOperator* rex_function) const {
+  const auto arg1 = translateScalarRex(rex_function->getOperand(0));
+  const auto arg2 = translateScalarRex(rex_function->getOperand(1));
+  const auto arg1_ti = arg1->get_type_info();
+  const auto arg2_ti = arg2->get_type_info();
+  if (!arg1_ti.is_array()) {
+    throw std::runtime_error(rex_function->getName() +
+                             " expects an array expression for the first argument.");
+  }
+  if (!arg2_ti.is_array()) {
+    throw std::runtime_error(rex_function->getName() +
+                             " expects an array expression for the second argument.");
+  }
+  if (arg1_ti.get_subtype() == kARRAY || arg2_ti.get_subtype() == kARRAY) {
+    throw std::runtime_error(rex_function->getName() +
+                             " expects one-dimension array expressions.");
+  }
+  return makeExpr<Analyzer::DotProductExpr>(arg1, arg2);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateItem(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
@@ -1867,6 +1888,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
   if (func_resolve(rex_function->getName(), "CARDINALITY"sv, "ARRAY_LENGTH"sv)) {
     return translateCardinality(rex_function);
+  }
+  if (rex_function->getName() == "DOT_PRODUCT"sv) {
+    return translateDotProduct(rex_function);
   }
   if (rex_function->getName() == "ITEM"sv) {
     return translateItem(rex_function);

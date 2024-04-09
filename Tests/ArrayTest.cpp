@@ -16,6 +16,8 @@
 
 #include "TestHelpers.h"
 
+#include <algorithm>
+#include <cctype>
 #include <string>
 #include <vector>
 
@@ -31,6 +33,13 @@
     CHECK(dt == ExecutorDeviceType::GPU);                    \
     LOG(WARNING) << "GPU not available, skipping GPU tests"; \
     continue;                                                \
+  }
+
+// SKIP_NO_GPU() but for parameterized tests which don't use a loop.
+#define SKIP_NO_GPU_P(dt)                                    \
+  if (skip_tests(dt)) {                                      \
+    CHECK_EQ(ExecutorDeviceType::GPU, dt);                   \
+    GTEST_SKIP() << "GPU not available, skipping GPU tests"; \
   }
 
 bool g_keep_data{false};
@@ -1537,13 +1546,291 @@ TEST(Select, LiteralDecimals) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    EXPECT_NO_THROW(run_multiple_agg("SELECT {1.0, 10.00};", dt));
-    // Throws "Overflow in DECIMAL-to-DECIMAL conversion."
-    // since no valid DECIMAL type can hold both array values.
-    EXPECT_THROW(run_multiple_agg("SELECT {1234567890123456.0, 0.1234567890123456};", dt),
-                 std::runtime_error);
+    // Verify decimal values of different precision and scale
+    // can be cast to a common type when in the same array.
+    char const* query = "SELECT {1.0, 10.00};";
+    EXPECT_NO_THROW(run_multiple_agg(query, dt)) << query << ' ' << dt;
+
+    // When decimals in the same array cannot be cast to a common decimal type
+    // because the precision would be too large then they are cast to double.
+    query =
+        "SELECT array_equal({POWER(2.0,59), POWER(2.0,-20)},"
+        " {576460752303423488.0, 0.00000095367431640625});";
+    auto const result_set = run_multiple_agg(query, dt);
+    constexpr bool translate_strings = true;
+    constexpr bool decimal_to_double = true;
+    auto const result = result_set->getNextRow(translate_strings, decimal_to_double)[0];
+    EXPECT_TRUE(v<int64_t>(result)) << query << ' ' << dt;
   }
 }
+
+struct ArrayDotProductParam {
+  char v_type;  // i,f,d for in64_t,float,double as parameter to v<>().
+  std::optional<double> expected;
+  char const* lhs;
+  char const* rhs;
+};
+
+using ArrayDotProductTuple = std::tuple<ExecutorDeviceType, ArrayDotProductParam>;
+
+class ArrayDotProductTest : public testing::TestWithParam<ArrayDotProductTuple> {
+ public:
+  static void SetUpTestSuite() {
+    run_ddl_statement("DROP TABLE IF EXISTS dot_product_test;");
+    run_ddl_statement(
+        "CREATE TABLE dot_product_test (id INTEGER, i8 TINYINT[3], i16 SMALLINT[3], i32 "
+        "INTEGER[3], i64 BIGINT[3], f32 FLOAT[3], f64 DOUBLE[3], d18 DECIMAL(18,9)[3]);");
+    run_multiple_agg(
+        "INSERT INTO dot_product_test VALUES (0, {1, 2, 3}, {1, 2, 3}, {1, 2, 3},"
+        " {1, 2, 3}, {1., 2., 3.}, {1., 2., 3.}, {1., 2., 3.});",
+        ExecutorDeviceType::CPU);
+    run_multiple_agg(
+        "INSERT INTO dot_product_test VALUES (1, {2, 3, 4}, {2, 3, 4}, {2, 3, 4},"
+        " {2, 3, 4}, {2., 3., 4.}, {2., 3., 4.}, {2., 3., 4.});",
+        ExecutorDeviceType::CPU);
+    run_multiple_agg(
+        "INSERT INTO dot_product_test VALUES (2, {3, 4, 5}, {3, 4, 5}, {3, 4, 5},"
+        " {3, 4, 5}, {3., 4., 5.}, {3., 4., 5.}, {3., 4., 5.});",
+        ExecutorDeviceType::CPU);
+    run_multiple_agg(
+        "INSERT INTO dot_product_test VALUES (3, {4, 5, 6}, {4, 5, 6}, {4, 5, 6},"
+        " {4, 5, 6}, {4., 5., 6.}, {4., 5., 6.}, {4., 5., 6.});",
+        ExecutorDeviceType::CPU);
+  }
+
+  static void TearDownTestSuite() {
+    if (!g_keep_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS dot_product_test;");
+    }
+  }
+
+  static std::string printTestParams(
+      const ::testing::TestParamInfo<ArrayDotProductTuple>& info) {
+    auto const [dt, param] = info.param;
+    std::ostringstream ss;
+    ss << dt << '_' << param.lhs << '_' << param.rhs;
+    std::string str = ss.str();
+    std::replace(str.begin(), str.end(), '-', 'm');  // 'm' means "minus"
+    std::replace(str.begin(), str.end(), '.', 'p');  // 'p' means "point"
+    // Erase {}s.
+    str.erase(std::remove(str.begin(), str.end(), '{'), str.end());
+    str.erase(std::remove(str.begin(), str.end(), '}'), str.end());
+    // Replace all remaining consecutive non-alphanums with a single underscore.
+    replace_consecutive_non_alphaum(str, '_');
+    return str;
+  }
+};
+
+TEST_P(ArrayDotProductTest, BasicDotProduct) {
+  auto const [dt, param] = GetParam();
+  SKIP_NO_GPU_P(dt);
+  std::ostringstream query;
+  query << "SELECT DOT_PRODUCT(" << param.lhs << ',' << param.rhs << ") "
+        << (param.expected ? "" : "IS NULL ") << "FROM dot_product_test WHERE id=0";
+  auto const result_set = run_multiple_agg(query.str(), dt);
+  ASSERT_EQ(1u, result_set->rowCount()) << query.str();
+  constexpr bool translate_strings = true;
+  constexpr bool decimal_to_double = true;
+  auto const actual = result_set->getNextRow(translate_strings, decimal_to_double)[0];
+  if (param.expected) {
+    constexpr double EPS = 1e-13;
+    double const err = EPS * std::fabs(*param.expected);
+    switch (param.v_type) {
+      case 'i':
+        ASSERT_EQ(int64_t(*param.expected), v<int64_t>(actual)) << query.str();
+        break;
+      case 'f':
+        ASSERT_NEAR(*param.expected, v<float>(actual), err) << query.str();
+        break;
+      case 'd':
+        ASSERT_NEAR(*param.expected, v<double>(actual), err) << query.str();
+        break;
+      default:
+        UNREACHABLE() << param.v_type;
+    }
+  } else {
+    bool const is_null = static_cast<bool>(v<int64_t>(actual));
+    ASSERT_TRUE(is_null) << query.str();
+  }
+}
+
+// Test DOT_PRODUCT() between different array types.
+INSTANTIATE_TEST_SUITE_P(
+    BasicValues,
+    ArrayDotProductTest,
+    testing::Combine(
+        testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+        testing::Values(ArrayDotProductParam{'i', 14, "i8", "i8"},
+                        ArrayDotProductParam{'i', 14, "i8", "i16"},
+                        ArrayDotProductParam{'i', 14, "i8", "i32"},
+                        ArrayDotProductParam{'i', 14, "i8", "i64"},
+                        ArrayDotProductParam{'f', 14, "i8", "f32"},
+                        ArrayDotProductParam{'d', 14, "i8", "f64"},
+                        ArrayDotProductParam{'i', 14, "i16", "i16"},
+                        ArrayDotProductParam{'i', 14, "i16", "i32"},
+                        ArrayDotProductParam{'i', 14, "i16", "i64"},
+                        ArrayDotProductParam{'f', 14, "i16", "f32"},
+                        ArrayDotProductParam{'d', 14, "i16", "f64"},
+                        ArrayDotProductParam{'i', 14, "i32", "i32"},
+                        ArrayDotProductParam{'i', 14, "i32", "i64"},
+                        ArrayDotProductParam{'d', 14, "i32", "f32"},
+                        ArrayDotProductParam{'d', 14, "i32", "f64"},
+                        ArrayDotProductParam{'i', 14, "i64", "i64"},
+                        ArrayDotProductParam{'d', 14, "i64", "f32"},
+                        ArrayDotProductParam{'d', 14, "i64", "f64"},
+                        ArrayDotProductParam{'f', 14, "f32", "f32"},
+                        ArrayDotProductParam{'d', 14, "f32", "f64"},
+                        ArrayDotProductParam{'d', 14, "f64", "f64"},
+                        ArrayDotProductParam{'i', 14, "i8", "{1,2,3}"},
+                        ArrayDotProductParam{'i', 14, "i16", "{1,2,3}"},
+                        ArrayDotProductParam{'i', 14, "i32", "{1,2,3}"},
+                        ArrayDotProductParam{'i', 14, "i64", "{1,2,3}"},
+                        ArrayDotProductParam{'d', 14, "f32", "{1,2,3}"},
+                        ArrayDotProductParam{'d', 14, "f64", "{1,2,3}"},
+                        ArrayDotProductParam{'f', 14, "i8", "{1.0,2.0,3.0}"},
+                        ArrayDotProductParam{'f', 14, "i16", "{1.0,2.0,3.0}"},
+                        ArrayDotProductParam{'d', 14, "i32", "{1.0,2.0,3.0}"},
+                        ArrayDotProductParam{'d', 14, "i64", "{1.0,2.0,3.0}"},
+                        ArrayDotProductParam{'f', 14, "f32", "{1.0,2.0,3.0}"},
+                        ArrayDotProductParam{'d', 14, "f64", "{1.0,2.0,3.0}"},
+                        ArrayDotProductParam{'d', 14, "i8", "{1.0,20e-1,3.0}"},
+                        ArrayDotProductParam{'d', 14, "i16", "{1.0,20e-1,3.0}"},
+                        ArrayDotProductParam{'d', 14, "i32", "{1.0,20e-1,3.0}"},
+                        ArrayDotProductParam{'d', 14, "i64", "{1.0,20e-1,3.0}"},
+                        ArrayDotProductParam{'d', 14, "f32", "{1.0,20e-1,3.0}"},
+                        ArrayDotProductParam{'d', 14, "f64", "{1.0,20e-1,3.0}"},
+                        ArrayDotProductParam{'i', {}, "i8", "{1,2}"},
+                        ArrayDotProductParam{'i', {}, "i16", "{1,2,3,4}"},
+                        ArrayDotProductParam{'i', {}, "i32", "{1,2}"},
+                        ArrayDotProductParam{'i', {}, "i64", "{1,2,3,4}"},
+                        ArrayDotProductParam{'d', {}, "f32", "{1,2}"},
+                        ArrayDotProductParam{'d', {}, "f64", "{1,2,3,4}"})),
+    ArrayDotProductTest::printTestParams);
+
+class ArrayDotProductVarlenTest : public ArrayDotProductTest {
+ public:
+  static void SetUpTestSuite() {
+    run_ddl_statement("DROP TABLE IF EXISTS dot_product_varlen_test;");
+    run_ddl_statement(
+        "CREATE TABLE dot_product_varlen_test (fixlen2 FLOAT[2], fixlen3 FLOAT[3],"
+        " varlen2 FLOAT[], varlen3 FLOAT[]);");
+    run_multiple_agg(
+        "INSERT INTO dot_product_varlen_test VALUES ({1,2}, {1,2,3}, {1,2}, {1,2,3});",
+        ExecutorDeviceType::CPU);
+  }
+
+  static void TearDownTestSuite() {
+    if (!g_keep_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS dot_product_varlen_test;");
+    }
+  }
+};
+
+TEST_P(ArrayDotProductVarlenTest, Varlen) {
+  auto const [dt, param] = GetParam();
+  SKIP_NO_GPU_P(dt);
+  std::ostringstream query;
+  query << "SELECT DOT_PRODUCT(" << param.lhs << ',' << param.rhs << ')'
+        << (param.expected ? "" : " IS NULL") << " FROM dot_product_varlen_test;";
+  auto const result_set = run_multiple_agg(query.str(), dt);
+  ASSERT_EQ(1u, result_set->rowCount()) << query.str();
+  constexpr bool translate_strings = true;
+  constexpr bool decimal_to_double = true;
+  auto const actual = result_set->getNextRow(translate_strings, decimal_to_double)[0];
+  if (param.expected) {
+    switch (param.v_type) {
+      case 'i':
+        ASSERT_EQ(int64_t(*param.expected), v<int64_t>(actual)) << query.str();
+        break;
+      case 'f':
+        ASSERT_EQ(*param.expected, v<float>(actual)) << query.str();
+        break;
+      case 'd':
+        ASSERT_EQ(*param.expected, v<double>(actual)) << query.str();
+        break;
+      default:
+        UNREACHABLE() << param.v_type;
+    }
+  } else {
+    bool const is_null = static_cast<bool>(v<int64_t>(actual));
+    ASSERT_TRUE(is_null) << query.str();
+  }
+}
+
+// Test DOT_PRODUCT() between different sizes of literal, fixed, and varlen arrays.
+INSTANTIATE_TEST_SUITE_P(
+    VarlenArrays,
+    ArrayDotProductVarlenTest,
+    testing::Combine(
+        testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+        testing::Values(ArrayDotProductParam{'i', 5, "{1,2}", "{1,2}"},
+                        ArrayDotProductParam{'i', {}, "{1,2}", "{1,2,3}"},
+                        ArrayDotProductParam{'d', 5, "{1,2}", "fixlen2"},
+                        ArrayDotProductParam{'d', {}, "{1,2}", "fixlen3"},
+                        ArrayDotProductParam{'d', 5, "{1,2}", "varlen2"},
+                        ArrayDotProductParam{'d', {}, "{1,2}", "varlen3"},
+                        ArrayDotProductParam{'i', {}, "{1,2,3}", "{1,2}"},
+                        ArrayDotProductParam{'i', 14, "{1,2,3}", "{1,2,3}"},
+                        ArrayDotProductParam{'d', {}, "{1,2,3}", "fixlen2"},
+                        ArrayDotProductParam{'d', 14, "{1,2,3}", "fixlen3"},
+                        ArrayDotProductParam{'d', {}, "{1,2,3}", "varlen2"},
+                        ArrayDotProductParam{'d', 14, "{1,2,3}", "varlen3"},
+                        ArrayDotProductParam{'d', 5, "fixlen2", "{1,2}"},
+                        ArrayDotProductParam{'d', {}, "fixlen2", "{1,2,3}"},
+                        ArrayDotProductParam{'f', 5, "fixlen2", "fixlen2"},
+                        ArrayDotProductParam{'f', {}, "fixlen2", "fixlen3"},
+                        ArrayDotProductParam{'f', 5, "fixlen2", "varlen2"},
+                        ArrayDotProductParam{'f', {}, "fixlen2", "varlen3"},
+                        ArrayDotProductParam{'d', {}, "fixlen3", "{1,2}"},
+                        ArrayDotProductParam{'d', 14, "fixlen3", "{1,2,3}"},
+                        ArrayDotProductParam{'f', {}, "fixlen3", "fixlen2"},
+                        ArrayDotProductParam{'f', 14, "fixlen3", "fixlen3"},
+                        ArrayDotProductParam{'f', {}, "fixlen3", "varlen2"},
+                        ArrayDotProductParam{'f', 14, "fixlen3", "varlen3"},
+                        ArrayDotProductParam{'d', 5, "varlen2", "{1,2}"},
+                        ArrayDotProductParam{'d', {}, "varlen2", "{1,2,3}"},
+                        ArrayDotProductParam{'f', 5, "varlen2", "fixlen2"},
+                        ArrayDotProductParam{'f', {}, "varlen2", "fixlen3"},
+                        ArrayDotProductParam{'f', 5, "varlen2", "varlen2"},
+                        ArrayDotProductParam{'f', {}, "varlen2", "varlen3"},
+                        ArrayDotProductParam{'d', {}, "varlen3", "{1,2}"},
+                        ArrayDotProductParam{'d', 14, "varlen3", "{1,2,3}"},
+                        ArrayDotProductParam{'f', {}, "varlen3", "fixlen2"},
+                        ArrayDotProductParam{'f', 14, "varlen3", "fixlen3"},
+                        ArrayDotProductParam{'f', {}, "varlen3", "varlen2"},
+                        ArrayDotProductParam{'f', 14, "varlen3", "varlen3"})),
+    ArrayDotProductVarlenTest::printTestParams);
+
+// Use same dot_product_varlen_test table
+class ArrayDotProductExceptionsTest : public ArrayDotProductVarlenTest {};
+
+TEST_P(ArrayDotProductExceptionsTest, NonArrayAndMultidimensional) {
+  auto const [dt, param] = GetParam();
+  SKIP_NO_GPU_P(dt);
+  std::ostringstream query;
+  query << "SELECT DOT_PRODUCT(" << param.lhs << ',' << param.rhs << ')'
+        << " FROM dot_product_varlen_test;";
+  ASSERT_ANY_THROW(run_multiple_agg(query.str(), dt));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    NonArrayAndMultidimensional,
+    ArrayDotProductExceptionsTest,
+    testing::Combine(
+        testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+        testing::Values(ArrayDotProductParam{{}, {}, "1.0", "{1.0,2.0}"},
+                        ArrayDotProductParam{{}, {}, "{1.0,2.0}", "1.0"},
+                        ArrayDotProductParam{{}, {}, "1.0", "fixlen2"},
+                        ArrayDotProductParam{{}, {}, "1.0", "varlen2"},
+                        ArrayDotProductParam{{}, {}, "fixlen2", "1.0"},
+                        ArrayDotProductParam{{}, {}, "varlen2", "1.0"},
+                        ArrayDotProductParam{{}, {}, "{{1,2},{1,2}}", "{1.0,2.0}"},
+                        ArrayDotProductParam{{}, {}, "{1.0,2.0}", "{{1,2},{1,2}}"},
+                        ArrayDotProductParam{{}, {}, "{{1,2},{1,2}}", "fixlen2"},
+                        ArrayDotProductParam{{}, {}, "{{1,2},{1,2}}", "varlen2"},
+                        ArrayDotProductParam{{}, {}, "fixlen2", "{{1,2},{1,2}}"},
+                        ArrayDotProductParam{{}, {}, "varlen2", "{{1,2},{1,2}}"})),
+    ArrayDotProductExceptionsTest::printTestParams);
 
 int main(int argc, char** argv) {
   g_is_test_env = true;

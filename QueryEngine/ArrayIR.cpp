@@ -94,6 +94,114 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CardinalityExpr* expr,
       fn_name, get_int_type(32, cgen_state_->context_), array_size_args);
 }
 
+namespace {  // codegen Analyzer::DotProductExpr helpers
+
+llvm::Type* get_dot_product_return_type(const CgenState* cgen_state,
+                                        const SQLTypeInfo& expr_ti) {
+  if (expr_ti.is_fp()) {
+    return get_fp_type(expr_ti.get_type() == kFLOAT ? 32 : 64, cgen_state->context_);
+  } else {
+    CHECK(expr_ti.is_integer()) << expr_ti.toString();
+    return get_int_type(expr_ti.get_size() <= 4 ? 32 : 64, cgen_state->context_);
+  }
+}
+
+bool reverse_dot_product_args(const SQLTypeInfo& type1, const SQLTypeInfo& type2) {
+  // Floating point types are placed first
+  // Cover case of mixed fp and integer types
+  if (type1.is_fp() ^ type2.is_fp()) {
+    return type2.is_fp();
+  }
+  // If here we should have either both fp or both integer types
+  return type1.get_logical_size() < type2.get_logical_size();
+}
+
+struct DotProductArg {
+  Analyzer::Expr const* expr;
+  std::string_view type;  // "Literal" or "Chunk"
+  std::array<llvm::Value*, 3> params;
+
+  DotProductArg(Analyzer::Expr const* expr) : expr(expr) {
+    CHECK(expr->get_type_info().is_array());
+  }
+
+  SQLTypeInfo getElemTypeInfo() const { return expr->get_type_info().get_elem_type(); }
+
+  // Set type and params.
+  void setTypeAndParams(CodeGenerator* cg,
+                        CgenState* cgen_state,
+                        llvm::Value* const value) {
+    if (auto* alloca = llvm::dyn_cast<llvm::AllocaInst>(value)) {
+      if (alloca->getAllocatedType()->isStructTy()) {
+        throw std::runtime_error("Unsupported type used in 'dot_product'");
+      }
+    }
+
+    if (auto* array_expr = dynamic_cast<Analyzer::ArrayExpr const*>(expr)) {
+      type = "Literal";
+      params[0] = array_expr->isLocalAlloc()
+                      ? cgen_state->ir_builder_.CreateBitCast(
+                            value, llvm::Type::getInt8PtrTy(cgen_state->context_))
+                      : value;
+      params[1] = cgen_state->llInt(array_expr->getElementCount());
+      params[2] = cgen_state->llInt(uint32_t{});  // unused but needed to use common API
+    } else {
+      type = "Chunk";
+      params[0] = value;
+      params[1] = cg->posArg(expr);
+      int const logical_size = getElemTypeInfo().get_logical_size();
+      params[2] = cgen_state->llInt(log2_bytes(logical_size));
+    }
+  }
+
+  void swap(DotProductArg& rhs) {
+    std::swap(expr, rhs.expr);
+    type.swap(rhs.type);
+    params.swap(rhs.params);
+  }
+};
+
+std::ostream& operator<<(std::ostream& os, DotProductArg const& arg) {
+  SQLTypeInfo const elem_ti = arg.getElemTypeInfo();
+  if (elem_ti.is_fp()) {
+    os << arg.type << '_' << to_lower(toString(elem_ti.get_type()));
+  } else {
+    os << arg.type << "_int" << 8 * elem_ti.get_logical_size() << "_t";
+  }
+  return os;
+}
+
+}  // namespace
+
+llvm::Value* CodeGenerator::codegen(const Analyzer::DotProductExpr* expr,
+                                    const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+
+  DotProductArg arg1{expr->get_arg1()};
+  DotProductArg arg2{expr->get_arg2()};
+
+  arg1.setTypeAndParams(this, cgen_state_, codegen(expr->get_arg1(), true, co).front());
+  arg2.setTypeAndParams(this, cgen_state_, codegen(expr->get_arg2(), true, co).front());
+
+  // Float type is first, else larger type is first.
+  if (reverse_dot_product_args(arg1.getElemTypeInfo(), arg2.getElemTypeInfo())) {
+    arg1.swap(arg2);
+  }
+
+  // Set function name and return type.
+  std::ostringstream fn_name;
+  fn_name << "array_dot_product_" << arg1 << '_' << arg2;
+  llvm::Type* ret_type = get_dot_product_return_type(cgen_state_, expr->get_type_info());
+
+  // Set function params and emit the call.
+  std::vector<llvm::Value*> fn_params;
+  fn_params.reserve(arg1.params.size() + arg2.params.size() + 1u);
+  fn_params.insert(fn_params.end(), arg1.params.begin(), arg1.params.end());
+  fn_params.insert(fn_params.end(), arg2.params.begin(), arg2.params.end());
+  fn_params.push_back(cgen_state_->inlineNull(expr->get_type_info()));
+  return cgen_state_->emitExternalCall(fn_name.str(), ret_type, fn_params);
+}
+
 std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
     Analyzer::ArrayExpr const* array_expr,
     CompilationOptions const& co) {

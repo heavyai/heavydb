@@ -253,6 +253,8 @@ class CodeGenerator {
 
   llvm::Value* codegen(const Analyzer::CardinalityExpr*, const CompilationOptions&);
 
+  llvm::Value* codegen(const Analyzer::DotProductExpr*, const CompilationOptions&);
+
   std::vector<llvm::Value*> codegenArrayExpr(const Analyzer::ArrayExpr*,
                                              const CompilationOptions&);
 
