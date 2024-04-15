@@ -14378,8 +14378,8 @@ TEST_F(Select, RuntimeFunctions) {
         static_cast<double>(1171.11),
         v<double>(run_simple_agg(
             "SELECT TRUNCATE(CAST(1171.113 AS FLOAT),2) FROM test LIMIT 1;", dt)));
-    ASSERT_FLOAT_EQ(static_cast<float>(11000000000000),
-                    v<float>(run_simple_agg(
+    ASSERT_FLOAT_EQ(static_cast<double>(11000000000000),
+                    v<double>(run_simple_agg(
                         "SELECT FLOOR(f / 1e-13) FROM test WHERE f < 1.2 LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(
         static_cast<float>(11000000000000),
@@ -14387,8 +14387,8 @@ TEST_F(Select, RuntimeFunctions) {
             "SELECT FLOOR(CAST(f / 1e-13 AS FLOAT)) FROM test WHERE f < 1.2 LIMIT 1;",
             dt)));
     ASSERT_FLOAT_EQ(
-        std::numeric_limits<float>::min(),
-        v<float>(run_simple_agg(
+        std::numeric_limits<double>::min(),
+        v<double>(run_simple_agg(
             "SELECT FLOOR(fn / 1e-13) FROM test WHERE fn IS NULL LIMIT 1;", dt)));
     {
       auto result = run_multiple_agg("SELECT fn, is_nan(fn) FROM test;", dt);
@@ -14406,6 +14406,28 @@ TEST_F(Select, RuntimeFunctions) {
         }
       }
     }
+  }
+}
+
+TEST_F(Select, CeilFunctionTypeDifference) {
+  const std::string query1{"SELECT CEIL(CAST(avg(dd) AS REAL) / 0.5) * 0.5 FROM test;"};
+  const std::string query2{"SELECT 0.5 * CEIL(CAST(avg(dd) AS REAL) / 0.5) FROM test;"};
+  const double expected_res = 194.5;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(expected_res, v<float>(run_simple_agg(query1, dt)));
+    ASSERT_EQ(expected_res, v<float>(run_simple_agg(query2, dt)));
+  }
+}
+
+TEST_F(Select, FloorFunctionTypeDifference) {
+  const std::string query1{"SELECT FLOOR(CAST(avg(dd) AS REAL) / 0.5) * 0.5 FROM test;"};
+  const std::string query2{"SELECT 0.5 * FLOOR(CAST(avg(dd) AS REAL) / 0.5) FROM test;"};
+  const double expected_res = 194;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(expected_res, v<float>(run_simple_agg(query1, dt)));
+    ASSERT_EQ(expected_res, v<float>(run_simple_agg(query2, dt)));
   }
 }
 
