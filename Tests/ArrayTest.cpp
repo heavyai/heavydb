@@ -673,6 +673,28 @@ TEST_F(ArrayExtOpsEnv, CardinalityWithUdf) {
   }
 }
 
+TEST_F(ArrayExtOpsEnv, CardinalityForConstantArray) {
+  auto check_row_result =
+      [](const auto& crt_row, int64_t expected, ExecutorDeviceType dt) {
+        auto const res = v<int64_t>(crt_row[0]);
+        ASSERT_EQ(res, expected)
+            << "device: " << dt << ", expected: " << expected << ", but return :" << res;
+      };
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    check_row_result(
+        run_multiple_agg("SELECT CARDINALITY({});", dt)->getNextRow(false, false), 0, dt);
+    check_row_result(
+        run_multiple_agg("SELECT CARDINALITY({1});", dt)->getNextRow(false, false),
+        1,
+        dt);
+    check_row_result(
+        run_multiple_agg("SELECT CARDINALITY({1,2});", dt)->getNextRow(false, false),
+        2,
+        dt);
+  }
+}
+
 class FixedEncodedArrayTest : public ::testing::Test {
  protected:
   void SetUp() override { dropTestTables(); }
