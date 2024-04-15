@@ -1443,8 +1443,7 @@ TEST_P(Ctas, ValidationCheck) {
   sql("DROP TABLE IF EXISTS ctas_target;");
   sql("CREATE TABLE ctas_source (id int, dd DECIMAL(17,2));");
   sql("INSERT INTO ctas_source VALUES(1, 10000);");
-  ASSERT_ANY_THROW(
-      sql("CREATE TABLE ctas_target AS SELECT id, CEIL(dd*10000) FROM ctas_source;"));
+  sql("CREATE TABLE ctas_target AS SELECT id, CEIL(dd*10000) FROM ctas_source;");
 }
 
 TEST_P(Ctas, GeoTest) {

@@ -1920,10 +1920,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     return translateSign(rex_function);
   }
   if (func_resolve(rex_function->getName(), "CEIL"sv, "FLOOR"sv)) {
+    CHECK_EQ(static_cast<size_t>(1), rex_function->size());
+    auto const args = translateFunctionArgs(rex_function);
+    auto ret_ti = args.front()->get_type_info();
+    if (ret_ti.is_decimal()) {
+      // DECIMAL_FLOOR and DECIMAL_CEIL return int64_t
+      ret_ti.set_scale(0);
+    }
     return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
-        rex_function->getType(),
-        rex_function->getName(),
-        translateFunctionArgs(rex_function));
+        ret_ti, rex_function->getName(), args);
   } else if (rex_function->getName() == "ROUND"sv) {
     std::vector<std::shared_ptr<Analyzer::Expr>> args =
         translateFunctionArgs(rex_function);
