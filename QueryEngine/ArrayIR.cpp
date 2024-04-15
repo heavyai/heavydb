@@ -71,13 +71,25 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CardinalityExpr* expr,
   const auto arr_expr = expr->get_arg();
   const auto& array_ti = arr_expr->get_type_info();
   CHECK(array_ti.is_array());
+  if (auto array_literal_expr = dynamic_cast<Analyzer::ArrayExpr const*>(arr_expr)) {
+    constexpr size_t array_literal_size_limit = static_cast<size_t>(INT32_MAX);
+    auto const array_literal_size = array_literal_expr->getElementCount();
+    if (array_literal_size > array_literal_size_limit) {
+      std::ostringstream oss;
+      oss << "Too large array literal (size: " << array_literal_size
+          << ") used in 'CARDINALITY' function (maximum allowed cardinality is "
+             "2147483647)";
+      throw std::runtime_error(oss.str());
+    }
+    return cgen_state_->llInt(static_cast<int32_t>(array_literal_size));
+  }
   const auto& elem_ti = array_ti.get_elem_type();
   auto arr_lv = codegen(arr_expr, true, co);
   std::string fn_name("array_size");
 
   if (auto alloca = llvm::dyn_cast<llvm::AllocaInst>(arr_lv.front())) {
     if (alloca->getAllocatedType()->isStructTy()) {
-      throw std::runtime_error("Unsupported type used in 'cardinality'");
+      throw std::runtime_error("Unsupported type used in 'CARDINALITY' function");
     }
   }
 
