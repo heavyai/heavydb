@@ -589,7 +589,7 @@ TEST_F(LegacyDataWrapperMigrationTest, LegacyDataWrappersAreRenamed) {
   }
 }
 
-class ColumnLevelSecurityMigrationTest : public DBHandlerTestFixture {
+class SystemCatalogMigrationTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     dirname_ = std::filesystem::path(BASE_PATH) / std::filesystem::path("catalogs");
@@ -605,28 +605,6 @@ class ColumnLevelSecurityMigrationTest : public DBHandlerTestFixture {
     destroyDBHandler();
 
     sys_catalog_sqlite_connector_ = std::make_unique<SqliteConnector>(dbname_, dirname_);
-    sys_catalog_sqlite_connector_->query("DROP TABLE IF EXISTS mapd_object_permissions;");
-    sys_catalog_sqlite_connector_->query(
-        "CREATE TABLE mapd_object_permissions (roleName TEXT, roleType bool, dbId "
-        "integer references mapd_databases, objectName text, objectId integer, "
-        "objectPermissionsType integer, objectPermissions integer, objectOwnerId "
-        "integer, UNIQUE(roleName, objectPermissionsType, dbId, objectId))");
-    sys_catalog_sqlite_connector_->query(
-        "INSERT INTO mapd_object_permissions VALUES('admin',1,0,'heavyai',-1,1,0,0)");
-    sys_catalog_sqlite_connector_->query(
-        "INSERT INTO mapd_object_permissions VALUES('user1',1,0,'heavyai',-1,1,0,0)");
-    sys_catalog_sqlite_connector_->query(
-        "INSERT INTO mapd_object_permissions VALUES('user2',1,0,'heavyai',-1,1,0,0)");
-    sys_catalog_sqlite_connector_->query(
-        "INSERT INTO mapd_object_permissions VALUES('user1',1,1,'heavyai',-1,1,8,0)");
-    sys_catalog_sqlite_connector_->query(
-        "INSERT INTO mapd_object_permissions VALUES('user2',1,1,'heavyai',-1,1,8,0)");
-    sys_catalog_sqlite_connector_->query(
-        "INSERT INTO mapd_object_permissions VALUES('user1',1,1,'test_table1',4,2,4,0)");
-    sys_catalog_sqlite_connector_->query(
-        "INSERT INTO mapd_object_permissions VALUES('user2',1,1,'test_table2',5,2,8,0)");
-    sys_catalog_sqlite_connector_->query(
-        "INSERT INTO mapd_object_permissions VALUES('user2',1,1,'heavyai',-1,2,4,0)");
   }
 
   void TearDown() override {
@@ -650,26 +628,6 @@ class ColumnLevelSecurityMigrationTest : public DBHandlerTestFixture {
   void restoreSysCatalog() {
     std::filesystem::copy(std::filesystem::path(dirname_) / dbname_old_,
                           std::filesystem::path(dirname_) / dbname_);
-  }
-
-  void checkTableDoesNotExist(const std::string& table_name) {
-    sys_catalog_sqlite_connector_->query("PRAGMA TABLE_INFO(" + table_name + ")");
-    ASSERT_EQ(sys_catalog_sqlite_connector_->getNumRows(), 0UL);
-  }
-
-  void verifyUniqueConstraint() {
-    sys_catalog_sqlite_connector_->query("PRAGMA INDEX_LIST(mapd_object_permissions)");
-    ASSERT_EQ(sys_catalog_sqlite_connector_->getNumRows(), 1UL);
-    ASSERT_EQ(sys_catalog_sqlite_connector_->getNumCols(), 5UL);
-    ASSERT_EQ(sys_catalog_sqlite_connector_->getData<int>(0, 2),
-              1);  // This asserts the columns are sorted
-    auto index_name = sys_catalog_sqlite_connector_->getData<std::string>(0, 1);
-    assertExpectedQueryResult("PRAGMA INDEX_INFO(\"" + index_name + "\")",
-                              {{"0", "0", "roleName"},
-                               {"1", "5", "objectPermissionsType"},
-                               {"2", "2", "dbId"},
-                               {"3", "4", "objectId"},
-                               {"4", "8", "subObjectId"}});
   }
 
   void assertExpectedQueryResult(
@@ -716,6 +674,161 @@ class ColumnLevelSecurityMigrationTest : public DBHandlerTestFixture {
   std::string dirname_;
   std::string dbname_;
   std::string dbname_old_;
+};
+
+class ImmerseMetadataMigrationTest : public SystemCatalogMigrationTest {
+ protected:
+  void SetUp() override {
+    SystemCatalogMigrationTest::SetUp();
+
+    // Setup a pre-migrated state of mapd_users
+    sys_catalog_sqlite_connector_->query("DROP TABLE IF EXISTS mapd_users;");
+    sys_catalog_sqlite_connector_->query(
+        "CREATE TABLE mapd_users (userid integer primary key, name text unique, "
+        "passwd_hash text, issuper boolean, default_db integer references "
+        "mapd_databases, can_login boolean);");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_users "
+        "VALUES(0,'admin','$2a$12$WaJQNlOE1q.D7Ity5mRqkehvui3ePmUI/"
+        "HorBDeYAS74KVFuBb2au',1,NULL,1);");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_users "
+        "VALUES(1,'test_user1','$2a$12$GWEpeJWheabNCra9LOV85uIwfV8."
+        "8yDwLoDxUMe3POwY4qr59q2pu',0,NULL,1);");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_users "
+        "VALUES(2,'test_user2','$2a$12$R9o4uYIibqcEPGtUvsLCpOorUF8i7zng/j8KlJ/"
+        "O689ntfrNICLQu',0,NULL,1);");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_users "
+        "VALUES(3,'test_user3','$2a$12$hw4XAkNZAg.KaI9vQAhqcu6zKsI.Bh8DKos5oa/"
+        ".yt7nT.3zn2/Te',0,NULL,1);");
+
+    // Setup a pre-migrated state of mapd_databases
+    sys_catalog_sqlite_connector_->query("DROP TABLE IF EXISTS mapd_databases;");
+    sys_catalog_sqlite_connector_->query(
+        "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner "
+        "integer references mapd_users)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_databases "
+        "VALUES(1,'heavyai',0);");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_databases "
+        "VALUES(2,'information_schema',0);");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_databases "
+        "VALUES(3,'test_db1',0);");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_databases "
+        "VALUES(4,'test_db2',0);");
+  }
+
+  void TearDown() override { SystemCatalogMigrationTest::TearDown(); }
+};
+
+TEST_F(ImmerseMetadataMigrationTest, MockMigration) {
+  // The migration happens as part of creating the db handler below, see method
+  // `SetUp` for details of system catalog configuration prior to migration
+  createDBHandler();
+
+  // Validate mapd_users migration
+  assertExpectedQueryResult("PRAGMA TABLE_INFO(mapd_users)",
+                            {{"0", "userid", "integer"},
+                             {"1", "name", "text"},
+                             {"2", "passwd_hash", "text"},
+                             {"3", "issuper", "boolean"},
+                             {"4", "default_db", "integer"},
+                             {"5", "can_login", "boolean"},
+                             {"6", "immerse_metadata_json", "text"}},
+                            std::vector<bool>{false, false, true});
+
+  // clang-format off
+  assertExpectedQueryResult("SELECT * FROM mapd_users ORDER BY userid",
+  {
+    { "0", "admin",
+        "$2a$12$WaJQNlOE1q.D7Ity5mRqkehvui3ePmUI/HorBDeYAS74KVFuBb2au", "1",
+        "", "1", "" },
+    { "1", "test_user1",
+        "$2a$12$GWEpeJWheabNCra9LOV85uIwfV8.8yDwLoDxUMe3POwY4qr59q2pu", "0",
+        "", "1", "" },
+    { "2", "test_user2",
+        "$2a$12$R9o4uYIibqcEPGtUvsLCpOorUF8i7zng/j8KlJ/O689ntfrNICLQu", "0",
+        "", "1", "" },
+    { "3", "test_user3",
+        "$2a$12$hw4XAkNZAg.KaI9vQAhqcu6zKsI.Bh8DKos5oa/.yt7nT.3zn2/Te", "0",
+        "", "1", "" }
+  }
+  );
+  // clang-format off
+
+  // Validate mapd_databases migration
+  assertExpectedQueryResult("PRAGMA TABLE_INFO(mapd_databases)",
+                            {{"0", "dbid", "integer"},
+                             {"1", "name", "text"},
+                             {"2", "owner", "integer"},
+                             {"3", "immerse_metadata_json", "text"}},
+                            std::vector<bool>{false, false, true});
+  // clang-format off
+  assertExpectedQueryResult("SELECT * FROM mapd_databases ORDER BY dbid",
+  {
+    { "1", "heavyai", "0", ""},
+    { "2", "information_schema", "0", ""},
+    { "3", "test_db1", "0", ""},
+    { "4", "test_db2", "0", ""},
+  }
+  );
+  // clang-format off
+}
+
+class ColumnLevelSecurityMigrationTest : public SystemCatalogMigrationTest {
+ protected:
+  void SetUp() override {
+    SystemCatalogMigrationTest::SetUp();
+    sys_catalog_sqlite_connector_->query("DROP TABLE IF EXISTS mapd_object_permissions;");
+    sys_catalog_sqlite_connector_->query(
+        "CREATE TABLE mapd_object_permissions (roleName TEXT, roleType bool, dbId "
+        "integer references mapd_databases, objectName text, objectId integer, "
+        "objectPermissionsType integer, objectPermissions integer, objectOwnerId "
+        "integer, UNIQUE(roleName, objectPermissionsType, dbId, objectId))");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('admin',1,0,'heavyai',-1,1,0,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user1',1,0,'heavyai',-1,1,0,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user2',1,0,'heavyai',-1,1,0,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user1',1,1,'heavyai',-1,1,8,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user2',1,1,'heavyai',-1,1,8,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user1',1,1,'test_table1',4,2,4,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user2',1,1,'test_table2',5,2,8,0)");
+    sys_catalog_sqlite_connector_->query(
+        "INSERT INTO mapd_object_permissions VALUES('user2',1,1,'heavyai',-1,2,4,0)");
+  }
+
+  void TearDown() override { SystemCatalogMigrationTest::TearDown(); }
+
+  void checkTableDoesNotExist(const std::string& table_name) {
+    sys_catalog_sqlite_connector_->query("PRAGMA TABLE_INFO(" + table_name + ")");
+    ASSERT_EQ(sys_catalog_sqlite_connector_->getNumRows(), 0UL);
+  }
+
+  void verifyUniqueConstraint() {
+    sys_catalog_sqlite_connector_->query("PRAGMA INDEX_LIST(mapd_object_permissions)");
+    ASSERT_EQ(sys_catalog_sqlite_connector_->getNumRows(), 1UL);
+    ASSERT_EQ(sys_catalog_sqlite_connector_->getNumCols(), 5UL);
+    ASSERT_EQ(sys_catalog_sqlite_connector_->getData<int>(0, 2),
+              1);  // This asserts the columns are sorted
+    auto index_name = sys_catalog_sqlite_connector_->getData<std::string>(0, 1);
+    assertExpectedQueryResult("PRAGMA INDEX_INFO(\"" + index_name + "\")",
+                              {{"0", "0", "roleName"},
+                               {"1", "5", "objectPermissionsType"},
+                               {"2", "2", "dbId"},
+                               {"3", "4", "objectId"},
+                               {"4", "8", "subObjectId"}});
+  }
 };
 
 TEST_F(ColumnLevelSecurityMigrationTest, MockMigration) {
