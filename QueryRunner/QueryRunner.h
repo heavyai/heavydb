@@ -258,8 +258,8 @@ class QueryRunner {
       const TableDescriptor* td) const;
 
   RegisteredQueryHint getParsedQueryHint(const std::string&);
-  std::optional<
-      std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>>
+  std::optional<std::unordered_map<const RelAlgNode*,
+                                   std::unordered_map<unsigned, RegisteredQueryHint>>>
   getParsedQueryHints(const std::string& query_str);
   std::shared_ptr<const RelAlgNode> getRootNodeFromParsedQuery(
       const std::string& query_str);
