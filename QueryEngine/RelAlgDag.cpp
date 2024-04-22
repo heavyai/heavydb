@@ -23,6 +23,7 @@
 #include "RelLeftDeepInnerJoin.h"
 #include "RexVisitor.h"
 #include "Shared/misc.h"
+#include "Shared/scope.h"
 #include "Shared/sqldefs.h"
 #include "Visitors/RelAlgDagViewer.h"
 
@@ -1727,20 +1728,6 @@ void handle_query_hint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
   rel_alg_dag.setGlobalQueryHints(new_global_query_hints);
 }
 
-void compute_node_hash(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
-  // compute each rel node's hash value in advance to avoid inconsistency of their hash
-  // values depending on the toHash's caller
-  // specifically, we manipulate our logical query plan before retrieving query step
-  // sequence but once we compute a hash value we cached it so there is no way to update
-  // it after the plan has been changed starting from the top node, we compute the hash
-  // value (top-down manner)
-  std::for_each(
-      nodes.rbegin(), nodes.rend(), [](const std::shared_ptr<RelAlgNode>& node) {
-        auto node_hash = node->toHash();
-        CHECK_NE(node_hash, static_cast<size_t>(0));
-      });
-}
-
 void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   for (auto node : nodes) {
     const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
@@ -1804,7 +1791,8 @@ class RexInputReplacementVisitor : public RexDeepCopyVisitor {
 void create_compound(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
     const std::vector<size_t>& pattern,
-    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
+    std::unordered_map<const RelAlgNode*,
+                       std::unordered_map<unsigned, RegisteredQueryHint>>&
         query_hints) noexcept {
   CHECK_GE(pattern.size(), size_t(2));
   CHECK_LE(pattern.size(), size_t(4));
@@ -1820,19 +1808,19 @@ void create_compound(
   RelAlgNode* last_node{nullptr};
 
   std::shared_ptr<ModifyManipulationTarget> manipulation_target;
-  size_t node_hash{0};
+  const RelAlgNode* query_hint_map_key{nullptr};
   unsigned node_id{0};
   bool hint_registered{false};
   RegisteredQueryHint registered_query_hint = RegisteredQueryHint::defaults();
   for (const auto node_idx : pattern) {
     const auto ra_node = nodes[node_idx];
-    auto registered_query_hint_map_it = query_hints.find(ra_node->toHash());
+    auto registered_query_hint_map_it = query_hints.find(ra_node.get());
     if (registered_query_hint_map_it != query_hints.end()) {
       auto& registered_query_hint_map = registered_query_hint_map_it->second;
       auto registered_query_hint_it = registered_query_hint_map.find(ra_node->getId());
       if (registered_query_hint_it != registered_query_hint_map.end()) {
         hint_registered = true;
-        node_hash = registered_query_hint_map_it->first;
+        query_hint_map_key = registered_query_hint_map_it->first;
         node_id = registered_query_hint_it->first;
         registered_query_hint = registered_query_hint_it->second;
       }
@@ -1934,18 +1922,18 @@ void create_compound(
   if (hint_registered) {
     // pass the registered hint from the origin node to newly created compound node
     // where it is coalesced
-    auto registered_query_hint_map_it = query_hints.find(node_hash);
+    auto registered_query_hint_map_it = query_hints.find(query_hint_map_key);
     CHECK(registered_query_hint_map_it != query_hints.end());
     auto registered_query_hint_map = registered_query_hint_map_it->second;
     if (registered_query_hint_map.size() > 1) {
       registered_query_hint_map.erase(node_id);
     } else {
       CHECK_EQ(registered_query_hint_map.size(), static_cast<size_t>(1));
-      query_hints.erase(node_hash);
+      query_hints.erase(query_hint_map_key);
     }
     std::unordered_map<unsigned, RegisteredQueryHint> hint_map;
     hint_map.emplace(compound_node->getId(), registered_query_hint);
-    query_hints.emplace(compound_node->toHash(), hint_map);
+    query_hints.emplace(compound_node.get(), hint_map);
   }
   for (size_t i = 0; i < pattern.size() - 1; ++i) {
     nodes[pattern[i]].reset();
@@ -2130,8 +2118,8 @@ bool is_window_function_operator(const RexScalar* rex) {
 void coalesce_nodes(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
     const std::vector<const RelAlgNode*>& left_deep_joins,
-    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
-        query_hints) {
+    std::unordered_map<const RelAlgNode*,
+                       std::unordered_map<unsigned, RegisteredQueryHint>>& query_hints) {
   enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
   std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
@@ -2350,8 +2338,8 @@ void handle_agg_filter_left_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes
 // "Aggregate-Project-Join" and can continue the execution w/o any crash or exception
 void handle_agg_over_join(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
-    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
-        query_hints) {
+    std::unordered_map<const RelAlgNode*,
+                       std::unordered_map<unsigned, RegisteredQueryHint>>& query_hints) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
   bool replace_nodes = false;
   for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
@@ -2628,22 +2616,22 @@ class RexWindowFuncReplacementVisitor : public RexDeepCopyVisitor {
 void propagate_hints_to_new_project(
     std::shared_ptr<RelProject> prev_node,
     std::shared_ptr<RelProject> new_node,
-    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
-        query_hints) {
+    std::unordered_map<const RelAlgNode*,
+                       std::unordered_map<unsigned, RegisteredQueryHint>>& query_hints) {
   auto delivered_hints = prev_node->getDeliveredHints();
   bool needs_propagate_hints = !delivered_hints->empty();
   if (needs_propagate_hints) {
     for (auto& kv : *delivered_hints) {
       new_node->addHint(kv.second);
     }
-    auto prev_it = query_hints.find(prev_node->toHash());
+    auto prev_it = query_hints.find(prev_node.get());
     // query hint for the prev projection node should be registered
     CHECK(prev_it != query_hints.end());
     auto prev_hint_it = prev_it->second.find(prev_node->getId());
     CHECK(prev_hint_it != prev_it->second.end());
     std::unordered_map<unsigned, RegisteredQueryHint> hint_map;
     hint_map.emplace(new_node->getId(), prev_hint_it->second);
-    query_hints.emplace(new_node->toHash(), hint_map);
+    query_hints.emplace(new_node.get(), hint_map);
   }
 }
 
@@ -2671,8 +2659,8 @@ void propagate_hints_to_new_project(
  */
 void separate_window_function_expressions(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
-    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
-        query_hints) {
+    std::unordered_map<const RelAlgNode*,
+                       std::unordered_map<unsigned, RegisteredQueryHint>>& query_hints) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
   for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
     const auto node = *node_itr;
@@ -2870,8 +2858,8 @@ std::pair<bool, bool> need_pushdown_generic_expr(
 void add_window_function_pre_project(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
     const bool always_add_project_if_first_project_is_window_expr,
-    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
-        query_hints) {
+    std::unordered_map<const RelAlgNode*,
+                       std::unordered_map<unsigned, RegisteredQueryHint>>& query_hints) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
   size_t project_node_counter{0};
   for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
@@ -3629,6 +3617,10 @@ std::unique_ptr<RelAlgDag> RelAlgDagBuilder::build(const rapidjson::Value& query
 }
 
 void RelAlgDagBuilder::optimizeDag(RelAlgDag& rel_alg_dag) {
+  auto optimize_start = timer_start();
+  ScopeGuard log_timer = [&optimize_start]() {
+    VLOG(1) << "Optimize RelAlgDag took: " << timer_stop(optimize_start) << " ms";
+  };
   auto const build_state = rel_alg_dag.getBuildState();
   if (build_state == RelAlgDag::BuildState::kBuiltOptimized) {
     return;
@@ -3639,10 +3631,7 @@ void RelAlgDagBuilder::optimizeDag(RelAlgDag& rel_alg_dag) {
 
   auto& nodes = getNodes(rel_alg_dag);
   auto& subqueries = getSubqueries(rel_alg_dag);
-  auto& query_hints = getQueryHints(rel_alg_dag);
 
-  compute_node_hash(nodes);
-  handle_query_hint(nodes, rel_alg_dag);
   mark_nops(nodes);
   simplify_sort(nodes);
   sink_projected_boolean_expr_to_join(nodes);
@@ -3666,6 +3655,8 @@ void RelAlgDagBuilder::optimizeDag(RelAlgDag& rel_alg_dag) {
   }
   eliminate_dead_columns(nodes);
   eliminate_dead_subqueries(subqueries, nodes.back().get());
+  handle_query_hint(nodes, rel_alg_dag);
+  auto& query_hints = getQueryHints(rel_alg_dag);
   separate_window_function_expressions(nodes, query_hints);
   add_window_function_pre_project(
       nodes,
@@ -3764,310 +3755,4 @@ std::string RelCompound::toString(RelRexToStringConfig config) const {
                std::to_string(is_agg_),
                ")");
   }
-}
-
-std::size_t hash_value(RexAbstractInput const& rex_ab_input) {
-  if (rex_ab_input.hash_) {
-    return *rex_ab_input.hash_;
-  }
-  rex_ab_input.hash_ = typeid(RexAbstractInput).hash_code();
-  boost::hash_combine(*rex_ab_input.hash_, rex_ab_input.in_index_);
-  return *rex_ab_input.hash_;
-}
-
-std::size_t hash_value(RexLiteral const& rex_literal) {
-  if (rex_literal.hash_) {
-    return *rex_literal.hash_;
-  }
-  rex_literal.hash_ = typeid(RexLiteral).hash_code();
-  boost::apply_visitor(
-      [&rex_literal](auto&& current_val) {
-        using T = std::decay_t<decltype(current_val)>;
-        if constexpr (!std::is_same_v<boost::blank, T>) {
-          static_assert(std::is_same_v<int64_t, T> || std::is_same_v<double, T> ||
-                        std::is_same_v<std::string, T> || std::is_same_v<bool, T>);
-          boost::hash_combine(*rex_literal.hash_, current_val);
-        }
-      },
-      rex_literal.literal_);
-  boost::hash_combine(*rex_literal.hash_, rex_literal.type_);
-  boost::hash_combine(*rex_literal.hash_, rex_literal.target_type_);
-  boost::hash_combine(*rex_literal.hash_, rex_literal.scale_);
-  boost::hash_combine(*rex_literal.hash_, rex_literal.precision_);
-  boost::hash_combine(*rex_literal.hash_, rex_literal.target_scale_);
-  boost::hash_combine(*rex_literal.hash_, rex_literal.target_precision_);
-  return *rex_literal.hash_;
-}
-
-std::size_t hash_value(RexOperator const& rex_op) {
-  if (rex_op.hash_) {
-    return *rex_op.hash_;
-  }
-  rex_op.hash_ = typeid(RexOperator).hash_code();
-  boost::hash_combine(*rex_op.hash_, rex_op.op_);
-  boost::hash_combine(*rex_op.hash_, rex_op.operands_);
-  boost::hash_combine(*rex_op.hash_, rex_op.getType().get_type_name());
-  return *rex_op.hash_;
-}
-
-std::size_t hash_value(RexCase const& rex_case) {
-  if (rex_case.hash_) {
-    return *rex_case.hash_;
-  }
-  rex_case.hash_ = typeid(RexCase).hash_code();
-  boost::hash_combine(*rex_case.hash_, rex_case.expr_pair_list_);
-  boost::hash_combine(*rex_case.hash_, rex_case.else_expr_);
-  return *rex_case.hash_;
-}
-
-std::size_t hash_value(RexFunctionOperator const& rex_op) {
-  if (rex_op.hash_) {
-    return *rex_op.hash_;
-  }
-  rex_op.hash_ = typeid(RexFunctionOperator).hash_code();
-  boost::hash_combine(*rex_op.hash_, ::toString(rex_op.op_));
-  boost::hash_combine(*rex_op.hash_, rex_op.getType().get_type_name());
-  boost::hash_combine(*rex_op.hash_, rex_op.operands_);
-  boost::hash_combine(*rex_op.hash_, rex_op.name_);
-  return *rex_op.hash_;
-}
-
-std::size_t hash_value(SortField const& sort_field) {
-  auto hash = boost::hash_value(sort_field.field_);
-  boost::hash_combine(hash, sort_field.sort_dir_ == SortDirection::Ascending ? "a" : "d");
-  boost::hash_combine(hash,
-                      sort_field.nulls_pos_ == NullSortedPosition::First ? "f" : "l");
-  return hash;
-}
-
-std::size_t hash_value(RexWindowFunctionOperator const& rex_window) {
-  if (rex_window.hash_) {
-    return *rex_window.hash_;
-  }
-  rex_window.hash_ = typeid(RexWindowFunctionOperator).hash_code();
-  boost::hash_combine(*rex_window.hash_, rex_window.getType().get_type_name());
-  boost::hash_combine(*rex_window.hash_, rex_window.getName());
-  boost::hash_combine(*rex_window.hash_, rex_window.is_rows_);
-  boost::hash_combine(*rex_window.hash_, rex_window.collation_);
-  boost::hash_combine(*rex_window.hash_, rex_window.operands_);
-  boost::hash_combine(*rex_window.hash_, rex_window.partition_keys_);
-  boost::hash_combine(*rex_window.hash_, rex_window.order_keys_);
-  auto get_window_bound_hash =
-      [](const RexWindowFunctionOperator::RexWindowBound& bound) {
-        auto h = boost::hash_value(bound.bound_expr);
-        boost::hash_combine(h, bound.unbounded);
-        boost::hash_combine(h, bound.preceding);
-        boost::hash_combine(h, bound.following);
-        boost::hash_combine(h, bound.is_current_row);
-        boost::hash_combine(h, bound.order_key);
-        return h;
-      };
-  boost::hash_combine(*rex_window.hash_,
-                      get_window_bound_hash(rex_window.frame_start_bound_));
-  boost::hash_combine(*rex_window.hash_,
-                      get_window_bound_hash(rex_window.frame_end_bound_));
-  return *rex_window.hash_;
-}
-
-std::size_t hash_value(RexRef const& rex_ref) {
-  if (rex_ref.hash_) {
-    return *rex_ref.hash_;
-  }
-  rex_ref.hash_ = typeid(RexRef).hash_code();
-  boost::hash_combine(*rex_ref.hash_, rex_ref.index_);
-  return *rex_ref.hash_;
-}
-
-std::size_t hash_value(RexAgg const& rex_agg) {
-  if (rex_agg.hash_) {
-    return *rex_agg.hash_;
-  }
-  rex_agg.hash_ = typeid(RexAgg).hash_code();
-  boost::hash_combine(*rex_agg.hash_, rex_agg.operands_);
-  boost::hash_combine(*rex_agg.hash_, rex_agg.agg_);
-  boost::hash_combine(*rex_agg.hash_, rex_agg.distinct_);
-  boost::hash_combine(*rex_agg.hash_, rex_agg.type_.get_type_name());
-  return *rex_agg.hash_;
-}
-
-std::size_t hash_value(RexSubQuery const& rex_subq) {
-  if (rex_subq.hash_) {
-    return *rex_subq.hash_;
-  }
-  rex_subq.hash_ = typeid(RexSubQuery).hash_code();
-  boost::hash_combine(*rex_subq.hash_, rex_subq.ra_);
-  return *rex_subq.hash_;
-}
-
-std::size_t hash_value(RexInput const& rex_input) {
-  if (rex_input.hash_) {
-    return *rex_input.hash_;
-  }
-  rex_input.hash_ = typeid(RexInput).hash_code();
-  boost::hash_combine(*rex_input.hash_, rex_input.node_);
-  boost::hash_combine(*rex_input.hash_, rex_input.getIndex());
-  return *rex_input.hash_;
-}
-
-std::size_t hash_value(RelScan const& rel_scan) {
-  if (rel_scan.hash_) {
-    return *rel_scan.hash_;
-  }
-  rel_scan.hash_ = typeid(RelScan).hash_code();
-  boost::hash_combine(*rel_scan.hash_, rel_scan.td_->tableId);
-  boost::hash_combine(*rel_scan.hash_, rel_scan.td_->tableName);
-  boost::hash_combine(*rel_scan.hash_, ::toString(rel_scan.field_names_));
-  return *rel_scan.hash_;
-}
-
-std::size_t hash_value(RelProject const& rel_project) {
-  if (rel_project.hash_) {
-    return *rel_project.hash_;
-  }
-  rel_project.hash_ = typeid(RelProject).hash_code();
-  boost::hash_combine(*rel_project.hash_, rel_project.scalar_exprs_);
-  boost::hash_combine(*rel_project.hash_, rel_project.fields_);
-  boost::hash_combine(*rel_project.hash_, rel_project.inputs_);
-  return *rel_project.hash_;
-}
-
-std::size_t hash_value(RelAggregate const& rel_agg) {
-  if (rel_agg.hash_) {
-    return *rel_agg.hash_;
-  }
-  rel_agg.hash_ = typeid(RelAggregate).hash_code();
-  boost::hash_combine(*rel_agg.hash_, rel_agg.groupby_count_);
-  boost::hash_combine(*rel_agg.hash_, rel_agg.agg_exprs_);
-  boost::hash_combine(*rel_agg.hash_, rel_agg.fields_);
-  boost::hash_combine(*rel_agg.hash_, rel_agg.inputs_);
-  return *rel_agg.hash_;
-}
-
-std::size_t hash_value(RelJoin const& rel_join) {
-  if (rel_join.hash_) {
-    return *rel_join.hash_;
-  }
-  rel_join.hash_ = typeid(RelJoin).hash_code();
-  boost::hash_combine(*rel_join.hash_, rel_join.condition_);
-  boost::hash_combine(*rel_join.hash_, rel_join.inputs_);
-  boost::hash_combine(*rel_join.hash_, ::toString(rel_join.getJoinType()));
-  return *rel_join.hash_;
-}
-
-std::size_t hash_value(RelTranslatedJoin const& rel_tr_join) {
-  if (rel_tr_join.hash_) {
-    return *rel_tr_join.hash_;
-  }
-  rel_tr_join.hash_ = typeid(RelTranslatedJoin).hash_code();
-  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.lhs_);
-  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.rhs_);
-  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.outer_join_cond_);
-  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.nested_loop_);
-  boost::hash_combine(*rel_tr_join.hash_, ::toString(rel_tr_join.join_type_));
-  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.op_type_);
-  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.qualifier_);
-  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.op_typeinfo_);
-  boost::hash_combine(*rel_tr_join.hash_, rel_tr_join.filter_ops_);
-  return *rel_tr_join.hash_;
-}
-
-std::size_t hash_value(RelFilter const& rel_filter) {
-  if (rel_filter.hash_) {
-    return *rel_filter.hash_;
-  }
-  rel_filter.hash_ = typeid(RelFilter).hash_code();
-  boost::hash_combine(*rel_filter.hash_, rel_filter.filter_);
-  boost::hash_combine(*rel_filter.hash_, rel_filter.inputs_);
-  return *rel_filter.hash_;
-}
-
-std::size_t hash_value(RelLeftDeepInnerJoin const& rel_join) {
-  if (rel_join.hash_) {
-    return *rel_join.hash_;
-  }
-  rel_join.hash_ = typeid(RelLeftDeepInnerJoin).hash_code();
-  boost::hash_combine(*rel_join.hash_, rel_join.condition_);
-  boost::hash_combine(*rel_join.hash_, rel_join.outer_conditions_per_level_);
-  boost::hash_combine(*rel_join.hash_, rel_join.original_filter_);
-  boost::hash_combine(*rel_join.hash_, rel_join.inputs_);
-  return *rel_join.hash_;
-}
-
-std::size_t hash_value(RelCompound const& rel_compound) {
-  if (rel_compound.hash_) {
-    return *rel_compound.hash_;
-  }
-  rel_compound.hash_ = typeid(RelCompound).hash_code();
-  boost::hash_combine(*rel_compound.hash_, rel_compound.filter_expr_);
-  boost::hash_combine(*rel_compound.hash_, rel_compound.is_agg_);
-  boost::hash_combine(*rel_compound.hash_, rel_compound.target_exprs_);
-  boost::hash_combine(*rel_compound.hash_, rel_compound.agg_exprs_);
-  boost::hash_combine(*rel_compound.hash_, rel_compound.scalar_sources_);
-  boost::hash_combine(*rel_compound.hash_, rel_compound.groupby_count_);
-  boost::hash_combine(*rel_compound.hash_, rel_compound.fields_);
-  boost::hash_combine(*rel_compound.hash_, rel_compound.inputs_);
-  return *rel_compound.hash_;
-}
-
-std::size_t hash_value(RelSort const& rel_sort) {
-  if (rel_sort.hash_) {
-    return *rel_sort.hash_;
-  }
-  rel_sort.hash_ = typeid(RelSort).hash_code();
-  boost::hash_combine(*rel_sort.hash_, rel_sort.collation_);
-  boost::hash_combine(*rel_sort.hash_, rel_sort.limit_.has_value());
-  boost::hash_combine(*rel_sort.hash_, rel_sort.limit_.value_or(0));
-  boost::hash_combine(*rel_sort.hash_, rel_sort.offset_);
-  boost::hash_combine(*rel_sort.hash_, rel_sort.inputs_);
-  return *rel_sort.hash_;
-}
-
-std::size_t hash_value(RelModify const& rel_modify) {
-  if (rel_modify.hash_) {
-    return *rel_modify.hash_;
-  }
-  rel_modify.hash_ = typeid(RelModify).hash_code();
-  boost::hash_combine(*rel_modify.hash_, rel_modify.table_descriptor_->tableName);
-  boost::hash_combine(*rel_modify.hash_, rel_modify.table_descriptor_->tableId);
-  boost::hash_combine(*rel_modify.hash_, rel_modify.flattened_);
-  boost::hash_combine(*rel_modify.hash_,
-                      RelModify::yieldModifyOperationString(rel_modify.operation_));
-  boost::hash_combine(*rel_modify.hash_, rel_modify.target_column_list_);
-  boost::hash_combine(*rel_modify.hash_, rel_modify.inputs_);
-  return *rel_modify.hash_;
-}
-
-std::size_t hash_value(RelTableFunction const& rel_tf) {
-  if (rel_tf.hash_) {
-    return *rel_tf.hash_;
-  }
-  rel_tf.hash_ = typeid(RelTableFunction).hash_code();
-  boost::hash_combine(*rel_tf.hash_, rel_tf.function_name_);
-  boost::hash_combine(*rel_tf.hash_, rel_tf.table_func_inputs_);
-  boost::hash_combine(*rel_tf.hash_, rel_tf.target_exprs_);
-  boost::hash_combine(*rel_tf.hash_, rel_tf.fields_);
-  boost::hash_combine(*rel_tf.hash_, rel_tf.inputs_);
-  return *rel_tf.hash_;
-}
-
-std::size_t hash_value(RelLogicalValues const& rel_lv) {
-  if (rel_lv.hash_) {
-    return *rel_lv.hash_;
-  }
-  rel_lv.hash_ = typeid(RelLogicalValues).hash_code();
-  for (auto& target_meta_info : rel_lv.tuple_type_) {
-    boost::hash_combine(*rel_lv.hash_, target_meta_info.get_resname());
-    boost::hash_combine(*rel_lv.hash_, target_meta_info.get_type_info().get_type_name());
-  }
-  return *rel_lv.hash_;
-}
-
-std::size_t hash_value(RelLogicalUnion const& rel_lv) {
-  if (rel_lv.hash_) {
-    return *rel_lv.hash_;
-  }
-  rel_lv.hash_ = typeid(RelLogicalUnion).hash_code();
-  boost::hash_combine(*rel_lv.hash_, rel_lv.is_all_);
-  boost::hash_combine(*rel_lv.hash_, rel_lv.inputs_);
-  return *rel_lv.hash_;
 }
