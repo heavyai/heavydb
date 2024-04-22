@@ -78,7 +78,8 @@ std::optional<RegisteredQueryHint> get_hint_registered(std::string const& query,
 }
 
 bool is_hint_registered(
-    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>& hints,
+    std::unordered_map<const RelAlgNode*,
+                       std::unordered_map<unsigned, RegisteredQueryHint>>& hints,
     QueryHint expected_hint) {
   for (const auto& kv : hints) {
     for (auto& kv2 : kv.second) {
@@ -570,8 +571,8 @@ TEST(QueryHint, PerQueryBlockHint) {
   // func in QR but for test, it is enough to check the functionality in brute-force
   // manner
   auto check_registered_hint =
-      [](std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
-             hints) {
+      [](std::unordered_map<const RelAlgNode*,
+                            std::unordered_map<unsigned, RegisteredQueryHint>>& hints) {
         bool find_columnar_hint = false;
         bool find_cpu_mode_hint = false;
         CHECK(hints.size() == static_cast<size_t>(2));
