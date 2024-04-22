@@ -27036,6 +27036,68 @@ TEST_F(Select, GeoScalarIntermediateProjection) {
   }
 }
 
+TEST_F(Select, InvalidChunkMetadataCache) {
+  SKIP_ALL_ON_AGGREGATOR();
+  run_ddl_statement("DROP TABLE IF EXISTS qe_1179;");
+  run_ddl_statement(
+      "CREATE TABLE qe_1179(de DATE ENCODING DAYS(32),si SMALLINT,f FLOAT,t TEXT "
+      "ENCODING DICT(32));");
+  ScopeGuard drop_table = []() { run_ddl_statement("DROP TABLE IF EXISTS qe_1179;"); };
+  std::vector<std::string> row_vals{
+      "INSERT INTO QE_1179 VALUES ('2000-01-01', 2000, 1.1, 'foo0');",
+      "INSERT INTO QE_1179 VALUES ('2001-01-01', 2001, 1.2, 'foo1');",
+      "INSERT INTO QE_1179 VALUES ('2002-01-01', 2002, 1.3, 'foo2');",
+      "INSERT INTO QE_1179 VALUES ('2003-01-01', 2003, 1.4, 'foo0');",
+      "INSERT INTO QE_1179 VALUES ('2004-01-01', 2004, 1.5, 'foo1');",
+      "INSERT INTO QE_1179 VALUES ('2005-01-01', 2005, 1.6, 'foo2');",
+      "INSERT INTO QE_1179 VALUES ('2006-01-01', 2006, 1.7, 'foo0');",
+      "INSERT INTO QE_1179 VALUES ('2007-01-01', 2007, 1.8, 'foo1');",
+      "INSERT INTO QE_1179 VALUES ('2008-01-01', 2008, 1.9, 'foo2');",
+      "INSERT INTO QE_1179 VALUES ('2009-01-01', 2009, 1.1, 'foo0');",
+      "INSERT INTO QE_1179 VALUES ('2010-01-01', 2000, 1.2, 'foo1');",
+      "INSERT INTO QE_1179 VALUES ('2010-01-01', 2010, 1.1, 'foo0');",
+      "INSERT INTO QE_1179 VALUES ('2011-01-01', 2011, 1.2, 'foo1');",
+      "INSERT INTO QE_1179 VALUES ('2012-01-01', 2012, 1.3, 'foo2');",
+      "INSERT INTO QE_1179 VALUES ('2013-01-01', 2013, 1.4, 'foo0');",
+      "INSERT INTO QE_1179 VALUES ('2014-01-01', 2014, 1.5, 'foo1');",
+      "INSERT INTO QE_1179 VALUES ('2015-01-01', 2015, 1.6, 'foo2');",
+      "INSERT INTO QE_1179 VALUES ('2016-01-01', 2016, 1.7, 'foo0');",
+      "INSERT INTO QE_1179 VALUES ('2017-01-01', 2017, 1.8, 'foo1');",
+      "INSERT INTO QE_1179 VALUES ('2018-01-01', 2018, 1.9, 'foo2');",
+      "INSERT INTO QE_1179 VALUES ('2019-01-01', 2019, 1.1, 'foo0');",
+      "INSERT INTO QE_1179 VALUES ('2020-01-01', 2020, 1.2, 'foo1');"};
+  for (auto const& row : row_vals) {
+    run_multiple_agg(row, ExecutorDeviceType::CPU);
+  }
+  std::string const CTE_common_1{
+      "WITH dimensionValues AS (SELECT EXTRACT(YEAR FROM de) AS key0, SUM(f) AS measure0 "
+      "FROM qe_1179 WHERE (t = \'foo0\' or t = \'foo1\' or t = \'foo2\')"};
+  std::string const CTE_common_2{"GROUP BY key0 ORDER BY key0 asc NULLS LAST LIMIT 500)"};
+  std::string const main_common_1{
+      "\nSELECT SUM(f) AS measure0, CASE WHEN t IN (\'foo0\', '\foo1\', \'foo2\') "
+      "THEN t END AS dimensionColor, EXTRACT(YEAR FROM de) AS dimension0 FROM qe_1179 "
+      "WHERE (t = \'foo0\' or t = \'foo1\' or t = \'foo2\')"};
+  std::string const main_common_2{
+      "AND EXTRACT(YEAR FROM de) IN (SELECT key0 FROM dimensionValues) GROUP BY "
+      "dimension0, dimensionColor ORDER BY dimension0 asc NULLS LAST;"};
+  std::string const q1_filter{
+      "AND de BETWEEN \'2020-01-01 00:00:00.000\' AND \'2028-12-31 00:00:00.000\' "};
+  std::string const q2_filter{"AND si >= 2000 "};
+  std::ostringstream q1;
+  std::ostringstream q2;
+  q1 << CTE_common_1 << q1_filter << CTE_common_2 << main_common_1 << q1_filter
+     << main_common_2;
+  q2 << CTE_common_1 << q2_filter << CTE_common_2 << main_common_1 << q2_filter
+     << main_common_2;
+  auto const q1_str = q1.str();
+  auto const q2_str = q2.str();
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_multiple_agg(q1_str, dt);
+    run_multiple_agg(q2_str, dt);
+  }
+}
+
 class DateAndTimeFunctionsTest : public QRExecutorDeviceParamTest {};
 
 TEST_P(DateAndTimeFunctionsTest, CastLiteralToDate) {

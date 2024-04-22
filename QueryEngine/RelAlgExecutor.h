@@ -184,8 +184,8 @@ class RelAlgExecutor : private StorageIOFacility {
     return query_dag_ ? query_dag_->getQueryHint(node) : std::nullopt;
   }
 
-  std::optional<
-      std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>>
+  std::optional<std::unordered_map<const RelAlgNode*,
+                                   std::unordered_map<unsigned, RegisteredQueryHint>>>
   getParsedQueryHints() {
     return query_dag_ ? std::make_optional(query_dag_->getQueryHints()) : std::nullopt;
   }
