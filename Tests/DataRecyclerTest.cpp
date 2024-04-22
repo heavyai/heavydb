@@ -438,6 +438,57 @@ TEST(DataRecycler, QueryPlanDagExtractor_TableFunction) {
   EXPECT_TRUE(q5_plan_dag.compare(q1_plan_dag) == 0);
 }
 
+TEST(DataRecycler, Update_QueryPlanDagHash_After_DeadColumnElimination) {
+  auto drop_tables = []() {
+    run_ddl_statement("DROP TABLE IF EXISTS flights_qe1179;");
+    run_ddl_statement("DROP TABLE IF EXISTS airports_qe1179;");
+    run_ddl_statement("DROP TABLE IF EXISTS usa_states_qe1179;");
+  };
+  ScopeGuard drop_table_after_test = [drop_tables]() { drop_tables(); };
+  drop_tables();
+  run_ddl_statement(
+      "CREATE TABLE flights_qe1179 (\n"
+      "  carrier_name TEXT ENCODING DICT(8),\n"
+      "  tail_num TEXT ENCODING DICT(32),\n"
+      "  origin_airport_id SMALLINT);");
+  run_ddl_statement(
+      "CREATE TABLE airports_qe1179 (\n"
+      "  airport_id SMALLINT,\n"
+      "  airport_state_name TEXT ENCODING DICT(32));");
+  run_ddl_statement(
+      "CREATE TABLE usa_states_qe1179 (\n"
+      "  STATE_NAME TEXT ENCODING DICT(32),\n"
+      "  geom GEOMETRY(MULTIPOLYGON, 4326) ENCODING COMPRESSED(32));");
+  std::string common_subq{
+      "SELECT T1.tail_num, T1.carrier_name, T2.airport_state_name FROM flights_qe1179 AS "
+      "T1 LEFT JOIN airports_qe1179 AS T2 ON T1.origin_airport_id = T2.airport_id"};
+  std::string q1_where{
+      "WHERE ((airport_state_name in (SELECT STATE_NAME from usa_states_qe1179 WHERE "
+      "ST_XMax(geom) >= -172.976569702))) GROUP BY dimension0 ORDER BY measure0 desc "
+      "NULLS LAST LIMIT 500;"};
+  std::string q2_where{
+      "WHERE ((airport_state_name in (SELECT STATE_NAME from usa_states_qe1179 WHERE "
+      "ST_XMax(geom) >= -172.976569702)));"};
+  std::string q1_project{"count(*) AS measure0, carrier_name AS dimension0"};
+  std::string q2_project{"APPROX_COUNT_DISTINCT(tail_num) AS val"};
+  std::ostringstream q1_oss;
+  q1_oss << "SELECT " << q1_project << " FROM (" << common_subq << ") " << q1_where;
+  std::ostringstream q2_oss;
+  q2_oss << "SELECT " << q2_project << " FROM (" << common_subq << ") " << q2_where;
+  auto executor = QR::get()->getExecutor().get();
+  auto q1_ra_dag = QR::get()->getRelAlgDag(q1_oss.str());
+  auto q1_ed_seq = RaExecutionSequence(&q1_ra_dag->getRootNode(), executor);
+  CHECK_EQ(q1_ed_seq.size(), static_cast<size_t>(3));
+  auto q1_project_hash_val = q1_ed_seq.getDescriptor(1)->getBody()->toHash();
+  ASSERT_NE(q1_project_hash_val, EMPTY_HASHED_PLAN_DAG_KEY);
+  auto q2_ra_dag = QR::get()->getRelAlgDag(q2_oss.str());
+  auto q2_ed_seq = RaExecutionSequence(&q2_ra_dag->getRootNode(), executor);
+  CHECK_EQ(q2_ed_seq.size(), static_cast<size_t>(3));
+  auto q2_project_hash_val = q2_ed_seq.getDescriptor(1)->getBody()->toHash();
+  ASSERT_NE(q1_project_hash_val, EMPTY_HASHED_PLAN_DAG_KEY);
+  ASSERT_NE(q1_project_hash_val, q2_project_hash_val);
+}
+
 TEST(DataRecycler, DAG_Cache_Size_Management) {
   // test if DAG cache becomes full
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();

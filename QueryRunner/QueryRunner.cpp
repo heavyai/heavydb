@@ -420,8 +420,8 @@ std::shared_ptr<const RelAlgNode> QueryRunner::getRootNodeFromParsedQuery(
   return ra_executor.getRootRelAlgNodeShPtr();
 }
 
-std::optional<
-    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>>
+std::optional<std::unordered_map<const RelAlgNode*,
+                                 std::unordered_map<unsigned, RegisteredQueryHint>>>
 QueryRunner::getParsedQueryHints(const std::string& query_str) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());

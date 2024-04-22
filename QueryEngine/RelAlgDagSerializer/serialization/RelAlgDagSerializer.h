@@ -120,9 +120,7 @@ struct RelAlgDagSerializer {
             class RexClass,
             typename std::enable_if_t<is_rex_class_v<RexClass>>* = nullptr>
   static void serialize(Archive& ar, RexClass& obj, const unsigned int version) {
-    if constexpr (std::is_same_v<Rex, RexClass>) {
-      (ar & obj.hash_);
-    } else if constexpr (std::is_same_v<RexScalar, RexClass>) {
+    if constexpr (std::is_same_v<RexScalar, RexClass>) {
       (ar & boost::serialization::base_object<Rex>(obj));
     } else if constexpr (std::is_same_v<RexAbstractInput, RexClass>) {
       (ar & boost::serialization::base_object<RexScalar>(obj));
@@ -188,8 +186,6 @@ struct RelAlgDagSerializer {
       (ar & obj.distinct_);
       (ar & obj.type_);
       (ar & obj.operands_);
-    } else {
-      static_assert(!sizeof(RexClass), "Unhandled Rex class during serialization.");
     }
   }
 
@@ -222,7 +218,6 @@ struct RelAlgDagSerializer {
     if constexpr (std::is_same_v<RelAlgNode, RelAlgClass>) {
       (ar & obj.inputs_);
       (ar & obj.id_);
-      (ar & obj.hash_);
       (ar & obj.is_nop_);
 
       // NOTE: not serializing the id_in_plan_tree_, context_data_, targets_metainfo_,
