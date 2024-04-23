@@ -1474,7 +1474,8 @@ else()
   install(FILES docker/Dockerfile.cpu RENAME Dockerfile DESTINATION "docker")
 endif()
 
-exec_program(uname ARGS -m OUTPUT_VARIABLE MAPD_HOST_SYSTEM_ARCHITECTURE) # does not account for cross-compiling or Windows
+# does not account for cross-compiling or Windows
+execute_process(COMMAND uname -m OUTPUT_VARIABLE MAPD_HOST_SYSTEM_ARCHITECTURE OUTPUT_STRIP_TRAILING_WHITESPACE)
 set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${MAPD_EDITION_LOWER}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${MAPD_HOST_SYSTEM_ARCHITECTURE}${MAPD_PACKAGE_FLAGS}")
 
 set(CPACK_GENERATOR "STGZ")
