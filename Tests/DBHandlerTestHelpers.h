@@ -188,7 +188,7 @@ class AssertValueEqualsVisitor : public boost::static_visitor<> {
   }
 
   void operator()(const NullableString& value) const {
-    if (value.which() == 0) {
+    if (boost::get<std::string>(&value)) {
       boost::apply_visitor(AssertValueEqualsVisitor{datum_, column_type_, row_, column_},
                            value);
     } else {
