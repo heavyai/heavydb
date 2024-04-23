@@ -1,5 +1,5 @@
 pkgname='onedal'
-pkgver=2023.1.1
+pkgver=2024.1.0
 pkgrel=1
 pkgdesc="oneAPI Data Analytics Library (oneDAL)"
 arch=('x86_64')
@@ -11,36 +11,39 @@ optdepends=()
 makedepends=('cmake')
 options=('staticlibs')
 source=("https://github.com/oneapi-src/oneDAL/archive/refs/tags/$pkgver.tar.gz")
-sha256sums=('38e4e6513a17382f994fb5934b3f1b4f4b291c4663e2e904c6871681ed44da48')
+sha256sums=('8183ddbf10a88e86bed54be8d1ec20241316bb9f33d20718911516e8ec67e90f')
 
 prepare() {
   cd "$srcdir/oneDAL-$pkgver"
   ./dev/download_micromkl.sh
 
-  # Remove #include of some headers marked as DAAL_DEPRECATED
-  #sed -i '/^#include ".*\/bzip2compression\.h"$/d' cpp/daal/include/daal.h
-  #sed -i '/^#include ".*\/zlibcompression\.h"$/d' cpp/daal/include/daal.h
+  # ./cpp/oneapi/dal/algo/svm/detail/kernel_function.hpp:146:17: error: possibly dangling reference to a temporary [-Werror=dangling-reference]
+  #   146 |     const auto& kernel = kernel_function_accessor{}.get_kernel_impl(std::forward<Descriptor>(desc));
+  #       |                 ^~~~~~
+  # ./cpp/oneapi/dal/algo/svm/detail/kernel_function.hpp:146:68: note: the temporary was destroyed at the end of the full expression ‘oneapi::dal::svm::detail::v1::kernel_function_accessor().oneapi::dal::svm::detail::v1::kernel_function_accessor::get_kernel_impl<const oneapi::dal::svm::detail::v1::descriptor_base<oneapi::dal::svm::task::v1::nu_regression>&>((* & std::forward<const oneapi::dal::svm::detail::v1::descriptor_base<oneapi::dal::svm::task::v1::nu_regression>&>((* & desc))))’
+  sed -ie "/-Wreturn-type/s/$/ -Wno-error=dangling-reference/" dev/make/cmplr.gnu.mkl.mk
+
+  # Fix In file included from /usr/include/c++/13.2.1/bits/stl_algo.h:71,
+  #                      from /usr/include/c++/13.2.1/algorithm:61,
+  #                      from cpp/oneapi/dal/algo/logistic_regression/parameters/cpu/train_parameters.cpp:17:
+  # /usr/include/c++/13.2.1/cstdlib:79:15: fatal error: stdlib.h: No such file or directory
+  #    79 | #include_next <stdlib.h>
+  #       |               ^~~~~~~~~~
+  # compilation terminated.
+  awk '{print} /\(ONEAPI\.include_options\)/{print "\tsed -i \x27s# -isystem/usr/include$$##\x27 $@"}' \
+      makefile > makefile.tmp && mv makefile.tmp makefile
 }
 
 build() {
   cd "$srcdir/oneDAL-$pkgver"
 
-  # building oneAPI triggers deprecated implicit copy constructor warnings, which fail the build
-  # due to -Werror, so add a -Wno-error=deprecated-copy flag to compilation command
-  sed -ie "/-Wreturn-type/s/$/ -Wno-error=deprecated-copy -Wno-error=dangling-reference/" dev/make/cmplr.gnu.mk
+  half_cores=$(( ($(nproc) + 1) / 2 ))
 
-  # Add -Wno-error=dangling-reference due to:
-  # ./cpp/oneapi/dal/algo/svm/detail/kernel_function.hpp:146:17: error: possibly dangling reference to a temporary [-Werror=dangling-reference]
-  #   146 |     const auto& kernel = kernel_function_accessor{}.get_kernel_impl(std::forward<Descriptor>(desc));
-  #       |                 ^~~~~~
-  # ./cpp/oneapi/dal/algo/svm/detail/kernel_function.hpp:146:68: note: the temporary was destroyed at the end of the full expression ‘oneapi::dal::svm::detail::v1::kernel_function_accessor().oneapi::dal::svm::detail::v1::kernel_function_accessor::get_kernel_impl<const oneapi::dal::svm::detail::v1::descriptor_base<oneapi::dal::svm::task::v1::nu_regression>&>((* & std::forward<const oneapi::dal::svm::detail::v1::descriptor_base<oneapi::dal::svm::task::v1::nu_regression>&>((* & desc))))’
-
-  JAVA_HOME=/usr/lib/jvm/default \
-  CPATH=$JAVA_HOME/include:$JAVA_HOME/include/linux \
+  # See https://github.com/oneapi-src/oneDAL/blob/main/INSTALL.md
   LIBRARY_PATH=/usr/lib \
   LD_LIBRARY_PATH=/usr/lib \
   TBBROOT=/usr \
-    make -f makefile daal_c oneapi_c PLAT=lnx32e REQCPU="avx2 avx512" COMPILER=gnu -j
+    make -f makefile daal oneapi_c -j$half_cores COMPILER=gnu PLAT=lnx32e REQCPU="avx2 avx512"
 }
 
 package() {
