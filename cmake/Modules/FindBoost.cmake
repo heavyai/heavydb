@@ -379,10 +379,10 @@ endmacro()
 # version with a regex.
 #
 function(_Boost_COMPILER_DUMPVERSION _OUTPUT_VERSION)
-
-  exec_program(${CMAKE_CXX_COMPILER}
-    ARGS ${CMAKE_CXX_COMPILER_ARG1} -dumpversion
+  execute_process(
+    COMMAND ${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_ARG1} -dumpversion
     OUTPUT_VARIABLE _boost_COMPILER_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
   )
   string(REGEX REPLACE "([0-9])\\.([0-9])(\\.[0-9])?" "\\1\\2"
     _boost_COMPILER_VERSION ${_boost_COMPILER_VERSION})
