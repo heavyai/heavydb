@@ -287,6 +287,7 @@ class CompilationRetryNewScanLimit : public std::runtime_error {
 class TooManyLiterals : public std::runtime_error {
  public:
   TooManyLiterals() : std::runtime_error("Too many literals in the query") {}
+  TooManyLiterals(std::string msg) : std::runtime_error(std::move(msg)) {}
 };
 
 class CompilationRetryNoCompaction : public std::runtime_error {

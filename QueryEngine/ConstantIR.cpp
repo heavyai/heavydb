@@ -155,8 +155,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
   CHECK(!type_info.is_geometry());
   if (type_info.is_string() && enc_type != kENCODING_DICT) {
     CHECK_EQ(kENCODING_NONE, type_info.get_compression());
-    CHECK_EQ(size_t(4),
-             CgenState::literalBytes(CgenState::LiteralValue(std::string(""))));
+    auto const empty_string_literal{CgenState::LiteralValue(std::string(""))};
+    CHECK_EQ(4u, std::visit(CgenState::LiteralBytes{}, empty_string_literal));
     auto off_and_len_ptr = cgen_state_->query_func_entry_ir_builder_.CreateBitCast(
         lit_buf_start,
         llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
