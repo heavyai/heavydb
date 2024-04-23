@@ -20,6 +20,8 @@
 #include "InValuesBitmap.h"
 #include "InputMetadata.h"
 #include "LLVMGlobalContext.h"
+#include "Shared/DbObjectKeys.h"
+#include "Shared/MathUtils.h"
 #include "StringDictionaryTranslationMgr.h"
 #include "TreeModelPredictionMgr.h"
 
@@ -29,8 +31,6 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/Transforms/Utils/ValueMapper.h>
-
-#include "Shared/DbObjectKeys.h"
 
 struct ArrayLoadCodegen {
   llvm::Value* buffer;
@@ -171,18 +171,18 @@ struct CgenState {
     }
   }
 
-  using LiteralValue = boost::variant<int8_t,
-                                      int16_t,
-                                      int32_t,
-                                      int64_t,
-                                      float,
-                                      double,
-                                      std::pair<std::string, shared::StringDictKey>,
-                                      std::string,
-                                      std::vector<double>,
-                                      std::vector<int32_t>,
-                                      std::vector<int8_t>,
-                                      std::pair<std::vector<int8_t>, int>>;
+  using LiteralValue = std::variant<int8_t,
+                                    int16_t,
+                                    int32_t,
+                                    int64_t,
+                                    float,
+                                    double,
+                                    std::pair<std::string, shared::StringDictKey>,
+                                    std::string,
+                                    std::vector<double>,
+                                    std::vector<int32_t>,
+                                    std::vector<int8_t>,
+                                    std::pair<std::vector<int8_t>, int>>;
   using LiteralValues = std::vector<LiteralValue>;
 
   const std::unordered_map<int, LiteralValues>& getLiterals() const { return literals_; }
@@ -415,43 +415,44 @@ struct CgenState {
   };
   std::unordered_map<llvm::Value*, HoistedLiteralLoadLocator> row_func_hoisted_literals_;
 
-  static size_t literalBytes(const CgenState::LiteralValue& lit) {
-    switch (lit.which()) {
-      case 0:
-        return 1;  // int8_t
-      case 1:
-        return 2;  // int16_t
-      case 2:
-        return 4;  // int32_t
-      case 3:
-        return 8;  // int64_t
-      case 4:
-        return 4;  // float
-      case 5:
-        return 8;  // double
-      case 6:
-        return 4;  // std::pair<std::string, int>
-      case 7:
-        return 4;  // std::string
-      case 8:
-        return 4;  // std::vector<double>
-      case 9:
-        return 4;  // std::vector<int32_t>
-      case 10:
-        return 4;  // std::vector<int8_t>
-      case 11:
-        return 4;  // std::pair<std::vector<int8_t>, int>
-      default:
-        abort();
-    }
-  }
+  // Number of bytes required to store each literal in the serialized header.
+  // See Executor::serializeLiterals() for more info.
+  struct LiteralBytes {
+    using OffsetAndSize = int32_t;
+    using StringId = int32_t;
+    static_assert(shared::isPowOfTwo(sizeof(OffsetAndSize)));
+    static_assert(shared::isPowOfTwo(sizeof(StringId)));
 
-  static size_t addAligned(const size_t off_in, const size_t alignment) {
-    size_t off = off_in;
-    if (off % alignment != 0) {
-      off += (alignment - off % alignment);
+    // Values returned must be powers of two as required for memory alignment.
+    size_t operator()(int8_t) const { return sizeof(int8_t); }
+    size_t operator()(int16_t) const { return sizeof(int16_t); }
+    size_t operator()(int32_t) const { return sizeof(int32_t); }
+    size_t operator()(int64_t) const { return sizeof(int64_t); }
+    size_t operator()(float) const { return sizeof(float); }
+    size_t operator()(double) const { return sizeof(double); }
+    size_t operator()(std::pair<std::string, shared::StringDictKey> const&) const {
+      return sizeof(StringId);
     }
-    return off + alignment;
+    size_t operator()(std::string const&) const { return sizeof(OffsetAndSize); }
+    template <typename T>
+    size_t operator()(std::vector<T> const&) const {
+      return sizeof(OffsetAndSize);
+    }
+    size_t operator()(std::pair<std::vector<int8_t>, int> const&) const {
+      return sizeof(OffsetAndSize);
+    }
+  };
+
+  /// Return offset if offset is divisible by alignment,
+  ///   otherwise the next highest multiple of alignment.
+  /// Requirements: alignment is a power of two.
+  /// Examples:
+  ///   align(12, 4) -> 12
+  ///   align(13, 4) -> 16
+  static size_t align(size_t const offset, size_t const alignment) {
+    CHECK(shared::isPowOfTwo(alignment)) << offset << ' ' << alignment;
+    size_t const mask = alignment - 1u;
+    return (offset + mask) & ~mask;
   }
 
   void maybeCloneFunctionRecursive(llvm::Function* fn);
@@ -464,15 +465,15 @@ struct CgenState {
     size_t literal_found_off{0};
     auto& literals = literals_[device_id];
     for (const auto& literal : literals) {
-      const auto lit_bytes = literalBytes(literal);
-      literal_found_off = addAligned(literal_found_off, lit_bytes);
+      size_t const lit_bytes = std::visit(LiteralBytes{}, literal);
+      literal_found_off = align(literal_found_off, lit_bytes) + lit_bytes;
       if (literal == var_val) {
         return {literal_found_off - lit_bytes, lit_bytes};
       }
     }
     literals.emplace_back(val);
-    const auto lit_bytes = literalBytes(var_val);
-    literal_bytes_[device_id] = addAligned(literal_bytes_[device_id], lit_bytes);
+    size_t const lit_bytes = std::visit(LiteralBytes{}, var_val);
+    literal_bytes_[device_id] = align(literal_bytes_[device_id], lit_bytes) + lit_bytes;
     return {literal_bytes_[device_id] - lit_bytes, lit_bytes};
   }
 
