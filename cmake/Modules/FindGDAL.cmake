@@ -33,7 +33,7 @@ find_program(GDAL_CONFIG gdal-config
 )
 
 if(GDAL_CONFIG)
-  exec_program(${GDAL_CONFIG} ARGS --prefix OUTPUT_VARIABLE GDAL_CONFIG_PREFIX)
+  execute_process(COMMAND ${GDAL_CONFIG} --prefix OUTPUT_VARIABLE GDAL_CONFIG_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE)
 else()
   message(FATAL_ERROR "Failed to find gdal-config executable in PATH")
 endif()

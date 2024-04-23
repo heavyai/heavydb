@@ -41,12 +41,15 @@ yay -Suy \
     clang14 \
     cmake \
     compiler-rt14 \
+    cpr \
     cuda \
+    curl \
+    double-conversion \
     doxygen \
     flex \
     fmt \
     gcc \
-    gdal \
+    gdal-libkml \
     geos \
     git \
     glm \
@@ -60,6 +63,7 @@ yay -Suy \
     llvm14 \
     lz4 \
     maven \
+    minio \
     ninja \
     pdal \
     python-numpy \
@@ -68,6 +72,7 @@ yay -Suy \
     thrift \
     vulkan-headers \
     vulkan-utility-libraries \
+    vulkan-validation-layers \
     wget \
     zlib
 
