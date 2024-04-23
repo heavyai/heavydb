@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef OMNISCI_MATHUTILS_H
-#define OMNISCI_MATHUTILS_H
+#pragma once
 
 namespace shared {
 
-bool isPowOfTwo(unsigned n);
+constexpr bool isPowOfTwo(size_t const n) {
+  return n != 0u && (n & (n - 1u)) == 0u;
+}
 
 unsigned getExpOfTwo(unsigned n);
 
 }  // namespace shared
-
-#endif  // OMNISCI_MATHUTILS_H
