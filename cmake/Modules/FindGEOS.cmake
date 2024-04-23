@@ -24,7 +24,7 @@ find_program(GEOS_CONFIG geos-config
 )
 
 if(GEOS_CONFIG)
-	exec_program(${GEOS_CONFIG} ARGS --prefix OUTPUT_VARIABLE GEOS_CONFIG_PREFIX)
+  execute_process(COMMAND ${GEOS_CONFIG} --prefix OUTPUT_VARIABLE GEOS_CONFIG_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE)
 else()
   message(FATAL_ERROR "Failed to find geos-config executable in PATH")
 endif()
