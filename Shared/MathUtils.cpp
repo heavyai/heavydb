@@ -16,10 +16,6 @@
 
 namespace shared {
 
-bool isPowOfTwo(unsigned n) {
-  return n && ((n & (n - 1)) == 0);
-}
-
 unsigned getExpOfTwo(unsigned n) {
   unsigned i = 0;
 

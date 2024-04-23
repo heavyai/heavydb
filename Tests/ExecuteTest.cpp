@@ -7136,8 +7136,8 @@ TEST_F(Select, DetectOverflowedLiteralBuf) {
   auto getOrAddLiteral = [&literals, &literal_bytes](const std::string& val) {
     const CgenState::LiteralValue var_val(val);
     literals.emplace_back(val);
-    const auto lit_bytes = CgenState::literalBytes(var_val);
-    literal_bytes = CgenState::addAligned(literal_bytes, lit_bytes);
+    size_t const lit_bytes = std::visit(CgenState::LiteralBytes{}, var_val);
+    literal_bytes = CgenState::align(literal_bytes, lit_bytes) + lit_bytes;
     return literal_bytes - lit_bytes;
   };
 
