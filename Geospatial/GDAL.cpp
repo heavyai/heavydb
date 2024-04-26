@@ -29,6 +29,7 @@
 #include "Logger/Logger.h"
 #include "OSDependent/heavyai_env.h"
 #include "OSDependent/heavyai_path.h"
+#include "Shared/S3Config.h"
 #include "Shared/scope.h"
 
 namespace Geospatial {
@@ -146,43 +147,39 @@ bool GDAL::supportsDriver(const std::string& driver_name) {
   return GetGDALDriverManager()->GetDriverByName(driver_name.c_str()) != nullptr;
 }
 
-void GDAL::setAuthorizationTokens(const std::string& s3_region,
-                                  const std::string& s3_endpoint,
-                                  const std::string& s3_access_key,
-                                  const std::string& s3_secret_key,
-                                  const std::string& s3_session_token) {
+void GDAL::setAuthorizationTokens(const shared::S3Config& s3_config) {
   // lazy init
   init();
 
   // set tokens
-  if (s3_region.size()) {
-    CPLSetConfigOption("AWS_REGION", s3_region.c_str());
+  if (s3_config.region.size()) {
+    CPLSetConfigOption("AWS_REGION", s3_config.region.c_str());
   } else {
     CPLSetConfigOption("AWS_REGION", nullptr);
   }
-  if (s3_endpoint.size()) {
-    CPLSetConfigOption("AWS_S3_ENDPOINT", s3_endpoint.c_str());
+  if (s3_config.endpoint.size()) {
+    CPLSetConfigOption("AWS_S3_ENDPOINT", s3_config.endpoint.c_str());
   } else {
     CPLSetConfigOption("AWS_S3_ENDPOINT", nullptr);
   }
-  if (s3_access_key.size()) {
-    CPLSetConfigOption("AWS_ACCESS_KEY_ID", s3_access_key.c_str());
+  if (s3_config.access_key.size()) {
+    CPLSetConfigOption("AWS_ACCESS_KEY_ID", s3_config.access_key.c_str());
   } else {
     CPLSetConfigOption("AWS_ACCESS_KEY_ID", nullptr);
   }
-  if (s3_secret_key.size()) {
-    CPLSetConfigOption("AWS_SECRET_ACCESS_KEY", s3_secret_key.c_str());
+  if (s3_config.secret_key.size()) {
+    CPLSetConfigOption("AWS_SECRET_ACCESS_KEY", s3_config.secret_key.c_str());
   } else {
     CPLSetConfigOption("AWS_SECRET_ACCESS_KEY", nullptr);
   }
-  if (s3_session_token.size()) {
-    CPLSetConfigOption("AWS_SESSION_TOKEN", s3_session_token.c_str());
+  if (s3_config.session_token.size()) {
+    CPLSetConfigOption("AWS_SESSION_TOKEN", s3_config.session_token.c_str());
   } else {
     CPLSetConfigOption("AWS_SESSION_TOKEN", nullptr);
   }
 
   // if we haven't set keys, we need to disable signed access
-  if (s3_access_key.size() || s3_secret_key.size()) {
+  if (s3_config.access_key.size() || s3_config.secret_key.size()) {
     CPLSetConfigOption("AWS_NO_SIGN_REQUEST", nullptr);
   } else {
     CPLSetConfigOption("AWS_NO_SIGN_REQUEST", "YES");

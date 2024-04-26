@@ -26,6 +26,7 @@
 #include <string>
 
 #include "ImportExport/SourceType.h"
+#include "Shared/S3Config.h"
 #include "Shared/sqltypes.h"
 
 namespace import_export {
@@ -75,15 +76,7 @@ struct CopyParams {
   import_export::SourceType source_type;
   bool plain_text = false;
   bool trim_spaces;
-  // s3/parquet related params
-  std::string s3_access_key;  // per-query credentials to override the
-  std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
-  std::string s3_session_token = "";
-  std::string s3_region;
-  std::string s3_endpoint;
-  bool s3_use_virtual_addressing = true;
-  int32_t s3_max_concurrent_downloads =
-      8;  // maximum number of concurrent file downloads from S3
+  shared::S3Config s3_config;
   // kafka related params
   size_t retry_count;
   size_t retry_wait;
