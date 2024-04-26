@@ -1432,7 +1432,7 @@ class DumpRestoreTableStmtBase : public DDLStmt {
   std::unique_ptr<std::string> table_;
   std::unique_ptr<std::string> path_;  // dump TO file path
   CompressionType compression_;
-  TableArchiverS3Options s3_options_;
+  shared::S3Config s3_options_;
 };
 
 class DumpTableStmt : public DumpRestoreTableStmtBase {
