@@ -25,6 +25,7 @@
 #include <thread>
 #include <vector>
 #include "Archive.h"
+#include "Shared/S3Config.h"
 
 #include <openssl/evp.h>
 
@@ -45,42 +46,31 @@ class S3Archive : public Archive {
     // which make few senses in case of private s3 resources
     char* env;
     if (0 != (env = getenv("AWS_REGION"))) {
-      s3_region = env;
+      s3_config.region = env;
     }
     if (0 != (env = getenv("AWS_ACCESS_KEY_ID"))) {
-      s3_access_key = env;
+      s3_config.access_key = env;
     }
     if (0 != (env = getenv("AWS_SECRET_ACCESS_KEY"))) {
-      s3_secret_key = env;
+      s3_config.secret_key = env;
     }
     if (0 != (env = getenv("AWS_SESSION_TOKEN"))) {
-      s3_session_token = env;
+      s3_config.session_token = env;
     }
-
     if (0 != (env = getenv("AWS_ENDPOINT"))) {
-      s3_endpoint = env;
+      s3_config.endpoint = env;
     }
   }
 
   S3Archive(const std::string& url,
-            const std::string& s3_access_key,
-            const std::string& s3_secret_key,
-            const std::string& s3_session_token,
-            const std::string& s3_region,
-            const std::string& s3_endpoint,
-            const bool s3_use_virtual_addressing,
+            const shared::S3Config& s3_config,
             const bool plain_text,
             const std::optional<std::string>& regex_path_filter,
             const std::optional<std::string>& file_sort_order_by,
             const std::optional<std::string>& file_sort_regex,
             const std::string& s3_temp_dir_path = {})
       : S3Archive(url, plain_text) {
-    this->s3_access_key = s3_access_key;
-    this->s3_secret_key = s3_secret_key;
-    this->s3_session_token = s3_session_token;
-    this->s3_region = s3_region;
-    this->s3_endpoint = s3_endpoint;
-    this->s3_use_virtual_addressing = s3_use_virtual_addressing;
+    this->s3_config = s3_config;
     this->regex_path_filter = regex_path_filter;
     this->file_sort_order_by = file_sort_order_by;
     this->file_sort_regex = file_sort_regex;
@@ -144,14 +134,9 @@ class S3Archive : public Archive {
 
   std::unique_ptr<Aws::S3::S3Client> s3_client;
   std::vector<std::thread> threads;
-#endif                        // HAVE_AWS_S3
-  std::string s3_access_key;  // per-query credentials to override the
-  std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
-  std::string s3_session_token;
-  std::string s3_region;
-  std::string s3_endpoint;
+#endif  // HAVE_AWS_S3
+  shared::S3Config s3_config;
   std::string s3_temp_dir;
-  bool s3_use_virtual_addressing;
 
   std::string bucket_name;
   std::string prefix_name;
@@ -166,23 +151,13 @@ class S3Archive : public Archive {
 class S3ParquetArchive : public S3Archive {
  public:
   S3ParquetArchive(const std::string& url,
-                   const std::string& s3_access_key,
-                   const std::string& s3_secret_key,
-                   const std::string& s3_session_token,
-                   const std::string& s3_region,
-                   const std::string& s3_endpoint,
-                   const bool s3_use_virtual_addressing,
+                   const shared::S3Config& s3_config,
                    const bool plain_text,
                    const std::optional<std::string>& regex_path_filter,
                    const std::optional<std::string>& file_sort_order_by,
                    const std::optional<std::string>& file_sort_regex)
       : S3Archive(url,
-                  s3_access_key,
-                  s3_secret_key,
-                  s3_session_token,
-                  s3_region,
-                  s3_endpoint,
-                  s3_use_virtual_addressing,
+                  s3_config,
                   plain_text,
                   regex_path_filter,
                   file_sort_order_by,

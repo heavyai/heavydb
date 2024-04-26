@@ -3989,28 +3989,28 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
     copy_params.threads = cp.threads;
   }
   if (cp.s3_access_key.length() > 0) {
-    copy_params.s3_access_key = cp.s3_access_key;
+    copy_params.s3_config.access_key = cp.s3_access_key;
   }
   if (cp.s3_secret_key.length() > 0) {
-    copy_params.s3_secret_key = cp.s3_secret_key;
+    copy_params.s3_config.secret_key = cp.s3_secret_key;
   }
   if (cp.s3_session_token.length() > 0) {
-    copy_params.s3_session_token = cp.s3_session_token;
+    copy_params.s3_config.session_token = cp.s3_session_token;
   }
   if (cp.s3_region.length() > 0) {
-    copy_params.s3_region = cp.s3_region;
+    copy_params.s3_config.region = cp.s3_region;
   }
   if (cp.s3_endpoint.length() > 0) {
-    copy_params.s3_endpoint = cp.s3_endpoint;
+    copy_params.s3_config.endpoint = cp.s3_endpoint;
   }
 #ifdef HAVE_AWS_S3
   if (g_allow_s3_server_privileges && cp.s3_access_key.length() == 0 &&
       cp.s3_secret_key.length() == 0 && cp.s3_session_token.length() == 0) {
     const auto& server_credentials =
         Aws::Auth::DefaultAWSCredentialsProviderChain().GetAWSCredentials();
-    copy_params.s3_access_key = server_credentials.GetAWSAccessKeyId();
-    copy_params.s3_secret_key = server_credentials.GetAWSSecretKey();
-    copy_params.s3_session_token = server_credentials.GetSessionToken();
+    copy_params.s3_config.access_key = server_credentials.GetAWSAccessKeyId();
+    copy_params.s3_config.secret_key = server_credentials.GetAWSSecretKey();
+    copy_params.s3_config.session_token = server_credentials.GetSessionToken();
   }
 #endif
 
@@ -4163,11 +4163,11 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   copy_params.array_begin = cp.array_begin;
   copy_params.array_end = cp.array_end;
   copy_params.threads = cp.threads;
-  copy_params.s3_access_key = cp.s3_access_key;
-  copy_params.s3_secret_key = cp.s3_secret_key;
-  copy_params.s3_session_token = cp.s3_session_token;
-  copy_params.s3_region = cp.s3_region;
-  copy_params.s3_endpoint = cp.s3_endpoint;
+  copy_params.s3_access_key = cp.s3_config.access_key;
+  copy_params.s3_secret_key = cp.s3_config.secret_key;
+  copy_params.s3_session_token = cp.s3_config.session_token;
+  copy_params.s3_region = cp.s3_config.region;
+  copy_params.s3_endpoint = cp.s3_config.endpoint;
   switch (cp.source_type) {
     case import_export::SourceType::kDelimitedFile:
       copy_params.source_type = TSourceType::DELIMITED_FILE;

@@ -343,11 +343,11 @@ std::tuple<std::string, import_export::CopyParams> get_local_copy_source_and_par
   import_export::CopyParams local_copy_params = s3_copy_params;
   // remove any members from `local_copy_params` that are only intended to be used at a
   // higher level
-  local_copy_params.s3_access_key.clear();
-  local_copy_params.s3_secret_key.clear();
-  local_copy_params.s3_session_token.clear();
-  local_copy_params.s3_region.clear();
-  local_copy_params.s3_endpoint.clear();
+  local_copy_params.s3_config.access_key.clear();
+  local_copy_params.s3_config.secret_key.clear();
+  local_copy_params.s3_config.session_token.clear();
+  local_copy_params.s3_config.region.clear();
+  local_copy_params.s3_config.endpoint.clear();
 
   local_copy_params.regex_path_filter = std::nullopt;
   local_copy_params.file_sort_order_by = "PATHNAME";  // see comment below
@@ -630,12 +630,7 @@ ImportStatus ForeignDataImporter::importGeneralS3(
   };
 
   auto s3_archive = std::make_unique<S3Archive>(copy_from_source_,
-                                                copy_params_.s3_access_key,
-                                                copy_params_.s3_secret_key,
-                                                copy_params_.s3_session_token,
-                                                copy_params_.s3_region,
-                                                copy_params_.s3_endpoint,
-                                                copy_params_.s3_use_virtual_addressing,
+                                                copy_params_.s3_config,
                                                 copy_params_.plain_text,
                                                 copy_params_.regex_path_filter,
                                                 copy_params_.file_sort_order_by,
@@ -655,7 +650,7 @@ ImportStatus ForeignDataImporter::importGeneralS3(
   }
 
   ImportStatus aggregate_import_status;
-  const int num_download_threads = copy_params_.s3_max_concurrent_downloads;
+  const int num_download_threads = copy_params_.s3_config.max_concurrent_downloads;
 
   std::mutex communication_mutex;
   bool continue_downloading = true;

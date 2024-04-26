@@ -29,6 +29,10 @@ class OGRSpatialReference;
 class OGRCoordinateTransformation;
 class GDALMajorObject;
 
+namespace shared {
+struct S3Config;
+}
+
 namespace Geospatial {
 
 class GDAL {
@@ -36,11 +40,7 @@ class GDAL {
   static void init();
   static bool supportsNetworkFileAccess();
   static bool supportsDriver(const std::string& driver_name);
-  static void setAuthorizationTokens(const std::string& s3_region,
-                                     const std::string& s3_endpoint,
-                                     const std::string& s3_access_key,
-                                     const std::string& s3_secret_key,
-                                     const std::string& s3_session_token);
+  static void setAuthorizationTokens(const shared::S3Config& creds);
 
   struct DataSourceDeleter {
     void operator()(OGRDataSource* datasource);
