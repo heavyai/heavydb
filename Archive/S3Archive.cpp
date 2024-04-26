@@ -42,37 +42,39 @@ void get_s3_parameter_from_env_if_unset_or_empty(std::string& param,
   }
 }
 
-void log_s3_config(const Aws::Client::ClientConfiguration& s3_config,
-                   bool use_virtual_addressing) {
+void log_client_config(const Aws::Client::ClientConfiguration& client_config,
+                       bool use_virtual_addressing) {
   VLOG(1) << "Creating S3 Client using virtual adressing mode :"
           << std::to_string(use_virtual_addressing) << std::endl
           << " with S3 properties: " << std::endl
-          << "userAgent: " << s3_config.userAgent << "region: " << s3_config.region
-          << "useDualStack: " << s3_config.useDualStack
-          << "maxConnections: " << s3_config.maxConnections << std::endl
-          << "requestTimeoutMs: " << s3_config.requestTimeoutMs
-          << "connectTimeoutMs: " << s3_config.connectTimeoutMs
-          << "enableTcpKeepAlive: " << s3_config.enableTcpKeepAlive
-          << "tcpKeepAliveIntervalMs: " << s3_config.tcpKeepAliveIntervalMs << std::endl
-          << "lowSpeedLimit: " << s3_config.lowSpeedLimit
-          << "retryStrategy: " << s3_config.retryStrategy
-          << "endpointOverride: " << s3_config.endpointOverride
-          << "proxyHost: " << s3_config.proxyHost << std::endl
-          << "proxyPort: " << s3_config.proxyPort
-          << "proxyUserName: " << s3_config.proxyUserName
-          << "proxyPassword: " << s3_config.proxyPassword
-          << "executor: " << s3_config.executor << std::endl
-          << "verifySSL: " << s3_config.verifySSL << "caPath: " << s3_config.caPath
-          << "caFile: " << s3_config.caFile
-          << "writeRateLimiter: " << s3_config.writeRateLimiter << std::endl
-          << "readRateLimiter: " << s3_config.readRateLimiter
-          << "followRedirects: " << s3_config.followRedirects
-          << "disableExpectHeader: " << s3_config.disableExpectHeader
-          << "enableClockSkewAdjustment: " << s3_config.enableClockSkewAdjustment
+          << "userAgent: " << client_config.userAgent
+          << "region: " << client_config.region
+          << "useDualStack: " << client_config.useDualStack
+          << "maxConnections: " << client_config.maxConnections << std::endl
+          << "requestTimeoutMs: " << client_config.requestTimeoutMs
+          << "connectTimeoutMs: " << client_config.connectTimeoutMs
+          << "enableTcpKeepAlive: " << client_config.enableTcpKeepAlive
+          << "tcpKeepAliveIntervalMs: " << client_config.tcpKeepAliveIntervalMs
           << std::endl
-          << "enableClockSkewAdjustment: " << s3_config.enableClockSkewAdjustment
-          << "enableHostPrefixInjection: " << s3_config.enableHostPrefixInjection
-          << "enableEndpointDiscovery: " << s3_config.enableEndpointDiscovery;
+          << "lowSpeedLimit: " << client_config.lowSpeedLimit
+          << "retryStrategy: " << client_config.retryStrategy
+          << "endpointOverride: " << client_config.endpointOverride
+          << "proxyHost: " << client_config.proxyHost << std::endl
+          << "proxyPort: " << client_config.proxyPort
+          << "proxyUserName: " << client_config.proxyUserName
+          << "proxyPassword: " << client_config.proxyPassword
+          << "executor: " << client_config.executor << std::endl
+          << "verifySSL: " << client_config.verifySSL
+          << "caPath: " << client_config.caPath << "caFile: " << client_config.caFile
+          << "writeRateLimiter: " << client_config.writeRateLimiter << std::endl
+          << "readRateLimiter: " << client_config.readRateLimiter
+          << "followRedirects: " << client_config.followRedirects
+          << "disableExpectHeader: " << client_config.disableExpectHeader
+          << "enableClockSkewAdjustment: " << client_config.enableClockSkewAdjustment
+          << std::endl
+          << "enableClockSkewAdjustment: " << client_config.enableClockSkewAdjustment
+          << "enableHostPrefixInjection: " << client_config.enableHostPrefixInjection
+          << "enableEndpointDiscovery: " << client_config.enableEndpointDiscovery;
 }
 
 };  // namespace
@@ -100,10 +102,10 @@ void S3Archive::init_for_read() {
     objects_request.SetMaxKeys(1 << 20);
 
     if (g_allow_s3_server_privileges) {
-      get_s3_parameter_from_env_if_unset_or_empty(s3_region, "AWS_REGION");
+      get_s3_parameter_from_env_if_unset_or_empty(s3_config.region, "AWS_REGION");
     }
 
-    if (s3_region.empty()) {
+    if (s3_config.region.empty()) {
       throw std::runtime_error(
           "Required parameter \"s3_region\" not set. Please specify the \"s3_region\" "
           "configuration parameter.");
@@ -114,33 +116,34 @@ void S3Archive::init_for_read() {
     // credentials are configured *globally* while different users with private
     // s3 resources may need separate credentials to access.in that case, use
     // WITH s3_access_key/s3_secret_key parameters.
-    Aws::Client::ClientConfiguration s3_config;
-    s3_config.region = s3_region;
-    s3_config.endpointOverride = s3_endpoint;
+    Aws::Client::ClientConfiguration client_config;
+    client_config.region = s3_config.region;
+    client_config.endpointOverride = s3_config.endpoint;
     auto ssl_config = heavydb_aws_sdk::get_ssl_config();
-    s3_config.caPath = ssl_config.ca_path;
-    s3_config.caFile = ssl_config.ca_file;
+    client_config.caPath = ssl_config.ca_path;
+    client_config.caFile = ssl_config.ca_file;
 
-    log_s3_config(s3_config, s3_use_virtual_addressing);
+    log_client_config(client_config, s3_config.use_virtual_addressing);
 
-    if (!s3_access_key.empty() && !s3_secret_key.empty()) {
+    if (!s3_config.access_key.empty() && !s3_config.secret_key.empty()) {
       s3_client.reset(new Aws::S3::S3Client(
-          Aws::Auth::AWSCredentials(s3_access_key, s3_secret_key, s3_session_token),
-          s3_config,
+          Aws::Auth::AWSCredentials(
+              s3_config.access_key, s3_config.secret_key, s3_config.session_token),
+          client_config,
           Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-          s3_use_virtual_addressing));
+          s3_config.use_virtual_addressing));
     } else if (g_allow_s3_server_privileges) {
       s3_client.reset(new Aws::S3::S3Client(
           std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>(),
-          s3_config,
+          client_config,
           Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-          s3_use_virtual_addressing));
+          s3_config.use_virtual_addressing));
     } else {
       s3_client.reset(new Aws::S3::S3Client(
           std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>(),
-          s3_config,
+          client_config,
           Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-          s3_use_virtual_addressing));
+          s3_config.use_virtual_addressing));
     }
     while (true) {
       VLOG(1) << "Listing objects using URL: " << url;

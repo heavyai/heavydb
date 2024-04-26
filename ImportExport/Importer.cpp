@@ -3698,14 +3698,14 @@ create_parquet_s3_detect_filesystem_config(const foreign_storage::ForeignServer*
   foreign_storage::ParquetS3DetectFileSystem::ParquetS3DetectFileSystemConfiguration
       config;
 
-  if (!copy_params.s3_access_key.empty()) {
-    config.s3_access_key = copy_params.s3_access_key;
+  if (!copy_params.s3_config.access_key.empty()) {
+    config.s3_access_key = copy_params.s3_config.access_key;
   }
-  if (!copy_params.s3_secret_key.empty()) {
-    config.s3_secret_key = copy_params.s3_secret_key;
+  if (!copy_params.s3_config.secret_key.empty()) {
+    config.s3_secret_key = copy_params.s3_config.secret_key;
   }
-  if (!copy_params.s3_session_token.empty()) {
-    config.s3_session_token = copy_params.s3_session_token;
+  if (!copy_params.s3_config.session_token.empty()) {
+    config.s3_session_token = copy_params.s3_config.session_token;
   }
 
   return config;
@@ -4049,12 +4049,7 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths,
       if ("s3" == url_parts[2]) {
 #ifdef HAVE_AWS_S3
         us3arch.reset(new S3ParquetArchive(file_path,
-                                           copy_params.s3_access_key,
-                                           copy_params.s3_secret_key,
-                                           copy_params.s3_session_token,
-                                           copy_params.s3_region,
-                                           copy_params.s3_endpoint,
-                                           copy_params.s3_use_virtual_addressing,
+                                           copy_params.s3_config,
                                            copy_params.plain_text,
                                            copy_params.regex_path_filter,
                                            copy_params.file_sort_order_by,
@@ -4184,12 +4179,7 @@ void DataStreamSink::import_compressed(
           // new a S3Archive with a shared s3client.
           // should be safe b/c no wildcard with s3 url
           us3arch.reset(new S3Archive(file_path,
-                                      copy_params.s3_access_key,
-                                      copy_params.s3_secret_key,
-                                      copy_params.s3_session_token,
-                                      copy_params.s3_region,
-                                      copy_params.s3_endpoint,
-                                      copy_params.s3_use_virtual_addressing,
+                                      copy_params.s3_config,
                                       copy_params.plain_text,
                                       copy_params.regex_path_filter,
                                       copy_params.file_sort_order_by,
@@ -4616,11 +4606,7 @@ Geospatial::GDAL::DataSourceUqPtr Importer::openGDALDataSource(
     const std::string& file_name,
     const CopyParams& copy_params) {
   Geospatial::GDAL::init();
-  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_region,
-                                           copy_params.s3_endpoint,
-                                           copy_params.s3_access_key,
-                                           copy_params.s3_secret_key,
-                                           copy_params.s3_session_token);
+  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_config);
   if (copy_params.source_type != import_export::SourceType::kGeoFile) {
     throw std::runtime_error("Unexpected CopyParams.source_type (" +
                              std::to_string(static_cast<int>(copy_params.source_type)) +
@@ -4867,11 +4853,7 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsRaster(
     const CopyParams& copy_params) {
   // lazy init GDAL
   Geospatial::GDAL::init();
-  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_region,
-                                           copy_params.s3_endpoint,
-                                           copy_params.s3_access_key,
-                                           copy_params.s3_secret_key,
-                                           copy_params.s3_session_token);
+  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_config);
 
   // prepare for metadata column
   auto metadata_column_infos =
@@ -5052,11 +5034,7 @@ bool Importer::gdalStatInternal(const std::string& path,
                                 bool also_dir) {
   // lazy init GDAL
   Geospatial::GDAL::init();
-  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_region,
-                                           copy_params.s3_endpoint,
-                                           copy_params.s3_access_key,
-                                           copy_params.s3_secret_key,
-                                           copy_params.s3_session_token);
+  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_config);
 
 #if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 3)
   // clear GDAL stat cache
@@ -5164,11 +5142,7 @@ std::vector<std::string> Importer::gdalGetAllFilesInArchive(
     const CopyParams& copy_params) {
   // lazy init GDAL
   Geospatial::GDAL::init();
-  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_region,
-                                           copy_params.s3_endpoint,
-                                           copy_params.s3_access_key,
-                                           copy_params.s3_secret_key,
-                                           copy_params.s3_session_token);
+  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_config);
 
   // prepare to gather files
   std::vector<std::string> files;
@@ -5191,11 +5165,7 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
     const CopyParams& copy_params) {
   // lazy init GDAL
   Geospatial::GDAL::init();
-  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_region,
-                                           copy_params.s3_endpoint,
-                                           copy_params.s3_access_key,
-                                           copy_params.s3_secret_key,
-                                           copy_params.s3_session_token);
+  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_config);
 
   // prepare to gather layer info
   std::vector<GeoFileLayerInfo> layer_info;
