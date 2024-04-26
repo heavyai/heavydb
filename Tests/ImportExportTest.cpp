@@ -76,6 +76,7 @@ extern bool g_enable_legacy_parquet_import;
 extern bool g_enable_fsi_regex_import;
 
 namespace {
+#ifdef HAVE_AWS_S3
 std::string get_source_type(const std::string& file_type) {
   auto upper_type = to_upper(file_type);
   if (upper_type == "CSV" || upper_type == "LEGACY_CSV") {
@@ -101,6 +102,7 @@ std::string get_extension(const std::string& file_type) {
   }
   return {};
 }
+#endif  // HAVE_AWS_S3
 
 std::string repeat_regex(size_t repeat_count, const std::string& regex) {
   std::string repeated_regex;
