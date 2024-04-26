@@ -21,13 +21,8 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/SessionInfo.h"
 
-struct TableArchiverS3Options {
-  std::string s3_access_key;
-  std::string s3_secret_key;
-  std::string s3_session_token;
-  std::string s3_region;
-  std::string s3_endpoint;
-  bool s3_use_virtual_addressing = true;
+namespace shared {
+struct S3Config;
 };
 
 class TableArchiver {
@@ -42,7 +37,7 @@ class TableArchiver {
                     const std::string& table_name,
                     const std::string& archive_path,
                     const std::string& compression,
-                    const TableArchiverS3Options& s3_options);
+                    const shared::S3Config& s3_options);
 
  private:
   void restoreTable(const Catalog_Namespace::SessionInfo& session,

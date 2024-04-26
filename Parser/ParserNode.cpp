@@ -1173,35 +1173,35 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
         if (str_literal == nullptr) {
           throw std::runtime_error("Option s3_access_key must be a string.");
         }
-        copy_params.s3_access_key = *str_literal->get_stringval();
+        copy_params.s3_config.access_key = *str_literal->get_stringval();
       } else if (boost::iequals(*p->get_name(), "s3_secret_key")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
           throw std::runtime_error("Option s3_secret_key must be a string.");
         }
-        copy_params.s3_secret_key = *str_literal->get_stringval();
+        copy_params.s3_config.secret_key = *str_literal->get_stringval();
       } else if (boost::iequals(*p->get_name(), "s3_session_token")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
           throw std::runtime_error("Option s3_session_token must be a string.");
         }
-        copy_params.s3_session_token = *str_literal->get_stringval();
+        copy_params.s3_config.session_token = *str_literal->get_stringval();
       } else if (boost::iequals(*p->get_name(), "s3_region")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
           throw std::runtime_error("Option s3_region must be a string.");
         }
-        copy_params.s3_region = *str_literal->get_stringval();
+        copy_params.s3_config.region = *str_literal->get_stringval();
       } else if (boost::iequals(*p->get_name(), "s3_endpoint")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
           throw std::runtime_error("Option s3_endpoint must be a string.");
         }
-        copy_params.s3_endpoint = *str_literal->get_stringval();
+        copy_params.s3_config.endpoint = *str_literal->get_stringval();
       } else if (boost::iequals(*p->get_name(), "s3_max_concurrent_downloads")) {
         const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
         if (int_literal == nullptr) {
@@ -1210,7 +1210,7 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
         }
         const int s3_max_concurrent_downloads = int_literal->get_intval();
         if (s3_max_concurrent_downloads > 0) {
-          copy_params.s3_max_concurrent_downloads = s3_max_concurrent_downloads;
+          copy_params.s3_config.max_concurrent_downloads = s3_max_concurrent_downloads;
         } else {
           throw std::runtime_error(
               "Invalid value for 's3_max_concurrent_downloads' option (must be > 0): " +
@@ -1222,7 +1222,8 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
         if (str_literal == nullptr) {
           throw std::runtime_error("s3_use_virtual_addressing option must be a boolean.");
         }
-        copy_params.s3_use_virtual_addressing = bool_from_string_literal(str_literal);
+        copy_params.s3_config.use_virtual_addressing =
+            bool_from_string_literal(str_literal);
       } else if (boost::iequals(*p->get_name(), "quote")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -7240,27 +7241,27 @@ DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& paylo
 #ifdef HAVE_AWS_S3
       } else if (auto s3_access_key = get_string_option(option.get(), "s3_access_key");
                  s3_access_key.has_value()) {
-        s3_options_.s3_access_key = s3_access_key.value();
+        s3_options_.access_key = s3_access_key.value();
       } else if (auto s3_secret_key = get_string_option(option.get(), "s3_secret_key");
                  s3_secret_key.has_value()) {
-        s3_options_.s3_secret_key = s3_secret_key.value();
+        s3_options_.secret_key = s3_secret_key.value();
       } else if (auto s3_session_token =
                      get_string_option(option.get(), "s3_session_token");
                  s3_session_token.has_value()) {
-        s3_options_.s3_session_token = s3_session_token.value();
+        s3_options_.session_token = s3_session_token.value();
       } else if (auto s3_region = get_string_option(option.get(), "s3_region");
                  s3_region.has_value()) {
-        s3_options_.s3_region = s3_region.value();
+        s3_options_.region = s3_region.value();
       } else if (auto s3_endpoint = get_string_option(option.get(), "s3_endpoint");
                  s3_endpoint.has_value()) {
-        s3_options_.s3_endpoint = s3_endpoint.value();
+        s3_options_.endpoint = s3_endpoint.value();
       } else if (boost::iequals(*option->get_name(), "s3_use_virtual_addressing")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(option->get_value());
         if (str_literal == nullptr) {
           throw std::runtime_error("s3_use_virtual_addressing option must be a boolean.");
         }
-        s3_options_.s3_use_virtual_addressing = bool_from_string_literal(str_literal);
+        s3_options_.use_virtual_addressing = bool_from_string_literal(str_literal);
 #endif
       } else {
         throw std::runtime_error("Invalid WITH option: " + *option->get_name());

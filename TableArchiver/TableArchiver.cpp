@@ -43,6 +43,7 @@
 #include "Parser/ParserNode.h"
 #include "Shared/File.h"
 #include "Shared/JsonUtils.h"
+#include "Shared/S3Config.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/ThreadController.h"
@@ -942,15 +943,10 @@ std::string get_restore_dir_path() {
 }
 
 std::string download_s3_file(const std::string& s3_archive_path,
-                             const TableArchiverS3Options& s3_options,
+                             const shared::S3Config& s3_options,
                              const std::string& restore_dir_path) {
   S3Archive s3_archive{s3_archive_path,
-                       s3_options.s3_access_key,
-                       s3_options.s3_secret_key,
-                       s3_options.s3_session_token,
-                       s3_options.s3_region,
-                       s3_options.s3_endpoint,
-                       s3_options.s3_use_virtual_addressing,
+                       s3_options,
                        false,
                        std::optional<std::string>{},
                        std::optional<std::string>{},
@@ -975,7 +971,7 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
                                  const std::string& table_name,
                                  const std::string& archive_path,
                                  const std::string& compression,
-                                 const TableArchiverS3Options& s3_options) {
+                                 const shared::S3Config& s3_options) {
   auto local_archive_path = archive_path;
 #ifdef HAVE_AWS_S3
   const auto restore_dir_path = get_restore_dir_path();
