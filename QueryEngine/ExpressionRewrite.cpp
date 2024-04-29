@@ -25,6 +25,7 @@
 #include "QueryEngine/DeepCopyVisitor.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ScalarExprVisitor.h"
+#include "QueryEngine/Visitors/DotProductVisitor.h"
 #include "QueryEngine/WindowExpressionRewrite.h"
 #include "Shared/scope.h"
 #include "Shared/sqldefs.h"
@@ -443,60 +444,15 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     return false;
   }
 
-  static bool isConstant(std::shared_ptr<Analyzer::Expr> const& expr) {
-    return static_cast<bool>(dynamic_cast<Analyzer::Constant*>(expr.get()));
-  }
-
-  /// When an Array is encountered under a DOT_PRODUCT() its elements may be
-  /// converted to the type determined by DotProductExpr::derive_return_type().
-  /// In that case update the ArrayExpr type_info.
-  std::shared_ptr<Analyzer::Expr> visitArrayOper(
-      const Analyzer::ArrayExpr* array_expr) const override {
-    std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
-    args_copy.reserve(array_expr->getElementCount());
-    for (size_t i = 0; i < array_expr->getElementCount(); ++i) {
-      args_copy.push_back(visit(array_expr->getElement(i)));
-    }
-    if (dot_product_type_info_.empty()) {
-      // This code path is the same as DeepCopyVisitor::visitArrayOper().
-      auto const& type_info = array_expr->get_type_info();
-      return makeExpr<Analyzer::ArrayExpr>(
-          type_info, args_copy, array_expr->isNull(), array_expr->isLocalAlloc());
-    } else {
-      // Update the Array subtype from being casted by visitConstant().
-      // In case the element type is decimal, also copy the precision and scale.
-      SQLTypeInfo type_info = args_copy.empty() ? dot_product_type_info_.back()
-                                                : args_copy.front()->get_type_info();
-      if (!args_copy.empty()) {
-        type_info.set_subtype(type_info.get_type());
-        type_info.set_type(kARRAY);
-      }
-      // Set local_alloc to true if all args are Constants.
-      bool local_alloc = array_expr->isLocalAlloc() ||
-                         std::all_of(args_copy.begin(), args_copy.end(), isConstant);
-      return makeExpr<Analyzer::ArrayExpr>(
-          type_info, args_copy, array_expr->isNull(), local_alloc);
-    }
-  }
-
-  /// Cast constant decimals to dot_product->get_type_info() when used in a DOT_PRODUCT().
-  std::shared_ptr<Analyzer::Expr> visitConstant(
-      const Analyzer::Constant* constant) const override {
-    std::shared_ptr<Analyzer::Expr> retval = DeepCopyVisitor::visitConstant(constant);
-    if (!dot_product_type_info_.empty() && retval->get_type_info().is_decimal() &&
-        dot_product_type_info_.back() != retval->get_type_info()) {
-      retval->add_cast(dot_product_type_info_.back());
-    }
-    return retval;
-  }
-
-  /// At each call level of DOT_PRODUCT() (in case nested calls are ever supported)
-  /// the return type is given by dot_product_type_info_.back();
   std::shared_ptr<Analyzer::Expr> visitDotProduct(
-      const Analyzer::DotProductExpr* dot_product) const override {
-    dot_product_type_info_.push_back(dot_product->get_type_info());
-    ScopeGuard pop_dot_product_type_info{[this] { dot_product_type_info_.pop_back(); }};
-    return DeepCopyVisitor::visitDotProduct(dot_product);
+      const Analyzer::DotProductExpr* dot_product_expr) const override {
+    if (Analyzer::is_null_constant(dot_product_expr->get_arg1()) ||
+        Analyzer::is_null_constant(dot_product_expr->get_arg2())) {
+      constexpr bool is_null = true;
+      return makeExpr<Analyzer::Constant>(kNULLT, is_null);
+    } else {
+      return DeepCopyVisitor::visitDotProduct(dot_product_expr);
+    }
   }
 
   std::shared_ptr<Analyzer::Expr> visitUOper(
@@ -817,8 +773,6 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
   mutable std::vector<std::shared_ptr<Analyzer::Expr>> chained_string_op_exprs_;
   mutable std::unordered_map<const Analyzer::Expr*, const SQLTypeInfo> casts_;
   mutable int32_t num_overflows_;
-  /// The DOT_PRODUCT() type at each level of call depth (typically no more than one).
-  mutable std::vector<SQLTypeInfo> dot_product_type_info_;
 
  public:
   ConstantFoldingVisitor() : num_overflows_(0) {}
@@ -1448,6 +1402,7 @@ std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr* expr) {
     return std::make_shared<Analyzer::LikelihoodExpr>(
         rewritten_expr, expr_with_likelihood->get_likelihood());
   }
+  rewritten_expr = DotProductVisitor{}.visit(rewritten_expr.get());
   return rewritten_expr;
 }
 

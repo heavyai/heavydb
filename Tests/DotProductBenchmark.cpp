@@ -124,14 +124,14 @@ BENCHMARK_DEFINE_F(DotProduct, NumRowsVsLiteralArraySize)(benchmark::State& stat
 #endif
   for (auto _ : state) {
 #if CHECK_FOR_CORRECT_RESULT
-    auto result_set = run_multiple_agg(select, ExecutorDeviceType::CPU);
+    auto result_set = run_multiple_agg(select, ExecutorDeviceType::GPU);
     EXPECT_EQ(num_rows, result_set->rowCount());
     // Though there are multiple rows returned, just check the first row.
     auto actual = result_set->getNextRow(translate_strings, decimal_to_double)[0];
     constexpr float EPS = 1e-5;
     EXPECT_NEAR(expected, v<float>(actual), EPS * expected);
 #else
-    run_multiple_agg(select, ExecutorDeviceType::CPU);
+    run_multiple_agg(select, ExecutorDeviceType::GPU);
 #endif
   }
 }

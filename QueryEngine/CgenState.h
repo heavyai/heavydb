@@ -114,54 +114,32 @@ struct CgenState {
         return getOrAddLiteral(constant->get_constval().bigintval, device_id);
       case kARRAY: {
         if (enc_type == kENCODING_NONE) {
-          if (ti.get_subtype() == kDOUBLE) {
-            std::vector<double> double_array_literal;
-            for (const auto& value : constant->get_value_list()) {
-              const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
-              CHECK(c);
-              double d = c->get_constval().doubleval;
-              double_array_literal.push_back(d);
+          switch (ti.get_subtype()) {
+            case kDOUBLE:
+              return getOrAddLiteral(makeArrayLiteral<double>(constant), device_id);
+            case kFLOAT:
+              return getOrAddLiteral(makeArrayLiteral<float>(constant), device_id);
+            case kINT:
+              return getOrAddLiteral(makeArrayLiteral<int32_t>(constant), device_id);
+            case kTINYINT: {
+              std::vector<int8_t> int8_array_literal = makeArrayLiteral<int8_t>(constant);
+              if (ti.get_comp_param() == 64) {
+                return getOrAddLiteral(std::make_pair(std::move(int8_array_literal), 64),
+                                       device_id);
+              }
+              return getOrAddLiteral(std::move(int8_array_literal), device_id);
             }
-            return getOrAddLiteral(double_array_literal, device_id);
+            default:
+              throw std::runtime_error("Unsupported literal array: " + ti.toString());
           }
-          if (ti.get_subtype() == kINT) {
-            std::vector<int32_t> int32_array_literal;
-            for (const auto& value : constant->get_value_list()) {
-              const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
-              CHECK(c);
-              int32_t i = c->get_constval().intval;
-              int32_array_literal.push_back(i);
-            }
-            return getOrAddLiteral(int32_array_literal, device_id);
-          }
+        } else if (enc_type == kENCODING_GEOINT) {
           if (ti.get_subtype() == kTINYINT) {
-            std::vector<int8_t> int8_array_literal;
-            for (const auto& value : constant->get_value_list()) {
-              const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
-              CHECK(c);
-              int8_t i = c->get_constval().tinyintval;
-              int8_array_literal.push_back(i);
-            }
-            if (ti.get_comp_param() == 64) {
-              return getOrAddLiteral(std::make_pair(int8_array_literal, 64), device_id);
-            }
-            return getOrAddLiteral(int8_array_literal, device_id);
-          }
-          throw std::runtime_error("Unsupported literal array");
-        }
-        if (enc_type == kENCODING_GEOINT) {
-          if (ti.get_subtype() == kTINYINT) {
-            std::vector<int8_t> int8_array_literal;
-            for (const auto& value : constant->get_value_list()) {
-              const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
-              CHECK(c);
-              int8_t i = c->get_constval().tinyintval;
-              int8_array_literal.push_back(i);
-            }
+            std::vector<int8_t> int8_array_literal = makeArrayLiteral<int8_t>(constant);
             if (ti.get_comp_param() == 32) {
-              return getOrAddLiteral(std::make_pair(int8_array_literal, 32), device_id);
+              return getOrAddLiteral(std::make_pair(std::move(int8_array_literal), 32),
+                                     device_id);
             }
-            return getOrAddLiteral(int8_array_literal, device_id);
+            return getOrAddLiteral(std::move(int8_array_literal), device_id);
           }
         }
         throw std::runtime_error("Encoded literal arrays are not supported");
@@ -180,6 +158,7 @@ struct CgenState {
                                     std::pair<std::string, shared::StringDictKey>,
                                     std::string,
                                     std::vector<double>,
+                                    std::vector<float>,
                                     std::vector<int32_t>,
                                     std::vector<int8_t>,
                                     std::pair<std::vector<int8_t>, int>>;
@@ -460,8 +439,8 @@ struct CgenState {
  private:
   // todo (yoonmin) : avoid linear scanning of `literals` map
   template <class T>
-  std::tuple<size_t, size_t> getOrAddLiteral(const T& val, const int device_id) {
-    const LiteralValue var_val(val);
+  std::tuple<size_t, size_t> getOrAddLiteral(T val, const int device_id) {
+    LiteralValue var_val(std::move(val));
     size_t literal_found_off{0};
     auto& literals = literals_[device_id];
     for (const auto& literal : literals) {
@@ -471,10 +450,29 @@ struct CgenState {
         return {literal_found_off - lit_bytes, lit_bytes};
       }
     }
-    literals.emplace_back(val);
     size_t const lit_bytes = std::visit(LiteralBytes{}, var_val);
+    literals.emplace_back(std::move(var_val));
     literal_bytes_[device_id] = align(literal_bytes_[device_id], lit_bytes) + lit_bytes;
     return {literal_bytes_[device_id] - lit_bytes, lit_bytes};
+  }
+
+  template <typename T>
+  struct GetConstval {
+    T operator()(std::shared_ptr<Analyzer::Expr> const& expr) const {
+      auto* constant = dynamic_cast<Analyzer::Constant const*>(expr.get());
+      CHECK(constant) << "Constant expected: " << expr->toString();
+      CHECK_EQ(cpp_type_to_sql_type<T>(), expr->get_type_info().get_type());
+      return get_datum_value<T>(constant->get_constval());
+    }
+  };
+
+  /// Return the actual values in a std::vector<T> of a given Constant array.
+  template <typename T>
+  static std::vector<T> makeArrayLiteral(Analyzer::Constant const* constant_array) {
+    auto& list = constant_array->get_value_list();
+    std::vector<T> literals(list.size());
+    std::transform(list.begin(), list.end(), literals.begin(), GetConstval<T>{});
+    return literals;
   }
 
   std::unordered_map<int, LiteralValues> literals_;

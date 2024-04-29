@@ -130,7 +130,7 @@ bool reverse_dot_product_args(const SQLTypeInfo& type1, const SQLTypeInfo& type2
 
 struct DotProductArg {
   Analyzer::Expr const* expr;
-  std::string_view type;  // "Literal" or "Chunk"
+  std::string_view type;  // "ArrayExpr" or "Chunk"
   std::array<llvm::Value*, 3> params;
 
   DotProductArg(Analyzer::Expr const* expr) : expr(expr) {
@@ -150,13 +150,21 @@ struct DotProductArg {
     }
 
     if (auto* array_expr = dynamic_cast<Analyzer::ArrayExpr const*>(expr)) {
-      type = "Literal";
+      type = "ArrayExpr";
       params[0] = array_expr->isLocalAlloc()
                       ? cgen_state->ir_builder_.CreateBitCast(
                             value, llvm::Type::getInt8PtrTy(cgen_state->context_))
                       : value;
       params[1] = cgen_state->llInt(array_expr->getElementCount());
-      params[2] = cgen_state->llInt(uint32_t{});  // unused but needed to use common API
+      params[2] = cgen_state->llInt(uint32_t{});  // unused but needed for common API
+    } else if (auto* constant = dynamic_cast<Analyzer::Constant const*>(expr)) {
+      // Though the pointer is of type Constant it is pointing to an array expression,
+      // and the code path is the same as for an ArrayExpr, so the term ArrayExpr is
+      // used here too.
+      type = "ArrayExpr";
+      params[0] = value;
+      params[1] = cgen_state->llInt(constant->get_value_list().size());
+      params[2] = cgen_state->llInt(uint32_t{});  // unused but needed for common API
     } else {
       type = "Chunk";
       params[0] = value;
