@@ -96,6 +96,7 @@ add_executable(BufferMgrTest BufferMgrTest.cpp)
 # CudaMgr constructor requires the dependency on QueryEngineCudaTargets and QueryEngine.
 if(ENABLE_CUDA)
   add_dependencies(BufferMgrTest QueryEngineCudaTargets)
+  target_link_libraries(BufferMgrTest CudaMgr)
 endif()
 target_link_libraries(BufferMgrTest gtest DataMgr QueryEngine)
 add_test(BufferMgrTest BufferMgrTest ${TEST_ARGS})
@@ -298,7 +299,8 @@ if(${HEAVYAI_PARTITION} EQUAL 0 OR ${HEAVYAI_PARTITION} EQUAL 3)  # Partition 3
 ##########
 
 add_executable(ExecutorResourceMgrTest ExecutorResourceMgrTest.cpp)
-target_link_libraries(ExecutorResourceMgrTest ${EXECUTE_TEST_LIBS})
+# Linking in EXECUTE_TEST_LIBS is a hacky solution, but this test has a lot of circular deps.
+target_link_libraries(ExecutorResourceMgrTest ${EXECUTE_TEST_LIBS} ${EXECUTE_TEST_LIBS})
 add_test(ExecutorResourceMgrTest ExecutorResourceMgrTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ExecutorResourceMgrTest)
 
@@ -362,7 +364,7 @@ list(APPEND SANITY_TEST_PROGRAMS GeospatialTest)
 
 if(NOT MSVC)
   add_executable(GeoTypesTest Geospatial/GeoTypesTest.cpp)
-  target_link_libraries(GeoTypesTest gtest Logger Shared Geospatial ${CMAKE_DL_LIBS} ${LibAwsS3_LIBRARIES})
+  target_link_libraries(GeoTypesTest gtest Logger Shared Geospatial ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} ${LibAwsS3_LIBRARIES})
   add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS GeoTypesTest)
 endif()
@@ -784,9 +786,9 @@ add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 
 add_executable(StringDictionaryBenchmark StringDictionaryBenchmark.cpp)
 if(ENABLE_FOLLY)
-  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils Geospatial $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 else()
-  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils Geospatial $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 endif()
 
 ##########
