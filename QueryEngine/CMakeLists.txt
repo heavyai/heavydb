@@ -364,7 +364,7 @@ add_custom_command(
   DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp GeoOpsRuntime.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp ${CMAKE_SOURCE_DIR}/Geospatial/Utm.h ${SHARED_SQL_TYPES_H_AND_DEPS}
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
   COMMAND ${llvm_clangpp_cmd}
-  ARGS -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm
+  ARGS -std=c++${CMAKE_CXX_STANDARD} ${RT_OPT_FLAGS} -c -emit-llvm
   ${CLANG_SDK_INC}
   ${CLANG_CRT_INC}
   ${MAPD_DEFINITIONS}
@@ -376,7 +376,7 @@ add_custom_command(
   DEPENDS GeosRuntime.cpp GeosRuntime.h ${CMAKE_SOURCE_DIR}/Geospatial/Compression.cpp ${SHARED_SQL_TYPES_H_AND_DEPS}
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
   COMMAND ${llvm_clangpp_cmd}
-  ARGS -DNO_BOOST -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm
+  ARGS -DNO_BOOST -std=c++${CMAKE_CXX_STANDARD} ${RT_OPT_FLAGS} -c -emit-llvm
   ${CLANG_SDK_INC}
   ${CLANG_CRT_INC}
   -I ${Boost_INCLUDE_DIR}
@@ -390,7 +390,7 @@ add_custom_command(
   DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsArray.hpp ExtensionFunctionsText.hpp ExtensionFunctionsTesting.hpp ExtensionFunctionsArrayTesting.hpp ExtensionFunctionsTextTesting.hpp
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw
   COMMAND ${llvm_clangpp_cmd}
-  ARGS -DNO_BOOST -std=c++17 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color -Wno-return-type-c-linkage
+  ARGS -DNO_BOOST -std=c++${CMAKE_CXX_STANDARD} -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color -Wno-return-type-c-linkage
   -I ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw)
 
 add_custom_command(
@@ -433,6 +433,7 @@ set(QUERY_ENGINE_LIBS
   Shared
   sqlite3
   ${Arrow_LIBRARIES}
+  DataMgr # Needed for ArenaAllocator and others.
 )
 
 list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})
@@ -462,7 +463,7 @@ add_custom_command(
   -fatbin
   -rdc=true
   ${CUDA_COMPILATION_ARCH}
-  -std=c++17
+  -std=c++${CMAKE_CXX_STANDARD}
   ${NVCC_BUILD_TYPE_ARGS}
   ${NVCC_THREADS}
   -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu
@@ -488,7 +489,7 @@ add_custom_command(
   --lib
   -rdc=true
   ${CUDA_COMPILATION_ARCH}
-  -std=c++17
+  -std=c++${CMAKE_CXX_STANDARD}
   ${NVCC_BUILD_TYPE_ARGS}
   ${NVCC_THREADS}
   -x cu
