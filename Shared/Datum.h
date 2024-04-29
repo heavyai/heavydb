@@ -82,6 +82,32 @@ union Datum {
 #endif
 };
 
+// Return value based on template type. Note bool returns bool instead of int8_t.
+template <typename T>
+T get_datum_value(Datum const d) {
+  if constexpr (std::is_same_v<bool, T>) {
+    return static_cast<bool>(d.boolval);
+  } else if constexpr (std::is_same_v<int8_t, T>) {
+    return d.tinyintval;
+  } else if constexpr (std::is_same_v<int16_t, T>) {
+    return d.smallintval;
+  } else if constexpr (std::is_same_v<int32_t, T>) {
+    return d.intval;
+  } else if constexpr (std::is_same_v<int64_t, T>) {
+    return d.bigintval;
+  } else if constexpr (std::is_same_v<float, T>) {
+    return d.floatval;
+  } else if constexpr (std::is_same_v<double, T>) {
+    return d.doubleval;
+  } else if constexpr (std::is_same_v<VarlenDatum*, T>) {
+    return d.arrayval;
+#ifndef __CUDACC__
+  } else if constexpr (std::is_same_v<std::string*, T>) {
+    return d.stringval;
+#endif
+  }
+}
+
 template <typename T>
 Datum make_datum(T val) {
   static_assert(std::is_same_v<T, bool> || std::is_same_v<T, int8_t> ||

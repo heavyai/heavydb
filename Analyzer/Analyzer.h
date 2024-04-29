@@ -339,10 +339,8 @@ class Constant : public Expr {
       type_info.set_notnull(true);
     }
   }
-  Constant(const SQLTypeInfo& ti,
-           bool n,
-           const std::list<std::shared_ptr<Analyzer::Expr>>& l)
-      : Expr(ti), is_null(n), constval(Datum{0}), value_list(l) {}
+  Constant(const SQLTypeInfo& ti, bool n, std::list<std::shared_ptr<Analyzer::Expr>> l)
+      : Expr(ti), is_null(n), constval(Datum{0}), value_list(std::move(l)) {}
   ~Constant() override;
   bool get_is_null() const { return is_null; }
   Datum get_constval() const { return constval; }
@@ -366,6 +364,9 @@ class Constant : public Expr {
   void do_cast(const SQLTypeInfo& new_type_info);
   void set_null_value();
 };
+
+/// Return true iff expr is an Analyzer::Constant and get_is_null() is true.
+bool is_null_constant(Analyzer::Expr const* expr);
 
 /*
  * @type UOper
@@ -3088,11 +3089,11 @@ class WindowFunction : public Expr {
 class ArrayExpr : public Expr {
  public:
   ArrayExpr(SQLTypeInfo const& array_ti,
-            ExpressionPtrVector const& array_exprs,
+            ExpressionPtrVector array_exprs,
             bool is_null = false,
             bool local_alloc = false)
       : Expr(array_ti)
-      , contained_expressions_(array_exprs)
+      , contained_expressions_(std::move(array_exprs))
       , local_alloc_(local_alloc)
       , is_null_(is_null) {}
 

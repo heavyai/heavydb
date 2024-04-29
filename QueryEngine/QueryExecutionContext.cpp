@@ -905,9 +905,9 @@ size_t QueryExecutionContext::copyCountDistinctBitmapLiteralsToDevice(
   return sizeof count_distinct_addrs;
 }
 
-// The count_distinct_addrs are considered "additional literals"
-// and are retrieved as negative offsets relative to the "literals" pointer
-// via GroupByAndAggregate::getAdditionalLiteral().
+// The AggModeLiterals and CountDistinctBitmapLiterals are considered
+// "additional literals" and are retrieved as negative offsets relative to the
+// "literals" pointer via GroupByAndAggregate::getAdditionalLiteral().
 int8_t* QueryExecutionContext::copyLiteralsToDevice(
     int8_t* device_ptr,
     std::vector<int8_t> const& literal_buff) const {
@@ -918,7 +918,7 @@ int8_t* QueryExecutionContext::copyLiteralsToDevice(
     gpu_allocator_->copyToDevice(device_ptr,
                                  literal_buff.data(),
                                  literal_buff.size(),
-                                 "Additional input literals");
+                                 "params[LITERALS] and additional input literals");
   }
   return device_ptr;
 }

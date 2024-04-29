@@ -1600,23 +1600,36 @@ class ArrayDotProductTest : public testing::TestWithParam<ArrayDotProductTuple> 
   static void SetUpTestSuite() {
     run_ddl_statement("DROP TABLE IF EXISTS dot_product_test;");
     run_ddl_statement(
-        "CREATE TABLE dot_product_test (id INTEGER, i8 TINYINT[3], i16 SMALLINT[3], i32 "
-        "INTEGER[3], i64 BIGINT[3], f32 FLOAT[3], f64 DOUBLE[3], d18 DECIMAL(18,9)[3]);");
+        "CREATE TABLE dot_product_test (id INTEGER, i8val TINYINT, i16val SMALLINT,"
+        " i32val INT, i64val BIGINT, f32val FLOAT, f64val DOUBLE, i8 TINYINT[3],"
+        " i16 SMALLINT[3], i32 INTEGER[3], i64 BIGINT[3], f32 FLOAT[3], f64 DOUBLE[3],"
+        " d18 DECIMAL(18,9)[3], i8null TINYINT[3], i16null SMALLINT[3],"
+        " i32null INTEGER[3], i64null BIGINT[3], f32null FLOAT[3], f64null DOUBLE[3],"
+        " d18null DECIMAL(18,9)[3]);");
     run_multiple_agg(
-        "INSERT INTO dot_product_test VALUES (0, {1, 2, 3}, {1, 2, 3}, {1, 2, 3},"
-        " {1, 2, 3}, {1., 2., 3.}, {1., 2., 3.}, {1., 2., 3.});",
+        "INSERT INTO dot_product_test VALUES (0, 8, 16, 32, 64, 32.0, 64.0, {1, 2, 3},"
+        " {1, 2, 3}, {1, 2, 3}, {1, 2, 3}, {1., 2., 3.}, {1., 2., 3.}, {1., 2., 3.},"
+        " NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
         ExecutorDeviceType::CPU);
     run_multiple_agg(
-        "INSERT INTO dot_product_test VALUES (1, {2, 3, 4}, {2, 3, 4}, {2, 3, 4},"
-        " {2, 3, 4}, {2., 3., 4.}, {2., 3., 4.}, {2., 3., 4.});",
+        "INSERT INTO dot_product_test VALUES (1, 8, 16, 32, 64, 32.0, 64.0, {1, 2, 3},"
+        " {1, 2, 3}, {1, 2, 3}, {1, 2, 3}, {1., 2., 3.}, {1., 2., 3.}, {1., 2., 3.},"
+        " NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
         ExecutorDeviceType::CPU);
     run_multiple_agg(
-        "INSERT INTO dot_product_test VALUES (2, {3, 4, 5}, {3, 4, 5}, {3, 4, 5},"
-        " {3, 4, 5}, {3., 4., 5.}, {3., 4., 5.}, {3., 4., 5.});",
+        "INSERT INTO dot_product_test VALUES (2, 8, 16, 32, 64, 32.0, 64.0, {1, 2, 3},"
+        " {1, 2, 3}, {1, 2, 3}, {1, 2, 3}, {1., 2., 3.}, {1., 2., 3.}, {1., 2., 3.},"
+        " NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
         ExecutorDeviceType::CPU);
     run_multiple_agg(
-        "INSERT INTO dot_product_test VALUES (3, {4, 5, 6}, {4, 5, 6}, {4, 5, 6},"
-        " {4, 5, 6}, {4., 5., 6.}, {4., 5., 6.}, {4., 5., 6.});",
+        "INSERT INTO dot_product_test VALUES (3, 8, 16, 32, 64, 32.0, 64.0, {1, 2, 3},"
+        " {1, 2, 3}, {1, 2, 3}, {1, 2, 3}, {1., 2., 3.}, {1., 2., 3.}, {1., 2., 3.},"
+        " NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+        ExecutorDeviceType::CPU);
+    run_multiple_agg(
+        "INSERT INTO dot_product_test VALUES (4, 8, 16, 32, 64, 32.0, 64.0, {1, 2, 3},"
+        " {1, 2, 3}, {1, 2, 3}, {1, 2, 3}, {1., 2., 3.}, {1., 2., 3.}, {1., 2., 3.},"
+        " NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
         ExecutorDeviceType::CPU);
   }
 
@@ -1709,6 +1722,7 @@ INSTANTIATE_TEST_SUITE_P(
                         ArrayDotProductParam{'i', 14, "i64", "{1,2,3}"},
                         ArrayDotProductParam{'d', 14, "f32", "{1,2,3}"},
                         ArrayDotProductParam{'d', 14, "f64", "{1,2,3}"},
+                        ArrayDotProductParam{'d', 74, "f64", "{1,i32val,3}"},
                         ArrayDotProductParam{'f', 14, "i8", "{1.0,2.0,3.0}"},
                         ArrayDotProductParam{'f', 14, "i16", "{1.0,2.0,3.0}"},
                         ArrayDotProductParam{'d', 14, "i32", "{1.0,2.0,3.0}"},
@@ -1726,7 +1740,13 @@ INSTANTIATE_TEST_SUITE_P(
                         ArrayDotProductParam{'i', {}, "i32", "{1,2}"},
                         ArrayDotProductParam{'i', {}, "i64", "{1,2,3,4}"},
                         ArrayDotProductParam{'d', {}, "f32", "{1,2}"},
-                        ArrayDotProductParam{'d', {}, "f64", "{1,2,3,4}"})),
+                        ArrayDotProductParam{'d', {}, "f64", "{1,2,3,4}"},
+                        ArrayDotProductParam{'i', {}, "i8null", "{1,2,3}"},
+                        ArrayDotProductParam{'i', {}, "i16null", "{1,2,3}"},
+                        ArrayDotProductParam{'i', {}, "i32null", "{1,2,3}"},
+                        ArrayDotProductParam{'i', {}, "i64null", "{1,2,3}"},
+                        ArrayDotProductParam{'f', {}, "f32null", "{1,2,3}"},
+                        ArrayDotProductParam{'d', {}, "f64null", "{1,2,3}"})),
     ArrayDotProductTest::printTestParams);
 
 class ArrayDotProductVarlenTest : public ArrayDotProductTest {
@@ -1735,9 +1755,10 @@ class ArrayDotProductVarlenTest : public ArrayDotProductTest {
     run_ddl_statement("DROP TABLE IF EXISTS dot_product_varlen_test;");
     run_ddl_statement(
         "CREATE TABLE dot_product_varlen_test (fixlen2 FLOAT[2], fixlen3 FLOAT[3],"
-        " varlen2 FLOAT[], varlen3 FLOAT[]);");
+        " varlen2 FLOAT[], varlen3 FLOAT[], varlennull FLOAT[]);");
     run_multiple_agg(
-        "INSERT INTO dot_product_varlen_test VALUES ({1,2}, {1,2,3}, {1,2}, {1,2,3});",
+        "INSERT INTO dot_product_varlen_test VALUES ({1,2}, {1,2,3}, {1,2}, {1,2,3}, "
+        "NULL);",
         ExecutorDeviceType::CPU);
   }
 
@@ -1820,7 +1841,10 @@ INSTANTIATE_TEST_SUITE_P(
                         ArrayDotProductParam{'f', {}, "varlen3", "fixlen2"},
                         ArrayDotProductParam{'f', 14, "varlen3", "fixlen3"},
                         ArrayDotProductParam{'f', {}, "varlen3", "varlen2"},
-                        ArrayDotProductParam{'f', 14, "varlen3", "varlen3"})),
+                        ArrayDotProductParam{'f', 14, "varlen3", "varlen3"},
+                        ArrayDotProductParam{'f', {}, "varlennull", "{1,2,3}"},
+                        ArrayDotProductParam{'f', {}, "varlennull", "varlen3"},
+                        ArrayDotProductParam{'f', {}, "varlennull", "varlennull"})),
     ArrayDotProductVarlenTest::printTestParams);
 
 // Use same dot_product_varlen_test table
@@ -1842,8 +1866,17 @@ INSTANTIATE_TEST_SUITE_P(
         testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
         testing::Values(ArrayDotProductParam{{}, {}, "1.0", "{1.0,2.0}"},
                         ArrayDotProductParam{{}, {}, "{1.0,2.0}", "1.0"},
+                        ArrayDotProductParam{{}, {}, "i8", "{1.0,i8val,3.0}"},
+                        ArrayDotProductParam{{}, {}, "i16", "{1.0,i16val,3.0}"},
+                        ArrayDotProductParam{{}, {}, "i32", "{1.0,i32val,3.0}"},
+                        ArrayDotProductParam{{}, {}, "i64", "{1.0,i64val,3.0}"},
+                        ArrayDotProductParam{{}, {}, "f32", "{1.0,f32val,3.0}"},
+                        ArrayDotProductParam{{}, {}, "f64", "{1.0,f64val,3.0}"},
                         ArrayDotProductParam{{}, {}, "1.0", "fixlen2"},
                         ArrayDotProductParam{{}, {}, "1.0", "varlen2"},
+                        ArrayDotProductParam{{}, {}, "{1,2,3}", "NULL"},
+                        ArrayDotProductParam{{}, {}, "fixlen2", "NULL"},
+                        ArrayDotProductParam{{}, {}, "varlen2", "NULL"},
                         ArrayDotProductParam{{}, {}, "fixlen2", "1.0"},
                         ArrayDotProductParam{{}, {}, "varlen2", "1.0"},
                         ArrayDotProductParam{{}, {}, "{{1,2},{1,2}}", "{1.0,2.0}"},
@@ -1851,7 +1884,8 @@ INSTANTIATE_TEST_SUITE_P(
                         ArrayDotProductParam{{}, {}, "{{1,2},{1,2}}", "fixlen2"},
                         ArrayDotProductParam{{}, {}, "{{1,2},{1,2}}", "varlen2"},
                         ArrayDotProductParam{{}, {}, "fixlen2", "{{1,2},{1,2}}"},
-                        ArrayDotProductParam{{}, {}, "varlen2", "{{1,2},{1,2}}"})),
+                        ArrayDotProductParam{{}, {}, "varlen2", "{{1,2},{1,2}}"},
+                        ArrayDotProductParam{{}, {}, "f32", "(SELECT {1.0,2.0,3.0})"})),
     ArrayDotProductExceptionsTest::printTestParams);
 
 int main(int argc, char** argv) {

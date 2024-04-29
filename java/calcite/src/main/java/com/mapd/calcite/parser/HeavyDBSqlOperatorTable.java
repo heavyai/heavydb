@@ -561,8 +561,10 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       RelDataType elem1_type = opBinding.getOperandType(0).getComponentType();
       RelDataType elem2_type = opBinding.getOperandType(1).getComponentType();
-      SqlTypeName ret_type =
-              lookupReturnType(elem1_type.getSqlTypeName(), elem2_type.getSqlTypeName());
+      SqlTypeName ret_type = elem1_type == null || elem2_type == null
+              ? SqlTypeName.NULL
+              : lookupReturnType(
+                      elem1_type.getSqlTypeName(), elem2_type.getSqlTypeName());
       // We always make the output nullable as that is how we handle
       // arrays with different lengths, which is not a valid dot product
       return typeFactory.createTypeWithNullability(

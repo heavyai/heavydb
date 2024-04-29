@@ -1099,8 +1099,11 @@ std::vector<int8_t> Executor::serializeLiterals(
   // Second pass: Copy literal values and variable length content into serialized vector.
   heavyai::serialize_literals::Serializer serializer{*this, memory_requirements};
   std::for_each(dev_literals.begin(), dev_literals.end(), std::ref(serializer));
+
   // Verify that the max offset equals the serialized buffer size.
   CHECK_EQ(serializer.getMaxOffset(), serializer.getSerializedVector().size());
+  VLOG(1) << "Serialized " << literals.size() << " literal(s) on device " << device_id
+          << " using " << serializer.getSerializedVector().size() << " bytes.";
 
   return std::move(serializer.getSerializedVector());
 }
