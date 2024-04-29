@@ -820,11 +820,11 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
 
 namespace {
 
-// Return dec * 10^-scale
+// Return dec / 10^scale
 template <typename T>
 T floatFromDecimal(int64_t const dec, unsigned const scale) {
   static_assert(std::is_floating_point_v<T>);
-  return static_cast<T>(dec) / shared::power10(scale);
+  return static_cast<T>(dec) / static_cast<T>(shared::power10(scale));
 }
 
 // Q: Why is there a maxRound() but no minRound()?
@@ -4664,6 +4664,9 @@ LevenshteinDistanceStringOper::normalize_operands(
 SQLTypes DotProductExpr::deriveReturnType(const SQLTypeInfo& arg1_ti,
                                           const SQLTypeInfo& arg2_ti) {
   using namespace heavyai::dot_product;  // see QueryEngine/DotProductReturnTypes.h
+  if (arg1_ti.get_type() == kNULLT || arg2_ti.get_type() == kNULLT) {
+    return kNULLT;
+  }
   auto itr1 = std::find(types.begin(), types.end(), arg1_ti.get_elem_type().get_type());
   size_t idx1 = std::distance(types.begin(), itr1);
   auto itr2 = std::find(types.begin(), types.end(), arg2_ti.get_elem_type().get_type());
@@ -4673,6 +4676,13 @@ SQLTypes DotProductExpr::deriveReturnType(const SQLTypeInfo& arg1_ti,
   }
   throw std::runtime_error("Unsupported DotProduct pair " + arg1_ti.toString() + " and " +
                            arg2_ti.toString());
+}
+
+bool is_null_constant(Analyzer::Expr const* expr) {
+  if (auto* constant = dynamic_cast<Analyzer::Constant const*>(expr)) {
+    return constant->get_is_null();
+  }
+  return false;
 }
 
 }  // namespace Analyzer
