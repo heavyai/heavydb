@@ -1430,6 +1430,23 @@ SQLTypes decimal_to_int_type(const SQLTypeInfo&);
 
 SQLTypes string_dict_to_int_type(const SQLTypeInfo&);
 
+template <typename T>
+SQLTypes cpp_type_to_sql_type() {
+  if constexpr (std::is_same_v<int8_t, T>) {
+    return kTINYINT;
+  } else if constexpr (std::is_same_v<int16_t, T>) {
+    return kSMALLINT;
+  } else if constexpr (std::is_same_v<int32_t, T>) {
+    return kINT;
+  } else if constexpr (std::is_same_v<int64_t, T>) {
+    return kBIGINT;
+  } else if constexpr (std::is_same_v<float, T>) {
+    return kFLOAT;
+  } else if constexpr (std::is_same_v<double, T>) {
+    return kDOUBLE;
+  }
+}
+
 #ifndef __CUDACC__
 #include <string_view>
 

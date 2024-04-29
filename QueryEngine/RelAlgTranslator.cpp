@@ -492,6 +492,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
   Datum d{0};
   bool is_null_const{false};
   auto scalar_tv = boost::get<ScalarTargetValue>(&first_row[0]);
+  if (!scalar_tv) {
+    throw std::runtime_error(
+        "Unsupported subquery result data type. Only scalar values are currently "
+        "supported.");
+  }
   std::tie(d, is_null_const) = datum_from_scalar_tv(scalar_tv, ti);
   if (ti.is_dict_encoded_string()) {
     // we already translate the string, so let's make its type as a string literal
@@ -1632,17 +1637,18 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateDotProduct(
     const RexFunctionOperator* rex_function) const {
   const auto arg1 = translateScalarRex(rex_function->getOperand(0));
   const auto arg2 = translateScalarRex(rex_function->getOperand(1));
-  const auto arg1_ti = arg1->get_type_info();
-  const auto arg2_ti = arg2->get_type_info();
-  if (!arg1_ti.is_array()) {
+  const auto& arg1_ti = arg1->get_type_info();
+  const auto& arg2_ti = arg2->get_type_info();
+  if (!is_null_constant(arg1.get()) && !arg1_ti.is_array()) {
     throw std::runtime_error(rex_function->getName() +
                              " expects an array expression for the first argument.");
   }
-  if (!arg2_ti.is_array()) {
+  if (!is_null_constant(arg2.get()) && !arg2_ti.is_array()) {
     throw std::runtime_error(rex_function->getName() +
                              " expects an array expression for the second argument.");
   }
-  if (arg1_ti.get_subtype() == kARRAY || arg2_ti.get_subtype() == kARRAY) {
+  if ((!is_null_constant(arg1.get()) && arg1_ti.get_subtype() == kARRAY) ||
+      (!is_null_constant(arg2.get()) && arg2_ti.get_subtype() == kARRAY)) {
     throw std::runtime_error(rex_function->getName() +
                              " expects one-dimension array expressions.");
   }
