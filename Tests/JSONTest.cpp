@@ -219,13 +219,9 @@ TEST(JSON, Comparisons) {
   EXPECT_FALSE(testString5 == testBoolean1);
 }
 
-TEST(JSON, IfStatements) {
+TEST(JSON, BracketsOperator) {
   JSON json("{\"enabled\":true,\"driver_type\":\"Vulkan\"}");
-  if (json["enabled"] != true) {
-    EXPECT_TRUE(false);
-  } else {
-    EXPECT_TRUE(true);
-  }
+  EXPECT_TRUE(json["enabled"]);
 }
 
 int main(int argc, char** argv) {

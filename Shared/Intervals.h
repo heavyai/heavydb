@@ -88,7 +88,7 @@ class Intervals {
  public:
   class Iterator {
     T begin_;
-    U const quot_;
+    U quot_;
     U rem_;
     U index{0};
 
@@ -100,13 +100,23 @@ class Intervals {
     using reference = value_type&;
 
     Iterator(T begin, U quot, U rem) : begin_(begin), quot_(quot), rem_(rem) {}
+
     Interval<T> operator*() const {
       return {begin_, T(begin_ + quot_ + bool(rem_)), index};
     }
-    void operator++() {
+
+    Iterator& operator++() {
       begin_ += quot_ + (rem_ && rem_--);
       ++index;
+      return *this;
     }
+
+    Iterator operator++(int) {
+      auto ret = *this;
+      ++(*this);
+      return ret;
+    }
+
     bool operator==(Iterator const& rhs) const { return begin_ == rhs.begin_; }
     bool operator!=(Iterator const& rhs) const { return begin_ != rhs.begin_; }
   };

@@ -164,7 +164,7 @@ std::vector<TargetValue> ResultSet::getRowAt(
                                                             agg_col_idx,
                                                             translate_strings,
                                                             decimal_to_double)
-                          : nullptr);
+                          : NullableString(nullptr));
       } else {
         row.push_back(getTargetValueFromBufferColwise(crt_col_ptr,
                                                       keys_ptr,
@@ -194,7 +194,7 @@ std::vector<TargetValue> ResultSet::getRowAt(
                                                             translate_strings,
                                                             decimal_to_double,
                                                             fixup_count_distinct_pointers)
-                          : nullptr);
+                          : NullableString(nullptr));
       } else {
         row.push_back(getTargetValueFromBufferRowwise(rowwise_target_ptr,
                                                       keys_ptr,
@@ -865,7 +865,7 @@ TargetValue build_array_target_value(
       CHECK(false);
   }
   CHECK(false);
-  return TargetValue(nullptr);
+  return NullableString(nullptr);
 }
 
 template <class Tuple, size_t... indices>
@@ -1066,7 +1066,7 @@ struct GeoTargetValueBuilder {
       }
       default: {
         UNREACHABLE();
-        return TargetValue(nullptr);
+        return NullableString(nullptr);
       }
     }
   }
@@ -1377,7 +1377,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
       if (target_info.sql_type.get_type() == kARRAY) {
         return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});
       }
-      return TargetValue(nullptr);
+      return NullableString(nullptr);
     }
     const auto storage_idx = getStorageIndex(entry_buff_idx);
     if (target_info.sql_type.is_string()) {
@@ -1419,7 +1419,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
           bool is_null{};
           auto status = m.getItem(varlen_ptr, fetched_str, is_null);
           if (is_null) {
-            return TargetValue(nullptr);
+            return NullableString(nullptr);
           }
           CHECK_EQ(status, FlatBufferManager::Status::Success);
           return fetched_str;
@@ -1429,7 +1429,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
             reinterpret_cast<ChunkIter*>(col_buf), varlen_ptr, false, &vd, &is_end);
         CHECK(!is_end);
         if (vd.is_null) {
-          return TargetValue(nullptr);
+          return NullableString(nullptr);
         }
         CHECK(vd.pointer);
         CHECK_GT(vd.length, 0u);
@@ -1463,7 +1463,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     if (target_info.sql_type.is_array()) {
       return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});
     }
-    return TargetValue(nullptr);
+    return NullableString(nullptr);
   }
   auto length = read_int_from_buff(ptr2, compact_sz2);
   if (target_info.sql_type.is_array()) {
@@ -1651,7 +1651,7 @@ TargetValue NestedArrayToGeoTargetValue(const int8_t* buf,
     default:
       UNREACHABLE();
   }
-  return TargetValue(nullptr);
+  return NullableString(nullptr);
 }
 
 // Reads a geo value from a series of ptrs to var len types
@@ -1743,7 +1743,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
 
   if (separate_varlen_storage_valid_ && getCoordsDataPtr(geo_target_ptr) < 0) {
     CHECK_EQ(-1, getCoordsDataPtr(geo_target_ptr));
-    return TargetValue(nullptr);
+    return NullableString(nullptr);
   }
 
   const ColumnLazyFetchInfo* col_lazy_fetch = nullptr;
@@ -2060,7 +2060,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
                                target_info.sql_type.get_type_name());
   }
   UNREACHABLE();
-  return TargetValue(nullptr);
+  return NullableString(nullptr);
 }
 
 std::string ResultSet::getString(SQLTypeInfo const& ti, int64_t const ival) const {

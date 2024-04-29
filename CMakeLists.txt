@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # Required for LLVM / JIT, alternative to setting CMP0065 to OLD
 set(CMAKE_ENABLE_EXPORTS True)
 
@@ -55,7 +59,7 @@ if(ENABLE_IWYU)
  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
    find_program(IWYU_EXE include-what-you-use)
    if(IWYU_EXE)
-     set(CMAKE_CXX_INCLUDE_WHAT_YOU_USE "${CMAKE_SOURCE_DIR}/scripts/do-iwyu;${IWYU_EXE};-Xiwyu --cxx17ns")
+     set(CMAKE_CXX_INCLUDE_WHAT_YOU_USE "${CMAKE_SOURCE_DIR}/scripts/do-iwyu;${IWYU_EXE};-Xiwyu --cxx{CMAKE_CXX_STANDARD}ns")
    else()
      message(FATAL_ERROR "ENABLE_IWYU failed to find the include-what-you-use binary")
    endif()
@@ -104,10 +108,6 @@ else()
   set(MAPD_BUILD_NUMBER "dev")
 endif()
 set(MAPD_VERSION "${MAPD_VERSION_RAW}-${MAPD_BUILD_NUMBER}")
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -257,7 +257,7 @@ if(ENABLE_CUDA)
     list(APPEND MAPD_CUDA_OPTIONS -O3)
   endif()
 
-  list(APPEND MAPD_CUDA_OPTIONS -Xcompiler -fPIC -D_FORCE_INLINES -std=c++17)
+  list(APPEND MAPD_CUDA_OPTIONS -Xcompiler -fPIC -D_FORCE_INLINES -std=c++${CMAKE_CXX_STANDARD})
 
   if(ENABLE_ONLY_ONE_ARCH)
     execute_process(
@@ -602,7 +602,7 @@ if(MSVC)
   else()
     add_compile_options(/W4 /permisive-)
   endif()
-  add_compile_options(/EHsc /std:c++17 /Qspectre)
+  add_compile_options(/EHsc /std:c++${CMAKE_CXX_STANDARD} /Qspectre)
 else()
   option(ENABLE_WARNINGS_AS_ERRORS "Enable treat warnings as errors" ON)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -Wvla -fdiagnostics-color=auto -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
