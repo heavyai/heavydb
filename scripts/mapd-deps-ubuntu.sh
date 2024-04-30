@@ -61,8 +61,8 @@ source $SCRIPTS_DIR/common-functions.sh
 source /etc/os-release
 if [ "$ID" == "ubuntu" ] ; then
   PACKAGER="apt -y"
-  if [ "$VERSION_ID" != "23.10" ] && [ "$VERSION_ID" != "22.04" ] && [ "$VERSION_ID" != "20.04" ]; then
-    echo "Ubuntu 23.10, 22.04, and 20.04 are the only debian-based releases supported by this script"
+  if [ "$VERSION_ID" != "24.04" ] && [ "$VERSION_ID" != "23.10" ] && [ "$VERSION_ID" != "22.04" ] && [ "$VERSION_ID" != "20.04" ]; then
+    echo "Ubuntu 24.04, 23.10, 22.04, and 20.04 are the only debian-based releases supported by this script"
     exit 1
   fi
 else
