@@ -1,0 +1,27 @@
+diff --git a/glslang/CMakeLists.txt b/glslang/CMakeLists.txt
+index 37eecaad..83e27418 100644
+--- a/glslang/CMakeLists.txt
++++ b/glslang/CMakeLists.txt
+@@ -261,6 +261,22 @@ if(PROJECT_IS_TOP_LEVEL)
+         Include/ResourceLimits.h
+         MachineIndependent/Versions.h)
+ 
++    list(APPEND PUBLIC_HEADERS
++        Include/InfoSink.h
++        Include/intermediate.h
++        Include/Common.h
++        Include/arrays.h
++        Include/BaseTypes.h
++        Include/Types.h
++        Include/PoolAlloc.h
++        Include/SpirvIntrinsics.h
++        Include/ConstantUnion.h
++        MachineIndependent/iomapper.h
++        MachineIndependent/gl_types.h
++        MachineIndependent/LiveTraverser.h
++        MachineIndependent/localintermediate.h
++        MachineIndependent/reflection.h)
++
+     foreach(file ${PUBLIC_HEADERS})
+         get_filename_component(dir ${file} DIRECTORY)
+         install(FILES ${file} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/glslang/${dir})
