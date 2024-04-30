@@ -8,8 +8,8 @@ PREFIX=/usr/local/mapd-deps
 source /etc/os-release
 if [ "$ID" == "ubuntu" ] ; then
   PACKAGER="apt -y"
-  if [ "$VERSION_ID" != "23.10" ] && [ "$VERSION_ID" != "22.04" ] && [ "$VERSION_ID" != "20.04" ]; then
-    echo "Ubuntu 23.10, 22.04, and 20.04 are the only debian-based releases supported by this script"
+  if [ "$VERSION_ID" != "24.04" ] && [ "$VERSION_ID" != "23.10" ] && [ "$VERSION_ID" != "22.04" ] && [ "$VERSION_ID" != "20.04" ]; then
+    echo "Ubuntu 24.04, 23.10, 22.04, and 20.04 are the only debian-based releases supported by this script"
     exit 1
   fi
 elif [ "$ID" == "centos" ] ; then
@@ -116,7 +116,7 @@ if [ "$ID" == "ubuntu" ] ; then
   pushd $PREFIX
 
   DOWNLOAD_ID=$VERSION_ID
-  if [ $VERSION_ID == "23.10" ]; then
+  if [ $VERSION_ID == "24.04" ] || [ $VERSION_ID == "23.10" ]; then
     DOWNLOAD_ID=22.04
   fi
   sudo wget --continue https://dependencies.mapd.com/mapd-deps/mapd-deps-ubuntu-${DOWNLOAD_ID}-$FLAG.tar.xz
