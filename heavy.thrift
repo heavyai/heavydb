@@ -254,6 +254,7 @@ struct TCopyParams {
   41: bool trim_spaces=true;
   42: bool geo_validate_geometry=false;
   43: bool raster_drop_if_all_null=false;
+  44: string bounding_box_clip;
 }
 
 struct TCreateParams {
