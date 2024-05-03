@@ -170,7 +170,6 @@ struct RelAlgExecutionUnit {
   const JoinQualsPerNestingLevel join_quals;
   const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   std::vector<Analyzer::Expr*> target_exprs;
-  std::unordered_map<size_t, SQLTypeInfo> target_exprs_original_type_infos;
   const std::shared_ptr<Analyzer::Estimator> estimator;
   const SortInfo sort_info;
   size_t scan_limit;

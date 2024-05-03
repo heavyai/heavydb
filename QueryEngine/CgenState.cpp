@@ -449,3 +449,9 @@ llvm::Value* CgenState::emitExternalCall(
   CHECK_EQ(result->getType(), ret_type);
   return result;
 }
+
+bool CgenState::isCountDistinctOnEncodedDate(const Analyzer::Expr* expr) const {
+    return std::any_of(count_distinct_on_encoded_date_arg_.begin(),
+                count_distinct_on_encoded_date_arg_.end(),
+                [&expr](auto const arg) { return expr == arg; });
+}

@@ -3665,6 +3665,23 @@ TEST_F(Select, CountDistinct) {
   }
 }
 
+TEST_F(Select, CountDistinctWithCaseExpressionOnEncodedDate) {
+  std::string create_ddl{
+      "CREATE TABLE date_cd_case_test(id INT, d DATE ENCODING DAYS(32));"};
+  std::string drop_ddl{"DROP TABLE IF EXISTS date_cd_case_test;"};
+  run_ddl_statement(drop_ddl);
+  ScopeGuard drop_table = [&drop_ddl]() { run_ddl_statement(drop_ddl); };
+  run_ddl_statement(create_ddl);
+  run_ddl_statement("INSERT INTO date_cd_case_test VALUES (0, '2024-04-30');");
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg("SELECT count(distinct case when id=0 then d "
+                                        "else null end) FROM date_cd_case_test;",
+                                        dt)));
+  }
+}
+
 TEST_F(Select, CountIf) {
   struct CountIfTestQuery {
     std::string query;

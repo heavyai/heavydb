@@ -251,6 +251,7 @@ struct CgenState {
   llvm::LLVMContext& getExecutorContext() const;
   void set_module_shallow_copy(const std::unique_ptr<llvm::Module>& module,
                                bool always_clone = false);
+  bool isCountDistinctOnEncodedDate(const Analyzer::Expr* expr) const;
 
   size_t executor_id_;
 
@@ -387,6 +388,7 @@ struct CgenState {
   llvm::Function* query_func_;
   llvm::IRBuilder<> query_func_entry_ir_builder_;
   std::unordered_map<int, std::vector<llvm::Value*>> query_func_literal_loads_;
+  std::unordered_set<const Analyzer::Expr*> count_distinct_on_encoded_date_arg_;
 
   struct HoistedLiteralLoadLocator {
     int offset_in_literal_buffer;

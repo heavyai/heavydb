@@ -707,6 +707,11 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
     } else if (constrained_not_null(arg_expr, ra_exe_unit.quals)) {
       target_info.skip_null_val = false;
     }
+    if (dynamic_cast<const Analyzer::ColumnVar*>(arg_expr) && target_info.is_distinct &&
+        target_info.agg_kind == kCOUNT && arg_expr->get_type_info().get_type() == kDATE &&
+        arg_expr->get_type_info().get_compression() == kENCODING_DATE_IN_DAYS) {
+      executor->cgen_state_->count_distinct_on_encoded_date_arg_.insert(arg_expr);
+    }
   }
 
   if (!(query_mem_desc.getQueryDescriptionType() ==

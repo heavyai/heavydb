@@ -125,7 +125,6 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
                                   {},
                                   {group_expr},
                                   {count_expr.get()},
-                                  {},
                                   nullptr,
                                   SortInfo(),
                                   0};
@@ -224,7 +223,6 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                   {},
                                   {group_expr},
                                   {count_expr.get()},
-                                  {},
                                   nullptr,
                                   SortInfo(),
                                   0};
@@ -304,7 +302,6 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
                                   {},
                                   {group_expr},
                                   {count_expr.get()},
-                                  {},
                                   nullptr,
                                   SortInfo(),
                                   0};
