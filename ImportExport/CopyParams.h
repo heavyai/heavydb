@@ -57,8 +57,6 @@ inline std::string to_string(const RasterPointTransform& pt) {
   return "";
 }
 
-RasterPointType create_raster_point_type(const std::string& str);
-
 struct CopyParams {
   char delimiter;
   std::string null_str;
@@ -120,6 +118,8 @@ struct CopyParams {
   // regex parameters
   std::string line_start_regex;
   std::string line_regex;
+  // geo/raster bounding box filter
+  std::string bounding_box_clip;
 
   CopyParams()
       : delimiter(',')
