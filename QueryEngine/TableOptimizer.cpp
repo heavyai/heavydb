@@ -101,7 +101,6 @@ RelAlgExecutionUnit build_ra_exe_unit(
                              {},
                              {},
                              target_exprs,
-                             {},
                              nullptr,
                              SortInfo(),
                              0};

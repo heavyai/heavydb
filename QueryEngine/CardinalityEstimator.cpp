@@ -99,7 +99,6 @@ RelAlgExecutionUnit RelAlgExecutionUnit::createNdvExecutionUnit(
           join_quals,
           {},
           {},
-          {},
           use_large_estimator ? makeExpr<Analyzer::LargeNDVEstimator>(groupby_exprs)
                               : makeExpr<Analyzer::NDVEstimator>(groupby_exprs),
           SortInfo(),
@@ -123,7 +122,6 @@ RelAlgExecutionUnit RelAlgExecutionUnit::createCountAllExecutionUnit(
           join_quals,
           {},
           {replacement_target},
-          {},
           nullptr,
           SortInfo(),
           0,
