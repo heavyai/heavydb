@@ -379,17 +379,26 @@ llvm::Value* CodeGenerator::codegenConstantWidthBucketExpr(
         "PARTITION_COUNT expression of width_bucket function should be in a valid "
         "range: 0 < PARTITION_COUNT <= 2147483647");
   }
-  double lower = expr->get_bound_val(lower_bound_expr);
-  double upper = expr->get_bound_val(upper_bound_expr);
-  if (lower == upper) {
-    throw std::runtime_error(
-        "LOWER_BOUND and UPPER_BOUND expressions of width_bucket function cannot have "
-        "the same constant value");
-  }
-  if (lower == NULL_DOUBLE || upper == NULL_DOUBLE) {
-    throw std::runtime_error(
-        "Both LOWER_BOUND and UPPER_BOUND of width_bucket function should be finite "
-        "numeric constants.");
+  double const lower = expr->get_bound_val(lower_bound_expr);
+  double const upper = expr->get_bound_val(upper_bound_expr);
+  auto const has_any_scalar_subquery_bound_expr =
+      expr->is_lower_bound_scalar_subquery() || expr->is_upper_bound_scalar_subquery();
+  // for validation query containing a scalar subquery as lower and/or upper exprs
+  // we do not need to check what's the actual value is since we fill an invalid scalar
+  // value as its result instead of actually execute the subquery
+  // we will check the datum's correctness at the actual query execution time
+  // because we will evaluate the scalar subquery
+  if (!co.just_validate || !has_any_scalar_subquery_bound_expr) {
+    if (lower == upper) {
+      throw std::runtime_error(
+          "LOWER_BOUND and UPPER_BOUND expressions of width_bucket function cannot have "
+          "the same constant value");
+    }
+    if (lower == NULL_DOUBLE || upper == NULL_DOUBLE) {
+      throw std::runtime_error(
+          "Both LOWER_BOUND and UPPER_BOUND of width_bucket function should be finite "
+          "numeric constants.");
+    }
   }
 
   bool const reversed = lower > upper;

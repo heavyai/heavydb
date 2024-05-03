@@ -815,6 +815,13 @@ add_test(UtilTest UtilTest ${TEST_ARGS})
 
 ##########
 
+add_executable(ValidationQueryTest ValidationQueryTest.cpp)
+target_link_libraries(ValidationQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(ValidationQueryTest ValidationQueryTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS ValidationQueryTest)
+
+##########
+
 ########## Build targets.
 
 ##########
