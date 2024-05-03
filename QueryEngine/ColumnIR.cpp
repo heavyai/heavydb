@@ -26,7 +26,8 @@ namespace {
 
 // Return the right decoder for a given column expression. Doesn't handle
 // variable length data. The decoder encapsulates the code generation logic.
-std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
+std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var,
+                                         CgenState* cgen_state) {
   const auto enc_type = col_var->get_compression();
   const auto& ti = col_var->get_type_info();
   switch (enc_type) {
@@ -71,9 +72,12 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
     }
     case kENCODING_DATE_IN_DAYS: {
       CHECK(ti.is_date_in_days());
-      return col_var->get_type_info().get_comp_param() == 16
-                 ? std::make_shared<FixedWidthSmallDate>(2)
-                 : std::make_shared<FixedWidthSmallDate>(4);
+      auto const col_var_size = col_var->get_type_info().get_comp_param() == 16 ? 2 : 4;
+      if (cgen_state->isCountDistinctOnEncodedDate(col_var)) {
+        return std::make_shared<FixedWidthInt>(col_var_size);
+      }
+      return col_var_size == 2 ? std::make_shared<FixedWidthSmallDate>(2)
+                               : std::make_shared<FixedWidthSmallDate>(4);
     }
     default:
       abort();
@@ -158,7 +162,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   if (grouped_col_lv) {
     return {grouped_col_lv};
   }
-  const auto col_var_hash = boost::hash_value(col_var->toString());
+  auto col_var_hash = boost::hash_value(col_var->toString());
+  if (cgen_state_->isCountDistinctOnEncodedDate(col_var)) {
+    boost::hash_combine(col_var_hash, "AVOID_DECODING");
+  }
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext(executor());
   // only generate the decoding code once; if a column has been previously
@@ -251,7 +258,7 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVar(
     llvm::Value* pos_arg,
     const WindowFunctionContext* window_function_context) {
   AUTOMATIC_IR_METADATA(cgen_state_);
-  const auto decoder = get_col_decoder(col_var);
+  const auto decoder = get_col_decoder(col_var, cgen_state_);
   auto dec_val = decoder->codegenDecode(col_byte_stream, pos_arg, cgen_state_->module_);
   cgen_state_->ir_builder_.Insert(dec_val);
   auto dec_type = dec_val->getType();
