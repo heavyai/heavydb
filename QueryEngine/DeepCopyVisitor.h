@@ -124,7 +124,9 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
         visit(width_bucket_expr->get_target_value()),
         visit(width_bucket_expr->get_lower_bound()),
         visit(width_bucket_expr->get_upper_bound()),
-        visit(width_bucket_expr->get_partition_count()));
+        visit(width_bucket_expr->get_partition_count()),
+        width_bucket_expr->is_lower_bound_scalar_subquery(),
+        width_bucket_expr->is_upper_bound_scalar_subquery());
   }
 
   RetType visitCaseExpr(const Analyzer::CaseExpr* case_expr) const override {
