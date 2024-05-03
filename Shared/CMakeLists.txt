@@ -16,7 +16,8 @@ set(shared_source_files
     JsonUtils.cpp
     DbObjectKeys.cpp
     QuotedIdentifierUtil.cpp
-    FullyQualifiedTableName.cpp)
+    FullyQualifiedTableName.cpp
+    LonLatBoundingBox.cpp)
 
 include_directories(${CMAKE_SOURCE_DIR})
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")

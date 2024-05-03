@@ -54,6 +54,7 @@
 #include "Archive/PosixFileArchive.h"
 #include "Archive/S3Archive.h"
 #include "ArrowImporter.h"
+#include "Shared/LonLatBoundingBox.h"
 #include "Catalog/os/UserMapping.h"
 #ifdef ENABLE_IMPORT_PARQUET
 #include "DataMgr/ForeignStorage/ParquetDataWrapper.h"
@@ -2429,7 +2430,8 @@ static ImportStatus import_thread_shapefile(
     const ColumnNameToSourceNameMapType& columnNameToSourceNameMap,
     const Catalog_Namespace::SessionInfo* session_info,
     Executor* executor,
-    const MetadataColumnInfos& metadata_column_infos) {
+    const MetadataColumnInfos& metadata_column_infos,
+    const std::optional<shared::LonLatBoundingBox>& bounding_box_clip) {
   ImportStatus thread_import_status;
   const CopyParams& copy_params = importer->get_copy_params();
   const std::list<const ColumnDescriptor*>& col_descs = importer->get_column_descs();
@@ -2469,6 +2471,20 @@ static ImportStatus import_thread_shapefile(
           thread_import_status.load_failed = true;
           thread_import_status.load_msg = "Table load was cancelled via Query Interrupt";
           throw QueryExecutionError(ErrorCode::INTERRUPTED);
+        }
+
+        // skip if outside import bounding box clip
+        // getEnvelope() just scans all points of the geo, which is not cheap
+        // but GDAL does not provide the bounding box in the general case
+        // we only suffer this expense when the option is enabled
+        if (bounding_box_clip.has_value()) {
+          OGREnvelope envelope;
+          import_geometry->getEnvelope(&envelope);
+          auto const& bb = *bounding_box_clip;
+          if (envelope.MaxX < bb.min_lon || envelope.MinX > bb.max_lon ||
+              envelope.MaxY < bb.min_lat || envelope.MinY > bb.max_lat) {
+            return;
+          }
         }
 
         uint32_t field_column_count{0u};
@@ -5403,6 +5419,10 @@ ImportStatus Importer::importGDALGeo(
       }
     }
 
+    // parse bounding box clip string
+    auto const bounding_box_clip =
+        shared::LonLatBoundingBox::parse(copy_params.bounding_box_clip);
+
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
     // call worker function directly
     auto ret_import_status =
@@ -5416,7 +5436,8 @@ ImportStatus Importer::importGDALGeo(
                                 columnNameToSourceNameMap,
                                 session_info,
                                 executor.get(),
-                                metadata_column_infos);
+                                metadata_column_infos,
+                                bounding_box_clip);
     import_status += ret_import_status;
     import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) *
                                    import_status.rows_completed;
@@ -5435,7 +5456,8 @@ ImportStatus Importer::importGDALGeo(
                                  columnNameToSourceNameMap,
                                  session_info,
                                  executor.get(),
-                                 metadata_column_infos));
+                                 metadata_column_infos,
+                                 bounding_box_clip));
 
     // let the threads run
     while (threads.size() > 0) {

@@ -3935,6 +3935,58 @@ TEST_F(ImportTestGDAL, GeoJSON_MultiPolygon_Import_Invalid_Enabled) {
   checkGeoNumRows("geom", 1);  // we expect it to reject the row with invalid geo
 }
 
+TEST_F(ImportTestGDAL, Bounding_Box_Clip1) {
+  const auto file_path = boost::filesystem::weakly_canonical(
+      "../../Tests/Import/datafiles/geospatial_mpoly/geospatial_mpoly.geojson");
+  sql("COPY geospatial FROM '" + file_path.string() +
+      "' WITH (source_type='geo_file', bounding_box_clip='5.0,0.0,10.0,10.0');");
+  checkGeoNumRows("geom", 6);  // we expect it to reject the rows outside the clip
+}
+
+TEST_F(ImportTestGDAL, Bounding_Box_Clip2) {
+  const auto file_path = boost::filesystem::weakly_canonical(
+      "../../Tests/Import/datafiles/geospatial_mpoly/geospatial_mpoly.geojson");
+  sql("COPY geospatial FROM '" + file_path.string() +
+      "' WITH (source_type='geo_file', bounding_box_clip='5.1,0.0,10.0,10.0');");
+  checkGeoNumRows("geom", 5);  // we expect it to reject the rows outside the clip
+}
+
+TEST_F(ImportTestGDAL, Bounding_Box_Invalid1) {
+  const auto file_path = boost::filesystem::weakly_canonical(
+      "../../Tests/Import/datafiles/geospatial_mpoly/geospatial_mpoly.geojson");
+  queryAndAssertPartialException(
+      "COPY geospatial FROM '" + file_path.string() +
+          "' WITH (source_type='geo_file', bounding_box_clip='1,2,3');",
+      "must be 4 comma-separated numeric values");
+}
+
+TEST_F(ImportTestGDAL, Bounding_Box_Invalid2) {
+  const auto file_path = boost::filesystem::weakly_canonical(
+      "../../Tests/Import/datafiles/geospatial_mpoly/geospatial_mpoly.geojson");
+  queryAndAssertPartialException(
+      "COPY geospatial FROM '" + file_path.string() +
+          "' WITH (source_type='geo_file', bounding_box_clip='foo,bar,42,3.1415');",
+      "is not numeric");
+}
+
+TEST_F(ImportTestGDAL, Bounding_Box_Invalid3) {
+  const auto file_path = boost::filesystem::weakly_canonical(
+      "../../Tests/Import/datafiles/geospatial_mpoly/geospatial_mpoly.geojson");
+  queryAndAssertPartialException(
+      "COPY geospatial FROM '" + file_path.string() +
+          "' WITH (source_type='geo_file', bounding_box_clip='-1000,-1000,1000,1000');",
+      "one or more values out of range");
+}
+
+TEST_F(ImportTestGDAL, Bounding_Box_Invalid4) {
+  const auto file_path = boost::filesystem::weakly_canonical(
+      "../../Tests/Import/datafiles/geospatial_mpoly/geospatial_mpoly.geojson");
+  queryAndAssertPartialException(
+      "COPY geospatial FROM '" + file_path.string() +
+          "' WITH (source_type='geo_file', bounding_box_clip='10,10,-10,-10');",
+      "one or more overlapping min/max values");
+}
+
 #ifdef HAVE_AWS_S3
 // s3 compressed (non-parquet) test cases
 TEST_F(ImportTest, S3_One_csv_file) {
