@@ -1244,18 +1244,24 @@ class WidthBucketExpr : public Expr {
   WidthBucketExpr(const std::shared_ptr<Analyzer::Expr> target_value,
                   const std::shared_ptr<Analyzer::Expr> lower_bound,
                   const std::shared_ptr<Analyzer::Expr> upper_bound,
-                  const std::shared_ptr<Analyzer::Expr> partition_count)
+                  const std::shared_ptr<Analyzer::Expr> partition_count,
+                  const bool is_lower_bound_scalar_subquery,
+                  const bool is_upper_bound_scalar_subquery)
       : Expr(kINT, target_value->get_type_info().get_notnull())
       , target_value_(target_value)
       , lower_bound_(lower_bound)
       , upper_bound_(upper_bound)
       , partition_count_(partition_count)
+      , is_lower_bound_scalar_subquery_(is_lower_bound_scalar_subquery)
+      , is_upper_bound_scalar_subquery_(is_upper_bound_scalar_subquery)
       , constant_expr_(false)
       , skip_out_of_bound_check_(false) {}
   const Expr* get_target_value() const { return target_value_.get(); }
   const Expr* get_lower_bound() const { return lower_bound_.get(); }
   const Expr* get_upper_bound() const { return upper_bound_.get(); }
   const Expr* get_partition_count() const { return partition_count_.get(); }
+  bool is_lower_bound_scalar_subquery() const { return is_lower_bound_scalar_subquery_; }
+  bool is_upper_bound_scalar_subquery() const { return is_upper_bound_scalar_subquery_; }
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
   void group_predicates(std::list<const Expr*>& scan_predicates,
                         std::list<const Expr*>& join_predicates,
@@ -1274,21 +1280,27 @@ class WidthBucketExpr : public Expr {
     return makeExpr<WidthBucketExpr>(target_value_->rewrite_with_targetlist(tlist),
                                      lower_bound_,
                                      upper_bound_,
-                                     partition_count_);
+                                     partition_count_,
+                                     is_lower_bound_scalar_subquery_,
+                                     is_upper_bound_scalar_subquery_);
   }
   std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
     return makeExpr<WidthBucketExpr>(target_value_->rewrite_with_child_targetlist(tlist),
                                      lower_bound_,
                                      upper_bound_,
-                                     partition_count_);
+                                     partition_count_,
+                                     is_lower_bound_scalar_subquery_,
+                                     is_upper_bound_scalar_subquery_);
   }
   std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
     return makeExpr<WidthBucketExpr>(target_value_->rewrite_agg_to_var(tlist),
                                      lower_bound_,
                                      upper_bound_,
-                                     partition_count_);
+                                     partition_count_,
+                                     is_lower_bound_scalar_subquery_,
+                                     is_upper_bound_scalar_subquery_);
   }
   double get_bound_val(const Analyzer::Expr* bound_expr) const;
   int32_t get_partition_count_val() const;
@@ -1307,6 +1319,8 @@ class WidthBucketExpr : public Expr {
   std::shared_ptr<Analyzer::Expr> lower_bound_;      // lower_bound
   std::shared_ptr<Analyzer::Expr> upper_bound_;      // upper_bound
   std::shared_ptr<Analyzer::Expr> partition_count_;  // partition_count
+  bool const is_lower_bound_scalar_subquery_;
+  bool const is_upper_bound_scalar_subquery_;
   // true if lower, upper and partition count exprs are constant
   mutable bool constant_expr_;
   // true if we can skip oob check and is determined within compile time
