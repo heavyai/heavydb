@@ -4883,7 +4883,6 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsRaster(
       copy_params.raster_import_dimensions,
       convert_raster_point_type(copy_params.raster_point_type),
       convert_raster_point_transform(copy_params.raster_point_transform),
-      copy_params.raster_point_compute_angle,
       false,
       metadata_column_infos);
 
@@ -5558,7 +5557,6 @@ ImportStatus Importer::importGDALRaster(
       copy_params.raster_import_dimensions,
       convert_raster_point_type(copy_params.raster_point_type),
       convert_raster_point_transform(copy_params.raster_point_transform),
-      copy_params.raster_point_compute_angle,
       true,
       metadata_column_infos);
 
@@ -5592,7 +5590,6 @@ ImportStatus Importer::importGDALRaster(
   // if we're importing the coords as a POINT, then the first column
   // must be a POINT (two physical columns, POINT and TINYINT[])
   // if we're not, the first two columns must be the matching type
-  // optionally followed by an angle column
   auto cd_itr = column_descs.begin();
   for (auto const& [col_name, sql_type] : point_names_and_sql_types) {
     if (sql_type == kPOINT) {
@@ -5780,8 +5777,6 @@ ImportStatus Importer::importGDALRaster(
       // the first two columns (either lon/lat or POINT/coords)
       auto const* cd_col0 = *col_itr++;
       auto const* cd_col1 = *col_itr++;
-      auto const* cd_angle =
-          copy_params.raster_point_compute_angle ? *col_itr++ : nullptr;
 
       // compute and add x and y
       auto proj_timer = timer_start();
@@ -5791,8 +5786,8 @@ ImportStatus Importer::importGDALRaster(
 
         // add to buffers
         for (int x = 0; x < band_size_x; x++) {
-          // this point and angle
-          auto const& [dx, dy, angle] = coords[x];
+          // this point
+          auto const& [dx, dy] = coords[x];
 
           // store the point
           switch (point_sql_type) {
@@ -5837,19 +5832,10 @@ ImportStatus Importer::importGDALRaster(
             default:
               CHECK(false);
           }
-
-          // angle?
-          if (copy_params.raster_point_compute_angle) {
-            CHECK(cd_angle);
-            TDatum td;
-            td.is_null = false;
-            td.val.real_val = static_cast<double>(angle);
-            import_buffers[2]->add_value(cd_angle, td, false);
-          }
         }
       }
       proj_s = TIMER_STOP(proj_timer);
-      col_idx += (copy_params.raster_point_compute_angle ? 3 : 2);
+      col_idx += 2;
     }
 
     // prepare to accumulate read and conv times

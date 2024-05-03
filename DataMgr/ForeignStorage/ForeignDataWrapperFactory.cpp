@@ -251,7 +251,6 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
   CHECK(server);
   foreign_table->foreign_server = server;
 
-
   // enable geo validation in most/all source types
   if (copy_params.source_type == import_export::SourceType::kRegexParsedFile ||
       copy_params.source_type == import_export::SourceType::kDelimitedFile ||

@@ -5652,8 +5652,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
                 const std::string& import_bands,
                 const std::string& import_dimensions,
                 const import_export::RasterImporter::PointType point_type,
-                const import_export::RasterImporter::PointTransform point_transform,
-                const bool point_compute_angle) {
+                const import_export::RasterImporter::PointTransform point_transform) {
     // init GDAL
     Geospatial::GDAL::init();
 
@@ -5673,7 +5672,6 @@ class RasterImporterTest : public DBHandlerTestFixture {
                              import_dimensions,
                              point_type,
                              point_transform,
-                             point_compute_angle,
                              true,
                              {});
 
@@ -5707,8 +5705,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
              import_bands,
              import_dimensions,
              import_export::RasterImporter::PointType::kNone,
-             import_export::RasterImporter::PointTransform::kNone,
-             false);
+             import_export::RasterImporter::PointTransform::kNone);
 
     // check band names?
     if (expected_band_names_and_sql_types.size()) {
@@ -5732,7 +5729,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
       const double expected_proj_x,
       const double expected_proj_y) {
     // detect phase
-    doDetect(file_name, "", "", point_type, point_transform, false);
+    doDetect(file_name, "", "", point_type, point_transform);
 
     // import phase
     static constexpr int max_threads{1};
@@ -5742,7 +5739,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
     auto const coords = raster_importer_->getProjectedPixelCoords(0u, pixel_y);
 
     // get for this pixel
-    auto const [x, y, angle] = coords[pixel_x];
+    auto const [x, y] = coords[pixel_x];
 
 #if DEBUG_RASTER_TESTS
     std::cout << "Pixel (" << pixel_x << ", " << pixel_y << ") projects to (" << x << ", "
@@ -5765,8 +5762,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
              single_band_name,
              "",
              import_export::RasterImporter::PointType::kNone,
-             import_export::RasterImporter::PointTransform::kNone,
-             false);
+             import_export::RasterImporter::PointTransform::kNone);
 
     // validate band name and type
     auto const band_names_and_sql_types = raster_importer_->getBandNamesAndSQLTypes();
@@ -5826,7 +5822,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
   void runEnumsTest(const std::string& file_name,
                     const import_export::RasterImporter::PointType point_type,
                     const import_export::RasterImporter::PointTransform point_transform) {
-    doDetect(file_name, "", "", point_type, point_transform, false);
+    doDetect(file_name, "", "", point_type, point_transform);
   }
 
   using TY = import_export::RasterImporter::PointType;
@@ -6141,26 +6137,6 @@ TEST_P(RasterImportTest, ImportGRIBTest) {
                                    "",
                                    "SELECT max(raster_lon), max(raster_lat) FROM raster;",
                                    {{-110.58529479972468, 38.556625347271748}}));
-}
-
-TEST_P(RasterImportTest, ImportComputeAngleFailTest) {
-  EXPECT_THROW(
-      importTestCommon(
-          kPNG,
-          "raster_x double, raster_y double, compute_angle float, band_1_1 integer",
-          ", raster_point_compute_angle='true'",
-          "SELECT raster_x, raster_y FROM raster;",
-          {}),
-      TDBException);
-}
-
-TEST_P(RasterImportTest, ImportComputeAngleTest) {
-  ASSERT_NO_THROW(importTestCommon(
-      kGeoTIFF,
-      "raster_lon double, raster_lat double, raster_angle float, band_1_1 float",
-      ", raster_point_compute_angle='true'",
-      "SELECT max(raster_lon), max(raster_lat), max(raster_angle) FROM raster;",
-      {{-83.222766892364277, 39.818764365787992, -1.4294090270996094}}));
 }
 
 TEST_P(RasterImportTest, ImportSpecifiedBandsTest) {

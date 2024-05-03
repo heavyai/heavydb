@@ -256,14 +256,6 @@ SQLTypes point_type_to_sql_type(const RasterImporter::PointType point_type) {
   return kNULLT;
 }
 
-double conv_4326_900913_x(const double x) {
-  return x * 111319.490778;
-}
-
-double conv_4326_900913_y(const double y) {
-  return 6378136.99911 * log(tan(.00872664626 * y + .785398163397));
-}
-
 std::string get_datasource_driver_name(OGRDataSource* source) {
   CHECK(source);
   auto driver = source->GetDriver();
@@ -279,92 +271,10 @@ bool datasource_requires_libhdf(OGRDataSource* source) {
 
 RasterImporter::CoordBuffers create_coord_buffers(size_t num_elems) {
   RasterImporter::CoordBuffers coord_buffers;
-  auto& [lons, lats, angles] = coord_buffers;
+  auto& [lons, lats] = coord_buffers;
   lons = std::unique_ptr<double[]>(new double[num_elems]);
   lats = std::unique_ptr<double[]>(new double[num_elems]);
-  angles = std::unique_ptr<float[]>(new float[num_elems]);
   return coord_buffers;
-}
-
-// A specialized function for when we are starting at the beginning of a band.
-void point_compute_angle_from_zero(float* angles,
-                                   const double* lons,
-                                   const double* lats,
-                                   const RasterImporter::ChunkBoundingBox& chunk_size) {
-  const auto [x_start, y_start, width, height, num_pixels] = chunk_size;
-  CHECK_EQ(x_start, 0);
-  int32_t i = 0;
-  for (auto y = 0; y < height; y++) {
-    double prev_mx = conv_4326_900913_x(lons[y * width]);
-    double prev_my = conv_4326_900913_y(lats[y * width]);
-    i++;  // Skip for (x == 0) because it will be assigned later.
-    for (auto x = 1; x < width; x++) {
-      // Compute angle between this pixel's Mercator coords and the previous
-      // expressed as clockwise degrees for symbol rotation
-      auto const mx = conv_4326_900913_x(lons[(y * width) + x]);
-      auto const my = conv_4326_900913_y(lats[(y * width) + x]);
-      auto const angle = atan2f(my - prev_my, mx - prev_mx) * (-180.0f / M_PI);
-      prev_mx = mx;
-      prev_my = my;
-      angles[i] = angle;
-      i++;
-    }
-    // Reset the base case (x == 0) to the same as the second.
-    angles[(y * width)] = angles[(y * width) + 1];
-  }
-}
-
-void point_compute_angle_non_zero(float* angles,
-                                  const double* lons,
-                                  const double* lats,
-                                  const RasterImporter::ChunkBoundingBox& chunk_size,
-                                  const double* prev_lons,
-                                  const double* prev_lats,
-                                  const RasterImporter::ChunkBoundingBox& prev_chunk) {
-  const auto [x_start, y_start, width, height, num_pixels] = chunk_size;
-  CHECK_NE(x_start, 0);  // x == 0 is a special case so we have a separate function.
-  // The previous chunk is the chunk that comes immediately before this horizontally so
-  // they can have different widths, but not heights.
-  CHECK_EQ(height, prev_chunk.height);
-  CHECK_EQ(prev_chunk.x_offset + prev_chunk.width, x_start);  // Check for contiguity
-  int32_t i = 0;
-  for (auto y = 0; y < height; y++) {
-    // Peeled first iteration (x == x_start) because the prev values need to be set based
-    // on the previous values with the same y coordinate as represented in the previous
-    // arrays.
-    double prev_mx = conv_4326_900913_x(prev_lons[(y + 1) * prev_chunk.width - 1]);
-    double prev_my = conv_4326_900913_y(prev_lats[(y + 1) * prev_chunk.width - 1]);
-    for (auto x = 0; x < width; x++) {
-      // compute angle between this pixel's Mercator coords and the previous
-      // expressed as clockwise degrees for symbol rotation
-      auto const mx = conv_4326_900913_x(lons[(y * width) + x]);
-      auto const my = conv_4326_900913_y(lats[(y * width) + x]);
-      auto const angle = atan2f(my - prev_my, mx - prev_mx) * (-180.0f / M_PI);
-      prev_mx = mx;
-      prev_my = my;
-      angles[i] = angle;
-      i++;
-    }
-  }
-}
-
-void point_compute_angle(float* angles,
-                         const double* lons,
-                         const double* lats,
-                         const RasterImporter::ChunkBoundingBox& chunk_size,
-                         const double* const prev_lons,
-                         const double* const prev_lats,
-                         const RasterImporter::ChunkBoundingBox* const prev_chunk_size) {
-  if (chunk_size.x_offset == 0) {
-    // Zero is a special case because there is no previous value to iterate on.
-    point_compute_angle_from_zero(angles, lons, lats, chunk_size);
-  } else {
-    CHECK(prev_lons);
-    CHECK(prev_lats);
-    CHECK(prev_chunk_size);
-    point_compute_angle_non_zero(
-        angles, lons, lats, chunk_size, prev_lons, prev_lats, *prev_chunk_size);
-  }
 }
 
 void coordinate_transform(
@@ -496,7 +406,6 @@ void RasterImporter::detect(const std::string& file_name,
                             const std::string& specified_band_dimensions,
                             const PointType point_type,
                             const PointTransform point_transform,
-                            const bool point_compute_angle,
                             const bool throw_on_error,
                             const MetadataColumnInfos& metadata_column_infos) {
   // open base file to check for subdatasources
@@ -730,9 +639,6 @@ void RasterImporter::detect(const std::string& file_name,
     point_type_ = PointType::kSmallInt;
   }
 
-  // capture this
-  point_compute_angle_ = point_compute_angle;
-
   // validate final point type/transform
   if (!has_spatial_reference && point_transform_ == PointTransform::kWorld) {
     throw std::runtime_error(
@@ -758,10 +664,6 @@ void RasterImporter::detect(const std::string& file_name,
         "Raster Importer: Raster file '" + file_name +
         "' has band dimensions too large for 'SMALLINT' raster_point_type (" +
         std::to_string(bands_width_) + "x" + std::to_string(bands_height_) + ")");
-  }
-  if (point_compute_angle_ && point_transform_ != PointTransform::kWorld) {
-    throw std::runtime_error(
-        "Raster Importer: Must do World Transform with raster_point_compute_angle");
   }
 }
 
@@ -899,9 +801,6 @@ const RasterImporter::NamesAndSQLTypes RasterImporter::getPointNamesAndSQLTypes(
         names_and_sql_types.emplace_back("raster_lon", sql_type);
         names_and_sql_types.emplace_back("raster_lat", sql_type);
       }
-      if (point_compute_angle_) {
-        names_and_sql_types.emplace_back("raster_angle", kFLOAT);
-      }
     } else {
       names_and_sql_types.emplace_back("raster_x", sql_type);
       names_and_sql_types.emplace_back("raster_y", sql_type);
@@ -932,14 +831,13 @@ const RasterImporter::NullValue RasterImporter::getBandNullValue(
 
 RasterImporter::CoordBuffers RasterImporter::getProjectedPixelCoordChunks(
     const ChunkBoundingBox& chunk_size,
-    const bool do_point_compute,
     const double* const prev_lons,
     const double* const prev_lats,
     const ChunkBoundingBox* const prev_chunk_size) const {
   // TODO(Misiu):  If we can get rid of the cache then maybe we can have this write
   // directly to the AbstractBuffers.  Currently the caching is too valuable.
   auto coord_buffers = create_coord_buffers(chunk_size.num_pixels);
-  auto& [lons, lats, angles] = coord_buffers;
+  auto& [lons, lats] = coord_buffers;
 
   if (point_transform_ == PointTransform::kNone) {
     populate_default_coordinates(lons.get(), lats.get(), chunk_size);
@@ -953,24 +851,12 @@ RasterImporter::CoordBuffers RasterImporter::getProjectedPixelCoordChunks(
                     chunk_size);
   }
 
-  if (do_point_compute) {
-    CHECK(point_compute_angle_)
-        << "Point compute requested but undetected in raster file";
-    point_compute_angle(angles.get(),
-                        lons.get(),
-                        lats.get(),
-                        chunk_size,
-                        prev_lons,
-                        prev_lats,
-                        prev_chunk_size);
-  }
-
   return coord_buffers;
 }
 
 // A specialized function for when we are only looking for lon/lat values for individual
 // points.
-const std::tuple<double, double> RasterImporter::getProjectedPixelCoord(
+const std::pair<double, double> RasterImporter::getProjectedPixelCoord(
     const uint32_t thread_idx,
     const int x,
     const int y) const {
@@ -1012,7 +898,6 @@ const RasterImporter::Coords RasterImporter::getProjectedPixelCoords(
     const uint32_t thread_idx,
     const int y) const {
   Coords coords(bands_width_);
-  double prev_mx{0.0}, prev_my{0.0};
 
   for (int x = 0; x < bands_width_; x++) {
     // start with the pixel coord
@@ -1048,30 +933,7 @@ const RasterImporter::Coords RasterImporter::getProjectedPixelCoords(
     }
 
     // store
-    coords[x] = {dx, dy, 0.0f};
-
-    // compute and overwrite angle?
-    if (point_compute_angle_) {
-      if (x == 0) {
-        // capture first pixel's Mercator coords
-        prev_mx = conv_4326_900913_x(dx);
-        prev_my = conv_4326_900913_y(dy);
-      } else {
-        // compute angle between this pixel's Mercator coords and the previous
-        // expressed as clockwise degrees for symbol rotation
-        auto const mx = conv_4326_900913_x(dx);
-        auto const my = conv_4326_900913_y(dy);
-        auto const angle = atan2f(my - prev_my, mx - prev_mx) * (-180.0f / M_PI);
-        prev_mx = mx;
-        prev_my = my;
-
-        // overwrite this angle (and that of the first pixel, if this is the second)
-        std::get<2>(coords[x]) = angle;
-        if (x == 1) {
-          std::get<2>(coords[0]) = angle;
-        }
-      }
-    }
+    coords[x] = {dx, dy};
   }
 
   return coords;
