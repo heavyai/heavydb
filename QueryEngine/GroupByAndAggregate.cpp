@@ -704,36 +704,31 @@ CountDistinctDescriptors init_count_distinct_descriptors(
           arg_ti.is_fp() ? no_range_info
                          : get_expr_range_info(
                                ra_exe_unit, query_infos, agg_expr->get_arg(), executor);
-      const auto it = ra_exe_unit.target_exprs_original_type_infos.find(i);
-      if (it != ra_exe_unit.target_exprs_original_type_infos.end()) {
-        const auto& original_target_expr_ti = it->second;
-        if (arg_ti.is_integer() && original_target_expr_ti.get_type() == kDATE &&
-            original_target_expr_ti.get_compression() == kENCODING_DATE_IN_DAYS) {
-          // manually encode the col range of date col if necessary
-          // (see conditionally_change_arg_to_int_type function in RelAlgExecutor.cpp)
-          auto is_date_value_not_encoded = [&original_target_expr_ti](int64_t date_val) {
-            if (original_target_expr_ti.get_comp_param() == 16) {
-              return date_val < INT16_MIN || date_val > INT16_MAX;
-            } else {
-              return date_val < INT32_MIN || date_val > INT32_MIN;
-            }
-          };
-          if (is_date_value_not_encoded(arg_range_info.min)) {
-            // chunk metadata of the date column contains decoded value
-            // so we manually encode it again here to represent its column range correctly
-            arg_range_info.min =
-                DateConverters::get_epoch_days_from_seconds(arg_range_info.min);
+      if (arg_ti.get_type() == kDATE &&
+          arg_ti.get_compression() == kENCODING_DATE_IN_DAYS &&
+          dynamic_cast<const Analyzer::ColumnVar*>(agg_expr->get_arg())) {
+        auto is_date_value_not_encoded = [comp_param =
+                                              arg_ti.get_comp_param()](int64_t date_val) {
+          if (comp_param == 16) {
+            return date_val < INT16_MIN || date_val > INT16_MAX;
+          } else {
+            return date_val < INT32_MIN || date_val > INT32_MIN;
           }
-          if (is_date_value_not_encoded(arg_range_info.max)) {
-            arg_range_info.max =
-                DateConverters::get_epoch_days_from_seconds(arg_range_info.max);
-          }
-          // now we manually encode the value, so we need to invalidate bucket value
-          // i.e., 86000 -> 0, to correctly calculate the size of bitmap
-          arg_range_info.bucket = 0;
+        };
+        if (is_date_value_not_encoded(arg_range_info.min)) {
+          // chunk metadata of the date column contains decoded value
+          // so we manually encode it again here to represent its column range correctly
+          arg_range_info.min =
+              DateConverters::get_epoch_days_from_seconds(arg_range_info.min);
         }
+        if (is_date_value_not_encoded(arg_range_info.max)) {
+          arg_range_info.max =
+              DateConverters::get_epoch_days_from_seconds(arg_range_info.max);
+        }
+        // now we manually encode the value, so we need to invalidate bucket value
+        // i.e., 86000 -> 0, to correctly calculate the size of bitmap
+        arg_range_info.bucket = 0;
       }
-
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::UnorderedSet};
       int64_t bitmap_sz_bits{0};
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
@@ -1950,6 +1945,16 @@ void GroupByAndAggregate::codegenCountDistinct(
              ? static_cast<llvm::Value*>(executor_->cgen_state_->inlineFpNull(arg_ti))
              : static_cast<llvm::Value*>(executor_->cgen_state_->inlineIntNull(arg_ti))),
         64);
+    if (auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
+      auto agg_arg_expr = agg_expr->get_arg();
+      if (agg_expr->get_is_distinct() && agg_expr->get_aggtype() == SQLAgg::kCOUNT &&
+          dynamic_cast<const Analyzer::ColumnVar*>(agg_arg_expr) &&
+          executor_->cgen_state_->isCountDistinctOnEncodedDate(agg_arg_expr)) {
+        SQLTypeInfo encoded_arg_ti(arg_ti.get_comp_param() == 16 ? kSMALLINT : kINT);
+        null_lv = executor_->cgen_state_->castToTypeIn(
+            executor_->cgen_state_->inlineIntNull(encoded_arg_ti), 64);
+      }
+    }
     null_lv = executor_->cgen_state_->ir_builder_.CreateBitCast(
         null_lv, get_int_type(64, executor_->cgen_state_->context_));
     agg_fname += "_skip_val";
