@@ -1867,7 +1867,6 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
           ra_exe_unit_in.join_quals,
           ra_exe_unit_in.groupby_exprs,
           ra_exe_unit_in.target_exprs,
-          ra_exe_unit_in.target_exprs_original_type_infos,
           ra_exe_unit_in.estimator,
           ra_exe_unit_in.sort_info,
           new_scan_limit,
