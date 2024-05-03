@@ -34,6 +34,7 @@ struct CompilationOptions {
   ExecutorOptLevel opt_level;
   bool with_dynamic_watchdog;
   bool allow_lazy_fetch;
+  bool just_validate;
   bool filter_on_deleted_column{true};  // if false, ignore the delete column during table
                                         // scans. Primarily disabled for delete queries.
   ExecutorExplainType explain_type{ExecutorExplainType::Default};
@@ -45,6 +46,7 @@ struct CompilationOptions {
                               in.opt_level,
                               in.with_dynamic_watchdog,
                               in.allow_lazy_fetch,
+                              in.just_validate,
                               in.filter_on_deleted_column,
                               in.explain_type,
                               in.register_intel_jit_listener};
@@ -57,6 +59,7 @@ struct CompilationOptions {
                               /*opt_level=*/ExecutorOptLevel::Default,
                               /*with_dynamic_watchdog=*/false,
                               /*allow_lazy_fetch=*/true,
+                              /*just_validate=*/false,
                               /*filter_on_delted_column=*/true,
                               /*explain_type=*/ExecutorExplainType::Default,
                               /*register_intel_jit_listener=*/false};

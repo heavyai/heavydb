@@ -1189,6 +1189,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(
   auto lower_bound = translateScalarRex(rex_function->getOperand(1));
   auto upper_bound = translateScalarRex(rex_function->getOperand(2));
   auto partition_count = translateScalarRex(rex_function->getOperand(3));
+  auto const is_lower_bound_scalar_subquery =
+      dynamic_cast<const RexSubQuery*>(rex_function->getOperand(1)) != nullptr;
+  auto const is_upper_bound_scalar_subquery =
+      dynamic_cast<const RexSubQuery*>(rex_function->getOperand(2)) != nullptr;
   if (!partition_count->get_type_info().is_integer()) {
     throw std::runtime_error(
         "PARTITION_COUNT expression of width_bucket function expects an integer type.");
@@ -1223,8 +1227,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(
   target_value = cast_to_double_if_necessary(target_value);
   lower_bound = cast_to_double_if_necessary(lower_bound);
   upper_bound = cast_to_double_if_necessary(upper_bound);
-  return makeExpr<Analyzer::WidthBucketExpr>(
-      target_value, lower_bound, upper_bound, partition_count);
+  return makeExpr<Analyzer::WidthBucketExpr>(target_value,
+                                             lower_bound,
+                                             upper_bound,
+                                             partition_count,
+                                             is_lower_bound_scalar_subquery,
+                                             is_upper_bound_scalar_subquery);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(
