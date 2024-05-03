@@ -81,7 +81,6 @@ class RasterImporter {
               const std::string& specified_band_dimensions,
               const PointType point_type,
               const PointTransform point_transform,
-              const bool point_compute_angle,
               const bool throw_on_error,
               const MetadataColumnInfos& metadata_column_infos);
 
@@ -90,10 +89,8 @@ class RasterImporter {
   using NamesAndSQLTypes = std::vector<std::pair<std::string, SQLTypes>>;
   using RawPixels = std::vector<std::byte>;
   using NullValue = std::pair<double, bool>;
-  using Coords = std::vector<std::tuple<double, double, float>>;
-  using CoordBuffers = std::tuple<std::unique_ptr<double[]>,
-                                  std::unique_ptr<double[]>,
-                                  std::unique_ptr<float[]>>;
+  using Coords = std::vector<std::pair<double, double>>;
+  using CoordBuffers = std::pair<std::unique_ptr<double[]>, std::unique_ptr<double[]>>;
 
   const uint32_t getNumBands() const;
   const PointTransform getPointTransform() const;
@@ -105,12 +102,11 @@ class RasterImporter {
   const int getBlockHeight() const { return block_height_; }
   const NullValue getBandNullValue(const int band_idx) const;
   const Coords getProjectedPixelCoords(const uint32_t thread_idx, const int y) const;
-  const std::tuple<double, double> getProjectedPixelCoord(const uint32_t thread_idx,
-                                                          const int x,
-                                                          const int y) const;
+  const std::pair<double, double> getProjectedPixelCoord(const uint32_t thread_idx,
+                                                         const int x,
+                                                         const int y) const;
   CoordBuffers getProjectedPixelCoordChunks(
       const ChunkBoundingBox& chunk_size,
-      const bool do_point_compute,
       const double* const lons = nullptr,
       const double* const lats = nullptr,
       const ChunkBoundingBox* const prev_chunk_size = nullptr) const;
@@ -156,7 +152,6 @@ class RasterImporter {
   std::vector<Geospatial::GDAL::CoordinateTransformationUqPtr>
       coordinate_transformations_;
   std::vector<std::unique_ptr<GCPTransformer>> gcp_transformers_;
-  bool point_compute_angle_{false};
 
   void getRawBandNamesForFormat(const Geospatial::GDAL::DataSourceUqPtr& datasource);
   void initializeFiltering(const std::string& specified_band_names,

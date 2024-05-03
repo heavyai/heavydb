@@ -4122,7 +4122,6 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
     default:
       CHECK(false);
   }
-  copy_params.raster_point_compute_angle = cp.raster_point_compute_angle;
   copy_params.raster_import_dimensions = cp.raster_import_dimensions;
   copy_params.dsn = cp.odbc_dsn;
   copy_params.connection_string = cp.odbc_connection_string;
@@ -4256,7 +4255,6 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
     default:
       CHECK(false);
   }
-  copy_params.raster_point_compute_angle = cp.raster_point_compute_angle;
   copy_params.raster_import_dimensions = cp.raster_import_dimensions;
   copy_params.odbc_dsn = cp.dsn;
   copy_params.odbc_connection_string = cp.connection_string;
