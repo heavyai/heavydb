@@ -1671,6 +1671,15 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
           throw std::runtime_error("'add_metadata_columns' option must be a string.");
         }
         copy_params.add_metadata_columns = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "bounding_box_clip")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error(
+              "'bounding_box_clip' option must be a string of the form "
+              "'<minlon>,<minlat>,<maxlon>,<maxlat>'.");
+        }
+        copy_params.bounding_box_clip = *str_literal->get_stringval();
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
