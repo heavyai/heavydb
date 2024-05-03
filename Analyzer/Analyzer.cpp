@@ -189,7 +189,9 @@ std::shared_ptr<Analyzer::Expr> WidthBucketExpr::deep_copy() const {
   return makeExpr<WidthBucketExpr>(target_value_->deep_copy(),
                                    lower_bound_->deep_copy(),
                                    upper_bound_->deep_copy(),
-                                   partition_count_->deep_copy());
+                                   partition_count_->deep_copy(),
+                                   is_lower_bound_scalar_subquery_,
+                                   is_upper_bound_scalar_subquery_);
 }
 
 std::shared_ptr<Analyzer::Expr> LikelihoodExpr::deep_copy() const {

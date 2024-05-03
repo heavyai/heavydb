@@ -6327,6 +6327,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                            ExecutorOptLevel::Default,
                            g_enable_dynamic_watchdog,
                            /*allow_lazy_fetch=*/true,
+                           just_validate,
                            /*filter_on_deleted_column=*/true,
                            explain_info.isOptimizedExplain()
                                ? ExecutorExplainType::Optimized

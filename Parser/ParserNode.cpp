@@ -874,8 +874,17 @@ std::shared_ptr<Analyzer::Expr> WidthBucketExpr::get(
     std::shared_ptr<Analyzer::Expr> lower_bound,
     std::shared_ptr<Analyzer::Expr> upper_bound,
     std::shared_ptr<Analyzer::Expr> partition_count) {
-  std::shared_ptr<Analyzer::Expr> result = makeExpr<Analyzer::WidthBucketExpr>(
-      target_value, lower_bound, upper_bound, partition_count);
+  auto const is_lower_bound_scalar_subquery =
+      dynamic_cast<const Analyzer::Subquery*>(lower_bound.get()) != nullptr;
+  auto const is_upper_bound_scalar_subquery =
+      dynamic_cast<const Analyzer::Subquery*>(upper_bound.get()) != nullptr;
+  std::shared_ptr<Analyzer::Expr> result =
+      makeExpr<Analyzer::WidthBucketExpr>(target_value,
+                                          lower_bound,
+                                          upper_bound,
+                                          partition_count,
+                                          is_lower_bound_scalar_subquery,
+                                          is_upper_bound_scalar_subquery);
   return result;
 }
 
@@ -3929,6 +3938,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                              *query_state_proxy->getConstSessionInfo(),
                              query_state_proxy->shared_from_this());
   CompilationOptions co = CompilationOptions::defaults(device_type);
+  co.just_validate = validate_only;
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
   ExecutionOptions eo = {false,
