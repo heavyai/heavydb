@@ -132,7 +132,10 @@ using Vertex = DAG::vertex_descriptor;
  */
 class RaExecutionSequence {
  public:
-  RaExecutionSequence(const RelAlgNode*, Executor*, const bool build_sequence = true);
+  RaExecutionSequence(const RelAlgNode*,
+                      Executor*,
+                      const bool for_validation,
+                      const bool build_sequence = true);
   RaExecutionSequence(std::unique_ptr<RaExecutionDesc> exec_desc);
 
   /**
@@ -200,6 +203,7 @@ class RaExecutionSequence {
   std::vector<Vertex> ordering_;  // reverse order topological sort of graph_
   size_t current_vertex_ = 0;
   size_t scan_count_ = 0;
+  bool just_validation_{false};
 
   std::unordered_map<const RelAlgNode*, int> node_ptr_to_vert_idx_;
   std::unordered_map<int, std::unordered_set<int>> skippable_steps_;
