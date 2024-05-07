@@ -208,13 +208,14 @@ std::unordered_set<Vertex> get_join_vertices(const std::vector<Vertex>& vertices
 
 RaExecutionSequence::RaExecutionSequence(const RelAlgNode* sink,
                                          Executor* executor,
-                                         const bool build_sequence) {
+                                         const bool just_validation,
+                                         const bool build_sequence)
+    : executor_(executor), just_validation_(just_validation) {
   CHECK(sink);
-  CHECK(executor);
+  CHECK(executor_);
   if (dynamic_cast<const RelScan*>(sink) || dynamic_cast<const RelJoin*>(sink)) {
     throw std::runtime_error("Query not supported yet");
   }
-  executor_ = executor;
   graph_ = build_dag(sink, node_ptr_to_vert_idx_);
 
   boost::topological_sort(graph_, std::back_inserter(ordering_));
@@ -228,7 +229,8 @@ RaExecutionSequence::RaExecutionSequence(const RelAlgNode* sink,
       // noop
     }
     if (g_enable_data_recycler && g_use_query_resultset_cache &&
-        g_allow_query_step_skipping && !has_step_for_union_ && !g_cluster) {
+        g_allow_query_step_skipping && !has_step_for_union_ && !g_cluster &&
+        !just_validation_) {
       extractQueryStepSkippingInfo();
       skipQuerySteps();
     }
@@ -245,8 +247,11 @@ RaExecutionDesc* RaExecutionSequence::next() {
         CHECK_GE(step_id, 0);
         if (executor_->getResultSetRecyclerHolder().hasCachedQueryResultSet(key)) {
           cached_query_steps_.insert(step_id);
-          cached_resultset_keys_.emplace(-node->getId(), key);
-          const auto output_meta_info =
+          auto const node_id = -int(node->getId());
+          cached_resultset_keys_.emplace(node_id, key);
+          VLOG(1) << "Skip query step if possible, step_id: " << step_id
+                  << ", node_id: " << node_id << ", query plan dag hash: " << key;
+          auto const output_meta_info =
               executor_->getResultSetRecyclerHolder().getOutputMetaInfo(key);
           CHECK(output_meta_info);
           node->setOutputMetainfo(*output_meta_info);
@@ -270,7 +275,7 @@ RaExecutionDesc* RaExecutionSequence::next() {
     }
     auto extracted_query_plan_dag =
         QueryPlanDagExtractor::extractQueryPlanDag(node, executor_);
-    if (g_allow_query_step_skipping &&
+    if (g_allow_query_step_skipping && !just_validation_ &&
         !boost::iequals(extracted_query_plan_dag.extracted_dag, EMPTY_QUERY_PLAN)) {
       SortInfo sort_info;
       if (auto sort_node = dynamic_cast<const RelSort*>(node)) {
@@ -400,6 +405,8 @@ void RaExecutionSequence::skipQuerySteps() {
       const auto body = descs_[step_id]->getBody();
       if (!skippable_query_steps.count(step_id)) {
         new_descs.push_back(std::make_unique<RaExecutionDesc>(body));
+      } else {
+        VLOG(1) << "Skip query step-" << step_id << " (node_id: " << body->getId() << ")";
       }
     }
     const auto prev_num_steps = descs_.size();

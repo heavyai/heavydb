@@ -169,7 +169,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
       RelAlgExecutor ra_executor(executor_, nullptr, gfx_context_);
       const auto subquery_ra = subquery->getRelAlg();
       CHECK(subquery_ra);
-      RaExecutionSequence subquery_seq(subquery_ra, executor_);
+      RaExecutionSequence subquery_seq(subquery_ra, executor_, eo.just_validate);
       auto result =
           ra_executor.executeRelAlgSeq(subquery_seq, co, eo_modified, nullptr, 0);
       subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));

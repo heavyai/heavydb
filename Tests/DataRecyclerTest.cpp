@@ -477,12 +477,12 @@ TEST(DataRecycler, Update_QueryPlanDagHash_After_DeadColumnElimination) {
   q2_oss << "SELECT " << q2_project << " FROM (" << common_subq << ") " << q2_where;
   auto executor = QR::get()->getExecutor().get();
   auto q1_ra_dag = QR::get()->getRelAlgDag(q1_oss.str());
-  auto q1_ed_seq = RaExecutionSequence(&q1_ra_dag->getRootNode(), executor);
+  auto q1_ed_seq = RaExecutionSequence(&q1_ra_dag->getRootNode(), executor, false);
   CHECK_EQ(q1_ed_seq.size(), static_cast<size_t>(3));
   auto q1_project_hash_val = q1_ed_seq.getDescriptor(1)->getBody()->toHash();
   ASSERT_NE(q1_project_hash_val, EMPTY_HASHED_PLAN_DAG_KEY);
   auto q2_ra_dag = QR::get()->getRelAlgDag(q2_oss.str());
-  auto q2_ed_seq = RaExecutionSequence(&q2_ra_dag->getRootNode(), executor);
+  auto q2_ed_seq = RaExecutionSequence(&q2_ra_dag->getRootNode(), executor, false);
   CHECK_EQ(q2_ed_seq.size(), static_cast<size_t>(3));
   auto q2_project_hash_val = q2_ed_seq.getDescriptor(1)->getBody()->toHash();
   ASSERT_NE(q1_project_hash_val, EMPTY_HASHED_PLAN_DAG_KEY);
