@@ -212,10 +212,11 @@ class RelAlgExecutor : private StorageIOFacility {
 
   // used for testing
   RaExecutionSequence getRaExecutionSequence(const RelAlgNode* root_node,
-                                             Executor* executor) {
+                                             Executor* executor,
+                                             const bool just_validation = false) {
     CHECK(executor);
     CHECK(root_node);
-    return RaExecutionSequence(root_node, executor);
+    return RaExecutionSequence(root_node, executor, just_validation);
   }
 
   void prepareForeignTable();
@@ -428,14 +429,20 @@ class RelAlgExecutor : private StorageIOFacility {
                                                     const bool just_explain,
                                                     const bool is_gpu);
 
-  void addTemporaryTable(const int table_id, const ResultSetPtr& result) {
+  void addTemporaryTable(const int node_id, const ResultSetPtr& result) {
     CHECK_LT(size_t(0), result->colCount());
-    CHECK_LT(table_id, 0);
-    auto it_ok = temporary_tables_.emplace(table_id, result);
-    CHECK(it_ok.second);
+    CHECK_LT(node_id, 0);
+    auto it_ok = temporary_tables_.emplace(node_id, result);
+    CHECK(it_ok.second) << "Failed to add temporary table (node_id: " << node_id << ")";
+    VLOG(1) << "Add temporary table (node_id: " << node_id << ")";
   }
 
-  void eraseFromTemporaryTables(const int table_id) { temporary_tables_.erase(table_id); }
+  void eraseFromTemporaryTables(const int node_id) {
+    if (temporary_tables_.find(node_id) != temporary_tables_.end()) {
+      temporary_tables_.erase(node_id);
+      VLOG(1) << "Erase temporary table (node_id: " << node_id << ")";
+    }
+  }
 
   void handleNop(RaExecutionDesc& ed);
 
@@ -461,7 +468,7 @@ class RelAlgExecutor : private StorageIOFacility {
 
   bool hasStepForUnion() const { return has_step_for_union_; }
 
-  bool canUseResultsetCache(const ExecutionOptions& eo, RenderInfo* render_info) const;
+  bool canUseResultsetCache(const ExecutionOptions& eo) const;
 
   void setupCaching(const RelAlgNode* ra);
 

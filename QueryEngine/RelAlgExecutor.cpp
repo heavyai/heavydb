@@ -481,14 +481,12 @@ void check_none_encoded_string_cast_tuple_limit(
 
 }  // namespace
 
-bool RelAlgExecutor::canUseResultsetCache(const ExecutionOptions& eo,
-                                          RenderInfo* render_info) const {
+bool RelAlgExecutor::canUseResultsetCache(const ExecutionOptions& eo) const {
   auto validate_or_explain_query = is_validate_or_explain_query(eo);
   auto query_for_partial_outer_frag = !eo.outer_fragment_indices.empty();
   return g_enable_data_recycler && g_use_query_resultset_cache && !g_cluster &&
          !validate_or_explain_query && !hasStepForUnion() &&
-         !query_for_partial_outer_frag &&
-         (!render_info || (render_info && !render_info->isInSitu()));
+         !query_for_partial_outer_frag;
 }
 
 size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
@@ -511,7 +509,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   setupCaching(&ra);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
-  auto ed_seq = RaExecutionSequence(&ra, executor_);
+  auto ed_seq = RaExecutionSequence(&ra, executor_, eo.just_validate);
 
   if (!getSubqueries().empty()) {
     return 0;
@@ -699,11 +697,11 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   setupCaching(&ra);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
-  auto ed_seq = RaExecutionSequence(&ra, executor_);
+  auto ed_seq = RaExecutionSequence(&ra, executor_, eo.just_validate);
 
   if (just_explain_plan) {
     const auto& ra = getRootRelAlgNode();
-    auto ed_seq = RaExecutionSequence(&ra, executor_);
+    auto ed_seq = RaExecutionSequence(&ra, executor_, eo.just_validate);
     std::vector<const RelAlgNode*> steps;
     for (size_t i = 0; i < ed_seq.size(); i++) {
       steps.emplace_back(ed_seq.getDescriptor(i)->getBody());
@@ -747,7 +745,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
         subquery_rel_alg_dag->registerQueryHint(subquery_ra, *local_hints);
       }
     }
-    RaExecutionSequence subquery_seq(subquery_ra, executor_);
+    RaExecutionSequence subquery_seq(subquery_ra, executor_, eo.just_validate);
     auto result = subquery_executor.executeRelAlgSeq(subquery_seq, co, eo, nullptr, 0);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
   }
@@ -944,7 +942,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
 
   const auto num_steps = exec_desc_count - 1;
   for (size_t i = 0; i < exec_desc_count; i++) {
-    VLOG(1) << "Executing query step " << i << " / " << num_steps;
+    auto const node_id = seq.getDescriptor(i)->getBody()->getId();
+    VLOG(1) << "Executing query step " << i << " / " << num_steps
+            << " (node_id: " << node_id << ")";
     try {
       executeRelAlgStep(
           seq, i, co, eo_copied, (i == num_steps) ? render_info : nullptr, queue_time_ms);
@@ -956,7 +956,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
       if (!g_allow_query_step_cpu_retry || g_cluster) {
         throw;
       }
-      LOG(INFO) << "Retrying current query step " << i << " / " << num_steps << " on CPU";
+      LOG(INFO) << "Retrying current query step " << i << " / " << num_steps
+                << " on CPU (node_id: " << node_id << ")";
       const auto co_cpu = CompilationOptions::makeCpuOnly(co);
       if (render_info && i == num_steps) {
         // only render on the last step
@@ -1191,11 +1192,11 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   }
 
   setHasStepForUnion(seq.hasQueryStepForUnion());
-  if (canUseResultsetCache(eo, render_info) && has_valid_query_plan_dag(body)) {
+  if (canUseResultsetCache(eo) && has_valid_query_plan_dag(body)) {
     if (auto cached_resultset =
             executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(
                 query_plan_dag_hash)) {
-      VLOG(1) << "recycle resultset of the root node " << body->getRelNodeDagId()
+      VLOG(1) << "recycle resultset of the root node " << body->getId()
               << " from resultset cache";
       body->setOutputMetainfo(cached_resultset->getTargetMetaInfo());
       if (render_info) {
@@ -2369,14 +2370,14 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
 
   auto const global_hint = getGlobalQueryHint();
   auto const use_resultset_recycler =
-      canUseResultsetCache(eo, nullptr) && has_valid_query_plan_dag(table_func);
+      canUseResultsetCache(eo) && has_valid_query_plan_dag(table_func);
   if (use_resultset_recycler) {
     auto cached_resultset =
         executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(
             table_func->getQueryPlanDagHash());
     if (cached_resultset) {
       VLOG(1) << "recycle table function's resultset of the root node "
-              << table_func->getRelNodeDagId() << " from resultset cache";
+              << table_func->getId() << " from resultset cache";
       result = {cached_resultset, cached_resultset->getTargetMetaInfo()};
       addTemporaryTable(-body->getId(), result.getDataPtr());
       return result;
@@ -2410,7 +2411,12 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
     if (global_hint->isHintRegistered(QueryHint::kKeepTableFuncResult) ||
         allow_auto_caching_resultset) {
       if (allow_auto_caching_resultset) {
-        VLOG(1) << "Automatically keep table function's query resultset to recycler";
+        VLOG(1) << "Automatically keep table function's query resultset to recycler "
+                   "(node_id: "
+                << table_func->getId() << ")";
+      } else {
+        VLOG(1) << "Keep table function's query resultset to recycler (node_id: "
+                << table_func->getId() << ")";
       }
       executor_->getResultSetRecyclerHolder().putQueryResultSetToCache(
           table_func_work_unit.exe_unit.query_plan_dag_hash,
@@ -3352,13 +3358,13 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
     auto source_query_plan_dag = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
         source_node->getQueryPlanDagHash(), sort_info);
-    if (canUseResultsetCache(eo, render_info) && has_valid_query_plan_dag(source_node) &&
+    if (canUseResultsetCache(eo) && has_valid_query_plan_dag(source_node) &&
         !sort->isEmptyResult()) {
       if (auto cached_resultset =
               executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(
                   source_query_plan_dag)) {
         CHECK(cached_resultset->canUseSpeculativeTopNSort());
-        VLOG(1) << "recycle resultset of the root node " << source_node->getRelNodeDagId()
+        VLOG(1) << "recycle resultset of the root node " << source_node->getId()
                 << " from resultset cache";
         source_result =
             ExecutionResult{cached_resultset, cached_resultset->getTargetMetaInfo()};
@@ -3940,7 +3946,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     }
   };
 
-  auto use_resultset_cache = canUseResultsetCache(eo, render_info);
+  auto use_resultset_cache = canUseResultsetCache(eo);
   for (const auto& table_info : table_infos) {
     const auto db_id = table_info.table_key.db_id;
     if (db_id > 0) {
@@ -4048,7 +4054,11 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
         res->getBufferSizeBytes(co.device_type) <= g_auto_resultset_caching_threshold;
     if (eo.keep_result || allow_auto_caching_resultset) {
       if (allow_auto_caching_resultset) {
-        VLOG(1) << "Automatically keep query resultset to recycler";
+        VLOG(1) << "Automatically keep query resultset to recycler (node_id: "
+                << body->getId() << ")";
+      } else {
+        VLOG(1) << "Keep table query resultset to recycler (node_id: " << body->getId()
+                << ")";
       }
       res->setUseSpeculativeTopNSort(
           use_speculative_top_n(ra_exe_unit, res->getQueryMemDesc()));
