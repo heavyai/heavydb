@@ -114,6 +114,7 @@ class CrossDatabaseQueryTest : public DBHandlerTestFixture {
   void TearDown() override {
     switchToAdmin();
     sql("REVOKE ALL ON DATABASE db_2 FROM test_user;");
+    sql("DROP TABLE IF EXISTS ctas_test_table;");
     DBHandlerTestFixture::TearDown();
   }
 
@@ -337,6 +338,42 @@ TEST_F(CrossDatabaseQueryTest, ValidateTableInAnotherDb) {
   EXPECT_EQ(result[2].col_type.type, TDatumType::type::STR);
   EXPECT_EQ(result[2].col_type.encoding, TEncodingType::type::NONE);
   EXPECT_EQ(result[2].col_type.comp_param, 0);
+}
+
+TEST_F(CrossDatabaseQueryTest, CtasTableWithTextEncodedColumnFromAnotherDbDefault) {
+  sql("CREATE TABLE ctas_test_table AS (SELECT power(db_1.db_1_table.i, 2) AS c1, "
+      "db_1.db_1_table.t AS c2, db_1.db_1_table.t2 FROM db_1.db_1_table ORDER BY c1);");
+
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM ctas_test_table ORDER BY c1;",
+                      {{1.0, "a", "cc"},
+                       {4.0, "b", "bb"},
+                       {100.0, "aa", "aa"},
+                       {400.0, "bb", "b"},
+                       {900.0, "cc", "a"}});
+  // clang-format on
+
+  // Assert that the string dictionary is not shared
+  const auto& catalog = getCatalog();
+  auto table_id = catalog.getTableId("ctas_test_table");
+  ASSERT_TRUE(table_id.has_value());
+  const auto cd = catalog.getMetadataForColumn(table_id.value(), "c2");
+  ASSERT_TRUE(cd != nullptr);
+  const auto& dict_key = cd->columnType.getStringDictKey();
+  ASSERT_EQ(catalog.getDatabaseId(), dict_key.db_id);
+  const auto dd = catalog.getMetadataForDict(dict_key.dict_id, false);
+  ASSERT_TRUE(dd != nullptr);
+  ASSERT_EQ(dd->refcount, 1);
+}
+
+TEST_F(CrossDatabaseQueryTest,
+       CtasTableWithTextEncodedColumnFromAnotherDbSharedDictionary) {
+  queryAndAssertException(
+      "CREATE TABLE ctas_test_table AS (SELECT power(db_1.db_1_table.i, 2) AS c1, "
+      "db_1.db_1_table.t AS c2, db_1.db_1_table.t2 FROM db_1.db_1_table ORDER BY c1) "
+      "WITH (use_shared_dictionaries = 'true');",
+      "String dictionaries cannot be shared across databases. Source column expression: "
+      "c2");
 }
 
 class CrossDatabaseWriteQueryTest : public CrossDatabaseQueryTest {
