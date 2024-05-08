@@ -25264,6 +25264,19 @@ TEST_F(Select, MultiStepColumnarization) {
   }
 }
 
+TEST_F(Select, ZeroCopyAndNonZeroCopyMixedColumnarization) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    std::string query{
+        "select col0 as val0, col1 as val1, col2 as val2 from (select col_dict_text1 as "
+        "col0, col_decimal_2 as col1, state_name as col2 from data_types_basic3 where "
+        "cast(col_decimal_2 as FLOAT) > -1000.0 OFFSET 0 ROWS FETCH NEXT 1000000 ROWS "
+        "ONLY)"};
+    const auto result = run_multiple_agg(query, dt);
+    ASSERT_EQ(result->rowCount(), size_t(82));
+  }
+}
+
 TEST_F(Select, LogicalSizedColumns) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
