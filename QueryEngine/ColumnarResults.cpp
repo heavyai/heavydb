@@ -480,6 +480,12 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
  */
 void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& rows,
                                                             const size_t num_columns) {
+  if (!rows.isEmpty()) {
+    for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+      CHECK(column_buffers_[col_idx])
+          << "Columnarization buffer for " << col_idx << "-th column is not initialized";
+    }
+  }
   if (isParallelConversion()) {
     std::atomic<size_t> row_idx{0};
     const size_t worker_count = cpu_threads();
