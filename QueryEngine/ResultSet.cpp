@@ -1523,7 +1523,8 @@ bool ResultSet::isZeroCopyColumnarConversionPossible(size_t column_idx) const {
           query_mem_desc_.getQueryDescriptionType() ==
               QueryDescriptionType::TableFunction) &&
          appended_storage_.empty() && storage_ &&
-         (lazy_fetch_info_.empty() || !lazy_fetch_info_[column_idx].is_lazily_fetched);
+         (lazy_fetch_info_.empty() || !lazy_fetch_info_[column_idx].is_lazily_fetched) &&
+         !isTruncated();
 }
 
 const int8_t* ResultSet::getColumnarBuffer(size_t column_idx) const {
