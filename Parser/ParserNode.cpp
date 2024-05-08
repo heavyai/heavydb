@@ -4820,7 +4820,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
       td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
     }
 
-    bool use_shared_dictionaries = true;
+    std::optional<bool> force_use_of_shared_dictionaries;
     bool force_geo_compression = true;
 
     if (!storage_options_.empty()) {
@@ -4834,7 +4834,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
                 "USE_SHARED_DICTIONARIES must be a string parameter");
           }
           std::string val = boost::to_lower_copy<std::string>(*literal->get_stringval());
-          use_shared_dictionaries = val == "true" || val == "1" || val == "t";
+          force_use_of_shared_dictionaries = (val == "true" || val == "1" || val == "t");
         } else if (boost::to_lower_copy<std::string>(*p->get_name()) ==
                    "force_geo_compression") {
           const StringLiteral* literal =
@@ -4852,7 +4852,9 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
     std::vector<SharedDictionaryDef> sharedDictionaryRefs;
 
-    if (use_shared_dictionaries) {
+    // By default, attempt to use shared dictionaries when possible.
+    if (!force_use_of_shared_dictionaries.has_value() ||
+        force_use_of_shared_dictionaries.value() == true) {
       const auto source_column_descriptors =
           local_connector.getColumnDescriptors(validate_result, false);
       const auto mapping = catalog.getDictionaryToColumnMapping();
@@ -4861,8 +4863,20 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
         const auto& ti = source_cd.columnType;
         if (ti.is_string()) {
           if (ti.get_compression() == kENCODING_DICT) {
-            int dict_id = ti.get_comp_param();
-            auto it = mapping.find(dict_id);
+            const auto& dict_key = ti.getStringDictKey();
+            if (dict_key.db_id != catalog.getDatabaseId()) {
+              // Throw an exception if a user explicitly wants to use a shared dictionary
+              // for a cross database query.
+              if (force_use_of_shared_dictionaries.has_value()) {
+                throw std::runtime_error(
+                    "String dictionaries cannot be shared across databases. Source "
+                    "column expression: " +
+                    source_cd.columnName);
+              } else {
+                continue;
+              }
+            }
+            auto it = mapping.find(dict_key.dict_id);
             if (mapping.end() != it) {
               const auto targetColumn = it->second;
               auto targetTable =
