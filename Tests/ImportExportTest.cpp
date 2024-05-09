@@ -6233,6 +6233,29 @@ TEST_P(RasterImportTest, PointTransformWorld) {
                    {{-83.222766892364277, 39.818764365787985, 287.54092407226562}});
 }
 
+TEST_P(RasterImportTest, BoundingBoxClip) {
+  if (g_enable_legacy_raster_import) {
+    // option not supported by legacy raster importer
+    EXPECT_THROW(
+        importTestCommon(
+            kGeoTIFF,
+            "raster_lon DOUBLE, raster_lat DOUBLE, band_1 FLOAT",
+            ", raster_point_transform='world', bounding_box_clip='-84,39.8178,-83,40'",
+            "SELECT count(*) FROM raster",
+            {{i(22000)}}),
+        TDBException);
+  } else {
+    // file is 200x200 with tiling 200x10, so clip by latitude to have an effect
+    // clips 9 out of 20 tiles, leaving 22K points out of 40K
+    importTestCommon(
+        kGeoTIFF,
+        "raster_lon DOUBLE, raster_lat DOUBLE, band_1 FLOAT",
+        ", raster_point_transform='world', bounding_box_clip='-84,39.8178,-83,40'",
+        "SELECT count(*) FROM raster",
+        {{i(22000)}});
+  }
+}
+
 //
 // Metadata Column Tests
 //
