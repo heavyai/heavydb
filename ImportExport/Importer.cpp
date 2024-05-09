@@ -5545,6 +5545,12 @@ ImportStatus Importer::importGDALRaster(
   // initial status
   set_import_status(import_id, import_status_);
 
+  // check for unsupported options
+  if (!copy_params.bounding_box_clip.empty()) {
+    throw std::runtime_error(
+        "Bounding Box Clip option not supported by Legacy Raster Importer");
+  }
+
   // metadata columns?
   auto const metadata_column_infos =
       parse_add_metadata_columns(copy_params.add_metadata_columns, file_path);
