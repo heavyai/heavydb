@@ -185,7 +185,7 @@ TableLockMgrImpl<T>::getClusterTableMutex(const ChunkKey& table_key) const {
         Catalog_Namespace::SysCatalog::instance().getCatalog(table_key[CHUNK_KEY_DB_IDX]);
     CHECK(cat);
     heavyai::shared_lock<heavyai::DistributedSharedMutex> dread_lock(
-        cat->getDistributedMutex());
+        *cat->dcatalogMutex_);
   };
 
   if constexpr (T::kind == "schema") {
@@ -197,7 +197,7 @@ TableLockMgrImpl<T>::getClusterTableMutex(const ChunkKey& table_key) const {
           table_key[CHUNK_KEY_DB_IDX]);
       CHECK(cat);
       heavyai::shared_lock<heavyai::DistributedSharedMutex> dread_lock(
-          cat->getDistributedMutex());
+          *cat->dcatalogMutex_);
       cat->reloadTableMetadataUnlocked(table_key[CHUNK_KEY_TABLE_IDX]);
     };
 
