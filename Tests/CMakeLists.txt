@@ -613,7 +613,7 @@ list(APPEND SANITY_TESTS StringDictionaryHashTest)
 ##########
 
 add_executable(StringFunctionsTest StringFunctionsTest.cpp)
-target_link_libraries(StringFunctionsTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(StringFunctionsTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 add_test(StringFunctionsTest StringFunctionsTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS StringFunctionsTest)
 
