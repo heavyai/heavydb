@@ -701,7 +701,7 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
   }
 
   bool setExecuteMode(const TExecuteMode::type mode) {
-    if (db_handler_->cpu_mode_only_ && TExecuteMode::GPU) {
+    if (db_handler_->cpu_mode_only_ && mode == TExecuteMode::GPU) {
       return false;
     }
     db_handler_->set_execution_mode(session_id_, mode);
