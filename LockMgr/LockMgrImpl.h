@@ -147,18 +147,18 @@ class TableLockMgrImpl {
   static WriteLock getWriteLockForTable(const Catalog_Namespace::Catalog& cat,
                                         const std::string& table_name);
 
-  static WriteLock getWriteLockForTable(const ChunkKey table_key);
+  static WriteLock getWriteLockForTable(const ChunkKey& table_key);
 
   static ReadLock getReadLockForTable(Catalog_Namespace::Catalog& cat,
                                       const std::string& table_name);
 
-  static ReadLock getReadLockForTable(const ChunkKey table_key);
+  static ReadLock getReadLockForTable(const ChunkKey& table_key);
 
  protected:
   TableLockMgrImpl() {}
 
   virtual std::unique_ptr<heavyai::DistributedSharedMutex> getClusterTableMutex(
-      const ChunkKey table_key) const;
+      const ChunkKey& table_key) const;
 
   mutable std::mutex map_mutex_;
   std::map<ChunkKey, std::unique_ptr<MutexTracker>> table_mutex_map_;
