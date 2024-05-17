@@ -993,10 +993,10 @@ void RasterImporter::getRawPixelsFineGrained(const uint32_t thread_idx,
                                nullptr);
 
   if (result != CE_None) {
-    throw std::runtime_error("Failed to read raster pixels: (" + std::to_string(x_start) +
-                             ", " + std::to_string(y_start) + ") to (" +
-                             std::to_string(x_start + x_size) + "," +
-                             std::to_string(y_start + y_size) + ")");
+    throw FailedToReadException(
+        "Failed to read raster pixels: (" + std::to_string(x_start) + ", " +
+        std::to_string(y_start) + ") to (" + std::to_string(x_start + x_size) + "," +
+        std::to_string(y_start + y_size) + ").  Check integrity of raster file.");
   }
 }
 
