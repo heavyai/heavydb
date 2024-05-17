@@ -6048,13 +6048,10 @@ INSTANTIATE_TEST_SUITE_P(RasterImportTest,
                          RasterImportTest,
                          ::testing::Values(true, false),
                          [](const auto& param_info) {
-                           return std::to_string(param_info.param);
+                           return (param_info.param ? "Legacy" : "FSI");
                          });
 
 TEST_P(RasterImportTest, MissingColumnNameInSecondFile) {
-  if (!GetParam()) {
-    GTEST_SKIP() << "FSI Raster globbing not currently supported (comming soon).";
-  }
   ASSERT_NO_THROW(
       importTestCommonWithDir(kGeoTIFFDir,
                               "raster_lon double, raster_lat double, band_1_1 float",
@@ -6084,37 +6081,11 @@ TEST_P(RasterImportTest, ImportGeoTIFFTest) {
 }
 
 TEST_P(RasterImportTest, ImportGeoTIFFDropNullsTest) {
-  if (!GetParam()) {
-    GTEST_SKIP() << "FSI Raster import does not currently support dropping nulls.";
-  }
   ASSERT_NO_THROW(importTestCommon(kGeoTIFFLastPixelNull,
                                    "raster_lon double, raster_lat double, band_1_1 float",
                                    ", raster_drop_if_all_null='true'",
                                    "SELECT COUNT(*) FROM raster;",
                                    {{39999L}}));
-}
-
-TEST_P(RasterImportTest, ImportGeoTIFFTruncatedTest) {
-  if (!GetParam()) {
-    GTEST_SKIP() << "Malformed raster not supported in FSI import yet.";
-  }
-  ASSERT_NO_THROW(importTestCommon(kGeoTIFFTruncated,
-                                   "raster_lon double, raster_lat double, band_1_1 float",
-                                   ", max_reject=1000000",
-                                   "SELECT count(*) > 10000 FROM raster;",
-                                   {{1L}}));
-}
-
-TEST_P(RasterImportTest, ImportGeoTIFFTruncatedFailTest) {
-  if (!GetParam()) {
-    GTEST_SKIP() << "Malformed raster not supported in FSI import yet.";
-  }
-  EXPECT_THROW(importTestCommon(kGeoTIFFTruncated,
-                                "raster_lon double, raster_lat double, band_1_1 float",
-                                ", max_reject=1000",
-                                "SELECT count(*) > 10000 FROM raster;",
-                                {{1L}}),
-               TDBException);
 }
 
 TEST_P(RasterImportTest, ImportGeoTIFFPointTest) {
@@ -6233,28 +6204,87 @@ TEST_P(RasterImportTest, PointTransformWorld) {
                    {{-83.222766892364277, 39.818764365787985, 287.54092407226562}});
 }
 
-TEST_P(RasterImportTest, BoundingBoxClip) {
-  if (g_enable_legacy_raster_import) {
-    // option not supported by legacy raster importer
-    EXPECT_THROW(
-        importTestCommon(
-            kGeoTIFF,
-            "raster_lon DOUBLE, raster_lat DOUBLE, band_1 FLOAT",
-            ", raster_point_transform='world', bounding_box_clip='-84,39.8178,-83,40'",
-            "SELECT count(*) FROM raster",
-            {{i(22000)}}),
-        TDBException);
-  } else {
-    // file is 200x200 with tiling 200x10, so clip by latitude to have an effect
-    // clips 9 out of 20 tiles, leaving 22K points out of 40K
-    importTestCommon(
-        kGeoTIFF,
-        "raster_lon DOUBLE, raster_lat DOUBLE, band_1 FLOAT",
-        ", raster_point_transform='world', bounding_box_clip='-84,39.8178,-83,40'",
-        "SELECT count(*) FROM raster",
-        {{i(22000)}});
-  }
+class RasterImportFsiOnlyTest : public RasterImportTest {};
+
+// This test has different behaviour between legacy and fsi import, so it needs custom
+// testing.  Specifically, the legacy import throws an exception, whereas the fsi import
+// logs an error and does not import any rows, but does not throw.  This is to keep raster
+// import consistent with the rest of fsi-import.
+TEST_P(RasterImportFsiOnlyTest, ImportGeoTIFFTruncatedThrowException) {
+  importTestCommon(kGeoTIFFTruncated,
+                   "raster_lon double, raster_lat double, band_1_1 float",
+                   ", max_reject=1000",
+                   "SELECT count(*) > 10000 FROM raster;",
+                   {{0L}});
+
+  // Check to make sure we did not import any rows.
+  sqlAndCompareResult("SELECT count(*) from raster", {{0L}});
 }
+
+TEST_P(RasterImportFsiOnlyTest, BoundingBoxClip) {
+  // file is 200x200 with tiling 200x10, so clip by latitude to have an effect
+  // clips 9 out of 20 tiles, leaving 22K points out of 40K
+  importTestCommon(
+      kGeoTIFF,
+      "raster_lon DOUBLE, raster_lat DOUBLE, band_1 FLOAT",
+      ", raster_point_transform='world', bounding_box_clip='-84,39.8178,-83,40'",
+      "SELECT count(*) FROM raster",
+      {{i(22000)}});
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportGeoTIFFTruncatedTest) {
+  ASSERT_NO_THROW(importTestCommon(kGeoTIFFTruncated,
+                                   "raster_lon double, raster_lat double, band_1_1 float",
+                                   ", max_reject=1000000",
+                                   "SELECT count(*) > 10000 FROM raster;",
+                                   {{1L}}));
+  sqlAndCompareResult("select count(*) from raster", {{12000L}});
+}
+
+INSTANTIATE_TEST_SUITE_P(RasterImportTest,
+                         RasterImportFsiOnlyTest,
+                         ::testing::Values(false),
+                         [](const auto& param_info) {
+                           return (param_info.param ? "Legacy" : "FSI");
+                         });
+
+class RasterImportLegacyOnlyTest : public RasterImportTest {};
+
+TEST_P(RasterImportLegacyOnlyTest, ImportGeoTIFFTruncatedImportNone) {
+  EXPECT_THROW(importTestCommon(kGeoTIFFTruncated,
+                                "raster_lon double, raster_lat double, band_1_1 float",
+                                ", max_reject=1000",
+                                "SELECT count(*) > 10000 FROM raster;",
+                                {{0L}}),
+               TDBException);
+}
+
+TEST_P(RasterImportLegacyOnlyTest, BoundingBoxClip) {
+  // option not supported by legacy raster importer
+  EXPECT_THROW(
+      importTestCommon(
+          kGeoTIFF,
+          "raster_lon DOUBLE, raster_lat DOUBLE, band_1 FLOAT",
+          ", raster_point_transform='world', bounding_box_clip='-84,39.8178,-83,40'",
+          "SELECT count(*) FROM raster",
+          {{i(22000)}}),
+      TDBException);
+}
+
+TEST_P(RasterImportLegacyOnlyTest, ImportGeoTIFFTruncatedTest) {
+  ASSERT_NO_THROW(importTestCommon(kGeoTIFFTruncated,
+                                   "raster_lon double, raster_lat double, band_1_1 float",
+                                   ", max_reject=1000000",
+                                   "SELECT count(*) > 10000 FROM raster;",
+                                   {{1L}}));
+}
+
+INSTANTIATE_TEST_SUITE_P(RasterImportTest,
+                         RasterImportLegacyOnlyTest,
+                         ::testing::Values(true),
+                         [](const auto& param_info) {
+                           return (param_info.param ? "Legacy" : "FSI");
+                         });
 
 //
 // Metadata Column Tests
