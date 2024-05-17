@@ -18,6 +18,8 @@
 
 #include <regex>
 
+#include <boost/algorithm/string.hpp>
+#include <boost/regex.hpp>
 #include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
 #include "RefreshTimeCalculator.h"
 #include "Shared/DateTimeParser.h"
@@ -179,6 +181,22 @@ void ForeignTable::validateSchema(const std::list<ColumnDescriptor>& columns) co
   foreign_storage::ForeignDataWrapperFactory::createForValidation(
       foreign_server->data_wrapper_type, this)
       ->validateSchema(columns, this);
+}
+
+std::optional<bool> ForeignTable::validateAndGetOptionAsBool(
+    const std::string& option_name) const {
+  if (auto it = options.find(option_name); it != options.end()) {
+    if (boost::iequals(it->second, "TRUE")) {
+      return true;
+    } else if (boost::iequals(it->second, "FALSE")) {
+      return false;
+    } else {
+      throw std::runtime_error{"Invalid boolean value specified for \"" + option_name +
+                               "\" foreign table option. "
+                               "Value must be either 'true' or 'false'."};
+    }
+  }
+  return std::nullopt;
 }
 
 }  // namespace foreign_storage

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <optional>
 #include "ForeignServer.h"
 #include "OptionsContainer.h"
 #include "TableDescriptor.h"
@@ -122,6 +123,11 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
     @brief Verifies the schema is supported by this foreign table
    */
   void validateSchema(const std::list<ColumnDescriptor>& columns) const;
+
+  /**
+     @breif Validates a specific option as a boolean.
+   */
+  std::optional<bool> validateAndGetOptionAsBool(const std::string& option) const;
 
  private:
   void validateDataWrapperOptions() const;
