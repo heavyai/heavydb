@@ -63,6 +63,11 @@ class RasterImporter {
   enum class PointType { kNone, kAuto, kSmallInt, kInt, kFloat, kDouble, kPoint };
   enum class PointTransform { kNone, kAuto, kFile, kWorld };
 
+  class FailedToReadException : public std::runtime_error {
+   public:
+    FailedToReadException(const std::string& msg) : std::runtime_error(msg){};
+  };
+
   struct ChunkBoundingBox {
     ChunkBoundingBox(int32_t x, int32_t y, int32_t w, int32_t h)
         : x_offset(x), y_offset(y), width(w), height(h), num_pixels(width * height) {
