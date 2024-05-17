@@ -130,23 +130,6 @@ size_t get_row_count(const char* buffer,
   }
   return row_count;
 }
-
-std::optional<bool> validate_and_get_bool_value(const ForeignTable* foreign_table,
-                                                const std::string& option_name) {
-  if (auto it = foreign_table->options.find(option_name);
-      it != foreign_table->options.end()) {
-    if (boost::iequals(it->second, "TRUE")) {
-      return true;
-    } else if (boost::iequals(it->second, "FALSE")) {
-      return false;
-    } else {
-      throw std::runtime_error{"Invalid boolean value specified for \"" + option_name +
-                               "\" foreign table option. "
-                               "Value must be either 'true' or 'false'."};
-    }
-  }
-  return std::nullopt;
-}
 }  // namespace
 
 RegexFileBufferParser::RegexFileBufferParser(const ForeignTable* foreign_table)
@@ -360,7 +343,7 @@ import_export::CopyParams RegexFileBufferParser::validateAndGetCopyParams(
     const ForeignTable* foreign_table) const {
   import_export::CopyParams copy_params{};
   copy_params.plain_text = true;
-  auto has_header = validate_and_get_bool_value(foreign_table, HEADER_KEY);
+  auto has_header = foreign_table->validateAndGetOptionAsBool(HEADER_KEY);
   if (has_header.has_value()) {
     if (has_header.value()) {
       copy_params.has_header = import_export::ImportHeaderRow::kHasHeader;
@@ -380,7 +363,7 @@ import_export::CopyParams RegexFileBufferParser::validateAndGetCopyParams(
     copy_params.threads = std::stoi(it->second);
   }
   copy_params.geo_validate_geometry =
-      validate_and_get_bool_value(foreign_table, ForeignTable::GEO_VALIDATE_GEOMETRY_KEY)
+      foreign_table->validateAndGetOptionAsBool(ForeignTable::GEO_VALIDATE_GEOMETRY_KEY)
           .value_or(copy_params.geo_validate_geometry);
   return copy_params;
 }
