@@ -173,9 +173,13 @@ if [ -d frontend ] && [ -e ./bin/heavy_web_server ]; then
     fi
 fi
 
-if [[ -d heavyiq && -f "$CONFIG_FILE" ]] && grep -qF "[iq]" "$CONFIG_FILE"; then
-  # Execute the HeavyIQ startup script in a subshell in order to avoid
-  # possible conflicts from virtual environment activation.
+if [[ -d heavyiq ]]; then
+    # Execute the HeavyIQ startup script in a subshell in order to avoid
+    # possible conflicts from virtual environment activation.
+
+    # Always start HeavyIQ, it will do it's own checks and bail if failed
+    # Specifically if it's _not_ free edition and there's no config
+    # -or- if a `disabled`` config flag is specified in `[iq]` it will bail
   ($DIR/scripts/ee/start_heavyiq.sh)
 fi
 
