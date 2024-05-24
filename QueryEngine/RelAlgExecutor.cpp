@@ -1192,7 +1192,11 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   }
 
   setHasStepForUnion(seq.hasQueryStepForUnion());
-  if (canUseResultsetCache(eo) && has_valid_query_plan_dag(body)) {
+  // let's check whether we have a cached query resultset of the input query
+  // note that the resultset recycling for a top sort node query will be handled
+  // within executeSort(body) function
+  if (canUseResultsetCache(eo) && has_valid_query_plan_dag(body) &&
+      !dynamic_cast<const RelSort*>(body)) {
     if (auto cached_resultset =
             executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(
                 query_plan_dag_hash)) {
