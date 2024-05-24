@@ -26386,6 +26386,62 @@ TEST_F(Select, ResultsetAndChunkMetadataRecycling) {
   clearCache();
 }
 
+TEST_F(Select, ResultsetRecyclingForSortQuery) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto clearCache = [&executor] {
+    executor->clearMemory(MemoryLevel::CPU_LEVEL);
+    executor->getQueryPlanDagCache().clearQueryPlanCache();
+  };
+  clearCache();
+
+  ScopeGuard reset_global_flag_state = [orig_resulset_recycler =
+                                            g_use_query_resultset_cache,
+                                        orig_data_recycler = g_enable_data_recycler] {
+    g_use_query_resultset_cache = orig_resulset_recycler;
+    g_enable_data_recycler = orig_data_recycler;
+  };
+  g_enable_data_recycler = true;
+  g_use_query_resultset_cache = true;
+
+  auto& recycler_holder = executor->getResultSetRecyclerHolder();
+  auto resultset_recycler = recycler_holder.getResultSetRecycler();
+  CHECK(resultset_recycler);
+  EXPECT_EQ(resultset_recycler->getCurrentNumCachedItems(
+                CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER),
+            static_cast<size_t>(0));
+
+  std::string q{"select /*+ keep_result */ x from test group by x order by x limit 1;"};
+  auto const orig_query = run_multiple_agg(q, ExecutorDeviceType::CPU);
+  EXPECT_EQ(1u, orig_query->rowCount());
+  EXPECT_EQ(resultset_recycler->getCurrentNumCachedItems(
+                CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER),
+            static_cast<size_t>(1));
+
+  std::set<QueryPlanHash> visited_cache_key;
+  auto const cached_resultset_info =
+      resultset_recycler->getCachedResultSetWithoutCacheKey(
+          visited_cache_key, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto const cache_key = std::get<0>(cached_resultset_info);
+  auto const orig_metric = resultset_recycler->getCachedItemMetric(
+      CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER, cache_key);
+  auto ref_count = orig_metric->getRefCount();
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto res = run_multiple_agg(q, dt);
+    EXPECT_EQ(res->rowCount(), orig_query->rowCount());
+    auto const new_metric =
+        resultset_recycler->getCachedItemMetric(CacheItemType::QUERY_RESULTSET,
+                                                DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+                                                cache_key);
+    EXPECT_GT(new_metric->getRefCount(), ref_count);
+    ref_count = new_metric->getRefCount();
+  }
+  clearCache();
+}
+
 TEST_F(Select, ChunkMetadataCacheFromSubQuery) {
   SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
