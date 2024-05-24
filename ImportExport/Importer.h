@@ -51,6 +51,7 @@
 #include "Geospatial/GDAL.h"
 #include "ImportExport/CopyParams.h"
 #include "Logger/Logger.h"
+#include "Shared/ShapeDrawData.h"
 #include "Shared/ThreadController.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/fixautotools.h"
