@@ -409,7 +409,6 @@ void RasterImporter::detect(const std::string& file_name,
                             const bool throw_on_error,
                             const MetadataColumnInfos& metadata_column_infos) {
   // open base file to check for subdatasources
-  bool has_spatial_reference{false};
   {
     // prepare to open
     // open the file
@@ -439,17 +438,6 @@ void RasterImporter::detect(const std::string& file_name,
       }
     }
 
-    // note if it has a spatial reference (of either type)
-    if (datasource->GetSpatialRef()) {
-      has_spatial_reference = true;
-      LOG_IF(INFO, DEBUG_RASTER_IMPORT) << "DEBUG: Found regular Spatial Reference";
-    } else if (datasource->GetGCPSpatialRef()) {
-      auto const num_points = datasource->GetGCPCount();
-      LOG_IF(INFO, DEBUG_RASTER_IMPORT)
-          << "DEBUG: Found GCP Spatial Reference with " << num_points << " GCPs";
-      has_spatial_reference = (num_points > 0);
-    }
-
     // fetch
     getRawBandNamesForFormat(datasource);
   }
@@ -461,28 +449,10 @@ void RasterImporter::detect(const std::string& file_name,
     datasource_names_.push_back(file_name);
   }
 
-  // auto point transform
-  if (point_transform == PointTransform::kAuto) {
-    point_transform_ =
-        has_spatial_reference ? PointTransform::kWorld : PointTransform::kNone;
-  } else {
-    point_transform_ = point_transform;
-  }
-
-  // auto point type
-  bool optimize_to_smallint = false;
-  if (point_type == PointType::kAuto) {
-    if (point_transform_ == PointTransform::kNone) {
-      point_type_ = PointType::kInt;
-      optimize_to_smallint = true;
-    } else {
-      point_type_ = PointType::kDouble;
-    }
-  } else {
-    point_type_ = point_type;
-  }
-
   std::set<std::pair<int, int>> found_dimensions;
+
+  bool has_spatial_reference{false};
+  bool has_spatial_reference_set{false};
 
   // lambda to process a datasource
   auto process_datasource = [&](const Geospatial::GDAL::DataSourceUqPtr& datasource,
@@ -491,6 +461,25 @@ void RasterImporter::detect(const std::string& file_name,
     if (raster_count == 0) {
       throw std::runtime_error("Raster Importer: Raster file " + file_name +
                                " has no rasters");
+    }
+
+    // note if it has a spatial reference (of either type)
+    bool this_has_spatial_reference{false};
+    if (datasource->GetSpatialRef()) {
+      this_has_spatial_reference = true;
+      LOG_IF(INFO, DEBUG_RASTER_IMPORT) << "DEBUG: Found regular Spatial Reference";
+    } else if (datasource->GetGCPSpatialRef()) {
+      auto const num_points = datasource->GetGCPCount();
+      LOG_IF(INFO, DEBUG_RASTER_IMPORT)
+          << "DEBUG: Found GCP Spatial Reference with " << num_points << " GCPs";
+      this_has_spatial_reference = (num_points > 0);
+    }
+    // validate that either all have or all do not have
+    if (!has_spatial_reference_set) {
+      has_spatial_reference = this_has_spatial_reference;
+    } else if (this_has_spatial_reference != has_spatial_reference) {
+      throw std::runtime_error("Raster Importer: Raster file " + file_name +
+                               " has subdatasets with mismatched spatial references");
     }
 
     // for each band (1-based index)
@@ -583,6 +572,27 @@ void RasterImporter::detect(const std::string& file_name,
 
     // process it
     process_datasource(datasource_handle, datasource_idx++);
+  }
+
+  // auto point transform
+  if (point_transform == PointTransform::kAuto) {
+    point_transform_ =
+        has_spatial_reference ? PointTransform::kWorld : PointTransform::kNone;
+  } else {
+    point_transform_ = point_transform;
+  }
+
+  // auto point type
+  bool optimize_to_smallint = false;
+  if (point_type == PointType::kAuto) {
+    if (point_transform_ == PointTransform::kNone) {
+      point_type_ = PointType::kInt;
+      optimize_to_smallint = true;
+    } else {
+      point_type_ = PointType::kDouble;
+    }
+  } else {
+    point_type_ = point_type;
   }
 
   // check dimensions
