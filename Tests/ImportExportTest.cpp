@@ -5626,6 +5626,8 @@ static constexpr const char* kGRIB = "hrrr.t00z.wrfsubhf00_small.grib2";
 static constexpr const char* kZARRArchive = "small.zarr.tgz";
 static constexpr const char* kZARRFile = "small.zarr";
 static constexpr const char* kS1B = "s1b_small.tiff";
+static constexpr const char* kS2A =
+    "S2A_MSIL1C_20231118T190701_N0509_R013_T10SEG_20231118T220618.SAFE.zip";
 
 // RasterImporter Class Tests
 
@@ -6202,6 +6204,24 @@ TEST_P(RasterImportTest, PointTransformWorld) {
                    ", raster_point_transform='world'",
                    "SELECT max(raster_lon), max(raster_lat), max(band_1) FROM raster",
                    {{-83.222766892364277, 39.818764365787985, 287.54092407226562}});
+}
+
+TEST_P(RasterImportTest, DISABLED_ImportFetchCRSFromSubDataset) {
+  // if the CRS is correctly fetched from the sub-dataset then the longitudes will be
+  // in the range -120 to -130 (Bay Area) as opposed to positive pixel coordinates
+  // test disabled as unreliable on Jenkins (get "Resource temporarily unavailable"
+  // errors even though it runs fine locally... can be manually run if needed)
+  // @TODO try to construct a smaller test file bundle
+  ASSERT_NO_THROW(importTestCommon(
+      kS2A,
+      "raster_lon double, raster_lat double, band_1_1 INTEGER, band_1_2 "
+      "INTEGER, band_1_3 INTEGER, band_1_4 INTEGER, band_4_1 SMALLINT, "
+      "band_4_2 SMALLINT, band_4_3 SMALLINT",
+      ", "
+      "raster_import_bands='band_1_1,band_1_2,band_1_3,band_1_4,band_4_"
+      "1,band_4_2,band_4_3'",
+      "SELECT COUNT(*) FROM raster WHERE raster_lon < -120.0 AND raster_lon > -130.0;",
+      {{120560400L}}));
 }
 
 class RasterImportFsiOnlyTest : public RasterImportTest {};
