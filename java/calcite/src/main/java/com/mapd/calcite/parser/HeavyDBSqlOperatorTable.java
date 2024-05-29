@@ -1752,13 +1752,23 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
         throw new IllegalArgumentException(
                 "At least 1 arguments are required: an input prompt.");
       }
+      final SqlNode input_operand = callBinding.operand(0);
+      final SqlTypeName input_operand_type =
+              validator.getValidatedNodeType(input_operand).getSqlTypeName();
+      final SqlTypeFamily input_operand_type_family = input_operand_type.getFamily();
+      if (input_operand_type_family != SqlTypeFamily.STRING
+              && input_operand_type_family != SqlTypeFamily.CHARACTER) {
+        throw new IllegalArgumentException(
+                "The input operand of LLM_TRANSFORM must be a STRING expression");
+      }
       final SqlNode prompt_operand = callBinding.operand(num_operands - 1);
-      final SqlTypeName operand_type =
+      final SqlTypeName prompt_type =
               validator.getValidatedNodeType(prompt_operand).getSqlTypeName();
-      final SqlTypeFamily operand_type_family = operand_type.getFamily();
+      final SqlTypeFamily prompt_type_family = prompt_type.getFamily();
       if (!prompt_operand.isA(EnumSet.of(SqlKind.LITERAL))
-              || operand_type_family != SqlTypeFamily.CHARACTER) {
-        throw new IllegalArgumentException("The input prompt must be a TEXT literal");
+              || prompt_type_family != SqlTypeFamily.CHARACTER) {
+        throw new IllegalArgumentException(
+                "The prompt operand of LLM_TRANSFORM must be a STRING literal");
       }
       return true;
     }
