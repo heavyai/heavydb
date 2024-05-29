@@ -185,6 +185,8 @@ extern size_t g_watchdog_in_subquery_max_in_values;
 extern size_t g_preflight_count_query_threshold;
 extern bool g_from_table_reordering;
 extern bool g_enable_filter_push_down;
+extern float g_filter_push_down_max_selectivity;
+extern size_t g_filter_push_down_selectivity_override_max_passing_num_rows;
 extern bool g_allow_cpu_retry;
 extern bool g_allow_query_step_cpu_retry;
 extern bool g_null_div_by_zero;
@@ -204,9 +206,6 @@ extern bool g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concur
 extern double g_executor_resource_mgr_max_available_resource_use_ratio;
 
 extern bool g_inner_join_fragment_skipping;
-extern float g_filter_push_down_low_frac;
-extern float g_filter_push_down_high_frac;
-extern size_t g_filter_push_down_passing_row_ubound;
 extern bool g_enable_columnar_output;
 extern bool g_optimize_row_initialization;
 extern bool g_enable_bbox_intersect_hashjoin;

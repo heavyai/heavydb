@@ -116,7 +116,9 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
   CHECK(count_ptr);
   const auto rows_passing = *count_ptr;
   const auto rows_total = std::max(total_rows_upper_bound, size_t(1));
-  return {true, static_cast<float>(rows_passing) / rows_total, total_rows_upper_bound};
+  return {true,
+          static_cast<float>(rows_passing) / rows_total,
+          static_cast<size_t>(rows_passing)};
 }
 
 /**

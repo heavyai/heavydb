@@ -456,23 +456,22 @@ void CommandLineOptions::fillOptions() {
           ->default_value(g_watchdog_none_encoded_string_translation_limit),
       "Max number of none-encoded strings allowed to be translated "
       "to dictionary-encoded with watchdog enabled");
-  desc.add_options()("filter-push-down-low-frac",
-                     po::value<float>(&g_filter_push_down_low_frac)
-                         ->default_value(g_filter_push_down_low_frac)
-                         ->implicit_value(g_filter_push_down_low_frac),
-                     "Lower threshold for selectivity of filters that are pushed down.");
-  desc.add_options()("filter-push-down-high-frac",
-                     po::value<float>(&g_filter_push_down_high_frac)
-                         ->default_value(g_filter_push_down_high_frac)
-                         ->implicit_value(g_filter_push_down_high_frac),
-                     "Higher threshold for selectivity of filters that are pushed down.");
-  desc.add_options()("filter-push-down-passing-row-ubound",
-                     po::value<size_t>(&g_filter_push_down_passing_row_ubound)
-                         ->default_value(g_filter_push_down_passing_row_ubound)
-                         ->implicit_value(g_filter_push_down_passing_row_ubound),
-                     "Upperbound on the number of rows that should pass the filter "
-                     "if the selectivity is less than "
-                     "the high fraction threshold.");
+  desc.add_options()("filter-push-down-selectivity-threshold",
+                     po::value<float>(&g_filter_push_down_max_selectivity)
+                         ->default_value(g_filter_push_down_max_selectivity)
+                         ->implicit_value(g_filter_push_down_max_selectivity),
+                     "A threshold of a selectivity of filters that are pushed "
+                     "down to determine whether enabling the filter-predicate pushdown "
+                     "(valid range: 0.0 ~ 1.0).");
+  desc.add_options()(
+      "filter-push-down-selectivity-override-max-passing-num-rows",
+      po::value<size_t>(&g_filter_push_down_selectivity_override_max_passing_num_rows)
+          ->default_value(g_filter_push_down_selectivity_override_max_passing_num_rows)
+          ->implicit_value(g_filter_push_down_selectivity_override_max_passing_num_rows),
+      "A threshold of the number of rows passing filter predicates to determine whether "
+      "enabling the filter-predicate pushdown, which overrides the "
+      "\'filter-push-down-selectivity-threshold\' threshold");
+
   desc.add_options()("from-table-reordering",
                      po::value<bool>(&g_from_table_reordering)
                          ->default_value(g_from_table_reordering)
@@ -1972,8 +1971,20 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     LOG(INFO) << " From clause table reordering is disabled";
   }
 
+  if (g_filter_push_down_max_selectivity < 0.0f ||
+      g_filter_push_down_max_selectivity > 1.0f) {
+    std::cerr << "\'filter-push-down-max-selectivity\' must be between 0.0 and 1.0"
+              << std::endl;
+    return 1;
+  }
+
   if (g_enable_filter_push_down) {
     LOG(INFO) << " Filter push down for JOIN is enabled";
+    LOG(INFO) << " \t \'filter-push-down-max-selectivity\' is set to "
+              << g_filter_push_down_max_selectivity;
+    LOG(INFO)
+        << " \t \'filter-push-down-selectivity-override-max-passing-num-rows\' is set to "
+        << g_filter_push_down_selectivity_override_max_passing_num_rows;
   }
 
   if (vm.count("udf")) {
