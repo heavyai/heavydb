@@ -23,9 +23,8 @@
 #include "QueryEngine/RangeTableIndexVisitor.h"
 
 extern bool g_enable_filter_push_down;
-extern float g_filter_push_down_low_frac;
-extern float g_filter_push_down_high_frac;
-extern size_t g_filter_push_down_passing_row_ubound;
+extern float g_filter_push_down_max_selectivity;
+extern size_t g_filter_push_down_selectivity_override_max_passing_num_rows;
 
 /**
  * The main purpose of this struct is to help identify the selected filters
@@ -48,30 +47,13 @@ struct PushedDownFilterInfo {
  */
 struct FilterSelectivity {
   const bool is_valid;
-  const float fraction_passing;
-  const size_t total_rows_upper_bound;
+  const float selectivity;
+  const size_t num_rows_passed;
 
-  size_t getRowsPassingUpperBound() const {
-    return fraction_passing * total_rows_upper_bound;
-  }
   bool isFilterSelectiveEnough() const {
-    auto low_frac_threshold = (g_filter_push_down_low_frac >= 0.0)
-                                  ? std::min(g_filter_push_down_low_frac, 1.0f)
-                                  : kFractionPassingLowThreshold;
-    auto high_frac_threshold = (g_filter_push_down_high_frac >= 0.0)
-                                   ? std::min(g_filter_push_down_high_frac, 1.0f)
-                                   : kFractionPassingHighThreshold;
-    auto rows_ubound_threshold = (g_filter_push_down_passing_row_ubound > 0)
-                                     ? g_filter_push_down_passing_row_ubound
-                                     : kRowsPassingUpperBoundThreshold;
-    return (fraction_passing < low_frac_threshold ||
-            (fraction_passing < high_frac_threshold &&
-             getRowsPassingUpperBound() < rows_ubound_threshold));
+    return selectivity < g_filter_push_down_max_selectivity ||
+           num_rows_passed < g_filter_push_down_selectivity_override_max_passing_num_rows;
   }
-
-  static constexpr float kFractionPassingLowThreshold = 0.1;
-  static constexpr float kFractionPassingHighThreshold = 0.5;
-  static constexpr size_t kRowsPassingUpperBoundThreshold = 4000000;
 };
 
 bool to_gather_info_for_filter_selectivity(
