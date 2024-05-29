@@ -12196,9 +12196,9 @@ TEST_F(Select, Joins_DifferentIntegerTypes) {
 
 TEST_F(Select, Joins_FilterPushDown) {
   ScopeGuard reset_status = [orig1 = g_enable_filter_push_down,
-                             orig2 = g_filter_push_down_low_frac] {
+                             orig2 = g_filter_push_down_max_selectivity] {
     g_enable_filter_push_down = orig1;
-    g_filter_push_down_low_frac = orig2;
+    g_filter_push_down_max_selectivity = orig2;
     run_ddl_statement("DROP TABLE lt;");
     run_ddl_statement("DROP TABLE rt;");
   };
@@ -12217,7 +12217,7 @@ TEST_F(Select, Joins_FilterPushDown) {
     SKIP_NO_GPU();
     for (auto fpd : {std::make_pair(true, 1.0), std::make_pair(false, 0.0)}) {
       g_enable_filter_push_down = fpd.first;
-      g_filter_push_down_low_frac = fpd.second;
+      g_filter_push_down_max_selectivity = fpd.second;
       c("SELECT COUNT(*) FROM coalesce_cols_test_2 AS R, coalesce_cols_test_0 AS S "
         "WHERE R.y = S.y AND R.x > 2 AND (S.x > 1 OR S.y < 18);",
         dt);
