@@ -2576,6 +2576,18 @@ TEST_P(StringFunctionTest, LLMTransformCurlError) {
       "LLM_TRANSFORM failed");
 }
 
+TEST_P(StringFunctionTest, LLMTransformInputArgumentTypeCheck) {
+  queryAndAssertPartialException(
+      "SELECT LLM_TRANSFORM(id, \'haha\') FROM string_function_test_people;",
+      "The input operand of LLM_TRANSFORM must be a STRING expression");
+}
+
+TEST_P(StringFunctionTest, LLMTransformPromptTypeCheck) {
+  queryAndAssertPartialException(
+      "SELECT LLM_TRANSFORM(first_name, id) FROM string_function_test_people;",
+      "The prompt operand of LLM_TRANSFORM must be a STRING literal");
+}
+
 INSTANTIATE_TEST_SUITE_P(CpuAndGpuExecutorDevices,
                          StringFunctionTest,
                          ::testing::Values(TExecuteMode::CPU, TExecuteMode::GPU),

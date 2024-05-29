@@ -2628,9 +2628,11 @@ class LLMTransformStringOper : public StringOper {
       : StringOper(SqlStringOpKind::LLM_TRANSFORM, operands) {
     if (operands.size() != 2) {
       throw std::runtime_error(
-          "LLM_TRANSFORM must contain two operands: a string column and a "
+          "\'LLM_TRANSFORM\' must contain two operands: a string expression and a "
           "prompt as string literal");
     }
+    // we check the type requirement at the Calcite level
+    CHECK(operands.front()->get_type_info().is_string());
     CHECK(operands.back()->get_type_info().is_none_encoded_string());
   }
 
