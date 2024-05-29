@@ -7411,6 +7411,52 @@ TEST_F(Select, CastRoundNullable) {
   }
 }
 
+class FPCastedRound
+    : public ::testing::TestWithParam<
+          std::tuple<std::string, ExecutorDeviceType, std::string, std::string>> {};
+
+TEST_P(FPCastedRound, Round) {
+  auto [func, dt, type, op] = GetParam();
+  if (skip_tests(dt)) {
+    return;
+  }
+
+  std::ostringstream oss;
+  oss << "SELECT " << func << "(CAST(avg(dd) AS " << type << ") / 0.5) " << op
+      << " 0.5 FROM test;";
+  c(oss.str(), dt);
+}
+
+std::string FPCastedTestNameGenerator(
+    const ::testing::TestParamInfo<
+        std::tuple<std::string, ExecutorDeviceType, std::string, std::string>>& info) {
+  std::string func = std::get<0>(info.param);
+  std::string dt = std::get<1>(info.param) == ExecutorDeviceType::CPU ? "CPU" : "GPU";
+  std::string type = std::get<2>(info.param);
+  std::string op = std::get<3>(info.param);
+  auto translate_op_name = [](std::string const& op) {
+    if (op.compare("*") == 0) {
+      return "MULTIPLY";
+    } else if (op.compare("/") == 0) {
+      return "DIVIDE";
+    } else if (op.compare("+") == 0) {
+      return "PLUS";
+    } else {
+      return "MINUS";
+    }
+  };
+  return func + "_" + dt + "_" + type + "_" + translate_op_name(op);
+}
+
+INSTANTIATE_TEST_SUITE_P(Round,
+                         FPCastedRound,
+                         ::testing::Combine(::testing::Values("ROUND"),
+                                            ::testing::Values(ExecutorDeviceType::CPU,
+                                                              ExecutorDeviceType::GPU),
+                                            ::testing::Values("REAL"),
+                                            ::testing::Values("*", "/", "+", "-")),
+                         FPCastedTestNameGenerator);
+
 TEST_F(Select, CastTimestampToTime) {
   run_ddl_statement("DROP TABLE IF EXISTS test_cast_tstt;");
   run_ddl_statement(
