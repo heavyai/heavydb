@@ -1952,9 +1952,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
       // this needs to be done as calcite returns
       // only the 1st operand without defaulting the 2nd one
       // when the user did not specify the 2nd operand.
-      SQLTypes t = kSMALLINT;
+      SQLTypes t = kINT;
       Datum d;
-      d.smallintval = 0;
+      d.intval = 0;
       args.push_back(makeExpr<Analyzer::Constant>(t, false, d));
     }
 
@@ -1977,6 +1977,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     const SQLTypeInfo ret_ti = args[0]->get_type_info().is_decimal()
                                    ? args[0]->get_type_info()
                                    : rex_function->getType();
+
+    if (ret_ti.get_type() != args[0]->get_type_info().get_type()) {
+      VLOG(1)
+          << "Add a cast to ROUND function to have an expected return type, previous: "
+          << args[0]->get_type_info().get_type_name()
+          << ", updated: " << ret_ti.get_type_name();
+      auto round_expr = makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
+          args[0]->get_type_info().get_type(), rex_function->getName(), args);
+      return round_expr->add_cast(ret_ti);
+    }
 
     return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
         ret_ti, rex_function->getName(), args);
