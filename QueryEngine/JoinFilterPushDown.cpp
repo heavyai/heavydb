@@ -17,6 +17,7 @@
 #include "JoinFilterPushDown.h"
 #include "DeepCopyVisitor.h"
 #include "RelAlgExecutor.h"
+#include "Visitors/CommonVisitors.h"
 
 namespace {
 
@@ -121,6 +122,76 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
           static_cast<size_t>(rows_passing)};
 }
 
+namespace {
+class MapGeoFuncAndColVarsVisitor : public ScalarExprVisitor<void*> {
+ public:
+  std::unordered_map<const Analyzer::Expr*, std::set<const Analyzer::ColumnVar*>> const&
+  getMap() const {
+    return map_;
+  }
+
+ protected:
+  void* visitGeoExpr(const Analyzer::GeoExpr* geo_expr) const override {
+    AllColumnVarsVisitor visitor;
+    map_.emplace(geo_expr, visitor.visit(geo_expr));
+    return nullptr;
+  }
+  void* visitFunctionOper(const Analyzer::FunctionOper* func_oper) const override {
+    AllColumnVarsVisitor visitor;
+    map_.emplace(func_oper, visitor.visit(func_oper));
+    return nullptr;
+  }
+
+ private:
+  mutable std::unordered_map<const Analyzer::Expr*, std::set<const Analyzer::ColumnVar*>>
+      map_;
+};
+
+bool will_require_intermetidate_non_point_geo_projection(
+    RelAlgExecutionUnit const& exe_unit) {
+  auto const is_loop_join_query = exe_unit.isAllJoinQualsAreLoopJoin();
+  // check whether we explicitly project non-point geometry column from rhs (build-side
+  // table)
+  for (auto const* expr : exe_unit.target_exprs) {
+    AllRangeTableIndexVisitor visitor;
+    auto const rte_idx = visitor.visit(expr);
+    auto const build_side_table_expr =
+        std::any_of(rte_idx.begin(), rte_idx.end(), [](auto idx) { return idx > 0; });
+    if (build_side_table_expr && expr->get_type_info().is_geometry()) {
+      if (is_loop_join_query && expr->get_type_info().get_type() == kPOINT) {
+        // we can safely pushdown filter(s) if a join query only has a loop join and has a
+        // point projection
+        continue;
+      }
+      return true;
+    }
+  }
+
+  // check whether we implicitly project non-point geometry column from rhs (build-side
+  // table)
+  for (auto const& cond : exe_unit.join_quals) {
+    MapGeoFuncAndColVarsVisitor visitor;
+    for (auto it = cond.quals.begin(); it != cond.quals.end(); it++) {
+      visitor.visit(it->get());
+    }
+    for (auto const& pair : visitor.getMap()) {
+      auto const expr_ti = pair.first->get_type_info();
+      if (expr_ti.is_geometry() && expr_ti.get_type() != kPOINT) {
+        return true;
+      }
+      for (auto const* col_var : pair.second) {
+        if (col_var->get_rte_idx() > 0 && col_var->get_type_info().is_geometry() &&
+            col_var->get_type_info().get_type() != kPOINT) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+}  // namespace
+
 /**
  * Goes through all candidate filters and evaluate whether they pass the selectivity
  * criteria or not.
@@ -129,6 +200,12 @@ std::vector<PushedDownFilterInfo> RelAlgExecutor::selectFiltersToBePushedDown(
     const RelAlgExecutor::WorkUnit& work_unit,
     const CompilationOptions& co,
     const ExecutionOptions& eo) {
+  if (will_require_intermetidate_non_point_geo_projection(work_unit.exe_unit)) {
+    VLOG(1) << "Detect non-point geometry projection on a table used to build a join "
+               "hash table";
+    return {};
+  }
+
   const auto all_push_down_candidates =
       find_push_down_filters(work_unit.exe_unit,
                              work_unit.input_permutation,

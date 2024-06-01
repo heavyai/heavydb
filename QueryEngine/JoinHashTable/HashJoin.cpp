@@ -27,6 +27,7 @@
 #include "QueryEngine/RangeTableIndexVisitor.h"
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/ScalarExprVisitor.h"
+#include "QueryEngine/Visitors/CommonVisitors.h"
 
 #include <sstream>
 
@@ -619,34 +620,6 @@ std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(
       rte_idx);
   return cv;
 }
-
-class AllColumnVarsVisitor
-    : public ScalarExprVisitor<std::set<const Analyzer::ColumnVar*>> {
- protected:
-  std::set<const Analyzer::ColumnVar*> visitColumnVar(
-      const Analyzer::ColumnVar* column) const override {
-    return {column};
-  }
-
-  std::set<const Analyzer::ColumnVar*> visitColumnVarTuple(
-      const Analyzer::ExpressionTuple* expr_tuple) const override {
-    AllColumnVarsVisitor visitor;
-    std::set<const Analyzer::ColumnVar*> result;
-    for (const auto& expr_component : expr_tuple->getTuple()) {
-      const auto component_rte_set = visitor.visit(expr_component.get());
-      result.insert(component_rte_set.begin(), component_rte_set.end());
-    }
-    return result;
-  }
-
-  std::set<const Analyzer::ColumnVar*> aggregateResult(
-      const std::set<const Analyzer::ColumnVar*>& aggregate,
-      const std::set<const Analyzer::ColumnVar*>& next_result) const override {
-    auto result = aggregate;
-    result.insert(next_result.begin(), next_result.end());
-    return result;
-  }
-};
 
 void setupSyntheticCaching(std::set<const Analyzer::ColumnVar*> cvs, Executor* executor) {
   std::unordered_set<shared::TableKey> phys_table_ids;
