@@ -12325,6 +12325,53 @@ TEST_F(Select, Joins_FilterPushDown) {
   }
 }
 
+TEST_F(Select, Joins_FilterPushDownWithGeoProjection) {
+  SKIP_ALL_ON_AGGREGATOR();
+  ScopeGuard reset_status = [orig1 = g_enable_filter_push_down] {
+    g_enable_filter_push_down = orig1;
+    run_ddl_statement("DROP TABLE fpd1;");
+    run_ddl_statement("DROP TABLE fpd2;");
+  };
+  run_ddl_statement("DROP TABLE IF EXISTS fpd1;");
+  run_ddl_statement("DROP TABLE IF EXISTS fpd2;");
+  run_ddl_statement(
+      "CREATE TABLE fpd1 (id int, val int, poly GEOMETRY(POLYGON, 4326), pt "
+      "GEOMETRY(POINT, 4326));");
+  run_ddl_statement("CREATE TABLE fpd2 (id int, val int, poly GEOMETRY(POLYGON, 4326));");
+  auto const cpu_dt = ExecutorDeviceType::CPU;
+  for (int i = 1; i <= 6; i++) {
+    auto const val = std::to_string(i);
+    run_multiple_agg(
+        "INSERT INTO fpd2 VALUES(1, " + val + ", \'POLYGON((0 0,4 0,4 4,0 0))\');",
+        cpu_dt);
+    if (i <= 5) {
+      run_multiple_agg("INSERT INTO fpd1 VALUES(1, " + val +
+                           ", \'POLYGON((0 0,4 0,4 4,0 0))\', \'POINT(1 1)\');",
+                       cpu_dt);
+    }
+  }
+
+  // we should not pushdown filter if we project geo from rhs, i.e., join hash table build
+  // side or loop join with non-point geo from rhs
+  g_enable_filter_push_down = true;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // 1. hash join + non_point projection (fpd1.poly)
+    EXPECT_NO_THROW(
+        run_multiple_agg("select fpd1.val, fpd1.poly from fpd1, fpd2 where fpd1.id = "
+                         "fpd2.id and fpd1.val < 2;",
+                         dt));
+    // 2. loop join + non-point projection (fpd1.poly)
+    EXPECT_NO_THROW(run_multiple_agg(
+        "select fpd1.val, fpd1.poly from fpd1, fpd2 where fpd1.val < 2;", dt));
+    // 3. hash join + point projection (fpd1.pt)
+    EXPECT_NO_THROW(
+        run_multiple_agg("select fpd1.val, fpd1.pt from fpd1, fpd2 where fpd1.id = "
+                         "fpd2.id and fpd1.val < 2;",
+                         dt));
+  }
+}
+
 TEST_F(Select, Joins_InnerJoin_TwoTables) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
