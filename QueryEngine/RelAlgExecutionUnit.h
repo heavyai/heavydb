@@ -201,6 +201,21 @@ struct RelAlgExecutionUnit {
       }
     }
   }
+
+  bool isAllJoinQualsAreLoopJoin() const {
+    for (auto const& condition : join_quals) {
+      for (auto const& qual : condition.quals) {
+        auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(qual.get());
+        if (bin_oper && bin_oper->get_optype() == kEQ) {
+          if (dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand()) &&
+              dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_right_operand())) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
 };
 
 std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_unit);
