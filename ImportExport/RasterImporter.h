@@ -97,6 +97,7 @@ class RasterImporter {
   using Coords = std::vector<std::pair<double, double>>;
   using CoordBuffers = std::pair<std::unique_ptr<double[]>, std::unique_ptr<double[]>>;
 
+  const std::string& getFileName() const { return file_name_; }
   const uint32_t getNumBands() const;
   const PointTransform getPointTransform() const;
   const NamesAndSQLTypes getPointNamesAndSQLTypes() const;
@@ -138,6 +139,7 @@ class RasterImporter {
     bool null_value_valid;
   };
 
+  std::string file_name_;
   std::vector<std::string> datasource_names_;
   std::vector<std::vector<std::string>> raw_band_names_;
   std::map<std::string, bool> specified_band_names_map_;
