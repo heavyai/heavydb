@@ -408,6 +408,9 @@ void RasterImporter::detect(const std::string& file_name,
                             const PointTransform point_transform,
                             const bool throw_on_error,
                             const MetadataColumnInfos& metadata_column_infos) {
+  // keep this
+  file_name_ = file_name;
+
   // open base file to check for subdatasources
   {
     // prepare to open
