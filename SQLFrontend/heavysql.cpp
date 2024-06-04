@@ -1489,6 +1489,12 @@ int main(int argc, char** argv) {
       }
     } else if (!strncmp(line, "\\detect", 7)) {
       char* token = strtok(line + 8, " ");
+      if (!token) {
+        std::cerr << "detect requires additional parameters in the form '\\detect [type] "
+                     "filename'"
+                  << std::endl;
+        continue;
+      }
       char* file_path{nullptr};
       TCopyParams copy_params;
 #ifdef ENABLE_IMPORT_PARQUET
