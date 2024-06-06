@@ -108,7 +108,9 @@ void TreeModelPredictionMgr::createKernelBuffers() {
           decision_tree_table_device_buffers_.back()->getMemoryPtr());
       auto decision_tree_offsets_device_buffer = reinterpret_cast<const int8_t*>(
           decision_tree_offsets_device_buffers_.back()->getMemoryPtr());
+      auto cuda_stream = executor_->getCudaStream(device_id);
       copy_to_nvidia_gpu(data_mgr_,
+                         cuda_stream,
                          reinterpret_cast<CUdeviceptr>(decision_tree_table_device_buffer),
                          reinterpret_cast<const int8_t*>(host_decision_tree_table_),
                          decision_tree_table_size_bytes_,
@@ -116,6 +118,7 @@ void TreeModelPredictionMgr::createKernelBuffers() {
                          "Tree model decision tree buffer");
       copy_to_nvidia_gpu(
           data_mgr_,
+          cuda_stream,
           reinterpret_cast<CUdeviceptr>(decision_tree_offsets_device_buffer),
           reinterpret_cast<const int8_t*>(host_decision_tree_offsets_),
           decision_tree_offsets_size_bytes_,

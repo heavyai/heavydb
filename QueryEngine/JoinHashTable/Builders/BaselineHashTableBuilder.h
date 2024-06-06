@@ -135,7 +135,8 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             const bool with_val_slot,
                                             int* dev_err_buff,
                                             const KEY_HANDLER* key_handler,
-                                            const size_t num_elems) {
+                                            const size_t num_elems,
+                                            CUstream cuda_stream) {
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_baseline_hash_join_buff_on_device_32(hash_buff,
                                               entry_count,
@@ -145,7 +146,8 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                               with_val_slot,
                                               dev_err_buff,
                                               key_handler,
-                                              num_elems);
+                                              num_elems,
+                                              cuda_stream);
   } else if constexpr (std::is_same<KEY_HANDLER, RangeKeyHandler>::value) {
     UNREACHABLE();
   } else {
@@ -167,7 +169,8 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             const bool with_val_slot,
                                             int* dev_err_buff,
                                             const KEY_HANDLER* key_handler,
-                                            const size_t num_elems) {
+                                            const size_t num_elems,
+                                            CUstream cuda_stream) {
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_baseline_hash_join_buff_on_device_64(hash_buff,
                                               entry_count,
@@ -177,7 +180,8 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                               with_val_slot,
                                               dev_err_buff,
                                               key_handler,
-                                              num_elems);
+                                              num_elems,
+                                              cuda_stream);
   } else if constexpr (std::is_same<KEY_HANDLER, RangeKeyHandler>::value) {
     range_fill_baseline_hash_join_buff_on_device_64(hash_buff,
                                                     entry_count,
@@ -186,7 +190,8 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                                     with_val_slot,
                                                     dev_err_buff,
                                                     key_handler,
-                                                    num_elems);
+                                                    num_elems,
+                                                    cuda_stream);
   } else {
     static_assert(
         std::is_same<KEY_HANDLER, BoundingBoxIntersectKeyHandler>::value,
@@ -198,7 +203,8 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                                              with_val_slot,
                                                              dev_err_buff,
                                                              key_handler,
-                                                             num_elems);
+                                                             num_elems,
+                                                             cuda_stream);
   }
 }
 
@@ -211,7 +217,8 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const size_t key_component_count,
                                                     const KEY_HANDLER* key_handler,
                                                     const size_t num_elems,
-                                                    const bool for_window_framing) {
+                                                    const bool for_window_framing,
+                                                    CUstream cuda_stream) {
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_one_to_many_baseline_hash_table_on_device_32(buff,
                                                       composite_key_dict,
@@ -219,7 +226,8 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                       key_component_count,
                                                       key_handler,
                                                       num_elems,
-                                                      for_window_framing);
+                                                      for_window_framing,
+                                                      cuda_stream);
   } else {
     static_assert(
         std::is_same<KEY_HANDLER, BoundingBoxIntersectKeyHandler>::value ||
@@ -238,23 +246,25 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const size_t key_component_count,
                                                     const KEY_HANDLER* key_handler,
                                                     const size_t num_elems,
-                                                    const bool for_window_framing) {
+                                                    const bool for_window_framing,
+                                                    CUstream cuda_stream) {
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_one_to_many_baseline_hash_table_on_device_64(buff,
                                                       composite_key_dict,
                                                       hash_entry_count,
                                                       key_handler,
                                                       num_elems,
-                                                      for_window_framing);
+                                                      for_window_framing,
+                                                      cuda_stream);
   } else if constexpr (std::is_same<KEY_HANDLER, RangeKeyHandler>::value) {
     range_fill_one_to_many_baseline_hash_table_on_device_64(
-        buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
+        buff, composite_key_dict, hash_entry_count, key_handler, num_elems, cuda_stream);
   } else {
     static_assert(
         std::is_same<KEY_HANDLER, BoundingBoxIntersectKeyHandler>::value,
         "Only Generic, Bounding Box Intersect, and Range Key Handlers are supported.");
     bbox_intersect_fill_one_to_many_baseline_hash_table_on_device_64(
-        buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
+        buff, composite_key_dict, hash_entry_count, key_handler, num_elems, cuda_stream);
   }
 }
 
@@ -520,11 +530,11 @@ class BaselineJoinHashTableBuilder {
       VLOG(1) << "Stop building a hash table based on a column: an input table is empty";
       return 0;
     }
-    auto data_mgr = executor->getDataMgr();
-    auto allocator = std::make_unique<CudaAllocator>(
-        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-    auto dev_err_buff = allocator->alloc(sizeof(int));
-    allocator->copyToDevice(
+    auto device_allocator = executor->getCudaAllocator(device_id);
+    CHECK(device_allocator);
+    auto cuda_stream = executor->getCudaStream(device_id);
+    auto dev_err_buff = device_allocator->alloc(sizeof(int));
+    device_allocator->copyToDevice(
         dev_err_buff, &err, sizeof(err), "Baseline join hashtable error buffer");
     auto gpu_hash_table_buff = hash_table_->getGpuBuffer();
     CHECK(gpu_hash_table_buff);
@@ -532,7 +542,7 @@ class BaselineJoinHashTableBuilder {
         (join_type == JoinType::SEMI || join_type == JoinType::ANTI) &&
         hash_table_layout == HashType::OneToOne;
     const auto key_handler_gpu = transfer_flat_object_to_gpu(
-        *key_handler, *allocator, "Baseline hash join key handler");
+        *key_handler, *device_allocator, "Baseline hash join key handler");
     {
       auto timer_init = DEBUG_TIMER("Initialize GPU Baseline Join Hash Table");
       switch (hash_table_entry_info.getJoinKeysSize()) {
@@ -542,7 +552,8 @@ class BaselineJoinHashTableBuilder {
               hash_table_entry_info.getNumHashEntries(),
               hash_table_entry_info.getNumJoinKeys(),
               hash_table_layout == HashType::OneToOne,
-              -1);
+              -1,
+              cuda_stream);
           break;
         case 8:
           init_baseline_hash_join_buff_on_device_64(
@@ -550,7 +561,8 @@ class BaselineJoinHashTableBuilder {
               hash_table_entry_info.getNumHashEntries(),
               hash_table_entry_info.getNumJoinKeys(),
               hash_table_layout == HashType::OneToOne,
-              -1);
+              -1,
+              cuda_stream);
           break;
         default:
           UNREACHABLE();
@@ -568,8 +580,9 @@ class BaselineJoinHashTableBuilder {
             hash_table_layout == HashType::OneToOne,
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
-            join_columns.front().num_elems);
-        allocator->copyFromDevice(
+            join_columns.front().num_elems,
+            cuda_stream);
+        device_allocator->copyFromDevice(
             &err, dev_err_buff, sizeof(err), "Baseline join hashtable error code");
         break;
       }
@@ -583,8 +596,9 @@ class BaselineJoinHashTableBuilder {
             hash_table_layout == HashType::OneToOne,
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
-            join_columns.front().num_elems);
-        allocator->copyFromDevice(
+            join_columns.front().num_elems,
+            cuda_stream);
+        device_allocator->copyFromDevice(
             &err, dev_err_buff, sizeof(err), "Baseline join hashtable error code");
         break;
       }
@@ -602,7 +616,7 @@ class BaselineJoinHashTableBuilder {
         auto timer_init_additional_buf =
             DEBUG_TIMER("Initialize Additional Buffer for GPU Baseline Join Hash Table");
         init_hash_join_buff_on_device(
-            one_to_many_buff, hash_table_entry_info.getNumHashEntries(), -1);
+            one_to_many_buff, hash_table_entry_info.getNumHashEntries(), -1, cuda_stream);
       }
       setHashLayout(hash_table_layout);
       auto timer_fill_additional_buf =
@@ -617,7 +631,8 @@ class BaselineJoinHashTableBuilder {
               hash_table_entry_info.getNumJoinKeys(),
               key_handler_gpu,
               join_columns.front().num_elems,
-              join_type == JoinType::WINDOW_FUNCTION_FRAMING);
+              join_type == JoinType::WINDOW_FUNCTION_FRAMING,
+              cuda_stream);
 
           break;
         }
@@ -630,7 +645,8 @@ class BaselineJoinHashTableBuilder {
               hash_table_entry_info.getNumJoinKeys(),
               key_handler_gpu,
               join_columns.front().num_elems,
-              join_type == JoinType::WINDOW_FUNCTION_FRAMING);
+              join_type == JoinType::WINDOW_FUNCTION_FRAMING,
+              cuda_stream);
 
           break;
         }

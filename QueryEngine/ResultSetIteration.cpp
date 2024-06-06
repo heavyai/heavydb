@@ -632,15 +632,10 @@ InternalTargetValue ResultSet::getVarlenOrderEntry(const int64_t str_ptr,
   std::vector<int8_t> cpu_buffer;
   if (device_type_ == ExecutorDeviceType::GPU) {
     cpu_buffer.resize(str_len);
-    const auto executor = query_mem_desc_.getExecutor();
-    CHECK(executor);
-    auto data_mgr = executor->getDataMgr();
-    auto allocator = std::make_unique<CudaAllocator>(
-        data_mgr, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
-    allocator->copyFromDevice(&cpu_buffer[0],
-                              reinterpret_cast<int8_t*>(str_ptr),
-                              str_len,
-                              kSkipMemoryActivityLog);
+    getCudaAllocator()->copyFromDevice(&cpu_buffer[0],
+                                       reinterpret_cast<int8_t*>(str_ptr),
+                                       str_len,
+                                       kSkipMemoryActivityLog);
     host_str_ptr = reinterpret_cast<char*>(&cpu_buffer[0]);
   } else {
     CHECK(device_type_ == ExecutorDeviceType::CPU);
@@ -930,16 +925,13 @@ struct GeoLazyFetchHandler {
 
 inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
                                                        const int64_t length,
-                                                       Data_Namespace::DataMgr* data_mgr,
-                                                       const int device_id) {
+                                                       CudaAllocator* cuda_allocator) {
   auto cpu_buf =
       std::shared_ptr<int8_t>(new int8_t[length], std::default_delete<int8_t[]>());
-  auto allocator = std::make_unique<CudaAllocator>(
-      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-  allocator->copyFromDevice(cpu_buf.get(),
-                            reinterpret_cast<int8_t*>(varlen_ptr),
-                            length,
-                            kSkipMemoryActivityLog);
+  cuda_allocator->copyFromDevice(cpu_buf.get(),
+                                 reinterpret_cast<int8_t*>(varlen_ptr),
+                                 length,
+                                 kSkipMemoryActivityLog);
   // Just fetching the data from gpu, not checking geo nullness
   return std::make_unique<ArrayDatum>(length, cpu_buf, false);
 }
@@ -952,11 +944,9 @@ struct GeoQueryOutputFetchHandler {
     };
   }
 
-  static inline auto yieldGpuDatumFetcher(Data_Namespace::DataMgr* data_mgr_ptr,
-                                          const int device_id) {
-    return [data_mgr_ptr, device_id](const int64_t ptr,
-                                     const int64_t length) -> VarlenDatumPtr {
-      return fetch_data_from_gpu(ptr, length, data_mgr_ptr, device_id);
+  static inline auto yieldGpuDatumFetcher(CudaAllocator* cuda_allocator) {
+    return [cuda_allocator](const int64_t ptr, const int64_t length) -> VarlenDatumPtr {
+      return fetch_data_from_gpu(ptr, length, cuda_allocator);
     };
   }
 
@@ -970,9 +960,8 @@ struct GeoQueryOutputFetchHandler {
   template <typename... T>
   static inline auto fetch(const SQLTypeInfo& geo_ti,
                            const ResultSet::GeoReturnType return_type,
-                           Data_Namespace::DataMgr* data_mgr,
+                           CudaAllocator* cuda_allocator,
                            const bool fetch_data_from_gpu,
-                           const int device_id,
                            T&&... vals) {
     auto ad_arr_generator = [&](auto datum_fetcher) {
       constexpr int num_vals = sizeof...(vals);
@@ -1015,7 +1004,7 @@ struct GeoQueryOutputFetchHandler {
       if (return_type == ResultSet::GeoReturnType::GeoTargetValueGpuPtr) {
         return ad_arr_generator(yieldGpuPtrFetcher());
       } else {
-        return ad_arr_generator(yieldGpuDatumFetcher(data_mgr, device_id));
+        return ad_arr_generator(yieldGpuDatumFetcher(cuda_allocator));
       }
     } else {
       return ad_arr_generator(yieldCpuDatumFetcher());
@@ -1473,16 +1462,10 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
   std::vector<int8_t> cpu_buffer;
   if (varlen_ptr && device_type_ == ExecutorDeviceType::GPU) {
     cpu_buffer.resize(length);
-    const auto executor = query_mem_desc_.getExecutor();
-    CHECK(executor);
-    auto data_mgr = executor->getDataMgr();
-    auto allocator = std::make_unique<CudaAllocator>(
-        data_mgr, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
-
-    allocator->copyFromDevice(&cpu_buffer[0],
-                              reinterpret_cast<int8_t*>(varlen_ptr),
-                              length,
-                              kSkipMemoryActivityLog);
+    getCudaAllocator()->copyFromDevice(&cpu_buffer[0],
+                                       reinterpret_cast<int8_t*>(varlen_ptr),
+                                       length,
+                                       kSkipMemoryActivityLog);
     varlen_ptr = reinterpret_cast<int64_t>(&cpu_buffer[0]);
   }
   if (target_info.sql_type.is_array()) {
@@ -1728,12 +1711,6 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
 
   const bool is_gpu_fetch = device_type_ == ExecutorDeviceType::GPU;
 
-  auto getDataMgr = [&]() {
-    auto executor = query_mem_desc_.getExecutor();
-    CHECK(executor);
-    return executor->getDataMgr();
-  };
-
   auto getSeparateVarlenStorage = [&]() -> decltype(auto) {
     const auto storage_idx = getStorageIndex(entry_buff_idx);
     CHECK_LT(storage_idx.first, serialized_varlen_buffer_.size());
@@ -1764,9 +1741,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kPOINT, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            /*data_mgr=*/nullptr,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
             /*is_gpu_fetch=*/false,
-            device_id_,
             cpu_data_ptr,
             target_info.sql_type.get_compression() == kENCODING_GEOINT ? 8 : 16);
       } else if (separate_varlen_storage_valid_ && !target_info.is_agg) {
@@ -1777,9 +1755,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kPOINT, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            nullptr,
-            false,
-            device_id_,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
+            /*is_gpu_fetch=*/false,
             reinterpret_cast<int64_t>(
                 varlen_buffer[getCoordsDataPtr(geo_target_ptr)].data()),
             static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()));
@@ -1794,9 +1773,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kPOINT, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            is_gpu_fetch ? getDataMgr() : nullptr,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
             is_gpu_fetch,
-            device_id_,
             getCoordsDataPtr(geo_target_ptr),
             getCoordsLength(geo_target_ptr));
       }
@@ -1811,9 +1791,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kMULTIPOINT, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            nullptr,
-            false,
-            device_id_,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
+            /*is_gpu_fetch=*/false,
             reinterpret_cast<int64_t>(
                 varlen_buffer[getCoordsDataPtr(geo_target_ptr)].data()),
             static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()));
@@ -1838,9 +1819,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kMULTIPOINT, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            is_gpu_fetch ? getDataMgr() : nullptr,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
             is_gpu_fetch,
-            device_id_,
             getCoordsDataPtr(geo_target_ptr),
             getCoordsLength(geo_target_ptr));
       }
@@ -1855,9 +1837,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kLINESTRING, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            nullptr,
-            false,
-            device_id_,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
+            /*is_gpu_fetch=*/false,
             reinterpret_cast<int64_t>(
                 varlen_buffer[getCoordsDataPtr(geo_target_ptr)].data()),
             static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()));
@@ -1882,9 +1865,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kLINESTRING, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            is_gpu_fetch ? getDataMgr() : nullptr,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
             is_gpu_fetch,
-            device_id_,
             getCoordsDataPtr(geo_target_ptr),
             getCoordsLength(geo_target_ptr));
       }
@@ -1899,9 +1883,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kMULTILINESTRING, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            nullptr,
-            false,
-            device_id_,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
+            /*is_gpu_fetch=*/false,
             reinterpret_cast<int64_t>(
                 varlen_buffer[getCoordsDataPtr(geo_target_ptr)].data()),
             static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()),
@@ -1933,9 +1918,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kMULTILINESTRING, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            is_gpu_fetch ? getDataMgr() : nullptr,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
             is_gpu_fetch,
-            device_id_,
             getCoordsDataPtr(geo_target_ptr),
             getCoordsLength(geo_target_ptr),
             getRingSizesPtr(geo_target_ptr),
@@ -1952,9 +1938,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kPOLYGON, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            nullptr,
-            false,
-            device_id_,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
+            /*is_gpu_fetch=*/false,
             reinterpret_cast<int64_t>(
                 varlen_buffer[getCoordsDataPtr(geo_target_ptr)].data()),
             static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()),
@@ -1985,9 +1972,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kPOLYGON, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            is_gpu_fetch ? getDataMgr() : nullptr,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
             is_gpu_fetch,
-            device_id_,
             getCoordsDataPtr(geo_target_ptr),
             getCoordsLength(geo_target_ptr),
             getRingSizesPtr(geo_target_ptr),
@@ -2004,9 +1992,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kMULTIPOLYGON, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            nullptr,
-            false,
-            device_id_,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
+            /*is_gpu_fetch=*/false,
             reinterpret_cast<int64_t>(
                 varlen_buffer[getCoordsDataPtr(geo_target_ptr)].data()),
             static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()),
@@ -2043,9 +2032,10 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
         return GeoTargetValueBuilder<kMULTIPOLYGON, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            is_gpu_fetch ? getDataMgr() : nullptr,
+            /*device_allocator=*/device_type_ == ExecutorDeviceType::GPU
+                ? getCudaAllocator()
+                : nullptr,
             is_gpu_fetch,
-            device_id_,
             getCoordsDataPtr(geo_target_ptr),
             getCoordsLength(geo_target_ptr),
             getRingSizesPtr(geo_target_ptr),

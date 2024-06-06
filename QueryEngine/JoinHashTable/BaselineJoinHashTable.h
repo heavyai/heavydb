@@ -184,8 +184,7 @@ class BaselineJoinHashTable : public HashJoin {
   void reify(const HashType preferred_layout);
 
   void copyCpuHashTableToGpu(std::shared_ptr<BaselineHashTable>& cpu_hash_table,
-                             const int device_id,
-                             Data_Namespace::DataMgr* data_mgr);
+                             const int device_id);
 
   virtual void reifyForDevice(const ColumnsForDevice& columns_for_device,
                               const HashType layout,

@@ -69,13 +69,15 @@ class CudaAllocator : public DeviceAllocator {
                       const size_t num_bytes,
                       std::optional<std::string_view> tag) const override;
 
-  CUstream cudaStream() const { return cuda_stream_; }
-
   void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const override;
 
   void setDeviceMem(int8_t* device_ptr,
                     unsigned char uc,
                     const size_t num_bytes) const override;
+
+  int getDeviceId() const { return device_id_; }
+
+  Data_Namespace::DataMgr* getDataMgr() const { return data_mgr_; }
 
  private:
   std::vector<Data_Namespace::AbstractBuffer*> owned_buffers_;

@@ -31,6 +31,12 @@
 
 class CudaAllocator;
 
+#ifdef HAVE_CUDA
+#include <cuda.h>
+#else
+#include <Shared/nocuda.h>
+#endif
+
 namespace heavyai {
 namespace agg_mode {
 namespace detail {
@@ -43,7 +49,7 @@ class AggModeHashTablesGpu {
   using Allocator = FastAllocator<int8_t>;
 #ifdef HAVE_CUDA
   ~AggModeHashTablesGpu();
-  void init(CudaAllocator*, size_t nhash_tables);
+  void init(CudaAllocator*, CUstream, size_t nhash_tables);
   std::vector<int8_t> serialize() const;
   AggMode::Map moveToHost(size_t const index);
 #endif
