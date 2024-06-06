@@ -953,8 +953,7 @@ class Executor {
       const QueryCompilationDescriptor& query_comp_desc,
       const QueryMemoryDescriptor& query_mem_desc,
       RenderInfo* render_info,
-      std::unordered_set<int>& available_gpus,
-      int& available_cpus);
+      std::unordered_set<int>& available_gpus);
 
   /**
    * Launches execution kernels created by `createKernels` asynchronously using a thread
@@ -998,7 +997,8 @@ class Executor {
       std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
       const ExecutorDeviceType device_type,
       const std::vector<InputDescriptor>& input_descs,
-      const QueryMemoryDescriptor& query_mem_desc);
+      const QueryMemoryDescriptor& query_mem_desc,
+      const size_t available_cpus);
 
   std::vector<size_t> getTableFragmentIndices(
       const RelAlgExecutionUnit& ra_exe_unit,
