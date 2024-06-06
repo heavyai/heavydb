@@ -18,9 +18,12 @@
 #include <thread>
 
 #include "../QueryEngine/ExecutorResourceMgr/ExecutorResourceMgr.h"
+#include "../Shared/scope.h"
 #include "TestHelpers.h"
 
 using namespace ExecutorResourceMgr_Namespace;
+
+extern bool g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query;
 
 const size_t default_cpu_slots{16};
 const size_t default_gpu_slots{2};
@@ -51,6 +54,15 @@ const ChunkRequestInfo default_chunk_request_info;  // Empty request info to sat
 const bool default_output_buffers_reusable_intra_thread{false};
 
 const size_t ZERO_SIZE{0UL};
+
+const char* QUERY_NEEDS_TOO_MANY_CPU_SLOTS_ERR_MSG = "Query requested more CPU slots";
+const char* QUERY_NEEDS_TOO_MANY_GPU_SLOTS_ERR_MSG = "Query requested more GPU slots";
+const char* QUERY_NEEDS_TOO_MUCH_CPU_RESULT_MEM_ERR_MSG =
+    "Query requested more CPU result memory";
+const char* QUERY_NEEDS_TOO_MUCH_CPU_BUFFER_POOP_MEM_ERR_MSG =
+    "Query requested more CPU buffer pool mem";
+const char* QUERY_NEEDS_TOO_MUCH_GPU_BUFFER_POOP_MEM_ERR_MSG =
+    "Query requested more GPU buffer pool mem";
 
 std::shared_ptr<ExecutorResourceMgr> gen_resource_mgr_with_defaults(
     bool enable_cpu_buffer_pool = false) {
@@ -318,8 +330,14 @@ TEST(ExecutorResourceMgr, ErrorOnPerQueryLargeRequests) {
       default_chunk_request_info,
       default_output_buffers_reusable_intra_thread);
 
-  EXPECT_THROW(executor_resource_mgr->request_resources(too_many_cpu_slots_request_info),
-               QueryNeedsTooManyCpuSlots);
+  try {
+    executor_resource_mgr->request_resources(too_many_cpu_slots_request_info);
+    EXPECT_TRUE(false) << "We should throw an exception.";
+  } catch (std::runtime_error const& e) {
+    std::string err_msg(e.what());
+    EXPECT_TRUE(err_msg.find(QUERY_NEEDS_TOO_MANY_CPU_SLOTS_ERR_MSG) !=
+                std::string::npos);
+  }
 
   check_resources(executor_resource_mgr,
                   ZERO_SIZE,
@@ -346,8 +364,15 @@ TEST(ExecutorResourceMgr, ErrorOnPerQueryLargeRequests) {
       default_chunk_request_info,
       default_output_buffers_reusable_intra_thread);
 
-  EXPECT_THROW(executor_resource_mgr->request_resources(too_many_gpu_slots_request_info),
-               QueryNeedsTooManyGpuSlots);
+  try {
+    executor_resource_mgr->request_resources(too_many_gpu_slots_request_info);
+    EXPECT_TRUE(false) << "We should throw an exception.";
+  } catch (std::runtime_error const& e) {
+    std::string err_msg(e.what());
+    EXPECT_TRUE(err_msg.find(QUERY_NEEDS_TOO_MANY_GPU_SLOTS_ERR_MSG) !=
+                std::string::npos);
+  }
+
   check_resources(executor_resource_mgr,
                   ZERO_SIZE,
                   default_cpu_slots,
@@ -373,9 +398,15 @@ TEST(ExecutorResourceMgr, ErrorOnPerQueryLargeRequests) {
       default_chunk_request_info,
       default_output_buffers_reusable_intra_thread);
 
-  EXPECT_THROW(
-      executor_resource_mgr->request_resources(too_much_cpu_result_mem_request_info),
-      QueryNeedsTooMuchCpuResultMem);
+  try {
+    executor_resource_mgr->request_resources(too_much_cpu_result_mem_request_info);
+    EXPECT_TRUE(false) << "We should throw an exception.";
+  } catch (std::runtime_error const& e) {
+    std::string err_msg(e.what());
+    EXPECT_TRUE(err_msg.find(QUERY_NEEDS_TOO_MUCH_CPU_RESULT_MEM_ERR_MSG) !=
+                std::string::npos);
+  }
+
   check_resources(executor_resource_mgr,
                   ZERO_SIZE,
                   default_cpu_slots,
@@ -513,8 +544,21 @@ TEST(ExecutorResourceMgr, TooBigBufferPoolRequests) {
     auto cpu_big_request_info = gen_default_request_info();
     cpu_big_request_info.chunk_request_info =
         gen_chunk_request_info(1, 2, 1, 2, 1, static_cast<size_t>(1L << 37), false);
-    EXPECT_THROW(executor_resource_mgr->request_resources(cpu_big_request_info),
-                 QueryNeedsTooMuchBufferPoolMem);
+    ScopeGuard reset_flag =
+        [orig =
+             g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query]() {
+          g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = orig;
+        };
+
+    g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = false;
+    try {
+      executor_resource_mgr->request_resources(cpu_big_request_info);
+      EXPECT_TRUE(false) << "We should throw an exception.";
+    } catch (std::runtime_error const& e) {
+      std::string err_msg(e.what());
+      EXPECT_TRUE(err_msg.find(QUERY_NEEDS_TOO_MUCH_CPU_BUFFER_POOP_MEM_ERR_MSG) !=
+                  std::string::npos);
+    }
 
     // ResourcePool should be empty
     check_resources(executor_resource_mgr,
@@ -533,8 +577,15 @@ TEST(ExecutorResourceMgr, TooBigBufferPoolRequests) {
     gpu_big_request_info.chunk_request_info.device_memory_pool_type =
         ExecutorDeviceType::GPU;
     gpu_big_request_info.chunk_request_info.bytes_scales_per_kernel = false;
-    EXPECT_THROW(executor_resource_mgr->request_resources(gpu_big_request_info),
-                 QueryNeedsTooMuchBufferPoolMem);
+
+    try {
+      executor_resource_mgr->request_resources(cpu_big_request_info);
+      EXPECT_TRUE(false) << "We should throw an exception.";
+    } catch (std::runtime_error const& e) {
+      std::string err_msg(e.what());
+      EXPECT_TRUE(err_msg.find(QUERY_NEEDS_TOO_MUCH_CPU_BUFFER_POOP_MEM_ERR_MSG) !=
+                  std::string::npos);
+    }
 
     // ResourcePool should be empty
     check_resources(executor_resource_mgr,
@@ -948,8 +999,15 @@ TEST(ExecutorResourceMgr, ChangeTotalResource) {
   const auto request_info = gen_default_request_info();
   // Now request should throw as we request a 4 CPU slots with a minimum fallback of 2,
   // but only have 1 in pool
-  EXPECT_THROW(executor_resource_mgr->request_resources(request_info),
-               QueryNeedsTooManyCpuSlots);
+  try {
+    executor_resource_mgr->request_resources(request_info);
+    EXPECT_TRUE(false) << "We should throw an exception.";
+  } catch (std::runtime_error const& e) {
+    std::string err_msg(e.what());
+    EXPECT_TRUE(err_msg.find(QUERY_NEEDS_TOO_MANY_CPU_SLOTS_ERR_MSG) !=
+                std::string::npos);
+  }
+
   check_resources(executor_resource_mgr,
                   ZERO_SIZE,
                   new_cpu_slot_size,
@@ -982,6 +1040,14 @@ TEST(ExecutorResourceMgr, HandleFailedResourceRequest) {
                                                               false,
                                                               0.8);
   ASSERT_TRUE(executor_resource_mgr != nullptr);
+
+  ScopeGuard reset_flag =
+      [orig =
+           g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query]() {
+        g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = orig;
+      };
+
+  g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = false;
 
   // Ensure exception is thrown for too large of a request
   bool detect_exception = false;
@@ -1021,7 +1087,7 @@ TEST(ExecutorResourceMgr, HandleFailedResourceRequest) {
     CHECK(request_handle);
   } catch (std::runtime_error const& e) {
     std::string error_msg(e.what());
-    if (error_msg.find("RequestStats error: Query requested more CPU result memory") !=
+    if (error_msg.find(QUERY_NEEDS_TOO_MUCH_CPU_RESULT_MEM_ERR_MSG) !=
         std::string::npos) {
       detect_exception = true;
     }
@@ -1086,6 +1152,196 @@ TEST(ExecutorResourceMgr, EnableCPUBufferPool) {
   EXPECT_EQ(post_resource_release_executor_stats.requests_executed, size_t(1));
   EXPECT_EQ(post_resource_release_executor_stats.cpu_requests_executed, size_t(1));
   EXPECT_EQ(post_resource_release_executor_stats.gpu_requests_executed, size_t(0));
+}
+
+TEST(ExecutorResourceMgr, AdjustNumCPUSlotForCPUGroupbyQuery) {
+  auto executor_resource_mgr = generate_executor_resource_mgr(
+      32,
+      1,
+      0u,
+      true,
+      20480,
+      default_gpu_buffer_pool_mem,
+      default_per_query_max_cpu_slots_ratio,
+      default_per_query_max_cpu_result_mem_ratio,
+      default_per_query_max_pinned_cpu_buffer_pool_mem_ratio,
+      default_per_query_max_pageable_cpu_buffer_pool_mem_ratio,
+      default_allow_cpu_kernel_concurrency,
+      default_allow_cpu_gpu_kernel_concurrency,
+      default_allow_cpu_slot_oversubscription_concurrency,
+      default_allow_gpu_slot_oversubscription,
+      default_allow_cpu_result_mem_oversubscription_concurrency,
+      default_max_available_resource_use_ratio);
+  ASSERT_TRUE(executor_resource_mgr != nullptr);
+  ChunkRequestInfo chunk_request_info{
+      ExecutorDeviceType::CPU,
+      std::vector<std::pair<std::vector<int>, unsigned long>>(50),
+      50,
+      796,
+      std::vector<unsigned long>(50, 16),
+      16,
+      true};
+
+  for (size_t i = 0; i < 50; ++i) {
+    chunk_request_info.chunks_with_byte_sizes[i] = {{3, 220, 1, static_cast<int>(i)},
+                                                    (i == 49) ? 12 : 16};
+  }
+
+  RequestInfo resource_request_info{
+      ExecutorDeviceType::CPU, 0, 40, 1, 0, 0, 63680, 1592, chunk_request_info, true};
+
+  ScopeGuard reset_flag =
+      [orig =
+           g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query]() {
+        g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = orig;
+      };
+
+  g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = false;
+  try {
+    auto request_info = executor_resource_mgr->request_resources(resource_request_info);
+    ASSERT_TRUE(false) << "We should throw an ERM \'RequestStat Error\' exception.";
+  } catch (std::runtime_error const& e) {
+    std::string const err_msg{e.what()};
+    std::string const expected_msg{
+        "RequestStats error: Query requested more CPU result memory (62.18 KB) than "
+        "available per query (15.0 KB) in executor resource pool"};
+    ASSERT_EQ(err_msg, expected_msg);
+  }
+
+  g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = true;
+  ASSERT_NO_THROW(executor_resource_mgr->request_resources(resource_request_info));
+}
+
+TEST(ExecutorResourceMgr, AdjustedNumCPUSlotBecomeZero) {
+  auto executor_resource_mgr = generate_executor_resource_mgr(
+      1,
+      1,
+      0u,
+      true,
+      1000,
+      default_gpu_buffer_pool_mem,
+      default_per_query_max_cpu_slots_ratio,
+      default_per_query_max_cpu_result_mem_ratio,
+      default_per_query_max_pinned_cpu_buffer_pool_mem_ratio,
+      default_per_query_max_pageable_cpu_buffer_pool_mem_ratio,
+      default_allow_cpu_kernel_concurrency,
+      default_allow_cpu_gpu_kernel_concurrency,
+      default_allow_cpu_slot_oversubscription_concurrency,
+      default_allow_gpu_slot_oversubscription,
+      default_allow_cpu_result_mem_oversubscription_concurrency,
+      default_max_available_resource_use_ratio);
+  ASSERT_TRUE(executor_resource_mgr != nullptr);
+  ChunkRequestInfo chunk_request_info{
+      ExecutorDeviceType::CPU,
+      std::vector<std::pair<std::vector<int>, unsigned long>>(40),
+      40,
+      796,
+      std::vector<unsigned long>(40, 16),
+      16,
+      true};
+
+  for (size_t i = 0; i < 40; ++i) {
+    chunk_request_info.chunks_with_byte_sizes[i] = {{3, 220, 1, static_cast<int>(i)}, 16};
+  }
+
+  RequestInfo resource_request_info{
+      ExecutorDeviceType::CPU, 0, 40, 1, 0, 0, 63680, 1592, chunk_request_info, true};
+
+  ScopeGuard reset_flag =
+      [orig =
+           g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query]() {
+        g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = orig;
+      };
+
+  g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = false;
+  try {
+    auto request_info = executor_resource_mgr->request_resources(resource_request_info);
+    ASSERT_TRUE(false) << "We should throw an exception.";
+  } catch (std::runtime_error const& e) {
+    std::string const err_msg{e.what()};
+    std::string const expected_msg{
+        "RequestStats error: Query requested more CPU result memory (1.55 KB) than "
+        "available per query (750 bytes) in executor resource pool"};
+    ASSERT_EQ(err_msg, expected_msg);
+  }
+
+  g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = true;
+  try {
+    auto request_info = executor_resource_mgr->request_resources(resource_request_info);
+    ASSERT_TRUE(false) << "We should throw an exception.";
+  } catch (std::runtime_error const& e) {
+    std::string const err_msg{e.what()};
+    std::string const expected_msg{
+        "Failed to adjust CPU slots for \'QueryNeedsTooMuchCpuResultMem\' error: "
+        "adjusted CPU slots should be larger than zero"};
+    ASSERT_EQ(err_msg, expected_msg);
+  }
+}
+
+TEST(ExecutorResourceMgr, IdentitalAdjustedNumCPUSlot) {
+  auto executor_resource_mgr = generate_executor_resource_mgr(
+      1,
+      1,
+      0u,
+      true,
+      70000,
+      default_gpu_buffer_pool_mem,
+      default_per_query_max_cpu_slots_ratio,
+      default_per_query_max_cpu_result_mem_ratio,
+      default_per_query_max_pinned_cpu_buffer_pool_mem_ratio,
+      default_per_query_max_pageable_cpu_buffer_pool_mem_ratio,
+      default_allow_cpu_kernel_concurrency,
+      default_allow_cpu_gpu_kernel_concurrency,
+      default_allow_cpu_slot_oversubscription_concurrency,
+      default_allow_gpu_slot_oversubscription,
+      default_allow_cpu_result_mem_oversubscription_concurrency,
+      default_max_available_resource_use_ratio);
+  ASSERT_TRUE(executor_resource_mgr != nullptr);
+  ChunkRequestInfo chunk_request_info{
+      ExecutorDeviceType::CPU,
+      std::vector<std::pair<std::vector<int>, unsigned long>>(2),
+      2,
+      796,
+      std::vector<unsigned long>(2, 16),
+      16,
+      true};
+
+  for (size_t i = 0; i < 2; ++i) {
+    chunk_request_info.chunks_with_byte_sizes[i] = {{3, 220, 1, static_cast<int>(i)}, 16};
+  }
+
+  RequestInfo resource_request_info{
+      ExecutorDeviceType::CPU, 0, 2, 1, 0, 0, 63680, 1592, chunk_request_info, true};
+
+  ScopeGuard reset_flag =
+      [orig =
+           g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query]() {
+        g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = orig;
+      };
+
+  g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = false;
+  try {
+    auto request_info = executor_resource_mgr->request_resources(resource_request_info);
+    ASSERT_TRUE(false) << "We should throw an exception.";
+  } catch (std::runtime_error const& e) {
+    std::string const err_msg{e.what()};
+    std::string const expected_msg{
+        "RequestStats error: Query requested more CPU result memory (62.18 KB) than "
+        "available per query (51.26 KB) in executor resource pool"};
+    ASSERT_EQ(err_msg, expected_msg);
+  }
+
+  g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = true;
+  try {
+    auto request_info = executor_resource_mgr->request_resources(resource_request_info);
+    ASSERT_TRUE(false) << "We should throw an exception.";
+  } catch (std::runtime_error const& e) {
+    std::string const err_msg{e.what()};
+    std::string const expected_msg{
+        "Failed to adjust CPU slots for \'QueryNeedsTooMuchCpuResultMem\' error: "
+        "adjusted CPU slots is equal to the original resource request"};
+    ASSERT_EQ(err_msg, expected_msg);
+  }
 }
 
 int main(int argc, char** argv) {
