@@ -85,9 +85,10 @@ class PerfectJoinHashTableBuilder {
     CHECK(gpu_hash_table_err_buff);
     auto dev_err_buff = gpu_hash_table_err_buff->getMemoryPtr();
     int err{0};
-    auto allocator = std::make_unique<CudaAllocator>(
-        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-    allocator->copyToDevice(
+    auto device_allocator = executor->getCudaAllocator(device_id);
+    CHECK(device_allocator);
+    auto cuda_stream = executor->getCudaStream(device_id);
+    device_allocator->copyToDevice(
         dev_err_buff, &err, sizeof(err), "Perfect join hashtable error buffer");
     CHECK(hash_table_);
     auto gpu_hash_table_buff = hash_table_->getGpuBuffer();
@@ -95,7 +96,8 @@ class PerfectJoinHashTableBuilder {
       auto timer_init = DEBUG_TIMER("Initialize GPU Perfect Hash Table");
       init_hash_join_buff_on_device(reinterpret_cast<int32_t*>(gpu_hash_table_buff),
                                     hash_entry_info.getNormalizedHashEntryCount(),
-                                    hash_join_invalid_val);
+                                    hash_join_invalid_val,
+                                    cuda_stream);
     }
     if (chunk_key.empty()) {
       return;
@@ -138,13 +140,13 @@ class PerfectJoinHashTableBuilder {
         for (size_t shard = device_id; shard < shard_count; shard += device_count) {
           auto const shard_info =
               ShardInfo{shard, entries_per_shard, shard_count, device_count};
-          hash_table_fill_func(one_to_one_args, shard_info);
+          hash_table_fill_func(cuda_stream, one_to_one_args, shard_info);
         }
       } else {
         decltype(&fill_hash_join_buff_on_device) const hash_table_fill_func =
             use_bucketization ? fill_hash_join_buff_on_device_bucketized
                               : fill_hash_join_buff_on_device;
-        hash_table_fill_func(one_to_one_args);
+        hash_table_fill_func(cuda_stream, one_to_one_args);
       }
     } else {  // layout == HashType::OneToMany
       OneToManyPerfectJoinHashTableFillFuncArgs one_to_many_args{
@@ -163,16 +165,17 @@ class PerfectJoinHashTableBuilder {
         for (size_t shard = device_id; shard < shard_count; shard += device_count) {
           auto const shard_info =
               ShardInfo{shard, entries_per_shard, shard_count, device_count};
-          fill_one_to_many_hash_table_on_device_sharded(one_to_many_args, shard_info);
+          fill_one_to_many_hash_table_on_device_sharded(
+              cuda_stream, one_to_many_args, shard_info);
         }
       } else {
         decltype(&fill_one_to_many_hash_table_on_device) const hash_table_fill_func =
             use_bucketization ? fill_one_to_many_hash_table_on_device_bucketized
                               : fill_one_to_many_hash_table_on_device;
-        hash_table_fill_func(one_to_many_args);
+        hash_table_fill_func(cuda_stream, one_to_many_args);
       }
     }
-    allocator->copyFromDevice(
+    device_allocator->copyFromDevice(
         &err, dev_err_buff, sizeof(err), "Baseline join hashtable error code");
     if (err) {
       if (hash_table_entry_info.getHashTableLayout() == HashType::OneToOne) {

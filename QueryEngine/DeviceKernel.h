@@ -36,17 +36,10 @@ class DeviceKernel {
                       KernelParamsLog const&,
                       bool optimize_block_and_grid_sizes) = 0;
 
-  virtual void initializeDynamicWatchdog(bool could_interrupt, uint64_t cycle_budget) = 0;
-  virtual void initializeRuntimeInterrupter(const int device_id) = 0;
-  virtual void resetRuntimeInterrupter(const int device_id) = 0;
-
   virtual char const* name() const = 0;
 
   virtual ~DeviceKernel() = default;
 };
-
-std::unique_ptr<DeviceKernel> create_device_kernel(const CompilationContext* ctx,
-                                                   int device_id);
 
 // Temp struct used to log information on a CUDA error after a kernel launch.
 struct DeviceKernelLaunchErrorLogDump {
@@ -66,3 +59,47 @@ struct DeviceKernelLaunchErrorLogDump {
 };
 
 std::ostream& operator<<(std::ostream&, DeviceKernelLaunchErrorLogDump const&);
+
+#ifdef HAVE_CUDA
+
+class NvidiaKernel : public DeviceKernel {
+ public:
+  NvidiaKernel(const CompilationContext* ctx, int device_id, CUstream cuda_stream)
+      : device_id_(device_id), cuda_stream_(cuda_stream) {
+    auto cuda_ctx = dynamic_cast<const GpuCompilationContext*>(ctx);
+    CHECK(cuda_ctx);
+    name_ = cuda_ctx->name(device_id);
+    const auto native_code = cuda_ctx->getNativeCode(device_id);
+    function_ptr_ = static_cast<CUfunction>(native_code.first);
+    module_ptr_ = static_cast<CUmodule>(native_code.second);
+  }
+
+  void launch(unsigned int grid_dim_x,
+              unsigned int grid_dim_y,
+              unsigned int grid_dim_z,
+              unsigned int block_dim_x,
+              unsigned int block_dim_y,
+              unsigned int block_dim_z,
+              CompilationResult const& compilation_result,
+              void** kernel_params,
+              KernelParamsLog const& kernel_params_log,
+              bool optimize_block_and_grid_sizes) override;
+
+  char const* name() const override { return name_.c_str(); }
+
+  CUmodule getModulePtr() const { return module_ptr_; }
+
+ private:
+  CUfunction function_ptr_;
+  CUmodule module_ptr_;
+  int device_id_;
+  std::string name_;
+  CUstream cuda_stream_;
+
+  friend std::ostream& operator<<(std::ostream&, DeviceKernelLaunchErrorLogDump const&);
+};
+#endif
+
+std::unique_ptr<DeviceKernel> create_device_kernel(const CompilationContext* ctx,
+                                                   int device_id,
+                                                   CUstream cuda_stream);

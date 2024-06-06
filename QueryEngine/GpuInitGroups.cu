@@ -1,5 +1,4 @@
 #include <cuda.h>
-CUstream getQueryEngineCudaStream();
 
 #include "BufferCompaction.h"
 #include "GpuInitGroups.h"
@@ -201,9 +200,9 @@ void init_group_by_buffer_on_device(int64_t* groups_buffer,
                                     const bool keyless,
                                     const int8_t warp_size,
                                     const size_t block_size_x,
-                                    const size_t grid_size_x) {
-  auto qe_cuda_stream = getQueryEngineCudaStream();
-  init_group_by_buffer_gpu<<<grid_size_x, block_size_x, 0, qe_cuda_stream>>>(
+                                    const size_t grid_size_x,
+                                    CUstream cuda_stream) {
+  init_group_by_buffer_gpu<<<grid_size_x, block_size_x, 0, cuda_stream>>>(
       groups_buffer,
       init_vals,
       groups_buffer_entry_count,
@@ -212,7 +211,7 @@ void init_group_by_buffer_on_device(int64_t* groups_buffer,
       row_size_quad,
       keyless,
       warp_size);
-  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(cuda_stream));
 }
 
 void init_columnar_group_by_buffer_on_device(int64_t* groups_buffer,
@@ -225,19 +224,19 @@ void init_columnar_group_by_buffer_on_device(int64_t* groups_buffer,
                                              const bool keyless,
                                              const int8_t key_size,
                                              const size_t block_size_x,
-                                             const size_t grid_size_x) {
-  auto qe_cuda_stream = getQueryEngineCudaStream();
+                                             const size_t grid_size_x,
+                                             CUstream cuda_stream) {
   init_columnar_group_by_buffer_gpu_wrapper<<<grid_size_x,
                                               block_size_x,
                                               0,
-                                              qe_cuda_stream>>>(groups_buffer,
-                                                                init_vals,
-                                                                groups_buffer_entry_count,
-                                                                key_count,
-                                                                agg_col_count,
-                                                                col_sizes,
-                                                                need_padding,
-                                                                keyless,
-                                                                key_size);
-  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
+                                              cuda_stream>>>(groups_buffer,
+                                                             init_vals,
+                                                             groups_buffer_entry_count,
+                                                             key_count,
+                                                             agg_col_count,
+                                                             col_sizes,
+                                                             need_padding,
+                                                             keyless,
+                                                             key_size);
+  checkCudaErrors(cudaStreamSynchronize(cuda_stream));
 }
