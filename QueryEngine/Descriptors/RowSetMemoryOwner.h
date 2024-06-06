@@ -145,6 +145,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     CHECK_LT(thread_idx, non_owned_group_by_buffers_.size());
     // First try cache
     if (non_owned_group_by_buffers_[thread_idx]) {  // not nullptr
+      VLOG(1) << "Reuse cached groupby buffer: " << num_bytes << " bytes (THREAD-"
+              << thread_idx << ")";
       return std::make_pair(non_owned_group_by_buffers_[thread_idx], true);
     }
     // Was not in cache so must allocate

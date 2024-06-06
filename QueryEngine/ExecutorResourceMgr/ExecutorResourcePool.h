@@ -245,9 +245,6 @@ class ExecutorResourcePool {
 
   void log_parameters() const;
 
-  std::vector<ResourceRequestGrant> calc_static_resource_grant_ranges_for_request(
-      const std::vector<ResourceRequest>& resource_requests) const;
-
   /**
    * @brief Given the provided resource_request, statically calculate the minimum and
    * maximum grantable resources for that request. Note that the max resource grant
@@ -405,9 +402,6 @@ class ExecutorResourcePool {
 
   void init_concurrency_policies();
   void init_max_resource_grants_per_requests();
-
-  void throw_insufficient_resource_error(const ResourceSubtype resource_subtype,
-                                         const size_t min_resource_requested) const;
 
   size_t calc_max_resource_grant_for_request(
       const size_t requested_resource_quantity,
