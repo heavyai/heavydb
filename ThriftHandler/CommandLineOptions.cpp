@@ -88,6 +88,11 @@ extern bool g_use_cpu_mem_pool_for_output_buffers;
 extern bool g_use_cpu_mem_pool_size_for_max_cpu_slab_size;
 extern bool g_verbose_lock_logging;
 
+extern std::string g_heavyiq_url;
+extern size_t g_max_concurrent_llm_transform_call;
+extern int32_t g_llm_transform_call_timeout_ms;
+extern int64_t g_llm_transform_max_num_unique_value;
+
 #ifdef ENABLE_MEMKIND
 extern std::string g_pmem_path;
 #endif
@@ -133,6 +138,11 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(g_bigint_count)
                          ->implicit_value(true),
                      "Use 64-bit count.");
+  desc.add_options()("llm-transform-max-num-unique-value",
+                     po::value<int64_t>(&g_llm_transform_max_num_unique_value)
+                         ->default_value(g_llm_transform_max_num_unique_value),
+                     "The maximum number of unique values of the input expression of the "
+                     "LLM_TRANSFORM operator.");
 
   desc.add_options()(
       "enable-executor-resource-mgr",
