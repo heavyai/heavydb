@@ -17,10 +17,13 @@
 #include <iostream>
 #include <thread>
 
+#include "DataMgr/BufferMgr/BufferMgr.h"
 #include "ExecutorResourceMgr.h"
 #include "Logger/Logger.h"
 
 static const char* REQUEST_STATS_ERROR_MSG_PREFIX = "RequestStats error: ";
+
+extern bool g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query;
 
 namespace ExecutorResourceMgr_Namespace {
 
@@ -52,8 +55,14 @@ ExecutorResourceMgr::request_resources_with_timeout(const RequestInfo& request_i
 
   // Following can throw
   // Should we put in stats to track errors?
-  min_max_resource_grants =
-      executor_resource_pool_.calc_min_max_resource_grants_for_request(request_info);
+  try {
+    min_max_resource_grants =
+        executor_resource_pool_.calc_min_max_resource_grants_for_request(request_info);
+  } catch (std::runtime_error const& e) {
+    std::ostringstream oss;
+    oss << REQUEST_STATS_ERROR_MSG_PREFIX << e.what();
+    throw ExecutorResourceMgrError(std::nullopt, oss.str());
+  }
 
   const auto request_id = enqueue_request(request_info,
                                           timeout_in_ms,
@@ -113,8 +122,62 @@ std::unique_ptr<ExecutorResourceHandle> ExecutorResourceMgr::request_resources(
         request_info,
         static_cast<size_t>(0));  // 0 signifies no timeout
   } catch (ExecutorResourceMgrError const& e) {
-    if (e.getErrorMsg().find(REQUEST_STATS_ERROR_MSG_PREFIX) == 0u) {
-      handle_resource_stat_error(e.getRequestId());
+    if (e.getErrorMsg().find(REQUEST_STATS_ERROR_MSG_PREFIX) == 0u &&
+        e.getRequestId().has_value()) {
+      handle_resource_stat_error(e.getRequestId().value());
+    }
+    auto result_memory_error =
+        e.getErrorMsg().find("CPU result memory") != std::string::npos;
+    if (g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query &&
+        request_info.output_buffers_reusable_intra_thread && result_memory_error &&
+        request_info.cpu_slots > 1) {
+      // Calculate memory requirements and limits
+      const auto current_per_slot_res_buf_mem_bytes =
+          request_info.cpu_result_mem / request_info.cpu_slots;
+      const auto cpu_buffer_pool_size_bytes =
+          get_resource_info(ResourceType::CPU_BUFFER_POOL_MEM).second;
+      const auto page_size = heavyai::get_page_size();
+      const auto num_pages =
+          (current_per_slot_res_buf_mem_bytes + page_size - 1) / page_size;
+      const auto actual_buf_size_per_slot = page_size * num_pages;
+      CHECK_GT(actual_buf_size_per_slot, 0u);
+
+      // Adjust cpu slots to fit into an available cpu buffer pool memory
+      const auto adjusted_cpu_slots =
+          cpu_buffer_pool_size_bytes / actual_buf_size_per_slot;
+
+      // Check if a valid number of CPU slots was found
+      if (adjusted_cpu_slots <= 0u) {
+        VLOG(1) << e.getErrorMsg();
+        throw std::runtime_error(
+            "Failed to adjust CPU slots for \'QueryNeedsTooMuchCpuResultMem\' error: "
+            "adjusted CPU slots should be larger than zero");
+      }
+      if (adjusted_cpu_slots == request_info.cpu_slots) {
+        VLOG(1) << e.getErrorMsg();
+        throw std::runtime_error(
+            "Failed to adjust CPU slots for 'QueryNeedsTooMuchCpuResultMem' error: "
+            "adjusted CPU slots is equal to the original resource request");
+      }
+
+      // Update the request with the new number of CPU slots
+      RequestInfo updated_request = request_info;
+      updated_request.cpu_slots = adjusted_cpu_slots;
+      const auto cpu_result_mem_bytes_per_kernel =
+          request_info.cpu_result_mem / request_info.cpu_slots;
+      updated_request.cpu_result_mem =
+          cpu_result_mem_bytes_per_kernel * adjusted_cpu_slots;
+
+      // Log the adjustment details
+      VLOG(1) << e.getErrorMsg()
+              << ", retry resource request with reduced number of CPU slots ("
+              << request_info.cpu_slots << " -> " << adjusted_cpu_slots
+              << ") to reduce the amount of requested memory for query resultset buffer: "
+              << format_num_bytes(request_info.cpu_result_mem) << " -> "
+              << format_num_bytes(updated_request.cpu_result_mem) << ")";
+
+      // Request resources with the updated request
+      return request_resources(updated_request);
     }
     throw std::runtime_error(e.getErrorMsg());
   }
@@ -362,7 +425,8 @@ void ExecutorResourceMgr::process_queue_loop() {
     try {
       chosen_request_id = choose_next_request();
     } catch (ExecutorResourceMgrError const& e) {
-      chosen_request_id = e.getRequestId();
+      CHECK(e.getRequestId().has_value());
+      chosen_request_id = e.getRequestId().value();
       mark_request_error(chosen_request_id, e.getErrorMsg());
     }
     if (enable_debug_printing_) {
