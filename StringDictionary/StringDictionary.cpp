@@ -54,6 +54,7 @@
 
 bool g_cache_string_hash{true};
 size_t g_max_concurrent_llm_transform_call{16};
+int64_t g_llm_transform_max_num_unique_value{1000};
 
 namespace {
 
@@ -1927,9 +1928,20 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   constexpr int64_t target_strings_per_thread{1000};
   ThreadInfo thread_info(
       std::thread::hardware_concurrency(), num_source_strings, target_strings_per_thread);
-  if (std::any_of(string_op_infos.begin(), string_op_infos.end(), [](auto const& info) {
+  auto const has_llm_transform_expr =
+      std::any_of(string_op_infos.begin(), string_op_infos.end(), [](auto const& info) {
         return info.getOpKind() == SqlStringOpKind::LLM_TRANSFORM;
-      })) {
+      });
+  if (has_llm_transform_expr) {
+    if (num_source_strings > g_llm_transform_max_num_unique_value) {
+      std::ostringstream oss;
+      oss << "The number of entries of a string dictionary of the input argument of the "
+             "LLM_TRANSFORM (="
+          << num_source_strings
+          << ") is larger than a threshold (=" << g_llm_transform_max_num_unique_value
+          << ")";
+      throw std::runtime_error(oss.str());
+    }
     thread_info.num_threads = g_max_concurrent_llm_transform_call;
     thread_info.num_elems_per_thread = 1;
   }
