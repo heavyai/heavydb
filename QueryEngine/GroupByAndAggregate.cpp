@@ -1618,6 +1618,9 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
 llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
                                                    const TargetInfo& agg_info,
                                                    llvm::Value* target) {
+  if (arg_type.get_notnull()) {
+    return target;
+  }
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto& agg_type = agg_info.sql_type;
   const size_t chosen_bytes = agg_type.get_size();
