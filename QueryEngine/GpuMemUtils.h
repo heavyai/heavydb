@@ -45,15 +45,6 @@ class DataMgr;
 
 }  // namespace Data_Namespace
 
-class DeviceAllocator;
-
-void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
-                        CUdeviceptr dst,
-                        const void* src,
-                        const size_t num_bytes,
-                        const int device_id,
-                        std::string_view tag);
-
 struct GpuGroupByBuffers {
   int8_t* ptrs;  // ptrs for individual outputs
   int8_t* data;  // ptr to data allocation
@@ -64,6 +55,14 @@ struct GpuGroupByBuffers {
 class QueryMemoryDescriptor;
 class DeviceAllocator;
 class Allocator;
+
+void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
+                        CUstream cuda_stream,
+                        CUdeviceptr dst,
+                        const void* src,
+                        const size_t num_bytes,
+                        const int device_id,
+                        std::string_view tag);
 
 GpuGroupByBuffers create_dev_group_by_buffers(
     DeviceAllocator* device_allocator,
@@ -95,7 +94,7 @@ size_t get_num_allocated_rows_from_gpu(DeviceAllocator& device_allocator,
                                        int8_t* projection_size_gpu,
                                        const int device_id);
 
-void copy_projection_buffer_from_gpu_columnar(Data_Namespace::DataMgr* data_mgr,
+void copy_projection_buffer_from_gpu_columnar(DeviceAllocator* device_allocator,
                                               const GpuGroupByBuffers& gpu_query_buffers,
                                               const QueryMemoryDescriptor& query_mem_desc,
                                               int8_t* projection_buffer,

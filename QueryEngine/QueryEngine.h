@@ -121,6 +121,5 @@ class QueryEngine {
   std::unique_ptr<CodeCacheAccessor<CompilationContext>> tf_code_accessor;
 };  // class QueryEngine
 
-CUstream getQueryEngineCudaStream();  // NOTE: CUstream is cudaStream_t
 CUstream getQueryEngineCudaStreamForDevice(
     int device_num);  // NOTE: CUstream is cudaStream_t

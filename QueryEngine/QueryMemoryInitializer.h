@@ -139,7 +139,7 @@ class QueryMemoryInitializer {
       const unsigned grid_size_x,
       const bool zero_initialize_buffers);
 
-  void copyFromTableFunctionGpuBuffers(Data_Namespace::DataMgr* data_mgr,
+  void copyFromTableFunctionGpuBuffers(DeviceAllocator* device_allocator,
                                        const QueryMemoryDescriptor& query_mem_desc,
                                        const size_t entry_count,
                                        const GpuGroupByBuffers& gpu_group_by_buffers,
@@ -203,7 +203,10 @@ class QueryMemoryInitializer {
 
   ModeIndexSet initializeModeIndexSet(const QueryMemoryDescriptor& query_mem_desc,
                                       const RelAlgExecutionUnit& ra_exe_unit);
-  void allocateModeMem(ExecutorDeviceType, const QueryMemoryDescriptor&);
+  void allocateModeMem(ExecutorDeviceType,
+                       const QueryMemoryDescriptor&,
+                       const Executor*,
+                       int);
 
   // Return CPU: AggMode* or GPU: (1<<63 | i<<32 | j+1)
   // where i, j are agg_mode_hash_tables_cpu_, row_set_mem_owner_ indexes.
@@ -224,13 +227,15 @@ class QueryMemoryInitializer {
                                               const size_t n,
                                               const int device_id,
                                               const unsigned block_size_x,
-                                              const unsigned grid_size_x);
+                                              const unsigned grid_size_x,
+                                              CUstream cuda_stream);
 
   GpuGroupByBuffers createAndInitializeGroupByBufferGpu(
       const RelAlgExecutionUnit& ra_exe_unit,
       const QueryMemoryDescriptor& query_mem_desc,
       const int8_t* init_agg_vals_dev_ptr,
       const int device_id,
+      CUstream cuda_stream,
       const ExecutorDispatchMode dispatch_mode,
       const unsigned block_size_x,
       const unsigned grid_size_x,
@@ -246,7 +251,7 @@ class QueryMemoryInitializer {
   void compactProjectionBuffersCpu(const QueryMemoryDescriptor& query_mem_desc,
                                    const size_t projection_count);
   void compactProjectionBuffersGpu(const QueryMemoryDescriptor& query_mem_desc,
-                                   Data_Namespace::DataMgr* data_mgr,
+                                   DeviceAllocator* device_allocator,
                                    const GpuGroupByBuffers& gpu_group_by_buffers,
                                    const size_t projection_count,
                                    const int device_id);
@@ -255,11 +260,13 @@ class QueryMemoryInitializer {
                                    const RelAlgExecutionUnit& ra_exe_unit);
 
   void applyStreamingTopNOffsetGpu(Data_Namespace::DataMgr* data_mgr,
+                                   CudaAllocator* cuda_allocator,
                                    const QueryMemoryDescriptor& query_mem_desc,
                                    const GpuGroupByBuffers& gpu_group_by_buffers,
                                    const RelAlgExecutionUnit& ra_exe_unit,
                                    const unsigned total_thread_count,
-                                   const int device_id);
+                                   const int device_id,
+                                   CUstream cuda_stream);
 
   std::shared_ptr<VarlenOutputInfo> getVarlenOutputInfo();
 

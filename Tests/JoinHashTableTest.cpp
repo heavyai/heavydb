@@ -122,7 +122,7 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CHECK(executor);
 
   auto memory_level =
@@ -142,7 +142,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CHECK(executor);
 
   auto memory_level =
@@ -466,7 +466,7 @@ TEST_F(Build, KeyedOneToOne) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CHECK(executor);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -524,7 +524,7 @@ TEST_F(Build, KeyedOneToMany) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CHECK(executor);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -584,7 +584,7 @@ TEST_F(Build, GeoOneToMany1) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CHECK(executor);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -660,7 +660,7 @@ TEST_F(Build, GeoOneToMany2) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CHECK(executor);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -873,7 +873,7 @@ TEST_F(MultiFragmentTest, KeyedOneToOne) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CHECK(executor);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -961,7 +961,7 @@ TEST_F(MultiFragmentTest, KeyedOneToMany) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CHECK(executor);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -1085,12 +1085,20 @@ int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 
   QR::init(BASE_PATH);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  CHECK(executor);
+  if (QR::get()->gpusPresent()) {
+    executor->initializeCudaAllocator();
+  }
 
   int err{0};
   try {
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
+  }
+  if (QR::get()->gpusPresent()) {
+    executor->clearCudaAllocator();
   }
   QR::reset();
   return err;

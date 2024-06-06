@@ -152,7 +152,9 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
           data_mgr_, translation_map_size_bytes, device_id));
       auto device_buffer =
           reinterpret_cast<int8_t*>(device_buffers_.back()->getMemoryPtr());
+      auto cuda_stream = executor_->getCudaStream(device_id);
       copy_to_nvidia_gpu(data_mgr_,
+                         cuda_stream,
                          reinterpret_cast<CUdeviceptr>(device_buffer),
                          data(),
                          translation_map_size_bytes,

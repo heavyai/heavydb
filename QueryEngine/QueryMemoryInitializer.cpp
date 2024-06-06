@@ -294,7 +294,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
             << query_mem_desc.getEntryCount() << ')';
     row_set_mem_owner_->reserveTDigestMemory(thread_idx_, capacity);
   }
-  allocateModeMem(device_type, query_mem_desc);
+  allocateModeMem(device_type, query_mem_desc, executor, device_id);
 
   if (render_allocator_map || !query_mem_desc.isGroupBy()) {
     if (agg_op_metadata.has_count_distinct) {
@@ -458,6 +458,10 @@ QueryMemoryInitializer::QueryMemoryInitializer(
                                     row_set_mem_owner_,
                                     executor->blockSize(),
                                     executor->gridSize());
+    if (device_type == ExecutorDeviceType::GPU) {
+      result_sets_[old_size]->setCudaAllocator(executor, device_id);
+      result_sets_[old_size]->setCudaStream(executor, device_id);
+    }
     result_sets_[old_size]->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer),
                                             executor->plan_state_->init_agg_vals_,
                                             getVarlenOutputInfo());
@@ -834,9 +838,10 @@ void QueryMemoryInitializer::initColumnsPerRow(
   }
 }
 
-void QueryMemoryInitializer::allocateModeMem(
-    ExecutorDeviceType const device_type,
-    const QueryMemoryDescriptor& query_mem_desc) {
+void QueryMemoryInitializer::allocateModeMem(ExecutorDeviceType const device_type,
+                                             const QueryMemoryDescriptor& query_mem_desc,
+                                             const Executor* executor,
+                                             int device_id) {
   if (size_t const ncolumns = query_mem_desc.getNumModeTargets()) {
     size_t const nmodes = ncolumns * query_mem_desc.getEntryCount();
     VLOG(2) << "device_type(" << device_type << ") nmodes = " << nmodes << " = "
@@ -847,7 +852,8 @@ void QueryMemoryInitializer::allocateModeMem(
       // agg_mode_hash_tables_gpu_ also uses the cudaStream from device_allocator_.
       auto* const allocator = dynamic_cast<CudaAllocator*>(device_allocator_);
       CHECK(allocator) << "CudaAllocator expected for ExecutorDeviceType::GPU.";
-      agg_mode_hash_tables_gpu_.init(allocator, nmodes);
+      agg_mode_hash_tables_gpu_.init(
+          allocator, executor->getCudaStream(device_id), nmodes);
 #else
       UNREACHABLE();
 #endif
@@ -1074,7 +1080,8 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
     const size_t n,
     const int device_id,
     const unsigned block_size_x,
-    const unsigned grid_size_x) {
+    const unsigned grid_size_x,
+    CUstream cuda_stream) {
 #ifdef HAVE_CUDA
   CHECK(device_allocator_);
   const auto thread_count = block_size_x * grid_size_x;
@@ -1115,7 +1122,8 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
       query_mem_desc.hasKeylessHash(),
       1,
       block_size_x,
-      grid_size_x);
+      grid_size_x,
+      cuda_stream);
 
   return {dev_ptr, dev_buffer};
 #else
@@ -1129,6 +1137,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     const QueryMemoryDescriptor& query_mem_desc,
     const int8_t* init_agg_vals_dev_ptr,
     const int device_id,
+    CUstream cuda_stream,
     const ExecutorDispatchMode dispatch_mode,
     const unsigned block_size_x,
     const unsigned grid_size_x,
@@ -1144,8 +1153,13 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit.value_or(0);
     CHECK(!output_columnar);
 
-    return prepareTopNHeapsDevBuffer(
-        query_mem_desc, init_agg_vals_dev_ptr, n, device_id, block_size_x, grid_size_x);
+    return prepareTopNHeapsDevBuffer(query_mem_desc,
+                                     init_agg_vals_dev_ptr,
+                                     n,
+                                     device_id,
+                                     block_size_x,
+                                     grid_size_x,
+                                     cuda_stream);
   }
 
   auto dev_group_by_buffers =
@@ -1216,7 +1230,8 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
             query_mem_desc.hasKeylessHash(),
             sizeof(int64_t),
             block_size_x,
-            grid_size_x);
+            grid_size_x,
+            cuda_stream);
       } else {
         init_group_by_buffer_on_device(
             reinterpret_cast<int64_t*>(group_by_dev_buffer),
@@ -1228,7 +1243,8 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
             query_mem_desc.hasKeylessHash(),
             warp_count,
             block_size_x,
-            grid_size_x);
+            grid_size_x,
+            cuda_stream);
       }
       group_by_dev_buffer += groups_buffer_size;
     }
@@ -1284,7 +1300,7 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
 }
 
 void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
-    Data_Namespace::DataMgr* data_mgr,
+    DeviceAllocator* device_allocator,
     const QueryMemoryDescriptor& query_mem_desc,
     const size_t entry_count,
     const GpuGroupByBuffers& gpu_group_by_buffers,
@@ -1303,17 +1319,14 @@ void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
 
   const auto col_slot_context = query_mem_desc.getColSlotContext();
 
-  auto allocator = std::make_unique<CudaAllocator>(
-      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-
   for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
     const size_t col_width = col_slot_context.getSlotInfo(col_idx).logical_size;
     const size_t output_device_col_size = original_entry_count * col_width;
     const size_t output_host_col_size = entry_count * col_width;
-    allocator->copyFromDevice(host_buffer + output_host_col_offset,
-                              dev_buffer + output_device_col_offset,
-                              output_host_col_size,
-                              "Table function output column buffer");
+    device_allocator->copyFromDevice(host_buffer + output_host_col_offset,
+                                     dev_buffer + output_device_col_offset,
+                                     output_host_col_size,
+                                     "Table function output column buffer");
     output_device_col_offset =
         align_to_int64(output_device_col_offset + output_device_col_size);
     output_host_col_offset =
@@ -1385,7 +1398,7 @@ void QueryMemoryInitializer::compactProjectionBuffersCpu(
 
 void QueryMemoryInitializer::compactProjectionBuffersGpu(
     const QueryMemoryDescriptor& query_mem_desc,
-    Data_Namespace::DataMgr* data_mgr,
+    DeviceAllocator* device_allocator,
     const GpuGroupByBuffers& gpu_group_by_buffers,
     const size_t projection_count,
     const int device_id) {
@@ -1396,7 +1409,7 @@ void QueryMemoryInitializer::compactProjectionBuffersGpu(
   // copy the results from the main buffer into projection_buffer
   const size_t buffer_start_idx = query_mem_desc.hasVarlenOutput() ? 1 : 0;
   copy_projection_buffer_from_gpu_columnar(
-      data_mgr,
+      device_allocator,
       gpu_group_by_buffers,
       query_mem_desc,
       reinterpret_cast<int8_t*>(group_by_buffers_[buffer_start_idx]),
@@ -1476,22 +1489,27 @@ void QueryMemoryInitializer::applyStreamingTopNOffsetCpu(
 
 void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
     Data_Namespace::DataMgr* data_mgr,
+    CudaAllocator* cuda_allocator,
     const QueryMemoryDescriptor& query_mem_desc,
     const GpuGroupByBuffers& gpu_group_by_buffers,
     const RelAlgExecutionUnit& ra_exe_unit,
     const unsigned total_thread_count,
-    const int device_id) {
+    const int device_id,
+    CUstream cuda_stream) {
 #ifdef HAVE_CUDA
+  CHECK(cuda_allocator);
   CHECK_EQ(group_by_buffers_.size(), num_buffers_);
   const size_t buffer_start_idx = query_mem_desc.hasVarlenOutput() ? 1 : 0;
 
   const auto rows_copy = pick_top_n_rows_from_dev_heaps(
       data_mgr,
+      cuda_allocator,
       reinterpret_cast<int64_t*>(gpu_group_by_buffers.data),
       ra_exe_unit,
       query_mem_desc,
       total_thread_count,
-      device_id);
+      device_id,
+      cuda_stream);
   CHECK_EQ(
       rows_copy.size(),
       static_cast<size_t>(query_mem_desc.getEntryCount() * query_mem_desc.getRowSize()));
