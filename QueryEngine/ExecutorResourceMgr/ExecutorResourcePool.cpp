@@ -314,56 +314,6 @@ ExecutorResourcePool::calc_max_dependent_resource_grant_for_request(
                         adjusted_max_independent_resource_quantity);
 }
 
-void ExecutorResourcePool::throw_insufficient_resource_error(
-    const ResourceSubtype resource_subtype,
-    const size_t min_resource_requested) const {
-  const size_t max_resource_grant_per_request =
-      get_max_resource_grant_per_request(resource_subtype);
-
-  switch (resource_subtype) {
-    case ResourceSubtype::CPU_SLOTS:
-      throw QueryNeedsTooManyCpuSlots(max_resource_grant_per_request,
-                                      min_resource_requested);
-    case ResourceSubtype::GPU_SLOTS:
-      throw QueryNeedsTooManyGpuSlots(max_resource_grant_per_request,
-                                      min_resource_requested);
-    case ResourceSubtype::CPU_RESULT_MEM:
-      throw QueryNeedsTooMuchCpuResultMem(max_resource_grant_per_request,
-                                          min_resource_requested);
-    default:
-      throw std::runtime_error(
-          "Insufficient resources for request");  // todo: just placeholder
-  }
-}
-
-std::vector<ResourceRequestGrant>
-ExecutorResourcePool::calc_static_resource_grant_ranges_for_request(
-    const std::vector<ResourceRequest>& resource_requests) const {
-  std::vector<ResourceRequestGrant> resource_request_grants;
-
-  std::array<ResourceRequestGrant, ResourceSubtypeSize> all_resource_grants;
-  for (const auto& resource_request : resource_requests) {
-    CHECK(resource_request.resource_subtype != ResourceSubtype::INVALID_SUBTYPE);
-    CHECK_LE(resource_request.min_quantity, resource_request.max_quantity);
-
-    ResourceRequestGrant resource_grant;
-    resource_grant.resource_subtype = resource_request.resource_subtype;
-    resource_grant.max_quantity = calc_max_resource_grant_for_request(
-        resource_request.max_quantity,
-        resource_request.min_quantity,
-        get_max_resource_grant_per_request(resource_request.resource_subtype));
-    if (resource_grant.max_quantity < resource_request.min_quantity) {
-      // Current implementation should always return 0 if it cannot grant requested amount
-      CHECK_EQ(resource_grant.max_quantity, size_t(0));
-      throw_insufficient_resource_error(resource_request.resource_subtype,
-                                        resource_request.min_quantity);
-    }
-    all_resource_grants[static_cast<size_t>(resource_grant.resource_subtype)] =
-        resource_grant;
-  }
-  return resource_request_grants;
-}
-
 std::pair<ResourceGrant, ResourceGrant>
 ExecutorResourcePool::calc_min_max_resource_grants_for_request(
     const RequestInfo& request_info) const {

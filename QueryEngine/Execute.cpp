@@ -195,6 +195,7 @@ bool g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency{false};
 // g_executor_resource_mgr_per_query_max_cpu_slots_ratio
 bool g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency{false};
 double g_executor_resource_mgr_max_available_resource_use_ratio{0.8};
+bool g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query{true};
 
 bool g_use_cpu_mem_pool_for_output_buffers{true};
 
@@ -2030,7 +2031,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     }
 
     if (!eo.just_validate) {
-      int available_cpus = cpu_threads();
+      auto const available_cpus = static_cast<size_t>(cpu_threads());
       auto available_gpus = get_available_gpus(data_mgr_);
 
       const auto context_count =
@@ -2047,8 +2048,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      *query_comp_desc_owned,
                                      *query_mem_desc_owned,
                                      render_info,
-                                     available_gpus,
-                                     available_cpus);
+                                     available_gpus);
         if (!kernels.empty()) {
           row_set_mem_owner_->setKernelMemoryAllocator(kernels.size());
         }
@@ -2057,7 +2057,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                       std::move(kernels),
                                       query_comp_desc_owned->getDeviceType(),
                                       ra_exe_unit.input_descs,
-                                      *query_mem_desc_owned);
+                                      *query_mem_desc_owned,
+                                      available_cpus);
         } else {
           launchKernelsLocked(
               shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
@@ -2700,8 +2701,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
     const QueryCompilationDescriptor& query_comp_desc,
     const QueryMemoryDescriptor& query_mem_desc,
     RenderInfo* render_info,
-    std::unordered_set<int>& available_gpus,
-    int& available_cpus) {
+    std::unordered_set<int>& available_gpus) {
   std::vector<std::unique_ptr<ExecutionKernel>> execution_kernels;
 
   QueryFragmentDescriptor fragment_descriptor(
@@ -2921,12 +2921,14 @@ void Executor::launchKernelsViaResourceMgr(
     std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
     const ExecutorDeviceType device_type,
     const std::vector<InputDescriptor>& input_descs,
-    const QueryMemoryDescriptor& query_mem_desc) {
+    const QueryMemoryDescriptor& query_mem_desc,
+    const size_t available_cpus) {
   // CPU queries in general, plus some GPU queries, i.e. certain types of top-k sorts,
   // can generate more kernels than cores/GPU devices, so allow handle this for now
   // by capping the number of requested slots from GPU than actual GPUs
   const size_t num_kernels = kernels.size();
-  constexpr bool cap_slots = false;
+  auto const cap_slots =
+      num_kernels > available_cpus && query_mem_desc.threadsCanReuseGroupByBuffers();
   const size_t num_compute_slots =
       cap_slots
           ? std::min(num_kernels,

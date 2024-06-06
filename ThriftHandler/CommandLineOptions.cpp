@@ -153,7 +153,8 @@ void CommandLineOptions::fillOptions() {
       "greater than 0, representing the fraction of the system memory not allocated for "
       "the CPU buffer pool. Values of 1.0 are permitted to allow oversubscription when "
       "warranted, but too high a value can cause out-of-memory errors. Requires "
-      "--executor-resource-mgr to be set");
+      "--executor-resource-mgr to be set. If \'use-cpu-mem-pool-for-output-buffers\' is "
+      "enabled, we ignore this ratio when managing memory for query resultset.");
 
   desc.add_options()(
       "executor-cpu-result-mem-bytes",
@@ -162,7 +163,9 @@ void CommandLineOptions::fillOptions() {
       "Set executor resource manager reserved memory for query result sets in bytes, "
       "this overrides the default reservation of 80% the size of the system memory that "
       "is not allocated for the CPU buffer pool. Use 0 for auto. Requires "
-      "--enable-executor-resource-mgr to be set.");
+      "--enable-executor-resource-mgr to be set. If "
+      "\'use-cpu-mem-pool-for-output-buffers\' is enabled, we ignore this ratio when "
+      "managing memory for query resultset.");
 
   // Note we allow executor-per-query-max-cpu-threads-ratio to have values > 1 to allow
   // oversubscription of threads when warranted, given we may be overly pessimistic about
@@ -241,6 +244,16 @@ void CommandLineOptions::fillOptions() {
           ->default_value(g_executor_resource_mgr_max_available_resource_use_ratio),
       "Set max proportion (0 < ratio <= 1.0) of available resources that should be "
       "granted to a query. Requires --executor-resource-mgr to be set");
+
+  desc.add_options()(
+      "allow-auto-shrink-num-cpu-slot-for-groupby-query",
+      po::value<bool>(
+          &g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query)
+          ->default_value(
+              g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query),
+      "Allow for shrinking the number of CPU slots to execute groupby query if the query "
+      "requires too much memory for query resultset. Requires "
+      "--enable-executor-resource-mgr.");
 
   desc.add_options()("calcite-max-mem",
                      po::value<size_t>(&system_parameters.calcite_max_mem)
