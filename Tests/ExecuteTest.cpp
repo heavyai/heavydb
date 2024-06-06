@@ -3895,6 +3895,9 @@ TEST_F(Select, ApproxCountDistinct) {
     c("SELECT APPROX_COUNT_DISTINCT(x + 1) FROM test;",
       "SELECT COUNT(distinct x + 1) FROM test;",
       dt);
+    c("SELECT APPROX_COUNT_DISTINCT(fn IS NULL) FROM test;",
+      "SELECT COUNT(distinct fn IS NULL) FROM test;",
+      dt);
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, APPROX_COUNT_DISTINCT(x) "
       "FROM test GROUP BY y ORDER "
       "BY n;",
@@ -28533,6 +28536,91 @@ INSTANTIATE_TEST_SUITE_P(
             Arithmetic128BitsParam{123456.123456789, "-n", "-1.0"},
             Arithmetic128BitsParam{12345.6123456789, "-n", "-10.0"})),
     Arithmetic128Bits::printTestParams);
+
+class NullableBoolsCountAggFunctionsTest
+    : public testing::TestWithParam<std::tuple<std::string, ExecutorDeviceType>> {
+ public:
+  static inline const std::string table_name_{"test_nullable_bools"};
+  static inline const std::vector<std::string> bool_values_{"true",
+                                                            "NULL",
+                                                            "false",
+                                                            "true",
+                                                            "false",
+                                                            "true"};
+
+  static void SetUpTestSuite() {
+    run_ddl_statement("DROP TABLE IF EXISTS " + table_name_ + ';');
+    run_ddl_statement("CREATE TABLE " + table_name_ + " (b BOOLEAN);");
+
+    for (const auto& value : bool_values_) {
+      run_multiple_agg("INSERT INTO " + table_name_ + " VALUES (" + value + ");",
+                       ExecutorDeviceType::CPU);
+    }
+  }
+
+  static void TearDownTestSuite() {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name_ + ';');
+    }
+  }
+
+ protected:
+  void executeAndAssertQueryResult(int64_t expected_count, std::string const& query) {
+    EXPECT_EQ(expected_count, v<int64_t>(run_simple_agg(query, std::get<1>(GetParam()))));
+  }
+
+  static inline size_t nullCount() {
+    return std::count(bool_values_.begin(), bool_values_.end(), "NULL");
+  }
+
+  std::string getFunctionExpr(const std::string& arg) {
+    std::string const& function_name = std::get<0>(GetParam());
+    if (function_name == "COUNT_DISTINCT") {
+      return "COUNT(DISTINCT " + arg + ")";
+    }
+    return function_name + "(" + arg + ")";
+  }
+
+  size_t getCount(bool include_null_count) {
+    const auto& function_name = std::get<0>(GetParam());
+    if (function_name == "COUNT") {
+      return include_null_count ? bool_values_.size() : bool_values_.size() - nullCount();
+    }
+    return 2;  // Number of possible boolean values
+  }
+};
+
+TEST_P(NullableBoolsCountAggFunctionsTest, SimpleColumnExpr) {
+  constexpr bool include_null_count = false;
+  executeAndAssertQueryResult(
+      static_cast<int64_t>(getCount(include_null_count)),
+      "SELECT " + getFunctionExpr("b") + " FROM " + table_name_ + ";");
+}
+
+TEST_P(NullableBoolsCountAggFunctionsTest, NullablePredicate) {
+  constexpr bool include_null_count = false;
+  executeAndAssertQueryResult(
+      static_cast<int64_t>(getCount(include_null_count)),
+      "SELECT " + getFunctionExpr("b = true") + " FROM " + table_name_ + ";");
+}
+
+TEST_P(NullableBoolsCountAggFunctionsTest, NonNullablePredicate) {
+  constexpr bool include_null_count = true;
+  executeAndAssertQueryResult(
+      static_cast<int64_t>(getCount(include_null_count)),
+      "SELECT " + getFunctionExpr("b IS NULL") + " FROM " + table_name_ + ";");
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllDeviceTypesAndCountAggFunctions,
+    NullableBoolsCountAggFunctionsTest,
+    testing::Combine(testing::Values("COUNT", "APPROX_COUNT_DISTINCT", "COUNT_DISTINCT"),
+                     testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU)),
+    [](const auto& info) {
+      std::stringstream ss;
+      ss << std::get<0>(info.param) << "_" << std::get<1>(info.param);
+      return ss.str();
+    });
 
 class ValuesTest : public ::testing::Test {
  protected:
