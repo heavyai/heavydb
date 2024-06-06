@@ -37,6 +37,7 @@ extern bool g_enable_string_functions;
 extern bool g_enable_watchdog;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
 extern std::string g_heavyiq_url;
+extern size_t g_llm_transform_max_num_unique_value;
 
 // begin string function tests
 
@@ -2586,6 +2587,17 @@ TEST_P(StringFunctionTest, LLMTransformPromptTypeCheck) {
   queryAndAssertPartialException(
       "SELECT LLM_TRANSFORM(first_name, id) FROM string_function_test_people;",
       "The prompt operand of LLM_TRANSFORM must be a STRING literal");
+}
+
+TEST_P(StringFunctionTest, LLMTransformNDVWatchdogLimit) {
+  ScopeGuard reset = [orig = g_llm_transform_max_num_unique_value]() {
+    g_llm_transform_max_num_unique_value = orig;
+  };
+  g_llm_transform_max_num_unique_value = 1;
+  queryAndAssertPartialException(
+      "SELECT LLM_TRANSFORM(first_name, \'haha\') FROM string_function_test_people;",
+      "The number of entries of a string dictionary of the input argument of the "
+      "LLM_TRANSFORM (=3) is larger than a threshold (=1)");
 }
 
 INSTANTIATE_TEST_SUITE_P(CpuAndGpuExecutorDevices,

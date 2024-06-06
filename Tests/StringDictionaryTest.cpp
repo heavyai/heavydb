@@ -17,6 +17,7 @@
 #include "TestHelpers.h"
 
 #include "Shared/funcannotations.h"
+#include "Shared/scope.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 
 #include <boost/lexical_cast.hpp>
@@ -40,6 +41,7 @@
 
 extern bool g_cache_string_hash;
 int g_op_count{250000};
+extern int64_t g_llm_transform_max_num_unique_value;
 
 class StringDictionaryTest : public TestHelpers::TbbPrivateServerKiller {};
 class StringDictionaryProxyTest : public TestHelpers::TbbPrivateServerKiller {};
@@ -964,6 +966,11 @@ int main(int argc, char** argv) {
   } catch (std::exception& error) {
     LOG(FATAL) << "Could not create string dictionary directories.";
   }
+
+  ScopeGuard reset = [orig = g_llm_transform_max_num_unique_value] {
+    g_llm_transform_max_num_unique_value = orig;
+  };
+  g_llm_transform_max_num_unique_value = std::numeric_limits<int64_t>::max();
 
   int err{0};
   try {
