@@ -134,7 +134,8 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
 ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
                      const ExecutorDeviceType device_type,
                      const int device_id,
-                     Data_Namespace::DataMgr* data_mgr)
+                     Data_Namespace::DataMgr* data_mgr,
+                     std::shared_ptr<CudaAllocator> device_allocator)
     : device_type_(device_type)
     , device_id_(device_id)
     , thread_idx_(-1)
@@ -142,6 +143,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , crt_row_buff_idx_(0)
     , estimator_(estimator)
     , data_mgr_(data_mgr)
+    , cuda_allocator_(device_allocator)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
@@ -154,10 +156,8 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
   if (device_type == ExecutorDeviceType::GPU) {
     device_estimator_buffer_ = CudaAllocator::allocGpuAbstractBuffer(
         data_mgr_, estimator_->getBufferSize(), device_id_);
-    data_mgr->getCudaMgr()->zeroDeviceMem(device_estimator_buffer_->getMemoryPtr(),
-                                          estimator_->getBufferSize(),
-                                          device_id_,
-                                          getQueryEngineCudaStreamForDevice(device_id_));
+    cuda_allocator_->zeroDeviceMem(device_estimator_buffer_->getMemoryPtr(),
+                                   estimator_->getBufferSize());
   } else {
     host_estimator_buffer_ =
         static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
@@ -708,12 +708,10 @@ void ResultSet::syncEstimatorBuffer() const {
       static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
   CHECK(device_estimator_buffer_);
   auto device_buffer_ptr = device_estimator_buffer_->getMemoryPtr();
-  auto allocator = std::make_unique<CudaAllocator>(
-      data_mgr_, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
-  allocator->copyFromDevice(host_estimator_buffer_,
-                            device_buffer_ptr,
-                            estimator_->getBufferSize(),
-                            "Estimator buffer");
+  cuda_allocator_->copyFromDevice(host_estimator_buffer_,
+                                  device_buffer_ptr,
+                                  estimator_->getBufferSize(),
+                                  "Estimator buffer");
 }
 
 void ResultSet::setQueueTime(const int64_t queue_time) {
@@ -1348,16 +1346,13 @@ PermutationView ResultSet::topPermutation(PermutationView permutation,
 void ResultSet::radixSortOnGpu(
     const std::list<Analyzer::OrderEntry>& order_entries) const {
   auto timer = DEBUG_TIMER(__func__);
-  auto data_mgr = &Catalog_Namespace::SysCatalog::instance().getDataMgr();
   const int device_id{0};
-  auto allocator = std::make_unique<CudaAllocator>(
-      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   CHECK_GT(block_size_, 0);
   CHECK_GT(grid_size_, 0);
   std::vector<int64_t*> group_by_buffers(block_size_);
   group_by_buffers[0] = reinterpret_cast<int64_t*>(storage_->getUnderlyingBuffer());
   auto dev_group_by_buffers =
-      create_dev_group_by_buffers(allocator.get(),
+      create_dev_group_by_buffers(getCudaAllocator(),
                                   group_by_buffers,
                                   query_mem_desc_,
                                   block_size_,
@@ -1370,10 +1365,13 @@ void ResultSet::radixSortOnGpu(
                                   /*use_bump_allocator=*/false,
                                   /*has_varlen_output=*/false,
                                   /*insitu_allocator*=*/nullptr);
-  inplace_sort_gpu(
-      order_entries, query_mem_desc_, dev_group_by_buffers, data_mgr, device_id);
+  inplace_sort_gpu(order_entries,
+                   query_mem_desc_,
+                   dev_group_by_buffers,
+                   getCudaAllocator(),
+                   getCudaStream());
   copy_group_by_buffers_from_gpu(
-      *allocator,
+      *getCudaAllocator(),
       group_by_buffers,
       query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
       dev_group_by_buffers.data,
@@ -1596,6 +1594,28 @@ std::vector<size_t> ResultSet::getSlotIndicesForTargetIndices() const {
     slot_index = advance_slot(slot_index, targets_[target_idx], false);
   }
   return slot_indices;
+}
+
+void ResultSet::setCudaAllocator(const Executor* executor, int device_id) {
+  CHECK(device_type_ == ExecutorDeviceType::GPU);
+  cuda_allocator_ = executor->getCudaAllocatorShared(device_id_);
+  CHECK(cuda_allocator_);
+}
+
+CudaAllocator* ResultSet::getCudaAllocator() const {
+  CHECK(device_type_ == ExecutorDeviceType::GPU);
+  CHECK(cuda_allocator_);
+  return cuda_allocator_.get();
+}
+
+void ResultSet::setCudaStream(const Executor* executor, int device_id) {
+  CHECK(device_type_ == ExecutorDeviceType::GPU);
+  cuda_stream_ = executor->getCudaStream(device_id_);
+}
+
+CUstream ResultSet::getCudaStream() const {
+  CHECK(device_type_ == ExecutorDeviceType::GPU);
+  return cuda_stream_;
 }
 
 // namespace result_set

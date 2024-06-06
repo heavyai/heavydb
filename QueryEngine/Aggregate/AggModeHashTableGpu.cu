@@ -29,6 +29,7 @@ namespace agg_mode {
 namespace detail {
 
 void AggModeHashTablesGpu::init(CudaAllocator* cuda_allocator,
+                                CUstream cuda_stream,
                                 size_t const nhash_tables) {
   constexpr size_t init_capacity = kMinCapacity;
   constexpr size_t temp_memory_bytes = warpcore::defaults::temp_memory_bytes();
@@ -40,8 +41,7 @@ void AggModeHashTablesGpu::init(CudaAllocator* cuda_allocator,
   allocator_.emplace(buffer, capacity);
   hash_tables_.reserve(nhash_tables);
   for (size_t i = 0; i < nhash_tables; ++i) {
-    hash_tables_.push_back(
-        new AggModeHashTableGpu(cuda_allocator->cudaStream(), &*allocator_, i));
+    hash_tables_.push_back(new AggModeHashTableGpu(cuda_stream, &*allocator_, i));
   }
 }
 

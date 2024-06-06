@@ -100,29 +100,39 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
            layout,
            top_n,
            start,
-           step] {
+           step,
+           &executor] {
+            CudaAllocator* device_allocator{nullptr};
+            CUstream cuda_stream{nullptr};
             if (device_type == ExecutorDeviceType::GPU) {
               set_cuda_context(data_mgr, start);
+              device_allocator = executor->getCudaAllocator(start);
+              CHECK(device_allocator);
+              cuda_stream = executor->getCudaStream(start);
             }
             strided_permutations[start] = (key_bytewidth == 4)
                                               ? baseline_sort<int32_t>(device_type,
                                                                        start,
                                                                        data_mgr,
+                                                                       device_allocator,
                                                                        groupby_buffer,
                                                                        pod_oe,
                                                                        layout,
                                                                        top_n,
                                                                        start,
-                                                                       step)
+                                                                       step,
+                                                                       cuda_stream)
                                               : baseline_sort<int64_t>(device_type,
                                                                        start,
                                                                        data_mgr,
+                                                                       device_allocator,
                                                                        groupby_buffer,
                                                                        pod_oe,
                                                                        layout,
                                                                        top_n,
                                                                        start,
-                                                                       step);
+                                                                       step,
+                                                                       cuda_stream);
           }));
     }
     for (auto& top_future : top_futures) {
@@ -144,12 +154,36 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     }
     return;
   } else {
-    permutation_ =
-        (key_bytewidth == 4)
-            ? baseline_sort<int32_t>(
-                  device_type, 0, data_mgr, groupby_buffer, pod_oe, layout, top_n, 0, 1)
-            : baseline_sort<int64_t>(
-                  device_type, 0, data_mgr, groupby_buffer, pod_oe, layout, top_n, 0, 1);
+    constexpr int device_id = 0;
+    CudaAllocator* device_allocator{nullptr};
+    CUstream cuda_stream{nullptr};
+    if (device_type == ExecutorDeviceType::GPU) {
+      device_allocator = executor->getCudaAllocator(device_id);
+      CHECK(device_allocator);
+      cuda_stream = executor->getCudaStream(device_id);
+    }
+    permutation_ = (key_bytewidth == 4) ? baseline_sort<int32_t>(device_type,
+                                                                 device_id,
+                                                                 data_mgr,
+                                                                 device_allocator,
+                                                                 groupby_buffer,
+                                                                 pod_oe,
+                                                                 layout,
+                                                                 top_n,
+                                                                 device_id,
+                                                                 1,
+                                                                 cuda_stream)
+                                        : baseline_sort<int64_t>(device_type,
+                                                                 device_id,
+                                                                 data_mgr,
+                                                                 device_allocator,
+                                                                 groupby_buffer,
+                                                                 pod_oe,
+                                                                 layout,
+                                                                 top_n,
+                                                                 device_id,
+                                                                 1,
+                                                                 cuda_stream);
   }
 }
 
