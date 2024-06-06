@@ -175,14 +175,12 @@ class QueryExecutionContext : boost::noncopyable {
       const std::vector<int32_t>& error_codes,
       const uint32_t num_tables,
       const std::vector<int8_t*>& join_hash_tables,
-      Data_Namespace::DataMgr* data_mgr,
-      const int device_id,
       const bool hoist_literals,
       const bool is_group_by) const;
 
   ResultSetPtr groupBufferToDeinterleavedResults(const size_t i) const;
 
-  std::unique_ptr<DeviceAllocator> gpu_allocator_;
+  DeviceAllocator* device_allocator_;
 
   // TODO(adb): convert to shared_ptr
   QueryMemoryDescriptor query_mem_desc_;

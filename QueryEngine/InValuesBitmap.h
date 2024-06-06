@@ -44,8 +44,7 @@ class InValuesBitmap {
   InValuesBitmap(const std::vector<int64_t>& values,
                  const int64_t null_val,
                  const Data_Namespace::MemoryLevel memory_level,
-                 const int device_count,
-                 Data_Namespace::DataMgr* data_mgr,
+                 Executor* executor,
                  CompilationOptions const& co);
   ~InValuesBitmap();
 
@@ -54,8 +53,6 @@ class InValuesBitmap {
   bool isEmpty() const;
 
   bool hasNull() const;
-
-  size_t gpuBuffers() const { return gpu_buffers_.size(); }
 
   struct BitIsSetParams {
     llvm::Value* bitmap_ptr_lv;
@@ -69,7 +66,6 @@ class InValuesBitmap {
       std::vector<std::shared_ptr<const Analyzer::Constant>> const& constant_owned) const;
 
  private:
-  std::vector<Data_Namespace::AbstractBuffer*> gpu_buffers_;
   std::vector<int8_t*> bitsets_;
   bool rhs_has_null_;
   int64_t min_val_;
@@ -77,7 +73,6 @@ class InValuesBitmap {
   const int64_t null_val_;
   const Data_Namespace::MemoryLevel memory_level_;
   const int device_count_;
-  Data_Namespace::DataMgr* data_mgr_;
   CompilationOptions co_;
 };
 

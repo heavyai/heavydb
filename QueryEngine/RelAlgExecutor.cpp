@@ -1191,6 +1191,17 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     handle_query_hint(*query_hints, eo_copied, co_copied);
   }
 
+#if HAVE_CUDA
+  if (co_copied.device_type == ExecutorDeviceType::GPU) {
+    executor_->initializeCudaAllocator();
+  }
+  ScopeGuard resetCudaAllocator = [this, &co_copied]() {
+    if (co_copied.device_type == ExecutorDeviceType::GPU) {
+      executor_->clearCudaAllocator();
+    }
+  };
+#endif
+
   setHasStepForUnion(seq.hasQueryStepForUnion());
   // let's check whether we have a cached query resultset of the input query
   // note that the resultset recycling for a top sort node query will be handled

@@ -247,8 +247,7 @@ class PerfectJoinHashTable : public HashJoin {
 
   void copyCpuHashTableToGpu(std::shared_ptr<PerfectHashTable>& cpu_hash_table,
                              const PerfectHashTableEntryInfo hash_table_entry_info,
-                             const int device_id,
-                             Data_Namespace::DataMgr* data_mgr);
+                             const int device_id);
 
   struct AlternativeCacheKeyForPerfectHashJoin {
     const ExpressionRange col_range;

@@ -208,12 +208,11 @@ void ExecutionKernel::runImpl(Executor* executor,
   auto chunk_iterators_ptr = std::make_shared<std::list<ChunkIter>>();
   std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks;
   std::unique_ptr<std::lock_guard<std::mutex>> gpu_lock;
-  std::unique_ptr<CudaAllocator> device_allocator;
+  CudaAllocator* device_allocator{nullptr};
   if (chosen_device_type == ExecutorDeviceType::GPU) {
     gpu_lock.reset(
         new std::lock_guard<std::mutex>(executor->gpu_exec_mutex_[chosen_device_id]));
-    device_allocator = std::make_unique<CudaAllocator>(
-        data_mgr, chosen_device_id, getQueryEngineCudaStreamForDevice(chosen_device_id));
+    device_allocator = executor->getCudaAllocator(chosen_device_id);
   }
   std::shared_ptr<FetchResult> fetch_result(new FetchResult);
   try {
@@ -230,7 +229,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                      frag_list,
                                                      *chunk_iterators_ptr,
                                                      chunks,
-                                                     device_allocator.get(),
+                                                     device_allocator,
                                                      thread_idx,
                                                      eo.allow_runtime_query_interrupt)
                         : executor->fetchChunks(column_fetcher,
@@ -241,7 +240,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                 frag_list,
                                                 *chunk_iterators_ptr,
                                                 chunks,
-                                                device_allocator.get(),
+                                                device_allocator,
                                                 thread_idx,
                                                 eo.allow_runtime_query_interrupt);
     if (fetch_result->num_rows.empty()) {

@@ -29,6 +29,12 @@
 #include "../../../Shared/SqlTypesLayout.h"
 #include "../../../Shared/sqltypes.h"
 
+#ifdef HAVE_CUDA
+#include <cuda.h>
+#else
+#include <Shared/nocuda.h>
+#endif
+
 #ifdef __CUDACC__
 #include "../../DecodersImpl.h"
 #else
@@ -69,7 +75,8 @@ void init_hash_join_buff_tbb(int32_t* buff,
 
 void init_hash_join_buff_on_device(int32_t* buff,
                                    const int64_t entry_count,
-                                   const int32_t invalid_slot_val);
+                                   const int32_t invalid_slot_val,
+                                   CUstream cuda_stream);
 
 void init_baseline_hash_join_buff_32(int8_t* hash_join_buff,
                                      const int64_t entry_count,
@@ -109,13 +116,15 @@ void init_baseline_hash_join_buff_on_device_32(int8_t* hash_join_buff,
                                                const int64_t entry_count,
                                                const size_t key_component_count,
                                                const bool with_val_slot,
-                                               const int32_t invalid_slot_val);
+                                               const int32_t invalid_slot_val,
+                                               CUstream cuda_stream);
 
 void init_baseline_hash_join_buff_on_device_64(int8_t* hash_join_buff,
                                                const int64_t entry_count,
                                                const size_t key_component_count,
                                                const bool with_val_slot,
-                                               const int32_t invalid_slot_val);
+                                               const int32_t invalid_slot_val,
+                                               CUstream cuda_stream);
 
 enum ColumnType { SmallDate = 0, Signed = 1, Unsigned = 2, Double = 3 };
 
@@ -199,16 +208,20 @@ int fill_hash_join_buff_bitwise_eq(OneToOnePerfectJoinHashTableFillFuncArgs cons
                                    int32_t const cpu_thread_idx,
                                    int32_t const cpu_thread_count);
 
-void fill_hash_join_buff_on_device(OneToOnePerfectJoinHashTableFillFuncArgs const args);
+void fill_hash_join_buff_on_device(CUstream cuda_stream,
+                                   OneToOnePerfectJoinHashTableFillFuncArgs const args);
 
 void fill_hash_join_buff_on_device_bucketized(
+    CUstream cuda_stream,
     OneToOnePerfectJoinHashTableFillFuncArgs const args);
 
 void fill_hash_join_buff_on_device_sharded(
+    CUstream cuda_stream,
     OneToOnePerfectJoinHashTableFillFuncArgs const args,
     ShardInfo const shard_info);
 
 void fill_hash_join_buff_on_device_sharded_bucketized(
+    CUstream cuda_stream,
     OneToOnePerfectJoinHashTableFillFuncArgs const args,
     ShardInfo const shard_info);
 
@@ -220,12 +233,15 @@ void fill_one_to_many_hash_table_bucketized(
     int32_t const cpu_thread_count);
 
 void fill_one_to_many_hash_table_on_device(
+    CUstream cuda_stream,
     OneToManyPerfectJoinHashTableFillFuncArgs const args);
 
 void fill_one_to_many_hash_table_on_device_bucketized(
+    CUstream cuda_stream,
     OneToManyPerfectJoinHashTableFillFuncArgs const args);
 
 void fill_one_to_many_hash_table_on_device_sharded(
+    CUstream cuda_stream,
     OneToManyPerfectJoinHashTableFillFuncArgs const args,
     ShardInfo const shard_info);
 
@@ -301,7 +317,8 @@ void fill_baseline_hash_join_buff_on_device_32(int8_t* hash_buff,
                                                const bool with_val_slot,
                                                int* dev_err_buff,
                                                const GenericKeyHandler* key_handler,
-                                               const int64_t num_elems);
+                                               const int64_t num_elems,
+                                               CUstream cuda_stream);
 
 void fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
                                                const int64_t entry_count,
@@ -311,7 +328,8 @@ void fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
                                                const bool with_val_slot,
                                                int* dev_err_buff,
                                                const GenericKeyHandler* key_handler,
-                                               const int64_t num_elems);
+                                               const int64_t num_elems,
+                                               CUstream cuda_stream);
 
 void bbox_intersect_fill_baseline_hash_join_buff_on_device_64(
     int8_t* hash_buff,
@@ -321,7 +339,8 @@ void bbox_intersect_fill_baseline_hash_join_buff_on_device_64(
     const bool with_val_slot,
     int* dev_err_buff,
     const BoundingBoxIntersectKeyHandler* key_handler,
-    const int64_t num_elems);
+    const int64_t num_elems,
+    CUstream cuda_stream);
 
 void range_fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
                                                      const int64_t entry_count,
@@ -330,7 +349,8 @@ void range_fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
                                                      const bool with_val_slot,
                                                      int* dev_err_buff,
                                                      const RangeKeyHandler* key_handler,
-                                                     const size_t num_elems);
+                                                     const size_t num_elems,
+                                                     CUstream cuda_stream);
 
 void fill_one_to_many_baseline_hash_table_32(
     int32_t* buff,
@@ -369,7 +389,8 @@ void fill_one_to_many_baseline_hash_table_on_device_32(
     const size_t key_component_count,
     const GenericKeyHandler* key_handler,
     const int64_t num_elems,
-    const bool for_window_framing);
+    const bool for_window_framing,
+    CUstream cuda_stream);
 
 void fill_one_to_many_baseline_hash_table_on_device_64(
     int32_t* buff,
@@ -377,21 +398,24 @@ void fill_one_to_many_baseline_hash_table_on_device_64(
     const int64_t hash_entry_count,
     const GenericKeyHandler* key_handler,
     const int64_t num_elems,
-    const bool for_window_framing);
+    const bool for_window_framing,
+    CUstream cuda_stream);
 
 void bbox_intersect_fill_one_to_many_baseline_hash_table_on_device_64(
     int32_t* buff,
     const int64_t* composite_key_dict,
     const int64_t hash_entry_count,
     const BoundingBoxIntersectKeyHandler* key_handler,
-    const int64_t num_elems);
+    const int64_t num_elems,
+    CUstream cuda_stream);
 
 void range_fill_one_to_many_baseline_hash_table_on_device_64(
     int32_t* buff,
     const int64_t* composite_key_dict,
     const size_t hash_entry_count,
     const RangeKeyHandler* key_handler,
-    const size_t num_elems);
+    const size_t num_elems,
+    CUstream cuda_stream);
 
 void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,
                                  const uint32_t b,
@@ -424,14 +448,16 @@ void approximate_distinct_tuples_range(
 void approximate_distinct_tuples_on_device(uint8_t* hll_buffer,
                                            const uint32_t b,
                                            const GenericKeyHandler* key_handler,
-                                           const int64_t num_elems);
+                                           const int64_t num_elems,
+                                           CUstream cuda_stream);
 
 void approximate_distinct_tuples_on_device_bbox_intersect(
     uint8_t* hll_buffer,
     const uint32_t b,
     int32_t* row_counts_buffer,
     const BoundingBoxIntersectKeyHandler* key_handler,
-    const int64_t num_elems);
+    const int64_t num_elems,
+    CUstream cuda_stream);
 
 void compute_bucket_sizes_on_cpu(std::vector<double>& bucket_sizes_for_dimension,
                                  const JoinColumn& join_column,
@@ -445,11 +471,13 @@ void approximate_distinct_tuples_on_device_range(uint8_t* hll_buffer,
                                                  const RangeKeyHandler* key_handler,
                                                  const size_t num_elems,
                                                  const size_t block_size_x,
-                                                 const size_t grid_size_x);
+                                                 const size_t grid_size_x,
+                                                 CUstream cuda_stream);
 
 void compute_bucket_sizes_on_device(double* bucket_sizes_buffer,
                                     const JoinColumn* join_column,
                                     const JoinColumnTypeInfo* type_info,
-                                    const double* bucket_size_thresholds);
+                                    const double* bucket_size_thresholds,
+                                    CUstream cuda_stream);
 
 #endif  // QUERYENGINE_HASHJOINRUNTIME_H

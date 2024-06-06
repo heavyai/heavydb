@@ -24,6 +24,7 @@
 #define QUERYENGINE_RESULTSET_H
 
 #include "CardinalityEstimator.h"
+#include "DataMgr/Allocators/CudaAllocator.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "ResultSetBufferAccessors.h"
 #include "ResultSetStorage.h"
@@ -35,6 +36,12 @@
 #include <functional>
 #include <list>
 #include <optional>
+
+#ifdef HAVE_CUDA
+#include <cuda.h>
+#else
+#include <Shared/nocuda.h>
+#endif
 
 /*
  * Stores the underlying buffer and the meta-data for a result set. The buffer
@@ -182,7 +189,8 @@ class ResultSet {
   ResultSet(const std::shared_ptr<const Analyzer::Estimator>,
             const ExecutorDeviceType device_type,
             const int device_id,
-            Data_Namespace::DataMgr* data_mgr);
+            Data_Namespace::DataMgr* data_mgr,
+            std::shared_ptr<CudaAllocator> device_allocator);
 
   ResultSet(const std::string& explanation);
 
@@ -634,6 +642,14 @@ class ResultSet {
     return query_mem_desc_.checkSlotUsesFlatBufferFormat(slot_idx);
   }
 
+  void setCudaAllocator(const Executor* executor, int device_id);
+
+  CudaAllocator* getCudaAllocator() const;
+
+  void setCudaStream(const Executor* executor, int device_id);
+
+  CUstream getCudaStream() const;
+
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
 
@@ -971,6 +987,8 @@ class ResultSet {
   Data_Namespace::AbstractBuffer* device_estimator_buffer_{nullptr};
   mutable int8_t* host_estimator_buffer_{nullptr};
   Data_Namespace::DataMgr* data_mgr_;
+  std::shared_ptr<CudaAllocator> cuda_allocator_{nullptr};
+  CUstream cuda_stream_{nullptr};
 
   // only used by serialization
   using SerializedVarlenBufferStorage = std::vector<std::string>;

@@ -225,3 +225,89 @@ void Executor::resetInterrupt() {
     interrupted_.store(false);
   }
 }
+
+#ifdef HAVE_CUDA
+void Executor::initializeDynamicWatchdog(CUmodule module_ptr,
+                                         int device_id,
+                                         CUstream cuda_stream,
+                                         bool could_interrupt,
+                                         uint64_t cycle_budget,
+                                         unsigned time_limit) const {
+  CHECK(module_ptr);
+  CHECK(data_mgr_);
+  auto cuda_mgr = data_mgr_->getCudaMgr();
+  std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
+  CUcontext old_cu_context;
+  checkCudaErrors(cuCtxGetCurrent(&old_cu_context));
+  cuda_mgr->setContext(device_id);
+  auto init_start = timer_start();
+  CUdeviceptr dw_cycle_budget;
+  size_t dw_cycle_budget_size;
+
+  // Translate milliseconds to device cycles
+  if (device_id == 0) {
+    LOG(INFO) << "Dynamic Watchdog budget: GPU: " << time_limit << "ms, " << cycle_budget
+              << " cycles";
+  }
+  checkCudaErrors(cuModuleGetGlobal(
+      &dw_cycle_budget, &dw_cycle_budget_size, module_ptr, "dw_cycle_budget"));
+  CHECK_EQ(dw_cycle_budget_size, sizeof(uint64_t));
+  checkCudaErrors(cuMemcpyHtoDAsync(dw_cycle_budget,
+                                    reinterpret_cast<void*>(&cycle_budget),
+                                    sizeof(uint64_t),
+                                    cuda_stream));
+  checkCudaErrors(cuStreamSynchronize(cuda_stream));
+
+  CUdeviceptr dw_sm_cycle_start;
+  size_t dw_sm_cycle_start_size;
+  checkCudaErrors(cuModuleGetGlobal(
+      &dw_sm_cycle_start, &dw_sm_cycle_start_size, module_ptr, "dw_sm_cycle_start"));
+  CHECK_EQ(dw_sm_cycle_start_size, 128 * sizeof(uint64_t));
+  checkCudaErrors(cuMemsetD32Async(dw_sm_cycle_start, 0, 128 * 2, cuda_stream));
+  checkCudaErrors(cuStreamSynchronize(cuda_stream));
+
+  if (!could_interrupt) {
+    // Executor is not marked as interrupted, make sure dynamic watchdog doesn't block
+    // execution
+    CUdeviceptr dw_abort;
+    size_t dw_abort_size;
+    checkCudaErrors(cuModuleGetGlobal(&dw_abort, &dw_abort_size, module_ptr, "dw_abort"));
+    CHECK_EQ(dw_abort_size, sizeof(uint32_t));
+    checkCudaErrors(cuMemsetD32Async(dw_abort, 0, 1, cuda_stream));
+    checkCudaErrors(cuStreamSynchronize(cuda_stream));
+  }
+  checkCudaErrors(cuCtxSetCurrent(old_cu_context));
+  VLOG(1) << "Device " << device_id
+          << ": launchGpuCode: dynamic watchdog init: " << timer_stop(init_start)
+          << " ms\n";
+}
+void Executor::initializeRuntimeInterrupter(CUmodule module_ptr,
+                                            int device_id,
+                                            CUstream cuda_stream) const {
+  CHECK(module_ptr);
+  CHECK(data_mgr_);
+  {
+    std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
+    CUcontext old_cu_context;
+    checkCudaErrors(cuCtxGetCurrent(&old_cu_context));
+    auto cuda_mgr = data_mgr_->getCudaMgr();
+    CHECK(cuda_mgr);
+    cuda_mgr->setContext(device_id);
+    CUdeviceptr runtime_interrupt_flag;
+    size_t runtime_interrupt_flag_size;
+    auto init_runtime_interrupt_start = timer_start();
+    checkCudaErrors(cuModuleGetGlobal(&runtime_interrupt_flag,
+                                      &runtime_interrupt_flag_size,
+                                      module_ptr,
+                                      "runtime_interrupt_flag"));
+    CHECK_EQ(runtime_interrupt_flag_size, sizeof(uint32_t));
+    checkCudaErrors(cuMemsetD32Async(runtime_interrupt_flag, 0, 1, cuda_stream));
+    checkCudaErrors(cuStreamSynchronize(cuda_stream));
+    checkCudaErrors(cuCtxSetCurrent(old_cu_context));
+    VLOG(1) << "Device " << device_id
+            << ": launchGpuCode: runtime query interrupter init: "
+            << timer_stop(init_runtime_interrupt_start) << " ms";
+  }
+  registerActiveModule(module_ptr, device_id);
+}
+#endif

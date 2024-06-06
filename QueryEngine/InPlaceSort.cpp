@@ -24,6 +24,12 @@
 
 #include <cstdint>
 
+#ifdef HAVE_CUDA
+#include <cuda.h>
+#else
+#include <Shared/nocuda.h>
+#endif
+
 void sort_groups_cpu(int64_t* val_buff,
                      int32_t* idx_buff,
                      const uint64_t entry_count,
@@ -70,14 +76,15 @@ void sort_groups_gpu(int64_t* val_buff,
                      const bool desc,
                      const uint32_t chosen_bytes,
                      ThrustAllocator& alloc,
-                     const int device_id) {
+                     CUstream cuda_stream) {
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
     case 1:
     case 2:
     case 4:
     case 8:
-      sort_on_gpu(val_buff, idx_buff, entry_count, desc, chosen_bytes, alloc, device_id);
+      sort_on_gpu(
+          val_buff, idx_buff, entry_count, desc, chosen_bytes, alloc, cuda_stream);
       break;
     default:
       CHECK(false);
@@ -90,7 +97,7 @@ void apply_permutation_gpu(int64_t* val_buff,
                            const uint64_t entry_count,
                            const uint32_t chosen_bytes,
                            ThrustAllocator& alloc,
-                           const int device_id) {
+                           CUstream cuda_stream) {
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
     case 1:
@@ -98,7 +105,7 @@ void apply_permutation_gpu(int64_t* val_buff,
     case 4:
     case 8:
       apply_permutation_on_gpu(
-          val_buff, idx_buff, entry_count, chosen_bytes, alloc, device_id);
+          val_buff, idx_buff, entry_count, chosen_bytes, alloc, cuda_stream);
       break;
     default:
       CHECK(false);
@@ -111,9 +118,11 @@ void apply_permutation_gpu(int64_t* val_buff,
 void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>& order_entries,
                       const QueryMemoryDescriptor& query_mem_desc,
                       const GpuGroupByBuffers& group_by_buffers,
-                      Data_Namespace::DataMgr* data_mgr,
-                      const int device_id) {
-  ThrustAllocator alloc(data_mgr, device_id);
+                      CudaAllocator* cuda_allocator,
+                      CUstream cuda_stream) {
+  CHECK(cuda_allocator);
+  CHECK(cuda_allocator->getDataMgr());
+  ThrustAllocator alloc(cuda_allocator->getDataMgr(), cuda_allocator->getDeviceId());
   CHECK_EQ(size_t(1), order_entries.size());
   const auto idx_buff = group_by_buffers.data -
                         align_to_int64(query_mem_desc.getEntryCount() * sizeof(int32_t));
@@ -128,14 +137,14 @@ void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>& order_entries,
                     order_entry.is_desc,
                     chosen_bytes,
                     alloc,
-                    device_id);
+                    cuda_stream);
     if (!query_mem_desc.hasKeylessHash()) {
       apply_permutation_gpu(reinterpret_cast<int64_t*>(group_by_buffers.data),
                             reinterpret_cast<int32_t*>(idx_buff),
                             query_mem_desc.getEntryCount(),
                             sizeof(int64_t),
                             alloc,
-                            device_id);
+                            cuda_stream);
     }
     for (size_t target_idx = 0; target_idx < query_mem_desc.getSlotCount();
          ++target_idx) {
@@ -150,7 +159,7 @@ void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>& order_entries,
                             query_mem_desc.getEntryCount(),
                             chosen_bytes,
                             alloc,
-                            device_id);
+                            cuda_stream);
     }
   }
 }

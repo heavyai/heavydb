@@ -57,11 +57,13 @@ size_t get_heap_key_slot_index(const std::vector<Analyzer::Expr*>& target_exprs,
 #ifdef HAVE_CUDA
 std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
     Data_Namespace::DataMgr* data_mgr,
+    CudaAllocator* cuda_allocator,
     const int64_t* dev_heaps_buffer,
     const RelAlgExecutionUnit& ra_exe_unit,
     const QueryMemoryDescriptor& query_mem_desc,
     const size_t thread_count,
-    const int device_id) {
+    const int device_id,
+    CUstream cuda_stream) {
   CHECK(!query_mem_desc.canOutputColumnar());
   CHECK_EQ(ra_exe_unit.sort_info.order_entries.size(), size_t(1));
   const auto& only_oe = ra_exe_unit.sort_info.order_entries.back();
@@ -79,6 +81,7 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
       -1};
   return pop_n_rows_from_merged_heaps_gpu(
       data_mgr,
+      cuda_allocator,
       dev_heaps_buffer,
       query_mem_desc.getBufferSizeBytes(
           ra_exe_unit, thread_count, ExecutorDeviceType::GPU),
@@ -87,6 +90,7 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
       oe_layout,
       group_key_bytes,
       thread_count,
-      device_id);
+      device_id,
+      cuda_stream);
 }
 #endif  // HAVE_CUDA

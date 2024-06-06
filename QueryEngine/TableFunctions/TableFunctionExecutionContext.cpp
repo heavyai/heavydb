@@ -25,6 +25,7 @@
 #include "QueryEngine/TableFunctions/TableFunctionManager.h"
 #include "QueryEngine/Utils/FlatBuffer.h"
 #include "Shared/funcannotations.h"
+#include "Shared/scope.h"
 
 namespace {
 
@@ -115,11 +116,19 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   std::vector<std::unique_ptr<char[]>> literals_owner;
 
   const int device_id = 0;  // TODO(adb): support multi-gpu table functions
-  std::unique_ptr<CudaAllocator> device_allocator;
   if (device_type == ExecutorDeviceType::GPU) {
-    auto data_mgr = executor->getDataMgr();
-    device_allocator.reset(new CudaAllocator(
-        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
+    executor->initializeCudaAllocator();
+  }
+  ScopeGuard resetCudaAllocator = [&executor, &device_type] {
+    if (device_type == ExecutorDeviceType::GPU) {
+      executor->clearCudaAllocator();
+    }
+  };
+
+  CudaAllocator* device_allocator{nullptr};
+  if (device_type == ExecutorDeviceType::GPU) {
+    device_allocator = executor->getCudaAllocator(device_id);
+    CHECK(device_allocator);
   }
   std::vector<const int8_t*> col_buf_ptrs;
   std::vector<int64_t> col_sizes;
@@ -152,7 +161,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           device_type == ExecutorDeviceType::CPU ? Data_Namespace::MemoryLevel::CPU_LEVEL
                                                  : Data_Namespace::MemoryLevel::GPU_LEVEL,
           device_id,
-          device_allocator.get(),
+          device_allocator,
           /*thread_idx=*/0,
           chunks_owner,
           column_fetcher.columnarized_table_cache_);
@@ -264,12 +273,11 @@ ResultSetPtr TableFunctionExecutionContext::execute(
                                  "\n Only literal constants and columns are supported!");
       }
       if (device_type == ExecutorDeviceType::GPU) {
-        auto* gpu_allocator = device_allocator.get();
-        const auto gpu_literal_buf_ptr = gpu_allocator->alloc(literal_buffer_size);
-        gpu_allocator->copyToDevice(gpu_literal_buf_ptr,
-                                    cpu_literal_buf_ptr,
-                                    literal_buffer_size,
-                                    "Table function literal buffer");
+        const auto gpu_literal_buf_ptr = device_allocator->alloc(literal_buffer_size);
+        device_allocator->copyToDevice(gpu_literal_buf_ptr,
+                                       cpu_literal_buf_ptr,
+                                       literal_buffer_size,
+                                       "Table function literal buffer");
         col_buf_ptrs.push_back(gpu_literal_buf_ptr);
       } else {
         CHECK_EQ(device_type, ExecutorDeviceType::CPU);
@@ -680,10 +688,9 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   }
 
   auto num_out_columns = exe_unit.target_exprs.size();
-  auto data_mgr = executor->getDataMgr();
-  auto gpu_allocator = std::make_unique<CudaAllocator>(
-      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-  CHECK(gpu_allocator);
+  auto device_allocator = executor->getCudaAllocator(device_id);
+  CHECK(device_allocator);
+  auto cuda_stream = executor->getCudaStream(device_id);
   std::vector<CUdeviceptr> kernel_params(KERNEL_PARAM_COUNT, 0);
 
   // TODO: implement table function manager for CUDA
@@ -691,33 +698,34 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   // to a struct that a table function kernel with a
   // TableFunctionManager argument can access from the device.
   kernel_params[MANAGER] =
-      reinterpret_cast<CUdeviceptr>(gpu_allocator->alloc(sizeof(int8_t*)));
+      reinterpret_cast<CUdeviceptr>(device_allocator->alloc(sizeof(int8_t*)));
 
   // setup the inputs
-  auto byte_stream_ptr = !(col_buf_ptrs.empty())
-                             ? gpu_allocator->alloc(col_buf_ptrs.size() * sizeof(int64_t))
-                             : nullptr;
+  auto byte_stream_ptr =
+      !(col_buf_ptrs.empty())
+          ? device_allocator->alloc(col_buf_ptrs.size() * sizeof(int64_t))
+          : nullptr;
   if (byte_stream_ptr) {
-    gpu_allocator->copyToDevice(byte_stream_ptr,
-                                reinterpret_cast<int8_t*>(col_buf_ptrs.data()),
-                                col_buf_ptrs.size() * sizeof(int64_t),
-                                "Table function input column ptrs");
+    device_allocator->copyToDevice(byte_stream_ptr,
+                                   reinterpret_cast<int8_t*>(col_buf_ptrs.data()),
+                                   col_buf_ptrs.size() * sizeof(int64_t),
+                                   "Table function input column ptrs");
   }
   kernel_params[COL_BUFFERS] = reinterpret_cast<CUdeviceptr>(byte_stream_ptr);
 
   auto col_sizes_ptr = !(col_sizes.empty())
-                           ? gpu_allocator->alloc(col_sizes.size() * sizeof(int64_t))
+                           ? device_allocator->alloc(col_sizes.size() * sizeof(int64_t))
                            : nullptr;
   if (col_sizes_ptr) {
-    gpu_allocator->copyToDevice(col_sizes_ptr,
-                                reinterpret_cast<int8_t*>(col_sizes.data()),
-                                col_sizes.size() * sizeof(int64_t),
-                                "Table function column sizes");
+    device_allocator->copyToDevice(col_sizes_ptr,
+                                   reinterpret_cast<int8_t*>(col_sizes.data()),
+                                   col_sizes.size() * sizeof(int64_t),
+                                   "Table function column sizes");
   }
   kernel_params[COL_SIZES] = reinterpret_cast<CUdeviceptr>(col_sizes_ptr);
 
   kernel_params[ERROR_BUFFER] =
-      reinterpret_cast<CUdeviceptr>(gpu_allocator->alloc(sizeof(int32_t)));
+      reinterpret_cast<CUdeviceptr>(device_allocator->alloc(sizeof(int32_t)));
   // initialize output memory
   QueryMemoryDescriptor query_mem_desc(
       executor, elem_count, QueryDescriptionType::TableFunction);
@@ -736,18 +744,19 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
       std::vector<std::vector<const int8_t*>>{col_buf_ptrs},
       std::vector<std::vector<uint64_t>>{{0}},  // frag offsets
       row_set_mem_owner_,
-      gpu_allocator.get(),
+      device_allocator,
       executor);
 
   // setup the output
   int64_t output_row_count = allocated_output_row_count;
 
   kernel_params[OUTPUT_ROW_COUNT] =
-      reinterpret_cast<CUdeviceptr>(gpu_allocator->alloc(sizeof(int64_t*)));
-  gpu_allocator->copyToDevice(reinterpret_cast<int8_t*>(kernel_params[OUTPUT_ROW_COUNT]),
-                              reinterpret_cast<int8_t*>(&output_row_count),
-                              sizeof(output_row_count),
-                              "Table function kernel_params[OUTPUT_ROW_COUNT]");
+      reinterpret_cast<CUdeviceptr>(device_allocator->alloc(sizeof(int64_t*)));
+  device_allocator->copyToDevice(
+      reinterpret_cast<int8_t*>(kernel_params[OUTPUT_ROW_COUNT]),
+      reinterpret_cast<int8_t*>(&output_row_count),
+      sizeof(output_row_count),
+      "Table function kernel_params[OUTPUT_ROW_COUNT]");
   /*
  ￼ TODO: RBC generated runtime table functions do not support
    concurrent execution on a CUDA device. Hence, we'll force 1 as
@@ -787,7 +796,6 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   CHECK(compilation_context);
   const auto native_code = compilation_context->getNativeCode(device_id);
   auto cu_func = static_cast<CUfunction>(native_code.first);
-  auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
   VLOG(1) << "Launch GPU table function kernel compiled with the following block and "
              "grid sizes: "
           << block_size_x << " and " << grid_size_x;
@@ -799,13 +807,13 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
                                  block_size_y,
                                  block_size_z,
                                  0,  // shared mem bytes
-                                 qe_cuda_stream,
+                                 cuda_stream,
                                  &param_ptrs[0],
                                  nullptr));
-  checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
+  checkCudaErrors(cuStreamSynchronize(cuda_stream));
 
   // read output row count from GPU
-  gpu_allocator->copyFromDevice(
+  device_allocator->copyFromDevice(
       reinterpret_cast<int8_t*>(&output_row_count),
       reinterpret_cast<int8_t*>(kernel_params[OUTPUT_ROW_COUNT]),
       sizeof(int64_t),
@@ -827,7 +835,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   query_buffers->getResultSet(0)->updateStorageEntryCount(output_row_count);
 
   // Copy back to CPU storage
-  query_buffers->copyFromTableFunctionGpuBuffers(data_mgr,
+  query_buffers->copyFromTableFunctionGpuBuffers(device_allocator,
                                                  query_mem_desc,
                                                  output_row_count,
                                                  gpu_output_buffers,

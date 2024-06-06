@@ -11,7 +11,6 @@
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
-CUstream getQueryEngineCudaStreamForDevice(int device_num);
 
 #include "Logger/Logger.h"
 #define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS)
@@ -22,24 +21,23 @@ void sort_on_gpu(T* val_buff,
                  const uint64_t entry_count,
                  const bool desc,
                  ThrustAllocator& alloc,
-                 const int device_id) {
+                 CUstream cuda_stream) {
   thrust::device_ptr<T> key_ptr(val_buff);
   thrust::device_ptr<int32_t> idx_ptr(idx_buff);
   thrust::sequence(idx_ptr, idx_ptr + entry_count);
-  auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
   if (desc) {
-    thrust::sort_by_key(thrust::cuda::par(alloc).on(qe_cuda_stream),
+    thrust::sort_by_key(thrust::cuda::par(alloc).on(cuda_stream),
                         key_ptr,
                         key_ptr + entry_count,
                         idx_ptr,
                         thrust::greater<T>());
   } else {
-    thrust::sort_by_key(thrust::cuda::par(alloc).on(qe_cuda_stream),
+    thrust::sort_by_key(thrust::cuda::par(alloc).on(cuda_stream),
                         key_ptr,
                         key_ptr + entry_count,
                         idx_ptr);
   }
-  checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
+  checkCudaErrors(cuStreamSynchronize(cuda_stream));
 }
 
 template <typename T>
@@ -47,24 +45,21 @@ void apply_permutation_on_gpu(T* val_buff,
                               int32_t* idx_buff,
                               const uint64_t entry_count,
                               ThrustAllocator& alloc,
-                              const int device_id) {
+                              CUstream cuda_stream) {
   thrust::device_ptr<T> key_ptr(val_buff);
   thrust::device_ptr<int32_t> idx_ptr(idx_buff);
   const size_t buf_size = entry_count * sizeof(T);
   T* raw_ptr = reinterpret_cast<T*>(alloc.allocate(buf_size));
   thrust::device_ptr<T> tmp_ptr(raw_ptr);
-  auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
-  thrust::copy(thrust::cuda::par(alloc).on(qe_cuda_stream),
-               key_ptr,
-               key_ptr + entry_count,
-               tmp_ptr);
-  checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
-  thrust::gather(thrust::cuda::par(alloc).on(qe_cuda_stream),
+  thrust::copy(
+      thrust::cuda::par(alloc).on(cuda_stream), key_ptr, key_ptr + entry_count, tmp_ptr);
+  checkCudaErrors(cuStreamSynchronize(cuda_stream));
+  thrust::gather(thrust::cuda::par(alloc).on(cuda_stream),
                  idx_ptr,
                  idx_ptr + entry_count,
                  tmp_ptr,
                  key_ptr);
-  checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
+  checkCudaErrors(cuStreamSynchronize(cuda_stream));
   alloc.deallocate(reinterpret_cast<int8_t*>(raw_ptr), buf_size);
 }
 
@@ -97,7 +92,7 @@ void sort_on_gpu(int64_t* val_buff,
                  const bool desc,
                  const uint32_t chosen_bytes,
                  ThrustAllocator& alloc,
-                 const int device_id) {
+                 CUstream cuda_stream) {
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
     case 1:
@@ -106,7 +101,7 @@ void sort_on_gpu(int64_t* val_buff,
                   entry_count,
                   desc,
                   alloc,
-                  device_id);
+                  cuda_stream);
       break;
     case 2:
       sort_on_gpu(reinterpret_cast<int16_t*>(val_buff),
@@ -114,7 +109,7 @@ void sort_on_gpu(int64_t* val_buff,
                   entry_count,
                   desc,
                   alloc,
-                  device_id);
+                  cuda_stream);
       break;
     case 4:
       sort_on_gpu(reinterpret_cast<int32_t*>(val_buff),
@@ -122,10 +117,10 @@ void sort_on_gpu(int64_t* val_buff,
                   entry_count,
                   desc,
                   alloc,
-                  device_id);
+                  cuda_stream);
       break;
     case 8:
-      sort_on_gpu(val_buff, idx_buff, entry_count, desc, alloc, device_id);
+      sort_on_gpu(val_buff, idx_buff, entry_count, desc, alloc, cuda_stream);
       break;
     default:
       // FIXME(miyu): CUDA linker doesn't accept assertion on GPU yet right now.
@@ -165,23 +160,29 @@ void apply_permutation_on_gpu(int64_t* val_buff,
                               const uint64_t entry_count,
                               const uint32_t chosen_bytes,
                               ThrustAllocator& alloc,
-                              const int device_id) {
+                              CUstream cuda_stream) {
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
     case 1:
       apply_permutation_on_gpu(
-          reinterpret_cast<int8_t*>(val_buff), idx_buff, entry_count, alloc, device_id);
+          reinterpret_cast<int8_t*>(val_buff), idx_buff, entry_count, alloc, cuda_stream);
       break;
     case 2:
-      apply_permutation_on_gpu(
-          reinterpret_cast<int16_t*>(val_buff), idx_buff, entry_count, alloc, device_id);
+      apply_permutation_on_gpu(reinterpret_cast<int16_t*>(val_buff),
+                               idx_buff,
+                               entry_count,
+                               alloc,
+                               cuda_stream);
       break;
     case 4:
-      apply_permutation_on_gpu(
-          reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, alloc, device_id);
+      apply_permutation_on_gpu(reinterpret_cast<int32_t*>(val_buff),
+                               idx_buff,
+                               entry_count,
+                               alloc,
+                               cuda_stream);
       break;
     case 8:
-      apply_permutation_on_gpu(val_buff, idx_buff, entry_count, alloc, device_id);
+      apply_permutation_on_gpu(val_buff, idx_buff, entry_count, alloc, cuda_stream);
       break;
     default:
       // FIXME(miyu): CUDA linker doesn't accept assertion on GPU yet right now.

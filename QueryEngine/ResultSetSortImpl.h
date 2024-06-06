@@ -19,6 +19,13 @@
 
 #include "../Shared/TargetInfo.h"
 #include "CompilationOptions.h"
+#include "DataMgr/Allocators/CudaAllocator.h"
+
+#ifdef HAVE_CUDA
+#include <cuda.h>
+#else
+#include <Shared/nocuda.h>
+#endif
 
 struct PodOrderEntry {
   int tle_no;       /* targetlist entry number: 1-based */
@@ -45,11 +52,13 @@ template <class K>
 std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,
                                     const int device_id,
                                     Data_Namespace::DataMgr* data_mgr,
+                                    CudaAllocator* cuda_allocator,
                                     const int8_t* groupby_buffer,
                                     const PodOrderEntry& oe,
                                     const GroupByBufferLayoutInfo& layout,
                                     const size_t top_n,
                                     const size_t start,
-                                    const size_t step);
+                                    const size_t step,
+                                    CUstream cuda_stream);
 
 #endif  // QUERYENGINE_RESULTSETSORTIMPL_H
