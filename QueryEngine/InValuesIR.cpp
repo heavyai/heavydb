@@ -90,8 +90,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
       needle_null_val,
       co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                 : Data_Namespace::CPU_LEVEL,
-      executor()->deviceCount(co.device_type),
-      executor()->data_mgr_,
+      executor(),
       co);
   const auto& in_integer_set_ti = in_integer_set->get_type_info();
   CHECK(in_integer_set_ti.is_boolean());
@@ -197,8 +196,7 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
                                               co.device_type == ExecutorDeviceType::GPU
                                                   ? Data_Namespace::GPU_LEVEL
                                                   : Data_Namespace::CPU_LEVEL,
-                                              executor()->deviceCount(co.device_type),
-                                              executor()->data_mgr_,
+                                              executor(),
                                               co);
     } catch (...) {
       return nullptr;

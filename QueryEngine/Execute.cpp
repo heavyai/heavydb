@@ -1891,6 +1891,8 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                        const bool has_cardinality_estimation,
                                        ColumnCacheMap& column_cache) {
   VLOG(1) << "Executor " << executor_id_ << " is executing work unit:" << ra_exe_unit_in;
+  auto copied_co = co;
+  copied_co.device_type = getDeviceTypeForTargets(ra_exe_unit_in, co.device_type);
   ScopeGuard cleanup_post_execution = [this] {
     // cleanup/unpin GPU buffer allocations
     // TODO: separate out this state into a single object
@@ -1910,7 +1912,7 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                       true,
                                       query_infos,
                                       ra_exe_unit_in,
-                                      co,
+                                      copied_co,
                                       eo,
                                       row_set_mem_owner_,
                                       render_info,
@@ -1931,7 +1933,7 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                             false,
                             query_infos,
                             replace_scan_limit(ra_exe_unit_in, e.new_scan_limit_),
-                            co,
+                            copied_co,
                             eo,
                             row_set_mem_owner_,
                             render_info,
@@ -1962,20 +1964,17 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     ColumnCacheMap& column_cache) {
   INJECT_TIMER(Exec_executeWorkUnit);
   const auto [ra_exe_unit, deleted_cols_map] = addDeletedColumn(ra_exe_unit_in, co);
-  const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type);
   CHECK(!query_infos.empty());
   if (!max_groups_buffer_entry_guess) {
     // The query has failed the first execution attempt because of running out
     // of group by slots. Make the conservative choice: allocate fragment size
     // slots and run on the CPU.
-    CHECK(device_type == ExecutorDeviceType::CPU);
+    CHECK(co.device_type == ExecutorDeviceType::CPU);
     max_groups_buffer_entry_guess =
         compute_buffer_entry_guess(query_infos, ra_exe_unit_in);
   }
 
   int8_t crt_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
-  CompilationOptions copied_co = co;
-  copied_co.device_type = device_type;
   do {
     SharedKernelContext shared_context(query_infos);
     ColumnFetcher column_fetcher(this, column_cache);
@@ -1996,7 +1995,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                            query_infos,
                                            deleted_cols_map,
                                            column_fetcher,
-                                           copied_co,
+                                           co,
                                            eo,
                                            render_info,
                                            this);
@@ -2035,7 +2034,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       auto available_gpus = get_available_gpus(data_mgr_);
 
       const auto context_count =
-          get_context_count(device_type, available_cpus, available_gpus.size());
+          get_context_count(co.device_type, available_cpus, available_gpus.size());
       try {
         auto kernels = createKernels(shared_context,
                                      ra_exe_unit,
@@ -5281,6 +5280,42 @@ void Executor::set_concurrent_resource_grant_policy(
   }
   executor_resource_mgr_->set_concurrent_resource_grant_policy(
       concurrent_resource_grant_policy);
+}
+
+void Executor::initializeCudaAllocator() {
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(executors_cache_mutex_);
+  auto const device_count = deviceCount(ExecutorDeviceType::GPU);
+  for (int i = 0; i < device_count; i++) {
+    cuda_streams_.push_back(getQueryEngineCudaStreamForDevice(i));
+    cuda_allocators_.emplace_back(
+        std::make_shared<CudaAllocator>(data_mgr_, i, cuda_streams_.back()));
+  }
+}
+
+CudaAllocator* Executor::getCudaAllocator(int device_id) const {
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(executors_cache_mutex_);
+  CHECK_LT(device_id, static_cast<int>(cuda_allocators_.size()));
+  return cuda_allocators_[device_id].get();
+}
+
+std::shared_ptr<CudaAllocator> Executor::getCudaAllocatorShared(int device_id) const {
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(executors_cache_mutex_);
+  CHECK_LT(device_id, static_cast<int>(cuda_allocators_.size()));
+  return cuda_allocators_[device_id];
+}
+
+CUstream Executor::getCudaStream(int device_id) const {
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(executors_cache_mutex_);
+  CHECK_LT(device_id, static_cast<int>(cuda_streams_.size()));
+  return cuda_streams_[device_id];
+}
+
+void Executor::clearCudaAllocator() {
+  // currently, cuda stream for device is maintained by QE instance, and so we do not
+  // need to destroy it when cleaning up the query execution
+  // todo(yoonmin): destroy cuda stream once supporting per-query cuda stream
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(executors_cache_mutex_);
+  cuda_allocators_.clear();
 }
 
 std::map<int, std::shared_ptr<Executor>> Executor::executors_;

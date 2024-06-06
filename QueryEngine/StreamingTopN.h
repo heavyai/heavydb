@@ -59,12 +59,15 @@ class DataMgr;
 }  // namespace Data_Namespace
 
 class QueryMemoryDescriptor;
+class CudaAllocator;
 std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
     Data_Namespace::DataMgr* data_mgr,
+    CudaAllocator* cuda_allocator,
     const int64_t* dev_heaps,
     const RelAlgExecutionUnit& ra_exe_unit,
     const QueryMemoryDescriptor& query_mem_desc,
     const size_t thread_count,
-    const int device_id);
+    const int device_id,
+    CUstream cuda_stream);
 #endif  // HAVE_CUDA
 #endif  // QUERYENGINE_STREAMINGTOPN_H

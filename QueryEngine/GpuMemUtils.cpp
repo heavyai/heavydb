@@ -16,7 +16,6 @@
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
-CUstream getQueryEngineCudaStreamForDevice(int device_num);
 #endif  // HAVE_CUDA
 
 #include "DataMgr/Allocators/DeviceAllocator.h"
@@ -33,16 +32,16 @@ extern size_t g_min_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
 
 void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
+                        CUstream cuda_stream,
                         CUdeviceptr dst,
                         const void* src,
                         const size_t num_bytes,
                         const int device_id,
                         std::string_view tag) {
 #ifdef HAVE_CUDA
-  auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
   if (!data_mgr) {  // only for unit tests
-    checkCudaErrors(cuMemcpyHtoDAsync(dst, src, num_bytes, qe_cuda_stream));
-    checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
+    checkCudaErrors(cuMemcpyHtoDAsync(dst, src, num_bytes, cuda_stream));
+    checkCudaErrors(cuStreamSynchronize(cuda_stream));
     return;
   }
   const auto cuda_mgr = data_mgr->getCudaMgr();
@@ -52,7 +51,7 @@ void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
                              num_bytes,
                              device_id,
                              tag,
-                             qe_cuda_stream);
+                             cuda_stream);
 #else
   CHECK(false);
 #endif  // HAVE_CUDA
@@ -312,7 +311,7 @@ size_t get_num_allocated_rows_from_gpu(DeviceAllocator& device_allocator,
  * NOTE: Saman: we should revisit this function when we have a bump allocator
  */
 void copy_projection_buffer_from_gpu_columnar(
-    Data_Namespace::DataMgr* data_mgr,
+    DeviceAllocator* device_allocator,
     const GpuGroupByBuffers& gpu_group_by_buffers,
     const QueryMemoryDescriptor& query_mem_desc,
     int8_t* projection_buffer,
@@ -321,22 +320,21 @@ void copy_projection_buffer_from_gpu_columnar(
 #ifdef HAVE_CUDA
   CHECK(query_mem_desc.didOutputColumnar());
   CHECK(query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection);
+  CHECK(device_allocator);
   constexpr size_t row_index_width = sizeof(int64_t);
 
-  auto allocator = std::make_unique<CudaAllocator>(
-      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   // copy all the row indices back to the host
-  allocator->copyFromDevice(projection_buffer,
-                            gpu_group_by_buffers.data,
-                            projection_count * row_index_width,
-                            "Output column indices");
+  device_allocator->copyFromDevice(projection_buffer,
+                                   gpu_group_by_buffers.data,
+                                   projection_count * row_index_width,
+                                   "Output column indices");
   size_t buffer_offset_cpu{projection_count * row_index_width};
   // other columns are actual non-lazy columns for the projection:
   for (size_t i = 0; i < query_mem_desc.getSlotCount(); i++) {
     if (query_mem_desc.getPaddedSlotWidthBytes(i) > 0) {
       const auto column_proj_size =
           projection_count * query_mem_desc.getPaddedSlotWidthBytes(i);
-      allocator->copyFromDevice(
+      device_allocator->copyFromDevice(
           projection_buffer + buffer_offset_cpu,
           gpu_group_by_buffers.data + query_mem_desc.getColOffInBytes(i),
           column_proj_size,

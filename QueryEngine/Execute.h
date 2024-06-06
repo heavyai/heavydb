@@ -688,6 +688,18 @@ class Executor {
                  const QuerySessionId& interrupt_session = "");
   void resetInterrupt();
 
+#ifdef HAVE_CUDA
+  void initializeDynamicWatchdog(CUmodule module_ptr,
+                                 int device_id,
+                                 CUstream cuda_stream,
+                                 bool could_interrupt,
+                                 uint64_t cycle_budget,
+                                 unsigned time_limit) const;
+  void initializeRuntimeInterrupter(CUmodule module_ptr,
+                                    int device_id,
+                                    CUstream cuda_stream) const;
+#endif
+
   // only for testing usage
   void enableRuntimeQueryInterrupt(const double runtime_query_check_freq,
                                    const unsigned pending_query_check_freq) const;
@@ -1333,7 +1345,9 @@ class Executor {
   void setColRangeCache(const AggregatedColRange& aggregated_col_range) {
     agg_col_range_cache_ = aggregated_col_range;
   }
-  ExecutorId getExecutorId() const { return executor_id_; };
+  ExecutorId getExecutorId() const {
+    return executor_id_;
+  };
   QuerySessionId& getCurrentQuerySession(
       heavyai::shared_lock<heavyai::shared_mutex>& read_lock);
   QuerySessionStatus::QueryStatus getQuerySessionStatus(
@@ -1416,10 +1430,16 @@ class Executor {
   QueryPlanDagCache& getQueryPlanDagCache();
   ResultSetRecyclerHolder& getResultSetRecyclerHolder();
 
-  CgenState* getCgenStatePtr() const { return cgen_state_.get(); }
-  PlanState* getPlanStatePtr() const { return plan_state_.get(); }
+  CgenState* getCgenStatePtr() const {
+    return cgen_state_.get();
+  }
+  PlanState* getPlanStatePtr() const {
+    return plan_state_.get();
+  }
 
-  llvm::LLVMContext& getContext() { return *context_.get(); }
+  llvm::LLVMContext& getContext() {
+    return *context_.get();
+  }
   void update_extension_modules(bool update_runtime_modules_only = false);
 
   static void update_after_registration(bool update_runtime_modules_only = false) {
@@ -1458,6 +1478,11 @@ class Executor {
   static void set_concurrent_resource_grant_policy(
       const ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy&
           concurrent_resource_grant_policy);
+  void initializeCudaAllocator();
+  CudaAllocator* getCudaAllocator(int device_id) const;
+  std::shared_ptr<CudaAllocator> getCudaAllocatorShared(int device_id) const;
+  CUstream getCudaStream(int device_id) const;
+  void clearCudaAllocator();
 
  private:
   std::vector<int8_t> serializeLiterals(
@@ -1552,6 +1577,8 @@ class Executor {
   const std::string debug_file_;
 
   Data_Namespace::DataMgr* data_mgr_;
+  std::vector<std::shared_ptr<CudaAllocator>> cuda_allocators_;
+  std::vector<CUstream> cuda_streams_;
   const TemporaryTables* temporary_tables_;
   TableIdToNodeMap table_id_to_node_map_;
 
