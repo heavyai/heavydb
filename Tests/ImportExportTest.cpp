@@ -6125,7 +6125,7 @@ TEST_P(RasterImportTest, ImportSpecifiedBandsTest) {
 
 TEST_P(RasterImportTest, ImportSpecifiedBandsBadTest) {
   EXPECT_THROW(importTestCommon(kGRIB,
-                                "raster_lon double, rater_lat double, bad double, worse "
+                                "raster_lon double, raster_lat double, bad double, worse "
                                 "double, terrible double",
                                 ", "
                                 "raster_import_bands='bad,worse,terrible'",
@@ -6139,9 +6139,22 @@ TEST_P(RasterImportTest, ImportSpecifiedBandsRenameTest) {
       kGRIB,
       "raster_lon double, raster_lat double, p double, r double, t double",
       ", "
-      "raster_import_bands='Pressure__Pa_=p,Frozen_Rain__kg__m_2__=r,Temperature__C_=t'",
+      "raster_import_bands='p=Pressure__Pa_,r=Frozen_Rain__kg__m_2__,t=Temperature__C_'",
       "SELECT max(p), max(r), max(t) FROM raster;",
       {{86880.0, 0.0, 33.674859619140648}}));
+}
+
+TEST_P(RasterImportTest, ImportSpecifiedBandsRepeatedTest) {
+  EXPECT_THROW(
+      importTestCommon(
+          kGRIB,
+          "raster_lon double, raster_lat double, p double, r double, t double, p2 double",
+          ", "
+          "raster_import_bands='p=Pressure__Pa_,r=Frozen_Rain__kg__m_2__,t=Temperature__"
+          "C_,p2=Pressure__Pa_'",
+          "SELECT max(p), max(r), max(t) FROM raster;",
+          {{86880.0, 0.0, 33.674859619140648}}),
+      TDBException);
 }
 
 TEST_P(RasterImportTest, CaseInsensitiveBandNamesTest) {
@@ -6168,9 +6181,9 @@ TEST_P(RasterImportTest, Filter) {
 
 TEST_P(RasterImportTest, FilterRemap) {
   importTestCommon(kPNG,
-                   "raster_x SMALLINT, raster_y SMALLINT, band_1_2 SMALLINT",
-                   ", raster_import_bands='band_1_2=band_2'",
-                   "SELECT max(raster_x), max(raster_y), max(band_1_2) FROM raster",
+                   "raster_x SMALLINT, raster_y SMALLINT, band_2 SMALLINT",
+                   ", raster_import_bands='band_2=band_1_2'",
+                   "SELECT max(raster_x), max(raster_y), max(band_2) FROM raster",
                    {{i(319), i(224), i(255)}});
 }
 
@@ -6244,12 +6257,12 @@ TEST_P(RasterImportFsiOnlyTest, ImportGeoTIFFTruncatedThrowException) {
 TEST_P(RasterImportFsiOnlyTest, BoundingBoxClip) {
   // file is 200x200 with tiling 200x10, so clip by latitude to have an effect
   // clips 9 out of 20 tiles, leaving 22K points out of 40K
-  importTestCommon(
+  ASSERT_NO_THROW(importTestCommon(
       kGeoTIFF,
       "raster_lon DOUBLE, raster_lat DOUBLE, band_1 FLOAT",
       ", raster_point_transform='world', bounding_box_clip='-84,39.8178,-83,40'",
       "SELECT count(*) FROM raster",
-      {{i(22000)}});
+      {{i(22000)}}));
 }
 
 TEST_P(RasterImportFsiOnlyTest, ImportGeoTIFFTruncatedTest) {
@@ -6259,6 +6272,68 @@ TEST_P(RasterImportFsiOnlyTest, ImportGeoTIFFTruncatedTest) {
                                    "SELECT count(*) > 10000 FROM raster;",
                                    {{1L}}));
   sqlAndCompareResult("select count(*) from raster", {{12000L}});
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportPackedColorTest) {
+  ASSERT_NO_THROW(importTestCommon(
+      kPNG,
+      "raster_x SMALLINT, raster_y SMALLINT, packed_color INT",
+      ", raster_import_bands='packed_color=band_1_1/band_1_2/band_1_3/sRGB'",
+      "SELECT max(raster_x), max(raster_y), min(packed_color), "
+      "max(packed_color) FROM raster;",
+      {{319L, 224L, -2140321537L, 2143986943L}}));
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportPackedColorMultipleFailTest) {
+  executeLambdaAndAssertPartialException(
+      [&]() {
+        (importTestCommon(
+            kPNG,
+            "raster_x SMALLINT, raster_y SMALLINT, packed_color1 INT, packed_color2 INT",
+            ", "
+            "raster_import_bands='packed_color1=band_1_1/band_1_2/band_1_3/"
+            "sRGB,packed_color2=band_1_1/band_1_2/band_1_3/sRGB'",
+            "SELECT max(raster_x), max(raster_y), min(packed_color1), "
+            "max(packed_color1) FROM raster;",
+            {{319L, 224L, -2140321537L, 2143986943L}}));
+      },
+      "found multiple packed-color expressions");
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportPackedColorBandDoesNotExistFailTest) {
+  executeLambdaAndAssertPartialException(
+      [&]() {
+        (importTestCommon(
+            kPNG,
+            "raster_x SMALLINT, raster_y SMALLINT, packed_color INT",
+            ", raster_import_bands='packed_color=band_1_1/band_1_2/band_1_4/sRGB'",
+            "SELECT max(raster_x), max(raster_y), min(packed_color), "
+            "max(packed_color) FROM raster;",
+            {{319L, 224L, -2140321537L, 2143986943L}}));
+      },
+      "was not found in the input raster file");
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportSpecifiedBandsReorder1Test) {
+  // bands in file order, columns not
+  importTestCommon(
+      kGRIB,
+      "raster_lon double, raster_lat double, t double, p double, r double",
+      ", "
+      "raster_import_bands='p=Pressure__Pa_,r=Frozen_Rain__kg__m_2__,t=Temperature__C_'",
+      "SELECT max(p), max(r), max(t) FROM raster;",
+      {{86880.0, 0.0, 33.674859619140648}});
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportSpecifiedBandsReorder2Test) {
+  // neither columns nor bands in file order
+  importTestCommon(
+      kGRIB,
+      "raster_lon double, raster_lat double, t double, p double, r double",
+      ", "
+      "raster_import_bands='r=Frozen_Rain__kg__m_2__,t=Temperature__C_,p=Pressure__Pa_'",
+      "SELECT max(p), max(r), max(t) FROM raster;",
+      {{86880.0, 0.0, 33.674859619140648}});
 }
 
 INSTANTIATE_TEST_SUITE_P(RasterImportTest,
@@ -6271,24 +6346,29 @@ INSTANTIATE_TEST_SUITE_P(RasterImportTest,
 class RasterImportLegacyOnlyTest : public RasterImportTest {};
 
 TEST_P(RasterImportLegacyOnlyTest, ImportGeoTIFFTruncatedImportNone) {
-  EXPECT_THROW(importTestCommon(kGeoTIFFTruncated,
-                                "raster_lon double, raster_lat double, band_1_1 float",
-                                ", max_reject=1000",
-                                "SELECT count(*) > 10000 FROM raster;",
-                                {{0L}}),
-               TDBException);
+  executeLambdaAndAssertPartialException(
+      [&]() {
+        importTestCommon(kGeoTIFFTruncated,
+                         "raster_lon double, raster_lat double, band_1_1 float",
+                         ", max_reject=1000",
+                         "SELECT count(*) > 10000 FROM raster;",
+                         {{0L}});
+      },
+      "Import aborted after failing to read");
 }
 
 TEST_P(RasterImportLegacyOnlyTest, BoundingBoxClip) {
   // option not supported by legacy raster importer
-  EXPECT_THROW(
-      importTestCommon(
-          kGeoTIFF,
-          "raster_lon DOUBLE, raster_lat DOUBLE, band_1 FLOAT",
-          ", raster_point_transform='world', bounding_box_clip='-84,39.8178,-83,40'",
-          "SELECT count(*) FROM raster",
-          {{i(22000)}}),
-      TDBException);
+  executeLambdaAndAssertPartialException(
+      [&]() {
+        importTestCommon(
+            kGeoTIFF,
+            "raster_lon DOUBLE, raster_lat DOUBLE, band_1 FLOAT",
+            ", raster_point_transform='world', bounding_box_clip='-84,39.8178,-83,40'",
+            "SELECT count(*) FROM raster",
+            {{i(22000)}});
+      },
+      "Bounding Box Clip option not supported by Legacy Raster Importer");
 }
 
 TEST_P(RasterImportLegacyOnlyTest, ImportGeoTIFFTruncatedTest) {
@@ -6297,6 +6377,44 @@ TEST_P(RasterImportLegacyOnlyTest, ImportGeoTIFFTruncatedTest) {
                                    ", max_reject=1000000",
                                    "SELECT count(*) > 10000 FROM raster;",
                                    {{1L}}));
+}
+
+TEST_P(RasterImportLegacyOnlyTest, ImportPackedColorTest) {
+  executeLambdaAndAssertPartialException(
+      [&]() {
+        importTestCommon(
+            kPNG,
+            "raster_x SMALLINT, raster_y SMALLINT, packed_color INT",
+            ", raster_import_bands='packed_color=band_1_1/band_1_2/band_1_3/sRGB'",
+            "SELECT max(raster_x), max(raster_y), min(packed_color), "
+            "max(packed_color) FROM raster;",
+            {{319L, 224L, -2140321537L, 2143986943L}});
+      },
+      "Advanced Raster Import Bands syntax not supported by Legacy Raster Importer");
+}
+
+TEST_P(RasterImportLegacyOnlyTest, ImportSpecifiedBandsReorder1Test) {
+  // bands in file order, columns not
+  // legacy cannot handle this, it will always import the bands in file order
+  importTestCommon(kGRIB,
+                   "raster_lon double, raster_lat double, t double, p double, r double",
+                   ", "
+                   "raster_import_bands='p=Pressure__Pa_,r=Frozen_Rain__kg__m_2__,t="
+                   "Temperature__C_'",
+                   "SELECT max(p), max(r), max(t) FROM raster;",
+                   {{0.0, 33.674859619140648, 86880.0}});
+}
+
+TEST_P(RasterImportLegacyOnlyTest, ImportSpecifiedBandsReorder2Test) {
+  // neither columns nor bands in file order
+  // legacy cannot handle this, it will always import the bands in file order
+  importTestCommon(kGRIB,
+                   "raster_lon double, raster_lat double, t double, p double, r double",
+                   ", "
+                   "raster_import_bands='r=Frozen_Rain__kg__m_2__,t=Temperature__C_,p="
+                   "Pressure__Pa_'",
+                   "SELECT max(p), max(r), max(t) FROM raster;",
+                   {{33.674859619140648, 86880.0, 0.0}});
 }
 
 INSTANTIATE_TEST_SUITE_P(RasterImportTest,
