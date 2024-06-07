@@ -112,6 +112,14 @@ class FileReaderMap {
     map_.clear();
   }
 
+  bool isEmpty() const { return map_.empty(); }
+
+  std::pair<const std::string, const ReaderPtr> getFirst() const {
+    CHECK(!map_.empty());
+    const auto& [path, ptr] = *(map_.begin());
+    return {path, ptr.get()};
+  }
+
  private:
   mutable heavyai::shared_mutex mutex_;
   std::map<const std::string, UniqueReaderPtr> map_;
