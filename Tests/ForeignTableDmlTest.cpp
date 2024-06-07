@@ -256,6 +256,58 @@ std::string get_data_wrapper_name(const std::string& data_wrapper_type) {
   }
   return data_wrapper;
 }
+
+void make_parquet_file(const std::string& file_name,
+                       const std::vector<parquet::Type::type>& col_types,
+                       const std::vector<std::vector<std::string>>& rows) {
+  foreign_storage::SampleRows sample_rows{{"1", "2"}};
+  parquet::WriterProperties::Builder builder;
+  std::vector<std::shared_ptr<parquet::schema::Node>> fields;
+  for (auto i = 0U; i < col_types.size(); ++i) {
+    fields.emplace_back(parquet::schema::PrimitiveNode::Make(
+        std::to_string(i), parquet::Repetition::OPTIONAL, col_types.at(i)));
+  }
+  std::shared_ptr<parquet::schema::GroupNode> schema =
+      std::static_pointer_cast<parquet::schema::GroupNode>(
+          parquet::schema::GroupNode::Make(
+              "schema", parquet::Repetition::REQUIRED, fields));
+
+  std::shared_ptr<arrow::io::FileOutputStream> outfile;
+  PARQUET_ASSIGN_OR_THROW(outfile, arrow::io::FileOutputStream::Open(file_name));
+
+  {
+    parquet::StreamWriter os{
+        parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
+    for (const auto& row : rows) {
+      CHECK_EQ(row.size(), col_types.size());
+      for (auto i = 0U; i < row.size(); ++i) {
+        if (col_types.at(i) == parquet::Type::DOUBLE) {
+          os << std::stod(row.at(i));
+        } else if (col_types.at(i) == parquet::Type::FLOAT) {
+          os << std::stof(row.at(i));
+        } else if (col_types.at(i) == parquet::Type::INT32) {
+          os << std::stoi(row.at(i));
+        } else if (col_types.at(i) == parquet::Type::INT64) {
+          os << std::stol(row.at(i));
+        } else {
+          UNREACHABLE() << "Type unsupported or not yet implemented";
+        }
+      }
+      os << parquet::EndRow;
+    }
+  }
+  PARQUET_THROW_NOT_OK(outfile->Close());
+}
+
+std::string parquet_schema_mismatch_error(const std::string& file1,
+                                          const std::string& file2) {
+  std::stringstream ss;
+  ss << "Parquet file \"" << file1
+     << "\" has a different schema. Please ensure that all Parquet files use the same "
+        "schema. Reference Parquet file: "
+     << file2 << ", column name: 1. New Parquet file: " << file1 << ", column name: 1.";
+  return ss.str();
+}
 }  // namespace
 
 /**
@@ -3410,6 +3462,82 @@ INSTANTIATE_TEST_SUITE_P(FragmentRemovedForDataWrapper,
                          AlteredSourceTest,
                          testing::Values("csv", "regex_parser", "parquet", "postgres"),
                          AlteredSourceTest::getTestName);
+
+class CorruptedRefreshTest : public RefreshTests {};
+
+TEST_F(CorruptedRefreshTest, Parquet) {
+  sql("CREATE FOREIGN TABLE " + default_table_name +
+      " (f32 FLOAT, f64 FLOAT) server default_local_parquet WITH "
+      "(REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE= 'APPEND', FILE_PATH='" +
+      test_temp_dir + "', REGEX_PATH_FILTER='.*.parquet', FRAGMENT_SIZE=1);");
+
+  make_parquet_file(test_temp_dir + "/temp1.parquet",
+                    {parquet::Type::DOUBLE, parquet::Type::DOUBLE},
+                    {{"1", "2"}});
+
+  // Multiple files need to be read before refresh so that the append refresh assumes it
+  // should not re-read old files.
+  std::filesystem::copy(test_temp_dir + "/temp1.parquet",
+                        test_temp_dir + "/temp2.parquet");
+
+  sql("select * from " + default_table_name);
+
+  // New file has a schema mismatch.
+  make_parquet_file(test_temp_dir + "/temp3.parquet",
+                    {parquet::Type::DOUBLE, parquet::Type::FLOAT},
+                    {{"1", "2"}});
+
+  queryAndAssertException("REFRESH FOREIGN TABLES " + default_table_name,
+                          parquet_schema_mismatch_error(test_temp_dir + "temp3.parquet",
+                                                        test_temp_dir + "temp1.parquet"));
+  queryAndAssertException("select * from " + default_table_name,
+                          parquet_schema_mismatch_error(test_temp_dir + "temp3.parquet",
+                                                        test_temp_dir + "temp1.parquet"));
+}
+
+TEST_F(CorruptedRefreshTest, ParquetRecover) {
+  SKIP_IF_DISTRIBUTED("Test relies on local cache access");
+
+  sql("CREATE FOREIGN TABLE " + default_table_name +
+      " (f32 FLOAT, f64 FLOAT) server default_local_parquet WITH "
+      "(REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='APPEND', FILE_PATH='" +
+      test_temp_dir + "', REGEX_PATH_FILTER='.*.parquet', FRAGMENT_SIZE=1);");
+
+  make_parquet_file(test_temp_dir + "/temp1.parquet",
+                    {parquet::Type::DOUBLE, parquet::Type::DOUBLE},
+                    {{"1", "2"}});
+
+  // Multiple files need to be read before refresh so that the append refresh assumes it
+  // should not re-read old files.
+  std::filesystem::copy(test_temp_dir + "/temp1.parquet",
+                        test_temp_dir + "/temp2.parquet");
+
+  sql("select * from " + default_table_name);
+
+  // New file has a schema mismatch.
+  make_parquet_file(test_temp_dir + "/temp3.parquet",
+                    {parquet::Type::DOUBLE, parquet::Type::FLOAT},
+                    {{"1", "2"}});
+
+  auto cat = &getCatalog();
+  const auto td = cat->getMetadataForTable(default_table_name, false);
+  cat->removeFragmenterForTable(td->tableId);
+  cat->getDataMgr().resetBufferMgrs(
+      {to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName,
+       File_Namespace::DiskCacheLevel::fsi},
+      0,
+      getSystemParameters());
+  ChunkKey table_key{cat->getDatabaseId(), td->tableId, 1, 1};
+  cat->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
+  cat->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
+
+  queryAndAssertException("REFRESH FOREIGN TABLES " + default_table_name,
+                          parquet_schema_mismatch_error(test_temp_dir + "temp3.parquet",
+                                                        test_temp_dir + "temp2.parquet"));
+  queryAndAssertException("select * from " + default_table_name,
+                          parquet_schema_mismatch_error(test_temp_dir + "temp3.parquet",
+                                                        test_temp_dir + "temp1.parquet"));
+}
 
 class RefreshMetadataTypeTest : public SelectQueryTest {};
 TEST_F(RefreshMetadataTypeTest, ScalarTypes) {

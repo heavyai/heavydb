@@ -2550,6 +2550,12 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
                            schema.getLogicalAndPhysicalColumns().back()->columnId};
   CHECK(!file_paths.empty());
 
+  std::string base_path;
+  ReaderPtr base_reader = nullptr;
+  if (!file_reader_cache_->isEmpty()) {
+    std::tie(base_path, base_reader) = file_reader_cache_->getFirst();
+  }
+
   // The encoder map needs to be populated before we can start scanning rowgroups, so we
   // peel the first file_path out of the async loop below to perform population.
   const auto& first_path = *file_paths.begin();
@@ -2559,6 +2565,10 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
                                 first_path,
                                 schema,
                                 do_metadata_stats_validation);
+
+  if (base_reader) {
+    validate_equal_schema(base_reader, first_reader, base_path, first_path);
+  }
 
   // Iterate asynchronously over any paths beyond the first.
   auto table_ptr = schema.getForeignTable();
