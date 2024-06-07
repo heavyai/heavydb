@@ -18,6 +18,7 @@
 
 #include "LazyParquetChunkLoader.h"
 #include "ParquetInPlaceEncoder.h"
+#include "Shared/InlineNullValues.h"
 #include "StringDictionary/StringDictionary.h"
 
 #include <parquet/schema.h>
@@ -37,6 +38,7 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
       , encode_buffer_(LazyParquetChunkLoader::batch_reader_num_elements * sizeof(V))
       , min_(std::numeric_limits<V>::max())
       , max_(std::numeric_limits<V>::lowest())
+      , null_value_(inline_int_null_value<V>())
       , current_batch_offset_(0)
       , invalid_indices_(nullptr) {
     if (chunk_metadata_) {
@@ -155,12 +157,22 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
     if (!chunk_metadata_) {
       return;
     }
+    bool has_nulls = chunk_metadata_->chunkStats.has_nulls;
     V* data_ptr = reinterpret_cast<V*>(values);
     for (int64_t i = 0; i < values_read; ++i) {
-      min_ = std::min<V>(data_ptr[i], min_);
-      max_ = std::max<V>(data_ptr[i], max_);
+      auto& value = data_ptr[i];
+      if (null_value_ == value) {
+        has_nulls = true;  // NOTE: this should not be set true for NOT NULL
+                           // columns, however, due to how empty strings are
+                           // represented as NULLs, this is necessary to keep
+                           // things working with what currently exists in the
+                           // codebase
+      } else {
+        min_ = std::min<V>(value, min_);
+        max_ = std::max<V>(value, max_);
+      }
     }
-    chunk_metadata_->fillChunkStats(min_, max_, chunk_metadata_->chunkStats.has_nulls);
+    chunk_metadata_->fillChunkStats(min_, max_, has_nulls);
   }
 
   StringDictionary* string_dictionary_;
@@ -168,6 +180,7 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
   std::vector<int8_t> encode_buffer_;
 
   V min_, max_;
+  V null_value_;
 
   int64_t current_batch_offset_;
   InvalidRowGroupIndices* invalid_indices_;

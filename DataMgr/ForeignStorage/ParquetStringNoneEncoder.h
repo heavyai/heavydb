@@ -27,11 +27,17 @@ namespace foreign_storage {
 class ParquetStringNoneEncoder : public ParquetEncoder {
  public:
   ParquetStringNoneEncoder(Data_Namespace::AbstractBuffer* buffer,
-                           Data_Namespace::AbstractBuffer* index_buffer)
+                           Data_Namespace::AbstractBuffer* index_buffer,
+                           ChunkMetadata* chunk_metadata)
       : ParquetEncoder(buffer)
       , index_buffer_(index_buffer)
       , encode_buffer_(LazyParquetChunkLoader::batch_reader_num_elements *
-                       sizeof(StringOffsetT)) {}
+                       sizeof(StringOffsetT))
+      , chunk_metadata_(chunk_metadata) {
+    if (chunk_metadata_) {
+      chunk_metadata_->chunkStats.has_nulls = false;
+    }
+  }
 
   void appendData(const int16_t* def_levels,
                   const int16_t* rep_levels,
@@ -45,6 +51,7 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
     auto parquet_data_ptr = reinterpret_cast<const parquet::ByteArray*>(values);
     auto offsets = reinterpret_cast<StringOffsetT*>(encode_buffer_.data());
     auto last_offset = buffer_->size();
+    bool has_nulls = chunk_metadata_->chunkStats.has_nulls;
 
     size_t total_len = 0;
     for (int64_t i = 0, j = 0; i < levels_read; ++i) {
@@ -54,9 +61,20 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
         if (is_error_tracking_enabled_ &&
             byte_array.len > ParquetEncoder::column_type_.get_max_strlen()) {
           // no-op, or effectively inserting a null: total_len += 0;
+          has_nulls = true;
         } else {
           total_len += byte_array.len;
         }
+        if (!byte_array.len) {
+          has_nulls = true;  // NOTE: see
+                             // `ParquetStringEncoder::updateMetadataStats` for
+                             // comment. This should also not apply for NOT NULL
+                             // columns, but in order to be consistent with
+                             // existing (import, insert & HC) code-paths, this
+                             // case is ignored here.
+        }
+      } else {
+        has_nulls = true;
       }
       offsets[i] = last_offset + total_len;
     }
@@ -88,6 +106,7 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
       ParquetEncoder::current_chunk_offset_ += levels_read;
     }
     buffer_->append(encode_buffer_.data(), total_len);
+    chunk_metadata_->chunkStats.has_nulls = has_nulls;
   }
 
   void appendDataTrackErrors(const int16_t* def_levels,
@@ -110,6 +129,7 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
 
   Data_Namespace::AbstractBuffer* index_buffer_;
   std::vector<int8_t> encode_buffer_;
+  ChunkMetadata* chunk_metadata_;
 };
 
 }  // namespace foreign_storage
