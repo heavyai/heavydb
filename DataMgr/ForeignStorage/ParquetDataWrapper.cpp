@@ -37,7 +37,7 @@ namespace foreign_storage {
 namespace {
 void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
                      std::shared_ptr<ChunkMetadata> reduce_from) {
-  CHECK(reduce_to->sqlType == reduce_from->sqlType);
+  CHECK_EQ(reduce_to->sqlType, reduce_from->sqlType);
   reduce_to->numBytes += reduce_from->numBytes;
   reduce_to->numElements += reduce_from->numElements;
   reduce_to->chunkStats.has_nulls |= reduce_from->chunkStats.has_nulls;
