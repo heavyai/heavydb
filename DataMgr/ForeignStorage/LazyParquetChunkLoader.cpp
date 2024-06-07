@@ -775,6 +775,15 @@ std::shared_ptr<ParquetEncoder> create_parquet_date_encoder(
   return {};
 }
 
+std::unique_ptr<ChunkMetadata>& initialize_chunk_metadata(
+    const ColumnDescriptor* omnisci_column,
+    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata) {
+  chunk_metadata.emplace_back(std::make_unique<ChunkMetadata>());
+  std::unique_ptr<ChunkMetadata>& logical_chunk_metadata = chunk_metadata.back();
+  logical_chunk_metadata->sqlType = omnisci_column->columnType;
+  return logical_chunk_metadata;
+}
+
 std::shared_ptr<ParquetEncoder> create_parquet_string_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
@@ -792,14 +801,15 @@ std::shared_ptr<ParquetEncoder> create_parquet_string_encoder(
     if (is_for_import) {
       return std::make_shared<ParquetStringImportEncoder>(chunk.getBuffer());
     } else {
-      return std::make_shared<ParquetStringNoneEncoder>(chunk.getBuffer(),
-                                                        chunk.getIndexBuf());
+      auto& logical_chunk_metadata =
+          initialize_chunk_metadata(omnisci_column, chunk_metadata);
+      return std::make_shared<ParquetStringNoneEncoder>(
+          chunk.getBuffer(), chunk.getIndexBuf(), logical_chunk_metadata.get());
     }
   } else if (column_type.get_compression() == kENCODING_DICT) {
     if (!is_for_detect) {  // non-detect use case
-      chunk_metadata.emplace_back(std::make_unique<ChunkMetadata>());
-      std::unique_ptr<ChunkMetadata>& logical_chunk_metadata = chunk_metadata.back();
-      logical_chunk_metadata->sqlType = omnisci_column->columnType;
+      auto& logical_chunk_metadata =
+          initialize_chunk_metadata(omnisci_column, chunk_metadata);
       switch (column_type.get_size()) {
         case 1:
           return std::make_shared<ParquetStringEncoder<uint8_t>>(

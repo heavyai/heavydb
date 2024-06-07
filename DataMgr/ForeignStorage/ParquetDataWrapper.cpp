@@ -605,7 +605,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
 
     // for certain types, update the metadata statistics
     // should update the cache, and the internal chunk_metadata_map_
-    if (is_dictionary_encoded_string_column || logical_column->columnType.is_geometry()) {
+    if (is_dictionary_encoded_string_column || logical_column->columnType.is_geometry() ||
+        logical_column->columnType.is_none_encoded_string()) {
       CHECK(metadata_iter != metadata.end());
       cached_metadata->chunkStats = (*metadata_iter)->chunkStats;
 

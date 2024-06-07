@@ -36,6 +36,7 @@
 #include "Catalog/OptionsContainer.h"
 #include "Catalog/RefreshTimeCalculator.h"
 #include "DBHandlerTestHelpers.h"
+#include "DataMgr/ChunkMetadata.h"
 #include "DataMgr/ForeignStorage/DataPreview.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
@@ -2371,6 +2372,158 @@ TEST_P(DataWrapperSelectQueryTest, EmptyTable) {
                               getDataFilesPath() + "empty" + wrapper_ext(GetParam()),
                               GetParam()));
   sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {});
+}
+
+class MetadataStatsTest : public DataWrapperSelectQueryTest {
+ protected:
+  ChunkMetadataVector getMetadataForColumn(const std::string& table_name,
+                                           const std::string& col_name) {
+    auto& cat = getCatalog();
+
+    auto id_opt = cat.getTableId(table_name);
+    CHECK(id_opt.has_value());
+    auto tid = id_opt.value();
+
+    auto cd = cat.getMetadataForColumn(tid, col_name);
+    CHECK(cd);
+
+    ChunkMetadataVector column_metadata;
+    cat.getDataMgr().getChunkMetadataVecForKeyPrefix(
+        column_metadata, {cat.getDatabaseId(), tid, cd->columnId});
+
+    return column_metadata;
+  }
+
+  ChunkStats getSingleFragmentStats(const std::string& table_name,
+                                    const std::string& col_name) {
+    auto column_metadata = getMetadataForColumn(default_table_name, "txt");
+    EXPECT_EQ(column_metadata.size(), 1UL);
+    const auto& [key, metadata] = column_metadata[0];
+    return metadata->chunkStats;
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(DataWrapperParameterizedTests,
+                         MetadataStatsTest,
+                         ::testing::ValuesIn(local_wrappers),
+                         [](const auto& info) { return info.param; });
+
+TEST_P(MetadataStatsTest, ParquetWithEmptyStringDictionaryNullable) {
+  sql(createForeignTableQuery(
+      {
+          {"txt", "TEXT ENCODING DICT(32)"},
+      },
+      getDataFilesPath() + "strings_w_empty" + wrapper_ext(GetParam()),
+      GetParam()));
+
+  TQueryResult result;
+  sqlAndCompareResult("SELECT txt, count(*) as CNT from " + default_table_name +
+                          " GROUP BY txt ORDER BY txt;",
+                      {
+                          {"a", 1L},
+                          {"b", 1L},
+                          {"c", 1L},
+                          {Null, 1L},
+                      });
+
+  if (!isDistributedMode()) {
+    // Validate metadata matches expectations
+    auto stats = getSingleFragmentStats(default_table_name, "txt");
+    EXPECT_TRUE(stats.has_nulls);
+    EXPECT_EQ(stats.min.intval, 0);
+  }
+}
+
+TEST_P(MetadataStatsTest, ParquetWithEmptyStringDictionaryNotNullable) {
+  sql(createForeignTableQuery(
+      {
+          {"txt", "TEXT NOT NULL ENCODING DICT(32)"},
+      },
+      getDataFilesPath() + "strings_w_empty" + wrapper_ext(GetParam()),
+      GetParam()));
+
+  sqlAndCompareResult("SELECT txt, count(*) as CNT from " + default_table_name +
+                          " GROUP BY txt ORDER BY txt;",
+                      {
+                          {"", 1L},
+                          {"a", 1L},
+                          {"b", 1L},
+                          {"c", 1L},
+                      });
+
+  if (!isDistributedMode()) {
+    // Validate metadata matches expectations
+    auto stats = getSingleFragmentStats(default_table_name, "txt");
+    EXPECT_TRUE(stats.has_nulls);  // NOTE: this is inline with other code-paths
+                                   // such as INSERT or DELIMITED import, although
+                                   // this is counter-intuitive.
+    EXPECT_EQ(stats.min.intval, 0);
+  }
+}
+
+TEST_P(MetadataStatsTest, ParquetWithEmptyStringNoneEncodedNullable) {
+  sql(createForeignTableQuery(
+      {
+          {"txt", "TEXT ENCODING NONE"},
+      },
+      getDataFilesPath() + "strings_w_empty" + wrapper_ext(GetParam()),
+      GetParam()));
+
+  sqlAndCompareResult("SELECT txt from " + default_table_name + " ORDER BY txt;",
+                      {
+                          {"a"},
+                          {"b"},
+                          {"c"},
+                          {Null},
+                      });
+
+  if (!isDistributedMode()) {
+    // Validate metadata matches expectations
+    auto stats = getSingleFragmentStats(default_table_name, "txt");
+    EXPECT_TRUE(stats.has_nulls);
+  }
+}
+
+TEST_P(MetadataStatsTest, ParquetWithEmptyStringNoneEncodedNotNullable) {
+  sql(createForeignTableQuery(
+      {
+          {"txt", "TEXT NOT NULL ENCODING NONE"},
+      },
+      getDataFilesPath() + "strings_w_empty" + wrapper_ext(GetParam()),
+      GetParam()));
+
+  if (!is_odbc(GetParam())) {
+    sqlAndCompareResult("SELECT txt from " + default_table_name + ";",
+                        {
+                            {"a"},
+                            {""},
+                            {"b"},
+                            {"c"},
+                        });  // TODO: There should be
+                             // an ORDER BY to ensure
+                             // correctness here, but
+                             // there is a bug in QE
+                             // preventing this at
+                             // this time, update when
+                             // bug is fixed.
+
+  } else {
+    // ODBC wrappers return a different order of results
+    sqlAndCompareResult("SELECT txt from " + default_table_name + ";",
+                        {
+                            {""},
+                            {"a"},
+                            {"b"},
+                            {"c"},
+                        });
+  }
+  if (!isDistributedMode()) {
+    // Validate metadata matches expectations
+    auto stats = getSingleFragmentStats(default_table_name, "txt");
+    EXPECT_TRUE(stats.has_nulls);  // NOTE: this is inline with other code-paths
+                                   // such as INSERT or DELIMITED import, although
+                                   // this is counter-intuitive.
+  }
 }
 
 class CSVFileTypeTests
