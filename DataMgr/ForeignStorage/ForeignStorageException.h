@@ -54,6 +54,12 @@ struct InvalidOptionException : public ForeignStorageException {
   InvalidOptionException(std::string msg) : ForeignStorageException(msg) {}
 };
 
+struct InvalidRasterFilterBandsOptionException : public ForeignStorageException {
+  InvalidRasterFilterBandsOptionException(const std::string& rfb, const std::string& msg)
+      : ForeignStorageException("Invalid Raster Filter Bands option '" + rfb +
+                                "': " + msg) {}
+};
+
 inline void throw_unexpected_number_of_items(const size_t& num_expected,
                                              const size_t& num_loaded,
                                              const std::string& item_type) {

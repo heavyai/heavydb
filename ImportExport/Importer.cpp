@@ -4871,6 +4871,16 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsRaster(
   Geospatial::GDAL::init();
   Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_config);
 
+  // check for unsupported options
+  if (!copy_params.bounding_box_clip.empty()) {
+    throw std::runtime_error(
+        "Bounding Box Clip option not supported by Legacy Raster Importer");
+  }
+  if (copy_params.raster_import_bands.find("/") != std::string::npos) {
+    throw std::runtime_error(
+        "Advanced Raster Import Bands syntax not supported by Legacy Raster Importer");
+  }
+
   // prepare for metadata column
   auto metadata_column_infos =
       parse_add_metadata_columns(copy_params.add_metadata_columns, file_name);
@@ -5549,6 +5559,10 @@ ImportStatus Importer::importGDALRaster(
   if (!copy_params.bounding_box_clip.empty()) {
     throw std::runtime_error(
         "Bounding Box Clip option not supported by Legacy Raster Importer");
+  }
+  if (copy_params.raster_import_bands.find("/") != std::string::npos) {
+    throw std::runtime_error(
+        "Advanced Raster Import Bands syntax not supported by Legacy Raster Importer");
   }
 
   // metadata columns?
