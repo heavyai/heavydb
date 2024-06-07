@@ -19,7 +19,7 @@
 #include <vector>
 
 namespace shared {
-void execute_over_contiguous_indices(
+inline void execute_over_contiguous_indices(
     const std::vector<size_t>& indices,
     std::function<void(const size_t, const size_t)> to_execute) {
   size_t start_pos = 0;
