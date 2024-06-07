@@ -2,8 +2,16 @@
 
 set -e
 
-HAS_PYTHON_3_10=$(hash python3.10 2> /dev/null || echo "false")
-if [[ "$HAS_PYTHON_3_10" != "false" ]]; then
+if ! command -v python3 &> /dev/null; then
+  echo "Python3 is not installed. Skipping HeavyIQ deployment."
+  exit 0
+fi
+
+PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
+PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
+PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
+
+if [[ $PYTHON_MAJOR_VERSION -eq 3 && $PYTHON_MINOR_VERSION -ge 10 ]]; then
   if [[ -f "$CONFIG_FILE" ]]; then
     CONFIG_FILE_ABS_PATH=$(readlink -f $CONFIG_FILE)
   fi
@@ -12,7 +20,7 @@ if [[ "$HAS_PYTHON_3_10" != "false" ]]; then
   if [[ ! -d .venv ]]; then
     BUILD_LOG_FILE=${HEAVYIQ_LOG_PREFIX}_build.log
     VENV_ERROR=false
-    python3.10 -m venv .venv &>> $BUILD_LOG_FILE || VENV_ERROR=true
+    python3 -m venv .venv &>> $BUILD_LOG_FILE || VENV_ERROR=true
     if $VENV_ERROR; then
       echo "Warning: An error occurred when attempting to create a virtual environment." \
            "See the $BUILD_LOG_FILE logs for more details."
@@ -54,5 +62,5 @@ if [[ "$HAS_PYTHON_3_10" != "false" ]]; then
   fi
   popd > /dev/null
 else
-  echo "Python 3.10 not found. Skipping HeavyIQ deployment."
+  echo "Python 3.10 not found or installed version is less than 3.10. Skipping HeavyIQ deployment."
 fi
