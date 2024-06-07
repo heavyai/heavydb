@@ -1126,22 +1126,33 @@ void RasterImporter::initializeFiltering(
   // specified names?
   if (specified_band_names.length()) {
     // tokenize names
-    std::vector<std::string> names_and_alt_names;
-    boost::split(names_and_alt_names, specified_band_names, boost::is_any_of(","));
+    std::vector<std::string> all_names;
+    boost::split(all_names, specified_band_names, boost::is_any_of(","));
 
     // pre-populate infos (in given order) and found map
-    for (auto const& name_and_alt_name : names_and_alt_names) {
+    for (auto const& names : all_names) {
       // parse for optional alt name
       std::vector<std::string> tokens;
-      boost::split(tokens, name_and_alt_name, boost::is_any_of("="));
-      if (tokens.size() < 1 || tokens.size() > 2) {
-        throw std::runtime_error("Failed to parse specified name '" + name_and_alt_name +
-                                 "'");
+      boost::split(tokens, names, boost::is_any_of("="));
+      if (tokens.size() == 1u) {
+        // no rename
+        auto const& name = strip(tokens[0]);
+        import_band_infos_.push_back({name, name, kNULLT, 0u, 0, 0.0, false});
+        if (!specified_band_names_map_.emplace(name, false).second) {
+          throw std::runtime_error("Found repeated specified band name '" + name + "'");
+        }
+      } else if (tokens.size() == 2u) {
+        // rename
+        auto const& col_name = strip(tokens[0]);
+        auto const& band_name = strip(tokens[1]);
+        import_band_infos_.push_back({band_name, col_name, kNULLT, 0u, 0, 0.0, false});
+        if (!specified_band_names_map_.emplace(band_name, false).second) {
+          throw std::runtime_error("Found repeated specified band name '" + band_name +
+                                   "'");
+        }
+      } else {
+        throw std::runtime_error("Failed to parse specified band name '" + names + "'");
       }
-      auto const& name = strip(tokens[0]);
-      auto const& alt_name = strip(tokens[tokens.size() == 2 ? 1 : 0]);
-      import_band_infos_.push_back({name, alt_name, kNULLT, 0u, 0, 0.0, false});
-      specified_band_names_map_.emplace(name, false);
     }
   }
 
