@@ -1028,8 +1028,8 @@ const char* translateCPRLibraryErrorCode(int32_t error_code) {
 NullableStrType LLMTransform::operator()(const std::string& str_val) const {
   {
     std::shared_lock<std::shared_mutex> read_lock(translation_cache_lock_);
-    auto it = translation_cache_->find(str_val);
-    if (it != translation_cache_->end()) {
+    auto it = translation_cache_.find(str_val);
+    if (it != translation_cache_.end()) {
       return it->second;
     }
   }
@@ -1086,7 +1086,7 @@ NullableStrType LLMTransform::operator()(const std::string& str_val) const {
     auto output = response["response"].GetString();
     {
       std::lock_guard<std::shared_mutex> write_lock(translation_cache_lock_);
-      translation_cache_->emplace(str_val, output);
+      translation_cache_.emplace(str_val, output);
     }
     return NullableStrType{std::string(output)};
   }
@@ -1365,8 +1365,7 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       CHECK_LE(num_non_variable_literals, 1UL);
       CHECK(string_op_info.stringLiteralArgAtIdxExists(1));
       return std::make_unique<const LLMTransform>(var_string_optional_literal,
-                                                  string_op_info.getStringLiteral(1),
-                                                  string_op_info.getTranslationCache());
+                                                  string_op_info.getStringLiteral(1));
     }
     case SqlStringOpKind::TRY_STRING_CAST: {
       CHECK_EQ(num_non_variable_literals, 0UL);
