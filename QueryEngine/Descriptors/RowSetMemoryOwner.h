@@ -470,11 +470,6 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return const_cast<AggMode*>(std::as_const(*this).getAggMode(ival));
   }
 
-  robin_hood::unordered_map<std::string, std::string>* allocateTranslationCache() {
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    return &str_translation_cache_owned_.emplace_back();
-  }
-
  private:
   int8_t* allocateUnlocked(const size_t num_bytes,
                            const size_t thread_idx,
@@ -514,8 +509,6 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       str_proxy_numeric_translation_maps_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   StringDictionaryGenerations string_dictionary_generations_;
-  std::list<robin_hood::unordered_map<std::string, std::string>>
-      str_translation_cache_owned_;
   std::vector<void*> col_buffers_;
   std::vector<Data_Namespace::AbstractBuffer*> varlen_input_buffers_;
 

@@ -639,16 +639,14 @@ struct NullOp : public StringOp {
 
 struct LLMTransform : public StringOp {
   LLMTransform(const std::optional<std::string>& var_str_optional_literal,
-               std::string const& input,
-               robin_hood::unordered_map<std::string, std::string>* translation_cache)
+               std::string const& input)
       : StringOp(SqlStringOpKind::LLM_TRANSFORM, var_str_optional_literal)
-      , prompt_(input)
-      , translation_cache_(translation_cache) {}
+      , prompt_(input) {}
 
   NullableStrType operator()(const std::string& str) const override;
 
   const std::string prompt_;
-  robin_hood::unordered_map<std::string, std::string>* translation_cache_;
+  mutable robin_hood::unordered_map<std::string, std::string> translation_cache_;
   mutable std::shared_mutex translation_cache_lock_;
 };
 

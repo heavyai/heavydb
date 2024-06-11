@@ -369,12 +369,6 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
   CHECK_EQ(size_t(3), primary_str_lv.size());
   auto string_op_infos = getStringOpInfos(expr);
   CHECK(string_op_infos.size());
-  for (auto& string_op_info : string_op_infos) {
-    if (string_op_info.getOpKind() == SqlStringOpKind::LLM_TRANSFORM) {
-      string_op_info.setTranslationCache(
-          executor_->getRowSetMemoryOwner()->allocateTranslationCache());
-    }
-  }
 
   const auto string_ops =
       executor()->getRowSetMemoryOwner()->getStringOps(string_op_infos);
