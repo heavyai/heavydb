@@ -25,206 +25,112 @@
 #include "Logger/Logger.h"
 
 inline SQLOps to_sql_op(const std::string& op_str) {
-  if (op_str == std::string(">")) {
-    return kGT;
-  }
-  if (op_str == std::string("IS NOT DISTINCT FROM")) {
-    return kBW_EQ;
-  }
-  if (op_str == std::string(">=")) {
-    return kGE;
-  }
-  if (op_str == std::string("<")) {
-    return kLT;
-  }
-  if (op_str == std::string("<=")) {
-    return kLE;
-  }
-  if (op_str == std::string("=")) {
-    return kEQ;
-  }
-  if (op_str == std::string("<>")) {
-    return kNE;
-  }
-  if (op_str == std::string("+")) {
-    return kPLUS;
-  }
-  if (op_str == std::string("-")) {
-    return kMINUS;
-  }
-  if (op_str == std::string("*")) {
-    return kMULTIPLY;
-  }
-  if (op_str == std::string("/")) {
-    return kDIVIDE;
-  }
-  if (op_str == "MOD") {
-    return kMODULO;
-  }
-  if (op_str == std::string("AND")) {
-    return kAND;
-  }
-  if (op_str == std::string("OR")) {
-    return kOR;
-  }
-  if (op_str == std::string("CAST")) {
-    return kCAST;
-  }
-  if (op_str == std::string("ENCODE_TEXT")) {
-    return kENCODE_TEXT;
-  }
-  if (op_str == std::string("NOT")) {
-    return kNOT;
-  }
-  if (op_str == std::string("IS NULL")) {
-    return kISNULL;
-  }
-  if (op_str == std::string("IS NOT NULL")) {
-    return kISNOTNULL;
-  }
-  if (op_str == std::string("PG_UNNEST")) {
-    return kUNNEST;
-  }
-  if (op_str == std::string("PG_ANY") || op_str == std::string("PG_ALL")) {
+  static const std::unordered_map<std::string, SQLOps> op_map = {
+      {">", SQLOps::kGT},
+      {"IS NOT DISTINCT FROM", SQLOps::kBW_EQ},
+      {">=", SQLOps::kGE},
+      {"<", SQLOps::kLT},
+      {"<=", SQLOps::kLE},
+      {"=", SQLOps::kEQ},
+      {"<>", SQLOps::kNE},
+      {"+", SQLOps::kPLUS},
+      {"-", SQLOps::kMINUS},
+      {"*", SQLOps::kMULTIPLY},
+      {"/", SQLOps::kDIVIDE},
+      {"MOD", SQLOps::kMODULO},
+      {"AND", SQLOps::kAND},
+      {"OR", SQLOps::kOR},
+      {"CAST", SQLOps::kCAST},
+      {"ENCODE_TEXT", SQLOps::kENCODE_TEXT},
+      {"NOT", SQLOps::kNOT},
+      {"IS NULL", SQLOps::kISNULL},
+      {"IS NOT NULL", SQLOps::kISNOTNULL},
+      {"PG_UNNEST", SQLOps::kUNNEST},
+      {"IN", SQLOps::kIN}};
+
+  auto it = op_map.find(op_str);
+  if (it != op_map.end()) {
+    return it->second;
+  } else if (op_str == "PG_ANY" || op_str == "PG_ALL") {
     throw std::runtime_error("Invalid use of " + op_str + " operator");
   }
-  if (op_str == std::string("IN")) {
-    return kIN;
-  }
-  return kFUNCTION;
+  return SQLOps::kFUNCTION;
 }
 
 inline SQLAgg to_agg_kind(const std::string& agg_name) {
-  if (agg_name == std::string("COUNT")) {
-    return kCOUNT;
+  static const std::unordered_map<std::string, SQLAgg> agg_map = {
+      {"COUNT", SQLAgg::kCOUNT},
+      {"MIN", SQLAgg::kMIN},
+      {"MAX", SQLAgg::kMAX},
+      {"SUM", SQLAgg::kSUM},
+      {"$SUM0", SQLAgg::kSUM},
+      {"AVG", SQLAgg::kAVG},
+      {"APPROX_COUNT_DISTINCT", SQLAgg::kAPPROX_COUNT_DISTINCT},
+      {"APPROX_MEDIAN", SQLAgg::kAPPROX_QUANTILE},
+      {"APPROX_PERCENTILE", SQLAgg::kAPPROX_QUANTILE},
+      {"APPROX_QUANTILE", SQLAgg::kAPPROX_QUANTILE},
+      {"ANY_VALUE", SQLAgg::kSAMPLE},
+      {"SAMPLE", SQLAgg::kSAMPLE},
+      {"LAST_SAMPLE", SQLAgg::kSAMPLE},
+      {"SINGLE_VALUE", SQLAgg::kSINGLE_VALUE},
+      {"MODE", SQLAgg::kMODE},
+      {"COUNT_IF", SQLAgg::kCOUNT_IF},
+      {"SUM_IF", SQLAgg::kSUM_IF}};
+
+  auto it = agg_map.find(agg_name);
+  if (it != agg_map.end()) {
+    if (agg_name.compare("$SUM0") == 0) {
+      VLOG(1)
+          << "Convert $SUM0 aggregate function to an equivalent SUM aggregate function";
+    }
+    return it->second;
+  } else {
+    throw std::runtime_error("Aggregate function " + agg_name + " not supported");
   }
-  if (agg_name == std::string("MIN")) {
-    return kMIN;
-  }
-  if (agg_name == std::string("MAX")) {
-    return kMAX;
-  }
-  if (agg_name == std::string("SUM")) {
-    return kSUM;
-  }
-  if (agg_name == std::string("AVG")) {
-    return kAVG;
-  }
-  if (agg_name == std::string("APPROX_COUNT_DISTINCT")) {
-    return kAPPROX_COUNT_DISTINCT;
-  }
-  if (agg_name == "APPROX_MEDIAN" || agg_name == "APPROX_PERCENTILE" ||
-      agg_name == "APPROX_QUANTILE") {
-    return kAPPROX_QUANTILE;
-  }
-  if (agg_name == std::string("ANY_VALUE") || agg_name == std::string("SAMPLE") ||
-      agg_name == std::string("LAST_SAMPLE")) {
-    return kSAMPLE;
-  }
-  if (agg_name == std::string("SINGLE_VALUE")) {
-    return kSINGLE_VALUE;
-  }
-  if (agg_name == "MODE") {
-    return kMODE;
-  }
-  if (agg_name == "COUNT_IF") {
-    return kCOUNT_IF;
-  }
-  if (agg_name == "SUM_IF") {
-    return kSUM_IF;
-  }
-  throw std::runtime_error("Aggregate function " + agg_name + " not supported");
 }
 
 inline SQLTypes to_sql_type(const std::string& type_name) {
-  if (type_name == std::string("BIGINT")) {
-    return kBIGINT;
-  }
-  if (type_name == std::string("INTEGER")) {
-    return kINT;
-  }
-  if (type_name == std::string("TINYINT")) {
-    return kTINYINT;
-  }
-  if (type_name == std::string("SMALLINT")) {
-    return kSMALLINT;
-  }
-  if (type_name == std::string("FLOAT")) {
-    return kFLOAT;
-  }
-  if (type_name == std::string("REAL")) {
-    return kFLOAT;
-  }
-  if (type_name == std::string("DOUBLE")) {
-    return kDOUBLE;
-  }
-  if (type_name == std::string("DECIMAL")) {
-    return kDECIMAL;
-  }
-  if (type_name == std::string("CHAR") || type_name == std::string("VARCHAR") ||
-      type_name == std::string("SYMBOL")) {
-    return kTEXT;
-  }
-  if (type_name == std::string("BOOLEAN")) {
-    return kBOOLEAN;
-  }
-  if (type_name == std::string("TIMESTAMP")) {
-    return kTIMESTAMP;
-  }
-  if (type_name == std::string("DATE")) {
-    return kDATE;
-  }
-  if (type_name == std::string("TIME")) {
-    return kTIME;
-  }
-  if (type_name == std::string("NULL")) {
-    return kNULLT;
-  }
-  if (type_name == std::string("ARRAY")) {
-    return kARRAY;
-  }
-  if (type_name == std::string("INTERVAL_DAY") ||
-      type_name == std::string("INTERVAL_HOUR") ||
-      type_name == std::string("INTERVAL_MINUTE") ||
-      type_name == std::string("INTERVAL_SECOND")) {
-    return kINTERVAL_DAY_TIME;
-  }
-  if (type_name == std::string("INTERVAL_MONTH") ||
-      type_name == std::string("INTERVAL_YEAR")) {
-    return kINTERVAL_YEAR_MONTH;
-  }
-  if (type_name == std::string("ANY")) {
-    return kEVAL_CONTEXT_TYPE;
-  }
-  if (type_name == std::string("TEXT")) {
-    return kTEXT;
-  }
-  if (type_name == std::string("POINT")) {
-    return kPOINT;
-  }
-  if (type_name == std::string("MULTIPOINT")) {
-    return kMULTIPOINT;
-  }
-  if (type_name == std::string("LINESTRING")) {
-    return kLINESTRING;
-  }
-  if (type_name == std::string("MULTILINESTRING")) {
-    return kMULTILINESTRING;
-  }
-  if (type_name == std::string("POLYGON")) {
-    return kPOLYGON;
-  }
-  if (type_name == std::string("MULTIPOLYGON")) {
-    return kMULTIPOLYGON;
-  }
-  if (type_name == std::string("GEOMETRY")) {
-    return kGEOMETRY;
-  }
-  if (type_name == std::string("GEOGRAPHY")) {
-    return kGEOGRAPHY;
-  }
+  static const std::unordered_map<std::string, SQLTypes> type_map = {
+      {"BIGINT", SQLTypes::kBIGINT},
+      {"INTEGER", SQLTypes::kINT},
+      {"TINYINT", SQLTypes::kTINYINT},
+      {"SMALLINT", SQLTypes::kSMALLINT},
+      {"FLOAT", SQLTypes::kFLOAT},
+      {"REAL", SQLTypes::kFLOAT},  // Same as FLOAT
+      {"DOUBLE", SQLTypes::kDOUBLE},
+      {"DECIMAL", SQLTypes::kDECIMAL},
+      {"CHAR", SQLTypes::kTEXT},
+      {"VARCHAR", SQLTypes::kTEXT},
+      {"SYMBOL", SQLTypes::kTEXT},
+      {"BOOLEAN", SQLTypes::kBOOLEAN},
+      {"TIMESTAMP", SQLTypes::kTIMESTAMP},
+      {"DATE", SQLTypes::kDATE},
+      {"TIME", SQLTypes::kTIME},
+      {"NULL", SQLTypes::kNULLT},
+      {"ARRAY", SQLTypes::kARRAY},
+      {"INTERVAL_DAY", SQLTypes::kINTERVAL_DAY_TIME},
+      {"INTERVAL_HOUR", SQLTypes::kINTERVAL_DAY_TIME},
+      {"INTERVAL_MINUTE", SQLTypes::kINTERVAL_DAY_TIME},
+      {"INTERVAL_SECOND", SQLTypes::kINTERVAL_DAY_TIME},
+      {"INTERVAL_MONTH", SQLTypes::kINTERVAL_YEAR_MONTH},
+      {"INTERVAL_YEAR", SQLTypes::kINTERVAL_YEAR_MONTH},
+      {"ANY", SQLTypes::kEVAL_CONTEXT_TYPE},
+      {"TEXT", SQLTypes::kTEXT},
+      {"POINT", SQLTypes::kPOINT},
+      {"MULTIPOINT", SQLTypes::kMULTIPOINT},
+      {"LINESTRING", SQLTypes::kLINESTRING},
+      {"MULTILINESTRING", SQLTypes::kMULTILINESTRING},
+      {"POLYGON", SQLTypes::kPOLYGON},
+      {"MULTIPOLYGON", SQLTypes::kMULTIPOLYGON},
+      {"GEOMETRY", SQLTypes::kGEOMETRY},
+      {"GEOGRAPHY", SQLTypes::kGEOGRAPHY}};
 
-  throw std::runtime_error("Unsupported type: " + type_name);
+  auto it = type_map.find(type_name);
+  if (it != type_map.end()) {
+    return it->second;
+  } else {
+    throw std::runtime_error("Unsupported type: " + type_name);
+  }
 }
 
 namespace Analyzer {
