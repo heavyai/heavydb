@@ -1747,9 +1747,8 @@ std::list<RowGroupMetadata> metadata_scan_rowgroup_interval(
     std::unique_ptr<parquet::RowGroupMetaData> group_metadata =
         file_metadata->RowGroup(row_group);
 
-    for (int column_id = column_interval.start; column_id <= column_interval.end;
-         column_id++) {
-      const auto column_descriptor = schema.getColumnDescriptor(column_id);
+    for (const auto& column_descriptor : schema.getColumnsInInterval(column_interval)) {
+      const auto column_id = column_descriptor->columnId;
       auto parquet_column_index = schema.getParquetColumnIndex(column_id);
       auto encoder_map_iter =
           encoder_map.find(schema.getLogicalColumn(column_id)->columnId);
@@ -1819,9 +1818,11 @@ std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map_for_metadata
     const bool geo_validate_geometry) {
   std::map<int, std::shared_ptr<ParquetEncoder>> encoder_map;
   auto file_metadata = reader->parquet_reader()->metadata();
-  for (int column_id = column_interval.start; column_id <= column_interval.end;
-       column_id++) {
-    const auto column_descriptor = schema.getColumnDescriptor(column_id);
+  for (const auto column_descriptor : schema.getColumnsInInterval(column_interval)) {
+    if (column_descriptor->isGeoPhyCol) {
+      continue;
+    }
+    const auto column_id = column_descriptor->columnId;
     auto parquet_column_descriptor =
         file_metadata->schema()->Column(schema.getParquetColumnIndex(column_id));
     encoder_map[column_id] = create_parquet_encoder_for_metadata_scan(
@@ -1829,7 +1830,6 @@ std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map_for_metadata
     if (!do_metadata_stats_validation) {
       shared::get_from_map(encoder_map, column_id)->disableMetadataStatsValidation();
     }
-    column_id += column_descriptor->columnType.get_physical_cols();
   }
   return encoder_map;
 }

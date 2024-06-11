@@ -1099,45 +1099,27 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
                            failed_status);
   }
 
-  TQueryResult createTableCopyFromAndSelect(
-      const std::string& in_schema,
-      const std::string& file_id,
-      const std::string& select_query,
-      const std::string& line_regex,
-      const int64_t max_byte_size_per_element,
-      const bool geo_validate_geometry = false,
-      const std::string& odbc_select = {},
-      const std::string& odbc_order_by = {},
-      const std::string& table_options = {},
-      const bool is_dir = false,
-      const std::optional<int64_t> max_reject = std::nullopt,
-      const std::list<std::pair<std::string, std::string>>& odbc_schema_modifications =
-          {},
-      const std::optional<int> threads = std::nullopt,
-      const std::optional<size_t> buffer_size = std::nullopt) {
-    auto& import_type = param_.import_type;
-    auto& data_source_type = param_.data_source_type;
-    auto& fragment_size = param_.fragment_size;
-    auto& num_elements_per_chunk = param_.num_elements_per_chunk;
-
-    int64_t max_chunk_size = num_elements_per_chunk * max_byte_size_per_element;
-
+  TQueryResult copyFromAndSelect(const std::string& in_schema,
+                                 const std::string& file_id,
+                                 const std::string& select_query,
+                                 const std::string& line_regex,
+                                 const bool geo_validate_geometry = false,
+                                 const std::string& odbc_select = {},
+                                 const std::string& odbc_order_by = {},
+                                 const bool is_dir = false,
+                                 const std::optional<int64_t> max_reject = std::nullopt,
+                                 const std::list<std::pair<std::string, std::string>>&
+                                     odbc_schema_modifications = {},
+                                 const std::optional<int> threads = std::nullopt,
+                                 const std::optional<size_t> buffer_size = std::nullopt) {
     auto schema = applyOdbcSchemaModifications(in_schema);
-
-    auto odbc_schema = schema;
+    std::string odbc_schema = schema;
     if (!odbc_schema_modifications.empty()) {
       odbc_schema = applyOdbcRdbmsSchemaModifications(schema, odbc_schema_modifications);
     }
 
-    std::string query = "CREATE TABLE import_test_new (" + schema + ")";
-    std::string query_table_options = "fragment_size=" + std::to_string(fragment_size) +
-                                      ",max_chunk_size=" + std::to_string(max_chunk_size);
-    if (!table_options.empty()) {
-      query_table_options += "," + table_options;
-    }
-    query += " WITH (" + query_table_options + ")";
-    query += ";";
-
+    auto& import_type = param_.import_type;
+    auto& data_source_type = param_.data_source_type;
     std::string file_path;
     if (boost::filesystem::path(file_id).is_absolute()) {
       file_path = file_id;
@@ -1171,8 +1153,6 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
       import_id_ = get_import_id(import_id_);
     }
 
-    sql(query);
-
     TQueryResult copy_from_result;
     sql(copy_from_result,
         "COPY import_test_new FROM " + copy_from_source +
@@ -1191,6 +1171,75 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     sql(result, select_query);
     validateTableChunkSizeAndMaxFragRows();
     return result;
+  }
+
+  TQueryResult createTableCopyFromAndSelect(
+      const std::string& in_schema,
+      const std::string& file_id,
+      const std::string& select_query,
+      const std::string& line_regex,
+      const int64_t max_byte_size_per_element,
+      const bool geo_validate_geometry = false,
+      const std::string& odbc_select = {},
+      const std::string& odbc_order_by = {},
+      const std::string& table_options = {},
+      const bool is_dir = false,
+      const std::optional<int64_t> max_reject = std::nullopt,
+      const std::list<std::pair<std::string, std::string>>& odbc_schema_modifications =
+          {},
+      const std::optional<int> threads = std::nullopt,
+      const std::optional<size_t> buffer_size = std::nullopt) {
+    auto& import_type = param_.import_type;
+    auto& data_source_type = param_.data_source_type;
+    auto& fragment_size = param_.fragment_size;
+    auto& num_elements_per_chunk = param_.num_elements_per_chunk;
+
+    int64_t max_chunk_size = num_elements_per_chunk * max_byte_size_per_element;
+
+    auto schema = applyOdbcSchemaModifications(in_schema);
+
+    std::string query = "CREATE TABLE import_test_new (" + schema + ")";
+    std::string query_table_options = "fragment_size=" + std::to_string(fragment_size) +
+                                      ",max_chunk_size=" + std::to_string(max_chunk_size);
+    if (!table_options.empty()) {
+      query_table_options += "," + table_options;
+    }
+    query += " WITH (" + query_table_options + ")";
+    query += ";";
+    sql(query);
+
+    std::string file_path;
+    if (boost::filesystem::path(file_id).is_absolute()) {
+      file_path = file_id;
+    } else {
+      std::string extension =
+          is_odbc(import_type) || import_type == "regex_parser" ? "csv" : import_type;
+      std::string base_name = file_id + "." + extension;
+      if (is_dir) {
+        base_name = file_id + "_" + extension + "_dir";
+      }
+
+      if (data_source_type == "local") {
+        file_path = "../../Tests/FsiDataFiles/" + base_name;
+      } else if (data_source_type == "s3_private") {
+        file_path = "s3://omnisci-fsi-test/FsiDataFiles/" + base_name;
+      } else if (data_source_type == "s3_public") {
+        file_path = "s3://omnisci-fsi-test-public/FsiDataFiles/" + base_name;
+      }
+    }
+
+    return copyFromAndSelect(in_schema,
+                             file_id,
+                             select_query,
+                             line_regex,
+                             geo_validate_geometry,
+                             odbc_select,
+                             odbc_order_by,
+                             is_dir,
+                             max_reject,
+                             odbc_schema_modifications,
+                             threads,
+                             buffer_size);
   }
 
   std::string getCopyFromOptions(
@@ -2072,7 +2121,7 @@ TEST_P(LowProxyForeignTableFragmentSizeImportTest, ImportWithSmallProxyFragmentS
         "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
       {False, 110L, 30500L, 2000500000L, 9000000050000000000L, 100.12f, 2.1234,
         "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"},
-      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, (param_.import_type == "redshift" ? 1000.12f : 1000.123f), 100.1,
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L,  1000.123f, 100.1,
         "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
       {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null}
   };
@@ -2111,6 +2160,83 @@ INSTANTIATE_TEST_SUITE_P(LocalFiles,
                          LowProxyForeignTableFragmentSizeImportTest,
                          ::testing::Values("csv", "regex_parser", "parquet"),
                          FileTypeOnlyImportAndSelectTest::toString);
+
+TEST_P(FileTypeOnlyImportAndSelectTest, DropColumnsThenReadd) {
+  std::string sql_select_stmt =
+      "";
+  std::string schema =
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
+      "DECIMAL(10,5), tm " +
+      std::string(param_.import_type == "hive" ? "TEXT" : "TIME") +
+      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE";
+  auto query = createTableCopyFromAndSelect(schema,
+                                            "scalar_types",
+                                            "SELECT * FROM import_test_new ORDER BY s;",
+                                            get_line_regex(12),
+                                            14,
+                                            false,
+                                            sql_select_stmt,
+                                            "s");
+
+  // clang-format off
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
+        "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
+      {False, 110L, 30500L, 2000500000L, 9000000050000000000L, 100.12f, 2.1234,
+        "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"},
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, (param_.import_type == "redshift" ? 1000.12f : 1000.123f), 100.1,
+        "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
+      {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null},
+  };
+  // clang-format on
+
+  validateImportStatus(4, 0, false);
+  assertResultSetEqual(expected_values, query);
+
+  sql("ALTER TABLE import_test_new DROP COLUMN txt, txt_2;");
+  sql("ALTER TABLE import_test_new ADD COLUMN txt TEXT, txt_2 TEXT ENCODING NONE;");
+
+  auto second_query = copyFromAndSelect(schema,
+                                        "scalar_types",
+                                        "SELECT * FROM import_test_new ORDER BY s;",
+                                        get_line_regex(12),
+                                        false,
+                                        sql_select_stmt,
+                                        "s");
+
+  // clang-format off
+  auto second_expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
+        "00:00:10", "1/1/2000 00:00:59", "1/1/2000", Null, Null},
+      {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
+        "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
+      {False, 110L, 30500L, 2000500000L, 9000000050000000000L, 100.12f, 2.1234,
+        "00:10:00", "6/15/2020 00:59:59", "6/15/2020", Null, Null},
+      {False, 110L, 30500L, 2000500000L, 9000000050000000000L, 100.12f, 2.1234,
+        "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"},
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, (param_.import_type == "redshift" ? 1000.12f : 1000.123f), 100.1,
+        "10:00:00", "12/31/2500 23:59:59", "12/31/2500", Null, Null},
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, (param_.import_type == "redshift" ? 1000.12f : 1000.123f), 100.1,
+        "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
+      {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null},
+      {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null},
+  };
+  // clang-format on
+
+  validateImportStatus(4, 0, false);
+  assertResultSetEqual(second_expected_values, second_query);
+}
+
+INSTANTIATE_TEST_SUITE_P(DataSourceTypes,
+                         FileTypeOnlyImportAndSelectTest,
+                         ::testing::Values("csv",
+                                           "regex_parser"
+#ifdef ENABLE_IMPORT_PARQUET
+                                           ,
+                                           "parquet"
+#endif
+                                           ),
+                         [](const auto& info) { return info.param; });
 
 class ParquetSpecificImportAndSelectTest : public ImportAndSelectTestBase {
  protected:

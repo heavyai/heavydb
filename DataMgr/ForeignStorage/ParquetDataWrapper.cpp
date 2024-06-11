@@ -125,19 +125,7 @@ void ParquetDataWrapper::resetParquetMetadata() {
 
 std::list<const ColumnDescriptor*> ParquetDataWrapper::getColumnsToInitialize(
     const Interval<ColumnType>& column_interval) {
-  const auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
-  CHECK(catalog);
-  const auto& columns = schema_->getLogicalAndPhysicalColumns();
-  auto column_start = column_interval.start;
-  auto column_end = column_interval.end;
-  std::list<const ColumnDescriptor*> columns_to_init;
-  for (const auto column : columns) {
-    auto column_id = column->columnId;
-    if (column_id >= column_start && column_id <= column_end) {
-      columns_to_init.push_back(column);
-    }
-  }
-  return columns_to_init;
+  return schema_->getColumnsInInterval(column_interval);
 }
 
 void ParquetDataWrapper::initializeChunkBuffers(
@@ -452,10 +440,12 @@ void ParquetDataWrapper::updateChunkMetadataForFragment(
   CHECK_EQ(static_cast<int>(column_chunk_metadata.size()),
            schema_->numLogicalAndPhysicalColumns());
   auto column_chunk_metadata_iter = column_chunk_metadata.begin();
-  for (auto column_id = column_interval.start; column_id <= column_interval.end;
-       column_id++, column_chunk_metadata_iter++) {
+  auto columns = schema_->getColumnsInInterval(column_interval);
+  for (auto column_iter = columns.begin(); column_iter != columns.end();
+       column_iter++, column_chunk_metadata_iter++) {
     CHECK(column_chunk_metadata_iter != column_chunk_metadata.end());
-    const auto column_descriptor = schema_->getColumnDescriptor(column_id);
+    const auto column_descriptor = *column_iter;
+    const auto column_id = column_descriptor->columnId;
     const auto& type_info = column_descriptor->columnType;
     ChunkKey const data_chunk_key =
         type_info.is_varlen_indeed()

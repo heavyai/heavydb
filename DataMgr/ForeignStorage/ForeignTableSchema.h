@@ -21,6 +21,7 @@
 #include <memory>
 #include <vector>
 #include "Catalog/CatalogFwd.h"
+#include "Interval.h"
 
 namespace foreign_storage {
 class ForeignTableSchema {
@@ -31,6 +32,13 @@ class ForeignTableSchema {
    * Gets a pointer to the column descriptor object for the given column id.
    */
   const ColumnDescriptor* getColumnDescriptor(const int column_id) const;
+
+  /**
+   * Get a list of pointers of valid column descriptors (returned by
+   * `getLogicalAndPhysicalColumns`) that are also within the given interval.
+   */
+  std::list<const ColumnDescriptor*> getColumnsInInterval(
+      const Interval<ColumnType>& column_interval) const;
 
   /**
    * Gets the logical column that is associated with the given column id.
