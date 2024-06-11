@@ -25822,6 +25822,20 @@ TEST_F(Select, UnionAllIgnorePerSubqueryCardinality) {
   }
 }
 
+TEST_F(Select, UnionAllSum0) {
+  ScopeGuard reset = [old1 = g_enable_union] { g_enable_union = old1; };
+  g_enable_union = true;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT t, COUNT(*) AS N, SUM(i) FROM (SELECT a4 as t, a1 as i FROM union_all_a "
+      "UNION ALL SELECT b4 as t, b1 as i FROM union_all_b) group by 1 order by 1;",
+      dt);
+    c("SELECT t, COUNT(i) AS N FROM (SELECT a4 as t, a1 as i FROM union_all_a UNION ALL "
+      "SELECT b4 as t, b1 as i FROM union_all_b) group by 1 order by 1;",
+      dt);
+  }
+}
+
 TEST_F(Select, VariableLengthAggs) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
