@@ -46,6 +46,20 @@ const ColumnDescriptor* ForeignTableSchema::getLogicalColumn(const int column_id
   return getColumnDescriptor(logical_column_id);
 }
 
+std::list<const ColumnDescriptor*> ForeignTableSchema::getColumnsInInterval(
+    const Interval<ColumnType>& column_interval) const {
+  auto column_start = column_interval.start;
+  auto column_end = column_interval.end;
+  std::list<const ColumnDescriptor*> columns;
+  for (const auto column : getLogicalAndPhysicalColumns()) {
+    auto column_id = column->columnId;
+    if (column_id >= column_start && column_id <= column_end) {
+      columns.push_back(column);
+    }
+  }
+  return columns;
+}
+
 int ForeignTableSchema::getParquetColumnIndex(const int column_id) const {
   auto column_index =
       std::distance(logical_column_ids_.begin(), getLogicalColumnIdIterator(column_id));
