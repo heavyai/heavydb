@@ -2600,6 +2600,17 @@ TEST_P(StringFunctionTest, LLMTransformNDVWatchdogLimit) {
       "LLM_TRANSFORM (=3) is larger than a threshold (=1)");
 }
 
+TEST_P(StringFunctionTest, LLMTransformNumericTranslationByTryCastToInt) {
+  // this test framework cannot run the LLM_TRANSFORM function at this point
+  // so, we expect throw an exception instead of getting a hard crash
+  // due to missing initialization of translation cache of LLM_TRANSFORM
+  // when numeric translation query is processed
+  queryAndAssertPartialException(
+      "SELECT TRY_CAST(LLM_TRANSFORM(short_name, \'Return ascii value of the first "
+      "character\') AS INT) FROM text_enc_test",
+      "LLM_TRANSFORM failed");
+}
+
 INSTANTIATE_TEST_SUITE_P(CpuAndGpuExecutorDevices,
                          StringFunctionTest,
                          ::testing::Values(TExecuteMode::CPU, TExecuteMode::GPU),
