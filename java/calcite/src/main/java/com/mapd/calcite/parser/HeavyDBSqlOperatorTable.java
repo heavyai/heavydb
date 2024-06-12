@@ -1735,6 +1735,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
               new java.util.ArrayList<SqlTypeFamily>();
       families.add(SqlTypeFamily.STRING);
       families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
       return families;
     }
 
@@ -1761,7 +1762,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
         throw new IllegalArgumentException(
                 "The input operand of LLM_TRANSFORM must be a STRING expression");
       }
-      final SqlNode prompt_operand = callBinding.operand(num_operands - 1);
+      final SqlNode prompt_operand = callBinding.operand(1);
       final SqlTypeName prompt_type =
               validator.getValidatedNodeType(prompt_operand).getSqlTypeName();
       final SqlTypeFamily prompt_type_family = prompt_type.getFamily();
@@ -1770,7 +1771,39 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
         throw new IllegalArgumentException(
                 "The prompt operand of LLM_TRANSFORM must be a STRING literal");
       }
+      final SqlNode constraint_operand = callBinding.operand(2);
+      final SqlTypeName constraint_type =
+              validator.getValidatedNodeType(constraint_operand).getSqlTypeName();
+      final SqlTypeFamily constraint_type_family = constraint_type.getFamily();
+      if (!constraint_operand.isA(EnumSet.of(SqlKind.LITERAL))
+              || constraint_type_family != SqlTypeFamily.CHARACTER) {
+        throw new IllegalArgumentException(
+                "The constraint operand of LLM_TRANSFORM must be a STRING literal");
+      }
       return true;
+    }
+
+    public SqlCall createCall(@Nullable SqlLiteral functionQualifier,
+            SqlParserPos pos,
+            @Nullable SqlNode... operands) {
+      assert functionQualifier == null;
+      final int num_operands = operands.length;
+      if (num_operands < 2 || num_operands > 3) {
+        throw new IllegalArgumentException(
+                "Invalid operand count " + Arrays.toString(operands));
+      }
+      SqlNode[] new_operands = new SqlNode[3];
+      // operand string (required)
+      new_operands[0] = operands[0];
+      // prompt (required)
+      new_operands[1] = operands[1];
+      // output constraints
+      if (num_operands < 3 || operands[2] == null) {
+        new_operands[2] = SqlLiteral.createCharString("", pos);
+      } else {
+        new_operands[2] = operands[2];
+      }
+      return super.createCall(functionQualifier, pos, new_operands);
     }
   }
 
