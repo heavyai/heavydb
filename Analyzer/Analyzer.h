@@ -2626,14 +2626,15 @@ class LLMTransformStringOper : public StringOper {
  public:
   LLMTransformStringOper(const std::vector<std::shared_ptr<Analyzer::Expr>>& operands)
       : StringOper(SqlStringOpKind::LLM_TRANSFORM, operands) {
-    if (operands.size() != 2) {
+    if (operands.size() != 3) {
       throw std::runtime_error(
-          "\'LLM_TRANSFORM\' must contain two operands: a string expression and a "
-          "prompt as string literal");
+          "\'LLM_TRANSFORM\' must contain three operands: a string expression, a "
+          "prompt as string literal, and output constraints as a string literal");
     }
     // we check the type requirement at the Calcite level
-    CHECK(operands.front()->get_type_info().is_string());
-    CHECK(operands.back()->get_type_info().is_none_encoded_string());
+    CHECK(operands[0]->get_type_info().is_string());
+    CHECK(operands[1]->get_type_info().is_none_encoded_string());
+    CHECK(operands[2]->get_type_info().is_none_encoded_string());
   }
 
   LLMTransformStringOper(const std::shared_ptr<Analyzer::StringOper>& string_oper)
