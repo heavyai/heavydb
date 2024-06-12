@@ -704,16 +704,39 @@ struct NullOp : public StringOp {
   const SqlStringOpKind op_kind_;
 };
 
-struct LLMTransform : public StringOp {
+class LLMTransform : public StringOp {
+ public:
   LLMTransform(const std::optional<std::string>& var_str_optional_literal,
-               std::string const& input,
+               std::string const& prompt,
                const StringOpInfo& string_op_info)
       : StringOp(SqlStringOpKind::LLM_TRANSFORM, var_str_optional_literal, string_op_info)
-      , prompt_(input) {}
+      , prompt_(prompt) {}
+
+  LLMTransform(const std::optional<std::string>& var_str_optional_literal,
+               std::string const& prompt,
+               std::string const& constraint,
+               const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::LLM_TRANSFORM, var_str_optional_literal, string_op_info)
+      , prompt_(prompt)
+      , constraint_values_(splitConstraint(constraint, delimiter_)) {}
 
   NullableStrType operator()(const std::string& str) const override;
 
+ private:
+  std::vector<std::string> splitConstraint(const std::string& constraint,
+                                           const char delimiter) const {
+    std::vector<std::string> result;
+    std::stringstream ss(constraint);
+    std::string item;
+    while (std::getline(ss, item, delimiter)) {
+      result.push_back(item);
+    }
+    return result;
+  }
+
   const std::string prompt_;
+  std::vector<std::string> constraint_values_;
+  static constexpr char delimiter_ = '|';
   mutable robin_hood::unordered_map<std::string, std::string> translation_cache_;
   mutable std::shared_mutex translation_cache_lock_;
 };

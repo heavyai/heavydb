@@ -1045,6 +1045,17 @@ NullableStrType LLMTransform::operator()(const std::string& str_val) const {
   input_json.AddMember("max_tokens", rapidjson::Value(256).Move(), allocator);
   input_json.AddMember(
       "llm_type", rapidjson::Value("default", allocator).Move(), allocator);
+
+  // Add the constraint_values_ array to the JSON object
+  if (!constraint_values_.empty()) {
+    rapidjson::Value guided_choice(rapidjson::kArrayType);
+    for (const auto& constraint : constraint_values_) {
+      guided_choice.PushBack(rapidjson::Value().SetString(constraint.c_str(), allocator),
+                             allocator);
+    }
+    input_json.AddMember("guided_choice", guided_choice, allocator);
+  }
+
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   input_json.Accept(writer);
@@ -1388,10 +1399,18 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
                                                string_op_info);
     }
     case SqlStringOpKind::LLM_TRANSFORM: {
-      CHECK_LE(num_non_variable_literals, 1UL);
+      CHECK_GE(num_non_variable_literals, 1UL);
+      CHECK_LE(num_non_variable_literals, 2UL);
       CHECK(string_op_info.stringLiteralArgAtIdxExists(1));
+      const auto prompt_literal = string_op_info.getStringLiteral(1);
+      const bool has_constraint_literal = string_op_info.stringLiteralArgAtIdxExists(2);
+      if (has_constraint_literal) {
+        const auto constraint_literal = string_op_info.getStringLiteral(2);
+        return std::make_unique<const LLMTransform>(
+            var_string_optional_literal, prompt_literal, constraint_literal, string_op_info);
+      }
       return std::make_unique<const LLMTransform>(var_string_optional_literal,
-                                                  string_op_info.getStringLiteral(1),
+                                                  prompt_literal,
                                                   string_op_info);
     }
     case SqlStringOpKind::TRY_STRING_CAST: {
