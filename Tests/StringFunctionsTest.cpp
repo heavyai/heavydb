@@ -2589,6 +2589,15 @@ TEST_P(StringFunctionTest, LLMTransformPromptTypeCheck) {
       "The prompt operand of LLM_TRANSFORM must be a STRING literal");
 }
 
+TEST_P(StringFunctionTest, LLMTransformConstraintFormatCheck) {
+  queryAndAssertPartialException(
+      "SELECT LLM_TRANSFORM(first_name, 'Return what type of animal you think this "
+      "person is', 'human') FROM string_function_test_people;",
+      "LLM_TRANSFORM constraint literal must either have at least two output choices, "
+      "separated by a '|' character (i.e. 'west|east'), or must be bounded by '/' on "
+      "each side (i.e. '/SELECT .*;/') to signify a regex.");
+}
+
 TEST_P(StringFunctionTest, LLMTransformNDVWatchdogLimit) {
   ScopeGuard reset = [orig = g_llm_transform_max_num_unique_value]() {
     g_llm_transform_max_num_unique_value = orig;

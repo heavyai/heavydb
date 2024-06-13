@@ -710,33 +710,74 @@ class LLMTransform : public StringOp {
                std::string const& prompt,
                const StringOpInfo& string_op_info)
       : StringOp(SqlStringOpKind::LLM_TRANSFORM, var_str_optional_literal, string_op_info)
-      , prompt_(prompt) {}
+      , prompt_(std::move(prompt)) {}
 
   LLMTransform(const std::optional<std::string>& var_str_optional_literal,
                std::string const& prompt,
                std::string const& constraint,
                const StringOpInfo& string_op_info)
       : StringOp(SqlStringOpKind::LLM_TRANSFORM, var_str_optional_literal, string_op_info)
-      , prompt_(prompt)
-      , constraint_values_(splitConstraint(constraint, delimiter_)) {}
+      , prompt_(std::move(prompt))
+      , constraint_values_(splitConstraint(constraint, delimiter_, regex_signifier_))
+      , constraint_regex_(extractRegex(constraint, regex_signifier_)) {}
 
   NullableStrType operator()(const std::string& str) const override;
 
  private:
   std::vector<std::string> splitConstraint(const std::string& constraint,
-                                           const char delimiter) const {
+                                           const char delimiter,
+                                           const char regex_signifier) const {
     std::vector<std::string> result;
-    std::stringstream ss(constraint);
-    std::string item;
-    while (std::getline(ss, item, delimiter)) {
-      result.push_back(item);
+
+    // Return empty vector if string is empty
+    if (constraint.empty()) {
+      return result;
     }
-    return result;
+
+    // Check if the string starts and ends with the regex_signifier
+    if (constraint.front() == regex_signifier && constraint.back() == regex_signifier) {
+      return result;  // Return empty vector
+    }
+
+    // Check if the string contains the delimiter
+    if (constraint.find(delimiter) != std::string::npos) {
+      std::stringstream ss(constraint);
+      std::string item;
+      while (std::getline(ss, item, delimiter)) {
+        result.push_back(item);
+      }
+      return result;
+    }
+
+    // If here string is non-empty but it neither is bounded by the regex signifier
+    // nor does it contain the delimiter ('|') for guided choice. Error rather than
+    // silently ignore so the user knows there is an issue.
+    std::ostringstream error_message;
+    error_message << "LLM_TRANSFORM constraint literal must either have at least two "
+                     "output choices, separated by a '"
+                  << delimiter_
+                  << "' character (i.e. 'west|east'), or must be bounded by '"
+                  << regex_signifier_
+                  << "' on each side (i.e. '/SELECT .*;/') to signify a regex.";
+    throw std::runtime_error(error_message.str());
+  }
+
+  std::string extractRegex(const std::string& constraint,
+                           const char regex_signifier) const {
+    if (constraint.empty() || constraint.front() != regex_signifier ||
+        constraint.back() != regex_signifier) {
+      return "";
+    }
+    return constraint.substr(
+        1,
+        constraint.size() - 2);  // Strip the regex_signifier from the beginning and end
   }
 
   const std::string prompt_;
   std::vector<std::string> constraint_values_;
+  std::string constraint_regex_;
   static constexpr char delimiter_ = '|';
+  static constexpr char regex_signifier_ = '/';
   mutable robin_hood::unordered_map<std::string, std::string> translation_cache_;
   mutable std::shared_mutex translation_cache_lock_;
 };
