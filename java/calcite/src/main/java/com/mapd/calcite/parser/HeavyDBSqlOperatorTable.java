@@ -1753,7 +1753,11 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
         throw new IllegalArgumentException(
                 "At least 1 arguments are required: an input prompt.");
       }
-      final SqlNode input_operand = callBinding.operand(0);
+      final int input_operand_idx = 0;
+      final int prompt_operand_idx = 1;
+      final int constraint_operand_idx = 2;
+
+      final SqlNode input_operand = callBinding.operand(input_operand_idx);
       final SqlTypeName input_operand_type =
               validator.getValidatedNodeType(input_operand).getSqlTypeName();
       final SqlTypeFamily input_operand_type_family = input_operand_type.getFamily();
@@ -1762,7 +1766,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
         throw new IllegalArgumentException(
                 "The input operand of LLM_TRANSFORM must be a STRING expression");
       }
-      final SqlNode prompt_operand = callBinding.operand(1);
+      final SqlNode prompt_operand = callBinding.operand(prompt_operand_idx);
       final SqlTypeName prompt_type =
               validator.getValidatedNodeType(prompt_operand).getSqlTypeName();
       final SqlTypeFamily prompt_type_family = prompt_type.getFamily();
@@ -1771,7 +1775,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
         throw new IllegalArgumentException(
                 "The prompt operand of LLM_TRANSFORM must be a STRING literal");
       }
-      final SqlNode constraint_operand = callBinding.operand(2);
+      final SqlNode constraint_operand = callBinding.operand(constraint_operand_idx);
       final SqlTypeName constraint_type =
               validator.getValidatedNodeType(constraint_operand).getSqlTypeName();
       final SqlTypeFamily constraint_type_family = constraint_type.getFamily();
@@ -1788,17 +1792,23 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
             @Nullable SqlNode... operands) {
       assert functionQualifier == null;
       final int num_operands = operands.length;
-      if (num_operands < 2 || num_operands > 3) {
+      if (num_operands < 2) {
         throw new IllegalArgumentException(
-                "Invalid operand count " + Arrays.toString(operands));
+                "LLM_TRANSFORM expects at least 2 arguments, a string operand and a prompt string literal. Provided args: "
+                + Arrays.toString(operands));
+      }
+      if (num_operands > 3) {
+        throw new IllegalArgumentException(
+                "LLM_TRANSFORM a maximum of 3 arguments, a string operand, a prompt string literal, and an optional string output constraint literal. Provided args: "
+                + Arrays.toString(operands));
       }
       SqlNode[] new_operands = new SqlNode[3];
       // operand string (required)
       new_operands[0] = operands[0];
       // prompt (required)
       new_operands[1] = operands[1];
-      // output constraints
-      if (num_operands < 3 || operands[2] == null) {
+      // output constraints (optional)
+      if (num_operands < 3) {
         new_operands[2] = SqlLiteral.createCharString("", pos);
       } else {
         new_operands[2] = operands[2];

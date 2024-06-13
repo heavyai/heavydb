@@ -1054,6 +1054,10 @@ NullableStrType LLMTransform::operator()(const std::string& str_val) const {
                              allocator);
     }
     input_json.AddMember("guided_choice", guided_choice, allocator);
+  } else if (!constraint_regex_.empty()) {
+    input_json.AddMember("guided_regex",
+                         rapidjson::Value(constraint_regex_.c_str(), allocator).Move(),
+                         allocator);
   }
 
   rapidjson::StringBuffer buffer;
@@ -1406,12 +1410,13 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       const bool has_constraint_literal = string_op_info.stringLiteralArgAtIdxExists(2);
       if (has_constraint_literal) {
         const auto constraint_literal = string_op_info.getStringLiteral(2);
-        return std::make_unique<const LLMTransform>(
-            var_string_optional_literal, prompt_literal, constraint_literal, string_op_info);
+        return std::make_unique<const LLMTransform>(var_string_optional_literal,
+                                                    prompt_literal,
+                                                    constraint_literal,
+                                                    string_op_info);
       }
-      return std::make_unique<const LLMTransform>(var_string_optional_literal,
-                                                  prompt_literal,
-                                                  string_op_info);
+      return std::make_unique<const LLMTransform>(
+          var_string_optional_literal, prompt_literal, string_op_info);
     }
     case SqlStringOpKind::TRY_STRING_CAST: {
       CHECK_EQ(num_non_variable_literals, 0UL);
