@@ -37,9 +37,6 @@ if [[ $PYTHON_MAJOR_VERSION -eq 3 && $PYTHON_MINOR_VERSION -ge 10 ]]; then
       REQUIREMENTS=requirements.packages.txt
     fi
     pip install -r $REQUIREMENTS -r requirements-linux.txt &>> $BUILD_LOG_FILE || PIP_ERROR=true
-    if [[ $PIP_ERROR == "false" ]]; then
-      pip install --no-deps -r requirements-no-deps.txt &>> $BUILD_LOG_FILE || PIP_ERROR=true
-    fi
     if $PIP_ERROR; then
       echo "Warning: An error occurred when installing HeavyIQ dependencies." \
            "See the $BUILD_LOG_FILE logs for more details."
