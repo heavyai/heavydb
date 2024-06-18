@@ -1,8 +1,0 @@
-[flake8]
-exclude =
-  heavydb/thrift/*,
-  heavydb/extension_functions/*,
-  heavydb/serialized_result_set/*,
-  heavydb/common/*,
-  heavydb/completion_hints/*,
-  tests/test_data/*
