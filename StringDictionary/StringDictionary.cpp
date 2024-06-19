@@ -1887,7 +1887,7 @@ size_t StringDictionary::buildDictionaryTranslationMap(
     const int64_t dest_generation,
     const bool dest_has_transients,
     StringLookupCallback const& dest_transient_lookup_callback,
-    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const {
+    const StringOps_Namespace::StringOps& string_ops) const {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_GE(source_generation, 0L);
   CHECK_GE(dest_generation, 0L);
@@ -1928,9 +1928,11 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   constexpr int64_t target_strings_per_thread{1000};
   ThreadInfo thread_info(
       std::thread::hardware_concurrency(), num_source_strings, target_strings_per_thread);
+
+  const auto& ops = string_ops.getStringOps();
   auto const has_llm_transform_expr =
-      std::any_of(string_op_infos.begin(), string_op_infos.end(), [](auto const& info) {
-        return info.getOpKind() == SqlStringOpKind::LLM_TRANSFORM;
+      std::any_of(ops.begin(), ops.end(), [](auto const& info) {
+        return info->getOpInfo().getOpKind() == SqlStringOpKind::LLM_TRANSFORM;
       });
   if (has_llm_transform_expr) {
     if (num_source_strings > g_llm_transform_max_num_unique_value) {
@@ -1953,7 +1955,6 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   // numbers of threads are needed than just letting tbb figure the number of threads,
   // but should benchmark in this specific context
 
-  StringOps_Namespace::StringOps string_ops(string_op_infos);
   const bool has_string_ops = string_ops.size();
 
   tbb::task_arena limited_arena(thread_info.num_threads);
@@ -2047,11 +2048,11 @@ size_t StringDictionary::buildDictionaryTranslationMap(
 void StringDictionary::buildDictionaryNumericTranslationMap(
     Datum* translated_ids,
     const int64_t source_generation,
-    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const {
+    const StringOps_Namespace::StringOps& string_ops) const {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_GE(source_generation, 0L);
-  CHECK_GT(string_op_infos.size(), 0UL);
-  CHECK(!string_op_infos.back().getReturnType().is_string());
+  CHECK_GT(string_ops.size(), 0UL);
+  CHECK(!string_ops.getLastStringOpsReturnType().is_string());
   const int64_t num_source_strings = source_generation;
 
   // We can bail early if there are no source strings to translate
@@ -2084,7 +2085,6 @@ void StringDictionary::buildDictionaryNumericTranslationMap(
   // numbers of threads are needed than just letting tbb figure the number of threads,
   // but should benchmark in this specific context
 
-  const StringOps_Namespace::StringOps string_ops(string_op_infos);
   CHECK_GT(string_ops.size(), 0UL);
 
   tbb::task_arena limited_arena(thread_info.num_threads);

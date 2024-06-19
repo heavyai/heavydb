@@ -1177,6 +1177,14 @@ std::vector<std::unique_ptr<const StringOp>> StringOps::genStringOpsFromOpInfos(
   return string_ops;
 }
 
+const std::vector<std::unique_ptr<const StringOp>>& StringOps::getStringOps() const {
+  return string_ops_;
+}
+
+const SQLTypeInfo& StringOps::getLastStringOpsReturnType() const {
+  return string_ops_.back()->getOpInfo().getReturnType();
+}
+
 // Free functions follow
 
 std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info) {
@@ -1186,7 +1194,7 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
 
   if (string_op_info.hasNullLiteralArg()) {
     return std::make_unique<const NullOp>(
-        return_ti, var_string_optional_literal, op_kind);
+        return_ti, var_string_optional_literal, op_kind, string_op_info);
   }
 
   const auto num_non_variable_literals = string_op_info.numNonVariableLiterals();
@@ -1198,25 +1206,25 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
   switch (op_kind) {
     case SqlStringOpKind::LOWER: {
       CHECK_EQ(num_non_variable_literals, 0UL);
-      return std::make_unique<const Lower>(var_string_optional_literal);
+      return std::make_unique<const Lower>(var_string_optional_literal, string_op_info);
     }
     case SqlStringOpKind::UPPER: {
       CHECK_EQ(num_non_variable_literals, 0UL);
-      return std::make_unique<const Upper>(var_string_optional_literal);
+      return std::make_unique<const Upper>(var_string_optional_literal, string_op_info);
     }
     case SqlStringOpKind::INITCAP: {
       CHECK_EQ(num_non_variable_literals, 0UL);
-      return std::make_unique<const InitCap>(var_string_optional_literal);
+      return std::make_unique<const InitCap>(var_string_optional_literal, string_op_info);
     }
     case SqlStringOpKind::REVERSE: {
       CHECK_EQ(num_non_variable_literals, 0UL);
-      return std::make_unique<const Reverse>(var_string_optional_literal);
+      return std::make_unique<const Reverse>(var_string_optional_literal, string_op_info);
     }
     case SqlStringOpKind::REPEAT: {
       CHECK_EQ(num_non_variable_literals, 1UL);
       const auto num_repeats_literal = string_op_info.getIntLiteral(1);
-      return std::make_unique<const Repeat>(var_string_optional_literal,
-                                            num_repeats_literal);
+      return std::make_unique<const Repeat>(
+          var_string_optional_literal, num_repeats_literal, string_op_info);
     }
     case SqlStringOpKind::CONCAT:
     case SqlStringOpKind::RCONCAT: {
@@ -1227,9 +1235,11 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
         // Handle lhs literals by having RCONCAT operator set a flag
         return std::make_unique<const Concat>(var_string_optional_literal,
                                               str_literal,
-                                              op_kind == SqlStringOpKind::RCONCAT);
+                                              op_kind == SqlStringOpKind::RCONCAT,
+                                              string_op_info);
       } else {
-        return std::make_unique<const Concat>(var_string_optional_literal);
+        return std::make_unique<const Concat>(var_string_optional_literal,
+                                              string_op_info);
       }
     }
     case SqlStringOpKind::LPAD:
@@ -1240,7 +1250,8 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       return std::make_unique<Pad>(var_string_optional_literal,
                                    op_kind,
                                    padded_length_literal,
-                                   padding_string_literal);
+                                   padding_string_literal,
+                                   string_op_info);
     }
     case SqlStringOpKind::TRIM:
     case SqlStringOpKind::LTRIM:
@@ -1248,7 +1259,7 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       CHECK_EQ(num_non_variable_literals, 1UL);
       const auto trim_chars_literal = string_op_info.getStringLiteral(1);
       return std::make_unique<Trim>(
-          var_string_optional_literal, op_kind, trim_chars_literal);
+          var_string_optional_literal, op_kind, trim_chars_literal, string_op_info);
     }
     case SqlStringOpKind::SUBSTRING: {
       CHECK_GE(num_non_variable_literals, 1UL);
@@ -1257,11 +1268,13 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       const bool has_length_literal = string_op_info.intLiteralArgAtIdxExists(2);
       if (has_length_literal) {
         const auto length_literal = string_op_info.getIntLiteral(2);
-        return std::make_unique<const Substring>(
-            var_string_optional_literal, start_pos_literal, length_literal);
-      } else {
         return std::make_unique<const Substring>(var_string_optional_literal,
-                                                 start_pos_literal);
+                                                 start_pos_literal,
+                                                 length_literal,
+                                                 string_op_info);
+      } else {
+        return std::make_unique<const Substring>(
+            var_string_optional_literal, start_pos_literal, string_op_info);
       }
     }
     case SqlStringOpKind::OVERLAY: {
@@ -1275,10 +1288,13 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
         return std::make_unique<const Overlay>(var_string_optional_literal,
                                                replace_string_literal,
                                                start_pos_literal,
-                                               length_literal);
+                                               length_literal,
+                                               string_op_info);
       } else {
-        return std::make_unique<const Overlay>(
-            var_string_optional_literal, replace_string_literal, start_pos_literal);
+        return std::make_unique<const Overlay>(var_string_optional_literal,
+                                               replace_string_literal,
+                                               start_pos_literal,
+                                               string_op_info);
       }
     }
     case SqlStringOpKind::REPLACE: {
@@ -1288,15 +1304,18 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       const auto replacement_string_literal = string_op_info.getStringLiteral(2);
       return std::make_unique<const Replace>(var_string_optional_literal,
                                              pattern_string_literal,
-                                             replacement_string_literal);
+                                             replacement_string_literal,
+                                             string_op_info);
     }
     case SqlStringOpKind::SPLIT_PART: {
       CHECK_GE(num_non_variable_literals, 2UL);
       CHECK_LE(num_non_variable_literals, 2UL);
       const auto delimiter_literal = string_op_info.getStringLiteral(1);
       const auto split_part_literal = string_op_info.getIntLiteral(2);
-      return std::make_unique<const SplitPart>(
-          var_string_optional_literal, delimiter_literal, split_part_literal);
+      return std::make_unique<const SplitPart>(var_string_optional_literal,
+                                               delimiter_literal,
+                                               split_part_literal,
+                                               string_op_info);
     }
     case SqlStringOpKind::REGEXP_REPLACE: {
       CHECK_GE(num_non_variable_literals, 5UL);
@@ -1311,7 +1330,8 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
                                                    replacement_literal,
                                                    start_pos_literal,
                                                    occurrence_literal,
-                                                   regex_params_literal);
+                                                   regex_params_literal,
+                                                   string_op_info);
     }
     case SqlStringOpKind::REGEXP_SUBSTR: {
       CHECK_GE(num_non_variable_literals, 5UL);
@@ -1326,7 +1346,8 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
                                                   start_pos_literal,
                                                   occurrence_literal,
                                                   regex_params_literal,
-                                                  sub_match_idx_literal);
+                                                  sub_match_idx_literal,
+                                                  string_op_info);
     }
     case SqlStringOpKind::REGEXP_COUNT: {
       CHECK_GE(num_non_variable_literals, 3UL);
@@ -1337,40 +1358,46 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       return std::make_unique<const RegexpCount>(var_string_optional_literal,
                                                  pattern_literal,
                                                  start_pos_literal,
-                                                 regex_params_literal);
+                                                 regex_params_literal,
+                                                 string_op_info);
     }
     case SqlStringOpKind::JSON_VALUE: {
       CHECK_EQ(num_non_variable_literals, 1UL);
       const auto json_path_literal = string_op_info.getStringLiteral(1);
-      return std::make_unique<const JsonValue>(var_string_optional_literal,
-                                               json_path_literal);
+      return std::make_unique<const JsonValue>(
+          var_string_optional_literal, json_path_literal, string_op_info);
     }
     case SqlStringOpKind::BASE64_ENCODE: {
       CHECK_EQ(num_non_variable_literals, 0UL);
-      return std::make_unique<const Base64Encode>(var_string_optional_literal);
+      return std::make_unique<const Base64Encode>(var_string_optional_literal,
+                                                  string_op_info);
     }
     case SqlStringOpKind::BASE64_DECODE: {
       CHECK_EQ(num_non_variable_literals, 0UL);
-      return std::make_unique<const Base64Decode>(var_string_optional_literal);
+      return std::make_unique<const Base64Decode>(var_string_optional_literal,
+                                                  string_op_info);
     }
     case SqlStringOpKind::URL_ENCODE: {
       CHECK_EQ(num_non_variable_literals, 0UL);
-      return std::make_unique<const UrlEncode>(var_string_optional_literal);
+      return std::make_unique<const UrlEncode>(var_string_optional_literal,
+                                               string_op_info);
     }
     case SqlStringOpKind::URL_DECODE: {
       CHECK_EQ(num_non_variable_literals, 0UL);
-      return std::make_unique<const UrlDecode>(var_string_optional_literal);
+      return std::make_unique<const UrlDecode>(var_string_optional_literal,
+                                               string_op_info);
     }
     case SqlStringOpKind::LLM_TRANSFORM: {
       CHECK_LE(num_non_variable_literals, 1UL);
       CHECK(string_op_info.stringLiteralArgAtIdxExists(1));
       return std::make_unique<const LLMTransform>(var_string_optional_literal,
-                                                  string_op_info.getStringLiteral(1));
+                                                  string_op_info.getStringLiteral(1),
+                                                  string_op_info);
     }
     case SqlStringOpKind::TRY_STRING_CAST: {
       CHECK_EQ(num_non_variable_literals, 0UL);
-      return std::make_unique<const TryStringCast>(return_ti,
-                                                   var_string_optional_literal);
+      return std::make_unique<const TryStringCast>(
+          return_ti, var_string_optional_literal, string_op_info);
     }
     case SqlStringOpKind::POSITION: {
       CHECK_GE(num_non_variable_literals, 1UL);
@@ -1379,11 +1406,13 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       const bool has_start_pos_literal = string_op_info.intLiteralArgAtIdxExists(2);
       if (has_start_pos_literal) {
         const auto start_pos_literal = string_op_info.getIntLiteral(2);
-        return std::make_unique<const Position>(
-            var_string_optional_literal, search_literal, start_pos_literal);
-      } else {
         return std::make_unique<const Position>(var_string_optional_literal,
-                                                search_literal);
+                                                search_literal,
+                                                start_pos_literal,
+                                                string_op_info);
+      } else {
+        return std::make_unique<const Position>(
+            var_string_optional_literal, search_literal, string_op_info);
       }
     }
     case SqlStringOpKind::JAROWINKLER_SIMILARITY: {
@@ -1391,10 +1420,11 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       CHECK_LE(num_non_variable_literals, 1UL);
       if (num_non_variable_literals == 1UL) {
         const auto str_literal = string_op_info.getStringLiteral(1);
-        return std::make_unique<const JarowinklerSimilarity>(var_string_optional_literal,
-                                                             str_literal);
+        return std::make_unique<const JarowinklerSimilarity>(
+            var_string_optional_literal, str_literal, string_op_info);
       } else {
-        return std::make_unique<const JarowinklerSimilarity>(var_string_optional_literal);
+        return std::make_unique<const JarowinklerSimilarity>(var_string_optional_literal,
+                                                             string_op_info);
       }
     }
     case SqlStringOpKind::LEVENSHTEIN_DISTANCE: {
@@ -1402,15 +1432,16 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       CHECK_LE(num_non_variable_literals, 1UL);
       if (num_non_variable_literals == 1UL) {
         const auto str_literal = string_op_info.getStringLiteral(1);
-        return std::make_unique<const LevenshteinDistance>(var_string_optional_literal,
-                                                           str_literal);
+        return std::make_unique<const LevenshteinDistance>(
+            var_string_optional_literal, str_literal, string_op_info);
       } else {
-        return std::make_unique<const LevenshteinDistance>(var_string_optional_literal);
+        return std::make_unique<const LevenshteinDistance>(var_string_optional_literal,
+                                                           string_op_info);
       }
     }
     case SqlStringOpKind::HASH: {
       CHECK_EQ(num_non_variable_literals, 0UL);
-      return std::make_unique<const Hash>(var_string_optional_literal);
+      return std::make_unique<const Hash>(var_string_optional_literal, string_op_info);
     }
     default:
       UNREACHABLE();
