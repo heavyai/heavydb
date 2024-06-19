@@ -49,26 +49,32 @@ struct NullableStrType {
   bool is_null;
 };
 
+// TODO: Update all StringOp and child structs to accept StringOpInfo as the only
+// constructor parameter
 struct StringOp {
  public:
   StringOp(const SqlStringOpKind op_kind,
-           const std::optional<std::string>& var_str_optional_literal)
+           const std::optional<std::string>& var_str_optional_literal,
+           const StringOpInfo& string_op_info)
       : op_kind_(op_kind)
       , return_ti_(SQLTypeInfo(kTEXT, false, kENCODING_DICT))
       , has_var_str_literal_(var_str_optional_literal.has_value())
       , var_str_literal_(!var_str_optional_literal.has_value()
                              ? NullableStrType()
-                             : NullableStrType(var_str_optional_literal.value())) {}
+                             : NullableStrType(var_str_optional_literal.value()))
+      , string_op_info_(string_op_info) {}
 
   StringOp(const SqlStringOpKind op_kind,
            const SQLTypeInfo& return_ti,
-           const std::optional<std::string>& var_str_optional_literal)
+           const std::optional<std::string>& var_str_optional_literal,
+           const StringOpInfo& string_op_info)
       : op_kind_(op_kind)
       , return_ti_(return_ti)
       , has_var_str_literal_(var_str_optional_literal.has_value())
       , var_str_literal_(!var_str_optional_literal.has_value()
                              ? NullableStrType()
-                             : NullableStrType(var_str_optional_literal.value())) {}
+                             : NullableStrType(var_str_optional_literal.value()))
+      , string_op_info_(string_op_info) {}
 
   virtual ~StringOp() = default;
 
@@ -119,6 +125,8 @@ struct StringOp {
 
   bool hasVarStringLiteral() const { return has_var_str_literal_; }
 
+  const StringOpInfo& getOpInfo() const { return string_op_info_; }
+
  protected:
   static boost::regex generateRegex(const std::string& op_name,
                                     const std::string& regex_pattern,
@@ -129,13 +137,18 @@ struct StringOp {
   const SQLTypeInfo return_ti_;
   const bool has_var_str_literal_{false};
   const NullableStrType var_str_literal_;
+  const StringOpInfo string_op_info_;
 };
 
 struct TryStringCast : public StringOp {
  public:
   TryStringCast(const SQLTypeInfo& return_ti,
-                const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::TRY_STRING_CAST, return_ti, var_str_optional_literal) {}
+                const std::optional<std::string>& var_str_optional_literal,
+                const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::TRY_STRING_CAST,
+                 return_ti,
+                 var_str_optional_literal,
+                 string_op_info) {}
 
   NullableStrType operator()(const std::string& str) const override;
   Datum numericEval(const std::string_view str) const override;
@@ -144,19 +157,23 @@ struct TryStringCast : public StringOp {
 struct Position : public StringOp {
  public:
   Position(const std::optional<std::string>& var_str_optional_literal,
-           const std::string& search_str)
+           const std::string& search_str,
+           const StringOpInfo& string_op_info)
       : StringOp(SqlStringOpKind::POSITION,
                  SQLTypeInfo(kBIGINT),
-                 var_str_optional_literal)
+                 var_str_optional_literal,
+                 string_op_info)
       , search_str_(search_str)
       , start_(0) {}
 
   Position(const std::optional<std::string>& var_str_optional_literal,
            const std::string& search_str,
-           const int64_t start)
+           const int64_t start,
+           const StringOpInfo& string_op_info)
       : StringOp(SqlStringOpKind::POSITION,
                  SQLTypeInfo(kBIGINT),
-                 var_str_optional_literal)
+                 var_str_optional_literal,
+                 string_op_info)
       , search_str_(search_str)
       , start_(start > 0 ? start - 1 : start) {}
 
@@ -170,14 +187,19 @@ struct Position : public StringOp {
 
 struct JarowinklerSimilarity : public StringOp {
   JarowinklerSimilarity(const std::optional<std::string>& var_str_optional_literal,
-                        const std::string& str_literal)
+                        const std::string& str_literal,
+                        const StringOpInfo& string_op_info)
       : StringOp(SqlStringOpKind::JAROWINKLER_SIMILARITY,
                  SQLTypeInfo(kBIGINT),
-                 var_str_optional_literal)
+                 var_str_optional_literal,
+                 string_op_info)
       , str_literal_(str_literal) {}
 
-  JarowinklerSimilarity(const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::JAROWINKLER_SIMILARITY, var_str_optional_literal) {}
+  JarowinklerSimilarity(const std::optional<std::string>& var_str_optional_literal,
+                        const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::JAROWINKLER_SIMILARITY,
+                 var_str_optional_literal,
+                 string_op_info) {}
 
   NullableStrType operator()(const std::string& str) const override;
 
@@ -190,14 +212,19 @@ struct JarowinklerSimilarity : public StringOp {
 
 struct LevenshteinDistance : public StringOp {
   LevenshteinDistance(const std::optional<std::string>& var_str_optional_literal,
-                      const std::string& str_literal)
+                      const std::string& str_literal,
+                      const StringOpInfo& string_op_info)
       : StringOp(SqlStringOpKind::LEVENSHTEIN_DISTANCE,
                  SQLTypeInfo(kBIGINT),
-                 var_str_optional_literal)
+                 var_str_optional_literal,
+                 string_op_info)
       , str_literal_(str_literal) {}
 
-  LevenshteinDistance(const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::LEVENSHTEIN_DISTANCE, var_str_optional_literal) {}
+  LevenshteinDistance(const std::optional<std::string>& var_str_optional_literal,
+                      const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::LEVENSHTEIN_DISTANCE,
+                 var_str_optional_literal,
+                 string_op_info) {}
 
   NullableStrType operator()(const std::string& str) const override;
 
@@ -210,23 +237,29 @@ struct LevenshteinDistance : public StringOp {
 
 struct Hash : public StringOp {
  public:
-  Hash(const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::HASH, SQLTypeInfo(kBIGINT), var_str_optional_literal) {}
+  Hash(const std::optional<std::string>& var_str_optional_literal,
+       const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::HASH,
+                 SQLTypeInfo(kBIGINT),
+                 var_str_optional_literal,
+                 string_op_info) {}
 
   NullableStrType operator()(const std::string& str) const override;
   Datum numericEval(const std::string_view str) const override;
 };
 
 struct Lower : public StringOp {
-  Lower(const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::LOWER, var_str_optional_literal) {}
+  Lower(const std::optional<std::string>& var_str_optional_literal,
+        const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::LOWER, var_str_optional_literal, string_op_info) {}
 
   NullableStrType operator()(const std::string& str) const override;
 };
 
 struct Upper : public StringOp {
-  Upper(const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::UPPER, var_str_optional_literal) {}
+  Upper(const std::optional<std::string>& var_str_optional_literal,
+        const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::UPPER, var_str_optional_literal, string_op_info) {}
   NullableStrType operator()(const std::string& str) const override;
 };
 
@@ -239,8 +272,9 @@ inline std::bitset<256> build_char_bitmap(const std::string& chars_to_set) {
 }
 
 struct InitCap : public StringOp {
-  InitCap(const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::INITCAP, var_str_optional_literal)
+  InitCap(const std::optional<std::string>& var_str_optional_literal,
+          const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::INITCAP, var_str_optional_literal, string_op_info)
       , delimiter_bitmap_(build_char_bitmap(InitCap::delimiter_chars)) {}
 
   NullableStrType operator()(const std::string& str) const override;
@@ -251,16 +285,19 @@ struct InitCap : public StringOp {
 };
 
 struct Reverse : public StringOp {
-  Reverse(const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::REVERSE, var_str_optional_literal) {}
+  Reverse(const std::optional<std::string>& var_str_optional_literal,
+          const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::REVERSE, var_str_optional_literal, string_op_info) {}
 
   NullableStrType operator()(const std::string& str) const override;
 };
 
 struct Repeat : public StringOp {
  public:
-  Repeat(const std::optional<std::string>& var_str_optional_literal, const int64_t n)
-      : StringOp(SqlStringOpKind::REPEAT, var_str_optional_literal)
+  Repeat(const std::optional<std::string>& var_str_optional_literal,
+         const int64_t n,
+         const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::REPEAT, var_str_optional_literal, string_op_info)
       , n_(n >= 0 ? n : 0UL) {
     if (n < 0) {
       throw std::runtime_error("Number of repeats must be >= 0");
@@ -276,14 +313,17 @@ struct Repeat : public StringOp {
 struct Concat : public StringOp {
   Concat(const std::optional<std::string>& var_str_optional_literal,
          const std::string& str_literal,
-         const bool reverse_order)
+         const bool reverse_order,
+         const StringOpInfo& string_op_info)
       : StringOp(reverse_order ? SqlStringOpKind::RCONCAT : SqlStringOpKind::CONCAT,
-                 var_str_optional_literal)
+                 var_str_optional_literal,
+                 string_op_info)
       , str_literal_(str_literal)
       , reverse_order_(reverse_order) {}
 
-  Concat(const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::CONCAT, var_str_optional_literal)
+  Concat(const std::optional<std::string>& var_str_optional_literal,
+         const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::CONCAT, var_str_optional_literal, string_op_info)
       , reverse_order_(false) {}
 
   NullableStrType operator()(const std::string& str) const override;
@@ -302,8 +342,9 @@ struct Pad : public StringOp {
   Pad(const std::optional<std::string>& var_str_optional_literal,
       const SqlStringOpKind op_kind,
       const int64_t padded_length,
-      const std::string& padding_string)
-      : StringOp(op_kind, var_str_optional_literal)
+      const std::string& padding_string,
+      const StringOpInfo& string_op_info)
+      : StringOp(op_kind, var_str_optional_literal, string_op_info)
       , pad_mode_(Pad::op_kind_to_pad_mode(op_kind))
       , padded_length_(static_cast<size_t>(padded_length))
       , padding_string_(padding_string.empty() ? " " : padding_string)
@@ -332,8 +373,9 @@ struct Trim : public StringOp {
 
   Trim(const std::optional<std::string>& var_str_optional_literal,
        const SqlStringOpKind op_kind,
-       const std::string& trim_chars)
-      : StringOp(op_kind, var_str_optional_literal)
+       const std::string& trim_chars,
+       const StringOpInfo& string_op_info)
+      : StringOp(op_kind, var_str_optional_literal, string_op_info)
       , trim_mode_(Trim::op_kind_to_trim_mode(op_kind))
       , trim_char_bitmap_(build_char_bitmap(trim_chars.empty() ? " " : trim_chars)) {}
 
@@ -353,8 +395,9 @@ struct Substring : public StringOp {
   // Note start_pos is 1-indexed, unless input is 0
 
   Substring(const std::optional<std::string>& var_str_optional_literal,
-            const int64_t start)
-      : StringOp(SqlStringOpKind::SUBSTRING, var_str_optional_literal)
+            const int64_t start,
+            const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::SUBSTRING, var_str_optional_literal, string_op_info)
       , start_(start > 0 ? start - 1 : start)
       , length_(std::string::npos) {}
 
@@ -364,8 +407,9 @@ struct Substring : public StringOp {
   // Note start_pos is 1-indexed, unless input is 0
   Substring(const std::optional<std::string>& var_str_optional_literal,
             const int64_t start,
-            const int64_t length)
-      : StringOp(SqlStringOpKind::SUBSTRING, var_str_optional_literal)
+            const int64_t length,
+            const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::SUBSTRING, var_str_optional_literal, string_op_info)
       , start_(start > 0 ? start - 1 : start)
       , length_(static_cast<size_t>(length >= 0 ? length : 0)) {}
 
@@ -379,8 +423,9 @@ struct Substring : public StringOp {
 struct Overlay : public StringOp {
   Overlay(const std::optional<std::string>& var_str_optional_literal,
           const std::string& insert_str,
-          const int64_t start)
-      : StringOp(SqlStringOpKind::OVERLAY, var_str_optional_literal)
+          const int64_t start,
+          const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::OVERLAY, var_str_optional_literal, string_op_info)
       , insert_str_(insert_str)
       , start_(start > 0 ? start - 1 : start)
       , replacement_length_(insert_str_.size()) {}
@@ -388,8 +433,9 @@ struct Overlay : public StringOp {
   Overlay(const std::optional<std::string>& var_str_optional_literal,
           const std::string& insert_str,
           const int64_t start,
-          const int64_t replacement_length)
-      : StringOp(SqlStringOpKind::OVERLAY, var_str_optional_literal)
+          const int64_t replacement_length,
+          const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::OVERLAY, var_str_optional_literal, string_op_info)
       , insert_str_(insert_str)
       , start_(start > 0 ? start - 1 : start)
       , replacement_length_(
@@ -406,8 +452,9 @@ struct Overlay : public StringOp {
 struct Replace : public StringOp {
   Replace(const std::optional<std::string>& var_str_optional_literal,
           const std::string& pattern_str,
-          const std::string& replacement_str)
-      : StringOp(SqlStringOpKind::REPLACE, var_str_optional_literal)
+          const std::string& replacement_str,
+          const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::REPLACE, var_str_optional_literal, string_op_info)
       , pattern_str_(pattern_str)
       , replacement_str_(replacement_str)
       , pattern_str_len_(pattern_str.size())
@@ -424,8 +471,9 @@ struct Replace : public StringOp {
 struct SplitPart : public StringOp {
   SplitPart(const std::optional<std::string>& var_str_optional_literal,
             const std::string& delimiter,
-            const int64_t split_part)
-      : StringOp(SqlStringOpKind::SPLIT_PART, var_str_optional_literal)
+            const int64_t split_part,
+            const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::SPLIT_PART, var_str_optional_literal, string_op_info)
       , delimiter_(delimiter)
       , split_part_(split_part == 0 ? 1UL : std::abs(split_part))
       , delimiter_length_(delimiter.size())
@@ -448,8 +496,9 @@ struct RegexpSubstr : public StringOp {
                const int64_t start_pos,
                const int64_t occurrence,
                const std::string& regex_params,
-               const int64_t sub_match_group_idx)
-      : StringOp(SqlStringOpKind::REGEXP_SUBSTR, var_str_optional_literal)
+               const int64_t sub_match_group_idx,
+               const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::REGEXP_SUBSTR, var_str_optional_literal, string_op_info)
       , regex_pattern_str_(regex_pattern)
       , regex_pattern_(
             StringOp::generateRegex("REGEXP_SUBSTR", regex_pattern, regex_params, true))
@@ -480,8 +529,11 @@ struct RegexpReplace : public StringOp {
                 const std::string& replacement,
                 const int64_t start_pos,
                 const int64_t occurrence,
-                const std::string& regex_params)
-      : StringOp(SqlStringOpKind::REGEXP_REPLACE, var_str_optional_literal)
+                const std::string& regex_params,
+                const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::REGEXP_REPLACE,
+                 var_str_optional_literal,
+                 string_op_info)
       , regex_pattern_str_(regex_pattern)
       , regex_pattern_(
             StringOp::generateRegex("REGEXP_REPLACE", regex_pattern, regex_params, false))
@@ -509,10 +561,12 @@ struct RegexpCount : public StringOp {
   RegexpCount(const std::optional<std::string>& var_str_optional_literal,
               const std::string& regex_pattern,
               const int64_t start_pos,
-              const std::string& regex_params)
+              const std::string& regex_params,
+              const StringOpInfo& string_op_info)
       : StringOp(SqlStringOpKind::REGEXP_COUNT,
                  SQLTypeInfo(kBIGINT),
-                 var_str_optional_literal)
+                 var_str_optional_literal,
+                 string_op_info)
       , regex_pattern_str_(regex_pattern)
       , regex_pattern_(
             StringOp::generateRegex("REGEXP_COUNT", regex_pattern, regex_params, true))
@@ -548,8 +602,9 @@ struct RegexpCount : public StringOp {
 struct JsonValue : public StringOp {
  public:
   JsonValue(const std::optional<std::string>& var_str_optional_literal,
-            const std::string& json_path)
-      : StringOp(SqlStringOpKind::JSON_VALUE, var_str_optional_literal)
+            const std::string& json_path,
+            const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::JSON_VALUE, var_str_optional_literal, string_op_info)
       , json_parse_mode_(parse_json_parse_mode(json_path))
       , json_keys_(parse_json_path(json_path)) {}
 
@@ -596,29 +651,37 @@ struct JsonValue : public StringOp {
 };
 
 struct Base64Encode : public StringOp {
-  Base64Encode(const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::BASE64_ENCODE, var_str_optional_literal) {}
+  Base64Encode(const std::optional<std::string>& var_str_optional_literal,
+               const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::BASE64_ENCODE,
+                 var_str_optional_literal,
+                 string_op_info) {}
 
   NullableStrType operator()(const std::string& str) const override;
 };
 
 struct Base64Decode : public StringOp {
-  Base64Decode(const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::BASE64_DECODE, var_str_optional_literal) {}
+  Base64Decode(const std::optional<std::string>& var_str_optional_literal,
+               const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::BASE64_DECODE,
+                 var_str_optional_literal,
+                 string_op_info) {}
 
   NullableStrType operator()(const std::string& str) const override;
 };
 
 struct UrlEncode : public StringOp {
-  UrlEncode(const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::URL_ENCODE, var_str_optional_literal) {}
+  UrlEncode(const std::optional<std::string>& var_str_optional_literal,
+            const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::URL_ENCODE, var_str_optional_literal, string_op_info) {}
 
   NullableStrType operator()(const std::string& str) const override;
 };
 
 struct UrlDecode : public StringOp {
-  UrlDecode(const std::optional<std::string>& var_str_optional_literal)
-      : StringOp(SqlStringOpKind::URL_DECODE, var_str_optional_literal) {}
+  UrlDecode(const std::optional<std::string>& var_str_optional_literal,
+            const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::URL_DECODE, var_str_optional_literal, string_op_info) {}
 
   NullableStrType operator()(const std::string& str) const override;
 };
@@ -626,8 +689,12 @@ struct UrlDecode : public StringOp {
 struct NullOp : public StringOp {
   NullOp(const SQLTypeInfo& return_ti,
          const std::optional<std::string>& var_str_optional_literal,
-         const SqlStringOpKind op_kind)
-      : StringOp(SqlStringOpKind::INVALID, return_ti, var_str_optional_literal)
+         const SqlStringOpKind op_kind,
+         const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::INVALID,
+                 return_ti,
+                 var_str_optional_literal,
+                 string_op_info)
       , op_kind_(op_kind) {}
 
   NullableStrType operator()(const std::string& str) const override {
@@ -639,8 +706,9 @@ struct NullOp : public StringOp {
 
 struct LLMTransform : public StringOp {
   LLMTransform(const std::optional<std::string>& var_str_optional_literal,
-               std::string const& input)
-      : StringOp(SqlStringOpKind::LLM_TRANSFORM, var_str_optional_literal)
+               std::string const& input,
+               const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::LLM_TRANSFORM, var_str_optional_literal, string_op_info)
       , prompt_(input) {}
 
   NullableStrType operator()(const std::string& str) const override;
@@ -676,6 +744,10 @@ class StringOps {
   Datum numericEval(const std::string_view str1, const std::string_view str2) const;
 
   size_t size() const { return num_ops_; }
+
+  const std::vector<std::unique_ptr<const StringOp>>& getStringOps() const;
+
+  const SQLTypeInfo& getLastStringOpsReturnType() const;
 
  private:
   std::vector<std::unique_ptr<const StringOp>> genStringOpsFromOpInfos(
