@@ -32,7 +32,7 @@
 #include <vector>
 
 namespace StringOps_Namespace {
-struct StringOpInfo;
+class StringOps;
 }
 
 // used to access a StringDictionary when transient strings are involved
@@ -166,15 +166,15 @@ class StringDictionaryProxy {
    */
 
   TranslationMap<Datum> buildNumericTranslationMap(
-      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
+      const StringOps_Namespace::StringOps& string_ops) const;
 
   IdMap buildIntersectionTranslationMapToOtherProxy(
       const StringDictionaryProxy* dest_proxy,
-      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
+      const StringOps_Namespace::StringOps& string_ops) const;
 
   IdMap buildUnionTranslationMapToOtherProxy(
       StringDictionaryProxy* dest_proxy,
-      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_types) const;
+      const StringOps_Namespace::StringOps& string_ops) const;
 
   /**
    * @brief Returns the number of string entries in the underlying string dictionary,
@@ -290,7 +290,7 @@ class StringDictionaryProxy {
 
   IdMap buildIntersectionTranslationMapToOtherProxyUnlocked(
       const StringDictionaryProxy* dest_proxy,
-      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
+      const StringOps_Namespace::StringOps& string_ops) const;
 
   std::shared_ptr<StringDictionary> string_dict_;
   const shared::StringDictKey string_dict_key_;
