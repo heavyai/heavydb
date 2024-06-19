@@ -31,6 +31,8 @@
 #include <string_view>
 #include <unordered_set>
 
+#include "StringOps/StringOps.h"
+
 #ifndef BASE_PATH1
 #define BASE_PATH1 "./tmp/dict1"
 #endif
