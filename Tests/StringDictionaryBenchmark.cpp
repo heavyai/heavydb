@@ -34,6 +34,8 @@
 #include <string_view>
 #include <vector>
 
+#include "StringOps/StringOps.h"
+
 std::string generate_random_str(std::mt19937& generator, const int64_t str_len) {
   constexpr char alphanum_lookup_table[] =
       "0123456789"
@@ -401,10 +403,11 @@ BENCHMARK_DEFINE_F(
   for (auto _ : state) {
     auto id_map = source_proxy->buildIntersectionTranslationMapToOtherProxy(
         dest_proxy.get(),
-        {StringOps_Namespace::StringOpInfo(
-             SqlStringOpKind::REVERSE, SQLTypeInfo(kTEXT), {}),
-         StringOps_Namespace::StringOpInfo(
-             SqlStringOpKind::REVERSE, SQLTypeInfo(kTEXT), {})});
+        StringOps_Namespace::StringOps(
+            {StringOps_Namespace::StringOpInfo(
+                 SqlStringOpKind::REVERSE, SQLTypeInfo(kTEXT), {}),
+             StringOps_Namespace::StringOpInfo(
+                 SqlStringOpKind::REVERSE, SQLTypeInfo(kTEXT), {})}));
     CHECK_EQ(id_map.numUntranslatedStrings(), 0UL);
   }
 }
