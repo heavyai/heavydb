@@ -27,15 +27,15 @@
 
 #include "DictRef.h"
 #include "DictionaryCache.hpp"
+#include "Shared/Datum.h"
 #include "Shared/DbObjectKeys.h"
-#include "StringOps/StringOpInfo.h"
 
 extern bool g_enable_stringdict_parallel;
 
 class StringDictionaryClient;
 
 namespace StringOps_Namespace {
-struct StringOpInfo;
+class StringOps;
 }
 
 class DictPayloadUnavailable : public std::runtime_error {
@@ -137,12 +137,12 @@ class StringDictionary {
       const int64_t dest_generation,
       const bool dest_has_transients,
       StringLookupCallback const& dest_transient_lookup_callback,
-      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
+      const StringOps_Namespace::StringOps& string_ops) const;
 
   void buildDictionaryNumericTranslationMap(
       Datum* translated_ids,
       const int64_t source_generation,
-      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
+      const StringOps_Namespace::StringOps& string_ops) const;
 
   bool checkpoint() noexcept;
 

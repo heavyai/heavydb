@@ -850,9 +850,12 @@ struct Timestamp {
   std::string toString() const {
     Datum d;
     d.bigintval = time;
-    return ::typeName(this) + "(time=" + ::toString(time) + ")" +
-           ", (formatted= " + DatumToString(d, SQLTypeInfo(kTIMESTAMP, 9, 0, false)) +
-           ")";
+    return ::typeName(this) + "(time=" + ::toString(time) + ")"
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
+           + ", (formatted= " + DatumToString(d, SQLTypeInfo(kTIMESTAMP, 9, 0, false)) +
+           ")"
+#endif
+        ;
   }
 #endif
 };

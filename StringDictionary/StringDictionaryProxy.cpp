@@ -215,15 +215,13 @@ int32_t StringDictionaryProxy::lookupTransientStringUnlocked(
 
 StringDictionaryProxy::TranslationMap<Datum>
 StringDictionaryProxy::buildNumericTranslationMap(
-    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const {
+    const StringOps_Namespace::StringOps& string_ops) const {
   auto timer = DEBUG_TIMER(__func__);
-  CHECK(string_op_infos.size());
+  CHECK(string_ops.size());
   TranslationMap<Datum> translation_map(transient_string_vec_.size(), generation_);
   if (translation_map.empty()) {
     return translation_map;
   }
-
-  const StringOps_Namespace::StringOps string_ops(string_op_infos);
 
   const size_t num_transient_entries = translation_map.numTransients();
   if (num_transient_entries) {
@@ -252,7 +250,7 @@ StringDictionaryProxy::buildNumericTranslationMap(
   Datum* translation_map_stored_entries_ptr = translation_map.storageData();
   if (generation_ > 0) {
     string_dict_->buildDictionaryNumericTranslationMap(
-        translation_map_stored_entries_ptr, generation_, string_op_infos);
+        translation_map_stored_entries_ptr, generation_, string_ops);
   }
   translation_map.setNumUntranslatedStrings(0UL);
 
@@ -264,15 +262,13 @@ StringDictionaryProxy::buildNumericTranslationMap(
 StringDictionaryProxy::IdMap
 StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxyUnlocked(
     const StringDictionaryProxy* dest_proxy,
-    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const {
+    const StringOps_Namespace::StringOps& string_ops) const {
   auto timer = DEBUG_TIMER(__func__);
   IdMap id_map = initIdMap();
 
   if (id_map.empty()) {
     return id_map;
   }
-
-  const StringOps_Namespace::StringOps string_ops(string_op_infos);
 
   // First map transient strings, store at front of vector map
   const size_t num_transient_entries = id_map.numTransients();
@@ -328,7 +324,7 @@ StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxyUnlocked(
                             dest_proxy->generation_,
                             num_dest_transients > 0UL,
                             dest_transient_lookup_callback,
-                            string_op_infos)
+                            string_ops)
                       : 0UL;
 
   const size_t num_dest_entries = dest_proxy->entryCountUnlocked();
@@ -381,7 +377,7 @@ void order_translation_locks(const shared::StringDictKey& source_dict_key,
 StringDictionaryProxy::IdMap
 StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxy(
     const StringDictionaryProxy* dest_proxy,
-    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const {
+    const StringOps_Namespace::StringOps& string_ops) const {
   const auto& source_dict_id = getDictKey();
   const auto& dest_dict_id = dest_proxy->getDictKey();
 
@@ -390,12 +386,12 @@ StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxy(
                                                             std::defer_lock);
   order_translation_locks(
       source_dict_id, dest_dict_id, source_proxy_read_lock, dest_proxy_write_lock);
-  return buildIntersectionTranslationMapToOtherProxyUnlocked(dest_proxy, string_op_infos);
+  return buildIntersectionTranslationMapToOtherProxyUnlocked(dest_proxy, string_ops);
 }
 
 StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOtherProxy(
     StringDictionaryProxy* dest_proxy,
-    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const {
+    const StringOps_Namespace::StringOps& string_ops) const {
   auto timer = DEBUG_TIMER(__func__);
 
   const auto& source_dict_id = getDictKey();
@@ -407,7 +403,7 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOt
       source_dict_id, dest_dict_id, source_proxy_read_lock, dest_proxy_write_lock);
 
   auto id_map =
-      buildIntersectionTranslationMapToOtherProxyUnlocked(dest_proxy, string_op_infos);
+      buildIntersectionTranslationMapToOtherProxyUnlocked(dest_proxy, string_ops);
   if (id_map.empty()) {
     return id_map;
   }
@@ -429,7 +425,6 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOt
     const int32_t map_domain_start = id_map.domainStart();
     const int32_t map_domain_end = id_map.domainEnd();
 
-    const StringOps_Namespace::StringOps string_ops(string_op_infos);
     const bool has_string_ops = string_ops.size();
 
     // First iterate over transient strings and add to dest map
