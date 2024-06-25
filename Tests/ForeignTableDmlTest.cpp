@@ -4978,7 +4978,7 @@ INSTANTIATE_TEST_SUITE_P(DataTypeFragmentSizeAndDataWrapperParquetTests,
 INSTANTIATE_TEST_SUITE_P(DataTypeFragmentSizeAndDataWrapperOdbcTests,
                          DataTypeFragmentSizeAndDataWrapperTest,
                          ::testing::Combine(::testing::Values(1, 2, 32'000'000),
-                                            ::testing::Values("sqlite", "postgres"),
+                                            ::testing::ValuesIn(odbc_wrappers),
                                             ::testing::Values(".csv")),
                          DataTypeFragmentSizeAndDataWrapperTest::getTestName);
 INSTANTIATE_TEST_SUITE_P(
