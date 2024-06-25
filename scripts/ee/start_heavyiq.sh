@@ -48,8 +48,13 @@ if [[ $PYTHON_MAJOR_VERSION -eq 3 && $PYTHON_MINOR_VERSION -ge 10 ]]; then
     source .venv/bin/activate
   fi
   GUNICORN_LOG_FILE=${HEAVYIQ_LOG_PREFIX}_gunicorn.log
-  gunicorn --preload --log-file $GUNICORN_LOG_FILE --capture-output -t 0 -w 4 -k uvicorn.workers.UvicornWorker \
-  -b :$MAPD_HEAVYIQ_PORT -c "gunicorn.conf.py" "heavyiq.api:create_app(config_path=\"$CONFIG_FILE_ABS_PATH\")" &
+  if [ "${START_MODE}" == "f" ]; then
+    gunicorn --preload --log-file $GUNICORN_LOG_FILE --capture-output -t 0 -w 4 -k uvicorn.workers.UvicornWorker \
+    -b :$MAPD_HEAVYIQ_PORT -c "gunicorn.conf.py" "heavyiq.api:create_app(config_path=\"$CONFIG_FILE_ABS_PATH\")"
+  else
+    gunicorn --preload --log-file $GUNICORN_LOG_FILE --capture-output -t 0 -w 4 -k uvicorn.workers.UvicornWorker \
+    -b :$MAPD_HEAVYIQ_PORT -c "gunicorn.conf.py" "heavyiq.api:create_app(config_path=\"$CONFIG_FILE_ABS_PATH\")" &
+  fi
   PID3=$!
   sleep 5
   if [[ $(ps -h -p $PID3) ]]; then
