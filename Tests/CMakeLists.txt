@@ -412,6 +412,13 @@ endif()
 
 ##########
 
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  add_executable(LlmTransformIntegrationTest ee/LlmTransform/LlmTransformIntegrationTest.cpp)
+  target_link_libraries(LlmTransformIntegrationTest gtest Logger Shared mapd_thrift ThriftClient)
+endif()
+
+##########
+
 add_executable(LoadTableTest LoadTableTest.cpp)
 target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 add_test(LoadTableTest LoadTableTest ${TEST_ARGS})

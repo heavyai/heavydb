@@ -579,6 +579,13 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(
 StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
     const shared::StringDictKey& dict_key_in,
     const bool with_generation) {
+  if (dict_key_in.db_id < 0) {
+    // Temporary dictionaries should already be created and stored in the
+    // str_dict_proxy_owned_ map when this method is called.
+    auto it = str_dict_proxy_owned_.find(dict_key_in);
+    CHECK(it != str_dict_proxy_owned_.end());
+    return it->second.get();
+  }
   const int dict_id{dict_key_in.dict_id < 0 ? REGULAR_DICT(dict_key_in.dict_id)
                                             : dict_key_in.dict_id};
   const auto catalog =
@@ -2300,6 +2307,88 @@ ResultSetPtr Executor::executeExplain(const QueryCompilationDescriptor& query_co
   return std::make_shared<ResultSet>(query_comp_desc.getIR());
 }
 
+bool Executor::buildTemporaryStringDictionaryIfNecessary(const Analyzer::Expr* expr) {
+  if (auto* string_oper = dynamic_cast<const Analyzer::StringOper*>(expr)) {
+    if (string_oper->get_kind() == SqlStringOpKind::LLM_TRANSFORM) {
+      std::set<const Analyzer::ColumnVar*,
+               bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>
+          colvar_set(Analyzer::ColumnVar::colvar_comp);
+      auto input_string_expr = string_oper->getOwnArg(0);
+      input_string_expr->collect_column_var(colvar_set, false);
+      if (colvar_set.size() == 1) {
+        auto col_var = *colvar_set.begin();
+        // Build a temporary dictionary if the input is a string dictionary encoded column
+        // expression from a filtered intermediate result set
+        if (col_var->getColumnKey().table_id < 0 &&
+            col_var->get_type_info().is_dict_encoded_type()) {
+          auto res_ptr =
+              get_temporary_table(temporary_tables_, col_var->getColumnKey().table_id);
+          CHECK(res_ptr);
+          auto const col_idx = col_var->getColumnKey().column_id;
+          CHECK_LT(col_idx, res_ptr->getTargetInfos().size());
+          CHECK_EQ(res_ptr->getTargetInfos()[col_idx].sql_type.get_type(),
+                   col_var->get_type_info().get_type());
+          auto const num_rows = res_ptr->rowCount();
+          auto const dict_key = col_var->get_type_info().getStringDictKey();
+          auto* dict_proxy = getStringDictionaryProxy(dict_key, true);
+          CHECK(dict_proxy);
+          const auto temporary_dict_key =
+              row_set_mem_owner_->getTempDictionaryKey(dict_key.db_id, *string_oper);
+          auto const dict_key_hash = temporary_dict_key.hash();
+          if (num_rows < dict_proxy->entryCount() &&
+              !row_set_mem_owner_->hasSourceSDToTempSDTransMap(dict_key_hash)) {
+            // build a temporary dictionary to reduce dictionary translation cost
+            row_set_mem_owner_->allocateSourceSDToTempSDTransMap(
+                dict_key_hash, dict_proxy->entryCount());
+            auto trans_map_ptr =
+                row_set_mem_owner_->getSourceSDToTempSDTransMap(dict_key_hash);
+            CHECK(trans_map_ptr);
+            std::shared_ptr<StringDictionary> temporary_sd =
+                std::make_shared<StringDictionary>(
+                    temporary_dict_key, "", true, false, g_cache_string_hash);
+            // todo (yoonmin) : parallelize this
+            for (size_t i = 0; i < num_rows; i++) {
+              auto const& row_values = res_ptr->getNextRow(true, false);
+              const auto row_tv = row_values[col_idx];
+              const auto row_scalar_tv = boost::get<ScalarTargetValue>(&row_tv);
+              CHECK(row_scalar_tv);
+              auto nullable_sptr = boost::get<NullableString>(row_scalar_tv);
+              if (boost::get<void*>(nullable_sptr)) {
+                continue;
+              } else {
+                auto str = boost::get<std::string>(nullable_sptr);
+                auto const source_id = dict_proxy->getIdOfString(*str);
+
+                // Create a temporary translation map from the original string ID to the
+                // temporary dictionary string ID. The generated code will first do a
+                // translation to the temporary dictionary string IDs before doing the
+                // string op translation.
+                trans_map_ptr[source_id] = temporary_sd->getOrAdd(*str);
+              }
+            }
+            res_ptr->moveToBegin();
+            VLOG(1) << "Create a temporary string dictionary for `LLM_TRANSFORM` "
+                       "expression (# entries: "
+                    << temporary_sd->storageEntryCount() << ")";
+            // Store the temporary string dictionary in row_set_mem_owner_ for subsequent
+            // access.
+            row_set_mem_owner_->addStringDict(
+                temporary_sd, temporary_dict_key, temporary_sd->storageEntryCount());
+
+            // replace the target expr's dictionary key
+            SQLTypeInfo copied_ti = input_string_expr->get_type_info();
+            copied_ti.set_comp_param(temporary_dict_key.dict_id);
+            copied_ti.setStringDictKey(temporary_dict_key);
+            input_string_expr->set_type_info(copied_ti);
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
 void Executor::addTransientStringLiterals(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner) {
@@ -2308,6 +2397,10 @@ void Executor::addTransientStringLiterals(
   auto visit_expr =
       [this, &dict_id_visitor, &row_set_mem_owner](const Analyzer::Expr* expr) {
         if (!expr) {
+          return;
+        }
+        if (expr->get_type_info().is_dict_encoded_string() &&
+            buildTemporaryStringDictionaryIfNecessary(expr)) {
           return;
         }
         const auto& dict_key = dict_id_visitor.visit(expr);
@@ -2342,10 +2435,15 @@ void Executor::addTransientStringLiterals(
           visit_expr(agg_expr->get_arg());
         }
       } else {
+        if (target_type.get_compression() == kENCODING_DICT &&
+            buildTemporaryStringDictionaryIfNecessary(target_expr)) {
+          return;
+        }
         visit_expr(target_expr);
       }
     }
   };
+
   const auto& target_exprs = ra_exe_unit.target_exprs;
   std::for_each(target_exprs.begin(), target_exprs.end(), visit_target_expr);
   const auto& target_exprs_union = ra_exe_unit.target_exprs_union;
