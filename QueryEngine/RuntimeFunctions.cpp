@@ -2171,6 +2171,13 @@ key_for_string_encoded(const int32_t str_id) {
 }
 
 extern "C" ALWAYS_INLINE DEVICE int32_t
+map_src_id_to_temp_id(const int32_t string_id, const int64_t translation_map_handle) {
+  const int32_t* translation_map =
+      reinterpret_cast<const int32_t*>(translation_map_handle);
+  return translation_map[string_id];
+}
+
+extern "C" ALWAYS_INLINE DEVICE int32_t
 map_string_dict_id(const int32_t string_id,
                    const int64_t translation_map_handle,
                    const int32_t min_source_id) {

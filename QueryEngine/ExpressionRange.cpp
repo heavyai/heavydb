@@ -679,11 +679,21 @@ ExpressionRange getExpressionRange(const Analyzer::StringOper* string_oper_expr,
     // transient dictionaries are used as targets for on-the-fly translation
     CHECK(expr_ti.is_dict_encoded_string());
 
-    const auto& dict_key = expr_ti.getStringDictKey();
-    CHECK_NE(dict_key.dict_id, TRANSIENT_DICT_ID);
+    shared::StringDictKey src_dict_key;
+    const auto dest_dict_key = expr_ti.getStringDictKey();
+    // todo (yoonmin) : improve this logic to expand the usage of temporary sd translation
+    // for filtered string values
+    if (string_oper_expr->get_kind() == SqlStringOpKind::LLM_TRANSFORM) {
+      CHECK(string_oper_expr->getArg(0));
+      src_dict_key = string_oper_expr->getArg(0)->get_type_info().getStringDictKey();
+    } else {
+      src_dict_key = dest_dict_key;
+    }
+    CHECK_NE(dest_dict_key.dict_id, TRANSIENT_DICT_ID);
+    CHECK_NE(src_dict_key.dict_id, TRANSIENT_DICT_ID);
     const auto translation_map = executor->getStringProxyTranslationMap(
-        dict_key,
-        dict_key,
+        src_dict_key,
+        dest_dict_key,
         RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
         string_op_infos,
         executor->getRowSetMemoryOwner(),
