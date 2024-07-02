@@ -490,18 +490,29 @@ std::unique_ptr<StringDictionaryTranslationMgr> translate_dict_strings(
     const Analyzer::StringOper* expr,
     const ExecutorDeviceType device_type,
     Executor* executor) {
+  DEBUG_TIMER("translate_dict_strings");
   const auto& expr_ti = expr->get_type_info();
   const auto& primary_input_expr_ti = expr->getArg(0)->get_type_info();
-  const auto& dict_id = primary_input_expr_ti.getStringDictKey();
+  auto const src_dict_key = primary_input_expr_ti.getStringDictKey();
+  auto const dest_dict_key = expr_ti.getStringDictKey();
   const auto string_op_infos = getStringOpInfos(expr);
   CHECK(string_op_infos.size());
 
   if (string_op_infos.back().getReturnType().is_dict_encoded_string()) {
     // string->string translation
+    int32_t* src_sd_to_temp_sd_trans_map{nullptr};
+    if (src_dict_key.db_id < 0) {
+      // When the source is a temporary dictionary, get the [original dictionary] ->
+      // [temporary dictionary] translation map for intermediate translation.
+      src_sd_to_temp_sd_trans_map =
+          executor->getRowSetMemoryOwner()->getSourceSDToTempSDTransMap(
+              src_dict_key.hash());
+      CHECK(src_sd_to_temp_sd_trans_map);
+    }
     auto string_dictionary_translation_mgr =
         std::make_unique<StringDictionaryTranslationMgr>(
-            dict_id,
-            dict_id,
+            src_dict_key,
+            dest_dict_key,
             false,  // translate_intersection_only
             expr_ti,
             string_op_infos,
@@ -510,13 +521,14 @@ std::unique_ptr<StringDictionaryTranslationMgr> translate_dict_strings(
             executor->deviceCount(device_type),
             executor,
             executor->getDataMgr(),
-            false /* delay_translation */);
+            false /* delay_translation */,
+            src_sd_to_temp_sd_trans_map);
     return string_dictionary_translation_mgr;
   } else {
     // string->numeric translation
     auto string_dictionary_translation_mgr =
         std::make_unique<StringDictionaryTranslationMgr>(
-            dict_id,
+            src_dict_key,
             expr_ti,
             string_op_infos,
             device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
@@ -573,7 +585,8 @@ llvm::Value* CodeGenerator::codegenPseudoStringOper(
           executor()->deviceCount(co.device_type),
           executor(),
           executor()->getDataMgr(),
-          false /* delay_translation */);
+          false /* delay_translation */,
+          nullptr /* src_to_tmp_trans_map */);
 
   auto str_id_lv = codegen(expr, true /* fetch_column */, co);
   CHECK_EQ(size_t(1), str_id_lv.size());

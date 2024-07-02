@@ -290,7 +290,8 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
             executor()->deviceCount(co.device_type),
             executor(),
             executor()->getDataMgr(),
-            false /* delay_translation */);
+            false /* delay_translation */,
+            nullptr /* src_to_tmp_trans_map */);
 
     return cgen_state_
         ->moveStringDictionaryTranslationMgr(std::move(string_dictionary_translation_mgr))
