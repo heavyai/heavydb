@@ -25,6 +25,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Analyzer/Analyzer.h"
 #include "ApproxQuantileDescriptor.h"
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
@@ -57,7 +58,9 @@ class ResultSet;
 class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
  public:
   RowSetMemoryOwner(const size_t arena_block_size, const size_t executor_id)
-      : arena_block_size_(arena_block_size), executor_id_(executor_id) {
+      : arena_block_size_(arena_block_size)
+      , executor_id_(executor_id)
+      , next_temp_dict_id_(1) {
     // initialize shared allocator (i.e., allocators_[0])
     if (g_use_cpu_mem_pool_for_output_buffers) {
       allocators_.emplace_back(std::make_unique<CpuMgrArenaAllocator>());
@@ -470,6 +473,42 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return const_cast<AggMode*>(std::as_const(*this).getAggMode(ival));
   }
 
+  void allocateSourceSDToTempSDTransMap(size_t key, int32_t const size) {
+    auto [it, success] = source_sd_to_temp_sd_trans_map_.emplace(
+        key, std::make_unique<std::vector<int32_t>>(size, -1));
+    CHECK(success);
+  }
+
+  bool hasSourceSDToTempSDTransMap(size_t key) const {
+    return source_sd_to_temp_sd_trans_map_.find(key) !=
+           source_sd_to_temp_sd_trans_map_.end();
+  }
+
+  const size_t getSourceSDToTempSDTransMapSize(size_t key) const {
+    auto it = source_sd_to_temp_sd_trans_map_.find(key);
+    CHECK(it != source_sd_to_temp_sd_trans_map_.end());
+    return it->second->size();
+  }
+
+  int32_t* getSourceSDToTempSDTransMap(size_t key) const {
+    auto it = source_sd_to_temp_sd_trans_map_.find(key);
+    CHECK(it != source_sd_to_temp_sd_trans_map_.end());
+    return it->second->data();
+  }
+
+  shared::StringDictKey getTempDictionaryKey(int32_t db_id,
+                                             const Analyzer::StringOper& string_oper) {
+    const auto string_oper_str = string_oper.toString();
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    auto it = string_dict_key_by_string_oper_.find(string_oper_str);
+    if (it != string_dict_key_by_string_oper_.end()) {
+      return it->second;
+    }
+    shared::StringDictKey dict_key{db_id > 0 ? -db_id : -1, next_temp_dict_id_++};
+    string_dict_key_by_string_oper_[string_oper_str] = dict_key;
+    return dict_key;
+  }
+
  private:
   int8_t* allocateUnlocked(const size_t num_bytes,
                            const size_t thread_idx,
@@ -509,6 +548,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       str_proxy_numeric_translation_maps_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   StringDictionaryGenerations string_dictionary_generations_;
+
   std::vector<void*> col_buffers_;
   std::vector<Data_Namespace::AbstractBuffer*> varlen_input_buffers_;
 
@@ -526,8 +566,12 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   using CountDistinctBufferFastAllocator = FastAllocator<int8_t>;
   std::vector<std::unique_ptr<CountDistinctBufferFastAllocator>>
       count_distinct_buffer_fast_allocators_;
+  std::unordered_map<size_t, std::unique_ptr<std::vector<int32_t>>>
+      source_sd_to_temp_sd_trans_map_;
 
   size_t executor_id_;
+  int32_t next_temp_dict_id_;
+  std::map<std::string, shared::StringDictKey> string_dict_key_by_string_oper_;
 
   mutable std::mutex state_mutex_;
 

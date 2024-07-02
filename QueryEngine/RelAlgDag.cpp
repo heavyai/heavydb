@@ -25,6 +25,7 @@
 #include "Shared/misc.h"
 #include "Shared/scope.h"
 #include "Shared/sqldefs.h"
+#include "Visitors/CommonVisitors.h"
 #include "Visitors/RelAlgDagViewer.h"
 
 #include <rapidjson/error/en.h>
@@ -3043,6 +3044,75 @@ void add_window_function_pre_project(
   nodes.assign(node_list.begin(), node_list.end());
 }
 
+// When a Filter -> Project (with LLM_TRANSFORM expression) node pattern is encountered,
+// inject a new Project node in between both nodes in order to ensure that the
+// LLM_TRANSFORM operation is executed as a separate step on the filtered intermediate
+// result.
+void add_project_before_heavy_string_op(
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+    std::unordered_map<const RelAlgNode*,
+                       std::unordered_map<unsigned, RegisteredQueryHint>>& query_hints) {
+  std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
+  auto has_child_filter = false;
+  for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
+    auto project_node = std::dynamic_pointer_cast<RelProject>(*node_itr);
+    if (!project_node) {
+      if (std::dynamic_pointer_cast<RelFilter>(*node_itr)) {
+        has_child_filter = true;
+      }
+      continue;
+    }
+    bool has_target_expr = false;
+    for (size_t i = 0; i < project_node->size(); i++) {
+      if (StringOperatorDetector::hasStringOperator(SqlStringOpKind::LLM_TRANSFORM,
+                                                    project_node->getProjectAt(i))) {
+        has_target_expr = true;
+        break;
+      }
+    }
+    if (!has_target_expr || !has_child_filter) {
+      continue;
+    }
+
+    const auto prev_node_itr = std::prev(node_itr);
+    const auto prev_node = *prev_node_itr;
+    CHECK(prev_node);
+
+    RexInputSet inputs;
+    RexInputCollector input_collector;
+    for (size_t i = 0; i < project_node->size(); i++) {
+      auto new_inputs = input_collector.visit(project_node->getProjectAt(i));
+      inputs.insert(new_inputs.begin(), new_inputs.end());
+    }
+    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
+    std::vector<std::string> fields;
+    std::unordered_map<unsigned, unsigned> old_index_to_new_index;
+
+    std::vector<RexInput> sorted_inputs(inputs.begin(), inputs.end());
+    std::sort(sorted_inputs.begin(),
+              sorted_inputs.end(),
+              [](const auto& a, const auto& b) { return a.getIndex() < b.getIndex(); });
+
+    for (auto& input : sorted_inputs) {
+      CHECK_EQ(input.getSourceNode(), prev_node.get());
+      CHECK(old_index_to_new_index
+                .insert(std::make_pair(input.getIndex(), scalar_exprs.size()))
+                .second);
+      scalar_exprs.emplace_back(input.deepCopy());
+      fields.emplace_back("");
+    }
+
+    CHECK_GT(scalar_exprs.size(), 0UL);
+    CHECK_EQ(scalar_exprs.size(), fields.size());
+    auto new_project = std::make_shared<RelProject>(
+        scalar_exprs, fields, project_node->getAndOwnInput(0));
+    propagate_hints_to_new_project(project_node, new_project, query_hints);
+    node_list.insert(node_itr, new_project);
+    project_node->replaceInput(prev_node, new_project, old_index_to_new_index);
+  }
+  nodes.assign(node_list.begin(), node_list.end());
+}
+
 int64_t get_int_literal_field(const rapidjson::Value& obj,
                               const char field[],
                               const int64_t default_val) noexcept {
@@ -3662,6 +3732,7 @@ void RelAlgDagBuilder::optimizeDag(RelAlgDag& rel_alg_dag) {
       nodes,
       g_cluster /* always_add_project_if_first_project_is_window_expr */,
       query_hints);
+  add_project_before_heavy_string_op(nodes, query_hints);
   coalesce_nodes(nodes, left_deep_joins, query_hints);
   CHECK(nodes.back().use_count() == 1);
   handle_agg_filter_left_join(nodes);

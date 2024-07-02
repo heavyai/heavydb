@@ -58,7 +58,8 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     const int device_count,
     Executor* executor,
     Data_Namespace::DataMgr* data_mgr,
-    const bool delay_translation)
+    const bool delay_translation,
+    int32_t* src_to_tmp_trans_map)
     : source_string_dict_key_(source_string_dict_key)
     , dest_string_dict_key_(dest_string_dict_key)
     , translate_intersection_only_(translate_intersection_only)
@@ -76,6 +77,9 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
 #else
   CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
 #endif  // HAVE_CUDA
+  if (src_to_tmp_trans_map) {
+    source_sd_to_temp_sd_translation_map_ = src_to_tmp_trans_map;
+  }
   if (!delay_translation && !has_null_string_op_) {
     buildTranslationMap();
     createKernelBuffers();
@@ -161,6 +165,29 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
                          device_id,
                          "Dictionary translation buffer");
       kernel_translation_maps_.push_back(device_buffer);
+    }
+
+    if (source_string_dict_key_.db_id < 0) {
+      auto const buf_size =
+          executor_->getRowSetMemoryOwner()->getSourceSDToTempSDTransMapSize(
+              source_string_dict_key_.hash()) *
+          sizeof(int32_t);
+      CHECK_GT(buf_size, 0);
+      CHECK(source_sd_to_temp_sd_translation_map_.has_value());
+      for (int device_id = 0; device_id < device_count_; ++device_id) {
+        source_sd_to_temp_sd_translation_map_device_buffer_.push_back(
+            CudaAllocator::allocGpuAbstractBuffer(data_mgr_, buf_size, device_id));
+        auto device_buffer = reinterpret_cast<int8_t*>(
+            source_sd_to_temp_sd_translation_map_device_buffer_.back()->getMemoryPtr());
+        auto cuda_stream = executor_->getCudaStream(device_id);
+        copy_to_nvidia_gpu(data_mgr_,
+                           cuda_stream,
+                           reinterpret_cast<CUdeviceptr>(device_buffer),
+                           source_sd_to_temp_sd_translation_map_.value(),
+                           buf_size,
+                           device_id,
+                           "Dictionary source_id to temp_id translation buffer");
+      }
     }
   }
 #else
@@ -261,11 +288,46 @@ llvm::Value* StringDictionaryTranslationMgr::codegen(llvm::Value* input_str_id_l
   }
   llvm::Value* ret;
   if (dest_type_is_string_) {
+    if (source_string_dict_key_.db_id < 0) {
+      std::vector<std::shared_ptr<const Analyzer::Constant>> trans_map_constants_owned;
+      std::vector<const Analyzer::Constant*> trans_map_constants;
+      CHECK(source_sd_to_temp_sd_translation_map_.has_value());
+      const int8_t* source_sd_to_temp_sd_translation_map_ptr =
+          memory_level_ == Data_Namespace::GPU_LEVEL
+              ? source_sd_to_temp_sd_translation_map_device_buffer_.front()
+                    ->getMemoryPtr()
+              : reinterpret_cast<const int8_t*>(
+                    source_sd_to_temp_sd_translation_map_.value());
+      CHECK(source_sd_to_temp_sd_translation_map_ptr);
+      const int64_t src_to_tmp_translation_map_handle =
+          reinterpret_cast<int64_t>(source_sd_to_temp_sd_translation_map_ptr);
+      const auto src_to_tmp_translation_map_handle_literal =
+          std::dynamic_pointer_cast<Analyzer::Constant>(
+              Parser::IntLiteral::analyzeValue(src_to_tmp_translation_map_handle));
+      CHECK(src_to_tmp_translation_map_handle_literal);
+      CHECK_EQ(
+          kENCODING_NONE,
+          src_to_tmp_translation_map_handle_literal->get_type_info().get_compression());
+      trans_map_constants_owned.push_back(src_to_tmp_translation_map_handle_literal);
+      trans_map_constants.push_back(src_to_tmp_translation_map_handle_literal.get());
+
+      const auto src_to_tmp_translation_map_handle_lvs =
+          co.hoist_literals ? code_generator.codegenHoistedConstants(
+                                  trans_map_constants, kENCODING_NONE, {})
+                            : code_generator.codegen(trans_map_constants[0], false, co);
+      CHECK_EQ(size_t(1), src_to_tmp_translation_map_handle_lvs.size());
+      input_str_id_lv = cgen_state_ptr->emitCall(
+          "map_src_id_to_temp_id",
+          {input_str_id_lv,
+           cgen_state_ptr->castToTypeIn(src_to_tmp_translation_map_handle_lvs.front(),
+                                        64)});
+    }
+    llvm::Value* transient_offset_lv = cgen_state_ptr->llInt(minSourceStringId());
     ret = cgen_state_ptr->emitCall(
         "map_string_dict_id",
         {input_str_id_lv,
          cgen_state_ptr->castToTypeIn(translation_map_handle_lvs.front(), 64),
-         cgen_state_ptr->llInt(minSourceStringId())});
+         transient_offset_lv});
   } else {
     std::string fn_call = "map_string_to_datum_";
     const auto sql_type = output_ti_.get_type();
