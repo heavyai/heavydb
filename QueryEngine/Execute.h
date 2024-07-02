@@ -738,6 +738,8 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner);
 
+  bool buildTemporaryStringDictionaryIfNecessary(const Analyzer::Expr* expr);
+
   int deviceCount(const ExecutorDeviceType) const;
 
   void logSystemCPUMemoryStatus(std::string const& tag, size_t const thread_idx) const;

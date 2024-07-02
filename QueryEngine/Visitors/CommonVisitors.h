@@ -17,6 +17,7 @@
 #pragma once
 
 #include "Analyzer/Analyzer.h"
+#include "RexVisitor.h"
 #include "ScalarExprVisitor.h"
 
 #include <set>
@@ -47,4 +48,37 @@ class AllColumnVarsVisitor
     result.insert(next_result.begin(), next_result.end());
     return result;
   }
+};
+
+class StringOperatorDetector : public RexVisitor<void*> {
+ public:
+  StringOperatorDetector(SqlStringOpKind kind) {
+    std::ostringstream oss;
+    oss << kind;
+    kind_ = oss.str();
+  }
+
+  static bool hasStringOperator(SqlStringOpKind kind, const RexScalar* expr) {
+    StringOperatorDetector detector(kind);
+    detector.visit(expr);
+    return detector.has_string_oper_;
+  }
+
+ protected:
+  void* visitOperator(const RexOperator* rex_operator) const override {
+    if (auto rex_func = dynamic_cast<const RexFunctionOperator*>(rex_operator)) {
+      if (rex_func->getName() == kind_) {
+        has_string_oper_ = true;
+        return defaultResult();
+      }
+    }
+    for (size_t i = 0; i < rex_operator->size(); ++i) {
+      visit(rex_operator->getOperand(i));
+    }
+    return defaultResult();
+  }
+
+ private:
+  std::string kind_;
+  mutable bool has_string_oper_{false};
 };
