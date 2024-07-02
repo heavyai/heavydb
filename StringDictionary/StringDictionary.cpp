@@ -113,6 +113,29 @@ struct ThreadInfo {
   }
 };
 
+void try_parallelize_llm_transform(ThreadInfo& thread_info,
+                                   const StringOps_Namespace::StringOps& string_ops,
+                                   int num_source_strings) {
+  const auto& ops = string_ops.getStringOps();
+  auto const has_llm_transform_expr =
+      std::any_of(ops.begin(), ops.end(), [](auto const& op) {
+        return op->getOpInfo().getOpKind() == SqlStringOpKind::LLM_TRANSFORM;
+      });
+  if (has_llm_transform_expr) {
+    if (num_source_strings > g_llm_transform_max_num_unique_value) {
+      std::ostringstream oss;
+      oss << "The number of entries of a string dictionary of the input argument of the "
+             "LLM_TRANSFORM (="
+          << num_source_strings
+          << ") is larger than a threshold (=" << g_llm_transform_max_num_unique_value
+          << ")";
+      throw std::runtime_error(oss.str());
+    }
+    thread_info.num_threads = g_max_concurrent_llm_transform_call;
+    thread_info.num_elems_per_thread = 1;
+  }
+}
+
 }  // namespace
 
 bool g_enable_stringdict_parallel{false};
@@ -1928,25 +1951,7 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   constexpr int64_t target_strings_per_thread{1000};
   ThreadInfo thread_info(
       std::thread::hardware_concurrency(), num_source_strings, target_strings_per_thread);
-
-  const auto& ops = string_ops.getStringOps();
-  auto const has_llm_transform_expr =
-      std::any_of(ops.begin(), ops.end(), [](auto const& info) {
-        return info->getOpInfo().getOpKind() == SqlStringOpKind::LLM_TRANSFORM;
-      });
-  if (has_llm_transform_expr) {
-    if (num_source_strings > g_llm_transform_max_num_unique_value) {
-      std::ostringstream oss;
-      oss << "The number of entries of a string dictionary of the input argument of the "
-             "LLM_TRANSFORM (="
-          << num_source_strings
-          << ") is larger than a threshold (=" << g_llm_transform_max_num_unique_value
-          << ")";
-      throw std::runtime_error(oss.str());
-    }
-    thread_info.num_threads = g_max_concurrent_llm_transform_call;
-    thread_info.num_elems_per_thread = 1;
-  }
+  try_parallelize_llm_transform(thread_info, string_ops, num_source_strings);
   CHECK_GE(thread_info.num_threads, 1L);
   CHECK_GE(thread_info.num_elems_per_thread, 1L);
 
@@ -2075,8 +2080,10 @@ void StringDictionary::buildDictionaryNumericTranslationMap(
   CHECK_LE(num_source_strings, static_cast<int64_t>(str_count_));
 
   constexpr int64_t target_strings_per_thread{1000};
-  const ThreadInfo thread_info(
+  ThreadInfo thread_info(
       std::thread::hardware_concurrency(), num_source_strings, target_strings_per_thread);
+  try_parallelize_llm_transform(thread_info, string_ops, num_source_strings);
+
   CHECK_GE(thread_info.num_threads, 1L);
   CHECK_GE(thread_info.num_elems_per_thread, 1L);
 

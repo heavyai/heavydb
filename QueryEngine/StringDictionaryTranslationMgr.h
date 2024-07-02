@@ -57,7 +57,8 @@ class StringDictionaryTranslationMgr {
       const int device_count,
       Executor* executor,
       Data_Namespace::DataMgr* data_mgr,
-      const bool delay_translation);
+      const bool delay_translation,
+      int32_t* src_to_tmp_trans_map);
 
   StringDictionaryTranslationMgr(
       const shared::StringDictKey& source_string_dict_key,
@@ -99,4 +100,7 @@ class StringDictionaryTranslationMgr {
       nullptr};
   std::vector<const int8_t*> kernel_translation_maps_;
   std::vector<Data_Namespace::AbstractBuffer*> device_buffers_;
+  std::optional<const int32_t*> source_sd_to_temp_sd_translation_map_{std::nullopt};
+  std::vector<Data_Namespace::AbstractBuffer*>
+      source_sd_to_temp_sd_translation_map_device_buffer_;
 };
