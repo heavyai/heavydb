@@ -106,6 +106,7 @@ class RasterImporter {
   const int getBandsHeight() const { return bands_height_; }
   const int getBlockWidth() const { return block_width_; }
   const int getBlockHeight() const { return block_height_; }
+  std::string getInitializedFilePath() const { return initialized_file_path_; }
   const NullValue getBandNullValue(const int band_idx) const;
   const Coords getProjectedPixelCoords(const uint32_t thread_idx, const int y) const;
   const std::pair<double, double> getProjectedPixelCoord(const uint32_t thread_idx,
@@ -159,6 +160,7 @@ class RasterImporter {
   std::vector<Geospatial::GDAL::CoordinateTransformationUqPtr>
       coordinate_transformations_;
   std::vector<std::unique_ptr<GCPTransformer>> gcp_transformers_;
+  std::string initialized_file_path_;
 
   void getRawBandNamesForFormat(const Geospatial::GDAL::DataSourceUqPtr& datasource);
   void initializeFiltering(const std::string& specified_band_names,
