@@ -678,6 +678,8 @@ void RasterImporter::detect(const std::string& file_name,
         "' has band dimensions too large for 'SMALLINT' raster_point_type (" +
         std::to_string(bands_width_) + "x" + std::to_string(bands_height_) + ")");
   }
+
+  initialized_file_path_ = file_name;
 }
 
 void RasterImporter::import(size_t& max_threads, const bool max_threads_using_default) {
