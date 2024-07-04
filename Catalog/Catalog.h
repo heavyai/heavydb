@@ -667,6 +667,10 @@ class Catalog final {
    */
   std::unique_ptr<TableDescriptor> getTableFromStorage(const int table_id);
 
+  void setFragmentSizeForTable(const int max_frag_rows, const int table_id);
+  void setFragmenterTypeForTable(const Fragmenter_Namespace::FragmenterType frag_type,
+                                 const int table_id);
+
  protected:
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
