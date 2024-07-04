@@ -560,6 +560,8 @@ ImportStatus ForeignDataImporter::importGeneral(
       if (metadata_vector.empty()) {  // an empty data source
         return {};
       }
+
+
       max_fragment_id = 0;
       for (const auto& [key, _] : metadata_vector) {
         max_fragment_id = std::max(max_fragment_id, key[CHUNK_KEY_FRAGMENT_IDX]);

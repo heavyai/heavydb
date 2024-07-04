@@ -61,6 +61,8 @@
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "DataMgr/ForeignStorage/RegexParserDataWrapper.h"
 #include "Fragmenter/Fragmenter.h"
+#include "Fragmenter/InsertOrderFragmenter.h"
+#include "Fragmenter/PassThroughFragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "LockMgr/LockMgr.h"
 #include "MigrationMgr/MigrationMgr.h"
@@ -85,6 +87,7 @@
 
 using Chunk_NS::Chunk;
 using Fragmenter_Namespace::InsertOrderFragmenter;
+using Fragmenter_Namespace::PassThroughFragmenter;
 using Fragmenter_Namespace::SortedOrderFragmenter;
 using std::list;
 using std::map;
@@ -1905,14 +1908,24 @@ void Catalog::addLinkToMap(LinkDescriptor& ld) {
 
 void Catalog::instantiateFragmenter(TableDescriptor* td) const {
   auto time_ms = measure<>::execution([&]() {
-    // instanciate table fragmenter upon first use
-    // assume only insert order fragmenter is supported
-    CHECK_EQ(td->fragType, Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
     vector<Chunk> chunkVec;
     auto columnDescs = getAllColumnMetadataForTable(td->tableId, true, false, true);
     Chunk::translateColumnDescriptorsToChunkVec(columnDescs, chunkVec);
     ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
-    if (td->sortedColumnId > 0) {
+    if (td->fragType == Fragmenter_Namespace::FragmenterType::PASS_THROUGH) {
+      td->fragmenter = std::make_shared<PassThroughFragmenter>(chunkKeyPrefix,
+                                                               chunkVec,
+                                                               dataMgr_.get(),
+                                                               const_cast<Catalog*>(this),
+                                                               td->tableId,
+                                                               td->shard,
+                                                               td->maxFragRows,
+                                                               td->maxChunkSize,
+                                                               td->fragPageSize,
+                                                               td->maxRows,
+                                                               td->persistenceLevel,
+                                                               !td->storageType.empty());
+    } else if (td->sortedColumnId > 0) {
       td->fragmenter = std::make_shared<SortedOrderFragmenter>(chunkKeyPrefix,
                                                                chunkVec,
                                                                dataMgr_.get(),
@@ -7423,4 +7436,47 @@ void Catalog::execInTransaction(F&& f, Args&&... args) {
   }
   sqliteConnector_.query("END TRANSACTION");
 }
+
+void Catalog::setFragmentSizeForTable(const int max_frag_rows, const int table_id) {
+  cat_write_lock write_lock(this);
+  TableDescriptor* td = getMutableMetadataForTableUnlocked(table_id);
+  td->fragmenter = nullptr;
+  CHECK(td);
+
+  execInTransaction([&, this] {
+    // Change value on disk.
+    std::vector<SqliteConnector::BindType> bind_types(2, SqliteConnector::BindType::TEXT);
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_tables SET "
+        "max_frag_rows = ?"
+        "WHERE tableid = ?",
+        std::vector<std::string>{std::to_string(max_frag_rows), std::to_string(table_id)},
+        bind_types);
+    // Change value in memory.
+    td->maxFragRows = max_frag_rows;
+  });
+}
+
+void Catalog::setFragmenterTypeForTable(
+    const Fragmenter_Namespace::FragmenterType frag_type,
+    const int table_id) {
+  cat_write_lock write_lock(this);
+  TableDescriptor* td = getMutableMetadataForTableUnlocked(table_id);
+  td->fragmenter = nullptr;
+  CHECK(td);
+
+  execInTransaction([&, this] {
+    // Change value on disk.
+    std::vector<SqliteConnector::BindType> bind_types(2, SqliteConnector::BindType::TEXT);
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_tables SET "
+        "frag_type = ?"
+        "WHERE tableid = ?",
+        std::vector<std::string>{std::to_string(frag_type), std::to_string(table_id)},
+        bind_types);
+    // Change value in memory.
+    td->fragType = frag_type;
+  });
+}
+
 }  // namespace Catalog_Namespace

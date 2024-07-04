@@ -43,7 +43,8 @@ class InsertOrderFragmenter;
  */
 
 enum FragmenterType {
-  INSERT_ORDER = 0  // these values persist in catalog.  make explicit
+  INSERT_ORDER = 0,  // these values persist in catalog.  make explicit
+  PASS_THROUGH
 };
 
 struct InsertChunks {
