@@ -244,7 +244,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 
   void lockInsertCheckpointData(const InsertData& insertDataStruct);
   void insertDataImpl(InsertData& insert_data);
-  void insertChunksImpl(const InsertChunks& insert_chunk);
+  virtual void insertChunksImpl(const InsertChunks& insert_chunk);
   void addColumns(const InsertData& insertDataStruct);
 
   InsertOrderFragmenter(const InsertOrderFragmenter&);
@@ -260,11 +260,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   auto vacuum_varlen_rows(const FragmentInfo& fragment,
                           const std::shared_ptr<Chunk_NS::Chunk>& chunk,
                           const std::vector<uint64_t>& frag_offsets);
-
- private:
-  bool isAddingNewColumns(const InsertData& insert_data) const;
   void dropFragmentsToSizeNoInsertLock(const size_t max_rows);
-  void setLastFragmentVarLenColumnSizes();
   void insertChunksIntoFragment(const InsertChunks& insert_chunks,
                                 const std::optional<int> delete_column_id,
                                 FragmentInfo* current_fragment,
@@ -273,6 +269,12 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                                 size_t& num_rows_left,
                                 std::vector<size_t>& valid_row_indices,
                                 const size_t start_fragment);
+  std::optional<int> findDeleteColumnId() const;
+  std::optional<size_t> validateSameNumRows(const InsertChunks& insert_chunks) const;
+
+ private:
+  bool isAddingNewColumns(const InsertData& insert_data) const;
+  void setLastFragmentVarLenColumnSizes();
 };
 
 }  // namespace Fragmenter_Namespace

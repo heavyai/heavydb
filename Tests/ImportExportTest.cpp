@@ -128,6 +128,10 @@ std::string get_line_geo_regex(size_t column_count) {
                       "\"?((?:POINT|MULTIPOINT|LINESTRING|MULTILINESTRING|POLYGON|"
                       "MULTIPOLYGON)[^\"]+|\\\\N)\"?");
 }
+
+std::string get_raster_dir() {
+  return boost::filesystem::canonical("../../Tests/Import/datafiles/raster/").string();
+}
 }  // namespace
 
 namespace {
@@ -5754,6 +5758,7 @@ static constexpr const char* kZARRFile = "small.zarr";
 static constexpr const char* kS1B = "s1b_small.tiff";
 static constexpr const char* kS2A =
     "S2A_MSIL1C_20231118T190701_N0509_R013_T10SEG_20231118T220618.SAFE.zip";
+static constexpr const char* kSimpleSizesDir = "SimpleSizes/";
 
 // RasterImporter Class Tests
 
@@ -5785,9 +5790,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
     Geospatial::GDAL::init();
 
     // get absolute filename
-    auto abs_file_name =
-        boost::filesystem::canonical("../../Tests/Import/datafiles/raster/" + file_name)
-            .string();
+    auto abs_file_name = get_raster_dir() + file_name;
 
     // special case ZARR
     if (file_name == kZARRArchive) {
@@ -6145,9 +6148,7 @@ class RasterImportTest : public DBHandlerTestFixture,
       const std::string& extra_with_options,
       const std::string& check_str,
       const std::vector<std::vector<NullableTargetValue>>& expected_result_set) {
-    auto const abs_file_name =
-        boost::filesystem::canonical("../../Tests/Import/datafiles/raster/" + file_name)
-            .string();
+    auto const abs_file_name = get_raster_dir() + file_name;
     sql("CREATE table raster (" + schema + ")");
     sql("COPY raster FROM '" + abs_file_name + "' WITH (source_type='raster_file'" +
         extra_with_options + ");");
@@ -6161,14 +6162,24 @@ class RasterImportTest : public DBHandlerTestFixture,
       const std::string& extra_with_options,
       const std::string& check_str,
       const std::vector<std::vector<NullableTargetValue>>& expected_result_set) {
-    auto const abs_file_name =
-        (boost::filesystem::canonical("../../Tests/Import/datafiles/raster/" + dirname) /
-         suffix)
-            .string();
+    auto const abs_file_name = get_raster_dir() + dirname + suffix;
     sql("CREATE table raster (" + schema + ")");
     sql("COPY raster FROM '" + abs_file_name + "' WITH (source_type='raster_file'" +
         extra_with_options + ");");
     sqlAndCompareResult(check_str, expected_result_set);
+  }
+
+  std::multiset<int> getFragsWithNumRowsForTable(
+      const std::string& table_name = "raster") {
+    auto& cat = getCatalog();
+    auto table = cat.getMetadataForTable(table_name, false);
+    CHECK(table);
+    std::multiset<int> fragments_with_num_rows;
+    auto& fragmenter = table->fragmenter;
+    for (int i = 0; i < static_cast<int>(fragmenter->getNumFragments()); ++i) {
+      fragments_with_num_rows.emplace(fragmenter->getFragmentInfo(i)->getNumTuples());
+    }
+    return fragments_with_num_rows;
   }
 };
 
@@ -6286,9 +6297,7 @@ TEST_P(RasterImportTest, ImportSpecifiedBandsRepeatedTest) {
 TEST_P(RasterImportTest, CaseInsensitiveBandNamesTest) {
   auto do_test = []() {
     auto const abs_file_name =
-        boost::filesystem::canonical(
-            "../../Tests/Import/datafiles/raster/band_names_differing_only_by_case.grib2")
-            .string();
+        get_raster_dir() + "band_names_differing_only_by_case.grib2";
     sql("CREATE table raster (raster_lon double, raster_lat double,"
         "Convective_precipitation_rate__kg__m_2_s__ DOUBLE,"
         "Convective_Precipitation_Rate__kg__m_2_s___2 DOUBLE);");
@@ -6361,6 +6370,23 @@ TEST_P(RasterImportTest, DISABLED_ImportFetchCRSFromSubDataset) {
       "1,band_4_2,band_4_3'",
       "SELECT COUNT(*) FROM raster WHERE raster_lon < -120.0 AND raster_lon > -130.0;",
       {{120560400L}}));
+}
+
+TEST_P(RasterImportTest, ImportPNGTwiceSameSize) {
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       "",
+                       "SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
+                       {{319L, 224L, 243L}}));
+  sqlAndCompareResult("select count(*) from raster", {{72000L}});
+
+  auto const abs_file_name = get_raster_dir() + kPNG;
+  sql("COPY raster FROM '" + abs_file_name + "' WITH (source_type='raster_file')");
+  sqlAndCompareResult("select count(*) from raster", {{144000L}});
+  sqlAndCompareResult("SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
+                      {{319L, 224L, 243L}});
 }
 
 class RasterImportFsiOnlyTest : public RasterImportTest {};
@@ -6460,6 +6486,150 @@ TEST_P(RasterImportFsiOnlyTest, ImportSpecifiedBandsReorder2Test) {
       "raster_import_bands='r=Frozen_Rain__kg__m_2__,t=Temperature__C_,p=Pressure__Pa_'",
       "SELECT max(p), max(r), max(t) FROM raster;",
       {{86880.0, 0.0, 33.674859619140648}});
+}
+
+TEST_P(RasterImportFsiOnlyTest, FragmentSizeAuto) {
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       "",
+                       "SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
+                       {{319L, 224L, 243L}}));
+  auto& cat = getCatalog();
+  auto table = cat.getMetadataForTable("raster", false);
+  ASSERT_NE(table, nullptr);
+  // 72000 pixels into fragments of 72000 makes 1 fragment.
+  ASSERT_EQ(table->fragmenter->getNumFragments(), 1U);
+}
+
+// Importing multiple files of different block size, but all block sizes are larger than
+// default so we should be fine.
+TEST_P(RasterImportFsiOnlyTest, FragmentSizeAutoBlockSizeMismatch) {
+  importTestCommon(kSimpleSizesDir,
+                   "raster_x DOUBLE, raster_y DOUBLE, band_1_1 INT",
+                   "",
+                   "SELECT count(*) FROM raster;",
+                   {{8192L}});
+
+  auto fragments_with_num_rows = getFragsWithNumRowsForTable();
+  EXPECT_EQ(fragments_with_num_rows.size(), 20U);
+  EXPECT_EQ(fragments_with_num_rows.count(16 * 16), 16U);
+  EXPECT_EQ(fragments_with_num_rows.count(32 * 32), 4U);
+}
+
+// Importing a single file who's block size is larger than the maxFragRows set on the
+// table, however, since the table has no data we are allowed to change it.
+TEST_P(RasterImportFsiOnlyTest, FragmentTooSmall) {
+  auto const file_name = get_raster_dir() + "SimpleSizes/simple_16x16.tif";
+  sql("CREATE table raster (raster_x DOUBLE, raster_y DOUBLE, band_1_1 INT) WITH "
+      "(fragment_size=100)");
+  sql("COPY raster FROM '" + file_name + "' WITH (source_type='raster_file')");
+
+  auto fragments_with_num_rows = getFragsWithNumRowsForTable();
+  EXPECT_EQ(fragments_with_num_rows.size(), 16U);
+  EXPECT_EQ(fragments_with_num_rows.count(16 * 16), 16U);
+}
+
+// Importing multiple files into a table where the fragment size has been set to small.
+// The first import will reset the size, but is still to small for the second, so we fail.
+TEST_P(RasterImportFsiOnlyTest, FragmentTooSmallSecondImport) {
+  auto const file_name = get_raster_dir() + "SimpleSizes/simple_16x16.tif";
+  sql("CREATE table raster (raster_x DOUBLE, raster_y DOUBLE, band_1_1 INT) WITH "
+      "(fragment_size=100)");
+  sql("COPY raster FROM '" + file_name + "' WITH (source_type='raster_file')");
+
+  auto const big_file_name = get_raster_dir() + "SimpleSizes/simple_32x32.tif";
+
+  queryAndAssertPartialException(
+      "COPY raster FROM '" + big_file_name + "' WITH (source_type='raster_file')",
+      "Cannot import raster data.  New raster data tile size is too big for the table's "
+      "existing fragmentation.  Select a smaller tile size or import into a new table.  "
+      "Table 'raster' has maximum fragment size '256' raster file has tile size '1024'");
+
+  auto fragments_with_num_rows = getFragsWithNumRowsForTable();
+  EXPECT_EQ(fragments_with_num_rows.size(), 16U);
+  EXPECT_EQ(fragments_with_num_rows.count(16 * 16), 16U);
+}
+
+// Importing multiple files into a table where the fragment size has been set to small.
+// The first import will reset the size which is large enough for the second, so we are
+// ok.
+TEST_P(RasterImportFsiOnlyTest, FragmentTooSmallSecondImportBigFirst) {
+  auto const file_name = get_raster_dir() + "SimpleSizes/simple_32x32.tif";
+  sql("CREATE table raster (raster_x DOUBLE, raster_y DOUBLE, band_1_1 INT) WITH "
+      "(fragment_size=100)");
+  sql("COPY raster FROM '" + file_name + "' WITH (source_type='raster_file')");
+
+  auto const small_file_name = get_raster_dir() + "SimpleSizes/simple_16x16.tif";
+
+  sql("COPY raster FROM '" + small_file_name + "' WITH (source_type='raster_file')");
+
+  auto fragments_with_num_rows = getFragsWithNumRowsForTable();
+  EXPECT_EQ(fragments_with_num_rows.size(), 20U);
+  EXPECT_EQ(fragments_with_num_rows.count(16 * 16), 16U);
+  EXPECT_EQ(fragments_with_num_rows.count(32 * 32), 4U);
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportPNGTwiceDifferentSize) {
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       "",
+                       "SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
+                       {{319L, 224L, 243L}}));
+  sqlAndCompareResult("select count(*) from raster", {{72000L}});
+
+  auto const abs_file_name = get_raster_dir() + kPNG;
+  sql("COPY raster FROM '" + abs_file_name +
+      "' WITH (source_type='raster_file', raster_tile_width=100, "
+      "raster_tile_height=100)");
+  sqlAndCompareResult("select count(*) from raster", {{144000L}});
+  sqlAndCompareResult("SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
+                      {{319L, 224L, 243L}});
+}
+
+TEST_P(RasterImportFsiOnlyTest, FragmentsAlignToTiles) {
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       ", raster_tile_width=100, raster_tile_height=100",
+                       "SELECT max(band_1_1) FROM raster;",
+                       {{243L}}));
+  auto fragments_with_num_rows = getFragsWithNumRowsForTable();
+  EXPECT_EQ(fragments_with_num_rows.size(), 12U);
+  // File is 320x225 pixels, so we should have 6 100x100 fragments, 2 20x100 fragments, 3
+  // 100x25 fragments, and 1 20x25 fragment.  We don't have a guarantee for the order of
+  // the fragments.
+  EXPECT_EQ(fragments_with_num_rows.count(100 * 100), 6U);
+  EXPECT_EQ(fragments_with_num_rows.count(20 * 100), 2U);
+  EXPECT_EQ(fragments_with_num_rows.count(100 * 25), 3U);
+  EXPECT_EQ(fragments_with_num_rows.count(20 * 25), 1U);
+}
+
+TEST_P(RasterImportFsiOnlyTest, FragmentsAlignToTilesMultiImport) {
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       ", raster_tile_width=100, raster_tile_height=100",
+                       "SELECT max(band_1_1) FROM raster;",
+                       {{243L}}));
+
+  auto const abs_file_name = get_raster_dir() + kPNG;
+  sql("COPY raster FROM '" + abs_file_name +
+      "' WITH (source_type='raster_file', raster_tile_width=100, "
+      "raster_tile_height=100)");
+
+  auto fragments_with_num_rows = getFragsWithNumRowsForTable();
+  EXPECT_EQ(fragments_with_num_rows.size(), 24U);
+  // Fragments should the same layout for both imports.
+  EXPECT_EQ(fragments_with_num_rows.count(100 * 100), 12U);
+  EXPECT_EQ(fragments_with_num_rows.count(20 * 100), 4U);
+  EXPECT_EQ(fragments_with_num_rows.count(100 * 25), 6U);
+  EXPECT_EQ(fragments_with_num_rows.count(20 * 25), 2U);
 }
 
 INSTANTIATE_TEST_SUITE_P(RasterImportTest,
@@ -6591,9 +6761,7 @@ class MetadataColumnsTest : public DBHandlerTestFixture {
       const std::string& add_metadata_columns,
       const std::string& select_metadata_columns = "",
       const std::vector<std::vector<NullableTargetValue>>& expected_result_set = {}) {
-    auto const file_name =
-        boost::filesystem::canonical("../../Tests/Import/datafiles/raster/beach.png")
-            .string();
+    auto const file_name = get_raster_dir() + "beach.png";
     auto const copy_str = "COPY metadata_raster FROM '" + file_name +
                           "' WITH (source_type='raster_file', add_metadata_columns='" +
                           add_metadata_columns + "');";
