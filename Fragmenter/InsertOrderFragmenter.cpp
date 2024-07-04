@@ -1034,26 +1034,8 @@ void InsertOrderFragmenter::insertChunksIntoFragment(
 }
 
 void InsertOrderFragmenter::insertChunksImpl(const InsertChunks& insert_chunks) {
-  std::optional<int> delete_column_id{std::nullopt};
-  for (const auto& cit : columnMap_) {
-    if (cit.second.getColumnDesc()->isDeletedCol) {
-      delete_column_id = cit.second.getColumnDesc()->columnId;
-    }
-  }
-
-  // verify that all chunks to be inserted have same number of rows, otherwise the input
-  // data is malformed
-  std::optional<size_t> num_rows{std::nullopt};
-  for (const auto& [column_id, chunk] : insert_chunks.chunks) {
-    auto buffer = chunk->getBuffer();
-    CHECK(buffer);
-    CHECK(buffer->hasEncoder());
-    if (!num_rows.has_value()) {
-      num_rows = buffer->getEncoder()->getNumElems();
-    } else {
-      CHECK_EQ(num_rows.value(), buffer->getEncoder()->getNumElems());
-    }
-  }
+  auto delete_column_id = findDeleteColumnId();
+  validateSameNumRows(insert_chunks);
 
   auto valid_row_indices = insert_chunks.valid_row_indices;
   size_t num_rows_left = valid_row_indices.size();
@@ -1121,7 +1103,7 @@ void InsertOrderFragmenter::insertChunksImpl(const InsertChunks& insert_chunks) 
                              valid_row_indices,
                              start_fragment);
   }
-  numTuples_ += *num_rows;
+  numTuples_ += num_rows_inserted;
   dropFragmentsToSizeNoInsertLock(maxRows_);
 }
 
@@ -1491,4 +1473,33 @@ void InsertOrderFragmenter::setLastFragmentVarLenColumnSizes() {
     }
   }
 }
+
+std::optional<int> InsertOrderFragmenter::findDeleteColumnId() const {
+  std::optional<int> delete_column_id{std::nullopt};
+  for (const auto& cit : columnMap_) {
+    if (cit.second.getColumnDesc()->isDeletedCol) {
+      delete_column_id = cit.second.getColumnDesc()->columnId;
+    }
+  }
+  return delete_column_id;
+}
+
+// verify that all chunks to be inserted have same number of rows, otherwise the input
+// data is malformed
+std::optional<size_t> InsertOrderFragmenter::validateSameNumRows(
+    const InsertChunks& insert_chunks) const {
+  std::optional<size_t> num_rows{std::nullopt};
+  for (const auto& [column_id, chunk] : insert_chunks.chunks) {
+    auto buffer = chunk->getBuffer();
+    CHECK(buffer);
+    CHECK(buffer->hasEncoder());
+    if (!num_rows.has_value()) {
+      num_rows = buffer->getEncoder()->getNumElems();
+    } else {
+      CHECK_EQ(num_rows.value(), buffer->getEncoder()->getNumElems());
+    }
+  }
+  return num_rows;
+}
+
 }  // namespace Fragmenter_Namespace
