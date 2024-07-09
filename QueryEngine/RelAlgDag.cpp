@@ -561,7 +561,9 @@ RelProject::RelProject(RelProject const& rhs)
     , fields_(rhs.fields_)
     , hint_applied_(false)
     , hints_(std::make_unique<Hints>())
-    , has_pushed_down_window_expr_(rhs.has_pushed_down_window_expr_) {
+    , has_pushed_down_window_expr_(rhs.has_pushed_down_window_expr_)
+    , has_pushed_down_filter_for_string_oper_(
+          rhs.has_pushed_down_filter_for_string_oper_) {
   RexDeepCopyVisitor copier;
   for (auto const& expr : rhs.scalar_exprs_) {
     scalar_exprs_.push_back(copier.visit(expr.get()));
@@ -3109,6 +3111,7 @@ void add_project_before_heavy_string_op(
     propagate_hints_to_new_project(project_node, new_project, query_hints);
     node_list.insert(node_itr, new_project);
     project_node->replaceInput(prev_node, new_project, old_index_to_new_index);
+    project_node->setPushedDownFilterForStringOper();
   }
   nodes.assign(node_list.begin(), node_list.end());
 }
