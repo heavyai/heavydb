@@ -253,6 +253,7 @@ struct RelAlgDagSerializer {
       (ar & obj.hint_applied_);
       (ar & obj.hints_);
       (ar & obj.has_pushed_down_window_expr_);
+      (ar & obj.has_pushed_down_filter_for_string_oper_);
     } else if constexpr (std::is_same_v<RelAggregate, RelAlgClass>) {
       (ar & boost::serialization::base_object<RelAlgNode>(obj));
       (ar & obj.groupby_count_);
