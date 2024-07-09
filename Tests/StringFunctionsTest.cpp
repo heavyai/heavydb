@@ -37,7 +37,7 @@ extern bool g_enable_string_functions;
 extern bool g_enable_watchdog;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
 extern std::string g_heavyiq_url;
-extern size_t g_llm_transform_max_num_unique_value;
+extern int64_t g_llm_transform_max_num_unique_value;
 
 // begin string function tests
 
