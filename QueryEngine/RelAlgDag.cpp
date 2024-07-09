@@ -3046,6 +3046,23 @@ void add_window_function_pre_project(
   nodes.assign(node_list.begin(), node_list.end());
 }
 
+namespace {
+class RexInputSourceNodeReplacer : public RexVisitor<void*> {
+ public:
+  RexInputSourceNodeReplacer(const RelAlgNode* target_ra_node)
+      : target_ra_node_(target_ra_node) {}
+  void* visitInput(const RexInput* input) const override {
+    if (input->getSourceNode() != target_ra_node_) {
+      input->setSourceNode(target_ra_node_);
+    }
+    return nullptr;
+  }
+
+ private:
+  const RelAlgNode* target_ra_node_;
+};
+}  // namespace
+
 // When a Filter -> Project (with LLM_TRANSFORM expression) node pattern is encountered,
 // inject a new Project node in between both nodes in order to ensure that the
 // LLM_TRANSFORM operation is executed as a separate step on the filtered intermediate
@@ -3053,7 +3070,8 @@ void add_window_function_pre_project(
 void add_project_before_heavy_string_op(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
     std::unordered_map<const RelAlgNode*,
-                       std::unordered_map<unsigned, RegisteredQueryHint>>& query_hints) {
+                       std::unordered_map<unsigned, RegisteredQueryHint>>& query_hints,
+    bool& skip_redundant_project_elimination) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
   auto has_child_filter = false;
   for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
@@ -3096,7 +3114,6 @@ void add_project_before_heavy_string_op(
               [](const auto& a, const auto& b) { return a.getIndex() < b.getIndex(); });
 
     for (auto& input : sorted_inputs) {
-      CHECK_EQ(input.getSourceNode(), prev_node.get());
       CHECK(old_index_to_new_index
                 .insert(std::make_pair(input.getIndex(), scalar_exprs.size()))
                 .second);
@@ -3110,8 +3127,27 @@ void add_project_before_heavy_string_op(
         scalar_exprs, fields, project_node->getAndOwnInput(0));
     propagate_hints_to_new_project(project_node, new_project, query_hints);
     node_list.insert(node_itr, new_project);
+
+    // manipulate an input (source) node of target expression of the current project node
+    // from prev_node to new_project
+    // #1. for target expressions having prev_node as their input (source) node
     project_node->replaceInput(prev_node, new_project, old_index_to_new_index);
     project_node->setPushedDownFilterForStringOper();
+
+    // #2. we may have a case of RexInput as one of target expression of the current
+    // project node where its input source node is not prev_node
+    // find such a case and replace the input source node to the new project node
+    RexInputSourceNodeReplacer replacer(new_project.get());
+    for (size_t i = 0; i < project_node->size(); i++) {
+      replacer.visit(project_node->getProjectAt(i));
+    }
+
+    // we intentionally inject the new_project node as a child of the current project node
+    // so we have to keep it from the `eliminating_redundant_project` query rewriting
+    // logic
+    if (new_project->isSimple()) {
+      skip_redundant_project_elimination = true;
+    }
   }
   nodes.assign(node_list.begin(), node_list.end());
 }
@@ -3735,13 +3771,17 @@ void RelAlgDagBuilder::optimizeDag(RelAlgDag& rel_alg_dag) {
       nodes,
       g_cluster /* always_add_project_if_first_project_is_window_expr */,
       query_hints);
-  add_project_before_heavy_string_op(nodes, query_hints);
+  bool skip_redundant_project_elimination = false;
+  add_project_before_heavy_string_op(
+      nodes, query_hints, skip_redundant_project_elimination);
   coalesce_nodes(nodes, left_deep_joins, query_hints);
   CHECK(nodes.back().use_count() == 1);
   handle_agg_filter_left_join(nodes);
   create_left_deep_join(nodes);
   handle_agg_over_join(nodes, query_hints);
-  eliminate_redundant_projection(nodes);
+  if (!skip_redundant_project_elimination) {
+    eliminate_redundant_projection(nodes);
+  }
 
   setBuildState(rel_alg_dag, RelAlgDag::BuildState::kBuiltOptimized);
 }
