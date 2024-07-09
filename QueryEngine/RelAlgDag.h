@@ -1459,7 +1459,8 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   RelProject(const TableDescriptor* td, const Catalog_Namespace::Catalog* catalog)
       : ModifyManipulationTarget(false, false, false, td, {}, catalog)
       , hint_applied_{false}
-      , has_pushed_down_window_expr_{false} {}
+      , has_pushed_down_window_expr_{false}
+      , has_pushed_down_filter_for_string_oper_{false} {}
 
   // Takes memory ownership of the expressions.
   RelProject(std::vector<std::unique_ptr<const RexScalar>>& scalar_exprs,
@@ -1470,7 +1471,8 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
       , fields_(fields)
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>())
-      , has_pushed_down_window_expr_(false) {
+      , has_pushed_down_window_expr_(false)
+      , has_pushed_down_filter_for_string_oper_(false) {
     CHECK_EQ(scalar_exprs_.size(), fields_.size());
     inputs_.push_back(input);
   }
@@ -1547,6 +1549,14 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
 
   void setPushedDownWindowExpr() { has_pushed_down_window_expr_ = true; }
 
+  bool hasPushedDownFilterForStringOper() const {
+    return has_pushed_down_filter_for_string_oper_;
+  }
+
+  void setPushedDownFilterForStringOper() {
+    has_pushed_down_filter_for_string_oper_ = true;
+  }
+
   const RexScalar* getProjectAt(const size_t idx) const {
     CHECK(idx < scalar_exprs_.size());
     return scalar_exprs_[idx].get();
@@ -1602,6 +1612,9 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
     }
     if (has_pushed_down_window_expr_) {
       copied_project_node->setPushedDownWindowExpr();
+    }
+    if (has_pushed_down_filter_for_string_oper_) {
+      copied_project_node->setPushedDownFilterForStringOper();
     }
     return copied_project_node;
   }
@@ -1673,6 +1686,7 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
   bool has_pushed_down_window_expr_;
+  bool has_pushed_down_filter_for_string_oper_;
 
   friend struct RelAlgDagSerializer;
 };

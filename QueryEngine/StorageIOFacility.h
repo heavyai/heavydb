@@ -391,7 +391,8 @@ class StorageIOFacility {
           const auto* input_source_node = update_parameters.getInputSourceNode();
           if (auto proj_node = dynamic_cast<const RelProject*>(input_source_node)) {
             if (proj_node->hasPushedDownWindowExpr() ||
-                proj_node->hasWindowFunctionExpr()) {
+                proj_node->hasWindowFunctionExpr() ||
+                proj_node->hasPushedDownFilterForStringOper()) {
               table_id = proj_node->getModifiedTableDescriptor()->tableId;
               table_descriptor = catalog.getMetadataForTable(table_id);
             }
