@@ -82,3 +82,23 @@ class StringOperatorDetector : public RexVisitor<void*> {
   std::string kind_;
   mutable bool has_string_oper_{false};
 };
+
+class StringFunctionDetector : public ScalarExprVisitor<void*> {
+ public:
+  static bool hasStringFunction(const Analyzer::Expr* expr) {
+    StringFunctionDetector detector;
+    if (expr) {
+      detector.visit(expr);
+    }
+    return detector.has_string_oper_;
+  }
+
+ protected:
+  void* visitStringOper(const Analyzer::StringOper* expr) const override {
+    has_string_oper_ = true;
+    return defaultResult();
+  }
+
+ private:
+  mutable bool has_string_oper_{false};
+};
