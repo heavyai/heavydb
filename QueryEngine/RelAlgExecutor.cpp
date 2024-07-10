@@ -38,6 +38,7 @@
 #include "QueryEngine/ResultSetBuilder.h"
 #include "QueryEngine/RexVisitor.h"
 #include "QueryEngine/TableOptimizer.h"
+#include "QueryEngine/Visitors/CommonVisitors.h"
 #include "QueryEngine/Visitors/RelAlgDagViewer.h"
 #include "QueryEngine/WindowContext.h"
 #include "Shared/TypedDataAccessors.h"
@@ -2052,6 +2053,7 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
           auto eo = eo_in;
           if (dml_transaction_parameters_->tableIsTemporary()) {
             eo.output_columnar_hint = true;
+            VLOG(1) << "Disable lazy fetch: temporary table update query detected";
             co_project.allow_lazy_fetch = false;
             co_project.filter_on_deleted_column =
                 false;  // project the entire delete column for columnar update
@@ -3718,6 +3720,33 @@ inline bool can_use_bump_allocator(const RelAlgExecutionUnit& ra_exe_unit,
          !eo.output_columnar_hint && ra_exe_unit.sort_info.order_entries.empty();
 }
 
+void disable_lazy_fetch_if_necessary(CompilationOptions& co,
+                                     RenderInfo* render_info,
+                                     const RelAlgExecutionUnit& ra_exe_unit) {
+  if (co.allow_lazy_fetch) {
+    if (render_info && render_info->isInSitu()) {
+      VLOG(1) << "Disable lazy fetch: render in-situ query detected";
+      co.allow_lazy_fetch = false;
+      return;
+    }
+    for (auto* expr : ra_exe_unit.target_exprs) {
+      if (StringFunctionDetector::hasStringFunction(expr)) {
+        VLOG(1) << "Disable lazy fetch: detect string function from target expression(s)";
+        co.allow_lazy_fetch = false;
+        return;
+      }
+    }
+    for (auto& expr : ra_exe_unit.groupby_exprs) {
+      if (StringFunctionDetector::hasStringFunction(expr.get())) {
+        VLOG(1)
+            << "Disable lazy fetch: detect string function from group-by expression(s)";
+        co.allow_lazy_fetch = false;
+        return;
+      }
+    }
+  }
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(
@@ -3749,6 +3778,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       throw std::runtime_error("Window functions support is disabled");
     }
     co.device_type = ExecutorDeviceType::CPU;
+    VLOG(1) << "Disable lazy fetch: window function detected";
     co.allow_lazy_fetch = false;
     computeWindow(work_unit, co, eo, column_cache, queue_time_ms);
   }
@@ -3764,9 +3794,10 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     }
     VLOG(1) << "Continue with the current query plan";
   }
-  if (render_info && render_info->isInSitu()) {
-    co.allow_lazy_fetch = false;
-  }
+
+  // check whether we force disabling lazy-fetch column
+  disable_lazy_fetch_if_necessary(co, render_info, work_unit.exe_unit);
+
   const auto body = work_unit.body;
   CHECK(body);
   auto it = leaf_results_.find(body->getId());
