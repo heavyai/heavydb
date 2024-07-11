@@ -140,8 +140,11 @@ void ExecutionKernel::run(Executor* executor,
   } catch (const OutOfRenderMemory& e) {
     throw QueryExecutionError(ErrorCode::OUT_OF_RENDER_MEM, e.what());
   } catch (const OutOfMemory& e) {
+    ErrorCode const ec = chosen_device_type == ExecutorDeviceType::GPU
+                             ? ErrorCode::OUT_OF_GPU_MEM
+                             : ErrorCode::OUT_OF_CPU_MEM;
     throw QueryExecutionError(
-        ErrorCode::OUT_OF_GPU_MEM,
+        ec,
         e.what(),
         QueryExecutionProperties{
             query_mem_desc.getQueryDescriptionType(),
@@ -491,8 +494,11 @@ void KernelSubtask::run(Executor* executor) {
   } catch (const OutOfRenderMemory& e) {
     throw QueryExecutionError(ErrorCode::OUT_OF_RENDER_MEM, e.what());
   } catch (const OutOfMemory& e) {
+    ErrorCode const ec = kernel_.chosen_device_type == ExecutorDeviceType::GPU
+                             ? ErrorCode::OUT_OF_GPU_MEM
+                             : ErrorCode::OUT_OF_CPU_MEM;
     throw QueryExecutionError(
-        ErrorCode::OUT_OF_GPU_MEM,
+        ec,
         e.what(),
         QueryExecutionProperties{
             kernel_.query_mem_desc.getQueryDescriptionType(),
