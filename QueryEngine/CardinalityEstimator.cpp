@@ -81,6 +81,9 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
     if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
       throw std::runtime_error("Cardinality estimation query has been interrupted");
     }
+    if (e.hasErrorCode(ErrorCode::OUT_OF_GPU_MEM)) {
+      throw QueryMustRunOnCpu(e.what());
+    }
     throw std::runtime_error("Failed to run the cardinality estimation query: " +
                              getErrorMessageFromCode(e.getErrorCode()));
   }
