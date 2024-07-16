@@ -38,6 +38,8 @@
 #include <tbb/parallel_for.h>
 #endif  // HAVE_TBB
 
+#include <algorithm>
+
 bool one_or_more_string_ops_is_null(
     const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
   for (const auto& string_op_info : string_op_infos) {
@@ -59,7 +61,7 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     Executor* executor,
     Data_Namespace::DataMgr* data_mgr,
     const bool delay_translation,
-    int32_t* src_to_tmp_trans_map)
+    int32_t const* src_to_tmp_trans_map)
     : source_string_dict_key_(source_string_dict_key)
     , dest_string_dict_key_(dest_string_dict_key)
     , translate_intersection_only_(translate_intersection_only)
@@ -70,16 +72,14 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     , device_count_(device_count)
     , executor_(executor)
     , data_mgr_(data_mgr)
-    , dest_type_is_string_(true) {
+    , dest_type_is_string_(true)
+    , source_sd_to_temp_sd_translation_map_(src_to_tmp_trans_map) {
 #ifdef HAVE_CUDA
   CHECK(memory_level_ == Data_Namespace::CPU_LEVEL ||
         memory_level_ == Data_Namespace::GPU_LEVEL);
 #else
   CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
 #endif  // HAVE_CUDA
-  if (src_to_tmp_trans_map) {
-    source_sd_to_temp_sd_translation_map_ = src_to_tmp_trans_map;
-  }
   if (!delay_translation && !has_null_string_op_) {
     buildTranslationMap();
     createKernelBuffers();
@@ -105,7 +105,8 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     , device_count_(device_count)
     , executor_(executor)
     , data_mgr_(data_mgr)
-    , dest_type_is_string_(false) {
+    , dest_type_is_string_(false)
+    , source_sd_to_temp_sd_translation_map_(nullptr) {
 #ifdef HAVE_CUDA
   CHECK(memory_level_ == Data_Namespace::CPU_LEVEL ||
         memory_level == Data_Namespace::GPU_LEVEL);
@@ -173,7 +174,7 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
               source_string_dict_key_.hash()) *
           sizeof(int32_t);
       CHECK_GT(buf_size, 0);
-      CHECK(source_sd_to_temp_sd_translation_map_.has_value());
+      CHECK(source_sd_to_temp_sd_translation_map_);
       for (int device_id = 0; device_id < device_count_; ++device_id) {
         source_sd_to_temp_sd_translation_map_device_buffer_.push_back(
             CudaAllocator::allocGpuAbstractBuffer(data_mgr_, buf_size, device_id));
@@ -183,7 +184,7 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
         copy_to_nvidia_gpu(data_mgr_,
                            cuda_stream,
                            reinterpret_cast<CUdeviceptr>(device_buffer),
-                           source_sd_to_temp_sd_translation_map_.value(),
+                           source_sd_to_temp_sd_translation_map_,
                            buf_size,
                            device_id,
                            "Dictionary source_id to temp_id translation buffer");
@@ -196,6 +197,49 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {
     kernel_translation_maps_.push_back(data());
   }
+}
+
+namespace {
+template <typename T>
+std::vector<T*> get_raw_pointers(std::vector<std::shared_ptr<T>> const& owned) {
+  std::vector<T*> raw_pointers(owned.size());
+  auto get_raw = [](std::shared_ptr<T> const& shared_ptr) { return shared_ptr.get(); };
+  std::transform(owned.begin(), owned.end(), raw_pointers.begin(), get_raw);
+  return raw_pointers;
+}
+
+void check_has_encoding_none(Analyzer::Constant const* const ptr) {
+  CHECK_EQ(kENCODING_NONE, ptr->get_type_info().get_compression()) << ptr->toString();
+}
+
+std::shared_ptr<Analyzer::Constant const> to_constant(void const* ptr) {
+  auto shared_expr = Parser::IntLiteral::analyzeValue(reinterpret_cast<int64_t>(ptr));
+  auto shared_constant = std::dynamic_pointer_cast<Analyzer::Constant const>(shared_expr);
+  CHECK(shared_constant);
+  return shared_constant;
+}
+}  // namespace
+
+std::vector<std::shared_ptr<Analyzer::Constant const>>
+StringDictionaryTranslationMgr::getConstants() const {
+  auto& ktm = kernel_translation_maps_;
+  std::vector<std::shared_ptr<Analyzer::Constant const>> constants_owned(ktm.size());
+  std::transform(ktm.begin(), ktm.end(), constants_owned.begin(), to_constant);
+  return constants_owned;
+}
+
+std::vector<std::shared_ptr<Analyzer::Constant const>>
+StringDictionaryTranslationMgr::getTranslationMappedConstants() const {
+  std::vector<std::shared_ptr<Analyzer::Constant const>> constants_owned;
+  if (memory_level_ == Data_Namespace::GPU_LEVEL) {
+    constants_owned.reserve(source_sd_to_temp_sd_translation_map_device_buffer_.size());
+    for (auto* buf_ptr : source_sd_to_temp_sd_translation_map_device_buffer_) {
+      constants_owned.push_back(to_constant(buf_ptr->getMemoryPtr()));
+    }
+  } else {
+    constants_owned.push_back(to_constant(source_sd_to_temp_sd_translation_map_));
+  }
+  return constants_owned;
 }
 
 llvm::Value* StringDictionaryTranslationMgr::codegen(llvm::Value* input_str_id_lv,
@@ -250,20 +294,10 @@ llvm::Value* StringDictionaryTranslationMgr::codegen(llvm::Value* input_str_id_l
     return static_cast<llvm::Value*>(executor_->cgen_state_->inlineIntNull(null_ti));
   }
 
-  std::vector<std::shared_ptr<const Analyzer::Constant>> constants_owned;
-  std::vector<const Analyzer::Constant*> constants;
-  for (const auto kernel_translation_map : kernel_translation_maps_) {
-    const int64_t translation_map_handle =
-        reinterpret_cast<int64_t>(kernel_translation_map);
-    const auto translation_map_handle_literal =
-        std::dynamic_pointer_cast<Analyzer::Constant>(
-            Parser::IntLiteral::analyzeValue(translation_map_handle));
-    CHECK(translation_map_handle_literal);
-    CHECK_EQ(kENCODING_NONE,
-             translation_map_handle_literal->get_type_info().get_compression());
-    constants_owned.push_back(translation_map_handle_literal);
-    constants.push_back(translation_map_handle_literal.get());
-  }
+  // Shared pointers are used because Parser::IntLiteral::analyzeValue() returns them.
+  std::vector<std::shared_ptr<Analyzer::Constant const>> constants_owned = getConstants();
+  std::vector<Analyzer::Constant const*> constants = get_raw_pointers(constants_owned);
+  std::for_each(constants.begin(), constants.end(), check_has_encoding_none);
   CHECK_GE(constants.size(), 1UL);
   CHECK(co.hoist_literals || constants.size() == 1UL);
 
@@ -289,27 +323,14 @@ llvm::Value* StringDictionaryTranslationMgr::codegen(llvm::Value* input_str_id_l
   llvm::Value* ret;
   if (dest_type_is_string_) {
     if (source_string_dict_key_.db_id < 0) {
-      std::vector<std::shared_ptr<const Analyzer::Constant>> trans_map_constants_owned;
-      std::vector<const Analyzer::Constant*> trans_map_constants;
-      CHECK(source_sd_to_temp_sd_translation_map_.has_value());
-      const int8_t* source_sd_to_temp_sd_translation_map_ptr =
-          memory_level_ == Data_Namespace::GPU_LEVEL
-              ? source_sd_to_temp_sd_translation_map_device_buffer_.front()
-                    ->getMemoryPtr()
-              : reinterpret_cast<const int8_t*>(
-                    source_sd_to_temp_sd_translation_map_.value());
-      CHECK(source_sd_to_temp_sd_translation_map_ptr);
-      const int64_t src_to_tmp_translation_map_handle =
-          reinterpret_cast<int64_t>(source_sd_to_temp_sd_translation_map_ptr);
-      const auto src_to_tmp_translation_map_handle_literal =
-          std::dynamic_pointer_cast<Analyzer::Constant>(
-              Parser::IntLiteral::analyzeValue(src_to_tmp_translation_map_handle));
-      CHECK(src_to_tmp_translation_map_handle_literal);
-      CHECK_EQ(
-          kENCODING_NONE,
-          src_to_tmp_translation_map_handle_literal->get_type_info().get_compression());
-      trans_map_constants_owned.push_back(src_to_tmp_translation_map_handle_literal);
-      trans_map_constants.push_back(src_to_tmp_translation_map_handle_literal.get());
+      CHECK(source_sd_to_temp_sd_translation_map_);
+      std::vector<std::shared_ptr<Analyzer::Constant const>> trans_map_constants_owned =
+          getTranslationMappedConstants();
+      std::vector<Analyzer::Constant const*> trans_map_constants =
+          get_raw_pointers(trans_map_constants_owned);
+      std::for_each(trans_map_constants.begin(),
+                    trans_map_constants.end(),
+                    check_has_encoding_none);
 
       const auto src_to_tmp_translation_map_handle_lvs =
           co.hoist_literals ? code_generator.codegenHoistedConstants(
