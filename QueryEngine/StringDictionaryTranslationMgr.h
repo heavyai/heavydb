@@ -58,7 +58,7 @@ class StringDictionaryTranslationMgr {
       Executor* executor,
       Data_Namespace::DataMgr* data_mgr,
       const bool delay_translation,
-      int32_t* src_to_tmp_trans_map);
+      int32_t const* src_to_tmp_trans_map);
 
   StringDictionaryTranslationMgr(
       const shared::StringDictKey& source_string_dict_key,
@@ -84,6 +84,10 @@ class StringDictionaryTranslationMgr {
   size_t mapSize() const;
 
  private:
+  std::vector<std::shared_ptr<Analyzer::Constant const>> getConstants() const;
+  std::vector<std::shared_ptr<Analyzer::Constant const>> getTranslationMappedConstants()
+      const;
+
   const shared::StringDictKey source_string_dict_key_;
   const shared::StringDictKey dest_string_dict_key_;
   const bool translate_intersection_only_;
@@ -100,7 +104,7 @@ class StringDictionaryTranslationMgr {
       nullptr};
   std::vector<const int8_t*> kernel_translation_maps_;
   std::vector<Data_Namespace::AbstractBuffer*> device_buffers_;
-  std::optional<const int32_t*> source_sd_to_temp_sd_translation_map_{std::nullopt};
+  int32_t const* source_sd_to_temp_sd_translation_map_;
   std::vector<Data_Namespace::AbstractBuffer*>
       source_sd_to_temp_sd_translation_map_device_buffer_;
 };
