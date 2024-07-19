@@ -708,7 +708,8 @@ void RasterImporter::import(size_t& max_threads, const bool max_threads_using_de
       Geospatial::GDAL::DataSourceUqPtr datasource_handle;
       // if we need bands from this datasource, open it for this thread
       if (needed_datasource_indices.count(datasource_idx)) {
-        LOG(INFO) << "Raster Importer: Opening datasource '" << datasource_name << "'";
+        LOG_IF(INFO, i == 0) << "Raster Importer: Opening datasource '" << datasource_name
+                             << "'";
         datasource_handle = Geospatial::GDAL::openDataSource(
             datasource_name, import_export::SourceType::kRasterFile);
         if (datasource_handle == nullptr) {
@@ -729,8 +730,8 @@ void RasterImporter::import(size_t& max_threads, const bool max_threads_using_de
           }
         }
       } else {
-        LOG(INFO) << "Raster Importer: Not opening datasource '" << datasource_name
-                  << "'";
+        LOG_IF(INFO, i == 0) << "Raster Importer: Not opening datasource '"
+                             << datasource_name << "'";
       }
       datasource_thread_handles.emplace_back(std::move(datasource_handle));
     }
@@ -741,8 +742,16 @@ void RasterImporter::import(size_t& max_threads, const bool max_threads_using_de
         std::move(shared::get_from_map(datasource_thread_handles_map, datasource_name)));
   }
 
-  // use handle for the first datasource from the first thread to read the globals
-  auto const& global_datasource_handle = datasource_handles_[0][0];
+  // use handle for the first valid datasource from the first thread to read the globals
+  // all valid datasources by this point are known to be of the same resolution and world
+  // transform, so using the first non-null handle is valid
+  auto itr = std::find_if(datasource_handles_.begin(),
+                          datasource_handles_.end(),
+                          [](auto const& dsh) { return dsh[0] != nullptr; });
+  if (itr == datasource_handles_.end()) {
+    throw std::runtime_error("Raster Importer: No valid datasources.");
+  }
+  auto const& global_datasource_handle = (*itr)[0];
 
   // get the raster affine transform
   // this converts the points from pixel space to the file coordinate system space
