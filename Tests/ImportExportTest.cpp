@@ -6372,6 +6372,20 @@ TEST_P(RasterImportTest, DISABLED_ImportFetchCRSFromSubDataset) {
       {{120560400L}}));
 }
 
+TEST_P(RasterImportTest, DISABLED_ImportNoBandsFromFirstSubDataset) {
+  // this is a test for the crash fixed by SIO-1794
+  // also leave disabled due to same issue as above
+  // @TODO as above
+  ASSERT_NO_THROW(importTestCommon(
+      kS2A,
+      "raster_lon double, raster_lat double, band_4_1 SMALLINT, band_4_2 SMALLINT, "
+      "band_4_3 SMALLINT",
+      ", "
+      "raster_import_bands='band_4_1,band_4_2,band_4_3'",
+      "SELECT COUNT(*) FROM raster WHERE raster_lon < -120.0 AND raster_lon > -130.0;",
+      {{120560400L}}));
+}
+
 TEST_P(RasterImportTest, ImportPNGTwiceSameSize) {
   ASSERT_NO_THROW(
       importTestCommon(kPNG,
