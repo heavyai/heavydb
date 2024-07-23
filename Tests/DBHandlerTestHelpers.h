@@ -264,6 +264,52 @@ class AssertValueEqualsOrIsNullVisitor : public boost::static_visitor<> {
   const size_t column_;
 };
 
+template <typename T, typename... Ts>
+constexpr bool is_any() {
+  return ((std::is_same_v<T, Ts> || ...));
+}
+
+class ToStringVisitor : public boost::static_visitor<std::string> {
+ public:
+  template <typename T>
+  std::string operator()(const T& value) const {
+    if constexpr (is_any<T, GeoTargetValue, GeoTargetValuePtr>()) {
+      throw std::runtime_error(
+          "Geo types are currently not supported by ToStringVisitor");
+    } else if constexpr (is_any<T, TargetValue, ScalarTargetValue, NullableString>()) {
+      return boost::apply_visitor(ToStringVisitor{}, value);
+    } else {
+      std::stringstream ss;
+      ss << value;
+      return ss.str();
+    }
+  }
+
+  std::string operator()(const ArrayTargetValue& value_optional) const {
+    std::stringstream ss;
+    if (value_optional.has_value()) {
+      ss << "{";
+      bool first_value{true};
+      for (const auto& element : value_optional.value()) {
+        if (first_value) {
+          first_value = false;
+        } else {
+          ss << ", ";
+        }
+        ss << boost::apply_visitor(ToStringVisitor{}, element);
+      }
+      ss << "}";
+    } else {
+      ss << "NULL";
+    }
+    return ss.str();
+  }
+
+  std::string operator()(const std::string& value) const { return "'" + value + "'"; }
+
+  std::string operator()(const void* null) const { return "NULL"; }
+};
+
 /**
  * Helper gtest fixture class for executing SQL queries through DBHandler
  * and asserting result sets.

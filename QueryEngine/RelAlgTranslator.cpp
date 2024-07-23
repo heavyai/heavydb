@@ -1345,7 +1345,6 @@ std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti,
   }
   return makeExpr<Analyzer::Constant>(ti, false, datum);
 }
-
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
@@ -1534,6 +1533,36 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentUser(
   return Parser::UserLiteral::get(user);
 }
 
+namespace {
+Analyzer::ExpressionPtr rewrite_to_like_expr(const Analyzer::ExpressionPtrVector& args,
+                                             const char* const prefix,
+                                             const char* const suffix) {
+  CHECK_EQ(args.size(), size_t(2));
+  if (dynamic_cast<const Analyzer::Constant*>(args[1].get())) {
+    auto arg_copy = args[1]->deep_copy();
+    auto literal_pattern = dynamic_cast<Analyzer::Constant*>(arg_copy.get());
+    CHECK(literal_pattern);
+    auto datum = literal_pattern->get_constval();
+    *datum.stringval = prefix + (*datum.stringval) + suffix;
+    return Parser::LikeExpr::get(args[0], arg_copy, nullptr, false, false);
+  } else {
+    throw std::runtime_error("The matching pattern must be a literal.");
+  }
+}
+
+Analyzer::ExpressionPtr rewrite_to_case_expr(const Analyzer::ExpressionPtrVector& args,
+                                             SQLOps sql_op,
+                                             const Executor* executor) {
+  CHECK_EQ(args.size(), size_t(2));
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
+      expr_list;
+  const auto comparison =
+      Parser::OperExpr::normalize(sql_op, kONE, args[0], args[1], executor);
+  expr_list.emplace_back(comparison, args[0]);
+  return Parser::CaseExpr::normalize(expr_list, args[1], executor);
+}
+}  // namespace
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
     const RexFunctionOperator* rex_function) const {
   const auto func_name = rex_function->getName();
@@ -1546,8 +1575,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
   auto args = translateFunctionArgs(rex_function);
 
   switch (string_op_kind) {
+    case SqlStringOpKind::LCASE:
     case SqlStringOpKind::LOWER:
       return makeExpr<Analyzer::LowerStringOper>(args);
+    case SqlStringOpKind::UCASE:
     case SqlStringOpKind::UPPER:
       return makeExpr<Analyzer::UpperStringOper>(args);
     case SqlStringOpKind::INITCAP:
@@ -1567,6 +1598,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
     case SqlStringOpKind::RTRIM: {
       return makeExpr<Analyzer::TrimStringOper>(string_op_kind, args);
     }
+    case SqlStringOpKind::MID:
+    case SqlStringOpKind::SUBSTR:
     case SqlStringOpKind::SUBSTRING:
       return makeExpr<Analyzer::SubstringStringOper>(args);
     case SqlStringOpKind::OVERLAY:
@@ -1608,6 +1641,41 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
       return makeExpr<Analyzer::UrlDecodeStringOper>(args);
     case SqlStringOpKind::LLM_TRANSFORM:
       return makeExpr<Analyzer::LLMTransformStringOper>(args);
+    case SqlStringOpKind::STARTSWITH:
+      return rewrite_to_like_expr(args, "", "%");
+    case SqlStringOpKind::ENDSWITH:
+      return rewrite_to_like_expr(args, "%", "");
+    case SqlStringOpKind::CONTAINS:
+      return rewrite_to_like_expr(args, "%", "%");
+    case SqlStringOpKind::LEFT:
+      CHECK_EQ(args.size(), size_t(2));
+      return makeExpr<Analyzer::SubstringStringOper>(
+          args[0], makeNumericConstant(args[1]->get_type_info(), 0), args[1]);
+    case SqlStringOpKind::RIGHT: {
+      CHECK_EQ(args.size(), size_t(2));
+      if (auto num_chars_constant = dynamic_cast<Analyzer::Constant*>(args[1].get())) {
+        const auto num_chars = extract_int_type_from_datum(
+            num_chars_constant->get_constval(), num_chars_constant->get_type_info());
+        if (num_chars <= 0) {
+          return makeExpr<Analyzer::Constant>(args[0]->get_type_info().get_type(), true);
+        }
+        return makeExpr<Analyzer::SubstringStringOper>(
+            args[0], makeNumericConstant(args[1]->get_type_info(), num_chars * -1));
+      } else {
+        throw std::runtime_error(
+            "The second argument of the RIGHT function must be a literal.");
+      }
+    }
+    case SqlStringOpKind::SPACE:
+      CHECK_EQ(args.size(), size_t(1));
+      Datum space;
+      space.stringval = new std::string(" ");
+      return makeExpr<Analyzer::RepeatStringOper>(
+          makeExpr<Analyzer::Constant>(kTEXT, false, space), args[0]);
+    case SqlStringOpKind::LEAST:
+      return rewrite_to_case_expr(args, kLT, executor_);
+    case SqlStringOpKind::GREATEST:
+      return rewrite_to_case_expr(args, kGT, executor_);
     default: {
       throw std::runtime_error("Unsupported string function.");
     }
@@ -1846,7 +1914,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == "DATEPART"sv) {
     return translateDatepart(rex_function);
   }
-  if (func_resolve(rex_function->getName(), "LENGTH"sv, "CHAR_LENGTH"sv)) {
+  if (func_resolve(rex_function->getName(), "LEN"sv, "LENGTH"sv, "CHAR_LENGTH"sv)) {
     return translateLength(rex_function);
   }
   if (rex_function->getName() == "KEY_FOR_STRING"sv) {
@@ -1897,7 +1965,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "POSITION"sv,
                    "JAROWINKLER_SIMILARITY"sv,
                    "LEVENSHTEIN_DISTANCE"sv,
-                   "HASH"sv)) {
+                   "HASH"sv,
+                   "LCASE"sv,
+                   "UCASE"sv,
+                   "SPACE"sv,
+                   "LEFT"sv,
+                   "GREATEST"sv,
+                   "LEAST"sv,
+                   "ENDSWITH"sv,
+                   "RIGHT"sv,
+                   "CONTAINS"sv,
+                   "STARTSWITH"sv,
+                   "MID"sv,
+                   "SUBSTR"sv)) {
     return translateStringOper(rex_function);
   }
   if (func_resolve(rex_function->getName(), "CARDINALITY"sv, "ARRAY_LENGTH"sv)) {

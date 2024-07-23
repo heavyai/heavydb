@@ -92,19 +92,32 @@ enum SQLAgg {
 enum class SqlStringOpKind {
   /* Unary */
   LOWER = 1,
+  LEN,
+  LCASE,
+  UCASE,
   UPPER,
   INITCAP,
   REVERSE,
+  SPACE,
   /* Binary */
+  LEFT,
+  GREATEST,
+  LEAST,
+  ENDSWITH,
   REPEAT,
+  RIGHT,
   CONCAT,
+  CONTAINS,
   RCONCAT,
+  STARTSWITH,
   /* Ternary */
   LPAD,
+  MID,
   RPAD,
   TRIM,
   LTRIM,
   RTRIM,
+  SUBSTR,
   SUBSTRING,
   OVERLAY,
   REPLACE,
@@ -452,6 +465,32 @@ inline std::ostream& operator<<(std::ostream& os, const SqlStringOpKind kind) {
       return os << "LEVENSHTEIN_DISTANCE";
     case SqlStringOpKind::HASH:
       return os << "HASH";
+    case SqlStringOpKind::LEN:
+      return os << "LEN";
+    case SqlStringOpKind::LCASE:
+      return os << "LCASE";
+    case SqlStringOpKind::UCASE:
+      return os << "UCASE";
+    case SqlStringOpKind::SPACE:
+      return os << "SPACE";
+    case SqlStringOpKind::LEFT:
+      return os << "LEFT";
+    case SqlStringOpKind::GREATEST:
+      return os << "GREATEST";
+    case SqlStringOpKind::LEAST:
+      return os << "LEAST";
+    case SqlStringOpKind::ENDSWITH:
+      return os << "ENDSWITH";
+    case SqlStringOpKind::RIGHT:
+      return os << "RIGHT";
+    case SqlStringOpKind::CONTAINS:
+      return os << "CONTAINS";
+    case SqlStringOpKind::STARTSWITH:
+      return os << "STARTSWITH";
+    case SqlStringOpKind::MID:
+      return os << "MID";
+    case SqlStringOpKind::SUBSTR:
+      return os << "SUBSTR";
     case SqlStringOpKind::INVALID:
       return os << "INVALID";
   }
@@ -550,6 +589,45 @@ inline SqlStringOpKind name_to_string_op_kind(const std::string& func_name) {
   }
   if (func_name == "HASH") {
     return SqlStringOpKind::HASH;
+  }
+  if (func_name == "LEN") {
+    return SqlStringOpKind::LEN;
+  }
+  if (func_name == "LCASE") {
+    return SqlStringOpKind::LCASE;
+  }
+  if (func_name == "UCASE") {
+    return SqlStringOpKind::UCASE;
+  }
+  if (func_name == "SPACE") {
+    return SqlStringOpKind::SPACE;
+  }
+  if (func_name == "LEFT") {
+    return SqlStringOpKind::LEFT;
+  }
+  if (func_name == "GREATEST") {
+    return SqlStringOpKind::GREATEST;
+  }
+  if (func_name == "LEAST") {
+    return SqlStringOpKind::LEAST;
+  }
+  if (func_name == "ENDSWITH") {
+    return SqlStringOpKind::ENDSWITH;
+  }
+  if (func_name == "RIGHT") {
+    return SqlStringOpKind::RIGHT;
+  }
+  if (func_name == "CONTAINS") {
+    return SqlStringOpKind::CONTAINS;
+  }
+  if (func_name == "STARTSWITH") {
+    return SqlStringOpKind::STARTSWITH;
+  }
+  if (func_name == "MID") {
+    return SqlStringOpKind::MID;
+  }
+  if (func_name == "SUBSTR") {
+    return SqlStringOpKind::SUBSTR;
   }
   LOG(FATAL) << "Invalid string function " << func_name << ".";
   return SqlStringOpKind::INVALID;
