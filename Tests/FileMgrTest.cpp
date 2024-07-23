@@ -1671,6 +1671,17 @@ class FileMgrUnitTest : public testing::Test {
   }
 };
 
+TEST_F(FileMgrUnitTest, SimulateReadError) {
+  auto data_file = std::filesystem::path(kFileMgrPath) / "test_file";
+  ASSERT_TRUE(std::filesystem::create_directory(data_file));
+  FILE* f = heavyai::fopen(data_file.c_str(), "r");
+  ASSERT_NE(f, nullptr);
+  int8_t buf;
+  ASSERT_DEATH(fn::read(f, 0, 1, &buf, data_file),
+               "Expected bytes read: 1, actual bytes read: 0, offset: 0, file stream "
+               "error set: true, EOF reached: false, error reading file: Is a directory");
+}
+
 TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedFreedFirstPage) {
   auto fsi = std::make_shared<ForeignStorageInterface>();
   {
