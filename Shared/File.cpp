@@ -122,6 +122,42 @@ bool removeFile(const std::string& base_path, const std::string& filename) {
   return remove(file_path.c_str()) == 0;
 }
 
+namespace {
+
+std::string get_posix_read_error(FILE* f,
+                                 const size_t offset,
+                                 const size_t size,
+                                 int8_t* buf) {
+  std::clearerr(f);
+
+  // NOTE: In the system calls below, `errno` is used. Such use is
+  // guaranteed to be thread-safe by the POSIX standard (1c and later):
+  //
+  // "To circumvent the resulting nondeterminism, POSIX.1c redefines errno
+  // as a service that can access the per-thread error number as follows
+  // (ISO/IEC 9945:1-1996, §2.4)"
+  //
+  // See https://unix.org/whitepapers/reentrant.html
+
+  int fd = fileno(f);
+  if (fd == -1) {
+    return "error obtaining file descriptor from file stream: " +
+           std::string(strerror(errno));
+  }
+
+  if (lseek(fd, static_cast<off_t>(offset), SEEK_SET) == static_cast<off_t>(-1)) {
+    return "error seeking in file: " + std::string(strerror(errno));
+  }
+
+  ssize_t read_return_value = ::read(fd, buf, size);
+  if (read_return_value == -1) {
+    return "error reading file: " + std::string(strerror(errno));
+  }
+
+  return "no error encountered using POSIX read";
+}
+}  // namespace
+
 size_t read(FILE* f,
             const size_t offset,
             const size_t size,
@@ -131,12 +167,17 @@ size_t read(FILE* f,
   CHECK_EQ(fseek(f, static_cast<long>(offset), SEEK_SET), 0);
   size_t bytesRead = fread(buf, sizeof(int8_t), size, f);
   auto expected_bytes_read = sizeof(int8_t) * size;
+  const bool file_read_error_occured = std::ferror(f);
+  std::string error_msg;
+  if (bytesRead != expected_bytes_read && file_read_error_occured) {
+    error_msg = get_posix_read_error(f, offset, size, buf);
+  }
   CHECK_EQ(bytesRead, expected_bytes_read)
       << "Unexpected number of bytes read from file: " << file_path
       << ". Expected bytes read: " << expected_bytes_read
       << ", actual bytes read: " << bytesRead << ", offset: " << offset
-      << ", file stream error set: " << (std::ferror(f) ? "true" : "false")
-      << ", EOF reached: " << (std::feof(f) ? "true" : "false");
+      << ", file stream error set: " << (file_read_error_occured ? "true" : "false")
+      << ", EOF reached: " << (std::feof(f) ? "true" : "false") << ", " << error_msg;
   return bytesRead;
 }
 
