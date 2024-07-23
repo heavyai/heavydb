@@ -67,6 +67,7 @@ import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
 import org.apache.calcite.sql.type.SameOperandTypeChecker;
 import org.apache.calcite.sql.type.SqlOperandCountRanges;
+import org.apache.calcite.sql.type.SqlOperandTypeChecker;
 import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -238,6 +239,20 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new Base64Decode());
     addOperator(new UrlEncode());
     addOperator(new UrlDecode());
+    addOperator(new Mid());
+    addOperator(new SubStr());
+    addOperator(new Contains());
+    addOperator(new EndsWith());
+    addOperator(new LCase());
+    addOperator(new Left());
+    addOperator(new Len());
+    addOperator(new Least());
+    addOperator(new Greatest());
+    addOperator(new Right());
+    addOperator(new Space());
+    addOperator(new Split());
+    addOperator(new StartsWith());
+    addOperator(new UCase());
     addOperator(new JarowinklerSimilarity());
     addOperator(new LevenshteinDistance());
     addOperator(new Hash());
@@ -1646,6 +1661,343 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public static class UrlDecode extends SqlFunction {
     public UrlDecode() {
       super("URL_DECODE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class SubStr extends SqlFunction {
+    public SubStr() {
+      this("SUBSTR");
+    }
+
+    public SubStr(final String alias) {
+      super(alias,
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies(),
+                      (i) -> {
+                        // The length parameter is optional
+                        return i == 2;
+                      }),
+              SqlFunctionCategory.STRING);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.INTEGER);
+      families.add(SqlTypeFamily.INTEGER);
+      return families;
+    }
+  }
+
+  public static class Mid extends SubStr {
+    public Mid() {
+      super("MID");
+    }
+  }
+
+  public static class Contains extends SqlFunction {
+    public Contains() {
+      super("CONTAINS",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      RelDataType dataType = typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+      return typeFactory.createTypeWithNullability(dataType, true);
+    }
+  }
+
+  public static class EndsWith extends SqlFunction {
+    public EndsWith() {
+      super("ENDSWITH",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      RelDataType dataType = typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+      return typeFactory.createTypeWithNullability(dataType, true);
+    }
+  }
+
+  public static class LCase extends SqlFunction {
+    public LCase() {
+      super("LCASE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class Left extends SqlFunction {
+    public Left() {
+      super("LEFT",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.INTEGER);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class Len extends SqlFunction {
+    public Len() {
+      super("LEN",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      RelDataType dataType = typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createTypeWithNullability(dataType, true);
+    }
+  }
+
+  public static class Least extends SqlFunction {
+    public Least() {
+      super("LEAST",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.and(OperandTypes.family(getSignatureFamilies()),
+                      new SameOperandTypeChecker(2)),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.ANY);
+      families.add(SqlTypeFamily.ANY);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class Greatest extends SqlFunction {
+    public Greatest() {
+      super("GREATEST",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.and(OperandTypes.family(getSignatureFamilies()),
+                      new SameOperandTypeChecker(2)),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.ANY);
+      families.add(SqlTypeFamily.ANY);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class Right extends SqlFunction {
+    public Right() {
+      super("RIGHT",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.INTEGER);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class Space extends SqlFunction {
+    public Space() {
+      super("SPACE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.INTEGER);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      RelDataType dataType = typeFactory.createSqlType(SqlTypeName.VARCHAR);
+      return typeFactory.createTypeWithNullability(dataType, true);
+    }
+  }
+
+  public static class Split extends SqlFunction {
+    public Split() {
+      super("SPLIT",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      RelDataType dataType = typeFactory.createSqlType(SqlTypeName.ARRAY);
+      return typeFactory.createTypeWithNullability(dataType, true);
+    }
+  }
+
+  public static class StartsWith extends SqlFunction {
+    public StartsWith() {
+      super("STARTSWITH",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      RelDataType dataType = typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+      return typeFactory.createTypeWithNullability(dataType, true);
+    }
+  }
+
+  public static class UCase extends SqlFunction {
+    public UCase() {
+      super("UCASE",
               SqlKind.OTHER_FUNCTION,
               null,
               null,
