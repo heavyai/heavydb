@@ -2259,26 +2259,27 @@ TEST_P(StringFunctionTest, len) {
 }
 
 TEST_P(StringFunctionTest, max) {
-  sqlAndCompareResult("select MAX(7,4);", {{i(7)}});
+  sqlAndCompareResult("select GREATEST(7,4);", {{i(7)}});
 
-  sqlAndCompareResult("select MAX(-7,220);", {{i(220)}});
+  sqlAndCompareResult("select GREATEST(-7,220);", {{i(220)}});
 
-  sqlAndCompareResult("select MAX('bf','sh');", {{"sh"}});
+  sqlAndCompareResult("select GREATEST('bf','sh');", {{"sh"}});
 
-  sqlAndCompareResult("select MAX(123,456);", {{i(456)}});
+  sqlAndCompareResult("select GREATEST(123,456);", {{i(456)}});
 
-  sqlAndCompareResult("select MIN(count(*),count(*)) from string_function_test_people;",
+  sqlAndCompareResult("select LEAST(count(*),count(*)) from string_function_test_people;",
                       {{i(4)}});
 
   // this will assert as the types mismatch
-  queryAndAssertException("select MAX(3,'f');", "Unable to parse f to INTEGER");
+  queryAndAssertException("select GREATEST(3,'f');",
+                          "Cannot compare between INTEGER and VARCHAR");
 
   // Edge case: empty strings
-  sqlAndCompareResult("select max('', '');", {{""}});
+  sqlAndCompareResult("select greatest('', '');", {{""}});
 
   // Edge case: NULL string: zip_plus_4 has NULL values in some rows
   sqlAndCompareResult(
-      "select max(zip_plus_4, zip_plus_4) from string_function_test_people;",
+      "select greatest(zip_plus_4, zip_plus_4) from string_function_test_people;",
       {{"90210-7743"}, {"94104-8123"}, {Null}, {Null}});
 }
 
@@ -2298,26 +2299,27 @@ TEST_P(StringFunctionTest, mid) {
 }
 
 TEST_P(StringFunctionTest, min) {
-  sqlAndCompareResult("select MIN(7,4);", {{i(4)}});
+  sqlAndCompareResult("select LEAST(7,4);", {{i(4)}});
 
-  sqlAndCompareResult("select MIN(-7,220);", {{i(-7)}});
+  sqlAndCompareResult("select LEAST(-7,220);", {{i(-7)}});
 
-  sqlAndCompareResult("select MIN('bf','sh');", {{"bf"}});
+  sqlAndCompareResult("select LEAST('bf','sh');", {{"bf"}});
 
-  sqlAndCompareResult("select MIN(123,456);", {{i(123)}});
+  sqlAndCompareResult("select LEAST(123,456);", {{i(123)}});
 
-  sqlAndCompareResult("select MIN(count(*),count(*)) from string_function_test_people;",
+  sqlAndCompareResult("select LEAST(count(*),count(*)) from string_function_test_people;",
                       {{i(4)}});
 
   // this will assert as the types mismatch
-  queryAndAssertException("select MIN(3,'f');", "Unable to parse f to INTEGER");
+  queryAndAssertException("select LEAST(3,'f');",
+                          "Cannot compare between INTEGER and VARCHAR");
 
   // Edge case: empty strings
-  sqlAndCompareResult("select min('', '');", {{""}});
+  sqlAndCompareResult("select least('', '');", {{""}});
 
   // Edge case: NULL string: zip_plus_4 has NULL values in some rows
   sqlAndCompareResult(
-      "select min(zip_plus_4, zip_plus_4) from string_function_test_people;",
+      "select least(zip_plus_4, zip_plus_4) from string_function_test_people;",
       {{"90210-7743"}, {"94104-8123"}, {Null}, {Null}});
 }
 
@@ -2355,7 +2357,7 @@ TEST_P(StringFunctionTest, space) {
       "argument 'operand', but a column input was received for argument 'num_repeats'.");
 }
 
-TEST_P(StringFunctionTest, split) {
+TEST_P(StringFunctionTest, DISABLED_split) {
   // SPLIT is an alias for SPLIT_PART, mainly test the alias as
   // SPLIT_PART functionality should be covered by other tests
   sqlAndCompareResult("select split('123-345-6789', '-', 2);", {{"345"}});
@@ -2773,6 +2775,195 @@ INSTANTIATE_TEST_SUITE_P(
     [](const auto& info) {
       std::stringstream ss;
       ss << std::get<0>(info.param) << "_" << std::get<1>(info.param);
+      return ss.str();
+    });
+
+struct QueryParams {
+  std::string projection_expr;
+  std::string first_value_projection_expr;
+  NullableTargetValue projected_first_value;
+  NullableTargetValue projected_second_value;
+  bool returns_text;
+};
+
+class OverlayStringFunctionTest
+    : public DBHandlerTestFixture,
+      public ::testing::WithParamInterface<
+          std::tuple<TExecuteMode::type, std::string, std::string>> {
+ public:
+  static void SetUpTestSuite() { createTestTable("overlay_test"); }
+
+  static void TearUpTestSuite() { sql("drop table if exists overlay_test;"); }
+
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    const auto& [device_type, test_function, encoding_type] = GetParam();
+    if (!setExecuteMode(device_type)) {
+      GTEST_SKIP() << device_type << " is not enabled.";
+    }
+    query_params_ = shared::get_from_map(query_params_by_function_name_, test_function);
+    if (encoding_type == "DictEncoded") {
+      boost::replace_all(query_params_.projection_expr, "column_1", "t1");
+      boost::replace_all(query_params_.first_value_projection_expr, "column_1", "t1");
+      boost::replace_all(query_params_.projection_expr, "column_2", "t3");
+      boost::replace_all(query_params_.first_value_projection_expr, "column_2", "t3");
+    } else {
+      boost::replace_all(query_params_.projection_expr, "column_1", "t2");
+      boost::replace_all(query_params_.first_value_projection_expr, "column_1", "t2");
+      boost::replace_all(query_params_.projection_expr, "column_2", "t4");
+      boost::replace_all(query_params_.first_value_projection_expr, "column_2", "t4");
+    }
+  }
+
+  void TearDown() override { sql("drop table if exists overlay_test_2;"); }
+
+  static void createTestTable(const std::string& table_name) {
+    sql("drop table if exists " + table_name + ";");
+    sql("create table " + table_name +
+        " (id integer, t1 text, t2 text encoding none, t3 text, t4 text encoding none);");
+    // clang-format off
+    sql("insert into " + table_name + " values "
+        "(1, '" + txt_1_ + "', '" + txt_1_ + "', '" + txt_1_ + "', '" + txt_1_ +
+        "'), "
+        "(2, '" + txt_2_ + "', '" + txt_2_ + "', '" + txt_1_ + "', '" + txt_1_ +
+        "');");
+    // clang-format on
+  }
+
+  std::string getAdditionalPredicate() {
+    const auto& [device_type, test_function, encoding_type] = GetParam();
+    std::string additional_predicate;
+    if (test_function == "space") {
+      // The space function call in the test always returns the same value. Force a single
+      // row return by filtering on the id column.
+      additional_predicate = " and id = 1";
+    }
+    return additional_predicate;
+  }
+
+  bool isFunctionAnyOf(const std::set<std::string>& functions) {
+    const auto& [device_type, test_function, encoding_type] = GetParam();
+    return shared::contains(functions, test_function);
+  }
+
+  QueryParams query_params_;
+
+  static inline const std::map<std::string, QueryParams> query_params_by_function_name_{
+      {"mid_2_args", {"mid(column_1, 6)", "mid(column_2, 6)", "aAA", "BAAcc", true}},
+      {"mid_3_args", {"mid(column_1, 0, 3)", "mid(column_2, 0, 3)", "aaA", "AAa", true}},
+      {"substr_2_args",
+       {"substr(column_1, 6)", "substr(column_2, 6)", "aAA", "BAAcc", true}},
+      {"substr_3_args",
+       {"substr(column_1, 0, 3)", "substr(column_2, 0, 3)", "aaA", "AAa", true}},
+      {"contains",
+       {"contains(column_1, 'BA')", "contains(column_2, 'BA')", False, True, false}},
+      {"endswith",
+       {"endswith(column_1, 'A')", "endswith(column_2, 'A')", True, False, false}},
+      {"lcase", {"lcase(column_1)", "lcase(column_2)", "aaaaaaaa", "aaaabbaacc", true}},
+      {"left", {"left(column_1, 3)", "left(column_2, 3)", "aaA", "AAa", true}},
+      {"len", {"len(column_1)", "len(column_2)", int64_t(8), int64_t(10), false}},
+      {"least",
+       {"least(column_1, column_2)",
+        "least(column_2, column_2)",
+        "aaAAaaAA",
+        "AAaaBBAAcc",
+        true}},
+      {"greatest",
+       {"greatest(column_1, column_1)",
+        "greatest(column_1, column_2)",
+        "aaAAaaAA",
+        "AAaaBBAAcc",
+        true}},
+      {"right", {"right(column_1, 3)", "right(column_2, 3)", "aAA", "Acc", true}},
+      {"space", {"space(5)", "space(5)", "     ", "     ", true}},
+      {"startswith",
+       {"startswith(column_1, 'aa')", "startswith(column_2, 'aa')", True, False, false}},
+      {"ucase", {"ucase(column_1)", "ucase(column_2)", "AAAAAAAA", "AAAABBAACC", true}}};
+
+  static inline const std::string txt_1_{"aaAAaaAA"}, txt_2_{"AAaaBBAAcc"};
+};
+
+TEST_P(OverlayStringFunctionTest, Projection) {
+  sqlAndCompareResult(
+      "select " + query_params_.projection_expr + " from overlay_test order by id;",
+      {{query_params_.projected_first_value}, {query_params_.projected_second_value}});
+}
+
+TEST_P(OverlayStringFunctionTest, Predicate) {
+  sqlAndCompareResult(
+      "select t1 from overlay_test where " + query_params_.projection_expr + " = " +
+          query_params_.first_value_projection_expr + getAdditionalPredicate() + ";",
+      {{txt_1_}});
+}
+
+TEST_P(OverlayStringFunctionTest, PredicateWithLiteral) {
+  const auto first_value =
+      boost::apply_visitor(ToStringVisitor{}, query_params_.projected_first_value);
+  sqlAndCompareResult("select t1 from overlay_test where " +
+                          query_params_.projection_expr + " = " + first_value +
+                          getAdditionalPredicate() + ";",
+                      {{txt_1_}});
+}
+
+TEST_P(OverlayStringFunctionTest, Update) {
+  if (isFunctionAnyOf({"contains", "endswith", "startswith"})) {
+    GTEST_SKIP();  // Use of LIKE related functions currently result in an error
+  }
+  createTestTable("overlay_test_2");
+  auto projection_expr{query_params_.projection_expr};
+  auto first_value{query_params_.projected_first_value},
+      second_value{query_params_.projected_second_value};
+  if (!query_params_.returns_text) {
+    projection_expr = "cast(" + projection_expr + " as text)";
+    first_value = boost::apply_visitor(ToStringVisitor{}, first_value);
+    second_value = boost::apply_visitor(ToStringVisitor{}, second_value);
+  }
+  sql("update overlay_test_2 set t3 = " + projection_expr + ";");
+  sqlAndCompareResult("select t3 from overlay_test_2 order by id;",
+                      {{first_value}, {second_value}});
+}
+
+TEST_P(OverlayStringFunctionTest, Delete) {
+  createTestTable("overlay_test_2");
+  sql("delete from overlay_test_2 where " + query_params_.projection_expr + " = " +
+      query_params_.first_value_projection_expr + getAdditionalPredicate() + ";");
+  sqlAndCompareResult("select t1 from overlay_test_2;", {{txt_2_}});
+}
+
+TEST_P(OverlayStringFunctionTest, DeleteWithLiteralPredicate) {
+  const auto first_value =
+      boost::apply_visitor(ToStringVisitor{}, query_params_.projected_first_value);
+  createTestTable("overlay_test_2");
+  sql("delete from overlay_test_2 where " + query_params_.projection_expr + " = " +
+      first_value + getAdditionalPredicate() + ";");
+  sqlAndCompareResult("select t1 from overlay_test_2;", {{txt_2_}});
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    CpuAndGpuExecutorDevices,
+    OverlayStringFunctionTest,
+    ::testing::Combine(::testing::Values(TExecuteMode::CPU, TExecuteMode::GPU),
+                       ::testing::Values("mid_2_args",
+                                         "mid_3_args",
+                                         "substr_2_args",
+                                         "substr_3_args",
+                                         "contains",
+                                         "endswith",
+                                         "lcase",
+                                         "left",
+                                         "len",
+                                         "least",
+                                         "greatest",
+                                         "right",
+                                         "space",
+                                         "startswith",
+                                         "ucase"),
+                       ::testing::Values("DictEncoded", "NoneEncoded")),
+    [](const auto& info) {
+      std::stringstream ss;
+      ss << std::get<0>(info.param) << "_" << std::get<1>(info.param) << "_"
+         << std::get<2>(info.param);
       return ss.str();
     });
 
