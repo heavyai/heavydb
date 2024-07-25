@@ -20,6 +20,7 @@
 #include "CompilationOptions.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
 #include "GpuMemUtils.h"
+#include "QueryEngine/ColumnFetcher.h"
 #include "QueryMemoryInitializer.h"
 #include "Rendering/RenderInfo.h"
 #include "ResultSet.h"
@@ -52,7 +53,8 @@ struct KernelParamsLog {
                              NamedSize,
                              std::vector<void const*>,
                              std::vector<std::vector<int64_t>>,
-                             std::vector<std::vector<uint64_t>>>;
+                             std::vector<std::vector<uint64_t>>,
+                             std::vector<std::vector<int32_t>>>;
   std::array<void const*, size_t(heavyai::KernelParam::N_)> ptrs;
   std::array<Value, size_t(heavyai::KernelParam::N_)> values;
   bool hoist_literals;
@@ -83,40 +85,36 @@ class QueryExecutionContext : boost::noncopyable {
 
   ResultSetPtr groupBufferToResults(const size_t i) const;
 
-  std::vector<int64_t*> launchGpuCode(
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const CompilationResult& compilation_result,
-      const bool hoist_literals,
-      const std::vector<int8_t>& literal_buff,
-      std::vector<std::vector<const int8_t*>> col_buffers,
-      const std::vector<std::vector<int64_t>>& num_rows,
-      const std::vector<std::vector<uint64_t>>& frag_row_offsets,
-      const int32_t scan_limit,
-      Data_Namespace::DataMgr* data_mgr,
-      const unsigned block_size_x,
-      const unsigned grid_size_x,
-      const int device_id,
-      int32_t* error_code,
-      const uint32_t num_tables,
-      const bool allow_runtime_interrupt,
-      const std::vector<int8_t*>& join_hash_tables,
-      RenderAllocatorMap* render_allocator_map,
-      bool optimize_cuda_block_and_grid_sizes);
+  std::vector<int64_t*> launchGpuCode(const RelAlgExecutionUnit& ra_exe_unit,
+                                      const CompilationResult& compilation_result,
+                                      const bool hoist_literals,
+                                      const std::vector<int8_t>& literal_buff,
+                                      std::vector<std::vector<const int8_t*>> col_buffers,
+                                      const FetchResultFragmentInfo& fragment_info,
+                                      const int32_t scan_limit,
+                                      Data_Namespace::DataMgr* data_mgr,
+                                      const unsigned block_size_x,
+                                      const unsigned grid_size_x,
+                                      const int device_id,
+                                      int32_t* error_code,
+                                      const uint32_t num_tables,
+                                      const bool allow_runtime_interrupt,
+                                      const std::vector<int8_t*>& join_hash_tables,
+                                      RenderAllocatorMap* render_allocator_map,
+                                      bool optimize_cuda_block_and_grid_sizes);
 
-  std::vector<int64_t*> launchCpuCode(
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const CpuCompilationContext* fn_ptrs,
-      const bool hoist_literals,
-      const std::vector<int8_t>& literal_buff,
-      std::vector<std::vector<const int8_t*>> col_buffers,
-      const std::vector<std::vector<int64_t>>& num_rows,
-      const std::vector<std::vector<uint64_t>>& frag_row_offsets,
-      const int32_t scan_limit,
-      int32_t* error_code,
-      const uint32_t start_rowid,
-      const uint32_t num_tables,
-      const std::vector<int8_t*>& join_hash_tables,
-      const int64_t num_rows_to_process = -1);
+  std::vector<int64_t*> launchCpuCode(const RelAlgExecutionUnit& ra_exe_unit,
+                                      const CpuCompilationContext* fn_ptrs,
+                                      const bool hoist_literals,
+                                      const std::vector<int8_t>& literal_buff,
+                                      std::vector<std::vector<const int8_t*>> col_buffers,
+                                      const FetchResultFragmentInfo& fragment_info,
+                                      const int32_t scan_limit,
+                                      int32_t* error_code,
+                                      const uint32_t start_rowid,
+                                      const uint32_t num_tables,
+                                      const std::vector<int8_t*>& join_hash_tables,
+                                      const int64_t num_rows_to_process = -1);
 
   int64_t getAggInitValForIndex(const size_t index) const;
 
@@ -168,8 +166,7 @@ class QueryExecutionContext : boost::noncopyable {
   std::pair<KernelParams, KernelParamsLog> prepareKernelParams(
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       const std::vector<int8_t>& literal_buff,
-      const std::vector<std::vector<int64_t>>& num_rows,
-      const std::vector<std::vector<uint64_t>>& frag_offsets,
+      const FetchResultFragmentInfo& fragment_info,
       const int32_t scan_limit,
       const std::vector<int64_t>& init_agg_vals,
       const std::vector<int32_t>& error_codes,
