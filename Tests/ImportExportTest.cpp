@@ -232,6 +232,12 @@ class ImportExportTestBase : public DBHandlerTestFixture {
                             avg);
   }
 
+  int32_t getTableId(const std::string& table_name) {
+    auto opt_tid = getCatalog().getTableId(table_name);
+    CHECK(opt_tid.has_value());
+    return opt_tid.value();
+  }
+
 #ifdef HAVE_AWS_S3
   bool importTestS3(const string& prefix,
                     const string& filename,
@@ -792,7 +798,11 @@ void validate_import_status(const std::string& import_id,
                             const std::string& copy_from_result,
                             const size_t rows_completed,
                             const size_t rows_rejected,
-                            const bool failed_status) {
+                            const bool failed_status,
+                            const int32_t expected_epoch,
+                            const int32_t table_id,
+                            const Catalog_Namespace::Catalog* catalog,
+                            const bool is_distributed_mode) {
   // Verify the string result set returend by COPY FROM
   std::string expected_copy_from_result =
       "Loaded: " + std::to_string(rows_completed) +
@@ -827,6 +837,17 @@ void validate_import_status(const std::string& import_id,
       << " incorrect rows rejected in import status";
   ASSERT_EQ(failed_status, import_status.load_failed)
       << " incorrect load_failed flag in import status";
+
+  if (!is_distributed_mode) {
+    ASSERT_EQ(expected_epoch, catalog->getTableEpoch(catalog->getDatabaseId(), table_id));
+  } else {
+    auto epochs = catalog->getTableEpochs(catalog->getDatabaseId(), table_id);
+    for (const auto& epoch : epochs) {
+      if (epoch.leaf_index >= 0) {
+        ASSERT_EQ(expected_epoch, epoch.table_epoch);
+      }
+    }
+  }
 }
 
 std::string get_copy_from_result_str(const TQueryResult& copy_from_query_result) {
@@ -864,13 +885,19 @@ class ParquetImportErrorHandling : public ImportExportTestBase, public FsiImport
                             const std::string& copy_from_result,
                             const size_t rows_completed,
                             const size_t rows_rejected,
-                            const bool failed_status) {
+                            const bool failed_status,
+                            const std::string& table_name,
+                            const int32_t expected_epoch) {
     validate_import_status(import_id,
                            getImportStatus(import_id),
                            copy_from_result,
                            rows_completed,
                            rows_rejected,
-                           failed_status);
+                           failed_status,
+                           expected_epoch,
+                           getTableId(table_name),
+                           &getCatalog(),
+                           isDistributedMode());
   }
 
   const std::string fsi_file_base_dir = "../../Tests/FsiDataFiles/";
@@ -894,8 +921,13 @@ TEST_F(ParquetImportErrorHandling, GreaterThanMaxReject) {
   TQueryResult query;
   sql(query, "SELECT count(*) FROM test_table;");
   assertResultSetEqual({{0L}}, query);  // confirm no data was loaded into table
-  validateImportStatus(
-      get_import_id(file_path), get_copy_from_result_str(copy_from_result), 0, 0, true);
+  validateImportStatus(get_import_id(file_path),
+                       get_copy_from_result_str(copy_from_result),
+                       0,
+                       0,
+                       true,
+                       "test_table",
+                       0);
 }
 
 TEST_F(ParquetImportErrorHandling, IncreasingMaxRowGroupSizeAcrossFiles) {
@@ -965,8 +997,13 @@ TEST_P(ParquetImportErrorHandlingOfTypes, OneInvalidType) {
       fsi_file_base_dir + "/invalid_parquet/one_invalid_row_" + GetParam() + ".parquet";
   sql(copy_from_result,
       "COPY test_table FROM '" + filename + "' WITH (source_type='parquet_file');");
-  validateImportStatus(
-      get_import_id(filename), get_copy_from_result_str(copy_from_result), 3, 1, false);
+  validateImportStatus(get_import_id(filename),
+                       get_copy_from_result_str(copy_from_result),
+                       3,
+                       1,
+                       false,
+                       "test_table",
+                       1);
   TQueryResult query;
   sql(query, "SELECT * FROM test_table ORDER BY id;");
   // clang-format off
@@ -1094,13 +1131,19 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
 
   void validateImportStatus(const size_t rows_completed,
                             const size_t rows_rejected,
-                            const bool failed_status) {
+                            const bool failed_status,
+                            const std::string& table_name,
+                            const int32_t expected_epoch) {
     validate_import_status(import_id_,
                            getImportStatus(),
                            copy_from_result_,
                            rows_completed,
                            rows_rejected,
-                           failed_status);
+                           failed_status,
+                           expected_epoch,
+                           getTableId(table_name),
+                           &getCatalog(),
+                           isDistributedMode());
   }
 
   TQueryResult copyFromAndSelect(const std::string& in_schema,
@@ -1408,7 +1451,7 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
     }},
     query);
   // clang-format on
-  validateImportStatus(5, 0, false);
+  validateImportStatus(5, 0, false, "import_test_new", 1);
 }
 
 TEST_P(ImportAndSelectTest, ArrayTypes) {
@@ -1445,7 +1488,7 @@ TEST_P(ImportAndSelectTest, ArrayTypes) {
     }},
     query);
   // clang-format on
-  validateImportStatus(3, 0, false);
+  validateImportStatus(3, 0, false, "import_test_new", 1);
 }
 
 TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
@@ -1482,7 +1525,7 @@ TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
     }},
     query);
   // clang-format on
-  validateImportStatus(3, 0, false);
+  validateImportStatus(3, 0, false, "import_test_new", 1);
 }
 
 TEST_P(ImportAndSelectTest, ScalarTypes) {
@@ -1515,9 +1558,9 @@ TEST_P(ImportAndSelectTest, ScalarTypes) {
   if (param_.data_source_type == "local") {
     expected_values.push_back(
         {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null});
-    validateImportStatus(4, 0, false);
+    validateImportStatus(4, 0, false, "import_test_new", 1);
   } else {
-    validateImportStatus(3, 0, false);
+    validateImportStatus(3, 0, false, "import_test_new", 1);
   }
   assertResultSetEqual(expected_values, query);
 }
@@ -1551,9 +1594,9 @@ TEST_P(ImportAndSelectTest, Sharded) {
   if (param_.data_source_type == "local") {
     expected_values.push_back(
         {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null});
-    validateImportStatus(4, 0, false);
+    validateImportStatus(4, 0, false, "import_test_new", 1);
   } else {
-    validateImportStatus(3, 0, false);
+    validateImportStatus(3, 0, false, "import_test_new", 1);
   }
   // clang-format off
     assertResultSetEqual(expected_values,
@@ -1586,7 +1629,7 @@ TEST_P(ImportAndSelectTest, Multifile) {
           {"aaa", 3L, 3.3f},
       },
       query);
-  validateImportStatus(6, 0, false);
+  validateImportStatus(6, 0, false, "import_test_new", 1);
 }
 
 TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
@@ -1634,7 +1677,7 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
     }},
     query);
   // clang-format on
-  validateImportStatus(4, 1, false);
+  validateImportStatus(4, 1, false, "import_test_new", 1);
 }
 
 TEST_P(ImportAndSelectTest, GeoValidateGeometryPolygon) {
@@ -1655,7 +1698,7 @@ TEST_P(ImportAndSelectTest, GeoValidateGeometryPolygon) {
                                false,
                                std::nullopt,
                                {{"POLYGON", "TEXT"}});
-  validateImportStatus(1, 1, false);  // expect 1 good, 1 rejected
+  validateImportStatus(1, 1, false, "import_test_new", 1);  // expect 1 good, 1 rejected
 }
 
 TEST_P(ImportAndSelectTest, GeoValidateGeometryMultiPolygon) {
@@ -1676,7 +1719,7 @@ TEST_P(ImportAndSelectTest, GeoValidateGeometryMultiPolygon) {
                                false,
                                std::nullopt,
                                {{"MULTIPOLYGON", "TEXT"}});
-  validateImportStatus(1, 1, false);  // expect 1 good, 1 rejected
+  validateImportStatus(1, 1, false, "import_test_new", 1);  // expect 1 good, 1 rejected
 }
 
 TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
@@ -1713,7 +1756,7 @@ TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
     }},
     query);
   // clang-format on
-  validateImportStatus(1, 6, false);
+  validateImportStatus(1, 6, false, "import_test_new", 1);
 }
 
 TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
@@ -1750,7 +1793,7 @@ TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
     }},
     query);
   // clang-format on
-  validateImportStatus(2, 1, false);
+  validateImportStatus(2, 1, false, "import_test_new", 1);
 }
 
 TEST_P(ImportAndSelectTest, NotNullArrayTypeColumns) {
@@ -1787,7 +1830,7 @@ TEST_P(ImportAndSelectTest, NotNullArrayTypeColumns) {
     }},
     query);
   // clang-format on
-  validateImportStatus(1, 11, false);
+  validateImportStatus(1, 11, false, "import_test_new", 1);
 }
 
 TEST_P(ImportAndSelectTest, InvalidFixedLengthArrayTypesRecord) {
@@ -1824,7 +1867,7 @@ TEST_P(ImportAndSelectTest, InvalidFixedLengthArrayTypesRecord) {
     }},
     query);
   // clang-format on
-  validateImportStatus(2, 1, false);
+  validateImportStatus(2, 1, false, "import_test_new", 1);
 }
 
 TEST_P(ImportAndSelectTest, NotNullFixedLengthArrayTypeColumns) {
@@ -1860,7 +1903,7 @@ TEST_P(ImportAndSelectTest, NotNullFixedLengthArrayTypeColumns) {
     }},
     query);
   // clang-format on
-  validateImportStatus(1, 11, false);
+  validateImportStatus(1, 11, false, "import_test_new", 1);
 }
 
 TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
@@ -1893,7 +1936,7 @@ TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
   };
   // clang-format on
 
-  validateImportStatus(3, 1, false);
+  validateImportStatus(3, 1, false, "import_test_new", 1);
   assertResultSetEqual(expected_values, query);
 }
 
@@ -1938,7 +1981,7 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
                                                      "text_1",
                                                      "quoted text"}};
 
-  validateImportStatus(1, 12, false);
+  validateImportStatus(1, 12, false, "import_test_new", 1);
   assertResultSetEqual(expected_values, query);
 }
 
@@ -1972,7 +2015,7 @@ TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
   };
   // clang-format on
 
-  validateImportStatus(3, 1, false);
+  validateImportStatus(3, 1, false, "import_test_new", 1);
   assertResultSetEqual(expected_values, query);
 }
 
@@ -1996,7 +2039,34 @@ TEST_P(ImportAndSelectTest, MaxRejectReached) {
 
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{};
 
-  validateImportStatus(0, 0, true);
+  validateImportStatus(0, 0, true, "import_test_new", 0);
+  assertResultSetEqual(expected_values, query);
+}
+
+TEST_P(ImportAndSelectTest, MaxRejectReachedMultifile) {
+  std::string sql_select_stmt =
+      "";
+  std::string schema =
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
+      "DECIMAL(10,5), tm " +
+      std::string(param_.import_type == "hive" ? "TEXT" : "TIME") +
+      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE";
+  auto query = createTableCopyFromAndSelect(schema,
+                                            "multifile_scalar_mixed_invalid",
+                                            "SELECT * FROM import_test_new ORDER BY s;",
+                                            get_line_regex(12),
+                                            14,
+                                            false,
+                                            sql_select_stmt,
+                                            "s",
+                                            {},
+                                            true,
+                                            /*max_reject=*/0,
+                                            {{"INTEGER", "BIGINT"}});
+
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{};
+
+  validateImportStatus(0, 0, true, "import_test_new", 0);
   assertResultSetEqual(expected_values, query);
 }
 
@@ -2040,7 +2110,7 @@ TEST_P(ImportAndSelectTest, LongerNoneEncodedString) {
 
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{{long_str}};
 
-  validateImportStatus(1, 0, false);
+  validateImportStatus(1, 0, false, "import_test_new", 1);
   assertResultSetEqual(expected_values, query);
 }
 
@@ -2131,7 +2201,7 @@ TEST_P(LowProxyForeignTableFragmentSizeImportTest, ImportWithSmallProxyFragmentS
   };
   // clang-format on
 
-  validateImportStatus(4, 0, false);
+  validateImportStatus(4, 0, false, "import_test_new", 1);
   assertResultSetEqual(expected_values, query);
 }
 
@@ -2156,7 +2226,7 @@ TEST_P(LowProxyForeignTableFragmentSizeImportTest, LargeNumberOfFragments) {
 
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{{17L}};
 
-  validateImportStatus(17, 0, false);
+  validateImportStatus(17, 0, false, "import_test_new", 1);
   assertResultSetEqual(expected_values, query);
 }
 
@@ -2194,7 +2264,7 @@ TEST_P(FileTypeOnlyImportAndSelectTest, DropColumnsThenReadd) {
   };
   // clang-format on
 
-  validateImportStatus(4, 0, false);
+  validateImportStatus(4, 0, false, "import_test_new", 1);
   assertResultSetEqual(expected_values, query);
 
   sql("ALTER TABLE import_test_new DROP COLUMN txt, txt_2;");
@@ -2227,7 +2297,8 @@ TEST_P(FileTypeOnlyImportAndSelectTest, DropColumnsThenReadd) {
   };
   // clang-format on
 
-  validateImportStatus(4, 0, false);
+  validateImportStatus(
+      4, 0, false, "import_test_new", 4);  // Alter operations increment epoch as well
   assertResultSetEqual(second_expected_values, second_query);
 }
 
@@ -2270,7 +2341,7 @@ TEST_F(ParquetSpecificImportAndSelectTest, ZeroMaxDefinitionLevelScalars) {
   };
   // clang-format on
 
-  validateImportStatus(3, 0, false);
+  validateImportStatus(3, 0, false, "import_test_new", 1);
   assertResultSetEqual(expected_values, query);
 }
 
@@ -2292,7 +2363,7 @@ TEST_F(ParquetSpecificImportAndSelectTest, NoMetadataStatistics) {
   };
   // clang-format on
 
-  validateImportStatus(6, 0, false);
+  validateImportStatus(6, 0, false, "import_test_new", 1);
   assertResultSetEqual(expected_values, query);
 }
 
@@ -2336,7 +2407,7 @@ TEST_F(ParquetSpecificS3PublicImportAndSelectTest, WithDebugTimersEnabled) {
   };
   // clang-format on
 
-  validateImportStatus(3, 0, false);
+  validateImportStatus(3, 0, false, "import_test_new", 1);
   assertResultSetEqual(expected_values, query);
 }
 
