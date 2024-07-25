@@ -2419,14 +2419,15 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
     const int8_t* literals,
     const int64_t* num_rows,
     const uint64_t* frag_row_offsets,
+    const int32_t* frag_ids,
     const int32_t* max_matched,
     const int64_t* init_agg_value,
     const int64_t* join_hash_tables,
     const int8_t* row_func_mgr) {
 #ifndef _WIN32
   assert(error_codes || total_matched || out || frag_idx || row_index_resume ||
-         col_buffers || literals || num_rows || frag_row_offsets || max_matched ||
-         init_agg_value || join_hash_tables || row_func_mgr);
+         col_buffers || literals || num_rows || frag_row_offsets || frag_ids ||
+         max_matched || init_agg_value || join_hash_tables || row_func_mgr);
 #endif
 }
 
@@ -2442,6 +2443,7 @@ extern "C" RUNTIME_EXPORT void multifrag_query_hoisted_literals(
     const int8_t* literals,
     const int64_t* num_rows,
     const uint64_t* frag_row_offsets,
+    const int32_t* frag_ids,
     const int32_t* max_matched,
     const int64_t* init_agg_value,
     const int64_t* join_hash_tables,
@@ -2461,6 +2463,7 @@ extern "C" RUNTIME_EXPORT void multifrag_query_hoisted_literals(
                                 literals,
                                 &num_rows[frag_idx * num_tables],
                                 &frag_row_offsets[frag_idx * num_tables],
+                                &frag_ids[frag_idx * num_tables],
                                 max_matched,
                                 init_agg_value,
                                 join_hash_tables,
@@ -2477,14 +2480,15 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(int32_t* error_codes,
                                                        const int8_t** col_buffers,
                                                        const int64_t* num_rows,
                                                        const uint64_t* frag_row_offsets,
+                                                       const int32_t* frag_ids,
                                                        const int32_t* max_matched,
                                                        const int64_t* init_agg_value,
                                                        const int64_t* join_hash_tables,
                                                        const int8_t* row_func_mgr) {
 #ifndef _WIN32
   assert(error_codes || total_matched || out || frag_idx || row_index_resume ||
-         col_buffers || num_rows || frag_row_offsets || max_matched || init_agg_value ||
-         join_hash_tables || row_func_mgr);
+         col_buffers || num_rows || frag_row_offsets || frag_ids || max_matched ||
+         init_agg_value || join_hash_tables || row_func_mgr);
 #endif
 }
 
@@ -2498,6 +2502,7 @@ extern "C" RUNTIME_EXPORT void multifrag_query(int32_t* error_codes,
                                                const int8_t*** col_buffers,
                                                const int64_t* num_rows,
                                                const uint64_t* frag_row_offsets,
+                                               const int32_t* frag_ids,
                                                const int32_t* max_matched,
                                                const int64_t* init_agg_value,
                                                const int64_t* join_hash_tables,
@@ -2516,6 +2521,7 @@ extern "C" RUNTIME_EXPORT void multifrag_query(int32_t* error_codes,
                col_buffers ? col_buffers[frag_idx] : nullptr,
                &num_rows[frag_idx * num_tables],
                &frag_row_offsets[frag_idx * num_tables],
+               &frag_ids[frag_idx * num_tables],
                max_matched,
                init_agg_value,
                join_hash_tables,

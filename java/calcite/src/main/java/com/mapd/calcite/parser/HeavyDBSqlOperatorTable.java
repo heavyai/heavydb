@@ -305,6 +305,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new CastToGeography());
     addOperator(new EncodeText());
     addOperator(new OffsetInFragment());
+    addOperator(new FragmentId());
     addOperator(new ApproxCountDistinct());
     addOperator(new ApproxMedian());
     addOperator(new ApproxPercentile());
@@ -3370,13 +3371,32 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
               SqlKind.OTHER_FUNCTION,
               null,
               null,
-              OperandTypes.NILADIC,
+              OperandTypes.family(SqlTypeFamily.ANY),
               SqlFunctionCategory.SYSTEM);
     }
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      assert opBinding.getOperandCount() == 0;
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BIGINT);
+    }
+  }
+
+  /* FRAGMENT_ID() */
+  public static class FragmentId extends SqlFunction {
+    public FragmentId() {
+      super("FRAGMENT_ID",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BIGINT);
     }
