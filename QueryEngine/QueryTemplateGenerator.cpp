@@ -88,7 +88,7 @@ class Params {
 };
 
 // NTYPES = max number of types. Used by llvm::SmallVector to avoid dynamic memory allocs.
-template <bool IS_GROUP_BY, size_t NTYPES = 13u>
+template <bool IS_GROUP_BY, size_t NTYPES = 14u>
 Params<NTYPES> make_params(llvm::Module const* const mod, bool const hoist_literals) {
   constexpr llvm::Attribute::AttrKind NoCapture = llvm::Attribute::NoCapture;
   auto* const i8_type = llvm::IntegerType::get(mod->getContext(), 8);
@@ -118,6 +118,7 @@ Params<NTYPES> make_params(llvm::Module const* const mod, bool const hoist_liter
     }
     params.pushBack(pi64_type, "row_count_ptr", NoCapture, ReadOnly);
     params.pushBack(pi64_type, "frag_row_off_ptr", NoCapture, ReadOnly);
+    params.pushBack(pi32_type, "frag_id_ptr", NoCapture, ReadOnly);
     params.pushBack(pi32_type, "max_matched_ptr", NoCapture, ReadOnly);
     params.pushBack(pi64_type, "agg_init_val", NoCapture, ReadOnly);
     params.pushBack(pi64_type, "join_hash_tables", NoCapture, ReadOnly);
@@ -134,6 +135,7 @@ Params<NTYPES> make_params(llvm::Module const* const mod, bool const hoist_liter
     }
     params.pushBack(pi64_type, "row_count_ptr", NoCapture);  // num_rows
     params.pushBack(pi64_type, "frag_row_off_ptr", NoCapture);
+    params.pushBack(pi32_type, "frag_id_ptr", NoCapture);
     params.pushBack(pi32_type, "max_matched_ptr", NoCapture);
     params.pushBack(pi64_type, "agg_init_val", NoCapture);
     params.pushBack(pi64_type, "join_hash_tables", NoCapture);
@@ -234,6 +236,7 @@ llvm::Function* row_process(llvm::Module* mod,
 
   func_args.push_back(i64_type);   // pos
   func_args.push_back(pi64_type);  // frag_row_off_ptr
+  func_args.push_back(pi32_type);  // frag_id_ptr
   func_args.push_back(pi64_type);  // row_count_ptr
   if (hoist_literals) {
     func_args.push_back(PointerType::get(i8_type, 0));  // literals
@@ -412,6 +415,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
   row_process_params.push_back(agg_init_val);
   row_process_params.push_back(pos);
   row_process_params.push_back(get_arg_by_name(query_func_ptr, "frag_row_off_ptr"));
+  row_process_params.push_back(get_arg_by_name(query_func_ptr, "frag_id_ptr"));
   row_process_params.push_back(row_count_ptr);
   if (hoist_literals) {
     row_process_params.push_back(get_arg_by_name(query_func_ptr, "literals"));
@@ -718,6 +722,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
   row_process_params.push_back(get_arg_by_name(query_func_ptr, "agg_init_val"));
   row_process_params.push_back(pos);
   row_process_params.push_back(get_arg_by_name(query_func_ptr, "frag_row_off_ptr"));
+  row_process_params.push_back(get_arg_by_name(query_func_ptr, "frag_id_ptr"));
   row_process_params.push_back(row_count_ptr);
   if (hoist_literals) {
     row_process_params.push_back(get_arg_by_name(query_func_ptr, "literals"));

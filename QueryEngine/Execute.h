@@ -1056,8 +1056,7 @@ class Executor {
                                const size_t thread_idx,
                                const bool allow_runtime_interrupt);
 
-  std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
-  getRowCountAndOffsetForAllFrags(
+  FetchResultFragmentInfo getAllFragmentInfo(
       const RelAlgExecutionUnit& ra_exe_unit,
       const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
       const std::vector<InputDescriptor>& input_descs,
@@ -1088,8 +1087,7 @@ class Executor {
                                  std::vector<std::vector<const int8_t*>>& col_buffers,
                                  const std::vector<size_t> outer_tab_frag_ids,
                                  QueryExecutionContext*,
-                                 const std::vector<std::vector<int64_t>>& num_rows,
-                                 const std::vector<std::vector<uint64_t>>& frag_offsets,
+                                 const FetchResultFragmentInfo& fragment_info,
                                  Data_Namespace::DataMgr*,
                                  const int device_id,
                                  const shared::TableKey& outer_table_key,
@@ -1101,25 +1099,23 @@ class Executor {
                                  const bool optimize_cuda_block_and_grid_sizes,
                                  const int64_t rows_to_process = -1);
   // pass nullptr to results if it shouldn't be extracted from the execution context
-  int32_t executePlanWithoutGroupBy(
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const CompilationResult&,
-      const bool hoist_literals,
-      ResultSetPtr* results,
-      const std::vector<Analyzer::Expr*>& target_exprs,
-      const ExecutorDeviceType device_type,
-      std::vector<std::vector<const int8_t*>>& col_buffers,
-      QueryExecutionContext* query_exe_context,
-      const std::vector<std::vector<int64_t>>& num_rows,
-      const std::vector<std::vector<uint64_t>>& frag_offsets,
-      Data_Namespace::DataMgr* data_mgr,
-      const int device_id,
-      const uint32_t start_rowid,
-      const uint32_t num_tables,
-      const bool allow_runtime_interrupt,
-      RenderInfo* render_info,
-      const bool optimize_cuda_block_and_grid_sizes,
-      const int64_t rows_to_process = -1);
+  int32_t executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
+                                    const CompilationResult&,
+                                    const bool hoist_literals,
+                                    ResultSetPtr* results,
+                                    const std::vector<Analyzer::Expr*>& target_exprs,
+                                    const ExecutorDeviceType device_type,
+                                    std::vector<std::vector<const int8_t*>>& col_buffers,
+                                    QueryExecutionContext* query_exe_context,
+                                    const FetchResultFragmentInfo& fragment_info,
+                                    Data_Namespace::DataMgr* data_mgr,
+                                    const int device_id,
+                                    const uint32_t start_rowid,
+                                    const uint32_t num_tables,
+                                    const bool allow_runtime_interrupt,
+                                    RenderInfo* render_info,
+                                    const bool optimize_cuda_block_and_grid_sizes,
+                                    const int64_t rows_to_process = -1);
 
  public:  // Temporary, ask saman about this
   static std::pair<int64_t, int32_t> reduceResults(const SQLAgg agg,

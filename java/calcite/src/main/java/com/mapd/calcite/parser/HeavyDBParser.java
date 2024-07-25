@@ -616,6 +616,17 @@ public final class HeavyDBParser {
               SqlStdOperatorTable.SINGLE_VALUE, new SqlNode[] {select0}, ZERO);
     }
 
+    // get the fully qualified target table rowid column name
+    // no method to get as a List<String> so re-tokenize by "."
+    String targetTableQualifiedName = update.getTargetTable().toString();
+    List<String> tokens = new ArrayList<>();
+    for (String token : targetTableQualifiedName.split("\\.", 0)) {
+      tokens.add(token);
+    }
+    tokens.add("rowid");
+    SqlIdentifier targetTableRowIdColumnName =
+            new SqlIdentifier(tokens, SqlParserPos.ZERO);
+
     SqlNodeList selectList = new SqlNodeList(ZERO);
     selectList.add(select0);
     selectList.add(new SqlBasicCall(SqlStdOperatorTable.AS,
@@ -627,7 +638,7 @@ public final class HeavyDBParser {
                                            null,
                                            null,
                                            SqlFunctionCategory.USER_DEFINED_FUNCTION),
-                                   new SqlNode[0],
+                                   new SqlNode[] {targetTableRowIdColumnName},
                                    SqlParserPos.ZERO),
                     new SqlIdentifier("EXPR$DELETE_OFFSET_IN_FRAGMENT", ZERO)},
             ZERO));
@@ -769,6 +780,17 @@ public final class HeavyDBParser {
         sourceExpression.add(expression);
       }
 
+      // get the fully qualified target table rowid column name
+      // getQualifiedName() actually returns an ImmutableCollection<String>
+      // which cannot be appended, so copy to a fresh regular List<String>
+      List<String> tokens = new ArrayList<>();
+      for (String token : targetTable.getQualifiedName()) {
+        tokens.add(token);
+      }
+      tokens.add("rowid");
+      SqlIdentifier targetTableRowIdColumnName =
+              new SqlIdentifier(tokens, SqlParserPos.ZERO);
+
       sourceExpression.add(new SqlBasicCall(SqlStdOperatorTable.AS,
               new SqlNode[] {
                       new SqlBasicCall(new SqlUnresolvedFunction(
@@ -779,7 +801,7 @@ public final class HeavyDBParser {
                                                null,
                                                null,
                                                SqlFunctionCategory.USER_DEFINED_FUNCTION),
-                              new SqlNode[0],
+                              new SqlNode[] {targetTableRowIdColumnName},
                               SqlParserPos.ZERO),
                       new SqlIdentifier("EXPR$DELETE_OFFSET_IN_FRAGMENT", ZERO)},
               ZERO));
