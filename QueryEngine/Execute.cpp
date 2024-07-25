@@ -3241,20 +3241,19 @@ std::map<shared::TableKey, std::vector<uint64_t>> get_table_id_to_frag_offsets(
   return tab_id_to_frag_offsets;
 }
 
-std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
-Executor::getRowCountAndOffsetForAllFrags(
+FetchResultFragmentInfo Executor::getAllFragmentInfo(
     const RelAlgExecutionUnit& ra_exe_unit,
     const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
     const std::vector<InputDescriptor>& input_descs,
     const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments) {
-  std::vector<std::vector<int64_t>> all_num_rows;
-  std::vector<std::vector<uint64_t>> all_frag_offsets;
+  FetchResultFragmentInfo all_frag_info;
   const auto tab_id_to_frag_offsets =
       get_table_id_to_frag_offsets(input_descs, all_tables_fragments);
   std::unordered_map<size_t, size_t> outer_id_to_num_row_idx;
   for (const auto& selected_frag_ids : frag_ids_crossjoin) {
     std::vector<int64_t> num_rows;
     std::vector<uint64_t> frag_offsets;
+    std::vector<int32_t> frag_ids;
     if (!ra_exe_unit.union_all) {
       CHECK_EQ(selected_frag_ids.size(), input_descs.size());
     }
@@ -3281,12 +3280,14 @@ Executor::getRowCountAndOffsetForAllFrags(
       const auto& offsets = frag_offsets_it->second;
       CHECK_LT(frag_id, offsets.size());
       frag_offsets.push_back(offsets[frag_id]);
+      frag_ids.push_back(frag_id);
     }
-    all_num_rows.push_back(num_rows);
+    all_frag_info.num_rows.push_back(num_rows);
     // Fragment offsets of outer table should be ONLY used by rowid for now.
-    all_frag_offsets.push_back(frag_offsets);
+    all_frag_info.frag_offsets.push_back(frag_offsets);
+    all_frag_info.frag_ids.push_back(frag_ids);
   }
-  return {all_num_rows, all_frag_offsets};
+  return all_frag_info;
 }
 
 // Only fetch columns of hash-joined inner fact table whose fetch are not deferred from
@@ -3329,8 +3330,10 @@ bool Executor::needLinearizeAllFragments(
 
 std::ostream& operator<<(std::ostream& os, FetchResult const& fetch_result) {
   return os << "col_buffers" << shared::printContainer(fetch_result.col_buffers)
-            << " num_rows" << shared::printContainer(fetch_result.num_rows)
-            << " frag_offsets" << shared::printContainer(fetch_result.frag_offsets);
+            << " num_rows" << shared::printContainer(fetch_result.fragment_info.num_rows)
+            << " frag_offsets"
+            << shared::printContainer(fetch_result.fragment_info.frag_offsets)
+            << " frag_ids" << shared::printContainer(fetch_result.fragment_info.frag_ids);
 }
 
 FetchResult Executor::fetchChunks(
@@ -3359,8 +3362,6 @@ FetchResult Executor::fetchChunks(
   CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(
       selected_fragments_crossjoin);
   std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
-  std::vector<std::vector<int64_t>> all_num_rows;
-  std::vector<std::vector<uint64_t>> all_frag_offsets;
   for (const auto& selected_frag_ids : frag_ids_crossjoin) {
     std::vector<const int8_t*> frag_col_buffers(
         plan_state_->global_to_local_col_ids_.size());
@@ -3463,9 +3464,9 @@ FetchResult Executor::fetchChunks(
     }
     all_frag_col_buffers.push_back(frag_col_buffers);
   }
-  std::tie(all_num_rows, all_frag_offsets) = getRowCountAndOffsetForAllFrags(
+  auto const fragment_info = getAllFragmentInfo(
       ra_exe_unit, frag_ids_crossjoin, ra_exe_unit.input_descs, all_tables_fragments);
-  return {all_frag_col_buffers, all_num_rows, all_frag_offsets};
+  return {std::move(all_frag_col_buffers), std::move(fragment_info)};
 }
 
 namespace {
@@ -3622,17 +3623,21 @@ FetchResult Executor::fetchUnionChunks(
     // Set frag_col_buffers[i]=ptr for i in mod input_descs.size() range of local_col_id.
     set_mod_range(frag_col_buffers, ptr, local_col_id, input_descs.size());
   }
-  auto const [num_rows, frag_offsets] = getRowCountAndOffsetForAllFrags(
+  auto const fragment_info = getAllFragmentInfo(
       ra_exe_unit, frag_ids_crossjoin, input_descs, all_tables_fragments);
 
   VLOG(2) << "frag_col_buffers=" << shared::printContainer(frag_col_buffers)
-          << " num_rows=" << shared::printContainer(num_rows)
-          << " frag_offsets=" << shared::printContainer(frag_offsets)
+          << " num_rows=" << shared::printContainer(fragment_info.num_rows)
+          << " frag_offsets=" << shared::printContainer(fragment_info.frag_offsets)
+          << " frag_ids=" << shared::printContainer(fragment_info.frag_ids)
           << " input_descs_index=" << input_descs_index
           << " input_col_descs_index=" << input_col_descs_index;
-  return {{std::move(frag_col_buffers)},
-          {{num_rows[0][input_descs_index]}},
-          {{frag_offsets[0][input_descs_index]}}};
+
+  const FetchResultFragmentInfo single_fragment_info{
+      {{fragment_info.num_rows[0][input_descs_index]}},
+      {{fragment_info.frag_offsets[0][input_descs_index]}},
+      {{fragment_info.frag_ids[0][input_descs_index]}}};
+  return {{std::move(frag_col_buffers)}, std::move(single_fragment_info)};
 }
 
 std::vector<size_t> Executor::getFragmentCount(const FragmentsList& selected_fragments,
@@ -3718,8 +3723,7 @@ int32_t Executor::executePlanWithoutGroupBy(
     const ExecutorDeviceType device_type,
     std::vector<std::vector<const int8_t*>>& col_buffers,
     QueryExecutionContext* query_exe_context,
-    const std::vector<std::vector<int64_t>>& num_rows,
-    const std::vector<std::vector<uint64_t>>& frag_offsets,
+    const FetchResultFragmentInfo& fragment_info,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id,
     const uint32_t start_rowid,
@@ -3774,8 +3778,7 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                hoist_literals,
                                                hoist_buf,
                                                col_buffers,
-                                               num_rows,
-                                               frag_offsets,
+                                               fragment_info,
                                                0,
                                                &error_code,
                                                start_rowid,
@@ -3791,8 +3794,7 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                  hoist_literals,
                                                  hoist_buf,
                                                  col_buffers,
-                                                 num_rows,
-                                                 frag_offsets,
+                                                 fragment_info,
                                                  0,
                                                  data_mgr,
                                                  blockSize(),
@@ -3941,8 +3943,7 @@ int32_t Executor::executePlanWithGroupBy(
     std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<size_t> outer_tab_frag_ids,
     QueryExecutionContext* query_exe_context,
-    const std::vector<std::vector<int64_t>>& num_rows,
-    const std::vector<std::vector<uint64_t>>& frag_offsets,
+    const FetchResultFragmentInfo& fragment_info,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id,
     const shared::TableKey& outer_table_key,
@@ -3995,8 +3996,9 @@ int32_t Executor::executePlanWithGroupBy(
           << " ra_exe_unit.input_col_descs="
           << shared::printContainer(ra_exe_unit.input_col_descs)
           << " ra_exe_unit.scan_limit=" << ra_exe_unit.scan_limit
-          << " num_rows=" << shared::printContainer(num_rows)
-          << " frag_offsets=" << shared::printContainer(frag_offsets)
+          << " num_rows=" << shared::printContainer(fragment_info.num_rows)
+          << " frag_offsets=" << shared::printContainer(fragment_info.frag_offsets)
+          << " frag_ids=" << shared::printContainer(fragment_info.frag_ids)
           << " query_exe_context->query_buffers_->num_rows_="
           << query_exe_context->query_buffers_->num_rows_
           << " query_exe_context->query_mem_desc_.getEntryCount()="
@@ -4042,8 +4044,7 @@ int32_t Executor::executePlanWithGroupBy(
                                      hoist_literals,
                                      hoist_buf,
                                      col_buffers,
-                                     num_rows,
-                                     frag_offsets,
+                                     fragment_info,
                                      max_matched,
                                      &error_code,
                                      start_rowid,
@@ -4060,8 +4061,7 @@ int32_t Executor::executePlanWithGroupBy(
           hoist_literals,
           hoist_buf,
           col_buffers,
-          num_rows,
-          frag_offsets,
+          fragment_info,
           ra_exe_unit_copy.union_all ? ra_exe_unit_copy.scan_limit : scan_limit,
           data_mgr,
           blockSize(),

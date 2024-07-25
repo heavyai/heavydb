@@ -38,10 +38,14 @@ struct hash<std::pair<int, int>> {
 
 }  // namespace std
 
-struct FetchResult {
-  std::vector<std::vector<const int8_t*>> col_buffers;
+struct FetchResultFragmentInfo {
   std::vector<std::vector<int64_t>> num_rows;
   std::vector<std::vector<uint64_t>> frag_offsets;
+  std::vector<std::vector<int32_t>> frag_ids;
+};
+struct FetchResult {
+  std::vector<std::vector<const int8_t*>> col_buffers;
+  FetchResultFragmentInfo fragment_info;
 };
 
 using MergedChunk = std::pair<AbstractBuffer*, AbstractBuffer*>;

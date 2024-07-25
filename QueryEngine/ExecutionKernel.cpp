@@ -246,7 +246,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                 device_allocator,
                                                 thread_idx,
                                                 eo.allow_runtime_query_interrupt);
-    if (fetch_result->num_rows.empty()) {
+    if (fetch_result->fragment_info.num_rows.empty()) {
       return;
     }
     if (eo.with_dynamic_watchdog &&
@@ -299,8 +299,8 @@ void ExecutionKernel::runImpl(Executor* executor,
   if (kernel_dispatch_mode == ExecutorDispatchMode::KernelPerFragment &&
       query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
     total_num_input_rows = 0;
-    std::for_each(fetch_result->num_rows.begin(),
-                  fetch_result->num_rows.end(),
+    std::for_each(fetch_result->fragment_info.num_rows.begin(),
+                  fetch_result->fragment_info.num_rows.end(),
                   [&total_num_input_rows](const std::vector<int64_t>& frag_row_count) {
                     total_num_input_rows = std::accumulate(frag_row_count.begin(),
                                                            frag_row_count.end(),
@@ -358,7 +358,7 @@ void ExecutionKernel::runImpl(Executor* executor,
   // TODO: check for literals? We serialize literals before execution and hold them in
   // result sets. Can we simply do it once and holdin an outer structure?
   if (can_run_subkernels) {
-    size_t total_rows = fetch_result->num_rows[0][0];
+    size_t total_rows = fetch_result->fragment_info.num_rows[0][0];
     size_t sub_size = g_cpu_sub_task_size;
 
     for (size_t sub_start = start_rowid; sub_start < total_rows; sub_start += sub_size) {
@@ -386,21 +386,21 @@ void ExecutionKernel::runImpl(Executor* executor,
       // has std::vector<std::unique_ptr<ResultSet>> result_sets_
       // has std::unique_ptr<ResultSetStorage> storage_
       // which are initialized and possibly allocated here.
-      query_exe_context_owned =
-          query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
-                                                  executor,
-                                                  chosen_device_type,
-                                                  kernel_dispatch_mode,
-                                                  chosen_device_id,
-                                                  outer_table_key,
-                                                  total_num_input_rows,
-                                                  fetch_result->col_buffers,
-                                                  fetch_result->frag_offsets,
-                                                  executor->getRowSetMemoryOwner(),
-                                                  compilation_result.output_columnar,
-                                                  query_mem_desc.sortOnGpu(),
-                                                  thread_idx,
-                                                  do_render ? render_info_ : nullptr);
+      query_exe_context_owned = query_mem_desc.getQueryExecutionContext(
+          ra_exe_unit_,
+          executor,
+          chosen_device_type,
+          kernel_dispatch_mode,
+          chosen_device_id,
+          outer_table_key,
+          total_num_input_rows,
+          fetch_result->col_buffers,
+          fetch_result->fragment_info.frag_offsets,
+          executor->getRowSetMemoryOwner(),
+          compilation_result.output_columnar,
+          query_mem_desc.sortOnGpu(),
+          thread_idx,
+          do_render ? render_info_ : nullptr);
     } catch (const OutOfHostMemory& e) {
       throw QueryExecutionError(ErrorCode::OUT_OF_CPU_MEM);
     }
@@ -423,8 +423,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                               chosen_device_type,
                                               fetch_result->col_buffers,
                                               query_exe_context,
-                                              fetch_result->num_rows,
-                                              fetch_result->frag_offsets,
+                                              fetch_result->fragment_info,
                                               data_mgr,
                                               chosen_device_id,
                                               start_rowid,
@@ -445,8 +444,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                            fetch_result->col_buffers,
                                            outer_tab_frag_ids,
                                            query_exe_context,
-                                           fetch_result->num_rows,
-                                           fetch_result->frag_offsets,
+                                           fetch_result->fragment_info,
                                            data_mgr,
                                            chosen_device_id,
                                            outer_table_key,
@@ -531,8 +529,8 @@ void KernelSubtask::runImpl(Executor* executor) {
           fetch_result_->col_buffers.size(),
           std::vector<const int8_t*>(fetch_result_->col_buffers[0].size()));
       std::vector<std::vector<uint64_t>> frag_offsets(
-          fetch_result_->frag_offsets.size(),
-          std::vector<uint64_t>(fetch_result_->frag_offsets[0].size()));
+          fetch_result_->fragment_info.frag_offsets.size(),
+          std::vector<uint64_t>(fetch_result_->fragment_info.frag_offsets[0].size()));
       query_exe_context_owned = kernel_.query_mem_desc.getQueryExecutionContext(
           kernel_.ra_exe_unit_,
           executor,
@@ -570,8 +568,7 @@ void KernelSubtask::runImpl(Executor* executor) {
                                               kernel_.chosen_device_type,
                                               fetch_result_->col_buffers,
                                               query_exe_context,
-                                              fetch_result_->num_rows,
-                                              fetch_result_->frag_offsets,
+                                              fetch_result_->fragment_info,
                                               executor->getDataMgr(),
                                               kernel_.chosen_device_id,
                                               start_rowid_,
@@ -589,8 +586,7 @@ void KernelSubtask::runImpl(Executor* executor) {
                                            fetch_result_->col_buffers,
                                            outer_tab_frag_ids,
                                            query_exe_context,
-                                           fetch_result_->num_rows,
-                                           fetch_result_->frag_offsets,
+                                           fetch_result_->fragment_info,
                                            executor->getDataMgr(),
                                            kernel_.chosen_device_id,
                                            outer_table_key,

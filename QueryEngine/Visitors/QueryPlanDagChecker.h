@@ -40,6 +40,7 @@ class QueryPlanDagChecker final : public RelRexDagVisitor {
     non_supported_functions.emplace("NOW");
     non_supported_functions.emplace("SIGN");
     non_supported_functions.emplace("OFFSET_IN_FRAGMENT");
+    non_supported_functions.emplace("FRAGMENT_ID");
     non_supported_functions.emplace("DATETIME");
     return non_supported_functions;
   }

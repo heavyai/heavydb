@@ -1812,8 +1812,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSign(
       makeExpr<Analyzer::Constant>(operand_ti, true, Datum{0}));
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOffsetInFragment() const {
-  return makeExpr<Analyzer::OffsetInFragment>();
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOffsetInFragment(
+    const RexFunctionOperator* rex_function) const {
+  CHECK_EQ(size_t(1), rex_function->size());
+  auto operand = translateScalarRex(rex_function->getOperand(0));
+  return makeExpr<Analyzer::OffsetInFragment>(operand);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFragmentId(
+    const RexFunctionOperator* rex_function) const {
+  CHECK_EQ(size_t(1), rex_function->size());
+  auto operand = translateScalarRex(rex_function->getOperand(0));
+  return makeExpr<Analyzer::FragmentId>(operand);
 }
 
 Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
@@ -2139,8 +2149,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     return translateTernaryGeoFunction(rex_function);
   }
   if (rex_function->getName() == "OFFSET_IN_FRAGMENT"sv) {
-    CHECK_EQ(size_t(0), rex_function->size());
-    return translateOffsetInFragment();
+    CHECK_EQ(size_t(1), rex_function->size());
+    return translateOffsetInFragment(rex_function);
+  }
+  if (rex_function->getName() == "FRAGMENT_ID"sv) {
+    CHECK_EQ(size_t(1), rex_function->size());
+    return translateFragmentId(rex_function);
   }
   if (rex_function->getName() == "ARRAY"sv) {
     // Var args; currently no check.  Possible fix-me -- can array have 0 elements?
