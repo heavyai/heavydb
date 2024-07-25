@@ -60,6 +60,9 @@ class ForeignDataImporter : public AbstractImporter {
   ImportStatus importGeneral(const Catalog_Namespace::SessionInfo* session_info,
                              const std::string& copy_from_source,
                              const CopyParams& copy_params);
+  ImportStatus importGeneralNoFinalize(const Catalog_Namespace::SessionInfo* session_info,
+                                       const std::string& copy_from_source,
+                                       const CopyParams& copy_params);
 
   ImportStatus importGeneralS3(const Catalog_Namespace::SessionInfo* session_info);
 
