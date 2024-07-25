@@ -226,8 +226,13 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (geo_expr) {
     return codegenGeoExpr(geo_expr, co);
   }
-  if (dynamic_cast<const Analyzer::OffsetInFragment*>(expr)) {
-    return {posArg(nullptr)};
+  auto offset_in_fragment = dynamic_cast<const Analyzer::OffsetInFragment*>(expr);
+  if (offset_in_fragment) {
+    return {codegenOffsetInFragment(offset_in_fragment)};
+  }
+  auto fragment_id = dynamic_cast<const Analyzer::FragmentId*>(expr);
+  if (fragment_id) {
+    return {codegenFragmentId(fragment_id)};
   }
   if (dynamic_cast<const Analyzer::WindowFunction*>(expr)) {
     throw NativeExecutionError("Window expression not supported in this context");

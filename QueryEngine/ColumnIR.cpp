@@ -585,14 +585,9 @@ llvm::Value* CodeGenerator::colByteStream(const Analyzer::ColumnVar* col_var,
   CHECK_GE(cgen_state_->row_func_->arg_size(), size_t(3));
   const auto stream_arg_name =
       "col_buf" + std::to_string(plan_state_->getLocalColumnId(col_var, fetch_column));
-  for (auto& arg : cgen_state_->row_func_->args()) {
-    if (arg.getName() == stream_arg_name) {
-      CHECK(arg.getType() == llvm::Type::getInt8PtrTy(cgen_state_->context_));
-      return &arg;
-    }
-  }
-  CHECK(false);
-  return nullptr;
+  auto* arg = get_arg_by_name(cgen_state_->row_func_, stream_arg_name);
+  CHECK(arg->getType() == llvm::Type::getInt8PtrTy(cgen_state_->context_));
+  return arg;
 }
 
 llvm::Value* CodeGenerator::posArg(const Analyzer::Expr* expr) const {
@@ -612,13 +607,48 @@ llvm::Value* CodeGenerator::posArg(const Analyzer::Expr* expr) const {
     }
     return hash_pos_it->second;
   }
-  for (auto& arg : cgen_state_->row_func_->args()) {
-    if (arg.getName() == "pos") {
-      CHECK(arg.getType()->isIntegerTy(64));
-      return &arg;
-    }
-  }
-  abort();
+  auto* arg = get_arg_by_name(cgen_state_->row_func_, "pos");
+  CHECK(arg->getType()->isIntegerTy(64));
+  return arg;
+}
+
+llvm::Value* CodeGenerator::codegenOffsetInFragment(
+    const Analyzer::OffsetInFragment* offset_in_fragment) const {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  // get rte_idx from col var and validate
+  auto col_var = offset_in_fragment->getColVar();
+  CHECK(col_var);
+  // this does the rest
+  return posArg(col_var.get());
+}
+
+llvm::Value* CodeGenerator::codegenFragmentId(
+    const Analyzer::FragmentId* fragment_id) const {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  // get rte_idx from col var and validate
+  auto col_var = fragment_id->getColVar();
+  CHECK(col_var);
+  auto const rte_idx = col_var->get_rte_idx();
+  CHECK_GE(rte_idx, 0);
+  // get frag_id base ptr and ensure type
+  auto* frag_id_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_id");
+  CHECK(frag_id_ptr->getType()->isPointerTy());
+  CHECK(frag_id_ptr->getType()->getPointerElementType()->isIntegerTy(32));
+  // offset for rte idx
+  auto frag_id_for_rte_idx_ptr = cgen_state_->ir_builder_.CreateGEP(
+      frag_id_ptr->getType()->getScalarType()->getPointerElementType(),
+      frag_id_ptr,
+      cgen_state_->llInt(rte_idx));
+  // get pointer and ensure type
+  CHECK(frag_id_for_rte_idx_ptr->getType()->isPointerTy());
+  CHECK(frag_id_for_rte_idx_ptr->getType()->getPointerElementType()->isIntegerTy(32));
+  // fetch the value
+  llvm::Value* value = cgen_state_->ir_builder_.CreateLoad(
+      frag_id_for_rte_idx_ptr->getType()->getPointerElementType(),
+      frag_id_for_rte_idx_ptr);
+  // sign-extend to i64 and return
+  return cgen_state_->ir_builder_.CreateSExt(value,
+                                             get_int_type(64, cgen_state_->context_));
 }
 
 // todo (yoonmin) : we have to revisit this logic and its usage

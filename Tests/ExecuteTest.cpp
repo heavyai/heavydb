@@ -26193,33 +26193,67 @@ TEST_F(Select, OffsetInFragment) {
     // With fragment_size of 2, we should have 10 frags
     EXPECT_EQ(10,
               v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM test WHERE offset_in_fragment() = 1;", dt)));
+                  "SELECT COUNT(*) FROM test WHERE offset_in_fragment(x) = 1;", dt)));
+    // same but as temp table
+    EXPECT_EQ(10,
+              v<int64_t>(run_simple_agg(
+                  "WITH test_temp AS (SELECT * FROM test WHERE offset_in_fragment(x) = "
+                  "1) SELECT COUNT(*) FROM test_temp;",
+                  dt)));
     EXPECT_EQ(
         10,
         v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM test WHERE offset_in_fragment() = CAST(1 AS INT);",
+            "SELECT COUNT(*) FROM test WHERE offset_in_fragment(x) = CAST(1 AS INT);",
             dt)));
     EXPECT_EQ(10,
               v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM test WHERE offset_in_fragment() < 1;", dt)));
+                  "SELECT COUNT(*) FROM test WHERE offset_in_fragment(x) < 1;", dt)));
     EXPECT_EQ(20,
               v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM test WHERE offset_in_fragment() <= 1;", dt)));
+                  "SELECT COUNT(*) FROM test WHERE offset_in_fragment(x) <= 1;", dt)));
     EXPECT_EQ(
         10,
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE offset_in_fragment() "
-                                  "<= 1 AND offset_in_fragment() != 0;",
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE offset_in_fragment(x) "
+                                  "<= 1 AND offset_in_fragment(x) != 0;",
                                   dt)));
-    EXPECT_EQ(
-        1,
-        v<int64_t>(run_simple_agg("SELECT CAST(AVG(offset_in_fragment()) AS BIGINT) FROM "
-                                  "test WHERE offset_in_fragment() > 0;",
-                                  dt)));
+    EXPECT_EQ(1,
+              v<int64_t>(
+                  run_simple_agg("SELECT CAST(AVG(offset_in_fragment(x)) AS BIGINT) FROM "
+                                 "test WHERE offset_in_fragment(x) > 0;",
+                                 dt)));
     const auto num_rows = v<int64_t>(run_simple_agg(
-        "SELECT COUNT(*) FROM (SELECT COUNT(*) FROM test WHERE offset_in_fragment() <= "
-        "10 GROUP BY MOD(offset_in_fragment(), 2));",
+        "SELECT COUNT(*) FROM (SELECT COUNT(*) FROM test WHERE offset_in_fragment(x) <= "
+        "10 GROUP BY MOD(offset_in_fragment(x), 2));",
         dt));
     EXPECT_EQ(num_rows, 2);
+  }
+}
+
+TEST_F(Select, FragmentId) {
+  // Skip test in sharded/distributed situations, as for OffsetInFragment
+  SKIP_IF_SHARDED();
+  SKIP_ALL_ON_AGGREGATOR();
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // With fragment_size of 2, we should have 10 frags
+    EXPECT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE fragment_id(x) = 0;", dt)));
+    EXPECT_EQ(10,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE fragment_id(x) < 5;", dt)));
+    // same but as temp table
+    EXPECT_EQ(
+        2,
+        v<int64_t>(run_simple_agg("WITH test_temp AS (SELECT * FROM test WHERE "
+                                  "fragment_id(x) = 0) SELECT COUNT(*) FROM test_temp;",
+                                  dt)));
+    EXPECT_EQ(
+        10,
+        v<int64_t>(run_simple_agg("WITH test_temp AS (SELECT * FROM test WHERE "
+                                  "fragment_id(x) < 5) SELECT COUNT(*) FROM test_temp;",
+                                  dt)));
   }
 }
 

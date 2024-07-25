@@ -2882,13 +2882,46 @@ class FunctionOperWithCustomTypeHandling : public FunctionOper {
   bool operator==(const Expr& rhs) const override;
 };
 
+class FragmentInfoOper : public Expr {
+ public:
+  FragmentInfoOper(std::shared_ptr<Analyzer::Expr> arg, const std::string& function_name)
+      : Expr(SQLTypeInfo(kBIGINT, true))
+      , col_var_{std::dynamic_pointer_cast<Analyzer::ColumnVar>(arg)} {
+    if (!col_var_) {
+      throw std::runtime_error("Argument of " + function_name +
+                               " must be a direct column reference");
+    }
+  };
+
+  std::shared_ptr<Analyzer::ColumnVar> getColVar() const { return col_var_; }
+
+ protected:
+  std::shared_ptr<Analyzer::ColumnVar> col_var_;
+};
+
 /*
  * @type OffsetInFragment
  * @brief The offset of a row in the current fragment. To be used by updates.
  */
-class OffsetInFragment : public Expr {
+class OffsetInFragment : public FragmentInfoOper {
  public:
-  OffsetInFragment() : Expr(SQLTypeInfo(kBIGINT, true)){};
+  OffsetInFragment(std::shared_ptr<Analyzer::Expr> arg)
+      : FragmentInfoOper(arg, "OFFSET_IN_FRAGMENT"){};
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  bool operator==(const Expr& rhs) const override;
+  std::string toString() const override;
+};
+
+/*
+ * @type FragmentId
+ * @brief The ID of the fragment containing the row.
+ */
+class FragmentId : public FragmentInfoOper {
+ public:
+  FragmentId(std::shared_ptr<Analyzer::Expr> arg)
+      : FragmentInfoOper(arg, "FRAGMENT_ID"){};
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
 

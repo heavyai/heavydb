@@ -5533,7 +5533,7 @@ TEST_F(GrantRevokeSelectColumnTest, NonImplementedPrivilege) {
 
 TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithUpdateQuery) {
   loginAdmin();
-  sql("GRANT SELECT (val,id), UPDATE ON TABLE test_table TO test_user;");
+  sql("GRANT SELECT (val,id,rowid), UPDATE ON TABLE test_table TO test_user;");
 
   loginTestUser();
   queryAndAssertException("SELECT str FROM test_table;",
@@ -5558,7 +5558,7 @@ TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithUpdateQuery) {
 
 TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithDeleteQueryNoWhereCondition) {
   loginAdmin();
-  sql("GRANT SELECT (val,id), DELETE ON TABLE test_table TO test_user;");
+  sql("GRANT SELECT (val,id,rowid), DELETE ON TABLE test_table TO test_user;");
 
   loginTestUser();
   sqlAndCompareResult("DELETE FROM test_table;", {});
@@ -5574,7 +5574,7 @@ TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithDeleteQueryNoWhereCondition) 
 
 TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithDeleteQuery) {
   loginAdmin();
-  sql("GRANT SELECT (val,id), DELETE ON TABLE test_table TO test_user;");
+  sql("GRANT SELECT (val,id,rowid), DELETE ON TABLE test_table TO test_user;");
 
   loginTestUser();
   sqlAndCompareResult(

@@ -214,8 +214,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const bool hoist_literals,
     const std::vector<int8_t>& literal_buff,
     std::vector<std::vector<const int8_t*>> col_buffers,
-    const std::vector<std::vector<int64_t>>& num_rows,
-    const std::vector<std::vector<uint64_t>>& frag_offsets,
+    const FetchResultFragmentInfo& fragment_info,
     const int32_t scan_limit,
     Data_Namespace::DataMgr* data_mgr,
     const unsigned block_size_x,
@@ -275,8 +274,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
 #endif
   auto [kernel_params, kernel_params_log] = prepareKernelParams(col_buffers,
                                                                 literal_buff,
-                                                                num_rows,
-                                                                frag_offsets,
+                                                                fragment_info,
                                                                 scan_limit,
                                                                 init_agg_vals,
                                                                 error_codes,
@@ -582,8 +580,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     const bool hoist_literals,
     const std::vector<int8_t>& literal_buff,
     std::vector<std::vector<const int8_t*>> col_buffers,
-    const std::vector<std::vector<int64_t>>& num_rows,
-    const std::vector<std::vector<uint64_t>>& frag_offsets,
+    const FetchResultFragmentInfo& fragment_info,
     const int32_t scan_limit,
     int32_t* error_code,
     const uint32_t start_rowid,
@@ -629,25 +626,29 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     }
   }
 
-  CHECK_EQ(num_rows.size(), col_buffers.size());
-  std::vector<int64_t> flatened_num_rows;
-  for (auto& nums : num_rows) {
-    flatened_num_rows.insert(flatened_num_rows.end(), nums.begin(), nums.end());
+  CHECK_EQ(fragment_info.num_rows.size(), col_buffers.size());
+  std::vector<int64_t> flattened_num_rows;
+  for (auto& nums : fragment_info.num_rows) {
+    flattened_num_rows.insert(flattened_num_rows.end(), nums.begin(), nums.end());
   }
-  std::vector<uint64_t> flatened_frag_offsets;
-  for (auto& offsets : frag_offsets) {
-    flatened_frag_offsets.insert(
-        flatened_frag_offsets.end(), offsets.begin(), offsets.end());
+  std::vector<uint64_t> flattened_frag_offsets;
+  for (auto& offsets : fragment_info.frag_offsets) {
+    flattened_frag_offsets.insert(
+        flattened_frag_offsets.end(), offsets.begin(), offsets.end());
+  }
+  std::vector<int32_t> flattened_frag_ids;
+  for (auto& ids : fragment_info.frag_ids) {
+    flattened_frag_ids.insert(flattened_frag_ids.end(), ids.begin(), ids.end());
   }
   const int64_t rowid_lookup_num_rows =
       start_rowid ? static_cast<int64_t>(start_rowid) + 1 : 0;
   int64_t const* num_rows_ptr;
   if (num_rows_to_process > 0) {
-    flatened_num_rows[0] = num_rows_to_process;
-    num_rows_ptr = flatened_num_rows.data();
+    flattened_num_rows[0] = num_rows_to_process;
+    num_rows_ptr = flattened_num_rows.data();
   } else {
     num_rows_ptr =
-        rowid_lookup_num_rows ? &rowid_lookup_num_rows : flatened_num_rows.data();
+        rowid_lookup_num_rows ? &rowid_lookup_num_rows : flattened_num_rows.data();
   }
   int32_t total_matched_init{0};
 
@@ -686,11 +687,12 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
         multifrag_cols_ptr,   // const int8_t***,  // col_buffers
         literal_buff.data(),  // const int8_t*,    // literals
         num_rows_ptr,         // const int64_t*,   // num_rows
-        flatened_frag_offsets.data(),  // const uint64_t*,  // frag_row_offsets
-        &scan_limit,                   // const int32_t*,   // max_matched
-        init_agg_value,                // const int64_t*,   // init_agg_value
-        join_hash_tables_ptr,          // const int64_t*,   // join_hash_tables_ptr
-        row_func_mgr_ptr);             // const int8_t*);   // row_func_mgr
+        flattened_frag_offsets.data(),  // const uint64_t*,  // frag_row_offsets
+        flattened_frag_ids.data(),      // const int32_t*,   // frag IDs
+        &scan_limit,                    // const int32_t*,   // max_matched
+        init_agg_value,                 // const int64_t*,   // init_agg_value
+        join_hash_tables_ptr,           // const int64_t*,   // join_hash_tables_ptr
+        row_func_mgr_ptr);              // const int8_t*);   // row_func_mgr
   } else {
     native_code->call(
         error_code,           // int32_t*,         // error_code
@@ -701,11 +703,12 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
         &start_rowid,         // const uint32_t*,  // start_rowid aka row_index_resume
         multifrag_cols_ptr,   // const int8_t***,  // col_buffers
         num_rows_ptr,         // const int64_t*,   // num_rows
-        flatened_frag_offsets.data(),  // const uint64_t*,  // frag_row_offsets
-        &scan_limit,                   // const int32_t*,   // max_matched
-        init_agg_value,                // const int64_t*,   // init_agg_value
-        join_hash_tables_ptr,          // const int64_t*,   // join_hash_tables_ptr
-        row_func_mgr_ptr);             // const int8_t*);   // row_func_mgr
+        flattened_frag_offsets.data(),  // const uint64_t*,  // frag_row_offsets
+        flattened_frag_ids.data(),      // const int32_t*,   // frag IDs
+        &scan_limit,                    // const int32_t*,   // max_matched
+        init_agg_value,                 // const int64_t*,   // init_agg_value
+        join_hash_tables_ptr,           // const int64_t*,   // join_hash_tables_ptr
+        row_func_mgr_ptr);              // const int8_t*);   // row_func_mgr
   }
 
   if (ra_exe_unit.estimator) {
@@ -970,8 +973,7 @@ std::pair<QueryExecutionContext::KernelParams, KernelParamsLog>
 QueryExecutionContext::prepareKernelParams(
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<int8_t>& literal_buff,
-    const std::vector<std::vector<int64_t>>& num_rows,
-    const std::vector<std::vector<uint64_t>>& frag_offsets,
+    const FetchResultFragmentInfo& fragment_info,
     const int32_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
     const std::vector<int32_t>& error_codes,
@@ -981,28 +983,37 @@ QueryExecutionContext::prepareKernelParams(
     const bool is_group_by) const {
   CHECK(device_allocator_);
   CHECK(literal_buff.empty() || hoist_literals) << literal_buff.size();
-  CHECK_EQ(num_rows.size(), col_buffers.size());
-  CHECK_EQ(frag_offsets.size(), col_buffers.size());
+  CHECK_EQ(fragment_info.num_rows.size(), col_buffers.size());
+  CHECK_EQ(fragment_info.frag_offsets.size(), col_buffers.size());
   KernelParamsLog params_log{};  // Log values to report in case of cuda error.
   params_log.hoist_literals = hoist_literals;
 
-  // All sizes are in number of bytes and divisible by 8 (int64_t-aligned).
   using KP = heavyai::KernelParam;
   KernelParamSizes param_sizes;
-  param_sizes[int(KP::ERROR_CODE)] = align_to<8>(sizeofVector(error_codes));
-  param_sizes[int(KP::TOTAL_MATCHED)] = align_to<8>(sizeof(uint32_t));
+  param_sizes[int(KP::ERROR_CODE)] = sizeofVector(error_codes);
+  param_sizes[int(KP::TOTAL_MATCHED)] = sizeof(uint32_t);
   param_sizes[int(KP::GROUPBY_BUF)] = 0u;
-  param_sizes[int(KP::NUM_FRAGMENTS)] = align_to<8>(sizeof(uint32_t));
-  param_sizes[int(KP::NUM_TABLES)] = align_to<8>(sizeof(num_tables));
-  param_sizes[int(KP::ROW_INDEX_RESUME)] = align_to<8>(sizeof(uint32_t));
+  param_sizes[int(KP::NUM_FRAGMENTS)] = sizeof(uint32_t);
+  param_sizes[int(KP::NUM_TABLES)] = sizeof(num_tables);
+  param_sizes[int(KP::ROW_INDEX_RESUME)] = sizeof(uint32_t);
   param_sizes[int(KP::COL_BUFFERS)] = sizeofColBuffers(col_buffers);
-  param_sizes[int(KP::LITERALS)] = align_to<8>(sizeofLiterals(literal_buff));
-  param_sizes[int(KP::NUM_ROWS)] = sizeofFlattened2dVec(num_tables, num_rows);
-  param_sizes[int(KP::FRAG_ROW_OFFSETS)] = sizeofFlattened2dVec(num_tables, frag_offsets);
-  param_sizes[int(KP::MAX_MATCHED)] = align_to<8>(sizeof(scan_limit));
+  param_sizes[int(KP::LITERALS)] = sizeofLiterals(literal_buff);
+  param_sizes[int(KP::NUM_ROWS)] =
+      sizeofFlattened2dVec(num_tables, fragment_info.num_rows);
+  param_sizes[int(KP::FRAG_ROW_OFFSETS)] =
+      sizeofFlattened2dVec(num_tables, fragment_info.frag_offsets);
+  param_sizes[int(KP::FRAG_IDS)] =
+      sizeofFlattened2dVec(num_tables, fragment_info.frag_ids);
+  param_sizes[int(KP::MAX_MATCHED)] = sizeof(scan_limit);
   param_sizes[int(KP::INIT_AGG_VALS)] = sizeofInitAggVals(is_group_by, init_agg_vals);
   param_sizes[int(KP::JOIN_HASH_TABLES)] = sizeofJoinHashTables(join_hash_tables);
   param_sizes[int(KP::ROW_FUNC_MGR)] = 0u;
+
+  // 8-byte align all param_sizes and accumulate
+  std::transform(param_sizes.begin(),
+                 param_sizes.end(),
+                 param_sizes.begin(),
+                 [](size_t param_size) -> size_t { return align_to<8>(param_size); });
   auto const nbytes = std::accumulate(param_sizes.begin(), param_sizes.end(), size_t(0));
 
   KernelParams params;
@@ -1054,14 +1065,18 @@ QueryExecutionContext::prepareKernelParams(
       KPL::NamedSize{"Size", sizeofLiterals(literal_buff)};
 
   copyFlattened2dVecToDevice(
-      params[int(KP::NUM_ROWS)], num_tables, num_rows, "params[NUM_ROWS]");
-  params_log.values[int(KP::NUM_ROWS)] = num_rows;
+      params[int(KP::NUM_ROWS)], num_tables, fragment_info.num_rows, "params[NUM_ROWS]");
+  params_log.values[int(KP::NUM_ROWS)] = fragment_info.num_rows;
 
   copyFlattened2dVecToDevice(params[int(KP::FRAG_ROW_OFFSETS)],
                              num_tables,
-                             frag_offsets,
+                             fragment_info.frag_offsets,
                              "params[FRAG_ROW_OFFSETS]");
-  params_log.values[int(KP::FRAG_ROW_OFFSETS)] = frag_offsets;
+  params_log.values[int(KP::FRAG_ROW_OFFSETS)] = fragment_info.frag_offsets;
+
+  copyFlattened2dVecToDevice(
+      params[int(KP::FRAG_IDS)], num_tables, fragment_info.frag_ids, "params[FRAG_IDS]");
+  params_log.values[int(KP::FRAG_IDS)] = fragment_info.frag_ids;
 
   // Note that this will be overwritten if we are setting the entry count during group by
   // buffer allocation and initialization
