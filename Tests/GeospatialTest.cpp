@@ -2658,6 +2658,12 @@ TEST(GeoSpatial, Math) {
             R"(SELECT ST_Distance('POINT(0.166666666 0.933333333)', ST_Centroid('MULTIPOLYGON(((1 0,2 1,2 0,1 0)),((-1 -1,2 2,-1 2,-1 -1)))'));)",
             dt)),
         static_cast<double>(0.00001));
+    ASSERT_NEAR(
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Distance('POINT(0 0)', ST_Centroid('MULTILINESTRING((1 0,2 0,2 1),(-1 0,-2 0,-2 -1))'));)",
+            dt)),
+        static_cast<double>(0.00001));
     // Degenerate input geometries triggering fall backs to linestring and point centroids
     // zero-area, non-zero-length: fall back to linestring centroid
     ASSERT_NEAR(
@@ -4049,6 +4055,8 @@ class CTE : public testing::TestWithParam<CTEParam> {
   // Exact expression for ST_X(ST_CENTROID('LINESTRING(3 0, 6 6, 7 7)'))
   static constexpr double l_centroid_x =
       (4.5 * 3 * sqrt5 + 6.5 * sqrt2) / (3 * sqrt5 + sqrt2);
+  // Value of centroid of MULTILINESTRING((3 0,6 6,7 7),(3.2 4.2,5.1 5.2))
+  static constexpr double ml_centroid_x = 4.7022438800466304;
   static void SetUpTestSuite() {
     run_ddl_statement("DROP TABLE IF EXISTS AllGeoTypes;");
     setup_all_geo_types();  // CREATE and INSERT into TABLE AllGeoTypes
@@ -4085,8 +4093,6 @@ TEST_P(CTE, ST_Centroid) {
       << query.str();
 }
 
-// QE-1076: ST_Centroid crashes on MULTILINESTRING columns.
-// Comment-in the below commented-out tests when this is fixed.
 INSTANTIATE_TEST_SUITE_P(
     GeoSpatial,
     CTE,
@@ -4109,13 +4115,13 @@ INSTANTIATE_TEST_SUITE_P(
                                      TestParam<double>{CTE::l_centroid_x, "gl4n"},
                                      TestParam<double>{CTE::l_centroid_x, "gl9"},
                                      TestParam<double>{CTE::l_centroid_x, "gl9n"},
-                                     // TestParam<double>{0.0, "ml"},
-                                     // TestParam<double>{0.0, "gml"},
-                                     // TestParam<double>{0.0, "gml4"},
-                                     // TestParam<double>{0.0, "gml4e"},
-                                     // TestParam<double>{0.0, "gml4n"},
-                                     // TestParam<double>{0.0, "gml9"},
-                                     // TestParam<double>{0.0, "gml9n"},
+                                     TestParam<double>{CTE::ml_centroid_x, "ml"},
+                                     TestParam<double>{CTE::ml_centroid_x, "gml"},
+                                     TestParam<double>{CTE::ml_centroid_x, "gml4"},
+                                     TestParam<double>{CTE::ml_centroid_x, "gml4e"},
+                                     TestParam<double>{CTE::ml_centroid_x, "gml4n"},
+                                     TestParam<double>{CTE::ml_centroid_x, "gml9"},
+                                     TestParam<double>{CTE::ml_centroid_x, "gml9n"},
                                      TestParam<double>{4 / 3.0, "p"},
                                      TestParam<double>{4 / 3.0, "gp"},
                                      TestParam<double>{4 / 3.0, "gp4"},
