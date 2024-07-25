@@ -511,7 +511,7 @@ int32_t get_proxy_foreign_table_fragment_size(
 }
 }  // namespace
 
-ImportStatus ForeignDataImporter::importGeneral(
+ImportStatus ForeignDataImporter::importGeneralNoFinalize(
     const Catalog_Namespace::SessionInfo* session_info,
     const std::string& copy_from_source,
     const CopyParams& copy_params) {
@@ -523,66 +523,66 @@ ImportStatus ForeignDataImporter::importGeneral(
   validate_copy_params(copy_params);
 
   ImportStatus import_status;
-  {
-    auto& current_user = session_info->get_currentUser();
-    auto [server, user_mapping, foreign_table] =
-        foreign_storage::create_proxy_fsi_objects(copy_from_source,
-                                                  copy_params,
-                                                  catalog.getDatabaseId(),
-                                                  table_,
-                                                  current_user.userId);
+  auto& current_user = session_info->get_currentUser();
+  auto [server, user_mapping, foreign_table] =
+      foreign_storage::create_proxy_fsi_objects(copy_from_source,
+                                                copy_params,
+                                                catalog.getDatabaseId(),
+                                                table_,
+                                                current_user.userId);
 
-    // maximum number of fragments buffered in memory at any one time, affects
-    // `maxFragRows` heuristic below
-    const size_t maximum_num_fragments_buffered = 3;
-    // set fragment size for proxy foreign table during import
-    foreign_table->maxFragRows =
-        get_proxy_foreign_table_fragment_size(maximum_num_fragments_buffered,
-                                              copy_params.max_import_batch_row_count,
-                                              *session_info,
-                                              table_->tableId);
+  // maximum number of fragments buffered in memory at any one time, affects
+  // `maxFragRows` heuristic below
+  const size_t maximum_num_fragments_buffered = 3;
+  // set fragment size for proxy foreign table during import
+  foreign_table->maxFragRows =
+      get_proxy_foreign_table_fragment_size(maximum_num_fragments_buffered,
+                                            copy_params.max_import_batch_row_count,
+                                            *session_info,
+                                            table_->tableId);
 
-    // log for debugging purposes
-    LOG(INFO) << "Import fragment row count is " << foreign_table->maxFragRows
-              << " for table " << table_->tableName;
+  // log for debugging purposes
+  LOG(INFO) << "Import fragment row count is " << foreign_table->maxFragRows
+            << " for table " << table_->tableName;
 
-    auto data_wrapper =
-        foreign_storage::ForeignDataWrapperFactory::createForGeneralImport(
-            copy_params,
-            catalog.getDatabaseId(),
-            foreign_table.get(),
-            user_mapping.get());
+  auto data_wrapper = foreign_storage::ForeignDataWrapperFactory::createForGeneralImport(
+      copy_params, catalog.getDatabaseId(), foreign_table.get(), user_mapping.get());
 
-    int32_t max_fragment_id = std::numeric_limits<int32_t>::max();
-    if (!data_wrapper->isLazyFragmentFetchingEnabled()) {
-      ChunkMetadataVector metadata_vector =
-          metadata_scan(data_wrapper.get(), foreign_table.get());
-      if (metadata_vector.empty()) {  // an empty data source
-        return {};
-      }
-
-
-      max_fragment_id = 0;
-      for (const auto& [key, _] : metadata_vector) {
-        max_fragment_id = std::max(max_fragment_id, key[CHUNK_KEY_FRAGMENT_IDX]);
-      }
-      CHECK_GE(max_fragment_id, 0);
+  int32_t max_fragment_id = std::numeric_limits<int32_t>::max();
+  if (!data_wrapper->isLazyFragmentFetchingEnabled()) {
+    ChunkMetadataVector metadata_vector =
+        metadata_scan(data_wrapper.get(), foreign_table.get());
+    if (metadata_vector.empty()) {  // an empty data source
+      return {};
     }
 
-    import_status = import_foreign_data(max_fragment_id,
-                                        connector_.get(),
-                                        catalog,
-                                        table_,
-                                        data_wrapper.get(),
-                                        session_info,
-                                        copy_params,
-                                        copy_from_source,
-                                        maximum_num_fragments_buffered);
+    max_fragment_id = 0;
+    for (const auto& [key, _] : metadata_vector) {
+      max_fragment_id = std::max(max_fragment_id, key[CHUNK_KEY_FRAGMENT_IDX]);
+    }
+    CHECK_GE(max_fragment_id, 0);
+  }
 
-  }  // this scope ensures that fsi proxy objects are destroyed prior to checkpoint
+  import_status = import_foreign_data(max_fragment_id,
+                                      connector_.get(),
+                                      catalog,
+                                      table_,
+                                      data_wrapper.get(),
+                                      session_info,
+                                      copy_params,
+                                      copy_from_source,
+                                      maximum_num_fragments_buffered);
 
+  return import_status;
+}
+
+ImportStatus ForeignDataImporter::importGeneral(
+    const Catalog_Namespace::SessionInfo* session_info,
+    const std::string& copy_from_source,
+    const CopyParams& copy_params) {
+  auto import_status =
+      importGeneralNoFinalize(session_info, copy_from_source, copy_params);
   finalize(*session_info, import_status, table_->tableId);
-
   return import_status;
 }
 
@@ -666,7 +666,10 @@ ImportStatus ForeignDataImporter::importGeneralS3(
   };
 
   std::function<void(const std::vector<size_t>&)> download_objects =
-      [&](const std::vector<size_t>& partition) {
+      [&, parent_thread_local_ids = logger::thread_local_ids()](
+          const std::vector<size_t>& partition) {
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+
         for (const auto& index : partition) {
           DownloadedObjectToProcess& object = objects_to_process[index];
           const std::string& obj_key = object.object_key;
@@ -711,81 +714,81 @@ ImportStatus ForeignDataImporter::importGeneralS3(
         }
       };
 
-  std::function<void()> import_local_files =
-      [&, parent_thread_local_ids = logger::thread_local_ids()]() {
-        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-        DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
-        for (size_t object_index = 0; object_index < object_count;) {
-          {
-            std::unique_lock communication_lock(communication_mutex);
-            files_download_condition.wait(
-                communication_lock,
-                [&download_exception_occured, object_index, &objects_to_process]() {
-                  return objects_to_process[object_index].is_downloaded ||
-                         download_exception_occured;
-                });
-            if (download_exception_occured) {  // do not wait for object index if a
-                                               // download error has occured
-              return;
-            }
-          }
-
-          // find largest range of files to import
-          size_t end_object_index = object_count;
-          for (size_t i = object_index + 1; i < object_count; ++i) {
-            if (!objects_to_process[i].is_downloaded) {
-              end_object_index = i;
-              break;
-            }
-          }
-
-          ImportStatus local_import_status;
-          std::string local_import_dir;
-          try {
-            CopyParams local_copy_params;
-            std::tie(local_import_dir, local_copy_params) =
-                get_local_copy_source_and_params(
-                    copy_params_, objects_to_process, object_index, end_object_index);
-            local_import_status =
-                importGeneral(session_info, local_import_dir, local_copy_params);
-            // clean up temporary files
-            std::filesystem::remove_all(local_import_dir);
-          } catch (const std::exception& except) {
-            // replace all occurences of file names with the object keys for
-            // users
-            std::string what = except.what();
-
-            for (size_t i = object_index; i < end_object_index; ++i) {
-              auto& object = objects_to_process[i];
-              what = boost::regex_replace(what,
-                                          boost::regex{object.import_file_path},
-                                          bucket_name + "/" + object.object_key);
-            }
-            {
-              std::unique_lock communication_lock(communication_mutex);
-              continue_downloading = false;
-            }
-            // clean up temporary files
-            std::filesystem::remove_all(local_import_dir);
-            throw std::runtime_error(what);
-          }
-          aggregate_import_status += local_import_status;
-          import_export::Importer::set_import_status(copy_from_source_,
-                                                     aggregate_import_status);
-          if (aggregate_import_status.load_failed) {
-            {
-              std::unique_lock communication_lock(communication_mutex);
-              continue_downloading = false;
-            }
-            return;
-          }
-
-          object_index =
-              end_object_index;  // all objects in range [object_index,end_object_index)
-                                 // correctly imported at this point in excecution, move
-                                 // onto next range
+  std::function<void()> import_local_files = [&,
+                                              parent_thread_local_ids =
+                                                  logger::thread_local_ids()]() {
+    logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+    DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
+    for (size_t object_index = 0; object_index < object_count;) {
+      {
+        std::unique_lock communication_lock(communication_mutex);
+        files_download_condition.wait(
+            communication_lock,
+            [&download_exception_occured, object_index, &objects_to_process]() {
+              return objects_to_process[object_index].is_downloaded ||
+                     download_exception_occured;
+            });
+        if (download_exception_occured) {  // do not wait for object index if a
+                                           // download error has occured
+          return;
         }
-      };
+      }
+
+      // find largest range of files to import
+      size_t end_object_index = object_count;
+      for (size_t i = object_index + 1; i < object_count; ++i) {
+        if (!objects_to_process[i].is_downloaded) {
+          end_object_index = i;
+          break;
+        }
+      }
+
+      ImportStatus local_import_status;
+      std::string local_import_dir;
+      try {
+        CopyParams local_copy_params;
+        std::tie(local_import_dir, local_copy_params) = get_local_copy_source_and_params(
+            copy_params_, objects_to_process, object_index, end_object_index);
+        local_import_status =
+            importGeneralNoFinalize(session_info, local_import_dir, local_copy_params);
+        // clean up temporary files
+        std::filesystem::remove_all(local_import_dir);
+      } catch (const std::exception& except) {
+        // replace all occurences of file names with the object keys for
+        // users
+        std::string what = except.what();
+
+        for (size_t i = object_index; i < end_object_index; ++i) {
+          auto& object = objects_to_process[i];
+          what = boost::regex_replace(what,
+                                      boost::regex{object.import_file_path},
+                                      bucket_name + "/" + object.object_key);
+        }
+        {
+          std::unique_lock communication_lock(communication_mutex);
+          continue_downloading = false;
+        }
+        // clean up temporary files
+        std::filesystem::remove_all(local_import_dir);
+        throw std::runtime_error(what);
+      }
+      aggregate_import_status += local_import_status;
+      import_export::Importer::set_import_status(copy_from_source_,
+                                                 aggregate_import_status);
+      if (aggregate_import_status.load_failed) {
+        {
+          std::unique_lock communication_lock(communication_mutex);
+          continue_downloading = false;
+        }
+        return;
+      }
+
+      object_index =
+          end_object_index;  // all objects in range [object_index,end_object_index)
+                             // correctly imported at this point in excecution, move
+                             // onto next range
+    }
+  };
 
   std::vector<size_t> partition_range(object_count);
   std::iota(partition_range.begin(), partition_range.end(), 0);
@@ -803,6 +806,9 @@ ImportStatus ForeignDataImporter::importGeneralS3(
   for (auto& future : download_futures) {
     future.get();
   }
+
+  finalize(*session_info, aggregate_import_status, table_->tableId);
+
   return aggregate_import_status;
 
 #else
