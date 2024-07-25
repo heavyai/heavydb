@@ -126,9 +126,10 @@ int vt_eof(sqlite3_vtab_cursor* cur) {
 
 int64_t get_num_rows(OmniSciCursor* p_cur) {
   auto p = reinterpret_cast<OmniSciVtab*>(p_cur->base.pVtab);
-  CHECK_EQ(p->external_query_table->fetch_result.num_rows.size(), size_t(1));
-  CHECK_EQ(p->external_query_table->fetch_result.num_rows.front().size(), size_t(1));
-  return p->external_query_table->fetch_result.num_rows.front().front();
+  auto const& num_rows = p->external_query_table->fetch_result.fragment_info.num_rows;
+  CHECK_EQ(num_rows.size(), size_t(1));
+  CHECK_EQ(num_rows.front().size(), size_t(1));
+  return num_rows.front().front();
 }
 
 int vt_next(sqlite3_vtab_cursor* cur) {

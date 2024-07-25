@@ -235,7 +235,11 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::deep_copy() const {
 }
 
 std::shared_ptr<Analyzer::Expr> OffsetInFragment::deep_copy() const {
-  return makeExpr<OffsetInFragment>();
+  return makeExpr<OffsetInFragment>(col_var_->deep_copy());
+}
+
+std::shared_ptr<Analyzer::Expr> FragmentId::deep_copy() const {
+  return makeExpr<FragmentId>(col_var_->deep_copy());
 }
 
 std::shared_ptr<Analyzer::Expr> WindowFrame::deep_copy() const {
@@ -2677,6 +2681,10 @@ bool OffsetInFragment::operator==(const Expr& rhs) const {
   return typeid(rhs) == typeid(OffsetInFragment);
 }
 
+bool FragmentId::operator==(const Expr& rhs) const {
+  return typeid(rhs) == typeid(FragmentId);
+}
+
 bool WindowFrame::operator==(const Expr& rhs) const {
   const WindowFrame& rhs_window_frame = dynamic_cast<const WindowFrame&>(rhs);
   if (bound_type_ == rhs_window_frame.bound_type_) {
@@ -3155,6 +3163,10 @@ std::string DatetruncExpr::toString() const {
 
 std::string OffsetInFragment::toString() const {
   return "(OffsetInFragment) ";
+}
+
+std::string FragmentId::toString() const {
+  return "(FragmentId) ";
 }
 
 std::string WindowFrame::toString() const {

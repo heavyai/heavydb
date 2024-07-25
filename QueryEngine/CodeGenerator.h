@@ -73,6 +73,10 @@ class CodeGenerator {
   // Generates the index of the current row in the context of query execution.
   llvm::Value* posArg(const Analyzer::Expr*) const;
 
+  llvm::Value* codegenOffsetInFragment(const Analyzer::OffsetInFragment*) const;
+
+  llvm::Value* codegenFragmentId(const Analyzer::FragmentId*) const;
+
   llvm::Value* toBool(llvm::Value*);
 
   llvm::Value* castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti);

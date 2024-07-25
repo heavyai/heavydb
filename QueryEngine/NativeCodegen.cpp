@@ -1761,6 +1761,9 @@ void set_row_func_argnames(llvm::Function* row_func,
   arg_it->setName("frag_row_off");
   ++arg_it;
 
+  arg_it->setName("frag_id");
+  ++arg_it;
+
   arg_it->setName("num_rows_per_scan");
   ++arg_it;
 
@@ -1814,6 +1817,9 @@ llvm::Function* create_row_function(const size_t in_col_count,
 
   // fragment row offset argument
   row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+
+  // fragment ids argument
+  row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
 
   // number of rows for each scan
   row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
