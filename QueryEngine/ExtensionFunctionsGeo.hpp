@@ -490,10 +490,10 @@ double distance_ring_linestring(int8_t* ring,
   double min_distance = 0.0;
 
   Point2D re1 = get_point(ring, ring_num_coords - 2, ic1, isr1, osr);
-  for (auto i = 0; i < ring_num_coords; i += 2) {
+  for (int32_t i = 0; i < ring_num_coords; i += 2) {
     Point2D re2 = get_point(ring, i, ic1, isr1, osr);
     Point2D le1 = get_point(l, 0, ic2, isr2, osr);
-    for (auto j = 2; j < lnum_coords; j += 2) {
+    for (int32_t j = 2; j < lnum_coords; j += 2) {
       Point2D le2 = get_point(l, j, ic2, isr2, osr);
       auto distance =
           distance_line_line(re1.x, re1.y, re2.x, re2.y, le1.x, le1.y, le2.x, le2.y);
@@ -526,10 +526,10 @@ double distance_ring_ring(int8_t* ring1,
                           double threshold) {
   double min_distance = 0.0;
   Point2D e11 = get_point(ring1, ring1_num_coords - 2, ic1, isr1, osr);
-  for (auto i = 0; i < ring1_num_coords; i += 2) {
+  for (int32_t i = 0; i < ring1_num_coords; i += 2) {
     Point2D e12 = get_point(ring1, i, ic1, isr1, osr);
     Point2D e21 = get_point(ring2, ring2_num_coords - 2, ic2, isr2, osr);
-    for (auto j = 0; j < ring2_num_coords; j += 2) {
+    for (int32_t j = 0; j < ring2_num_coords; j += 2) {
       Point2D e22 = get_point(ring2, j, ic2, isr2, osr);
       auto distance =
           distance_line_line(e11.x, e11.y, e12.x, e12.y, e21.x, e21.y, e22.x, e22.y);
@@ -1198,7 +1198,7 @@ double ST_Length_MultiLineString(int8_t* coords,
 
   auto next_linestring_coords = coords;
 
-  for (auto l = 0; l < linestring_sizes_sz; l++) {
+  for (int64_t l = 0; l < linestring_sizes_sz; l++) {
     auto linestring_coords = next_linestring_coords;
     auto linestring_sizes = reinterpret_cast<int32_t*>(linestring_sizes_in);
     auto linestring_num_points = linestring_sizes[l];
@@ -1276,13 +1276,13 @@ DEVICE ALWAYS_INLINE double perimeter_multipolygon(int8_t* mpoly_coords,
   auto next_poly_coords = mpoly_coords;
   auto next_poly_ring_sizes = mpoly_ring_sizes;
 
-  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+  for (int32_t poly = 0; poly < mpoly_num_polys; poly++) {
     auto poly_coords = next_poly_coords;
     auto poly_ring_sizes = next_poly_ring_sizes;
     auto poly_num_rings = reinterpret_cast<int32_t*>(mpoly_poly_sizes)[poly];
     // Count number of coords in all of poly's rings, advance ring size pointer.
     int32_t poly_num_coords = 0;
-    for (auto ring = 0; ring < poly_num_rings; ring++) {
+    for (int32_t ring = 0; ring < poly_num_rings; ring++) {
       poly_num_coords += 2 * *next_poly_ring_sizes++;
     }
     auto poly_coords_size = poly_num_coords * compression_unit_size(ic);
@@ -1396,7 +1396,7 @@ DEVICE ALWAYS_INLINE double area_polygon(int8_t* poly_coords,
   // Add up the areas of all rings.
   // External ring is CCW, open - positive area.
   // Internal rings (holes) are CW, open - negative areas.
-  for (auto r = 0; r < poly_num_rings; r++) {
+  for (int32_t r = 0; r < poly_num_rings; r++) {
     auto ring_coords_size = poly_ring_sizes[r] * 2 * compression_unit_size(ic);
     area += area_ring(ring_coords, ring_coords_size, ic, isr, osr);
     // Advance to the next ring.
@@ -1439,13 +1439,13 @@ double ST_Area_MultiPolygon(int8_t* mpoly_coords,
   auto next_poly_coords = mpoly_coords;
   auto next_poly_ring_sizes = reinterpret_cast<int32_t*>(mpoly_ring_sizes);
 
-  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+  for (int32_t poly = 0; poly < mpoly_num_polys; poly++) {
     auto poly_coords = next_poly_coords;
     auto poly_ring_sizes = next_poly_ring_sizes;
     auto poly_num_rings = mpoly_poly_sizes[poly];
     // Count number of coords in all of poly's rings, advance ring size pointer.
     int32_t poly_num_coords = 0;
-    for (auto ring = 0; ring < poly_num_rings; ring++) {
+    for (int32_t ring = 0; ring < poly_num_rings; ring++) {
       poly_num_coords += 2 * *next_poly_ring_sizes++;
     }
     auto poly_coords_size = poly_num_coords * compression_unit_size(ic);
@@ -1586,6 +1586,47 @@ void ST_Centroid_LineString(int8_t* coords,
   }
 }
 
+EXTENSION_NOINLINE
+void ST_Centroid_MultiLineString(int8_t* coords,
+                                 int64_t coords_sz,
+                                 int8_t* linestring_sizes_in,
+                                 int64_t linestring_sizes_sz,
+                                 int32_t ic,
+                                 int32_t isr,
+                                 int32_t osr,
+                                 double* linestring_centroid) {
+  double length = 0.0;
+  double linestring_centroid_sum[2] = {0.0, 0.0};
+  int64_t num_points = 0;
+  double point_centroid_sum[2] = {0.0, 0.0};
+  auto next_linestring_coords = coords;
+  for (int64_t l = 0; l < linestring_sizes_sz; l++) {
+    auto linestring_coords = next_linestring_coords;
+    auto linestring_sizes = reinterpret_cast<int32_t*>(linestring_sizes_in);
+    auto linestring_num_points = linestring_sizes[l];
+    auto linestring_num_coords = 2 * linestring_num_points;
+    auto linestring_coords_size = linestring_num_coords * compression_unit_size(ic);
+    next_linestring_coords += linestring_coords_size;
+    centroid_add_linestring(linestring_coords,
+                            linestring_coords_size,
+                            ic,
+                            isr,
+                            osr,
+                            false,
+                            &length,
+                            &linestring_centroid_sum[0],
+                            &num_points,
+                            &point_centroid_sum[0]);
+  }
+  if (length > 0) {
+    linestring_centroid[0] = linestring_centroid_sum[0] / length;
+    linestring_centroid[1] = linestring_centroid_sum[1] / length;
+  } else if (num_points > 0) {
+    linestring_centroid[0] = point_centroid_sum[0] / num_points;
+    linestring_centroid[1] = point_centroid_sum[1] / num_points;
+  }
+}
+
 DEVICE ALWAYS_INLINE bool centroid_add_triangle(double x1,
                                                 double y1,
                                                 double x2,
@@ -1662,7 +1703,7 @@ DEVICE ALWAYS_INLINE bool centroid_add_polygon(int8_t* poly_coords,
 
   auto ring_coords = poly_coords;
 
-  for (auto r = 0; r < poly_num_rings; r++) {
+  for (int64_t r = 0; r < poly_num_rings; r++) {
     auto ring_coords_size = poly_ring_sizes[r] * 2 * compression_unit_size(ic);
     // Shape - positive area, holes - negative areas
     double sign = (r == 0) ? 1.0 : -1.0;
@@ -1762,13 +1803,13 @@ void ST_Centroid_MultiPolygon(int8_t* mpoly_coords,
   auto next_poly_coords = mpoly_coords;
   auto next_poly_ring_sizes = mpoly_ring_sizes;
 
-  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+  for (int32_t poly = 0; poly < mpoly_num_polys; poly++) {
     auto poly_coords = next_poly_coords;
     auto poly_ring_sizes = next_poly_ring_sizes;
     auto poly_num_rings = mpoly_poly_sizes[poly];
     // Count number of coords in all of poly's rings, advance ring size pointer.
     int32_t poly_num_coords = 0;
-    for (auto ring = 0; ring < poly_num_rings; ring++) {
+    for (int32_t ring = 0; ring < poly_num_rings; ring++) {
       poly_num_coords += 2 * *next_poly_ring_sizes++;
     }
     auto poly_coords_size = poly_num_coords * compression_unit_size(ic);
@@ -2034,7 +2075,7 @@ DEVICE ALWAYS_INLINE double distance_point_multilinestring(int8_t* p,
 
   auto next_linestring_coords = mls;
 
-  for (auto l = 0; l < mls_ls_num; l++) {
+  for (int64_t l = 0; l < mls_ls_num; l++) {
     auto linestring_coords = next_linestring_coords;
     auto linestring_num_points = mls_ls_sizes[l];
     auto linestring_num_coords = 2 * linestring_num_points;
@@ -2122,7 +2163,7 @@ DEVICE ALWAYS_INLINE double distance_point_polygon(int8_t* p,
   // Advance to first interior ring
   poly += exterior_ring_coords_size;
   // Check if one of the polygon's holes contains that point
-  for (auto r = 1; r < poly_num_rings; r++) {
+  for (int64_t r = 1; r < poly_num_rings; r++) {
     auto interior_ring_num_coords = poly_ring_sizes[r] * 2;
     auto interior_ring_coords_size =
         interior_ring_num_coords * compression_unit_size(ic2);
@@ -2168,13 +2209,13 @@ DEVICE ALWAYS_INLINE double distance_point_multipolygon(int8_t* p,
   auto next_poly_coords = mpoly_coords;
   auto next_poly_ring_sizes = mpoly_ring_sizes;
 
-  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+  for (int64_t poly = 0; poly < mpoly_num_polys; poly++) {
     auto poly_coords = next_poly_coords;
     auto poly_ring_sizes = next_poly_ring_sizes;
     auto poly_num_rings = mpoly_poly_sizes[poly];
     // Count number of coords in all of poly's rings, advance ring size pointer.
     int32_t poly_num_coords = 0;
-    for (auto ring = 0; ring < poly_num_rings; ring++) {
+    for (int32_t ring = 0; ring < poly_num_rings; ring++) {
       poly_num_coords += 2 * *next_poly_ring_sizes++;
     }
     auto poly_coords_size = poly_num_coords * compression_unit_size(ic2);
@@ -2758,7 +2799,7 @@ double ST_Distance_LineString_Polygon(int8_t* l,
   // an internal ring. Measure minimum distance between linestring segments and
   // poly rings. Crossing a ring zeroes the distance and causes an early return.
   auto poly_ring_coords = poly_coords;
-  for (auto r = 0; r < poly_num_rings; r++) {
+  for (int64_t r = 0; r < poly_num_rings; r++) {
     int64_t poly_ring_num_coords = poly_ring_sizes[r] * 2;
 
     auto distance = distance_ring_linestring(poly_ring_coords,
@@ -2809,13 +2850,13 @@ double ST_Distance_LineString_MultiPolygon(int8_t* l,
   auto next_poly_coords = mpoly_coords;
   auto next_poly_ring_sizes = mpoly_ring_sizes;
 
-  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+  for (int64_t poly = 0; poly < mpoly_num_polys; poly++) {
     auto poly_coords = next_poly_coords;
     auto poly_ring_sizes = next_poly_ring_sizes;
     auto poly_num_rings = mpoly_poly_sizes[poly];
     // Count number of coords in all of poly's rings, advance ring size pointer.
     int32_t poly_num_coords = 0;
-    for (auto ring = 0; ring < poly_num_rings; ring++) {
+    for (int32_t ring = 0; ring < poly_num_rings; ring++) {
       poly_num_coords += 2 * *next_poly_ring_sizes++;
     }
     auto poly_coords_size = poly_num_coords * compression_unit_size(ic2);
@@ -2995,11 +3036,11 @@ double ST_Distance_Polygon_Polygon(int8_t* poly1_coords,
   // intersection, and we can early-out with zero.
 
   auto poly1_ring_coords = poly1_coords;
-  for (auto r1 = 0; r1 < poly1_num_rings; r1++) {
+  for (int64_t r1 = 0; r1 < poly1_num_rings; r1++) {
     int64_t poly1_ring_num_coords = poly1_ring_sizes[r1] * 2;
 
     auto poly2_ring_coords = poly2_coords;
-    for (auto r2 = 0; r2 < poly2_num_rings; r2++) {
+    for (int64_t r2 = 0; r2 < poly2_num_rings; r2++) {
       int64_t poly2_ring_num_coords = poly2_ring_sizes[r2] * 2;
 
       auto distance = distance_ring_ring(poly1_ring_coords,
@@ -3054,13 +3095,13 @@ double ST_Distance_Polygon_MultiPolygon(int8_t* poly1_coords,
   auto next_poly_coords = mpoly_coords;
   auto next_poly_ring_sizes = mpoly_ring_sizes;
 
-  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+  for (int64_t poly = 0; poly < mpoly_num_polys; poly++) {
     auto poly_coords = next_poly_coords;
     auto poly_ring_sizes = next_poly_ring_sizes;
     auto poly_num_rings = mpoly_poly_sizes[poly];
     // Count number of coords in all of poly's rings, advance ring size pointer.
     int32_t poly_num_coords = 0;
-    for (auto ring = 0; ring < poly_num_rings; ring++) {
+    for (int32_t ring = 0; ring < poly_num_rings; ring++) {
       poly_num_coords += 2 * *next_poly_ring_sizes++;
     }
     auto poly_coords_size = poly_num_coords * compression_unit_size(ic2);
@@ -3217,13 +3258,13 @@ double ST_Distance_MultiPolygon_MultiPolygon(int8_t* mpoly1_coords,
   auto next_poly_coords = mpoly1_coords;
   auto next_poly_ring_sizes = mpoly1_ring_sizes;
 
-  for (auto poly = 0; poly < mpoly1_num_polys; poly++) {
+  for (int64_t poly = 0; poly < mpoly1_num_polys; poly++) {
     auto poly_coords = next_poly_coords;
     auto poly_ring_sizes = next_poly_ring_sizes;
     auto poly_num_rings = mpoly1_poly_sizes[poly];
     // Count number of coords in all of poly's rings, advance ring size pointer.
     int32_t poly_num_coords = 0;
-    for (auto ring = 0; ring < poly_num_rings; ring++) {
+    for (int32_t ring = 0; ring < poly_num_rings; ring++) {
       poly_num_coords += 2 * *next_poly_ring_sizes++;
     }
     auto poly_coords_size = poly_num_coords * compression_unit_size(ic1);
@@ -4043,7 +4084,7 @@ DEVICE ALWAYS_INLINE bool Contains_Polygon_Point_Impl(const int8_t* poly_coords,
     // Inside exterior ring
     poly += exterior_ring_num_coords * compression_unit_size(ic1);
     // Check that none of the polygon's holes contain that point
-    for (auto r = 1; r < poly_num_rings; r++) {
+    for (int64_t r = 1; r < poly_num_rings; r++) {
       const int64_t interior_ring_num_coords = poly_ring_sizes[r] * 2;
       if (point_in_polygon_winding_number<T, TEdgeBehavior>(
               poly, interior_ring_num_coords, px, py, ic1, isr1, osr)) {
@@ -4263,7 +4304,7 @@ DEVICE ALWAYS_INLINE bool Contains_MultiPolygon_MultiPolygon_Impl(
     auto* b_ring_sizes = next_b_ring_sizes;
     auto const b_num_rings = mpoly2_poly_sizes[b];
     int32_t b_num_coords = 0;
-    for (auto ring = 0; ring < b_num_rings; ring++) {
+    for (int32_t ring = 0; ring < b_num_rings; ring++) {
       b_num_coords += 2 * *next_b_ring_sizes++;
     }
     auto const b_coords_size = b_num_coords * compression_unit_size(ic2);
@@ -4280,7 +4321,7 @@ DEVICE ALWAYS_INLINE bool Contains_MultiPolygon_MultiPolygon_Impl(
       auto* a_ring_sizes = next_a_ring_sizes;
       auto const a_num_rings = mpoly1_poly_sizes[a];
       int32_t a_num_coords = 0;
-      for (auto ring = 0; ring < a_num_rings; ring++) {
+      for (int32_t ring = 0; ring < a_num_rings; ring++) {
         a_num_coords += 2 * *next_a_ring_sizes++;
       }
       auto const a_coords_size = a_num_coords * compression_unit_size(ic1);
@@ -4528,13 +4569,13 @@ DEVICE ALWAYS_INLINE bool Contains_MultiPolygon_Point_Impl(
   auto next_poly_coords = mpoly_coords;
   auto next_poly_ring_sizes = mpoly_ring_sizes;
 
-  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+  for (int64_t poly = 0; poly < mpoly_num_polys; poly++) {
     const auto poly_coords = next_poly_coords;
     const auto poly_ring_sizes = next_poly_ring_sizes;
     const auto poly_num_rings = mpoly_poly_sizes[poly];
     // Count number of coords in all of poly's rings, advance ring size pointer.
     int32_t poly_num_coords = 0;
-    for (auto ring = 0; ring < poly_num_rings; ring++) {
+    for (int32_t ring = 0; ring < poly_num_rings; ring++) {
       poly_num_coords += 2 * *next_poly_ring_sizes++;
     }
     const auto poly_coords_size = poly_num_coords * compression_unit_size(ic1);
@@ -4691,13 +4732,13 @@ bool ST_Contains_MultiPolygon_LineString(int8_t* mpoly_coords,
   auto next_poly_coords = mpoly_coords;
   auto next_poly_ring_sizes = mpoly_ring_sizes;
 
-  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+  for (int64_t poly = 0; poly < mpoly_num_polys; poly++) {
     auto poly_coords = next_poly_coords;
     auto poly_ring_sizes = next_poly_ring_sizes;
     auto poly_num_rings = mpoly_poly_sizes[poly];
     // Count number of coords in all of poly's rings, advance ring size pointer.
     int32_t poly_num_coords = 0;
-    for (auto ring = 0; ring < poly_num_rings; ring++) {
+    for (int32_t ring = 0; ring < poly_num_rings; ring++) {
       poly_num_coords += 2 * *next_poly_ring_sizes++;
     }
     auto poly_coords_size = poly_num_coords * compression_unit_size(ic1);
