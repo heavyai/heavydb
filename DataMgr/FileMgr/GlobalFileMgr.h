@@ -118,9 +118,9 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   inline MgrType getMgrType() override { return GLOBAL_FILE_MGR; };
   inline std::string getStringMgrType() override { return ToString(GLOBAL_FILE_MGR); }
   inline std::string printSlabs() override { return "Not Implemented"; }
-  inline size_t getMaxSize() override { return 0; }
-  inline size_t getInUseSize() override { return 0; }
-  inline size_t getAllocated() override { return 0; }
+  inline size_t getMaxSize() const override { return 0; }
+  inline size_t getInUseSize() const override { return 0; }
+  inline size_t getAllocated() const override { return 0; }
   inline bool isAllocationCapped() override { return false; }
 
   void init();

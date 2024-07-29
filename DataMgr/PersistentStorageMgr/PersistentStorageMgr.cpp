@@ -103,15 +103,15 @@ std::string PersistentStorageMgr::printSlabs() {
   return global_file_mgr_->printSlabs();
 }
 
-size_t PersistentStorageMgr::getMaxSize() {
+size_t PersistentStorageMgr::getMaxSize() const {
   return global_file_mgr_->getMaxSize();
 }
 
-size_t PersistentStorageMgr::getInUseSize() {
+size_t PersistentStorageMgr::getInUseSize() const {
   return global_file_mgr_->getInUseSize();
 }
 
-size_t PersistentStorageMgr::getAllocated() {
+size_t PersistentStorageMgr::getAllocated() const {
   return global_file_mgr_->getAllocated();
 }
 

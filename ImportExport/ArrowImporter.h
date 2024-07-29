@@ -192,12 +192,12 @@ struct DataBufferBase {
                  true) {}
 };
 
-template <typename DATA_TYPE>
+template <typename DATA_TYPE, typename ALLOC = std::allocator<DATA_TYPE>>
 struct DataBuffer : DataBufferBase {
-  std::vector<DATA_TYPE>& buffer;
+  std::vector<DATA_TYPE, ALLOC>& buffer;
   DataBuffer(const ColumnDescriptor* cd,
              const arrow::Array& array,
-             std::vector<DATA_TYPE>& buffer,
+             std::vector<DATA_TYPE, ALLOC>& buffer,
              import_export::BadRowsTracker* const bad_rows_tracker)
       : DataBufferBase(cd, array, bad_rows_tracker), buffer(buffer) {}
 };
@@ -496,8 +496,8 @@ struct ArrowValue<arrow::Decimal128> : ArrowValueBase<arrow::Decimal128> {
 };
 
 // appends a converted RHS value to LHS data block
-template <typename DATA_TYPE>
-inline auto& operator<<(DataBuffer<DATA_TYPE>& data, const VarValue& var) {
+template <typename DATA_TYPE, typename ALLOC = std::allocator<DATA_TYPE>>
+inline auto& operator<<(DataBuffer<DATA_TYPE, ALLOC>& data, const VarValue& var) {
   boost::apply_visitor(
       [&data](const auto& v) {
         data.buffer.push_back(DATA_TYPE(ArrowValue<exprtype(v)>(data, v)));
