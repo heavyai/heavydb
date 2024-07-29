@@ -199,8 +199,8 @@ class CachingFileMgr : public FileMgr {
   // Simple getters.
   inline MgrType getMgrType() override { return CACHING_FILE_MGR; };
   inline std::string getStringMgrType() override { return ToString(CACHING_FILE_MGR); }
-  inline size_t getPageSize() { return page_size_; }
-  inline size_t getMaxSize() override { return max_size_; }
+  inline size_t getPageSize() const { return page_size_; }
+  inline size_t getMaxSize() const override { return max_size_; }
   inline size_t getMaxDataFiles() const { return max_num_data_files_; }
   inline size_t getMaxMetaFiles() const { return max_num_meta_files_; }
   inline size_t getMaxWrapperSize() const { return max_wrapper_space_; }
@@ -215,7 +215,7 @@ class CachingFileMgr : public FileMgr {
   inline size_t getAvailableWrapperSpace() {
     return max_wrapper_space_ - getTableFileMgrsSize();
   }
-  inline size_t getAllocated() override {
+  inline size_t getAllocated() const override {
     return getFilesSize() + getTableFileMgrsSize();
   }
   size_t getMaxDataFilesSize() const;

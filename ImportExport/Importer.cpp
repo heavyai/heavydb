@@ -786,15 +786,15 @@ struct GeoImportException : std::runtime_error {
 };
 
 // appends (streams) a slice of Arrow array of values (RHS) to TypedImportBuffer (LHS)
-template <typename DATA_TYPE>
+template <typename DATA_TYPE, typename ALLOC>
 size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
     const ColumnDescriptor* cd,
     const Array& array,
-    std::vector<DATA_TYPE>& buffer,
+    std::vector<DATA_TYPE, ALLOC>& buffer,
     const ArraySliceRange& slice_range,
     import_export::BadRowsTracker* const bad_rows_tracker) {
   auto data =
-      std::make_unique<DataBuffer<DATA_TYPE>>(cd, array, buffer, bad_rows_tracker);
+      std::make_unique<DataBuffer<DATA_TYPE, ALLOC>>(cd, array, buffer, bad_rows_tracker);
   auto f_value_getter = value_getter(array, cd, bad_rows_tracker);
   std::function<void(const int64_t)> f_add_geo_phy_cols = [&](const int64_t row) {};
   if (bad_rows_tracker && cd->columnType.is_geometry()) {
@@ -1636,9 +1636,9 @@ void TypedImportBuffer::addDefaultValues(const ColumnDescriptor* cd, size_t num_
   }
 }
 
-template <typename DATA_TYPE>
+template <typename DATA_TYPE, typename ALLOC>
 auto TypedImportBuffer::del_values(
-    std::vector<DATA_TYPE>& buffer,
+    std::vector<DATA_TYPE, ALLOC>& buffer,
     import_export::BadRowsTracker* const bad_rows_tracker) {
   const auto old_size = buffer.size();
   // erase backward to minimize memory movement overhead

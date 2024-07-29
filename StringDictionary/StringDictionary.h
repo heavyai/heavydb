@@ -71,6 +71,14 @@ class StringDictionary {
     virtual void operator()(std::string_view const, int32_t const string_id) = 0;
   };
 
+  struct StringDictMemoryUsage {
+    size_t mmap_size{0};
+    size_t temp_dict_size{0};
+    size_t canary_buffer_size{0};
+
+    size_t total() const { return temp_dict_size + canary_buffer_size; }
+  };
+
   // Functors passed to eachStringSerially() must derive from StringCallback.
   // Each std::string const& (if isClient()) or std::string_view (if !isClient())
   // plus string_id is passed to the callback functor.
@@ -177,6 +185,15 @@ class StringDictionary {
       StringDictionary* dest_dict,
       const std::vector<std::vector<int32_t>>& source_array_ids,
       const StringDictionary* source_dict);
+
+  inline static std::atomic<size_t> total_mmap_size{0};
+  inline static std::atomic<size_t> total_temp_size{0};
+  inline static std::atomic<size_t> total_canary_size{0};
+
+  static size_t getTotalMmapSize() { return total_mmap_size; }
+  static size_t getTotalTempSize() { return total_temp_size; }
+  static size_t getTotalCanarySize() { return total_canary_size; }
+  static StringDictMemoryUsage getStringDictMemoryUsage();
 
   static constexpr int32_t INVALID_STR_ID = -1;
   static constexpr size_t MAX_STRLEN = (1 << 15) - 1;
@@ -319,3 +336,6 @@ void translate_string_ids(std::vector<int32_t>& dest_ids,
                           const std::vector<int32_t>& source_ids,
                           const shared::StringDictKey& source_dict_key,
                           const int32_t dest_generation);
+
+std::ostream& operator<<(std::ostream& os,
+                         const StringDictionary::StringDictMemoryUsage&);

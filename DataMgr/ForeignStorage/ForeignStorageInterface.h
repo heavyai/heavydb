@@ -172,17 +172,17 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     return "";
   }
 
-  size_t getMaxSize() override {
+  size_t getMaxSize() const override {
     CHECK(false);
     return 0;
   }
 
-  size_t getInUseSize() override {
+  size_t getInUseSize() const override {
     CHECK(false);
     return 0;
   }
 
-  size_t getAllocated() override {
+  size_t getAllocated() const override {
     CHECK(false);
     return 0;
   }

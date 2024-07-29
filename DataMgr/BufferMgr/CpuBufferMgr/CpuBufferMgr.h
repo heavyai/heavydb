@@ -59,6 +59,15 @@ class CpuBufferMgr : public BufferMgr {
     allocator_ = std::move(allocator);
   }
 
+  struct CpuBufferMgrMemoryUsage {
+    size_t allocated;
+    size_t in_use;
+  };
+
+  CpuBufferMgrMemoryUsage getMemoryUsage() const {
+    return {getAllocated(), getInUseSize()};
+  }
+
  protected:
   void addSlab(const size_t slab_size) override;
   void freeAllMem() override;
@@ -73,4 +82,6 @@ class CpuBufferMgr : public BufferMgr {
   std::unique_ptr<DramArena> allocator_;
 };
 
+std::ostream& operator<<(std::ostream& os,
+                         const CpuBufferMgr::CpuBufferMgrMemoryUsage& bm);
 }  // namespace Buffer_Namespace

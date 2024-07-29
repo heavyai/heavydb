@@ -38,6 +38,7 @@
 
 #include "Catalog/Catalog.h"
 #include "Catalog/DdlCommandExecutor.h"
+#include "DataMgr/BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "DataMgr/ForeignStorage/DummyForeignStorage.h"
 #include "DataMgr/ForeignStorage/PassThroughBuffer.h"
@@ -3256,9 +3257,32 @@ std::vector<int> column_ids_by_names(const std::list<const ColumnDescriptor*>& d
   return desc_to_column_ids;
 }
 
-void log_cache_size(const Catalog_Namespace::Catalog& cat) {
-  std::ostringstream oss;
-  oss << "Cache size information {";
+struct CacheMemoryUsage {
+  size_t query_resultset{0};
+  size_t hash_tables{0};
+  size_t chunk_metadata{0};
+  size_t query_plan_dag{0};
+  size_t compiled_gpu_code{0};
+  size_t string_dictionary{0};
+
+  size_t total() const {
+    return query_resultset + hash_tables + chunk_metadata + query_plan_dag +
+           compiled_gpu_code + string_dictionary;
+  }
+};
+
+std::ostream& operator<<(std::ostream& os, const CacheMemoryUsage& mu) {
+  return os << "\"CacheMemoryUsage\": {"
+            << "\"query_resultset\": " << mu.query_resultset
+            << ", \"hash_tables\": " << mu.hash_tables
+            << ", \"chunk_metadata\": " << mu.chunk_metadata
+            << ", \"query_plan_dag\": " << mu.query_plan_dag
+            << ", \"compiled_GPU_code\": " << mu.compiled_gpu_code
+            << ", \"string_dictionary\": " << mu.string_dictionary << "}";
+}
+
+CacheMemoryUsage get_cache_size() {
+  CacheMemoryUsage cmu;
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   // 1. Data recycler
   // 1.a Resultset Recycler
@@ -3268,7 +3292,7 @@ void log_cache_size(const Catalog_Namespace::Catalog& cat) {
           ->getResultSetRecyclerMetricTracker()
           .getCurrentCacheSize(DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
   if (resultset_cache_size) {
-    oss << "\"query_resultset\": " << *resultset_cache_size << " bytes, ";
+    cmu.query_resultset = *resultset_cache_size;
   }
 
   // 1.b Join Hash Table Recycler
@@ -3286,42 +3310,56 @@ void log_cache_size(const Catalog_Namespace::Catalog& cat) {
       BoundingBoxIntersectJoinHashTable::getBoundingBoxIntersectTuningParamCache()
           ->getCurrentCacheSizeForDevice(CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM,
                                          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  auto sum_hash_table_cache_size =
-      perfect_join_ht_cache_size + baseline_join_ht_cache_size +
-      bbox_intersect_ht_cache_size + bbox_intersect_ht_tuner_cache_size;
-  oss << "\"hash_tables\": " << sum_hash_table_cache_size << " bytes, ";
+  cmu.hash_tables = perfect_join_ht_cache_size + baseline_join_ht_cache_size +
+                    bbox_intersect_ht_cache_size + bbox_intersect_ht_tuner_cache_size;
 
   // 1.c Chunk Metadata Recycler
-  auto chunk_metadata_cache_size =
+  cmu.chunk_metadata =
       executor->getResultSetRecyclerHolder()
           .getChunkMetadataRecycler()
           ->getCurrentCacheSizeForDevice(CacheItemType::CHUNK_METADATA,
                                          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  oss << "\"chunk_metadata\": " << chunk_metadata_cache_size << " bytes, ";
 
   // 2. Query Plan Dag
-  auto query_plan_dag_cache_size =
-      executor->getQueryPlanDagCache().getCurrentNodeMapSize();
-  oss << "\"query_plan_dag\": " << query_plan_dag_cache_size << " bytes, ";
+  cmu.query_plan_dag = executor->getQueryPlanDagCache().getCurrentNodeMapSize();
 
   // 3. Compiled (GPU) Code
-  oss << "\"compiled_GPU code\": "
-      << QueryEngine::getInstance()->gpu_code_accessor->getCacheSize() << " bytes, ";
+  cmu.compiled_gpu_code = QueryEngine::getInstance()->gpu_code_accessor->getCacheSize();
 
   // 4. String Dictionary
-  oss << "\"string_dictionary\": " << cat.getTotalMemorySizeForDictionariesForDatabase()
-      << " bytes";
-  oss << "}";
-  LOG(INFO) << oss.str();
+  cmu.string_dictionary = 0;
+  for (const auto& cat : SysCatalog::instance().getCatalogsForAllDbs()) {
+    cmu.string_dictionary += cat->getTotalMemorySizeForDictionariesForDatabase();
+  }
+  return cmu;
 }
 
 void log_system_cpu_memory_status(std::string const& query,
-                                  const Catalog_Namespace::Catalog& cat) {
+                                  const Catalog_Namespace::Catalog& cat,
+                                  size_t num_imports_in_queue) {
   if (g_allow_memory_status_log) {
+    const auto& data_mgr = cat.getDataMgr();
+    auto data_mgr_mem = DataMgr::getSystemMemoryUsage();
+    auto cache_mem = get_cache_size();
     std::ostringstream oss;
-    oss << query << "\n" << cat.getDataMgr().getSystemMemoryUsage();
+    oss << query << " jsonlog {\"name\": \"CPU Memory Info\", " << data_mgr_mem << ", "
+        << cache_mem;
+    if (logger::fast_logging_check(logger::Severity::DEBUG1)) {
+      // We only want to collect (let alone display) these extra stats if we are doing
+      // verbose logging.
+      auto cpu_mgr_mem = data_mgr.getCpuBufferMgr()->getMemoryUsage();
+      auto string_dict_mem = StringDictionary::getStringDictMemoryUsage();
+      auto import_buf_mem =
+          import_export::TypedImportBuffer::getImportBufferMemoryUsage();
+      oss << ", " << cpu_mgr_mem << ", " << string_dict_mem << ", " << import_buf_mem
+          << ", \"num_queued_imports\": " << num_imports_in_queue;
+      oss << ", \"total_MB\": "
+          << (cpu_mgr_mem.allocated + cache_mem.total() + import_buf_mem.fixed_length +
+              string_dict_mem.total()) /
+                 (1024 * 1024);
+    }
+    oss << "}";
     LOG(INFO) << oss.str();
-    log_cache_size(cat);
   }
 }
 }  // namespace
@@ -3445,9 +3483,13 @@ void DBHandler::load_table_binary(const TSessionId& session_id_or_json,
 
     size_t rows_completed = 0;
     auto const load_tag = get_load_tag("load_table_binary", table_name);
-    log_system_cpu_memory_status("start_" + load_tag, session_ptr->getCatalog());
-    ScopeGuard cleanup = [&load_tag, &session_ptr]() {
-      log_system_cpu_memory_status("finish_" + load_tag, session_ptr->getCatalog());
+    num_imports_in_queue++;
+    log_system_cpu_memory_status(
+        "start_" + load_tag, session_ptr->getCatalog(), num_imports_in_queue);
+    ScopeGuard cleanup = [&load_tag, &session_ptr, this]() {
+      num_imports_in_queue--;
+      log_system_cpu_memory_status(
+          "finish_" + load_tag, session_ptr->getCatalog(), num_imports_in_queue);
     };
     for (auto const& row : rows) {
       size_t col_idx = 0;
@@ -3585,9 +3627,13 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session_id_or_json,
   size_t import_idx = 0;  // index into the TColumn vector being loaded
   size_t col_idx = 0;     // index into column description vector
   auto const load_tag = get_load_tag("load_table_binary_columnar", table_name);
-  log_system_cpu_memory_status("start_" + load_tag, session_ptr->getCatalog());
-  ScopeGuard cleanup = [&load_tag, &session_ptr]() {
-    log_system_cpu_memory_status("finish_" + load_tag, session_ptr->getCatalog());
+  num_imports_in_queue++;
+  log_system_cpu_memory_status(
+      "start_" + load_tag, session_ptr->getCatalog(), num_imports_in_queue);
+  ScopeGuard cleanup = [&load_tag, &session_ptr, this]() {
+    num_imports_in_queue--;
+    log_system_cpu_memory_status(
+        "finish_" + load_tag, session_ptr->getCatalog(), num_imports_in_queue);
   };
   try {
     size_t skip_physical_cols = 0;
@@ -3735,9 +3781,13 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session_id_or_json,
   // col_idx indexes "desc_id_to_column_id"
   size_t col_idx = 0;
   auto const load_tag = get_load_tag("load_table_binary_arrow", table_name);
-  log_system_cpu_memory_status("start_" + load_tag, session_ptr->getCatalog());
-  ScopeGuard cleanup = [&load_tag, &session_ptr]() {
-    log_system_cpu_memory_status("finish_" + load_tag, session_ptr->getCatalog());
+  num_imports_in_queue++;
+  log_system_cpu_memory_status(
+      "start_" + load_tag, session_ptr->getCatalog(), num_imports_in_queue);
+  ScopeGuard cleanup = [&load_tag, &session_ptr, this]() {
+    num_imports_in_queue--;
+    log_system_cpu_memory_status(
+        "finish_" + load_tag, session_ptr->getCatalog(), num_imports_in_queue);
   };
   try {
     for (auto cd : loader->get_column_descs()) {
@@ -3815,9 +3865,13 @@ void DBHandler::load_table(const TSessionId& session_id_or_json,
       THROW_DB_EXCEPTION("No rows to insert");
     }
     auto const load_tag = get_load_tag("load_table", table_name);
-    log_system_cpu_memory_status("start_" + load_tag, session_ptr->getCatalog());
-    ScopeGuard cleanup = [&load_tag, &session_ptr]() {
-      log_system_cpu_memory_status("finish_" + load_tag, session_ptr->getCatalog());
+    num_imports_in_queue++;
+    log_system_cpu_memory_status(
+        "start_" + load_tag, session_ptr->getCatalog(), num_imports_in_queue);
+    ScopeGuard cleanup = [&load_tag, &session_ptr, this]() {
+      num_imports_in_queue--;
+      log_system_cpu_memory_status(
+          "finish_" + load_tag, session_ptr->getCatalog(), num_imports_in_queue);
     };
     const auto execute_read_lock = legacylockmgr::getExecuteReadLock();
     std::unique_ptr<import_export::Loader> loader;
@@ -5441,9 +5495,13 @@ void DBHandler::import_table(const TSessionId& session_id_or_json,
       copy_from_source = file_path.string();
     }
     auto const load_tag = get_import_tag("import_table", table_name, copy_from_source);
-    log_system_cpu_memory_status("start_" + load_tag, session_ptr->getCatalog());
-    ScopeGuard cleanup = [&load_tag, &session_ptr]() {
-      log_system_cpu_memory_status("finish_" + load_tag, session_ptr->getCatalog());
+    num_imports_in_queue++;
+    log_system_cpu_memory_status(
+        "start_" + load_tag, session_ptr->getCatalog(), num_imports_in_queue);
+    ScopeGuard cleanup = [&load_tag, &session_ptr, this]() {
+      num_imports_in_queue--;
+      log_system_cpu_memory_status(
+          "finish_" + load_tag, session_ptr->getCatalog(), num_imports_in_queue);
     };
     const auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
@@ -5614,9 +5672,13 @@ void DBHandler::importGeoTableSingle(const TSessionId& session_id,
   VLOG(1) << "import_geo_table: Actual filename: " << file_name;
   VLOG(1) << "import_geo_table: Raster: " << is_raster;
   auto const load_tag = get_import_tag("import_geo_table", table_name, file_name);
-  log_system_cpu_memory_status("start_" + load_tag, session_ptr->getCatalog());
-  ScopeGuard cleanup = [&load_tag, &session_ptr]() {
-    log_system_cpu_memory_status("finish_" + load_tag, session_ptr->getCatalog());
+  num_imports_in_queue++;
+  log_system_cpu_memory_status(
+      "start_" + load_tag, session_ptr->getCatalog(), num_imports_in_queue);
+  ScopeGuard cleanup = [&load_tag, &session_ptr, this]() {
+    num_imports_in_queue--;
+    log_system_cpu_memory_status(
+        "finish_" + load_tag, session_ptr->getCatalog(), num_imports_in_queue);
   };
   // use GDAL to check the primary file exists (even if on S3 and/or in archive)
   auto file_path = boost::filesystem::path(file_name);
@@ -6566,14 +6628,18 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   bool show_cpu_memory_stat_after_finishing_query = false;
   ScopeGuard cpu_system_memory_logging = [&show_cpu_memory_stat_after_finishing_query,
                                           &cat,
-                                          &reduced_query_str]() {
+                                          &reduced_query_str,
+                                          &num_imports_in_queue =
+                                              num_imports_in_queue]() {
     if (show_cpu_memory_stat_after_finishing_query) {
-      log_system_cpu_memory_status("Finish query execution: " + reduced_query_str, cat);
+      log_system_cpu_memory_status(
+          "Finish query execution: " + reduced_query_str, cat, num_imports_in_queue);
     }
   };
   auto log_cpu_memory_status =
-      [&reduced_query_str, &cat, &show_cpu_memory_stat_after_finishing_query]() {
-        log_system_cpu_memory_status("Start query execution: " + reduced_query_str, cat);
+      [&reduced_query_str, &cat, &show_cpu_memory_stat_after_finishing_query, this]() {
+        log_system_cpu_memory_status(
+            "Start query execution: " + reduced_query_str, cat, num_imports_in_queue);
         show_cpu_memory_stat_after_finishing_query = true;
       };
 

@@ -102,9 +102,9 @@ class ForeignStorageMgr : public AbstractBufferMgr {
                                        const ChunkKey& chunk_key_prefix) override;
   bool isBufferOnDevice(const ChunkKey& chunk_key) override;
   std::string printSlabs() override;
-  size_t getMaxSize() override;
-  size_t getInUseSize() override;
-  size_t getAllocated() override;
+  size_t getMaxSize() const override;
+  size_t getInUseSize() const override;
+  size_t getAllocated() const override;
   bool isAllocationCapped() override;
   void checkpoint() override;
   void checkpoint(const int db_id, const int tb_id) override;

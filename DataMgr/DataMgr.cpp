@@ -128,7 +128,7 @@ DataMgr::~DataMgr() {
   }
 }
 
-DataMgr::SystemMemoryUsage DataMgr::getSystemMemoryUsage() const {
+DataMgr::SystemMemoryUsage DataMgr::getSystemMemoryUsage() {
   SystemMemoryUsage usage;
 #ifdef __linux__
 
@@ -711,19 +711,17 @@ std::shared_ptr<ForeignStorageInterface> DataMgr::getForeignStorageInterface() c
 }
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem_info) {
-  os << "jsonlog ";
-  os << "{";
-  os << " \"name\": \"CPU Memory Info\",";
-  os << " \"TotalMB\": " << mem_info.total / (1024. * 1024.) << ",";
-  os << " \"FreeMB\": " << mem_info.free / (1024. * 1024.) << ",";
-  os << " \"ProcessMB\": " << mem_info.resident / (1024. * 1024.) << ",";
-  os << " \"VirtualMB\": " << mem_info.vtotal / (1024. * 1024.) << ",";
-  os << " \"ProcessPlusSwapMB\": " << mem_info.regular / (1024. * 1024.) << ",";
-  os << " \"ProcessSharedMB\": " << mem_info.shared / (1024. * 1024.) << ",";
-  os << " \"FragmentationPercent\": " << mem_info.frag;
+  os << "\"SystemMemoryUsage\": {";
+  os << "\"TotalMB\": " << mem_info.total / (1024. * 1024.);
+  os << ", \"FreeMB\": " << mem_info.free / (1024. * 1024.);
+  os << ", \"ProcessMB\": " << mem_info.resident / (1024. * 1024.);
+  os << ", \"VirtualMB\": " << mem_info.vtotal / (1024. * 1024.);
+  os << ", \"ProcessPlusSwapMB\": " << mem_info.regular / (1024. * 1024.);
+  os << ", \"ProcessSharedMB\": " << mem_info.shared / (1024. * 1024.);
+  os << ", \"FragmentationPercent\": " << mem_info.frag;
   os << ", \"BuddyinfoHighBlocks\": " << mem_info.high_blocks;
   os << ", \"BuddyinfoAvailPages\": " << mem_info.avail_pages;
-  os << " }";
+  os << "}";
   return os;
 }
 
