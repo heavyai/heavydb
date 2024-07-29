@@ -198,6 +198,7 @@ StringDictionary::StringDictionary(const shared::StringDictKey& dict_key,
         reinterpret_cast<char*>(heavyai::checked_mmap(payload_fd_, payload_file_size_));
     offset_map_ = reinterpret_cast<StringIdxEntry*>(
         heavyai::checked_mmap(offset_fd_, offset_file_size_));
+    total_mmap_size += payload_file_size_ + offset_file_size_;
     if (recover) {
       const size_t bytes = heavyai::file_size(offset_fd_);
       if (bytes % sizeof(StringIdxEntry) != 0) {
@@ -388,6 +389,7 @@ StringDictionary::StringDictionary(const LeafHostInfo& host,
 
 StringDictionary::~StringDictionary() noexcept {
   free(CANARY_BUFFER);
+  total_canary_size -= canary_buffer_size;
   if (isClient()) {
     return;
   }
@@ -396,6 +398,7 @@ StringDictionary::~StringDictionary() noexcept {
       CHECK(offset_map_);
       heavyai::checked_munmap(payload_map_, payload_file_size_);
       heavyai::checked_munmap(offset_map_, offset_file_size_);
+      total_mmap_size -= payload_file_size_ + offset_file_size_;
       CHECK_GE(payload_fd_, 0);
       heavyai::close(payload_fd_);
       CHECK_GE(offset_fd_, 0);
@@ -404,6 +407,7 @@ StringDictionary::~StringDictionary() noexcept {
       CHECK(offset_map_);
       free(payload_map_);
       free(offset_map_);
+      total_temp_size -= payload_file_size_ + offset_file_size_;
     }
   }
 }
@@ -1501,10 +1505,12 @@ void StringDictionary::checkAndConditionallyIncreasePayloadCapacity(
     if (!isTemp_) {
       CHECK_GE(payload_fd_, 0);
       heavyai::checked_munmap(payload_map_, payload_file_size_);
+      total_mmap_size -= payload_file_size_;
       addPayloadCapacity(min_capacity_needed);
       CHECK(payload_file_off_ + write_length <= payload_file_size_);
       payload_map_ =
           reinterpret_cast<char*>(heavyai::checked_mmap(payload_fd_, payload_file_size_));
+      total_mmap_size += payload_file_size_;
     } else {
       addPayloadCapacity(min_capacity_needed);
       CHECK(payload_file_off_ + write_length <= payload_file_size_);
@@ -1521,10 +1527,12 @@ void StringDictionary::checkAndConditionallyIncreaseOffsetCapacity(
     if (!isTemp_) {
       CHECK_GE(offset_fd_, 0);
       heavyai::checked_munmap(offset_map_, offset_file_size_);
+      total_mmap_size += offset_file_size_;
       addOffsetCapacity(min_capacity_needed);
       CHECK(offset_file_off + write_length <= offset_file_size_);
       offset_map_ = reinterpret_cast<StringIdxEntry*>(
           heavyai::checked_mmap(offset_fd_, offset_file_size_));
+      total_mmap_size += offset_file_size_;
     } else {
       addOffsetCapacity(min_capacity_needed);
       CHECK(offset_file_off + write_length <= offset_file_size_);
@@ -1614,6 +1622,7 @@ size_t StringDictionary::addStorageCapacity(
                (min_capacity_requested / SYSTEM_PAGE_SIZE + 1) * SYSTEM_PAGE_SIZE);
 
   if (canary_buffer_size < canary_buff_size_to_add) {
+    total_canary_size += canary_buff_size_to_add - canary_buffer_size;
     CANARY_BUFFER = static_cast<char*>(realloc(CANARY_BUFFER, canary_buff_size_to_add));
     canary_buffer_size = canary_buff_size_to_add;
     CHECK(CANARY_BUFFER);
@@ -1634,6 +1643,7 @@ void* StringDictionary::addMemoryCapacity(void* addr,
       std::max(static_cast<size_t>(1024 * SYSTEM_PAGE_SIZE),
                (min_capacity_requested / SYSTEM_PAGE_SIZE + 1) * SYSTEM_PAGE_SIZE);
   if (canary_buffer_size < canary_buff_size_to_add) {
+    total_canary_size += canary_buff_size_to_add - canary_buffer_size;
     CANARY_BUFFER =
         reinterpret_cast<char*>(realloc(CANARY_BUFFER, canary_buff_size_to_add));
     canary_buffer_size = canary_buff_size_to_add;
@@ -1645,6 +1655,7 @@ void* StringDictionary::addMemoryCapacity(void* addr,
   void* write_addr = reinterpret_cast<void*>(static_cast<char*>(new_addr) + mem_size);
   CHECK(memcpy(write_addr, CANARY_BUFFER, canary_buff_size_to_add));
   mem_size += canary_buff_size_to_add;
+  total_temp_size += canary_buff_size_to_add;
   return new_addr;
 }
 
@@ -2140,4 +2151,16 @@ size_t StringDictionary::computeCacheSize() const {
          hash_cache_.size() * sizeof(string_dict_hash_t) +
          sorted_cache.size() * sizeof(int32_t) + like_cache_size_ + regex_cache_size_ +
          equal_cache_size_ + compare_cache_size_ + strings_cache_size_;
+}
+
+StringDictionary::StringDictMemoryUsage StringDictionary::getStringDictMemoryUsage() {
+  return {total_mmap_size, total_temp_size, total_canary_size};
+}
+
+std::ostream& operator<<(std::ostream& os,
+                         const StringDictionary::StringDictMemoryUsage& mu) {
+  return os << "\"StringDictMemoryUsage\": {"
+            << "\"mmap_size MB\": " << mu.mmap_size / (1024 * 1024)
+            << ", \"temp_size MB\": " << mu.temp_dict_size / (1024 * 1024)
+            << ", \"canary_size MB\": " << mu.canary_buffer_size / (1024 * 1024) << "}";
 }

@@ -398,17 +398,17 @@ std::string ForeignStorageMgr::printSlabs() {
   return {};  // Added to avoid "no return statement" compiler warning
 }
 
-size_t ForeignStorageMgr::getMaxSize() {
+size_t ForeignStorageMgr::getMaxSize() const {
   UNREACHABLE();
   return 0;  // Added to avoid "no return statement" compiler warning
 }
 
-size_t ForeignStorageMgr::getInUseSize() {
+size_t ForeignStorageMgr::getInUseSize() const {
   UNREACHABLE();
   return 0;  // Added to avoid "no return statement" compiler warning
 }
 
-size_t ForeignStorageMgr::getAllocated() {
+size_t ForeignStorageMgr::getAllocated() const {
   UNREACHABLE();
   return 0;  // Added to avoid "no return statement" compiler warning
 }

@@ -196,7 +196,7 @@ class DataMgr {
     size_t high_blocks;  // sum of highest non-dma blocks in /proc/buddyinfo
   };
 
-  SystemMemoryUsage getSystemMemoryUsage() const;
+  static SystemMemoryUsage getSystemMemoryUsage();
   static size_t getTotalSystemMemory();
 
   PersistentStorageMgr* getPersistentStorageMgr() const;
