@@ -116,12 +116,12 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   void printSegs();
   std::string printSeg(BufferList::iterator& seg_it);
 
-  size_t getInUseSize() override;
-  size_t getMaxSize() override;
-  size_t getAllocated() override;
-  size_t getMaxBufferSize();
-  size_t getMaxSlabSize();
-  size_t getPageSize();
+  size_t getInUseSize() const override;
+  size_t getMaxSize() const override;
+  size_t getAllocated() const override;
+  size_t getMaxBufferSize() const;
+  size_t getMaxSlabSize() const;
+  size_t getPageSize() const;
   bool isAllocationCapped() override;
   const std::vector<BufferList>& getSlabSegments();
 
@@ -160,7 +160,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   void free(AbstractBuffer* buffer) override;
 
   /// Returns the total number of bytes allocated.
-  size_t size();
+  size_t size() const;
   size_t getNumChunks() override;
 
   BufferList::iterator reserveBuffer(BufferList::iterator& seg_it,
@@ -237,5 +237,4 @@ class BufferMgr : public AbstractBufferMgr {  // implements
    */
   BufferList::iterator findFreeBuffer(size_t num_bytes);
 };
-
 }  // namespace Buffer_Namespace

@@ -664,8 +664,9 @@ class DBHandler : public HeavyIf {
   std::unique_ptr<HeavyDBLeafHandler> leaf_handler_;
   std::shared_ptr<Calcite> calcite_;
   const bool legacy_syntax_;
-
   std::unique_ptr<QueryDispatchQueue> dispatch_queue_;
+
+  std::atomic<size_t> num_imports_in_queue{0};
 
   template <typename... ARGS>
   std::shared_ptr<query_state::QueryState> create_query_state(ARGS&&... args) {

@@ -59,4 +59,11 @@ void CpuBufferMgr::initializeMem() {
   allocator_.reset(new DramArena(default_slab_size_ + kArenaBlockOverhead));
 }
 
+std::ostream& operator<<(std::ostream& os,
+                         const CpuBufferMgr::CpuBufferMgrMemoryUsage& bm) {
+  return os << "\"CPU Buffers\": {"
+            << "\"Allocated MB\": " << bm.allocated / (1024. * 1024.) << ", "
+            << "\"In Use MB\": " << bm.in_use / (1024. * 1024.) << "}";
+}
+
 }  // namespace Buffer_Namespace

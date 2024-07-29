@@ -512,12 +512,12 @@ void BufferMgr::clearSlabs() {
 }
 
 // return the maximum size this buffer can be in bytes
-size_t BufferMgr::getMaxSize() {
+size_t BufferMgr::getMaxSize() const {
   return page_size_ * max_buffer_pool_num_pages_;
 }
 
 // return how large the buffer are currently allocated
-size_t BufferMgr::getAllocated() {
+size_t BufferMgr::getAllocated() const {
   return num_pages_allocated_ * page_size_;
 }
 
@@ -526,15 +526,15 @@ bool BufferMgr::isAllocationCapped() {
   return allocations_capped_;
 }
 
-size_t BufferMgr::getPageSize() {
+size_t BufferMgr::getPageSize() const {
   return page_size_;
 }
 
 // return the size of the chunks in use in bytes
-size_t BufferMgr::getInUseSize() {
+size_t BufferMgr::getInUseSize() const {
   size_t in_use = 0;
-  for (auto& segment_list : slab_segments_) {
-    for (auto& segment : segment_list) {
+  for (const auto& segment_list : slab_segments_) {
+    for (const auto& segment : segment_list) {
       if (segment.mem_status != FREE) {
         in_use += segment.num_pages * page_size_;
       }
@@ -911,15 +911,15 @@ size_t BufferMgr::getNumChunks() {
   return chunk_index_.size();
 }
 
-size_t BufferMgr::size() {
+size_t BufferMgr::size() const {
   return num_pages_allocated_;
 }
 
-size_t BufferMgr::getMaxBufferSize() {
+size_t BufferMgr::getMaxBufferSize() const {
   return max_buffer_pool_size_;
 }
 
-size_t BufferMgr::getMaxSlabSize() {
+size_t BufferMgr::getMaxSlabSize() const {
   return max_slab_size_;
 }
 
