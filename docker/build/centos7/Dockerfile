@@ -11,6 +11,12 @@ RUN echo $'#!/bin/bash\n\
     chmod +x /docker-entrypoint.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]
 
+# patch repo files now that CentOS 7 is EOL
+RUN sed -i 's/mirror.centos.org/vault.centos.org/' /etc/yum.repos.d/*.repo
+RUN sed -i 's/^#.*baseurl=http:/baseurl=https:/' /etc/yum.repos.d/*.repo
+RUN sed -i 's/^mirrorlist=http:/#mirrorlist=https:/' /etc/yum.repos.d/*.repo
+RUN echo 'sslverify=false' | tee -a /etc/yum.conf
+
 RUN yum groupinstall -y "Development Tools"
 RUN yum install -y \
         zlib-devel \

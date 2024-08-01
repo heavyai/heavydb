@@ -8,6 +8,7 @@ TSAN=false
 COMPRESS=false
 NOCUDA=false
 CACHE=
+LIBRARY_TYPE=
 
 while (( $# )); do
   case "$1" in
@@ -25,6 +26,12 @@ while (( $# )); do
       ;;
     --cache=*)
       CACHE="${1#*=}"
+      ;;
+    --static)
+      LIBRARY_TYPE=static
+      ;;
+    --shared)
+      LIBRARY_TYPE=shared
       ;;
     *)
       break
@@ -54,6 +61,24 @@ HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
 SUFFIX=${SUFFIX:=$(date +%Y%m%d)}
 PREFIX=/usr/local/mapd-deps
 
+CMAKE_BUILD_TYPE=Release
+
+if [ "$LIBRARY_TYPE" == "static" ]; then
+  ARROW_BOOST_USE_SHARED=off
+  BUILD_SHARED_LIBS=off
+  CFLAGS=-fPIC
+  CMAKE_POSITION_INDEPENDENT_CODE=on
+  CONFIGURE_OPTS="--enable-static --disable-shared"
+  CXXFLAGS=-fPIC
+else
+  ARROW_BOOST_USE_SHARED=on
+  BUILD_SHARED_LIBS=on
+  CFLAGS=""
+  CMAKE_POSITION_INDEPENDENT_CODE=off
+  CONFIGURE_OPTS=""
+  CXXFLAGS=""
+fi
+
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $SCRIPTS_DIR/common-functions.sh
 
@@ -70,68 +95,14 @@ else
   exit 1
 fi
 
-sudo mkdir -p $PREFIX
-sudo chown -R $(id -u) $PREFIX
-# create a  txt file in $PREFIX
+safe_mkdir "$PREFIX"
 
 # this should be based on the actual distro and arch, but they're the same files.
 DEBIAN_FRONTEND=noninteractive sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub
 
 DEBIAN_FRONTEND=noninteractive sudo apt update
 
-DEBIAN_FRONTEND=noninteractive sudo apt install -y \
-    software-properties-common \
-    build-essential \
-    ccache \
-    git \
-    wget \
-    curl \
-    libevent-dev \
-    default-jre \
-    default-jre-headless \
-    default-jdk \
-    default-jdk-headless \
-    libncurses5-dev \
-    libldap2-dev \
-    google-perftools \
-    libdouble-conversion-dev \
-    libevent-dev \
-    libgflags-dev \
-    libgoogle-perftools-dev \
-    libiberty-dev \
-    libjemalloc-dev \
-    libglu1-mesa-dev \
-    liblz4-dev \
-    liblzma-dev \
-    libbz2-dev \
-    libarchive-dev \
-    libedit-dev \
-    uuid-dev \
-    libsnappy-dev \
-    zlib1g-dev \
-    autoconf \
-    autoconf-archive \
-    automake \
-    bison \
-    flex \
-    libpng-dev \
-    rsync \
-    unzip \
-    jq \
-    python3-dev \
-    python3-yaml \
-    swig \
-    pkg-config \
-    libxerces-c-dev \
-    libtool \
-    patchelf \
-    libxrandr-dev \
-    libxinerama-dev \
-    libxcursor-dev \
-    libxi-dev \
-    libegl-dev \
-    binutils-dev \
-    libnuma-dev
+install_required_ubuntu_packages
 
 if [ "$VERSION_ID" == "20.04" ]; then
   # required for gcc-11 on Ubuntu < 22.04
@@ -163,12 +134,21 @@ install_maven
 
 install_openssl
 
+if [ "$LIBRARY_TYPE" == "static" ]; then
+  install_openldap2
+fi
+
 install_cmake
 
 install_boost
 export BOOST_ROOT=$PREFIX/include
 
 install_memkind
+
+VERS=3.3.2
+CFLAGS="$CFLAGS" download_make_install ${HTTP_DEPS}/libarchive-$VERS.tar.gz "" "$CONFIGURE_OPTS --without-nettle"
+
+install_uriparser
 
 VERS=7.75.0
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
@@ -183,7 +163,6 @@ install_geos
 
 # llvm
 # (see common-functions.sh)
-LLVM_BUILD_DYLIB=true
 install_llvm
 
 # install AWS core and s3 sdk
@@ -213,7 +192,6 @@ install_tbb
 install_onedal
 
 # Apache Arrow (see common-functions.sh)
-ARROW_BOOST_USE_SHARED="ON"
 install_arrow
 
 # Go
@@ -274,59 +252,20 @@ install_vulkan
 # GLM (GL Mathematics)
 install_glm
 
+# LZ4 required by rdkafka
+install_lz4
+
 # Rendering sandbox support
-# GLFW
-VERS=3.3.6
-download https://github.com/glfw/glfw/archive/refs/tags/${VERS}.tar.gz
-extract ${VERS}.tar.gz
-pushd glfw-${VERS}
-mkdir -p build
-pushd build
-cmake \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DBUILD_SHARED_LIBS=ON \
-    -DGLFW_BUILD_EXAMPLES=OFF \
-    -DGLFW_BUILD_TESTS=OFF \
-    -DGLFW_BUILD_DOCS=OFF \
-    ..
-make -j $(nproc)
-make install
-popd #build
-popd #glfw
-
-# ImGui
-VERS=1.89.1-docking
-rm -rf imgui
-mkdir -p imgui
-pushd imgui
-wget --continue ${HTTP_DEPS}/imgui.$VERS.tar.gz
-tar xvf imgui.$VERS.tar.gz
-mkdir -p $PREFIX/include
-mkdir -p $PREFIX/include/imgui
-rsync -av imgui.$VERS/* $PREFIX/include/imgui
-popd #imgui
-
-# ImPlot
-VERS=0.14
-rm -rf implot
-mkdir -p implot
-pushd implot
-wget --continue ${HTTP_DEPS}/implot.$VERS.tar.gz
-tar xvf implot.$VERS.tar.gz
-# Patch #includes for imgui.h / imgui_internal.h
-pushd implot.$VERS
-patch -p0 < $SCRIPTS_DIR/implot-0.14_fix_imgui_includes.patch
-popd
-mkdir -p $PREFIX/include
-mkdir -p $PREFIX/include/implot
-rsync -av implot.$VERS/* $PREFIX/include/implot
-popd #implot
+if [ "$LIBRARY_TYPE" != "static" ]; then
+  install_glfw
+  install_imgui
+  install_implot
+fi
 
 # OpenSAML
-download_make_install ${HTTP_DEPS}/xml-security-c-2.0.4.tar.gz "" "--without-xalan"
-download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz
-CXXFLAGS="-std=c++14" download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz
+download_make_install ${HTTP_DEPS}/xml-security-c-2.0.4.tar.gz "" "$CONFIGURE_OPTS --without-xalan"
+download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz "" "$CONFIGURE_OPTS"
+CXXFLAGS="-std=c++14" download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz "" "$CONFIGURE_OPTS"
 
 # Generate mapd-deps.sh
 cat > $PREFIX/mapd-deps.sh <<EOF
@@ -342,7 +281,7 @@ PATH=\$HEAVY_PREFIX/maven/bin:\$PATH
 PATH=\$HEAVY_PREFIX/bin:\$PATH
 
 VULKAN_SDK=\$HEAVY_PREFIX
-VK_LAYER_PATH=\$HEAVY_PREFIX/etc/vulkan/explicit_layer.d
+VK_LAYER_PATH=\$HEAVY_PREFIX/share/vulkan/explicit_layer.d
 
 CMAKE_PREFIX_PATH=\$HEAVY_PREFIX:\$CMAKE_PREFIX_PATH
 
@@ -355,11 +294,14 @@ echo
 echo "Done. Be sure to source the 'mapd-deps.sh' file to pick up the required environment variables:"
 echo "    source $PREFIX/mapd-deps.sh"
 
-if [ "$COMPRESS" = "true" ] ; then
-    if [ "$TSAN" = "false" ]; then
-      TARBALL_TSAN=""
-    elif [ "$TSAN" = "true" ]; then
-      TARBALL_TSAN="tsan-"
-    fi
-    tar acvf mapd-deps-ubuntu-${VERSION_ID}-${TARBALL_TSAN}${SUFFIX}.tar.xz -C ${PREFIX} .
+if [ "$COMPRESS" = "true" ]; then
+  TARBALL_TSAN=""
+  if [ "$TSAN" = "true" ]; then
+    TARBALL_TSAN="-tsan"
+  fi
+  TARBALL_STATIC=""
+  if [ "$LIBRARY_TYPE" != "" ]; then
+    TARBALL_LIBRARY_TYPE="-${LIBRARY_TYPE}"
+  fi
+  tar acvf mapd-deps-ubuntu-${VERSION_ID}${TARBALL_TSAN}${TARBALL_LIBRARY_TYPE}-${SUFFIX}.tar.xz -C ${PREFIX} .
 fi
