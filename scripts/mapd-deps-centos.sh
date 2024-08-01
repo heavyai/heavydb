@@ -60,7 +60,7 @@ export LD_LIBRARY_PATH=$PREFIX/lib64:$PREFIX/lib:$LD_LIBRARY_PATH
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source $SCRIPTS_DIR/common-functions.sh
+source $SCRIPTS_DIR/common-functions-centos.sh
 
 sudo yum groupinstall -y "Development Tools"
 sudo yum install -y \
@@ -186,7 +186,7 @@ install_geos
 # http://thrysoee.dk/editline/libedit-20230828-3.1.tar.gz
 CPPFLAGS="-I$PREFIX/include/ncurses" download_make_install ${HTTP_DEPS}/libedit-20230828-3.1.tar.gz
 
-# (see common-functions.sh)
+# (see common-functions-centos.sh)
 install_llvm 
 
 install_iwyu 
@@ -205,7 +205,7 @@ install_go
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
 
-# Apache Arrow (see common-functions.sh)
+# Apache Arrow (see common-functions-centos.sh)
 install_arrow
 
 # abseil
