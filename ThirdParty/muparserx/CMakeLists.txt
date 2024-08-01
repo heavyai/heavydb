@@ -40,15 +40,6 @@ set_property(TARGET muparserx PROPERTY POSITION_INDEPENDENT_CODE TRUE)
 set_target_properties(muparserx PROPERTIES SOVERSION ${MUPARSERX_VERSION})
 set_target_properties(muparserx PROPERTIES VERSION ${MUPARSERX_VERSION})
 
-#link with lib math when found
-find_library(
-    M_LIBRARY NAMES m
-    PATHS /usr/lib /usr/lib64
-)
-if(M_LIBRARY)
-    target_link_libraries(muparserx ${M_LIBRARY})
-endif(M_LIBRARY)
-
 ########################################################################
 # Print summary
 ########################################################################

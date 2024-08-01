@@ -18,6 +18,7 @@ set -x
 
 # default CPU_SET
 CPU_SET="0-10"
+LIBRARY_TYPE="shared"
 
 while (( $# )); do
   case "$1" in
@@ -47,6 +48,9 @@ while (( $# )); do
       ;;
     --operating_system=*)
       OPERATING_SYSTEM="${1#*=}"
+      ;;
+    --static)
+      LIBRARY_TYPE="static"
       ;;
     --tag_date=*)
       TAG_DATE="${1#*=}"
@@ -86,6 +90,10 @@ else
   exit 1
 fi
 
+if [ "$LIBRARY_TYPE" == "static" ] ; then
+  STATIC_PARAM="--static"
+fi
+
 if [ "$tsan" == "true" ] ; then
   TSAN_PARAM="--tsan"
 fi
@@ -113,10 +121,12 @@ OPERATING_SYSTEM=$(echo $OPERATING_SYSTEM | sed 's/[0-9,\.]*$//')
 # common-functions.sh script sourced by the 'main' mapd-deps-${OPERATING_SYSTEM}
 # script.
 #
+MIRRORLIST_PATCH="sed -i 's/mirror.centos.org/vault.centos.org/' /etc/yum.repos.d/*.repo && sed -i 's/^#.*baseurl=http:/baseurl=https:/' /etc/yum.repos.d/*.repo && sed -i 's/^mirrorlist=http:/#mirrorlist=https:/' /etc/yum.repos.d/*.repo && echo 'sslverify=false' >> /etc/yum.conf"
 if [[ $OPERATING_SYSTEM == "centos" ]] ; then
- docker_cmd="yum install sudo -y && ./mapd-deps-${OPERATING_SYSTEM}.sh --savespace --compress $TSAN_PARAM --cache=/dep_cache"
+  docker_cmd="${MIRRORLIST_PATCH} && yum install sudo -y && ./mapd-deps-${OPERATING_SYSTEM}.sh --savespace --compress $TSAN_PARAM --cache=/dep_cache"
 else
   docker_cmd='echo -e "#!/bin/sh\n\${@}" > /usr/sbin/sudo && chmod +x /usr/sbin/sudo && ./mapd-deps-'${OPERATING_SYSTEM}'.sh --savespace --compress --cache=/dep_cache'
+  docker_cmd="$docker_cmd $STATIC_PARAM $TSAN_PARAM"
 fi
 PACKAGE_CACHE=/theHoard/export/dep_cache
 
