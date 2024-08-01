@@ -30,6 +30,7 @@ RUN echo > /etc/ld.so.preload
 # copy the script into the docker context
 # the script needs to already be in '.'
 COPY mapd-deps-prebuilt.sh .
+COPY common-functions.sh .
 
 #
 # example cmd use --build-arg PREBUILT_CUSTOM_ARG="--custom=tsan-20230706" 

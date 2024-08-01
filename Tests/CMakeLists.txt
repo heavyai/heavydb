@@ -98,7 +98,11 @@ if(ENABLE_CUDA)
   add_dependencies(BufferMgrTest QueryEngineCudaTargets)
   target_link_libraries(BufferMgrTest CudaMgr)
 endif()
-target_link_libraries(BufferMgrTest gtest DataMgr QueryEngine)
+target_link_libraries(BufferMgrTest gtest DataMgr QueryEngine Geospatial LockMgr ${Parquet_LIBRARIES}
+    ImportExport Distributed Parser)
+if(ENABLE_RENDERING)
+  target_link_libraries(BufferMgrTest GfxDriver GfxInterop)
+endif()
 add_test(BufferMgrTest BufferMgrTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS BufferMgrTest)
 
@@ -270,7 +274,11 @@ endif()
 ##########
 
 add_executable(EncoderTest EncoderTest.cpp)
-target_link_libraries(EncoderTest gtest DataMgr Shared Logger)
+target_link_libraries(EncoderTest gtest DataMgr Catalog Shared Logger Geospatial LockMgr ${Parquet_LIBRARIES}
+    ImportExport Distributed Parser)
+if(ENABLE_RENDERING)
+  target_link_libraries(EncoderTest GfxDriver GfxInterop)
+endif()
 add_test(EncoderTest EncoderTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS EncoderTest)
 
@@ -365,6 +373,10 @@ list(APPEND SANITY_TEST_PROGRAMS GeospatialTest)
 if(NOT MSVC)
   add_executable(GeoTypesTest Geospatial/GeoTypesTest.cpp)
   target_link_libraries(GeoTypesTest gtest Logger Shared Geospatial ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} ${LibAwsS3_LIBRARIES})
+  if (NOT USE_ALTERNATE_LINKER STREQUAL "mold")
+    # Libraries are just out-of-order in the link.txt file which mold can handle.
+    target_link_libraries(GeoTypesTest ${GDAL_LIBRARIES})
+  endif()
   add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS GeoTypesTest)
 endif()
@@ -728,9 +740,11 @@ endif()  # Partition 4
 
 ##########
 
+
 if(NOT MSVC)
+  find_library(URIPARSER_LIBRARY uriparser REQUIRED)
   add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
-  target_link_libraries(ArrowIpcIntegrationTest gtest absl::str_format ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
+  target_link_libraries(ArrowIpcIntegrationTest gtest absl::str_format ThriftClient mapd_thrift Logger Shared ${Arrow_LIBRARIES} ${CUDA_LIBRARIES} ${URIPARSER_LIBRARY})
   add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
 endif()
 
@@ -766,7 +780,7 @@ target_link_libraries(GeospatialBenchmark benchmark ${EXECUTE_TEST_LIBS})
 
 if(NOT MSVC)
   add_executable(QuantileCpuTest Quantile/QuantileCpuTest.cpp)
-  target_link_libraries(QuantileCpuTest gtest ${MAPD_LIBRARIES})
+  target_link_libraries(QuantileCpuTest gtest ${MAPD_LIBRARIES} ${ZLIB_LIBRARIES})
 endif()
 
 ##########

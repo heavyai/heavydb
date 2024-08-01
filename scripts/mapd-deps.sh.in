@@ -26,6 +26,6 @@ export GOROOT=$HEAVY_PREFIX/go
 export PATH=$HEAVY_PREFIX/maven/bin:$PATH
 
 export VULKAN_SDK=$HEAVY_PREFIX
-export VK_LAYER_PATH=$HEAVY_PREFIX/etc/vulkan/explicit_layer.d
+export VK_LAYER_PATH=$HEAVY_PREFIX/share/vulkan/explicit_layer.d
 
 export MEMKIND_PREFIX=$HEAVY_PREFIX

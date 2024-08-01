@@ -67,11 +67,12 @@ endif()
 
 get_filename_component(RdKafka_LIBRARY_DIR ${RdKafka_LIBRARY} DIRECTORY)
 
+find_library(lz4_LIBRARY lz4 REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 
 # Set standard CMake FindPackage variables if found.
-set(RdKafka_LIBRARIES ${RdKafka++_LIBRARY} ${RdKafka_LIBRARY} ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
+set(RdKafka_LIBRARIES ${RdKafka++_LIBRARY} ${RdKafka_LIBRARY} ${lz4_LIBRARY} ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
 set(RdKafka_LIBRARY_DIRS ${RdKafka_LIBRARY_DIR})
 set(RdKafka_INCLUDE_DIRS ${RdKafka_LIBRARY_DIR}/../include)
 

@@ -27,6 +27,7 @@ fi
 # Parse inputs
 FLAG=latest
 ENABLE=false
+LIBRARY_TYPE=
 
 while (( $# )); do
   case "$1" in
@@ -39,6 +40,12 @@ while (( $# )); do
     --enable)
       ENABLE=true
       ;;
+    --static)
+      LIBRARY_TYPE=static
+      ;;
+    --shared)
+      LIBRARY_TYPE=shared
+      ;;
     *)
       break
       ;;
@@ -50,52 +57,10 @@ done
 if [ "$ID" == "ubuntu" ] ; then
   sudo $PACKAGER update
 
-  sudo $PACKAGER install \
-      software-properties-common \
-      build-essential \
-      ccache \
-      git \
-      wget \
-      curl \
-      golang \
-      libevent-dev \
-      default-jre \
-      default-jre-headless \
-      default-jdk \
-      default-jdk-headless \
-      maven \
-      libncurses5-dev \
-      libldap2-dev \
-      binutils-dev \
-      google-perftools \
-      libdouble-conversion-dev \
-      libevent-dev \
-      libgflags-dev \
-      libgoogle-perftools-dev \
-      libiberty-dev \
-      libjemalloc-dev \
-      liblz4-dev \
-      liblzma-dev \
-      libbz2-dev \
-      libarchive-dev \
-      libedit-dev \
-      uuid-dev \
-      libsnappy-dev \
-      zlib1g-dev \
-      autoconf \
-      autoconf-archive \
-      automake \
-      bison \
-      flex \
-      libpng-dev \
-      rsync \
-      unzip \
-      jq \
-      python3-dev \
-      python3-yaml \
-      libxerces-c-dev \
-      swig \
-      libegl-dev
+  SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  source $SCRIPTS_DIR/common-functions.sh
+
+  install_required_ubuntu_packages
 
   if [ "$VERSION_ID" == "20.04" ]; then
     # required for gcc-11 on Ubuntu < 22.04
@@ -119,10 +84,20 @@ if [ "$ID" == "ubuntu" ] ; then
   if [ $VERSION_ID == "24.04" ] || [ $VERSION_ID == "23.10" ]; then
     DOWNLOAD_ID=22.04
   fi
+  if [ "$LIBRARY_TYPE" != "" ] ; then
+    DOWNLOAD_ID="${LIBRARY_TYPE}-${DOWNLOAD_ID}"
+  fi
   sudo wget --continue https://dependencies.mapd.com/mapd-deps/mapd-deps-ubuntu-${DOWNLOAD_ID}-$FLAG.tar.xz
   sudo tar xvf mapd-deps-ubuntu-${DOWNLOAD_ID}-$FLAG.tar.xz
   sudo rm -f mapd-deps-ubuntu-${DOWNLOAD_ID}-$FLAG.tar.xz
   popd
+
+  # move validation layer JSON files from /etc to /share if needed (and remove then-empty vulkan subdir)
+  # @TODO(simon) remove this once the bundle has been repackaged for both x86 and ARM
+  if [ -d $PREFIX/etc/vulkan/explicit_layer.d ]; then
+    sudo mv $PREFIX/etc/vulkan/explicit_layer.d -t $PREFIX/share/vulkan
+    sudo rmdir $PREFIX/etc/vulkan
+  fi
 
   cat << EOF | sudo tee $PREFIX/mapd-deps.sh
 HEAVY_PREFIX=$PREFIX
@@ -135,7 +110,7 @@ PATH=/usr/local/cuda/bin:\$PATH
 PATH=\$HEAVY_PREFIX/bin:\$PATH
 
 VULKAN_SDK=\$HEAVY_PREFIX
-VK_LAYER_PATH=\$HEAVY_PREFIX/etc/vulkan/explicit_layer.d
+VK_LAYER_PATH=\$HEAVY_PREFIX/share/vulkan/explicit_layer.d
 
 CMAKE_PREFIX_PATH=\$HEAVY_PREFIX:\$CMAKE_PREFIX_PATH
 
@@ -192,6 +167,13 @@ elif [ "$ID" == "centos" ] ; then
   sudo rm -f mapd-deps-$FLAG.tar.xz
   MODFILE=$(readlink -e $(ls $DIRNAME/*modulefile | head -n 1))
   popd
+
+  # move validation layer JSON files from /etc to /share if needed (and remove then-empty vulkan subdir)
+  # @TODO(simon) remove this once the bundle has been repackaged for both x86 and ARM
+  if [ -d $MODFILE/etc/vulkan/explicit_layer.d ]; then
+    sudo mv $MODFILE/etc/vulkan/explicit_layer.d -t $MODFILE/share/vulkan
+    sudo rmdir $MODFILE/etc/vulkan
+  fi
 
   sudo mkdir -p $MODPATH/mapd-deps
   sudo ln -sf $MODFILE $MODPATH/mapd-deps/$DIRNAME
