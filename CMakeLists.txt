@@ -125,6 +125,7 @@ if(NOT MapdDepsVersion_FILE)
 else()
   get_filename_component(MAPD_DEPS_PATH "${MapdDepsVersion_FILE}" DIRECTORY)
   message(STATUS "Found dependencies path: ${MAPD_DEPS_PATH}")
+  list(APPEND CMAKE_LIBRARY_PATH ${MAPD_DEPS_PATH})
 endif()
 
 macro(set_alternate_linker linker)
@@ -188,9 +189,13 @@ endif (IS_CENTOS)
 
 if(PREFER_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+  set(BUILD_SHARED_LIBS OFF)
   set(Arrow_USE_STATIC_LIBS ON)
   set(Boost_USE_STATIC_LIBS ON)
+  set(EXPAT_USE_STATIC_LIBS ON)
+  set(LibOpenSaml_USE_STATIC_LIBS ON)
   set(OPENSSL_USE_STATIC_LIBS ON)
+  set(RdKafka_USE_STATIC_LIBS ON)
   set(Thrift_USE_STATIC_LIBS ON)
   if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
@@ -427,13 +432,33 @@ else()
   endif()
 endif()
 
+list(APPEND CMAKE_MODULE_PATH "${MAPD_DEPS_PATH}/lib/cmake/gdal/packages")
 find_package(Git)
 find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(GDAL REQUIRED)
 find_package(GDALExtra REQUIRED)
 find_package(BLOSC REQUIRED)
-list(APPEND GDAL_LIBRARIES ${PNG_LIBRARIES} ${GDALExtra_LIBRARIES})
+find_package(EXPAT REQUIRED)
+if(PREFER_STATIC_LIBS)
+  find_package(LibKML)
+  if(NOT LibKML_FOUND)
+    # After upgrading to new deps, make LibKML REQUIRED and delete this if() block.
+    set(LIBKML_LIBRARIES "")
+    message(WARNING "LibKML not found. This must be using old deps.")
+  endif()
+  list(APPEND GDAL_LIBRARIES ${LIBKML_LIBRARIES})
+endif()
+find_package(PROJ REQUIRED)
+find_package(TIFF REQUIRED)
+find_library(XML2_LIBRARY xml2)
+if(NOT XML2_LIBRARY)
+  # After upgrading to new deps, make XML2_LIBRARY REQUIRED and delete this if() block.
+  set(XML2_LIBRARY "")
+  message(WARNING "Libxml2 not found. This must be using old deps.")
+endif()
+list(APPEND GDAL_LIBRARIES ${PNG_LIBRARIES} ${GDALExtra_LIBRARIES} ${EXPAT_LIBRARIES}
+    ${PROJ_LIBRARIES} ${TIFF_LIBRARIES} ${XML2_LIBRARY})
 include_directories(${GDAL_INCLUDE_DIRS})
 
 option(ENABLE_FOLLY "Use Folly" ON)
@@ -772,10 +797,23 @@ else()
   set(llvm_libs ${LLVM_LIB})
 endif()
 
+# International Components for Unicode (ICU) required by boost_locale
+find_library(ICUUC_LIBRARY icuuc)
+find_library(ICUDATA_LIBRARY icudata)
+find_library(ICUI18N_LIBRARY icui18n)
+if(NOT ICUUC_LIBRARY OR NOT ICUDATA_LIBRARY OR NOT ICUI18N_LIBRARY)
+  # After upgrading to new deps, make above 3 ICU libraries REQUIRED and delete this if() block.
+  set(ICUUC_LIBRARY "")
+  set(ICUDATA_LIBRARY "")
+  set(ICUI18N_LIBRARY "")
+  message(WARNING "Not all ICU libraries were found. This must be using old deps.")
+endif()
+set(ICU_LIBRARIES ${ICUUC_LIBRARY} ${ICUDATA_LIBRARY} ${ICUI18N_LIBRARY})
 
 # Boost
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams serialization REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
+list(APPEND Boost_LIBRARIES ${ICU_LIBRARIES})
 
 if(Boost_VERSION LESS 107500)
   # BOOST_PP_VARIADICS is incorrectly set to 0 by <boost/preprocessor/config/config.hpp>
@@ -805,9 +843,24 @@ if(WIN32)
 endif()
 add_subdirectory(ThirdParty/googlebenchmark)
 
+# idn2
+find_library(IDN2_LIBRARY idn2) # Required by curl and gnutls
+if(NOT IDN2_LIBRARY)
+  # After upgrading to new deps, make IDN2_LIBRARY REQUIRED and delete this if() block.
+  set(IDN2_LIBRARY "")
+  message(WARNING "Libidn2 not found. This must be using old deps.")
+endif()
+find_library(UNISTRING_LIBRARY unistring) # Required by idn2
+if(NOT UNISTRING_LIBRARY)
+  # After upgrading to new deps, make UNISTRING_LIBRARY REQUIRED and delete this if() block.
+  set(UNISTRING_LIBRARY "")
+  message(WARNING "Libunistring not found. This must be using old deps.")
+endif()
+set(IDN2_LIBRARIES ${IDN2_LIBRARY} ${UNISTRING_LIBRARY})
+
 # aws-sdk
 find_package(CURL REQUIRED QUIET)
-list(APPEND CURL_LIBRARIES ${OPENSSL_LIBRARIES})
+list(APPEND CURL_LIBRARIES ${OPENSSL_LIBRARIES} ${IDN2_LIBRARIES})
 option(ENABLE_AWS_S3 "Enable AWS S3 support" ON)
 if(ENABLE_AWS_S3)
   find_package(LibAwsS3)
@@ -841,7 +894,14 @@ if(ENABLE_IMPORT_PARQUET)
   endif()
 endif()
 
-list(APPEND Arrow_LIBRARIES ${Snappy_LIBRARIES})
+find_library(lz4_LIBRARY lz4)
+if(NOT lz4_LIBRARY)
+  # After upgrading to new deps, make lz4_LIBRARY REQUIRED and delete this if() block.
+  set(lz4_LIBRARY "")
+  message(WARNING "Liblz4 not found. This must be using old deps.")
+endif()
+
+list(APPEND Arrow_LIBRARIES ${lz4_LIBRARY} ${Snappy_LIBRARIES})
 if(ENABLE_AWS_S3)
   list(INSERT Arrow_LIBRARIES 0 ${LibAwsS3_LIBRARIES})
 endif()
@@ -880,9 +940,18 @@ endif()
 find_package(RdKafka REQUIRED)
 include_directories(${RdKafka_INCLUDE_DIRS})
 
+# Message Digest functions used by libarchive
+find_library(MD_LIBRARY md)
+if(NOT MD_LIBRARY)
+  # After upgrading to new deps, make MD_LIBRARY REQUIRED and delete this if() block.
+  set(MD_LIBRARY "")
+  message(WARNING "Libmd not found. This must be using old deps.")
+endif()
+
 # libarchive
 find_package(LibArchive REQUIRED)
 include_directories(${LibArchive_INCLUDE_DIRS})
+list(APPEND LibArchive_LIBRARIES ${MD_LIBRARY})
 
 #find_package(CURL REQUIRED QUIET)
 #if(CURL_FOUND)

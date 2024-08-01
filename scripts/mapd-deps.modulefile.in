@@ -31,4 +31,4 @@ setenv GOROOT $root/go
 prepend-path PATH $root/maven/bin
 
 setenv VULKAN_SDK $root
-setenv VK_LAYER_PATH $root/etc/vulkan/explicit_layer.d
+setenv VK_LAYER_PATH $root/share/vulkan/explicit_layer.d
