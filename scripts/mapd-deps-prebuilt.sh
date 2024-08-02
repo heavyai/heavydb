@@ -53,6 +53,21 @@ while (( $# )); do
   shift
 done
 
+# Validate LIBRARY_TYPE
+if [ "$ID" == "ubuntu" ] &&  [ "$LIBRARY_TYPE" == "" ] ; then
+  echo "ERROR - Library type must be specified for Ubuntu installs (--static or --shared)"
+  exit
+fi
+
+# Establish architecture
+ARCH=$(uname -m)
+
+# Validate architecture
+if [ "$ID" == "centos" ] && [ "$ARCH" != "x86_64" ] ; then
+  echo "ERROR - Only x86 builds supported on CentOS"
+  exit
+fi
+
 # Distro-specific installations
 if [ "$ID" == "ubuntu" ] ; then
   sudo $PACKAGER update
@@ -80,16 +95,14 @@ if [ "$ID" == "ubuntu" ] ; then
   sudo mkdir -p $PREFIX
   pushd $PREFIX
 
-  DOWNLOAD_ID=$VERSION_ID
+  OS=ubuntu${VERSION_ID//./} # remove dot
   if [ $VERSION_ID == "24.04" ] || [ $VERSION_ID == "23.10" ]; then
-    DOWNLOAD_ID=22.04
+    OS=ubuntu2204
   fi
-  if [ "$LIBRARY_TYPE" != "" ] ; then
-    DOWNLOAD_ID="${LIBRARY_TYPE}-${DOWNLOAD_ID}"
-  fi
-  sudo wget --continue https://dependencies.mapd.com/mapd-deps/mapd-deps-ubuntu-${DOWNLOAD_ID}-$FLAG.tar.xz
-  sudo tar xvf mapd-deps-ubuntu-${DOWNLOAD_ID}-$FLAG.tar.xz
-  sudo rm -f mapd-deps-ubuntu-${DOWNLOAD_ID}-$FLAG.tar.xz
+  FILENAME=mapd-deps-${OS}-${LIBRARY_TYPE}-${ARCH}-${FLAG}.tar.xz
+  sudo wget --continue https://dependencies.mapd.com/mapd-deps/${FILENAME}
+  sudo tar xvf ${FILENAME}
+  sudo rm -f ${FILENAME}
   popd
 
   # move validation layer JSON files from /etc to /share if needed (and remove then-empty vulkan subdir)
