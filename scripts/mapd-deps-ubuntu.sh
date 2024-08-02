@@ -40,6 +40,15 @@ while (( $# )); do
   shift
 done
 
+# Validate LIBRARY_TYPE
+if [ "$LIBRARY_TYPE" == "" ] ; then
+  echo "ERROR - Library type must be specified (--static or --shared)"
+  exit
+fi
+
+# Establish architecture
+ARCH=$(uname -m)
+
 if [[ -n $CACHE && ( ! -d $CACHE  ||  ! -w $CACHE )  ]]; then
   # To prevent possible mistakes CACHE must be a writable directory
   echo "Invalid cache argument [$CACHE] supplied. Ignoring."
@@ -295,13 +304,15 @@ echo "Done. Be sure to source the 'mapd-deps.sh' file to pick up the required en
 echo "    source $PREFIX/mapd-deps.sh"
 
 if [ "$COMPRESS" = "true" ]; then
+  OS=ubuntu${VERSION_ID//./} # remove dot
+  if [ $VERSION_ID == "24.04" ] || [ $VERSION_ID == "23.10" ]; then
+    OS=ubuntu2204
+  fi
   TARBALL_TSAN=""
   if [ "$TSAN" = "true" ]; then
     TARBALL_TSAN="-tsan"
   fi
-  TARBALL_STATIC=""
-  if [ "$LIBRARY_TYPE" != "" ]; then
-    TARBALL_LIBRARY_TYPE="-${LIBRARY_TYPE}"
-  fi
-  tar acvf mapd-deps-ubuntu-${VERSION_ID}${TARBALL_TSAN}${TARBALL_LIBRARY_TYPE}-${SUFFIX}.tar.xz -C ${PREFIX} .
+  FILENAME=mapd-deps-${OS}${TARBALL_TSAN}-${LIBRARY_TYPE}-${ARCH}-${SUFFIX}.tar.xz
+
+  tar acvf ${FILENAME} -C ${PREFIX} .
 fi
