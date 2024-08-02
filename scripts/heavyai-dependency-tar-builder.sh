@@ -52,6 +52,9 @@ while (( $# )); do
     --static)
       LIBRARY_TYPE="static"
       ;;
+    --shared)
+      LIBRARY_TYPE="shared"
+      ;;
     --tag_date=*)
       TAG_DATE="${1#*=}"
       ;;
@@ -90,9 +93,7 @@ else
   exit 1
 fi
 
-if [ "$LIBRARY_TYPE" == "static" ] ; then
-  STATIC_PARAM="--static"
-fi
+LIBRARY_PARAM="--${LIBRARY_TYPE}"
 
 if [ "$tsan" == "true" ] ; then
   TSAN_PARAM="--tsan"
@@ -126,7 +127,7 @@ if [[ $OPERATING_SYSTEM == "centos" ]] ; then
   docker_cmd="${MIRRORLIST_PATCH} && yum install sudo -y && ./mapd-deps-${OPERATING_SYSTEM}.sh --savespace --compress $TSAN_PARAM --cache=/dep_cache"
 else
   docker_cmd='echo -e "#!/bin/sh\n\${@}" > /usr/sbin/sudo && chmod +x /usr/sbin/sudo && ./mapd-deps-'${OPERATING_SYSTEM}'.sh --savespace --compress --cache=/dep_cache'
-  docker_cmd="$docker_cmd $STATIC_PARAM $TSAN_PARAM"
+  docker_cmd="${docker_cmd} ${LIBRARY_PARAM} ${TSAN_PARAM}"
 fi
 PACKAGE_CACHE=/theHoard/export/dep_cache
 
