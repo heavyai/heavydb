@@ -903,18 +903,18 @@ function install_rdkafka() {
 GO_VERSION=1.15.6
 
 function install_go() {
-    VERS=${GO_VERSION}
-    ARCH=$(uname -m)
-    ARCH=${ARCH//x86_64/amd64}
-    ARCH=${ARCH//aarch64/arm64}
-    # https://dl.google.com/go/go$VERS.linux-$ARCH.tar.gz
-    download ${HTTP_DEPS}/go$VERS.linux-$ARCH.tar.gz
-    extract go$VERS.linux-$ARCH.tar.gz
-    rm -rf $PREFIX/go || true
-    mv go $PREFIX
-    if [[ $SAVE_SPACE == 'true' ]]; then
-      rm go$VERS.linux-$ARCH.tar.gz
-    fi
+  # substitute alternative arch tags
+  GO_ARCH=${ARCH}
+  GO_ARCH=${GO_ARCH//x86_64/amd64}
+  GO_ARCH=${GO_ARCH//aarch64/arm64}
+  # https://dl.google.com/go/go${GO_VERSION}.linux-${ARCH}.tar.gz
+  download ${HTTP_DEPS}/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
+  extract go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
+  rm -rf $PREFIX/go || true
+  mv go $PREFIX
+  if [[ $SAVE_SPACE == 'true' ]]; then
+    rm go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
+  fi
 }
 
 NINJA_VERSION=1.11.1

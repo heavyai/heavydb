@@ -124,11 +124,13 @@ OPERATING_SYSTEM=$(echo $OPERATING_SYSTEM | sed 's/[0-9,\.]*$//')
 #
 MIRRORLIST_PATCH="sed -i 's/mirror.centos.org/vault.centos.org/' /etc/yum.repos.d/*.repo && sed -i 's/^#.*baseurl=http:/baseurl=https:/' /etc/yum.repos.d/*.repo && sed -i 's/^mirrorlist=http:/#mirrorlist=https:/' /etc/yum.repos.d/*.repo && echo 'sslverify=false' >> /etc/yum.conf"
 if [[ $OPERATING_SYSTEM == "centos" ]] ; then
-  docker_cmd="${MIRRORLIST_PATCH} && yum install sudo -y && ./mapd-deps-${OPERATING_SYSTEM}.sh --savespace --compress $TSAN_PARAM --cache=/dep_cache"
+  docker_cmd="${MIRRORLIST_PATCH} && yum install sudo -y"
 else
-  docker_cmd='echo -e "#!/bin/sh\n\${@}" > /usr/sbin/sudo && chmod +x /usr/sbin/sudo && ./mapd-deps-'${OPERATING_SYSTEM}'.sh --savespace --compress --cache=/dep_cache'
-  docker_cmd="${docker_cmd} ${LIBRARY_PARAM} ${TSAN_PARAM}"
+  docker_cmd='echo -e "#!/bin/sh\n\${@}" > /usr/sbin/sudo && chmod +x /usr/sbin/sudo'
 fi
+# Add mapd-deps-prebuilt.sh command
+docker_cmd="${docker_cmd} && ./mapd-deps-'${OPERATING_SYSTEM}'.sh ${LIBRARY_PARAM} ${TSAN_PARAM} --savespace --compress --cache=/dep_cache"
+
 PACKAGE_CACHE=/theHoard/export/dep_cache
 
 echo "Running [$docker_cmd] in $BUILD_CONTAINER_IMAGE"
