@@ -8,6 +8,7 @@ TSAN=false
 COMPRESS=false
 SAVE_SPACE=false
 CACHE=
+LIBRARY_TYPE=
 
 while (( $# )); do
   case "$1" in
@@ -23,12 +24,27 @@ while (( $# )); do
     --cache=*)
       CACHE="${1#*=}"
       ;;
+    --static)
+      LIBRARY_TYPE=static
+      ;;
+    --shared)
+      LIBRARY_TYPE=shared
+      ;;
     *)
       break
       ;;
   esac
   shift
 done
+
+# Validate LIBRARY_TYPE
+if [ "$LIBRARY_TYPE" == "" ] ; then
+  echo "ERROR - Library type must be specified (--static or --shared)"
+  exit
+fi
+
+# Establish architecture
+ARCH=$(uname -m)
 
 if [[ -n $CACHE && ( ! -d $CACHE  ||  ! -w $CACHE )  ]]; then
   # To prevent possible mistakes CACHE must be a writable directory
@@ -282,11 +298,12 @@ sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.sh.in > mapd-deps-$SUFFIX.sh
 cp mapd-deps-$SUFFIX.sh mapd-deps-$SUFFIX.modulefile $PREFIX
 
 if [ "$COMPRESS" = "true" ] ; then
-    if [ "$TSAN" = "false" ]; then
+    OS=centos7
       TARBALL_TSAN=""
-    elif [ "$TSAN" = "true" ]; then
-      TARBALL_TSAN="tsan-"
+    if [ "$TSAN" = "true" ]; then
+      TARBALL_TSAN="-tsan"
     fi
-    tar -cvf mapd-deps-${TARBALL_TSAN}${SUFFIX}.tar -C $(dirname $PREFIX) $SUFFIX
-    pxz mapd-deps-${TARBALL_TSAN}${SUFFIX}.tar
+    FILENAME=mapd-deps-${OS}${TARBALL_TSAN}-${LIBRARY_TYPE}-${ARCH}-${SUFFIX}.tar
+    tar -cvf ${FILENAME} -C $(dirname $PREFIX) $SUFFIX
+    pxz ${FILENAME}
 fi
