@@ -304,15 +304,15 @@ echo "Done. Be sure to source the 'mapd-deps.sh' file to pick up the required en
 echo "    source $PREFIX/mapd-deps.sh"
 
 if [ "$COMPRESS" = "true" ]; then
-  OS=ubuntu${VERSION_ID//./} # remove dot
+  OS=ubuntu${VERSION_ID}
   if [ $VERSION_ID == "24.04" ] || [ $VERSION_ID == "23.10" ]; then
-    OS=ubuntu2204
+    OS=ubuntu22.04
   fi
   TARBALL_TSAN=""
   if [ "$TSAN" = "true" ]; then
     TARBALL_TSAN="-tsan"
   fi
-  FILENAME=mapd-deps-${OS}${TARBALL_TSAN}-${LIBRARY_TYPE}-${ARCH}-${SUFFIX}.tar.xz
-
-  tar acvf ${FILENAME} -C ${PREFIX} .
+  FILENAME=mapd-deps-${OS}${TARBALL_TSAN}-${LIBRARY_TYPE}-${ARCH}-${SUFFIX}.tar
+  tar cvf ${FILENAME} -C ${PREFIX} .
+  xz -T0 ${FILENAME} # @TODO(se) change to use ${NPROC}
 fi
