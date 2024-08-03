@@ -28,6 +28,7 @@ fi
 FLAG=latest
 ENABLE=false
 LIBRARY_TYPE=
+TSAN=false
 
 while (( $# )); do
   case "$1" in
@@ -45,6 +46,9 @@ while (( $# )); do
       ;;
     --shared)
       LIBRARY_TYPE=shared
+      ;;
+    --tsan)
+      TSAN=true
       ;;
     *)
       break
@@ -95,11 +99,15 @@ if [ "$ID" == "ubuntu" ] ; then
   sudo mkdir -p $PREFIX
   pushd $PREFIX
 
-  OS=ubuntu${VERSION_ID//./} # remove dot
+  OS=ubuntu${VERSION_ID}
   if [ $VERSION_ID == "24.04" ] || [ $VERSION_ID == "23.10" ]; then
-    OS=ubuntu2204
+    OS=ubuntu22.04
   fi
-  FILENAME=mapd-deps-${OS}-${LIBRARY_TYPE}-${ARCH}-${FLAG}.tar.xz
+  TARBALL_TSAN=""
+  if [ "$TSAN" = "true" ]; then
+    TARBALL_TSAN="-tsan"
+  fi
+  FILENAME=mapd-deps-${OS}${TARBALL_TSAN}-${LIBRARY_TYPE}-${ARCH}-${FLAG}.tar.xz
   sudo wget --continue https://dependencies.mapd.com/mapd-deps/${FILENAME}
   sudo tar xvf ${FILENAME}
   sudo rm -f ${FILENAME}
@@ -174,10 +182,16 @@ elif [ "$ID" == "centos" ] ; then
 
   sudo mkdir -p $PREFIX
   pushd $PREFIX
-  sudo wget --continue https://dependencies.mapd.com/mapd-deps/mapd-deps-$FLAG.tar.xz
-  DIRNAME=$(tar tf mapd-deps-$FLAG.tar.xz | head -n 2 | tail -n 1 | xargs dirname)
-  sudo tar xvf mapd-deps-$FLAG.tar.xz
-  sudo rm -f mapd-deps-$FLAG.tar.xz
+  OS=centos7
+  TARBALL_TSAN=""
+  if [ "$TSAN" = "true" ]; then
+    TARBALL_TSAN="-tsan"
+  fi
+  FILENAME=mapd-deps-${OS}${TARBALL_TSAN}-${LIBRARY_TYPE}-${ARCH}-${FLAG}.tar.xz
+  sudo wget --continue https://dependencies.mapd.com/mapd-deps/${FILENAME}
+  DIRNAME=$(tar tf ${FILENAME} | head -n 2 | tail -n 1 | xargs dirname)
+  sudo tar xvf ${FILENAME}
+  sudo rm -f ${FILENAME}
   MODFILE=$(readlink -e $(ls $DIRNAME/*modulefile | head -n 1))
   popd
 
