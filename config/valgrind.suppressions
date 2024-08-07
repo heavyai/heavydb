@@ -70,3 +70,15 @@
    fun:__libc_csu_init
    fun:(below main)
 }
+{
+   # QE-1261
+   onedal_api_global_common-GLIBC_2.34
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:_Znwm
+   ...
+   fun:_GLOBAL__sub_I_common.cpp
+   fun:call_init
+   fun:__libc_start_main@@GLIBC_2.34
+   fun:(below main)
+}
