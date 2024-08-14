@@ -138,6 +138,28 @@ void try_parallelize_llm_transform(ThreadInfo& thread_info,
 
 }  // namespace
 
+bool SortedStringPermutation::operator()(const int32_t lhs, const int32_t rhs) const {
+  if (lhs == rhs) {
+    return false;
+  }
+
+  if (lhs == inline_int_null_value<int32_t>()) {
+    return !sort_descending;
+  }
+  if (rhs == inline_int_null_value<int32_t>()) {
+    return sort_descending;
+  }
+
+  const std::pair<int32_t, int32_t> lhs_permutation = get_permutation(lhs);
+  const std::pair<int32_t, int32_t> rhs_permutation = get_permutation(rhs);
+
+  bool lhs_lt_rhs = lhs_permutation.first != rhs_permutation.first
+                        ? lhs_permutation.first < rhs_permutation.first
+                        : lhs_permutation.second < rhs_permutation.second;
+
+  return sort_descending != lhs_lt_rhs;
+}
+
 bool g_enable_stringdict_parallel{false};
 constexpr int32_t StringDictionary::INVALID_STR_ID;
 constexpr size_t StringDictionary::MAX_STRLEN;
@@ -835,12 +857,15 @@ std::pair<char*, size_t> StringDictionary::getStringBytes(
   return getStringBytesChecked(string_id);
 }
 
-size_t StringDictionary::storageEntryCount() const {
-  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+size_t StringDictionary::storageEntryCountUnlocked() const {
   if (isClient()) {
     return client_->storage_entry_count();
   }
   return str_count_;
+}
+
+size_t StringDictionary::storageEntryCount() const {
+  return storageEntryCountUnlocked();
 }
 
 template <typename T>
@@ -1007,6 +1032,93 @@ std::vector<int32_t> StringDictionary::getEquals(std::string pattern,
   return result;
 }
 
+std::vector<int32_t> StringDictionary::getPersistedSortedPermutation() {
+  permuteSortedCache();
+  return sorted_permutation_cache_;
+}
+
+void StringDictionary::permuteSortedCache() {
+  auto timer = DEBUG_TIMER(__func__);
+  // not thread safe, only called with write lock around parent method
+
+  const auto cur_cache_size = sorted_permutation_cache_.size();
+  if (cur_cache_size == str_count_) {
+    return;
+  }
+  buildSortedCache();
+  sorted_permutation_cache_.resize(sorted_cache_.size());
+  CHECK_LE(sorted_cache_.size(),
+           static_cast<size_t>(std::numeric_limits<int32_t>::max()));
+  tbb::parallel_for(tbb::blocked_range<size_t>(0, sorted_cache_.size()),
+                    [&](const tbb::blocked_range<size_t>& r) {
+                      for (size_t i = r.begin(); i != r.end(); ++i) {
+                        sorted_permutation_cache_[sorted_cache_[i]] =
+                            static_cast<int32_t>(i);
+                      }
+                    });
+}
+
+std::vector<std::pair<int32_t, int32_t>> StringDictionary::getTransientSortPermutation(
+    const std::vector<std::pair<std::string, int32_t>>& transient_strings_to_ids) const {
+  std::vector<std::pair<int32_t, int32_t>> transient_string_permutations(
+      transient_strings_to_ids.size());
+
+  int32_t last_persisted_rank =
+      std::numeric_limits<int32_t>::max();  // impossible value for current signed 32 bit
+                                            // dictionary
+  int32_t transient_rank = 0;  // To order transient strings with same persisted rank
+
+  for (const auto& transient_string_to_id : transient_strings_to_ids) {
+    const auto sorted_cache_itr = std::lower_bound(
+        sorted_cache_.begin(),
+        sorted_cache_.end(),
+        transient_string_to_id.first,
+        [this](decltype(sorted_cache_)::value_type const& a, const std::string& b) {
+          auto a_str = this->getStringFromStorage(a);
+          return string_lt(a_str.c_str_ptr, a_str.size, b.c_str(), b.size());
+        });
+    int32_t persisted_rank = sorted_cache_itr != sorted_cache_.end()
+                                 ? std::distance(sorted_cache_.begin(), sorted_cache_itr)
+                                 : sorted_cache_.size();
+    if (persisted_rank != last_persisted_rank) {
+      last_persisted_rank = persisted_rank;
+      transient_rank = 0;
+    }
+    transient_string_permutations[translateTransientIdToIndex(
+        transient_string_to_id.second)] =
+        std::make_pair(std::distance(sorted_cache_.begin(), sorted_cache_itr),
+                       transient_rank++);
+  }
+  return transient_string_permutations;
+}
+
+SortedStringPermutation StringDictionary::getSortedPermutation(
+    const std::vector<std::pair<std::string, int32_t>>& transient_string_to_id_map,
+    const bool should_sort_descending) {
+  auto timer = DEBUG_TIMER(__func__);
+  std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
+
+  if (client_) {
+    if (sorted_permutation_cache_.size() != storageEntryCountUnlocked()) {
+      sorted_permutation_cache_ = client_->get_persisted_sorted_permutation();
+    }
+  } else {
+    permuteSortedCache();
+  }
+  SortedStringPermutation sorted_string_permutation(should_sort_descending);
+  sorted_string_permutation.persisted_permutation = sorted_permutation_cache_;
+  if (!transient_string_to_id_map.empty()) {
+    if (client_) {
+      sorted_string_permutation.transient_permutation =
+          client_->get_transient_sorted_permutation(transient_string_to_id_map);
+    } else {
+      sorted_string_permutation.transient_permutation =
+          getTransientSortPermutation(transient_string_to_id_map);
+    }
+  }
+  return sorted_string_permutation;
+}
+
 std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
                                                   const std::string& comp_operator,
                                                   const size_t generation) {
@@ -1018,7 +1130,7 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
   if (str_count_ == 0) {
     return ret;
   }
-  if (sorted_cache.size() < str_count_) {
+  if (sorted_cache_.size() < str_count_) {
     if (comp_operator == "=" || comp_operator == "<>") {
       return getEquals(pattern, comp_operator, generation);
     }
@@ -1030,25 +1142,25 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
   if (!cache_index) {
     cache_index = std::make_shared<StringDictionary::compare_cache_value_t>();
     const auto cache_itr = std::lower_bound(
-        sorted_cache.begin(),
-        sorted_cache.end(),
+        sorted_cache_.begin(),
+        sorted_cache_.end(),
         pattern,
-        [this](decltype(sorted_cache)::value_type const& a, decltype(pattern)& b) {
+        [this](decltype(sorted_cache_)::value_type const& a, decltype(pattern)& b) {
           auto a_str = this->getStringFromStorage(a);
           return string_lt(a_str.c_str_ptr, a_str.size, b.c_str(), b.size());
         });
 
-    if (cache_itr == sorted_cache.end()) {
-      cache_index->index = sorted_cache.size() - 1;
+    if (cache_itr == sorted_cache_.end()) {
+      cache_index->index = sorted_cache_.size() - 1;
       cache_index->diff = 1;
     } else {
       const auto cache_str = getStringFromStorage(*cache_itr);
       if (!string_eq(
               cache_str.c_str_ptr, cache_str.size, pattern.c_str(), pattern.size())) {
-        cache_index->index = cache_itr - sorted_cache.begin() - 1;
+        cache_index->index = cache_itr - sorted_cache_.begin() - 1;
         cache_index->diff = 1;
       } else {
-        cache_index->index = cache_itr - sorted_cache.begin();
+        cache_index->index = cache_itr - sorted_cache_.begin();
         cache_index->diff = 0;
       }
     }
@@ -1080,7 +1192,7 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
       }
     }
     for (size_t i = 0; i < idx; i++) {
-      ret.push_back(sorted_cache[i]);
+      ret.push_back(sorted_cache_[i]);
     }
 
     // For <= operator if the index that we have points to the element which is equal to
@@ -1096,7 +1208,7 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
       idx = cache_index->index;
     }
     for (size_t i = 0; i < idx; i++) {
-      ret.push_back(sorted_cache[i]);
+      ret.push_back(sorted_cache_[i]);
     }
 
     // For > operator we want to get all the elements with index greater than the index
@@ -1109,8 +1221,8 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
     if (cache_index->index == 0 && cache_index->diff > 0) {
       idx = cache_index->index;
     }
-    for (size_t i = idx; i < sorted_cache.size(); i++) {
-      ret.push_back(sorted_cache[i]);
+    for (size_t i = idx; i < sorted_cache_.size(); i++) {
+      ret.push_back(sorted_cache_[i]);
     }
 
     // For >= operator when the indexed element that we have points to element which is
@@ -1127,12 +1239,12 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
         idx = cache_index->index;
       }
     }
-    for (size_t i = idx; i < sorted_cache.size(); i++) {
-      ret.push_back(sorted_cache[i]);
+    for (size_t i = idx; i < sorted_cache_.size(); i++) {
+      ret.push_back(sorted_cache_[i]);
     }
   } else if (comp_operator == "=") {
     if (!cache_index->diff) {
-      ret.push_back(sorted_cache[cache_index->index]);
+      ret.push_back(sorted_cache_[cache_index->index]);
     }
 
     // For <> operator it is simple matter of not including id of string which is equal
@@ -1141,15 +1253,15 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
     if (!cache_index->diff) {
       size_t idx = cache_index->index;
       for (size_t i = 0; i < idx; i++) {
-        ret.push_back(sorted_cache[i]);
+        ret.push_back(sorted_cache_[i]);
       }
       ++idx;
-      for (size_t i = idx; i < sorted_cache.size(); i++) {
-        ret.push_back(sorted_cache[i]);
+      for (size_t i = idx; i < sorted_cache_.size(); i++) {
+        ret.push_back(sorted_cache_[i]);
       }
     } else {
-      for (size_t i = 0; i < sorted_cache.size(); i++) {
-        ret.insert(ret.begin(), sorted_cache.begin(), sorted_cache.end());
+      for (size_t i = 0; i < sorted_cache_.size(); i++) {
+        ret.insert(ret.begin(), sorted_cache_.begin(), sorted_cache_.end());
       }
     }
 
@@ -1707,18 +1819,32 @@ bool StringDictionary::isClient() const noexcept {
   return static_cast<bool>(client_);
 }
 
+std::vector<int32_t> StringDictionary::fillIndexVector(const size_t start_idx,
+                                                       const size_t end_idx) const {
+  std::vector<int32_t> index_vector(end_idx - start_idx);
+  std::iota(index_vector.begin(), index_vector.end(), start_idx);
+  return index_vector;
+}
+
 void StringDictionary::buildSortedCache() {
+  auto timer = DEBUG_TIMER(__func__);
   // This method is not thread-safe.
-  const auto cur_cache_size = sorted_cache.size();
-  std::vector<int32_t> temp_sorted_cache;
-  for (size_t i = cur_cache_size; i < str_count_; i++) {
-    temp_sorted_cache.push_back(i);
+  const auto cur_cache_size = sorted_cache_.size();
+  if (cur_cache_size == str_count_) {
+    return;
   }
-  sortCache(temp_sorted_cache);
-  mergeSortedCache(temp_sorted_cache);
+  if (sorted_cache_.empty()) {
+    sorted_cache_ = fillIndexVector(cur_cache_size, str_count_);
+    sortCache(sorted_cache_);
+  } else {
+    std::vector<int32_t> temp_sorted_cache = fillIndexVector(cur_cache_size, str_count_);
+    sortCache(temp_sorted_cache);
+    mergeSortedCache(temp_sorted_cache);
+  }
 }
 
 void StringDictionary::sortCache(std::vector<int32_t>& cache) {
+  auto timer = DEBUG_TIMER(__func__);
   // This method is not thread-safe.
 
   // this boost sort is creating some problems when we use UTF-8 encoded strings.
@@ -1733,26 +1859,27 @@ void StringDictionary::sortCache(std::vector<int32_t>& cache) {
 
 void StringDictionary::mergeSortedCache(std::vector<int32_t>& temp_sorted_cache) {
   // this method is not thread safe
-  std::vector<int32_t> updated_cache(temp_sorted_cache.size() + sorted_cache.size());
+  auto timer = DEBUG_TIMER(__func__);
+  std::vector<int32_t> updated_cache(temp_sorted_cache.size() + sorted_cache_.size());
   size_t t_idx = 0, s_idx = 0, idx = 0;
-  for (; t_idx < temp_sorted_cache.size() && s_idx < sorted_cache.size(); idx++) {
+  for (; t_idx < temp_sorted_cache.size() && s_idx < sorted_cache_.size(); idx++) {
     auto t_string = getStringFromStorage(temp_sorted_cache[t_idx]);
-    auto s_string = getStringFromStorage(sorted_cache[s_idx]);
+    auto s_string = getStringFromStorage(sorted_cache_[s_idx]);
     const auto insert_from_temp_cache =
         string_lt(t_string.c_str_ptr, t_string.size, s_string.c_str_ptr, s_string.size);
     if (insert_from_temp_cache) {
       updated_cache[idx] = temp_sorted_cache[t_idx++];
     } else {
-      updated_cache[idx] = sorted_cache[s_idx++];
+      updated_cache[idx] = sorted_cache_[s_idx++];
     }
   }
   while (t_idx < temp_sorted_cache.size()) {
     updated_cache[idx++] = temp_sorted_cache[t_idx++];
   }
-  while (s_idx < sorted_cache.size()) {
-    updated_cache[idx++] = sorted_cache[s_idx++];
+  while (s_idx < sorted_cache_.size()) {
+    updated_cache[idx++] = sorted_cache_[s_idx++];
   }
-  sorted_cache.swap(updated_cache);
+  sorted_cache_.swap(updated_cache);
 }
 
 void StringDictionary::populate_string_ids(
@@ -2149,7 +2276,7 @@ size_t StringDictionary::computeCacheSize() const {
   std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   return string_id_string_dict_hash_table_.size() * sizeof(int32_t) +
          hash_cache_.size() * sizeof(string_dict_hash_t) +
-         sorted_cache.size() * sizeof(int32_t) + like_cache_size_ + regex_cache_size_ +
+         sorted_cache_.size() * sizeof(int32_t) + like_cache_size_ + regex_cache_size_ +
          equal_cache_size_ + compare_cache_size_ + strings_cache_size_;
 }
 

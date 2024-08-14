@@ -22,14 +22,19 @@
 
 #include <boost/lexical_cast.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
+#include <iomanip>
 #include <iostream>
 #include <limits>
+#include <random>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <vector>
 
 #include "StringOps/StringOps.h"
 
@@ -44,6 +49,21 @@
 extern bool g_cache_string_hash;
 int g_op_count{250000};
 extern int64_t g_llm_transform_max_num_unique_value;
+
+size_t get_num_digits(size_t num) {
+  size_t digits = 0;
+  do {
+    num /= 10;
+    digits++;
+  } while (num != 0);
+  return digits;
+}
+
+std::string left_zero_pad(const size_t num, const size_t num_digits) {
+  std::stringstream leading_zeroer;
+  leading_zeroer << std::setw(num_digits) << std::setfill('0') << num;
+  return leading_zeroer.str();
+}
 
 class StringDictionaryTest : public TestHelpers::TbbPrivateServerKiller {};
 class StringDictionaryProxyTest : public TestHelpers::TbbPrivateServerKiller {};
@@ -921,6 +941,47 @@ TEST_F(StringDictionaryTest, TransientUnion) {
     ASSERT_EQ(4, sdp_lhs.getIdOfString("g"));
     ASSERT_EQ(5, sdp_lhs.getIdOfString("h"));
     ASSERT_EQ(6, sdp_lhs.getIdOfString("i"));
+  }
+}
+
+TEST_F(StringDictionaryProxyTest, SortedPermutation) {
+  const DictRef dict_ref(-1, 1);
+  std::shared_ptr<StringDictionary> string_dict = std::make_shared<StringDictionary>(
+      dict_ref, BASE_PATH1, false, false, g_cache_string_hash);
+
+  const int reduced_op_count{
+      g_op_count /
+      4};  // Lower op count to keep test fast, was ~10 seconds on full g_op_count
+  std::vector<std::string> strings(reduced_op_count);
+  size_t num_digits = get_num_digits(reduced_op_count);
+  for (int i = 0; i < reduced_op_count; ++i) {
+    strings[i] = left_zero_pad(i, num_digits);
+  }
+
+  std::vector<int32_t> string_ids(reduced_op_count);
+  string_dict->getOrAddBulk(strings, string_ids.data());
+
+  // Now make proxy from dictionary
+  StringDictionaryProxy string_dict_proxy(
+      string_dict, test_source_dict_key, string_dict->storageEntryCount());
+
+  // now shuffle the vector above
+  std::random_device rd;
+  std::mt19937 twister(rd());  // mersenne_twister
+  std::shuffle(strings.begin(), strings.end(), twister);
+
+  //// now get the string ids for the shuffled strings
+  auto shuffled_string_ids = string_dict_proxy.getTransientBulk(strings);
+  CHECK_EQ(shuffled_string_ids.size(), static_cast<size_t>(reduced_op_count));
+
+  SortedStringPermutation sorted_string_permutation =
+      string_dict_proxy.getSortedPermutation(false);  // false is for sort descending
+
+  std::sort(
+      shuffled_string_ids.begin(), shuffled_string_ids.end(), sorted_string_permutation);
+
+  for (int i = 0; i < reduced_op_count; ++i) {
+    CHECK_EQ(i, shuffled_string_ids[i]);
   }
 }
 
