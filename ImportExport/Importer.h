@@ -957,7 +957,7 @@ inline std::ostream& operator<<(std::ostream& os,
                                 const TypedImportBuffer::ImportBufferMemoryUsage& mu) {
   return os << "\"ImportBufferMemoryUsage\": {"
             << "\"fixed_length MB\": " << mu.fixed_length / (1024 * 1024)
-            << ", \"var_length MB\": <unknown>"
+            << ", \"var_length MB\": null"
             << "}";
 }
 
