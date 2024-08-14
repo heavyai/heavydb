@@ -528,6 +528,30 @@ std::vector<int32_t> StringDictionaryProxy::getCompare(
   return result;
 }
 
+std::vector<std::pair<std::string, int32_t>> extract_and_sort_transient_map(
+    const StringDictionaryProxy::TransientMap& transient_str_to_int) {
+  std::vector<std::pair<std::string, int32_t>> sorted_elements;
+  sorted_elements.reserve(transient_str_to_int.size());
+
+  for (const auto& kv : transient_str_to_int) {
+    sorted_elements.emplace_back(kv.first, kv.second);
+  }
+
+  std::sort(sorted_elements.begin(),
+            sorted_elements.end(),
+            [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+  return sorted_elements;
+}
+
+SortedStringPermutation StringDictionaryProxy::getSortedPermutation(
+    const bool should_sort_descending) {
+  auto timer = DEBUG_TIMER(__func__);
+  const auto transient_strings_to_ids =
+      extract_and_sort_transient_map(transient_str_to_int_);
+  return string_dict_->getSortedPermutation(transient_strings_to_ids,
+                                            should_sort_descending);
+}
+
 namespace {
 
 bool is_regexp_like(const std::string& str,
