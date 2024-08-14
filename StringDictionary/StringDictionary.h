@@ -38,6 +38,48 @@ namespace StringOps_Namespace {
 class StringOps;
 }
 
+inline size_t translateTransientIdToIndex(const int32_t str_id) {
+  // Transient ids start at -2 and descend, -1 is INVALID_STR_ID
+  return -(str_id)-2;
+}
+
+struct SortedStringPermutation {
+  SortedStringPermutation(const bool should_sort_descending)
+      : sort_descending(should_sort_descending) {}
+  bool sort_descending;
+
+  std::vector<int32_t> persisted_permutation;
+
+  // transient_permutation_ maps transient string ids, starting from -2
+  // (-1 is INVALID_STR_ID), such that -2 is represented by element 0 of
+  // the vector, -3 by element 1, and so on, to the index in the
+  // persisted_permutation_ vector above, such that the first element permutation
+  // is set to the sort rank of the persisted string that is after
+  // the transient string. For example, if 'BBB' and 'DDD' are persisted
+  // elements in the dictionary, and 'AAA', 'AAB' 'CCC', and 'EEE' are transient
+  // strings, strings 'AAA' and 'AAB' will map to 0, since they fall before 'BBB',
+  // which is rank 0 in the persisted dictionary, 'CCC' will map to 1,
+  // since it occurs before 'DDD', and 'EEE' will map to 2.
+  // The second element denotes ordering for transient elements with the same persisted
+  // rank In the case above, both 'AAA' and 'AAB', falling before the first persisted
+  // string ('BBB'), will both have the same persisted rank(first element of the pair) of
+  // 0, but 'AAA' will have the transient rank of 0, and 'AAB' will have the transient
+  // rank of 1
+  std::vector<std::pair<int32_t, int32_t>> transient_permutation;
+
+  inline size_t size() const {
+    return persisted_permutation.size() + transient_permutation.size();
+  }
+  inline std::pair<int32_t, int32_t> get_permutation(const int32_t str_id) const {
+    if (str_id < 0) {
+      return transient_permutation[translateTransientIdToIndex(str_id)];
+    }
+    return std::make_pair(persisted_permutation[str_id],
+                          std::numeric_limits<int32_t>::max());
+  }
+  bool operator()(const int32_t lhs, const int32_t rhs) const;
+};
+
 class DictPayloadUnavailable : public std::runtime_error {
  public:
   DictPayloadUnavailable() : std::runtime_error("DictPayloadUnavailable") {}
@@ -106,6 +148,16 @@ class StringDictionary {
   std::string_view getStringView(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const;
+
+  SortedStringPermutation getSortedPermutation(
+      const std::vector<std::pair<std::string, int32_t>>& transient_string_to_ids,
+      const bool should_sort_descending);
+
+  std::vector<std::pair<int32_t, int32_t>> getTransientSortPermutation(
+      const std::vector<std::pair<std::string, int32_t>>& transient_string_to_id_map)
+      const;
+
+  std::vector<int32_t> getPersistedSortedPermutation();
 
   template <typename T>
   std::vector<T> getLike(const std::string& pattern,
@@ -288,6 +340,13 @@ class StringDictionary {
   void insertInSortedCache(std::string str, int32_t str_id);
   void sortCache(std::vector<int32_t>& cache);
   void mergeSortedCache(std::vector<int32_t>& temp_sorted_cache);
+
+  size_t storageEntryCountUnlocked() const;
+
+  std::vector<int32_t> fillIndexVector(const size_t start_idx,
+                                       const size_t end_idx) const;
+  void permuteSortedCache();
+
   compare_cache_value_t* binary_search_cache(const std::string& pattern) const;
 
   const shared::StringDictKey dict_key_;
@@ -296,7 +355,8 @@ class StringDictionary {
   size_t collisions_;
   std::vector<int32_t> string_id_string_dict_hash_table_;
   std::vector<string_dict_hash_t> hash_cache_;
-  std::vector<int32_t> sorted_cache;
+  std::vector<int32_t> sorted_cache_;
+  std::vector<int32_t> sorted_permutation_cache_;
   bool isTemp_;
   bool materialize_hashes_;
   std::string offsets_path_;

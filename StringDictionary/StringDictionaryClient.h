@@ -65,6 +65,9 @@ class StringDictionaryClient {
     return std::vector<int64_t>{};
   }
 
+  std::vector<int32_t> get_persisted_sorted_permutation();
+  std::vector<std::pair<int32_t, int32_t>> get_transient_sorted_permutation(
+      const std::vector<std::pair<std::string, int32_t>>& transient_strings_to_ids);
 
   std::vector<int32_t> get_compare(const std::string& pattern,
                                    const std::string& comp_operator,

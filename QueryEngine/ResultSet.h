@@ -862,9 +862,11 @@ class ResultSet {
         , single_threaded_(single_threaded)
         , approx_quantile_materialized_buffers_(materializeApproxQuantileColumns())
         , mode_buffers_(materializeModeColumns()) {
+      getDictionaryEncodedSortPermutations();
       materializeCountDistinctColumns();
     }
 
+    void getDictionaryEncodedSortPermutations();
     void materializeCountDistinctColumns();
     ApproxQuantileBuffers materializeApproxQuantileColumns() const;
     ModeBuffers materializeModeColumns() const;
@@ -884,6 +886,7 @@ class ResultSet {
     const BufferIteratorType buffer_itr_;
     const Executor* executor_;
     const bool single_threaded_;
+    std::vector<SortedStringPermutation> dictionary_string_sorted_permutations_;
     std::vector<std::vector<int64_t>> count_distinct_materialized_buffers_;
     const ApproxQuantileBuffers approx_quantile_materialized_buffers_;
     const ModeBuffers mode_buffers_;

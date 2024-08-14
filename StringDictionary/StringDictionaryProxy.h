@@ -216,6 +216,8 @@ class StringDictionaryProxy {
   std::vector<int32_t> getCompare(const std::string& pattern,
                                   const std::string& comp_operator) const;
 
+  SortedStringPermutation getSortedPermutation(const bool should_sort_descending);
+
   std::vector<int32_t> getRegexpLike(const std::string& pattern, const char escape) const;
 
   struct HeterogeneousStringHash {
