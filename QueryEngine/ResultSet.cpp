@@ -38,6 +38,7 @@
 #include "Shared/threading.h"
 
 #include <tbb/parallel_for.h>
+#include <tbb/parallel_sort.h>
 
 #include <algorithm>
 #include <atomic>
@@ -828,11 +829,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     if (top_n == 0) {
       top_n = pv.size();  // top_n == 0 implies a full sort
     }
-    {
-      auto top_permute_timer = DEBUG_TIMER("topPermutation");
-      pv =
-          topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false));
-    }
+    pv = topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false));
     if (pv.size() < permutation_.size()) {
       permutation_.resize(pv.size());
       permutation_.shrink_to_fit();
@@ -969,6 +966,20 @@ ResultSet::StorageLookupResult ResultSet::findStorage(const size_t entry_idx) co
   return {stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(),
           fixedup_entry_idx,
           stg_idx};
+}
+
+template <typename BUFFER_ITERATOR_TYPE>
+void ResultSet::ResultSetComparator<
+    BUFFER_ITERATOR_TYPE>::getDictionaryEncodedSortPermutations() {
+  for (const auto& order_entry : order_entries_) {
+    const auto entry_ti = get_compact_type(result_set_->targets_[order_entry.tle_no - 1]);
+    if (entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT) {
+      const auto string_dict_proxy =
+          result_set_->getStringDictionaryProxy(entry_ti.getStringDictKey());
+      dictionary_string_sorted_permutations_.emplace_back(
+          string_dict_proxy->getSortedPermutation(order_entry.is_desc));
+    }
+  }
 }
 
 template <typename BUFFER_ITERATOR_TYPE>
@@ -1170,6 +1181,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
   size_t materialized_count_distinct_buffer_idx{0};
   size_t materialized_approx_quantile_buffer_idx{0};
   size_t materialized_mode_buffer_idx{0};
+  size_t dictionary_string_sorted_permutation_idx{0};
 
   for (const auto& order_entry : order_entries_) {
     CHECK_GE(order_entry.tle_no, 1);
@@ -1273,18 +1285,15 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
                    lhs_entry_ti.get_compression() == kENCODING_DICT)) {
         CHECK_EQ(4, lhs_entry_ti.get_logical_size());
         CHECK(executor_);
-        const auto lhs_string_dict_proxy = executor_->getStringDictionaryProxy(
-            lhs_entry_ti.getStringDictKey(), result_set_->row_set_mem_owner_, false);
-        const auto rhs_string_dict_proxy = executor_->getStringDictionaryProxy(
-            rhs_entry_ti.getStringDictKey(), result_set_->row_set_mem_owner_, false);
-        const auto lhs_str = lhs_string_dict_proxy->getString(lhs_v.i1);
-        const auto rhs_str = rhs_string_dict_proxy->getString(rhs_v.i1);
-        if (lhs_str == rhs_str) {
+        if (lhs_v.i1 == rhs_v.i1) {
+          ++dictionary_string_sorted_permutation_idx;
           continue;
         }
-        return (lhs_str < rhs_str) != order_entry.is_desc;
+        CHECK_LT(dictionary_string_sorted_permutation_idx,
+                 dictionary_string_sorted_permutations_.size());
+        return dictionary_string_sorted_permutations_
+            [dictionary_string_sorted_permutation_idx++](lhs_v.i1, rhs_v.i1);
       }
-
       if (lhs_v.i1 == rhs_v.i1) {
         continue;
       }
@@ -1333,12 +1342,13 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
 PermutationView ResultSet::topPermutation(PermutationView permutation,
                                           const size_t n,
                                           const Comparator& compare) {
+  auto timer = DEBUG_TIMER(__func__);
   if (n < permutation.size()) {
     std::partial_sort(
         permutation.begin(), permutation.begin() + n, permutation.end(), compare);
     permutation.resize(n);
   } else {
-    std::sort(permutation.begin(), permutation.end(), compare);
+    tbb::parallel_sort(permutation.begin(), permutation.end(), compare);
   }
   return permutation;
 }
