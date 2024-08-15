@@ -459,8 +459,10 @@ function install_gdal_and_pdal() {
 
     # sqlite3 (for proj, gdal)
     download_make_install https://sqlite.org/2024/sqlite-autoconf-3450100.tar.gz
+
     # expat (for gdal)
-    download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_5_0/expat-2.5.0.tar.bz2
+    # upgrade to 2.6.2 to resolve gdb issue on Ubuntu 24.04
+    download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_6_2/expat-2.6.2.tar.bz2
 
     # kml (for gdal)
     download ${HTTP_DEPS}/libkml-master.zip
