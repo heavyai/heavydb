@@ -69,6 +69,7 @@ extern size_t g_approx_quantile_buffer;
 extern size_t g_approx_quantile_centroids;
 extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
+extern size_t g_watchdog_baseline_sort_max;
 extern size_t g_streaming_topn_max;
 extern size_t g_estimator_failure_max_groupby_size;
 extern double g_ndv_groups_estimator_multiplier;
@@ -1204,6 +1205,11 @@ void CommandLineOptions::fillDeveloperOptions() {
       po::value<size_t>(&g_parallel_top_max)->default_value(g_parallel_top_max),
       "For ResultSets requiring a heap sort, the maximum number of rows allowed by "
       "watchdog.");
+  desc.add_options()("watchdog-baseline-sort-max",
+                     po::value<size_t>(&g_watchdog_baseline_sort_max)
+                         ->default_value(g_watchdog_baseline_sort_max),
+                     "For ResultSets requiring a CPU baseline sort, the maximum number "
+                     "of rows allowed by watchdog.");
   desc.add_options()(
       "streaming-top-n-max",
       po::value<size_t>(&g_streaming_topn_max)->default_value(g_streaming_topn_max),
@@ -2141,6 +2147,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
             << (authMetadata.allowLocalAuthFallback ? "enabled" : "disabled");
   LOG(INFO) << " ParallelTop min threshold: " << g_parallel_top_min;
   LOG(INFO) << " ParallelTop watchdog max: " << g_parallel_top_max;
+  LOG(INFO) << " Baseline sort watchdog max: " << g_watchdog_baseline_sort_max;
 
   LOG(INFO) << " Enable Data Recycler: "
             << (g_enable_data_recycler ? "enabled" : "disabled");
