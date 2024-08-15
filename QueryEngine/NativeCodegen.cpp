@@ -2941,7 +2941,12 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                        query_mem_desc->queryDescTypeToString() + " query(" +
                        std::to_string(get_shared_memory_size(gpu_shared_mem_optimization,
                                                              query_mem_desc.get())) +
-                       " out of " + std::to_string(g_gpu_smem_threshold) + " bytes).";
+                       " out of " +
+                       std::to_string(
+                           (g_gpu_smem_threshold == 0)
+                               ? cuda_mgr->getMinSharedMemoryPerBlockForAllDevices()
+                               : g_gpu_smem_threshold) +
+                       " bytes).";
   }
 
   const GpuSharedMemoryContext gpu_smem_context(
