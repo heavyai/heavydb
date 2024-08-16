@@ -116,17 +116,11 @@ function extract() {
 }
 
 function cmake_build_and_install() {
-  cmake --build . --parallel && cmake --install .
+  cmake --build . --parallel ${NPROC} && cmake --install .
 }
 
 function makej() {
-  os=$(uname)
-  if [ "$os" = "Darwin" ]; then
-    nproc=$(sysctl -n hw.ncpu)
-  else
-    nproc=$(nproc)
-  fi
-  make -j ${nproc:-8}
+  make -j ${NPROC} $1
 }
 
 function make_install() {
@@ -237,7 +231,7 @@ function install_openldap2() {
   pushd openldap-$LDAP_VERSION/build
   ../configure --prefix=$PREFIX --disable-shared --enable-static --without-cyrus-sasl
   make depend
-  make -j $(nproc)
+  make -j ${NPROC}
   make install
   popd
   check_artifact_cleanup openldap-$LDAP_VERSION.tar.gz openldap-$LDAP_VERSION
@@ -1112,7 +1106,7 @@ function install_blosc() {
       -DPREFER_EXTERNAL_ZLIB=off \
       -DPREFER_EXTERNAL_ZSTD=off \
       ..
-  make -j $(nproc)
+  make -j ${NPROC}
   make install
   popd
   check_artifact_cleanup  v${BLOSC_VERSION}.tar.gz $BDIR
@@ -1160,7 +1154,7 @@ function install_onedal() {
    export LIBRARY_PATH="${PREFIX}/lib64:${PREFIX}/lib:${LIBRARY_PATH}"; \
    export CPATH="${PREFIX}/include:${CPATH}"; \
    export PATH="${PREFIX}/bin:${PATH}"; \
-   make -f makefile daal_c oneapi_c PLAT=lnx32e REQCPU="avx2 avx512" COMPILER=gnu -j)
+   make -f makefile daal_c oneapi_c PLAT=lnx32e REQCPU="avx2 avx512" COMPILER=gnu -j ${NPROC})
 
   # remove deprecated compression methods as they generate DEPRECATED warnings/errors
   sed -i '/bzip2compression\.h/d' __release_lnx_gnu/daal/latest/include/daal.h

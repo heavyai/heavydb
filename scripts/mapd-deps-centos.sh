@@ -10,6 +10,15 @@ SAVE_SPACE=false
 CACHE=
 LIBRARY_TYPE=
 
+# Establish number of cores to compile with
+# Default to 8, Limit to 24
+# Can be overridden with --nproc option
+NPROC=$(nproc)
+NPROC=${NPROC:-8}
+if [ "${NPROC}" -gt "24" ]; then
+  NPROC=24
+fi
+
 while (( $# )); do
   case "$1" in
     --compress)
@@ -29,6 +38,9 @@ while (( $# )); do
       ;;
     --shared)
       LIBRARY_TYPE=shared
+      ;;
+    --nproc=*)
+      NPROC="${1#*=}"
       ;;
     *)
       break
@@ -51,6 +63,8 @@ if [[ -n $CACHE && ( ! -d $CACHE  ||  ! -w $CACHE )  ]]; then
   echo "Invalid cache argument [$CACHE] supplied. Ignoring."
   CACHE=
 fi
+
+echo "Building with ${NPROC} cores"
 
 if [[ ! -x  "$(command -v sudo)" ]] ; then
   if [ "$EUID" -eq 0 ] ; then
@@ -219,7 +233,7 @@ install_onedal
 install_go
 
 # install AWS core and s3 sdk
-install_awscpp -j $(nproc)
+install_awscpp
 
 # Apache Arrow (see common-functions-centos.sh)
 install_arrow
