@@ -18,6 +18,7 @@
 
 #include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
+#include "QueryEngine/DataRecycler/HashtableRecycler.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/QueryPlanDagCache.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
@@ -554,7 +555,7 @@ TEST(DataRecycler, Hashtable_For_BBox_Intersect_Cache_Maintanence) {
        orig_trivial_loop_join_threshold = g_trivial_loop_join_threshold,
        orig_table_reordering_state = g_from_table_reordering] {
         g_enable_bbox_intersect_hashjoin = orig_bbox_hashjoin_state;
-        g_enable_bbox_intersect_hashjoin = orig_hashjoin_many_to_many_state;
+        g_enable_hashjoin_many_to_many = orig_hashjoin_many_to_many_state;
         g_trivial_loop_join_threshold = orig_trivial_loop_join_threshold;
         g_from_table_reordering = orig_table_reordering_state;
       };
@@ -856,7 +857,7 @@ TEST(DataRecycler, Hashtable_For_BBox_Intersect_Reuse_Per_Parameter) {
        orig_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many,
        orig_trivial_loop_join_threshold = g_trivial_loop_join_threshold] {
         g_enable_bbox_intersect_hashjoin = orig_bbox_intersect_state;
-        g_enable_bbox_intersect_hashjoin = orig_hashjoin_many_to_many_state;
+        g_enable_hashjoin_many_to_many = orig_hashjoin_many_to_many_state;
         g_trivial_loop_join_threshold = orig_trivial_loop_join_threshold;
       };
   g_enable_bbox_intersect_hashjoin = true;
@@ -2588,6 +2589,199 @@ TEST(DataRecycler, LargeHashTable) {
             QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                              CacheItemType::PERFECT_HT));
   drop_tables();
+}
+
+class HashtableRecyclerTest : public ::testing::Test {
+ protected:
+  constexpr static int num_gpus_ = 1;
+
+  HashtableRecyclerTest()
+      : hashtable_recycler_(CacheItemType::BBOX_INTERSECT_HT, num_gpus_), meta_info_{} {
+    meta_info_.bbox_intersect_meta_info = BoundingBoxIntersectMetaInfo{};
+  }
+
+  HashtableRecycler hashtable_recycler_;
+
+  constexpr static size_t item_size_ = 1024;
+  constexpr static size_t compute_time_ = 100;
+  constexpr static CacheItemType item_type_ = CacheItemType::BBOX_INTERSECT_HT;
+  constexpr static DeviceIdentifier device_identifier_ =
+      DataRecyclerUtil::CPU_DEVICE_IDENTIFIER;
+
+  // Actual values seen during test run in QE-1250 description.
+  BaselineHashTableEntryInfo hash_table_entry_info_{
+      26818,                // num_hash_entries_ = entry_count
+      16076,                // num_keys_ = emitted_keys_count
+      sizeof(int32_t),      // rowid_size_in_bytes_
+      2,                    // num_join_keys_ = getKeyComponentCount()
+      8,                    // join_key_size_in_byte_ = getKeyComponentWidth()
+      HashType::OneToMany,  // layout
+      false};               // for_window_framing_
+
+  HashtableCacheMetaInfo meta_info_;
+};
+
+TEST_F(HashtableRecyclerTest, PutAndGetCacheItem) {
+  constexpr QueryPlanHash key = 1234;
+  auto hash_table = std::make_shared<BaselineHashTable>(
+      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+
+  hashtable_recycler_.putItemToCache(key,
+                                     hash_table,
+                                     item_type_,
+                                     device_identifier_,
+                                     item_size_,
+                                     compute_time_,
+                                     meta_info_);
+
+  auto retrieved_item = hashtable_recycler_.getItemFromCache(
+      key, item_type_, device_identifier_, meta_info_);
+  EXPECT_EQ(retrieved_item.get(), hash_table.get());
+}
+
+TEST_F(HashtableRecyclerTest, PutTwoItemsWithSameKey) {
+  constexpr QueryPlanHash key = 1234;
+  auto hash_table = std::make_shared<BaselineHashTable>(
+      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+
+  hashtable_recycler_.putItemToCache(key,
+                                     hash_table,
+                                     item_type_,
+                                     device_identifier_,
+                                     item_size_,
+                                     compute_time_,
+                                     meta_info_);
+
+  auto hash_table_2 = std::make_shared<BaselineHashTable>(
+      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+  HashtableCacheMetaInfo meta_info_2{};
+  meta_info_2.bbox_intersect_meta_info = BoundingBoxIntersectMetaInfo{2};
+  hashtable_recycler_.putItemToCache(key,
+                                     hash_table_2,
+                                     item_type_,
+                                     device_identifier_,
+                                     item_size_,
+                                     compute_time_,
+                                     meta_info_2);
+
+  auto retrieved_item = hashtable_recycler_.getItemFromCache(
+      key, item_type_, device_identifier_, meta_info_);
+  EXPECT_EQ(retrieved_item.get(), hash_table.get());
+
+  auto retrieved_item_2 = hashtable_recycler_.getItemFromCache(
+      key, item_type_, device_identifier_, meta_info_2);
+  EXPECT_EQ(retrieved_item_2.get(), hash_table_2.get());
+}
+
+TEST_F(HashtableRecyclerTest, PutTenItemsWithSameKey) {
+  constexpr QueryPlanHash key = 1234;
+
+  // Add 10 items to cache
+  constexpr size_t N = 10;
+  std::array<void*, N> hash_tables;
+  for (size_t i = 0; i < N; ++i) {
+    EXPECT_EQ(
+        i, hashtable_recycler_.getCurrentNumCachedItems(item_type_, device_identifier_));
+    auto hash_table = std::make_shared<BaselineHashTable>(
+        MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+    hash_tables[i] = hash_table.get();
+    HashtableCacheMetaInfo meta_info{};
+    meta_info.bbox_intersect_meta_info = BoundingBoxIntersectMetaInfo{i};
+    hashtable_recycler_.putItemToCache(key,
+                                       hash_table,
+                                       item_type_,
+                                       device_identifier_,
+                                       item_size_,
+                                       compute_time_,
+                                       meta_info);
+  }
+  EXPECT_EQ(N,
+            hashtable_recycler_.getCurrentNumCachedItems(item_type_, device_identifier_));
+
+  // Verify all hash table pointers are distinct
+  std::unordered_set<void*> const distinct_values(hash_tables.begin(), hash_tables.end());
+  EXPECT_EQ(N, distinct_values.size());
+
+  // Add same 10 meta_info again, and verify size does not change.
+  for (size_t i = 0; i < N; ++i) {
+    EXPECT_EQ(
+        N, hashtable_recycler_.getCurrentNumCachedItems(item_type_, device_identifier_));
+    auto hash_table = std::make_shared<BaselineHashTable>(
+        MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+    HashtableCacheMetaInfo meta_info{};
+    meta_info.bbox_intersect_meta_info = BoundingBoxIntersectMetaInfo{i};
+    hashtable_recycler_.putItemToCache(key,
+                                       hash_table,
+                                       item_type_,
+                                       device_identifier_,
+                                       item_size_,
+                                       compute_time_,
+                                       meta_info);
+  }
+  EXPECT_EQ(N,
+            hashtable_recycler_.getCurrentNumCachedItems(item_type_, device_identifier_));
+
+  // Verify correct items are retrieved.
+  for (size_t i = 0; i < N; ++i) {
+    auto hash_table = std::make_shared<BaselineHashTable>(
+        MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+    HashtableCacheMetaInfo meta_info{};
+    meta_info.bbox_intersect_meta_info = BoundingBoxIntersectMetaInfo{i};
+    auto retrieved_item = hashtable_recycler_.getItemFromCache(
+        key, item_type_, device_identifier_, meta_info);
+    EXPECT_EQ(hash_tables[i], retrieved_item.get());
+  }
+}
+
+TEST_F(HashtableRecyclerTest, ClearCache) {
+  constexpr QueryPlanHash key = 91011;
+  auto hash_table = std::make_shared<BaselineHashTable>(
+      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+
+  hashtable_recycler_.putItemToCache(key,
+                                     hash_table,
+                                     item_type_,
+                                     device_identifier_,
+                                     item_size_,
+                                     compute_time_,
+                                     meta_info_);
+  hashtable_recycler_.clearCache();
+
+  auto retrieved_item = hashtable_recycler_.getItemFromCache(
+      key, item_type_, device_identifier_, meta_info_);
+  EXPECT_EQ(retrieved_item, nullptr);
+}
+
+TEST_F(HashtableRecyclerTest, MarkCachedItemAsDirty) {
+  constexpr QueryPlanHash key = 121314;
+  auto hash_table = std::make_shared<BaselineHashTable>(
+      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+  std::unordered_set<QueryPlanHash> key_set = {key};
+
+  hashtable_recycler_.putItemToCache(
+      key, hash_table, item_type_, device_identifier_, item_size_, compute_time_);
+  hashtable_recycler_.markCachedItemAsDirty(0, key_set, item_type_, device_identifier_);
+
+  auto retrieved_item =
+      hashtable_recycler_.getItemFromCache(key, item_type_, device_identifier_);
+  EXPECT_EQ(retrieved_item, nullptr);
+}
+
+TEST_F(HashtableRecyclerTest, GetCachedHashtableWithoutCacheKey) {
+  constexpr QueryPlanHash key = 151617;
+  auto hash_table = std::make_shared<BaselineHashTable>(
+      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+  std::set<size_t> visited;
+
+  hashtable_recycler_.putItemToCache(
+      key, hash_table, item_type_, device_identifier_, item_size_, compute_time_);
+
+  auto [retrieved_key, retrieved_item, meta_info] =
+      hashtable_recycler_.getCachedHashtableWithoutCacheKey(
+          visited, item_type_, device_identifier_);
+
+  EXPECT_EQ(retrieved_item, hash_table);
+  EXPECT_EQ(retrieved_key, key);
 }
 
 int main(int argc, char* argv[]) {

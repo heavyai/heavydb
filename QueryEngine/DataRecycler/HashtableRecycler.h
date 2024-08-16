@@ -24,6 +24,8 @@ struct BoundingBoxIntersectMetaInfo {
   size_t bbox_intersect_max_table_size_bytes;
   double bbox_intersect_bucket_threshold;
   std::vector<double> bucket_sizes;
+
+  bool isCompatibleWith(BoundingBoxIntersectMetaInfo const&) const;
 };
 
 struct HashtableCacheMetaInfo {
@@ -85,10 +87,6 @@ class HashtableRecycler
                              DeviceIdentifier device_identifier) override;
 
   std::string toString() const override;
-
-  bool checkHashtableForBoundingBoxIntersectBucketCompatability(
-      const BoundingBoxIntersectMetaInfo& candidate_bucket_dim,
-      const BoundingBoxIntersectMetaInfo& target_bucket_dim) const;
 
   static HashtableAccessPathInfo getHashtableAccessPathInfo(
       const std::vector<InnerOuter>& inner_outer_pairs,
@@ -160,6 +158,13 @@ class HashtableRecycler
       size_t required_size,
       std::lock_guard<std::mutex>& lock,
       std::optional<HashtableCacheMetaInfo> meta_info = std::nullopt) override;
+
+  CachedItemContainer::value_type* getCachedItem(
+      QueryPlanHash,
+      CacheItemType,
+      DeviceIdentifier,
+      std::lock_guard<std::mutex>&,
+      std::optional<HashtableCacheMetaInfo> const&) const;
 
   void removeCachedHashtableBuiltFromSyntheticTable(CacheItemType item_type,
                                                     DeviceIdentifier device_identifier,
