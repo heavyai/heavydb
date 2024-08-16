@@ -3,17 +3,6 @@
 HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-if [ "$TSAN" = "true" ]; then
-  ARROW_TSAN="-DARROW_JEMALLOC=OFF -DARROW_USE_TSAN=ON"
-elif [ "$TSAN" = "false" ]; then
-  ARROW_TSAN="-DARROW_JEMALLOC=BUNDLED"
-fi
-
-ARROW_USE_CUDA="-DARROW_CUDA=ON"
-if [ "$NOCUDA" = "true" ]; then
-  ARROW_USE_CUDA="-DARROW_CUDA=OFF"
-fi
-
 function generate_deps_version_file() {
   # SUFFIX, BRANCH_NAME, GIT_COMMIT and BUILD_CONTAINER_NAME are set as environment variables not as parameters and
   # are generally set 'on' the calling docker container.
@@ -68,7 +57,6 @@ function install_required_ubuntu_packages() {
       libiberty-dev \
       libicu-dev \
       libidn2-dev \
-      libjemalloc-dev \
       liblzma-dev \
       libmd-dev \
       libncurses5-dev \
@@ -100,6 +88,11 @@ function install_required_ubuntu_packages() {
         libxi-dev \
         libxinerama-dev \
         libxrandr-dev
+  fi
+
+  if [ "$ARCH" != "aarch64" ] ; then
+    DEBIAN_FRONTEND=noninteractive sudo apt install -y \
+      libjemalloc-dev
   fi
 }
 
@@ -233,7 +226,7 @@ function install_boost() {
 
 function install_openssl() {
   # https://www.openssl.org/source/old/3.0/openssl-3.0.10.tar.gz
-  download_make_install ${HTTP_DEPS}/openssl-3.0.10.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
+  download_make_install ${HTTP_DEPS}/openssl-3.0.10.tar.gz "" "linux-${ARCH} no-shared no-dso -fPIC"
 }
 
 LDAP_VERSION=2.5.16
@@ -250,9 +243,42 @@ function install_openldap2() {
   check_artifact_cleanup openldap-$LDAP_VERSION.tar.gz openldap-$LDAP_VERSION
 }
 
+# only for ARM
+# custom 64K (1<<16) page size
+
+JEMALLOC_VERSION=5.3.0
+
+function install_jemalloc() {
+  download https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2
+  extract jemalloc-${JEMALLOC_VERSION}.tar.bz2
+  pushd jemalloc-${JEMALLOC_VERSION}
+  ./configure --prefix=${PREFIX} --with-lg-page=16
+  makej build_lib
+  make install_lib
+  popd
+  check_artifact_cleanup jemalloc-${JEMALLOC_VERSION}.tar.bz2 jemalloc-${JEMALLOC_VERSION}
+}
+
 ARROW_VERSION=apache-arrow-9.0.0
 
 function install_arrow() {
+  if [ "$TSAN" = "true" ]; then
+    ARROW_TSAN="-DARROW_USE_TSAN=ON"
+    ARROW_JEMALLOC="-DARROW_JEMALLOC=OFF"
+  elif [ "$TSAN" = "false" ]; then
+    ARROW_TSAN="-DARROW_USE_TSAN=OFF"
+    if [ "$ARCH" == "aarch64" ]; then
+      ARROW_JEMALLOC="-DARROW_JEMALLOC=ON"
+    else
+      ARROW_JEMALLOC="-DARROW_JEMALLOC=BUNDLED"
+    fi
+  fi
+
+  ARROW_USE_CUDA="-DARROW_CUDA=ON"
+  if [ "$NOCUDA" = "true" ]; then
+    ARROW_USE_CUDA="-DARROW_CUDA=OFF"
+  fi
+
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
   extract $ARROW_VERSION.tar.gz
 
@@ -281,6 +307,7 @@ function install_arrow() {
     -DARROW_S3=ON \
     -DTHRIFT_HOME=${THRIFT_HOME:-$PREFIX} \
     ${ARROW_USE_CUDA} \
+    ${ARROW_JEMALLOC} \
     ${ARROW_TSAN} \
     ..
   makej
@@ -922,12 +949,25 @@ function install_go() {
 NINJA_VERSION=1.11.1
 
 function install_ninja() {
-  download https://github.com/ninja-build/ninja/releases/download/v${NINJA_VERSION}/ninja-linux.zip
-  unzip -u ninja-linux.zip
-  mkdir -p $PREFIX/bin/
-  mv ninja $PREFIX/bin/
-  if [[ $SAVE_SPACE == 'true' ]]; then
-    rm  ninja-linux.zip
+  if [ "$ARCH" == "aarch64" ]; then
+    # build from source as precompiled version not available for ARM
+    download https://github.com/ninja-build/ninja/archive/refs/tags/v${NINJA_VERSION}.tar.gz
+    tar xzvf v${NINJA_VERSION}.tar.gz
+    pushd ninja-${NINJA_VERSION}
+    cmake -Bbuild-cmake
+    cmake --build build-cmake
+    cp -f build-cmake/ninja ${PREFIX}/bin
+    popd
+    check_artifact_cleanup v${NINJA_VERSION}.tar.gz ninja-${NINJA_VERSION}
+  else
+    # download precompiled for x86
+    download https://github.com/ninja-build/ninja/releases/download/v${NINJA_VERSION}/ninja-linux.zip
+    unzip -u ninja-linux.zip
+    mkdir -p $PREFIX/bin/
+    mv ninja $PREFIX/bin/
+    if [[ $SAVE_SPACE == 'true' ]]; then
+      rm  ninja-linux.zip
+    fi
   fi
 }
 
@@ -1031,9 +1071,9 @@ function install_vulkan() {
   mkdir -p vulkan
   pushd vulkan
   # Custom tarball which excludes the spir-v toolchain
-  wget --continue ${HTTP_DEPS}/vulkansdk-linux-x86_64-no-spirv-$VULKAN_VERSION.tar.gz -O vulkansdk-linux-x86_64-no-spirv-$VULKAN_VERSION.tar.gz
-  tar xvf vulkansdk-linux-x86_64-no-spirv-$VULKAN_VERSION.tar.gz
-  rsync -av $VULKAN_VERSION/x86_64/* $PREFIX
+  wget --continue ${HTTP_DEPS}/vulkansdk-linux-${ARCH}-no-spirv-$VULKAN_VERSION.tar.gz
+  tar xvf vulkansdk-linux-${ARCH}-no-spirv-$VULKAN_VERSION.tar.gz
+  rsync -av $VULKAN_VERSION/${ARCH}/* $PREFIX
   
   # move validation layer JSON files from /etc to /share if needed (and remove then-empty vulkan subdir)
   # @TODO(simon) remove this once the bundle has been repackaged for both x86 and ARM
@@ -1137,9 +1177,9 @@ function install_onedal() {
 
 MOLD_VERSION=1.10.1
 
-function install_mold_precompiled_x86_64() {
-  download https://github.com/rui314/mold/releases/download/v${MOLD_VERSION}/mold-${MOLD_VERSION}-x86_64-linux.tar.gz
-  tar --strip-components=1 -xvf mold-${MOLD_VERSION}-x86_64-linux.tar.gz -C ${PREFIX}
+function install_mold() {
+  download https://github.com/rui314/mold/releases/download/v${MOLD_VERSION}/mold-${MOLD_VERSION}-${ARCH}-linux.tar.gz
+  tar --strip-components=1 -xvf mold-${MOLD_VERSION}-${ARCH}-linux.tar.gz -C ${PREFIX}
 }
 
 BZIP2_VERSION=1.0.6
