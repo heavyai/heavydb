@@ -28,28 +28,7 @@ bool HashtableRecycler::hasItemInCache(
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return false;
   }
-  auto hashtable_cache = getCachedItemContainer(item_type, device_identifier);
-  // hashtable cache of the *any* device type should be properly initialized
-  CHECK(hashtable_cache);
-  auto candidate_ht_it = std::find_if(
-      hashtable_cache->begin(), hashtable_cache->end(), [&key](const auto& cached_item) {
-        return cached_item.key == key;
-      });
-  if (candidate_ht_it != hashtable_cache->end()) {
-    if (item_type == BBOX_INTERSECT_HT) {
-      CHECK(candidate_ht_it->meta_info &&
-            candidate_ht_it->meta_info->bbox_intersect_meta_info);
-      CHECK(meta_info && meta_info->bbox_intersect_meta_info);
-      if (checkHashtableForBoundingBoxIntersectBucketCompatability(
-              *candidate_ht_it->meta_info->bbox_intersect_meta_info,
-              *meta_info->bbox_intersect_meta_info)) {
-        return true;
-      }
-    } else {
-      return true;
-    }
-  }
-  return false;
+  return bool(getCachedItem(key, item_type, device_identifier, lock, meta_info));
 }
 
 std::shared_ptr<HashTable> HashtableRecycler::getItemFromCache(
@@ -62,34 +41,82 @@ std::shared_ptr<HashTable> HashtableRecycler::getItemFromCache(
     return nullptr;
   }
   std::lock_guard<std::mutex> lock(getCacheLock());
-  auto hashtable_cache = getCachedItemContainer(item_type, device_identifier);
-  auto candidate_ht = getCachedItemWithoutConsideringMetaInfo(
-      key, item_type, device_identifier, *hashtable_cache, lock);
-  if (candidate_ht) {
-    bool can_return_cached_item = false;
-    if (item_type == BBOX_INTERSECT_HT) {
-      // we have to check hashtable metainfo of join hashtable for bounding box
-      // intersection
-      CHECK(candidate_ht->meta_info && candidate_ht->meta_info->bbox_intersect_meta_info);
-      CHECK(meta_info && meta_info->bbox_intersect_meta_info);
-      if (checkHashtableForBoundingBoxIntersectBucketCompatability(
-              *candidate_ht->meta_info->bbox_intersect_meta_info,
-              *meta_info->bbox_intersect_meta_info)) {
-        can_return_cached_item = true;
-      }
-    } else {
-      can_return_cached_item = true;
-    }
-    if (can_return_cached_item) {
-      CHECK(!candidate_ht->isDirty());
-      candidate_ht->item_metric->incRefCount();
-      VLOG(1) << "[" << item_type << ", "
-              << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
-              << "] Recycle item in a cache (key: " << key << ")";
-      return candidate_ht->cached_item;
-    }
+  auto* cached_item = getCachedItem(key, item_type, device_identifier, lock, meta_info);
+  if (!cached_item) {
+    return nullptr;
+  } else if (cached_item->isDirty()) {
+    removeItemFromCache(key, item_type, device_identifier, lock, cached_item->meta_info);
+    return nullptr;
   }
-  return nullptr;
+  cached_item->item_metric->incRefCount();
+  VLOG(1) << '[' << item_type << ", "
+          << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
+          << "] Recycle item in a cache (key: " << key << ')';
+  return cached_item->cached_item;
+}
+
+namespace {
+struct IsCompatibleBBox {
+  QueryPlanHash key;
+  BoundingBoxIntersectMetaInfo const& bbox_intersect_meta_info;
+
+  template <typename T>
+  bool operator()(T const& cached_item) const {
+    if (key != cached_item.key) {
+      return false;
+    }
+    CHECK(cached_item.meta_info);
+    CHECK(cached_item.meta_info->bbox_intersect_meta_info);
+    return bbox_intersect_meta_info.isCompatibleWith(
+        *cached_item.meta_info->bbox_intersect_meta_info);
+  }
+};
+
+struct MatchesKey {
+  QueryPlanHash key;
+
+  template <typename T>
+  bool operator()(T const& cached_item) const {
+    return key == cached_item.key;
+  }
+};
+}  // namespace
+
+bool BoundingBoxIntersectMetaInfo::isCompatibleWith(
+    BoundingBoxIntersectMetaInfo const& rhs) const {
+  if (bbox_intersect_max_table_size_bytes == rhs.bbox_intersect_max_table_size_bytes &&
+      bbox_intersect_bucket_threshold == rhs.bbox_intersect_bucket_threshold &&
+      bucket_sizes.size() == rhs.bucket_sizes.size()) {
+    for (size_t i = 0; i < bucket_sizes.size(); ++i) {
+      if (bucket_sizes[i] != rhs.bucket_sizes[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+// NOTE: The returned pointer may become invalidated if not protected w/ a cache lock.
+HashtableRecycler::CachedItemContainer::value_type* HashtableRecycler::getCachedItem(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex>&,
+    std::optional<HashtableCacheMetaInfo> const& meta_info) const {
+  auto container = getCachedItemContainer(item_type, device_identifier);
+  CHECK(container);
+  CachedItemContainer::iterator itr;
+  if (item_type == BBOX_INTERSECT_HT) {
+    if (!meta_info || !meta_info->bbox_intersect_meta_info) {
+      return nullptr;
+    }
+    IsCompatibleBBox const is_compatible_bbox{key, *meta_info->bbox_intersect_meta_info};
+    itr = std::find_if(container->begin(), container->end(), is_compatible_bbox);
+  } else {
+    itr = std::find_if(container->begin(), container->end(), MatchesKey{key});
+  }
+  return itr == container->end() ? nullptr : &*itr;
 }
 
 void HashtableRecycler::putItemToCache(QueryPlanHash key,
@@ -104,39 +131,13 @@ void HashtableRecycler::putItemToCache(QueryPlanHash key,
     return;
   }
   std::lock_guard<std::mutex> lock(getCacheLock());
-  auto has_cached_ht = hasItemInCache(key, item_type, device_identifier, lock, meta_info);
-  if (has_cached_ht) {
-    // check to see whether the cached one is in a dirty status
-    auto hashtable_cache = getCachedItemContainer(item_type, device_identifier);
-    auto candidate_it =
-        std::find_if(hashtable_cache->begin(),
-                     hashtable_cache->end(),
-                     [&key](const auto& cached_item) { return cached_item.key == key; });
-    bool found_candidate = false;
-    if (candidate_it != hashtable_cache->end()) {
-      if (item_type == BBOX_INTERSECT_HT) {
-        // we have to check hashtable metainfo for bounding box intersection
-        CHECK(candidate_it->meta_info &&
-              candidate_it->meta_info->bbox_intersect_meta_info);
-        CHECK(meta_info && meta_info->bbox_intersect_meta_info);
-        if (checkHashtableForBoundingBoxIntersectBucketCompatability(
-                *candidate_it->meta_info->bbox_intersect_meta_info,
-                *meta_info->bbox_intersect_meta_info)) {
-          found_candidate = true;
-        }
-      } else {
-        found_candidate = true;
-      }
-      if (found_candidate && candidate_it->isDirty()) {
-        // remove the dirty item from the cache and make a room for the new one
-        removeItemFromCache(
-            key, item_type, device_identifier, lock, candidate_it->meta_info);
-        has_cached_ht = false;
-      }
-    }
+  auto* cached_item = getCachedItem(key, item_type, device_identifier, lock, meta_info);
+  if (cached_item && cached_item->isDirty()) {
+    removeItemFromCache(key, item_type, device_identifier, lock, cached_item->meta_info);
+    cached_item = nullptr;
   }
 
-  if (!has_cached_ht) {
+  if (!cached_item) {
     // check cache's space availability
     auto& metric_tracker = getMetricTracker(item_type);
     auto cache_status = metric_tracker.canAddItem(device_identifier, item_size);
@@ -328,24 +329,6 @@ std::string HashtableRecycler::toString() const {
     oss << "\t" << metric_tracker.toString() << "\n";
   }
   return oss.str();
-}
-
-bool HashtableRecycler::checkHashtableForBoundingBoxIntersectBucketCompatability(
-    const BoundingBoxIntersectMetaInfo& candidate,
-    const BoundingBoxIntersectMetaInfo& target) const {
-  if (candidate.bucket_sizes.size() != target.bucket_sizes.size()) {
-    return false;
-  }
-  for (size_t i = 0; i < candidate.bucket_sizes.size(); i++) {
-    if (std::abs(target.bucket_sizes[i] - candidate.bucket_sizes[i]) > 1e-4) {
-      return false;
-    }
-  }
-  auto threshold_check =
-      candidate.bbox_intersect_bucket_threshold == target.bbox_intersect_bucket_threshold;
-  auto hashtable_size_check = candidate.bbox_intersect_max_table_size_bytes ==
-                              target.bbox_intersect_max_table_size_bytes;
-  return threshold_check && hashtable_size_check;
 }
 
 size_t HashtableRecycler::getJoinColumnInfoHash(
