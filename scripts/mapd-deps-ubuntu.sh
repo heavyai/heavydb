@@ -106,7 +106,7 @@ fi
 
 safe_mkdir "$PREFIX"
 
-# this should be based on the actual distro and arch, but they're the same files.
+# this should be based on the actual distro, but they're the same files.
 DEBIAN_FRONTEND=noninteractive sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub
 
 DEBIAN_FRONTEND=noninteractive sudo apt update
@@ -135,9 +135,7 @@ export PATH=$PREFIX/bin:$PREFIX/include:$PATH
 export LD_LIBRARY_PATH=$PREFIX/lib64:$PREFIX/lib:$LD_LIBRARY_PATH
 
 # mold fast linker
-install_mold_precompiled_x86_64
-
-install_ninja
+install_mold
 
 install_maven
 
@@ -148,6 +146,8 @@ if [ "$LIBRARY_TYPE" == "static" ]; then
 fi
 
 install_cmake
+
+install_ninja
 
 install_boost
 export BOOST_ROOT=$PREFIX/include
@@ -197,8 +197,15 @@ download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 # TBB
 install_tbb
 
-# OneDAL
-install_onedal
+# OneDAL (Intel only)
+if [ "$ARCH" == "x86_64" ] ; then
+  install_onedal
+fi
+
+# jemalloc (ARM only)
+if [ "$ARCH" == "aarch64" ] ; then
+  install_jemalloc
+fi
 
 # Apache Arrow (see common-functions.sh)
 install_arrow

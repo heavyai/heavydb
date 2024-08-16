@@ -7,6 +7,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Required for LLVM / JIT, alternative to setting CMP0065 to OLD
 set(CMAKE_ENABLE_EXPORTS True)
 
+# Get architecture
+EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCH)
+message(STATUS "Architecture is ${ARCH}")
+
 set(ENABLE_CONDA OFF)
 if(DEFINED ENV{CONDA_PREFIX})
   set(ENABLE_CONDA ON)
@@ -167,6 +171,10 @@ macro(InstallVersionFile)
 endmacro()
 
 set(USE_ALTERNATE_LINKER "" CACHE STRING "Use alternate linker. Leave empty for system default; alternatives are 'gold', 'lld', 'bfd', 'mold'")
+if("${ARCH}" STREQUAL "aarch64" AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  message(STATUS "Detected GCC build on ARM, forcing use of mold linker")
+  set(USE_ALTERNATE_LINKER "mold" CACHE STRING "Use alternate linker" FORCE)
+endif()
 if(NOT "${USE_ALTERNATE_LINKER}" STREQUAL "")
   set_alternate_linker(${USE_ALTERNATE_LINKER})
 endif()
@@ -652,6 +660,10 @@ else()
   endif()
   if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+  endif()
+  if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND ${ARCH} STREQUAL "aarch64")
+    # Suppress "parameter passing for argument of type 'std::pair<X,X>' notes" on ARM
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi")
   endif()
 endif()
 
