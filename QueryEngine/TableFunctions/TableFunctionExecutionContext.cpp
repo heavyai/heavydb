@@ -116,15 +116,6 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   std::vector<std::unique_ptr<char[]>> literals_owner;
 
   const int device_id = 0;  // TODO(adb): support multi-gpu table functions
-  if (device_type == ExecutorDeviceType::GPU) {
-    executor->initializeCudaAllocator();
-  }
-  ScopeGuard resetCudaAllocator = [&executor, &device_type] {
-    if (device_type == ExecutorDeviceType::GPU) {
-      executor->clearCudaAllocator();
-    }
-  };
-
   CudaAllocator* device_allocator{nullptr};
   if (device_type == ExecutorDeviceType::GPU) {
     device_allocator = executor->getCudaAllocator(device_id);
