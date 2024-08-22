@@ -845,6 +845,102 @@ class ResultSet {
   using ApproxQuantileBuffers = std::vector<std::vector<double>>;
   using ModeBuffers = std::vector<std::vector<int64_t>>;
 
+  /**
+   * @brief Base class for materialized sort buffers
+   * We need a base class so we can store a pointer to the
+   * non-BUFFER_ITERATOR_TYPE templated base class in the ResultSet class
+   */
+  class MaterializedSortBuffersBase {
+   public:
+    MaterializedSortBuffersBase(const ResultSet* result_set,
+                                const std::list<Analyzer::OrderEntry>& order_entries,
+                                bool single_threaded)
+        : result_set_(result_set)
+        , order_entries_(order_entries)
+        , single_threaded_(single_threaded) {}
+
+    virtual ~MaterializedSortBuffersBase() = default;
+
+    const std::vector<SortedStringPermutation>& getDictionaryEncodedSortPermutations()
+        const {
+      return dictionary_string_sorted_permutations_;
+    }
+    const std::vector<std::vector<int64_t>>& getCountDistinctBuffers() const {
+      return count_distinct_materialized_buffers_;
+    }
+    const ApproxQuantileBuffers& getApproxQuantileBuffers() const {
+      return approx_quantile_materialized_buffers_;
+    }
+    const ModeBuffers& getModeBuffers() const { return mode_buffers_; }
+
+   protected:
+    virtual void materializeBuffers() = 0;
+
+    const ResultSet* result_set_;
+    const std::list<Analyzer::OrderEntry>& order_entries_;
+    const bool single_threaded_;
+
+    std::vector<SortedStringPermutation> dictionary_string_sorted_permutations_;
+    std::vector<std::vector<int64_t>> count_distinct_materialized_buffers_;
+    ApproxQuantileBuffers approx_quantile_materialized_buffers_;
+    ModeBuffers mode_buffers_;
+  };
+
+  /**
+   * @brief Templated class that actually handles the materialization of sort buffers,
+   * templated by BUFFER_ITERATOR_TYPE, which is either RowWiseTargetAccessor or
+   * ColumnWiseTargetAccessor
+   */
+  template <typename BUFFER_ITERATOR_TYPE>
+  class MaterializedSortBuffers : public ResultSet::MaterializedSortBuffersBase {
+   public:
+    using BufferIteratorType = BUFFER_ITERATOR_TYPE;
+
+    MaterializedSortBuffers(const ResultSet* result_set,
+                            const std::list<Analyzer::OrderEntry>& order_entries,
+                            bool single_threaded)
+        : MaterializedSortBuffersBase(result_set, order_entries, single_threaded)
+        , buffer_itr_(result_set) {
+      materializeBuffers();
+    }
+
+   protected:
+    void materializeBuffers() override {
+      dictionary_string_sorted_permutations_ =
+          materializeDictionaryEncodedSortPermutations();
+      count_distinct_materialized_buffers_ = materializeCountDistinctColumns();
+      approx_quantile_materialized_buffers_ = materializeApproxQuantileColumns();
+      mode_buffers_ = materializeModeColumns();
+      VLOG(1) << logMaterializedBuffers();
+    }
+
+   private:
+    std::vector<SortedStringPermutation> materializeDictionaryEncodedSortPermutations()
+        const;
+    std::vector<std::vector<int64_t>> materializeCountDistinctColumns() const;
+    ResultSet::ApproxQuantileBuffers materializeApproxQuantileColumns() const;
+    ResultSet::ModeBuffers materializeModeColumns() const;
+    std::vector<int64_t> materializeCountDistinctColumn(
+        const Analyzer::OrderEntry& order_entry) const;
+    ApproxQuantileBuffers::value_type materializeApproxQuantileColumn(
+        const Analyzer::OrderEntry& order_entry) const;
+    ModeBuffers::value_type materializeModeColumn(
+        const Analyzer::OrderEntry& order_entry) const;
+    std::string logMaterializedBuffers() const;
+
+    struct ModeScatter;  // Functor for setting mode_buffers_.
+
+    const BufferIteratorType buffer_itr_;
+  };
+
+  /**
+   * @brief Initialize materialized sort buffers for dictionary encoded sort
+   *  permutations, count distinct/approx_count distinct, mode, and
+   * quantile/percentile calculations
+   */
+  void initMaterializedSortBuffers(const std::list<Analyzer::OrderEntry>& order_entries,
+                                   bool single_threaded);
+
   template <typename BUFFER_ITERATOR_TYPE>
   struct ResultSetComparator {
     using BufferIteratorType = BUFFER_ITERATOR_TYPE;
@@ -860,23 +956,14 @@ class ResultSet {
         , buffer_itr_(result_set)
         , executor_(executor)
         , single_threaded_(single_threaded)
-        , approx_quantile_materialized_buffers_(materializeApproxQuantileColumns())
-        , mode_buffers_(materializeModeColumns()) {
-      getDictionaryEncodedSortPermutations();
-      materializeCountDistinctColumns();
-    }
-
-    void getDictionaryEncodedSortPermutations();
-    void materializeCountDistinctColumns();
-    ApproxQuantileBuffers materializeApproxQuantileColumns() const;
-    ModeBuffers materializeModeColumns() const;
-
-    std::vector<int64_t> materializeCountDistinctColumn(
-        const Analyzer::OrderEntry& order_entry) const;
-    ApproxQuantileBuffers::value_type materializeApproxQuantileColumn(
-        const Analyzer::OrderEntry& order_entry) const;
-    ModeBuffers::value_type materializeModeColumn(
-        const Analyzer::OrderEntry& order_entry) const;
+        , dictionary_string_sorted_permutations_(
+              result_set->materialized_sort_buffers_
+                  ->getDictionaryEncodedSortPermutations())
+        , count_distinct_materialized_buffers_(
+              result_set->materialized_sort_buffers_->getCountDistinctBuffers())
+        , approx_quantile_materialized_buffers_(
+              result_set->materialized_sort_buffers_->getApproxQuantileBuffers())
+        , mode_buffers_(result_set->materialized_sort_buffers_->getModeBuffers()) {}
 
     bool operator()(const PermutationIdx lhs, const PermutationIdx rhs) const;
 
@@ -886,11 +973,10 @@ class ResultSet {
     const BufferIteratorType buffer_itr_;
     const Executor* executor_;
     const bool single_threaded_;
-    std::vector<SortedStringPermutation> dictionary_string_sorted_permutations_;
-    std::vector<std::vector<int64_t>> count_distinct_materialized_buffers_;
-    const ApproxQuantileBuffers approx_quantile_materialized_buffers_;
-    const ModeBuffers mode_buffers_;
-    struct ModeScatter;  // Functor for setting mode_buffers_.
+    const std::vector<SortedStringPermutation>& dictionary_string_sorted_permutations_;
+    const std::vector<std::vector<int64_t>>& count_distinct_materialized_buffers_;
+    const ApproxQuantileBuffers& approx_quantile_materialized_buffers_;
+    const ModeBuffers& mode_buffers_;
   };
 
   Comparator createComparator(const std::list<Analyzer::OrderEntry>& order_entries,
@@ -898,15 +984,15 @@ class ResultSet {
                               const Executor* executor,
                               const bool single_threaded) {
     if (query_mem_desc_.didOutputColumnar()) {
-      return [rsc = ResultSetComparator<ColumnWiseTargetAccessor>(
-                  order_entries, this, permutation, executor, single_threaded)](
-                 const PermutationIdx lhs, const PermutationIdx rhs) {
+      auto rsc = ResultSetComparator<ColumnWiseTargetAccessor>(
+          order_entries, this, permutation, executor, single_threaded);
+      return [rsc = std::move(rsc)](const PermutationIdx lhs, const PermutationIdx rhs) {
         return rsc(lhs, rhs);
       };
     } else {
-      return [rsc = ResultSetComparator<RowWiseTargetAccessor>(
-                  order_entries, this, permutation, executor, single_threaded)](
-                 const PermutationIdx lhs, const PermutationIdx rhs) {
+      auto rsc = ResultSetComparator<RowWiseTargetAccessor>(
+          order_entries, this, permutation, executor, single_threaded);
+      return [rsc = std::move(rsc)](const PermutationIdx lhs, const PermutationIdx rhs) {
         return rsc(lhs, rhs);
       };
     }
@@ -914,7 +1000,8 @@ class ResultSet {
 
   static PermutationView topPermutation(PermutationView,
                                         const size_t n,
-                                        const Comparator&);
+                                        const Comparator&,
+                                        const bool single_threaded);
 
   PermutationView initPermutationBuffer(PermutationView permutation,
                                         PermutationIdx const begin,
@@ -1014,6 +1101,7 @@ class ResultSet {
   QueryPlanHash query_plan_;  // a hashed query plan DAG of this resultset
   std::unordered_set<size_t> input_table_keys_;  // input table signatures
   std::vector<TargetMetaInfo> target_meta_info_;
+  std::unique_ptr<MaterializedSortBuffersBase> materialized_sort_buffers_;
   // if we recycle the resultset, we do not create work_unit of the query step
   // because we may skip its child query step(s)
   // so we try to keep whether this resultset is available to use speculative top n sort
