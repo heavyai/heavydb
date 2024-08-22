@@ -147,7 +147,11 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
           permutation_.end(), strided_permutation.begin(), strided_permutation.end());
     }
     auto pv = PermutationView(permutation_.data(), permutation_.size());
-    topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false));
+    initMaterializedSortBuffers(order_entries, false);
+    topPermutation(pv,
+                   top_n,
+                   createComparator(order_entries, pv, executor, false),
+                   false /* single_threaded */);
     if (top_n < permutation_.size()) {
       permutation_.resize(top_n);
       permutation_.shrink_to_fit();
