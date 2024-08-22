@@ -830,7 +830,11 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     if (top_n == 0) {
       top_n = pv.size();  // top_n == 0 implies a full sort
     }
-    pv = topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false));
+    initMaterializedSortBuffers(order_entries, false);
+    pv = topPermutation(pv,
+                        top_n,
+                        createComparator(order_entries, pv, executor, false),
+                        false /* single_threaded */);
     if (pv.size() < permutation_.size()) {
       permutation_.resize(pv.size());
       permutation_.shrink_to_fit();
@@ -886,27 +890,57 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   VLOG(1) << "Performing parallel top-k sort on CPU (# threads: " << nthreads
           << ", entry_count: " << query_mem_desc_.getEntryCount() << ")";
 
-  // Split permutation_ into nthreads subranges and top-sort in-place.
+  // Split permutation_ into nthreads subranges and initialize them
   auto const phase1_begin = timer_start();
   permutation_.resize(query_mem_desc_.getEntryCount());
   std::vector<PermutationView> permutation_views(nthreads);
-  threading::task_group top_sort_threads;
-  for (auto interval : makeIntervals<PermutationIdx>(0, permutation_.size(), nthreads)) {
-    top_sort_threads.run([this,
-                          &order_entries,
-                          &permutation_views,
-                          top_n,
-                          executor,
-                          parent_thread_local_ids = logger::thread_local_ids(),
-                          interval] {
-      logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-      PermutationView pv(permutation_.data() + interval.begin, 0, interval.size());
-      pv = initPermutationBuffer(pv, interval.begin, interval.end);
-      const auto compare = createComparator(order_entries, pv, executor, true);
-      permutation_views[interval.index] = topPermutation(pv, top_n, compare);
-    });
+
+  // First, initialize all permutation views. We need these initialized so that
+  // we can init the materialized sort buffers, which requires that the permutations
+  // to be initialized
+
+  {
+    threading::task_group init_threads;
+    for (auto interval :
+         makeIntervals<PermutationIdx>(0, permutation_.size(), nthreads)) {
+      init_threads.run([this,
+                        &permutation_views,
+                        interval,
+                        parent_thread_local_ids = logger::thread_local_ids()] {
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+        PermutationView pv(permutation_.data() + interval.begin, 0, interval.size());
+        permutation_views[interval.index] =
+            initPermutationBuffer(pv, interval.begin, interval.end);
+      });
+    }
+    init_threads.wait();
   }
-  top_sort_threads.wait();
+
+  // Now that all permutation views are initialized, create shared buffers
+  // These buffers will be used by all comparators generated below
+  initMaterializedSortBuffers(order_entries, false);
+
+  // Perform the top-k sort on each permutation view
+  {
+    threading::task_group top_sort_threads;
+    for (size_t i = 0; i < nthreads; ++i) {
+      top_sort_threads.run([this,
+                            &order_entries,
+                            &permutation_views,
+                            top_n,
+                            executor,
+                            i,
+                            parent_thread_local_ids = logger::thread_local_ids()] {
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+        const auto compare =
+            createComparator(order_entries, permutation_views[i], executor, true);
+        permutation_views[i] = topPermutation(
+            permutation_views[i], top_n, compare, true /* single threaded */);
+      });
+    }
+    top_sort_threads.wait();
+  }
+
   auto const phase1_ms = timer_stop(phase1_begin);
   // In case you are considering implementing a parallel reduction, note that the
   // ResultSetComparator constructor is O(N) in order to materialize some of the aggregate
@@ -927,7 +961,7 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   auto const phase3_begin = timer_start();
   PermutationView pv(permutation_.data(), end - permutation_.begin());
   const auto compare = createComparator(order_entries, pv, executor, false);
-  pv = topPermutation(pv, top_n, compare);
+  pv = topPermutation(pv, top_n, compare, false /* single_threaded */);
   permutation_.resize(pv.size());
   permutation_.shrink_to_fit();
   auto const phase3_ms = timer_stop(phase3_begin);
@@ -959,6 +993,8 @@ std::pair<size_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) con
   return {};
 }
 
+template struct ResultSet::MaterializedSortBuffers<ResultSet::RowWiseTargetAccessor>;
+template struct ResultSet::MaterializedSortBuffers<ResultSet::ColumnWiseTargetAccessor>;
 template struct ResultSet::ResultSetComparator<ResultSet::RowWiseTargetAccessor>;
 template struct ResultSet::ResultSetComparator<ResultSet::ColumnWiseTargetAccessor>;
 
@@ -967,31 +1003,6 @@ ResultSet::StorageLookupResult ResultSet::findStorage(const size_t entry_idx) co
   return {stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(),
           fixedup_entry_idx,
           stg_idx};
-}
-
-template <typename BUFFER_ITERATOR_TYPE>
-void ResultSet::ResultSetComparator<
-    BUFFER_ITERATOR_TYPE>::getDictionaryEncodedSortPermutations() {
-  for (const auto& order_entry : order_entries_) {
-    const auto entry_ti = get_compact_type(result_set_->targets_[order_entry.tle_no - 1]);
-    if (entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT) {
-      const auto string_dict_proxy =
-          result_set_->getStringDictionaryProxy(entry_ti.getStringDictKey());
-      dictionary_string_sorted_permutations_.emplace_back(
-          string_dict_proxy->getSortedPermutation(order_entry.is_desc));
-    }
-  }
-}
-
-template <typename BUFFER_ITERATOR_TYPE>
-void ResultSet::ResultSetComparator<
-    BUFFER_ITERATOR_TYPE>::materializeCountDistinctColumns() {
-  for (const auto& order_entry : order_entries_) {
-    if (is_distinct_target(result_set_->targets_[order_entry.tle_no - 1])) {
-      count_distinct_materialized_buffers_.emplace_back(
-          materializeCountDistinctColumn(order_entry));
-    }
-  }
 }
 
 namespace {
@@ -1007,7 +1018,62 @@ struct IsAggKind {
 }  // namespace
 
 template <typename BUFFER_ITERATOR_TYPE>
-ResultSet::ApproxQuantileBuffers ResultSet::ResultSetComparator<
+std::vector<SortedStringPermutation> ResultSet::MaterializedSortBuffers<
+    BUFFER_ITERATOR_TYPE>::materializeDictionaryEncodedSortPermutations() const {
+  // First, count the number of dictionary-encoded string columns
+  size_t dictionary_encoded_str_col_count = 0;
+  for (const auto& order_entry : order_entries_) {
+    const auto entry_ti = get_compact_type(result_set_->targets_[order_entry.tle_no - 1]);
+    if (entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT) {
+      dictionary_encoded_str_col_count++;
+    }
+  }
+
+  // Reserve space for the exact number of dictionary-encoded string columns
+  std::vector<SortedStringPermutation> permutations;
+  permutations.reserve(dictionary_encoded_str_col_count);
+
+  // Populate the vector only for dictionary-encoded string columns
+  for (const auto& order_entry : order_entries_) {
+    const auto entry_ti = get_compact_type(result_set_->targets_[order_entry.tle_no - 1]);
+    if (entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT) {
+      const auto string_dict_proxy =
+          result_set_->getStringDictionaryProxy(entry_ti.getStringDictKey());
+      permutations.push_back(
+          string_dict_proxy->getSortedPermutation(order_entry.is_desc));
+    }
+  }
+
+  return permutations;
+}
+
+template <typename BUFFER_ITERATOR_TYPE>
+std::vector<std::vector<int64_t>> ResultSet::MaterializedSortBuffers<
+    BUFFER_ITERATOR_TYPE>::materializeCountDistinctColumns() const {
+  // First, count the number of count distinct columns
+  size_t count_distinct_col_count = 0;
+  for (const auto& order_entry : order_entries_) {
+    if (is_distinct_target(result_set_->targets_[order_entry.tle_no - 1])) {
+      count_distinct_col_count++;
+    }
+  }
+
+  // Reserve space for the exact number of count distinct columns
+  std::vector<std::vector<int64_t>> buffers;
+  buffers.reserve(count_distinct_col_count);
+
+  // Populate the vector only for count distinct columns
+  for (const auto& order_entry : order_entries_) {
+    if (is_distinct_target(result_set_->targets_[order_entry.tle_no - 1])) {
+      buffers.push_back(materializeCountDistinctColumn(order_entry));
+    }
+  }
+
+  return buffers;
+}
+
+template <typename BUFFER_ITERATOR_TYPE>
+ResultSet::ApproxQuantileBuffers ResultSet::MaterializedSortBuffers<
     BUFFER_ITERATOR_TYPE>::materializeApproxQuantileColumns() const {
   ResultSet::ApproxQuantileBuffers approx_quantile_materialized_buffers;
   for (const auto& order_entry : order_entries_) {
@@ -1021,7 +1087,7 @@ ResultSet::ApproxQuantileBuffers ResultSet::ResultSetComparator<
 
 template <typename BUFFER_ITERATOR_TYPE>
 ResultSet::ModeBuffers
-ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeModeColumns() const {
+ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE>::materializeModeColumns() const {
   ResultSet::ModeBuffers mode_buffers;
   IsAggKind const is_mode(result_set_->targets_, kMODE);
   mode_buffers.reserve(
@@ -1036,19 +1102,21 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeModeColumns() c
 
 template <typename BUFFER_ITERATOR_TYPE>
 std::vector<int64_t>
-ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctColumn(
+ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE>::materializeCountDistinctColumn(
     const Analyzer::OrderEntry& order_entry) const {
   const size_t num_storage_entries = result_set_->query_mem_desc_.getEntryCount();
   std::vector<int64_t> count_distinct_materialized_buffer(num_storage_entries);
   const CountDistinctDescriptor count_distinct_descriptor =
       result_set_->query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no - 1);
-  const size_t num_non_empty_entries = permutation_.size();
+  const size_t num_non_empty_entries = result_set_->permutation_.size();
 
-  const auto work = [&, parent_thread_local_ids = logger::thread_local_ids()](
-                        const size_t start, const size_t end) {
+  const auto work = [&,
+                     parent_thread_local_ids = logger::thread_local_ids(),
+                     result_set_ = this->result_set_](const size_t start,
+                                                      const size_t end) {
     logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
     for (size_t i = start; i < end; ++i) {
-      const PermutationIdx permuted_idx = permutation_[i];
+      const PermutationIdx permuted_idx = result_set_->permutation_[i];
       const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
       const auto storage = storage_lookup_result.storage_ptr;
       const auto off = storage_lookup_result.fixedup_entry_idx;
@@ -1082,16 +1150,18 @@ double ResultSet::calculateQuantile(quantile::TDigest* const t_digest) {
 
 template <typename BUFFER_ITERATOR_TYPE>
 ResultSet::ApproxQuantileBuffers::value_type
-ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxQuantileColumn(
+ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE>::materializeApproxQuantileColumn(
     const Analyzer::OrderEntry& order_entry) const {
   ResultSet::ApproxQuantileBuffers::value_type materialized_buffer(
       result_set_->query_mem_desc_.getEntryCount());
-  const size_t size = permutation_.size();
-  const auto work = [&, parent_thread_local_ids = logger::thread_local_ids()](
-                        const size_t start, const size_t end) {
+  const size_t size = result_set_->permutation_.size();
+  const auto work = [&,
+                     parent_thread_local_ids = logger::thread_local_ids(),
+                     result_set_ = this->result_set_](const size_t start,
+                                                      const size_t end) {
     logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
     for (size_t i = start; i < end; ++i) {
-      const PermutationIdx permuted_idx = permutation_[i];
+      const PermutationIdx permuted_idx = result_set_->permutation_[i];
       const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
       const auto storage = storage_lookup_result.storage_ptr;
       const auto off = storage_lookup_result.fixedup_entry_idx;
@@ -1129,30 +1199,32 @@ using ModeBlockedRange = tbb::blocked_range<size_t>;
 }  // namespace
 
 template <typename BUFFER_ITERATOR_TYPE>
-struct ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::ModeScatter {
+struct ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE>::ModeScatter {
   logger::ThreadLocalIds const parent_thread_local_ids_;
-  ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE> const* const rsc_;
-  RowSetMemoryOwner const* const rsmo_;
+  ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE> const* const shared_buffers_;
+  RowSetMemoryOwner const* const row_set_memory_owner_;
   Analyzer::OrderEntry const& order_entry_;
   ResultSet::ModeBuffers::value_type& materialized_buffer_;
 
   void operator()(ModeBlockedRange const& r) const {
     logger::LocalIdsScopeGuard lisg = parent_thread_local_ids_.setNewThreadId();
     for (size_t i = r.begin(); i != r.end(); ++i) {
-      PermutationIdx const permuted_idx = rsc_->permutation_[i];
-      auto const storage_lookup_result = rsc_->result_set_->findStorage(permuted_idx);
+      PermutationIdx const permuted_idx = shared_buffers_->result_set_->permutation_[i];
+      auto const storage_lookup_result =
+          shared_buffers_->result_set_->findStorage(permuted_idx);
       auto const storage = storage_lookup_result.storage_ptr;
       auto const off = storage_lookup_result.fixedup_entry_idx;
-      auto const value = rsc_->buffer_itr_.getColumnInternal(
+      auto const value = shared_buffers_->buffer_itr_.getColumnInternal(
           storage->buff_, off, order_entry_.tle_no - 1, storage_lookup_result);
-      materialized_buffer_[permuted_idx] = materialize_mode(rsmo_, value.i1);
+      materialized_buffer_[permuted_idx] =
+          materialize_mode(row_set_memory_owner_, value.i1);
     }
   }
 };
 
 template <typename BUFFER_ITERATOR_TYPE>
 ResultSet::ModeBuffers::value_type
-ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeModeColumn(
+ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE>::materializeModeColumn(
     const Analyzer::OrderEntry& order_entry) const {
   RowSetMemoryOwner const* const rsmo = result_set_->getRowSetMemOwner().get();
   ResultSet::ModeBuffers::value_type materialized_buffer(
@@ -1160,11 +1232,73 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeModeColumn(
   ModeScatter mode_scatter{
       logger::thread_local_ids(), this, rsmo, order_entry, materialized_buffer};
   if (single_threaded_) {
-    mode_scatter(ModeBlockedRange(0, permutation_.size()));  // Still has new thread_id.
+    mode_scatter(ModeBlockedRange(
+        0, result_set_->permutation_.size()));  // Still has new thread_id.
   } else {
-    tbb::parallel_for(ModeBlockedRange(0, permutation_.size()), mode_scatter);
+    tbb::parallel_for(ModeBlockedRange(0, result_set_->permutation_.size()),
+                      mode_scatter);
   }
   return materialized_buffer;
+}
+
+template <typename BUFFER_ITERATOR_TYPE>
+std::string
+ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE>::logMaterializedBuffers() const {
+  std::ostringstream oss;
+  oss << "Materialized sort buffers generated for result set:";
+
+  bool any_buffers = false;
+
+  if (!dictionary_string_sorted_permutations_.empty()) {
+    any_buffers = true;
+    oss << "\n  Dictionary-encoded sort permutations: "
+        << dictionary_string_sorted_permutations_.size() << " permutation(s)";
+    if (!dictionary_string_sorted_permutations_.empty()) {
+      any_buffers = true;
+      for (size_t i = 0; i < dictionary_string_sorted_permutations_.size(); ++i) {
+        oss << "\n    String column " << i << ": "
+            << dictionary_string_sorted_permutations_[i].size() << " entries";
+      }
+    }
+  }
+
+  if (!count_distinct_materialized_buffers_.empty()) {
+    any_buffers = true;
+    oss << "\n  Count distinct buffers: " << count_distinct_materialized_buffers_.size()
+        << " buffer(s), ";
+    size_t total_elements = 0;
+    for (const auto& buffer : count_distinct_materialized_buffers_) {
+      total_elements += buffer.size();
+    }
+    oss << total_elements << " total elements";
+  }
+
+  if (!approx_quantile_materialized_buffers_.empty()) {
+    any_buffers = true;
+    oss << "\n  Approximate quantile buffers: "
+        << approx_quantile_materialized_buffers_.size() << " buffer(s), ";
+    size_t total_elements = 0;
+    for (const auto& buffer : approx_quantile_materialized_buffers_) {
+      total_elements += buffer.size();
+    }
+    oss << total_elements << " total elements";
+  }
+
+  if (!mode_buffers_.empty()) {
+    any_buffers = true;
+    oss << "\n  Mode buffers: " << mode_buffers_.size() << " buffer(s), ";
+    size_t total_elements = 0;
+    for (const auto& buffer : mode_buffers_) {
+      total_elements += buffer.size();
+    }
+    oss << total_elements << " total elements";
+  }
+
+  if (!any_buffers) {
+    oss << "No materialized sort buffers created";
+  }
+
+  return oss.str();
 }
 
 template <typename BUFFER_ITERATOR_TYPE>
@@ -1342,14 +1476,22 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
 // Return PermutationView with new size() = min(n, permutation.size()).
 PermutationView ResultSet::topPermutation(PermutationView permutation,
                                           const size_t n,
-                                          const Comparator& compare) {
+                                          const Comparator& compare,
+                                          const bool single_threaded) {
   auto timer = DEBUG_TIMER(__func__);
   if (n < permutation.size()) {
     std::partial_sort(
         permutation.begin(), permutation.begin() + n, permutation.end(), compare);
     permutation.resize(n);
   } else {
-    tbb::parallel_sort(permutation.begin(), permutation.end(), compare);
+    // If we call topPermutation from a method that is already parallelized,
+    // i.e. parallelTop, we call it with single_threaded = true to avoid
+    // nested parallelism.
+    if (single_threaded) {
+      std::sort(permutation.begin(), permutation.end(), compare);
+    } else {
+      tbb::parallel_sort(permutation.begin(), permutation.end(), compare);
+    }
   }
   return permutation;
 }
@@ -1627,6 +1769,23 @@ void ResultSet::setCudaStream(const Executor* executor, int device_id) {
 CUstream ResultSet::getCudaStream() const {
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   return cuda_stream_;
+}
+
+void ResultSet::initMaterializedSortBuffers(
+    const std::list<Analyzer::OrderEntry>& order_entries,
+    bool single_threaded) {
+  // This method is not thread safe
+  if (!materialized_sort_buffers_) {
+    if (query_mem_desc_.didOutputColumnar()) {
+      materialized_sort_buffers_ =
+          std::make_unique<MaterializedSortBuffers<ColumnWiseTargetAccessor>>(
+              this, order_entries, single_threaded);
+    } else {
+      materialized_sort_buffers_ =
+          std::make_unique<MaterializedSortBuffers<RowWiseTargetAccessor>>(
+              this, order_entries, single_threaded);
+    }
+  }
 }
 
 // namespace result_set
