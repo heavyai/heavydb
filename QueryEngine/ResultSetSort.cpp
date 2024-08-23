@@ -148,10 +148,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     }
     auto pv = PermutationView(permutation_.data(), permutation_.size());
     initMaterializedSortBuffers(order_entries, false);
-    topPermutation(pv,
-                   top_n,
-                   createComparator(order_entries, pv, executor, false),
-                   false /* single_threaded */);
+    topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false).get());
     if (top_n < permutation_.size()) {
       permutation_.resize(top_n);
       permutation_.shrink_to_fit();
