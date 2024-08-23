@@ -145,9 +145,9 @@ class ResultSetRowIterator {
       , global_entry_idx_valid_(false)
       , fetched_so_far_(0)
       , translate_strings_(translate_strings)
-      , decimal_to_double_(decimal_to_double){};
+      , decimal_to_double_(decimal_to_double) {}
 
-  ResultSetRowIterator(const ResultSet* rs) : ResultSetRowIterator(rs, false, false){};
+  ResultSetRowIterator(const ResultSet* rs) : ResultSetRowIterator(rs, false, false) {}
 
   friend class ResultSet;
 };
@@ -159,7 +159,12 @@ using AppendedStorage = std::vector<std::unique_ptr<ResultSetStorage>>;
 using PermutationIdx = uint32_t;
 using Permutation = std::vector<PermutationIdx>;
 using PermutationView = VectorView<PermutationIdx>;
-using Comparator = std::function<bool(const PermutationIdx, const PermutationIdx)>;
+
+// Common base class to ResultSetComparator template specializations.
+class ResultSetComparatorBase {
+ public:
+  virtual ~ResultSetComparatorBase() = default;
+};
 
 class ResultSet {
  public:
@@ -942,7 +947,7 @@ class ResultSet {
                                    bool single_threaded);
 
   template <typename BUFFER_ITERATOR_TYPE>
-  struct ResultSetComparator {
+  struct ResultSetComparator : public ResultSetComparatorBase {
     using BufferIteratorType = BUFFER_ITERATOR_TYPE;
 
     ResultSetComparator(const std::list<Analyzer::OrderEntry>& order_entries,
@@ -965,6 +970,9 @@ class ResultSet {
               result_set->materialized_sort_buffers_->getApproxQuantileBuffers())
         , mode_buffers_(result_set->materialized_sort_buffers_->getModeBuffers()) {}
 
+    ResultSetComparator(ResultSetComparator const&) = delete;
+    ResultSetComparator& operator=(ResultSetComparator const&) = delete;
+
     bool operator()(const PermutationIdx lhs, const PermutationIdx rhs) const;
 
     const std::list<Analyzer::OrderEntry>& order_entries_;
@@ -979,29 +987,29 @@ class ResultSet {
     const ModeBuffers& mode_buffers_;
   };
 
-  Comparator createComparator(const std::list<Analyzer::OrderEntry>& order_entries,
-                              const PermutationView permutation,
-                              const Executor* executor,
-                              const bool single_threaded) {
+  std::unique_ptr<ResultSetComparatorBase> createComparator(
+      const std::list<Analyzer::OrderEntry>& order_entries,
+      const PermutationView permutation,
+      const Executor* executor,
+      const bool single_threaded) {
     if (query_mem_desc_.didOutputColumnar()) {
-      auto rsc = ResultSetComparator<ColumnWiseTargetAccessor>(
+      return std::make_unique<ResultSetComparator<ColumnWiseTargetAccessor>>(
           order_entries, this, permutation, executor, single_threaded);
-      return [rsc = std::move(rsc)](const PermutationIdx lhs, const PermutationIdx rhs) {
-        return rsc(lhs, rhs);
-      };
     } else {
-      auto rsc = ResultSetComparator<RowWiseTargetAccessor>(
+      return std::make_unique<ResultSetComparator<RowWiseTargetAccessor>>(
           order_entries, this, permutation, executor, single_threaded);
-      return [rsc = std::move(rsc)](const PermutationIdx lhs, const PermutationIdx rhs) {
-        return rsc(lhs, rhs);
-      };
     }
   }
 
   static PermutationView topPermutation(PermutationView,
-                                        const size_t n,
-                                        const Comparator&,
-                                        const bool single_threaded);
+                                        const size_t top_n,
+                                        const ResultSetComparatorBase*);
+
+  template <typename BUFFER_ITERATOR_TYPE>
+  static PermutationView topPermutationImpl(
+      PermutationView,
+      const size_t top_n,
+      const ResultSetComparator<BUFFER_ITERATOR_TYPE>*);
 
   PermutationView initPermutationBuffer(PermutationView permutation,
                                         PermutationIdx const begin,
