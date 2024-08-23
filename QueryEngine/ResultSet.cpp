@@ -831,10 +831,8 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
       top_n = pv.size();  // top_n == 0 implies a full sort
     }
     initMaterializedSortBuffers(order_entries, false);
-    pv = topPermutation(pv,
-                        top_n,
-                        createComparator(order_entries, pv, executor, false),
-                        false /* single_threaded */);
+    pv = topPermutation(
+        pv, top_n, createComparator(order_entries, pv, executor, false).get());
     if (pv.size() < permutation_.size()) {
       permutation_.resize(pv.size());
       permutation_.shrink_to_fit();
@@ -932,10 +930,10 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
                             i,
                             parent_thread_local_ids = logger::thread_local_ids()] {
         logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-        const auto compare =
+        const auto comparator =
             createComparator(order_entries, permutation_views[i], executor, true);
-        permutation_views[i] = topPermutation(
-            permutation_views[i], top_n, compare, true /* single threaded */);
+        permutation_views[i] =
+            topPermutation(permutation_views[i], top_n, comparator.get());
       });
     }
     top_sort_threads.wait();
@@ -960,8 +958,8 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   // Top sort final range.
   auto const phase3_begin = timer_start();
   PermutationView pv(permutation_.data(), end - permutation_.begin());
-  const auto compare = createComparator(order_entries, pv, executor, false);
-  pv = topPermutation(pv, top_n, compare, false /* single_threaded */);
+  const auto comparator = createComparator(order_entries, pv, executor, false);
+  pv = topPermutation(pv, top_n, comparator.get());
   permutation_.resize(pv.size());
   permutation_.shrink_to_fit();
   auto const phase3_ms = timer_stop(phase3_begin);
@@ -1471,26 +1469,46 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
   return false;
 }
 
-// Partial sort permutation into top(least by compare) n elements.
-// If permutation.size() <= n then sort entire permutation by compare.
-// Return PermutationView with new size() = min(n, permutation.size()).
+// A separate topPermutationImpl() would not be needed if the comparison operator was
+// called as a virtual function. The downside would be a vtable lookup on each comparison.
+// Doing the dynamic_cast() here effectively hoists the vtable lookup out of the loop.
 PermutationView ResultSet::topPermutation(PermutationView permutation,
-                                          const size_t n,
-                                          const Comparator& compare,
-                                          const bool single_threaded) {
-  auto timer = DEBUG_TIMER(__func__);
-  if (n < permutation.size()) {
-    std::partial_sort(
-        permutation.begin(), permutation.begin() + n, permutation.end(), compare);
-    permutation.resize(n);
+                                          const size_t top_n,
+                                          const ResultSetComparatorBase* comparator) {
+  if (auto* rsc = dynamic_cast<ResultSetComparator<ColumnWiseTargetAccessor> const*>(
+          comparator)) {
+    return topPermutationImpl(permutation, top_n, rsc);
+  } else if (auto* rsc = dynamic_cast<ResultSetComparator<RowWiseTargetAccessor> const*>(
+                 comparator)) {
+    return topPermutationImpl(permutation, top_n, rsc);
   } else {
-    // If we call topPermutation from a method that is already parallelized,
-    // i.e. parallelTop, we call it with single_threaded = true to avoid
-    // nested parallelism.
-    if (single_threaded) {
-      std::sort(permutation.begin(), permutation.end(), compare);
+    UNREACHABLE();
+    return {};
+  }
+}
+
+// Partial sort permutation into top(least by compare) top_n elements.
+// If permutation.size() <= top_n then sort entire permutation by compare.
+// Return PermutationView with new size() = min(top_n, permutation.size()).
+template <typename BUFFER_ITERATOR_TYPE>
+PermutationView ResultSet::topPermutationImpl(
+    PermutationView permutation,
+    const size_t top_n,
+    const ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>* rsc) {
+  auto timer = DEBUG_TIMER(__func__);
+  // sort() requires a copyable comparison operator.
+  auto compare_op = [rsc](PermutationIdx a, PermutationIdx b) { return (*rsc)(a, b); };
+  bool const top_k_sort = top_n < permutation.size();
+  if (top_k_sort) {
+    std::partial_sort(
+        permutation.begin(), permutation.begin() + top_n, permutation.end(), compare_op);
+    permutation.resize(top_n);
+  } else {
+    // non-top-k sort, need to sort an entire permutation range
+    if (rsc->single_threaded_) {
+      std::sort(permutation.begin(), permutation.end(), compare_op);
     } else {
-      tbb::parallel_sort(permutation.begin(), permutation.end(), compare);
+      tbb::parallel_sort(permutation.begin(), permutation.end(), compare_op);
     }
   }
   return permutation;
