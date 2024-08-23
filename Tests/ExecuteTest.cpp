@@ -4492,6 +4492,10 @@ TEST_F(Select, ModeOrderBy) {
         "SELECT y FROM "
         "(SELECT y, MODE(ne) mne FROM test GROUP BY y ORDER BY mne NULLS LAST LIMIT 1);";
     EXPECT_EQ(42, v<int64_t>(run_simple_agg(query, dt))) << dt;
+
+    query =
+        "SELECT y FROM (SELECT y, MODE(x) mx FROM test GROUP BY y ORDER BY mx LIMIT 1);";
+    EXPECT_EQ(42, v<int64_t>(run_simple_agg(query, dt))) << dt;
   }
 }
 
