@@ -82,9 +82,13 @@ class ArrowOutput {
               const ExecutorDeviceType device_type,
               const TArrowTransport::type transport_method) {
     if (transport_method == TArrowTransport::WIRE) {
-      arrow::io::BufferReader reader(
-          reinterpret_cast<const uint8_t*>(tdf.df_buffer.data()), tdf.df_buffer.size());
-
+      auto const* buffer_data = reinterpret_cast<const uint8_t*>(tdf.df_buffer.data());
+#if ARROW_VERSION_MAJOR >= 14
+      auto buffer = std::make_shared<arrow::Buffer>(buffer_data, tdf.df_buffer.size());
+      arrow::io::BufferReader reader(buffer);
+#else
+      arrow::io::BufferReader reader(buffer_data, tdf.df_buffer.size());
+#endif
       ARROW_ASSIGN_OR_THROW(batch_reader,
                             arrow::ipc::RecordBatchStreamReader::Open(&reader));
 
@@ -110,8 +114,13 @@ class ArrowOutput {
           throw std::runtime_error("Failed to attach to IPC memory segment.");
         }
 
-        arrow::io::BufferReader reader(reinterpret_cast<const uint8_t*>(ipc_ptr),
-                                       tdf.df_size);
+        auto const* buffer_data = reinterpret_cast<const uint8_t*>(ipc_ptr);
+#if ARROW_VERSION_MAJOR >= 14
+        auto buffer = std::make_shared<arrow::Buffer>(buffer_data, tdf.df_size);
+        arrow::io::BufferReader reader(buffer);
+#else
+        arrow::io::BufferReader reader(buffer_data, tdf.df_size);
+#endif
         ARROW_ASSIGN_OR_THROW(batch_reader,
                               arrow::ipc::RecordBatchStreamReader::Open(&reader));
         auto read_result = batch_reader->ReadNext(&record_batch);
@@ -134,8 +143,13 @@ class ArrowOutput {
           throw std::runtime_error("Failed to attach to IPC memory segment.");
         }
 
-        arrow::io::BufferReader reader(reinterpret_cast<const uint8_t*>(ipc_ptr),
-                                       tdf.sm_size);
+        auto const* buffer_data = reinterpret_cast<const uint8_t*>(ipc_ptr);
+#if ARROW_VERSION_MAJOR >= 14
+        auto buffer = std::make_shared<arrow::Buffer>(buffer_data, tdf.sm_size);
+        arrow::io::BufferReader reader(buffer);
+#else
+        arrow::io::BufferReader reader(buffer_data, tdf.sm_size);
+#endif
         auto message_reader = arrow::ipc::MessageReader::Open(&reader);
 
         // read schema
