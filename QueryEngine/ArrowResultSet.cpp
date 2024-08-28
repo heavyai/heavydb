@@ -310,9 +310,13 @@ void ArrowResultSet::resultSetArrowLoopback(
   results_ = std::make_shared<ArrowResult>(converter.getArrowResult());
 
   // Create a reader for reading back serialized
-  arrow::io::BufferReader reader(
-      reinterpret_cast<const uint8_t*>(results_->df_buffer.data()), results_->df_size);
-
+  auto const* buffer_data = reinterpret_cast<const uint8_t*>(results_->df_buffer.data());
+#if ARROW_VERSION_MAJOR >= 14
+  auto buffer = std::make_shared<arrow::Buffer>(buffer_data, results_->df_size);
+  arrow::io::BufferReader reader(buffer);
+#else
+  arrow::io::BufferReader reader(buffer_data, results_->df_size);
+#endif
   ARROW_ASSIGN_OR_THROW(auto batch_reader,
                         arrow::ipc::RecordBatchStreamReader::Open(&reader));
 
