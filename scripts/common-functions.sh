@@ -392,6 +392,16 @@ function install_llvm() {
       LLVM_SHARED="-DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON"
     fi
 
+    if [ "$ARCH" == "x86_64" ]; then
+      LLVM_TARGETS_TO_BUILD="X86"
+    elif [ "$ARCH" == "aarch64" ]; then
+      LLVM_TARGETS_TO_BUILD="AArch64"
+    else
+      echo "ERROR - Unsupported ARCH: ${ARCH}"
+      exit 1
+    fi
+    LLVM_TARGETS_TO_BUILD="${LLVM_TARGETS_TO_BUILD};NVPTX"
+
     cmake \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=$PREFIX \
@@ -401,7 +411,7 @@ function install_llvm() {
       -DLLVM_ENABLE_ZLIB=off \
       -DLLVM_INCLUDE_BENCHMARKS=off \
       -DLLVM_ENABLE_LIBXML2=off \
-      -DLLVM_TARGETS_TO_BUILD="X86;AArch64;PowerPC;NVPTX" \
+      -DLLVM_TARGETS_TO_BUILD="${LLVM_TARGETS_TO_BUILD}" \
       $LLVM_SHARED \
       ../llvm-$VERS.src
     makej

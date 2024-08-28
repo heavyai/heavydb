@@ -307,7 +307,7 @@ function install_llvm() {
       -DLLVM_ENABLE_ZLIB=off \
       -DLLVM_INCLUDE_BENCHMARKS=off \
       -DLLVM_ENABLE_LIBXML2=off \
-      -DLLVM_TARGETS_TO_BUILD="X86;AArch64;PowerPC;NVPTX" \
+      -DLLVM_TARGETS_TO_BUILD="X86;NVPTX" \
       $LLVM_SHARED \
       ../llvm-$VERS.src
     makej
