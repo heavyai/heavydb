@@ -672,61 +672,6 @@ function install_geos() {
     check_artifact_cleanup geos-${GEOS_VERSION}.tar.bz2 geos-${GEOS_VERSION}
 }
 
-FOLLY_VERSION=2023.01.16.00
-# FMT_VERSION must match the version required for folly
-# ExecuteTests requires fmt even if Folly is disabled
-FMT_VERSION=9.1.0
-GLOG_VERSION=0.5.0
-
-function install_fmt() {
-  # Folly depends on fmt
-  download https://github.com/fmtlib/fmt/archive/$FMT_VERSION.tar.gz
-  extract $FMT_VERSION.tar.gz
-  BUILD_DIR="fmt-$FMT_VERSION/build"
-  mkdir -p $BUILD_DIR
-  pushd $BUILD_DIR
-  cmake -GNinja \
-        -DFMT_DOC=OFF \
-        -DFMT_TEST=OFF \
-        -DBUILD_SHARED_LIBS=OFF \
-        -DCMAKE_INSTALL_PREFIX=$PREFIX ..
-  cmake_build_and_install
-  popd
-}
-
-function install_folly() {
-  # Build Glog statically to remove dependency on it from heavydb CMake
-  download https://github.com/google/glog/archive/refs/tags/v$GLOG_VERSION.tar.gz
-  extract v$GLOG_VERSION.tar.gz
-  BUILD_DIR="glog-$GLOG_VERSION/build"
-  mkdir -p $BUILD_DIR
-  pushd $BUILD_DIR
-  cmake -GNinja \
-  -DBUILD_SHARED_LIBS=OFF \
-  -DWITH_UNWIND=OFF \
-  -DCMAKE_INSTALL_PREFIX=$PREFIX ..
-  cmake_build_and_install
-  popd
-
-  download https://github.com/facebook/folly/archive/v$FOLLY_VERSION.tar.gz
-  extract v$FOLLY_VERSION.tar.gz
-  pushd folly-$FOLLY_VERSION/build/
-
-  # jemalloc disabled due to issue with clang build on Ubuntu
-  # see: https://github.com/facebook/folly/issues/976
-  cmake -GNinja \
-        -DCMAKE_CXX_FLAGS="-pthread" \
-        -DFOLLY_USE_JEMALLOC=OFF \
-        -DBUILD_SHARED_LIBS=OFF \
-        -DFOLLY_NO_EXCEPTION_TRACER:STRING=True \
-        -DCMAKE_INSTALL_PREFIX=$PREFIX ..
-  cmake_build_and_install
-
-  popd
-  check_artifact_cleanup $FMT_VERSION.tar.gz "fmt-$FMT_VERSION"
-  check_artifact_cleanup v$FOLLY_VERSION.tar.gz "folly-$FOLLY_VERSION"
-}
-
 IWYU_VERSION=0.18
 LLVM_VERSION_USED_FOR_IWYU=14.0.6
 if [ "$LLVM_VERSION" != "$LLVM_VERSION_USED_FOR_IWYU" ]; then

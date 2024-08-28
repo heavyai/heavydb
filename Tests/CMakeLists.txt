@@ -605,15 +605,9 @@ list(APPEND SANITY_TEST_PROGRAMS StorageTest)
 ##########
 
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
-if(ENABLE_FOLLY)
-  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils
-    $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
-    ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
-else()
-  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils
-    $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
-    ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
-endif()
+target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils
+  $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
+  ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
 
 if(ENABLE_TSAN)
   add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS} "--string-dictionary-size=10000")
@@ -806,11 +800,7 @@ add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 ##########
 
 add_executable(StringDictionaryBenchmark StringDictionaryBenchmark.cpp)
-if(ENABLE_FOLLY)
-  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
-else()
-  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
-endif()
+target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 
 ##########
 
