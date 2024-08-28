@@ -91,17 +91,6 @@ struct DataWrapperType {
                                                       INTERNAL_EXECUTOR_STATS,
                                                       INTERNAL_ML_MODEL_METADATA};
 
-  static constexpr std::array<std::string_view, 9> supported_data_wrapper_types{
-      PARQUET,
-      CSV,
-      REGEX_PARSER,
-      INTERNAL_CATALOG,
-      INTERNAL_MEMORY_STATS,
-      INTERNAL_STORAGE_STATS,
-      INTERNAL_EXECUTOR_STATS,
-      INTERNAL_ML_MODEL_METADATA,
-      INTERNAL_LOGS};
-
   static constexpr std::array supported_data_wrapper_types{PARQUET,
                                                            CSV,
                                                            REGEX_PARSER,
@@ -110,8 +99,7 @@ struct DataWrapperType {
                                                            INTERNAL_STORAGE_STATS,
                                                            INTERNAL_EXECUTOR_STATS,
                                                            INTERNAL_ML_MODEL_METADATA,
-                                                           INTERNAL_LOGS,
-                                                           RASTER};
+                                                           INTERNAL_LOGS};
 };
 
 class ForeignDataWrapperFactory {

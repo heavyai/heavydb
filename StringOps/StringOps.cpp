@@ -18,9 +18,6 @@
 #include "Shared/base64.h"
 #include "Shared/toString.h"
 
-#include "cpr/cpr.h"
-#include "cpr/error.h"
-
 #include <curl/curl.h>
 #include <curl/curlver.h>
 #include <rapidjson/document.h>
@@ -961,135 +958,8 @@ NullableStrType UrlDecode::operator()(const std::string& str) const {
   return decoded;
 }
 
-namespace {
-const char* translateCPRLibraryErrorCode(int32_t error_code) {
-  switch (error_code) {
-    case CURLE_OK:
-      return "OK";
-    case CURLE_UNSUPPORTED_PROTOCOL:
-      return "UNSUPPORTED_PROTOCOL";
-    case CURLE_URL_MALFORMAT:
-      return "INVALID_URL_FORMAT";
-    case CURLE_COULDNT_RESOLVE_PROXY:
-      return "PROXY_RESOLUTION_FAILURE";
-    case CURLE_COULDNT_RESOLVE_HOST:
-      return "HOST_RESOLUTION_FAILURE";
-    case CURLE_COULDNT_CONNECT:
-      return "CONNECTION_FAILURE";
-    case CURLE_OPERATION_TIMEDOUT:
-      return "OPERATION_TIMEDOUT";
-    case CURLE_SSL_CONNECT_ERROR:
-      return "SSL_CONNECT_ERROR";
-#if LIBCURL_VERSION_NUM < 0x073e00
-    case CURLE_PEER_FAILED_VERIFICATION:
-      return "SSL_REMOTE_CERTIFICATE_ERROR";
-#endif
-    case CURLE_ABORTED_BY_CALLBACK:
-    case CURLE_WRITE_ERROR:
-      return "REQUEST_CANCELLED";
-    case CURLE_GOT_NOTHING:
-      return "EMPTY_RESPONSE";
-    case CURLE_SSL_ENGINE_NOTFOUND:
-    case CURLE_SSL_ENGINE_SETFAILED:
-      return "GENERIC_SSL_ERROR";
-    case CURLE_SEND_ERROR:
-      return "NETWORK_SEND_FAILURE";
-    case CURLE_RECV_ERROR:
-      return "NETWORK_RECEIVE_ERROR";
-    case CURLE_SSL_CERTPROBLEM:
-      return "SSL_LOCAL_CERTIFICATE_ERROR";
-    case CURLE_SSL_CIPHER:
-      return "GENERIC_SSL_ERROR";
-#if LIBCURL_VERSION_NUM >= 0x073e00
-    case CURLE_PEER_FAILED_VERIFICATION:
-      return "SSL_REMOTE_CERTIFICATE_ERROR";
-#else
-    case CURLE_SSL_CACERT:
-      return "SSL_CACERT_ERROR";
-#endif
-    case CURLE_USE_SSL_FAILED:
-    case CURLE_SSL_ENGINE_INITFAILED:
-      return "GENERIC_SSL_ERROR";
-    case CURLE_SSL_CACERT_BADFILE:
-      return "SSL_CACERT_ERROR";
-    case CURLE_SSL_SHUTDOWN_FAILED:
-      return "GENERIC_SSL_ERROR";
-    case CURLE_SSL_CRL_BADFILE:
-    case CURLE_SSL_ISSUER_ERROR:
-      return "SSL_CACERT_ERROR";
-    case CURLE_TOO_MANY_REDIRECTS:
-      return "TOO_MANY_REDIRECTS";
-    default:
-      return "INTERNAL_ERROR";
-  }
-}
-}  // namespace
-
 NullableStrType LLMTransform::operator()(const std::string& str_val) const {
-  {
-    std::shared_lock<std::shared_mutex> read_lock(translation_cache_lock_);
-    auto it = translation_cache_->find(str_val);
-    if (it != translation_cache_->end()) {
-      return it->second;
-    }
-  }
-
-  rapidjson::Document input_json;
-  input_json.SetObject();
-  std::ostringstream oss;
-  oss << prompt_ << ":\n" << str_val;
-  rapidjson::Document::AllocatorType& allocator = input_json.GetAllocator();
-  input_json.AddMember(
-      "question", rapidjson::Value(oss.str().c_str(), allocator).Move(), allocator);
-  input_json.AddMember("temperature", rapidjson::Value(0).Move(), allocator);
-  input_json.AddMember("max_tokens", rapidjson::Value(256).Move(), allocator);
-  input_json.AddMember(
-      "llm_type", rapidjson::Value("default", allocator).Move(), allocator);
-  rapidjson::StringBuffer buffer;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-  input_json.Accept(writer);
-
-  auto const query = std::string(buffer.GetString(), buffer.GetSize());
-
-  std::stringstream cpr_url_oss;
-  cpr_url_oss << g_heavyiq_url.c_str() << "/llm/call-llm";
-  std::string cpr_url = cpr_url_oss.str();
-  cpr::Header header{{"accept", "application/json"},
-                     {"Content-Type", "application/json"}};
-
-  // Make the POST request to the URL
-  cpr::Response r = cpr::Post(cpr::Url{cpr_url},
-                              cpr::Body{query},
-                              header,
-                              cpr::Timeout{g_llm_transform_call_timeout_ms});
-
-  // Process the response
-  rapidjson::Document response;
-  response.Parse(r.text.c_str());
-
-  // Check status of the operation and the parse result
-  if (r.status_code != 200 || response.HasParseError() ||
-      !response.HasMember("response")) {
-    std::ostringstream oss2;
-    oss2 << "LLM_TRANSFORM failed: ";
-    if (r.status_code != 200) {
-      oss2 << "Status Code: " << r.status_code << " (";
-      oss2 << translateCPRLibraryErrorCode(r.status_code);
-      oss2 << ")";
-    } else if (response.HasParseError()) {
-      oss2 << rapidjson::GetParseError_En(response.GetParseError());
-    } else {
-      oss2 << "No \'response\' field in the returned JSON";
-    }
-    throw std::runtime_error(oss2.str());
-  } else {
-    auto output = response["response"].GetString();
-    {
-      std::lock_guard<std::shared_mutex> write_lock(translation_cache_lock_);
-      translation_cache_->emplace(str_val, output);
-    }
-    return NullableStrType{std::string(output)};
-  }
+  return NullableStrType{std::string("")};
 }
 
 std::string StringOps::operator()(const std::string& str) const {
