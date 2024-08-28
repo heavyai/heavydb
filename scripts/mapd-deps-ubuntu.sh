@@ -109,8 +109,9 @@ source $SCRIPTS_DIR/common-functions.sh
 source /etc/os-release
 if [ "$ID" == "ubuntu" ] ; then
   PACKAGER="apt -y"
-  if [ "$VERSION_ID" != "24.04" ] && [ "$VERSION_ID" != "23.10" ] && [ "$VERSION_ID" != "22.04" ] && [ "$VERSION_ID" != "20.04" ]; then
-    echo "Ubuntu 24.04, 23.10, 22.04, and 20.04 are the only debian-based releases supported by this script"
+  if [ "$VERSION_ID" != "24.04" ] && [ "$VERSION_ID" != "22.04" ]; then
+    echo "Ubuntu 24.04 and 22.04 are the only Debian-based releases supported by this script"
+    echo "If you are still using 20.04 or 23.10 then you need to upgrade!"
     exit 1
   fi
 else
@@ -126,11 +127,6 @@ DEBIAN_FRONTEND=noninteractive sudo apt-key adv --fetch-keys https://developer.d
 DEBIAN_FRONTEND=noninteractive sudo apt update
 
 install_required_ubuntu_packages
-
-if [ "$VERSION_ID" == "20.04" ]; then
-  # required for gcc-11 on Ubuntu < 22.04
-  DEBIAN_FRONTEND=noninteractive sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-fi
 
 DEBIAN_FRONTEND=noninteractive sudo apt install -y \
   gcc-11 \
@@ -326,7 +322,8 @@ echo "    source $PREFIX/mapd-deps.sh"
 
 if [ "$COMPRESS" = "true" ]; then
   OS=ubuntu${VERSION_ID}
-  if [ $VERSION_ID == "24.04" ] || [ $VERSION_ID == "23.10" ]; then
+  # we don't have 24.04 builds yet, so just use the 22.04 bundle
+  if [ $VERSION_ID == "24.04" ]; then
     OS=ubuntu22.04
   fi
   TARBALL_TSAN=""
