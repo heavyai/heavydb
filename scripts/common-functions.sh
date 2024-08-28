@@ -43,7 +43,6 @@ function install_required_ubuntu_packages() {
       default-jre-headless \
       flex \
       git \
-      golang \
       google-perftools \
       groff-base \
       jq \
@@ -67,7 +66,6 @@ function install_required_ubuntu_packages() {
       libunistring-dev \
       libxerces-c-dev \
       libxml2-dev \
-      maven \
       patchelf \
       pkg-config \
       python3-dev \
@@ -934,7 +932,7 @@ function install_rdkafka() {
     check_artifact_cleanup  v$RDKAFKA_VERSION.tar.gz "librdkafka-$RDKAFKA_VERSION"
 }
 
-GO_VERSION=1.15.6
+GO_VERSION=1.22.6
 
 function install_go() {
   # substitute alternative arch tags

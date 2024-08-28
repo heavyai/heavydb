@@ -779,7 +779,7 @@ function install_rdkafka() {
     check_artifact_cleanup  v$RDKAFKA_VERSION.tar.gz "librdkafka-$RDKAFKA_VERSION"
 }
 
-GO_VERSION=1.15.6
+GO_VERSION=1.22.6
 
 function install_go() {
   # substitute alternative arch tags
