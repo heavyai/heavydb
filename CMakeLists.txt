@@ -915,10 +915,17 @@ find_library(lz4_LIBRARY lz4)
 if(NOT lz4_LIBRARY)
   # After upgrading to new deps, make lz4_LIBRARY REQUIRED and delete this if() block.
   set(lz4_LIBRARY "")
-  message(WARNING "Liblz4 not found. This must be using old deps.")
+  message(WARNING "liblz4 not found. This must be using old deps.")
 endif()
 
-list(APPEND Arrow_LIBRARIES ${lz4_LIBRARY} ${Snappy_LIBRARIES})
+find_library(bz2_LIBRARY bz2)
+if(NOT bz2_LIBRARY)
+  # After upgrading to new deps, make bz2_LIBRARY REQUIRED and delete this if() block.
+  set(bz2_LIBRARY "")
+  message(WARNING "libbz2 not found. This must be using old deps.")
+endif()
+
+list(APPEND Arrow_LIBRARIES ${lz4_LIBRARY} ${Snappy_LIBRARIES} ${bz2_LIBRARY}) # zstd linked elsewhere for GDAL
 if(ENABLE_AWS_S3)
   list(INSERT Arrow_LIBRARIES 0 ${LibAwsS3_LIBRARIES})
 endif()
