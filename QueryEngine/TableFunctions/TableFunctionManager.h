@@ -16,12 +16,15 @@
 
 #pragma once
 
-#include "GfxDriver/DeviceContext.h"
-#include "GfxDriver/GfxContext.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/QueryMemoryInitializer.h"
 #include "Shared/sqltypes.h"
 
+namespace gfx {
+class GfxContext;
+class CommandExecutionContext;
+using CommandExecutionContextUqPtr = std::unique_ptr<CommandExecutionContext>;
+}  // namespace gfx
 
 /*
   The TableFunctionManager implements the following features:
@@ -74,8 +77,7 @@ struct TableFunctionManager {
       , row_set_mem_owner_(row_set_mem_owner)
       , output_num_rows_(-1)
       , is_singleton_(is_singleton)
-      , thread_id_(std::this_thread::get_id())
-      , gfx_context_{gfx_context} {
+      , thread_id_(std::this_thread::get_id()) {
     if (isSingleton()) {
       set_singleton(this);  // start of singleton life
     }
@@ -91,14 +93,10 @@ struct TableFunctionManager {
   }
 
   // Return the number of output columns
-  size_t get_ncols() const {
-    return exe_unit_.target_exprs.size();
-  }
+  size_t get_ncols() const { return exe_unit_.target_exprs.size(); }
 
   // Return the number of rows of output columns.
-  size_t get_nrows() const {
-    return output_num_rows_;
-  }
+  size_t get_nrows() const { return output_num_rows_; }
 
   void check_thread_id() const {
     if (std::this_thread::get_id() != thread_id_) {
@@ -338,9 +336,7 @@ struct TableFunctionManager {
 
   // Methods for managing singleton instance of TableFunctionManager:
 
-  bool isSingleton() const {
-    return is_singleton_;
-  }
+  bool isSingleton() const { return is_singleton_; }
 
   ~TableFunctionManager() {
     if (isSingleton()) {
@@ -353,24 +349,9 @@ struct TableFunctionManager {
     return instance;
   }
 
-  const gfx::GfxContext* getGfxContext() const {
-    CHECK(gfx_context_) << "TableFunctionManager::getGfxContext() called from non-CPU TF";
-    return gfx_context_;
-  }
-
-  gfx::CommandExecutionContext* getGfxCommandExecutionContext() {
-    CHECK(gfx_execution_context_)
-        << "TableFunctionManager::getGfxContext() called from non-CPU TF";
-    return gfx_execution_context_.get();
-  }
-
  private:
-  void lock() {
-    TableFunctionManager_singleton_mutex.lock();
-  }
-  void unlock() {
-    TableFunctionManager_singleton_mutex.unlock();
-  }
+  void lock() { TableFunctionManager_singleton_mutex.lock(); }
+  void unlock() { TableFunctionManager_singleton_mutex.unlock(); }
 
   static void set_singleton(TableFunctionManager* instance) {
     TableFunctionManager*& instance_ = get_singleton_internal();
@@ -406,8 +387,4 @@ struct TableFunctionManager {
   std::thread::id thread_id_;
   // Error message
   std::string error_message_;
-  // GfxContext
-  gfx::GfxContext* gfx_context_;
-  // gfx::CommandExecutionContext
-  gfx::CommandExecutionContextUqPtr gfx_execution_context_;
 };

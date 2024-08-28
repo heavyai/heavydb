@@ -26,13 +26,12 @@
 class RenderHandler::Impl {};
 
 RenderHandler::RenderHandler(DBHandler* db_handler,
+                             gfx::GfxContext* gfx_context,
                              const size_t render_mem_bytes,
                              const size_t max_concurrent_render_sessions,
                              const bool compositor_use_last_gpu,
                              const bool enable_auto_clear_render_mem,
                              const int render_oom_retry_threshold,
-                             const bool renderer_prefer_igpu,
-                             const uint32_t renderer_vulkan_timeout_ms,
                              const bool renderer_use_parallel_executors,
                              const SystemParameters system_parameters,
                              const bool renderer_enable_slab_allocation)

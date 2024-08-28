@@ -443,13 +443,6 @@ struct TableFunctionManager {
     return TableFunctionManager_makeBuffer(
         reinterpret_cast<int8_t*>(this), element_count, element_size);
   }
-  const gfx::GfxContext* getGfxContext() {
-    return TableFunctionManager_getGfxContext(reinterpret_cast<int8_t*>(this));
-  }
-  gfx::CommandExecutionContext* getGfxCommandExecutionContext() {
-    return TableFunctionManager_getGfxCommandExecutionContext(
-        reinterpret_cast<int8_t*>(this));
-  }
 
 #ifdef HAVE_TOSTRING
   std::string toString() const {
