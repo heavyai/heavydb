@@ -18,9 +18,7 @@
 
 #include "ArenaAllocator.h"
 
-// An arena allocator that uses direct-access PMem for allocations.  This implementation
-// is simplified for now, but we could move it to a PMem allocator under folly if
-// necessary in the future.
+// An arena allocator that uses direct-access PMem for allocations.
 class PMemArena : public Arena {
  public:
   explicit PMemArena(size_t min_block_size = 1ULL << 32, size_t size_limit = 0);

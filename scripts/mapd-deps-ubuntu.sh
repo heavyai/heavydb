@@ -193,11 +193,6 @@ install_thrift
 VERS=3.52.16
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
 
-# fmt (must be installed before folly)
-install_fmt
-
-install_folly
-
 # Include What You Use
 install_iwyu
 

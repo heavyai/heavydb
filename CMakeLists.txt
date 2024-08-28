@@ -474,22 +474,6 @@ endif()
 list (APPEND GDAL_LIBRARIES ${XML2_LIBRARY})
 include_directories(${GDAL_INCLUDE_DIRS})
 
-option(ENABLE_FOLLY "Use Folly" ON)
-if(ENABLE_FOLLY)
-  find_package(Folly)
-  if(NOT Folly_FOUND)
-    set(ENABLE_FOLLY OFF CACHE BOOL "Use Folly" FORCE)
-  else()
-    include_directories(${Folly_INCLUDE_DIRS})
-    add_definitions("-DHAVE_FOLLY")
-    # TODO: use Folly::folly_deps?
-    if(MSVC)
-      find_package(Libevent COMPONENTS core REQUIRED)
-      list(APPEND Folly_LIBRARIES libevent::core)
-    endif()
-  endif()
-endif()
-
 option(ENABLE_SYSTEM_TFS "Enable system table functions" ON)
 option(ENABLE_ML_ONEDAL_TFS "Enable Intel oneDal ML system table functions" ON)
 option(ENABLE_ML_MLPACK_TFS "Enable MLPack ML system table functions" OFF)
@@ -1213,10 +1197,6 @@ if(ENABLE_RENDERING)
 endif()
 
 list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
-
-if(ENABLE_FOLLY)
-  list(APPEND MAPD_LIBRARIES ${Folly_LIBRARIES})
-endif()
 
 if(ENABLE_PDAL)
   # Correct link issue in test programs

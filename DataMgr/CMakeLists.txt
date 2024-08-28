@@ -116,15 +116,12 @@ add_library(DataMgr ${datamgr_source_files})
 add_dependencies(DataMgr Calcite)
 
 target_link_libraries(DataMgr CudaMgr Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS} ${CMAKE_DL_LIBS})
-# Generator expressions such as "$<$<BOOL:${ENABLE_FOLLY}>:${Folly_LIBRARIES}>"
-# cannot be used in target_link_libraries. On Windows, ${Folly_LIBRARIES} includes the substring
+# Generator expressions such as "$<$<BOOL:${ENABLE_FOLLY}>:${XXX_LIBRARIES}>"
+# cannot be used in target_link_libraries. On Windows, ${XXX_LIBRARIES} includes the substring
 # ";optimized;" resulting in an attempt to link to optimized.lib which does not exist.
 # See https://cmake.org/cmake/help/latest/command/target_link_libraries.html for details,
 # specifically the section containing "These keywords are interpreted immediately by this command
 # and therefore have no special meaning when produced by a generator expression."
-if(ENABLE_FOLLY)
-  target_link_libraries(DataMgr ${Folly_LIBRARIES})
-endif()
 if(ENABLE_FSI_ODBC)
   target_link_libraries(DataMgr ${iODBC_LIBRARIES})
 endif()
