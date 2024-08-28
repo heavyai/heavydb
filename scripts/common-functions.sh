@@ -77,6 +77,7 @@ function install_required_ubuntu_packages() {
       swig \
       unzip \
       uuid-dev \
+      valgrind \
       wget \
       zlib1g-dev
 
