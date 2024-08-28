@@ -29,7 +29,6 @@ The following ``cmake``/``ccmake`` options can enable/disable different features
 * ``-DENABLE_CUDA=off`` - Disable CUDA. Default is ``on``.
 * ``-DENABLE_CUDA_KERNEL_DEBUG=off`` - Enable debugging symbols for CUDA kernels. Will dramatically reduce kernel performance. Default is ``off``.
 * ``-DENABLE_DECODERS_BOUNDS_CHECKING=off`` - Enable bounds checking for column decoding. Default is ``off``.
-* ``-DENABLE_FOLLY=on`` - Use Folly. Default is ``on``.
 * ``-DENABLE_IWYU=off`` - Enable include-what-you-use. Default is ``off``.
 * ``-DENABLE_JIT_DEBUG=off`` - Enable debugging symbols for the JIT. Default is ``off``.
 * ``-DENABLE_PROFILER=off`` - Enable google perftools. Default is ``off``.

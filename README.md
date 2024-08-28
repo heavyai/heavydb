@@ -74,7 +74,6 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 - `-DENABLE_CUDA=off` - Disable CUDA. Default is `on`.
 - `-DENABLE_CUDA_KERNEL_DEBUG=off` - Enable debugging symbols for CUDA kernels. Will dramatically reduce kernel performance. Default is `off`.
 - `-DENABLE_DECODERS_BOUNDS_CHECKING=off` - Enable bounds checking for column decoding. Default is `off`.
-- `-DENABLE_FOLLY=on` - Use Folly. Default is `on`.
 - `-DENABLE_IWYU=off` - Enable include-what-you-use. Default is `off`.
 - `-DENABLE_JIT_DEBUG=off` - Enable debugging symbols for the JIT. Default is `off`.
 - `-DENABLE_ONLY_ONE_ARCH=off` - Compile GPU code only for the host machine's architecture, speeding up compilation. Default is `off`.
@@ -270,7 +269,8 @@ The [scripts/mapd-deps-centos.sh](scripts/mapd-deps-centos.sh) script is used to
 
 ## Ubuntu
 
-Most build dependencies required by HeavyDB are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 (x86_64). The dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
+Most build dependencies required by HeavyDB are available via APT. Certain dependencies such as Thrift and Blosc must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 and 20.04 (x86_64). The dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
+
 
 ### Ubuntu 16.04
 

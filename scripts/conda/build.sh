@@ -74,7 +74,6 @@ cmake -Wno-dev \
     -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DMAPD_DOCS_DOWNLOAD=off \
     -DENABLE_AWS_S3=off \
-    -DENABLE_FOLLY=off \
     -DENABLE_JAVA_REMOTE_DEBUG=off \
     -DENABLE_PROFILER=off \
     -DPREFER_STATIC_LIBS=off \

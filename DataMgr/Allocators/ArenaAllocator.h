@@ -53,68 +53,11 @@ class Arena {
   virtual MemoryType getMemoryType() const = 0;
 };
 
-#ifdef HAVE_FOLLY
-
-#include <folly/Memory.h>
-#include <folly/memory/Arena.h>
-
-using AllocatorType = char;
-
-constexpr size_t kArenaBlockOverhead =
-    folly::Arena<::SysAllocator<AllocatorType>>::kBlockOverhead;
-
-/**
- * Arena allocator using checked_malloc with default allocation size 4GB. Note that the
- * allocator only frees memory on destruction.
- */
-class DramArena : public Arena, public folly::Arena<::SysAllocator<AllocatorType>> {
- public:
-  explicit DramArena(size_t min_block_size = static_cast<size_t>(1ULL << 32) +
-                                             kBlockOverhead,
-                     size_t size_limit = kNoSizeLimit,
-                     size_t max_align = kDefaultMaxAlign)
-      : folly::Arena<::SysAllocator<AllocatorType>>({},
-                                                    min_block_size,
-                                                    size_limit,
-                                                    max_align) {}
-  ~DramArena() override {}
-
-  void* allocate(size_t size) override {
-    return folly::Arena<::SysAllocator<AllocatorType>>::allocate(size);
-  }
-
-  void* allocateAndZero(const size_t size) override {
-    auto ret = allocate(size);
-    std::memset(ret, 0, size);
-    return ret;
-  }
-
-  size_t bytesUsed() const override {
-    return folly::Arena<::SysAllocator<AllocatorType>>::bytesUsed();
-  }
-
-  size_t totalBytes() const override {
-    return folly::Arena<::SysAllocator<AllocatorType>>::totalSize();
-  }
-
-  MemoryType getMemoryType() const override { return MemoryType::DRAM; }
-};
-
-template <>
-struct folly::ArenaAllocatorTraits<::SysAllocator<AllocatorType>> {
-  static size_t goodSize(const ::SysAllocator<AllocatorType>& /* alloc */, size_t size) {
-    return folly::goodMallocSize(size);
-  }
-};
-
-#else
-
 constexpr size_t kArenaBlockOverhead = 0;
 
 /**
  * A naive allocator which calls malloc and maintains a list of allocate pointers for
- * freeing. For development and testing only, where folly is not available. Not for
- * production use.
+ * freeing. For development and testing only. Not for production use.
  */
 class DramArena : public Arena {
  public:
@@ -156,5 +99,3 @@ class DramArena : public Arena {
   SysAllocator<void> allocator_;
   std::vector<std::pair<void*, size_t>> allocations_;
 };
-
-#endif

@@ -27,9 +27,7 @@
 #include <Shlobj.h>
 #include "Shared/clean_windows.h"
 #endif
-#ifdef HAVE_FOLLY
-#include <folly/portability/Unistd.h>
-#elif !defined(_WIN32)
+#if !defined(_WIN32)
 #include <unistd.h>
 #else
 #include <io.h>
