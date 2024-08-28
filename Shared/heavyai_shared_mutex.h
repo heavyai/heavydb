@@ -19,20 +19,8 @@
 #include <mutex>
 #include <shared_mutex>
 
-#ifdef HAVE_FOLLY
-#include <folly/SharedMutex.h>
-namespace heavyai {
-using shared_mutex = folly::SharedMutex;
-}  // namespace heavyai
-// Folly includes windows.h and pollutes global namespace with macroses
-#include "cleanup_global_namespace.h"
-#else
 namespace heavyai {
 using shared_mutex = std::shared_timed_mutex;
-}  // namespace heavyai
-#endif  // HAVE_FOLLY
-
-namespace heavyai {
 template <typename T>
 using lock_guard = std::lock_guard<T>;
 template <typename T>

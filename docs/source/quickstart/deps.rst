@@ -37,7 +37,7 @@ The `mapd-deps-prebuilt.sh` script includes two files with the appropriate envir
 Building on Ubuntu
 ==================
 
-Most build dependencies required by HeavyDB are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 and 20.04 (x86_64). The dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
+Most build dependencies required by HeavyDB are available via APT. Certain dependencies such as Thrift and Blosc must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 and 20.04 (x86_64). The dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
 
 These dependencies will be installed to a directory under `/usr/local/mapd-deps`. The `mapd-deps-prebuilt.sh` script above will generate a script named `mapd-deps.sh` containing the environment variables which need to be set. Simply source this file in your current session (or symlink it to `/etc/profile.d/mapd-deps.sh`) in order to activate it:
 
@@ -96,11 +96,6 @@ Building on Arch Linux
 
 ..note::
     Apache Arrow, while available in the AUR, requires a few custom build flags in order to be used with Core. A custom PKGBUILD for it is included.
-
-.. note::
-    package folly, while available in the AUR, is not supported while for building Core on Arch. If these packages are installed, support for them should be disabled when building Core. To do so, use the following options when running CMake:
-
-    ``cmake -DENABLE_FOLLY=off ..``
 
 CUDA
 ----
