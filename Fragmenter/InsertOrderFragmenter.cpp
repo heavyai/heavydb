@@ -1114,7 +1114,7 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insert_data) {
     if (cit.second.getColumnDesc()->isDeletedCol) {
       data_for_deleted_column.reset(new int8_t[insert_data.numRows]);
       memset(data_for_deleted_column.get(), 0, insert_data.numRows);
-      insert_data.data.emplace_back(DataBlockPtr{data_for_deleted_column.get()});
+      insert_data.data.emplace_back(DataBlockPtr{{data_for_deleted_column.get()}});
       insert_data.columnIds.push_back(cit.second.getColumnDesc()->columnId);
       insert_data.is_default.push_back(false);
       break;

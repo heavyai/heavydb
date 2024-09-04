@@ -157,7 +157,19 @@ class FixedLengthEncoder : public Encoder {
     UNREACHABLE();
   }
 
+  void updateStats(const std::string* src_data,
+                   const size_t start_idx,
+                   const size_t num_elements) override {
+    UNREACHABLE();
+  }
+
   void updateStats(const std::vector<ArrayDatum>* const src_data,
+                   const size_t start_idx,
+                   const size_t num_elements) override {
+    UNREACHABLE();
+  }
+
+  void updateStats(const ArrayDatum* src_data,
                    const size_t start_idx,
                    const size_t num_elements) override {
     UNREACHABLE();

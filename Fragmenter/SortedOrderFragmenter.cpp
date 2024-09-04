@@ -23,23 +23,18 @@
 namespace Fragmenter_Namespace {
 
 template <typename T>
-void shuffleByIndexesImpl(const std::vector<size_t>& indexes, T* buffer) {
+void shuffleByIndexesImpl(const std::vector<size_t>& indexes,
+                          T* buffer,
+                          size_t& dst_size) {
   std::vector<T> new_buffer;
   new_buffer.reserve(indexes.size());
   for (const auto i : indexes) {
     new_buffer.push_back(buffer[i]);
   }
-  std::memcpy(buffer, new_buffer.data(), indexes.size() * sizeof(T));
-}
-
-template <typename T>
-void shuffleByIndexesImpl(const std::vector<size_t>& indexes, std::vector<T>& buffer) {
-  std::vector<T> new_buffer;
-  new_buffer.reserve(indexes.size());
-  for (const auto i : indexes) {
-    new_buffer.push_back(buffer[i]);
+  dst_size = indexes.size();
+  for (size_t i = 0; i < indexes.size(); ++i) {
+    buffer[i] = new_buffer[i];
   }
-  buffer.swap(new_buffer);
 }
 
 void shuffleByIndexes(const ColumnDescriptor* cd,
@@ -48,43 +43,52 @@ void shuffleByIndexes(const ColumnDescriptor* cd,
   const auto& ti = cd->columnType;
   switch (ti.get_type()) {
     case kBOOLEAN:
-      shuffleByIndexesImpl(indexes, reinterpret_cast<int8_t*>(data.numbersPtr));
+      shuffleByIndexesImpl(
+          indexes, reinterpret_cast<int8_t*>(data.numbersPtr), data.size);
       break;
     case kTINYINT:
-      shuffleByIndexesImpl(indexes, reinterpret_cast<int8_t*>(data.numbersPtr));
+      shuffleByIndexesImpl(
+          indexes, reinterpret_cast<int8_t*>(data.numbersPtr), data.size);
       break;
     case kSMALLINT:
-      shuffleByIndexesImpl(indexes, reinterpret_cast<int16_t*>(data.numbersPtr));
+      shuffleByIndexesImpl(
+          indexes, reinterpret_cast<int16_t*>(data.numbersPtr), data.size);
       break;
     case kINT:
-      shuffleByIndexesImpl(indexes, reinterpret_cast<int32_t*>(data.numbersPtr));
+      shuffleByIndexesImpl(
+          indexes, reinterpret_cast<int32_t*>(data.numbersPtr), data.size);
       break;
     case kBIGINT:
     case kNUMERIC:
     case kDECIMAL:
-      shuffleByIndexesImpl(indexes, reinterpret_cast<int64_t*>(data.numbersPtr));
+      shuffleByIndexesImpl(
+          indexes, reinterpret_cast<int64_t*>(data.numbersPtr), data.size);
       break;
     case kFLOAT:
-      shuffleByIndexesImpl(indexes, reinterpret_cast<float*>(data.numbersPtr));
+      shuffleByIndexesImpl(indexes, reinterpret_cast<float*>(data.numbersPtr), data.size);
       break;
     case kDOUBLE:
-      shuffleByIndexesImpl(indexes, reinterpret_cast<double*>(data.numbersPtr));
+      shuffleByIndexesImpl(
+          indexes, reinterpret_cast<double*>(data.numbersPtr), data.size);
       break;
     case kTEXT:
     case kVARCHAR:
     case kCHAR:
       if (ti.is_varlen()) {
-        shuffleByIndexesImpl(indexes, *data.stringsPtr);
+        shuffleByIndexesImpl(indexes, data.stringsPtr, data.size);
       } else {
         switch (ti.get_size()) {
           case 1:
-            shuffleByIndexesImpl(indexes, reinterpret_cast<int8_t*>(data.numbersPtr));
+            shuffleByIndexesImpl(
+                indexes, reinterpret_cast<int8_t*>(data.numbersPtr), data.size);
             break;
           case 2:
-            shuffleByIndexesImpl(indexes, reinterpret_cast<int16_t*>(data.numbersPtr));
+            shuffleByIndexesImpl(
+                indexes, reinterpret_cast<int16_t*>(data.numbersPtr), data.size);
             break;
           case 4:
-            shuffleByIndexesImpl(indexes, reinterpret_cast<int32_t*>(data.numbersPtr));
+            shuffleByIndexesImpl(
+                indexes, reinterpret_cast<int32_t*>(data.numbersPtr), data.size);
             break;
           default:
             CHECK(false);
@@ -94,10 +98,11 @@ void shuffleByIndexes(const ColumnDescriptor* cd,
     case kDATE:
     case kTIME:
     case kTIMESTAMP:
-      shuffleByIndexesImpl(indexes, reinterpret_cast<int64_t*>(data.numbersPtr));
+      shuffleByIndexesImpl(
+          indexes, reinterpret_cast<int64_t*>(data.numbersPtr), data.size);
       break;
     case kARRAY:
-      shuffleByIndexesImpl(indexes, *data.arraysPtr);
+      shuffleByIndexesImpl(indexes, data.arraysPtr, data.size);
       break;
     case kPOINT:
     case kMULTIPOINT:
@@ -105,7 +110,7 @@ void shuffleByIndexes(const ColumnDescriptor* cd,
     case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
-      shuffleByIndexesImpl(indexes, *data.stringsPtr);
+      shuffleByIndexesImpl(indexes, data.stringsPtr, data.size);
       break;
     default:
       CHECK(false);
@@ -120,16 +125,17 @@ void sortIndexesImpl(std::vector<size_t>& indexes, const T* buffer) {
   });
 }
 
-void sortIndexesImpl(std::vector<size_t>& indexes,
-                     const std::vector<std::string>& buffer) {
+template <>
+void sortIndexesImpl<std::string>(std::vector<size_t>& indexes,
+                                  const std::string* buffer) {
   std::sort(indexes.begin(), indexes.end(), [&](const auto a, const auto b) {
     return buffer[a].size() < buffer[b].size() ||
            (buffer[a].size() == buffer[b].size() && buffer[a] < buffer[b]);
   });
 }
 
-void sortIndexesImpl(std::vector<size_t>& indexes,
-                     const std::vector<ArrayDatum>& buffer) {
+template <>
+void sortIndexesImpl<ArrayDatum>(std::vector<size_t>& indexes, const ArrayDatum* buffer) {
   std::sort(indexes.begin(), indexes.end(), [&](const auto a, const auto b) {
     return buffer[a].is_null || buffer[a].length < buffer[b].length ||
            (!buffer[b].is_null && buffer[a].length == buffer[b].length &&
@@ -169,7 +175,7 @@ void sortIndexes(const ColumnDescriptor* cd,
     case kVARCHAR:
     case kCHAR:
       if (ti.is_varlen()) {
-        sortIndexesImpl(indexes, *data.stringsPtr);
+        sortIndexesImpl(indexes, data.stringsPtr);
       } else {
         switch (ti.get_size()) {
           case 1:
@@ -192,7 +198,7 @@ void sortIndexes(const ColumnDescriptor* cd,
       sortIndexesImpl(indexes, reinterpret_cast<int64_t*>(data.numbersPtr));
       break;
     case kARRAY:
-      sortIndexesImpl(indexes, *data.arraysPtr);
+      sortIndexesImpl(indexes, data.arraysPtr);
       break;
     default:
       CHECK(false) << "invalid type '" << ti.get_type() << "' to sort";
