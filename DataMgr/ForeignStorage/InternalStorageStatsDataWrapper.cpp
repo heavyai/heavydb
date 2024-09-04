@@ -31,13 +31,13 @@ InternalStorageStatsDataWrapper::InternalStorageStatsDataWrapper(
     : InternalSystemDataWrapper(db_id, foreign_table) {}
 
 namespace {
-void set_null(import_export::TypedImportBuffer* import_buffer) {
+void set_null(import_export::UnmanagedTypedImportBuffer* import_buffer) {
   import_buffer->add_value(import_buffer->getColumnDesc(), "", true, {});
 }
 
 void populate_import_buffers_for_storage_details(
     const std::vector<StorageDetails>& storage_details,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& storage_detail : storage_details) {
     set_node_name(import_buffers);
     if (import_buffers.find("database_id") != import_buffers.end()) {
@@ -164,7 +164,7 @@ void InternalStorageStatsDataWrapper::initializeObjectsForTable(
 
 void InternalStorageStatsDataWrapper::populateChunkBuffersForTable(
     const std::string& table_name,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   CHECK_EQ(table_name, Catalog_Namespace::STORAGE_DETAILS_SYS_TABLE_NAME);
   populate_import_buffers_for_storage_details(storage_details_, import_buffers);
 }

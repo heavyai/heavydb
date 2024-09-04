@@ -52,7 +52,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     return data_size / array_size;
   }
 
-  size_t getNumElemsForBytesInsertData(const std::vector<ArrayDatum>* srcData,
+  size_t getNumElemsForBytesInsertData(const ArrayDatum* srcData,
                                        const int start_idx,
                                        const size_t numAppendElems,
                                        const size_t byteLimit,
@@ -77,7 +77,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
                                           is_null_ignore_not_null(current_data),
                                           DoNothingDeleter{}));
     }
-    return appendData(&data_subset, 0, selected_idx.size(), false);
+    return appendData(data_subset.data(), 0, selected_idx.size(), false);
   }
 
   std::shared_ptr<ChunkMetadata> appendEncodedData(const int8_t* index_data,
@@ -91,7 +91,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       data_subset.emplace_back(
           ArrayDatum(array_size, current_data, false, DoNothingDeleter{}));
     }
-    return appendData(&data_subset, 0, num_elements, false);
+    return appendData(data_subset.data(), 0, num_elements, false);
   }
 
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
@@ -107,6 +107,13 @@ class FixedLengthArrayNoneEncoder : public Encoder {
                                             const int start_idx,
                                             const size_t numAppendElems,
                                             const bool replicating = false) {
+    return appendData(srcData->data(), start_idx, numAppendElems, replicating);
+  }
+
+  std::shared_ptr<ChunkMetadata> appendData(const ArrayDatum* srcData,
+                                            const int start_idx,
+                                            const size_t numAppendElems,
+                                            const bool replicating) {
     const size_t existing_data_size = num_elems_ * array_size;
     const size_t append_data_size = array_size * numAppendElems;
     buffer_->reserve(existing_data_size + append_data_size);
@@ -120,9 +127,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     // for a single field/row, are a different story however)
 
     if (replicating) {
-      const size_t len = (*srcData)[0].length;
+      const size_t len = srcData[0].length;
       CHECK_EQ(len, array_size);
-      const int8_t* replicated_ptr = (*srcData)[0].pointer;
+      const int8_t* replicated_ptr = srcData[0].pointer;
       for (size_t i = 0; i < numAppendElems; ++i) {
         std::memcpy(append_ptr + i * array_size, replicated_ptr, array_size);
       }
@@ -131,12 +138,11 @@ class FixedLengthArrayNoneEncoder : public Encoder {
         // Length of the appended array should be equal to the fixed length,
         // all others should have been discarded, assert if something slips through
         const size_t source_idx = start_idx + i;
-        const size_t len = (*srcData)[source_idx].length;
+        const size_t len = srcData[source_idx].length;
         CHECK_EQ(len, array_size);
         // NULL arrays have been filled with subtype's NULL sentinels,
         // should be appended as regular data, same size
-        std::memcpy(
-            append_ptr + i * array_size, (*srcData)[source_idx].pointer, array_size);
+        std::memcpy(append_ptr + i * array_size, srcData[source_idx].pointer, array_size);
       }
     }
 
@@ -188,11 +194,23 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     UNREACHABLE();
   }
 
+  void updateStats(const std::string* src_data,
+                   const size_t start_idx,
+                   const size_t num_elements) override {
+    UNREACHABLE();
+  }
+
   void updateStats(const std::vector<ArrayDatum>* const src_data,
                    const size_t start_idx,
                    const size_t num_elements) override {
+    updateStats(src_data->data(), start_idx, num_elements);
+  }
+
+  void updateStats(const ArrayDatum* src_data,
+                   const size_t start_idx,
+                   const size_t num_elements) override {
     for (size_t n = start_idx; n < start_idx + num_elements; n++) {
-      update_elem_stats((*src_data)[n]);
+      update_elem_stats(src_data[n]);
     }
   }
 

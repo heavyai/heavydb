@@ -49,8 +49,10 @@ class AbstractDataMgr;
 }  // namespace Data_Namespace
 
 namespace import_export {
-class TypedImportBuffer;
-}
+template <const bool>
+class OptionallyMemoryManagedTypedImportBuffer;
+using UnmanagedTypedImportBuffer = OptionallyMemoryManagedTypedImportBuffer<false>;
+}  // namespace import_export
 
 namespace Catalog_Namespace {
 class Catalog;

@@ -25,6 +25,7 @@
 #include <ogrsf_frmts.h>
 
 #include "Geospatial/GDAL.h"
+#include "ImportExport/TypedImportBufferVector.h"
 #include "Logger/Logger.h"
 #include "Shared/sqltypes.h"
 
@@ -1203,7 +1204,8 @@ bool GeoTypesFactory::getGeoColumns(OGRGeometry* geom,
   return true;
 }
 
-bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_or_wkb_hex_column,
+template <typename VectorType>
+bool GeoTypesFactory::getGeoColumns(const VectorType* wkt_or_wkb_hex_column,
                                     SQLTypeInfo& ti,
                                     std::vector<std::vector<double>>& coords_column,
                                     std::vector<std::vector<double>>& bounds_column,
@@ -1242,6 +1244,23 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_or_wkb_h
 
   return true;
 }
+
+template bool GeoTypesFactory::getGeoColumns(
+    const std::vector<std::string>* wkt_or_wkb_hex_column,
+    SQLTypeInfo& ti,
+    std::vector<std::vector<double>>& coords_column,
+    std::vector<std::vector<double>>& bounds_column,
+    std::vector<std::vector<int>>& ring_sizes_column,
+    std::vector<std::vector<int>>& poly_rings_column,
+    const bool validate_with_geos_if_available);
+template bool GeoTypesFactory::getGeoColumns(
+    const import_export::vector<std::string>* wkt_or_wkb_hex_column,
+    SQLTypeInfo& ti,
+    std::vector<std::vector<double>>& coords_column,
+    std::vector<std::vector<double>>& bounds_column,
+    std::vector<std::vector<int>>& ring_sizes_column,
+    std::vector<std::vector<int>>& poly_rings_column,
+    const bool validate_with_geos_if_available);
 
 std::unique_ptr<GeoBase> GeoTypesFactory::createGeoTypeImpl(OGRGeometry* geom,
                                                             const bool owns_geom_obj) {

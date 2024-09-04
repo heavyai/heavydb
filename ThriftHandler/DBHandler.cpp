@@ -7391,7 +7391,7 @@ void DBHandler::insert_data(const TSessionId& session_id_or_json,
           for (const auto& varlen_str : thrift_insert_data.data[col_idx].var_len_data) {
             none_encoded_strings->push_back(varlen_str.payload);
           }
-          p.stringsPtr = none_encoded_strings.get();
+          p.setStringsPtr(*none_encoded_strings);
         }
       } else if (ti.is_geometry()) {
         none_encoded_string_columns.emplace_back(new std::vector<std::string>());
@@ -7400,7 +7400,7 @@ void DBHandler::insert_data(const TSessionId& session_id_or_json,
         for (const auto& varlen_str : thrift_insert_data.data[col_idx].var_len_data) {
           none_encoded_strings->push_back(varlen_str.payload);
         }
-        p.stringsPtr = none_encoded_strings.get();
+        p.setStringsPtr(*none_encoded_strings);
 
         // point geo type needs to mark null sentinel in its physical coord column
         // To recognize null sentinel for point, therefore, we keep the actual geo type
@@ -7435,7 +7435,7 @@ void DBHandler::insert_data(const TSessionId& session_id_or_json,
             array_column->push_back(arr_datum);
           }
         }
-        p.arraysPtr = array_column.get();
+        p.setArraysPtr(*array_column);
       }
       insert_data.data.push_back(p);
     }

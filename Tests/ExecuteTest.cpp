@@ -9091,7 +9091,9 @@ void import_array_test(const std::string& table_name) {
               CHECK(false);
           }
           if (elem_ti.is_string()) {
-            import_buffer->addDictEncodedStringArray({array_elems});
+            using OptionalStringVector = std::optional<std::vector<std::string>>;
+            import_buffer->addDictEncodedStringArray<vector<OptionalStringVector>>(
+                {array_elems});
           } else {
             auto arr_str = "{" + boost::algorithm::join(array_elems, ",") + "}";
             import_buffer->addArray(StringToArray(arr_str, ti, copy_params));

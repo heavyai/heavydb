@@ -245,14 +245,14 @@ BlockWithColumnId copyColumnDataOfShard(const Catalog_Namespace::Catalog& cat,
   if (isStringVectorData(pCol)) {
     auto& data = dataOwner.stringData[columnIndex];
     data.resize(rows.size());
-    copyColumnDataOfShard(rows, &(*(dataBlock.stringsPtr))[0], &data[0]);
-    ret.stringsPtr = &data;
+    copyColumnDataOfShard(rows, dataBlock.stringsPtr, &data[0]);
+    ret.setStringsPtr(data);
 
   } else if (isDatumVectorData(pCol)) {
     auto& data = dataOwner.arrayData[columnIndex];
     data.resize(rows.size());
-    copyColumnDataOfShard(rows, &(*(dataBlock.arraysPtr))[0], &data[0]);
-    ret.arraysPtr = &data;
+    copyColumnDataOfShard(rows, dataBlock.arraysPtr, &data[0]);
+    ret.setArraysPtr(data);
 
   } else {
     auto rawArrayElementSize = size_of_raw_column(cat, pCol);

@@ -487,7 +487,10 @@ ArrayDatum TDatumToArrayDatum(const TDatum& datum, const SQLTypeInfo& ti) {
   return ArrayDatum(len, buf, false);
 }
 
-void TypedImportBuffer::addDictEncodedString(const std::vector<std::string>& string_vec) {
+template <const bool managed_memory>
+template <typename VectorType>
+void OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addDictEncodedString(
+    const VectorType& string_vec) {
   CHECK(string_dict_);
   std::vector<std::string_view> string_view_vec;
   string_view_vec.reserve(string_vec.size());
@@ -527,11 +530,24 @@ void TypedImportBuffer::addDictEncodedString(const std::vector<std::string>& str
   }
 }
 
-void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
-                                  const std::string_view val,
-                                  const bool is_null,
-                                  const CopyParams& copy_params,
-                                  const bool check_not_null) {
+template void OptionallyMemoryManagedTypedImportBuffer<true>::addDictEncodedString<
+    std::vector<std::string>>(const std::vector<std::string>& string_vec);
+template void OptionallyMemoryManagedTypedImportBuffer<false>::addDictEncodedString<
+    std::vector<std::string>>(const std::vector<std::string>& string_vec);
+
+template void OptionallyMemoryManagedTypedImportBuffer<true>::addDictEncodedString(
+    const import_export::vector<std::string>& string_vec);
+
+template void OptionallyMemoryManagedTypedImportBuffer<false>::addDictEncodedString(
+    const import_export::vector<std::string>& string_vec);
+
+template <const bool managed_memory>
+void OptionallyMemoryManagedTypedImportBuffer<managed_memory>::add_value(
+    const ColumnDescriptor* cd,
+    const std::string_view val,
+    const bool is_null,
+    const CopyParams& copy_params,
+    const bool check_not_null) {
   const auto type = cd->columnType.get_type();
   switch (type) {
     case kBOOLEAN: {
@@ -725,7 +741,8 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
   }
 }
 
-void TypedImportBuffer::pop_value() {
+template <const bool managed_memory>
+void OptionallyMemoryManagedTypedImportBuffer<managed_memory>::pop_value() {
   const auto type = column_desc_->columnType.is_decimal()
                         ? decimal_to_int_type(column_desc_->columnType)
                         : column_desc_->columnType.get_type();
@@ -786,15 +803,18 @@ struct GeoImportException : std::runtime_error {
 };
 
 // appends (streams) a slice of Arrow array of values (RHS) to TypedImportBuffer (LHS)
-template <typename DATA_TYPE, typename ALLOC>
-size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
-    const ColumnDescriptor* cd,
-    const Array& array,
-    std::vector<DATA_TYPE, ALLOC>& buffer,
-    const ArraySliceRange& slice_range,
-    import_export::BadRowsTracker* const bad_rows_tracker) {
+template <const bool managed_memory>
+template <typename DATA_TYPE>
+size_t OptionallyMemoryManagedTypedImportBuffer<managed_memory>::
+    convert_arrow_val_to_import_buffer(
+        const ColumnDescriptor* cd,
+        const Array& array,
+        vector<DATA_TYPE>& buffer,
+        const ArraySliceRange& slice_range,
+        import_export::BadRowsTracker* const bad_rows_tracker) {
   auto data =
-      std::make_unique<DataBuffer<DATA_TYPE, ALLOC>>(cd, array, buffer, bad_rows_tracker);
+      std::make_unique<DataBuffer<DATA_TYPE, typename vector<DATA_TYPE>::allocator_type>>(
+          cd, array, buffer, bad_rows_tracker);
   auto f_value_getter = value_getter(array, cd, bad_rows_tracker);
   std::function<void(const int64_t)> f_add_geo_phy_cols = [&](const int64_t row) {};
   if (bad_rows_tracker && cd->columnType.is_geometry()) {
@@ -872,11 +892,13 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
   return buffer.size();
 }
 
-size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
-                                           const Array& col,
-                                           const bool exact_type_match,
-                                           const ArraySliceRange& slice_range,
-                                           BadRowsTracker* const bad_rows_tracker) {
+template <const bool managed_memory>
+size_t OptionallyMemoryManagedTypedImportBuffer<managed_memory>::add_arrow_values(
+    const ColumnDescriptor* cd,
+    const Array& col,
+    const bool exact_type_match,
+    const ArraySliceRange& slice_range,
+    BadRowsTracker* const bad_rows_tracker) {
   const auto type = cd->columnType.get_type();
   if (cd->columnType.get_notnull()) {
     // We can't have any null values for this column; to have them is an error
@@ -888,25 +910,25 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::BOOL, "Expected boolean type");
       }
-      return convert_arrow_val_to_import_buffer(
+      return convert_arrow_val_to_import_buffer<int8_t>(
           cd, col, *bool_buffer_, slice_range, bad_rows_tracker);
     case kTINYINT:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::INT8, "Expected int8 type");
       }
-      return convert_arrow_val_to_import_buffer(
+      return convert_arrow_val_to_import_buffer<int8_t>(
           cd, col, *tinyint_buffer_, slice_range, bad_rows_tracker);
     case kSMALLINT:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::INT16, "Expected int16 type");
       }
-      return convert_arrow_val_to_import_buffer(
+      return convert_arrow_val_to_import_buffer<int16_t>(
           cd, col, *smallint_buffer_, slice_range, bad_rows_tracker);
     case kINT:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::INT32, "Expected int32 type");
       }
-      return convert_arrow_val_to_import_buffer(
+      return convert_arrow_val_to_import_buffer<int32_t>(
           cd, col, *int_buffer_, slice_range, bad_rows_tracker);
     case kBIGINT:
     case kNUMERIC:
@@ -914,19 +936,19 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::INT64, "Expected int64 type");
       }
-      return convert_arrow_val_to_import_buffer(
+      return convert_arrow_val_to_import_buffer<int64_t>(
           cd, col, *bigint_buffer_, slice_range, bad_rows_tracker);
     case kFLOAT:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::FLOAT, "Expected float type");
       }
-      return convert_arrow_val_to_import_buffer(
+      return convert_arrow_val_to_import_buffer<float>(
           cd, col, *float_buffer_, slice_range, bad_rows_tracker);
     case kDOUBLE:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::DOUBLE, "Expected double type");
       }
-      return convert_arrow_val_to_import_buffer(
+      return convert_arrow_val_to_import_buffer<double>(
           cd, col, *double_buffer_, slice_range, bad_rows_tracker);
     case kTEXT:
     case kVARCHAR:
@@ -935,27 +957,27 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
         arrow_throw_if(col.type_id() != Type::BINARY && col.type_id() != Type::STRING,
                        "Expected string type");
       }
-      return convert_arrow_val_to_import_buffer(
+      return convert_arrow_val_to_import_buffer<std::string>(
           cd, col, *string_buffer_, slice_range, bad_rows_tracker);
     case kTIME:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::TIME32 && col.type_id() != Type::TIME64,
                        "Expected time32 or time64 type");
       }
-      return convert_arrow_val_to_import_buffer(
+      return convert_arrow_val_to_import_buffer<int64_t>(
           cd, col, *bigint_buffer_, slice_range, bad_rows_tracker);
     case kTIMESTAMP:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::TIMESTAMP, "Expected timestamp type");
       }
-      return convert_arrow_val_to_import_buffer(
+      return convert_arrow_val_to_import_buffer<int64_t>(
           cd, col, *bigint_buffer_, slice_range, bad_rows_tracker);
     case kDATE:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::DATE32 && col.type_id() != Type::DATE64,
                        "Expected date32 or date64 type");
       }
-      return convert_arrow_val_to_import_buffer(
+      return convert_arrow_val_to_import_buffer<int64_t>(
           cd, col, *bigint_buffer_, slice_range, bad_rows_tracker);
     case kPOINT:
     case kMULTIPOINT:
@@ -965,7 +987,7 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
     case kMULTIPOLYGON:
       arrow_throw_if(col.type_id() != Type::BINARY && col.type_id() != Type::STRING,
                      "Expected string type");
-      return convert_arrow_val_to_import_buffer(
+      return convert_arrow_val_to_import_buffer<std::string>(
           cd, col, *geo_string_buffer_, slice_range, bad_rows_tracker);
     case kARRAY:
       throw std::runtime_error("Arrow array appends not yet supported");
@@ -1000,7 +1022,10 @@ size_t validate_and_get_column_data_size(const SQLTypeInfo& type,
 }  // namespace
 
 // this is exclusively used by load_table_binary_columnar
-size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& col) {
+template <const bool managed_memory>
+size_t OptionallyMemoryManagedTypedImportBuffer<managed_memory>::add_values(
+    const ColumnDescriptor* cd,
+    const TColumn& col) {
   CHECK(cd);
   if (col.nulls.size() != validate_and_get_column_data_size(cd->columnType, col.data)) {
     throw std::runtime_error("Column nulls vector and data vector sizes do not match.");
@@ -1336,9 +1361,11 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
   return dataSize;
 }
 
-void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
-                                  const TDatum& datum,
-                                  const bool is_null) {
+template <const bool managed_memory>
+void OptionallyMemoryManagedTypedImportBuffer<managed_memory>::add_value(
+    const ColumnDescriptor* cd,
+    const TDatum& datum,
+    const bool is_null) {
   const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType)
                                                 : cd->columnType.get_type();
   switch (type) {
@@ -1475,7 +1502,10 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
   }
 }
 
-void TypedImportBuffer::addDefaultValues(const ColumnDescriptor* cd, size_t num_rows) {
+template <const bool managed_memory>
+void OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addDefaultValues(
+    const ColumnDescriptor* cd,
+    size_t num_rows) {
   bool is_null = !cd->default_value.has_value();
   CHECK(!(is_null && cd->columnType.get_notnull()));
   const auto type = cd->columnType.get_type();
@@ -1636,9 +1666,10 @@ void TypedImportBuffer::addDefaultValues(const ColumnDescriptor* cd, size_t num_
   }
 }
 
-template <typename DATA_TYPE, typename ALLOC>
-auto TypedImportBuffer::del_values(
-    std::vector<DATA_TYPE, ALLOC>& buffer,
+template <const bool managed_memory>
+template <typename DATA_TYPE>
+auto OptionallyMemoryManagedTypedImportBuffer<managed_memory>::del_values(
+    vector<DATA_TYPE>& buffer,
     import_export::BadRowsTracker* const bad_rows_tracker) {
   const auto old_size = buffer.size();
   // erase backward to minimize memory movement overhead
@@ -1649,41 +1680,43 @@ auto TypedImportBuffer::del_values(
   return std::make_tuple(old_size, buffer.size());
 }
 
-auto TypedImportBuffer::del_values(const SQLTypes type,
-                                   BadRowsTracker* const bad_rows_tracker) {
+template <const bool managed_memory>
+auto OptionallyMemoryManagedTypedImportBuffer<managed_memory>::del_values(
+    const SQLTypes type,
+    BadRowsTracker* const bad_rows_tracker) {
   switch (type) {
     case kBOOLEAN:
-      return del_values(*bool_buffer_, bad_rows_tracker);
+      return del_values<int8_t>(*bool_buffer_, bad_rows_tracker);
     case kTINYINT:
-      return del_values(*tinyint_buffer_, bad_rows_tracker);
+      return del_values<int8_t>(*tinyint_buffer_, bad_rows_tracker);
     case kSMALLINT:
-      return del_values(*smallint_buffer_, bad_rows_tracker);
+      return del_values<int16_t>(*smallint_buffer_, bad_rows_tracker);
     case kINT:
-      return del_values(*int_buffer_, bad_rows_tracker);
+      return del_values<int32_t>(*int_buffer_, bad_rows_tracker);
     case kBIGINT:
     case kNUMERIC:
     case kDECIMAL:
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      return del_values(*bigint_buffer_, bad_rows_tracker);
+      return del_values<int64_t>(*bigint_buffer_, bad_rows_tracker);
     case kFLOAT:
-      return del_values(*float_buffer_, bad_rows_tracker);
+      return del_values<float>(*float_buffer_, bad_rows_tracker);
     case kDOUBLE:
-      return del_values(*double_buffer_, bad_rows_tracker);
+      return del_values<double>(*double_buffer_, bad_rows_tracker);
     case kTEXT:
     case kVARCHAR:
     case kCHAR:
-      return del_values(*string_buffer_, bad_rows_tracker);
+      return del_values<std::string>(*string_buffer_, bad_rows_tracker);
     case kPOINT:
     case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
-      return del_values(*geo_string_buffer_, bad_rows_tracker);
+      return del_values<std::string>(*geo_string_buffer_, bad_rows_tracker);
     case kARRAY:
-      return del_values(*array_buffer_, bad_rows_tracker);
+      return del_values<ArrayDatum>(*array_buffer_, bad_rows_tracker);
     default:
       throw std::runtime_error("Invalid Type");
   }
@@ -1717,10 +1750,11 @@ bool importGeoFromLonLat(double lon,
   return true;
 }
 
+template <typename TypedImportBufferType>
 void Importer::set_geo_physical_import_buffer(
     const Catalog_Namespace::Catalog& catalog,
     const ColumnDescriptor* cd,
-    std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+    std::vector<std::unique_ptr<TypedImportBufferType>>& import_buffers,
     size_t& col_idx,
     std::vector<double>& coords,
     std::vector<double>& bounds,
@@ -1812,10 +1846,34 @@ void Importer::set_geo_physical_import_buffer(
   }
 }
 
+template void Importer::set_geo_physical_import_buffer(
+    const Catalog_Namespace::Catalog& catalog,
+    const ColumnDescriptor* cd,
+    std::vector<std::unique_ptr<OptionallyMemoryManagedTypedImportBuffer<true>>>&
+        import_buffers,
+    size_t& col_idx,
+    std::vector<double>& coords,
+    std::vector<double>& bounds,
+    std::vector<int>& ring_sizes,
+    std::vector<int>& poly_rings,
+    const bool force_null);
+template void Importer::set_geo_physical_import_buffer(
+    const Catalog_Namespace::Catalog& catalog,
+    const ColumnDescriptor* cd,
+    std::vector<std::unique_ptr<OptionallyMemoryManagedTypedImportBuffer<false>>>&
+        import_buffers,
+    size_t& col_idx,
+    std::vector<double>& coords,
+    std::vector<double>& bounds,
+    std::vector<int>& ring_sizes,
+    std::vector<int>& poly_rings,
+    const bool force_null);
+
+template <typename TypedImportBufferType>
 void Importer::set_geo_physical_import_buffer_columnar(
     const Catalog_Namespace::Catalog& catalog,
     const ColumnDescriptor* cd,
-    std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+    std::vector<std::unique_ptr<TypedImportBufferType>>& import_buffers,
     size_t& col_idx,
     std::vector<std::vector<double>>& coords_column,
     std::vector<std::vector<double>>& bounds_column,
@@ -1940,6 +1998,27 @@ void Importer::set_geo_physical_import_buffer_columnar(
     col_idx++;
   }
 }
+
+template void Importer::set_geo_physical_import_buffer_columnar(
+    const Catalog_Namespace::Catalog& catalog,
+    const ColumnDescriptor* cd,
+    std::vector<std::unique_ptr<OptionallyMemoryManagedTypedImportBuffer<true>>>&
+        import_buffers,
+    size_t& col_idx,
+    std::vector<std::vector<double>>& coords_column,
+    std::vector<std::vector<double>>& bounds_column,
+    std::vector<std::vector<int>>& ring_sizes_column,
+    std::vector<std::vector<int>>& poly_rings_column);
+template void Importer::set_geo_physical_import_buffer_columnar(
+    const Catalog_Namespace::Catalog& catalog,
+    const ColumnDescriptor* cd,
+    std::vector<std::unique_ptr<OptionallyMemoryManagedTypedImportBuffer<false>>>&
+        import_buffers,
+    size_t& col_idx,
+    std::vector<std::vector<double>>& coords_column,
+    std::vector<std::vector<double>>& bounds_column,
+    std::vector<std::vector<int>>& ring_sizes_column,
+    std::vector<std::vector<int>>& poly_rings_column);
 
 namespace {
 
@@ -3033,8 +3112,12 @@ bool Loader::loadImpl(
   return loadToShard(import_buffers, row_count, table_desc_, checkpoint, session_info);
 }
 
-std::vector<DataBlockPtr> TypedImportBuffer::get_data_block_pointers(
-    const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers) {
+template <const bool managed_memory>
+std::vector<DataBlockPtr>
+OptionallyMemoryManagedTypedImportBuffer<managed_memory>::get_data_block_pointers(
+    const std::vector<
+        std::unique_ptr<OptionallyMemoryManagedTypedImportBuffer<managed_memory>>>&
+        import_buffers) {
   std::vector<DataBlockPtr> result(import_buffers.size());
   std::vector<std::pair<const size_t, std::future<int8_t*>>>
       encoded_data_block_ptrs_futures;
@@ -3063,7 +3146,7 @@ std::vector<DataBlockPtr> TypedImportBuffer::get_data_block_pointers(
     } else if (import_buffers[buf_idx]->getTypeInfo().is_string()) {
       auto string_payload_ptr = import_buffers[buf_idx]->getStringBuffer();
       if (import_buffers[buf_idx]->getTypeInfo().get_compression() == kENCODING_NONE) {
-        p.stringsPtr = string_payload_ptr;
+        p.setStringsPtr(*string_payload_ptr);
       } else {
         // This condition means we have column which is ENCODED string. We already made
         // Async request to gain the encoded integer values above so we should skip this
@@ -3072,16 +3155,16 @@ std::vector<DataBlockPtr> TypedImportBuffer::get_data_block_pointers(
       }
     } else if (import_buffers[buf_idx]->getTypeInfo().is_geometry()) {
       auto geo_payload_ptr = import_buffers[buf_idx]->getGeoStringBuffer();
-      p.stringsPtr = geo_payload_ptr;
+      p.setStringsPtr(*geo_payload_ptr);
     } else {
       CHECK(import_buffers[buf_idx]->getTypeInfo().get_type() == kARRAY);
       if (IS_STRING(import_buffers[buf_idx]->getTypeInfo().get_subtype())) {
         CHECK(import_buffers[buf_idx]->getTypeInfo().get_compression() == kENCODING_DICT);
         import_buffers[buf_idx]->addDictEncodedStringArray(
             *import_buffers[buf_idx]->getStringArrayBuffer());
-        p.arraysPtr = import_buffers[buf_idx]->getStringArrayDictBuffer();
+        p.setArraysPtr(*import_buffers[buf_idx]->getStringArrayDictBuffer());
       } else {
-        p.arraysPtr = import_buffers[buf_idx]->getArrayBuffer();
+        p.setArraysPtr(*import_buffers[buf_idx]->getArrayBuffer());
       }
     }
     result[buf_idx] = p;
@@ -3842,9 +3925,10 @@ void Detector::import_local_parquet(const std::string& file_path,
     }
     for (int r = 0; r < num_rows; ++r) {
       for (int c = 0; c < num_columns; ++c) {
-        std::vector<std::string> buffer;
+        import_export::vector<std::string> buffer;
         for (auto chunk : arrays[c]->chunks()) {
-          DataBuffer<std::string> data(&cd, *chunk, buffer, nullptr);
+          DataBuffer<std::string, import_export::vector<std::string>::allocator_type>
+              data(&cd, *chunk, buffer, nullptr);
           if (c) {
             raw_data += copy_params.delimiter;
           }
@@ -6351,5 +6435,8 @@ std::unique_ptr<AbstractImporter> create_importer(
   return std::make_unique<import_export::Importer>(
       catalog, td, copy_from_source, copy_params);
 }
+
+template class OptionallyMemoryManagedTypedImportBuffer<true>;
+template class OptionallyMemoryManagedTypedImportBuffer<false>;
 
 }  // namespace import_export

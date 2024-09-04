@@ -53,7 +53,7 @@ std::string get_table_name(int32_t db_id, int32_t table_id) {
 }
 
 void set_node_name(
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   if (import_buffers.find("node") != import_buffers.end()) {
     if (dist::is_leaf_node()) {
       std::string leaf_string{"Leaf " + to_string(g_distributed_leaf_idx)};
@@ -140,8 +140,9 @@ void initialize_chunks(std::map<ChunkKey, Chunk_NS::Chunk>& chunks,
 }
 
 void initialize_import_buffers(
-    std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers_map,
+    std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>>&
+        import_buffers,
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers_map,
     const std::set<const ColumnDescriptor*>& columns_to_parse,
     const Catalog_Namespace::Catalog& catalog) {
   for (const auto column : columns_to_parse) {
@@ -154,7 +155,8 @@ void initialize_import_buffers(
       string_dictionary = dict_descriptor->stringDict.get();
     }
     import_buffers.emplace_back(
-        std::make_unique<import_export::TypedImportBuffer>(column, string_dictionary));
+        std::make_unique<import_export::UnmanagedTypedImportBuffer>(column,
+                                                                    string_dictionary));
     import_buffers_map[column->columnName] = import_buffers.back().get();
   }
 }
@@ -205,8 +207,8 @@ void InternalSystemDataWrapper::populateChunkBuffers(
       chunks, required_buffers, row_count_, columns_to_parse, fragment_id, *catalog);
 
   // initialize import buffers from columns.
-  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
-  std::map<std::string, import_export::TypedImportBuffer*> import_buffers_map;
+  std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>> import_buffers;
+  std::map<std::string, import_export::UnmanagedTypedImportBuffer*> import_buffers_map;
   initialize_import_buffers(
       import_buffers, import_buffers_map, columns_to_parse, *catalog);
   populateChunkBuffersForTable(foreign_table_->tableName, import_buffers_map);

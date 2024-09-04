@@ -3253,12 +3253,12 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(
     }
     for (auto& kv : str_col_buffers) {
       DataBlockPtr p;
-      p.stringsPtr = &kv.second;
+      p.setStringsPtr(kv.second);
       insert_data.data[sequential_ids[kv.first]] = p;
     }
     for (auto& kv : arr_col_buffers) {
       DataBlockPtr p;
-      p.arraysPtr = &kv.second;
+      p.setArraysPtr(kv.second);
       insert_data.data[sequential_ids[kv.first]] = p;
     }
     insert_data.numRows = package_size;

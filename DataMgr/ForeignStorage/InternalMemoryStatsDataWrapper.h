@@ -37,7 +37,8 @@ class InternalMemoryStatsDataWrapper : public InternalSystemDataWrapper {
 
   void populateChunkBuffersForTable(
       const std::string& table_name,
-      std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) override;
+      std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers)
+      override;
 
   std::map<std::string, std::vector<MemoryInfo>> memory_info_by_device_type_;
 };

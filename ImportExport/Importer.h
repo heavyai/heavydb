@@ -39,11 +39,13 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "AbstractImporter.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/TableDescriptor.h"
 #include "DataMgr/Chunk/Chunk.h"
+#include "TypedImportBufferVector.h"
 #if defined(ENABLE_IMPORT_PARQUET)
 #include "DataMgr/ForeignStorage/DataPreview.h"
 #endif
@@ -90,79 +92,55 @@ class ImporterUtils {
                                            const SQLTypeInfo& geo_ti);
 };
 
-inline std::atomic<size_t> g_import_total_mem{0};
-
-template <typename T>
-struct track_alloc : std::allocator<T> {
-  typedef typename std::allocator<T>::pointer pointer;
-  typedef typename std::allocator<T>::size_type size_type;
-
-  template <typename U>
-  struct rebind {
-    typedef track_alloc<U> other;
-  };
-
-  track_alloc() {}
-
-  template <typename U>
-  track_alloc(track_alloc<U> const& u) : std::allocator<T>(u) {}
-
-  pointer allocate(size_type size, std::allocator<void>::const_pointer cp = 0) {
-    pointer p = std::allocator<T>::allocate(size, cp);
-    g_import_total_mem += size * sizeof(T);
-    return p;
-  }
-
-  void deallocate(pointer p, size_type n) {
-    std::allocator<T>::deallocate(p, n);
-    g_import_total_mem -= n * sizeof(T);
-  }
-};
-
-class TypedImportBuffer : boost::noncopyable {
+template <const bool managed_memory = true>
+class OptionallyMemoryManagedTypedImportBuffer : boost::noncopyable {
  public:
+  template <typename T>
+  using vector = typename std::
+      conditional<managed_memory, import_export::vector<T>, std::vector<T>>::type;
+
   using OptionalStringVector = std::optional<std::vector<std::string>>;
-  TypedImportBuffer(const ColumnDescriptor* col_desc, StringDictionary* string_dict)
+  OptionallyMemoryManagedTypedImportBuffer(const ColumnDescriptor* col_desc,
+                                           StringDictionary* string_dict)
       : column_desc_(col_desc), string_dict_(string_dict) {
     switch (col_desc->columnType.get_type()) {
       case kBOOLEAN:
-        bool_buffer_ = new std::vector<int8_t, track_alloc<int8_t>>();
+        bool_buffer_ = new vector<int8_t>();
         break;
       case kTINYINT:
-        tinyint_buffer_ = new std::vector<int8_t, track_alloc<int8_t>>();
+        tinyint_buffer_ = new vector<int8_t>();
         break;
       case kSMALLINT:
-        smallint_buffer_ = new std::vector<int16_t, track_alloc<int16_t>>();
+        smallint_buffer_ = new vector<int16_t>();
         break;
       case kINT:
-        int_buffer_ = new std::vector<int32_t, track_alloc<int32_t>>();
+        int_buffer_ = new vector<int32_t>();
         break;
       case kBIGINT:
       case kNUMERIC:
       case kDECIMAL:
-        bigint_buffer_ = new std::vector<int64_t, track_alloc<int64_t>>();
+        bigint_buffer_ = new vector<int64_t>();
         break;
       case kFLOAT:
-        float_buffer_ = new std::vector<float, track_alloc<float>>();
+        float_buffer_ = new vector<float>();
         break;
       case kDOUBLE:
-        double_buffer_ = new std::vector<double, track_alloc<double>>();
+        double_buffer_ = new vector<double>();
         break;
       case kTEXT:
       case kVARCHAR:
       case kCHAR:
-        string_buffer_ = new std::vector<std::string>();
+        string_buffer_ = new vector<std::string>();
         if (col_desc->columnType.get_compression() == kENCODING_DICT) {
           switch (col_desc->columnType.get_size()) {
             case 1:
-              string_dict_i8_buffer_ = new std::vector<uint8_t, track_alloc<uint8_t>>();
+              string_dict_i8_buffer_ = new vector<uint8_t>();
               break;
             case 2:
-              string_dict_i16_buffer_ =
-                  new std::vector<uint16_t, track_alloc<uint16_t>>();
+              string_dict_i16_buffer_ = new vector<uint16_t>();
               break;
             case 4:
-              string_dict_i32_buffer_ = new std::vector<int32_t, track_alloc<int32_t>>();
+              string_dict_i32_buffer_ = new vector<int32_t>();
               break;
             default:
               CHECK(false);
@@ -172,15 +150,15 @@ class TypedImportBuffer : boost::noncopyable {
       case kDATE:
       case kTIME:
       case kTIMESTAMP:
-        bigint_buffer_ = new std::vector<int64_t, track_alloc<int64_t>>();
+        bigint_buffer_ = new vector<int64_t>();
         break;
       case kARRAY:
         if (IS_STRING(col_desc->columnType.get_subtype())) {
           CHECK(col_desc->columnType.get_compression() == kENCODING_DICT);
-          string_array_buffer_ = new std::vector<OptionalStringVector>();
-          string_array_dict_buffer_ = new std::vector<ArrayDatum>();
+          string_array_buffer_ = new vector<OptionalStringVector>();
+          string_array_dict_buffer_ = new vector<ArrayDatum>();
         } else {
-          array_buffer_ = new std::vector<ArrayDatum>();
+          array_buffer_ = new vector<ArrayDatum>();
         }
         break;
       case kPOINT:
@@ -189,14 +167,14 @@ class TypedImportBuffer : boost::noncopyable {
       case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON:
-        geo_string_buffer_ = new std::vector<std::string>();
+        geo_string_buffer_ = new vector<std::string>();
         break;
       default:
         CHECK(false);
     }
   }
 
-  ~TypedImportBuffer() {
+  ~OptionallyMemoryManagedTypedImportBuffer() {
     switch (column_desc_->columnType.get_type()) {
       case kBOOLEAN:
         delete bool_buffer_;
@@ -310,10 +288,11 @@ class TypedImportBuffer : boost::noncopyable {
     string_array_buffer_->push_back(arr);
   }
 
-  void addDictEncodedString(const std::vector<std::string>& string_vec);
+  template <typename VectorType>
+  void addDictEncodedString(const VectorType& string_vec);
 
-  void addDictEncodedStringArray(
-      const std::vector<OptionalStringVector>& string_array_vec) {
+  template <typename VectorType>
+  void addDictEncodedStringArray(const VectorType& string_array_vec) {
     CHECK(string_dict_);
 
     // first check data is ok
@@ -420,15 +399,19 @@ class TypedImportBuffer : boost::noncopyable {
     }
   }
 
-  auto getStringBuffer() const { return string_buffer_; }
+  vector<std::string>* getStringBuffer() const { return string_buffer_; }
 
-  auto getGeoStringBuffer() const { return geo_string_buffer_; }
+  vector<std::string>* getGeoStringBuffer() const { return geo_string_buffer_; }
 
-  auto getArrayBuffer() const { return array_buffer_; }
+  vector<ArrayDatum>* getArrayBuffer() const { return array_buffer_; }
 
-  auto getStringArrayBuffer() const { return string_array_buffer_; }
+  vector<OptionalStringVector>* getStringArrayBuffer() const {
+    return string_array_buffer_;
+  }
 
-  auto getStringArrayDictBuffer() const { return string_array_dict_buffer_; }
+  vector<ArrayDatum>* getStringArrayDictBuffer() const {
+    return string_array_dict_buffer_;
+  }
 
   int8_t* getStringDictBuffer() const {
     switch (column_desc_->columnType.get_size()) {
@@ -550,46 +533,51 @@ class TypedImportBuffer : boost::noncopyable {
 
   void pop_value();
 
-  template <typename DATA_TYPE, typename ALLOC = std::allocator<DATA_TYPE>>
+  template <typename DATA_TYPE>
   size_t convert_arrow_val_to_import_buffer(const ColumnDescriptor* cd,
                                             const arrow::Array& array,
-                                            std::vector<DATA_TYPE, ALLOC>& buffer,
+                                            vector<DATA_TYPE>& buffer,
                                             const ArraySliceRange& slice_range,
                                             BadRowsTracker* const bad_rows_tracker);
-  template <typename DATA_TYPE, typename ALLOC = std::allocator<DATA_TYPE>>
-  auto del_values(std::vector<DATA_TYPE, ALLOC>& buffer,
-                  BadRowsTracker* const bad_rows_tracker);
+  template <typename DATA_TYPE>
+  auto del_values(vector<DATA_TYPE>& buffer, BadRowsTracker* const bad_rows_tracker);
   auto del_values(const SQLTypes type, BadRowsTracker* const bad_rows_tracker);
 
   static std::vector<DataBlockPtr> get_data_block_pointers(
-      const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers);
+      const std::vector<
+          std::unique_ptr<OptionallyMemoryManagedTypedImportBuffer<managed_memory>>>&
+          import_buffers);
 
-  std::vector<std::unique_ptr<TypedImportBuffer>>* import_buffers;
+  std::vector<std::unique_ptr<OptionallyMemoryManagedTypedImportBuffer<managed_memory>>>*
+      import_buffers;
   size_t col_idx;
 
  private:
   union {
-    std::vector<int8_t, track_alloc<int8_t>>* bool_buffer_;
-    std::vector<int8_t, track_alloc<int8_t>>* tinyint_buffer_;
-    std::vector<int16_t, track_alloc<int16_t>>* smallint_buffer_;
-    std::vector<int32_t, track_alloc<int32_t>>* int_buffer_;
-    std::vector<int64_t, track_alloc<int64_t>>* bigint_buffer_;
-    std::vector<float, track_alloc<float>>* float_buffer_;
-    std::vector<double, track_alloc<double>>* double_buffer_;
-    std::vector<std::string>* string_buffer_;
-    std::vector<std::string>* geo_string_buffer_;
-    std::vector<ArrayDatum>* array_buffer_;
-    std::vector<OptionalStringVector>* string_array_buffer_;
+    vector<int8_t>* bool_buffer_;
+    vector<int8_t>* tinyint_buffer_;
+    vector<int16_t>* smallint_buffer_;
+    vector<int32_t>* int_buffer_;
+    vector<int64_t>* bigint_buffer_;
+    vector<float>* float_buffer_;
+    vector<double>* double_buffer_;
+    vector<std::string>* string_buffer_;
+    vector<std::string>* geo_string_buffer_;
+    vector<ArrayDatum>* array_buffer_;
+    vector<OptionalStringVector>* string_array_buffer_;
   };
   union {
-    std::vector<uint8_t, track_alloc<uint8_t>>* string_dict_i8_buffer_;
-    std::vector<uint16_t, track_alloc<uint16_t>>* string_dict_i16_buffer_;
-    std::vector<int32_t, track_alloc<int32_t>>* string_dict_i32_buffer_;
-    std::vector<ArrayDatum>* string_array_dict_buffer_;
+    vector<uint8_t>* string_dict_i8_buffer_;
+    vector<uint16_t>* string_dict_i16_buffer_;
+    vector<int32_t>* string_dict_i32_buffer_;
+    vector<ArrayDatum>* string_array_dict_buffer_;
   };
   const ColumnDescriptor* column_desc_;
   StringDictionary* string_dict_;
 };
+
+using TypedImportBuffer = OptionallyMemoryManagedTypedImportBuffer<true>;
+using UnmanagedTypedImportBuffer = OptionallyMemoryManagedTypedImportBuffer<false>;
 
 class Loader {
   using LoadCallbackType =
@@ -884,20 +872,22 @@ class Importer : public DataStreamSink, public AbstractImporter {
   Catalog_Namespace::Catalog& getCatalog() {
     return loader->getCatalog();
   }
+  template <typename TypedImportBufferType>
   static void set_geo_physical_import_buffer(
       const Catalog_Namespace::Catalog& catalog,
       const ColumnDescriptor* cd,
-      std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+      std::vector<std::unique_ptr<TypedImportBufferType>>& import_buffers,
       size_t& col_idx,
       std::vector<double>& coords,
       std::vector<double>& bounds,
       std::vector<int>& ring_sizes,
       std::vector<int>& poly_rings,
       const bool force_null = false);
+  template <typename TypedImportBufferType>
   static void set_geo_physical_import_buffer_columnar(
       const Catalog_Namespace::Catalog& catalog,
       const ColumnDescriptor* cd,
-      std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+      std::vector<std::unique_ptr<TypedImportBufferType>>& import_buffers,
       size_t& col_idx,
       std::vector<std::vector<double>>& coords_column,
       std::vector<std::vector<double>>& bounds_column,

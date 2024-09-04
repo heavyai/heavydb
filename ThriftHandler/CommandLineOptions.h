@@ -265,6 +265,7 @@ extern size_t g_cpu_sub_task_size;
 extern unsigned g_cpu_threads_override;
 extern bool g_enable_filter_function;
 extern size_t g_max_import_threads;
+extern bool g_disable_cpu_mem_pool_import_buffers;
 extern bool g_enable_auto_metadata_update;
 extern bool g_allow_s3_server_privileges;
 extern float g_vacuum_min_selectivity;
