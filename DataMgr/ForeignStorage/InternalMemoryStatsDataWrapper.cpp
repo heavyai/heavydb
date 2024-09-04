@@ -31,7 +31,7 @@ InternalMemoryStatsDataWrapper::InternalMemoryStatsDataWrapper(
 namespace {
 void populate_import_buffers_for_memory_summary(
     const std::map<std::string, std::vector<MemoryInfo>>& memory_info_by_device_type,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& [device_type, memory_info_vector] : memory_info_by_device_type) {
     int32_t device_id{0};
     for (const auto& memory_info : memory_info_vector) {
@@ -70,7 +70,7 @@ void populate_import_buffers_for_memory_summary(
   }
 }
 
-void set_null(import_export::TypedImportBuffer* import_buffer) {
+void set_null(import_export::UnmanagedTypedImportBuffer* import_buffer) {
   import_buffer->add_value(import_buffer->getColumnDesc(), "", true, {});
 }
 
@@ -94,7 +94,7 @@ std::string get_column_name(int32_t db_id, int32_t table_id, int32_t column_id) 
 
 void populate_import_buffers_for_memory_details(
     const std::map<std::string, std::vector<MemoryInfo>>& memory_info_by_device_type,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& [device_type, memory_info_vector] : memory_info_by_device_type) {
     int32_t device_id{0};
     for (const auto& memory_info : memory_info_vector) {
@@ -232,7 +232,7 @@ void InternalMemoryStatsDataWrapper::initializeObjectsForTable(
 
 void InternalMemoryStatsDataWrapper::populateChunkBuffersForTable(
     const std::string& table_name,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   if (foreign_table_->tableName == Catalog_Namespace::MEMORY_SUMMARY_SYS_TABLE_NAME) {
     populate_import_buffers_for_memory_summary(memory_info_by_device_type_,
                                                import_buffers);

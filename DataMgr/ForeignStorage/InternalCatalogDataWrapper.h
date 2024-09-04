@@ -36,7 +36,8 @@ class InternalCatalogDataWrapper : public InternalSystemDataWrapper {
 
   void populateChunkBuffersForTable(
       const std::string& table_name,
-      std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) override;
+      std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers)
+      override;
 
   std::list<Catalog_Namespace::UserMetadata> users_;
   std::map<int32_t, std::vector<TableDescriptor>> tables_by_database_;

@@ -19,8 +19,10 @@
 #include "ForeignDataWrapper.h"
 
 namespace import_export {
-class TypedImportBuffer;
-}
+template <const bool>
+class OptionallyMemoryManagedTypedImportBuffer;
+using UnmanagedTypedImportBuffer = OptionallyMemoryManagedTypedImportBuffer<false>;
+}  // namespace import_export
 
 namespace foreign_storage {
 constexpr const char* kDeletedValueIndicator{"<DELETED>"};
@@ -29,7 +31,7 @@ std::string get_db_name(int32_t db_id);
 std::string get_table_name(int32_t db_id, int32_t table_id);
 
 void set_node_name(
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers);
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers);
 
 class InternalSystemDataWrapper : public ForeignDataWrapper {
  public:
@@ -65,7 +67,8 @@ class InternalSystemDataWrapper : public ForeignDataWrapper {
   virtual void initializeObjectsForTable(const std::string& table_name) = 0;
   virtual void populateChunkBuffersForTable(
       const std::string& table_name,
-      std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) = 0;
+      std::map<std::string, import_export::UnmanagedTypedImportBuffer*>&
+          import_buffers) = 0;
 
   const int db_id_;
   const ForeignTable* foreign_table_;

@@ -51,13 +51,15 @@ ParseBufferRequest::ParseBufferRequest(size_t buffer_size,
         string_dictionary = dict_descriptor->stringDict.get();
       }
       import_buffers.emplace_back(
-          std::make_unique<import_export::TypedImportBuffer>(column, string_dictionary));
+          std::make_unique<import_export::UnmanagedTypedImportBuffer>(column,
+                                                                      string_dictionary));
     }
   }
 }
 
 std::map<int, DataBlockPtr> TextFileBufferParser::convertImportBuffersToDataBlocks(
-    const std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+    const std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>>&
+        import_buffers,
     const bool skip_dict_encoding) {
   std::map<int, DataBlockPtr> result;
   std::vector<std::pair<const size_t, std::future<int8_t*>>>
@@ -75,7 +77,7 @@ std::map<int, DataBlockPtr> TextFileBufferParser::convertImportBuffersToDataBloc
     } else if (import_buffer->getTypeInfo().is_string()) {
       auto string_payload_ptr = import_buffer->getStringBuffer();
       if (import_buffer->getTypeInfo().get_compression() == kENCODING_NONE) {
-        p.stringsPtr = string_payload_ptr;
+        p.setStringsPtr(*string_payload_ptr);
       } else {
         CHECK_EQ(kENCODING_DICT, import_buffer->getTypeInfo().get_compression());
         p.numbersPtr = nullptr;
@@ -92,15 +94,15 @@ std::map<int, DataBlockPtr> TextFileBufferParser::convertImportBuffersToDataBloc
       }
     } else if (import_buffer->getTypeInfo().is_geometry()) {
       auto geo_payload_ptr = import_buffer->getGeoStringBuffer();
-      p.stringsPtr = geo_payload_ptr;
+      p.setStringsPtr(*geo_payload_ptr);
     } else {
       CHECK(import_buffer->getTypeInfo().get_type() == kARRAY);
       if (IS_STRING(import_buffer->getTypeInfo().get_subtype())) {
         CHECK(import_buffer->getTypeInfo().get_compression() == kENCODING_DICT);
         import_buffer->addDictEncodedStringArray(*import_buffer->getStringArrayBuffer());
-        p.arraysPtr = import_buffer->getStringArrayDictBuffer();
+        p.setArraysPtr(*import_buffer->getStringArrayDictBuffer());
       } else {
-        p.arraysPtr = import_buffer->getArrayBuffer();
+        p.setArraysPtr(*import_buffer->getArrayBuffer());
       }
     }
     result[import_buffer->getColumnDesc()->columnId] = p;
@@ -207,7 +209,8 @@ void TextFileBufferParser::fillRejectedRowWithInvalidData(
 }
 
 void TextFileBufferParser::processInvalidGeoColumn(
-    std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+    std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>>&
+        import_buffers,
     size_t& col_idx,
     const import_export::CopyParams& copy_params,
     const ColumnDescriptor* cd,
@@ -242,7 +245,8 @@ void TextFileBufferParser::processInvalidGeoColumn(
 }
 
 void TextFileBufferParser::processGeoColumn(
-    std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+    std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>>&
+        import_buffers,
     size_t& col_idx,
     const import_export::CopyParams& copy_params,
     std::list<const ColumnDescriptor*>::iterator& cd_it,

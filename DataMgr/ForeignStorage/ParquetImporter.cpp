@@ -138,12 +138,12 @@ void ParquetImportBatchResult::populateInsertData(
     DataBlockPtr block_ptr;
     if (column_descriptor->columnType.is_array()) {
       auto array_buffer = dynamic_cast<TypedParquetStorageBuffer<ArrayDatum>*>(buffer);
-      block_ptr.arraysPtr = array_buffer->getBufferPtr();
+      block_ptr.setArraysPtr(*array_buffer->getBufferPtr());
     } else if ((column_descriptor->columnType.is_string() &&
                 !column_descriptor->columnType.is_dict_encoded_string()) ||
                column_descriptor->columnType.is_geometry()) {
       auto string_buffer = dynamic_cast<TypedParquetStorageBuffer<std::string>*>(buffer);
-      block_ptr.stringsPtr = string_buffer->getBufferPtr();
+      block_ptr.setStringsPtr(*string_buffer->getBufferPtr());
     } else {
       block_ptr.numbersPtr = buffer->getMemoryPtr();
     }

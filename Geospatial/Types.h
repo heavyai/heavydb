@@ -327,7 +327,8 @@ class GeoTypesFactory {
                             std::vector<int>& poly_rings,
                             const bool validate_with_geos_if_available);
 
-  static bool getGeoColumns(const std::vector<std::string>* wkt_or_wkb_hex_column,
+  template <typename VectorType>
+  static bool getGeoColumns(const VectorType* wkt_or_wkb_hex_column,
                             SQLTypeInfo& ti,
                             std::vector<std::vector<double>>& coords_column,
                             std::vector<std::vector<double>>& bounds_column,

@@ -821,6 +821,16 @@ void CommandLineOptions::fillOptions() {
       "Additional path for helper files for PROJ geospatial transformations. If "
       "provided, must point to a directory containing the contents of a proj-data bundle "
       "downloaded from http://proj.org. See documentation for more details.");
+  desc.add_options()(
+      "disable-cpu-mem-pool-for-import-buffers",
+      po::value<bool>(&g_disable_cpu_mem_pool_import_buffers)
+          ->default_value(g_disable_cpu_mem_pool_import_buffers)
+          ->implicit_value(true),
+      "Use the CPU memory buffer pool (whose capacity is determined by the "
+      "cpu-buffer-mem-bytes configuration parameter) for import buffer allocations. "
+      "When this configuration parameter is set to true, import "
+      "buffer allocations will use heap memory outside the cpu-buffer-mem-bytes based "
+      "memory buffer pool.");
 
   desc.add(log_options_.get_options());
 }

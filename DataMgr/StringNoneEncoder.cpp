@@ -28,16 +28,15 @@
 
 using Data_Namespace::AbstractBuffer;
 
-size_t StringNoneEncoder::getNumElemsForBytesInsertData(
-    const std::vector<std::string>* srcData,
-    const int start_idx,
-    const size_t numAppendElems,
-    const size_t byteLimit,
-    const bool replicating) {
+size_t StringNoneEncoder::getNumElemsForBytesInsertData(const std::string* srcData,
+                                                        const int start_idx,
+                                                        const size_t numAppendElems,
+                                                        const size_t byteLimit,
+                                                        const bool replicating) {
   size_t dataSize = 0;
   size_t n = start_idx;
   for (; n < start_idx + numAppendElems; n++) {
-    size_t len = (*srcData)[replicating ? 0 : n].length();
+    size_t len = srcData[replicating ? 0 : n].length();
     if (dataSize + len > byteLimit) {
       break;
     }
@@ -189,8 +188,14 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(const StringType* s
 void StringNoneEncoder::updateStats(const std::vector<std::string>* const src_data,
                                     const size_t start_idx,
                                     const size_t num_elements) {
+  updateStats(src_data->data(), start_idx, num_elements);
+}
+
+void StringNoneEncoder::updateStats(const std::string* src_data,
+                                    const size_t start_idx,
+                                    const size_t num_elements) {
   for (size_t n = start_idx; n < start_idx + num_elements; n++) {
-    update_elem_stats((*src_data)[n]);
+    update_elem_stats(src_data[n]);
     if (has_nulls) {
       break;
     }

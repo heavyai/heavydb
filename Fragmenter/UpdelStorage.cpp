@@ -171,7 +171,7 @@ struct FixedLenArrayChunkConverter : public ChunkToInsertDataConverter {
 
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     DataBlockPtr dataBlock;
-    dataBlock.arraysPtr = column_data_.get();
+    dataBlock.setArraysPtr(*column_data_);
     insertData.data.push_back(dataBlock);
     insertData.columnIds.push_back(column_descriptor_->columnId);
   }
@@ -227,7 +227,7 @@ struct StringChunkConverter : public ChunkToInsertDataConverter {
 
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     DataBlockPtr dataBlock;
-    dataBlock.stringsPtr = column_data_.get();
+    dataBlock.setStringsPtr(*column_data_);
     insertData.data.push_back(dataBlock);
     insertData.columnIds.push_back(column_descriptor_->columnId);
   }
