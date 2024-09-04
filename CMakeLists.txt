@@ -1029,6 +1029,17 @@ add_subdirectory(Calcite)
 get_target_property(CalciteThrift_BINARY_DIR calciteserver_thrift BINARY_DIR)
 include_directories(${CalciteThrift_BINARY_DIR})
 
+# The variable USE_SYSTEM_CURL is used by the third party product 'cpr'
+set(USE_SYSTEM_CURL ON CACHE BOOL "Use the system curl for faster builds")
+find_package(cpr QUIET)
+if(cpr_FOUND)
+  message(STATUS "Found CPR")
+else()
+  message(STATUS "Using ThirdParty/cpr")
+  set(BUILD_CPR_TESTS OFF CACHE BOOL "Don't build cpr tests")
+  add_subdirectory(ThirdParty/cpr/cpr)
+endif()
+
 if(ENABLE_RUNTIME_LIBS)
   if(ENABLE_TORCH_TFS)
     if(NOT ENABLE_SYSTEM_TFS)

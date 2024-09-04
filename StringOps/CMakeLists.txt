@@ -11,4 +11,8 @@ set(string_ops_source_files
 
 add_library(StringOps ${string_ops_source_files})
 
-target_link_libraries(StringOps)
+target_link_libraries(StringOps cpr)
+
+if (NOT cpr_FOUND)
+  target_include_directories(StringOps PRIVATE ${CMAKE_SOURCE_DIR}/ThirdParty/cpr/cpr/include)
+endif()
