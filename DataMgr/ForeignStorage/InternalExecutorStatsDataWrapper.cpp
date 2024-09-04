@@ -32,7 +32,7 @@ InternalExecutorStatsDataWrapper::InternalExecutorStatsDataWrapper(
 namespace {
 void populate_import_buffers_for_executor_resource_pool_summary(
     const ExecutorResourceMgr_Namespace::ResourcePoolInfo& resource_pool_info,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   if (auto itr = import_buffers.find("total_cpu_slots"); itr != import_buffers.end()) {
     itr->second->addInt(resource_pool_info.total_cpu_slots);
   }
@@ -132,7 +132,7 @@ void InternalExecutorStatsDataWrapper::initializeObjectsForTable(
 
 void InternalExecutorStatsDataWrapper::populateChunkBuffersForTable(
     const std::string& table_name,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   CHECK_EQ(foreign_table_->tableName, table_name);
   CHECK_EQ(foreign_table_->tableName,
            Catalog_Namespace::EXECUTOR_RESOURCE_POOL_SUMMARY_SYS_TABLE_NAME)

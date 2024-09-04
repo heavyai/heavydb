@@ -38,7 +38,7 @@ class StringNoneEncoder : public Encoder {
   StringNoneEncoder(AbstractBuffer* buffer)
       : Encoder(buffer), index_buf(nullptr), last_offset(-1), has_nulls(false) {}
 
-  size_t getNumElemsForBytesInsertData(const std::vector<std::string>* srcData,
+  size_t getNumElemsForBytesInsertData(const std::string* srcData,
                                        const int start_idx,
                                        const size_t numAppendElems,
                                        const size_t byteLimit,
@@ -96,7 +96,17 @@ class StringNoneEncoder : public Encoder {
                    const size_t start_idx,
                    const size_t num_elements) override;
 
+  void updateStats(const std::string* src_data,
+                   const size_t start_idx,
+                   const size_t num_elements) override;
+
   void updateStats(const std::vector<ArrayDatum>* const src_data,
+                   const size_t start_idx,
+                   const size_t num_elements) override {
+    UNREACHABLE();
+  }
+
+  void updateStats(const ArrayDatum* src_data,
                    const size_t start_idx,
                    const size_t num_elements) override {
     UNREACHABLE();

@@ -249,6 +249,10 @@ class Encoder {
                            const size_t start_idx,
                            const size_t num_elements) = 0;
 
+  virtual void updateStats(const std::string* src_data,
+                           const size_t start_idx,
+                           const size_t num_elements) = 0;
+
   /**
    * Update statistics for array data without appending.
    *
@@ -257,6 +261,10 @@ class Encoder {
    * @param num_elements - the number of elements to scan in the array data
    */
   virtual void updateStats(const std::vector<ArrayDatum>* const src_data,
+                           const size_t start_idx,
+                           const size_t num_elements) = 0;
+
+  virtual void updateStats(const ArrayDatum* src_data,
                            const size_t start_idx,
                            const size_t num_elements) = 0;
 

@@ -229,10 +229,31 @@ using ArrayDatum =
     std::conditional_t<is_cuda_compiler(), DeviceArrayDatum, HostArrayDatum>;
 
 #ifndef __CUDACC__
-union DataBlockPtr {
-  int8_t* numbersPtr;
-  std::vector<std::string>* stringsPtr;
-  std::vector<ArrayDatum>* arraysPtr;
+
+struct DataBlockPtr {
+  union {
+    int8_t* numbersPtr;
+    std::string* stringsPtr;
+    ArrayDatum* arraysPtr;
+  };
+
+  size_t size;
+
+  template <typename VectorType>
+  void setStringsPtr(VectorType& vector) {
+    static_assert(std::is_same<typename VectorType::value_type, std::string>::value,
+                  "Only supported for string vectors");
+    this->stringsPtr = vector.data();
+    this->size = vector.size();
+  }
+
+  template <typename VectorType>
+  void setArraysPtr(VectorType& vector) {
+    static_assert(std::is_same<typename VectorType::value_type, ArrayDatum>::value,
+                  "Only supported for array vectors");
+    this->arraysPtr = vector.data();
+    this->size = vector.size();
+  }
 };
 #endif
 

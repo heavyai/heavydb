@@ -34,7 +34,7 @@ InternalMLModelMetadataDataWrapper::InternalMLModelMetadataDataWrapper(
 namespace {
 void populate_import_buffers_for_ml_model_metadata(
     const std::vector<MLModelMetadata>& ml_models_metadata,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& ml_model_metadata : ml_models_metadata) {
     if (auto itr = import_buffers.find("model_name"); itr != import_buffers.end()) {
       itr->second->addString(ml_model_metadata.getModelName());
@@ -90,7 +90,7 @@ void InternalMLModelMetadataDataWrapper::initializeObjectsForTable(
 
 void InternalMLModelMetadataDataWrapper::populateChunkBuffersForTable(
     const std::string& table_name,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   CHECK_EQ(foreign_table_->tableName, table_name);
   CHECK_EQ(foreign_table_->tableName, Catalog_Namespace::ML_MODEL_METADATA_SYS_TABLE_NAME)
       << "Unexpected table name: " << foreign_table_->tableName;
