@@ -104,6 +104,37 @@ std::string get_table_ddl(int32_t db_id, const TableDescriptor& td) {
   return ddl.value();
 }
 
+std::string get_column_type(const ColumnDescriptor& cd) {
+  return cd.columnType.get_type_name();
+}
+
+std::string get_column_encoding(const ColumnDescriptor& cd) {
+  const auto& ti = cd.columnType;
+
+  std::stringstream os;
+  if (ti.is_string() || ti.is_string_array()) {
+    auto size = ti.is_array() ? ti.get_logical_size() : ti.get_size();
+    if (ti.get_compression() == kENCODING_DICT) {
+      os << ti.get_compression_name() << "(" << (size * 8) << ")";
+    } else {
+      os << "NONE";
+    }
+  } else if (ti.is_date_in_days() ||
+             (ti.get_size() > 0 && ti.get_size() != ti.get_logical_size())) {
+    const auto comp_param = ti.get_comp_param() ? ti.get_comp_param() : 32;
+    os << ti.get_compression_name() << "(" << comp_param << ")";
+  } else if (ti.is_geometry()) {
+    if (ti.get_compression() == kENCODING_GEOINT) {
+      os << ti.get_compression_name() << "(" << ti.get_comp_param() << ")";
+    } else {
+      os << "NONE";
+    }
+  } else {
+    os << "NONE";
+  }
+  return os.str();
+}
+
 void populate_import_buffers_for_catalog_tables(
     const std::map<int32_t, std::vector<TableDescriptor>>& tables_by_database,
     std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
@@ -159,6 +190,61 @@ void populate_import_buffers_for_catalog_tables(
         import_buffers["ddl_statement"]->addDictStringWithTruncation(
             get_table_ddl(db_id, table));
       }
+      if (import_buffers.find("comment") != import_buffers.end()) {
+        import_buffers["comment"]->addDictStringWithTruncation(
+            table.comment.has_value() ? table.comment.value() : std::string{});
+      }
+    }
+  }
+}
+
+void populate_import_buffers_for_catalog_columns(
+    const std::vector<ColumnDescriptor>& columns,
+    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+  for (const auto& column : columns) {
+    if (import_buffers.find("database_id") != import_buffers.end()) {
+      import_buffers["database_id"]->addInt(column.db_id);
+    }
+    if (import_buffers.find("database_name") != import_buffers.end()) {
+      import_buffers["database_name"]->addDictStringWithTruncation(
+          get_db_name(column.db_id));
+    }
+    if (import_buffers.find("table_id") != import_buffers.end()) {
+      import_buffers["table_id"]->addInt(column.tableId);
+    }
+    if (import_buffers.find("table_name") != import_buffers.end()) {
+      import_buffers["table_name"]->addDictStringWithTruncation(
+          get_table_name(column.db_id, column.tableId));
+    }
+    if (import_buffers.find("column_name") != import_buffers.end()) {
+      import_buffers["column_name"]->addDictStringWithTruncation(column.columnName);
+    }
+    if (import_buffers.find("column_id") != import_buffers.end()) {
+      import_buffers["column_id"]->addInt(column.columnId);
+    }
+    if (import_buffers.find("data_type") != import_buffers.end()) {
+      import_buffers["data_type"]->addDictStringWithTruncation(get_column_type(column));
+    }
+    if (import_buffers.find("data_encoding") != import_buffers.end()) {
+      import_buffers["data_encoding"]->addDictStringWithTruncation(
+          get_column_encoding(column));
+    }
+    if (import_buffers.find("data_size") != import_buffers.end()) {
+      int size = column.columnType.get_size();
+      import_buffers["data_size"]->addInt(size < 0 ? inline_int_null_value<int32_t>()
+                                                   : size);
+    }
+    if (import_buffers.find("is_nullable") != import_buffers.end()) {
+      import_buffers["is_nullable"]->addBoolean(!column.columnType.get_notnull());
+    }
+    if (import_buffers.find("default_value") != import_buffers.end()) {
+      import_buffers["default_value"]->addDictStringWithTruncation(
+          column.default_value.has_value() ? column.getDefaultValueLiteral()
+                                           : std::string{});
+    }
+    if (import_buffers.find("comment") != import_buffers.end()) {
+      import_buffers["comment"]->addDictStringWithTruncation(
+          column.comment.has_value() ? column.comment.value() : std::string{});
     }
   }
 }
@@ -459,6 +545,21 @@ std::map<int32_t, std::vector<TableDescriptor>> get_all_tables() {
   return tables_by_database;
 }
 
+std::vector<ColumnDescriptor> get_all_columns() {
+  std::vector<ColumnDescriptor> columns;
+  auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+  for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
+    if (catalog->name() != shared::kInfoSchemaDbName) {
+      for (const auto& cd : catalog->getAllColumnMetadataCopyForColumnsSystemTable()) {
+        if (!cd.isGeoPhyCol && !cd.isDeletedCol && !cd.isSystemCol && !cd.isVirtualCol) {
+          columns.emplace_back(cd);
+        }
+      }
+    }
+  }
+  return columns;
+}
+
 std::map<int32_t, std::vector<DashboardDescriptor>> get_all_dashboards() {
   std::map<int32_t, std::vector<DashboardDescriptor>> dashboards_by_database;
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
@@ -497,7 +598,6 @@ void InternalCatalogDataWrapper::initializeObjectsForTable(
       // Only the aggregator can contain dashboards in distributed.
       return;
     }
-    dashboards_by_database_.clear();
     dashboards_by_database_ = get_all_dashboards();
     for (const auto& [db_id, dashboards] : dashboards_by_database_) {
       row_count_ += dashboards.size();
@@ -512,30 +612,27 @@ void InternalCatalogDataWrapper::initializeObjectsForTable(
   }
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   if (foreign_table_->tableName == Catalog_Namespace::USERS_SYS_TABLE_NAME) {
-    users_.clear();
     users_ = sys_catalog.getAllUserMetadata();
     row_count_ = users_.size();
   } else if (foreign_table_->tableName == Catalog_Namespace::TABLES_SYS_TABLE_NAME) {
-    tables_by_database_.clear();
     tables_by_database_ = get_all_tables();
     for (const auto& [db_id, tables] : tables_by_database_) {
       row_count_ += tables.size();
     }
+  } else if (foreign_table_->tableName == Catalog_Namespace::COLUMNS_SYS_TABLE_NAME) {
+    columns_ = get_all_columns();
+    row_count_ = columns_.size();
   } else if (foreign_table_->tableName == Catalog_Namespace::PERMISSIONS_SYS_TABLE_NAME) {
-    object_permissions_.clear();
     object_permissions_ = sys_catalog.getMetadataForAllObjects();
     row_count_ = object_permissions_.size();
   } else if (foreign_table_->tableName == Catalog_Namespace::DATABASES_SYS_TABLE_NAME) {
-    databases_.clear();
     databases_ = sys_catalog.getAllDBMetadata();
     row_count_ = databases_.size();
   } else if (foreign_table_->tableName == Catalog_Namespace::ROLES_SYS_TABLE_NAME) {
-    roles_.clear();
     roles_ = sys_catalog.getCreatedRoles();
     row_count_ = roles_.size();
   } else if (foreign_table_->tableName ==
              Catalog_Namespace::ROLE_ASSIGNMENTS_SYS_TABLE_NAME) {
-    user_names_by_role_.clear();
     user_names_by_role_ = get_all_role_assignments();
     for (const auto& [role, user_names] : user_names_by_role_) {
       row_count_ += user_names.size();
@@ -552,6 +649,8 @@ void InternalCatalogDataWrapper::populateChunkBuffersForTable(
     populate_import_buffers_for_catalog_users(users_, import_buffers);
   } else if (foreign_table_->tableName == Catalog_Namespace::TABLES_SYS_TABLE_NAME) {
     populate_import_buffers_for_catalog_tables(tables_by_database_, import_buffers);
+  } else if (foreign_table_->tableName == Catalog_Namespace::COLUMNS_SYS_TABLE_NAME) {
+    populate_import_buffers_for_catalog_columns(columns_, import_buffers);
   } else if (foreign_table_->tableName == Catalog_Namespace::DASHBOARDS_SYS_TABLE_NAME) {
     populate_import_buffers_for_catalog_dashboards(dashboards_by_database_,
                                                    import_buffers);

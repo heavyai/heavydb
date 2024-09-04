@@ -176,9 +176,10 @@ set(SHARED_SQL_TYPES_H_AND_DEPS
   ${CMAKE_CURRENT_SOURCE_DIR}/DateTruncate.h
   ${CMAKE_CURRENT_SOURCE_DIR}/ExtractFromTime.h
   ${CMAKE_CURRENT_SOURCE_DIR}/Utils/FlatBuffer.h
-  )
+)
 
 set(query_engine_cuda_source_files
+  Aggregate/AggModeHashTableGpu.cu
   TopKSort.cu
   InPlaceSortImpl.cu
   ResultSetSortImpl.cu
@@ -291,6 +292,12 @@ if(ENABLE_SYSTEM_TFS)
       list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/Loaders/PdalLoader.cpp)
       list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/PointCloudTableFunctions.cpp)
     endif()
+
+    if(ENABLE_GFX_TFS AND ENABLE_RENDERING)
+      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/GfxDriverTableFunctions.hpp)
+      list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/TableFunctionRenderTest.cpp)
+    endif()
+
     if(ENABLE_OMNIVERSE_CONNECTOR)
       list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/OmniverseExportTableFunctions.hpp)
       list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/OmniverseConnector.cpp)
@@ -299,10 +306,10 @@ if(ENABLE_SYSTEM_TFS)
   endif()
 endif()
 
-find_program(PYTHON_EXECUTABLE python)
+find_package(Python REQUIRED)
 
 execute_process(
-  COMMAND ${PYTHON_EXECUTABLE}
+  COMMAND ${Python_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_TableFunctionsFactory_init.py
     ${TABLE_FUNCTION_HEADERS}
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp)
@@ -388,7 +395,7 @@ add_custom_command(
 add_custom_command(
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
-  COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/parse_ast.py ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
+  COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/parse_ast.py ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
 
 add_custom_target(QueryEngineFunctionsTargets
   DEPENDS
@@ -400,7 +407,7 @@ add_custom_target(QueryEngineFunctionsTargets
 add_custom_command(
   DEPENDS ${TABLE_FUNCTION_HEADERS}
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
-  COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_TableFunctionsFactory_init.py ${TABLE_FUNCTION_HEADERS} ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp)
+  COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_TableFunctionsFactory_init.py ${TABLE_FUNCTION_HEADERS} ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp)
 
 add_custom_target(QueryEngineTableFunctionsFactory_init
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp ${GENERATED_TF_FILES} ${GENERATED_TF_GPU_FILES} ${GENERATED_TF_ADD_FILES})
@@ -412,6 +419,8 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/heavydbTypes.h ${CMAKE_CURRENT_BINARY_
 target_precompile_headers(QueryEngine PRIVATE
   [["QueryEngine/Execute.h"]]
 )
+
+set(QUERY_ENGINE_INCLUDES ".") # fails to find other stuff if just ""
 
 set(QUERY_ENGINE_LIBS
   OSDependent
@@ -427,6 +436,7 @@ set(QUERY_ENGINE_LIBS
 
 list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})
 
+target_include_directories(QueryEngine PRIVATE ${QUERY_ENGINE_INCLUDES})
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
 add_custom_command(
@@ -435,12 +445,16 @@ add_custom_command(
   COMMAND ${CMAKE_CUDA_COMPILER}
   ARGS
   -I ${CMAKE_SOURCE_DIR}
+  -I ${CMAKE_SOURCE_DIR}/ThirdParty/warpcore/include
   -I ${CMAKE_CURRENT_BINARY_DIR}
+  -I ${MAPD_DEPS_PATH}/include
   ${MAPD_HOST_COMPILER_FLAG}
   -Xcompiler -fPIC
   -D__STDC_LIMIT_MACROS
   -D__STDC_CONSTANT_MACROS
   -D_FORCE_INLINES
+  -DHAVE_CUDA
+  ${CMAKE_CUDA_FLAGS}
   -Xcompiler -Wno-return-type-c-linkage --expt-relaxed-constexpr
   ${MAPD_DEFINITIONS}
   -fatbin
@@ -500,6 +514,17 @@ if(ENABLE_CUDA)
     target_compile_options(QueryEngine PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:
       -DENABLE_UTM_TRANSFORM>)
   endif()
+
+  # Suppress
+  # /usr/include/boost/fusion/container/vector/vector.hpp(195):
+  # warning #20012-D: __host__ annotation is ignored on a function("vector_data")
+  # that is explicitly defaulted on its first declaration
+  # This appears to be caused by Aggregate/AggModeHashTableGpu.cu
+  # -> #include <boost/iterator/zip_iterator.hpp>
+  # -> #include <boost/fusion/ ...
+  # -> ...
+  # -> #include <boost/fusion/container/vector/vector.hpp>
+  target_compile_options(QueryEngine PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:--diag-suppress=20012>)
 
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a DESTINATION QueryEngine COMPONENT "QE")
 endif()

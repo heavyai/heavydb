@@ -95,6 +95,7 @@ struct TColumnType {
   6: bool is_physical;
   7: i64 col_id;
   8: optional string default_value;
+  9: optional string comment;
 }
 
 struct TRow {
@@ -390,6 +391,7 @@ struct TTableDetails {
   10: TTableType table_type;
   11: TTableRefreshInfo refresh_info;
   12: string sharded_column_name;
+  13: optional string comment;
 }
 
 enum TExpressionRangeType {

@@ -53,10 +53,10 @@ public class SqlGrantPrivilege extends SqlDdl {
 
     if (this.privileges != null) {
       List<Object> privilege_list = jsonBuilder.list();
-      for (SqlNode privilege : this.privileges) {
-        // privilege are string literals,
-        //    so may need to be later striped of the quotes that get added
-        privilege_list.add(privilege.toString());
+      for (SqlNode node : this.privileges) {
+        assert node instanceof SqlPrivilege;
+        SqlPrivilege privilege = (SqlPrivilege) node;
+        privilege_list.add(privilege.toJson(jsonBuilder));
       }
       map.put("privileges", privilege_list);
     }

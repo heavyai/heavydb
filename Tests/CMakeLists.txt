@@ -28,6 +28,8 @@ set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES}
 
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
 
+set(TF_TEST_LIBS ${EXECUTE_TEST_LIBS})
+
 #parse s3 credentials
 file(READ aws/s3client.conf S3CLIENT_CONF)
 if("${S3CLIENT_CONF}" MATCHES "AWS_ACCESS_KEY_ID=([^\n]+)")
@@ -425,7 +427,8 @@ list(APPEND SANITY_TEST_PROGRAMS MigrationMgrTest)
 if(ENABLE_SYSTEM_TFS)
   if (ENABLE_ML_ONEDAL_TFS OR ENABLE_ML_MLPACK_TFS)
     add_executable(MLFunctionsTest MLFunctionsTest.cpp)
-    target_link_libraries(MLFunctionsTest ${EXECUTE_TEST_LIBS})
+    target_include_directories(MLFunctionsTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/../QueryEngine/gen-cpp/ShaderTemplates)
+    target_link_libraries(MLFunctionsTest ${TF_TEST_LIBS})
     add_test(MLFunctionsTest MLFunctionsTest ${TEST_ARGS})
     list(APPEND SANITY_TEST_PROGRAMS MLFunctionsTest)
   endif()
@@ -582,16 +585,13 @@ list(APPEND SANITY_TEST_PROGRAMS StorageTest)
 
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 if(ENABLE_FOLLY)
-  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary
-    StringOps Logger Utils
+  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils
     $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
-    ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES}
-    ${AwsS3_CURL_SUPPORT} ${CMAKE_DL_LIBS})
+    ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
 else()
-  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary
-    StringOps Logger Utils
+  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils
     $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
-    ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${AwsS3_CURL_SUPPORT} ${CMAKE_DL_LIBS})
+    ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
 endif()
 
 if(ENABLE_TSAN)
@@ -619,7 +619,8 @@ list(APPEND SANITY_TEST_PROGRAMS StringFunctionsTest)
 
 if(ENABLE_SYSTEM_TFS)
   add_executable(SystemTableFunctionsTest SystemTableFunctionsTest.cpp)
-  target_link_libraries(SystemTableFunctionsTest ${EXECUTE_TEST_LIBS})
+  target_include_directories(SystemTableFunctionsTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/../QueryEngine/gen-cpp/ShaderTemplates)
+  target_link_libraries(SystemTableFunctionsTest ${TF_TEST_LIBS})
   add_test(SystemTableFunctionsTest SystemTableFunctionsTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS SystemTableFunctionsTest)
 endif()
@@ -630,7 +631,8 @@ add_executable(TableFunctionsTest TableFunctionsTest.cpp)
 if(ENABLE_RUNTIME_LIBS)
   add_dependencies(TableFunctionsTest TestRuntimeLib RuntimeLibTestTableFunctions)
 endif()
-target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
+target_include_directories(TableFunctionsTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/../QueryEngine/gen-cpp/ShaderTemplates)
+target_link_libraries(TableFunctionsTest ${TF_TEST_LIBS})
 add_test(TableFunctionsTest TableFunctionsTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS TableFunctionsTest)
 
@@ -693,6 +695,11 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   target_link_libraries(UserMappingDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
   add_test(UserMappingDdlTest UserMappingDdlTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS UserMappingDdlTest)
+
+  add_executable(RasterTableTests ee/RasterTableTests.cpp)
+  target_link_libraries(RasterTableTests ${THRIFT_HANDLER_TEST_LIBRARIES})
+  add_test(RasterTableTests RasterTableTests ${TEST_ARGS})
+  list(APPEND SANITY_TEST_PROGRAMS RasterTableTests)
 endif()
 
 ##########
@@ -726,7 +733,6 @@ if(NOT MSVC)
 endif()
 
 ##########
-
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   add_executable(MultiInstanceTest ee/MultiInstanceTest.cpp)

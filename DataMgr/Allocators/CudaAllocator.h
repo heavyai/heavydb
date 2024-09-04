@@ -61,11 +61,15 @@ class CudaAllocator : public DeviceAllocator {
 
   void copyToDevice(void* device_dst,
                     const void* host_src,
-                    const size_t num_bytes) const override;
+                    const size_t num_bytes,
+                    std::optional<std::string_view> tag) const override;
 
   void copyFromDevice(void* host_dst,
                       const void* device_src,
-                      const size_t num_bytes) const override;
+                      const size_t num_bytes,
+                      std::optional<std::string_view> tag) const override;
+
+  CUstream cudaStream() const { return cuda_stream_; }
 
   void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const override;
 

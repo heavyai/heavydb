@@ -10,3 +10,5 @@ leak:daal::algorithms::interface1::Argument::Argument
 leak:_GLOBAL__sub_I_common.cpp
 leak:_GLOBAL__sub_I_register_serializable.cpp
 leak:oneapi::dal::detail::serializable_registry::register_default_factory
+# BE-6509 ForeignTableDmlTest shutdown leak
+leak:CRYPTO_zalloc

@@ -3,6 +3,10 @@
 
 #include "base.cuh"
 
+// Disable erase() functions which are not used by Heavy.
+// This allows us to not waste an unused sentinel value for TombstoneKey.
+#define ENABLE_ERASE false
+
 namespace warpcore
 {
 
@@ -10,6 +14,7 @@ namespace warpcore
 template<
     class Key,
     class Value,
+    class Allocator,
     Key EmptyKey,
     Key TombstoneKey,
     class ProbingScheme,
@@ -20,6 +25,7 @@ class CountingHashTable;
 /*! \brief single-value hash table
  * \tparam Key key type (\c std::uint32_t or \c std::uint64_t)
  * \tparam Value value type
+ * \tparam Allocator allocator of type int8_t.
  * \tparam EmptyKey key which represents an empty slot
  * \tparam TombstoneKey key which represents an erased slot
  * \tparam ProbingScheme probing scheme from \c warpcore::probing_schemes
@@ -29,6 +35,7 @@ class CountingHashTable;
 template<
     class Key,
     class Value,
+    class Allocator = nullptr_t,
     Key EmptyKey = defaults::empty_key<Key>(),
     Key TombstoneKey = defaults::tombstone_key<Key>(),
     class ProbingScheme = defaults::probing_scheme_t<Key, 8>,
@@ -40,9 +47,11 @@ class SingleValueHashTable
         checks::is_valid_key_type<Key>(),
         "invalid key type");
 
+#if ENABLE_ERASE
     static_assert(
         EmptyKey != TombstoneKey,
         "empty key and tombstone key must not be identical");
+#endif
 
     static_assert(
         checks::is_probing_scheme<ProbingScheme>(),
@@ -68,7 +77,7 @@ class SingleValueHashTable
         TempMemoryBytes >= sizeof(index_t),
         "temporary storage must at least be of size index_type");
 
-    using temp_type = storage::CyclicStore<index_t>;
+    using temp_type = storage::CyclicStore<index_t, Allocator>;
 
 public:
     using key_type = Key;
@@ -111,11 +120,12 @@ public:
     HOSTQUALIFIER INLINEQUALIFIER
     explicit SingleValueHashTable(
         const index_type min_capacity,
+        Allocator* allocator,
         const key_type seed = defaults::seed<key_type>(),
         const bool no_init = false) noexcept :
         status_(nullptr),
-        table_(detail::get_valid_capacity(min_capacity, cg_size())),
-        temp_(TempMemoryBytes / sizeof(index_type)),
+        table_(detail::get_valid_capacity(min_capacity, cg_size()), allocator),
+        temp_(TempMemoryBytes / sizeof(index_type), allocator),
         seed_(seed),
         is_initialized_(false),
         is_copy_(false)
@@ -408,7 +418,7 @@ public:
             values_out[i] = value;
         }, stream);
 
-        cudaMemcpyAsync(&num_out, tmp, sizeof(index_type), D2H);
+        cudaMemcpyAsync(&num_out, tmp, sizeof(index_type), D2H, stream);
 
         if(stream == 0)
         {
@@ -416,6 +426,7 @@ public:
         }
     }
 
+#if ENABLE_ERASE
     /*! \brief erases a key from the hash table
      * \param[in] key_in key to erase from the hash table
      * \param[in] group cooperative group
@@ -494,6 +505,7 @@ public:
         <<<SDIV(num_in * cg_size(), WARPCORE_BLOCKSIZE), WARPCORE_BLOCKSIZE, 0, stream>>>
         (keys_in, num_in, *this, probing_length, status_out);
     }
+#endif
 
     /*! \brief applies a funtion over all key value pairs inside the table
      * \tparam Func type of map i.e. CUDA device lambda
@@ -892,6 +904,7 @@ private:
     template<
         class Key_,
         class Value_,
+        class Allocator_,
         Key_ EmptyKey_,
         Key_ TombstoneKey_,
         class ProbingScheme_,

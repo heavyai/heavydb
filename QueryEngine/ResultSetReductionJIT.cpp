@@ -476,9 +476,13 @@ extern "C" RUNTIME_EXPORT void mode_jit_rt(const int64_t new_set_handle,
                                            const void* that_qmd_handle,
                                            const void* this_qmd_handle,
                                            const int64_t target_logical_idx) {
-  auto* accumulator = reinterpret_cast<AggMode*>(old_set_handle);
-  auto* incoming = reinterpret_cast<AggMode*>(new_set_handle);
-  accumulator->reduce(std::move(*incoming));
+  if (new_set_handle != old_set_handle) {
+    auto* that_qmd = static_cast<QueryMemoryDescriptor const*>(that_qmd_handle);
+    auto* this_qmd = static_cast<QueryMemoryDescriptor const*>(this_qmd_handle);
+    AggMode* accumulator = this_qmd->getAggMode(old_set_handle);
+    AggMode* incoming = that_qmd->getAggMode(new_set_handle);
+    accumulator->reduce(std::move(*incoming));
+  }
 }
 
 extern "C" RUNTIME_EXPORT void get_group_value_reduction_rt(

@@ -146,7 +146,8 @@ class ExecutorResourceMgr : public std::enable_shared_from_this<ExecutorResource
       const std::vector<ConcurrentResourceGrantPolicy>&
           concurrent_resource_grant_policies,
       const std::vector<ResourceGrantPolicy>& max_per_request_resource_grant_policies,
-      const double max_available_resource_use_ratio);
+      const double max_available_resource_use_ratio,
+      const CPUResultMemResourceType cpu_result_memory_resource_type);
 
   /**
    * @brief The destructor ensures that the process queue thread (`process_queue_thread`)
@@ -389,6 +390,15 @@ class ExecutorResourceMgr : public std::enable_shared_from_this<ExecutorResource
   void mark_request_finished(const RequestId request_id);
 
   /**
+   * @brief Internal method: Invoked when we have `ResourceStat` error in the middle of
+   * handling the request, removes request from `EXECUTING` stage and modify related
+   * executor_stats
+   *
+   * @param request_id - `RequestId` for the resource request that has finished executing
+   */
+  void handle_resource_stat_error(const RequestId request_id);
+
+  /**
    * @brief Internal method: Set the `should_process_queue_` flag to true, signifying that
    * the queue should be processed. Protected by a lock on `processor_queue_mutex_`.
    *
@@ -571,6 +581,7 @@ std::shared_ptr<ExecutorResourceMgr> generate_executor_resource_mgr(
     const size_t num_cpu_slots,
     const size_t num_gpu_slots,
     const size_t cpu_result_mem,
+    const bool use_cpu_mem_pool_for_output_buffers,
     const size_t cpu_buffer_pool_mem,
     const size_t gpu_buffer_pool_mem,
     const double per_query_max_cpu_slots_ratio,

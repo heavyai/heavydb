@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -40,7 +41,9 @@ enum class NvidiaDeviceArch {
   Pascal,   // compute major = 6
   Volta,    // compute major = 7, compute minor = 0
   Turing,   // compute major = 7, compute minor = 5
-  Ampere    // compute major = 8
+  Ampere,   // compute major = 8, compute minor = 0
+  Ada,      // compute major = 8, compute minor = 9
+  Hopper    // compute major = 9
 };
 
 #ifdef HAVE_CUDA
@@ -97,16 +100,19 @@ class CudaMgr {
                         const int8_t* host_ptr,
                         const size_t num_bytes,
                         const int device_num,
+                        std::optional<std::string_view> tag,
                         CUstream cuda_stream = 0);
   void copyDeviceToHost(int8_t* host_ptr,
                         const int8_t* device_ptr,
                         const size_t num_bytes,
+                        std::optional<std::string_view> tag,
                         CUstream cuda_stream = 0);
   void copyDeviceToDevice(int8_t* dest_ptr,
                           int8_t* src_ptr,
                           const size_t num_bytes,
                           const int dest_device_num,
                           const int src_device_num,
+                          std::optional<std::string_view> tag,
                           CUstream cuda_stream = 0);
 
   int8_t* allocatePinnedHostMem(const size_t num_bytes);
@@ -173,7 +179,13 @@ class CudaMgr {
       case NvidiaDeviceArch::Turing:
         return "sm_75";
       case NvidiaDeviceArch::Ampere:
-        return "sm_75";
+        return "sm_80";
+      // For Ada and Hopper architectures, use the latest compute capability that is
+      // supported by the current LLVM version (LLVM 14). Update returned value when LLVM
+      // is updated.
+      case NvidiaDeviceArch::Ada:
+      case NvidiaDeviceArch::Hopper:
+        return "sm_86";
       default:
         LOG(WARNING) << "Unrecognized Nvidia device architecture, falling back to "
                         "Kepler-compatibility.";
@@ -200,7 +212,13 @@ class CudaMgr {
             return NvidiaDeviceArch::Turing;
           }
         case 8:
-          return NvidiaDeviceArch::Ampere;
+          if (device_properties.computeMinor < 9) {
+            return NvidiaDeviceArch::Ampere;
+          } else {
+            return NvidiaDeviceArch::Ada;
+          }
+        case 9:
+          return NvidiaDeviceArch::Hopper;
         default:
           return NvidiaDeviceArch::Kepler;
       }
@@ -243,7 +261,11 @@ class CudaMgr {
 
   DeviceMemoryAllocationMap& getDeviceMemoryAllocationMap();
   int exportHandle(const uint64_t handle) const;
+  void enableMemoryActivityLog();
+  bool logMemoryActivity() const;
 
+  int getDeviceNumFromDevicePtr(CUdeviceptr cu_device_ptr,
+                                const size_t allocated_mem_bytes);
 #endif
 
  private:
@@ -268,6 +290,7 @@ class CudaMgr {
   mutable std::mutex device_mutex_;
 
 #ifdef HAVE_CUDA
+  bool log_memory_activity_;
   DeviceMemoryAllocationMapUqPtr device_memory_allocation_map_;
 #endif
 };

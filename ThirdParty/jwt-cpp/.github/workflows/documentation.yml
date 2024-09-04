@@ -1,0 +1,25 @@
+name: Documentation CI
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ssciwr/doxygen-install@v1
+        with:
+          version: "1.10.0"
+      - run: sudo apt install graphviz
+      - run: | 
+          cmake . -DJWT_BUILD_DOCS=ON
+          cmake --build . --target jwt-docs
+      - if: github.event_name == 'push'
+        name: deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/html
+          force_orphan: true

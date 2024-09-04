@@ -118,6 +118,7 @@ enum class SqlStringOpKind {
   BASE64_DECODE,
   URL_ENCODE,
   URL_DECODE,
+  LLM_TRANSFORM,
   TRY_STRING_CAST,         // string-to-numeric
   POSITION,                // string-to-numeric
   JAROWINKLER_SIMILARITY,  // string-to-numeric
@@ -439,6 +440,8 @@ inline std::ostream& operator<<(std::ostream& os, const SqlStringOpKind kind) {
       return os << "URL_ENCODE";
     case SqlStringOpKind::URL_DECODE:
       return os << "URL_DECODE";
+    case SqlStringOpKind::LLM_TRANSFORM:
+      return os << "LLM_TRANSFORM";
     case SqlStringOpKind::TRY_STRING_CAST:
       return os << "TRY_STRING_CAST";
     case SqlStringOpKind::POSITION:
@@ -529,6 +532,9 @@ inline SqlStringOpKind name_to_string_op_kind(const std::string& func_name) {
   }
   if (func_name == "URL_DECODE") {
     return SqlStringOpKind::URL_DECODE;
+  }
+  if (func_name == "LLM_TRANSFORM") {
+    return SqlStringOpKind::LLM_TRANSFORM;
   }
   if (func_name == "TRY_CAST") {
     return SqlStringOpKind::TRY_STRING_CAST;

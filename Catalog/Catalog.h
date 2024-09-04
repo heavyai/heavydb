@@ -111,6 +111,7 @@ struct TableNotFoundException : public std::runtime_error {
 
 static constexpr const char* USERS_SYS_TABLE_NAME{"users"};
 static constexpr const char* TABLES_SYS_TABLE_NAME{"tables"};
+static constexpr const char* COLUMNS_SYS_TABLE_NAME{"columns"};
 static constexpr const char* DASHBOARDS_SYS_TABLE_NAME{"dashboards"};
 static constexpr const char* DATABASES_SYS_TABLE_NAME{"databases"};
 static constexpr const char* PERMISSIONS_SYS_TABLE_NAME{"permissions"};
@@ -260,6 +261,7 @@ class Catalog final {
 
   std::list<const TableDescriptor*> getAllTableMetadata() const;
   std::vector<TableDescriptor> getAllTableMetadataCopy() const;
+  std::vector<ColumnDescriptor> getAllColumnMetadataCopyForColumnsSystemTable() const;
   std::list<const DashboardDescriptor*> getAllDashboardsMetadata() const;
   std::vector<DashboardDescriptor> getAllDashboardsMetadataForSysTable() const;
   const DBMetadata& getCurrentDB() const { return currentDB_; }
@@ -520,7 +522,7 @@ class Catalog final {
    *
    * @return foreign tables pending refreshes
    */
-  std::vector<const TableDescriptor*> getAllForeignTablesForRefresh() const;
+  std::vector<std::string> getAllForeignTableNamesForRefresh() const;
 
   /**
    * Updates the last and next (if applicable) refresh times of the foreign table
@@ -616,6 +618,26 @@ class Catalog final {
                                bool do_soft_delete);
 
   /**
+   * Set a column's comment.
+   *
+   * @param column_desc - the column to set the comment for
+   * @param comment - the comment, if `std::nullopt` the comment is set to NULL (i.e. it
+   * is removed)
+   */
+  void setColumnComment(const ColumnDescriptor* column_desc,
+                        const std::optional<std::string>& comment = std::nullopt);
+
+  /**
+   * Set a table's comment.
+   *
+   * @param table_desc - the table to set the comment for
+   * @param comment - the comment, if `std::nullopt` the comment is set to NULL (i.e. it
+   * is removed)
+   */
+  void setTableComment(const TableDescriptor* table_desc,
+                       const std::optional<std::string>& comment = std::nullopt);
+
+  /**
    * Reassigns database object ownership from a set of users (old owners) to another user
    * (new owner).
    *
@@ -629,11 +651,28 @@ class Catalog final {
   bool isInfoSchemaDb() const;
   bool checkDropRenderGroupColumnsMigration();
 
+  // The following "FromStorage" functions are intended for testing purposes only
+  // NOTE: `getColumnFromStorage` obtains all properites of the column from
+  // storage EXCEPT isGeoPhyCol, which is obtained from the in-memory column held by the
+  // Catalog
+
+  /**
+   * Get a ColumnDescriptor from storage as it is represented in the Catalog.
+   */
+  std::unique_ptr<ColumnDescriptor> getColumnFromStorage(const int table_id,
+                                                         const int column_id);
+
+  /**
+   * Get a TableDescriptor from storage as it is represented in the Catalog.
+   */
+  std::unique_ptr<TableDescriptor> getTableFromStorage(const int table_id);
+
  protected:
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
   void updateDictionaryNames();
   void updateTableDescriptorSchema();
+  void updateColumnDescriptorSchema();
   void updateFixlenArrayColumns();
   void updateGeoColumns();
   void updateFrontendViewSchema();
@@ -836,6 +875,7 @@ class Catalog final {
   void initializePermissionsSystemTable();
   void initializeRolesSystemTable();
   void initializeTablesSystemTable();
+  void initializeColumnsSystemTable();
   void initializeDashboardsSystemTable();
   void initializeRoleAssignmentsSystemTable();
   void initializeMemorySummarySystemTable();

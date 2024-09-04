@@ -48,7 +48,9 @@ std::string ResourceGrant::to_string() const {
 ExecutorResourcePool::ExecutorResourcePool(
     const std::vector<std::pair<ResourceType, size_t>>& total_resources,
     const std::vector<ConcurrentResourceGrantPolicy>& concurrent_resource_grant_policies,
-    const std::vector<ResourceGrantPolicy>& max_per_request_resource_grant_policies) {
+    const std::vector<ResourceGrantPolicy>& max_per_request_resource_grant_policies,
+    const CPUResultMemResourceType cpu_result_mem_resource_type)
+    : cpu_result_mem_resource_type_(cpu_result_mem_resource_type) {
   init(total_resources,
        concurrent_resource_grant_policies,
        max_per_request_resource_grant_policies);
@@ -188,12 +190,12 @@ ResourcePoolInfo ExecutorResourcePool::get_resource_info() const {
   return ResourcePoolInfo(
       get_total_resource(ResourceType::CPU_SLOTS),
       get_total_resource(ResourceType::GPU_SLOTS),
-      get_total_resource(ResourceType::CPU_RESULT_MEM),
+      get_total_resource(cpu_result_mem_resource_type_.resource_type),
       get_total_resource(ResourceType::CPU_BUFFER_POOL_MEM),
       get_total_resource(ResourceType::GPU_BUFFER_POOL_MEM),
       get_allocated_resource_of_type(ResourceType::CPU_SLOTS),
       get_allocated_resource_of_type(ResourceType::GPU_SLOTS),
-      get_allocated_resource_of_type(ResourceType::CPU_RESULT_MEM),
+      get_allocated_resource_of_type(cpu_result_mem_resource_type_.resource_type),
       get_allocated_resource_of_type(ResourceType::CPU_BUFFER_POOL_MEM),
       get_allocated_resource_of_type(ResourceType::GPU_BUFFER_POOL_MEM),
       allocated_cpu_buffer_pool_chunks_.size(),
@@ -204,7 +206,8 @@ ResourcePoolInfo ExecutorResourcePool::get_resource_info() const {
       outstanding_num_requests_,
       get_outstanding_per_resource_num_requests(ResourceType::CPU_SLOTS),
       get_outstanding_per_resource_num_requests(ResourceType::GPU_SLOTS),
-      get_outstanding_per_resource_num_requests(ResourceType::CPU_RESULT_MEM),
+      get_outstanding_per_resource_num_requests(
+          cpu_result_mem_resource_type_.resource_type),
       get_outstanding_per_resource_num_requests(ResourceType::CPU_BUFFER_POOL_MEM),
       get_outstanding_per_resource_num_requests(ResourceType::GPU_BUFFER_POOL_MEM));
 }
@@ -395,10 +398,11 @@ ExecutorResourcePool::calc_min_max_resource_grants_for_request(
   max_resource_grant.cpu_result_mem = calc_max_resource_grant_for_request(
       request_info.cpu_result_mem,
       request_info.min_cpu_result_mem,
-      get_max_resource_grant_per_request(ResourceSubtype::CPU_RESULT_MEM));
+      get_max_resource_grant_per_request(cpu_result_mem_resource_type_.resource_subtype));
   if (max_resource_grant.cpu_result_mem == 0 && request_info.min_cpu_result_mem > 0) {
     throw QueryNeedsTooMuchCpuResultMem(
-        get_max_resource_grant_per_request(ResourceSubtype::CPU_RESULT_MEM),
+        get_max_resource_grant_per_request(
+            cpu_result_mem_resource_type_.resource_subtype),
         request_info.min_cpu_result_mem);
   }
 
@@ -577,9 +581,11 @@ bool ExecutorResourcePool::can_currently_satisfy_request_impl(
         min_resource_grant.gpu_slots);
   }
   if (min_resource_grant.cpu_result_mem >
-      get_max_resource_grant_per_request(ResourceSubtype::CPU_RESULT_MEM)) {
+      get_max_resource_grant_per_request(
+          cpu_result_mem_resource_type_.resource_subtype)) {
     throw QueryNeedsTooMuchCpuResultMem(
-        get_max_resource_grant_per_request(ResourceSubtype::CPU_RESULT_MEM),
+        get_max_resource_grant_per_request(
+            cpu_result_mem_resource_type_.resource_subtype),
         min_resource_grant.cpu_result_mem);
   }
 
@@ -599,9 +605,10 @@ bool ExecutorResourcePool::can_currently_satisfy_request_impl(
     return false;
   }
   if (!check_request_against_global_policy(
-          get_total_resource(ResourceType::CPU_RESULT_MEM),
-          get_allocated_resource_of_type(ResourceType::CPU_RESULT_MEM),
-          get_concurrent_resource_grant_policy(ResourceType::CPU_RESULT_MEM))) {
+          get_total_resource(cpu_result_mem_resource_type_.resource_type),
+          get_allocated_resource_of_type(cpu_result_mem_resource_type_.resource_type),
+          get_concurrent_resource_grant_policy(
+              cpu_result_mem_resource_type_.resource_type))) {
     return false;
   }
 
@@ -621,10 +628,10 @@ bool ExecutorResourcePool::can_currently_satisfy_request_impl(
 
   const bool can_satisfy_cpu_result_mem_request = check_request_against_policy(
       min_resource_grant.cpu_result_mem,
-      get_total_resource(ResourceType::CPU_RESULT_MEM),
-      get_allocated_resource_of_type(ResourceType::CPU_RESULT_MEM),
+      get_total_resource(cpu_result_mem_resource_type_.resource_type),
+      get_allocated_resource_of_type(cpu_result_mem_resource_type_.resource_type),
       outstanding_num_requests_,
-      get_concurrent_resource_grant_policy(ResourceType::CPU_RESULT_MEM));
+      get_concurrent_resource_grant_policy(cpu_result_mem_resource_type_.resource_type));
 
   // Short circuit before heavier chunk check operation
   if (!(can_satisfy_cpu_slots_request && can_satisfy_gpu_slots_request &&
@@ -963,8 +970,8 @@ std::pair<bool, ResourceGrant> ExecutorResourcePool::determine_dynamic_resource_
   actual_resource_grant.cpu_result_mem = determine_dynamic_single_resource_grant(
       min_resource_grant.cpu_result_mem,
       max_resource_grant.cpu_result_mem,
-      get_allocated_resource_of_type(ResourceType::CPU_RESULT_MEM),
-      get_total_resource(ResourceType::CPU_RESULT_MEM),
+      get_allocated_resource_of_type(cpu_result_mem_resource_type_.resource_type),
+      get_total_resource(cpu_result_mem_resource_type_.resource_type),
       max_request_backoff_ratio);
   if (min_resource_grant.buffer_mem_gated_per_slot) {
     CHECK(chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU);
@@ -1035,8 +1042,8 @@ void ExecutorResourcePool::allocate_resources(
       resource_grant.cpu_slots;
   allocated_resources_[static_cast<size_t>(ResourceSubtype::GPU_SLOTS)] +=
       resource_grant.gpu_slots;
-  allocated_resources_[static_cast<size_t>(ResourceSubtype::CPU_RESULT_MEM)] +=
-      resource_grant.cpu_result_mem;
+  allocated_resources_[static_cast<size_t>(
+      cpu_result_mem_resource_type_.resource_type)] += resource_grant.cpu_result_mem;
 
   total_num_requests_++;
   outstanding_num_requests_++;
@@ -1049,8 +1056,10 @@ void ExecutorResourcePool::allocate_resources(
     increment_total_per_resource_num_requests(ResourceType::GPU_SLOTS);
   }
   if (resource_grant.cpu_result_mem > 0) {
-    increment_outstanding_per_resource_num_requests(ResourceType::CPU_RESULT_MEM);
-    increment_total_per_resource_num_requests(ResourceType::CPU_RESULT_MEM);
+    increment_outstanding_per_resource_num_requests(
+        cpu_result_mem_resource_type_.resource_type);
+    increment_total_per_resource_num_requests(
+        cpu_result_mem_resource_type_.resource_type);
   }
   if (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU) {
     if (resource_grant.buffer_mem_gated_per_slot ||
@@ -1077,10 +1086,11 @@ void ExecutorResourcePool::allocate_resources(
                 << get_total_resource(ResourceType::CPU_SLOTS) << " | GPU slots: "
                 << get_allocated_resource_of_type(ResourceType::GPU_SLOTS) << " of "
                 << get_total_resource(ResourceType::GPU_SLOTS) << " CPU result mem: "
-                << format_num_bytes(
-                       get_allocated_resource_of_type(ResourceType::CPU_RESULT_MEM))
+                << format_num_bytes(get_allocated_resource_of_type(
+                       cpu_result_mem_resource_type_.resource_type))
                 << " of "
-                << format_num_bytes(get_total_resource(ResourceType::CPU_RESULT_MEM));
+                << format_num_bytes(
+                       get_total_resource(cpu_result_mem_resource_type_.resource_type));
   add_chunk_requests_to_allocated_pool(resource_grant, chunk_request_info);
 }
 
@@ -1097,14 +1107,14 @@ void ExecutorResourcePool::deallocate_resources(
   CHECK_LE(resource_grant.gpu_slots,
            get_allocated_resource_of_type(ResourceType::GPU_SLOTS));
   CHECK_LE(resource_grant.cpu_result_mem,
-           get_allocated_resource_of_type(ResourceType::CPU_RESULT_MEM));
+           get_allocated_resource_of_type(cpu_result_mem_resource_type_.resource_type));
 
   allocated_resources_[static_cast<size_t>(ResourceSubtype::CPU_SLOTS)] -=
       resource_grant.cpu_slots;
   allocated_resources_[static_cast<size_t>(ResourceSubtype::GPU_SLOTS)] -=
       resource_grant.gpu_slots;
-  allocated_resources_[static_cast<size_t>(ResourceSubtype::CPU_RESULT_MEM)] -=
-      resource_grant.cpu_result_mem;
+  allocated_resources_[static_cast<size_t>(
+      cpu_result_mem_resource_type_.resource_type)] -= resource_grant.cpu_result_mem;
 
   outstanding_num_requests_--;
   if (resource_grant.cpu_slots > 0) {
@@ -1114,7 +1124,8 @@ void ExecutorResourcePool::deallocate_resources(
     decrement_outstanding_per_resource_num_requests(ResourceType::GPU_SLOTS);
   }
   if (resource_grant.cpu_result_mem > 0) {
-    decrement_outstanding_per_resource_num_requests(ResourceType::CPU_RESULT_MEM);
+    decrement_outstanding_per_resource_num_requests(
+        cpu_result_mem_resource_type_.resource_type);
   }
   if (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU) {
     if (resource_grant.buffer_mem_gated_per_slot ||
@@ -1139,10 +1150,11 @@ void ExecutorResourcePool::deallocate_resources(
                 << get_total_resource(ResourceType::CPU_SLOTS) << " | GPU slots: "
                 << get_allocated_resource_of_type(ResourceType::GPU_SLOTS) << " of "
                 << get_total_resource(ResourceType::GPU_SLOTS) << " CPU result mem: "
-                << format_num_bytes(
-                       get_allocated_resource_of_type(ResourceType::CPU_RESULT_MEM))
+                << format_num_bytes(get_allocated_resource_of_type(
+                       cpu_result_mem_resource_type_.resource_type))
                 << " of "
-                << format_num_bytes(get_total_resource(ResourceType::CPU_RESULT_MEM));
+                << format_num_bytes(
+                       get_total_resource(cpu_result_mem_resource_type_.resource_type));
   remove_chunk_requests_from_allocated_pool(resource_grant, chunk_request_info);
 
   if (sanity_check_pool_state_on_deallocations_) {
@@ -1154,7 +1166,8 @@ void ExecutorResourcePool::sanity_check_requests_against_allocations() const {
   const size_t sum_resource_requests =
       get_outstanding_per_resource_num_requests(ResourceType::CPU_SLOTS) +
       get_outstanding_per_resource_num_requests(ResourceType::GPU_SLOTS) +
-      get_outstanding_per_resource_num_requests(ResourceType::CPU_RESULT_MEM);
+      get_outstanding_per_resource_num_requests(
+          cpu_result_mem_resource_type_.resource_type);
 
   CHECK_LE(outstanding_num_requests_, total_num_requests_);
   CHECK_LE(outstanding_num_requests_, sum_resource_requests);
@@ -1172,10 +1185,13 @@ void ExecutorResourcePool::sanity_check_requests_against_allocations() const {
   CHECK_LE(get_outstanding_per_resource_num_requests(ResourceType::GPU_SLOTS),
            get_allocated_resource_of_type(ResourceType::GPU_SLOTS));
 
-  CHECK_EQ(get_outstanding_per_resource_num_requests(ResourceType::CPU_RESULT_MEM) > 0,
-           get_allocated_resource_of_type(ResourceType::CPU_RESULT_MEM) > 0);
-  CHECK_LE(get_outstanding_per_resource_num_requests(ResourceType::CPU_RESULT_MEM),
-           get_allocated_resource_of_type(ResourceType::CPU_RESULT_MEM));
+  CHECK_EQ(
+      get_outstanding_per_resource_num_requests(
+          cpu_result_mem_resource_type_.resource_type) > 0,
+      get_allocated_resource_of_type(cpu_result_mem_resource_type_.resource_type) > 0);
+  CHECK_LE(get_outstanding_per_resource_num_requests(
+               cpu_result_mem_resource_type_.resource_type),
+           get_allocated_resource_of_type(cpu_result_mem_resource_type_.resource_type));
 
   CHECK_EQ(
       get_outstanding_per_resource_num_requests(ResourceType::CPU_BUFFER_POOL_MEM) > 0,

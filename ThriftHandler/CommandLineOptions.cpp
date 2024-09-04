@@ -19,6 +19,7 @@
 #include <sys/types.h>
 
 #include <filesystem>
+#include <algorithm>
 #include <iostream>
 #include <string>
 
@@ -34,6 +35,7 @@ using namespace std::string_literals;
 #include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
 #include "Shared/Compressor.h"
+#include "Shared/MathUtils.h"
 #include "Shared/SysDefinitions.h"
 #include "StringDictionary/StringDictionary.h"
 #include "Utils/DdlUtils.h"
@@ -72,12 +74,14 @@ extern bool g_allow_system_dashboard_update;
 extern bool g_allow_memory_status_log;
 extern bool g_enable_logs_system_tables;
 extern bool g_enable_logs_system_tables_auto_refresh;
+extern bool g_enable_mode_on_gpu;
 extern std::string g_logs_system_tables_refresh_interval;
 extern size_t g_logs_system_tables_max_files_count;
 extern bool g_uniform_request_ids_per_thrift_call;
 extern size_t g_gpu_code_cache_max_size_in_bytes;
 extern bool g_use_cpu_mem_pool_for_output_buffers;
 extern bool g_use_cpu_mem_pool_size_for_max_cpu_slab_size;
+extern bool g_verbose_lock_logging;
 
 #ifdef ENABLE_MEMKIND
 extern std::string g_pmem_path;
@@ -85,6 +89,9 @@ extern std::string g_pmem_path;
 
 namespace Catalog_Namespace {
 extern bool g_log_user_id;
+}
+namespace Geospatial {
+extern std::string g_importer_additional_proj_data_path;
 }
 
 unsigned connect_timeout{20000};
@@ -596,6 +603,11 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(verbose_logging)
                          ->implicit_value(true),
                      "Write additional debug log messages to server logs.");
+  desc.add_options()("verbose-lock-logging",
+                     po::value<bool>(&g_verbose_lock_logging)
+                         ->default_value(g_verbose_lock_logging)
+                         ->implicit_value(true),
+                     "Verbose logs for lock acquisition.");
   desc.add_options()(
       "enable-runtime-udf",
       po::value<bool>(&enable_runtime_udf)
@@ -749,6 +761,11 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(g_enable_logs_system_tables_auto_refresh)
                          ->implicit_value(true),
                      "Enable automatic refreshes of logs system tables.");
+  desc.add_options()("enable-mode-on-gpu",
+                     po::value<bool>(&g_enable_mode_on_gpu)
+                         ->default_value(g_enable_mode_on_gpu)
+                         ->implicit_value(true),
+                     "Enable calculation of MODE (statistical function) on GPU.");
   desc.add_options()("logs-system-tables-refresh-interval",
                      po::value<std::string>(&g_logs_system_tables_refresh_interval)
                          ->default_value(g_logs_system_tables_refresh_interval),
@@ -768,6 +785,14 @@ void CommandLineOptions::fillOptions() {
   desc.add_options()("pmem-size", po::value<size_t>(&g_pmem_size)->default_value(0));
   desc.add_options()("pmem-path", po::value<std::string>(&g_pmem_path));
 #endif
+
+  desc.add_options()(
+      "importer-additional-proj-data-path",
+      po::value<std::string>(&Geospatial::g_importer_additional_proj_data_path)
+          ->default_value(Geospatial::g_importer_additional_proj_data_path),
+      "Additional path for helper files for PROJ geospatial transformations. If "
+      "provided, must point to a directory containing the contents of a proj-data bundle "
+      "downloaded from http://proj.org. See documentation for more details.");
 
   desc.add(log_options_.get_options());
 }
@@ -833,17 +858,6 @@ void CommandLineOptions::fillDeveloperOptions() {
                      po::value<int>(&system_parameters.num_executors)
                          ->default_value(system_parameters.num_executors),
                      "Number of executors to run in parallel.");
-  desc.add_options()(
-      "num-tuple-threshold-switch-to-baseline",
-      po::value<size_t>(&g_num_tuple_threshold_switch_to_baseline)
-          ->default_value(g_num_tuple_threshold_switch_to_baseline)
-          ->implicit_value(100000),
-      "Control a threshold to switch perfect hash join to baseline hash join by "
-      "comparing a hash entry range of the join column to the input table cardinality."
-      "This condition checks the following: |INPUT_TABLE| < {THIS_THRESHOLD}"
-      "We switch hash table layout when this condition and the condition related to "
-      "\'col-range-to-num-hash-entries-threshold-switch-to-baseline\' are satisfied "
-      "together.");
   desc.add_options()(
       "ratio-num-hash-entry-to-num-tuple-switch-to-baseline",
       po::value<size_t>(&g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline)
@@ -1578,6 +1592,20 @@ void CommandLineOptions::validate() {
         "0. and less than or equal to 1.0");
   }
 
+  if (g_window_function_aggregation_tree_fanout < 2) {
+    throw std::runtime_error(
+        "Invalid value for window-function-frame-aggregation-tree-fanout, must be "
+        "greater than 1.");
+  } else if (g_window_function_aggregation_tree_fanout > 1024) {
+    throw std::runtime_error(
+        "Invalid value for window-function-frame-aggregation-tree-fanout, must be "
+        "less than or equal to 1024.");
+  } else if (!shared::isPowOfTwo(g_window_function_aggregation_tree_fanout)) {
+    throw std::runtime_error(
+        "Invalid value for window-function-frame-aggregation-tree-fanout, must be a "
+        "power of two.");
+  }
+
 #ifndef HAVE_SYSTEM_TFS
   if (g_enable_table_functions) {
     g_enable_table_functions = false;
@@ -2120,21 +2148,27 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     LOG(INFO) << "\tCPU-GPU kernel concurrency: "
               << (g_executor_resource_mgr_allow_cpu_gpu_kernel_concurrency ? "enabled"
                                                                            : "disabled");
-    if (g_executor_resource_mgr_cpu_result_mem_bytes != 0UL) {
-      LOG(INFO) << "\tCPU result set reserved allocation: "
-                << g_executor_resource_mgr_cpu_result_mem_bytes / (1024 * 1024) << " MB";
-    } else {
-      LOG(INFO) << "\tCPU result set reserved ratio of CPU buffer pool size: "
-                << g_executor_resource_mgr_cpu_result_mem_ratio;
-    }
     LOG(INFO) << "\tPer-query max CPU threads ratio: "
               << g_executor_resource_mgr_per_query_max_cpu_slots_ratio;
-    LOG(INFO) << "\tPer-query max CPU result memory ratio of allocated total: "
-              << g_executor_resource_mgr_per_query_max_cpu_result_mem_ratio;
     LOG(INFO) << "\tAllow concurrent CPU thread/slot oversubscription: "
               << (g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency
                       ? "enabled"
                       : "disabled");
+    if (g_use_cpu_mem_pool_for_output_buffers) {
+      LOG(INFO) << "\tCPU result set is managed by using CPU buffer pool memory";
+    } else {
+      if (g_executor_resource_mgr_cpu_result_mem_bytes != 0UL) {
+        LOG(INFO) << "\tCPU result set reserved allocation: "
+                  << g_executor_resource_mgr_cpu_result_mem_bytes / (1024 * 1024)
+                  << " MB";
+      } else {
+        LOG(INFO) << "\tCPU result set reserved ratio of CPU buffer pool size: "
+                  << g_executor_resource_mgr_cpu_result_mem_ratio;
+      }
+    }
+
+    LOG(INFO) << "\tPer-query max CPU result memory ratio of allocated total: "
+              << g_executor_resource_mgr_per_query_max_cpu_result_mem_ratio;
     LOG(INFO)
         << "\tAllow concurrent CPU result memory oversubscription: "
         << (g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency
@@ -2168,6 +2202,14 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   boost::algorithm::trim_if(authMetadata.ldapQueryUrl, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.ldapRoleRegex, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.ldapSuperUserRole, boost::is_any_of("\"'"));
+
+  if (Geospatial::g_importer_additional_proj_data_path.length() &&
+      !boost::filesystem::is_directory(
+          Geospatial::g_importer_additional_proj_data_path)) {
+    LOG(ERROR) << "Invalid importer_additional_proj_data_path server config option "
+                  "value: path does not exist or is not readable";
+    return 1;
+  }
 
   return boost::none;
 }

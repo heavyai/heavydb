@@ -52,6 +52,7 @@
 
 bool g_cluster{false};
 bool g_bigint_count{false};
+bool g_enable_mode_on_gpu{false};
 int g_hll_precision_bits{11};
 size_t g_watchdog_baseline_max_groups{120000000};
 extern size_t g_approx_quantile_buffer;
@@ -59,6 +60,7 @@ extern size_t g_approx_quantile_centroids;
 extern int64_t g_bitmap_memory_limit;
 extern size_t g_default_max_groups_buffer_entry_guess;
 extern size_t g_leaf_count;
+extern size_t g_baseline_groupby_threshold;
 
 bool ColRangeInfo::isEmpty() const {
   return min == 0 && max == -1;
@@ -138,16 +140,6 @@ bool expr_is_rowid(const Analyzer::Expr* expr) {
   return true;
 }
 
-bool has_count_distinct(const RelAlgExecutionUnit& ra_exe_unit) {
-  for (const auto& target_expr : ra_exe_unit.target_exprs) {
-    const auto agg_info = get_target_info(target_expr, g_bigint_count);
-    if (agg_info.is_agg && is_distinct_target(agg_info)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 bool is_column_range_too_big_for_perfect_hash(const ColRangeInfo& col_range_info,
                                               const int64_t max_entry_count) {
   try {
@@ -172,6 +164,30 @@ bool cardinality_estimate_less_than_column_range(const int64_t cardinality_estim
   } catch (...) {
     return false;
   }
+}
+
+struct IsCountDistinct {
+  bool operator()(Analyzer::Expr const* const target_expr) const {
+    TargetInfo const ti = get_target_info(target_expr, g_bigint_count);
+    return ti.is_agg && is_distinct_target(ti);
+  }
+};
+
+struct IsMode {
+  bool operator()(Analyzer::Expr const* const target_expr) const {
+    TargetInfo const ti = get_target_info(target_expr, g_bigint_count);
+    return ti.is_agg && ti.agg_kind == kMODE;
+  }
+};
+
+template <typename... FUNCTOR>  // FUNCTOR is either IsCountDistinct or IsMode
+bool any(std::vector<Analyzer::Expr*> const& target_exprs) {
+  return (std::any_of(target_exprs.begin(), target_exprs.end(), FUNCTOR{}) || ...);
+}
+
+template <typename FUNCTOR>  // FUNCTOR is either IsCountDistinct or IsMode
+size_t count(std::vector<Analyzer::Expr*> const& target_exprs) {
+  return std::count_if(target_exprs.begin(), target_exprs.end(), FUNCTOR{});
 }
 
 ColRangeInfo get_expr_range_info(const RelAlgExecutionUnit& ra_exe_unit,
@@ -215,14 +231,23 @@ ColRangeInfo get_expr_range_info(const RelAlgExecutionUnit& ra_exe_unit,
 
 }  // namespace
 
+size_t GroupByAndAggregate::getBaselineThreshold(const RelAlgExecutionUnit& ra_exe_unit,
+                                                 ExecutorDeviceType device_type) {
+  if (device_type == ExecutorDeviceType::GPU) {
+    if (any<IsMode, IsCountDistinct>(ra_exe_unit.target_exprs)) {
+      return g_baseline_groupby_threshold / 4;
+    }
+  }
+  return g_baseline_groupby_threshold;
+}
+
 ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   // Use baseline layout more eagerly on the GPU if the query uses count distinct,
   // because our HyperLogLog implementation is 4x less memory efficient on GPU.
   // Technically, this only applies to APPROX_COUNT_DISTINCT, but in practice we
   // can expect this to be true anyway for grouped queries since the precise version
   // uses significantly more memory.
-  const int64_t baseline_threshold =
-      Executor::getBaselineThreshold(has_count_distinct(ra_exe_unit_), device_type_);
+  const int64_t baseline_threshold = getBaselineThreshold(ra_exe_unit_, device_type_);
   // `group_cardinality_estimation_` is set as the result of (NDV) cardinality estimator
   auto group_cardinality_estimation = group_cardinality_estimation_.value_or(0);
   if (ra_exe_unit_.groupby_exprs.size() != 1) {
@@ -292,7 +317,7 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   const int64_t col_count =
       ra_exe_unit_.groupby_exprs.size() + ra_exe_unit_.target_exprs.size();
   int64_t max_entry_count = MAX_BUFFER_SIZE / (col_count * sizeof(int64_t));
-  if (has_count_distinct(ra_exe_unit_)) {
+  if (any<IsCountDistinct, IsMode>(ra_exe_unit_.target_exprs)) {
     max_entry_count = std::min(max_entry_count, baseline_threshold);
   }
   const auto& groupby_expr_ti = ra_exe_unit_.groupby_exprs.front()->get_type_info();
@@ -315,7 +340,7 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
       if (!ra_exe_unit_.sort_info.order_entries.empty()) {
         // TODO(adb): allow some sorts to pass through this block by centralizing sort
         // algorithm decision making
-        if (has_count_distinct(ra_exe_unit_)) {
+        if (any<IsCountDistinct>(ra_exe_unit_.target_exprs)) {
           // always use baseline hash for column range too big for perfect hash with count
           // distinct descriptors. We will need 8GB of CPU memory minimum for the perfect
           // hash group by in this case.
@@ -956,6 +981,8 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     throw WatchdogException("Query would use too much memory");
   }
 
+  size_t const nmode_targets = count<IsMode>(ra_exe_unit_.target_exprs);
+
   const auto count_distinct_descriptors = init_count_distinct_descriptors(
       ra_exe_unit_, query_infos_, col_range_info, device_type_, executor_);
   auto approx_quantile_descriptors = initApproxQuantileDescriptors();
@@ -973,6 +1000,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                        max_groups_buffer_entry_count,
                                        render_info,
                                        approx_quantile_descriptors,
+                                       nmode_targets,
                                        count_distinct_descriptors,
                                        must_use_baseline_sort,
                                        output_columnar_hint,
@@ -993,6 +1021,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                        max_groups_buffer_entry_count,
                                        render_info,
                                        approx_quantile_descriptors,
+                                       nmode_targets,
                                        count_distinct_descriptors,
                                        must_use_baseline_sort,
                                        output_columnar_hint,
@@ -1140,7 +1169,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
                 QueryDescriptionType::Projection &&
             query_mem_desc.useStreamingTopN()) {
           // Ignore rejection on pushing current row to top-K heap.
-          LL_BUILDER.CreateRet(LL_INT(int32_t(0)));
+          LL_BUILDER.CreateBr(filter_false);
         } else {
           CodeGenerator code_generator(executor_);
           LL_BUILDER.CreateRet(LL_BUILDER.CreateNeg(LL_BUILDER.CreateTrunc(
@@ -1994,10 +2023,9 @@ void GroupByAndAggregate::codegenMode(const size_t target_idx,
                                       std::vector<llvm::Value*>& agg_args,
                                       const QueryMemoryDescriptor& query_mem_desc,
                                       const ExecutorDeviceType device_type) {
-  if (device_type == ExecutorDeviceType::GPU) {
+  if (!g_enable_mode_on_gpu && device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
-  llvm::BasicBlock *calc, *skip{nullptr};
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   auto const arg_ti =
       static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
@@ -2005,27 +2033,56 @@ void GroupByAndAggregate::codegenMode(const size_t target_idx,
   bool const is_fp = arg_ti.is_fp();
   auto* cs = executor_->cgen_state_.get();
   auto& irb = cs->ir_builder_;
+  llvm::BasicBlock* const entry_bb = irb.GetInsertBlock();
+  llvm::BasicBlock* calc_bb{nullptr};
+  llvm::BasicBlock* skip_bb{nullptr};
   if (nullable) {
     auto* const null_value =
         is_fp ? cs->inlineNull(arg_ti) : cs->castToTypeIn(cs->inlineNull(arg_ti), 64);
     auto* const skip_cond = is_fp ? irb.CreateFCmpOEQ(agg_args.back(), null_value)
                                   : irb.CreateICmpEQ(agg_args.back(), null_value);
-    calc = llvm::BasicBlock::Create(cs->context_, "calc_mode");
-    skip = llvm::BasicBlock::Create(cs->context_, "skip_mode");
-    irb.CreateCondBr(skip_cond, skip, calc);
-    cs->current_func_->getBasicBlockList().push_back(calc);
-    irb.SetInsertPoint(calc);
+    calc_bb = llvm::BasicBlock::Create(cs->context_, "calc_mode");
+    skip_bb = llvm::BasicBlock::Create(cs->context_, "skip_mode");
+    irb.CreateCondBr(skip_cond, skip_bb, calc_bb);
+    cs->current_func_->getBasicBlockList().push_back(calc_bb);
+    irb.SetInsertPoint(calc_bb);
   }
   if (is_fp) {
-    auto* const int_type = get_int_type(8 * arg_ti.get_size(), cs->context_);
+    auto* int_type = get_int_type(8 * arg_ti.get_size(), cs->context_);
     agg_args.back() = irb.CreateBitCast(agg_args.back(), int_type);
+    if (arg_ti.get_size() < static_cast<int>(sizeof(int64_t))) {
+      constexpr auto cast_op = llvm::Instruction::CastOps::SExt;
+      int_type = get_int_type(8 * sizeof(int64_t), cs->context_);
+      agg_args.back() = irb.CreateCast(cast_op, agg_args.back(), int_type);
+    }
   }
+  // The error_code must be checked and returned if non-zero when run on GPU given
+  // the possibility of ErrorCode::PROBING_LENGTH_EXCEEDED on hash table insert.
+  llvm::Value* error_code_lv{nullptr};
   // "agg_mode" collides with existing names, so non-standard suffix "_func" is added.
-  cs->emitExternalCall("agg_mode_func", llvm::Type::getVoidTy(cs->context_), agg_args);
+  if (device_type_ == ExecutorDeviceType::GPU) {
+    llvm::Type* const error_code_ty = get_int_type(32, cs->context_);
+    agg_args.push_back(getAdditionalLiteral(-3));  // base_dev_addr
+    error_code_lv = executor_->cgen_state_->emitExternalCall(
+        "agg_mode_func_gpu", error_code_ty, agg_args);
+  } else {
+    cs->emitExternalCall("agg_mode_func", llvm::Type::getVoidTy(cs->context_), agg_args);
+  }
   if (nullable) {
-    irb.CreateBr(skip);
-    cs->current_func_->getBasicBlockList().push_back(skip);
-    irb.SetInsertPoint(skip);
+    irb.CreateBr(skip_bb);
+    cs->current_func_->getBasicBlockList().push_back(skip_bb);
+    irb.SetInsertPoint(skip_bb);
+    if (error_code_lv) {
+      llvm::PHINode* error_code_phi =
+          irb.CreatePHI(error_code_lv->getType(), 2, "error_code");
+      llvm::Constant* const zero = llvm::ConstantInt::get(error_code_lv->getType(), 0);
+      error_code_phi->addIncoming(zero, entry_bb);
+      error_code_phi->addIncoming(error_code_lv, calc_bb);
+      error_code_lv = error_code_phi;
+    }
+  }
+  if (error_code_lv) {
+    checkErrorCode(error_code_lv);
   }
 }
 

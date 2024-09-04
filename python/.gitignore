@@ -125,3 +125,7 @@ mapdql_history.txt
 **/.DS_Store
 
 .vscode/
+heavydb/**/constants.py
+heavydb/**/ttypes.py
+heavydb/thrift
+

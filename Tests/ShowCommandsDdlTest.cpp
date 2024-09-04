@@ -1304,8 +1304,92 @@ class ShowCreateTableTest : public DBHandlerTestFixture {
     sql("DROP TABLE IF EXISTS showcreatetabletest2;");
     sql("DROP VIEW IF EXISTS showcreateviewtest;");
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    sql("DROP TABLE IF EXISTS test_temp_table;");
   }
 };
+
+TEST_F(ShowCreateTableTest, TableComment) {
+  sql("CREATE TABLE showcreatetabletest (id INT, txt TEXT);");
+  sql("COMMENT ON TABLE showcreatetabletest IS 'test comment';");
+  sqlAndCompareResult("SHOW CREATE TABLE showcreatetabletest;",
+                      {{"CREATE TABLE showcreatetabletest /* test comment */ (\n  id "
+                        "INTEGER,\n  txt TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(ShowCreateTableTest, ForeignTableComment) {
+  sql("CREATE FOREIGN TABLE test_foreign_table (id INT, bint BIGINT) SERVER "
+      "default_local_delimited "
+      "WITH (file_path='" +
+      test_source_path + "/two_col_1_2.csv',header='true');");
+  sql("COMMENT ON TABLE test_foreign_table IS 'test comment';");
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE test_foreign_table;",
+      {{"CREATE FOREIGN TABLE test_foreign_table /* test comment */ (\n  id INTEGER,\n  "
+        "bint BIGINT)\nSERVER default_local_delimited\nWITH (FILE_PATH='" +
+        test_source_path +
+        "/two_col_1_2.csv', HEADER='true', REFRESH_TIMING_TYPE='MANUAL', "
+        "REFRESH_UPDATE_TYPE='ALL');"}});
+}
+
+TEST_F(ShowCreateTableTest, TemporaryTableComment) {
+  sql("CREATE TEMPORARY TABLE test_temp_table (id INT, txt TEXT);");
+  sql("COMMENT ON TABLE test_temp_table IS 'test comment';");
+  sqlAndCompareResult("SHOW CREATE TABLE test_temp_table;",
+                      {{"CREATE TEMPORARY TABLE test_temp_table /* test comment */ (\n  "
+                        "id INTEGER,\n  txt TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(ShowCreateTableTest, TableColumnComment) {
+  sql("CREATE TABLE showcreatetabletest (id INT, txt TEXT);");
+  sql("COMMENT ON COLUMN showcreatetabletest.id IS 'test column comment';");
+  sqlAndCompareResult("SHOW CREATE TABLE showcreatetabletest;",
+                      {{"CREATE TABLE showcreatetabletest (\n  id INTEGER /* test column "
+                        "comment */,\n  txt TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(ShowCreateTableTest, ForeignTableColumnComment) {
+  sql("CREATE FOREIGN TABLE test_foreign_table (id INT, bint BIGINT) SERVER "
+      "default_local_delimited "
+      "WITH (file_path='" +
+      test_source_path + "/two_col_1_2.csv',header='true');");
+  sql("COMMENT ON COLUMN test_foreign_table.id IS 'test column comment';");
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE test_foreign_table;",
+      {{"CREATE FOREIGN TABLE test_foreign_table (\n  id INTEGER /* test column comment "
+        "*/,\n  bint BIGINT)\nSERVER default_local_delimited\nWITH (FILE_PATH='" +
+        test_source_path +
+        "/two_col_1_2.csv', HEADER='true', REFRESH_TIMING_TYPE='MANUAL', "
+        "REFRESH_UPDATE_TYPE='ALL');"}});
+}
+
+TEST_F(ShowCreateTableTest, TemporaryTableColumnComment) {
+  sql("CREATE TEMPORARY TABLE test_temp_table (id INT, txt TEXT);");
+  sql("COMMENT ON COLUMN test_temp_table.id IS 'test column comment';");
+  sqlAndCompareResult("SHOW CREATE TABLE test_temp_table;",
+                      {{"CREATE TEMPORARY TABLE test_temp_table (\n  id INTEGER /* test "
+                        "column comment */,\n  txt TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(ShowCreateTableTest, TableCommentControlCharacters) {
+  sql("CREATE TABLE showcreatetabletest (id INT, txt TEXT);");
+  sql("COMMENT ON TABLE showcreatetabletest IS 'test column comment\nwith "
+      "c\fontrol\rcharacters\nthat may be\b used';");
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE showcreatetabletest;",
+      {{"CREATE TABLE showcreatetabletest /* u&'test column comment\\000awith "
+        "c\\000control\\000dcharacters\\000athat may be\\0008 used' */ (\n  id "
+        "INTEGER,\n  txt TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(ShowCreateTableTest, TableCommentWithCommentGuards) {
+  sql("CREATE TABLE showcreatetabletest (id INT, txt TEXT);");
+  sql("COMMENT ON TABLE showcreatetabletest IS '/*This is a comment with /* nested "
+      "guards */ */';");
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE showcreatetabletest;",
+      {{"CREATE TABLE showcreatetabletest /* \\\\/*This is a comment with \\\\/* nested "
+        "guards *\\\\/ *\\\\/ */ (\n  id INTEGER,\n  txt TEXT ENCODING DICT(32));"}});
+}
 
 TEST_F(ShowCreateTableTest, Identity) {
   // clang-format off
@@ -1604,6 +1688,299 @@ TEST_F(ShowCreateTableTest, DefaultColumnValues) {
         "FLOAT DEFAULT 1.15,\n  n DECIMAL(3,2) DEFAULT 1.25 ENCODING FIXED(16));"}});
 }
 
+using TestingTableTypeParameter = std::string;
+
+class ShowCommentTest : public DBHandlerTestFixture,
+                        public testing::WithParamInterface<TestingTableTypeParameter> {
+ public:
+  void SetUp() override {
+    saved_enable_system_tables = g_enable_system_tables;
+    g_enable_system_tables = true;
+    DBHandlerTestFixture::SetUp();
+    loginAdmin();
+    dropItemsIfExist();
+    sql("CREATE DATABASE test_db;");
+    sql("CREATE TABLE employees (id INT, salary BIGINT);");
+    sql("CREATE TABLE employees_sharded (id INT, salary BIGINT, SHARD KEY (id)) WITH "
+        "(shard_count=2);");
+    sql("CREATE TABLE \"the.funniest.employees\" (id INT, \"really big salary\" "
+        "BIGINT);");
+    sql("CREATE VIEW employees_view as (SELECT * FROM employees);");
+    sql("CREATE TEMPORARY TABLE employees_temp (id INT, salary BIGINT);");
+    sql("CREATE FOREIGN TABLE employees_ft (id INT, salary BIGINT) SERVER "
+        "default_local_delimited "
+        "WITH (file_path='" +
+        test_source_path + "/two_col_1_2.csv',header='true');");
+    createTestUsers();
+  }
+
+  void TearDown() override {
+    loginAdmin();
+    dropItemsIfExist();
+    DBHandlerTestFixture::TearDown();
+    g_enable_system_tables = saved_enable_system_tables;
+  }
+
+  void loginInformationSchema() {
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "information_schema");
+  }
+
+  std::string getTableNameForTableType(std::string base_table_name) {
+    if (GetParam() == "table") {
+      return base_table_name;
+    } else if (GetParam() == "foreign_table") {
+      return base_table_name + "_ft";
+    } else if (GetParam() == "temp_table") {
+      return base_table_name + "_temp";
+    } else {
+      throw std::runtime_error("Unsupported table type test parameter");
+    }
+    return {};
+  }
+
+  static void createTestUsers() {
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE test_db TO test_user;");
+    sql("GRANT CREATE TABLE ON DATABASE test_db TO test_user;");
+
+    sql("CREATE USER another_test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE test_db TO another_test_user;");
+    sql("GRANT SELECT ON DATABASE test_db TO another_test_user;");
+  }
+
+  void loginTestUser() { login("test_user", "test_pass", "test_db"); }
+
+  void loginAnotherTestUser() { login("another_test_user", "test_pass", "test_db"); }
+
+  void dropItemsIfExist() {
+    sql("DROP VIEW IF EXISTS employees_view;");
+    sql("DROP TABLE IF EXISTS employees;");
+    sql("DROP TABLE IF EXISTS employees_sharded;");
+    sql("DROP TABLE IF EXISTS \"the.funniest.employees\" ;");
+    sql("DROP TABLE IF EXISTS employees_temp;");
+    sql("DROP FOREIGN TABLE IF EXISTS employees_ft;");
+    sql("DROP USER IF EXISTS test_user;");
+    sql("DROP USER IF EXISTS another_test_user;");
+    sql("DROP DATABASE IF EXISTS test_db;");
+  }
+
+  void assertOptionalStringsEqual(const std::optional<std::string>& a,
+                                  const std::optional<std::string>& b,
+                                  const std::string& object_name) {
+    ASSERT_EQ(a.has_value(), b.has_value())
+        << " expected string has_value: " << b.has_value()
+        << " observed string has_value: " << a.has_value() << ", for object "
+        << object_name;
+    if (a.has_value()) {
+      ASSERT_EQ(a.value(), b.value()) << " expected string value: " << b.value()
+                                      << " observed string has_value: " << a.value()
+                                      << ", for object " << object_name;
+    }
+  }
+
+  void assertExpectedTableCommentFromStorage(const std::optional<std::string>& comment,
+                                             const std::string& table_name) {
+    auto td = getCatalog().getMetadataForTable(table_name);
+    CHECK(td);
+    auto storage_td = getCatalog().getTableFromStorage(td->tableId);
+    assertOptionalStringsEqual(storage_td->comment,
+                               comment,
+                               "table \"" + table_name + "\" comment from storage");
+  }
+
+  void assertExpectedColumnCommentFromStorage(const std::optional<std::string>& comment,
+                                              const std::string& table_name,
+                                              const std::string& column_name) {
+    auto td = getCatalog().getMetadataForTable(table_name);
+    CHECK(td);
+    auto cd = getCatalog().getMetadataForColumn(td->tableId, column_name);
+    CHECK(cd);
+    auto storage_cd = getCatalog().getColumnFromStorage(td->tableId, cd->columnId);
+    assertOptionalStringsEqual(
+        storage_cd->comment,
+        comment,
+        "column \"" + table_name + "." + column_name + "\" comment from storage");
+  }
+
+  void assertExpectedTableCommentInMemory(const std::optional<std::string>& comment,
+                                          const std::string& table_name) {
+    auto td = getCatalog().getMetadataForTable(table_name);
+    CHECK(td);
+    assertOptionalStringsEqual(
+        td->comment, comment, "table \"" + table_name + "\" comment");
+  }
+
+  void assertExpectedColumnCommentInMemory(const std::optional<std::string>& comment,
+                                           const std::string& table_name,
+                                           const std::string& column_name) {
+    auto td = getCatalog().getMetadataForTable(table_name);
+    CHECK(td);
+    auto cd = getCatalog().getMetadataForColumn(td->tableId, column_name);
+    CHECK(cd);
+    assertOptionalStringsEqual(
+        cd->comment,
+        comment,
+        "column \"" + table_name + "." + column_name + "\" comment");
+  }
+
+  void assertExpectedTableComment(const std::optional<std::string>& comment,
+                                  const std::string& table_name) {
+    auto td = getCatalog().getMetadataForTable(table_name);
+    CHECK(td);
+    assertExpectedTableCommentInMemory(comment, table_name);
+    if (!td->isTemporaryTable()) {
+      assertExpectedTableCommentFromStorage(comment, table_name);
+    }
+  }
+
+  void assertExpectedColumnComment(const std::optional<std::string>& comment,
+                                   const std::string& table_name,
+                                   const std::string& column_name) {
+    auto td = getCatalog().getMetadataForTable(table_name);
+    CHECK(td);
+    assertExpectedColumnCommentInMemory(comment, table_name, column_name);
+    if (!td->isTemporaryTable()) {
+      assertExpectedColumnCommentFromStorage(comment, table_name, column_name);
+    }
+  }
+
+ private:
+  bool saved_enable_system_tables;
+};
+
+TEST_F(ShowCommentTest, AddTableCommentNonExistentTable) {
+  queryAndAssertException(
+      "COMMENT ON TABLE employees_non_existent IS 'This is a non-existent table';",
+      "Table/View employees_non_existent for catalog heavyai does not exist.");
+}
+
+TEST_F(ShowCommentTest, AddTableCommentNonExistentColumn) {
+  queryAndAssertException(
+      "COMMENT ON COLUMN employees.address IS 'This is their home address';",
+      "Column address does not exist for table employees.");
+}
+
+TEST_F(ShowCommentTest, ViewAddTableComment) {
+  queryAndAssertException(
+      "COMMENT ON TABLE employees_view IS 'This table stores employee information';",
+      "COMMENT ON views is currently not supported.");
+}
+
+TEST_F(ShowCommentTest, AddColumnCommentWithQuotedIdentifier) {
+  sql("COMMENT ON COLUMN \"the.funniest.employees\".\"really big salary\" IS 'Stores the "
+      "big salary of the funny employee';");
+  assertExpectedColumnComment("Stores the big salary of the funny employee",
+                              "the.funniest.employees",
+                              "really big salary");
+}
+
+TEST_P(ShowCommentTest, AddTableComment) {
+  sql("COMMENT ON TABLE " + getTableNameForTableType("employees") +
+      " IS 'This table stores employee information';");
+  assertExpectedTableComment("This table stores employee information",
+                             getTableNameForTableType("employees"));
+}
+
+TEST_P(ShowCommentTest, AddColumnComment) {
+  sql("COMMENT ON COLUMN " + getTableNameForTableType("employees") +
+      ".salary IS 'Stores the salary of the employee';");
+  assertExpectedColumnComment("Stores the salary of the employee",
+                              getTableNameForTableType("employees"),
+                              "salary");
+}
+
+TEST_F(ShowCommentTest, AddTableCommentSharded) {
+  sql("COMMENT ON TABLE employees_sharded IS 'This table stores employee information';");
+  assertExpectedTableComment("This table stores employee information",
+                             "employees_sharded");
+}
+
+TEST_F(ShowCommentTest, AddColumnCommentSharded) {
+  sql("COMMENT ON COLUMN employees_sharded.salary IS 'Stores the salary of the "
+      "employee';");
+  assertExpectedColumnComment(
+      "Stores the salary of the employee", "employees_sharded", "salary");
+}
+
+TEST_P(ShowCommentTest, RemoveTableComment) {
+  sql("COMMENT ON TABLE " + getTableNameForTableType("employees") +
+      " IS 'This table stores employee information';");
+  sql("COMMENT ON TABLE " + getTableNameForTableType("employees") + " IS NULL;");
+  assertExpectedTableComment(std::nullopt, getTableNameForTableType("employees"));
+}
+
+TEST_P(ShowCommentTest, RemoveColumnComment) {
+  sql("COMMENT ON COLUMN " + getTableNameForTableType("employees") +
+      ".salary IS 'Stores the salary of the employee';");
+  sql("COMMENT ON COLUMN " + getTableNameForTableType("employees") + ".salary IS NULL;");
+  assertExpectedColumnComment(
+      std::nullopt, getTableNameForTableType("employees"), "salary");
+}
+
+TEST_P(ShowCommentTest, ModifyTableComment) {
+  sql("COMMENT ON TABLE " + getTableNameForTableType("employees") +
+      " IS 'This table stores employee information';");
+  assertExpectedTableComment("This table stores employee information",
+                             getTableNameForTableType("employees"));
+  sql("COMMENT ON TABLE " + getTableNameForTableType("employees") + " IS 'New comment';");
+  assertExpectedTableComment("New comment", getTableNameForTableType("employees"));
+}
+
+TEST_P(ShowCommentTest, ModifyColumnComment) {
+  sql("COMMENT ON COLUMN " + getTableNameForTableType("employees") +
+      ".salary IS 'Stores the salary of the employee';");
+  assertExpectedColumnComment("Stores the salary of the employee",
+                              getTableNameForTableType("employees"),
+                              "salary");
+  sql("COMMENT ON COLUMN " + getTableNameForTableType("employees") +
+      ".salary IS 'New comment';");
+  assertExpectedColumnComment(
+      "New comment", getTableNameForTableType("employees"), "salary");
+}
+
+TEST_F(ShowCommentTest, OwnerAddTableComment) {
+  loginTestUser();
+  sql("CREATE TABLE employees_test (id INT, salary BIGINT);");
+  sql("COMMENT ON TABLE employees_test IS 'This table stores employee information';");
+  assertExpectedTableComment("This table stores employee information", "employees_test");
+}
+
+TEST_F(ShowCommentTest, NonSuperAccessRevokedForTableComment) {
+  loginTestUser();
+  sql("CREATE TABLE employees_test (id INT, salary BIGINT);");
+
+  loginAnotherTestUser();
+  queryAndAssertException("COMMENT ON TABLE employees_test IS 'New comment';",
+                          "COMMENT ON failed on table \"employees_test\". It can only be "
+                          "executed by super user or owner of the table.");
+}
+
+TEST_F(ShowCommentTest, OwnerAddColumnComment) {
+  loginTestUser();
+
+  sql("CREATE TABLE employees_test (id INT, salary BIGINT);");
+  sql("COMMENT ON COLUMN employees_test.salary IS 'Stores the salary of the employee';");
+  assertExpectedColumnComment(
+      "Stores the salary of the employee", "employees_test", "salary");
+}
+
+TEST_F(ShowCommentTest, NonSuperAccessRevokedForColumnComment) {
+  loginTestUser();
+  sql("CREATE TABLE employees_test (id INT, salary BIGINT);");
+
+  loginAnotherTestUser();
+  queryAndAssertException("COMMENT ON COLUMN employees_test.salary IS 'New comment';",
+                          "COMMENT ON failed on table \"employees_test\". It can only be "
+                          "executed by super user or owner of the table.");
+}
+
+INSTANTIATE_TEST_SUITE_P(DifferentTableTypes,
+                         ShowCommentTest,
+                         testing::Values("table", "foreign_table", "temp_table"),
+                         [](const auto& param_info) -> std::string {
+                           return param_info.param;
+                         });
+
 class SystemTablesShowCreateTableTest : public ShowCreateTableTest {
  protected:
   void SetUp() override {
@@ -1622,13 +1999,16 @@ TEST_F(SystemTablesShowCreateTableTest, Users) {
 TEST_F(SystemTablesShowCreateTableTest, Tables) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE tables;",
-      {{"CREATE TABLE tables (\n  database_id INTEGER,\n  database_name TEXT ENCODING "
-        "DICT(32),\n  table_id INTEGER,\n  table_name TEXT ENCODING DICT(32),\n  "
-        "owner_id INTEGER,\n  owner_user_name TEXT ENCODING DICT(32),\n  column_count "
-        "INTEGER,\n  table_type TEXT ENCODING DICT(32),\n  view_sql TEXT ENCODING "
-        "DICT(32),\n  max_fragment_size INTEGER,\n  max_chunk_size BIGINT,\n  "
-        "fragment_page_size INTEGER,\n  max_rows BIGINT,\n  max_rollback_epochs "
-        "INTEGER,\n  shard_count INTEGER,\n  ddl_statement TEXT ENCODING DICT(32));"}});
+      {
+          {"CREATE TABLE tables (\n  database_id INTEGER,\n  database_name TEXT ENCODING "
+           "DICT(32),\n  table_id INTEGER,\n  table_name TEXT ENCODING DICT(32),\n  "
+           "owner_id INTEGER,\n  owner_user_name TEXT ENCODING DICT(32),\n  column_count "
+           "INTEGER,\n  table_type TEXT ENCODING DICT(32),\n  view_sql TEXT ENCODING "
+           "DICT(32),\n  max_fragment_size INTEGER,\n  max_chunk_size BIGINT,\n  "
+           "fragment_page_size INTEGER,\n  max_rows BIGINT,\n  max_rollback_epochs "
+           "INTEGER,\n  shard_count INTEGER,\n  ddl_statement TEXT ENCODING DICT(32),\n  "
+           "comment TEXT ENCODING DICT(32));"},
+      });
 }
 
 TEST_F(SystemTablesShowCreateTableTest, Dashboards) {
@@ -4130,12 +4510,12 @@ TEST_F(SystemTablesTest, TablesSystemTable) {
                         shared::kRootUsername, i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
                         i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
                         i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0),
-                        create_table_sql},
+                        create_table_sql, Null},
                        {i(3), "test_db_1", view_1_id, "test_view_1", getUserId(shared::kRootUsername),
                         shared::kRootUsername, i(2), "VIEW", "SELECT * FROM test_table_1;",
                         i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
                         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql}});
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql, Null}});
   // clang-format on
 
   login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
@@ -4166,27 +4546,834 @@ TEST_F(SystemTablesTest, TablesSystemTable) {
                         getUserId(shared::kRootUsername), shared::kRootUsername, i(2), "FOREIGN", Null,
                         i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
                         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_foreign_table_sql},
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_foreign_table_sql, Null},
                        {i(3), "test_db_1", table_1_id, "test_table_2", getUserId(shared::kRootUsername),
                         shared::kRootUsername, i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
                         i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
                         i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0),
-                        create_table_sql},
+                        create_table_sql, Null},
                        {i(3), "test_db_1", temp_table_id, "test_temp_table",
                         getUserId(shared::kRootUsername), shared::kRootUsername, i(3), "TEMPORARY", Null,
                         i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
                         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_temp_table_sql},
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_temp_table_sql, Null},
                        {i(3), "test_db_1", view_1_id, "test_view_1", getUserId(shared::kRootUsername),
                         shared::kRootUsername, i(2), "VIEW", "SELECT * FROM test_table_1;",
                         i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
                         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql},
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql, Null},
                        {i(3), "test_db_1", view_2_id, "test_view_2", getUserId(shared::kRootUsername),
                         shared::kRootUsername, i(2), "VIEW", "SELECT * FROM test_table_2;",
                         i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
                         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql_2}});
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql_2, Null}});
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, TablesSystemTableComments) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Test does not play well with sharded tables.";
+  }
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+
+  const std::string create_employees_sql =
+      "CREATE TABLE employees (\n  id INTEGER,\n  salary BIGINT);";
+  const std::string create_employees_sql_with_comment =
+      "CREATE TABLE employees /* This table stores employee information, v1 */ (\n  id "
+      "INTEGER,\n  salary BIGINT);";
+  const std::string create_employees_ft_sql =
+      "CREATE FOREIGN TABLE employees_ft (\n  id INTEGER,\n  salary BIGINT)\nSERVER "
+      "default_local_delimited\nWITH (FILE_PATH='" +
+      test_source_path +
+      "/two_col_1_2.csv', HEADER='true', REFRESH_TIMING_TYPE='MANUAL', "
+      "REFRESH_UPDATE_TYPE='ALL');";
+  const std::string create_employees_ft_sql_with_comment =
+      "CREATE FOREIGN TABLE employees_ft /* This table stores employee information, v5 "
+      "*/ (\n  id INTEGER,\n  salary BIGINT)\nSERVER "
+      "default_local_delimited\nWITH (FILE_PATH='" +
+      test_source_path +
+      "/two_col_1_2.csv', HEADER='true', REFRESH_TIMING_TYPE='MANUAL', "
+      "REFRESH_UPDATE_TYPE='ALL');";
+  const std::string create_employees_sharded_sql =
+      "CREATE TABLE employees_sharded (\n  id INTEGER,\n  salary BIGINT,\n  SHARD KEY "
+      "(id))\nWITH (SHARD_COUNT=2);";
+  const std::string create_employees_sharded_sql_with_comment =
+      "CREATE TABLE employees_sharded /* This table stores employee information, v2 */ "
+      "(\n  id INTEGER,\n  salary BIGINT,\n  SHARD KEY "
+      "(id))\nWITH (SHARD_COUNT=2);";
+  const std::string create_employees_sharded_1_sql =
+      "CREATE TABLE employees_sharded_shard_#1 (\n  id INTEGER,\n  salary BIGINT,\n  "
+      "SHARD KEY (id))\nWITH (SHARD_COUNT=2);";
+  const std::string create_employees_sharded_1_sql_with_comment =
+      "CREATE TABLE employees_sharded_shard_#1 /* This table stores employee "
+      "information, v2 */ (\n  id INTEGER,\n  salary BIGINT,\n  "
+      "SHARD KEY (id))\nWITH (SHARD_COUNT=2);";
+  const std::string create_employees_sharded_2_sql =
+      "CREATE TABLE employees_sharded_shard_#2 (\n  id INTEGER,\n  salary BIGINT,\n  "
+      "SHARD KEY (id))\nWITH (SHARD_COUNT=2);";
+  const std::string create_employees_sharded_2_sql_with_comment =
+      "CREATE TABLE employees_sharded_shard_#2 /* This table stores employee "
+      "information, v2 */ (\n  id INTEGER,\n  salary BIGINT,\n  "
+      "SHARD KEY (id))\nWITH (SHARD_COUNT=2);";
+  const std::string create_funniest_employees_sql =
+      "CREATE TABLE \"the.funniest.employees\" (\n  id INTEGER,\n  \"really big salary\" "
+      "BIGINT);";
+  const std::string create_funniest_employees_sql_output =
+      "CREATE TABLE the.funniest.employees (\n  id INTEGER,\n  \"really big salary\" "
+      "BIGINT);";
+  const std::string create_funniest_employees_sql_output_with_comment =
+      "CREATE TABLE the.funniest.employees /* This table stores employee information, v3 "
+      "*/ (\n  id INTEGER,\n  \"really big salary\" "
+      "BIGINT);";
+  const std::string create_employees_temp_sql =
+      "CREATE TEMPORARY TABLE employees_temp (\n  id INTEGER,\n  salary BIGINT);";
+  const std::string create_employees_temp_sql_with_comment =
+      "CREATE TEMPORARY TABLE employees_temp /* This table stores employee information, "
+      "v4 */ (\n  id INTEGER,\n  salary BIGINT);";
+
+  sql(create_employees_sql);
+  sql(create_employees_sharded_sql);
+  sql(create_funniest_employees_sql);
+  sql(create_employees_temp_sql);
+  sql(create_employees_ft_sql);
+
+  auto funniest_employees_id = getTableId("the.funniest.employees");
+  auto employees_id = getTableId("employees");
+  auto employees_sharded_id = getTableId("employees_sharded");
+  auto employees_sharded_shard_1_id = getTableId("employees_sharded_shard_#1");
+  auto employees_sharded_shard_2_id = getTableId("employees_sharded_shard_#2");
+  auto employees_temp_id = getTableId("employees_temp");
+  auto employees_ft_id = getTableId("employees_ft");
+
+  sql("COMMENT ON TABLE employees"
+      " IS 'This table stores employee information, v1';");
+  sql("COMMENT ON TABLE employees_sharded"
+      " IS 'This table stores employee information, v2';");
+  sql("COMMENT ON TABLE \"the.funniest.employees\""
+      " IS 'This table stores employee information, v3';");
+  sql("COMMENT ON TABLE employees_temp"
+      " IS 'This table stores employee information, v4';");
+  sql("COMMENT ON TABLE employees_ft"
+      " IS 'This table stores employee information, v5';");
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult(
+        "SELECT * FROM tables WHERE database_id <> " +
+        std::to_string(getDbId(shared::kDefaultDbName)) + " ORDER BY table_name;",
+    {
+      { 3L, "test_db_1", employees_id, "employees",
+        getUserId(shared::kRootUsername), shared::kRootUsername, 4L, "DEFAULT",
+        Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS),
+        0L, create_employees_sql_with_comment, "This table stores employee information, v1" },
+      { 3L, "test_db_1", employees_ft_id, "employees_ft",
+        getUserId(shared::kRootUsername), shared::kRootUsername, 3L, "FOREIGN",
+        Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 0L, create_employees_ft_sql_with_comment,
+        "This table stores employee information, v5" },
+      { 3L, "test_db_1", employees_sharded_id, "employees_sharded",
+        getUserId(shared::kRootUsername), shared::kRootUsername, 4L, "DEFAULT",
+        Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 2L, create_employees_sharded_sql_with_comment,
+        "This table stores employee information, v2" },
+      { 3L, "test_db_1", employees_sharded_shard_1_id,
+        "employees_sharded_shard_#1", getUserId(shared::kRootUsername),
+        shared::kRootUsername, 4L, "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
+        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 2L, create_employees_sharded_1_sql_with_comment,
+        "This table stores employee information, v2" },
+      { 3L, "test_db_1", employees_sharded_shard_2_id,
+        "employees_sharded_shard_#2", getUserId(shared::kRootUsername),
+        shared::kRootUsername, 4L, "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
+        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 2L, create_employees_sharded_2_sql_with_comment,
+        "This table stores employee information, v2" },
+      { 3L, "test_db_1", employees_temp_id, "employees_temp",
+        getUserId(shared::kRootUsername), shared::kRootUsername, 4L,
+        "TEMPORARY", Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 0L, create_employees_temp_sql_with_comment,
+        "This table stores employee information, v4" },
+      { 3L, "test_db_1", funniest_employees_id, "the.funniest.employees",
+        getUserId(shared::kRootUsername), shared::kRootUsername, 4L, "DEFAULT",
+        Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 0L,
+        create_funniest_employees_sql_output_with_comment,
+        "This table stores employee information, v3" },
+    }
+  );
+  // clang-format on
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+
+  sql("COMMENT ON TABLE employees"
+      " IS NULL;");
+  sql("COMMENT ON TABLE employees_sharded"
+      " IS NULL;");
+  sql("COMMENT ON TABLE \"the.funniest.employees\""
+      " IS NULL;");
+  sql("COMMENT ON TABLE employees_temp"
+      " IS NULL;");
+  sql("COMMENT ON TABLE employees_ft"
+      " IS NULL;");
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult(
+        "SELECT * FROM tables WHERE database_id <> " +
+        std::to_string(getDbId(shared::kDefaultDbName)) + " ORDER BY table_name;",
+    {
+      { 3L, "test_db_1", employees_id, "employees",
+        getUserId(shared::kRootUsername), shared::kRootUsername, 4L, "DEFAULT",
+        Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS),
+        0L, create_employees_sql, Null},
+      { 3L, "test_db_1", employees_ft_id, "employees_ft",
+        getUserId(shared::kRootUsername), shared::kRootUsername, 3L, "FOREIGN",
+        Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 0L, create_employees_ft_sql,
+        Null},
+      { 3L, "test_db_1", employees_sharded_id, "employees_sharded",
+        getUserId(shared::kRootUsername), shared::kRootUsername, 4L, "DEFAULT",
+        Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 2L, create_employees_sharded_sql,
+        Null},
+      { 3L, "test_db_1", employees_sharded_shard_1_id,
+        "employees_sharded_shard_#1", getUserId(shared::kRootUsername),
+        shared::kRootUsername, 4L, "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
+        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 2L, create_employees_sharded_1_sql,
+        Null},
+      { 3L, "test_db_1", employees_sharded_shard_2_id,
+        "employees_sharded_shard_#2", getUserId(shared::kRootUsername),
+        shared::kRootUsername, 4L, "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
+        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 2L, create_employees_sharded_2_sql,
+        Null},
+      { 3L, "test_db_1", employees_temp_id, "employees_temp",
+        getUserId(shared::kRootUsername), shared::kRootUsername, 4L,
+        "TEMPORARY", Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 0L, create_employees_temp_sql,
+        Null},
+      { 3L, "test_db_1", funniest_employees_id, "the.funniest.employees",
+        getUserId(shared::kRootUsername), shared::kRootUsername, 4L, "DEFAULT",
+        Null, i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+        i(DEFAULT_MAX_ROLLBACK_EPOCHS), 0L,
+        create_funniest_employees_sql_output,
+        Null},
+    }
+  );
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, ColumnsSystemTable) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  std::string create_table_sql{
+      "CREATE TABLE test_table_1 (\n  i INTEGER DEFAULT -1, s TEXT ENCODING DICT(16), sa "
+      "TEXT[], mp GEOMETRY(MULTIPOLYGON,4326) NOT NULL);"};
+  sql(create_table_sql);
+
+  // NOTE: Views reference columns in existing tables, and so do not appear in
+  // the `columns` system table, this view is created to verify this negative
+  // result
+  std::string create_view_sql{"CREATE VIEW test_view_1 AS SELECT * FROM test_table_1;"};
+  sql(create_view_sql);
+  auto table_1_id = getTableId("test_table_1");
+
+  loginInformationSchema();
+  // Skip the shared::kDefaultDbName database, since it can contain default
+  // created tables and tables created by other test suites.
+
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+        { 3L, "test_db_1", table_1_id, "test_table_1", 1L, "i", "INTEGER", "NONE", 4L,
+            True, "-1", Null },
+        { 3L, "test_db_1", table_1_id, "test_table_1", 2L, "s", "TEXT", "DICT(16)",
+            2L, True, Null, Null },
+        { 3L, "test_db_1", table_1_id, "test_table_1", 3L, "sa", "TEXT[]",
+            "DICT(32)", Null, True, Null, Null },
+        { 3L, "test_db_1", table_1_id, "test_table_1", 4L, "mp",
+            "GEOMETRY(MULTIPOLYGON, 4326)", "COMPRESSED(32)", Null, False, Null,
+            Null },
+      }
+  );
+  // clang-format on
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  sql("ALTER TABLE test_table_1 RENAME TO test_table_2;");
+  sql("ALTER TABLE test_table_2 RENAME COLUMN sa TO sa_new;");
+  if (!isDistributedMode()) {
+    sql("ALTER TABLE test_table_2 ALTER COLUMN s TYPE BIGINT[1] NOT NULL DEFAULT {-1};");
+  }
+  create_table_sql = "CREATE TABLE test_table_2 (\n  i INTEGER);";
+  std::string create_temp_table_sql{
+      "CREATE TEMPORARY TABLE test_temp_table (\n  t TEXT ENCODING DICT(32));"};
+  sql(create_temp_table_sql);
+  std::string create_foreign_table_sql{
+      "CREATE FOREIGN TABLE test_foreign_table (\n  "
+      "i INTEGER)\nSERVER default_local_delimited\nWITH (FILE_PATH='" +
+      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() +
+      "', "
+      "REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"};
+  sql(create_foreign_table_sql);
+
+  auto foreign_table_id = getTableId("test_foreign_table");
+  auto temp_table_id = getTableId("test_temp_table");
+
+  loginInformationSchema();
+
+  std::vector<std::vector<NullableTargetValue>> expected_result;
+  // clang-format off
+  if ( !isDistributedMode() ) {
+      expected_result = {
+          {3L, "test_db_1", foreign_table_id, "test_foreign_table", 1L, "i", "INTEGER", "NONE", 4L, True,  Null, Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 1L, "i", "INTEGER", "NONE", 4L, True,  "-1", Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 2L, "s", "BIGINT[1]", "NONE", 8L, False,  "ARRAY[-1]", Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 3L, "sa_new", "TEXT[]", "DICT(32)", Null, True,  Null, Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 4L, "mp", "GEOMETRY(MULTIPOLYGON, 4326)", "COMPRESSED(32)", Null,
+           False,  Null, Null},
+          {3L, "test_db_1", temp_table_id, "test_temp_table", 1L, "t", "TEXT", "DICT(32)", 4L, True, Null, Null},
+      };
+  } else {
+      expected_result = {
+          {3L, "test_db_1", foreign_table_id, "test_foreign_table", 1L, "i", "INTEGER", "NONE", 4L, True,  Null, Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 1L, "i", "INTEGER", "NONE", 4L, True,  "-1", Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 2L, "s", "TEXT", "DICT(16)", 2L, True,  Null, Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 3L, "sa_new", "TEXT[]", "DICT(32)", Null, True,  Null, Null},
+          {3L, "test_db_1", table_1_id, "test_table_2", 4L, "mp", "GEOMETRY(MULTIPOLYGON, 4326)", "COMPRESSED(32)", Null,
+           False,  Null, Null},
+          {3L, "test_db_1", temp_table_id, "test_temp_table", 1L, "t", "TEXT", "DICT(32)", 4L, True, Null, Null},
+      };
+  }
+  // clang-format on
+
+  sqlAndCompareResult("SELECT * FROM columns WHERE database_id <> " +
+                          std::to_string(getDbId(shared::kDefaultDbName)) +
+                          " ORDER BY table_name, column_id;",
+                      expected_result);
+}
+
+TEST_F(SystemTablesTest, ColumnsSystemTableScalarTypes) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  std::string create_table_scalars_sql{
+      "CREATE TABLE scalars ("
+      "b BOOLEAN,"
+      "t TINYINT,"
+      "s1 SMALLINT,"
+      "s2 SMALLINT ENCODING FIXED(8),"
+      "i1 INT,"
+      "i2 INT ENCODING FIXED(16),"
+      "i3 INT ENCODING FIXED(8),"
+      "bi1 BIGINT,"
+      "bi2 BIGINT ENCODING FIXED(32),"
+      "bi3 BIGINT ENCODING FIXED(16),"
+      "bi4 BIGINT ENCODING FIXED(8),"
+      "dec1 DECIMAL(4,2),"
+      "dec2 DECIMAL(9,5),"
+      "dec3 DECIMAL(18,12),"
+      "f FLOAT,"
+      "d DOUBLE,"
+      "tm TIME,"
+      "ts1 TIMESTAMP(0) ENCODING FIXED(32),"
+      "ts2 TIMESTAMP(0),"
+      "ts3 TIMESTAMP(3),"
+      "ts4 TIMESTAMP(6),"
+      "ts5 TIMESTAMP(9),"
+      "dt1 DATE,"
+      "dt2 DATE ENCODING DAYS(16),"
+      "dt3 DATE ENCODING DAYS(32),"
+      "txt TEXT ENCODING NONE,"
+      "td1 TEXT ENCODING DICT(8),"
+      "td2 TEXT ENCODING DICT(16),"
+      "td3 TEXT ENCODING DICT(32));"};
+
+  sql(create_table_scalars_sql);
+
+  auto scalars_table_id = getTableId("scalars");
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+        { 3L, "test_db_1", scalars_table_id, "scalars", 1L, "b", "BOOLEAN", "NONE", 1L,
+            True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 2L, "t", "TINYINT", "NONE",
+            1L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 3L, "s1", "SMALLINT",
+            "NONE", 2L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 4L, "s2", "SMALLINT",
+            "FIXED(8)", 1L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 5L, "i1", "INTEGER", "NONE",
+            4L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 6L, "i2", "INTEGER",
+            "FIXED(16)", 2L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 7L, "i3", "INTEGER",
+            "FIXED(8)", 1L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 8L, "bi1", "BIGINT", "NONE",
+            8L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 9L, "bi2", "BIGINT",
+            "FIXED(32)", 4L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 10L, "bi3", "BIGINT",
+            "FIXED(16)", 2L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 11L, "bi4", "BIGINT",
+            "FIXED(8)", 1L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 12L, "dec1", "DECIMAL(4,2)",
+            "FIXED(16)", 2L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 13L, "dec2", "DECIMAL(9,5)",
+            "FIXED(32)", 4L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 14L, "dec3",
+            "DECIMAL(18,12)", "NONE", 8L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 15L, "f", "FLOAT", "NONE",
+            4L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 16L, "d", "DOUBLE", "NONE",
+            8L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 17L, "tm", "TIME", "NONE",
+            8L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 18L, "ts1", "TIMESTAMP(0)",
+            "FIXED(32)", 4L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 19L, "ts2", "TIMESTAMP(0)",
+            "NONE", 8L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 20L, "ts3", "TIMESTAMP(3)",
+            "NONE", 8L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 21L, "ts4", "TIMESTAMP(6)",
+            "NONE", 8L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 22L, "ts5", "TIMESTAMP(9)",
+            "NONE", 8L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 23L, "dt1", "DATE",
+            "DAYS(32)", 4L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 24L, "dt2", "DATE",
+            "DAYS(16)", 2L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 25L, "dt3", "DATE",
+            "DAYS(32)", 4L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 26L, "txt", "TEXT", "NONE",
+            Null, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 27L, "td1", "TEXT",
+            "DICT(8)", 1L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 28L, "td2", "TEXT",
+            "DICT(16)", 2L, True, Null, Null },
+        { 3L, "test_db_1", scalars_table_id, "scalars", 29L, "td3", "TEXT",
+            "DICT(32)", 4L, True, Null, Null },
+      }
+  );
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, ColumnsSystemTableArrayTypes) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  std::string create_table_arrays_sql{
+      "CREATE TABLE arrays ("
+      "b1 BOOLEAN[],"
+      "b2 BOOLEAN[42],"
+      "t1 TINYINT[],"
+      "t2 TINYINT[42],"
+      "s1 SMALLINT[],"
+      "s2 SMALLINT[42],"
+      "i1 INT[],"
+      "i2 INT[42],"
+      "bi1 BIGINT[],"
+      "bi2 BIGINT[42],"
+      "dec1 DECIMAL(4,2)[],"
+      "dec2 DECIMAL(4,2)[42],"
+      "dec3 DECIMAL(9,5)[],"
+      "dec4 DECIMAL(9,5)[42],"
+      "dec5 DECIMAL(18,12)[],"
+      "dec6 DECIMAL(18,12)[42],"
+      "f1 FLOAT[],"
+      "f2 FLOAT[42],"
+      "d1 DOUBLE[],"
+      "d2 DOUBLE[42],"
+      "tm1 TIME[],"
+      "tm2 TIME[42],"
+      "ts1 TIMESTAMP(0)[],"
+      "ts2 TIMESTAMP(0)[42],"
+      "ts3 TIMESTAMP(3)[],"
+      "ts4 TIMESTAMP(3)[42],"
+      "ts5 TIMESTAMP(6)[],"
+      "ts6 TIMESTAMP(6)[42],"
+      "ts7 TIMESTAMP(9)[],"
+      "ts8 TIMESTAMP(9)[42],"
+      "dt1 DATE[],"
+      "dt2 DATE[42],"
+      "td1 TEXT[],"
+      "td2 TEXT[42]"
+      ");"};
+
+  sql(create_table_arrays_sql);
+
+  auto arrays_table_id = getTableId("arrays");
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+        { 3L, "test_db_1", arrays_table_id, "arrays", 1L, "b1", "BOOLEAN[]", "NONE",
+            Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 2L, "b2", "BOOLEAN[42]",
+            "NONE", 42L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 3L, "t1", "TINYINT[]", "NONE",
+            Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 4L, "t2", "TINYINT[42]",
+            "NONE", 42L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 5L, "s1", "SMALLINT[]",
+            "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 6L, "s2", "SMALLINT[42]",
+            "NONE", 84L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 7L, "i1", "INTEGER[]", "NONE",
+            Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 8L, "i2", "INTEGER[42]",
+            "NONE", 168L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 9L, "bi1", "BIGINT[]", "NONE",
+            Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 10L, "bi2", "BIGINT[42]",
+            "NONE", 336L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 11L, "dec1", "DECIMAL(4,2)[]",
+            "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 12L, "dec2",
+            "DECIMAL(4,2)[42]", "NONE", 336L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 13L, "dec3", "DECIMAL(9,5)[]",
+            "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 14L, "dec4",
+            "DECIMAL(9,5)[42]", "NONE", 336L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 15L, "dec5",
+            "DECIMAL(18,12)[]", "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 16L, "dec6",
+            "DECIMAL(18,12)[42]", "NONE", 336L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 17L, "f1", "FLOAT[]", "NONE",
+            Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 18L, "f2", "FLOAT[42]",
+            "NONE", 168L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 19L, "d1", "DOUBLE[]", "NONE",
+            Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 20L, "d2", "DOUBLE[42]",
+            "NONE", 336L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 21L, "tm1", "TIME[]", "NONE",
+            Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 22L, "tm2", "TIME[42]",
+            "NONE", 336L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 23L, "ts1", "TIMESTAMP(0)[]",
+            "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 24L, "ts2",
+            "TIMESTAMP(0)[42]", "NONE", 336L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 25L, "ts3", "TIMESTAMP(3)[]",
+            "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 26L, "ts4",
+            "TIMESTAMP(3)[42]", "NONE", 336L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 27L, "ts5", "TIMESTAMP(6)[]",
+            "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 28L, "ts6",
+            "TIMESTAMP(6)[42]", "NONE", 336L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 29L, "ts7", "TIMESTAMP(9)[]",
+            "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 30L, "ts8",
+            "TIMESTAMP(9)[42]", "NONE", 336L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 31L, "dt1", "DATE[]", "NONE",
+            Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 32L, "dt2", "DATE[42]",
+            "NONE", 336L, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 33L, "td1", "TEXT[]",
+            "DICT(32)", Null, True, Null, Null },
+        { 3L, "test_db_1", arrays_table_id, "arrays", 34L, "td2", "TEXT[42]",
+            "DICT(32)", 168L, True, Null, Null },
+      }
+  );
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, ColumnsSystemTableGeoTypes) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  std::string create_table_geo_sql{
+      "CREATE TABLE geo ("
+      "p1 POINT,"
+      "p2 GEOMETRY(POINT,4326),"
+      "p3 GEOMETRY(POINT,900913),"
+      "mp1 MULTIPOINT,"
+      "mp2 GEOMETRY(MULTIPOINT,4326),"
+      "mp3 GEOMETRY(MULTIPOINT,900913),"
+      "ls1 LINESTRING,"
+      "ls2 GEOMETRY(LINESTRING,4326),"
+      "ls3 GEOMETRY(LINESTRING,900913),"
+      "poly1 POLYGON,"
+      "poly2 GEOMETRY(POLYGON,4326),"
+      "poly3 GEOMETRY(POLYGON,900913),"
+      "mpoly1 MULTIPOLYGON,"
+      "mpoly2 GEOMETRY(MULTIPOLYGON,4326),"
+      "mpoly3 GEOMETRY(MULTIPOLYGON,900913)"
+      ");"};
+
+  sql(create_table_geo_sql);
+
+  auto geo_table_id = getTableId("geo");
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+        { 3L, "test_db_1", geo_table_id, "geo", 1L, "p1", "GEOMETRY(POINT)", "NONE",
+            16L, True, Null, Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 3L, "p2", "GEOMETRY(POINT, 4326)",
+            "COMPRESSED(32)", 8L, True, Null, Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 5L, "p3", "GEOMETRY(POINT, 900913)",
+            "NONE", 16L, True, Null, Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 7L, "mp1", "GEOMETRY(MULTIPOINT)",
+            "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 10L, "mp2",
+            "GEOMETRY(MULTIPOINT, 4326)", "COMPRESSED(32)", Null, True, Null,
+            Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 13L, "mp3",
+            "GEOMETRY(MULTIPOINT, 900913)", "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 16L, "ls1", "GEOMETRY(LINESTRING)",
+            "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 19L, "ls2",
+            "GEOMETRY(LINESTRING, 4326)", "COMPRESSED(32)", Null, True, Null,
+            Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 22L, "ls3",
+            "GEOMETRY(LINESTRING, 900913)", "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 25L, "poly1", "GEOMETRY(POLYGON)",
+            "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 29L, "poly2",
+            "GEOMETRY(POLYGON, 4326)", "COMPRESSED(32)", Null, True, Null, Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 33L, "poly3",
+            "GEOMETRY(POLYGON, 900913)", "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 37L, "mpoly1",
+            "GEOMETRY(MULTIPOLYGON)", "NONE", Null, True, Null, Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 42L, "mpoly2",
+            "GEOMETRY(MULTIPOLYGON, 4326)", "COMPRESSED(32)", Null, True, Null,
+            Null },
+        { 3L, "test_db_1", geo_table_id, "geo", 47L, "mpoly3",
+            "GEOMETRY(MULTIPOLYGON, 900913)", "NONE", Null, True, Null, Null },
+      }
+  );
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, ColumnsSystemTableAddDropColumns) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  std::string create_table_sql{
+      "CREATE TABLE test_table_1 ("
+      "id INT,"
+      "dropped INT);"};
+
+  sql(create_table_sql);
+  auto test_table_1_id = getTableId("test_table_1");
+
+  // clang-format off
+  loginInformationSchema();
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+        { 3L, "test_db_1", test_table_1_id, "test_table_1", 1L, "id", "INTEGER", "NONE",
+            4L, True, Null, Null },
+        { 3L, "test_db_1", test_table_1_id, "test_table_1", 2L, "dropped",
+            "INTEGER", "NONE", 4L, True, Null, Null },
+      }
+  );
+  // clang-format on
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  sql("ALTER TABLE test_table_1 ADD COLUMN added TEXT;");
+  sql("ALTER TABLE test_table_1 DROP COLUMN dropped;");
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+        { 3L, "test_db_1", test_table_1_id, "test_table_1", 1L, "id", "INTEGER", "NONE",
+            4L, True, Null, Null },
+        { 3L, "test_db_1", test_table_1_id, "test_table_1", 5L, "added", "TEXT",
+            "DICT(32)", 4L, True, Null, Null },
+      }
+  );
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, ColumnsSystemTableComments) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Test does not play well with sharded tables.";
+  }
+
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+
+  sql("CREATE TABLE employees (id INT, salary BIGINT);");
+  sql("CREATE TABLE employees_sharded (id INT, salary BIGINT, SHARD KEY (id)) WITH "
+      "(shard_count=2);");
+  sql("CREATE TABLE \"the.funniest.employees\" (id INT, \"really big salary\" "
+      "BIGINT);");
+  sql("CREATE TEMPORARY TABLE employees_temp (id INT, salary BIGINT);");
+  sql("CREATE FOREIGN TABLE employees_ft (id INT, salary BIGINT) SERVER "
+      "default_local_delimited "
+      "WITH (file_path='" +
+      test_source_path + "/two_col_1_2.csv',header='true');");
+
+  auto funniest_employees_id = getTableId("the.funniest.employees");
+  auto employees_id = getTableId("employees");
+  auto employees_sharded_id = getTableId("employees_sharded");
+  auto employees_sharded_shard_1_id = getTableId("employees_sharded_shard_#1");
+  auto employees_sharded_shard_2_id = getTableId("employees_sharded_shard_#2");
+  auto employees_temp_id = getTableId("employees_temp");
+  auto employees_ft_id = getTableId("employees_ft");
+
+  sql("COMMENT ON COLUMN \"the.funniest.employees\".\"really big salary\" IS 'Stores the "
+      "big salary of the funny employee';");
+  sql("COMMENT ON COLUMN employees"
+      ".salary IS 'Stores the salary of the employee, v1';");
+  sql("COMMENT ON COLUMN employees_sharded"
+      ".salary IS 'Stores the salary of the employee, v2';");
+  sql("COMMENT ON COLUMN employees_temp"
+      ".salary IS 'Stores the salary of the employee, v3';");
+  sql("COMMENT ON COLUMN employees_ft"
+      ".salary IS 'Stores the salary of the employee, v4';");
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+          { 3L, "test_db_1", employees_id, "employees", 1L, "id", "INTEGER", "NONE",
+              4L, True, Null, Null },
+          { 3L, "test_db_1", employees_id, "employees", 2L, "salary", "BIGINT",
+              "NONE", 8L, True, Null, "Stores the salary of the employee, v1" },
+          { 3L, "test_db_1", employees_ft_id, "employees_ft", 1L, "id", "INTEGER",
+              "NONE", 4L, True, Null, Null },
+          { 3L, "test_db_1", employees_ft_id, "employees_ft", 2L, "salary",
+              "BIGINT", "NONE", 8L, True, Null,
+              "Stores the salary of the employee, v4" },
+          { 3L, "test_db_1", employees_sharded_id, "employees_sharded", 1L, "id",
+              "INTEGER", "NONE", 4L, True, Null, Null },
+          { 3L, "test_db_1", employees_sharded_id, "employees_sharded", 2L,
+              "salary", "BIGINT", "NONE", 8L, True, Null,
+              "Stores the salary of the employee, v2" },
+          { 3L, "test_db_1", employees_sharded_shard_1_id,
+              "employees_sharded_shard_#1", 1L, "id", "INTEGER", "NONE", 4L, True,
+              Null, Null },
+          { 3L, "test_db_1", employees_sharded_shard_1_id,
+              "employees_sharded_shard_#1", 2L, "salary", "BIGINT", "NONE", 8L,
+              True, Null, "Stores the salary of the employee, v2" },
+          { 3L, "test_db_1", employees_sharded_shard_2_id,
+              "employees_sharded_shard_#2", 1L, "id", "INTEGER", "NONE", 4L, True,
+              Null, Null },
+          { 3L, "test_db_1", employees_sharded_shard_2_id,
+              "employees_sharded_shard_#2", 2L, "salary", "BIGINT", "NONE", 8L,
+              True, Null, "Stores the salary of the employee, v2" },
+          { 3L, "test_db_1", employees_temp_id, "employees_temp", 1L, "id",
+              "INTEGER", "NONE", 4L, True, Null, Null },
+          { 3L, "test_db_1", employees_temp_id, "employees_temp", 2L, "salary",
+              "BIGINT", "NONE", 8L, True, Null,
+              "Stores the salary of the employee, v3" },
+          { 3L, "test_db_1", funniest_employees_id, "the.funniest.employees", 1L,
+              "id", "INTEGER", "NONE", 4L, True, Null, Null },
+          { 3L, "test_db_1", funniest_employees_id, "the.funniest.employees", 2L,
+              "really big salary", "BIGINT", "NONE", 8L, True, Null,
+              "Stores the big salary of the funny employee" },
+      }
+  );
+  // clang-format on
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+
+  sql("COMMENT ON COLUMN \"the.funniest.employees\".\"really big salary\" IS NULL");
+  sql("COMMENT ON COLUMN employees.salary IS NULL;");
+  sql("COMMENT ON COLUMN employees_sharded.salary IS NULL;");
+  sql("COMMENT ON COLUMN employees_temp.salary IS NULL;");
+  sql("COMMENT ON COLUMN employees_ft.salary IS NULL;");
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM columns WHERE database_id <> " +
+      std::to_string(getDbId(shared::kDefaultDbName)) +
+          " ORDER BY table_name, column_id;",
+      {
+          { 3L, "test_db_1", employees_id, "employees", 1L, "id", "INTEGER", "NONE",
+              4L, True, Null, Null },
+          { 3L, "test_db_1", employees_id, "employees", 2L, "salary", "BIGINT",
+              "NONE", 8L, True, Null, Null },
+          { 3L, "test_db_1", employees_ft_id, "employees_ft", 1L, "id", "INTEGER",
+              "NONE", 4L, True, Null, Null },
+          { 3L, "test_db_1", employees_ft_id, "employees_ft", 2L, "salary",
+              "BIGINT", "NONE", 8L, True, Null, Null },
+          { 3L, "test_db_1", employees_sharded_id, "employees_sharded", 1L, "id",
+              "INTEGER", "NONE", 4L, True, Null, Null },
+          { 3L, "test_db_1", employees_sharded_id, "employees_sharded", 2L,
+              "salary", "BIGINT", "NONE", 8L, True, Null, Null },
+          { 3L, "test_db_1", employees_sharded_shard_1_id,
+              "employees_sharded_shard_#1", 1L, "id", "INTEGER", "NONE", 4L, True,
+              Null, Null },
+          { 3L, "test_db_1", employees_sharded_shard_1_id,
+              "employees_sharded_shard_#1", 2L, "salary", "BIGINT", "NONE", 8L,
+              True, Null, Null },
+          { 3L, "test_db_1", employees_sharded_shard_2_id,
+              "employees_sharded_shard_#2", 1L, "id", "INTEGER", "NONE", 4L, True,
+              Null, Null },
+          { 3L, "test_db_1", employees_sharded_shard_2_id,
+              "employees_sharded_shard_#2", 2L, "salary", "BIGINT", "NONE", 8L,
+              True, Null, Null },
+          { 3L, "test_db_1", employees_temp_id, "employees_temp", 1L, "id",
+              "INTEGER", "NONE", 4L, True, Null, Null },
+          { 3L, "test_db_1", employees_temp_id, "employees_temp", 2L, "salary",
+              "BIGINT", "NONE", 8L, True, Null, Null },
+          { 3L, "test_db_1", funniest_employees_id, "the.funniest.employees", 1L,
+              "id", "INTEGER", "NONE", 4L, True, Null, Null },
+          { 3L, "test_db_1", funniest_employees_id, "the.funniest.employees", 2L,
+              "really big salary", "BIGINT", "NONE", 8L, True, Null, Null },
+      }
+  );
   // clang-format on
 }
 
@@ -4220,7 +5407,7 @@ TEST_F(SystemTablesTest, TablesSystemTableDeletedOwner) {
                         i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
                         i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
                         i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0),
-                        create_table_sql}});
+                        create_table_sql, Null}});
   // clang-format on
 }
 
@@ -5438,13 +6625,23 @@ class GetTableDetailsTest : public DBHandlerTestFixture {
     sql("DROP TABLE IF EXISTS test_sharded_table;");
   }
 
-  void assertExpectedTableDetails(const std::string& table_name,
-                                  TTableType::type table_type,
-                                  const TTableRefreshInfo* refresh_info = nullptr,
-                                  int64_t shard_count = 0) {
+  virtual void getTableDetails(TTableDetails& table_details,
+                               const TSessionId& session_id,
+                               const std::string table_name,
+                               DBHandler* db_handler) {
+    db_handler->get_table_details(table_details, session_id, table_name);
+  }
+
+  void assertExpectedTableDetails(
+      const std::string& table_name,
+      TTableType::type table_type,
+      const TTableRefreshInfo* refresh_info = nullptr,
+      int64_t shard_count = 0,
+      std::optional<std::string>* table_comment = nullptr,
+      std::map<std::string, std::optional<std::string>>* column_comments = nullptr) {
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
     TTableDetails table_details;
-    db_handler->get_table_details(table_details, session_id, table_name);
+    getTableDetails(table_details, session_id, table_name, db_handler);
     EXPECT_EQ(static_cast<int64_t>(DEFAULT_FRAGMENT_ROWS), table_details.fragment_size);
     EXPECT_EQ(static_cast<int64_t>(DEFAULT_MAX_ROWS), table_details.max_rows);
     EXPECT_EQ(static_cast<int64_t>(DEFAULT_PAGE_SIZE), table_details.page_size);
@@ -5463,6 +6660,33 @@ class GetTableDetailsTest : public DBHandlerTestFixture {
     EXPECT_EQ(shard_count, table_details.shard_count);
     if (shard_count > 0) {
       EXPECT_EQ("i", table_details.sharded_column_name);
+    }
+    if (table_comment) {
+      if (table_comment->has_value()) {
+        ASSERT_TRUE(table_details.__isset.comment);
+        ASSERT_EQ(table_details.comment, table_comment->value());
+      } else {
+        ASSERT_FALSE(table_details.__isset.comment);
+      }
+    }
+    if (column_comments) {
+      for (const auto& [column_name, comment] : *column_comments) {
+        bool found = false;
+        for (const auto& thrift_col : table_details.row_desc) {
+          if (thrift_col.col_name != column_name) {
+            continue;
+          }
+          found = true;
+          if (comment.has_value()) {
+            ASSERT_TRUE(thrift_col.__isset.comment);
+            ASSERT_EQ(thrift_col.comment, comment);
+          } else {
+            ASSERT_FALSE(thrift_col.__isset.comment);
+          }
+        }
+        ASSERT_TRUE(found) << " comment expected but not found for column: " +
+                                  column_name;
+      }
     }
   }
 
@@ -5595,6 +6819,105 @@ TEST_F(GetTableDetailsTest, NonIsoInputStartDateTime) {
   refresh_info.next_refresh_time = iso_start_date_time;
   assertExpectedTableDetails("test_table_4", TTableType::FOREIGN, &refresh_info);
 }
+
+using ThriftApiCallTestParam = std::string;
+
+class GetTableDetailsCommentsTest
+    : public GetTableDetailsTest,
+      public ::testing::WithParamInterface<ThriftApiCallTestParam> {
+ protected:
+  void SetUp() override {
+    GetTableDetailsTest::SetUp();
+    sql("DROP TABLE IF EXISTS test_sharded_table;");
+    sql("CREATE TABLE test_sharded_table (i INTEGER, SHARD KEY (i)) WITH (shard_count = "
+        "2);");
+  }
+
+  void TearDown() override { GetTableDetailsTest::TearDown(); }
+
+  void getTableDetails(TTableDetails& table_details,
+                       const TSessionId& session_id,
+                       const std::string table_name,
+                       DBHandler* db_handler) override {
+    if (GetParam() == "get_table_details") {
+      db_handler->get_table_details(table_details, session_id, table_name);
+    } else if (GetParam() == "get_table_details_for_database") {
+      db_handler->get_table_details_for_database(
+          table_details, session_id, table_name, shared::kDefaultDbName);
+    } else {
+      throw std::runtime_error("unknown parameter passed to test: " + GetParam());
+    }
+  }
+};
+
+TEST_P(GetTableDetailsCommentsTest, DefaultTableCommentOnTable) {
+  std::optional<std::string> expected_comment = "test comment";
+  sql("COMMENT ON TABLE test_table_1 IS '" + expected_comment.value() + "';");
+  assertExpectedTableDetails(
+      "test_table_1", TTableType::DEFAULT, nullptr, 0, &expected_comment);
+}
+
+TEST_P(GetTableDetailsCommentsTest, DefaultTableCommentOnTableColumn) {
+  std::map<std::string, std::optional<std::string>> expected_comments = {
+      {"i", "test comment"}};
+  sql("COMMENT ON COLUMN test_table_1.i IS '" + expected_comments["i"].value() + "';");
+  assertExpectedTableDetails(
+      "test_table_1", TTableType::DEFAULT, nullptr, 0, nullptr, &expected_comments);
+}
+
+TEST_P(GetTableDetailsCommentsTest, DefaultTableCommentOnTempTable) {
+  std::optional<std::string> expected_comment = "test comment";
+  sql("COMMENT ON TABLE test_table_2 IS '" + expected_comment.value() + "';");
+  assertExpectedTableDetails(
+      "test_table_2", TTableType::TEMPORARY, nullptr, 0, &expected_comment);
+}
+
+TEST_P(GetTableDetailsCommentsTest, DefaultTableCommentOnTempTableColumn) {
+  std::map<std::string, std::optional<std::string>> expected_comments = {
+      {"i", "test comment"}};
+  sql("COMMENT ON COLUMN test_table_2.i IS '" + expected_comments["i"].value() + "';");
+  assertExpectedTableDetails(
+      "test_table_2", TTableType::TEMPORARY, nullptr, 0, nullptr, &expected_comments);
+}
+
+TEST_P(GetTableDetailsCommentsTest, DefaultTableCommentOnForeignTable) {
+  std::optional<std::string> expected_comment = "test comment";
+  sql("COMMENT ON TABLE test_table_3 IS '" + expected_comment.value() + "';");
+  assertExpectedTableDetails(
+      "test_table_3", TTableType::FOREIGN, nullptr, 0, &expected_comment);
+}
+
+TEST_P(GetTableDetailsCommentsTest, DefaultTableCommentOnForeignTableColumn) {
+  std::map<std::string, std::optional<std::string>> expected_comments = {
+      {"i", "test comment"}};
+  sql("COMMENT ON COLUMN test_table_3.i IS '" + expected_comments["i"].value() + "';");
+  assertExpectedTableDetails(
+      "test_table_3", TTableType::FOREIGN, nullptr, 0, nullptr, &expected_comments);
+}
+
+TEST_P(GetTableDetailsCommentsTest, DefaultTableCommentOnShardedTable) {
+  std::optional<std::string> expected_comment = "test comment";
+  sql("COMMENT ON TABLE test_sharded_table IS '" + expected_comment.value() + "';");
+  assertExpectedTableDetails(
+      "test_sharded_table", TTableType::DEFAULT, nullptr, 2, &expected_comment);
+}
+
+TEST_P(GetTableDetailsCommentsTest, DefaultTableCommentOnShardedTableColumn) {
+  std::map<std::string, std::optional<std::string>> expected_comments = {
+      {"i", "test comment"}};
+  sql("COMMENT ON COLUMN test_sharded_table.i IS '" + expected_comments["i"].value() +
+      "';");
+  assertExpectedTableDetails(
+      "test_sharded_table", TTableType::DEFAULT, nullptr, 2, nullptr, &expected_comments);
+}
+
+INSTANTIATE_TEST_SUITE_P(DifferentGetTableDetailsThriftApi,
+                         GetTableDetailsCommentsTest,
+                         testing::Values("get_table_details",
+                                         "get_table_details_for_database"),
+                         [](const auto& param_info) -> std::string {
+                           return param_info.param;
+                         });
 
 int main(int argc, char** argv) {
   g_enable_table_functions = true;

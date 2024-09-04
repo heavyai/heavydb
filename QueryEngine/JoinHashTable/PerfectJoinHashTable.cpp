@@ -226,12 +226,14 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   auto const& inner_table_info =
       get_inner_query_info(inner_col->getTableKey(), query_infos).info;
   auto const num_inner_table_tuple = inner_table_info.getFragmentNumTuplesUpperBound();
-  // when a table is small but has too wide hash entry value range, it's better to deploy
-  // baseline hash join to save unnecessary memory space and expensive hash table
-  // initialization & building cost required to build a perfect join hash table
+  // when a table has too wide range of hash entries compared to the actual # rows,
+  // it's better to deploy baseline hash join to save computational cost w.r.t
+  // time and space to use perfect hash join layout
+  // i.e., a table has 100 rows but its range of hash entries is 1 ~ 10000000 (10M)
+  // then, perfect hash table layout uses a hash table having 10M slots (instead of 100)
+  // but baseline can use much smaller # slots to build its hash table
   auto const deploy_baseline_join =
       !g_is_test_env &&
-      num_inner_table_tuple < g_num_tuple_threshold_switch_to_baseline &&
       num_inner_table_tuple * g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline <
           bucketized_entry_count;
   if (deploy_baseline_join) {
@@ -1153,7 +1155,8 @@ void PerfectJoinHashTable::copyCpuHashTableToGpu(
     device_allocator->copyToDevice(
         gpu_buffer_ptr,
         cpu_hash_table->getCpuBuffer(),
-        cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU));
+        cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
+        "Perfect join hashtable");
   }
   CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
   hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
@@ -1176,7 +1179,8 @@ std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
     auto data_mgr = executor_->getDataMgr();
     auto device_allocator = std::make_unique<CudaAllocator>(
         data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-    device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
+    device_allocator->copyFromDevice(
+        buffer_copy.get(), buffer, buffer_size, "Perfect join hashtable");
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else
@@ -1212,7 +1216,8 @@ std::set<DecodedJoinHashBufferEntry> PerfectJoinHashTable::toSet(
     auto data_mgr = executor_->getDataMgr();
     auto device_allocator = std::make_unique<CudaAllocator>(
         data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-    device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
+    device_allocator->copyFromDevice(
+        buffer_copy.get(), buffer, buffer_size, "Perfect join hashtable");
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else

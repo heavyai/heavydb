@@ -53,7 +53,7 @@ class CommandLineOptions {
   }
   int http_port = 6278;
   int http_binary_port = 6276;
-  size_t reserved_gpu_mem = 384 * 1024 * 1024;
+  size_t reserved_gpu_mem = 768 * 1024 * 1024;  // doubled from 384MB 2/13/24
   std::string base_path;
   File_Namespace::DiskCacheConfig disk_cache_config;
   std::string cluster_file = {"cluster.conf"};
@@ -210,7 +210,6 @@ extern size_t g_filter_push_down_passing_row_ubound;
 extern bool g_enable_columnar_output;
 extern bool g_optimize_row_initialization;
 extern bool g_enable_bbox_intersect_hashjoin;
-extern size_t g_num_tuple_threshold_switch_to_baseline;
 extern size_t g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline;
 extern bool g_enable_hashjoin_many_to_many;
 extern bool g_enable_distance_rangejoin;

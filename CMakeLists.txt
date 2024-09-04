@@ -117,6 +117,16 @@ add_custom_target(clean-all
   COMMAND ${CMAKE_BUILD_TOOL} clean
  )
 
+# Find dependency path (required for boost and geo files)
+find_file(MapdDepsVersion_FILE mapd_deps_version.txt CMAKE_PREFIX_PATH NO_CACHE)
+if(NOT MapdDepsVersion_FILE)
+  message(WARNING "Build could NOT find deps version file mapd_deps_version.txt in \"${CMAKE_PREFIX_PATH}\"")
+  message(WARNING "Unable to locate dependencies path")
+else()
+  get_filename_component(MAPD_DEPS_PATH "${MapdDepsVersion_FILE}" DIRECTORY)
+  message(STATUS "Found dependencies path: ${MAPD_DEPS_PATH}")
+endif()
+
 macro(set_alternate_linker linker)
   find_program(LINKER_EXECUTABLE ld.${USE_ALTERNATE_LINKER} ${USE_ALTERNATE_LINKER})
   if(LINKER_EXECUTABLE)
@@ -136,12 +146,7 @@ macro(set_alternate_linker linker)
 endmacro()
 
 macro(InstallVersionFile)
-  # `touch mapd_deps_version.txt` from build dir to silence warning.
-  find_file(MapdDepsVersion_FILE mapd_deps_version.txt PATH ${CMAKE_BINARY_DIR} NO_CACHE)
-
-  if(NOT MapdDepsVersion_FILE)
-    message(WARNING "Build could NOT find deps version file mapd_deps_version.txt")
-  else()
+  if(MapdDepsVersion_FILE)
     message(STATUS "Found deps version file ${MapdDepsVersion_FILE}")
     file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/version)
     set(HEAVY_DEPS_CUSTOM ${CMAKE_BINARY_DIR}/version/heavyai_deps_version.txt)
@@ -219,9 +224,10 @@ option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   enable_language(CUDA)
   include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+  include_directories(ThirdParty/warpcore/include)
   list(APPEND CUDA_LIBRARIES cuda)
+  list(APPEND CMAKE_CUDA_FLAGS --extended-lambda)  # required by warpcore
   add_definitions("-DHAVE_CUDA")
-
 else()
   set(CUDA_LIBRARIES "")
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-cpu")
@@ -289,7 +295,10 @@ if(ENABLE_CUDA)
           60-virtual
           70-virtual
           75-virtual
-          80-virtual)
+          80-virtual
+          86-virtual
+          89-virtual
+          90-virtual)
       list(APPEND MAPD_CUDA_OPTIONS -Wno-deprecated-gpu-targets)
       message(STATUS "CUDA_ARCHITECTURES: ${CMAKE_CUDA_ARCHITECTURES}")
     else()
@@ -300,6 +309,9 @@ if(ENABLE_CUDA)
         -gencode=arch=compute_70,code=compute_70;
         -gencode=arch=compute_75,code=compute_75;
         -gencode=arch=compute_80,code=compute_80;
+        -gencode=arch=compute_86,code=compute_86;
+        -gencode=arch=compute_89,code=compute_89;
+        -gencode=arch=compute_90,code=compute_90;
         -Wno-deprecated-gpu-targets)
       message(STATUS "CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
       list(APPEND MAPD_CUDA_OPTIONS ${CUDA_COMPILATION_ARCH})
@@ -440,6 +452,7 @@ option(ENABLE_TORCH_TFS "Enable Torch system table functions" OFF)
 
 option(ENABLE_PDAL "Enable PDAL support" ON)
 option(ENABLE_POINT_CLOUD_TFS "Enable point cloud table functions" ON)
+option(ENABLE_GFX_TFS "Enable graphics table functions" ON)
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
   # Clang will not complile these tests quickly enough to avoid timeout
@@ -605,7 +618,7 @@ else()
 endif()
 
 if (ENABLE_ML_MLPACK_TFS)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}") 
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
@@ -707,7 +720,7 @@ message(STATUS "Using CLANG_LIB: ${CLANG_LIB}")
 # Deps builds use separate libs for each clang component, while some distros now bundle into a single lib
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR NOT LLVM_LIB)
   set(LLVM_COMPONENTS support mcjit core irreader option linker)
-  if(MSVC) 
+  if(MSVC)
     list(APPEND LLVM_COMPONENTS Passes)
   endif(MSVC)
   option(ENABLE_INTEL_JIT_LISTENER "Enable Intel Vtune JIT Listener" OFF)
@@ -755,6 +768,13 @@ endif()
 # Boost
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams serialization REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
+
+if(Boost_VERSION LESS 107500)
+  # BOOST_PP_VARIADICS is incorrectly set to 0 by <boost/preprocessor/config/config.hpp>
+  # when defined(__CUDACC__) prior to 1.75. Set it to 1 here so that
+  # Shared/define_enum_class.h can be used by cuda modules.  This was fixed in Boost 1.75.
+  list(APPEND MAPD_DEFINITIONS "-DBOOST_PP_VARIADICS=1")
+endif()
 
 # Allow explicit include statements to access third party headers directly.
 # Ex: raft/canonical/include/raft.h
@@ -958,6 +978,8 @@ if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   option(ENABLE_RENDERING "Build backend renderer" OFF)
   if(ENABLE_RENDERING)
     option(ENABLE_RENDER_TESTS "Build backend renderer tests" ON)
+    option(ENABLE_RENDER_LOGGER "Enable detailed render logging in debug builds" OFF)
+    option(ENABLE_SHADER_DEBUG_PRINTF "Enable Vulkan Shader Debug printf extension" OFF)
 
     add_definitions("-DHAVE_RENDERING")
     add_subdirectory(Rendering)
@@ -993,6 +1015,9 @@ else()
   set(PROFILER_LIBS "")
 endif()
 
+# Set RPATH for all executables
+set(CMAKE_INSTALL_RPATH "$ORIGIN/../ThirdParty/lib")
+
 # Some subdirectories will add optional dependencies to initheavy so we want to declare
 # it before subdirs since it is otherwise independent.
 add_executable(initheavy initdb.cpp)
@@ -1003,6 +1028,17 @@ add_subdirectory(StringDictionary)
 add_subdirectory(Calcite)
 get_target_property(CalciteThrift_BINARY_DIR calciteserver_thrift BINARY_DIR)
 include_directories(${CalciteThrift_BINARY_DIR})
+
+# The variable USE_SYSTEM_CURL is used by the third party product 'cpr'
+set(USE_SYSTEM_CURL ON CACHE BOOL "Use the system curl for faster builds")
+find_package(cpr QUIET)
+if(cpr_FOUND)
+  message(STATUS "Found CPR")
+else()
+  message(STATUS "Using ThirdParty/cpr")
+  set(BUILD_CPR_TESTS OFF CACHE BOOL "Don't build cpr tests")
+  add_subdirectory(ThirdParty/cpr/cpr)
+endif()
 
 if(ENABLE_RUNTIME_LIBS)
   if(ENABLE_TORCH_TFS)
@@ -1120,10 +1156,6 @@ endif()
 if(ENABLE_RENDERING AND ENABLE_RENDER_TESTS)
   enable_testing()
   add_subdirectory(Tests/RenderTests)
-endif()
-
-if (ENABLE_MEMKIND OR ENABLE_RENDERING)
-  set(CMAKE_INSTALL_RPATH "$ORIGIN/../ThirdParty/lib")
 endif()
 
 add_executable(heavydb HeavyDB.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
@@ -1345,7 +1377,7 @@ set (JDBC_JAR "heavyai-jdbc-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 set (UTILITY_JAR "heavyai-utility-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 
 set(MVN_PATH_COMMAND "")
-if(NOT MSVC) 
+if(NOT MSVC)
     set(MVN_PATH_COMMAND "MVNPATH=${CMAKE_SOURCE_DIR}/java")
 endif()
 

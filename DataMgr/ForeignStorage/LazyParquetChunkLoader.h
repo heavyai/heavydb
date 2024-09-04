@@ -165,7 +165,7 @@ class LazyParquetChunkLoader {
       StringDictionary* string_dictionary,
       RejectedRowIndices* rejected_row_indices,
       const bool is_for_detect = false,
-      const std::optional<int64_t> max_levels_read = std::nullopt);
+      const std::optional<int64_t> max_rows_to_read = std::nullopt);
 
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
   FileReaderMap* file_reader_cache_;

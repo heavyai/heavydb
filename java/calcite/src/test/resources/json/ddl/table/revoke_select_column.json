@@ -1,0 +1,20 @@
+{
+  "payload": {
+    "privileges": [
+      {
+        "type": "SELECT COLUMN",
+        "columns": [
+          "a",
+          "b",
+          "c"
+        ]
+      }
+    ],
+    "type": "TABLE",
+    "target": "test_table",
+    "grantees": [
+      "admin"
+    ],
+    "command": "REVOKE_PRIVILEGE"
+  }
+}

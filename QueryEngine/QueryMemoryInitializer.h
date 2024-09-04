@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "Aggregate/AggModeHashTableGpu.h"
 #include "DataMgr/Allocators/DeviceAllocator.h"
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "GpuMemUtils.h"
@@ -31,6 +32,8 @@
 #else
 #include <Shared/nocuda.h>
 #endif
+
+class AggMode;
 
 class QueryMemoryInitializer {
  public:
@@ -87,6 +90,11 @@ class QueryMemoryInitializer {
   const auto getCountDistinctBitmapBytes() const {
     return count_distinct_bitmap_mem_size_;
   }
+
+  std::vector<int8_t> getAggModeHashTablesGpu() const;
+
+  // Number of mode hash table gpu objects
+  size_t getNumAggModeHashTablesGpu() const { return agg_mode_hash_tables_gpu_.size(); }
 
   // TODO: lazy init (maybe lazy init count distinct above, too?)
   const auto getVarlenOutputHostPtr() const { return varlen_output_buffer_host_ptr_; }
@@ -149,6 +157,8 @@ class QueryMemoryInitializer {
                                  const int device_id,
                                  const bool prepend_index_buffer) const;
 
+  void copyFromDeviceForAggMode();
+
  private:
   void initGroupByBuffer(int64_t* buffer,
                          const RelAlgExecutionUnit& ra_exe_unit,
@@ -184,8 +194,8 @@ class QueryMemoryInitializer {
       const QueryMemoryDescriptor& query_mem_desc,
       const RelAlgExecutionUnit& ra_exe_unit) const;
 
-  void allocateCountDistinctBuffers(const QueryMemoryDescriptor& query_mem_desc,
-                                    const RelAlgExecutionUnit& ra_exe_unit);
+  void fastAllocateCountDistinctBuffers(const QueryMemoryDescriptor& query_mem_desc,
+                                        const RelAlgExecutionUnit& ra_exe_unit);
 
   int64_t allocateCountDistinctBitmap(const size_t bitmap_byte_sz);
 
@@ -193,6 +203,11 @@ class QueryMemoryInitializer {
 
   ModeIndexSet initializeModeIndexSet(const QueryMemoryDescriptor& query_mem_desc,
                                       const RelAlgExecutionUnit& ra_exe_unit);
+  void allocateModeMem(ExecutorDeviceType, const QueryMemoryDescriptor&);
+
+  // Return CPU: AggMode* or GPU: (1<<63 | i<<32 | j+1)
+  // where i, j are agg_mode_hash_tables_cpu_, row_set_mem_owner_ indexes.
+  int64_t allocateAggMode();
 
   void allocateModeBuffer(const QueryMemoryDescriptor& query_mem_desc,
                           const RelAlgExecutionUnit& ra_exe_unit);
@@ -259,6 +274,12 @@ class QueryMemoryInitializer {
   std::shared_ptr<VarlenOutputInfo> varlen_output_info_;
   CUdeviceptr varlen_output_buffer_;
   int8_t* varlen_output_buffer_host_ptr_;
+
+  // Contains inter-device hash table objects, one per target (i.e. column).
+  // Each object is sizeof(AggModeHashTableGpu)=104 bytes and copies lightly.
+  AggModeHashTablesGpu agg_mode_hash_tables_gpu_;
+  // CPU hash tables owned by RowSetMemoryOwner.
+  std::vector<AggMode*> agg_mode_hash_tables_cpu_;
 
   CUdeviceptr count_distinct_bitmap_device_mem_ptr_;
   size_t count_distinct_bitmap_mem_size_;

@@ -766,6 +766,29 @@ TEST_F(GeospatialJoinTest, CacheBehaviorUnderQueryHint) {
       (size_t)7);
 }
 
+TEST_F(GeospatialJoinTest, STContainsBetweenMPolyAndCompressedPtWithNullptr) {
+  auto drop_tables = []() {
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS geo700_1;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS geo700_2;");
+  };
+  drop_tables();
+  QR::get()->runDDLStatement(
+      "CREATE TABLE geo700_1(geom GEOMETRY(MULTIPOLYGON, 4326) ENCODING "
+      "COMPRESSED(32));");
+  QR::get()->runDDLStatement(
+      "CREATE TABLE geo700_2(geom GEOMETRY(MULTIPOLYGON, 4326) ENCODING "
+      "COMPRESSED(32));");
+  QR::get()->runSQL("INSERT INTO geo700_1 VALUES (null);", ExecutorDeviceType::CPU);
+  QR::get()->runSQL("INSERT INTO geo700_2 VALUES (null);", ExecutorDeviceType::CPU);
+  auto const query =
+      "select count(1) from geo700_1 R, geo700_2 S where st_contains(S.geom, "
+      "st_centroid(R.geom));";
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(query, dt)));
+  }
+  drop_tables();
+}
+
 class BoundingBoxIntersectJoinHashTableMock : public BoundingBoxIntersectJoinHashTable {
  public:
   struct ExpectedValues {
@@ -1790,12 +1813,14 @@ TEST_P(MaxBBoxOverlapsExceededTest, NonAggregateProjection) {
       {true});
 }
 
+#ifndef HAVE_TSAN
 INSTANTIATE_TEST_SUITE_P(SingleAndMultipleBins,
                          MaxBBoxOverlapsExceededTest,
                          ::testing::Bool(),
                          [](const auto& info) {
                            return info.param ? "SingleBin" : "MultipleBins";
                          });
+#endif  // HAVE_TSAN
 
 class ParallelLinearization : public ::testing::Test {
  protected:

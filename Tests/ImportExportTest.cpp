@@ -64,6 +64,7 @@
 using namespace std;
 using namespace TestHelpers;
 
+extern bool g_enable_debug_timer;
 extern bool g_use_date_in_days_default_encoding;
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
@@ -2132,6 +2133,50 @@ TEST_F(ParquetSpecificImportAndSelectTest, NoMetadataStatistics) {
   // clang-format on
 
   validateImportStatus(6, 0, false);
+  assertResultSetEqual(expected_values, query);
+}
+
+class ParquetSpecificS3PublicImportAndSelectTest : public ImportAndSelectTestBase {
+ protected:
+  void SetUp() override {
+    saved_debug_timers_enabled_ = g_enable_debug_timer;
+    ImportAndSelectTestBase::SetUp();
+  }
+
+  void TearDown() override {
+    ImportAndSelectTestBase::TearDown();
+    g_enable_debug_timer = saved_debug_timers_enabled_;
+  }
+
+  ImportAndSelectTestParameters TestParam() override {
+    return {"parquet", "s3_public", DEFAULT_FRAGMENT_ROWS, 1000000};
+  }
+
+ private:
+  bool saved_debug_timers_enabled_;
+};
+
+TEST_F(ParquetSpecificS3PublicImportAndSelectTest, WithDebugTimersEnabled) {
+  g_enable_debug_timer = true;
+  std::string schema =
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
+      "DECIMAL(10,5), tm TIME "
+      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE";
+  auto query = createTableCopyFromAndSelect(
+      schema, "scalar_types", "SELECT * FROM import_test_new ORDER BY s;", {}, 14);
+
+  // clang-format off
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
+        "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
+      {False, 110L, 30500L, 2000500000L, 9000000050000000000L, 100.12f, 2.1234,
+        "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"},
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, 1000.123f, 100.1,
+        "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
+  };
+  // clang-format on
+
+  validateImportStatus(3, 0, false);
   assertResultSetEqual(expected_values, query);
 }
 
@@ -4700,8 +4745,10 @@ class ExportTest : public ImportTestGDAL {
                                                const std::string& layer_name) {
     std::string temp_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
                             std::to_string(getpid()) + ".tmp";
-    std::string ogrinfo_cmd = "ogrinfo " + file + " " + layer_name;
-    boost::process::system(ogrinfo_cmd, boost::process::std_out > temp_file);
+    std::vector<std::string> args = {file, layer_name};
+    boost::process::system(boost::process::search_path("ogrinfo"),
+                           args,
+                           boost::process::std_out > temp_file);
     auto lines =
         readTextFile(temp_file, false, {"DBF_DATE_LAST_UPDATE", "INFO: Open of"});
     boost::filesystem::remove(temp_file);
@@ -5042,7 +5089,12 @@ TEST_F(ExportTest, Shapefile) {
     ASSERT_NO_THROW(
         doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
     std::string layer_name = "query_export_test_shapefile_" + geo_type;
-    ASSERT_NO_THROW(doCompareWithOGRInfo(shp_file, layer_name, COMPARE_EXPLICIT));
+    // disable this step of the test for MULTIPOLYGON until we have moved to
+    // the new deps for 8.0, as GDAL 3.7.3 writes files slightly differently
+    // @TODO(se) remove this after the transition to new deps is complete
+    if (geo_type != "multipolygon") {
+      ASSERT_NO_THROW(doCompareWithOGRInfo(shp_file, layer_name, COMPARE_EXPLICIT));
+    }
     doImportAgainAndCompare(shp_file, "Shapefile", geo_type, NO_ARRAYS);
     removeExportedFile(shp_file);
     removeExportedFile(shx_file);

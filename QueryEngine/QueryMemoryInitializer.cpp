@@ -279,7 +279,8 @@ QueryMemoryInitializer::QueryMemoryInitializer(
       }
     }
     total_buffer_size *= query_mem_desc.getEntryCount();
-    row_set_mem_owner_->initCountDistinctBufferAllocator(total_buffer_size, thread_idx_);
+    row_set_mem_owner_->initCountDistinctBufferFastAllocator(total_buffer_size,
+                                                             thread_idx_);
   }
 
   if (agg_op_metadata.has_tdigest) {
@@ -293,10 +294,11 @@ QueryMemoryInitializer::QueryMemoryInitializer(
             << query_mem_desc.getEntryCount() << ')';
     row_set_mem_owner_->reserveTDigestMemory(thread_idx_, capacity);
   }
+  allocateModeMem(device_type, query_mem_desc);
 
   if (render_allocator_map || !query_mem_desc.isGroupBy()) {
     if (agg_op_metadata.has_count_distinct) {
-      allocateCountDistinctBuffers(query_mem_desc, ra_exe_unit);
+      fastAllocateCountDistinctBuffers(query_mem_desc, ra_exe_unit);
     }
     if (agg_op_metadata.has_mode) {
       allocateModeBuffer(query_mem_desc, ra_exe_unit);
@@ -801,7 +803,7 @@ void QueryMemoryInitializer::initColumnsPerRow(
         ++init_vec_idx;
       } else if (agg_op_metadata.has_mode &&
                  agg_op_metadata.mode_index_set.count(col_idx)) {
-        init_val = reinterpret_cast<int64_t>(row_set_mem_owner_->allocateMode());
+        init_val = allocateAggMode();
         CHECK_NE(init_val, 0);
         ++init_vec_idx;
       }
@@ -828,6 +830,27 @@ void QueryMemoryInitializer::initColumnsPerRow(
         continue;
       default:
         CHECK(false);
+    }
+  }
+}
+
+void QueryMemoryInitializer::allocateModeMem(
+    ExecutorDeviceType const device_type,
+    const QueryMemoryDescriptor& query_mem_desc) {
+  if (size_t const ncolumns = query_mem_desc.getNumModeTargets()) {
+    size_t const nmodes = ncolumns * query_mem_desc.getEntryCount();
+    VLOG(2) << "device_type(" << device_type << ") nmodes = " << nmodes << " = "
+            << ncolumns << " * " << query_mem_desc.getEntryCount();
+    agg_mode_hash_tables_cpu_.reserve(nmodes);
+    if (device_type == ExecutorDeviceType::GPU) {
+#ifdef HAVE_CUDA
+      // agg_mode_hash_tables_gpu_ also uses the cudaStream from device_allocator_.
+      auto* const allocator = dynamic_cast<CudaAllocator*>(device_allocator_);
+      CHECK(allocator) << "CudaAllocator expected for ExecutorDeviceType::GPU.";
+      agg_mode_hash_tables_gpu_.init(allocator, nmodes);
+#else
+      UNREACHABLE();
+#endif
     }
   }
 }
@@ -887,7 +910,7 @@ std::vector<int64_t> QueryMemoryInitializer::calculateCountDistinctBufferSize(
   return agg_bitmap_size;
 }
 
-void QueryMemoryInitializer::allocateCountDistinctBuffers(
+void QueryMemoryInitializer::fastAllocateCountDistinctBuffers(
     const QueryMemoryDescriptor& query_mem_desc,
     const RelAlgExecutionUnit& ra_exe_unit) {
   for (size_t target_idx = 0; target_idx < ra_exe_unit.target_exprs.size();
@@ -909,6 +932,8 @@ void QueryMemoryInitializer::allocateCountDistinctBuffers(
   }
 }
 
+// Increments count_distinct_bitmap_host_crt_ptr_ to point to the next cell in
+// count_distinct_bitmap_host_mem_ptr_.
 int64_t QueryMemoryInitializer::allocateCountDistinctBitmap(const size_t bitmap_byte_sz) {
   if (count_distinct_bitmap_host_mem_ptr_) {
     CHECK(count_distinct_bitmap_host_crt_ptr_);
@@ -919,7 +944,7 @@ int64_t QueryMemoryInitializer::allocateCountDistinctBitmap(const size_t bitmap_
     return reinterpret_cast<int64_t>(ptr);
   }
   return reinterpret_cast<int64_t>(
-      row_set_mem_owner_->allocateCountDistinctBuffer(bitmap_byte_sz, thread_idx_));
+      row_set_mem_owner_->fastAllocateCountDistinctBuffer(bitmap_byte_sz, thread_idx_));
 }
 
 int64_t QueryMemoryInitializer::allocateCountDistinctSet() {
@@ -928,18 +953,60 @@ int64_t QueryMemoryInitializer::allocateCountDistinctSet() {
   return reinterpret_cast<int64_t>(count_distinct_set);
 }
 
+// Return CPU: AggMode* or GPU: (1<<63 | i<<32 | j+1)
+// When run on GPU the bit fields are:
+// 1<<63 : used to distinguish the packed 32-bit indices vs pointer,
+//         since a pointer uses only the lower 48 bits.
+// i : used in agg_mode_func_gpu() as index into gpu hash tables array.
+// j : used in ResultSet::makeTargetValue() as index into
+//     std::deque<AggMode> RowSetMemoryOwner::agg_modes_.
+int64_t QueryMemoryInitializer::allocateAggMode() {
+  constexpr size_t high_bit = size_t(1) << 31;
+  bool const is_gpu = static_cast<bool>(getNumAggModeHashTablesGpu());
+  if (is_gpu && high_bit <= agg_mode_hash_tables_cpu_.size()) {
+    throw QueryMustRunOnCpu();
+  }
+  auto const idx_ptr = row_set_mem_owner_->allocateMode();  // (index, AggMode*)
+  size_t const cpu_idx = agg_mode_hash_tables_cpu_.size();
+  agg_mode_hash_tables_cpu_.push_back(idx_ptr.second);
+  return is_gpu ? static_cast<int64_t>((high_bit | cpu_idx) << 32) |
+                      static_cast<int64_t>(idx_ptr.first)
+                : reinterpret_cast<int64_t>(idx_ptr.second);
+}
+
+namespace {
+
+void eachAggregateTargetIdxOfType(
+    std::vector<Analyzer::Expr*> const& target_exprs,
+    SQLAgg const agg_type,
+    std::function<void(Analyzer::AggExpr const*, size_t)> lambda) {
+  for (size_t target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
+    auto const target_expr = target_exprs[target_idx];
+    if (auto const* agg_expr = dynamic_cast<Analyzer::AggExpr const*>(target_expr)) {
+      if (agg_expr->get_aggtype() == agg_type) {
+        lambda(agg_expr, target_idx);
+      }
+    }
+  }
+}
+
+}  // namespace
+
 QueryMemoryInitializer::ModeIndexSet QueryMemoryInitializer::initializeModeIndexSet(
     const QueryMemoryDescriptor& query_mem_desc,
     const RelAlgExecutionUnit& ra_exe_unit) {
   size_t const slot_count = query_mem_desc.getSlotCount();
   CHECK_LE(ra_exe_unit.target_exprs.size(), slot_count);
   ModeIndexSet mode_index_set;
-  ra_exe_unit.eachAggTarget<kMODE>([&](Analyzer::AggExpr const*,
-                                       size_t const target_idx) {
-    size_t const agg_col_idx = query_mem_desc.getSlotIndexForSingleSlotCol(target_idx);
-    CHECK_LT(agg_col_idx, slot_count);
-    mode_index_set.emplace(agg_col_idx);
-  });
+  eachAggregateTargetIdxOfType(
+      ra_exe_unit.target_exprs,
+      kMODE,
+      [&](Analyzer::AggExpr const*, size_t const target_idx) {
+        size_t const agg_col_idx =
+            query_mem_desc.getSlotIndexForSingleSlotCol(target_idx);
+        CHECK_LT(agg_col_idx, slot_count);
+        mode_index_set.emplace(agg_col_idx);
+      });
   return mode_index_set;
 }
 
@@ -952,8 +1019,7 @@ void QueryMemoryInitializer::allocateModeBuffer(
                                        size_t const target_idx) {
     size_t const agg_col_idx = query_mem_desc.getSlotIndexForSingleSlotCol(target_idx);
     CHECK_LT(agg_col_idx, slot_count);
-    AggMode* agg_mode = row_set_mem_owner_->allocateMode();
-    init_agg_vals_[agg_col_idx] = reinterpret_cast<int64_t>(agg_mode);
+    init_agg_vals_[agg_col_idx] = allocateAggMode();
   });
 }
 
@@ -1023,8 +1089,10 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
   }
 
   auto dev_ptr = device_allocator_->alloc(thread_count * sizeof(int8_t*));
-  device_allocator_->copyToDevice(
-      dev_ptr, dev_buffers.data(), thread_count * sizeof(int8_t*));
+  device_allocator_->copyToDevice(dev_ptr,
+                                  dev_buffers.data(),
+                                  thread_count * sizeof(int8_t*),
+                                  "Streaming Top-N buffer ptrs");
 
   CHECK(query_mem_desc.lazyInitGroups(ExecutorDeviceType::GPU));
 
@@ -1126,8 +1194,10 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
         compact_col_widths[idx] = query_mem_desc.getPaddedSlotWidthBytes(idx);
       }
       col_widths_dev_ptr = device_allocator_->alloc(col_count * sizeof(int8_t));
-      device_allocator_->copyToDevice(
-          col_widths_dev_ptr, compact_col_widths.data(), col_count * sizeof(int8_t));
+      device_allocator_->copyToDevice(col_widths_dev_ptr,
+                                      compact_col_widths.data(),
+                                      col_count * sizeof(int8_t),
+                                      "Compact column widths");
     }
     const int8_t warp_count =
         query_mem_desc.interleavedBins(ExecutorDeviceType::GPU) ? warp_size : 1;
@@ -1205,8 +1275,10 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
     dev_buffers[col_idx] = dev_buffers_allocation + col_byte_offsets[col_idx];
   }
   auto dev_ptrs = device_allocator_->alloc(num_columns * sizeof(CUdeviceptr));
-  device_allocator_->copyToDevice(
-      dev_ptrs, dev_buffers.data(), num_columns * sizeof(CUdeviceptr));
+  device_allocator_->copyToDevice(dev_ptrs,
+                                  dev_buffers.data(),
+                                  num_columns * sizeof(CUdeviceptr),
+                                  "Table function input column ptrs");
 
   return {dev_ptrs, dev_buffers_mem, (size_t)num_rows_};
 }
@@ -1240,7 +1312,8 @@ void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
     const size_t output_host_col_size = entry_count * col_width;
     allocator->copyFromDevice(host_buffer + output_host_col_offset,
                               dev_buffer + output_device_col_offset,
-                              output_host_col_size);
+                              output_host_col_size,
+                              "Table function output column buffer");
     output_device_col_offset =
         align_to_int64(output_device_col_offset + output_device_col_size);
     output_host_col_offset =
@@ -1369,6 +1442,22 @@ void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
                                  query_mem_desc.hasVarlenOutput());
 }
 
+void QueryMemoryInitializer::copyFromDeviceForAggMode() {
+#ifdef HAVE_CUDA
+  CHECK_EQ(agg_mode_hash_tables_cpu_.size(), agg_mode_hash_tables_gpu_.size());
+  try {
+    for (size_t i = 0; i < agg_mode_hash_tables_gpu_.size(); ++i) {
+      *agg_mode_hash_tables_cpu_[i] = agg_mode_hash_tables_gpu_.moveToHost(i);
+    }
+  } catch (std::runtime_error const& ex) {
+    LOG(INFO) << ex.what();  // E.g. too many keys for fixed gpu hash table
+    throw QueryMustRunOnCpu();
+  }
+#else
+  UNREACHABLE();
+#endif
+}
+
 void QueryMemoryInitializer::applyStreamingTopNOffsetCpu(
     const QueryMemoryDescriptor& query_mem_desc,
     const RelAlgExecutionUnit& ra_exe_unit) {
@@ -1409,6 +1498,15 @@ void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
   memcpy(group_by_buffers_[buffer_start_idx], &rows_copy[0], rows_copy.size());
 #else
   UNREACHABLE();
+#endif
+}
+
+std::vector<int8_t> QueryMemoryInitializer::getAggModeHashTablesGpu() const {
+#ifdef HAVE_CUDA
+  return agg_mode_hash_tables_gpu_.serialize();
+#else
+  UNREACHABLE();
+  return {};
 #endif
 }
 

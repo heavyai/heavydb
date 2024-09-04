@@ -35,6 +35,10 @@
 
 #include "StorageIOFacility.h"
 
+namespace gfx {
+class GfxContext;
+}
+
 extern bool g_skip_intermediate_count;
 
 enum class MergeType { Union, Reduce };
@@ -55,36 +59,42 @@ class RelAlgExecutor : private StorageIOFacility {
   using TargetInfoList = std::vector<TargetInfo>;
 
   RelAlgExecutor(Executor* executor,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr,
+                 gfx::GfxContext* gfx_context = nullptr)
       : StorageIOFacility(executor)
       , executor_(executor)
       , query_state_(std::move(query_state))
       , now_(0)
-      , queue_time_ms_(0) {
+      , queue_time_ms_(0)
+      , gfx_context_{gfx_context} {
     initializeParallelismHints();
   }
 
   RelAlgExecutor(Executor* executor,
                  const std::string& query_ra,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr,
+                 gfx::GfxContext* gfx_context = nullptr)
       : StorageIOFacility(executor)
       , executor_(executor)
       , query_dag_(RelAlgDagBuilder::buildDag(query_ra, true))
       , query_state_(std::move(query_state))
       , now_(0)
-      , queue_time_ms_(0) {
+      , queue_time_ms_(0)
+      , gfx_context_{gfx_context} {
     initializeParallelismHints();
   }
 
   RelAlgExecutor(Executor* executor,
                  std::unique_ptr<RelAlgDag> query_dag,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr,
+                 gfx::GfxContext* gfx_context = nullptr)
       : StorageIOFacility(executor)
       , executor_(executor)
       , query_dag_(std::move(query_dag))
       , query_state_(std::move(query_state))
       , now_(0)
-      , queue_time_ms_(0) {
+      , queue_time_ms_(0)
+      , gfx_context_{gfx_context} {
     initializeParallelismHints();
   }
 
@@ -206,6 +216,15 @@ class RelAlgExecutor : private StorageIOFacility {
 
   void prepareForeignTable();
 
+  struct CapturedColumns {
+    std::string db_name;
+    std::string table_name;
+    std::vector<std::string> column_names;
+  };
+
+  static std::vector<RelAlgExecutor::CapturedColumns> captureColumns(
+      const std::string& query_ra);
+
   std::unordered_set<shared::TableKey> getPhysicalTableIds() const;
 
   void prepareForSystemTableExecution(const CompilationOptions& co) const;
@@ -323,6 +342,8 @@ class RelAlgExecutor : private StorageIOFacility {
   // Creates the window context for the given window function.
   std::unique_ptr<WindowFunctionContext> createWindowFunctionContext(
       const Analyzer::WindowFunction* window_func,
+      WindowProjectNodeContext* window_project_node_ctx,
+      const size_t target_idx,
       const std::shared_ptr<Analyzer::BinOper>& partition_key_cond,
       std::unordered_map<QueryPlanHash, std::shared_ptr<HashJoin>>& partition_cache,
       std::unordered_map<QueryPlanHash, size_t>& sorted_partition_key_ref_count_map,
@@ -330,7 +351,9 @@ class RelAlgExecutor : private StorageIOFacility {
       const std::vector<InputTableInfo>& query_infos,
       const CompilationOptions& co,
       ColumnCacheMap& column_cache_map,
-      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
+      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+      Data_Namespace::DataMgr* data_mgr,
+      int device_id);
 
   size_t getNDVEstimation(const WorkUnit& work_unit,
                           const int64_t range,
@@ -450,6 +473,8 @@ class RelAlgExecutor : private StorageIOFacility {
 
   std::unique_ptr<TransactionParameters> dml_transaction_parameters_;
   std::optional<std::function<void()>> post_execution_callback_;
+
+  gfx::GfxContext* gfx_context_;
 
   friend class PendingExecutionClosure;
 };

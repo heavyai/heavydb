@@ -2128,7 +2128,101 @@ void create_rex_input_for_new_project_node(
     fields.emplace_back("");
   }
 }
+
+using RexInputPtrSet = std::unordered_set<RexInput const*>;
+
+class RexInputPtrCollector : public RexVisitor<RexInputPtrSet> {
+ public:
+  RexInputPtrSet visitInput(const RexInput* input) const override {
+    result_.insert(input);
+    return result_;
+  }
+
+ protected:
+  RexInputPtrSet aggregateResult(const RexInputPtrSet& aggregate,
+                                 const RexInputPtrSet& next_result) const override {
+    RexInputPtrSet result(aggregate.begin(), aggregate.end());
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+
+ private:
+  mutable RexInputPtrSet result_;
+};
+
+bool is_agg_filter_left_join_pattern(
+    std::list<std::shared_ptr<RelAlgNode>>::const_iterator node_itr) {
+  if (auto agg_node = std::dynamic_pointer_cast<RelAggregate>(*node_itr)) {
+    if (auto const filter_node =
+            std::dynamic_pointer_cast<RelFilter const>(agg_node->getAndOwnInput(0))) {
+      if (auto const join_node =
+              std::dynamic_pointer_cast<RelJoin const>(filter_node->getAndOwnInput(0))) {
+        if (join_node->getJoinType() == JoinType::LEFT) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+void insert_project_node_for_agg_filter_left_join_pattern(
+    std::list<std::shared_ptr<RelAlgNode>>& node_list,
+    std::list<std::shared_ptr<RelAlgNode>>::const_iterator node_itr) {
+  auto agg_node = std::dynamic_pointer_cast<RelAggregate>(*node_itr);
+  CHECK(agg_node);
+  auto const filter_node =
+      std::dynamic_pointer_cast<RelFilter const>(agg_node->getAndOwnInput(0));
+  CHECK(filter_node);
+  auto const join_node =
+      std::dynamic_pointer_cast<RelJoin const>(filter_node->getAndOwnInput(0));
+  CHECK(join_node);
+  CHECK(join_node->getJoinType() == JoinType::LEFT);
+  // insert an artificial project between filter and join;
+  std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
+  std::vector<std::string> fields;
+  RexInputPtrCollector filter_rex_collector;
+  // we collect RexInput defined in the filter and join's condition(s) and make
+  // it as a projection target of the new project node
+  RexInputPtrSet filter_rex_ins = filter_rex_collector.visit(filter_node->getCondition());
+  for (RexInput const* rex_input : filter_rex_ins) {
+    scalar_exprs.emplace_back(rex_input->deepCopy());
+    fields.emplace_back("");
+  }
+  // new project node will project resultset rows from the join node
+  auto new_project = std::make_shared<RelProject>(scalar_exprs, fields, join_node);
+  auto deconst_filter_node = const_cast<RelFilter*>(filter_node.get());
+  // the filter node has the new project node as its input
+  deconst_filter_node->replaceInput(join_node, new_project);
+  // We need to modify RexInput's index defined in the filter node
+  // because they now refer to expression(s) in the new project node
+  // not the join node
+  size_t new_idx = 0;
+  for (RexInput const* rex_input : filter_rex_ins) {
+    RexRebindInputsVisitor visitor(rex_input->getSourceNode(), new_project.get());
+    visitor.visitInput(rex_input);
+    rex_input->setIndex(new_idx++);
+  }
+  node_list.insert(node_itr, new_project);
+}
+
 }  // namespace
+
+// translate AGG-FILTER-LEFT_JOIN to AGG-FILTER-PROJECT-LEFT_JOIN
+// to trigger our left-deep join tree translation logic correctly
+void handle_agg_filter_left_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+  std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
+  bool replace_nodes = false;
+  for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
+    if (is_agg_filter_left_join_pattern(node_itr)) {
+      insert_project_node_for_agg_filter_left_join_pattern(node_list, node_itr);
+      replace_nodes = true;
+    }
+  }
+  if (replace_nodes) {
+    nodes.assign(node_list.begin(), node_list.end());
+  }
+}
 
 // Handle a query plan pattern "Aggregate-Join" which is not supported b/c Join node
 // (i.e., RelLeftDeepJoin) has multiple inputs (at least two if it has a single binary
@@ -2588,40 +2682,41 @@ class RexInputCollector : public RexVisitor<RexInputSet> {
 };
 
 namespace {
-bool find_generic_expr_in_window_func(RexWindowFunctionOperator const* window_expr,
-                                      bool& has_generic_expr_in_window_func) {
+// bits returned by get_conditions_of_window_func()
+constexpr unsigned kConditionNone = 0u;
+constexpr unsigned kNeedsExprPushdown = 1u;
+constexpr unsigned kHasGenericExprInWindowFunc = 1u << 1;
+
+unsigned get_conditions_of_window_func(RexWindowFunctionOperator const* window_expr) {
   for (auto const& partition_key : window_expr->getPartitionKeys()) {
     auto partition_input = dynamic_cast<RexInput const*>(partition_key.get());
     if (!partition_input) {
-      return true;
+      return kNeedsExprPushdown;
     }
   }
   for (auto const& order_key : window_expr->getOrderKeys()) {
     auto order_input = dynamic_cast<RexInput const*>(order_key.get());
     if (!order_input) {
-      return true;
+      return kNeedsExprPushdown;
     }
   }
   for (size_t k = 0; k < window_expr->size(); k++) {
     if (!shared::dynamic_castable_to_any<RexInput, RexLiteral>(
             window_expr->getOperand(k))) {
-      has_generic_expr_in_window_func = true;
-      return true;
+      return kNeedsExprPushdown | kHasGenericExprInWindowFunc;
     }
   }
-  return false;
+  return kConditionNone;
 }
 
 std::pair<bool, bool> need_pushdown_generic_expr(
     RelProject const* window_func_project_node) {
-  bool has_generic_expr_in_window_func = false;
-  bool res = false;
+  unsigned conditions{kConditionNone};
   for (size_t i = 0; i < window_func_project_node->size(); ++i) {
     auto const projected_target = window_func_project_node->getProjectAt(i);
     if (auto const* window_expr =
             dynamic_cast<RexWindowFunctionOperator const*>(projected_target)) {
-      res =
-          find_generic_expr_in_window_func(window_expr, has_generic_expr_in_window_func);
+      conditions |= get_conditions_of_window_func(window_expr);
     } else if (auto const* case_expr = dynamic_cast<RexCase const*>(projected_target)) {
       std::unordered_map<size_t, const RexScalar*> collected_window_func;
       WindowFunctionCollector collector(collected_window_func, true);
@@ -2630,12 +2725,15 @@ std::pair<bool, bool> need_pushdown_generic_expr(
         auto const* candidate_window_expr =
             dynamic_cast<RexWindowFunctionOperator const*>(kv.second);
         CHECK(candidate_window_expr);
-        res = find_generic_expr_in_window_func(candidate_window_expr,
-                                               has_generic_expr_in_window_func);
+        conditions |= get_conditions_of_window_func(candidate_window_expr);
       }
     }
+    // we do not need to check the expr further if both conditions are set to TRUE
+    if (conditions & kHasGenericExprInWindowFunc && conditions & kNeedsExprPushdown) {
+      break;
+    }
   }
-  return std::make_pair(has_generic_expr_in_window_func, res);
+  return {conditions & kHasGenericExprInWindowFunc, conditions & kNeedsExprPushdown};
 }
 };  // namespace
 /**
@@ -3453,6 +3551,7 @@ void RelAlgDagBuilder::optimizeDag(RelAlgDag& rel_alg_dag) {
       query_hints);
   coalesce_nodes(nodes, left_deep_joins, query_hints);
   CHECK(nodes.back().use_count() == 1);
+  handle_agg_filter_left_join(nodes);
   create_left_deep_join(nodes);
   handle_agg_over_join(nodes, query_hints);
   eliminate_redundant_projection(nodes);

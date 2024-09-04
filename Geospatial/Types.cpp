@@ -112,9 +112,15 @@ int process_poly_ring(OGRLinearRing* ring,
 
 namespace Geospatial {
 
-std::mutex transformation_map_mutex_;
-std::map<std::tuple<int32_t, int32_t>, std::shared_ptr<OGRCoordinateTransformation>>
-    transformation_map_;
+using TransformationMap =
+    std::map<std::tuple<int32_t, int32_t>, std::shared_ptr<OGRCoordinateTransformation>>;
+
+// Return reference to static TransformationMap singleton.
+TransformationMap& get_transformation_map() {
+  GDAL::init();
+  static TransformationMap transformation_map;
+  return transformation_map;
+}
 
 std::string GeoTypesError::OGRErrorToStr(const int ogr_err) {
   switch (ogr_err) {
@@ -307,10 +313,12 @@ int32_t GeoBase::getBestPlanarSRID() const {
 
 std::shared_ptr<OGRCoordinateTransformation> GeoBase::getTransformation(int32_t srid0,
                                                                         int32_t srid1) {
-  std::lock_guard<std::mutex> guard(transformation_map_mutex_);
-  std::tuple<int32_t, int32_t> key{srid0, srid1};
-  auto it = transformation_map_.find(key);
-  if (it != transformation_map_.end()) {
+  static std::mutex transformation_map_mutex;
+  auto& transformation_map = get_transformation_map();
+  std::lock_guard<std::mutex> guard(transformation_map_mutex);
+  std::tuple<int32_t, int32_t> const key{srid0, srid1};
+  auto it = transformation_map.find(key);
+  if (it != transformation_map.end()) {
     return it->second;
   }
   auto setSpatialReference = [&](OGRSpatialReference* sr, int32_t srid) -> bool {
@@ -360,9 +368,6 @@ std::shared_ptr<OGRCoordinateTransformation> GeoBase::getTransformation(int32_t 
     return (status == OGRERR_NONE);
   };
 
-  // lazy init GDAL
-  GDAL::init();
-
   OGRSpatialReference sr0;
   if (!setSpatialReference(&sr0, srid0)) {
     return nullptr;
@@ -375,10 +380,10 @@ std::shared_ptr<OGRCoordinateTransformation> GeoBase::getTransformation(int32_t 
   // OGRCoordinateTransformationOptions, including multi-step pipelines.
   // GDAL 3 would be required to handle Lambert zone proj4 strings.
   // Using a simple transform for now.
-  std::shared_ptr<OGRCoordinateTransformation> new_transformation;
-  new_transformation.reset(OGRCreateCoordinateTransformation(&sr0, &sr1));
-  transformation_map_[key] = new_transformation;
-  return new_transformation;
+  std::shared_ptr<OGRCoordinateTransformation> new_transform{
+      OGRCreateCoordinateTransformation(&sr0, &sr1)};
+  CHECK(transformation_map.emplace(key, new_transform).second) << srid0 << ' ' << srid1;
+  return new_transform;
 }
 
 bool GeoBase::transform(int32_t srid0, int32_t srid1) {

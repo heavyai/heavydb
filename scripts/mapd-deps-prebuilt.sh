@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -e
-#set -x
 
 PREFIX=/usr/local/mapd-deps
 
@@ -9,8 +8,8 @@ PREFIX=/usr/local/mapd-deps
 source /etc/os-release
 if [ "$ID" == "ubuntu" ] ; then
   PACKAGER="apt -y"
-  if [ "$VERSION_ID" != "20.04" ] && [ "$VERSION_ID" != "19.10" ] && [ "$VERSION_ID" != "19.04" ] && [ "$VERSION_ID" != "18.04" ]; then
-    echo "Ubuntu 20.04, 19.10, 19.04, and 18.04 are the only debian-based releases supported by this script"
+  if [ "$VERSION_ID" != "23.10" ] && [ "$VERSION_ID" != "22.04" ] && [ "$VERSION_ID" != "20.04" ]; then
+    echo "Ubuntu 23.10, 22.04, and 20.04 are the only debian-based releases supported by this script"
     exit 1
   fi
 elif [ "$ID" == "centos" ] ; then
@@ -58,9 +57,7 @@ if [ "$ID" == "ubuntu" ] ; then
       git \
       wget \
       curl \
-      libboost-all-dev \
       golang \
-      libssl-dev \
       libevent-dev \
       default-jre \
       default-jre-headless \
@@ -81,7 +78,6 @@ if [ "$ID" == "ubuntu" ] ; then
       liblzma-dev \
       libbz2-dev \
       libarchive-dev \
-      libcurl4-openssl-dev \
       libedit-dev \
       uuid-dev \
       libsnappy-dev \
@@ -90,50 +86,45 @@ if [ "$ID" == "ubuntu" ] ; then
       autoconf-archive \
       automake \
       bison \
-      flex-old \
+      flex \
       libpng-dev \
       rsync \
       unzip \
       jq \
-      python-dev \
-      python-yaml \
+      python3-dev \
+      python3-yaml \
       libxerces-c-dev \
-      swig
+      swig \
+      libegl-dev
 
-  # required for gcc-11 on Ubuntu < 22.04
-  if [ "$VERSION_ID" == "20.04" ] || [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ]; then
-    DEBIAN_FRONTEND=noninteractive sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+  if [ "$VERSION_ID" == "20.04" ]; then
+    # required for gcc-11 on Ubuntu < 22.04
+    DEBIAN_FRONTEND=noninteractive sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
   fi
 
   sudo $PACKAGER install \
       gcc-11 \
       g++-11
 
-# Set up gcc-11 as default gcc
-sudo update-alternatives \
-  --install /usr/bin/gcc gcc /usr/bin/gcc-11 1100 \
-  --slave /usr/bin/g++ g++ /usr/bin/g++-11
-sudo update-alternatives --auto gcc
-
-if [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ] ; then
-  sudo $PACKAGER install -y \
-    libxerces-c-dev \
-    libxmlsec1-dev \
-    libegl1-mesa-dev
-fi
-
-if [ "$VERSION_ID" == "20.04" ] ; then
-  sudo $PACKAGER install -y libegl-dev
-fi
+  # Set up gcc-11 as default gcc
+  sudo update-alternatives \
+    --install /usr/bin/gcc gcc /usr/bin/gcc-11 1100 \
+    --slave /usr/bin/g++ g++ /usr/bin/g++-11
+  sudo update-alternatives --auto gcc
 
   sudo mkdir -p $PREFIX
   pushd $PREFIX
-  sudo wget --continue https://dependencies.mapd.com/mapd-deps/mapd-deps-ubuntu-${VERSION_ID}-$FLAG.tar.xz
-  sudo tar xvf mapd-deps-ubuntu-${VERSION_ID}-$FLAG.tar.xz
-  sudo rm -f mapd-deps-ubuntu-${VERSION_ID}-$FLAG.tar.xz
+
+  DOWNLOAD_ID=$VERSION_ID
+  if [ $VERSION_ID == "23.10" ]; then
+    DOWNLOAD_ID=22.04
+  fi
+  sudo wget --continue https://dependencies.mapd.com/mapd-deps/mapd-deps-ubuntu-${DOWNLOAD_ID}-$FLAG.tar.xz
+  sudo tar xvf mapd-deps-ubuntu-${DOWNLOAD_ID}-$FLAG.tar.xz
+  sudo rm -f mapd-deps-ubuntu-${DOWNLOAD_ID}-$FLAG.tar.xz
   popd
 
-  cat << EOF | sudo tee -a $PREFIX/mapd-deps.sh
+  cat << EOF | sudo tee $PREFIX/mapd-deps.sh
 HEAVY_PREFIX=$PREFIX
 
 LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH
@@ -167,24 +158,20 @@ elif [ "$ID" == "centos" ] ; then
     epel-release \
     which \
     libssh \
-    openssl-devel \
-    ncurses-devel \
     git \
-    maven \
     java-1.8.0-openjdk-devel \
     java-1.8.0-openjdk-headless \
     gperftools \
     gperftools-devel \
     gperftools-libs \
-    python-devel \
     wget \
     curl \
-    python-yaml \
+    python3 \
     libX11-devel \
     environment-modules \
     valgrind \
-    openldap-devel \
-    patchelf
+    patchelf \
+    perl-IPC-Cmd
 
   # Install packages from EPEL
   sudo yum install -y \

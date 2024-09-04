@@ -24,15 +24,17 @@
 #include <ogrsf_frmts.h>
 
 #include <boost/filesystem.hpp>
+
+#include "Geospatial/Types.h"
 #include "Logger/Logger.h"
+#include "OSDependent/heavyai_env.h"
 #include "OSDependent/heavyai_path.h"
 #include "Shared/scope.h"
 
-#ifdef _WIN32
-#include "Shared/clean_windows.h"
-#endif
-
 namespace Geospatial {
+
+// externed in CommandLineOptions.cpp
+std::string g_importer_additional_proj_data_path;
 
 namespace {
 
@@ -70,25 +72,34 @@ void GDAL::init() {
 
   // init under mutex
   if (!initialized_) {
-    // FIXME(andrewseidl): investigate if CPLPushFinderLocation can be public
-#ifdef _WIN32
-    _putenv_s(
-        "GDAL_DATA",
-        std::string(heavyai::get_root_abs_path() + "/ThirdParty/gdal-data").c_str());
-    _putenv_s(
-        "PROJ_LIB",
-        std::string(heavyai::get_root_abs_path() + "/ThirdParty/gdal-data/proj").c_str());
+    // set the search path for the GDAL helper files
+    auto const gdal_data_str = heavyai::get_root_abs_path() + "/ThirdParty/gdal";
+    heavyai::setenv("GDAL_DATA", gdal_data_str);
+
+    // set the search path(s) for the PROJ helper files
+    // allow for a second path to be provided in the config
+    auto proj_data_str = heavyai::get_root_abs_path() + "/ThirdParty/proj";
+    if (g_importer_additional_proj_data_path.length()) {
+      if (boost::filesystem::is_directory(g_importer_additional_proj_data_path)) {
+        proj_data_str +=
+            heavyai::env_path_separator() + g_importer_additional_proj_data_path;
+      } else {
+        LOG(FATAL) << "Invalid importer_additional_proj_data_path config value";
+      }
+      LOG(INFO) << "Using additional PROJ_DATA path: "
+                << g_importer_additional_proj_data_path;
+    }
+
+    // for PROJ >= 9.1, PROJ_LIB has been deprecated by PROJ_DATA
+    // the PROJ version is not exposed, but we can check the GDAL version
+    // if we see GDAL 3.7.x or higher, we can be assured we have PROJ 9.3.1 or higher
+#if (GDAL_VERSION_MAJOR > 3) || ((GDAL_VERSION_MAJOR == 3) && (GDAL_VERSION_MINOR >= 7))
+    heavyai::setenv("PROJ_DATA", proj_data_str);
 #else
-    setenv("GDAL_DATA",
-           std::string(heavyai::get_root_abs_path() + "/ThirdParty/gdal-data").c_str(),
-           true);
-    setenv(
-        "PROJ_LIB",
-        std::string(heavyai::get_root_abs_path() + "/ThirdParty/gdal-data/proj").c_str(),
-        true);
+    heavyai::setenv("PROJ_LIB", proj_data_str);
 #endif
 
-#ifndef _MSC_VER  // TODO
+#ifndef _WIN32  // TODO
     // configure SSL certificate path (per S3Archive::init_for_read)
     // in a production build, GDAL and Curl will have been built on
     // CentOS, so the baked-in system path will be wrong for Ubuntu
@@ -106,7 +117,7 @@ void GDAL::init() {
     for (const auto& known_ca_path : known_ca_paths) {
       if (boost::filesystem::exists(known_ca_path)) {
         LOG(INFO) << "GDAL SSL Certificate path: " << known_ca_path;
-        setenv("SSL_CERT_FILE", known_ca_path, false);  // no overwrite
+        heavyai::setenv("SSL_CERT_FILE", known_ca_path, false);  // no overwrite
         break;
       }
     }

@@ -105,7 +105,7 @@ void eatSpace(std::string_view& str) {
 template <typename T>
 std::optional<T> fromChars(std::string_view& str,
                            size_t maxlen = std::numeric_limits<size_t>::max()) {
-  T retval;
+  T retval{0};
   maxlen = std::min(maxlen, str.size());
   auto const result = std::from_chars(str.data(), str.data() + maxlen, retval);
   if (result.ec == std::errc()) {

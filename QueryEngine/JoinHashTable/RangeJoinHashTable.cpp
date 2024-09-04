@@ -414,7 +414,8 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnGpu(
   auto data_mgr = executor_->getDataMgr();
   CudaAllocator allocator(
       data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-  auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
+  auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
+      join_columns, allocator, "Range hash join input column(s)");
   CHECK_EQ(join_columns.size(), 1u);
   CHECK(!join_bucket_info.empty());
 
@@ -422,7 +423,7 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnGpu(
       join_bucket_info[0].inverse_bucket_sizes_for_dimension;
 
   auto bucket_sizes_gpu = transfer_vector_of_flat_objects_to_gpu(
-      inverse_bucket_sizes_for_dimension, allocator);
+      inverse_bucket_sizes_for_dimension, allocator, "Range join hashtable bucket sizes");
 
   const auto key_handler = RangeKeyHandler(isInnerColCompressed(),
                                            inverse_bucket_sizes_for_dimension.size(),
@@ -617,8 +618,10 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
               device_id,
               getQueryEngineCudaStreamForDevice(device_id));
           const auto& columns_for_device = columns_per_device[device_id];
-          auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
-              columns_for_device.join_columns, *allocator);
+          auto join_columns_gpu =
+              transfer_vector_of_flat_objects_to_gpu(columns_for_device.join_columns,
+                                                     *allocator,
+                                                     "Range hash join input column(s)");
 
           CHECK_GT(columns_for_device.join_buckets.size(), 0u);
           const auto& bucket_sizes_for_dimension =
@@ -627,7 +630,8 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
               allocator->alloc(bucket_sizes_for_dimension.size() * sizeof(double));
           allocator->copyToDevice(bucket_sizes_gpu,
                                   bucket_sizes_for_dimension.data(),
-                                  bucket_sizes_for_dimension.size() * sizeof(double));
+                                  bucket_sizes_for_dimension.size() * sizeof(double),
+                                  "Range join hashtable bucket sizes");
           const size_t row_counts_buffer_sz =
               columns_per_device.front().join_columns[0].num_elems * sizeof(int32_t);
           auto row_counts_buffer = allocator->alloc(row_counts_buffer_sz);
@@ -641,8 +645,8 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
                               bucket_sizes_for_dimension.size(),
                               join_columns_gpu,
                               reinterpret_cast<double*>(bucket_sizes_gpu));
-          const auto key_handler_gpu =
-              transfer_flat_object_to_gpu(key_handler, *allocator);
+          const auto key_handler_gpu = transfer_flat_object_to_gpu(
+              key_handler, *allocator, "Range hash join key handler");
           approximate_distinct_tuples_on_device_range(
               reinterpret_cast<uint8_t*>(device_hll_buffer),
               count_distinct_desc.bitmap_sz_bits,
@@ -658,12 +662,14 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
               row_counts_buffer +
                   (columns_per_device.front().join_columns[0].num_elems - 1) *
                       sizeof(int32_t),
-              sizeof(int32_t));
+              sizeof(int32_t),
+              "Range join hashtable emitted key count");
 
           auto& host_hll_buffer = host_hll_buffers[device_id];
           allocator->copyFromDevice(&host_hll_buffer[0],
                                     device_hll_buffer,
-                                    count_distinct_desc.bitmapPaddedSizeBytes());
+                                    count_distinct_desc.bitmapPaddedSizeBytes(),
+                                    "Range join hashtable hyperloglog buffer");
         }));
   }
   for (auto& child : approximate_distinct_device_threads) {

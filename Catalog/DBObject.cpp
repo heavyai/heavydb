@@ -101,8 +101,10 @@ std::string DBObjectTypeToString(DBObjectType type) {
       return "VIEW";
     case ServerDBObjectType:
       return "SERVER";
+    case AbstractDBObjectType:
+      return "ABSTRACT";
     default:
-      CHECK(false);
+      UNREACHABLE() << "Unknown DBObjectType: '" << std::to_string(type) << "'";
   }
   return "not possible";
 }
@@ -264,7 +266,7 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
       break;
     }
     default:
-      CHECK(false);
+      UNREACHABLE() << "Unknown object type: " << dump() << "\n";
   }
 }
 

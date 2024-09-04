@@ -69,24 +69,20 @@ sudo yum install -y \
     epel-release \
     which \
     libssh \
-    openssl-devel \
-    ncurses-devel \
     git \
     java-1.8.0-openjdk-devel \
     java-1.8.0-openjdk-headless \
     gperftools \
     gperftools-devel \
     gperftools-libs \
-    python-devel \
     wget \
     curl \
     python3 \
-    openldap-devel \
-    patchelf
+    patchelf \
+    perl-IPC-Cmd
 sudo yum install -y \
     jq \
     pxz
-
 generate_deps_version_file
 # mold fast linker
 install_mold_precompiled_x86_64
@@ -113,12 +109,15 @@ install_ninja
 
 install_maven
 
+install_openssl
+
+install_openldap2
+
 install_cmake
 
 install_boost
 
 download_make_install ftp://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz
-
 
 # http://zlib.net/zlib-1.2.8.tar.xz
 download_make_install ${HTTP_DEPS}/zlib-1.2.8.tar.xz
@@ -127,14 +126,11 @@ install_memkind
 
 install_bzip2
 
-# https://www.openssl.org/source/openssl-1.0.2u.tar.gz
-download_make_install ${HTTP_DEPS}/openssl-1.0.2u.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
-
 # libarchive
 CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared --with-pic"
 CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libarchive-3.3.2.tar.gz "" "--without-openssl --disable-shared" 
 
-CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.1.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu" 
+CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.4.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu" 
 
 download_make_install ftp://ftp.gnu.org/gnu/bison/bison-3.4.2.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu" 
 
@@ -154,16 +150,9 @@ CXXFLAGS="-fPIC -std=c++11" download_make_install https://github.com/google/glog
 VERS=2.1.10
 download_make_install https://github.com/libevent/libevent/releases/download/release-$VERS-stable/libevent-$VERS-stable.tar.gz
 
+install_fmt
+
 install_folly
-
-# llvm
-# http://thrysoee.dk/editline/libedit-20170329-3.1.tar.gz
-download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
-
-# (see common-functions.sh)
-install_llvm 
-
-install_iwyu 
 
 VERS=7.75.0
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
@@ -189,10 +178,18 @@ CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VE
 install_blosc
 
 # Geo Support
-install_gdal
+install_gdal_and_pdal static
+install_gdal_tools
 install_geos
-install_pdal
 
+# llvm
+# http://thrysoee.dk/editline/libedit-20230828-3.1.tar.gz
+CPPFLAGS="-I$PREFIX/include/ncurses" download_make_install ${HTTP_DEPS}/libedit-20230828-3.1.tar.gz
+
+# (see common-functions.sh)
+install_llvm 
+
+install_iwyu 
 
 download_make_install https://mirrors.sarata.com/gnu/binutils/binutils-2.32.tar.xz
 
@@ -275,7 +272,7 @@ makej
 make install
 popd
 
-download_make_install ${HTTP_DEPS}/xml-security-c-2.0.2.tar.gz "" "--without-xalan --enable-static --disable-shared"
+download_make_install ${HTTP_DEPS}/xml-security-c-2.0.4.tar.gz "" "--without-xalan --enable-static --disable-shared"
 download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz "" "--enable-static --disable-shared"
 CXXFLAGS="-std=c++14" download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz "" "--enable-static --disable-shared"
 

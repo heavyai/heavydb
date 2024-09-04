@@ -95,7 +95,8 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
       gpu_buffers_.emplace_back(
           data_mgr->alloc(Data_Namespace::GPU_LEVEL, device_id, bitmap_sz_bytes));
       auto gpu_bitset = gpu_buffers_.back()->getMemoryPtr();
-      device_allocator->copyToDevice(gpu_bitset, cpu_bitset, bitmap_sz_bytes);
+      device_allocator->copyToDevice(
+          gpu_bitset, cpu_bitset, bitmap_sz_bytes, "In-value bitset");
       bitsets_.push_back(gpu_bitset);
     }
     free(cpu_bitset);

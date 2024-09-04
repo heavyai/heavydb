@@ -83,9 +83,17 @@ function check_artifact_cleanup() {
   build_dir=$2
   [[ -z $build_dir || -z $download_file ]] && echo "Invalid args remove_install_artifacts" && return
   if [[ $SAVE_SPACE == 'true' ]] ; then 
-    rm $download_file
+    rm -f $download_file
     rm -rf $build_dir
   fi
+}
+
+function force_artifact_cleanup() {
+  download_file=$1
+  build_dir=$2
+  [[ -z $build_dir || -z $download_file ]] && echo "Invalid args remove_install_artifacts" && return
+  rm -f $download_file
+  rm -rf $build_dir
 }
 
 function download_make_install() {
@@ -114,7 +122,7 @@ function install_cmake() {
 }
 
 # gcc
-GCC_VERSION=11.1.0
+GCC_VERSION=11.4.0
 function install_centos_gcc() {
 
   download ftp://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz
@@ -143,7 +151,7 @@ function install_centos_gcc() {
   check_artifact_cleanup gcc-${GCC_VERSION}.tar.xz gcc-${GCC_VERSION}
 }
 
-BOOST_VERSION=1_72_0
+BOOST_VERSION=1_84_0
 function install_boost() {
   # http://downloads.sourceforge.net/project/boost/boost/${BOOST_VERSION//_/.}/boost_$${BOOST_VERSION}.tar.bz2
   download ${HTTP_DEPS}/boost_${BOOST_VERSION}.tar.bz2
@@ -153,6 +161,25 @@ function install_boost() {
   ./b2 cxxflags=-fPIC install --prefix=$PREFIX || true
   popd
   check_artifact_cleanup boost_${BOOST_VERSION}.tar.bz2 boost_${BOOST_VERSION}
+}
+
+function install_openssl() {
+  # https://www.openssl.org/source/old/3.0/openssl-3.0.10.tar.gz
+  download_make_install ${HTTP_DEPS}/openssl-3.0.10.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
+}
+
+LDAP_VERSION=2.5.16
+function install_openldap2() {
+  download https://www.openldap.org/software/download/OpenLDAP/openldap-release/openldap-$LDAP_VERSION.tgz
+  extract openldap-$LDAP_VERSION.tgz
+  mkdir -p openldap-$LDAP_VERSION/build
+  pushd openldap-$LDAP_VERSION/build
+  ../configure --prefix=$PREFIX --disable-shared --enable-static
+  make depend
+  make -j $(nproc)
+  make install
+  popd
+  check_artifact_cleanup openldap-$LDAP_VERSION.tar.gz openldap-$LDAP_VERSION
 }
 
 ARROW_VERSION=apache-arrow-9.0.0
@@ -219,7 +246,7 @@ function install_awscpp() {
     # check c++17 support
     GNU_VERSION1=$(g++ --version|head -n1|awk '{print $4}'|cut -d'.' -f1)
     if [ "$GNU_VERSION1" = "7" ]; then
-        CPP_STANDARD=17
+    CPP_STANDARD=17
     fi
     rm -rf aws-sdk-cpp-${AWSCPP_VERSION}
     download https://github.com/aws/aws-sdk-cpp/archive/${AWSCPP_VERSION}.tar.gz
@@ -313,7 +340,7 @@ function install_thrift() {
     fi
     source /etc/os-release
     if [ "$ID" == "ubuntu"  ] ; then
-      BOOST_LIBDIR=""
+      BOOST_LIBDIR="--with-boost=$PREFIX/include --with-boost-libdir=$PREFIX/lib"
     else
       BOOST_LIBDIR="--with-boost-libdir=$PREFIX/lib"
     fi
@@ -330,17 +357,38 @@ function install_thrift() {
     check_artifact_cleanup thrift-$THRIFT_VERSION.tar.gz thrift-$THRIFT_VERSION
 }
 
-PROJ_VERSION=8.2.1
-GDAL_VERSION=3.4.1
+# newest as of 11/17/23 except where noted
+PROJ_VERSION=9.3.0
+GDAL_VERSION=3.7.3 # latest is 3.8.0 but that's too new for comfort
+TIFF_VERSION=4.5.1
+GEOTIFF_VERSION=1.7.1
+PDAL_VERSION=2.4.2 # newest is 2.5.5 but would require patch changes
+OPENJPEG_VERSION=2.5.0
+LCMS_VERSION=2.15
+WEBP_VERSION=1.3.2
+ZSTD_VERSION=1.4.8 # not the newest, but the one that comes with Ubuntu 22.04
+HDF5_VERSION=1.12.1 # newest is 1.14.x but there are API changes
+NETCDF_VERSION=4.8.1 # newest is 4.9.2 but has more deps
 
-function install_gdal() {
-    # sqlite3
-    download_make_install https://sqlite.org/2021/sqlite-autoconf-3350500.tar.gz
+function install_gdal_and_pdal() {
+    if [ "$1" == "static" ]; then
+      BUILD_STATIC_LIBS="ON"
+      BUILD_SHARED_LIBS="OFF"
+      WEBP_BUILD_SELECT="--enable-shared=OFF"
+      BUILD_PROJ_GDAL_APPS="OFF"
+    else
+      BUILD_STATIC_LIBS="OFF"
+      BUILD_SHARED_LIBS="ON"
+      WEBP_BUILD_SELECT="--enable-static=OFF"
+      BUILD_PROJ_GDAL_APPS="ON"
+    fi
 
-    # expat
-    download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_2_5/expat-2.2.5.tar.bz2
+    # sqlite3 (for proj, gdal)
+    download_make_install https://sqlite.org/2024/sqlite-autoconf-3450100.tar.gz
+    # expat (for gdal)
+    download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_5_0/expat-2.5.0.tar.bz2
 
-    # kml
+    # kml (for gdal)
     download ${HTTP_DEPS}/libkml-master.zip
     unzip -u libkml-master.zip
     pushd libkml-master
@@ -349,47 +397,305 @@ function install_gdal() {
     makej
     make install
     popd
+    check_artifact_cleanup libkml-master.zip libkml-master
 
-    # hdf5
-    download_make_install ${HTTP_DEPS}/hdf5-1.12.1.tar.gz "" "--enable-hl"
+    # hdf5 (for gdal)
+    download_make_install ${HTTP_DEPS}/hdf5-${HDF5_VERSION}.tar.gz "" "--enable-hl"
 
-    # netcdf
-    download https://github.com/Unidata/netcdf-c/archive/refs/tags/v4.8.1.tar.gz
-    tar xzvf v4.8.1.tar.gz
-    pushd netcdf-c-4.8.1
+    # netcdf (for gdal)
+    download https://github.com/Unidata/netcdf-c/archive/refs/tags/v${NETCDF_VERSION}.tar.gz
+    tar xzvf v${NETCDF_VERSION}.tar.gz
+    pushd netcdf-c-${NETCDF_VERSION}
     CPPFLAGS=-I${PREFIX}/include LDFLAGS=-L${PREFIX}/lib ./configure --prefix=$PREFIX
     makej
     make install
     popd
+    check_artifact_cleanup v${NETCDF_VERSION}.tar.gz netcdf-c-${NETCDF_VERSION}
 
-    # proj
-    download_make_install ${HTTP_DEPS}/proj-${PROJ_VERSION}.tar.gz "" "--disable-tiff"
-
-    # gdal (with patch for memory leak in VSICurlClearCache)
-    download ${HTTP_DEPS}/gdal-${GDAL_VERSION}.tar.gz
-    extract gdal-${GDAL_VERSION}.tar.gz
-    pushd gdal-${GDAL_VERSION}
-    patch -p0 port/cpl_vsil_curl.cpp $SCRIPTS_DIR/gdal-3.4.1_memory_leak_fix_1.patch
-    patch -p0 port/cpl_vsil_curl_streaming.cpp $SCRIPTS_DIR/gdal-3.4.1_memory_leak_fix_2.patch
-    ./configure --prefix=$PREFIX --without-geos --with-libkml=$PREFIX --with-proj=$PREFIX --with-libtiff=internal --with-libgeotiff=internal --with-netcdf=$PREFIX --with-blosc=$PREFIX
-    makej
-    make_install
+    # tiff (for proj, geotiff, gdal)
+    download http://download.osgeo.org/libtiff/tiff-${TIFF_VERSION}.tar.gz
+    extract tiff-$TIFF_VERSION.tar.gz
+    pushd tiff-$TIFF_VERSION
+    mkdir build2
+    pushd build2
+    cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -Dtiff-tools=OFF -Dtiff-tests=OFF -Dtiff-contrib=OFF -Dtiff-docs=OFF
+    cmake_build_and_install
     popd
-    check_artifact_cleanup libkml-master.zip libkml-master
-    check_artifact_cleanup v4.8.1.tar.gz netcdf-c-4.8.1
+    popd
+    check_artifact_cleanup tiff-$TIFF_VERSION.tar.gz tiff-$TIFF_VERSION
+
+    # proj (for geotiff, gdal)
+    download https://download.osgeo.org/proj/proj-${PROJ_VERSION}.tar.gz
+    tar xzvf proj-${PROJ_VERSION}.tar.gz
+    pushd proj-${PROJ_VERSION}
+    mkdir build
+    pushd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PREFIX} -DENABLE_TIFF=on -DBUILD_TESTING=off -DBUILD_APPS=${BUILD_PROJ_GDAL_APPS} -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
+    cmake_build_and_install
+    popd
+    popd
+    check_artifact_cleanup proj-${PROJ_VERSION}.tar.gz proj-${PROJ_VERSION}
+
+    # geotiff (for gdal, pdal)
+    download https://github.com/OSGeo/libgeotiff/releases/download/${GEOTIFF_VERSION}/libgeotiff-$GEOTIFF_VERSION.tar.gz
+    extract libgeotiff-$GEOTIFF_VERSION.tar.gz
+    pushd libgeotiff-$GEOTIFF_VERSION
+    sed -i 's/CHECK_FUNCTION_EXISTS(TIFFOpen HAVE_TIFFOPEN)/SET(HAVE_TIFFOPEN TRUE)/g' CMakeLists.txt
+    sed -i 's/CHECK_FUNCTION_EXISTS(TIFFMergeFieldInfo HAVE_TIFFMERGEFIELDINFO)/SET(HAVE_TIFFMERGEFIELDINFO TRUE)/g' CMakeLists.txt
+    mkdir build
+    pushd build
+    cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DWITH_UTILITIES=off
+    cmake_build_and_install
+    popd
+    popd
+    check_artifact_cleanup libgeotiff-$GEOTIFF_VERSION.tar.gz libgeotiff-$GEOTIFF_VERSION
+
+    # little cms (for openjpeg)
+    download_make_install https://github.com/mm2/Little-CMS/archive/refs/tags/lcms${LCMS_VERSION}.tar.gz "Little-CMS-lcms${LCMS_VERSION}"
+
+    # webp (for openjpeg)
+    download https://github.com/webmproject/libwebp/archive/refs/tags/v${WEBP_VERSION}.tar.gz
+    extract v${WEBP_VERSION}.tar.gz
+    pushd libwebp-${WEBP_VERSION}
+    ./autogen.sh || true
+    ./configure --prefix=$PREFIX --disable-libwebpdecoder --disable-libwebpdemux --disable-libwebpmux ${WEBP_BUILD_SELECT}
+    makej
+    make install
+    popd
+    check_artifact_cleanup v${WEBP_VERSION}.tar.gz libwebp-${WEBP_VERSION}
+
+    # zstd (for openjpeg)
+    download https://github.com/facebook/zstd/archive/refs/tags/v${ZSTD_VERSION}.tar.gz
+    extract v${ZSTD_VERSION}.tar.gz
+    pushd zstd-${ZSTD_VERSION}
+    pushd build
+    pushd cmake
+    mkdir build
+    pushd build
+    cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_SHARED=${BUILD_SHARED_LIBS} -DZSTD_BUILD_STATIC=${BUILD_STATIC_LIBS}
+    cmake_build_and_install
+    popd
+    popd
+    popd
+    popd
+    check_artifact_cleanup v${ZSTD_VERSION}.tar.gz zstd-${ZSTD_VERSION}
+
+    # openjpeg (for gdal JP2/Sentinel2 support)
+    download https://github.com/uclouvain/openjpeg/archive/refs/tags/v${OPENJPEG_VERSION}.tar.gz
+    tar xzvf v${OPENJPEG_VERSION}.tar.gz
+    pushd openjpeg-${OPENJPEG_VERSION}
+    mkdir build
+    pushd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PREFIX} -DBUILD_CODEC=off -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DBUILD_STATIC_LIBS=${BUILD_STATIC_LIBS}
+    makej
+    make install
+    popd
+    popd
+    check_artifact_cleanup v${OPENJPEG_VERSION}.tar.gz openjpeg-${OPENJPEG_VERSION}
+
+    # gdal
+    # use tiff and geotiff already built
+    # disable geos, parquet and arrow (as before)
+    # disable pcre (Perl Regex for SQLite3 driver which we don't use anyway)
+    # disable opencl image processing acceleration (new in 3.7, don't need it)
+    # disable use of libarchive (for 7z and RAR compression, but CentOS version is too old to use)
+    download https://github.com/OSGeo/gdal/releases/download/v${GDAL_VERSION}/gdal-${GDAL_VERSION}.tar.gz
+    tar xzvf gdal-${GDAL_VERSION}.tar.gz
+    pushd gdal-${GDAL_VERSION}
+    # patch flatbuffers namespace, per https://github.com/OSGeo/gdal/pull/9313
+    echo "target_compile_definitions(ogr_FlatGeobuf PRIVATE -Dflatbuffers=gdal_flatbuffers)" >> ogr/ogrsf_frmts/flatgeobuf/CMakeLists.txt
+    mkdir build
+    pushd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release \
+             -DCMAKE_INSTALL_PREFIX=$PREFIX \
+             -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
+             -DGDAL_USE_GEOS=off \
+             -DGDAL_USE_ARROW=off \
+             -DGDAL_USE_PARQUET=off \
+             -DGDAL_USE_TIFF=${PREFIX} \
+             -DGDAL_USE_GEOTIFF=${PREFIX} \
+             -DGDAL_USE_ARCHIVE=off \
+             -DGDAL_USE_PCRE=off \
+             -DGDAL_USE_OPENCL=off \
+             -DGDAL_USE_XERCESC=off \
+             -DBUILD_APPS=${BUILD_PROJ_GDAL_APPS} \
+             -DBUILD_PYTHON_BINDINGS=off
+    cmake_build_and_install
+    popd
+    popd
+    check_artifact_cleanup gdal-${GDAL_VERSION}.tar.gz gdal-${GDAL_VERSION}
+
+    # pdal
+    download https://github.com/PDAL/PDAL/releases/download/${PDAL_VERSION}/PDAL-${PDAL_VERSION}-src.tar.bz2
+    extract PDAL-${PDAL_VERSION}-src.tar.bz2
+    pushd PDAL-${PDAL_VERSION}-src
+    patch -p1 < $SCRIPTS_DIR/pdal-asan-leak-4be888818861d34145aca262014a00ee39c90b29.patch
+    patch -p1 < $SCRIPTS_DIR/pdal-gdal-3.7.2-const-ogrspatialreference.patch
+    if [ "$1" == "static" ] ; then
+      patch -p1 < $SCRIPTS_DIR/pdal-${PDAL_VERSION}-static-linking.patch
+    fi
+    mkdir build
+    pushd build
+    cmake .. -DWITH_TESTS=off -DCMAKE_INSTALL_PREFIX=$PREFIX || true
+    cmake_build_and_install
+    popd
+    popd
+    check_artifact_cleanup PDAL-${PDAL_VERSION}-src.tar.bz2 PDAL-${PDAL_VERSION}-src
+}
+
+function install_gdal_tools() {
+    # force clean up static builds to make space for shared builds
+    force_artifact_cleanup tiff-$TIFF_VERSION.tar.gz tiff-$TIFF_VERSION
+    force_artifact_cleanup proj-${PROJ_VERSION}.tar.gz proj-${PROJ_VERSION}
+    force_artifact_cleanup v${WEBP_VERSION}.tar.gz libwebp-${WEBP_VERSION}
+    force_artifact_cleanup v${ZSTD_VERSION}.tar.gz zstd-${ZSTD_VERSION}
+    force_artifact_cleanup v${OPENJPEG_VERSION}.tar.gz openjpeg-${OPENJPEG_VERSION}
+    force_artifact_cleanup gdal-${GDAL_VERSION}.tar.gz gdal-${GDAL_VERSION}
+
+    # tiff (for proj, gdal)
+    # just build DSOs
+    download http://download.osgeo.org/libtiff/tiff-${TIFF_VERSION}.tar.gz
+    extract tiff-$TIFF_VERSION.tar.gz
+    pushd tiff-$TIFF_VERSION
+    mkdir build2
+    pushd build2
+    cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_SHARED_LIBS=on -Dtiff-tools=OFF -Dtiff-tests=OFF -Dtiff-contrib=OFF -Dtiff-docs=OFF -Dwebp=off
+    cmake --build . --target tiff
+    cmake --build . --target tiffxx
+    cmake --install .
+    popd
+    popd
+    check_artifact_cleanup tiff-$TIFF_VERSION.tar.gz tiff-$TIFF_VERSION
+
+    # proj (for gdal)
+    download https://download.osgeo.org/proj/proj-${PROJ_VERSION}.tar.gz
+    tar xzvf proj-${PROJ_VERSION}.tar.gz
+    pushd proj-${PROJ_VERSION}
+    mkdir build
+    pushd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PREFIX} -DENABLE_TIFF=on -DBUILD_TESTING=off -DBUILD_APPS=on -DBUILD_SHARED_LIBS=on -DTIFF_LIBRARY_RELEASE=${PREFIX}/lib64/libtiff.so
+    cmake_build_and_install
+    popd
+    popd
+    check_artifact_cleanup proj-${PROJ_VERSION}.tar.gz proj-${PROJ_VERSION}
+
+    # webp (for openjpeg)
+    download https://github.com/webmproject/libwebp/archive/refs/tags/v${WEBP_VERSION}.tar.gz
+    extract v${WEBP_VERSION}.tar.gz
+    pushd libwebp-${WEBP_VERSION}
+    ./autogen.sh || true
+    ./configure --prefix=$PREFIX --disable-libwebpdecoder --disable-libwebpdemux --disable-libwebpmux --enable-static=off
+    makej
+    make install
+    popd
+    check_artifact_cleanup v${WEBP_VERSION}.tar.gz libwebp-${WEBP_VERSION}
+
+    # zstd (for openjpeg)
+    download https://github.com/facebook/zstd/archive/refs/tags/v${ZSTD_VERSION}.tar.gz
+    extract v${ZSTD_VERSION}.tar.gz
+    pushd zstd-${ZSTD_VERSION}
+    pushd build
+    pushd cmake
+    mkdir build
+    pushd build
+    cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_SHARED=on -DZSTD_BUILD_STATIC=off
+    cmake_build_and_install
+    popd
+    popd
+    popd
+    popd
+    check_artifact_cleanup v${ZSTD_VERSION}.tar.gz zstd-${ZSTD_VERSION}
+
+    # openjpeg (for gdal JP2/Sentinel2 support)
+    download https://github.com/uclouvain/openjpeg/archive/refs/tags/v${OPENJPEG_VERSION}.tar.gz
+    tar xzvf v${OPENJPEG_VERSION}.tar.gz
+    pushd openjpeg-${OPENJPEG_VERSION}
+    mkdir build
+    pushd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PREFIX} -DBUILD_CODEC=off -DBUILD_SHARED_LIBS=on -DBUILD_STATIC_LIBS=off
+    makej
+    make install
+    popd
+    popd
+    check_artifact_cleanup v${OPENJPEG_VERSION}.tar.gz openjpeg-${OPENJPEG_VERSION}
+
+    # gdal
+    # this time build shared
+    # use external tiff, but internal geotiff
+    # disable geos, parquet, arrow, pcre, opencl, archive as before
+    # force use of the DSOs for webp, openjpeg, and proj that we just built (ignore static libs from first pass)
+    download https://github.com/OSGeo/gdal/releases/download/v${GDAL_VERSION}/gdal-${GDAL_VERSION}.tar.gz
+    tar xzvf gdal-${GDAL_VERSION}.tar.gz
+    pushd gdal-${GDAL_VERSION}
+    # patch flatbuffers namespace, per https://github.com/OSGeo/gdal/pull/9313
+    echo "target_compile_definitions(ogr_FlatGeobuf PRIVATE -Dflatbuffers=gdal_flatbuffers)" >> ogr/ogrsf_frmts/flatgeobuf/CMakeLists.txt
+    mkdir build
+    pushd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release \
+             -DCMAKE_INSTALL_PREFIX=$PREFIX \
+             -DBUILD_SHARED_LIBS=on \
+             -DGDAL_USE_GEOS=off \
+             -DGDAL_USE_ARROW=off \
+             -DGDAL_USE_PARQUET=off \
+             -DGDAL_USE_TIFF=${PREFIX} \
+             -DGDAL_USE_GEOTIFF_INTERNAL=on \
+             -DGDAL_USE_ARCHIVE=off \
+             -DGDAL_USE_PCRE=off \
+             -DGDAL_USE_OPENCL=off \
+             -DGDAL_USE_XERCESC=off \
+             -DBUILD_APPS=on \
+             -DBUILD_PYTHON_BINDINGS=off \
+             -DWEBP_LIBRARY=${PREFIX}/lib/libwebp.so \
+             -DTIFF_LIBRARY_RELEASE=${PREFIX}/lib64/libtiff.so \
+             -DOPENJPEG_LIBRARY=${PREFIX}/lib/libopenjp2.so \
+             -DPROJ_LIBRARY_RELEASE=${PREFIX}/lib64/libproj.so
+    cmake_build_and_install
+    popd
+    popd
     check_artifact_cleanup gdal-${GDAL_VERSION}.tar.gz gdal-${GDAL_VERSION}
 }
 
-GEOS_VERSION=3.8.1
+GEOS_VERSION=3.11.1
 
 function install_geos() {
-    download_make_install ${HTTP_DEPS}/geos-${GEOS_VERSION}.tar.bz2 "" "--enable-shared --disable-static"
-
+    download ${HTTP_DEPS}/geos-${GEOS_VERSION}.tar.bz2
+    tar xvf geos-${GEOS_VERSION}.tar.bz2
+    pushd geos-${GEOS_VERSION}
+    mkdir build
+    pushd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release \
+             -DCMAKE_INSTALL_PREFIX=${PREFIX} \
+             -DBUILD_SHARED_LIBS=on \
+             -DBUILD_GEOSOP=off \
+             -DBUILD_TESTING=off
+    cmake_build_and_install
+    popd
+    popd
+    check_artifact_cleanup geos-${GEOS_VERSION}.tar.bz2 geos-${GEOS_VERSION}
 }
 
-FOLLY_VERSION=2021.02.01.00
-FMT_VERSION=7.1.3
+FOLLY_VERSION=2023.01.16.00
+# FMT_VERSION must match the version required for folly
+# ExecuteTests requires fmt even if Folly is disabled
+FMT_VERSION=9.1.0
 GLOG_VERSION=0.5.0
+
+function install_fmt() {
+  # Folly depends on fmt
+  download https://github.com/fmtlib/fmt/archive/$FMT_VERSION.tar.gz
+  extract $FMT_VERSION.tar.gz
+  BUILD_DIR="fmt-$FMT_VERSION/build"
+  mkdir -p $BUILD_DIR
+  pushd $BUILD_DIR
+  cmake -GNinja \
+        -DFMT_DOC=OFF \
+        -DFMT_TEST=OFF \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+  cmake_build_and_install
+  popd
+}
+
 function install_folly() {
   # Build Glog statically to remove dependency on it from heavydb CMake
   download https://github.com/google/glog/archive/refs/tags/v$GLOG_VERSION.tar.gz
@@ -404,20 +710,6 @@ function install_folly() {
   cmake_build_and_install
   popd
 
-  # Folly depends on fmt
-  download https://github.com/fmtlib/fmt/archive/$FMT_VERSION.tar.gz
-  extract $FMT_VERSION.tar.gz
-  BUILD_DIR="fmt-$FMT_VERSION/build"
-  mkdir -p $BUILD_DIR
-  pushd $BUILD_DIR
-  cmake -GNinja \
-        -DFMT_DOC=OFF \
-        -DFMT_TEST=OFF \
-        -DBUILD_SHARED_LIBS=OFF \
-        -DCMAKE_INSTALL_PREFIX=$PREFIX ..
-  cmake_build_and_install
-  popd
-
   download https://github.com/facebook/folly/archive/v$FOLLY_VERSION.tar.gz
   extract v$FOLLY_VERSION.tar.gz
   pushd folly-$FOLLY_VERSION/build/
@@ -428,6 +720,7 @@ function install_folly() {
         -DCMAKE_CXX_FLAGS="-pthread" \
         -DFOLLY_USE_JEMALLOC=OFF \
         -DBUILD_SHARED_LIBS=OFF \
+        -DFOLLY_NO_EXCEPTION_TRACER:STRING=True \
         -DCMAKE_INSTALL_PREFIX=$PREFIX ..
   cmake_build_and_install
 
@@ -529,45 +822,9 @@ function install_maven() {
     fi
 }
 
-# The version of Thrust included in CUDA 11.0 and CUDA 11.1 does not support newer TBB
-function patch_old_thrust_tbb() {
-  NVCC_VERSION=$(nvcc --version | grep release | grep -o '[0-9][0-9]\.[0-9]' | head -n1)
-
-  if [ "${NVCC_VERSION}" == "11.0" ] || [ "${NVCC_VERSION}" == "11.1" ]; then
-    pushd $(dirname $(which nvcc))/../include/
-		cat > /tmp/cuda-11.0-tbb-thrust.patch << EOF
-diff -ru thrust-old/system/tbb/detail/reduce_by_key.inl thrust/system/tbb/detail/reduce_by_key.inl
---- thrust-old/system/tbb/detail/reduce_by_key.inl      2021-10-12 15:59:23.693909272 +0000
-+++ thrust/system/tbb/detail/reduce_by_key.inl  2021-10-12 16:00:05.314080478 +0000
-@@ -27,8 +27,8 @@
- #include <thrust/detail/range/tail_flags.h>
- #include <tbb/blocked_range.h>
- #include <tbb/parallel_for.h>
--#include <tbb/tbb_thread.h>
- #include <cassert>
-+#include <thread>
- 
- 
- namespace thrust
-@@ -281,7 +281,7 @@
-   }
- 
-   // count the number of processors
--  const unsigned int p = thrust::max<unsigned int>(1u, ::tbb::tbb_thread::hardware_concurrency());
-+  const unsigned int p = thrust::max<unsigned int>(1u, std::thread::hardware_concurrency());
- 
-   // generate O(P) intervals of sequential work
-   // XXX oversubscribing is a tuning opportunity
-EOF
-		patch -p0 --forward -r- < /tmp/cuda-11.0-tbb-thrust.patch || true
-    popd
-  fi
-}
-
 TBB_VERSION=2021.9.0
 
 function install_tbb() {
-  patch_old_thrust_tbb
   download https://github.com/oneapi-src/oneTBB/archive/v${TBB_VERSION}.tar.gz
   extract v${TBB_VERSION}.tar.gz
   pushd oneTBB-${TBB_VERSION}
@@ -658,7 +915,7 @@ function install_abseil() {
   popd
 }
 
-VULKAN_VERSION=1.3.239.0 # 1/30/23
+VULKAN_VERSION=1.3.275.0 # 12/22/23
 
 function install_vulkan() {
   rm -rf vulkan
@@ -704,7 +961,7 @@ function install_blosc() {
   check_artifact_cleanup  v${BLOSC_VERSION}.tar.gz $BDIR
 }
 
-oneDAL_VERSION=2023.1.1
+oneDAL_VERSION=2024.1.0
 function install_onedal() {
   download https://github.com/oneapi-src/oneDAL/archive/refs/tags/${oneDAL_VERSION}.tar.gz
   extract ${oneDAL_VERSION}.tar.gz
@@ -731,9 +988,14 @@ function install_onedal() {
   # root PREFIX (where we install TBB)
   sed -i 's/$(_IA)\/gcc4\.8//g' makefile
 
-  # building oneAPI triggers deprecated implicit copy constructor warnings, which fail the build
-  # due to -Werror, so add a -Wno-error=deprecated-copy flag to compilation command
-  sed -i -E s/\-Wreturn\-type/\-Wreturn\-type\ \-Wno\-error=deprecated\-copy/g dev/make/cmplr.gnu.mk
+  # explicitly use python3
+  # could install python-is-python3 module, but that's overkill if only this needs it
+  sed -i 's/python/python3/g' makefile
+
+  # fix issues with c++20
+  # remove c++ standard override in cmake
+  # remove unnecessary template params from contructor decls (gcc fix)
+  patch -p1 < $SCRIPTS_DIR/patch-onedal-cpp20.patch
 
   # these exports will only be valid in the subshell that builds oneDAL
   (export TBBROOT=${PREFIX}; \
@@ -754,32 +1016,6 @@ function install_onedal() {
   cp __release_lnx_gnu/daal/latest/lib/cmake/oneDAL/*.cmake ${PREFIX}/lib/cmake/oneDAL/.
   popd
   check_artifact_cleanup ${oneDAL_VERSION}.tar.gz oneDAL-${oneDAL_VERSION}
-}
-
-PDAL_VERSION=2.4.2
-
-function install_pdal() {
-  download_make_install http://download.osgeo.org/libtiff/tiff-4.4.0.tar.gz
-  source /etc/os-release
-  if [ "$ID" == "ubuntu" ] ; then
-    download_make_install https://github.com/OSGeo/libgeotiff/releases/download/1.7.1/libgeotiff-1.7.1.tar.gz "" "--with-proj=$PREFIX/ --with-libtiff=$PREFIX/"
-  else
-    download_make_install https://github.com/OSGeo/libgeotiff/releases/download/1.7.1/libgeotiff-1.7.1.tar.gz
-  fi
-  download https://github.com/PDAL/PDAL/releases/download/${PDAL_VERSION}/PDAL-${PDAL_VERSION}-src.tar.bz2
-  extract PDAL-${PDAL_VERSION}-src.tar.bz2
-  pushd PDAL-${PDAL_VERSION}-src
-  patch -p1 < $SCRIPTS_DIR/pdal-asan-leak-4be888818861d34145aca262014a00ee39c90b29.patch
-  if [ "$ID" != "ubuntu" ] ; then
-    patch -p1 < $SCRIPTS_DIR/pdal-2.4.2-static-linking.patch
-  fi
-  mkdir build
-  pushd build
-  cmake .. -DWITH_TESTS=off -DCMAKE_INSTALL_PREFIX=$PREFIX || true
-  cmake_build_and_install
-  popd
-  popd
-  check_artifact_cleanup PDAL-${PDAL_VERSION}-src.tar.bz2 PDAL-${PDAL_VERSION}-src
 }
 
 MOLD_VERSION=1.10.1

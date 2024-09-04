@@ -36,7 +36,8 @@ void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
                         CUdeviceptr dst,
                         const void* src,
                         const size_t num_bytes,
-                        const int device_id) {
+                        const int device_id,
+                        std::string_view tag) {
 #ifdef HAVE_CUDA
   auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
   if (!data_mgr) {  // only for unit tests
@@ -50,6 +51,7 @@ void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
                              static_cast<const int8_t*>(src),
                              num_bytes,
                              device_id,
+                             tag,
                              qe_cuda_stream);
 #else
   CHECK(false);
@@ -109,6 +111,9 @@ GpuGroupByBuffers create_dev_group_by_buffers(
                                 groups_buffer_size,
                                 query_mem_desc.blocksShareMemory() ? 1 : grid_size_x);
       // TODO(adb): render allocator support
+      VLOG(1) << "Prepare query output buffer on GPU, bump_allocator: on, dispatch_mode: "
+                 "KernelPerFragment, entry_count: "
+              << entry_count << ", buffer_size: " << mem_size << " bytes";
       group_by_dev_buffers_mem = device_allocator->alloc(mem_size);
     } else {
       // Attempt to allocate increasingly small buffers until we have less than 256B of
@@ -128,6 +133,9 @@ GpuGroupByBuffers create_dev_group_by_buffers(
           CHECK_LE(entry_count, std::numeric_limits<uint32_t>::max());
 
           // TODO(adb): render allocator support
+          VLOG(1) << "Allocating query output buffer on GPU, bump_allocator: on, "
+                     "entry_count: "
+                  << entry_count << ", buffer_size: " << mem_size << " bytes";
           group_by_dev_buffers_mem = device_allocator->alloc(mem_size);
         } catch (const OutOfMemory& e) {
           LOG(WARNING) << e.what();
@@ -158,12 +166,14 @@ GpuGroupByBuffers create_dev_group_by_buffers(
         prepend_index_buffer ? align_to_int64(entry_count * sizeof(int32_t)) : 0};
 
     int8_t* group_by_dev_buffers_allocation{nullptr};
+    auto const group_by_dev_buffer_size = mem_size + prepended_buff_size;
+    VLOG(1) << "Allocating query output buffer on GPU, entry_count: " << entry_count
+            << ", buffer_size: " << group_by_dev_buffer_size
+            << " bytes (prepend_index_buffer_size: " << prepended_buff_size << " bytes)";
     if (insitu_allocator) {
-      group_by_dev_buffers_allocation =
-          insitu_allocator->alloc(mem_size + prepended_buff_size);
+      group_by_dev_buffers_allocation = insitu_allocator->alloc(group_by_dev_buffer_size);
     } else {
-      group_by_dev_buffers_allocation =
-          device_allocator->alloc(mem_size + prepended_buff_size);
+      group_by_dev_buffers_allocation = device_allocator->alloc(group_by_dev_buffer_size);
     }
     CHECK(group_by_dev_buffers_allocation);
 
@@ -187,7 +197,8 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     }
     device_allocator->copyToDevice(reinterpret_cast<int8_t*>(group_by_dev_buffers_mem),
                                    buff_to_gpu.data(),
-                                   buff_to_gpu.size());
+                                   buff_to_gpu.size(),
+                                   "Group-by buffer");
   }
 
   auto group_by_dev_buffer = group_by_dev_buffers_mem;
@@ -211,16 +222,23 @@ GpuGroupByBuffers create_dev_group_by_buffers(
   if (has_varlen_output) {
     const auto varlen_buffer_elem_size_opt = query_mem_desc.varlenOutputBufferElemSize();
     CHECK(varlen_buffer_elem_size_opt);  // TODO(adb): relax
-
-    group_by_dev_buffers[0] = device_allocator->alloc(
-        query_mem_desc.getEntryCount() * varlen_buffer_elem_size_opt.value());
+    auto const buf_size =
+        query_mem_desc.getEntryCount() * varlen_buffer_elem_size_opt.value();
+    VLOG(1) << "Allocating varlen output buffer on GPU, entry_count: "
+            << query_mem_desc.getEntryCount() << ", buffer_size: " << buf_size
+            << " bytes";
+    group_by_dev_buffers[0] = device_allocator->alloc(buf_size);
     varlen_output_buffer = group_by_dev_buffers[0];
   }
 
-  auto group_by_dev_ptr = device_allocator->alloc(num_ptrs * sizeof(CUdeviceptr));
+  auto const dev_ptr_buf_size = num_ptrs * sizeof(CUdeviceptr);
+  VLOG(1) << "Allocating group-by buffer buffer on device-" << device_id
+          << ", size: " << dev_ptr_buf_size << " bytes";
+  auto group_by_dev_ptr = device_allocator->alloc(dev_ptr_buf_size);
   device_allocator->copyToDevice(group_by_dev_ptr,
                                  reinterpret_cast<int8_t*>(group_by_dev_buffers.data()),
-                                 num_ptrs * sizeof(CUdeviceptr));
+                                 dev_ptr_buf_size,
+                                 "Group-by buffer");
 
   return {group_by_dev_ptr, group_by_dev_buffers_mem, entry_count, varlen_output_buffer};
 }
@@ -246,7 +264,8 @@ void copy_group_by_buffers_from_gpu(DeviceAllocator& device_allocator,
              groups_buffer_size);
     device_allocator.copyFromDevice(group_by_buffers[first_group_buffer_idx],
                                     group_by_dev_buffers_mem,
-                                    groups_buffer_size);
+                                    groups_buffer_size,
+                                    "Group-by buffer");
     return;
   }
   const size_t index_buffer_sz{
@@ -256,7 +275,8 @@ void copy_group_by_buffers_from_gpu(DeviceAllocator& device_allocator,
       index_buffer_sz);
   device_allocator.copyFromDevice(&buff_from_gpu[0],
                                   group_by_dev_buffers_mem - index_buffer_sz,
-                                  buff_from_gpu.size());
+                                  buff_from_gpu.size(),
+                                  "Group-by buffer");
   auto buff_from_gpu_ptr = &buff_from_gpu[0];
   for (size_t i = 0; i < block_buffer_count; ++i) {
     const size_t buffer_idx = (i * block_size_x) + first_group_buffer_idx;
@@ -278,7 +298,8 @@ size_t get_num_allocated_rows_from_gpu(DeviceAllocator& device_allocator,
                                        int8_t* projection_size_gpu,
                                        const int device_id) {
   int32_t num_rows{0};
-  device_allocator.copyFromDevice(&num_rows, projection_size_gpu, sizeof(num_rows));
+  device_allocator.copyFromDevice(
+      &num_rows, projection_size_gpu, sizeof(num_rows), "# allocated rows");
   CHECK(num_rows >= 0);
   return static_cast<size_t>(num_rows);
 }
@@ -305,8 +326,10 @@ void copy_projection_buffer_from_gpu_columnar(
   auto allocator = std::make_unique<CudaAllocator>(
       data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   // copy all the row indices back to the host
-  allocator->copyFromDevice(
-      projection_buffer, gpu_group_by_buffers.data, projection_count * row_index_width);
+  allocator->copyFromDevice(projection_buffer,
+                            gpu_group_by_buffers.data,
+                            projection_count * row_index_width,
+                            "Output column indices");
   size_t buffer_offset_cpu{projection_count * row_index_width};
   // other columns are actual non-lazy columns for the projection:
   for (size_t i = 0; i < query_mem_desc.getSlotCount(); i++) {
@@ -316,7 +339,8 @@ void copy_projection_buffer_from_gpu_columnar(
       allocator->copyFromDevice(
           projection_buffer + buffer_offset_cpu,
           gpu_group_by_buffers.data + query_mem_desc.getColOffInBytes(i),
-          column_proj_size);
+          column_proj_size,
+          "Output column buffer");
       buffer_offset_cpu += align_to_int64(column_proj_size);
     }
   }

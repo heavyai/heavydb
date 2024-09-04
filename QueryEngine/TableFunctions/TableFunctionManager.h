@@ -20,6 +20,12 @@
 #include "QueryEngine/QueryMemoryInitializer.h"
 #include "Shared/sqltypes.h"
 
+namespace gfx {
+class GfxContext;
+class CommandExecutionContext;
+using CommandExecutionContextUqPtr = std::unique_ptr<CommandExecutionContext>;
+}  // namespace gfx
+
 /*
   The TableFunctionManager implements the following features:
 
@@ -63,7 +69,8 @@ struct TableFunctionManager {
                        Executor* executor,
                        std::vector<const int8_t*>& col_buf_ptrs,
                        std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                       bool is_singleton)
+                       bool is_singleton,
+                       gfx::GfxContext* gfx_context)
       : exe_unit_(exe_unit)
       , executor_(executor)
       , col_buf_ptrs_(col_buf_ptrs)

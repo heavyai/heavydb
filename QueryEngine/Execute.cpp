@@ -107,7 +107,6 @@ bool g_enable_columnar_output{false};
 bool g_enable_left_join_filter_hoisting{true};
 bool g_optimize_row_initialization{true};
 bool g_enable_bbox_intersect_hashjoin{true};
-size_t g_num_tuple_threshold_switch_to_baseline{100000};
 size_t g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline{100};
 bool g_enable_distance_rangejoin{true};
 bool g_enable_hashjoin_many_to_many{true};
@@ -117,6 +116,9 @@ bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
 size_t g_default_max_groups_buffer_entry_guess{16384};
 size_t g_big_group_threshold{g_default_max_groups_buffer_entry_guess};
+size_t g_baseline_groupby_threshold{
+    1000000};  // if a perfect hash needs more entries, use baseline
+
 bool g_enable_window_functions{true};
 bool g_enable_table_functions{true};
 bool g_enable_ml_functions{true};
@@ -194,7 +196,7 @@ bool g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency{false};
 bool g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency{false};
 double g_executor_resource_mgr_max_available_resource_use_ratio{0.8};
 
-bool g_use_cpu_mem_pool_for_output_buffers{false};
+bool g_use_cpu_mem_pool_for_output_buffers{true};
 
 extern bool g_cache_string_hash;
 extern bool g_allow_memory_status_log;
@@ -613,6 +615,11 @@ const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
   CHECK(row_set_mem_owner);
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
+  for (auto& string_op_info : string_op_infos) {
+    if (string_op_info.getOpKind() == SqlStringOpKind::LLM_TRANSFORM) {
+      string_op_info.setTranslationCache(row_set_mem_owner->allocateTranslationCache());
+    }
+  }
   return row_set_mem_owner->getOrAddStringProxyTranslationMap(
       source_dict_key, dest_dict_key, with_generation, translation_type, string_op_infos);
 }
@@ -1785,12 +1792,6 @@ size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos
     return ra_exe_unit.scan_limit;
   }
   using Fragmenter_Namespace::FragmentInfo;
-  using checked_size_t = boost::multiprecision::number<
-      boost::multiprecision::cpp_int_backend<64,
-                                             64,
-                                             boost::multiprecision::unsigned_magnitude,
-                                             boost::multiprecision::checked,
-                                             void>>;
   checked_size_t checked_max_groups_buffer_entry_guess = 1;
   // Cap the rough approximation to 100M entries, it's unlikely we can do a great job for
   // baseline group layout with that many entries anyway.
@@ -2007,14 +2008,17 @@ CardinalityCacheKey::CardinalityCacheKey(const RelAlgExecutionUnit& ra_exe_unit)
   os << ::toString(ra_exe_unit.estimator == nullptr);
   os << std::to_string(ra_exe_unit.scan_limit);
   key = os.str();
+  query_plan_dag_hash = ra_exe_unit.query_plan_dag_hash;
 }
 
 bool CardinalityCacheKey::operator==(const CardinalityCacheKey& other) const {
-  return key == other.key;
+  return key == other.key && query_plan_dag_hash == other.query_plan_dag_hash;
 }
 
 size_t CardinalityCacheKey::hash() const {
-  return boost::hash_value(key);
+  auto hash = boost::hash_value(key);
+  boost::hash_combine(hash, query_plan_dag_hash);
+  return hash;
 }
 
 bool CardinalityCacheKey::containsTableKey(const shared::TableKey& table_key) const {
@@ -2446,7 +2450,8 @@ ResultSetPtr Executor::executeTableFunction(
     const TableFunctionExecutionUnit exe_unit,
     const std::vector<InputTableInfo>& table_infos,
     const CompilationOptions& co,
-    const ExecutionOptions& eo) {
+    const ExecutionOptions& eo,
+    gfx::GfxContext* gfx_context) {
   INJECT_TIMER(Exec_executeTableFunction);
   if (eo.just_validate) {
     QueryMemoryDescriptor query_mem_desc(this,
@@ -2473,7 +2478,7 @@ ResultSetPtr Executor::executeTableFunction(
                                 // framework, we may want to move this up a level
 
   ColumnFetcher column_fetcher(this, column_cache);
-  TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
+  TableFunctionExecutionContext exe_context(getRowSetMemoryOwner(), gfx_context);
 
   if (exe_unit.table_func.containsPreFlightFn()) {
     std::shared_ptr<CompilationContext> compilation_context;
@@ -2633,9 +2638,8 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
         // TODO: can we detect thread idx here?
         constexpr size_t thread_idx{0};
         const auto bitmap_size = count_distinct_desc.bitmapPaddedSizeBytes();
-        row_set_mem_owner->initCountDistinctBufferAllocator(bitmap_size, thread_idx);
         auto count_distinct_buffer =
-            row_set_mem_owner->allocateCountDistinctBuffer(bitmap_size, thread_idx);
+            row_set_mem_owner->slowAllocateCountDistinctBuffer(bitmap_size, thread_idx);
         entry.push_back(reinterpret_cast<int64_t>(count_distinct_buffer));
         continue;
       }
@@ -3906,30 +3910,26 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                rows_to_process);
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
-    GpuCompilationContext* gpu_generated_code =
-        dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get());
-    CHECK(gpu_generated_code);
+    CHECK(dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get()));
     try {
-      out_vec = query_exe_context->launchGpuCode(
-          ra_exe_unit,
-          gpu_generated_code,
-          hoist_literals,
-          hoist_buf,
-          col_buffers,
-          num_rows,
-          frag_offsets,
-          0,
-          data_mgr,
-          blockSize(),
-          gridSize(),
-          device_id,
-          compilation_result.gpu_smem_context.getSharedMemorySize(),
-          &error_code,
-          num_tables,
-          allow_runtime_interrupt,
-          join_hash_table_ptrs,
-          render_allocator_map_ptr,
-          optimize_cuda_block_and_grid_sizes);
+      out_vec = query_exe_context->launchGpuCode(ra_exe_unit,
+                                                 compilation_result,
+                                                 hoist_literals,
+                                                 hoist_buf,
+                                                 col_buffers,
+                                                 num_rows,
+                                                 frag_offsets,
+                                                 0,
+                                                 data_mgr,
+                                                 blockSize(),
+                                                 gridSize(),
+                                                 device_id,
+                                                 &error_code,
+                                                 num_tables,
+                                                 allow_runtime_interrupt,
+                                                 join_hash_table_ptrs,
+                                                 render_allocator_map_ptr,
+                                                 optimize_cuda_block_and_grid_sizes);
       output_memory_scope.reset(new OutVecOwner(out_vec));
     } catch (const OutOfMemory&) {
       return int32_t(ErrorCode::OUT_OF_GPU_MEM);
@@ -4178,12 +4178,11 @@ int32_t Executor::executePlanWithGroupBy(
                                      rows_to_process);
   } else {
     try {
-      GpuCompilationContext* gpu_generated_code =
-          dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get());
-      CHECK(gpu_generated_code);
+      CHECK(
+          dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get()));
       query_exe_context->launchGpuCode(
           ra_exe_unit_copy,
-          gpu_generated_code,
+          compilation_result,
           hoist_literals,
           hoist_buf,
           col_buffers,
@@ -4194,7 +4193,6 @@ int32_t Executor::executePlanWithGroupBy(
           blockSize(),
           gridSize(),
           device_id,
-          compilation_result.gpu_smem_context.getSharedMemorySize(),
           &error_code,
           num_tables,
           allow_runtime_interrupt,
@@ -5290,18 +5288,28 @@ void Executor::addToCardinalityCache(const CardinalityCacheKey& cache_key,
                                      const size_t cache_value) {
   if (g_use_estimator_result_cache) {
     heavyai::unique_lock<heavyai::shared_mutex> lock(recycler_mutex_);
-    cardinality_cache_[cache_key] = cache_value;
-    VLOG(1) << "Put estimated cardinality to the cache";
+    auto const [itr, inserted] = cardinality_cache_.emplace(cache_key, cache_value);
+    if (inserted) {
+      VLOG(1) << "Put estimated cardinality to the cache (cache_key: " << cache_key.hash()
+              << ", value: " << cache_value << ')';
+    } else {
+      CHECK_EQ(itr->second, cache_value)
+          << "Cardinality cache contains unexpected pair (" << itr->first.hash() << ','
+          << itr->second << ')';
+    }
   }
 }
 
 Executor::CachedCardinality Executor::getCachedCardinality(
     const CardinalityCacheKey& cache_key) {
-  heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
-  if (g_use_estimator_result_cache &&
-      cardinality_cache_.find(cache_key) != cardinality_cache_.end()) {
-    VLOG(1) << "Reuse cached cardinality";
-    return {true, cardinality_cache_[cache_key]};
+  if (g_use_estimator_result_cache) {
+    heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
+    auto const itr = cardinality_cache_.find(cache_key);
+    if (itr != cardinality_cache_.end()) {
+      VLOG(1) << "Reuse cached cardinality (cache_key: " << itr->first.hash()
+              << ", value : " << itr->second << ")";
+      return {true, itr->second};
+    }
   }
   return {false, -1};
 }
@@ -5324,6 +5332,11 @@ void Executor::invalidateCardinalityCacheForTable(const shared::TableKey& table_
       }
     }
   }
+}
+
+size_t Executor::getNumCachedCardinality() const {
+  heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
+  return cardinality_cache_.size();
 }
 
 std::vector<QuerySessionStatus> Executor::getQuerySessionInfo(
@@ -5388,6 +5401,7 @@ void Executor::init_resource_mgr(
     const size_t num_cpu_slots,
     const size_t num_gpu_slots,
     const size_t cpu_result_mem,
+    const bool use_cpu_mem_pool_for_output_buffers,
     const size_t cpu_buffer_pool_mem,
     const size_t gpu_buffer_pool_mem,
     const double per_query_max_cpu_slots_ratio,
@@ -5403,6 +5417,7 @@ void Executor::init_resource_mgr(
       num_cpu_slots,
       num_gpu_slots,
       cpu_result_mem,
+      use_cpu_mem_pool_for_output_buffers,
       cpu_buffer_pool_mem,
       gpu_buffer_pool_mem,
       per_query_max_cpu_slots_ratio,

@@ -23,6 +23,8 @@
 
 #include "Logger/Logger.h"
 
+#include <optional>
+
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #else
@@ -48,11 +50,13 @@ class DeviceAllocator : public Allocator {
 
   virtual void copyToDevice(void* device_dst,
                             const void* host_src,
-                            const size_t num_bytes) const = 0;
+                            const size_t num_bytes,
+                            std::optional<std::string_view> tag) const = 0;
 
   virtual void copyFromDevice(void* host_dst,
                               const void* device_src,
-                              const size_t num_bytes) const = 0;
+                              const size_t num_bytes,
+                              std::optional<std::string_view> tag) const = 0;
 
   virtual void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const = 0;
 

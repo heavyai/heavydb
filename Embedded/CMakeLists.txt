@@ -26,26 +26,26 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/setup.in.py" "${CMAKE_CURRENT_BINARY
 file(GENERATE OUTPUT "${SETUP_PY}" INPUT "${CMAKE_CURRENT_BINARY_DIR}/setup.py.in")
 
 # Adding Python targets here for sake of better development experience, to give an example
-find_package(PythonInterp)
-if(PYTHON_EXECUTABLE)
+find_package(Python)
+if(Python_EXECUTABLE)
     set(pydeps ${SETUP_PY} ${CMAKE_CURRENT_SOURCE_DIR}/DBEngine.h ${CMAKE_CURRENT_SOURCE_DIR}/Python/dbe.pyx ${CMAKE_CURRENT_SOURCE_DIR}/Python/DBEngine.pxd)
 
     add_custom_target(dbe4py
-        COMMAND cd ${CMAKE_CURRENT_BINARY_DIR} && ${PYTHON_EXECUTABLE} ${SETUP_PY} build_ext -g -f -I ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMAND cd ${CMAKE_CURRENT_BINARY_DIR} && ${Python_EXECUTABLE} ${SETUP_PY} build_ext -g -f -I ${CMAKE_CURRENT_SOURCE_DIR}
         DEPENDS DBEngine ${pydeps} mapd_java_components
     )
     add_custom_target(dbe4py-test
-        COMMAND ${PYTHON_EXECUTABLE} -m pytest -v ${CMAKE_CURRENT_SOURCE_DIR}/test/test_exceptions.py
-        COMMAND ${PYTHON_EXECUTABLE} -m pytest -v ${CMAKE_CURRENT_SOURCE_DIR}/test/test_readcsv.py
-        COMMAND ${PYTHON_EXECUTABLE} -m pytest -v ${CMAKE_CURRENT_SOURCE_DIR}/test/test_fsi.py
-        COMMAND ${PYTHON_EXECUTABLE} -m pytest -v ${CMAKE_CURRENT_SOURCE_DIR}/test/test_ra.py
+        COMMAND ${Python_EXECUTABLE} -m pytest -v ${CMAKE_CURRENT_SOURCE_DIR}/test/test_exceptions.py
+        COMMAND ${Python_EXECUTABLE} -m pytest -v ${CMAKE_CURRENT_SOURCE_DIR}/test/test_readcsv.py
+        COMMAND ${Python_EXECUTABLE} -m pytest -v ${CMAKE_CURRENT_SOURCE_DIR}/test/test_fsi.py
+        COMMAND ${Python_EXECUTABLE} -m pytest -v ${CMAKE_CURRENT_SOURCE_DIR}/test/test_ra.py
         DEPENDS dbe4py
     )
     add_custom_target(dbe4py-install
-        COMMAND cd ${CMAKE_CURRENT_BINARY_DIR} && ${PYTHON_EXECUTABLE} ${SETUP_PY} build_ext -g -f -I ${CMAKE_CURRENT_SOURCE_DIR} install
+        COMMAND cd ${CMAKE_CURRENT_BINARY_DIR} && ${Python_EXECUTABLE} ${SETUP_PY} build_ext -g -f -I ${CMAKE_CURRENT_SOURCE_DIR} install
         DEPENDS DBEngine ${pydeps}
     )
-    add_custom_target(dbe4py-devel 
+    add_custom_target(dbe4py-devel
         cd ${CMAKE_CURRENT_BINARY_DIR} && pip install -v -e .
         DEPENDS dbe4py)
 

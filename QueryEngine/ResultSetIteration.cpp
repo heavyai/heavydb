@@ -42,6 +42,8 @@
 
 namespace {
 
+std::optional<std::string_view> kSkipMemoryActivityLog{std::nullopt};
+
 // Interprets ptr1, ptr2 as the sum and count pair used for AVG.
 TargetValue make_avg_target_value(const int8_t* ptr1,
                                   const int8_t compact_sz1,
@@ -635,8 +637,10 @@ InternalTargetValue ResultSet::getVarlenOrderEntry(const int64_t str_ptr,
     auto data_mgr = executor->getDataMgr();
     auto allocator = std::make_unique<CudaAllocator>(
         data_mgr, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
-    allocator->copyFromDevice(
-        &cpu_buffer[0], reinterpret_cast<int8_t*>(str_ptr), str_len);
+    allocator->copyFromDevice(&cpu_buffer[0],
+                              reinterpret_cast<int8_t*>(str_ptr),
+                              str_len,
+                              kSkipMemoryActivityLog);
     host_str_ptr = reinterpret_cast<char*>(&cpu_buffer[0]);
   } else {
     CHECK(device_type_ == ExecutorDeviceType::CPU);
@@ -932,7 +936,10 @@ inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
       std::shared_ptr<int8_t>(new int8_t[length], std::default_delete<int8_t[]>());
   auto allocator = std::make_unique<CudaAllocator>(
       data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
-  allocator->copyFromDevice(cpu_buf.get(), reinterpret_cast<int8_t*>(varlen_ptr), length);
+  allocator->copyFromDevice(cpu_buf.get(),
+                            reinterpret_cast<int8_t*>(varlen_ptr),
+                            length,
+                            kSkipMemoryActivityLog);
   // Just fetching the data from gpu, not checking geo nullness
   return std::make_unique<ArrayDatum>(length, cpu_buf, false);
 }
@@ -1472,8 +1479,10 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     auto allocator = std::make_unique<CudaAllocator>(
         data_mgr, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
 
-    allocator->copyFromDevice(
-        &cpu_buffer[0], reinterpret_cast<int8_t*>(varlen_ptr), length);
+    allocator->copyFromDevice(&cpu_buffer[0],
+                              reinterpret_cast<int8_t*>(varlen_ptr),
+                              length,
+                              kSkipMemoryActivityLog);
     varlen_ptr = reinterpret_cast<int64_t>(&cpu_buffer[0]);
   }
   if (target_info.sql_type.is_array()) {
@@ -2114,9 +2123,10 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   }
 
   // String dictionary keys are read as 32-bit values regardless of encoding
+  // For mode, extra bits are used for additional payload data.
   if (type_info.is_string() && type_info.get_compression() == kENCODING_DICT &&
       type_info.getStringDictKey().dict_id) {
-    actual_compact_sz = sizeof(int32_t);
+    actual_compact_sz = target_info.agg_kind == kMODE ? sizeof(int64_t) : sizeof(int32_t);
   }
 
   auto ival = read_int_from_buff(ptr, actual_compact_sz);
@@ -2144,9 +2154,10 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   }
   if (target_info.agg_kind == kMODE) {
     if (!isNullIval(chosen_type, translate_strings, ival)) {
-      auto const* const* const agg_mode = reinterpret_cast<AggMode const* const*>(ptr);
-      if (std::optional<int64_t> const mode = (*agg_mode)->mode()) {
-        return convertToScalarTargetValue(chosen_type, translate_strings, *mode);
+      if (AggMode const* const agg_mode = row_set_mem_owner_->getAggMode(ival)) {
+        if (std::optional<int64_t> const mode = agg_mode->mode()) {
+          return convertToScalarTargetValue(chosen_type, translate_strings, *mode);
+        }
       }
     }
     return nullScalarTargetValue(chosen_type, translate_strings);
@@ -2378,10 +2389,9 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
                                           ? count_distinct_desc.bitmapSizeBytes()
                                           : count_distinct_desc.bitmapPaddedSizeBytes();
           constexpr size_t thread_idx{0};
-          row_set_mem_owner_->initCountDistinctBufferAllocator(bitmap_byte_sz,
-                                                               thread_idx);
           auto count_distinct_buffer =
-              row_set_mem_owner_->allocateCountDistinctBuffer(bitmap_byte_sz, thread_idx);
+              row_set_mem_owner_->slowAllocateCountDistinctBuffer(bitmap_byte_sz,
+                                                                  thread_idx);
           *count_distinct_ptr_ptr = reinterpret_cast<int64_t>(count_distinct_buffer);
         }
       }

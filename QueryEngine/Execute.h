@@ -80,6 +80,10 @@
 #include "StringDictionary/StringDictionaryProxy.h"
 #include "ThriftHandler/CommandLineOptions.h"
 
+namespace gfx {
+class GfxContext;
+}
+
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
 class QueryMemoryDescriptor;
 using QueryMemoryDescriptorOwned = std::unique_ptr<QueryMemoryDescriptor>;
@@ -400,6 +404,7 @@ struct CardinalityCacheKey {
 
  private:
   std::string key;
+  size_t query_plan_dag_hash;
   std::unordered_set<shared::TableKey> table_keys;
 };
 
@@ -430,8 +435,6 @@ class Executor {
            const size_t max_gpu_slab_size,
            const std::string& debug_dir,
            const std::string& debug_file);
-
-  void clearCaches(bool runtime_only = false);
 
   std::string dumpCache() const;
 
@@ -642,8 +645,6 @@ class Executor {
       const std::set<shared::TableKey>& table_ids_to_fetch,
       const bool include_lazy_fetched_cols) const;
 
-  size_t getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetch) const;
-
   /**
    * @brief Determines a unique list of chunks and their associated byte sizes for a given
    * query plan
@@ -781,13 +782,14 @@ class Executor {
                                      const CompilationOptions& co);
 
   // Generate code for a given frame bound
-  llvm::Value* codegenFrameBound(bool for_start_bound,
-                                 bool for_range_mode,
-                                 bool for_window_frame_naviation,
-                                 const Analyzer::WindowFrame* frame_bound,
-                                 bool is_timestamp_type_frame,
-                                 llvm::Value* order_key_null_val,
-                                 const WindowFrameBoundFuncArgs& args);
+  llvm::Value* codegenFrameBound(
+      bool for_start_bound,
+      bool for_range_mode,
+      bool for_window_frame_naviation,
+      const Analyzer::WindowFrame* frame_bound,
+      bool is_timestamp_type_frame,
+      llvm::Value* order_key_null_val,
+      const WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args);
 
   std::pair<std::string, llvm::Value*> codegenLoadOrderKeyBufPtr(
       WindowFunctionContext* window_func_context,
@@ -802,7 +804,7 @@ class Executor {
       llvm::Value* partition_index_lv) const;
 
   // Generate codes for loading various buffers of window partitions
-  WindowPartitionBufferPtrs codegenLoadPartitionBuffers(
+  WindowFunctionCtx::WindowPartitionBufferLLVMArgs codegenLoadPartitionBuffers(
       WindowFunctionContext* window_func_context,
       CodeGenerator* code_generator,
       const CompilationOptions& co,
@@ -814,7 +816,7 @@ class Executor {
       const Analyzer::WindowFrame* frame_start_bound,
       const Analyzer::WindowFrame* frame_end_bound,
       llvm::Value* order_key_col_null_val_lv,
-      WindowFrameBoundFuncArgs& args,
+      WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args,
       CodeGenerator& code_generator);
 
   // Generate codes for computing a pair of window frame bounds
@@ -827,18 +829,18 @@ class Executor {
   std::vector<llvm::Value*> prepareRowModeFuncArgs(
       bool for_start_bound,
       SqlWindowFrameBoundType bound_type,
-      const WindowFrameBoundFuncArgs& args) const;
+      const WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args) const;
   std::vector<llvm::Value*> prepareRangeModeFuncArgs(
       bool for_start_bound,
       const Analyzer::WindowFrame* frame_bound,
       bool is_timestamp_type_frame,
       llvm::Value* order_key_null_val,
-      const WindowFrameBoundFuncArgs& frame_args) const;
+      const WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& frame_args) const;
   const std::string getOrderKeyTypeName(WindowFunctionContext* window_func_context) const;
   llvm::Value* codegenLoadCurrentValueFromColBuf(
       WindowFunctionContext* window_func_context,
       CodeGenerator& code_generator,
-      WindowFrameBoundFuncArgs& args) const;
+      WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs& args) const;
   size_t getOrderKeySize(WindowFunctionContext* window_func_context) const;
   const SQLTypeInfo getFirstOrderColTypeInfo(
       WindowFunctionContext* window_func_context) const;
@@ -912,7 +914,8 @@ class Executor {
   ResultSetPtr executeTableFunction(const TableFunctionExecutionUnit exe_unit,
                                     const std::vector<InputTableInfo>& table_infos,
                                     const CompilationOptions& co,
-                                    const ExecutionOptions& eo);
+                                    const ExecutionOptions& eo,
+                                    gfx::GfxContext* gfx_context);
 
   ExecutorDeviceType getDeviceTypeForTargets(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -1406,6 +1409,7 @@ class Executor {
   CachedCardinality getCachedCardinality(const CardinalityCacheKey& cache_key);
   static void clearCardinalityCache();
   static void invalidateCardinalityCacheForTable(const shared::TableKey& table_key);
+  size_t getNumCachedCardinality() const;
 
   heavyai::shared_mutex& getDataRecyclerLock();
   QueryPlanDagCache& getQueryPlanDagCache();
@@ -1425,6 +1429,7 @@ class Executor {
   static void init_resource_mgr(const size_t num_cpu_slots,
                                 const size_t num_gpu_slots,
                                 const size_t cpu_result_mem,
+                                const bool use_cpu_mem_pool_for_output_buffers,
                                 const size_t cpu_buffer_pool_mem,
                                 const size_t gpu_buffer_pool_mem,
                                 const double per_query_max_cpu_slots_ratio,
@@ -1445,13 +1450,6 @@ class Executor {
       const ExecutorResourceMgr_Namespace::ResourceType resource_type,
       const size_t resource_quantity);
 
-  static size_t getBaselineThreshold(bool for_count_distinct,
-                                     ExecutorDeviceType device_type) {
-    return for_count_distinct ? (device_type == ExecutorDeviceType::GPU
-                                     ? (Executor::baseline_threshold / 4)
-                                     : Executor::baseline_threshold)
-                              : Executor::baseline_threshold;
-  }
   static const ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy
   get_concurrent_resource_grant_policy(
       const ExecutorResourceMgr_Namespace::ResourceType resource_type);
@@ -1545,9 +1543,6 @@ class Executor {
   mutable std::mutex str_dict_mutex_;
 
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
-
-  static const size_t baseline_threshold{
-      1000000};  // if a perfect hash needs more entries, use baseline
 
   unsigned block_size_x_;
   unsigned grid_size_x_;

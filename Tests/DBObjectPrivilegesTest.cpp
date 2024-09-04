@@ -4820,6 +4820,309 @@ Was expecting:
     "MODEL" ...)");
 }
 
+class GrantRevokeSelectColumnTest : public DBHandlerTestFixture {
+ protected:
+  static void SetUpTestSuite() {
+    loginAdmin();
+    sql("DROP TABLE IF EXISTS test_table;");
+    sql("DROP VIEW IF EXISTS test_view;");
+    sql("CREATE TABLE test_table ( id INT, val INT, str TEXT);");
+    sql("CREATE VIEW test_view AS ( SELECT * FROM test_table);");
+  }
+
+  static void TearDownTestSuite() {
+    loginAdmin();
+    sql("DROP TABLE IF EXISTS test_table;");
+    sql("DROP VIEW IF EXISTS test_view;");
+  }
+
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    loginAdmin();
+  }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+};
+
+// TODO: GRANT SELECT [VIEW] (col_1, col_2, ...) is unimplemented, when
+// implemented update these tests.
+
+TEST_F(GrantRevokeSelectColumnTest, GrantSelectColumnTable) {
+  queryAndAssertException("GRANT SELECT (test_col) ON TABLE test_table TO admin;",
+                          "Privilege type SELECT COLUMN is unsupported.");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, RevokeSelectColumnTable) {
+  queryAndAssertException("REVOKE SELECT (test_col) ON TABLE test_table FROM admin;",
+                          "Privilege type SELECT COLUMN is unsupported.");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, RevokeSelectColumnOnIllegalType) {
+  queryAndAssertException(
+      "REVOKE SELECT (test_col) ON DATABASE " + shared::kDefaultDbName + " FROM admin;",
+      "Privilege type SELECT COLUMN is unsupported.");
+}
+
+/**
+ * Test to check column-capture parsing functionality required by column-level
+ * permissions/security.
+ */
+class ColumnCapturerPermissionTest : public DBHandlerTestFixture {
+ protected:
+  static void SetUpTestSuite() {
+    sql("DROP DATABASE IF EXISTS db1;");
+    sql("DROP DATABASE IF EXISTS db2;");
+
+    sql("CREATE DATABASE db1;");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "db1");
+
+    sql("CREATE TABLE sales ( id INT, val INT, custid INT, extra INT);");
+    sql("CREATE TABLE reports ( id INT, val INT, custid INT, extra INT);");
+    sql("CREATE TABLE marketing ( id INT, val INT, custid INT, extra INT );");
+
+    sql("CREATE TABLE query_rewrite_test ( id INT, str TEXT, custid INT, extra INT);");
+    sql("CREATE TABLE test ( str TEXT, y INT, custid INT, extra INT);");
+    sql("CREATE TABLE dept ( deptno INT, dname TEXT, custid INT, extra INT);");
+    sql("CREATE TABLE emp ( ename TEXT, deptno INT, custid INT, extra INT, salary "
+        "FLOAT);");
+
+    sql("CREATE DATABASE db2;");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "db2");
+
+    sql("CREATE TABLE sales ( id INT, val INT, custid INT, extra INT);");
+    sql("CREATE TABLE reports ( id INT, val INT, custid INT, extra INT);");
+    sql("CREATE TABLE marketing ( id INT, val INT, custid INT, extra INT );");
+  }
+
+  static void TearDownTestSuite() {
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, shared::kDefaultDbName);
+    sql("DROP DATABASE IF EXISTS db1;");
+    sql("DROP DATABASE IF EXISTS db2;");
+  }
+
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "db1");
+  }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+
+  std::vector<RelAlgExecutor::CapturedColumns> getCapturedColumnsFromCalcite(
+      const std::string& query) const {
+    auto [dbhandler, session_id] = getDbHandlerAndSessionId();
+    auto session = dbhandler->get_session_copy(session_id);
+    auto session_ptr =
+        std::make_shared<Catalog_Namespace::SessionInfo const>(session.get_catalog_ptr(),
+                                                               session.get_currentUser(),
+                                                               ExecutorDeviceType::CPU,
+                                                               session.get_session_id());
+
+    auto query_state = query_state::QueryState::create(session_ptr, query);
+    auto query_state_proxy = query_state->createQueryStateProxy();
+    auto calcite_mgr = getCatalog().getCalciteMgr();
+
+    const auto calciteQueryParsingOption =
+        calcite_mgr->getCalciteQueryParsingOption(true, false, false, false);
+    const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+        false,
+        g_enable_watchdog,
+        {},
+        Catalog_Namespace::SysCatalog::instance().isAggregator());
+    auto result = calcite_mgr->process(
+        query_state_proxy, query, calciteQueryParsingOption, calciteOptimizationOption);
+
+    return RelAlgExecutor::captureColumns(result.plan_result);
+  }
+
+  struct TestCapturedColumns {
+    TestCapturedColumns(const std::vector<std::string>& column_names,
+                        std::string table_name,
+                        std::string db_name)
+        : db_name{db_name}, table_name{table_name}, column_names{column_names} {}
+
+    std::string db_name;
+    std::string table_name;
+    std::vector<std::string> column_names;
+  };
+
+  void compareColumns(const std::vector<RelAlgExecutor::CapturedColumns>& columns,
+                      const std::vector<TestCapturedColumns>& expected_columns) const {
+    std::set<std::vector<std::string>> columns_set;
+    for (const auto& table_col : columns) {
+      for (const auto& col : table_col.column_names) {
+        columns_set.emplace(std::vector<std::string>{
+            to_upper(table_col.db_name), to_upper(table_col.table_name), to_upper(col)});
+      }
+    }
+
+    std::set<std::vector<std::string>> expected_columns_set;
+    for (const auto& table_col : expected_columns) {
+      for (const auto& col : table_col.column_names) {
+        expected_columns_set.emplace(
+            std::vector<std::string>{table_col.db_name, table_col.table_name, col});
+      }
+    }
+
+    for (const auto& expected_column : expected_columns_set) {
+      bool expected_column_in_captured_columns =
+          std::find(columns_set.begin(), columns_set.end(), expected_column) !=
+          columns_set.end();
+      ASSERT_TRUE(expected_column_in_captured_columns)
+          << "Expected column not found in captured columns: " +
+                 join(expected_column, ".");
+    }
+    for (const auto& captured_column : columns_set) {
+      bool captured_column_in_expected_columns =
+          std::find(expected_columns_set.begin(),
+                    expected_columns_set.end(),
+                    captured_column) != expected_columns_set.end();
+      ASSERT_TRUE(captured_column_in_expected_columns)
+          << "Captured column not found in expected columns: " +
+                 join(captured_column, ".");
+    }
+  }
+
+  void getPlanResultFromCalciteAndVerifyExpectedColumns(
+      const std::string& query,
+      const std::vector<TestCapturedColumns>& expected_columns) const {
+    auto captured_columns = getCapturedColumnsFromCalcite(query);
+
+    compareColumns(captured_columns, expected_columns);
+  }
+};
+
+TEST_F(ColumnCapturerPermissionTest, AllColumns) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT * FROM sales;", {{{"VAL", "CUSTID", "ID", "EXTRA"}, "SALES", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, WithTableSchema) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT * FROM db1.sales;", {{{"VAL", "CUSTID", "ID", "EXTRA"}, "SALES", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, SelectAllColumnsTableAlias) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT * FROM sales AS s;", {{{"VAL", "CUSTID", "ID", "EXTRA"}, "SALES", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, SelectColumnWithAlias) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns("SELECT id AS newid FROM sales;",
+                                                   {{{"ID"}, "SALES", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, JoinByWhere) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT r.extra, s.custid FROM db1.sales AS s, db1.reports AS r WHERE s.id = r.id",
+      {{{"ID", "EXTRA"}, "REPORTS", "DB1"}, {{"CUSTID", "ID"}, "SALES", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, OuterJoin) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT r.extra, s.custid FROM db1.sales AS s left outer join db1.reports AS r "
+      "on s.id = r.id",
+      {{{"ID", "EXTRA"}, "REPORTS", "DB1"}, {{"CUSTID", "ID"}, "SALES", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, JoinByUsing) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT e.ename, d.dname FROM db1.emp AS e JOIN db1.dept AS d USING (deptno) "
+      "LIMIT 10",
+      {{{"DEPTNO", "ENAME"}, "EMP", "DB1"}, {{"DEPTNO", "DNAME"}, "DEPT", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, NonSqlFunction) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT KEY_FOR_STRING(test.str) FROM test LIMIT 10", {{{"STR"}, "TEST", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, SelectInProjection) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT (SELECT sum(val) FROM db1.marketing m WHERE m.id=s.id) FROM db1.sales AS "
+      "s",
+      {{{"VAL", "ID"}, "MARKETING", "DB1"}, {{"ID"}, "SALES", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, Union) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT * FROM db1.sales UNION ALL SELECT * FROM db1.reports UNION ALL SELECT * "
+      "FROM "
+      "db1.marketing",
+      {
+          {{"VAL", "CUSTID", "ID", "EXTRA"}, "REPORTS", "DB1"},
+          {{"VAL", "CUSTID", "ID", "EXTRA"}, "SALES", "DB1"},
+          {{"VAL", "CUSTID", "ID", "EXTRA"}, "MARKETING", "DB1"},
+      });
+}
+
+TEST_F(ColumnCapturerPermissionTest, OverPartition) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT deptno, ename, salary, AVG(salary) OVER (PARTITION BY deptno) AS "
+      "avg_salary_by_dept FROM db1.emp ORDER BY deptno, ename; ",
+      {{{"DEPTNO", "SALARY", "ENAME"}, "EMP", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, GroupByHaving) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT COUNT(*) AS n, custid FROM db1.query_rewrite_test WHERE str IN ('str2', "
+      "'str99') GROUP BY custid HAVING n > 0 ORDER BY n DESC",
+      {{{"CUSTID", "STR"}, "QUERY_REWRITE_TEST", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, GroupBy) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT str, SUM(y) as total_y FROM db1.test GROUP BY str ORDER BY total_y DESC, "
+      "str LIMIT 1",
+      {{{"STR", "Y"}, "TEST", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, OrderBy) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT custid FROM db1.sales ORDER BY id, extra",
+      {{{"CUSTID", "ID", "EXTRA"}, "SALES", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, FromSubQuery) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT deptno, dname FROM (SELECT * from db1.dept) AS view_name LIMIT 10",
+      {{{"DEPTNO", "DNAME"}, "DEPT", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, NotInSubQuery) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT deptno, dname FROM dept WHERE extra NOT IN (SELECT MAX(custid) FROM dept) "
+      "LIMIT 10",
+      {{{"DEPTNO", "DNAME", "CUSTID", "EXTRA"}, "DEPT", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, ScalarSubqueryInProject) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT deptno, (SELECT MAX(extra) FROM dept ) FROM dept",
+      {{{"DEPTNO", "EXTRA"}, "DEPT", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, With) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "WITH d1 AS (SELECT deptno, dname FROM db1.dept LIMIT 10) SELECT * "
+      "FROM db1.emp, d1 WHERE emp.deptno = d1.deptno ORDER BY ename ASC LIMIT 10",
+      {{{"DEPTNO", "CUSTID", "SALARY", "EXTRA", "ENAME"}, "EMP", "DB1"},
+       {{"DEPTNO", "DNAME"}, "DEPT", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, FromMultiLevelSubQuery) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT extra FROM (SELECT * from (SELECT r.extra, s.custid FROM db1.sales AS s, "
+      "db1.reports AS r WHERE s.id = r.id) ) AS view_name LIMIT 10",
+      {{{"ID", "EXTRA"}, "REPORTS", "DB1"}, {{"ID"}, "SALES", "DB1"}});
+}
+
+TEST_F(ColumnCapturerPermissionTest, CrossDbTables) {
+  getPlanResultFromCalciteAndVerifyExpectedColumns(
+      "SELECT s.id AS id, r.custid FROM db1.sales AS s, db2.reports AS r  WHERE s.id = "
+      "r.id",
+      {{{"CUSTID", "ID"}, "REPORTS", "DB2"}, {{"ID"}, "SALES", "DB1"}});
+}
+
 class DatabaseCaseSensitiveTest : public DBHandlerTestFixture {
  protected:
   static void SetUpTestSuite() {

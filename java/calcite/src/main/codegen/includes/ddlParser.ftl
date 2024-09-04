@@ -1150,6 +1150,50 @@ SqlDdl SqlDropUser(Span s) :
     }
 }
 
+/*
+ * Set a comment on a database object using:
+ *
+ * COMMENT ON (TABLE | COLUMN)  <object_name> IS (<string_literal> | NULL);
+ *
+ */
+SqlDdl SqlComment(Span s) :
+{
+    SqlComment.Builder builder =
+        new SqlComment.Builder();
+    SqlIdentifier tableName;
+    SqlIdentifier columnName;
+    final SqlNode value;
+}
+{
+    <COMMENT> <ON> 
+    (
+       <TABLE>
+       { builder.setTableType(); }
+       tableName=SimpleIdentifier()
+       { builder.setTableName(tableName.toString()); }
+       |
+       <COLUMN>
+       { builder.setColumnType(); }
+       tableName=SimpleIdentifier()
+       { builder.setTableName(tableName.toString()); }
+       <DOT>
+       columnName=SimpleIdentifier()
+       { builder.setColumnName(columnName.toString()); }
+    )
+    <IS> 
+    (
+       <NULL>
+       { builder.setToNull(); }
+       |
+       value = StringLiteral()
+       { builder.setComment((new HeavySqlSanitizedString(value)).toString()); }
+    )
+    {
+        builder.setPos(s.end(this));
+        return builder.build();
+    }
+}
+
 
 /*
  * Alter user using the following syntax:
@@ -1411,9 +1455,28 @@ SqlDdl SqlRevokeRole(Span s, SqlNodeList roleList) :
     { return new SqlRevokeRole(s.end(this), roleList, granteeList); }
 }
 
+
+void GetColumnTargets(Span s, List<SqlIdentifier> columnTargets ) :
+{
+  SqlIdentifier columnName;
+}
+{
+  <LPAREN>
+  columnName = CompoundIdentifier()
+  { columnTargets.add(columnName); }
+  (
+    <COMMA>
+    columnName = CompoundIdentifier()
+    { columnTargets.add(columnName); }
+  )*
+  <RPAREN>
+  { s.end(this); }
+}
+
 SqlNode Privilege(Span s) :
 {
     String type;
+    List<SqlIdentifier> columnTargets = new ArrayList<SqlIdentifier>();
 }
 {
     (
@@ -1424,6 +1487,7 @@ SqlNode Privilege(Span s) :
     |   LOOKAHEAD(2) <CREATE> <VIEW> { type = "CREATE VIEW"; }
     |   LOOKAHEAD(2) <CREATE> <MODEL> { type = "CREATE MODEL"; }
     |   LOOKAHEAD(2) <SELECT> <VIEW> { type = "SELECT VIEW"; }
+    |   LOOKAHEAD(2) <SELECT> GetColumnTargets(s, columnTargets) { type = "SELECT COLUMN"; }
     |   LOOKAHEAD(2) <DROP> <VIEW> { type = "DROP VIEW"; }
     |   LOOKAHEAD(2) <DROP> <SERVER> { type = "DROP SERVER"; }
     |   LOOKAHEAD(2) <CREATE> <DASHBOARD> { type = "CREATE DASHBOARD"; }
@@ -1445,7 +1509,7 @@ SqlNode Privilege(Span s) :
     |   <USAGE> { type = "USAGE"; }
     |   <VIEW> { type = "VIEW"; }
     )
-    { return SqlLiteral.createCharString(type, s.end(this)); }
+    { return new SqlPrivilege(type,columnTargets,s.end(this)); }
 }
 
 SqlNodeList privilegeList() :

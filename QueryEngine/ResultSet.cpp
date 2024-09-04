@@ -50,6 +50,8 @@ size_t g_parallel_top_min = 100e3;
 size_t g_parallel_top_max = 20e6;  // In effect only with g_enable_watchdog.
 size_t g_streaming_topn_max = 100e3;
 constexpr int64_t uninitialized_cached_row_count{-1};
+constexpr size_t auto_parallel_row_count_threshold{20000UL};
+extern size_t g_baseline_groupby_threshold;
 
 void ResultSet::keepFirstN(const size_t n) {
   invalidateCachedRowCount();
@@ -578,7 +580,6 @@ size_t ResultSet::rowCountImpl(const bool force_parallel) const {
     return binSearchRowCount();
   }
 
-  constexpr size_t auto_parallel_row_count_threshold{20000UL};
   if (force_parallel || entryCount() >= auto_parallel_row_count_threshold) {
     return parallelRowCount();
   }
@@ -709,8 +710,10 @@ void ResultSet::syncEstimatorBuffer() const {
   auto device_buffer_ptr = device_estimator_buffer_->getMemoryPtr();
   auto allocator = std::make_unique<CudaAllocator>(
       data_mgr_, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
-  allocator->copyFromDevice(
-      host_estimator_buffer_, device_buffer_ptr, estimator_->getBufferSize());
+  allocator->copyFromDevice(host_estimator_buffer_,
+                            device_buffer_ptr,
+                            estimator_->getBufferSize(),
+                            "Estimator buffer");
 }
 
 void ResultSet::setQueueTime(const int64_t queue_time) {
@@ -817,7 +820,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     }
     parallelTop(order_entries, top_n, executor);
   } else {
-    if (g_enable_watchdog && Executor::baseline_threshold < entryCount()) {
+    if (g_enable_watchdog && g_baseline_groupby_threshold < entryCount()) {
       throw WatchdogException("Sorting the result would be too slow");
     }
     permutation_.resize(query_mem_desc_.getEntryCount());
@@ -827,7 +830,11 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     if (top_n == 0) {
       top_n = pv.size();  // top_n == 0 implies a full sort
     }
-    pv = topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false));
+    {
+      auto top_permute_timer = DEBUG_TIMER("topPermutation");
+      pv =
+          topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false));
+    }
     if (pv.size() < permutation_.size()) {
       permutation_.resize(pv.size());
       permutation_.shrink_to_fit();
@@ -880,8 +887,11 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
                             const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
   const size_t nthreads = cpu_threads();
+  VLOG(1) << "Performing parallel top-k sort on CPU (# threads: " << nthreads
+          << ", entry_count: " << query_mem_desc_.getEntryCount() << ")";
 
   // Split permutation_ into nthreads subranges and top-sort in-place.
+  auto const phase1_begin = timer_start();
   permutation_.resize(query_mem_desc_.getEntryCount());
   std::vector<PermutationView> permutation_views(nthreads);
   threading::task_group top_sort_threads;
@@ -901,7 +911,7 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
     });
   }
   top_sort_threads.wait();
-
+  auto const phase1_ms = timer_stop(phase1_begin);
   // In case you are considering implementing a parallel reduction, note that the
   // ResultSetComparator constructor is O(N) in order to materialize some of the aggregate
   // columns as necessary to perform a comparison. This cost is why reduction is chosen to
@@ -909,18 +919,26 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
 
   // Left-copy disjoint top-sorted subranges into one contiguous range.
   // ++++....+++.....+++++...  ->  ++++++++++++............
+  auto const phase2_begin = timer_start();
   auto end = permutation_.begin() + permutation_views.front().size();
   for (size_t i = 1; i < nthreads; ++i) {
     std::copy(permutation_views[i].begin(), permutation_views[i].end(), end);
     end += permutation_views[i].size();
   }
+  auto const phase2_ms = timer_stop(phase2_begin);
 
   // Top sort final range.
+  auto const phase3_begin = timer_start();
   PermutationView pv(permutation_.data(), end - permutation_.begin());
   const auto compare = createComparator(order_entries, pv, executor, false);
   pv = topPermutation(pv, top_n, compare);
   permutation_.resize(pv.size());
   permutation_.shrink_to_fit();
+  auto const phase3_ms = timer_stop(phase3_begin);
+  auto const total_ms = phase1_ms + phase2_ms + phase3_ms;
+  VLOG(1) << "Parallel top-k sort on CPU finished, total_elapsed_time: " << total_ms
+          << " ms (phase1: " << phase1_ms << " ms, phase2: " << phase2_ms
+          << " ms, phase3: " << phase3_ms << " ms)";
 }
 
 std::pair<size_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) const {
@@ -1088,8 +1106,8 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxQuantileC
 
 namespace {
 // i1 is from InternalTargetValue
-int64_t materializeMode(int64_t const i1) {
-  if (auto const* const agg_mode = reinterpret_cast<AggMode const*>(i1)) {
+int64_t materialize_mode(RowSetMemoryOwner const* const rsmo, int64_t const i1) {
+  if (AggMode const* const agg_mode = rsmo->getAggMode(i1)) {
     if (std::optional<int64_t> const mode = agg_mode->mode()) {
       return *mode;
     }
@@ -1104,6 +1122,7 @@ template <typename BUFFER_ITERATOR_TYPE>
 struct ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::ModeScatter {
   logger::ThreadLocalIds const parent_thread_local_ids_;
   ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE> const* const rsc_;
+  RowSetMemoryOwner const* const rsmo_;
   Analyzer::OrderEntry const& order_entry_;
   ResultSet::ModeBuffers::value_type& materialized_buffer_;
 
@@ -1116,7 +1135,7 @@ struct ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::ModeScatter {
       auto const off = storage_lookup_result.fixedup_entry_idx;
       auto const value = rsc_->buffer_itr_.getColumnInternal(
           storage->buff_, off, order_entry_.tle_no - 1, storage_lookup_result);
-      materialized_buffer_[permuted_idx] = materializeMode(value.i1);
+      materialized_buffer_[permuted_idx] = materialize_mode(rsmo_, value.i1);
     }
   }
 };
@@ -1125,10 +1144,11 @@ template <typename BUFFER_ITERATOR_TYPE>
 ResultSet::ModeBuffers::value_type
 ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeModeColumn(
     const Analyzer::OrderEntry& order_entry) const {
+  RowSetMemoryOwner const* const rsmo = result_set_->getRowSetMemOwner().get();
   ResultSet::ModeBuffers::value_type materialized_buffer(
       result_set_->query_mem_desc_.getEntryCount());
   ModeScatter mode_scatter{
-      logger::thread_local_ids(), this, order_entry, materialized_buffer};
+      logger::thread_local_ids(), this, rsmo, order_entry, materialized_buffer};
   if (single_threaded_) {
     mode_scatter(ModeBlockedRange(0, permutation_.size()));  // Still has new thread_id.
   } else {
@@ -1217,7 +1237,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
       if (lhs_value == rhs_value) {
         continue;
         // MODE(x) can only be NULL when the group is empty, since it skips null values.
-      } else if (lhs_value == NULL_BIGINT) {  // NULL_BIGINT from materializeMode()
+      } else if (lhs_value == NULL_BIGINT) {  // NULL_BIGINT from materialize_mode()
         return order_entry.nulls_first;
       } else if (rhs_value == NULL_BIGINT) {
         return !order_entry.nulls_first;
@@ -1315,7 +1335,6 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
 PermutationView ResultSet::topPermutation(PermutationView permutation,
                                           const size_t n,
                                           const Comparator& compare) {
-  auto timer = DEBUG_TIMER(__func__);
   if (n < permutation.size()) {
     std::partial_sort(
         permutation.begin(), permutation.begin() + n, permutation.end(), compare);
@@ -1477,6 +1496,8 @@ ResultSet::getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const {
 bool ResultSet::isDirectColumnarConversionPossible() const {
   if (!g_enable_direct_columnarization) {
     return false;
+  } else if (isTruncated()) {
+    return false;
   } else if (query_mem_desc_.didOutputColumnar()) {
     return permutation_.empty() && (query_mem_desc_.getQueryDescriptionType() ==
                                         QueryDescriptionType::Projection ||
@@ -1598,5 +1619,6 @@ std::optional<size_t> result_set::first_dict_encoded_idx(
 }
 
 bool result_set::use_parallel_algorithms(const ResultSet& rows) {
-  return result_set::can_use_parallel_algorithms(rows) && rows.entryCount() >= 20000;
+  return result_set::can_use_parallel_algorithms(rows) &&
+         rows.entryCount() >= auto_parallel_row_count_threshold;
 }

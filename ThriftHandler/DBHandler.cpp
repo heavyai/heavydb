@@ -80,6 +80,7 @@
 #include "Shared/scope.h"
 #include "UdfCompiler/UdfCompiler.h"
 
+
 #ifdef HAVE_AWS_S3
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #endif
@@ -333,13 +334,20 @@ void DBHandler::init_executor_resource_mgr() {
                  "memory to "
               << format_num_bytes(conservative_gpu_buffer_pool_mem) << ".";
   }
-  LOG(INFO) << "\tSetting Executor resource pool reserved space for CPU result memory to "
-            << format_num_bytes(cpu_result_mem) << ".";
+  if (g_use_cpu_mem_pool_for_output_buffers) {
+    cpu_result_mem = 0;
+    LOG(INFO) << "\tUse CPU buffer pool memory to manage CPU result memory";
+  } else {
+    LOG(INFO)
+        << "\tSetting Executor resource pool reserved space for CPU result memory to "
+        << format_num_bytes(cpu_result_mem) << ".";
+  }
 
   Executor::init_resource_mgr(
       num_cpu_slots,
       num_gpu_slots,
       cpu_result_mem,
+      g_use_cpu_mem_pool_for_output_buffers,
       conservative_cpu_buffer_pool_mem,
       conservative_gpu_buffer_pool_mem,
       g_executor_resource_mgr_per_query_max_cpu_slots_ratio,
@@ -347,19 +355,9 @@ void DBHandler::init_executor_resource_mgr() {
       g_executor_resource_mgr_allow_cpu_kernel_concurrency,
       g_executor_resource_mgr_allow_cpu_gpu_kernel_concurrency,
       g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency,
-      g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency,
+      !g_use_cpu_mem_pool_for_output_buffers &&
+          g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency,
       g_executor_resource_mgr_max_available_resource_use_ratio);
-}
-
-void DBHandler::validate_configurations() {
-#ifndef _WIN32
-  size_t temp;
-  CHECK(!__builtin_mul_overflow(g_num_tuple_threshold_switch_to_baseline,
-                                g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline,
-                                &temp))
-      << "The product of g_num_tuple_threshold_switch_to_baseline and "
-         "g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline exceeds 64 bits.";
-#endif
 }
 
 void DBHandler::resetSessionsStore() {
@@ -429,6 +427,9 @@ void DBHandler::initialize(const bool is_new_db) {
         system_parameters_.num_gpus =
             std::min(system_parameters_.num_gpus, cuda_mgr->getDeviceCount());
       }
+      if (g_allow_memory_status_log) {
+        cuda_mgr->enableMemoryActivityLog();
+      }
     } catch (const std::exception& e) {
       LOG(ERROR) << "Unable to instantiate CudaMgr, falling back to CPU-only mode. "
                  << e.what();
@@ -438,8 +439,6 @@ void DBHandler::initialize(const bool is_new_db) {
     }
   }
 #endif  // HAVE_CUDA
-
-  validate_configurations();
 
   try {
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
@@ -544,24 +543,6 @@ void DBHandler::initialize(const bool is_new_db) {
 
   import_path_ = boost::filesystem::path(base_data_path_) / shared::kDefaultImportDirName;
   start_time_ = std::time(nullptr);
-
-  if (is_rendering_enabled) {
-    try {
-      render_handler_.reset(new RenderHandler(this,
-                                              render_mem_bytes_,
-                                              max_concurrent_render_sessions_,
-                                              render_compositor_use_last_gpu_,
-                                              false,
-                                              false,
-                                              renderer_prefer_igpu_,
-                                              renderer_vulkan_timeout_,
-                                              renderer_use_parallel_executors_,
-                                              system_parameters_,
-                                              renderer_enable_slab_allocation_));
-    } catch (const std::exception& e) {
-      LOG(ERROR) << "Backend rendering disabled: " << e.what();
-    }
-  }
 
   query_engine_ = QueryEngine::createInstance(data_mgr_->getCudaMgr(), cpu_mode_only_);
 
@@ -1848,7 +1829,7 @@ TRowDescriptor DBHandler::validateRelAlg(const std::string& query_ra,
                         executor_index);
       });
   dispatch_query_task(execute_rel_alg_task, /*is_update_delete=*/false);
-  auto result_future = execute_rel_alg_task->get_future();
+  auto result_future = execute_rel_alg_task->get_future().share();
   result_future.get();
   DBHandler::convertData(query_result, execution_result, query_state_proxy, true, -1, -1);
 
@@ -2404,6 +2385,9 @@ TColumnType DBHandler::populateThriftColumnType(const Catalog* cat,
   if (cd->default_value.has_value()) {
     col_type.__set_default_value(cd->getDefaultValueLiteral());
   }
+  if (cd->comment.has_value()) {
+    col_type.__set_comment(cd->comment.value());
+  }
   return col_type;
 }
 
@@ -2620,6 +2604,9 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
                    ? TPartitionDetail::REPLICATED
                    : (td->partitions == "SHARDED" ? TPartitionDetail::SHARDED
                                                   : TPartitionDetail::OTHER));
+    if (td->comment.has_value()) {
+      _return.__set_comment(td->comment.value());
+    }
     if (td->isView) {
       _return.table_type = TTableType::VIEW;
     } else if (td->isTemporaryTable()) {
@@ -4341,6 +4328,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
                                     const TSessionId& session_id_or_json,
                                     const std::string& file_name_in,
                                     const TCopyParams& cp) {
+  auto timer = DEBUG_TIMER(__func__);
   heavyai::RequestInfo const request_info(session_id_or_json);
   SET_REQUEST_ID(request_info.requestId());
   auto stdlog = STDLOG(get_session_ptr(request_info.sessionId()));
@@ -5281,6 +5269,7 @@ void DBHandler::import_table(const TSessionId& session_id_or_json,
                              const std::string& table_name,
                              const std::string& file_name_in,
                              const TCopyParams& cp) {
+  auto timer = DEBUG_TIMER(__func__);
   try {
     heavyai::RequestInfo const request_info(session_id_or_json);
     SET_REQUEST_ID(request_info.requestId());
@@ -6223,8 +6212,10 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
       jit_debug_ ? "/tmp" : "",
       jit_debug_ ? "mapdquery" : "",
       system_parameters_);
-  RelAlgExecutor ra_executor(
-      executor.get(), query_ra, query_state_proxy->shared_from_this());
+  RelAlgExecutor ra_executor(executor.get(),
+                             query_ra,
+                             query_state_proxy->shared_from_this(),
+                             nullptr);
   CompilationOptions co = {executor_device_type,
                            /*hoist_literals=*/true,
                            ExecutorOptLevel::Default,
@@ -6785,7 +6776,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     dispatch_queue_->submit(execute_rel_alg_task,
                             pw.getDMLType() == ParserWrapper::DMLType::Update ||
                                 pw.getDMLType() == ParserWrapper::DMLType::Delete);
-    auto result_future = execute_rel_alg_task->get_future();
+    auto result_future = execute_rel_alg_task->get_future().share();
     result_future.get();
     return;
   }
@@ -7558,6 +7549,7 @@ void DBHandler::shutdown() {
   if (render_handler_) {
     render_handler_->shutdown();
   }
+
 
   Catalog_Namespace::SysCatalog::destroy();
 }

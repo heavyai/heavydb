@@ -171,4 +171,9 @@ inline std::string resource_subtype_to_string(const ResourceSubtype resource_sub
   return ResourceSubtypeStrings[static_cast<size_t>(resource_subtype)];
 }
 
+struct CPUResultMemResourceType {
+  ResourceType resource_type;
+  ResourceSubtype resource_subtype;
+};
+
 }  // namespace ExecutorResourceMgr_Namespace

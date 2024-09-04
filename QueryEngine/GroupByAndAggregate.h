@@ -140,6 +140,8 @@ class GroupByAndAggregate {
 
   ColRangeInfo getColRangeInfo();
 
+  size_t getBaselineThreshold(const RelAlgExecutionUnit&, ExecutorDeviceType);
+
   static int64_t getBucketedCardinality(const ColRangeInfo& col_range_info);
 
   llvm::Value* convertNullIfAny(const SQLTypeInfo& arg_type,

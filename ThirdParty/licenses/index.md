@@ -5,7 +5,7 @@ Apache Calcite | [Apache](<https://github.com/apache/calcite/blob/master/LICENSE
 Apache Thrift | [Apache](<https://github.com/apache/thrift/blob/master/LICENSE>) | RPC |
 Bcrypt | [CC0](https://github.com/rg3/bcrypt/blob/master/COPYING) | Password hashing |
 Boost | [Boost](<http://www.boost.org/LICENSE_1_0.txt>) | Multiple |
-cpr | [MIT](<https://github.com/whoshuu/cpr/blob/master/LICENSE>) | License verification |
+cpr | [MIT](<https://github.com/whoshuu/cpr/blob/master/LICENSE>) | License verification / Query execution support |
 crypto++ | [Boost](<http://www.cryptopp.com/License.txt>) | Signature verification |
 CUDA | [NVIDIA EULA](<http://docs.nvidia.com/cuda/eula/index.html#redistribution-rights>) | GPU access |
 double-conversion | [BSD-like](<https://github.com/google/double-conversion/blob/master/COPYING>) | Folly |
@@ -14,8 +14,9 @@ fmt | [MIT](https://github.com/fmtlib/fmt/blob/master/LICENSE.rst) | Folly |
 Folly | [Apache](https://github.com/facebook/folly/blob/master/LICENSE) | Multiple |
 gflags | [BSD-like](<https://github.com/gflags/gflags/blob/master/COPYING.txt>) | Folly |
 glog | [BSD-like](<https://github.com/google/glog/blob/master/COPYING>) | C++ logging |
+jwt-cpp | [MIT](<https://github.com/Thalhammer/jwt-cpp/blob/master/LICENSE>) | JWT token generation and validation |
 cpp-jwt | [MIT](<https://github.com/arun11299/cpp-jwt/blob/master/LICENSE>) | Elliptical Curve Digital Signature |
-libcurl | [MIT](<https://curl.haxx.se/docs/copyright.html>) | AWS metadata download |
+libcurl | [MIT](<https://curl.haxx.se/docs/copyright.html>) | AWS metadata download|
 libldap | varies, [OpenLDAP](<http://www.openldap.org/software/release/license.html>) | LDAP support; provided by OS (dynamic linked) |
 libnuma | [LGPL](<https://github.com/numactl/numactl/blob/master/LICENSE.LGPL2.1>) | Optane support, dynamic linked
 libpng | [libpng](<http://libpng.org/pub/png/src/libpng-LICENSE.txt>) | Render encoding / transport |
@@ -31,6 +32,7 @@ SQLite | [Public Domain](<https://www.sqlite.org/copyright.html>) | Catalog mana
 TBB | [Apache-2.0](https://raw.githubusercontent.com/oneapi-src/oneTBB/tbb_2020/LICENSE) | Threadpool support |
 TimeGM | [BSD](<https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc/pkgtools/libnbcompat/files/timegm.c>) | Date/time support |
 Uber H3 | [Apache-2.0](https://github.com/uber/h3/blob/master/LICENSE) | H3 index encoding/decoding |
+warpcore | [Apache-2.0](https://github.com/sleeepyjack/warpcore/blob/master/LICENSE) | CUDA-accelerated hash tables and algorithms |
 Xorg | [MIT](<https://www.x.org/releases/X11R7.7/doc/xorg-docs/License.html>) | OpenGL rendering |
 zlib | [zlib](<http://zlib.net/zlib_license.html>) | PNG support |
 --- | --- | --- |
@@ -39,7 +41,6 @@ spirv-tools | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Tools/blob/mast
 spirv-cross | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Cross/blob/master/LICENSE) | Rendering support
 abseil | [Apache-2.0](https://github.com/abseil/abseil-cpp/blob/master/LICENSE) | Rendering support
 Vulkan Loader | [Apache-2.0](https://github.com/KhronosGroup/Vulkan-Loader/blob/main/LICENSE.txt) | Rendering support
-Vulkan Memory Allocator | [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt) | Rendering support
 GLM | [MIT](https://github.com/g-truc/glm/blob/master/copying.txt) | Rendering support
 GLFW | [zlib](https://github.com/glfw/glfw/blob/master/LICENSE.md) | Rendering tools
 ImGui | [MIT](https://github.com/ocornut/imgui/blob/master/LICENSE.txt) | Rendering tools
@@ -166,3 +167,9 @@ STB | [MIT](https://github.com/nothings/stb/blob/master/LICENSE) | Image file ut
 --- | --- | --- |
 | earcut  | [ISC](https://github.com/mapbox/earcut.hpp/blob/master/LICENSE) | Omniverse Export Polygon Triangulation |
 | kdtree-cpp | [BSD-3-Clause](https://github.com/cdalitz/kdtree-cpp/blob/master/LICENSE) | Cross-Section 2D |
+--- | --- | --- |
+| openjpeg  | [BSD](https://github.com/uclouvain/openjpeg/blob/master/LICENSE) | GDAL, JPEG2000 support  |
+| libcms2 | [MIT](https://github.com/mm2/Little-CMS/blob/master/COPYING) | GDAL, JPEG2000 support (dependency of openjpeg) |
+| libtiff | [MIT](http://www.libtiff.org/misc.html) | GDAL, JPEG2000 support (dependency of openjpeg) |
+| libwebp | [MIT](https://github.com/webmproject/libwebp/blob/main/COPYING) | GDAL, JPEG2000 support (dependency of openjpeg) |
+| libzstd | [MIT](https://github.com/facebook/zstd/blob/dev/LICENSE) | GDAL, JPEG2000 support (dependency of openjpeg) |

@@ -1459,12 +1459,14 @@ TEST_P(MLRegressionFunctionsTest, ML_PREDICT_NULLS) {
   }
 }
 
+#ifndef HAVE_TSAN
 INSTANTIATE_TEST_SUITE_P(MLRegressionTests,
                          MLRegressionFunctionsTest,
                          ::testing::Values(MLModelType::LINEAR_REG,
                                            MLModelType::DECISION_TREE_REG,
                                            MLModelType::GBT_REG,
                                            MLModelType::RANDOM_FOREST_REG));
+#endif  // HAVE_TSAN
 
 TEST_P(MLCategoricalRegressionFunctionsTest, ML_PREDICT_CATEGORICAL_FEATURES_MISORDERED) {
   const auto model_type = GetParam();
@@ -1773,13 +1775,28 @@ TEST_P(MLCategoricalRegressionFunctionsTest, REG_MODEL_FIT_MIXED_FEATURES) {
   }
 }
 
+namespace {
+// Return epsilon for use in *_NEAR() to approximate x to sigfigs significant figures.
+// Examples:
+//  * get_epsilon(    0.0, 4) =   0.0
+//  * get_epsilon(  100.0, 4) =   0.1
+//  * get_epsilon(  999.9, 4) =   0.1
+//  * get_epsilon( 1000.0, 4) =   1.0
+//  * get_epsilon( 9999.9, 4) =   1.0
+//  * get_epsilon(10000.0, 4) =  10.0
+//  * get_epsilon(99999.9, 4) =  10.0
+double get_epsilon(double const x, int const sigfigs) {
+  return std::pow(10.0, std::floor(std::log10(std::fabs(x))) + 1 - sigfigs);
+}
+}  // namespace
+
 TEST_P(MLCategoricalRegressionFunctionsTest, ML_PREDICT) {
   const auto model_type = GetParam();
   const auto model_type_str = get_ml_model_type_str(model_type);
   const std::string model_name{model_type_str + "_MODEL"};
   const std::string model_fit_func{model_type_str + "_FIT"};
   const auto supported_ml_frameworks = get_supported_ml_frameworks();
-  const double allowed_epsilon{0.1};
+  const int sigfigs{5};  // Numbers should match to 5 significant figures
   for (auto& ml_framework : supported_ml_frameworks) {
     if (model_type != MLModelType::LINEAR_REG && ml_framework == "'mlpack'") {
       continue;
@@ -1837,8 +1854,8 @@ TEST_P(MLCategoricalRegressionFunctionsTest, ML_PREDICT) {
               TestHelpers::v<double>(run_simple_agg(row_wise_predict_query, dt));
           const auto tf_prediction_avg =
               TestHelpers::v<double>(run_simple_agg(tf_predict_query, dt));
-          EXPECT_GE(row_wise_prediction_avg, tf_prediction_avg - allowed_epsilon);
-          EXPECT_LE(row_wise_prediction_avg, tf_prediction_avg + allowed_epsilon);
+          const double epsilon = get_epsilon(row_wise_prediction_avg, sigfigs);
+          EXPECT_NEAR(row_wise_prediction_avg, tf_prediction_avg, epsilon);
         }
       }
     }

@@ -1,0 +1,26 @@
+html {
+    --top-nav-height: 150px
+}
+
+@media screen and (min-width: 768px) {
+    #top {
+        height: var(--top-nav-height);
+    }
+
+    #nav-tree, #side-nav {
+        height: calc(100vh - var(--top-nav-height)) !important;
+    }
+
+    #side-nav {
+        top: var(--top-nav-height);
+    }
+}
+
+.paramname em {
+    font-weight: 600;
+    color: var(--primary-dark-color);
+}
+
+a code {
+    color: var(--primary-color) !important;
+}

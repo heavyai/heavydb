@@ -52,6 +52,23 @@
       <artifactId>slf4j-api</artifactId>
       <version>1.7.32</version>
     </dependency>
+    <!-- Add/update transitive dependencies to secure versions -->
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>2.15.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.yaml</groupId>
+      <artifactId>snakeyaml</artifactId>
+      <version>2.2</version>
+    </dependency>
+    <dependency>
+      <groupId>net.minidev</groupId>
+      <artifactId>json-smart</artifactId>
+      <version>2.5.0</version>
+    </dependency>
+    <!-- End of transitive dependencies updates -->
   </dependencies>
   <build>
     <plugins>

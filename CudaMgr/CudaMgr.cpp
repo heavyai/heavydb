@@ -49,6 +49,7 @@ CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
     : start_gpu_(start_gpu)
     , min_shared_memory_per_block_for_all_devices(0)
     , min_num_mps_for_all_devices(0)
+    , log_memory_activity_(false)
     , device_memory_allocation_map_{std::make_unique<DeviceMemoryAllocationMap>()} {
   checkError(cuInit(0));
   checkError(cuDeviceGetCount(&device_count_));
@@ -128,6 +129,7 @@ void CudaMgr::copyHostToDevice(int8_t* device_ptr,
                                const int8_t* host_ptr,
                                const size_t num_bytes,
                                const int device_num,
+                               std::optional<std::string_view> tag,
                                CUstream cuda_stream) {
   setContext(device_num);
   if (!cuda_stream) {
@@ -138,26 +140,45 @@ void CudaMgr::copyHostToDevice(int8_t* device_ptr,
         reinterpret_cast<CUdeviceptr>(device_ptr), host_ptr, num_bytes, cuda_stream));
     checkError(cuStreamSynchronize(cuda_stream));
   }
+  if (log_memory_activity_ && tag) {
+    VLOG(1) << "CUDA H2D, tag: " << *tag
+            << ", host address: " << static_cast<const void*>(host_ptr)
+            << ", size: " << num_bytes << ", device: " << device_num
+            << ",  device address: " << static_cast<const void*>(device_ptr);
+  }
+}
+
+int CudaMgr::getDeviceNumFromDevicePtr(CUdeviceptr cu_device_ptr,
+                                       const size_t allocated_mem_bytes) {
+  std::lock_guard<std::mutex> device_lock(device_mutex_);
+  auto const [allocation_base, allocation] =
+      getDeviceMemoryAllocationMap().getAllocation(cu_device_ptr);
+  CHECK_LE(cu_device_ptr + allocated_mem_bytes, allocation_base + allocation.size);
+  CHECK_GE(allocation.device_num, 0);
+  return allocation.device_num;
 }
 
 void CudaMgr::copyDeviceToHost(int8_t* host_ptr,
                                const int8_t* device_ptr,
                                const size_t num_bytes,
+                               std::optional<std::string_view> tag,
                                CUstream cuda_stream) {
   // set device_num based on device_ptr
   auto const cu_device_ptr = reinterpret_cast<CUdeviceptr>(device_ptr);
-  {
-    std::lock_guard<std::mutex> device_lock(device_mutex_);
-    auto const [allocation_base, allocation] =
-        getDeviceMemoryAllocationMap().getAllocation(cu_device_ptr);
-    CHECK_LE(cu_device_ptr + num_bytes, allocation_base + allocation.size);
-    setContext(allocation.device_num);
-  }
+  int const device_num = getDeviceNumFromDevicePtr(cu_device_ptr, num_bytes);
+  // todo (yoonmin) : should we revert to the previous context after finishing D2H?
+  setContext(device_num);
   if (!cuda_stream) {
     checkError(cuMemcpyDtoH(host_ptr, cu_device_ptr, num_bytes));
   } else {
     checkError(cuMemcpyDtoHAsync(host_ptr, cu_device_ptr, num_bytes, cuda_stream));
     checkError(cuStreamSynchronize(cuda_stream));
+  }
+  if (log_memory_activity_ && tag) {
+    VLOG(1) << "CUDA D2H, tag: " << *tag
+            << ", host address: " << static_cast<void*>(host_ptr)
+            << ", size: " << num_bytes << ", device: " << device_num
+            << ",  device address: " << static_cast<const void*>(device_ptr);
   }
 }
 
@@ -166,6 +187,7 @@ void CudaMgr::copyDeviceToDevice(int8_t* dest_ptr,
                                  const size_t num_bytes,
                                  const int dest_device_num,
                                  const int src_device_num,
+                                 std::optional<std::string_view> tag,
                                  CUstream cuda_stream) {
   // dest_device_num and src_device_num are the device numbers relative to start_gpu_
   // (real_device_num - start_gpu_)
@@ -198,6 +220,13 @@ void CudaMgr::copyDeviceToDevice(int8_t* dest_ptr,
                                    cuda_stream));  // will we always have peer?
       checkError(cuStreamSynchronize(cuda_stream));
     }
+  }
+  if (log_memory_activity_ && tag) {
+    VLOG(1) << "CUDA D2D, tag: " << *tag << ", source device id: " << src_device_num
+            << ", destination device id: " << dest_device_num
+            << ", source address: " << static_cast<void*>(src_ptr)
+            << ", size: " << num_bytes
+            << ", destination address: " << static_cast<void*>(dest_ptr);
   }
 }
 
@@ -386,6 +415,11 @@ int8_t* CudaMgr::allocateDeviceMem(const size_t num_bytes,
       device_ptr, padded_num_bytes, handle, device_uuid, device_num, is_slab);
   // notify
   getDeviceMemoryAllocationMap().notifyMapChanged(device_uuid, is_slab);
+  if (log_memory_activity_) {
+    VLOG(1) << "Allocate GPU memory: address: " << reinterpret_cast<void*>(device_ptr)
+            << ", requested: " << num_bytes << " bytes, allocated: " << padded_num_bytes
+            << ", device id: " << device_num << ", slab? " << is_slab;
+  }
   return reinterpret_cast<int8_t*>(device_ptr);
 }
 
@@ -406,6 +440,11 @@ void CudaMgr::freeDeviceMem(int8_t* device_ptr) {
   // notify
   getDeviceMemoryAllocationMap().notifyMapChanged(allocation.device_uuid,
                                                   allocation.is_slab);
+  if (log_memory_activity_) {
+    VLOG(1) << "Deallocate GPU memory: address: " << static_cast<void*>(device_ptr)
+            << ", size: " << allocation.size << ", device id: " << allocation.device_num
+            << ", slab? " << allocation.is_slab;
+  }
 }
 
 void CudaMgr::zeroDeviceMem(int8_t* device_ptr,
@@ -532,6 +571,7 @@ int CudaMgr::getContext() const {
 }
 
 void CudaMgr::logDeviceProperties() const {
+  LOG(INFO) << "CUDA Driver version: " << gpu_driver_version_;
   LOG(INFO) << "Using " << device_count_ << " Gpus.";
   for (int d = 0; d < device_count_; ++d) {
     VLOG(1) << "Device: " << device_properties_[d].device;
@@ -576,6 +616,14 @@ int CudaMgr::exportHandle(const uint64_t handle) const {
   checkError(cuMemExportToShareableHandle(
       &fd, handle, CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR, 0));
   return fd;
+}
+
+void CudaMgr::enableMemoryActivityLog() {
+  log_memory_activity_ = true;
+}
+
+bool CudaMgr::logMemoryActivity() const {
+  return log_memory_activity_;
 }
 
 }  // namespace CudaMgr_Namespace

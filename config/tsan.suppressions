@@ -1,6 +1,12 @@
 # 2018-05-03: Suppress lock-order-inversion warning from internal locks in GDAL. Since the warnings only occur when `GDAL::init` is called, this should be fairly safe.
 # 2019-03-31 Suppress google rawlog.  it is unclear why this issue suddenly started to occur.  Investigation will continue
 deadlock:gdal
+# 2024-01-24 GeospatialTest / ImportExportTest internal lock inversion. See BE-6510
+deadlock:Geospatial::GeoBase::getTransformation
+# 2024-01-24 ImportExportTest / RasterImporter internal lock inversion. See BE-6511
+deadlock:import_export::RasterImporter::detect
+# 2024-03-01 RasterDataWrapper lock inversion, same issue as above
+deadlock:foreign_storage::RasterDataWrapper::populateChunkMetadata
 race:boost::*::saved_single_repeat
 race:boost::*::saved_state
 race:boost::*::perl_matcher
@@ -10,7 +16,7 @@ race:apache::thrift::server
 thread:libcuda.so
 race:libtbbmalloc*
 race:tbb::detail::*
-# TODO: remove TSAN wildcard after TSAN-enabled TBB deps go out 
+# TODO: remove TSAN wildcard after TSAN-enabled TBB deps go out
 race:^tbb*
 # mktime in libarchive uses tzset
 race:^tzset

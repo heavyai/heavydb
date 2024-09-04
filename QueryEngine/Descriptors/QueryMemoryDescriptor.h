@@ -44,6 +44,7 @@
 
 extern bool g_cluster;
 
+class AggMode;
 class Executor;
 class QueryExecutionContext;
 class RenderInfo;
@@ -84,6 +85,7 @@ class QueryMemoryDescriptor {
                         const std::vector<int64_t>& target_groupby_indices,
                         const size_t entry_count,
                         const ApproxQuantileDescriptors&,
+                        const size_t nmode_targets,
                         const CountDistinctDescriptors,
                         const bool sort_on_gpu_hint,
                         const bool output_columnar,
@@ -122,6 +124,7 @@ class QueryMemoryDescriptor {
       const size_t max_groups_buffer_entry_count,
       RenderInfo* render_info,
       const ApproxQuantileDescriptors&,
+      const size_t nmode_targets,
       const CountDistinctDescriptors,
       const bool must_use_baseline_sort,
       const bool output_columnar_hint,
@@ -279,6 +282,10 @@ class QueryMemoryDescriptor {
     return count_distinct_descriptors_.size();
   }
 
+  AggMode* getAggMode(int64_t const ival) const;
+
+  size_t getNumModeTargets() const { return nmode_targets_; }
+
   bool sortOnGpu() const { return sort_on_gpu_; }
 
   bool canOutputColumnar() const;
@@ -407,6 +414,7 @@ class QueryMemoryDescriptor {
   int64_t bucket_;
   bool has_nulls_;
   ApproxQuantileDescriptors approx_quantile_descriptors_;
+  size_t nmode_targets_;
   CountDistinctDescriptors count_distinct_descriptors_;
   bool sort_on_gpu_;
   bool output_columnar_;

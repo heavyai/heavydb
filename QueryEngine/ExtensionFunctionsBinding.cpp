@@ -179,6 +179,13 @@ static int match_numeric_argument(const SQLTypeInfo& arg_type_info,
         arg_type == kINT || arg_type == kBIGINT || arg_type == kFLOAT ||
         arg_type == kDOUBLE || arg_type == kDECIMAL || arg_type == kNUMERIC);
   // Todo (todd): Add support for timestamp, date, and time types
+
+  // pointer will never match numeric
+  // this is the proper fix for BE-6529
+  if (is_ext_arg_type_pointer(sig_ext_arg_type)) {
+    return -1;
+  }
+
   const auto sig_type_info = ext_arg_type_to_type_info(sig_ext_arg_type);
   const auto sig_type = sig_type_info.get_type();
 

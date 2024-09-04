@@ -36,7 +36,7 @@ std::unique_ptr<QueryExporter> QueryExporter::create(FileType file_type) {
     case FileType::kFlatGeobuf:
       return std::make_unique<QueryExporterGDAL>(file_type);
   }
-  CHECK(false);
+  UNREACHABLE();
   return nullptr;
 }
 

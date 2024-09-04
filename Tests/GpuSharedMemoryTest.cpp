@@ -391,7 +391,8 @@ void GpuReductionTester::performReductionTest(
     cuda_mgr_->copyHostToDevice(d_input_buffers[i],
                                 result_sets[i]->getStorage()->getUnderlyingBuffer(),
                                 buffer_size,
-                                device_id);
+                                device_id,
+                                "");
   }
 
   constexpr size_t num_kernel_params = 3;
@@ -410,19 +411,24 @@ void GpuReductionTester::performReductionTest(
   cuda_mgr_->copyHostToDevice(d_input_buffer_dptrs,
                               reinterpret_cast<int8_t*>(h_input_buffer_dptrs.data()),
                               num_buffers * sizeof(CUdeviceptr),
-                              device_id);
+                              device_id,
+                              "");
 
   // parameter 2: number of buffers
   auto d_num_buffers = cuda_mgr_->allocateDeviceMem(sizeof(int64_t), device_id);
   cuda_mgr_->copyHostToDevice(d_num_buffers,
                               reinterpret_cast<const int8_t*>(&num_buffers),
                               sizeof(int64_t),
-                              device_id);
+                              device_id,
+                              "");
 
   // parameter 3: device pointer to the output buffer
   auto d_result_buffer = cuda_mgr_->allocateDeviceMem(buffer_size, device_id);
-  cuda_mgr_->copyHostToDevice(
-      d_result_buffer, gpu_result_storage->getUnderlyingBuffer(), buffer_size, device_id);
+  cuda_mgr_->copyHostToDevice(d_result_buffer,
+                              gpu_result_storage->getUnderlyingBuffer(),
+                              buffer_size,
+                              device_id,
+                              "");
 
   // collecting all kernel parameters:
   std::vector<CUdeviceptr> h_kernel_params{
@@ -457,7 +463,7 @@ void GpuReductionTester::performReductionTest(
 
   // transfer back the results:
   cuda_mgr_->copyDeviceToHost(
-      gpu_result_storage->getUnderlyingBuffer(), d_result_buffer, buffer_size);
+      gpu_result_storage->getUnderlyingBuffer(), d_result_buffer, buffer_size, "");
 
   // release the gpu memory used:
   for (auto& d_buffer : d_input_buffers) {

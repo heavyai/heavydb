@@ -49,6 +49,11 @@
 
 #include "../Geospatial/CompressionRuntime.h"
 
+namespace gfx {
+class GfxContext;
+class CommandExecutionContext;
+}  // namespace gfx
+
 // declaring CPU functions as __host__ can help catch erroneous compilation of
 // these being done by the CUDA compiler at build time
 #define EXTENSION_INLINE_HOST extern "C" RUNTIME_EXPORT ALWAYS_INLINE HOST
@@ -132,6 +137,13 @@ EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getOrAddTransient(int8_t* m
 EXTENSION_NOINLINE_HOST int8_t* TableFunctionManager_makeBuffer(int8_t* mgr_ptr,
                                                                 int64_t count,
                                                                 int64_t size);
+
+EXTENSION_NOINLINE_HOST const gfx::GfxContext* TableFunctionManager_getGfxContext(
+    int8_t* mgr_ptr);
+
+EXTENSION_NOINLINE_HOST gfx::CommandExecutionContext*
+TableFunctionManager_getGfxCommandExecutionContext(int8_t* mgr_ptr);
+
 /*
   Row function management functions and macros:
  */

@@ -266,8 +266,10 @@ ResultSetPtr TableFunctionExecutionContext::execute(
       if (device_type == ExecutorDeviceType::GPU) {
         auto* gpu_allocator = device_allocator.get();
         const auto gpu_literal_buf_ptr = gpu_allocator->alloc(literal_buffer_size);
-        gpu_allocator->copyToDevice(
-            gpu_literal_buf_ptr, cpu_literal_buf_ptr, literal_buffer_size);
+        gpu_allocator->copyToDevice(gpu_literal_buf_ptr,
+                                    cpu_literal_buf_ptr,
+                                    literal_buffer_size,
+                                    "Table function literal buffer");
         col_buf_ptrs.push_back(gpu_literal_buf_ptr);
       } else {
         CHECK_EQ(device_type, ExecutorDeviceType::CPU);
@@ -362,7 +364,8 @@ void TableFunctionExecutionContext::launchPreCodeOnCpu(
       executor,
       col_buf_ptrs,
       row_set_mem_owner_,
-      /*is_singleton=*/!exe_unit.table_func.usesManager());
+      /*is_singleton=*/!exe_unit.table_func.usesManager(),
+      nullptr);
 
   // setup the inputs
   // We can have an empty col_buf_ptrs vector if there are no arguments to the function
@@ -513,7 +516,8 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
       executor,
       col_buf_ptrs,
       row_set_mem_owner_,
-      /*is_singleton=*/!exe_unit.table_func.usesManager());
+      /*is_singleton=*/!exe_unit.table_func.usesManager(),
+      gfx_context_);
 
   if (exe_unit.table_func.hasOutputSizeKnownPreLaunch()) {
     // allocate output buffers because the size is known up front, from
@@ -696,7 +700,8 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   if (byte_stream_ptr) {
     gpu_allocator->copyToDevice(byte_stream_ptr,
                                 reinterpret_cast<int8_t*>(col_buf_ptrs.data()),
-                                col_buf_ptrs.size() * sizeof(int64_t));
+                                col_buf_ptrs.size() * sizeof(int64_t),
+                                "Table function input column ptrs");
   }
   kernel_params[COL_BUFFERS] = reinterpret_cast<CUdeviceptr>(byte_stream_ptr);
 
@@ -706,7 +711,8 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   if (col_sizes_ptr) {
     gpu_allocator->copyToDevice(col_sizes_ptr,
                                 reinterpret_cast<int8_t*>(col_sizes.data()),
-                                col_sizes.size() * sizeof(int64_t));
+                                col_sizes.size() * sizeof(int64_t),
+                                "Table function column sizes");
   }
   kernel_params[COL_SIZES] = reinterpret_cast<CUdeviceptr>(col_sizes_ptr);
 
@@ -740,7 +746,8 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
       reinterpret_cast<CUdeviceptr>(gpu_allocator->alloc(sizeof(int64_t*)));
   gpu_allocator->copyToDevice(reinterpret_cast<int8_t*>(kernel_params[OUTPUT_ROW_COUNT]),
                               reinterpret_cast<int8_t*>(&output_row_count),
-                              sizeof(output_row_count));
+                              sizeof(output_row_count),
+                              "Table function kernel_params[OUTPUT_ROW_COUNT]");
   /*
  ￼ TODO: RBC generated runtime table functions do not support
    concurrent execution on a CUDA device. Hence, we'll force 1 as
@@ -801,7 +808,8 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   gpu_allocator->copyFromDevice(
       reinterpret_cast<int8_t*>(&output_row_count),
       reinterpret_cast<int8_t*>(kernel_params[OUTPUT_ROW_COUNT]),
-      sizeof(int64_t));
+      sizeof(int64_t),
+      "Table function kernel_params[OUTPUT_ROW_COUNT]");
   if (exe_unit.table_func.hasNonUserSpecifiedOutputSize()) {
     if (static_cast<size_t>(output_row_count) != allocated_output_row_count) {
       throw TableFunctionError(

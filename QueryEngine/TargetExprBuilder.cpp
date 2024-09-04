@@ -166,6 +166,13 @@ void TargetExprCodegen::codegen(
     // functions before continuing
     if (target_lvs.size() < agg_fn_names.size()) {
       if (!uses_flatbuffer) {
+        if (auto cv = dynamic_cast<const Analyzer::ColumnVar*>(target_expr)) {
+          auto const num_target_lvs_cond = target_lvs.size() == (agg_fn_names.size() / 2);
+          if (cv->getColumnKey().table_id < 0 && !num_target_lvs_cond) {
+            throw QueryNotSupported(
+                "Geospatial columns not yet supported in intermediate results.");
+          }
+        }
         CHECK_EQ(target_lvs.size(), agg_fn_names.size() / 2);
       }
       std::vector<llvm::Value*> new_target_lvs;
@@ -634,8 +641,8 @@ void TargetExprCodegen::codegenAggregate(
           break;
         }
       }
-      const auto partition_end =
-          LL_INT(reinterpret_cast<int64_t>(window_func_context->partitionEnd()));
+      const auto partition_end = LL_INT(reinterpret_cast<int64_t>(
+          window_func_context->getPartitionEndBitmapBuf(ExecutorDeviceType::CPU)));
       executor->cgen_state_->emitExternalCall(apply_window_pending_outputs_name,
                                               llvm::Type::getVoidTy(LL_CONTEXT),
                                               {pending_outputs,
