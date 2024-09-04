@@ -106,7 +106,7 @@ size_t random_fill_double(int8_t* buf, size_t num_elems) {
   return hash;
 }
 
-size_t random_fill_string(std::vector<std::string>& stringVec,
+size_t random_fill_string(std::string* stringVec,
                           size_t num_elems,
                           int max_len,
                           size_t& data_volumn) {
@@ -247,15 +247,13 @@ size_t random_fill(const ColumnDescriptor* cd,
       if (cd->columnType.get_compression() == kENCODING_NONE) {
         {
           hash = random_fill_string(
-              *p.stringsPtr, num_elems, cd->columnType.get_dimension(), data_volumn);
+              p.stringsPtr, num_elems, cd->columnType.get_dimension(), data_volumn);
         }
       }
       break;
     case kTEXT:
       if (cd->columnType.get_compression() == kENCODING_NONE) {
-        {
-          hash = random_fill_string(*p.stringsPtr, num_elems, MAX_TEXT_LEN, data_volumn);
-        }
+        { hash = random_fill_string(p.stringsPtr, num_elems, MAX_TEXT_LEN, data_volumn); }
       }
       break;
     case kDATE:
@@ -288,13 +286,13 @@ std::vector<size_t> populate_table_random(const std::string& table_name,
   std::vector<std::vector<int8_t>> numbers_vec;
   std::vector<std::unique_ptr<std::vector<std::string>>> strings_vec;
 
-  DataBlockPtr p{0};
+  DataBlockPtr p;
   // now allocate space for insert data
   for (auto cd : cds) {
     if (cd->columnType.is_varlen()) {
       if (cd->columnType.get_compression() == kENCODING_NONE) {
         strings_vec.push_back(std::make_unique<std::vector<std::string>>(num_rows));
-        p.stringsPtr = strings_vec.back().get();
+        p.setStringsPtr(*strings_vec.back());
       } else {
         CHECK(false);
       }

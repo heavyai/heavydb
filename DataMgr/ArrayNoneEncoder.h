@@ -47,7 +47,7 @@ class ArrayNoneEncoder : public Encoder {
       , index_buf(nullptr)
       , last_offset(-1) {}
 
-  size_t getNumElemsForBytesInsertData(const std::vector<ArrayDatum>* srcData,
+  size_t getNumElemsForBytesInsertData(const ArrayDatum* srcData,
                                        const int start_idx,
                                        const size_t numAppendElems,
                                        const size_t byteLimit,
@@ -56,7 +56,7 @@ class ArrayNoneEncoder : public Encoder {
 
     size_t n = start_idx;
     for (; n < start_idx + numAppendElems; n++) {
-      size_t len = (*srcData)[replicating ? 0 : n].length;
+      size_t len = srcData[replicating ? 0 : n].length;
       if (dataSize + len > byteLimit) {
         break;
       }
@@ -99,7 +99,7 @@ class ArrayNoneEncoder : public Encoder {
     for (const auto& offset_index : selected_idx) {
       data_subset.emplace_back(getArrayDatumAtIndex(index_data, data, offset_index));
     }
-    return appendData(&data_subset, 0, selected_idx.size(), false);
+    return appendData(data_subset.data(), 0, selected_idx.size(), false);
   }
 
   std::shared_ptr<ChunkMetadata> appendEncodedData(const int8_t* index_data,
@@ -112,10 +112,17 @@ class ArrayNoneEncoder : public Encoder {
       auto current_index = start_idx + count;
       data_subset.emplace_back(getArrayDatumAtIndex(index_data, data, current_index));
     }
-    return appendData(&data_subset, 0, num_elements, false);
+    return appendData(data_subset.data(), 0, num_elements, false);
   }
 
   std::shared_ptr<ChunkMetadata> appendData(const std::vector<ArrayDatum>* srcData,
+                                            const int start_idx,
+                                            const size_t numAppendElems,
+                                            const bool replicating) {
+    return appendData(srcData->data(), start_idx, numAppendElems, replicating);
+  }
+
+  std::shared_ptr<ChunkMetadata> appendData(const ArrayDatum* srcData,
                                             const int start_idx,
                                             const size_t numAppendElems,
                                             const bool replicating) {
@@ -129,7 +136,7 @@ class ArrayNoneEncoder : public Encoder {
     bool first_elem_padded = false;
     ArrayOffsetT initial_offset = 0;
     if (num_elems_ == 0) {
-      if ((*srcData)[0].is_null || (*srcData)[0].length <= 1) {
+      if (srcData[0].is_null || srcData[0].length <= 1) {
         // Covers following potentially problematic first arrays:
         // (1) NULL array, issue - can't encode a NULL with 0 initial offset
         // otherwise, if first array is not NULL:
@@ -161,10 +168,10 @@ class ArrayNoneEncoder : public Encoder {
     size_t append_data_size = (first_elem_padded) ? DEFAULT_NULL_PADDING_SIZE : 0;
     for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
       // NULL arrays don't take any space so don't add to the data size
-      if ((*srcData)[replicating ? 0 : n].is_null) {
+      if (srcData[replicating ? 0 : n].is_null) {
         continue;
       }
-      append_data_size += (*srcData)[replicating ? 0 : n].length;
+      append_data_size += srcData[replicating ? 0 : n].length;
     }
     buffer_->reserve(buffer_->size() + append_data_size);
 
@@ -177,10 +184,9 @@ class ArrayNoneEncoder : public Encoder {
       size_t i;
       for (i = 0; num_appended < numAppendElems && i < inbuf_size / sizeof(ArrayOffsetT);
            i++, num_appended++) {
-        p[i] =
-            last_offset + (*srcData)[replicating ? 0 : num_appended + start_idx].length;
+        p[i] = last_offset + srcData[replicating ? 0 : num_appended + start_idx].length;
         last_offset = p[i];
-        if ((*srcData)[replicating ? 0 : num_appended + start_idx].is_null) {
+        if (srcData[replicating ? 0 : num_appended + start_idx].is_null) {
           // Record array NULLness in the index buffer
           p[i] = -p[i];
         }
@@ -198,17 +204,17 @@ class ArrayNoneEncoder : public Encoder {
       for (int i = start_idx + num_appended;
            num_appended < numAppendElems && size < inbuf_size;
            i++, num_appended++) {
-        if ((*srcData)[replicating ? 0 : i].is_null) {
+        if (srcData[replicating ? 0 : i].is_null) {
           continue;  // NULL arrays don't take up any space in the data buffer
         }
-        size_t len = (*srcData)[replicating ? 0 : i].length;
+        size_t len = srcData[replicating ? 0 : i].length;
         if (len > inbuf_size) {
           // for large strings, append on its own
           if (size > 0) {
             buffer_->append(inbuf, size);
           }
           size = 0;
-          buffer_->append((*srcData)[replicating ? 0 : i].pointer, len);
+          buffer_->append(srcData[replicating ? 0 : i].pointer, len);
           num_appended++;
           break;
         } else if (size + len > inbuf_size) {
@@ -216,7 +222,7 @@ class ArrayNoneEncoder : public Encoder {
         }
         char* dest = (char*)inbuf + size;
         if (len > 0) {
-          std::memcpy((void*)dest, (void*)(*srcData)[replicating ? 0 : i].pointer, len);
+          std::memcpy((void*)dest, (void*)srcData[replicating ? 0 : i].pointer, len);
           size += len;
         }
       }
@@ -232,7 +238,7 @@ class ArrayNoneEncoder : public Encoder {
 
     // keep Chunk statistics with array elements
     for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
-      update_elem_stats((*srcData)[replicating ? 0 : n]);
+      update_elem_stats(srcData[replicating ? 0 : n]);
     }
     num_elems_ += numAppendElems;
     auto chunk_metadata = std::make_shared<ChunkMetadata>();
@@ -266,11 +272,23 @@ class ArrayNoneEncoder : public Encoder {
     UNREACHABLE();
   }
 
+  void updateStats(const std::string* src_data,
+                   const size_t start_idx,
+                   const size_t num_elements) override {
+    UNREACHABLE();
+  }
+
   void updateStats(const std::vector<ArrayDatum>* const src_data,
                    const size_t start_idx,
                    const size_t num_elements) override {
+    updateStats(src_data->data(), start_idx, num_elements);
+  }
+
+  void updateStats(const ArrayDatum* src_data,
+                   const size_t start_idx,
+                   const size_t num_elements) override {
     for (size_t n = start_idx; n < start_idx + num_elements; n++) {
-      update_elem_stats((*src_data)[n]);
+      update_elem_stats(src_data[n]);
     }
   }
 

@@ -65,7 +65,7 @@ struct ParseBufferRequest {
   const import_export::CopyParams copy_params;
   const int db_id;
   std::unique_ptr<ForeignTableSchema> foreign_table_schema;
-  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
+  std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>> import_buffers;
 
   // These are set during parsing.
   size_t buffer_row_count;
@@ -135,14 +135,15 @@ class TextFileBufferParser {
                              const ForeignTable* foreign_table) const = 0;
 
   static std::map<int, DataBlockPtr> convertImportBuffersToDataBlocks(
-      const std::vector<std::unique_ptr<import_export::TypedImportBuffer>>&
+      const std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>>&
           import_buffers,
       const bool skip_dict_encoding = false);
 
   static bool isCoordinateScalar(const std::string_view datum);
 
   static void processGeoColumn(
-      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+      std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>>&
+          import_buffers,
       size_t& col_idx,
       const import_export::CopyParams& copy_params,
       std::list<const ColumnDescriptor*>::iterator& cd_it,
@@ -171,7 +172,8 @@ class TextFileBufferParser {
 
  private:
   static void processInvalidGeoColumn(
-      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+      std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>>&
+          import_buffers,
       size_t& col_idx,
       const import_export::CopyParams& copy_params,
       const ColumnDescriptor* cd,

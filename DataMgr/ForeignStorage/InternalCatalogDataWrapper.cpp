@@ -35,13 +35,13 @@ InternalCatalogDataWrapper::InternalCatalogDataWrapper(const int db_id,
     : InternalSystemDataWrapper(db_id, foreign_table) {}
 
 namespace {
-void set_null(import_export::TypedImportBuffer* import_buffer) {
+void set_null(import_export::UnmanagedTypedImportBuffer* import_buffer) {
   import_buffer->add_value(import_buffer->getColumnDesc(), "", true, {});
 }
 
 void populate_import_buffers_for_catalog_users(
     const std::list<Catalog_Namespace::UserMetadata>& all_users,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& user : all_users) {
     if (import_buffers.find("user_id") != import_buffers.end()) {
       import_buffers["user_id"]->addInt(user.userId);
@@ -137,7 +137,7 @@ std::string get_column_encoding(const ColumnDescriptor& cd) {
 
 void populate_import_buffers_for_catalog_tables(
     const std::map<int32_t, std::vector<TableDescriptor>>& tables_by_database,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& [db_id, tables] : tables_by_database) {
     for (const auto& table : tables) {
       if (import_buffers.find("database_id") != import_buffers.end()) {
@@ -200,7 +200,7 @@ void populate_import_buffers_for_catalog_tables(
 
 void populate_import_buffers_for_catalog_columns(
     const std::vector<ColumnDescriptor>& columns,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& column : columns) {
     if (import_buffers.find("database_id") != import_buffers.end()) {
       import_buffers["database_id"]->addInt(column.db_id);
@@ -276,7 +276,7 @@ std::vector<std::string> get_data_sources(const std::string& dashboard_metadata)
 
 void populate_import_buffers_for_catalog_dashboards(
     const std::map<int32_t, std::vector<DashboardDescriptor>>& dashboards_by_database,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& [db_id, dashboards] : dashboards_by_database) {
     for (const auto& dashboard : dashboards) {
       if (import_buffers.find("database_id") != import_buffers.end()) {
@@ -448,7 +448,7 @@ std::string get_object_type_str(int32_t object_type) {
 
 void populate_import_buffers_for_catalog_permissions(
     const std::vector<ObjectRoleDescriptor>& object_permissions,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& permission : object_permissions) {
     if (import_buffers.find("role_name") != import_buffers.end()) {
       import_buffers["role_name"]->addDictStringWithTruncation(permission.roleName);
@@ -490,7 +490,7 @@ void populate_import_buffers_for_catalog_permissions(
 
 void populate_import_buffers_for_catalog_databases(
     const std::list<Catalog_Namespace::DBMetadata>& databases,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& db : databases) {
     if (import_buffers.find("database_id") != import_buffers.end()) {
       import_buffers["database_id"]->addInt(db.dbId);
@@ -510,7 +510,7 @@ void populate_import_buffers_for_catalog_databases(
 
 void populate_import_buffers_for_catalog_roles(
     const std::set<std::string>& roles,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& role : roles) {
     CHECK(import_buffers.find("role_name") != import_buffers.end());
     import_buffers["role_name"]->addDictStringWithTruncation(role);
@@ -519,7 +519,7 @@ void populate_import_buffers_for_catalog_roles(
 
 void populate_import_buffers_for_catalog_role_assignments(
     const std::map<std::string, std::vector<std::string>>& user_names_by_role_,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& [role, user_names] : user_names_by_role_) {
     for (const auto& user_name : user_names) {
       if (import_buffers.find("role_name") != import_buffers.end()) {
@@ -644,7 +644,7 @@ void InternalCatalogDataWrapper::initializeObjectsForTable(
 
 void InternalCatalogDataWrapper::populateChunkBuffersForTable(
     const std::string& table_name,
-    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   if (foreign_table_->tableName == Catalog_Namespace::USERS_SYS_TABLE_NAME) {
     populate_import_buffers_for_catalog_users(users_, import_buffers);
   } else if (foreign_table_->tableName == Catalog_Namespace::TABLES_SYS_TABLE_NAME) {

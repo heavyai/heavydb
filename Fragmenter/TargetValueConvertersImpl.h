@@ -503,7 +503,7 @@ struct StringValueConverter : public TargetValueConverter {
 
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     DataBlockPtr dataBlock;
-    dataBlock.stringsPtr = column_data_.get();
+    dataBlock.setStringsPtr(*column_data_);
     insertData.data.push_back(dataBlock);
     insertData.columnIds.push_back(column_descriptor_->columnId);
   }
@@ -614,7 +614,7 @@ struct ArrayValueConverter : public TargetValueConverter {
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     finalizeDataBlocksForInsertData();
     DataBlockPtr dataBlock;
-    dataBlock.arraysPtr = column_data_.get();
+    dataBlock.setArraysPtr(*column_data_);
     insertData.data.push_back(dataBlock);
     insertData.columnIds.push_back(column_descriptor_->columnId);
   }
@@ -691,8 +691,8 @@ struct GeoPointValueConverter : public TargetValueConverter {
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
     DataBlockPtr logical, coords;
 
-    logical.stringsPtr = column_data_.get();
-    coords.arraysPtr = signed_compressed_coords_data_.get();
+    logical.setStringsPtr(*column_data_);
+    coords.setArraysPtr(*signed_compressed_coords_data_);
 
     insertData.data.emplace_back(logical);
     insertData.columnIds.emplace_back(column_descriptor_->columnId);
@@ -798,7 +798,7 @@ struct GeoMultiPointValueConverter : public GeoPointValueConverter {
 
     DataBlockPtr bounds;
 
-    bounds.arraysPtr = bounds_data_.get();
+    bounds.setArraysPtr(*bounds_data_);
 
     insertData.data.emplace_back(bounds);
     insertData.columnIds.emplace_back(bounds_column_descriptor_->columnId);
@@ -863,7 +863,7 @@ struct GeoLinestringValueConverter : public GeoPointValueConverter {
 
     DataBlockPtr bounds;
 
-    bounds.arraysPtr = bounds_data_.get();
+    bounds.setArraysPtr(*bounds_data_);
 
     insertData.data.emplace_back(bounds);
     insertData.columnIds.emplace_back(bounds_column_descriptor_->columnId);
@@ -939,8 +939,8 @@ struct GeoMultiLinestringValueConverter : public GeoPointValueConverter {
 
     DataBlockPtr linestringSizes, bounds;
 
-    linestringSizes.arraysPtr = linestring_sizes_data_.get();
-    bounds.arraysPtr = bounds_data_.get();
+    linestringSizes.setArraysPtr(*linestring_sizes_data_);
+    bounds.setArraysPtr(*bounds_data_);
 
     insertData.data.emplace_back(linestringSizes);
     insertData.columnIds.emplace_back(linestring_sizes_column_descriptor_->columnId);
@@ -1015,8 +1015,8 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
 
     DataBlockPtr ringSizes, bounds;
 
-    ringSizes.arraysPtr = ring_sizes_data_.get();
-    bounds.arraysPtr = bounds_data_.get();
+    ringSizes.setArraysPtr(*ring_sizes_data_);
+    bounds.setArraysPtr(*bounds_data_);
 
     insertData.data.emplace_back(ringSizes);
     insertData.columnIds.emplace_back(ring_sizes_column_descriptor_->columnId);
@@ -1099,9 +1099,9 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
 
     DataBlockPtr ringSizes, polyRings, bounds;
 
-    ringSizes.arraysPtr = ring_sizes_data_.get();
-    polyRings.arraysPtr = poly_rings_data_.get();
-    bounds.arraysPtr = bounds_data_.get();
+    ringSizes.setArraysPtr(*ring_sizes_data_);
+    polyRings.setArraysPtr(*poly_rings_data_);
+    bounds.setArraysPtr(*bounds_data_);
 
     insertData.data.emplace_back(ringSizes);
     insertData.columnIds.emplace_back(ring_sizes_column_descriptor_->columnId);
