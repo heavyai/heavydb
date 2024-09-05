@@ -51,6 +51,7 @@ struct TResultSetBufferDescriptor {
   11: list<i32> target_groupby_indices,
   12: TCountDistinctDescriptors count_distinct_descriptors,
   13: bool force_4byte_float,
+  14: bool gpu_shared_mem_used,
 }
 
 enum TAggKind {

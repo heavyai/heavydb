@@ -23,6 +23,10 @@ extern "C" __device__ int64_t get_thread_index() {
   return threadIdx.x;
 }
 
+extern "C" __device__ int64_t get_block_dim() {
+  return blockDim.x;
+}
+
 extern "C" __device__ int64_t get_block_index() {
   return blockIdx.x;
 }

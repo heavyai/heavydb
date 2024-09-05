@@ -690,6 +690,7 @@ declare void @llvm.lifetime.end(i64, i8* nocapture) nounwind
 declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) nounwind
 declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) nounwind
 declare i64 @get_thread_index();
+declare i64 @get_block_dim();
 declare i64 @get_block_index();
 declare i32 @pos_start_impl(i32*);
 declare i32 @group_buff_idx_impl();
@@ -2738,18 +2739,6 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
   if (query_mem_desc_ptr->getQueryDescriptionType() ==
           QueryDescriptionType::GroupByPerfectHash &&
       g_enable_smem_group_by) {
-    /**
-     * To simplify the implementation for practical purposes, we
-     * initially provide shared memory support for cases where there are at most as many
-     * entries in the output buffer as there are threads within each GPU device. In
-     * order to relax this assumption later, we need to add a for loop in generated
-     * codes such that each thread loops over multiple entries.
-     * TODO: relax this if necessary
-     */
-    if (cuda_blocksize < query_mem_desc_ptr->getEntryCount()) {
-      return false;
-    }
-
     // Fundamentally, we should use shared memory whenever the output buffer
     // is small enough so that we can fit it in the shared memory and yet expect
     // good occupancy.
@@ -2935,20 +2924,18 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                   cuda_mgr ? this->blockSize() : 1,
                                   cuda_mgr ? this->numBlocksPerMP() : 1);
   if (gpu_shared_mem_optimization) {
+    query_mem_desc->enableGpuSharedMemory();
     // disable interleaved bins optimization on the GPU
     query_mem_desc->setHasInterleavedBinsOnGpu(false);
-    LOG(DEBUG1) << "GPU shared memory is used for the " +
-                       query_mem_desc->queryDescTypeToString() + " query(" +
-                       std::to_string(get_shared_memory_size(gpu_shared_mem_optimization,
-                                                             query_mem_desc.get())) +
-                       " out of " +
-                       std::to_string(
-                           (g_gpu_smem_threshold == 0)
-                               ? cuda_mgr->getMinSharedMemoryPerBlockForAllDevices()
-                               : g_gpu_smem_threshold) +
-                       " bytes).";
+    auto const used_shared_mem_size =
+        get_shared_memory_size(gpu_shared_mem_optimization, query_mem_desc.get());
+    auto const total_shared_mem_size =
+        g_gpu_smem_threshold == 0 ? cuda_mgr->getMinSharedMemoryPerBlockForAllDevices()
+                                  : g_gpu_smem_threshold;
+    VLOG(1) << "GPU shared memory is enabled (query type: "
+            << query_mem_desc->queryDescTypeToString() << ", " << used_shared_mem_size
+            << " / " << total_shared_mem_size << " bytes are used)";
   }
-
   const GpuSharedMemoryContext gpu_smem_context(
       get_shared_memory_size(gpu_shared_mem_optimization, query_mem_desc.get()));
 
@@ -3183,6 +3170,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       // helper functions are used for caching purposes later
       cgen_state_->helper_functions_.push_back(gpu_smem_code.getReductionFunction());
       cgen_state_->helper_functions_.push_back(gpu_smem_code.getInitFunction());
+      VLOG(3) << "GPU shared memory optimization IR: \n" << gpu_smem_code.toString();
       LOG(IR) << gpu_smem_code.toString();
     }
   }

@@ -1853,6 +1853,10 @@ extern "C" GPU_RT_STUB int64_t get_thread_index() {
   return 0;
 }
 
+extern "C" GPU_RT_STUB int64_t get_block_dim() {
+  return 0;
+}
+
 extern "C" GPU_RT_STUB int64_t* declare_dynamic_shared_memory() {
   return nullptr;
 }

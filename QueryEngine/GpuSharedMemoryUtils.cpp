@@ -36,6 +36,7 @@ GpuSharedMemCodeBuilder::GpuSharedMemCodeBuilder(
     , query_mem_desc_(qmd)
     , targets_(targets)
     , init_agg_values_(init_agg_values) {
+  // todo (yoonmin): update this comments when opening more cases exploiting the share mem
   /**
    * This class currently works only with:
    * 1. row-wise output memory layout
@@ -109,7 +110,9 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
   buffer_size->setName("buffer_size");
 
   auto bb_entry = llvm::BasicBlock::Create(context_, ".entry", reduction_func_);
-  auto bb_body = llvm::BasicBlock::Create(context_, ".body", reduction_func_);
+  auto bb_preheader =
+      llvm::BasicBlock::Create(context_, ".loop.preheader", reduction_func_);
+  auto bb_forbody = llvm::BasicBlock::Create(context_, ".forbody", reduction_func_);
   auto bb_exit = llvm::BasicBlock::Create(context_, ".exit", reduction_func_);
   llvm::IRBuilder<> ir_builder(bb_entry);
 
@@ -119,22 +122,30 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
 
   const auto func_thread_index = getFunction("get_thread_index");
   const auto thread_idx = ir_builder.CreateCall(func_thread_index, {}, "thread_index");
-
+  const auto func_block_dim = getFunction("get_block_dim");
+  const auto block_dim = ir_builder.CreateCall(func_block_dim, {}, "block_dim");
+  // cast src/dest buffers into byte streams:
+  auto src_byte_stream = ir_builder.CreatePointerCast(
+      src_buffer_ptr, llvm::Type::getInt8PtrTy(context_, 0), "src_byte_stream");
+  const auto dest_byte_stream = ir_builder.CreatePointerCast(
+      dest_buffer_ptr, llvm::Type::getInt8PtrTy(context_, 0), "dest_byte_stream");
   // branching out of out of bound:
   const auto entry_count = ll_int(query_mem_desc_.getEntryCount(), context_);
   const auto entry_count_i32 =
       ll_int(static_cast<int32_t>(query_mem_desc_.getEntryCount()), context_);
   const auto is_thread_inbound =
       ir_builder.CreateICmpSLT(thread_idx, entry_count, "is_thread_inbound");
-  ir_builder.CreateCondBr(is_thread_inbound, bb_body, bb_exit);
+  ir_builder.CreateCondBr(is_thread_inbound, bb_preheader, bb_exit);
 
-  ir_builder.SetInsertPoint(bb_body);
+  ir_builder.SetInsertPoint(bb_preheader);
+  ir_builder.CreateSExt(thread_idx, get_int_type(64, context_), "");
+  ir_builder.CreateBr(bb_forbody);
 
-  // cast src/dest buffers into byte streams:
-  auto src_byte_stream = ir_builder.CreatePointerCast(
-      src_buffer_ptr, llvm::Type::getInt8PtrTy(context_, 0), "src_byte_stream");
-  const auto dest_byte_stream = ir_builder.CreatePointerCast(
-      dest_buffer_ptr, llvm::Type::getInt8PtrTy(context_, 0), "dest_byte_stream");
+  ir_builder.SetInsertPoint(bb_forbody);
+  llvm::PHINode* pos = ir_builder.CreatePHI(get_int_type(64, context_), 2, "pos");
+  llvm::Value* pos_inc = ir_builder.CreateAdd(pos, block_dim);
+  pos->addIncoming(thread_idx, bb_preheader);
+  pos->addIncoming(pos_inc, bb_forbody);
 
   // running the result set reduction JIT code to get reduce_one_entry_idx function
   auto fixup_query_mem_desc = ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_);
@@ -156,7 +167,7 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
   bool link_error = linker.linkInModule(std::move(owner));
   CHECK(!link_error);
 
-  // go through the reduction code and replace all occurances of agg functions
+  // go through the reduction code and replace all agg. functions used in the logic
   // with their _shared counterparts, which are specifically used in GPUs
   auto reduce_one_entry_func = getFunction("reduce_one_entry");
   bool agg_func_found = true;
@@ -198,18 +209,19 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
   // disable for current shared memory support.
   const auto null_ptr_ll =
       llvm::ConstantPointerNull::get(llvm::Type::getInt8PtrTy(context_, 0));
-  const auto thread_idx_i32 = ir_builder.CreateCast(
-      llvm::Instruction::CastOps::Trunc, thread_idx, get_int_type(32, context_));
+  const auto pos_i32 = ir_builder.CreateCast(
+      llvm::Instruction::CastOps::Trunc, pos, get_int_type(32, context_));
   ir_builder.CreateCall(reduce_one_entry_idx_func,
                         {dest_byte_stream,
                          src_byte_stream,
-                         thread_idx_i32,
+                         pos_i32,
                          entry_count_i32,
                          null_ptr_ll,
                          null_ptr_ll,
                          null_ptr_ll},
                         "");
-  ir_builder.CreateBr(bb_exit);
+  auto is_pos_inbound = ir_builder.CreateICmpSLT(pos_inc, entry_count, "is_pos_inbound");
+  ir_builder.CreateCondBr(is_pos_inbound, bb_forbody, bb_exit);
   llvm::ReturnInst::Create(context_, bb_exit);
 }
 
@@ -264,31 +276,51 @@ void GpuSharedMemCodeBuilder::codegenInitialization() {
   CHECK(fixup_query_mem_desc.hasKeylessHash());
   CHECK_GE(init_agg_values_.size(), targets_.size());
 
+  // .entry defines constant values used throughout the loop
   auto bb_entry = llvm::BasicBlock::Create(context_, ".entry", init_func_);
-  auto bb_body = llvm::BasicBlock::Create(context_, ".body", init_func_);
+  // .loop.preheader increases each thread's target row index, i.e., pos, by using block
+  // dimension i.e., a target row id of a thread at i-th iteration (i > 1) = thread_idx *
+  // (i * block_dim)
+  auto bb_preheader = llvm::BasicBlock::Create(context_, ".loop.preheader", init_func_);
+  // in .forbody, each thread initializes its corresponding shared (query output) buffer
+  // address
+  auto bb_forbody = llvm::BasicBlock::Create(context_, ".forbody", init_func_);
+  // finalize the logic
   auto bb_exit = llvm::BasicBlock::Create(context_, ".exit", init_func_);
 
   llvm::IRBuilder<> ir_builder(bb_entry);
   const auto func_thread_index = getFunction("get_thread_index");
   const auto thread_idx = ir_builder.CreateCall(func_thread_index, {}, "thread_index");
+  const auto func_block_dim = getFunction("get_block_dim");
+  const auto block_dim = ir_builder.CreateCall(func_block_dim, {}, "block_dim");
+  const auto row_size_bytes = ll_int(fixup_query_mem_desc.getRowWidth(), context_);
+  const auto entry_count = ll_int(fixup_query_mem_desc.getEntryCount(), context_);
 
   // declare dynamic shared memory:
   const auto declare_smem_func = getFunction("declare_dynamic_shared_memory");
   const auto shared_mem_buffer =
       ir_builder.CreateCall(declare_smem_func, {}, "shared_mem_buffer");
-
-  const auto entry_count = ll_int(fixup_query_mem_desc.getEntryCount(), context_);
-  const auto is_thread_inbound =
-      ir_builder.CreateICmpSLT(thread_idx, entry_count, "is_thread_inbound");
-  ir_builder.CreateCondBr(is_thread_inbound, bb_body, bb_exit);
-
-  ir_builder.SetInsertPoint(bb_body);
-  // compute byte offset assigned to this thread:
-  const auto row_size_bytes = ll_int(fixup_query_mem_desc.getRowWidth(), context_);
-  auto byte_offset_ll = ir_builder.CreateMul(row_size_bytes, thread_idx, "byte_offset");
-
   const auto dest_byte_stream = ir_builder.CreatePointerCast(
       shared_mem_buffer, llvm::Type::getInt8PtrTy(context_), "dest_byte_stream");
+
+  // check whether the current thread is valid w.r.t the query's entry count
+  const auto is_thread_inbound =
+      ir_builder.CreateICmpSLT(thread_idx, entry_count, "is_thread_inbound");
+  ir_builder.CreateCondBr(is_thread_inbound, bb_preheader, bb_exit);
+
+  ir_builder.SetInsertPoint(bb_preheader);
+  ir_builder.CreateSExt(thread_idx, get_int_type(64, context_), "");
+  ir_builder.CreateBr(bb_forbody);
+
+  ir_builder.SetInsertPoint(bb_forbody);
+  llvm::PHINode* pos = ir_builder.CreatePHI(get_int_type(64, context_), 2, "pos");
+  llvm::Value* pos_inc = ir_builder.CreateAdd(pos, block_dim);
+  // at the first loop, `pos` is defined by the original thread_idx
+  pos->addIncoming(thread_idx, bb_preheader);
+  // but starting from the second loop, `pos` is updated by considering `block_dim`
+  pos->addIncoming(pos_inc, bb_forbody);
+  // compute byte offset of the thread at the current iteration
+  auto byte_offset_ll = ir_builder.CreateMul(row_size_bytes, pos, "byte_offset");
 
   // each thread will be responsible for one
   const auto& col_slot_context = fixup_query_mem_desc.getColSlotContext();
@@ -300,7 +332,6 @@ void GpuSharedMemCodeBuilder::codegenInitialization() {
     for (size_t slot_idx = slots_for_target.front(); slot_idx <= slots_for_target.back();
          slot_idx++) {
       const auto slot_size = fixup_query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
-
       auto casted_dest_slot_address = codegen_smem_dest_slot_ptr(context_,
                                                                  fixup_query_mem_desc,
                                                                  ir_builder,
@@ -308,7 +339,6 @@ void GpuSharedMemCodeBuilder::codegenInitialization() {
                                                                  target_info,
                                                                  dest_byte_stream,
                                                                  byte_offset_ll);
-
       llvm::Value* init_value_ll = nullptr;
       if (slot_size == sizeof(int32_t)) {
         init_value_ll =
@@ -319,6 +349,7 @@ void GpuSharedMemCodeBuilder::codegenInitialization() {
       } else {
         UNREACHABLE() << "Invalid slot size encountered.";
       }
+      CHECK(init_value_ll);
       ir_builder.CreateStore(init_value_ll, casted_dest_slot_address);
 
       // if not the last loop, we compute the next offset:
@@ -329,7 +360,10 @@ void GpuSharedMemCodeBuilder::codegenInitialization() {
     }
   }
 
-  ir_builder.CreateBr(bb_exit);
+  // check whether we are at the valid status w.r.t `pos` and `entry_coun`
+  auto is_pos_inbound = ir_builder.CreateICmpSLT(pos_inc, entry_count, "is_pos_inbound");
+  // continue the loop is we are at valid status, otherwise exit the loop
+  ir_builder.CreateCondBr(is_pos_inbound, bb_forbody, bb_exit);
 
   ir_builder.SetInsertPoint(bb_exit);
   // synchronize all threads within a threadblock:
