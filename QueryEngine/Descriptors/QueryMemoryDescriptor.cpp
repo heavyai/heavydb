@@ -499,6 +499,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , use_streaming_top_n_(use_streaming_top_n)
     , threads_can_reuse_group_by_buffers_(threads_can_reuse_group_by_buffers)
     , force_4byte_float_(false)
+    , gpu_shared_mem_used_(false)
     , col_slot_context_(col_slot_context)
     , num_available_threads_(cpu_threads()) {
   CHECK(!(query_desc_type_ == QueryDescriptionType::TableFunction));
@@ -575,7 +576,8 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
     , must_use_baseline_sort_(false)
     , use_streaming_top_n_(false)
     , threads_can_reuse_group_by_buffers_(false)
-    , force_4byte_float_(false) {}
+    , force_4byte_float_(false)
+    , gpu_shared_mem_used_(false) {}
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
                                              const size_t entry_count,
@@ -599,6 +601,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , use_streaming_top_n_(false)
     , threads_can_reuse_group_by_buffers_(false)
     , force_4byte_float_(false)
+    , gpu_shared_mem_used_(false)
     , num_available_threads_(cpu_threads()) {
   if (query_desc_type == QueryDescriptionType::TableFunction) {
     // Table functions output columns are always columnar
@@ -631,6 +634,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_de
     , use_streaming_top_n_(false)
     , threads_can_reuse_group_by_buffers_(false)
     , force_4byte_float_(false)
+    , gpu_shared_mem_used_(false)
     , num_available_threads_(cpu_threads()) {}
 
 bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const {
@@ -649,6 +653,9 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
     return false;
   }
   if (force_4byte_float_ != other.force_4byte_float_) {
+    return false;
+  }
+  if (gpu_shared_mem_used_ != other.gpu_shared_mem_used_) {
     return false;
   }
   if (group_col_widths_ != other.group_col_widths_) {
@@ -1147,22 +1154,24 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
-  if (g_cluster) {
+  // todo (yoonmin): remove `executor_->isCPUOnly()` if possible since this is GPU-related
+  // logic
+  if (g_cluster || executor_->isCPUOnly() || render_output_ ||
+      !countDescriptorsLogicallyEmpty(count_distinct_descriptors_)) {
     return true;
   }
-  if (!countDescriptorsLogicallyEmpty(count_distinct_descriptors_)) {
-    return true;
-  }
-  if (executor_->isCPUOnly() || render_output_ ||
-      query_desc_type_ == QueryDescriptionType::GroupByBaselineHash ||
+  if (query_desc_type_ == QueryDescriptionType::GroupByBaselineHash ||
       query_desc_type_ == QueryDescriptionType::Projection ||
-      query_desc_type_ == QueryDescriptionType::TableFunction ||
-      (query_desc_type_ == QueryDescriptionType::GroupByPerfectHash &&
-       getGroupbyColCount() > 1)) {
+      query_desc_type_ == QueryDescriptionType::TableFunction) {
     return true;
   }
-  return query_desc_type_ == QueryDescriptionType::GroupByPerfectHash &&
-         many_entries(max_val_, min_val_, bucket_);
+  // todo (yoonmin): can we return true regardless of query_desc_type if
+  // isGpuSharedMemoryUsed() is true?
+  if (query_desc_type_ == QueryDescriptionType::GroupByPerfectHash) {
+    return isGpuSharedMemoryUsed() || getGroupbyColCount() > 1 ||
+           many_entries(max_val_, min_val_, bucket_);
+  }
+  return false;
 }
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {

@@ -68,7 +68,8 @@ void NvidiaKernel::launch(unsigned int grid_dim_x,
 
   VLOG(1) << "Launch GPU kernel on device " << device_id_
           << " compiled with the following grid and block sizes: " << grid_dim_x
-          << " and " << block_dim_x;
+          << " and " << block_dim_x
+          << " (shared memory used per CUDA block: " << shared_memory_size << " bytes)";
   checkCudaErrors(cuLaunchKernel(function_ptr_,
                                  grid_dim_x,
                                  grid_dim_y,

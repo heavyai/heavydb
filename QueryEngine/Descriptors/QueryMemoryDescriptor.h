@@ -153,6 +153,10 @@ class QueryMemoryDescriptor {
     return max_val - min_val > 10000 * std::max(bucket, int64_t(1));
   }
 
+  bool isGpuSharedMemoryUsed() const { return gpu_shared_mem_used_; }
+
+  void enableGpuSharedMemory() { gpu_shared_mem_used_ = true; }
+
   static bool countDescriptorsLogicallyEmpty(
       const CountDistinctDescriptors& count_distinct_descriptors) {
     return std::all_of(count_distinct_descriptors.begin(),
@@ -423,6 +427,7 @@ class QueryMemoryDescriptor {
   bool use_streaming_top_n_;
   bool threads_can_reuse_group_by_buffers_;
   bool force_4byte_float_;
+  bool gpu_shared_mem_used_;
 
   ColSlotContext col_slot_context_;
 
