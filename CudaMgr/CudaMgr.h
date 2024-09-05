@@ -67,6 +67,7 @@ struct DeviceProperties {
   int computeMinor;
   size_t globalMem;
   int constantMem;
+  int sharedMemPerBlockOptIn;
   int sharedMemPerBlock;
   int sharedMemPerMP;
   int numMPs;
@@ -164,6 +165,7 @@ class CudaMgr {
   }
   bool isArchMaxwellOrLaterForAll() const;
   bool isArchVoltaOrGreaterForAll() const;
+  bool isArchPascalOrGreaterForAll() const;
 
   static std::string deviceArchToSM(const NvidiaDeviceArch arch) {
     // Must match ${CUDA_COMPILATION_ARCH} CMAKE flag
