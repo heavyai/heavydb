@@ -18,6 +18,7 @@
 
 #include "CompilationContext.h"
 #include "NvidiaKernel.h"
+extern bool g_enable_gpu_dynamic_smem;
 
 #ifdef HAVE_CUDA
 void NvidiaKernel::launch(unsigned int grid_dim_x,
@@ -32,6 +33,18 @@ void NvidiaKernel::launch(unsigned int grid_dim_x,
                           bool optimize_block_and_grid_sizes) {
   size_t const shared_memory_size =
       compilation_result.gpu_smem_context.getSharedMemorySize();
+  if (g_enable_gpu_dynamic_smem) {
+    auto returned_status =
+        cuFuncSetAttribute(function_ptr_,
+                           CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
+                           shared_memory_size);
+    if (returned_status == CUDA_SUCCESS) {
+      VLOG(1) << "Set max dynamic shared size to " << shared_memory_size << " bytes";
+    } else {
+      VLOG(1) << "Failed to set max dynamic shared size to " << shared_memory_size
+              << " bytes (Error code: " << returned_status << ")";
+    }
+  }
   if (optimize_block_and_grid_sizes) {
     int recommended_block_size;
     int recommended_grid_size;
@@ -52,6 +65,7 @@ void NvidiaKernel::launch(unsigned int grid_dim_x,
       grid_dim_x = recommended_grid_size;
     }
   }
+
   VLOG(1) << "Launch GPU kernel on device " << device_id_
           << " compiled with the following grid and block sizes: " << grid_dim_x
           << " and " << block_dim_x;

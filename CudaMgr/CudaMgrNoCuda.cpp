@@ -17,6 +17,8 @@
 #include "CudaMgr.h"
 #include "Logger/Logger.h"
 
+bool g_enable_gpu_dynamic_smem{true};
+
 namespace CudaMgr_Namespace {
 
 CudaMgr::CudaMgr(const int, const int) : device_count_(-1), start_gpu_(-1) {
@@ -99,6 +101,10 @@ bool CudaMgr::isArchMaxwellOrLaterForAll() const {
   return false;
 }
 bool CudaMgr::isArchVoltaOrGreaterForAll() const {
+  CHECK(false);
+  return false;
+}
+bool CudaMgr::isArchPascalOrGreaterForAll() const {
   CHECK(false);
   return false;
 }
