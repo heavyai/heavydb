@@ -94,6 +94,7 @@ extern size_t g_max_concurrent_llm_transform_call;
 extern int32_t g_llm_transform_call_timeout_ms;
 extern int64_t g_llm_transform_max_num_unique_value;
 
+extern bool g_enable_gpu_dynamic_smem;
 #ifdef ENABLE_MEMKIND
 extern std::string g_pmem_path;
 #endif
@@ -1156,6 +1157,11 @@ void CommandLineOptions::fillDeveloperOptions() {
                      "Specify libgeos shared object filename to be used for "
                      "geos-backed geo opertations.");
 #endif
+  desc.add_options()("enable-gpu-dynamic-smem",
+                     po::value<bool>(&g_enable_gpu_dynamic_smem)
+                         ->default_value(g_enable_gpu_dynamic_smem),
+                     "Enable GPU dynamic shared memory (available on Nvidia GPU "
+                     "starting from Pascal architecture)");
   desc.add_options()(
       "large-ndv-threshold",
       po::value<int64_t>(&g_large_ndv_threshold)->default_value(g_large_ndv_threshold));
