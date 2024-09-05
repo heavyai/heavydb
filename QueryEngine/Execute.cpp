@@ -1500,15 +1500,17 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
   }
 
   int64_t compilation_queue_time = 0;
-  const auto reduction_code =
-      get_reduction_code(executor_id_, results_per_device, &compilation_queue_time);
+  if (results_per_device.size() > size_t(1)) {
+    const auto reduction_code =
+        get_reduction_code(executor_id_, results_per_device, &compilation_queue_time);
 
-  for (size_t i = 1; i < results_per_device.size(); ++i) {
-    reduced_results->getStorage()->reduce(
-        *(results_per_device[i].first->getStorage()), {}, reduction_code, executor_id_);
+    for (size_t i = 1; i < results_per_device.size(); ++i) {
+      reduced_results->getStorage()->reduce(
+          *(results_per_device[i].first->getStorage()), {}, reduction_code, executor_id_);
+    }
+    reduced_results->invalidateCachedRowCount();
   }
   reduced_results->addCompilationQueueTime(compilation_queue_time);
-  reduced_results->invalidateCachedRowCount();
   return reduced_results;
 }
 
