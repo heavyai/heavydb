@@ -1041,6 +1041,7 @@ void ResultSetStorage::moveOneEntryToBuffer(const size_t entry_index,
 }
 
 void ResultSet::initializeStorage() const {
+  auto timer = DEBUG_TIMER(__func__);
   if (query_mem_desc_.didOutputColumnar()) {
     storage_->initializeColWise();
   } else {
@@ -1159,33 +1160,53 @@ void ResultSetStorage::fillOneEntryRowWise(const std::vector<int64_t>& entry) {
 }
 
 void ResultSetStorage::initializeRowWise() const {
+  auto timer = DEBUG_TIMER(__func__);
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   const auto row_size = get_row_bytes(query_mem_desc_);
   CHECK_EQ(row_size % 8, 0u);
   const auto key_bytes_with_padding =
       align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
   CHECK(!query_mem_desc_.hasKeylessHash());
+
+  const auto entry_count = query_mem_desc_.getEntryCount();
+
+  // Grain size dictates the minimum unit of parallelism for a tbb loop
+  // This calculation is based on the rule of thumb that tbb units of parallelism
+  // should take on the order of 100 microseconds, and we've measured initialization
+  // to take roughly take 2-3 nanoseconds per row
+  const size_t grain_size = size_t(30000);
+
   switch (query_mem_desc_.getEffectiveKeyWidth()) {
     case 4: {
-      for (size_t i = 0; i < query_mem_desc_.getEntryCount(); ++i) {
-        auto row_ptr = buff_ + i * row_size;
-        fill_empty_key_32(reinterpret_cast<int32_t*>(row_ptr), key_count);
-        auto slot_ptr = reinterpret_cast<int64_t*>(row_ptr + key_bytes_with_padding);
-        for (size_t j = 0; j < target_init_vals_.size(); ++j) {
-          slot_ptr[j] = target_init_vals_[j];
-        }
-      }
+      tbb::parallel_for(
+          tbb::blocked_range<size_t>(0, entry_count, grain_size),
+          [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i != range.end(); ++i) {
+              auto row_ptr = buff_ + i * row_size;
+              fill_empty_key_32(reinterpret_cast<int32_t*>(row_ptr), key_count);
+              auto slot_ptr =
+                  reinterpret_cast<int64_t*>(row_ptr + key_bytes_with_padding);
+              for (size_t j = 0; j < target_init_vals_.size(); ++j) {
+                slot_ptr[j] = target_init_vals_[j];
+              }
+            }
+          });
       break;
     }
     case 8: {
-      for (size_t i = 0; i < query_mem_desc_.getEntryCount(); ++i) {
-        auto row_ptr = buff_ + i * row_size;
-        fill_empty_key_64(reinterpret_cast<int64_t*>(row_ptr), key_count);
-        auto slot_ptr = reinterpret_cast<int64_t*>(row_ptr + key_bytes_with_padding);
-        for (size_t j = 0; j < target_init_vals_.size(); ++j) {
-          slot_ptr[j] = target_init_vals_[j];
-        }
-      }
+      tbb::parallel_for(
+          tbb::blocked_range<size_t>(0, entry_count, grain_size),
+          [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i != range.end(); ++i) {
+              auto row_ptr = buff_ + i * row_size;
+              fill_empty_key_64(reinterpret_cast<int64_t*>(row_ptr), key_count);
+              auto slot_ptr =
+                  reinterpret_cast<int64_t*>(row_ptr + key_bytes_with_padding);
+              for (size_t j = 0; j < target_init_vals_.size(); ++j) {
+                slot_ptr[j] = target_init_vals_[j];
+              }
+            }
+          });
       break;
     }
     default:
@@ -1213,22 +1234,41 @@ void ResultSetStorage::fillOneEntryColWise(const std::vector<int64_t>& entry) {
 }
 
 void ResultSetStorage::initializeColWise() const {
+  auto timer = DEBUG_TIMER(__func__);
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   auto this_buff = reinterpret_cast<int64_t*>(buff_);
   CHECK(!query_mem_desc_.hasKeylessHash());
+
+  const size_t entry_count = query_mem_desc_.getEntryCount();
+  const size_t num_targets = target_init_vals_.size();
+
+  // Grain size dictates the minimum unit of parallelism for a tbb loop
+  // This calculation is based on the rule of thumb that tbb units of parallelism
+  // should take on the order of 100 microseconds, and we've measured initialization
+  // to take roughly take 2-3 nanoseconds per row
+  const size_t grain_size = size_t(30000);
+
+  // Key initialization
   for (size_t key_idx = 0; key_idx < key_count; ++key_idx) {
-    const auto first_key_off =
-        key_offset_colwise(0, key_idx, query_mem_desc_.getEntryCount());
-    for (size_t i = 0; i < query_mem_desc_.getEntryCount(); ++i) {
-      this_buff[first_key_off + i] = EMPTY_KEY_64;
-    }
+    const auto first_key_off = key_offset_colwise(0, key_idx, key_count);
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, entry_count, grain_size),
+                      [&](const tbb::blocked_range<size_t>& range) {
+                        for (size_t row_idx = range.begin(); row_idx != range.end();
+                             ++row_idx) {
+                          this_buff[first_key_off + row_idx] = EMPTY_KEY_64;
+                        }
+                      });
   }
-  for (size_t target_idx = 0; target_idx < target_init_vals_.size(); ++target_idx) {
-    const auto first_val_off =
-        slot_offset_colwise(0, target_idx, key_count, query_mem_desc_.getEntryCount());
-    for (size_t i = 0; i < query_mem_desc_.getEntryCount(); ++i) {
-      this_buff[first_val_off + i] = target_init_vals_[target_idx];
-    }
+
+  for (size_t target_idx = 0; target_idx < num_targets; ++target_idx) {
+    const auto first_val_off = slot_offset_colwise(0, target_idx, key_count, entry_count);
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, entry_count, grain_size),
+        [&](const tbb::blocked_range<size_t>& range) {
+          for (size_t row_idx = range.begin(); row_idx != range.end(); ++row_idx) {
+            this_buff[first_val_off + row_idx] = target_init_vals_[target_idx];
+          }
+        });
   }
 }
 
