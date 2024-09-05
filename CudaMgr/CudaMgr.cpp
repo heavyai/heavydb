@@ -25,6 +25,8 @@
 #include <boost/filesystem.hpp>
 #include "Logger/Logger.h"
 
+bool g_enable_gpu_dynamic_smem{true};
+
 namespace CudaMgr_Namespace {
 
 CudaErrorException::CudaErrorException(CUresult status)
@@ -307,6 +309,12 @@ void CudaMgr::fillDeviceProperties() {
         cuDeviceGetAttribute(&device_properties_[device_num].sharedMemPerMP,
                              CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR,
                              device_properties_[device_num].device));
+    if (g_enable_gpu_dynamic_smem && isArchPascalOrGreaterForAll()) {
+      checkError(
+          cuDeviceGetAttribute(&device_properties_[device_num].sharedMemPerBlockOptIn,
+                               CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN,
+                               device_properties_[device_num].device));
+    }
     checkError(cuDeviceGetAttribute(&device_properties_[device_num].sharedMemPerBlock,
                                     CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK,
                                     device_properties_[device_num].device));
@@ -347,6 +355,13 @@ void CudaMgr::fillDeviceProperties() {
     // capture memory allocation granularity
     device_properties_[device_num].allocationGranularity = getGranularity(device_num);
   }
+  if (g_enable_gpu_dynamic_smem && !isArchPascalOrGreaterForAll()) {
+    VLOG(1) << "Not all GPUs support extended dynamic shared memory, so the feature is "
+               "turned off. The maximum size of shared memory is limited to "
+            << computeMinSharedMemoryPerBlockForAllDevices();
+    g_enable_gpu_dynamic_smem = false;
+  }
+
   min_shared_memory_per_block_for_all_devices =
       computeMinSharedMemoryPerBlockForAllDevices();
   min_num_mps_for_all_devices = computeMinNumMPsForAllDevices();
@@ -495,15 +510,26 @@ bool CudaMgr::isArchVoltaOrGreaterForAll() const {
   return true;
 }
 
+bool CudaMgr::isArchPascalOrGreaterForAll() const {
+  for (int i = 0; i < device_count_; i++) {
+    if (device_properties_[i].computeMajor < 6) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * This function returns the minimum available dynamic shared memory that is available per
  * block for all GPU devices.
  */
 size_t CudaMgr::computeMinSharedMemoryPerBlockForAllDevices() const {
-  int shared_mem_size =
-      device_count_ > 0 ? device_properties_.front().sharedMemPerBlock : 0;
-  for (int d = 1; d < device_count_; d++) {
-    shared_mem_size = std::min(shared_mem_size, device_properties_[d].sharedMemPerBlock);
+  int shared_mem_size = 0;
+  bool const optin = g_enable_gpu_dynamic_smem && isArchPascalOrGreaterForAll();
+  for (int d = 0; d < device_count_; d++) {
+    int size = optin ? device_properties_[d].sharedMemPerBlockOptIn
+                     : device_properties_[d].sharedMemPerBlock;
+    shared_mem_size = (d == 0) ? size : std::min(shared_mem_size, size);
   }
   return shared_mem_size;
 }
@@ -519,7 +545,6 @@ size_t CudaMgr::computeMinNumMPsForAllDevices() const {
   }
   return num_mps;
 }
-
 void CudaMgr::createDeviceContexts() {
   CHECK_EQ(device_contexts_.size(), size_t(0));
   device_contexts_.resize(device_count_);
@@ -591,6 +616,10 @@ void CudaMgr::logDeviceProperties() const {
     VLOG(1) << "Shared memory per multiprocessor: "
             << device_properties_[d].sharedMemPerMP;
     VLOG(1) << "Shared memory per block: " << device_properties_[d].sharedMemPerBlock;
+    if (g_enable_gpu_dynamic_smem) {
+      VLOG(1) << "Shared memory per block (Dynamic): "
+              << device_properties_[d].sharedMemPerBlockOptIn;
+    }
     VLOG(1) << "Number of MPs: " << device_properties_[d].numMPs;
     VLOG(1) << "Warp Size: " << device_properties_[d].warpSize;
     VLOG(1) << "Max threads per block: " << device_properties_[d].maxThreadsPerBlock;
