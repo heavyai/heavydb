@@ -1457,47 +1457,7 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const QueryMemoryDescriptor& query_mem_desc) const {
   auto timer = DEBUG_TIMER(__func__);
-  std::shared_ptr<ResultSet> reduced_results;
-
-  const auto& first = results_per_device.front().first;
-
-  if (query_mem_desc.getQueryDescriptionType() ==
-          QueryDescriptionType::GroupByBaselineHash &&
-      results_per_device.size() > 1) {
-    const auto total_entry_count = std::accumulate(
-        results_per_device.begin(),
-        results_per_device.end(),
-        size_t(0),
-        [](const size_t init, const std::pair<ResultSetPtr, std::vector<size_t>>& rs) {
-          const auto& r = rs.first;
-          return init + r->getQueryMemDesc().getEntryCount();
-        });
-    CHECK(total_entry_count);
-    auto query_mem_desc = first->getQueryMemDesc();
-    query_mem_desc.setEntryCount(total_entry_count);
-    reduced_results = std::make_shared<ResultSet>(first->getTargetInfos(),
-                                                  ExecutorDeviceType::CPU,
-                                                  query_mem_desc,
-                                                  row_set_mem_owner,
-                                                  blockSize(),
-                                                  gridSize());
-    auto result_storage = reduced_results->allocateStorage(plan_state_->init_agg_vals_);
-    reduced_results->initializeStorage();
-    switch (query_mem_desc.getEffectiveKeyWidth()) {
-      case 4:
-        first->getStorage()->moveEntriesToBuffer<int32_t>(
-            result_storage->getUnderlyingBuffer(), query_mem_desc.getEntryCount());
-        break;
-      case 8:
-        first->getStorage()->moveEntriesToBuffer<int64_t>(
-            result_storage->getUnderlyingBuffer(), query_mem_desc.getEntryCount());
-        break;
-      default:
-        CHECK(false);
-    }
-  } else {
-    reduced_results = first;
-  }
+  std::shared_ptr<ResultSet> reduced_results = results_per_device.front().first;
 
   int64_t compilation_queue_time = 0;
   if (results_per_device.size() > size_t(1)) {
