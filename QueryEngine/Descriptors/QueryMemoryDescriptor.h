@@ -149,8 +149,9 @@ class QueryMemoryDescriptor {
 
   static bool many_entries(const int64_t max_val,
                            const int64_t min_val,
-                           const int64_t bucket) {
-    return max_val - min_val > 10000 * std::max(bucket, int64_t(1));
+                           const int64_t bucket,
+                           const int64_t threshold) {
+    return max_val - min_val > threshold * std::max(bucket, int64_t(1));
   }
 
   bool isGpuSharedMemoryUsed() const { return gpu_shared_mem_used_; }
@@ -436,6 +437,8 @@ class QueryMemoryDescriptor {
   // parallelize for the query kernel, and it will be updated to a proper value before
   // performing the query initialization
   mutable size_t num_available_threads_{1};
+
+  int64_t static constexpr kLargeGroupbyEntryCount{10000};
 
   size_t getTotalBytesOfColumnarBuffers() const;
   size_t getTotalBytesOfColumnarBuffers(const size_t num_entries_per_column) const;

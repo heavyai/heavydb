@@ -2370,8 +2370,8 @@ TEST_F(Select, GroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    c("SELECT COUNT(*) FROM test_ranges GROUP BY i, b;", dt);
-    c("SELECT i, b FROM test_ranges GROUP BY i, b;", dt);
+    c("SELECT COUNT(*) FROM test_ranges GROUP BY i, b order by 1;", dt);
+    c("SELECT i, b FROM test_ranges GROUP BY i, b order by 1, 2;", dt);
 
     {
       const auto big_group_threshold = g_big_group_threshold;

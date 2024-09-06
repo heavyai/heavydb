@@ -320,11 +320,12 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       }
       // keyless hash: whether or not group columns are stored at the beginning of the
       // output buffer
-      keyless_hash =
-          (!sort_on_gpu_hint ||
-           !QueryMemoryDescriptor::many_entries(
-               col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
-          !col_range_info.bucket && !must_use_baseline_sort && keyless_info.keyless;
+      keyless_hash = (!sort_on_gpu_hint || !many_entries(col_range_info.max,
+                                                         col_range_info.min,
+                                                         col_range_info.bucket,
+                                                         kLargeGroupbyEntryCount)) &&
+                     !col_range_info.bucket && !must_use_baseline_sort &&
+                     keyless_info.keyless;
 
       // if keyless, then this target index indicates wheter an entry is empty or not
       // (acts as a key)
@@ -1153,23 +1154,33 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
   return query_desc_type_ != QueryDescriptionType::NonGroupedAggregate;
 }
 
+// todo (yoonmin) : need to improve the determination logic without using fixed constant
+// `kLargeGroupbyEntryCount`, i.e., based on statistics such as histogram of groupby expr,
+// table cardinality, and so on
 bool QueryMemoryDescriptor::blocksShareMemory() const {
   // todo (yoonmin): remove `executor_->isCPUOnly()` if possible since this is GPU-related
   // logic
-  if (g_cluster || executor_->isCPUOnly() || render_output_ ||
-      !countDescriptorsLogicallyEmpty(count_distinct_descriptors_)) {
+  auto const has_count_distinct_op =
+      !countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
+  if (g_cluster || executor_->isCPUOnly() || render_output_ || isGpuSharedMemoryUsed() ||
+      has_count_distinct_op) {
     return true;
   }
-  if (query_desc_type_ == QueryDescriptionType::GroupByBaselineHash ||
-      query_desc_type_ == QueryDescriptionType::Projection ||
+  if (query_desc_type_ == QueryDescriptionType::Projection ||
       query_desc_type_ == QueryDescriptionType::TableFunction) {
     return true;
   }
-  // todo (yoonmin): can we return true regardless of query_desc_type if
-  // isGpuSharedMemoryUsed() is true?
+  if (query_desc_type_ == QueryDescriptionType::GroupByBaselineHash) {
+    // create a single output buffer that is shared among all CUDA blocks
+    // if entry_count is larger than our predefined threshold
+    // we expect this entry_count will not cause memory contention even
+    // all CUDA blocks concurrently access the shared output buffer
+    // if not, let's prepare a dedicated output buffer for each CUDA block
+    return many_entries(entry_count_, 0, bucket_, kLargeGroupbyEntryCount);
+  }
   if (query_desc_type_ == QueryDescriptionType::GroupByPerfectHash) {
-    return isGpuSharedMemoryUsed() || getGroupbyColCount() > 1 ||
-           many_entries(max_val_, min_val_, bucket_);
+    return getGroupbyColCount() > 1 ||
+           many_entries(max_val_, min_val_, bucket_, kLargeGroupbyEntryCount);
   }
   return false;
 }
