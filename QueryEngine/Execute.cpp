@@ -1441,13 +1441,14 @@ ReductionCode get_reduction_code(
     int64_t* compilation_queue_time) {
   auto clock_begin = timer_start();
   // ResultSetReductionJIT::codegen compilation-locks if new code will be generated
-  *compilation_queue_time = timer_stop(clock_begin);
   const auto& this_result_set = results_per_device[0].first;
   ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
                                       this_result_set->getTargetInfos(),
                                       this_result_set->getTargetInitVals(),
                                       executor_id);
-  return reduction_jit.codegen();
+  ReductionCode result = reduction_jit.codegen();
+  *compilation_queue_time = timer_stop(clock_begin);
+  return result;
 };
 
 }  // namespace
