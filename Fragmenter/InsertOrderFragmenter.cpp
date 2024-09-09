@@ -1033,6 +1033,26 @@ void InsertOrderFragmenter::insertChunksIntoFragment(
                           valid_row_indices.begin() + num_rows_to_insert);
 }
 
+namespace {
+void validate_license_claim_num_rows_for_temp_tables(const int32_t db_id,
+                                                     const int32_t table_id,
+                                                     const size_t num_rows_to_insert) {
+  auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+  auto max_num_rows = sys_cat.getDataMgr().getMaxNumRows();
+  if (!max_num_rows.has_value()) {
+    return;
+  }
+  auto cat = sys_cat.getCatalog(db_id);
+  auto td = cat->getMetadataForTable(table_id, false);
+  CHECK(td);
+  if (!td->isTemporaryTable()) {
+    return;
+  }
+  Catalog_Namespace::SysCatalog::instance().getDataMgr().validateNumRows(
+      num_rows_to_insert);
+}
+}  // namespace
+
 void InsertOrderFragmenter::insertChunksImpl(const InsertChunks& insert_chunks) {
   auto delete_column_id = findDeleteColumnId();
   validateSameNumRows(insert_chunks);
@@ -1044,6 +1064,9 @@ void InsertOrderFragmenter::insertChunksImpl(const InsertChunks& insert_chunks) 
   if (num_rows_left == 0) {
     return;
   }
+
+  validate_license_claim_num_rows_for_temp_tables(
+      insert_chunks.db_id, insert_chunks.table_id, num_rows_left);
 
   FragmentInfo* current_fragment{nullptr};
 
@@ -1135,6 +1158,9 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insert_data) {
   if (numRowsLeft <= 0) {
     return;
   }
+
+  validate_license_claim_num_rows_for_temp_tables(
+      insert_data.databaseId, insert_data.tableId, numRowsLeft);
 
   FragmentInfo* currentFragment{nullptr};
 

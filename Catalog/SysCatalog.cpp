@@ -194,7 +194,8 @@ void SysCatalog::init(const std::string& basePath,
                       std::shared_ptr<Calcite> calcite,
                       bool is_new_db,
                       bool aggregator,
-                      const std::vector<LeafHostInfo>& string_dict_hosts) {
+                      const std::vector<LeafHostInfo>& string_dict_hosts,
+                      std::optional<int32_t> max_num_users) {
   basePath_ = !g_multi_instance ? copy_catalog_if_read_only(basePath).string() : basePath;
   sqliteConnector_.reset(new SqliteConnector(
       shared::kSystemCatalogName, basePath_ + "/" + shared::kCatalogDirectoryName + "/"));
@@ -233,6 +234,7 @@ void SysCatalog::init(const std::string& basePath,
     }
   }
   buildMaps(is_new_db);
+  setMaxNumUsers(max_num_users);
   is_initialized_ = true;
 }
 
@@ -1076,11 +1078,29 @@ void SysCatalog::check_for_session_encryption(const std::string& pki_cert,
   pki_server_->encrypt_session(pki_cert, session);
 }
 
+namespace {
+void validate_license_claim_num_users(const int32_t num_users,
+                                      const std::optional<int32_t>& max_num_users,
+                                      const std::string& name) {
+  if (auto new_num_users = num_users + 1; new_num_users > max_num_users.value()) {
+    std::stringstream ss;
+    ss << "Can not create user '" << name << "'"
+       << ", operation would result in " << new_num_users << ""
+       << " users when the system license allows " << max_num_users.value() << ".";
+    throw std::runtime_error(ss.str());
+  }
+}
+}  // namespace
+
 UserMetadata SysCatalog::createUser(const string& name,
                                     UserAlterations alts,
                                     bool is_temporary) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
+
+  if (max_num_users_.has_value()) {
+    validate_license_claim_num_users(getNumUsers(), max_num_users_, name);
+  }
 
   if (!alts.passwd) {
     alts.passwd = "";
@@ -3550,5 +3570,39 @@ const ColumnDescriptor* get_metadata_for_column(const ::shared::ColumnKey& colum
   const auto catalog = SysCatalog::instance().getCatalog(column_key.db_id);
   CHECK(catalog);
   return catalog->getMetadataForColumn(column_key.table_id, column_key.column_id);
+}
+
+int32_t SysCatalog::getNumUsers() const {
+  sys_read_lock read_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query("SELECT count(*) FROM mapd_users");
+  CHECK_EQ(sqliteConnector_->getNumRows(), 1U);
+  return sqliteConnector_->getData<int>(0, 0) + temporary_users_by_name_.size();
+}
+
+std::optional<int32_t> SysCatalog::getMaxNumUsers() const {
+  sys_read_lock read_lock(this);
+  return max_num_users_;
+}
+
+void SysCatalog::setMaxNumUsers(const std::optional<int32_t>& max_num_users_opt) {
+  sys_write_lock write_lock(this);
+
+  if (!max_num_users_opt.has_value()) {
+    max_num_users_ = max_num_users_opt;
+    return;
+  }
+
+  auto max_num_users = max_num_users_opt.value();
+
+  if (auto num_users = getNumUsers(); num_users > max_num_users) {
+    std::stringstream ss;
+    ss << "Cannot set max number of users.  New limit on number of users requested "
+       << max_num_users << " when system already has " << num_users
+       << ".  Please temporarily use a license that allows for more users and drop to "
+          "current license limits.";
+    throw std::runtime_error(ss.str());
+  }
+  max_num_users_ = max_num_users;
 }
 }  // namespace Catalog_Namespace
