@@ -2007,6 +2007,23 @@ const TableDescriptor* Catalog::getMetadataForTable(int table_id,
   return td;
 }
 
+int64_t Catalog::getTotalNumRows() const {
+  cat_read_lock read_lock(this);
+  size_t total_num_rows{0};
+  for (auto [id, td] : tableDescriptorMapById_) {
+    // Count foreign tables, tables, temporary tables, but not views & system tables
+    if (td->isView || td->is_system_table) {
+      continue;
+    }
+    std::unique_lock<std::mutex> td_lock(*td->mutex_.get());
+    if (td->fragmenter == nullptr) {
+      instantiateFragmenter(td);
+    }
+    total_num_rows += td->fragmenter->getNumRows();
+  }
+  return total_num_rows;
+}
+
 std::optional<std::string> Catalog::getTableName(int32_t table_id) const {
   cat_read_lock read_lock(this);
   auto td = getMutableMetadataForTableUnlocked(table_id);
