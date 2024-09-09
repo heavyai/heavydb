@@ -388,6 +388,9 @@ void DBHandler::initialize(const bool is_new_db) {
     return;
   }
 
+  std::optional<int32_t> max_num_users{std::nullopt};
+  std::optional<int64_t> max_total_rows{std::nullopt};
+
   if (system_parameters_.cpu_only || system_parameters_.num_gpus == 0) {
     executor_device_type_ = ExecutorDeviceType::CPU;
     cpu_mode_only_ = true;
@@ -539,7 +542,9 @@ void DBHandler::initialize(const bool is_new_db) {
                                 calcite_,
                                 is_new_db,
                                 !db_leaves_.empty(),
-                                string_leaves_);
+                                string_leaves_,
+                                max_num_users);
+    SysCatalog::instance().getDataMgr().setMaxNumRows(max_total_rows);
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize system catalog: " << e.what();
   }

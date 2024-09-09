@@ -147,12 +147,24 @@ void prepare_string_dictionaries(const RelAlgNode& ra_node) {
   }
 }
 
+void validate_max_row_limit(const RelAlgNode& ra_node) {
+  for (const auto [col_id, table_id, db_id] : get_physical_inputs(&ra_node)) {
+    const auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+    CHECK(catalog);
+    const auto table = catalog->getMetadataForTable(table_id, false);
+    if (table && table->isForeignTable()) {
+      Catalog_Namespace::SysCatalog::instance().getDataMgr().validateNumRows();
+    }
+  }
+}
+
 void prepare_foreign_table_for_execution(const RelAlgNode& ra_node) {
   // Iterate through ra_node inputs for types that need to be loaded pre-execution
   // If they do not have valid metadata, load them into CPU memory to generate
   // the metadata and leave them ready to be used by the query
   set_parallelism_hints(ra_node);
   prepare_string_dictionaries(ra_node);
+  validate_max_row_limit(ra_node);
 }
 
 void prepare_for_system_table_execution(const RelAlgNode& ra_node,

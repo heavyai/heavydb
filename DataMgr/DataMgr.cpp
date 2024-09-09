@@ -24,9 +24,12 @@
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
+#include "Catalog/Catalog.h"
+#include "Catalog/SysCatalog.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
 #include "FileMgr/GlobalFileMgr.h"
+#include "LockMgr/LockMgr.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 
 #ifdef __APPLE__
@@ -642,6 +645,8 @@ void DataMgr::checkpoint(const int db_id, const int tb_id) {
       (*deviceIt)->checkpoint(db_id, tb_id);
     }
   }
+  // Validate licensing limitations
+  Catalog_Namespace::SysCatalog::instance().getDataMgr().validateNumRows();
 }
 
 void DataMgr::checkpoint(const int db_id,
@@ -653,6 +658,8 @@ void DataMgr::checkpoint(const int db_id,
   for (int device_id = 0; device_id < levelSizes_[memory_level]; device_id++) {
     bufferMgrs_[memory_level][device_id]->checkpoint(db_id, table_id);
   }
+  // Validate licensing limitations
+  Catalog_Namespace::SysCatalog::instance().getDataMgr().validateNumRows();
 }
 
 void DataMgr::checkpoint() {
@@ -665,6 +672,8 @@ void DataMgr::checkpoint() {
       (*deviceIt)->checkpoint();
     }
   }
+  // Validate licensing limitations
+  Catalog_Namespace::SysCatalog::instance().getDataMgr().validateNumRows();
 }
 
 void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
@@ -873,6 +882,70 @@ void ProcBuddyinfoParser::parseBuddyinfo() {
     }
   }
   frag_percent_ = frag.fragPercent();
+}
+
+namespace {
+size_t get_system_total_num_rows() {
+  auto catalogs = Catalog_Namespace::SysCatalog::instance().getCatalogsForAllDbs();
+
+  size_t total_num_rows = 0;
+  for (const auto catalog : catalogs) {
+    CHECK(catalog);
+
+    // Do not count anything in the information schema towards limit
+    if (catalog->isInfoSchemaDb()) {
+      continue;
+    }
+
+    total_num_rows += catalog->getTotalNumRows();
+  }
+
+  return total_num_rows;
+}
+}  // namespace
+
+void DataMgr::validateNumRows(const int64_t additional_row_count) const {
+  std::shared_lock read_lock(max_num_rows_mutex_);
+  if (!max_num_rows_.has_value()) {
+    return;
+  }
+
+  if (auto num_rows = get_system_total_num_rows() + additional_row_count;
+      num_rows > max_num_rows_) {
+    std::stringstream ss;
+    ss << "Operation failed because it would result in " << num_rows << ""
+       << " rows when the system license allows " << max_num_rows_.value() << ".";
+    throw std::runtime_error(ss.str());
+  }
+}
+
+std::optional<int64_t> DataMgr::getMaxNumRows() const {
+  std::shared_lock read_lock(max_num_rows_mutex_);
+  return max_num_rows_;
+}
+
+void DataMgr::setMaxNumRows(const std::optional<int64_t>& new_max_opt) {
+  std::unique_lock write_lock(max_num_rows_mutex_);
+
+  if (!new_max_opt.has_value()) {
+    max_num_rows_ = new_max_opt;
+    return;
+  }
+
+  auto new_max = new_max_opt.value();
+
+  if (auto num_rows = get_system_total_num_rows();
+      num_rows > static_cast<size_t>(new_max)) {
+    std::stringstream ss;
+    ss << "Cannot set max number of rows across all tables.  New limit on number of "
+          "total number of rows "
+       << new_max << " when system already has " << num_rows
+       << ".  Please temporarily use a license that allows for more total rows and drop "
+          "to "
+          "current license limits.";
+    throw std::runtime_error(ss.str());
+  }
+  max_num_rows_ = new_max;
 }
 
 }  // namespace Data_Namespace

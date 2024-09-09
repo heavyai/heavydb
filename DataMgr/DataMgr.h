@@ -215,6 +215,27 @@ class DataMgr {
 
   static void atExitHandler();
 
+  /**
+   * Set the new number of maximum allowed rows.
+   *
+   * Validates if this new number does not exceed current capacity, if so,
+   * throws.
+   *
+   * @param new_max - Thew new maximum number, can be a std::nullopt, in which
+   * case this limit is ignored.
+   */
+  void setMaxNumRows(const std::optional<int64_t>& new_max);
+  std::optional<int64_t> getMaxNumRows() const;
+
+  /**
+   * Validate if current number of rows across the entire system, plus an
+   * optional additional amount of rows, exceeds the allowed number of rows,
+   * as typically determined by a license.
+   *
+   * @param additional_rows - An additional amount of rows, can be zero.
+   */
+  void validateNumRows(const int64_t additional_row_count = 0) const;
+
  private:
   void populateMgrs(const SystemParameters& system_parameters,
                     const size_t userSpecifiedNumReaderThreads,
@@ -230,6 +251,8 @@ class DataMgr {
                             size_t page_size,
                             const std::vector<size_t>& cpu_tier_sizes);
 
+  mutable std::shared_mutex max_num_rows_mutex_;
+  std::optional<int64_t> max_num_rows_;  // maximum number of rows as per license
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
   std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr_;
   std::string dataDir_;

@@ -259,6 +259,7 @@ class Catalog final {
       const bool fetchVirtualColumns,
       const bool fetchPhysicalColumns) const;
 
+  int64_t getTotalNumRows() const;
   std::list<const TableDescriptor*> getAllTableMetadata() const;
   std::vector<TableDescriptor> getAllTableMetadataCopy() const;
   std::vector<ColumnDescriptor> getAllColumnMetadataCopyForColumnsSystemTable() const;

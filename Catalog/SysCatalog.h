@@ -35,6 +35,7 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -184,7 +185,8 @@ class SysCatalog : private CommonFileOperations {
             std::shared_ptr<Calcite> calcite,
             bool is_new_db,
             bool aggregator,
-            const std::vector<LeafHostInfo>& string_dict_hosts);
+            const std::vector<LeafHostInfo>& string_dict_hosts,
+            std::optional<int32_t> max_num_users);
 
   bool isInitialized() const;
 
@@ -250,6 +252,7 @@ class SysCatalog : private CommonFileOperations {
   SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();
+  int32_t getNumUsers() const;
   void putImmerseUsersMetadata(
       const std::vector<UserMetadata>& immerse_user_metadata_list);
   std::vector<UserInfo> getUsersInfo(const UserMetadata& user);
@@ -423,6 +426,18 @@ class SysCatalog : private CommonFileOperations {
   bool hasExecutedMigration(const std::string& migration_name) const;
   void checkDropRenderGroupColumnsMigration() const;
 
+  /**
+   * Set the new number of allowed users across the entire system.
+   *
+   * Validates if this new number does not exceed current capacity, if so,
+   * throws.
+   *
+   * @param num_users - The new maximum number of users allowed, can be std::nullopt in
+   * which case this limit is ignored.
+   */
+  void setMaxNumUsers(const std::optional<int32_t>& num_users);
+  std::optional<int32_t> getMaxNumUsers() const;
+
  private:
   using GranteeMap = std::map<std::string, std::unique_ptr<Grantee>>;
   using ObjectRoleDescriptorMap =
@@ -563,6 +578,8 @@ class SysCatalog : private CommonFileOperations {
   // currently used in tests to ensure that QueryRunner and DBHandlerTestFixture are not
   // re-initializing SysCatalog.
   bool is_initialized_{false};
+
+  std::optional<int32_t> max_num_users_{};
 
  public:
   mutable std::unique_ptr<heavyai::DistributedSharedMutex> dcatalogMutex_;
