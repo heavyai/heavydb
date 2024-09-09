@@ -255,7 +255,8 @@ QueryRunner::QueryRunner(const char* db_path,
                  g_calcite,
                  false,
                  mapd_params.aggregator,
-                 string_servers);
+                 string_servers,
+                 {});
   }
 
   query_engine_ =

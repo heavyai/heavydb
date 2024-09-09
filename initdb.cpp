@@ -326,7 +326,7 @@ int main(int argc, char* argv[]) {
         std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024, 5000, true, "");
     g_base_path = base_path;
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-    sys_cat.init(base_path, dummy, {}, calcite, true, false, {});
+    sys_cat.init(base_path, dummy, {}, calcite, true, false, {}, {});
 
   } catch (std::exception& e) {
     std::cerr << "Exception: " << e.what() << "\n";
