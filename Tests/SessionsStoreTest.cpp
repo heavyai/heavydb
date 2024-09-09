@@ -377,7 +377,7 @@ int main(int argc, char** argv) {
       std::make_shared<Data_Namespace::DataMgr>(data_path, sys_parms, nullptr, false, 0);
   auto calcite = std::make_shared<Calcite>(
       -1, CALCITEPORT, std::string(BASE_PATH), 1024, 5000, true, "");
-  sys_cat.init(BASE_PATH, dummy, {}, calcite, false, false, {});
+  sys_cat.init(BASE_PATH, dummy, {}, calcite, false, false, {}, {});
   try {
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {

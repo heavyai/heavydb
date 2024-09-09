@@ -133,6 +133,6 @@ void init_sys_catalog() {
   auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(
       BASE_PATH "/" + shared::kDataDirectoryName, sys_params, nullptr, false);
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
-  sys_catalog.init(BASE_PATH, data_mgr, {}, {}, false, false, {});
+  sys_catalog.init(BASE_PATH, data_mgr, {}, {}, false, false, {}, {});
 }
 }  // namespace TestHelpers

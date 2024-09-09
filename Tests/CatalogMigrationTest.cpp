@@ -70,7 +70,7 @@ class CatalogTest : public DBHandlerTestFixture {
   static void initSysCatalog() {
     auto db_handler = getDbHandlerAndSessionId().first;
     SC::instance().init(
-        BASE_PATH, db_handler->data_mgr_, {}, db_handler->calcite_, false, false, {});
+        BASE_PATH, db_handler->data_mgr_, {}, db_handler->calcite_, false, false, {}, {});
   }
 
   std::vector<std::string> getTables(SqliteConnector& conn) {
