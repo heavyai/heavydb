@@ -645,9 +645,13 @@ else()
   if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
   endif()
-  if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND ${ARCH} STREQUAL "aarch64")
-    # Suppress "parameter passing for argument of type 'std::pair<X,X>' notes" on ARM
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi")
+  if (${ARCH} STREQUAL "aarch64")
+    # Disable floating point expression contraction which allows FMA in baseline aarch64
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffp-contract=off")
+    if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+      # Suppress "parameter passing for argument of type 'std::pair<X,X>' notes" on ARM
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi")
+    endif()
   endif()
 endif()
 
