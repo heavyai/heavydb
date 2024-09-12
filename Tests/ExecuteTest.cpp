@@ -5618,6 +5618,30 @@ TEST_F(Select, NotILikeNoneEncodedTextWithParenthesis) {
   }
 }
 
+TEST_F(Select, IREquivalenceForStringPatternMatchQuery) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto get_explain_str = [](std::string const& query, ExecutorDeviceType dt) {
+    const auto query_res = QR::get()->runSelectQuery(query,
+                                                     dt,
+                                                     /*hoist_literals=*/true,
+                                                     /*allow_loop_joins=*/false,
+                                                     /*just_explain=*/true);
+    const auto explain_res = query_res->getRows();
+    EXPECT_EQ(size_t(1), explain_res->rowCount());
+    const auto crt_row = explain_res->getNextRow(true, true);
+    EXPECT_EQ(size_t(1), crt_row.size());
+    return boost::get<std::string>(v<NullableString>(crt_row[0]));
+  };
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto const q1_explain_str =
+        get_explain_str("SELECT COUNT(1) FROM TEST WHERE shared_dict LIKE '%foo';", dt);
+    auto const q2_explain_str =
+        get_explain_str("SELECT COUNT(1) FROM TEST WHERE shared_dict LIKE '%baz';", dt);
+    ASSERT_EQ(q1_explain_str, q2_explain_str);
+  }
+}
+
 TEST_F(Select, CanReuseCompiledCodeForStringPatternMatchQuery) {
   SKIP_ALL_ON_AGGREGATOR();
   CodeCacheMetric q1_cache_metric, q2_cache_metric;
