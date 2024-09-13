@@ -1160,7 +1160,7 @@ TEST(ExecutorResourceMgr, AdjustNumCPUSlotForCPUGroupbyQuery) {
       1,
       0u,
       true,
-      20480,
+      65536,
       default_gpu_buffer_pool_mem,
       default_per_query_max_cpu_slots_ratio,
       default_per_query_max_cpu_result_mem_ratio,
@@ -1204,7 +1204,7 @@ TEST(ExecutorResourceMgr, AdjustNumCPUSlotForCPUGroupbyQuery) {
     std::string const err_msg{e.what()};
     std::string const expected_msg{
         "RequestStats error: Query requested more CPU result memory (62.18 KB) than "
-        "available per query (15.0 KB) in executor resource pool"};
+        "available per query (48.0 KB) in executor resource pool"};
     ASSERT_EQ(err_msg, expected_msg);
   }
 
@@ -1284,7 +1284,7 @@ TEST(ExecutorResourceMgr, IdentitalAdjustedNumCPUSlot) {
       1,
       0u,
       true,
-      70000,
+      131072,
       default_gpu_buffer_pool_mem,
       default_per_query_max_cpu_slots_ratio,
       default_per_query_max_cpu_result_mem_ratio,
@@ -1311,7 +1311,7 @@ TEST(ExecutorResourceMgr, IdentitalAdjustedNumCPUSlot) {
   }
 
   RequestInfo resource_request_info{
-      ExecutorDeviceType::CPU, 0, 2, 1, 0, 0, 63680, 1592, chunk_request_info, true};
+      ExecutorDeviceType::CPU, 0, 2, 1, 0, 0, 131072, 1592, chunk_request_info, true};
 
   ScopeGuard reset_flag =
       [orig =
@@ -1326,8 +1326,8 @@ TEST(ExecutorResourceMgr, IdentitalAdjustedNumCPUSlot) {
   } catch (std::runtime_error const& e) {
     std::string const err_msg{e.what()};
     std::string const expected_msg{
-        "RequestStats error: Query requested more CPU result memory (62.18 KB) than "
-        "available per query (51.26 KB) in executor resource pool"};
+        "RequestStats error: Query requested more CPU result memory (128.0 KB) than "
+        "available per query (96.0 KB) in executor resource pool"};
     ASSERT_EQ(err_msg, expected_msg);
   }
 
