@@ -144,6 +144,7 @@ class CudaMgr {
   const DeviceProperties* getDeviceProperties(const size_t device_num) const {
     // device_num is the device number relative to start_gpu_ (real_device_num -
     // start_gpu_)
+    CHECK(device_properties_initialized_);
     if (device_num < device_properties_.size()) {
       return &device_properties_[device_num];
     }
@@ -152,15 +153,19 @@ class CudaMgr {
                              std::to_string(device_properties_.size()) + ")");
   }
   inline bool isArchMaxwell() const {
+    CHECK(device_properties_initialized_);
     return (getDeviceCount() > 0 && device_properties_[0].computeMajor == 5);
   }
   inline bool isArchMaxwellOrLater() const {
+    CHECK(device_properties_initialized_);
     return (getDeviceCount() > 0 && device_properties_[0].computeMajor >= 5);
   }
   inline bool isArchPascal() const {
+    CHECK(device_properties_initialized_);
     return (getDeviceCount() > 0 && device_properties_[0].computeMajor == 6);
   }
   inline bool isArchPascalOrLater() const {
+    CHECK(device_properties_initialized_);
     return (getDeviceCount() > 0 && device_properties_[0].computeMajor >= 6);
   }
   bool isArchMaxwellOrLaterForAll() const;
@@ -237,6 +242,10 @@ class CudaMgr {
 
   void logDeviceProperties() const;
 
+  void finishDevicePropertiesInitialization() {
+    device_properties_initialized_ = true;
+  }
+
   const std::vector<CUcontext>& getDeviceContexts() const {
     return device_contexts_;
   }
@@ -290,6 +299,7 @@ class CudaMgr {
   heavyai::DeviceGroup device_group_;
   std::vector<CUcontext> device_contexts_;
   mutable std::mutex device_mutex_;
+  bool device_properties_initialized_{false};
 
 #ifdef HAVE_CUDA
   bool log_memory_activity_;
