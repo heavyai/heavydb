@@ -75,6 +75,7 @@ CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
 }
 
 void CudaMgr::initDeviceGroup() {
+  CHECK(device_properties_initialized_);
   for (int device_id = 0; device_id < device_count_; device_id++) {
     device_group_.push_back(
         {device_id, device_id + start_gpu_, device_properties_[device_id].uuid});
@@ -285,6 +286,12 @@ std::string CudaMgr::getCudaMemoryUsageInString() {
   return oss.str();
 }
 
+namespace {
+bool is_arch_pascal_or_greater(int compute_major) {
+  return compute_major >= 6;
+}
+}  // namespace
+
 void CudaMgr::fillDeviceProperties() {
   device_properties_.resize(device_count_);
   cuDriverGetVersion(&gpu_driver_version_);
@@ -309,7 +316,8 @@ void CudaMgr::fillDeviceProperties() {
         cuDeviceGetAttribute(&device_properties_[device_num].sharedMemPerMP,
                              CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR,
                              device_properties_[device_num].device));
-    if (g_enable_gpu_dynamic_smem && isArchPascalOrGreaterForAll()) {
+    if (g_enable_gpu_dynamic_smem &&
+        is_arch_pascal_or_greater(device_properties_[device_num].computeMajor)) {
       checkError(
           cuDeviceGetAttribute(&device_properties_[device_num].sharedMemPerBlockOptIn,
                                CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN,
@@ -355,6 +363,7 @@ void CudaMgr::fillDeviceProperties() {
     // capture memory allocation granularity
     device_properties_[device_num].allocationGranularity = getGranularity(device_num);
   }
+  finishDevicePropertiesInitialization();
   if (g_enable_gpu_dynamic_smem && !isArchPascalOrGreaterForAll()) {
     VLOG(1) << "Not all GPUs support extended dynamic shared memory, so the feature is "
                "turned off. The maximum size of shared memory is limited to "
@@ -489,6 +498,7 @@ void CudaMgr::setDeviceMem(int8_t* device_ptr,
  * Returns false, if there is any device with compute capability of < 5.0
  */
 bool CudaMgr::isArchMaxwellOrLaterForAll() const {
+  CHECK(device_properties_initialized_);
   for (int i = 0; i < device_count_; i++) {
     if (device_properties_[i].computeMajor < 5) {
       return false;
@@ -502,6 +512,7 @@ bool CudaMgr::isArchMaxwellOrLaterForAll() const {
  * Returns false, if there is any non-Volta device available.
  */
 bool CudaMgr::isArchVoltaOrGreaterForAll() const {
+  CHECK(device_properties_initialized_);
   for (int i = 0; i < device_count_; i++) {
     if (device_properties_[i].computeMajor < 7) {
       return false;
@@ -511,6 +522,7 @@ bool CudaMgr::isArchVoltaOrGreaterForAll() const {
 }
 
 bool CudaMgr::isArchPascalOrGreaterForAll() const {
+  CHECK(device_properties_initialized_);
   for (int i = 0; i < device_count_; i++) {
     if (device_properties_[i].computeMajor < 6) {
       return false;
@@ -524,6 +536,7 @@ bool CudaMgr::isArchPascalOrGreaterForAll() const {
  * block for all GPU devices.
  */
 size_t CudaMgr::computeMinSharedMemoryPerBlockForAllDevices() const {
+  CHECK(device_properties_initialized_);
   int shared_mem_size = 0;
   bool const optin = g_enable_gpu_dynamic_smem && isArchPascalOrGreaterForAll();
   for (int d = 0; d < device_count_; d++) {
@@ -539,6 +552,7 @@ size_t CudaMgr::computeMinSharedMemoryPerBlockForAllDevices() const {
  * per device across all GPU devices
  */
 size_t CudaMgr::computeMinNumMPsForAllDevices() const {
+  CHECK(device_properties_initialized_);
   int num_mps = device_count_ > 0 ? device_properties_.front().numMPs : 0;
   for (int d = 1; d < device_count_; d++) {
     num_mps = std::min(num_mps, device_properties_[d].numMPs);
@@ -546,6 +560,7 @@ size_t CudaMgr::computeMinNumMPsForAllDevices() const {
   return num_mps;
 }
 void CudaMgr::createDeviceContexts() {
+  CHECK(device_properties_initialized_);
   CHECK_EQ(device_contexts_.size(), size_t(0));
   device_contexts_.resize(device_count_);
   for (int d = 0; d < device_count_; ++d) {
@@ -596,6 +611,7 @@ int CudaMgr::getContext() const {
 }
 
 void CudaMgr::logDeviceProperties() const {
+  CHECK(device_properties_initialized_);
   LOG(INFO) << "CUDA Driver version: " << gpu_driver_version_;
   LOG(INFO) << "Using " << device_count_ << " Gpus.";
   for (int d = 0; d < device_count_; ++d) {
