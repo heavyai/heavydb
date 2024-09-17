@@ -279,6 +279,7 @@ extern size_t g_pmem_size;
 extern std::string g_pmem_path;
 #endif
 extern bool g_enable_data_recycler;
+extern bool g_enable_column_level_security;
 extern bool g_use_hashtable_cache;
 extern size_t g_hashtable_cache_total_bytes;
 extern size_t g_max_cacheable_hashtable_size_bytes;
