@@ -53,6 +53,7 @@
 #include <functional>
 #include <numeric>
 
+bool g_enable_column_level_security{true};
 bool g_skip_intermediate_count{true};
 bool g_enable_interop{false};
 bool g_enable_union{true};  // DEPRECATED
@@ -5636,6 +5637,10 @@ std::vector<RelAlgExecutor::CapturedColumns> RelAlgExecutor::captureColumns(
 
 void RelAlgExecutor::checkTableAndColumnPrivileges(
     const Catalog_Namespace::SessionInfo& session_info) {
+  if (!g_enable_column_level_security) {
+    return;
+  }
+
   CHECK(query_dag_.get()) << "Query DAG must be initialzied prior to capturing columns";
 
   auto captured_columns = capture_columns(query_dag_.get());

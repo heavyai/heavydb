@@ -51,6 +51,8 @@ using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
 
+extern bool g_enable_column_level_security;
+
 namespace {
 template <typename XDEBUG_OPTION,
           typename REMOTE_DEBUG_OPTION,
@@ -488,7 +490,9 @@ void check_permissions_for_table(
     AccessPrivileges tablePrivs,
     AccessPrivileges viewPrivs,
     const std::optional<AccessPrivileges>& column_privs = std::nullopt) {
-  const auto view_in_use = is_view_in_use(tableOrViewNames, session_info);
+  const auto disable_column_level_security =
+      g_enable_column_level_security ? is_view_in_use(tableOrViewNames, session_info)
+                                     : true;
   for (auto tableOrViewName : tableOrViewNames) {
     // Calcite returns table names in the form of a {table_name, database_name} vector.
     const auto catalog =
@@ -519,8 +523,9 @@ void check_permissions_for_table(
 
     if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(
             session_info.get_currentUser(), privObjects) &&
-        (view_in_use || !has_any_column_privilege(
-                            catalog.get(), tableMeta, session_info, column_privs))) {
+        (disable_column_level_security ||
+         !has_any_column_privilege(
+             catalog.get(), tableMeta, session_info, column_privs))) {
       throw std::runtime_error("Violation of access privileges: user " +
                                session_info.get_currentUser().userLoggable() +
                                " has no proper privileges for object " +
