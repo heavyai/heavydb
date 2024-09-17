@@ -47,6 +47,7 @@ using Catalog_Namespace::SysCatalog;
 using Catalog_Namespace::UserMetadata;
 
 extern size_t g_leaf_count;
+extern bool g_enable_column_level_security;
 std::string g_test_binary_file_path;
 
 namespace {
@@ -5114,6 +5115,8 @@ class GrantRevokeSelectColumnTest : public DBHandlerTestFixture {
   }
 
   void SetUp() override {
+    saved_column_level_security_enabled_ = g_enable_column_level_security;
+    g_enable_column_level_security = true;
     DBHandlerTestFixture::SetUp();
     loginAdmin();
 
@@ -5149,6 +5152,7 @@ class GrantRevokeSelectColumnTest : public DBHandlerTestFixture {
     sql("DROP TABLE IF EXISTS test_table_quoted_id;");
     sql("REVOKE ALL ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
     DBHandlerTestFixture::TearDown();
+    g_enable_column_level_security = saved_column_level_security_enabled_;
   }
 
   using UserLoginInfo = std::pair<std::string, std::string>;
@@ -5164,6 +5168,8 @@ class GrantRevokeSelectColumnTest : public DBHandlerTestFixture {
   void loginTestUser() { loginUser(test_user_); }
 
   const std::map<std::string, std::string> user_passwords = {{"test_user", "test_pass"}};
+
+  bool saved_column_level_security_enabled_;
 };
 
 TEST_F(GrantRevokeSelectColumnTest, Grant) {
