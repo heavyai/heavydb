@@ -134,7 +134,7 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
           lit = rBuilder.makeLiteral(
                   val.substring(1, val.length() - 1), field.getType(), false);
         } else {
-          lit = rBuilder.makeLiteral(Integer.parseInt(val), field.getType(), false);
+          lit = rBuilder.makeLiteral(Long.parseLong(val), field.getType(), false);
         }
         RexNode rn = builder.call(SqlStdOperatorTable.EQUALS,
                 builder.field(restriction.getRestrictionColumn()),
