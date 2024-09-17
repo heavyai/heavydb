@@ -832,6 +832,13 @@ void CommandLineOptions::fillOptions() {
       "When this configuration parameter is set to true, import "
       "buffer allocations will use heap memory outside the cpu-buffer-mem-bytes based "
       "memory buffer pool.");
+  desc.add_options()("enable-column-level-security",
+                     po::value<bool>(&g_enable_column_level_security)
+                         ->default_value(g_enable_column_level_security)
+                         ->implicit_value(true),
+                     "Enable column-level security, column-level privileges granted and "
+                     "revoked will be respected. Use of views in a query automatically "
+                     "disables column-level security for that query.");
 
   desc.add(log_options_.get_options());
 }
