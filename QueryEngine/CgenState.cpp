@@ -455,3 +455,16 @@ bool CgenState::isCountDistinctOnEncodedDate(const Analyzer::Expr* expr) const {
                 count_distinct_on_encoded_date_arg_.end(),
                 [&expr](auto const arg) { return expr == arg; });
 }
+
+llvm::Value* CgenState::getStringView(llvm::Value* ptr, llvm::Value* len) {
+    auto string_view_type = llvm::StructType::get(
+            llvm::Type::getInt8PtrTy(context_, 0),  // char*
+            llvm::Type::getInt64Ty(context_)        // uint64_t
+    );
+    llvm::Value* string_view_ptr_lv = ir_builder_.CreateAlloca(string_view_type);
+    llvm::Value* char_ptr_gep = ir_builder_.CreateStructGEP(string_view_type, string_view_ptr_lv, 0);
+    ir_builder_.CreateStore(ptr, char_ptr_gep);
+    llvm::Value* size_gep = ir_builder_.CreateStructGEP(string_view_type, string_view_ptr_lv, 1);
+    ir_builder_.CreateStore(len, size_gep);
+    return ir_builder_.CreateLoad(string_view_type, string_view_ptr_lv);
+}
