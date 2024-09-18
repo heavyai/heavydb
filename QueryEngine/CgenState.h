@@ -438,6 +438,8 @@ struct CgenState {
 
   void maybeCloneFunctionRecursive(llvm::Function* fn);
 
+  llvm::Value* getStringView(llvm::Value* ptr, llvm::Value* len);
+
  private:
   // todo (yoonmin) : avoid linear scanning of `literals` map
   template <class T>
