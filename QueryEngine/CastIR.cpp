@@ -32,7 +32,11 @@ llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
     const auto operand_lvs =
         codegen(operand_as_const, ti.get_compression(), ti.getStringDictKey(), co);
     if (operand_lvs.size() == 3) {
-      operand_lv = cgen_state_->emitCall("string_pack", {operand_lvs[1], operand_lvs[2]});
+      auto char_ptr_lv = cgen_state_->ir_builder_.CreateBitCast(
+          operand_lvs[1], llvm::Type::getInt8PtrTy(cgen_state_->context_, 0));
+      auto size_lv = cgen_state_->ir_builder_.CreateSExt(
+          operand_lvs[2], llvm::Type::getInt64Ty(cgen_state_->context_));
+      operand_lv = cgen_state_->getStringView(char_ptr_lv, size_lv);
     } else {
       operand_lv = operand_lvs.front();
     }
@@ -55,7 +59,11 @@ llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
         "register_buffer_with_executor_rsm",
         llvm::Type::getVoidTy(executor_->cgen_state_->context_),
         {executor_->cgen_state_->llInt(reinterpret_cast<int64_t>(executor_)), ptr});
-    operand_lv = cgen_state_->emitCall("string_pack", {ptr, len});
+    auto char_ptr_lv = cgen_state_->ir_builder_.CreateBitCast(
+        ptr, llvm::Type::getInt8PtrTy(cgen_state_->context_, 0));
+    auto size_lv = cgen_state_->ir_builder_.CreateSExt(
+        len, llvm::Type::getInt64Ty(cgen_state_->context_));
+    operand_lv = cgen_state_->getStringView(char_ptr_lv, size_lv);
   }
   const auto& operand_ti = operand->get_type_info();
   return codegenCast(operand_lv, operand_ti, ti, operand_as_const, co);

@@ -2143,11 +2143,6 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t* get_group_value_fast_keyless_se
   return groups_buffer + row_size_quad * (warp_size * (key - min_key) + thread_warp_idx);
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE StringView string_pack(const int8_t* ptr,
-                                                               const int32_t len) {
-  return {reinterpret_cast<char const*>(ptr), static_cast<uint64_t>(len)};
-}
-
 #ifdef __clang__
 #include "../Utils/StringLike.cpp"
 #endif
