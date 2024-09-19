@@ -115,13 +115,32 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return allocateUnlocked(num_bytes, thread_idx);
   }
 
-  void initCountDistinctBufferFastAllocator(size_t buffer_size, size_t thread_idx) {
+  void initCountDistinctBufferForFastAllocation(int8_t* buffer,
+                                                size_t buffer_size,
+                                                size_t thread_idx) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    VLOG(1) << "Count distinct buffer allocator initialized with buffer_size: "
-            << buffer_size << ", thread_idx: " << thread_idx;
+    VLOG(1) << "Count distinct buffer allocator initialized for thread_idx: "
+            << thread_idx;
     CHECK_LT(thread_idx, count_distinct_buffer_fast_allocators_.size());
     if (count_distinct_buffer_fast_allocators_[thread_idx]) {
       VLOG(1) << "Replacing count_distinct_buffer_allocators_[" << thread_idx << "].";
+    }
+    count_distinct_buffer_fast_allocators_[thread_idx] =
+        std::make_unique<CountDistinctBufferFastAllocator>(buffer, buffer_size);
+  }
+
+  void allocAndInitCountDistinctBufferForFastAllocator(size_t buffer_size,
+                                                       size_t thread_idx) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+
+    CHECK_LT(thread_idx, count_distinct_buffer_fast_allocators_.size());
+    if (count_distinct_buffer_fast_allocators_[thread_idx]) {
+      VLOG(1) << "Replacing count_distinct_buffer_allocators_[" << thread_idx
+              << "] to a newly allocated buffer.";
+    } else {
+      VLOG(1) << "Count distinct buffer allocator initialized with newly allocated "
+                 "buffer having buffer_size: "
+              << buffer_size << ", thread_idx: " << thread_idx;
     }
     count_distinct_buffer_fast_allocators_[thread_idx] =
         std::make_unique<CountDistinctBufferFastAllocator>(
@@ -134,8 +153,9 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     }
     std::lock_guard<std::mutex> lock(state_mutex_);
     auto const allocator_idx = count_distinct_buffer_fast_allocators_.size();
-    VLOG(1) << "Count distinct buffer allocator initialized with buffer_size: "
-            << buffer_size << ", allocator_idx: " << allocator_idx;
+    VLOG(1) << "Count distinct buffer allocator initialized with newly allocated buffer "
+               "(size: "
+            << buffer_size << ", allocator_idx: " << allocator_idx << ")";
     count_distinct_buffer_fast_allocators_.emplace_back(
         std::make_unique<RowSetMemoryOwner::CountDistinctBufferFastAllocator>(
             allocateUnlocked(buffer_size, 0), buffer_size));
