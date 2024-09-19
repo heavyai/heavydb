@@ -267,9 +267,6 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     if (!ra_exe_unit.use_bump_allocator) {
       check_total_bitmap_memory(query_mem_desc);
     }
-    if (device_type == ExecutorDeviceType::GPU) {
-      allocateCountDistinctGpuMem(query_mem_desc);
-    }
     agg_op_metadata.count_distinct_buf_size =
         calculateCountDistinctBufferSize(query_mem_desc, ra_exe_unit);
     size_t total_buffer_size{0};
@@ -279,8 +276,14 @@ QueryMemoryInitializer::QueryMemoryInitializer(
       }
     }
     total_buffer_size *= query_mem_desc.getEntryCount();
-    row_set_mem_owner_->initCountDistinctBufferFastAllocator(total_buffer_size,
-                                                             thread_idx_);
+    if (device_type == ExecutorDeviceType::GPU) {
+      allocateCountDistinctGpuMem(query_mem_desc);
+      row_set_mem_owner_->initCountDistinctBufferForFastAllocation(
+          count_distinct_bitmap_host_crt_ptr_, total_buffer_size, thread_idx_);
+    } else {
+      row_set_mem_owner_->allocAndInitCountDistinctBufferForFastAllocator(
+          total_buffer_size, thread_idx_);
+    }
   }
 
   if (agg_op_metadata.has_tdigest) {
@@ -882,11 +885,17 @@ void QueryMemoryInitializer::allocateCountDistinctGpuMem(
 
   count_distinct_bitmap_mem_size_ =
       total_bytes_per_entry * query_mem_desc.getEntryCount();
+  auto cuda_allocator = dynamic_cast<CudaAllocator*>(device_allocator_);
+  CHECK(cuda_allocator);
+  VLOG(1) << "Allocate count distinct buffer on GPU " << cuda_allocator->getDeviceId()
+          << " (size: " << count_distinct_bitmap_mem_size_ << " bytes)";
   count_distinct_bitmap_device_mem_ptr_ = reinterpret_cast<CUdeviceptr>(
-      device_allocator_->alloc(count_distinct_bitmap_mem_size_));
-  device_allocator_->zeroDeviceMem(
+      cuda_allocator->alloc(count_distinct_bitmap_mem_size_));
+  cuda_allocator->zeroDeviceMem(
       reinterpret_cast<int8_t*>(count_distinct_bitmap_device_mem_ptr_),
       count_distinct_bitmap_mem_size_);
+  VLOG(1) << "Allocate count distinct buffer on CPU (size: "
+          << count_distinct_bitmap_mem_size_ << " bytes)";
   count_distinct_bitmap_host_crt_ptr_ = count_distinct_bitmap_host_mem_ptr_ =
       row_set_mem_owner_->allocate(count_distinct_bitmap_mem_size_, thread_idx_);
 }
