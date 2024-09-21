@@ -1063,6 +1063,9 @@ double ST_Y_Point(int8_t* p, int64_t psize, int32_t ic, int32_t isr, int32_t osr
 
 EXTENSION_NOINLINE
 double ST_XMin(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t osr) {
+  if (!coords) {
+    return NULL_DOUBLE;
+  }
   auto num_coords = size / compression_unit_size(ic);
   double xmin = 0.0;
   for (int32_t i = 0; i < num_coords; i += 2) {
@@ -1076,6 +1079,9 @@ double ST_XMin(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t os
 
 EXTENSION_NOINLINE
 double ST_YMin(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t osr) {
+  if (!coords) {
+    return NULL_DOUBLE;
+  }
   auto num_coords = size / compression_unit_size(ic);
   double ymin = 0.0;
   for (int32_t i = 0; i < num_coords; i += 2) {
@@ -1089,6 +1095,9 @@ double ST_YMin(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t os
 
 EXTENSION_NOINLINE
 double ST_XMax(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t osr) {
+  if (!coords) {
+    return NULL_DOUBLE;
+  }
   auto num_coords = size / compression_unit_size(ic);
   double xmax = 0.0;
   for (int32_t i = 0; i < num_coords; i += 2) {
@@ -1102,6 +1111,9 @@ double ST_XMax(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t os
 
 EXTENSION_NOINLINE
 double ST_YMax(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t osr) {
+  if (!coords) {
+    return NULL_DOUBLE;
+  }
   auto num_coords = size / compression_unit_size(ic);
   double ymax = 0.0;
   for (int32_t i = 0; i < num_coords; i += 2) {
@@ -1115,21 +1127,33 @@ double ST_YMax(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t os
 
 EXTENSION_INLINE
 double ST_XMin_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
+  if (!bounds) {
+    return NULL_DOUBLE;
+  }
   return transform_point<X>({bounds[0], bounds[1]}, isr, osr).x;
 }
 
 EXTENSION_INLINE
 double ST_YMin_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
+  if (!bounds) {
+    return NULL_DOUBLE;
+  }
   return transform_point<Y>({bounds[0], bounds[1]}, isr, osr).y;
 }
 
 EXTENSION_INLINE
 double ST_XMax_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
+  if (!bounds) {
+    return NULL_DOUBLE;
+  }
   return transform_point<X>({bounds[2], bounds[3]}, isr, osr).x;
 }
 
 EXTENSION_INLINE
 double ST_YMax_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
+  if (!bounds) {
+    return NULL_DOUBLE;
+  }
   return transform_point<Y>({bounds[2], bounds[3]}, isr, osr).y;
 }
 
