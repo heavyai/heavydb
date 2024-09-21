@@ -2372,6 +2372,70 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
   }
 }
 
+class LeftJoinWithProjectingExprUsingSTFunctionTest
+    : public ::testing::TestWithParam<std::tuple<std::string, std::string>> {
+  void SetUp() override {
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS qe_1298_1;");
+    QR::get()->runDDLStatement(
+        "CREATE TABLE qe_1298_1 (p GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32));");
+    QR::get()->runDDLStatement("INSERT INTO qe_1298_1 VALUES ('POINT(0 0)');");
+    QR::get()->runDDLStatement("INSERT INTO qe_1298_1 VALUES ('POINT(0 0)');");
+
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS qe_1298_2;");
+    QR::get()->runDDLStatement(
+        "CREATE TABLE qe_1298_2(p GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32), "
+        "mp GEOMETRY(MULTIPOINT, 4326) ENCODING COMPRESSED(32), "
+        "l GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32), "
+        "ml GEOMETRY(MULTILINESTRING, 4326) ENCODING COMPRESSED(32), "
+        "pl GEOMETRY(POLYGON, 4326) ENCODING COMPRESSED(32), "
+        "mpl GEOMETRY(MULTIPOLYGON, 4326) ENCODING COMPRESSED(32));");
+    QR::get()->runDDLStatement(
+        "INSERT INTO qe_1298_2 VALUES("
+        "'POINT(0 0)', 'MULTIPOINT(3 3, 5 5)', "
+        "'LINESTRING(3 0, 6 6, 7 7)', "
+        "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', "
+        "'POLYGON((0 0, 4 0, 0 4, 0 0))', "
+        "'MULTIPOLYGON (((-67.2854439296226 48.7869639921873,-67.2933589607912 "
+        "48.7896589836058,"
+        "-67.2957599569558 48.7899489974556,-67.2956809994279 48.7883419770693,"
+        "-67.2925679605885 48.7823029834695,-67.2914879523644 48.781398995212,"
+        "-67.2908099402165 48.7808309955433,-67.2881719876491 48.7815289985302,"
+        "-67.2812509663781 48.7855359673433,-67.2854439296226 48.7869639921873)))');");
+  }
+
+  void TearDown() override {
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS qe_1298_1;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS qe_1298_2;");
+  }
+};
+
+TEST_P(LeftJoinWithProjectingExprUsingSTFunctionTest, ExecuteQueryWithFunctionAndColumn) {
+  auto params = GetParam();
+  auto const function = std::get<0>(params);
+  auto const column = std::get<1>(params);
+  auto const query = "SELECT " + function + "(qe_1298_2." + column +
+                     ") FROM qe_1298_1 LEFT JOIN qe_1298_2 ON ST_INTERSECTS(qe_1298_1.p, "
+                     "qe_1298_2.mpl) limit 1;";
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_EQ(v<double>(execSQL(query, dt)), NULL_DOUBLE);
+  }
+}
+
+// Instantiate the test suite with both function names and column names
+INSTANTIATE_TEST_SUITE_P(
+    FunctionAndColumnCombinations,
+    LeftJoinWithProjectingExprUsingSTFunctionTest,
+    ::testing::Combine(
+        ::testing::Values("st_xmin", "st_xmax", "st_ymin", "st_ymax"),  // Function names
+        ::testing::Values("p", "mp", "l", "ml", "pl", "mpl")            // Column names
+        ),
+    [](const testing::TestParamInfo<std::tuple<std::string, std::string>>& info) {
+      std::string function = std::get<0>(info.param);
+      std::string column = std::get<1>(info.param);
+      return function + "_" + column;
+    });
+
 namespace BoundingBoxIntersectRewriter {
 
 const auto setup_stmts = {
