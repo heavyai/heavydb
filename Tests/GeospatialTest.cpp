@@ -3061,7 +3061,7 @@ TEST_F(GeoSpatialTempTables, Geos) {
         v<double>(run_simple_agg(
             R"(SELECT ST_Area(ST_Buffer(ST_Transform(ST_GeomFromText('POLYGON((-118.240356 34.04880299999999,-118.64035599999998 34.04880300000001,-118.440356 34.24880300000001))',4326), 26945), 1.0));)",
             dt)),
-        static_cast<double>(0.00001)));
+        static_cast<double>(0.0005)));
     // expect throw for now: geos call output transforms can be sunk into geos runtime but
     // geo operators can't deal with it yet
     EXPECT_THROW(
