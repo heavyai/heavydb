@@ -1726,13 +1726,22 @@ void StringDictionary::addOffsetCapacity(const size_t min_capacity_requested) no
   }
 }
 
+namespace {
+
+static constexpr size_t FOUR_MB = 4 * 1024 * 1024;
+
+constexpr size_t align_up(size_t size, size_t alignment) {
+  return ((size + alignment - 1) / alignment) * alignment;
+}
+
+}  // namespace
+
 size_t StringDictionary::addStorageCapacity(
     int fd,
     const size_t min_capacity_requested) noexcept {
   const size_t canary_buff_size_to_add =
-      std::max(static_cast<size_t>(1024 * SYSTEM_PAGE_SIZE),
-               (min_capacity_requested / SYSTEM_PAGE_SIZE + 1) * SYSTEM_PAGE_SIZE);
-
+      std::max(align_up(FOUR_MB, SYSTEM_PAGE_SIZE),
+               align_up(min_capacity_requested, SYSTEM_PAGE_SIZE));
   if (canary_buffer_size < canary_buff_size_to_add) {
     total_canary_size += canary_buff_size_to_add - canary_buffer_size;
     CANARY_BUFFER = static_cast<char*>(realloc(CANARY_BUFFER, canary_buff_size_to_add));
@@ -1752,8 +1761,8 @@ void* StringDictionary::addMemoryCapacity(void* addr,
                                           size_t& mem_size,
                                           const size_t min_capacity_requested) noexcept {
   const size_t canary_buff_size_to_add =
-      std::max(static_cast<size_t>(1024 * SYSTEM_PAGE_SIZE),
-               (min_capacity_requested / SYSTEM_PAGE_SIZE + 1) * SYSTEM_PAGE_SIZE);
+      std::max(align_up(FOUR_MB, SYSTEM_PAGE_SIZE),
+               align_up(min_capacity_requested, SYSTEM_PAGE_SIZE));
   if (canary_buffer_size < canary_buff_size_to_add) {
     total_canary_size += canary_buff_size_to_add - canary_buffer_size;
     CANARY_BUFFER =
