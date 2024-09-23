@@ -382,11 +382,12 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
   }
 
   llvm::Value* buffer_ret{nullptr};
+  llvm::StructType* struct_ty{nullptr};
   if (ret_ti.is_buffer()) {
     // codegen buffer return as first arg
     CHECK(ret_ti.is_array() || ret_ti.is_text_encoding_none());
     ret_ty = llvm::Type::getVoidTy(cgen_state_->context_);
-    const auto struct_ty = get_buffer_struct_type(
+    struct_ty = get_buffer_struct_type(
         cgen_state_,
         function_oper->getName(),
         0,
@@ -397,6 +398,21 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
 
   const auto ext_call = cgen_state_->emitExternalCall(
       ext_func_sig.getName(), ret_ty, args, {}, ret_ti.is_buffer());
+
+  if (ret_ti.is_buffer() && ret_ti.is_text_encoding_none()) {
+    // we are at the `arg_notnull` code block, so let's initialize `is_null_` variable to
+    // 0 (false) for TextEncodingNone struct
+    // note that string buffer's ptr and its size are initialized when calling the above
+    // external call of the function `ext_func_sig.getName()`, which creates a new-
+    // `TextEncodingNone` instance for this none-encoded string
+    CHECK(struct_ty);
+    CHECK_EQ(struct_ty->getNumElements(), 3u);
+    const auto arr_null_bool =
+        cgen_state_->ir_builder_.CreateStructGEP(struct_ty, buffer_ret, 2);
+    // set `is_null_ = 0 (false)`
+    cgen_state_->ir_builder_.CreateStore(
+        llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_), 0), arr_null_bool);
+  }
   auto ext_call_nullcheck = endArgsNullcheck(
       bbs, ret_ti.is_buffer() ? buffer_ret : ext_call, null_buffer_ptr, function_oper);
 
