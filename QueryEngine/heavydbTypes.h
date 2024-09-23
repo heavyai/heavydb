@@ -619,15 +619,20 @@ struct Array {
 struct TextEncodingNone {
   char* ptr_;
   int64_t size_;
-  // padding is required to prevent clang/gcc from expanding arguments
+  // previous comment related to `is_null_` variable (which was defined as int8_t
+  // padding): padding is required to prevent clang/gcc from expanding arguments
   // https://stackoverflow.com/questions/27386912/prevent-clang-from-expanding-arguments-that-are-aggregate-types/27387908#27387908
-  int8_t padding;
+  // let's change its name from `padding` to `is_null_` since we use this field to mark
+  // whether the string is null but keep its type, not changing it as bool explicitly
+  int8_t is_null_;
 
 #ifndef __CUDACC__
   TextEncodingNone() = default;
   // Requires external ownership.
   explicit TextEncodingNone(char const* const c_str)
-      : ptr_(const_cast<char*>(c_str)), size_(strlen(c_str)) {}
+      : ptr_(const_cast<char*>(c_str))
+      , size_(strlen(c_str))
+      , is_null_(static_cast<int8_t>(size_ == 0)) {}
 
   template <typename M>
   explicit DEVICE ALWAYS_INLINE TextEncodingNone(M& mgr, const std::string& str) {
@@ -645,6 +650,7 @@ struct TextEncodingNone {
       ptr_ = reinterpret_cast<char*>(buffer);
       strcpy(ptr_, str.c_str());
     }
+    is_null_ = static_cast<int8_t>(size_ == 0);
   }
 
   operator std::string() const {
@@ -701,7 +707,7 @@ struct TextEncodingNone {
     return size_;
   }
   DEVICE ALWAYS_INLINE bool isNull() const {
-    return size_ == 0;
+    return is_null_;
   }
 };
 
