@@ -2436,7 +2436,8 @@ TEST_P(StringFunctionTest, StrtokToArrayCommonCases) {
   sqlAndCompareResult("select strtok_to_array('', '.@');", {{array({})}});
 
   /* empty delimiters */
-  sqlAndCompareResult("select strtok_to_array('hello.world', '');", {{array({})}});
+  sqlAndCompareResult("select strtok_to_array('hello.world', '');",
+                      {{array({"hello.world"})}});
 }
 
 TEST_P(StringFunctionTest, StrtokToArrayTextEncodingNone) {

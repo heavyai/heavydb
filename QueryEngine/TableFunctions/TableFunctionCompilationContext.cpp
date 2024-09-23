@@ -162,12 +162,14 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
             llvm::Type::getInt8PtrTy(ctx) /* int8_t* string_dictionary_ptr */
         });
   } else {
-    col_struct_type =
-        llvm::StructType::get(ctx,
-                              {
-                                  data_ptr_llvm_type,         /* T* ptr */
-                                  llvm::Type::getInt64Ty(ctx) /* int64_t sz */
-                              });
+    std::vector<llvm::Type*> types{
+        data_ptr_llvm_type,         /* T* ptr */
+        llvm::Type::getInt64Ty(ctx) /* int64_t sz */
+    };
+    if (data_target_info.is_text_encoding_none()) {
+      types.push_back(llvm::Type::getInt8Ty(ctx)); /* int8_t is_null_ */
+    }
+    col_struct_type = llvm::StructType::get(ctx, types);
   }
 
   auto col = ir_builder.CreateAlloca(col_struct_type);
@@ -185,6 +187,20 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
 
   initialize_ptr_member(col_ptr_ptr, data_ptr_llvm_type, data_ptr, ir_builder);
   initialize_int_member<int64_t>(col_sz_ptr, data_size, -1, ctx, ir_builder);
+  if (data_target_info.is_text_encoding_none()) {
+    auto is_null_ptr = ir_builder.CreateStructGEP(col_struct_type, col, 2);
+    is_null_ptr->setName(col_name + ".is_null");
+    llvm::Value* col_size_lv =
+        ir_builder.CreateLoad(col_sz_ptr->getType()->getPointerElementType(), col_sz_ptr);
+    llvm::Value* is_null_str_lv = ir_builder.CreateICmpEQ(
+        col_size_lv, llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), 0));
+    auto i8_type = llvm::Type::getInt8Ty(ctx);
+    llvm::Value* is_null_i8_lv =
+        ir_builder.CreateSelect(is_null_str_lv,
+                                llvm::ConstantInt::get(i8_type, 1),
+                                llvm::ConstantInt::get(i8_type, 0));
+    initialize_int_member<int8_t>(is_null_ptr, is_null_i8_lv, -1, ctx, ir_builder);
+  }
   if (is_text_encoding_dict_type) {
     initialize_ptr_member(col_str_dict_ptr,
                           llvm::Type::getInt8PtrTy(ctx),
@@ -760,9 +776,13 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
   LOG(IR) << (emit_only_preflight_fn ? "Pre Flight Function Entry Point IR\n"
                                      : "Table Function Entry Point IR\n")
           << serialize_llvm_object(entry_point_func_);
+  VLOG(3) << (emit_only_preflight_fn ? "Pre Flight Function Entry Point IR\n"
+                                     : "Table Function Entry Point IR\n")
+          << serialize_llvm_object(entry_point_func_);
   std::shared_ptr<CompilationContext> code;
   if (is_gpu) {
     LOG(IR) << "Table Function Kernel IR\n" << serialize_llvm_object(kernel_func_);
+    VLOG(3) << "Table Function Kernel IR\n" << serialize_llvm_object(kernel_func_);
 
     CHECK(executor_);
     executor_->initializeNVPTXBackend();
