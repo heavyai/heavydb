@@ -4138,6 +4138,141 @@ INSTANTIATE_TEST_SUITE_P(
                                      TestParam<double>{4 / 3.0, "gmp9n"})),
     CTE::printTestParams);
 
+class TextEncodingNoneProjection
+    : public testing::TestWithParam<
+          std::tuple<ExecutorDeviceType, std::string, std::string>> {
+ public:
+  static void SetUpTestSuite() {
+    run_ddl_statement("DROP TABLE IF EXISTS AllGeoTypes;");
+    setup_all_geo_types();  // CREATE and INSERT into TABLE AllGeoTypes
+    for (size_t i = 0; i < 9; i++) {
+      run_multiple_agg(
+          "insert into AllGeoTypes values (\n"
+          "1,\n"
+          "'POINT(3 3)', 'POINT(3 3)', 'POINT(3 3)', 'POINT(3 3)', 'POINT(3 3)', "
+          "'POINT(3 "
+          "3)',\n"
+          "'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)', "
+          "'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)', 'MULTIPOINT(3 3, 5 5)',\n"
+          "'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 "
+          "6, 7 "
+          "7)', 'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 0, 6 6, 7 7)', 'LINESTRING(3 "
+          "0, 6 "
+          "6, 7 7)', 'LINESTRING(3 0, 6 6, 7 7)',\n"
+          "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, "
+          "6 6, "
+          "7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 "
+          "5.2))', "
+          "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, "
+          "6 6, "
+          "7 7),(3.2 4.2,5.1 5.2))', 'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 "
+          "5.2))', "
+          "'MULTILINESTRING((3 0, 6 6, 7 7),(3.2 4.2,5.1 5.2))',\n"
+          "'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 "
+          "0, "
+          "4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 "
+          "0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))', 'POLYGON((0 0, 4 0, 0 4, 0 0))',\n"
+          "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', 'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 "
+          "0)))', "
+          "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', 'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 "
+          "0)))', "
+          "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))', 'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 "
+          "0)))', "
+          "'MULTIPOLYGON(((0 0, 4 0, 0 4, 0 0)))'\n"
+          ");",
+          ExecutorDeviceType::CPU);
+    }
+  }
+
+  static void TearDownTestSuite() {
+    if (!g_keep_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS AllGeoTypes;");
+    }
+  }
+
+  static std::string printTestParams(
+      const ::testing::TestParamInfo<
+          std::tuple<ExecutorDeviceType, std::string, std::string>>& info) {
+    const auto& param = info.param;
+    std::ostringstream ss;
+    ss << std::get<0>(param) << '_' << std::get<1>(param) << "_" << std::get<2>(param);
+    return ss.str();
+  }
+};
+
+TEST_P(TextEncodingNoneProjection, ProjectGeoString) {
+  auto const [dt, func, col] = GetParam();
+  SKIP_NO_GPU_IN_TEST_P();
+  std::ostringstream query;
+  query << "SELECT " << func << "(" << col << ") FROM AllGeoTypes;";
+  auto res = run_multiple_agg(query.str(), dt);
+  ASSERT_EQ(res->rowCount(), 10u);
+  std::array<std::string, 6> prefixes = {
+      "POINT", "MULTIPOINT", "LINESTRING", "MULTILINESTRING", "POLYGON", "MULTIPOLYGON"};
+  for (size_t i = 0; i < res->rowCount(); i++) {
+    auto const& row_values = res->getNextRow(true, false);
+    const auto row_tv = row_values[0];
+    const auto row_scalar_tv = boost::get<ScalarTargetValue>(&row_tv);
+    CHECK(row_scalar_tv);
+    auto nullable_sptr = boost::get<NullableString>(row_scalar_tv);
+    if (boost::get<void*>(nullable_sptr)) {
+      ASSERT_TRUE(false) << "NULL string detected";
+    } else {
+      auto str = boost::get<std::string>(nullable_sptr);
+      ASSERT_TRUE(std::any_of(
+          prefixes.begin(), prefixes.end(), [&str](const std::string& prefix) {
+            return str->rfind(prefix, 0) == 0;
+          }));
+    }
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(GeoSpatial,
+                         TextEncodingNoneProjection,
+                         testing::Combine(testing::Values(ExecutorDeviceType::CPU,
+                                                          ExecutorDeviceType::GPU),
+                                          testing::Values("ST_AsText"),
+                                          testing::Values("gpt",
+                                                          "gpt4",
+                                                          "gpt4e",
+                                                          "gpt4n",
+                                                          "gpt9",
+                                                          "mpt",
+                                                          "gmpt",
+                                                          "gmpt4",
+                                                          "gmpt4e",
+                                                          "gmpt4n",
+                                                          "gmpt9",
+                                                          "l",
+                                                          "gl",
+                                                          "gl4",
+                                                          "gl4e",
+                                                          "gl4n",
+                                                          "gl9",
+                                                          "gl9n",
+                                                          "ml",
+                                                          "gml",
+                                                          "gml4",
+                                                          "gml4e",
+                                                          "gml4n",
+                                                          "gml9",
+                                                          "gml9n",
+                                                          "p",
+                                                          "gp",
+                                                          "gp4",
+                                                          "gp4e",
+                                                          "gp4n",
+                                                          "gp9",
+                                                          "gp9n",
+                                                          "mp",
+                                                          "gmp",
+                                                          "gmp4",
+                                                          "gmp4e",
+                                                          "gmp4n",
+                                                          "gmp9",
+                                                          "gmp9n")),
+                         TextEncodingNoneProjection::printTestParams);
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 
