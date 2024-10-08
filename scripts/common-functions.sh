@@ -37,10 +37,6 @@ function install_required_ubuntu_packages() {
       build-essential \
       ccache \
       curl \
-      default-jdk \
-      default-jdk-headless \
-      default-jre \
-      default-jre-headless \
       flex \
       git \
       google-perftools \
@@ -77,6 +73,18 @@ function install_required_ubuntu_packages() {
       valgrind \
       wget \
       zlib1g-dev
+
+  # JDK21 is default on 24.04
+  JAVA_BASE="default"
+  if [[ $VERSION_ID != "24.04" ]]; then
+    ## install JDK 21 on 20.04 and 22.04
+    JAVA_BASE="openjdk-21"
+  fi
+  DEBIAN_FRONTEND=noninteractive sudo apt install -y \
+      ${JAVA_BASE}-jdk \
+      ${JAVA_BASE}-jdk-headless \
+      ${JAVA_BASE}-jre \
+      ${JAVA_BASE}-jre-headless
 
   if [ "$LIBRARY_TYPE" != "static" ]; then
     DEBIAN_FRONTEND=noninteractive sudo apt install -y \
