@@ -201,6 +201,26 @@ bool GeoBase::getWkb(std::vector<uint8_t>& wkb) const {
   return false;
 }
 
+uint8_t* GeoBase::getWkb(size_t& wkb_size) const {
+  wkb_size = geom_->WkbSize();
+  if (wkb_size > 0u) {
+    void* buffer = malloc(wkb_size);
+    if (!buffer) {
+      wkb_size = 0u;
+      return nullptr;
+    }
+    try {
+      geom_->exportToWkb(wkbNDR, reinterpret_cast<unsigned char*>(buffer));
+    } catch (...) {
+      free(buffer);
+      wkb_size = 0u;
+      return nullptr;
+    }
+    return reinterpret_cast<uint8_t*>(buffer);
+  }
+  return nullptr;
+}
+
 bool GeoBase::isEmpty() const {
   return geom_ && geom_->IsEmpty();
 }
