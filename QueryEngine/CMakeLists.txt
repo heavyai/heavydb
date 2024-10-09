@@ -167,6 +167,10 @@ set(query_engine_source_files
   TableFunctions/TableFunctionManager.h
   Utils/SegmentTree.h)
 
+if(ENABLE_GEOS)
+  list(APPEND query_engine_source_files WKB.cpp)
+endif()
+
 set(SHARED_SQL_TYPES_H_AND_DEPS
   ${CMAKE_SOURCE_DIR}/Shared/sqltypes.h
   ${CMAKE_SOURCE_DIR}/Shared/funcannotations.h
@@ -372,19 +376,21 @@ add_custom_command(
   -I ${Boost_INCLUDE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
-add_custom_command(
-  DEPENDS GeosRuntime.cpp GeosRuntime.h ${CMAKE_SOURCE_DIR}/Geospatial/Compression.cpp ${SHARED_SQL_TYPES_H_AND_DEPS}
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
-  COMMAND ${llvm_clangpp_cmd}
-  ARGS -DNO_BOOST -std=c++${CMAKE_CXX_STANDARD} ${RT_OPT_FLAGS} -c -emit-llvm
-  ${CLANG_SDK_INC}
-  ${CLANG_CRT_INC}
-  -I ${Boost_INCLUDE_DIR}
-  ${MAPD_DEFINITIONS}
-  ${GEOS_RT_DEFINITIONS}
-  -I ${CMAKE_SOURCE_DIR}
-  -I ${GEOS_INCLUDE_DIR} -Qy
-  ${CMAKE_CURRENT_SOURCE_DIR}/GeosRuntime.cpp)
+if(ENABLE_GEOS)
+  add_custom_command(
+    DEPENDS GeosRuntime.cpp GeosRuntime.h WKB.cpp WKB.h ${SHARED_SQL_TYPES_H_AND_DEPS}
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
+    COMMAND ${llvm_clangpp_cmd}
+    ARGS -DNO_BOOST -std=c++${CMAKE_CXX_STANDARD} ${RT_OPT_FLAGS} -c -emit-llvm
+    ${CLANG_SDK_INC}
+    ${CLANG_CRT_INC}
+    -I ${Boost_INCLUDE_DIR}
+    ${MAPD_DEFINITIONS}
+    ${GEOS_RT_DEFINITIONS}
+    -I ${CMAKE_SOURCE_DIR}
+    -I ${GEOS_INCLUDE_DIR} -Qy
+    ${CMAKE_CURRENT_SOURCE_DIR}/GeosRuntime.cpp)
+endif()
 
 add_custom_command(
   DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsArray.hpp ExtensionFunctionsText.hpp ExtensionFunctionsTesting.hpp ExtensionFunctionsArrayTesting.hpp ExtensionFunctionsTextTesting.hpp
@@ -398,12 +404,20 @@ add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
   COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/parse_ast.py ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
 
-add_custom_target(QueryEngineFunctionsTargets
-  DEPENDS
-  ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
-  ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
-  ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
-)
+if(ENABLE_GEOS)
+  add_custom_target(QueryEngineFunctionsTargets
+    DEPENDS
+    ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
+    ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
+    ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
+  )
+else()
+  add_custom_target(QueryEngineFunctionsTargets
+    DEPENDS
+    ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
+    ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
+  )
+endif()
 
 add_custom_command(
   DEPENDS ${TABLE_FUNCTION_HEADERS}

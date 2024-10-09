@@ -54,6 +54,7 @@ class GeoBase {
 
   std::string getWktString() const;
   bool getWkb(std::vector<uint8_t>&) const;
+  uint8_t* getWkb(size_t& wkb_size) const;  // mallocs memory which must be freed
   enum class GeoType {
     kPOINT,
     kLINESTRING,

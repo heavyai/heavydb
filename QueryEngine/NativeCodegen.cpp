@@ -87,6 +87,8 @@ float g_fraction_code_cache_to_evict = 0.2;
 
 #include <llvm/Support/DynamicLibrary.h>
 
+#include "QueryEngine/WKB.h"
+
 // from Geospatial/GeosValidation.cpp
 extern std::unique_ptr<std::string> g_libgeos_so_filename;
 
@@ -545,6 +547,18 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
 
   auto execution_engine =
       CodeGenerator::generateNativeCPUCode(query_func, live_funcs, co);
+
+#ifdef ENABLE_GEOS
+  if (cgen_state_->needs_geos_) {
+    // Ensure ExecutionEngine knows about the toWkb and fromWkb functions, required for
+    // run-time linking of code in GeosRuntime.cpp/bc. Only one of the functions needs
+    // to be added here in order for both of them to be found and linked. It is still
+    // unclear why those functions do not get automatically linked without this, and
+    // why that failure to link is also not reported. Also requires #include "WKB.h".
+    execution_engine->addGlobalMapping("toWkb", reinterpret_cast<uint64_t>(&toWkb));
+  }
+#endif
+
   auto cpu_compilation_context =
       std::make_shared<CpuCompilationContext>(std::move(execution_engine));
   cpu_compilation_context->setFunctionPointer(multifrag_query_func);
