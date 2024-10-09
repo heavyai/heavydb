@@ -4273,6 +4273,23 @@ INSTANTIATE_TEST_SUITE_P(GeoSpatial,
                                                           "gmp9n")),
                          TextEncodingNoneProjection::printTestParams);
 
+TEST_F(TextEncodingNoneProjection, CompareGeoString) {
+  std::vector<std::string> exprs = {"ST_AsText(l) IS NOT NULL",
+                                    "SUBSTR(ST_AsText(l), 0, 10) LIKE \'LINESTRING%\'",
+                                    "LENGTH(ST_AsText(l)) > 0",
+                                    "CHAR_LENGTH(ST_AsText(l)) > 0",
+                                    "REGEXP_LIKE(ST_AsText(l), \'.*\')",
+                                    "ST_AsText(l) REGEXP \'.*\'"};
+  for (auto const& expr : exprs) {
+    std::ostringstream query;
+    query << "SELECT COUNT(1) FROM AllGeoTypes WHERE " << expr << ";";
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      ASSERT_EQ(10u, v<int64_t>(run_simple_agg(query.str(), dt)));
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 
