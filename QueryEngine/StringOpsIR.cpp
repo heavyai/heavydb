@@ -242,8 +242,13 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
   auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
-    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 0));
-    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 1));
+    auto str_struct_lv = str_lv.front();
+    if (isTextEncodingNoneStringPtr(expr->get_arg()->get_type_info(), str_struct_lv)) {
+      str_struct_lv = cgen_state_->ir_builder_.CreateLoad(
+          str_struct_lv->getType()->getPointerElementType(), str_struct_lv);
+    }
+    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_struct_lv, 0));
+    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_struct_lv, 1));
     str_lv.back() = cgen_state_->ir_builder_.CreateTrunc(
         str_lv.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
     if (co.device_type == ExecutorDeviceType::GPU) {
@@ -632,12 +637,24 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
   auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
-    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 0));
-    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 1));
-    str_lv.back() = cgen_state_->ir_builder_.CreateTrunc(
-        str_lv.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
+    CHECK(ti.is_text_encoding_none());
     if (co.device_type == ExecutorDeviceType::GPU) {
       throw QueryMustRunOnCpu();
+    }
+    bool string_view_pack_required = isTextEncodingNoneStringPtr(ti, str_lv.front());
+    if (string_view_pack_required) {
+      auto [ptr_lv, size_lv] = extractTextEncodedNonePtrBufAndSize(str_lv.front());
+      CHECK(ptr_lv);
+      CHECK(size_lv);
+      str_lv.push_back(ptr_lv);
+      str_lv.push_back(size_lv);
+      str_lv.back() = cgen_state_->ir_builder_.CreateTrunc(
+          str_lv.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
+    } else {
+      str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 0));
+      str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 1));
+      str_lv.back() = cgen_state_->ir_builder_.CreateTrunc(
+          str_lv.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
     }
   }
   auto like_expr_arg_lvs = codegen(expr->get_like_expr(), true, co);
@@ -890,8 +907,13 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::RegexpExpr* expr,
   auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
-    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 0));
-    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_lv.front(), 1));
+    auto str_struct_lv = str_lv.front();
+    if (isTextEncodingNoneStringPtr(expr->get_arg()->get_type_info(), str_struct_lv)) {
+      str_struct_lv = cgen_state_->ir_builder_.CreateLoad(
+          str_struct_lv->getType()->getPointerElementType(), str_struct_lv);
+    }
+    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_struct_lv, 0));
+    str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_struct_lv, 1));
     str_lv.back() = cgen_state_->ir_builder_.CreateTrunc(
         str_lv.back(), llvm::Type::getInt32Ty(cgen_state_->context_));
   }

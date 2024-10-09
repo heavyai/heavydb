@@ -205,6 +205,14 @@ class CodeGenerator {
                            const bool operand_is_const,
                            const CompilationOptions& co);
 
+  llvm::Value* codegenCallStringPackForTextEncodingNone(llvm::Value* operand_lv,
+                                                        bool register_buffer_to_rsmo);
+
+  std::tuple<llvm::Value*, llvm::Value*> extractTextEncodedNonePtrBufAndSize(
+      llvm::Value* struct_ptr_lv);
+
+  bool isTextEncodingNoneStringPtr(SQLTypeInfo const& lv_ti, llvm::Value* struct_ptr_lv);
+
   llvm::Value* codegen(const Analyzer::InValues*, const CompilationOptions&);
 
   llvm::Value* codegen(const Analyzer::InIntegerSet* expr, const CompilationOptions& co);
