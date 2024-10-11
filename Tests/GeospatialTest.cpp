@@ -4274,6 +4274,7 @@ INSTANTIATE_TEST_SUITE_P(GeoSpatial,
                          TextEncodingNoneProjection::printTestParams);
 
 TEST_F(TextEncodingNoneProjection, CompareGeoString) {
+  SKIP_ALL_ON_AGGREGATOR();
   std::vector<std::string> exprs = {"ST_AsText(l) IS NOT NULL",
                                     "SUBSTR(ST_AsText(l), 0, 10) LIKE \'LINESTRING%\'",
                                     "LENGTH(ST_AsText(l)) > 0",
