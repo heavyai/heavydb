@@ -1822,6 +1822,7 @@ TEST(DataRecycler, Empty_Hashtable) {
 }
 
 TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
+  bool constexpr disable_hash_table_cache_for_dict_encoded_col = true;
   run_ddl_statement("DROP TABLE IF EXISTS TT1;");
   run_ddl_statement("DROP TABLE IF EXISTS TT2;");
   run_ddl_statement("CREATE TABLE TT1 (c1 TEXT ENCODING DICT(32), id1 INT);");
@@ -1909,33 +1910,41 @@ TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
   };
 
   auto perform_test = [&clear_caches, &check_query](
-                          const auto queries, size_t expected_num_cached_hashtable) {
+                          const auto queries,
+                          size_t expected_num_cached_hashtable,
+                          bool disable_hash_table_cache_for_dict_encoded_col) {
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
       QR::get()->runSQL(queries.first, dt);
       QR::get()->runSQL(queries.second, dt);
       check_query(queries.first, false);
       check_query(queries.second, false);
-      EXPECT_EQ(expected_num_cached_hashtable,
+      EXPECT_EQ(disable_hash_table_cache_for_dict_encoded_col
+                    ? 0
+                    : expected_num_cached_hashtable,
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                  CacheItemType::PERFECT_HT));
       clear_caches(ExecutorDeviceType::CPU);
     }
   };
 
-  auto execute_random_query_test = [&clear_caches](auto& queries,
-                                                   size_t expected_num_cached_hashtable) {
-    std::random_device rd;
-    std::mt19937 g(rd());
-    std::shuffle(queries.begin(), queries.end(), g);
-    for (const auto& query : queries) {
-      QR::get()->runSQL(query, ExecutorDeviceType::CPU);
-    }
-    EXPECT_EQ(expected_num_cached_hashtable,
-              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                               CacheItemType::PERFECT_HT));
-    clear_caches(ExecutorDeviceType::CPU);
-  };
+  auto execute_random_query_test =
+      [&clear_caches](auto& queries,
+                      size_t expected_num_cached_hashtable,
+                      bool disable_hash_table_cache_for_dict_encoded_col) {
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(queries.begin(), queries.end(), g);
+        for (const auto& query : queries) {
+          QR::get()->runSQL(query, ExecutorDeviceType::CPU);
+        }
+        EXPECT_EQ(disable_hash_table_cache_for_dict_encoded_col
+                      ? 0
+                      : expected_num_cached_hashtable,
+                  QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                   CacheItemType::PERFECT_HT));
+        clear_caches(ExecutorDeviceType::CPU);
+      };
 
   std::vector<std::string> queries_case1 = {
       q1a, q1b, q2a, q2b, q3a, q3b, q4a, q4b, q5a, q5b, q6a, q6b};
@@ -1954,16 +1963,21 @@ TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
   g_from_table_reordering = false;
   clear_caches(ExecutorDeviceType::CPU);
   for (const auto& test_case : {q1, q2, q3, q4, q5, q6}) {
-    perform_test(test_case, static_cast<size_t>(1));
+    perform_test(
+        test_case, static_cast<size_t>(1), disable_hash_table_cache_for_dict_encoded_col);
   }
   for (const auto& test_case : {case1, case2, case3, case4}) {
-    perform_test(test_case, static_cast<size_t>(2));
+    perform_test(
+        test_case, static_cast<size_t>(2), disable_hash_table_cache_for_dict_encoded_col);
   }
   for (const auto& test_case : {q7, q8, q9}) {
-    perform_test(test_case, static_cast<size_t>(2));
+    perform_test(
+        test_case, static_cast<size_t>(2), disable_hash_table_cache_for_dict_encoded_col);
   }
-  execute_random_query_test(queries_case1, 6);
-  execute_random_query_test(queries_case2, 2);
+  execute_random_query_test(
+      queries_case1, 6, disable_hash_table_cache_for_dict_encoded_col);
+  execute_random_query_test(
+      queries_case2, 2, disable_hash_table_cache_for_dict_encoded_col);
 
   // 2. enable from-table-reordering
   // if the table cardinality and a join qual are the same, we have the same cache key
@@ -1972,16 +1986,21 @@ TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
   g_from_table_reordering = true;
   clear_caches(ExecutorDeviceType::CPU);
   for (const auto& test_case : {q1, q2, q3, q4, q5, q6}) {
-    perform_test(test_case, static_cast<size_t>(1));
+    perform_test(
+        test_case, static_cast<size_t>(1), disable_hash_table_cache_for_dict_encoded_col);
   }
   for (const auto& test_case : {case1, case2, case3, case4}) {
-    perform_test(test_case, static_cast<size_t>(2));
+    perform_test(
+        test_case, static_cast<size_t>(2), disable_hash_table_cache_for_dict_encoded_col);
   }
   for (const auto& test_case : {q7, q8, q9}) {
-    perform_test(test_case, static_cast<size_t>(1));
+    perform_test(
+        test_case, static_cast<size_t>(1), disable_hash_table_cache_for_dict_encoded_col);
   }
-  execute_random_query_test(queries_case1, 6);
-  execute_random_query_test(queries_case2, 1);
+  execute_random_query_test(
+      queries_case1, 6, disable_hash_table_cache_for_dict_encoded_col);
+  execute_random_query_test(
+      queries_case2, 1, disable_hash_table_cache_for_dict_encoded_col);
 }
 
 TEST(DataRecycler, SimpleInsertion) {
@@ -2373,6 +2392,7 @@ TEST(DataRecycler, Lazy_Cache_Invalidation) {
     prepare_tables_for_string_joins();
 
     // built a hashtable on ts1
+    // ts1 and ts2 share the same dictionary, so we do not need a dictionary translation
     QR::get()->runSQL(gen_perfect_hash_query("ts1", "ts2"), dt);
     EXPECT_EQ(static_cast<size_t>(1),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
@@ -2384,15 +2404,18 @@ TEST(DataRecycler, Lazy_Cache_Invalidation) {
                                                CacheItemType::PERFECT_HT));
 
     // built a hashtable on ts4 (|ts4| < |ts3|)
+    // ts3 and ts4 share the same dictionary, so we do not need a dictionary translation
     QR::get()->runSQL(gen_perfect_hash_query("ts4", "ts3"), dt);
     // we only have a single clean cached item: ts4
     EXPECT_EQ(static_cast<size_t>(1),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
                                                CacheItemType::PERFECT_HT));
 
+    // ts2 and ts3 do not share the dictionary translation, so its join hash table
+    // should not be cached
     QR::get()->runSQL(gen_perfect_hash_query("ts3", "ts2"), dt);
-    // we have a two clean cached items: ts4 and ts2
-    EXPECT_EQ(static_cast<size_t>(2),
+    // we should have a one clean cached items: ts4
+    EXPECT_EQ(static_cast<size_t>(1),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
                                                CacheItemType::PERFECT_HT));
     // we still have a dirty cached item: ts1
@@ -2402,20 +2425,20 @@ TEST(DataRecycler, Lazy_Cache_Invalidation) {
 
     // drop table ts2
     run_ddl_statement(gen_drop_query("ts2"));
-    // ts3 is built based on join qual with ts2, so its cached item will be marked dirty
-    // b/c they share dictionaries
-    EXPECT_EQ(static_cast<size_t>(2),
+    EXPECT_EQ(static_cast<size_t>(1),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
                                                CacheItemType::PERFECT_HT));
-    EXPECT_EQ(static_cast<size_t>(3),
+    EXPECT_EQ(static_cast<size_t>(2),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::PERFECT_HT));
 
+    // tns1 and tns2 do not share the dictionary translation, so its join hash table
+    // should not be cached
     QR::get()->runSQL(gen_perfect_hash_query("tns1", "tns2"), dt);
-    EXPECT_EQ(static_cast<size_t>(2),
+    EXPECT_EQ(static_cast<size_t>(1),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
                                                CacheItemType::PERFECT_HT));
-    EXPECT_EQ(static_cast<size_t>(4),
+    EXPECT_EQ(static_cast<size_t>(2),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::PERFECT_HT));
 
@@ -2426,42 +2449,43 @@ TEST(DataRecycler, Lazy_Cache_Invalidation) {
     // join between dict encoded columns, ts1 and ts2: share dict1, ts3 and ts4: shared
     // dict2 hashtable based on qual ts1-ts2 is cached, dict1 is referenced
     QR::get()->runSQL(gen_perfect_hash_query("ts1", "ts2"), dt);
+    // we can cache the hash table on `ts1` because `ts1` and `ts2` share the dictionary
     EXPECT_EQ(static_cast<size_t>(1),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
                                                CacheItemType::PERFECT_HT));
-    // hashtable based on qual ts1-ts3 is cached, dict2 of ts3 is referenced
+    // hashtable based on qual ts1-ts3 is not cached since it needs a dictionary
+    // translation
     QR::get()->runSQL(gen_perfect_hash_query("ts1", "ts3"), dt);
-    EXPECT_EQ(static_cast<size_t>(2),
+    EXPECT_EQ(static_cast<size_t>(1),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
                                                CacheItemType::PERFECT_HT));
 
     // here, ts4 shares dictionary with ts3, so the hashtable for the qual ts1-ts4 is the
-    // same as ts1-ts3, e.g., use dict2 and |ts1| < |ts2| and |ts1| < |ts4|, but we
-    // separate them so hashtable for ts1-ts4 is classified as differently as that of
-    // ts1-ts3 in hashtable recycler
+    // same as ts1-ts3, e.g., use dict2 and |ts1| < |ts2| and |ts1| < |ts4|, but it is not
+    // not cached since it needs a dictionary translation
     QR::get()->runSQL(gen_perfect_hash_query("ts1", "ts4"), dt);
-    // hashtables for 1) ts1-ts2, 2) ts1-ts3 and 3) ts1-ts4
-    EXPECT_EQ(static_cast<size_t>(3),
+    EXPECT_EQ(static_cast<size_t>(1),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
                                                CacheItemType::PERFECT_HT));
 
-    // drop table ts3, so cached hashtable of ts1-ts3 is marked dirty
+    // drop table ts3, but nothing has changed since we do not cache a hash table related
+    // to `ts3`
     run_ddl_statement(gen_drop_query("ts3"));
     // remaining two cached items are in clean state
-    EXPECT_EQ(static_cast<size_t>(2),
+    EXPECT_EQ(static_cast<size_t>(1),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
                                                CacheItemType::PERFECT_HT));
-    EXPECT_EQ(static_cast<size_t>(1),
+    EXPECT_EQ(static_cast<size_t>(0),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
                                                CacheItemType::PERFECT_HT));
 
-    // drop table ts2, so cached hashtable of ts2-ts3 is also marked dirty
+    // drop table ts2, so the cached hash table between `ts1` and `ts2` is marked dirty
     run_ddl_statement(gen_drop_query("ts2"));
     // now all cached hashtables are marked dirty and no clean hashtable exists
-    EXPECT_EQ(static_cast<size_t>(1),
+    EXPECT_EQ(static_cast<size_t>(0),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
                                                CacheItemType::PERFECT_HT));
-    EXPECT_EQ(static_cast<size_t>(2),
+    EXPECT_EQ(static_cast<size_t>(1),
               QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
                                                CacheItemType::PERFECT_HT));
 
