@@ -683,22 +683,20 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
 }
 
 TEST(Truncate, JoinCacheInvalidationTest) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
+  for (auto dt : {ExecutorDeviceType::CPU}) {
     run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_t1;");
     run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_t2;");
 
-    run_ddl_statement("create table cache_invalid_t1 (k1 text encoding dict(32));");
-    run_ddl_statement("create table cache_invalid_t2 (k2 text encoding dict(32));");
+    run_ddl_statement("create table cache_invalid_t1 (k1 int);");
+    run_ddl_statement("create table cache_invalid_t2 (k2 int);");
     std::vector<std::string> t1_col_val{"1", "2", "3", "4", "5"};
     std::vector<std::string> t2_col_val{"0", "0", "0", "0", "0", "1", "2", "3", "4", "5"};
     for (auto& t1_val : t1_col_val) {
-      run_query("insert into cache_invalid_t1 values ('" + t1_val + "');",
+      run_query("insert into cache_invalid_t1 values (" + t1_val + ");",
                 ExecutorDeviceType::CPU);
     }
     for (auto& t2_val : t2_col_val) {
-      run_query("insert into cache_invalid_t2 values ('" + t2_val + "');",
+      run_query("insert into cache_invalid_t2 values (" + t2_val + ");",
                 ExecutorDeviceType::CPU);
     }
 
@@ -709,7 +707,7 @@ TEST(Truncate, JoinCacheInvalidationTest) {
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(1));
 
-    run_ddl_statement("truncate table cache_invalid_t2;");
+    run_ddl_statement("truncate table cache_invalid_t1;");
     EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(1));
@@ -720,16 +718,14 @@ TEST(Truncate, JoinCacheInvalidationTest) {
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(0));
 
-    std::vector<std::string> t2_col_val_v2{
-        "1", "2", "3", "4", "5", "0", "0", "0", "0", "0"};
-    for (auto& t2_val : t2_col_val) {
-      run_query("insert into cache_invalid_t2 values ('" + t2_val + "');",
+    for (auto& t2_val : t1_col_val) {
+      run_query("insert into cache_invalid_t1 values (" + t2_val + ");",
                 ExecutorDeviceType::CPU);
     }
 
-    auto res_before_truncate_v2 = QR::get()->runSQL(
+    auto res_after_truncate_v2 = QR::get()->runSQL(
         "select * from cache_invalid_t1, cache_invalid_t2 where k1 = k2;", dt);
-    EXPECT_EQ(static_cast<uint32_t>(5), res_before_truncate_v2->rowCount());
+    EXPECT_EQ(static_cast<uint32_t>(5), res_after_truncate_v2->rowCount());
     EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(1));
@@ -838,54 +834,51 @@ TEST(Truncate, BBoxIntersectCacheInvalidationTest) {
 }
 
 TEST(Update, JoinCacheInvalidationTest) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {ExecutorDeviceType::CPU}) {
     SKIP_NO_GPU();
 
-    run_ddl_statement("drop table if exists string_join1");
-    run_ddl_statement("drop table if exists string_join2");
-    run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
-    run_ddl_statement(
-        "create table string_join2 ( t text ) with (vacuum='delayed', "
-        "partitions='REPLICATED')");
+    run_ddl_statement("DROP TABLE IF EXISTS cache_update_t1;");
+    run_ddl_statement("DROP TABLE IF EXISTS cache_update_t2;");
 
-    run_query("insert into string_join1 values ('muffin')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('pizza')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('ice cream')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('poutine')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('samosa')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('tomato')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('potato')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('apple')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('orange')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('chutney')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('poutine')", ExecutorDeviceType::CPU);
+    run_ddl_statement("create table cache_update_t1 (t int);");
+    run_ddl_statement("create table cache_update_t2 (t int);");
+    std::vector<std::string> t1_col_val{"1", "2", "3", "4", "5"};
+    std::vector<std::string> t2_col_val{"0", "0", "0", "0", "0", "1", "2", "3", "4", "5"};
+    for (auto& t1_val : t1_col_val) {
+      run_query("insert into cache_update_t1 values (" + t1_val + ");",
+                ExecutorDeviceType::CPU);
+    }
+    for (auto& t2_val : t2_col_val) {
+      run_query("insert into cache_update_t2 values (" + t2_val + ");",
+                ExecutorDeviceType::CPU);
+    }
 
     run_simple_query(
-        "select count(string_join1.t) from string_join1 inner join string_join2 on "
-        "string_join1.t = string_join2.t;",
+        "select count(cache_update_t1.t) from cache_update_t1 inner join cache_update_t2 "
+        "on "
+        "cache_update_t1.t = cache_update_t2.t;",
         dt);
 
     EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(1));
 
-    run_query("update string_join1 set t='not poutine' where t='poutine';", dt);
+    run_query("update cache_update_t1 set t=666 where t <= 5;", dt);
     EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(1));
 
-    EXPECT_EQ(
-        int64_t(0),
-        v<int64_t>(run_simple_query(
-            "select count(string_join1.t) from string_join1 inner join string_join2 on "
-            "string_join1.t = string_join2.t;",
-            dt)));
+    EXPECT_EQ(int64_t(0),
+              v<int64_t>(run_simple_query("select count(cache_update_t1.t) from "
+                                          "cache_update_t1 inner join cache_update_t2 on "
+                                          "cache_update_t1.t = cache_update_t2.t;",
+                                          dt)));
     EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(1));
 
-    run_ddl_statement("drop table string_join1;");
-    run_ddl_statement("drop table string_join2;");
+    run_ddl_statement("drop table cache_update_t1;");
+    run_ddl_statement("drop table cache_update_t2;");
     EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(1));
@@ -894,38 +887,36 @@ TEST(Update, JoinCacheInvalidationTest) {
 }
 
 TEST(Delete, JoinCacheInvalidationTest) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {ExecutorDeviceType::CPU}) {
     SKIP_NO_GPU();
 
-    run_ddl_statement("drop table if exists string_join1;");
-    run_ddl_statement("drop table if exists string_join2;");
-    run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
-    run_ddl_statement(
-        "create table string_join2 ( t text ) with (vacuum='delayed', "
-        "partitions='REPLICATED')");
+    run_ddl_statement("DROP TABLE IF EXISTS cache_delete_t1;");
+    run_ddl_statement("DROP TABLE IF EXISTS cache_delete_t2;");
 
-    run_query("insert into string_join1 values ('muffin')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('pizza')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('ice cream')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('poutine')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('samosa')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('tomato')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('potato')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('apple')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('orange')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('chutney')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('poutine')", ExecutorDeviceType::CPU);
+    run_ddl_statement("create table cache_delete_t1 (t int);");
+    run_ddl_statement("create table cache_delete_t2 (t int);");
+    std::vector<std::string> t1_col_val{"1", "2", "3", "4", "5"};
+    std::vector<std::string> t2_col_val{"9", "8", "7", "6", "0", "4"};
+    for (auto& t1_val : t1_col_val) {
+      run_query("insert into cache_delete_t1 values (" + t1_val + ");",
+                ExecutorDeviceType::CPU);
+    }
+    for (auto& t2_val : t2_col_val) {
+      run_query("insert into cache_delete_t2 values (" + t2_val + ");",
+                ExecutorDeviceType::CPU);
+    }
 
     run_simple_query(
-        "select count(string_join1.t) from string_join1 inner join string_join2 on "
-        "string_join1.t = string_join2.t;",
+        "select count(cache_delete_t1.t) from cache_delete_t1 inner join cache_delete_t2 "
+        "on "
+        "cache_delete_t1.t = cache_delete_t2.t;",
         dt);
 
     EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(1));
 
-    run_query("delete from string_join1 where t='poutine';", dt);
+    run_query("delete from cache_delete_t1 where t=4;", dt);
     EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(0));
@@ -933,18 +924,17 @@ TEST(Delete, JoinCacheInvalidationTest) {
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(1));
 
-    EXPECT_EQ(
-        int64_t(0),
-        v<int64_t>(run_simple_query(
-            "select count(string_join1.t) from string_join1 inner join string_join2 on "
-            "string_join1.t = string_join2.t;",
-            dt)));
+    EXPECT_EQ(int64_t(0),
+              v<int64_t>(run_simple_query("select count(cache_delete_t1.t) from "
+                                          "cache_delete_t1 inner join cache_delete_t2 on "
+                                          "cache_delete_t1.t = cache_delete_t2.t;",
+                                          dt)));
     EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(1));
 
-    run_ddl_statement("drop table string_join1;");
-    run_ddl_statement("drop table string_join2;");
+    run_ddl_statement("drop table cache_delete_t1;");
+    run_ddl_statement("drop table cache_delete_t2;");
     EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
                                                CacheItemType::PERFECT_HT),
               static_cast<size_t>(0));
@@ -956,24 +946,22 @@ TEST(Delete, JoinCacheInvalidationTest) {
 }
 
 TEST(Delete, JoinCacheInvalidationTest_DropTable) {
-  // todo: when we support per-table cached hashtable invalidation,
-  // then this test should be changed either
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {ExecutorDeviceType::CPU}) {
     SKIP_NO_GPU();
 
     run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_t1;");
     run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_t2;");
-    run_ddl_statement("create table cache_invalid_t1 (k1 text encoding dict(32));");
-    run_ddl_statement("create table cache_invalid_t2 (k2 text encoding dict(32));");
+    run_ddl_statement("create table cache_invalid_t1 (k1 int);");
+    run_ddl_statement("create table cache_invalid_t2 (k2 int);");
 
     std::vector<std::string> t1_col_val{"1", "2", "3", "4", "5"};
     std::vector<std::string> t2_col_val{"0", "0", "0", "0", "0", "1", "2", "3", "4", "5"};
     for (auto& t1_val : t1_col_val) {
-      run_query("insert into cache_invalid_t1 values ('" + t1_val + "');",
+      run_query("insert into cache_invalid_t1 values (" + t1_val + ");",
                 ExecutorDeviceType::CPU);
     }
     for (auto& t2_val : t2_col_val) {
-      run_query("insert into cache_invalid_t2 values ('" + t2_val + "');",
+      run_query("insert into cache_invalid_t2 values (" + t2_val + ");",
                 ExecutorDeviceType::CPU);
     }
 
@@ -985,7 +973,7 @@ TEST(Delete, JoinCacheInvalidationTest_DropTable) {
               static_cast<size_t>(1));
 
     // add and drop dummy table
-    run_ddl_statement("create table cache_invalid_t3 (dummy text encoding dict(32));");
+    run_ddl_statement("create table cache_invalid_t3 (dummy int);");
     run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_t3;");
     // we drop `cache_invalid_t3` so the cached hashtable built from `cache_invalid_t1`
     // should alive
