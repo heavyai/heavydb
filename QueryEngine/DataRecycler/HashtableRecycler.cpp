@@ -364,7 +364,6 @@ bool HashtableRecycler::isSafeToCacheHashtable(
     return nullptr;
   };
   bool found_sort_node = false;
-  bool found_project_node = false;
   if (table_key.table_id < 0) {
     const auto origin_table_id = table_key.table_id * -1;
     const auto inner_node = getNodeByTableId({table_key.db_id, origin_table_id});
@@ -379,14 +378,9 @@ bool HashtableRecycler::isSafeToCacheHashtable(
     auto sort_node = dynamic_cast<const RelSort*>(inner_node);
     if (sort_node) {
       found_sort_node = true;
-    } else {
-      auto project_node = dynamic_cast<const RelProject*>(inner_node);
-      if (project_node) {
-        found_project_node = true;
-      }
     }
   }
-  return !(found_sort_node || (found_project_node && need_dict_translation));
+  return !found_sort_node && !need_dict_translation;
 }
 
 bool HashtableRecycler::isInvalidHashTableCacheKey(
