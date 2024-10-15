@@ -95,11 +95,6 @@ function install_required_ubuntu_packages() {
         libxinerama-dev \
         libxrandr-dev
   fi
-
-  if [ "$ARCH" != "aarch64" ] ; then
-    DEBIAN_FRONTEND=noninteractive sudo apt install -y \
-      libjemalloc-dev
-  fi
 }
 
 function download() {
@@ -243,22 +238,6 @@ function install_openldap2() {
   check_artifact_cleanup openldap-$LDAP_VERSION.tar.gz openldap-$LDAP_VERSION
 }
 
-# only for ARM
-# custom 64K (1<<16) page size
-
-JEMALLOC_VERSION=5.3.0
-
-function install_jemalloc() {
-  download https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2
-  extract jemalloc-${JEMALLOC_VERSION}.tar.bz2
-  pushd jemalloc-${JEMALLOC_VERSION}
-  ./configure --prefix=${PREFIX} --with-lg-page=16
-  makej build_lib
-  make install_lib
-  popd
-  check_artifact_cleanup jemalloc-${JEMALLOC_VERSION}.tar.bz2 jemalloc-${JEMALLOC_VERSION}
-}
-
 ARROW_VERSION=apache-arrow-9.0.0
 
 function install_arrow() {
@@ -268,7 +247,9 @@ function install_arrow() {
   elif [ "$TSAN" = "false" ]; then
     ARROW_TSAN="-DARROW_USE_TSAN=OFF"
     if [ "$ARCH" == "aarch64" ]; then
-      ARROW_JEMALLOC="-DARROW_JEMALLOC=ON"
+      # Arrow includes jemalloc
+      # force build with 64K system page size to support GH200
+      ARROW_JEMALLOC="-DARROW_JEMALLOC=ON -DARROW_JEMALLOC_LG_PAGE=16"
     else
       ARROW_JEMALLOC="-DARROW_JEMALLOC=BUNDLED"
     fi
