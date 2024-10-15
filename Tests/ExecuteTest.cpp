@@ -26072,6 +26072,42 @@ FROM (
   }
 }
 
+TEST_F(Select, InnerJoinOrderByNoneEncodedTextColumn) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  const std::vector<std::string> setup_stmts{
+      "drop table if exists t1;",
+      "create table t1 (t1_none_encoded text encoding none, t1_encoded text);",
+      "drop table if exists t2;",
+      "create table t2 (t2_none_encoded text encoding none);"};
+  for (const auto& stmt : setup_stmts) {
+    run_ddl_statement(stmt);
+    g_sqlite_comparator.query(stmt);
+  }
+
+  const std::vector<std::string> insert_stmts{
+      "insert into t1 values ('b', 'a');",
+      "insert into t2 values ('a'), ('a'), ('a'), ('a');"};
+  for (const auto& stmt : insert_stmts) {
+    run_multiple_agg(stmt, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(stmt);
+  }
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("select * from t1 inner join (select t2_none_encoded from t2) as c on "
+      "c.t2_none_encoded = t1.t1_encoded order by t1.t1_none_encoded;",
+      dt);
+  }
+
+  const std::vector<std::string> teardown_stmts{"drop table if exists t1;",
+                                                "drop table if exists t2;"};
+  for (const auto& stmt : teardown_stmts) {
+    run_ddl_statement(stmt);
+    g_sqlite_comparator.query(stmt);
+  }
+}
+
 // The subquery has an aggregate column that is not projected to the outer query,
 // and so is eliminated by an RA optimization. This tests internal logic that still
 // accesses the string "Chicago" from a StringDictionary with generation=-1.
