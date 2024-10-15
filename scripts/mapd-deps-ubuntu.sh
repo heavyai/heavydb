@@ -207,12 +207,7 @@ if [ "$ARCH" == "x86_64" ] ; then
   install_onedal
 fi
 
-# jemalloc (ARM only)
-if [ "$ARCH" == "aarch64" ] ; then
-  install_jemalloc
-fi
-
-# Apache Arrow (see common-functions.sh)
+# Apache Arrow
 install_arrow
 
 # Go
