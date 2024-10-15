@@ -49,4 +49,9 @@ inline const std::string kDefaultRegexServerName = "default_local_regex_parsed";
 inline const std::string kDefaultRasterServerName = "default_local_raster";
 inline const std::string kDeploymentDirectoryName = "deployment";
 inline const std::string kDeploymentIdFileName = "id.txt";
+#if defined(__aarch64__)
+inline const std::string kSystemArchitecture = "aarch64";
+#else
+inline const std::string kSystemArchitecture = "x86_64";
+#endif
 }  // namespace shared
