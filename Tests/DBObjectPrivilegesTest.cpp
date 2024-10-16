@@ -31,6 +31,8 @@
 #include "Shared/SysDefinitions.h"
 #include "Shared/scope.h"
 #include "TestHelpers.h"
+#include "ThriftHandler/QueryAuth.h"
+#include "ThriftHandler/QueryParsing.h"
 #include "ThriftHandler/QueryState.h"
 #include "gen-cpp/CalciteServer.h"
 
@@ -1384,16 +1386,18 @@ TEST_F(ViewObject, CalciteViewResolution) {
   }
 
   auto calciteQueryParsingOption =
-      g_calcite->getCalciteQueryParsingOption(true, false, true, false);
+      g_calcite->getCalciteQueryParsingOption(true, false, false);
   auto calciteOptimizationOption =
       g_calcite->getCalciteOptimizationOption(false, false, {}, false);
 
   auto query_state1 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_table");
-  TPlanResult result = ::g_calcite->process(query_state1->createQueryStateProxy(),
-                                            query_state1->getQueryStr(),
-                                            calciteQueryParsingOption,
-                                            calciteOptimizationOption);
+  TPlanResult result = query_parsing::process_and_check_access_privileges(
+      ::g_calcite.get(),
+      query_state1->createQueryStateProxy(),
+      query_state1->getQueryStr(),
+      calciteQueryParsingOption,
+      calciteOptimizationOption);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -1407,10 +1411,12 @@ TEST_F(ViewObject, CalciteViewResolution) {
 
   auto query_state2 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_view");
-  result = ::g_calcite->process(query_state2->createQueryStateProxy(),
-                                query_state2->getQueryStr(),
-                                calciteQueryParsingOption,
-                                calciteOptimizationOption);
+  result = query_parsing::process_and_check_access_privileges(
+      ::g_calcite.get(),
+      query_state2->createQueryStateProxy(),
+      query_state2->getQueryStr(),
+      calciteQueryParsingOption,
+      calciteOptimizationOption);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -1424,10 +1430,12 @@ TEST_F(ViewObject, CalciteViewResolution) {
 
   auto query_state3 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_view_outer");
-  result = ::g_calcite->process(query_state3->createQueryStateProxy(),
-                                query_state3->getQueryStr(),
-                                calciteQueryParsingOption,
-                                calciteOptimizationOption);
+  result = query_parsing::process_and_check_access_privileges(
+      ::g_calcite.get(),
+      query_state3->createQueryStateProxy(),
+      query_state3->getQueryStr(),
+      calciteQueryParsingOption,
+      calciteOptimizationOption);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -4883,7 +4891,7 @@ class ColumnCapturerPermissionTest : public DBHandlerTestFixture {
 
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
 
-  std::vector<RelAlgExecutor::CapturedColumns> getCapturedColumnsFromCalcite(
+  std::vector<query_auth::CapturedColumns> getCapturedColumnsFromCalcite(
       const std::string& query) const {
     auto [dbhandler, session_id] = getDbHandlerAndSessionId();
     auto session = dbhandler->get_session_copy(session_id);
@@ -4898,16 +4906,20 @@ class ColumnCapturerPermissionTest : public DBHandlerTestFixture {
     auto calcite_mgr = getCatalog().getCalciteMgr();
 
     const auto calciteQueryParsingOption =
-        calcite_mgr->getCalciteQueryParsingOption(true, false, false, false);
+        calcite_mgr->getCalciteQueryParsingOption(true, false, false);
     const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
         false,
         g_enable_watchdog,
         {},
         Catalog_Namespace::SysCatalog::instance().isAggregator());
-    auto result = calcite_mgr->process(
-        query_state_proxy, query, calciteQueryParsingOption, calciteOptimizationOption);
+    auto result =
+        query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
+                                                           query_state_proxy,
+                                                           query,
+                                                           calciteQueryParsingOption,
+                                                           calciteOptimizationOption);
 
-    return RelAlgExecutor::captureColumns(result.plan_result);
+    return query_auth::capture_columns(result.plan_result);
   }
 
   struct TestCapturedColumns {
@@ -4921,7 +4933,7 @@ class ColumnCapturerPermissionTest : public DBHandlerTestFixture {
     std::vector<std::string> column_names;
   };
 
-  void compareColumns(const std::vector<RelAlgExecutor::CapturedColumns>& columns,
+  void compareColumns(const std::vector<query_auth::CapturedColumns>& columns,
                       const std::vector<TestCapturedColumns>& expected_columns) const {
     std::set<std::vector<std::string>> columns_set;
     for (const auto& table_col : columns) {
@@ -5120,6 +5132,7 @@ class GrantRevokeSelectColumnTest : public DBHandlerTestFixture {
     DBHandlerTestFixture::SetUp();
     loginAdmin();
 
+    sql("REVOKE ALL ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
     sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
 
     sql("DROP TABLE IF EXISTS test_table_quoted_id;");
@@ -5140,6 +5153,31 @@ class GrantRevokeSelectColumnTest : public DBHandlerTestFixture {
     sql("CREATE VIEW test_view AS ( SELECT * FROM test_table);");
 
     loginAdmin();
+
+    sql("DROP VIEW IF EXISTS cross_db_test_view;");
+    sql("CREATE VIEW cross_db_test_view AS ( SELECT a.id as c1, b.id as c2 FROM "
+        "test_table a, db1.test_table b);");
+
+    // Create table for testing models
+    sql("DROP TABLE IF EXISTS test_table_1;");
+    sql("DROP TABLE IF EXISTS test_table_2;");
+    sql("DROP MODEL IF EXISTS lin_reg_test_model_2;");
+    sql("CREATE TABLE test_table_1 ( predicted float, predictor int );");
+    sql("INSERT INTO test_table_1 VALUES (2.0, 1), (3.1, 2), (2.9, 3), (4.1, 4), (4.9, "
+        "5), "
+        "(6.1, 6), (7.1, 7), (8.0, 8), (8.9, 9), (10.0, 10);");
+    sql("CREATE TABLE test_table_2 ( predicted float, numeric_predictor int, "
+        "cat_predictor text );");
+    sql("INSERT INTO test_table_2 VALUES (2.0, 1, 'one'), (3.1, 2, 'one'), (2.9, 3, "
+        "'one'), (4.1, 4, 'one'), (4.9, 5, 'one'), "
+        "(6.1, 6, 'one'), (7.1, 7, 'one'), (8.0, 8, 'one'), (8.9, 9, 'one'), (10.0, 10, "
+        "'one'), "
+        "(12.0, 1, 'two'), (13.1, 2, 'two'), (12.9, 3, 'two'), (14.1, 4, 'two'), (14.9, "
+        "5, 'two'), "
+        "(16.1, 6, 'two'), (17.1, 7, 'two'), (18.0, 8, 'two'), (18.9, 9, 'two'), (20.0, "
+        "10, 'two'), "
+        "(22.0, 1, 'three'), (23.1, 2, 'three'), (22.9, 3, 'three'), (24.1, 4, 'three'), "
+        "(24.9, 5, 'three');");
   }
 
   void TearDown() override {
@@ -5151,23 +5189,48 @@ class GrantRevokeSelectColumnTest : public DBHandlerTestFixture {
     sql("DROP DATABASE IF EXISTS db1;");
     sql("DROP TABLE IF EXISTS test_table_quoted_id;");
     sql("REVOKE ALL ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
+    sql("DROP VIEW IF EXISTS cross_db_test_view;");
+    sql("DROP VIEW IF EXISTS test_view_2;");
+    sql("DROP TABLE IF EXISTS test_table_1;");
+    sql("DROP TABLE IF EXISTS test_table_2;");
+    sql("DROP MODEL IF EXISTS lin_reg_test_model_2;");
     DBHandlerTestFixture::TearDown();
     g_enable_column_level_security = saved_column_level_security_enabled_;
   }
 
-  using UserLoginInfo = std::pair<std::string, std::string>;
-
-  const UserLoginInfo test_user_ = {shared::kDefaultDbName, "test_user"};
-
-  void loginUser(UserLoginInfo info) {
-    auto user = info.second;
-    CHECK(user_passwords.count(user));
-    login(user, user_passwords.at(user), info.first);
+  TTableDetails getTableDetailsForTestUser(const std::string& table_name,
+                                           const std::string& database_name) {
+    loginTestUser(database_name);
+    auto [handler, session] = getDbHandlerAndSessionId();
+    TTableDetails table_details;
+    handler->get_table_details_for_database(
+        table_details, session, table_name, database_name);
+    return table_details;
   }
 
-  void loginTestUser() { loginUser(test_user_); }
+  void sqlValidate(const std::string& sql, const std::string& database_name) {
+    loginTestUser(database_name);
+    auto [handler, session] = getDbHandlerAndSessionId();
+    TRowDescriptor row_desc;
+    handler->sql_validate(row_desc, session, sql);
+  }
 
-  const std::map<std::string, std::string> user_passwords = {{"test_user", "test_pass"}};
+  void loginUser(const std::string& username, const std::string& database_name) {
+    CHECK(user_passwords.count(username));
+    login(username, user_passwords.at(username), database_name);
+  }
+
+  void loginTestUser(const std::string& database_name = shared::kDefaultDbName) {
+    loginUser("test_user", database_name);
+  }
+
+  void loginAdminUser(const std::string& database_name = shared::kDefaultDbName) {
+    loginUser(shared::kRootUsername, database_name);
+  }
+
+  const std::map<std::string, std::string> user_passwords = {
+      {"test_user", "test_pass"},
+      {shared::kRootUsername, shared::kDefaultRootPasswd}};
 
   bool saved_column_level_security_enabled_;
 };
@@ -5275,6 +5338,168 @@ TEST_F(GrantRevokeSelectColumnTest, QueryWithView) {
       "SELECT t.val, (SELECT max(s.val) FROM test_view s) FROM test_table t;",
       "Violation of access privileges: user test_user has no proper privileges for "
       "object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, QueryWithViewAndNoTableProjection) {
+  sql("GRANT SELECT ON VIEW test_view TO test_user;");
+
+  // Verify views can still be accessed
+  loginTestUser();
+  sqlAndCompareResult("SELECT s.val FROM test_view s;", {});
+
+  // Verify granting a column level privilege has no effect
+  loginAdmin();
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+  loginTestUser();
+  sqlAndCompareResult("SELECT s.val FROM test_view s;", {});
+}
+
+TEST_F(GrantRevokeSelectColumnTest, QueryWithCrossDbView) {
+  sql("GRANT SELECT ON VIEW cross_db_test_view TO test_user;");
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "db1");
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  queryAndAssertException(
+      "SELECT t.val, (SELECT max(s.c1) FROM cross_db_test_view s) FROM test_table t;",
+      "Violation of access privileges: user test_user has no proper privileges for "
+      "object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, QueryWithCrossDbViewAndNoTableProjection) {
+  sql("GRANT SELECT ON VIEW cross_db_test_view TO test_user;");
+
+  // Verify views can still be accessed
+  loginTestUser();
+  sqlAndCompareResult("SELECT s.c1 FROM cross_db_test_view s;", {});
+
+  // Verify granting a column level privilege has no effect
+  loginAdmin();
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "db1");
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sqlAndCompareResult("SELECT s.c1 FROM cross_db_test_view s;", {});
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GetTableDetails) {
+  sql("REVOKE CREATE TABLE ON DATABASE db1 FROM test_user;");
+
+  // Verify user can not see table
+  executeLambdaAndAssertException(
+      [&] { getTableDetailsForTestUser("test_table", "db1"); },
+      "Unable to access table test_table. The table may not exist, or the logged in user "
+      "may not have permission to access the table.");
+
+  // Allow test user access to one column in table in db1
+  loginAdminUser("db1");
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  // Verify user can now see table
+  getTableDetailsForTestUser("test_table", "db1");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, ShowCreateTable) {
+  sql("REVOKE CREATE TABLE ON DATABASE db1 FROM test_user;");
+
+  // Verify user can not see table
+  loginTestUser("db1");
+  queryAndAssertException("SHOW CREATE TABLE test_table;",
+                          "Table/View test_table does not exist.");
+
+  // Allow test user access to one column in table in db1
+  loginAdminUser("db1");
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  // Verify table can be seen now
+  loginTestUser("db1");
+  sqlAndCompareResult("SHOW CREATE TABLE test_table;",
+                      {{"CREATE TABLE test_table (\n  id INTEGER,\n  val INTEGER,\n  str "
+                        "TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(GrantRevokeSelectColumnTest, GetTableDetailsView) {
+  sql("REVOKE CREATE TABLE ON DATABASE db1 FROM test_user;");
+
+  // Verify user can not see view
+  executeLambdaAndAssertException(
+      [&] { auto table_details = getTableDetailsForTestUser("test_view", "db1"); },
+      "View 'test_view' query has failed with an error: 'Unable to access view "
+      "test_view. The view may not exist, or the logged in user may not have permission "
+      "to access the view.'.\nThe view must be dropped and re-created to resolve the "
+      "error. \nQuery:\nSELECT * FROM test_table;");
+
+  // TODO: Should the above error message be changed? It leaks the SQL statement and the
+  // fact that the object being queried is a view.
+
+  // Allow test user access to view
+  loginAdminUser("db1");
+  sql("GRANT SELECT ON VIEW test_view TO test_user;");
+
+  // Verify user can now see view, but not sql related to view
+  {
+    auto table_details = getTableDetailsForTestUser("test_view", "db1");
+    ASSERT_EQ(table_details.view_sql, "[Not enough privileges to see the view SQL]");
+  }
+
+  // Allow test user access to one column in table in db1, which will be insufficient
+  loginAdminUser("db1");
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  // Verify user can see view, but not sql related to view
+  {
+    auto table_details = getTableDetailsForTestUser("test_view", "db1");
+    ASSERT_EQ(table_details.view_sql, "[Not enough privileges to see the view SQL]");
+  }
+
+  // Allow test user access to all remaining columns
+  loginAdminUser("db1");
+  sql("GRANT SELECT (id,str) ON TABLE test_table TO test_user;");
+
+  // Verify user can see view and related sql
+  {
+    auto table_details = getTableDetailsForTestUser("test_view", "db1");
+    ASSERT_EQ(table_details.view_sql, "SELECT * FROM test_table;");
+  }
+}
+
+TEST_F(GrantRevokeSelectColumnTest, ShowCreateTableView) {
+  sql("REVOKE CREATE TABLE ON DATABASE db1 FROM test_user;");
+
+  // Verify user can not see view
+  loginTestUser("db1");
+  queryAndAssertException("SHOW CREATE TABLE test_view;",
+                          "Table/View test_view does not exist.");
+
+  // Allow test user access to view
+  loginAdminUser("db1");
+  sql("GRANT SELECT ON VIEW test_view TO test_user;");
+
+  // Verify user can not see view
+  loginTestUser("db1");
+  queryAndAssertException("SHOW CREATE TABLE test_view;",
+                          "Not enough privileges to show the view SQL");
+
+  // Allow test user access to one column in table in db1
+  loginAdminUser("db1");
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  // Verify user can not see view
+  loginTestUser("db1");
+  queryAndAssertException("SHOW CREATE TABLE test_view;",
+                          "Not enough privileges to show the view SQL");
+
+  // Allow test user access to all remaining columns
+  loginAdminUser("db1");
+  sql("GRANT SELECT (id,str) ON TABLE test_table TO test_user;");
+
+  // Verify view can be seen now
+  loginTestUser("db1");
+  sqlAndCompareResult("SHOW CREATE TABLE test_view;",
+                      {{"CREATE VIEW test_view AS SELECT * FROM test_table;"}});
 }
 
 TEST_F(GrantRevokeSelectColumnTest, CrossDbGrantRevoke) {
@@ -5642,6 +5867,31 @@ TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithCTAS) {
       "proper privileges for object test_table");
 }
 
+TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithITAS) {
+  loginAdmin();
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("GRANT SELECT (val,id) ON TABLE test_table TO test_user;");
+  sql("DROP TABLE IF EXISTS created_test_table;");
+
+  loginTestUser();
+  sql("CREATE TABLE created_test_table (id int, val int );");
+  sql("INSERT INTO created_test_table SELECT id, val FROM test_table;");
+  sql("DROP TABLE IF EXISTS created_test_table;");
+
+  // Revoke select on one of two required columns
+  loginAdmin();
+  sql("REVOKE SELECT (val) ON TABLE test_table FROM test_user;");
+
+  loginTestUser();
+  sql("CREATE TABLE created_test_table (id int, val int );");
+  queryAndAssertException(
+      "INSERT INTO created_test_table SELECT id, val FROM test_table;",
+      "Violation of access privileges: user test_user has no "
+      "proper privileges for object test_table");
+
+  loginTestUser();
+}
+
 TEST_F(GrantRevokeSelectColumnTest, GrantRevokeWithCopyTo) {
   loginAdmin();
   sql("GRANT SELECT (val,id) ON TABLE test_table TO test_user;");
@@ -5676,6 +5926,170 @@ TEST_F(GrantRevokeSelectColumnTest, TableMetadataAcccessibleWithSelectColumnPriv
   queryAndAssertException("SELECT COUNT(1) FROM test_table;",
                           "Violation of access privileges: user test_user has no "
                           "proper privileges for object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, CreateViewStatement) {
+  sql("GRANT CREATE VIEW ON DATABASE db1 TO test_user;");
+
+  loginTestUser("db1");
+  queryAndAssertException("CREATE VIEW test_view_2 AS SELECT * FROM test_table;",
+                          "Violation of access privileges: user test_user has no proper "
+                          "privileges for object test_table");
+
+  loginAdminUser("db1");
+  sql("GRANT SELECT (id) ON TABLE test_table TO test_user;");
+
+  loginTestUser("db1");
+  queryAndAssertException("CREATE VIEW test_view_2 AS SELECT * FROM test_table;",
+                          "Violation of access privileges: user test_user has no proper "
+                          "privileges for object test_table");
+
+  loginAdminUser("db1");
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  loginTestUser("db1");
+  queryAndAssertException("CREATE VIEW test_view_2 AS SELECT * FROM test_table;",
+                          "Violation of access privileges: user test_user has no proper "
+                          "privileges for object test_table");
+
+  loginAdminUser("db1");
+  sql("GRANT SELECT (str) ON TABLE test_table TO test_user;");
+
+  loginTestUser("db1");
+  sql("CREATE VIEW test_view_2 AS SELECT * FROM test_table;");
+  sqlAndCompareResult("SELECT * FROM test_view_2", {});
+}
+
+TEST_F(GrantRevokeSelectColumnTest, SqlValidate) {
+  executeLambdaAndAssertException(
+      [&]() { sqlValidate("SELECT id, val FROM test_table;", "db1"); },
+      "Violation of access privileges: user test_user has no proper privileges for "
+      "object test_table");
+
+  loginAdminUser("db1");
+  sql("GRANT SELECT (id) ON TABLE test_table TO test_user;");
+
+  executeLambdaAndAssertException(
+      [&]() { sqlValidate("SELECT id, val FROM test_table;", "db1"); },
+      "Violation of access privileges: user test_user has no proper privileges for "
+      "object test_table");
+
+  loginAdminUser("db1");
+  sql("GRANT SELECT (val) ON TABLE test_table TO test_user;");
+
+  loginTestUser("db1");
+  sqlValidate("SELECT id, val FROM test_table;", "db1");
+
+  loginAdminUser("db1");
+  sql("REVOKE SELECT (id,val) ON TABLE test_table FROM test_user;");
+
+  executeLambdaAndAssertException(
+      [&]() { sqlValidate("SELECT id, val FROM test_table;", "db1"); },
+      "Violation of access privileges: user test_user has no proper privileges for "
+      "object test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, Explain) {
+  loginTestUser();
+  queryAndAssertException("EXPLAIN SELECT id,val FROM test_table",
+                          "Violation of access privileges: user test_user has no proper "
+                          "privileges for object test_table");
+
+  loginAdmin();
+  sql("GRANT SELECT (id,val) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sql("EXPLAIN SELECT id,val FROM test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, ExplainOptimized) {
+  loginTestUser();
+  queryAndAssertException("EXPLAIN OPTIMIZED SELECT id,val FROM test_table",
+                          "Violation of access privileges: user test_user has no proper "
+                          "privileges for object test_table");
+
+  loginAdmin();
+  sql("GRANT SELECT (id,val) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sql("EXPLAIN OPTIMIZED SELECT id,val FROM test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, ExplainCalcite) {
+  // Verify explain Calcite does not require privileges and this behaviour is unchanged
+  loginTestUser();
+  sql("EXPLAIN CALCITE SELECT id,val FROM test_table");
+  sql("EXPLAIN CALCITE DETAILED SELECT id,val FROM test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, ExplainPlan) {
+  loginTestUser();
+  queryAndAssertException("EXPLAIN PLAN SELECT id,val FROM test_table",
+                          "Violation of access privileges: user test_user has no proper "
+                          "privileges for object test_table");
+
+  loginAdmin();
+  sql("GRANT SELECT (id,val) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sql("EXPLAIN PLAN SELECT id,val FROM test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, ExplainPlanDetailed) {
+  loginTestUser();
+  queryAndAssertException("EXPLAIN PLAN DETAILED SELECT id,val FROM test_table",
+                          "Violation of access privileges: user test_user has no proper "
+                          "privileges for object test_table");
+
+  loginAdmin();
+  sql("GRANT SELECT (id,val) ON TABLE test_table TO test_user;");
+
+  loginTestUser();
+  sql("EXPLAIN PLAN DETAILED SELECT id,val FROM test_table");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, CreateModel) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Models are not supported in distributed mode";
+  }
+  loginTestUser();
+  queryAndAssertException(
+      "CREATE MODEL lin_reg_test_model_2 OF TYPE LINEAR_REG AS SELECT "
+      "predicted, cat_predictor, numeric_predictor FROM test_table_2 WITH "
+      "(EVAL_FRACTION=0.2);",
+      "Violation of access privileges: user test_user has no proper privileges for "
+      "object test_table_2");
+
+  loginAdmin();
+  sql("GRANT SELECT (predicted,cat_predictor, numeric_predictor) ON TABLE test_table_2 "
+      "TO test_user;");
+
+  loginTestUser();
+  sql("CREATE MODEL lin_reg_test_model_2 OF TYPE LINEAR_REG AS SELECT "
+      "predicted, cat_predictor, numeric_predictor FROM test_table_2 WITH "
+      "(EVAL_FRACTION=0.2);");
+}
+
+TEST_F(GrantRevokeSelectColumnTest, EvaluateModel) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Models are not supported in distributed mode";
+  }
+  loginAdmin();
+  sql("CREATE MODEL lin_reg_test_model_2 OF TYPE LINEAR_REG AS SELECT "
+      "predicted, cat_predictor, numeric_predictor FROM test_table_2 WITH "
+      "(EVAL_FRACTION=0.2);");
+  loginTestUser();
+  queryAndAssertException(
+      "EVALUATE MODEL lin_reg_test_model_2;",
+      "Could not evaluate model lin_reg_test_model_2. Violation of access privileges: "
+      "user test_user has no proper privileges for object test_table_2");
+
+  loginAdmin();
+  sql("GRANT SELECT (predicted,cat_predictor, numeric_predictor) ON TABLE test_table_2 "
+      "TO test_user;");
+
+  loginTestUser();
+  sql("EVALUATE MODEL lin_reg_test_model_2;");
 }
 
 class DatabaseCaseSensitiveTest : public DBHandlerTestFixture {

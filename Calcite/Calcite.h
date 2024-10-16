@@ -78,8 +78,6 @@ class Calcite {
                       const TQueryParsingOption& query_parsing_option,
                       const TOptimizationOption& optimization_option,
                       const std::string& calcite_session_id = "");
-  void checkAccessedObjectsPrivileges(query_state::QueryStateProxy query_state_prox,
-                                      TPlanResult plan) const;
   std::vector<TCompletionHint> getCompletionHints(
       const Catalog_Namespace::SessionInfo& session_info,
       const std::vector<std::string>& visible_tables,
@@ -100,7 +98,6 @@ class Calcite {
   }
   TQueryParsingOption getCalciteQueryParsingOption(bool legacy_syntax,
                                                    bool is_explain,
-                                                   bool check_privileges,
                                                    bool is_explain_detail);
   TOptimizationOption getCalciteOptimizationOption(
       bool is_view_optimize,
