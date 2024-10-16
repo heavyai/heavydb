@@ -251,7 +251,6 @@ public class TestServer {
       TQueryParsingOption queryParsingOption = new TQueryParsingOption();
       queryParsingOption.legacy_syntax = false;
       queryParsingOption.is_explain = false;
-      queryParsingOption.check_privileges = false;
       queryParsingOption.is_explain_detail = false;
 
       TOptimizationOption optimizationOption = new TOptimizationOption();

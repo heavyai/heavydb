@@ -33,6 +33,7 @@
 #include "Parser/ParserNode.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
+#include "ThriftHandler/QueryAuth.h"
 
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "QueryEngine/Execute.h"  // Executor::getArenaBlockSize()
@@ -1883,7 +1884,7 @@ ExecutionResult ShowCreateTableCommand::execute(bool read_only_mode) {
     auto query_state_proxy = query_state->createQueryStateProxy();
     auto calcite_mgr = catalog.getCalciteMgr();
     const auto calciteQueryParsingOption =
-        calcite_mgr->getCalciteQueryParsingOption(true, false, false, false);
+        calcite_mgr->getCalciteQueryParsingOption(true, false, false);
     const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
         false,
         g_enable_watchdog,
@@ -1894,7 +1895,7 @@ ExecutionResult ShowCreateTableCommand::execute(bool read_only_mode) {
                                        calciteQueryParsingOption,
                                        calciteOptimizationOption);
     try {
-      calcite_mgr->checkAccessedObjectsPrivileges(query_state_proxy, result);
+      query_auth::check_access_privileges(query_state_proxy, result);
     } catch (const std::runtime_error&) {
       throw std::runtime_error("Not enough privileges to show the view SQL");
     }

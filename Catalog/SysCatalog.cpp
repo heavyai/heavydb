@@ -2882,16 +2882,15 @@ std::vector<ObjectRoleDescriptor*> SysCatalog::getMetadataForSubObjects(
 
   std::string lower_bound_key = std::to_string(db_id) + ":" + std::to_string(db_type) +
                                 ":" + std::to_string(object_id) + ":";
-  std::string upper_bound_key = std::to_string(db_id) + ":" + std::to_string(db_type) +
-                                ":" + std::to_string(object_id + 1);
   auto lower_bound = objectDescriptorMap_.lower_bound(lower_bound_key);
-  auto upper_bound = objectDescriptorMap_.upper_bound(upper_bound_key);
 
-  for (auto it = lower_bound; it != upper_bound; ++it) {
+  for (auto it = lower_bound; it != objectDescriptorMap_.end(); ++it) {
     auto& desc = it->second;
     if (desc->dbId == db_id && desc->objectType == db_type &&
         desc->objectId == object_id) {
       objects_list.emplace_back(desc.get());
+    } else {
+      break;
     }
   }
   return objects_list;  // return pointers to objects
