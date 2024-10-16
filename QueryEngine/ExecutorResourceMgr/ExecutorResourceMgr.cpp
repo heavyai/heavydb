@@ -209,10 +209,10 @@ void ExecutorResourceMgr::mark_request_error(const RequestId request_id,
 }
 
 RequestId ExecutorResourceMgr::choose_next_request() {
+  std::unique_lock<std::shared_mutex> queue_stats_lock(queue_stats_mutex_);
   const auto request_ids = get_requests_for_stage(ExecutionRequestStage::QUEUED);
   LOG(EXECUTOR) << "ExecutorResourceMgr Queue Itr: " << process_queue_counter_ - 1
                 << " Queued requests: " << request_ids.size();
-  std::unique_lock<std::shared_mutex> queue_stats_lock(queue_stats_mutex_);
   for (const auto request_id : request_ids) {
     auto& request_stats = requests_stats_[request_id];
     try {
@@ -332,11 +332,12 @@ void ExecutorResourceMgr::pause_process_queue() {
     pause_process_queue_ = true;
   }
   processor_queue_condition_.notify_one();
-
-  std::unique_lock<std::mutex> pause_queue_lock(pause_processor_queue_mutex_);
-  pause_processor_queue_condition_.wait(pause_queue_lock,
-                                        [this] { return process_queue_is_paused_; });
-
+  {
+    std::unique_lock<std::mutex> pause_queue_lock(pause_processor_queue_mutex_);
+    pause_processor_queue_condition_.wait(pause_queue_lock,
+                                          [this] { return process_queue_is_paused_; });
+  }
+  std::shared_lock<std::shared_mutex> queue_stats_read_lock(queue_stats_mutex_);
   CHECK_EQ(executor_stats_.requests_executing, size_t(0));
 }
 
@@ -349,7 +350,10 @@ void ExecutorResourceMgr::resume_process_queue() {
              "no action.";
       return;
     }
-    CHECK_EQ(executor_stats_.requests_executing, size_t(0));
+    {
+      std::shared_lock<std::shared_mutex> queue_stats_read_lock(queue_stats_mutex_);
+      CHECK_EQ(executor_stats_.requests_executing, size_t(0));
+    }
     process_queue_is_paused_ = false;
     pause_process_queue_ = false;
     should_process_queue_ = true;
@@ -410,12 +414,15 @@ void ExecutorResourceMgr::process_queue_loop() {
 
     if (pause_process_queue_) {
       should_process_queue_ = false;
-      if (executor_stats_.requests_executing == 0) {
-        {
-          std::unique_lock<std::mutex> pause_queue_lock(pause_processor_queue_mutex_);
-          process_queue_is_paused_ = true;
+      {
+        std::shared_lock<std::shared_mutex> queue_stats_read_lock(queue_stats_mutex_);
+        if (executor_stats_.requests_executing == 0) {
+          {
+            std::unique_lock<std::mutex> pause_queue_lock(pause_processor_queue_mutex_);
+            process_queue_is_paused_ = true;
+          }
+          pause_processor_queue_condition_.notify_one();
         }
-        pause_processor_queue_condition_.notify_one();
       }
       continue;
     }
@@ -473,8 +480,8 @@ RequestId ExecutorResourceMgr::enqueue_request(const RequestInfo& request_info,
                                                const ResourceGrant& max_resource_grant) {
   const std::chrono::steady_clock::time_point enqueue_time =
       std::chrono::steady_clock::now();
-  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   const RequestId request_id = requests_count_.fetch_add(1, std::memory_order_relaxed);
+  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   executor_stats_.requests++;
   if (timeout_in_ms > 0) {
     executor_stats_.requests_with_timeouts++;
@@ -518,8 +525,8 @@ void ExecutorResourceMgr::mark_request_dequed(const RequestId request_id) {
   // relatively inexpensive though
   const size_t current_request_count = requests_count_.load(std::memory_order_relaxed);
   CHECK_LT(request_id, current_request_count);
+  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   {
-    std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
     RequestStats& request_stats = requests_stats_[request_id];
     request_stats.deque_time = deque_time;
     request_stats.finished_queueing = true;
@@ -531,7 +538,6 @@ void ExecutorResourceMgr::mark_request_dequed(const RequestId request_id) {
   remove_request_from_stage(request_id, ExecutionRequestStage::QUEUED);
   add_request_to_stage(request_id, ExecutionRequestStage::EXECUTING);
 
-  std::shared_lock<std::shared_mutex> queue_stats_read_lock(queue_stats_mutex_);
   const RequestStats& request_stats = requests_stats_[request_id];
   executor_stats_.queue_length--;
   executor_stats_.requests_executing++;
@@ -564,15 +570,14 @@ void ExecutorResourceMgr::mark_request_dequed(const RequestId request_id) {
 void ExecutorResourceMgr::mark_request_timed_out(const RequestId request_id) {
   const size_t current_request_count = requests_count_.load(std::memory_order_relaxed);
   CHECK_LT(request_id, current_request_count);
+  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   {
-    std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
     RequestStats& request_stats = requests_stats_[request_id];
     CHECK(!request_stats.finished_queueing);
     CHECK_GT(request_stats.timeout_in_ms, size_t(0));
     request_stats.timed_out = true;
   }
   remove_request_from_stage(request_id, ExecutionRequestStage::QUEUED);
-  std::shared_lock<std::shared_mutex> queue_stats_read_lock(queue_stats_mutex_);
   const RequestStats& request_stats = requests_stats_[request_id];
   CHECK_GT(executor_stats_.queue_length, size_t(0));
   executor_stats_.queue_length--;
