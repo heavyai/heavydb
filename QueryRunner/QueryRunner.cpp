@@ -993,8 +993,14 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
       });
   CHECK(dispatch_queue_);
   dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
-  auto result_future = query_launch_task->get_future().share();
-  result_future.get();
+  try {
+    auto result_future = query_launch_task->get_future().share();
+    result_future.get();
+  } catch (...) {
+    // capture any exception thrown while running `query_launch_task` here and rethrow it
+    // this will extend its lifetime regardless of `query_launch_task`'s lifetime
+    std::rethrow_exception(std::current_exception());
+  }
   CHECK(result);
   return result;
 }
