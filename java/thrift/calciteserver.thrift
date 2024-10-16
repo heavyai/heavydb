@@ -22,6 +22,8 @@ struct TPlanResult {
   3: TAccessedQueryObjects primary_accessed_objects;
      // these are the accessed objects during this query after resolving all views
   4: TAccessedQueryObjects resolved_accessed_objects;
+     // flag indicating if `plan_result` can be parsed into relational algebra
+  5: bool is_rel_alg;
 }
 
 struct TFilterPushDownInfo {
@@ -40,7 +42,6 @@ struct TRestriction {
 struct TQueryParsingOption {
  1: bool legacy_syntax;
  2: bool is_explain;
- 3: bool check_privileges;
  4: bool is_explain_detail;
 }
 

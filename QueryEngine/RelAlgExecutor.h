@@ -83,7 +83,6 @@ class RelAlgExecutor : private StorageIOFacility {
       , queue_time_ms_(0)
       , gfx_context_{gfx_context} {
     initializeParallelismHints();
-    checkTableAndColumnPrivileges(session_info);
   }
 
   RelAlgExecutor(Executor* executor,
@@ -99,7 +98,6 @@ class RelAlgExecutor : private StorageIOFacility {
       , queue_time_ms_(0)
       , gfx_context_{gfx_context} {
     initializeParallelismHints();
-    checkTableAndColumnPrivileges(session_info);
   }
 
   size_t getOuterFragmentCount(const CompilationOptions& co, const ExecutionOptions& eo);
@@ -221,22 +219,11 @@ class RelAlgExecutor : private StorageIOFacility {
 
   void prepareForeignTable();
 
-  struct CapturedColumns {
-    std::string db_name;
-    std::string table_name;
-    std::vector<std::string> column_names;
-  };
-
-  static std::vector<RelAlgExecutor::CapturedColumns> captureColumns(
-      const std::string& query_ra);
-
   std::unordered_set<shared::TableKey> getPhysicalTableIds() const;
 
   void prepareForSystemTableExecution(const CompilationOptions& co) const;
 
  private:
-  void checkTableAndColumnPrivileges(const Catalog_Namespace::SessionInfo& session_info);
-
   void initializeParallelismHints();
 
   ExecutionResult executeRelAlgQueryNoRetry(const CompilationOptions& co,

@@ -20,9 +20,12 @@ endif()
 add_library(QueryState QueryState.cpp)
 add_dependencies(QueryState Calcite)
 
+add_library(QueryParsing QueryParsing.cpp QueryAuth.cpp)
+add_dependencies(QueryParsing Calcite)
+
 add_library(token_completion_hints TokenCompletionHints.cpp)
 target_link_libraries(token_completion_hints mapd_thrift)
 
 add_library(thrift_handler ${THRIFT_HANDLER_SOURCES})
 add_dependencies(thrift_handler Parser Calcite)
-target_link_libraries(thrift_handler token_completion_hints QueryState UdfCompiler MigrationMgr ${THRIFT_HANDLER_LIBS})
+target_link_libraries(thrift_handler token_completion_hints QueryState QueryParsing UdfCompiler MigrationMgr ${THRIFT_HANDLER_LIBS})

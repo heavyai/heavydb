@@ -442,15 +442,27 @@ public final class HeavyDBParser {
     this.dbUser = dbUser;
   }
 
-  public Pair<String, SqlIdentifierCapturer> process(
-          String sql, final HeavyDBParserOptions parserOptions)
+  public static class ProcessResult {
+    public String json_str;
+    public SqlIdentifierCapturer capturer;
+    public boolean is_rel_alg;
+
+    public ProcessResult(
+            String json_str, SqlIdentifierCapturer capturer, boolean is_rel_alg) {
+      this.json_str = json_str;
+      this.capturer = capturer;
+      this.is_rel_alg = is_rel_alg;
+    }
+  }
+
+  public ProcessResult process(String sql, final HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     final HeavyDBPlanner planner = getPlanner(
             true, parserOptions.isWatchdogEnabled(), parserOptions.isDistributedMode());
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
-    String res = processSql(sqlNode, parserOptions);
+    Pair<String, Boolean> res = processSql(sqlNode, parserOptions);
     SqlIdentifierCapturer capture = captureIdentifiers(sqlNode);
-    return new Pair<String, SqlIdentifierCapturer>(res, capture);
+    return new ProcessResult(res.left, capture, res.right);
   }
 
   public String buildRATreeAndPerformQueryOptimization(
@@ -466,7 +478,8 @@ public final class HeavyDBParser {
     return HeavyDBSerializer.toString(optRel.project());
   }
 
-  public String processSql(String sql, final HeavyDBParserOptions parserOptions)
+  public Pair<String, Boolean> processSql(
+          String sql, final HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
 
@@ -477,17 +490,18 @@ public final class HeavyDBParser {
     return processSql(sqlNode, parserOptions);
   }
 
-  public String processSql(
+  public Pair<String, Boolean> processSql(
           final SqlNode sqlNode, final HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
 
     if (sqlNode instanceof JsonSerializableDdl) {
-      return ((JsonSerializableDdl) sqlNode).toJsonString();
+      return new Pair<String, Boolean>(
+              ((JsonSerializableDdl) sqlNode).toJsonString(), false);
     }
 
     if (sqlNode instanceof SqlDdl) {
-      return sqlNode.toString();
+      return new Pair<String, Boolean>(sqlNode.toString(), false);
     }
 
     final HeavyDBPlanner planner = getPlanner(
@@ -504,11 +518,11 @@ public final class HeavyDBParser {
       RelWriter planWriter = new HeavyDBRelWriterImpl(
               new PrintWriter(sw), SqlExplainLevel.EXPPLAN_ATTRIBUTES, false);
       project.explain(planWriter);
-      return sw.toString();
+      return new Pair<String, Boolean>(sw.toString(), true);
     } else if (parserOptions.isExplain()) {
-      return RelOptUtil.toString(sqlRel.project());
+      return new Pair<String, Boolean>(RelOptUtil.toString(sqlRel.project()), true);
     }
-    return HeavyDBSerializer.toString(project);
+    return new Pair<String, Boolean>(HeavyDBSerializer.toString(project), true);
   }
 
   public HeavyDBPlanner.CompletionResult getCompletionHints(
