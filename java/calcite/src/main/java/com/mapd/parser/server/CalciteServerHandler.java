@@ -192,6 +192,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     SqlIdentifierCapturer capturer;
     TAccessedQueryObjects primaryAccessedObjects = new TAccessedQueryObjects();
     TAccessedQueryObjects resolvedAccessedObjects = new TAccessedQueryObjects();
+    boolean is_rel_alg = false;
     try {
       final List<HeavyDBParserOptions.FilterPushDownInfo> filterPushDownInfo =
               new ArrayList<>();
@@ -208,12 +209,13 @@ public class CalciteServerHandler implements CalciteServer.Iface {
               optimizationOption.distributed_mode);
 
       if (!buildRATreeFromRAString) {
-        Pair<String, SqlIdentifierCapturer> res;
+        HeavyDBParser.ProcessResult res;
         SqlNode node;
 
         res = parser.process(queryText, parserOptions);
-        jsonResult = res.left;
-        capturer = res.right;
+        jsonResult = res.json_str;
+        capturer = res.capturer;
+        is_rel_alg = res.is_rel_alg;
 
         primaryAccessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
         primaryAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
@@ -233,6 +235,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         // exploit Calcite's query optimization rules for RA string
         jsonResult =
                 parser.buildRATreeAndPerformQueryOptimization(queryText, parserOptions);
+        is_rel_alg = true;
       }
     } catch (SqlParseException ex) {
       String msg = "SQL Error: " + ex.getMessage();
@@ -276,6 +279,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     result.resolved_accessed_objects = resolvedAccessedObjects;
     result.plan_result = jsonResult;
     result.execution_time_ms = System.currentTimeMillis() - timer;
+    result.is_rel_alg = is_rel_alg;
 
     return result;
   }

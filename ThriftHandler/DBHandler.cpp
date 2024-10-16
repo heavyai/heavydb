@@ -66,6 +66,8 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
 #include "RequestInfo.h"
+#include "ThriftHandler/QueryAuth.h"
+#include "ThriftHandler/QueryParsing.h"
 #ifdef HAVE_RUNTIME_LIBS
 #include "RuntimeLibManager/RuntimeLibManager.h"
 #endif
@@ -2575,8 +2577,8 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
                                                      system_parameters_,
                                                      false);
           try {
-            calcite_->checkAccessedObjectsPrivileges(query_state->createQueryStateProxy(),
-                                                     query_ra);
+            query_auth::check_access_privileges(query_state->createQueryStateProxy(),
+                                                query_ra);
           } catch (const std::runtime_error&) {
             have_privileges_on_view_sources = false;
           }
@@ -7061,22 +7063,23 @@ TPlanResult DBHandler::processCalciteRequest(
   ExplainInfo explain(query_str);
   std::string const actual_query{explain.isSelectExplain() ? explain.ActualQuery()
                                                            : query_str};
-  auto query_parsing_option =
-      calcite_->getCalciteQueryParsingOption(legacy_syntax_,
-                                             explain.isCalciteExplain(),
-                                             check_privileges,
-                                             explain.isCalciteExplainDetail());
+  auto query_parsing_option = calcite_->getCalciteQueryParsingOption(
+      legacy_syntax_, explain.isCalciteExplain(), explain.isCalciteExplainDetail());
   auto optimization_option = calcite_->getCalciteOptimizationOption(
       system_parameters.enable_calcite_view_optimize,
       g_enable_watchdog,
       filter_push_down_info,
       Catalog_Namespace::SysCatalog::instance().isAggregator());
 
-  return calcite_->process(timer.createQueryStateProxy(),
-                           legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                           query_parsing_option,
-                           optimization_option,
-                           request_info.json());
+  TPlanResult result = query_parsing::process_and_check_access_privileges(
+      calcite_.get(),
+      timer.createQueryStateProxy(),
+      legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+      query_parsing_option,
+      optimization_option,
+      check_privileges,
+      request_info.json());
+  return result;
 }
 
 std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(

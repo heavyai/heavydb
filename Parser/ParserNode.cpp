@@ -73,6 +73,7 @@
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
 #include "TableArchiver/TableArchiver.h"
+#include "ThriftHandler/QueryParsing.h"
 #include "Utils/FsiUtils.h"
 
 #include "gen-cpp/CalciteServer.h"
@@ -3920,18 +3921,19 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   // TODO MAT this should actually get the global or the session parameter for
   // view optimization
   const auto calciteQueryParsingOption =
-      calcite_mgr->getCalciteQueryParsingOption(true, false, true, false);
+      calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
       false,
       g_enable_watchdog,
       {},
       Catalog_Namespace::SysCatalog::instance().isAggregator());
-  const auto query_ra = calcite_mgr
-                            ->process(query_state_proxy,
-                                      pg_shim(select_stmt),
-                                      calciteQueryParsingOption,
-                                      calciteOptimizationOption)
-                            .plan_result;
+  const auto query_ra =
+      query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
+                                                         query_state_proxy,
+                                                         pg_shim(select_stmt),
+                                                         calciteQueryParsingOption,
+                                                         calciteOptimizationOption)
+          .plan_result;
   RelAlgExecutor ra_executor(executor.get(),
                              query_ra,
                              *query_state_proxy->getConstSessionInfo(),
@@ -3992,18 +3994,19 @@ size_t LocalQueryConnector::getOuterFragmentCount(QueryStateProxy query_state_pr
   // TODO MAT this should actually get the global or the session parameter for
   // view optimization
   const auto calciteQueryParsingOption =
-      calcite_mgr->getCalciteQueryParsingOption(true, false, true, false);
+      calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
       false,
       g_enable_watchdog,
       {},
       Catalog_Namespace::SysCatalog::instance().isAggregator());
-  const auto query_ra = calcite_mgr
-                            ->process(query_state_proxy,
-                                      pg_shim(sql_query_string),
-                                      calciteQueryParsingOption,
-                                      calciteOptimizationOption)
-                            .plan_result;
+  const auto query_ra =
+      query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
+                                                         query_state_proxy,
+                                                         pg_shim(sql_query_string),
+                                                         calciteQueryParsingOption,
+                                                         calciteOptimizationOption)
+          .plan_result;
   RelAlgExecutor ra_executor(executor.get(), query_ra, *session);
   CompilationOptions co = {device_type, true, ExecutorOptLevel::Default, false};
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
@@ -4652,13 +4655,15 @@ lockmgr::LockedTableDescriptors acquire_query_table_locks(
   auto& sys_catalog = SysCatalog::instance();
   auto& calcite_mgr = sys_catalog.getCalciteMgr();
   const auto calciteQueryParsingOption =
-      calcite_mgr.getCalciteQueryParsingOption(true, false, true, false);
+      calcite_mgr.getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption = calcite_mgr.getCalciteOptimizationOption(
       false, g_enable_watchdog, {}, sys_catalog.isAggregator());
-  const auto result = calcite_mgr.process(query_state_proxy,
-                                          pg_shim(query_str),
-                                          calciteQueryParsingOption,
-                                          calciteOptimizationOption);
+  const auto result =
+      query_parsing::process_and_check_access_privileges(&calcite_mgr,
+                                                         query_state_proxy,
+                                                         pg_shim(query_str),
+                                                         calciteQueryParsingOption,
+                                                         calciteOptimizationOption);
   // force sort into tableid order in case of name change to guarantee fixed order of
   // mutex access
   auto comparator = [](const std::vector<std::string>& table_1,
@@ -6911,13 +6916,15 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session,
 
   // this now also ensures that access permissions are checked
   const auto calciteQueryParsingOption =
-      calcite_mgr->getCalciteQueryParsingOption(true, false, true, false);
+      calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
       false, g_enable_watchdog, {}, SysCatalog::instance().isAggregator());
-  calcite_mgr->process(query_state->createQueryStateProxy(),
-                       query_after_shim,
-                       calciteQueryParsingOption,
-                       calciteOptimizationOption);
+
+  query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
+                                                     query_state->createQueryStateProxy(),
+                                                     query_after_shim,
+                                                     calciteQueryParsingOption,
+                                                     calciteOptimizationOption);
 
   // Take write lock after the query is processed to ensure no deadlocks
   const auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
@@ -7428,17 +7435,18 @@ std::unique_ptr<Parser::Stmt> create_stmt_for_query(
   const auto& cat = session_info.getCatalog();
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
-      calcite_mgr->getCalciteQueryParsingOption(true, false, true, false);
+      calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
       false,
       g_enable_watchdog,
       {},
       Catalog_Namespace::SysCatalog::instance().isAggregator());
-  const auto query_json = calcite_mgr
-                              ->process(query_state->createQueryStateProxy(),
-                                        pg_shim(queryStr),
-                                        calciteQueryParsingOption,
-                                        calciteOptimizationOption)
+  const auto query_json = query_parsing::process_and_check_access_privileges(
+                              calcite_mgr.get(),
+                              query_state->createQueryStateProxy(),
+                              pg_shim(queryStr),
+                              calciteQueryParsingOption,
+                              calciteOptimizationOption)
                               .plan_result;
   return create_stmt_for_json(query_json);
 }

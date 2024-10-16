@@ -23,6 +23,8 @@
 #ifndef QUERYENGINE_QUERYPHYSICALINPUTSCOLLECTOR_H
 #define QUERYENGINE_QUERYPHYSICALINPUTSCOLLECTOR_H
 
+#include "Shared/DbObjectKeys.h"
+
 #include <ostream>
 #include <unordered_set>
 
