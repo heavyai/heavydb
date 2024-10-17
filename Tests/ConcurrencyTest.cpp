@@ -179,6 +179,11 @@ class ConcurrencyTestEnv : public DBHandlerTestFixture {
     resizeDispatchQueue(num_executors);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    CHECK(executor);
+    auto executor_resource_mgr = executor->executor_resource_mgr_;
+    CHECK(executor_resource_mgr);
+
     // Run the queries once to control for warmup/compilation/data fetch time
     setExecuteMode(execution_mode_slow_query);
     auto slow_query_ms_warmup_future = std::async(
@@ -194,14 +199,26 @@ class ConcurrencyTestEnv : public DBHandlerTestFixture {
     auto const baseline_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                  std::chrono::system_clock::now().time_since_epoch())
                                  .count();
-    setExecuteMode(execution_mode_slow_query);
+    auto const executor_stat_baseline = executor_resource_mgr->get_executor_stats();
 
+    // execute the slow query first
+    setExecuteMode(execution_mode_slow_query);
     auto slow_query_ms_future = std::async(
         std::launch::async, get_query_return_time_epoch_ms, std::ref(slow_query_sql));
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    setExecuteMode(execution_mode_fast_query);
+    // wait until we actually start to execute the `slow` query
+    while (executor_resource_mgr->get_executor_stats().requests_executing ==
+               executor_stat_baseline.requests_executing &&
+           executor_resource_mgr->get_executor_stats().requests_executed ==
+               executor_stat_baseline.requests_executed) {
+      // `requests_executing` will be increased when we start to execute the slow query
+      // at the same time, `requests_executed` should be the same unless the slow query is
+      // finished
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
 
+    // execute the fast query next
+    setExecuteMode(execution_mode_fast_query);
     auto fast_query_ms_future = std::async(
         std::launch::async, get_query_return_time_epoch_ms, std::ref(fast_query_sql));
 
