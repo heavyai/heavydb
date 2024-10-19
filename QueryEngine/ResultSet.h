@@ -655,6 +655,31 @@ class ResultSet {
 
   CUstream getCudaStream() const;
 
+  /**
+   * @brief Fetches and materializes a lazily-fetched column value into a provided buffer.
+   *
+   * This function retrieves a lazily-fetched column value for a specific entry and
+   * column, decodes it if necessary, and writes the result to the provided output buffer.
+   * It is meant as a faster alternative to normal result fetching with the
+   * ResultSet::getRowAt function, which has significant overhead by going through the
+   * boost variant interface to access data.
+   *
+   * @param global_entry_idx The global index of the entry to fetch.
+   * @param col_idx The index of the column to fetch.
+   * @param output_ptr Pointer to the buffer where the fetched value will be written.
+   *
+   * @note This function supports various data types including boolean, integer types,
+   *       floating-point types, temporal types, and dictionary-encoded text types.
+   *       For non-dictionary-encoded text types, it will throw an exception.
+   *       It also does not support flatbuffer storage.
+   *
+   */
+
+  template <typename T>
+  void fetchLazyColumnValue(const size_t global_entry_idx,
+                            const size_t col_index,
+                            T* output_ptr) const;
+
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
 
@@ -1052,6 +1077,17 @@ class ResultSet {
 
   int64_t getDistinctBufferRefFromBufferRowwise(int8_t* rowwise_target_ptr,
                                                 const TargetInfo& target_info) const;
+
+  struct KeyInfo {
+    const int8_t* key_ptr;
+    const size_t key_width;
+    KeyInfo(const int8_t* ptr, const size_t width) : key_ptr(ptr), key_width(width) {}
+  };
+
+  KeyInfo getKeyInfo(const ResultSetStorage* storage,
+                     const int8_t* buff,
+                     const size_t col_idx,
+                     const size_t local_entry_idx) const;
 
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;

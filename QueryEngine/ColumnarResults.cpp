@@ -480,6 +480,7 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
  */
 void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& rows,
                                                             const size_t num_columns) {
+  auto timer = DEBUG_TIMER(__func__);
   if (!rows.isEmpty()) {
     for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
       CHECK(column_buffers_[col_idx])
@@ -513,10 +514,7 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
             if (g_enable_non_kernel_time_query_interrupt) {
               size_t local_idx = 0;
               for (size_t i = start; i < end; ++i, ++local_idx) {
-                if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
-                             executor_->checkNonKernelTimeInterrupted())) {
-                  throw QueryExecutionError(ErrorCode::INTERRUPTED);
-                }
+                checkInterruption(local_idx);
                 do_work(i);
               }
             } else {
@@ -562,10 +560,7 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
   };
   if (g_enable_non_kernel_time_query_interrupt) {
     while (!done) {
-      if (UNLIKELY((row_idx & 0xFFFF) == 0 &&
-                   executor_->checkNonKernelTimeInterrupted())) {
-        throw QueryExecutionError(ErrorCode::INTERRUPTED);
-      }
+      checkInterruption(row_idx);
       do_work();
     }
   } else {
@@ -1049,6 +1044,7 @@ void ColumnarResults::writeBackCellDirect<double>(
  */
 void ColumnarResults::materializeAllColumnsDirectly(const ResultSet& rows,
                                                     const size_t num_columns) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(isDirectColumnarConversionPossible());
   switch (rows.getQueryDescriptionType()) {
     case QueryDescriptionType::Projection: {
@@ -1077,8 +1073,10 @@ void ColumnarResults::materializeAllColumnsDirectly(const ResultSet& rows,
  * 2. for all lazy fetched columns, it uses result set's iterators to decode the proper
  * values before storing them into the output column buffers
  */
+
 void ColumnarResults::materializeAllColumnsProjection(const ResultSet& rows,
                                                       const size_t num_columns) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(rows.query_mem_desc_.didOutputColumnar());
   CHECK(isDirectColumnarConversionPossible() &&
         (rows.query_mem_desc_.getQueryDescriptionType() ==
@@ -1089,7 +1087,6 @@ void ColumnarResults::materializeAllColumnsProjection(const ResultSet& rows,
   // We can directly copy each non-lazy column's content
   copyAllNonLazyColumns(lazy_fetch_info, rows, num_columns);
 
-  // Only lazy columns are iterated through first and then materialized
   materializeAllLazyColumns(lazy_fetch_info, rows, num_columns);
 }
 
@@ -1119,6 +1116,8 @@ void ColumnarResults::copyAllNonLazyColumns(
     const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
     const ResultSet& rows,
     const size_t num_columns) {
+  auto timer = DEBUG_TIMER(__func__);
+
   CHECK(isDirectColumnarConversionPossible());
   const auto is_column_non_lazily_fetched = [&lazy_fetch_info](const size_t col_idx) {
     // Saman: make sure when this lazy_fetch_info is empty
@@ -1162,6 +1161,57 @@ void ColumnarResults::copyAllNonLazyColumns(
   }
 }
 
+namespace {
+
+bool has_lazy_fetched_column(const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info) {
+  return std::any_of(lazy_fetch_info.begin(),
+                     lazy_fetch_info.end(),
+                     [](const auto& col_info) { return col_info.is_lazily_fetched; });
+}
+
+bool has_lazy_fetched_flat_buffer_column(
+    const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
+    const ResultSet& rows,
+    const std::vector<SQLTypeInfo>& target_types,
+    const size_t num_columns) {
+  for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+    if (lazy_fetch_info[col_idx].is_lazily_fetched) {
+      if (rows.getColType(col_idx).usesFlatBuffer() ||
+          target_types[col_idx].usesFlatBuffer()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+std::vector<bool> generate_targets_to_skip(
+    const ResultSet& rows,
+    const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
+    const size_t num_columns) {
+  std::vector<bool> targets_to_skip;
+  if (rows.isPermutationBufferEmpty()) {
+    targets_to_skip.resize(num_columns);
+    for (size_t i = 0; i < num_columns; i++) {
+      targets_to_skip[i] = !lazy_fetch_info[i].is_lazily_fetched;
+    }
+  }
+  return targets_to_skip;
+}
+
+std::vector<size_t> generate_lazy_fetched_column_indices(
+    const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info) {
+  std::vector<size_t> lazy_fetched_indices;
+  for (size_t i = 0; i < lazy_fetch_info.size(); ++i) {
+    if (lazy_fetch_info[i].is_lazily_fetched) {
+      lazy_fetched_indices.push_back(i);
+    }
+  }
+  return lazy_fetched_indices;
+}
+
+}  // anonymous namespace
+
 /**
  * For all lazy fetched columns, we should iterate through the column's content and
  * properly materialize it.
@@ -1171,75 +1221,55 @@ void ColumnarResults::copyAllNonLazyColumns(
  * output buffer will have as many rows as there are in the result set, removing the need
  * for atomicly incrementing the output buffer position.
  */
+
 void ColumnarResults::materializeAllLazyColumns(
     const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
     const ResultSet& rows,
     const size_t num_columns) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(isDirectColumnarConversionPossible());
   CHECK(!(rows.query_mem_desc_.getQueryDescriptionType() ==
           QueryDescriptionType::TableFunction));
-  std::mutex write_mutex;
-  const auto do_work_just_lazy_columns = [num_columns, &rows, &write_mutex, this](
-                                             const size_t row_idx,
-                                             const std::vector<bool>& targets_to_skip) {
-    const auto crt_row = rows.getRowAtNoTranslations(row_idx, targets_to_skip);
-    for (size_t i = 0; i < num_columns; ++i) {
-      if (!targets_to_skip.empty() && !targets_to_skip[i]) {
-        auto& type_info = target_types_[i];
-        writeBackCell(crt_row[i], row_idx, type_info, column_buffers_[i], &write_mutex);
-      }
-    }
-  };
 
-  const auto contains_lazy_fetched_column =
-      [](const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info) {
-        for (auto& col_info : lazy_fetch_info) {
-          if (col_info.is_lazily_fetched) {
-            return true;
-          }
+  if (!has_lazy_fetched_column(lazy_fetch_info)) {
+    return;
+  }
+
+  const size_t worker_count =
+      result_set::use_parallel_algorithms(rows) ? cpu_threads() : 1;
+  std::vector<std::future<void>> conversion_threads;
+
+  const bool has_lazy_fetched_flat_buffer_col = has_lazy_fetched_flat_buffer_column(
+      lazy_fetch_info, rows, target_types_, num_columns);
+
+  if (has_lazy_fetched_flat_buffer_col) {
+    // Use the slower logic for flat buffers
+    const auto targets_to_skip =
+        generate_targets_to_skip(rows, lazy_fetch_info, num_columns);
+
+    const auto lazy_fetched_indices =
+        generate_lazy_fetched_column_indices(lazy_fetch_info);
+
+    std::mutex write_mutex;
+    const auto do_work = [this,
+                          &rows,
+                          &write_mutex,
+                          &lazy_fetched_indices,
+                          &targets_to_skip](const size_t start, const size_t end) {
+      for (size_t row_idx = start; row_idx < end; ++row_idx) {
+        const auto crt_row = rows.getRowAtNoTranslations(row_idx, targets_to_skip);
+        for (const auto i : lazy_fetched_indices) {
+          writeBackCell(
+              crt_row[i], row_idx, target_types_[i], column_buffers_[i], &write_mutex);
         }
-        return false;
-      };
-
-  // parallelized by assigning a chunk of rows to each thread)
-  const bool skip_non_lazy_columns = rows.isPermutationBufferEmpty();
-  if (contains_lazy_fetched_column(lazy_fetch_info)) {
-    const size_t worker_count =
-        result_set::use_parallel_algorithms(rows) ? cpu_threads() : 1;
-    std::vector<std::future<void>> conversion_threads;
-    std::vector<bool> targets_to_skip;
-    if (skip_non_lazy_columns) {
-      CHECK_EQ(lazy_fetch_info.size(), size_t(num_columns));
-      targets_to_skip.reserve(num_columns);
-      for (size_t i = 0; i < num_columns; i++) {
-        // we process lazy columns (i.e., skip non-lazy columns)
-        targets_to_skip.push_back(!lazy_fetch_info[i].is_lazily_fetched);
+        checkInterruption(row_idx);
       }
-    }
-    for (auto interval : makeIntervals(size_t(0), rows.entryCount(), worker_count)) {
-      conversion_threads.push_back(std::async(
-          std::launch::async,
-          [&do_work_just_lazy_columns, &targets_to_skip, this](const size_t start,
-                                                               const size_t end) {
-            if (g_enable_non_kernel_time_query_interrupt) {
-              size_t local_idx = 0;
-              for (size_t i = start; i < end; ++i, ++local_idx) {
-                if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
-                             executor_->checkNonKernelTimeInterrupted())) {
-                  throw QueryExecutionError(ErrorCode::INTERRUPTED);
-                }
-                do_work_just_lazy_columns(i, targets_to_skip);
-              }
-            } else {
-              for (size_t i = start; i < end; ++i) {
-                do_work_just_lazy_columns(i, targets_to_skip);
-              }
-            }
-          },
-          interval.begin,
-          interval.end));
-    }
+    };
 
+    for (auto interval : makeIntervals(size_t(0), rows.entryCount(), worker_count)) {
+      conversion_threads.push_back(
+          std::async(std::launch::async, do_work, interval.begin, interval.end));
+    }
     try {
       for (auto& child : conversion_threads) {
         child.wait();
@@ -1248,7 +1278,87 @@ void ColumnarResults::materializeAllLazyColumns(
       if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
         throw QueryExecutionError(ErrorCode::INTERRUPTED);
       }
-      throw e;
+      throw;
+    } catch (...) {
+      throw;
+    }
+  } else {
+    // Use the faster logic for non-flat buffers
+    const auto do_work = [this, &rows, &lazy_fetch_info, num_columns](const size_t start,
+                                                                      const size_t end) {
+      for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+        if (lazy_fetch_info[col_idx].is_lazily_fetched) {
+          const auto& type_info = target_types_[col_idx];
+          const size_t col_width = type_info.get_size();
+          const auto sql_type = type_info.get_type();
+          int8_t* col_buffer = column_buffers_[col_idx];
+          switch (sql_type) {
+            case SQLTypes::kBOOLEAN:
+              fetchAndCheckInterruption<bool>(
+                  start, end, col_idx, col_width, col_buffer, rows);
+              break;
+            case SQLTypes::kTINYINT:
+              fetchAndCheckInterruption<int8_t>(
+                  start, end, col_idx, col_width, col_buffer, rows);
+              break;
+            case SQLTypes::kSMALLINT:
+              fetchAndCheckInterruption<int16_t>(
+                  start, end, col_idx, col_width, col_buffer, rows);
+              break;
+            case SQLTypes::kINT:
+              fetchAndCheckInterruption<int32_t>(
+                  start, end, col_idx, col_width, col_buffer, rows);
+              break;
+            case SQLTypes::kBIGINT:
+            case SQLTypes::kNUMERIC:
+            case SQLTypes::kDECIMAL:
+            case SQLTypes::kTIMESTAMP:
+            case SQLTypes::kDATE:
+            case SQLTypes::kTIME:
+            case SQLTypes::kINTERVAL_DAY_TIME:
+            case SQLTypes::kINTERVAL_YEAR_MONTH:
+              fetchAndCheckInterruption<int64_t>(
+                  start, end, col_idx, col_width, col_buffer, rows);
+              break;
+            case SQLTypes::kFLOAT:
+              fetchAndCheckInterruption<float>(
+                  start, end, col_idx, col_width, col_buffer, rows);
+              break;
+            case SQLTypes::kDOUBLE:
+              fetchAndCheckInterruption<double>(
+                  start, end, col_idx, col_width, col_buffer, rows);
+              break;
+            case SQLTypes::kTEXT:
+            case SQLTypes::kVARCHAR:
+            case SQLTypes::kCHAR:
+              if (type_info.get_compression() == kENCODING_DICT) {
+                fetchAndCheckInterruption<int32_t>(
+                    start, end, col_idx, col_width, col_buffer, rows);
+              } else {
+                throw std::runtime_error("Unsupported non-encoded TEXT type");
+              }
+              break;
+            default:
+              throw std::runtime_error("Unsupported column type: " +
+                                       std::to_string(static_cast<int>(sql_type)));
+          }
+        }
+      }
+    };
+
+    for (auto interval : makeIntervals(size_t(0), rows.entryCount(), worker_count)) {
+      conversion_threads.push_back(
+          std::async(std::launch::async, do_work, interval.begin, interval.end));
+    }
+    try {
+      for (auto& child : conversion_threads) {
+        child.wait();
+      }
+    } catch (QueryExecutionError& e) {
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
+        throw QueryExecutionError(ErrorCode::INTERRUPTED);
+      }
+      throw;
     } catch (...) {
       throw;
     }
@@ -1263,6 +1373,7 @@ void ColumnarResults::materializeAllLazyColumns(
  */
 void ColumnarResults::materializeAllColumnsGroupBy(const ResultSet& rows,
                                                    const size_t num_columns) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(isDirectColumnarConversionPossible());
   CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
         rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
@@ -1302,6 +1413,7 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
                                             const size_t entry_count,
                                             const size_t num_threads,
                                             const size_t size_per_thread) const {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(isDirectColumnarConversionPossible());
   CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
         rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
@@ -1323,10 +1435,7 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
         if (g_enable_non_kernel_time_query_interrupt) {
           for (size_t entry_idx = start_index; entry_idx < end_index;
                entry_idx++, local_idx++) {
-            if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
-                         executor_->checkNonKernelTimeInterrupted())) {
-              throw QueryExecutionError(ErrorCode::INTERRUPTED);
-            }
+            checkInterruption(local_idx);
             do_work(total_non_empty, local_idx, entry_idx, thread_idx);
           }
         } else {
@@ -1377,6 +1486,7 @@ void ColumnarResults::compactAndCopyEntries(
     const size_t entry_count,
     const size_t num_threads,
     const size_t size_per_thread) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(isDirectColumnarConversionPossible());
   CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
         rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
@@ -1435,6 +1545,7 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
     const size_t entry_count,
     const size_t num_threads,
     const size_t size_per_thread) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(isDirectColumnarConversionPossible());
   CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
         rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
@@ -1504,10 +1615,7 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
     if (g_enable_non_kernel_time_query_interrupt) {
       for (size_t entry_idx = start_index; entry_idx < end_index;
            entry_idx++, local_idx++) {
-        if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
-                     executor_->checkNonKernelTimeInterrupted())) {
-          throw QueryExecutionError(ErrorCode::INTERRUPTED);
-        }
+        checkInterruption(local_idx);
         do_work(
             non_empty_idx, total_non_empty, local_idx, entry_idx, thread_idx, end_index);
       }
@@ -1558,6 +1666,7 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
     const size_t entry_count,
     const size_t num_threads,
     const size_t size_per_thread) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(isDirectColumnarConversionPossible());
   CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
         rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
@@ -1606,10 +1715,7 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
     if (g_enable_non_kernel_time_query_interrupt) {
       for (size_t entry_idx = start_index; entry_idx < end_index;
            entry_idx++, local_idx++) {
-        if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
-                     executor_->checkNonKernelTimeInterrupted())) {
-          throw QueryExecutionError(ErrorCode::INTERRUPTED);
-        }
+        checkInterruption(local_idx);
         do_work(
             entry_idx, non_empty_idx, total_non_empty, local_idx, thread_idx, end_index);
       }
@@ -1968,5 +2074,26 @@ ColumnarResults::initAllConversionFunctions(
           initReadFunctions<QueryDescriptionType::GroupByBaselineHash, false>(
               rows, slot_idx_per_target_idx, targets_to_skip));
     }
+  }
+}
+
+void ColumnarResults::checkInterruption(size_t row_idx) const {
+  if (UNLIKELY((row_idx & 0xFFFF) == 0 && g_enable_non_kernel_time_query_interrupt &&
+               executor_->checkNonKernelTimeInterrupted())) {
+    throw QueryExecutionError(ErrorCode::INTERRUPTED);
+  }
+}
+
+template <typename T>
+void ColumnarResults::fetchAndCheckInterruption(const size_t start,
+                                                const size_t end,
+                                                const size_t col_idx,
+                                                const size_t col_width,
+                                                int8_t* col_buffer,
+                                                const ResultSet& rows) {
+  for (size_t row_idx = start; row_idx < end; ++row_idx) {
+    T* target_ptr = reinterpret_cast<T*>(col_buffer + row_idx * col_width);
+    rows.fetchLazyColumnValue<T>(row_idx, col_idx, target_ptr);
+    checkInterruption(row_idx);
   }
 }
