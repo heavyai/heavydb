@@ -140,6 +140,7 @@ class ColumnarResults {
   void copyAllNonLazyColumns(const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
                              const ResultSet& rows,
                              const size_t num_columns);
+
   void materializeAllLazyColumns(const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
                                  const ResultSet& rows,
                                  const size_t num_columns);
@@ -201,6 +202,16 @@ class ColumnarResults {
   initAllConversionFunctions(const ResultSet& rows,
                              const std::vector<size_t>& slot_idx_per_target_idx,
                              const std::vector<bool>& targets_to_skip = {});
+
+  void checkInterruption(size_t row_idx) const;
+
+  template <typename T>
+  void fetchAndCheckInterruption(const size_t start,
+                                 const size_t end,
+                                 const size_t col_idx,
+                                 const size_t col_width,
+                                 int8_t* col_buffer,
+                                 const ResultSet& rows);
 
   const std::vector<SQLTypeInfo> target_types_;
   bool parallel_conversion_;  // multi-threaded execution of columnar conversion
