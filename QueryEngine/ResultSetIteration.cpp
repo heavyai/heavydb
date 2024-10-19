@@ -2616,3 +2616,105 @@ bool ResultSet::isNull(const SQLTypeInfo& ti,
   CHECK(val.isNull());
   return true;
 }
+
+namespace {
+
+template <typename T>
+inline T convert_value(int64_t ival) {
+  if constexpr (std::is_same_v<T, float>) {
+    double temp_double;
+    std::memcpy(&temp_double, &ival, sizeof(double));
+    return static_cast<float>(temp_double);
+  } else if constexpr (std::is_same_v<T, double>) {
+    double temp_double;
+    std::memcpy(&temp_double, &ival, sizeof(double));
+    return temp_double;
+  } else if constexpr (std::is_same_v<T, bool>) {
+    return ival != 0;
+  } else {
+    return static_cast<T>(ival);
+  }
+}
+
+}  // anonymous namespace
+
+ResultSet::KeyInfo ResultSet::getKeyInfo(const ResultSetStorage* storage,
+                                         const int8_t* buff,
+                                         const size_t col_idx,
+                                         const size_t local_entry_idx) const {
+  const auto& query_mem_desc = storage->query_mem_desc_;
+  if (query_mem_desc.targetGroupbyIndicesSize() == 0 ||
+      query_mem_desc.getTargetGroupbyIndex(col_idx) < 0) {
+    const auto crt_col_ptr = get_cols_ptr(buff, query_mem_desc);
+    const auto col_ptr = col_idx == size_t(0) ? crt_col_ptr
+                                              : advance_to_next_columnar_target_buff(
+                                                    crt_col_ptr, query_mem_desc, col_idx);
+    const auto key_width = query_mem_desc.getPaddedSlotWidthBytes(col_idx);
+    const auto key_ptr = columnar_elem_ptr(local_entry_idx, col_ptr, key_width);
+    return KeyInfo{key_ptr, static_cast<size_t>(key_width)};
+  } else {
+    const auto key_width = query_mem_desc.getEffectiveKeyWidth();
+    const auto key_idx = query_mem_desc.getTargetGroupbyIndex(col_idx);
+    const auto key_col_ptr = buff + key_idx * query_mem_desc.getEntryCount() * key_width;
+    const auto key_ptr = columnar_elem_ptr(local_entry_idx, key_col_ptr, key_width);
+    return KeyInfo{key_ptr, static_cast<size_t>(key_width)};
+  }
+}
+
+template <typename T>
+void ResultSet::fetchLazyColumnValue(const size_t global_entry_idx,
+                                     const size_t col_idx,
+                                     T* output_ptr) const {
+  // Assumptions made in this function, originally we had CHECKs but removed them for
+  // performance
+  // 1. Global_entry_idx < entryCount()
+  // 2. col_idx < lazy_fetch_info.size()
+  // 3. The column is lazily fetched, i.e. col_lazy_fetch.is_lazily_fetched()
+  // 4. The column is not stored in flat buffer storage, i.e.
+  // !col_lazy_fetch.type.usesFlatBuffer() To use flat buffer storage, use slower getRowAt
+  // path
+  // 5. Columnar output, i.e. query_mem_desc_.didOutputColumnar()
+
+  const auto& col_lazy_fetch = lazy_fetch_info_[col_idx];
+
+  const auto storage_lookup_result = findStorage(global_entry_idx);
+  const auto storage = storage_lookup_result.storage_ptr;
+  const auto local_entry_idx = storage_lookup_result.fixedup_entry_idx;
+
+  const auto buff = storage->buff_;
+  CHECK(buff);
+
+  const auto key_info = getKeyInfo(storage, buff, col_idx, local_entry_idx);
+
+  auto ival = read_int_from_buff(key_info.key_ptr, key_info.key_width);
+  CHECK_GE(ival, 0);
+  const auto storage_idx = getStorageIndex(global_entry_idx);
+  CHECK_LT(storage_idx.first, col_buffers_.size());
+  const auto& frag_col_buffers = getColumnFrag(storage_idx.first, col_idx, ival);
+  ival = result_set::lazy_decode(
+      col_lazy_fetch, frag_col_buffers[col_lazy_fetch.local_col_id], ival);
+
+  *output_ptr = convert_value<T>(ival);
+}
+
+template void ResultSet::fetchLazyColumnValue<bool>(const size_t,
+                                                    const size_t,
+                                                    bool*) const;
+template void ResultSet::fetchLazyColumnValue<int8_t>(const size_t,
+                                                      const size_t,
+                                                      int8_t*) const;
+template void ResultSet::fetchLazyColumnValue<int16_t>(const size_t,
+                                                       const size_t,
+                                                       int16_t*) const;
+template void ResultSet::fetchLazyColumnValue<int32_t>(const size_t,
+                                                       const size_t,
+                                                       int32_t*) const;
+template void ResultSet::fetchLazyColumnValue<int64_t>(const size_t,
+                                                       const size_t,
+                                                       int64_t*) const;
+template void ResultSet::fetchLazyColumnValue<float>(const size_t,
+                                                     const size_t,
+                                                     float*) const;
+template void ResultSet::fetchLazyColumnValue<double>(const size_t,
+                                                      const size_t,
+                                                      double*) const;
