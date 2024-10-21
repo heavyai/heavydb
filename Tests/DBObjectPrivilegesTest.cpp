@@ -6052,6 +6052,9 @@ TEST_F(GrantRevokeSelectColumnTest, CreateModel) {
   if (isDistributedMode()) {
     GTEST_SKIP() << "Models are not supported in distributed mode";
   }
+#if !defined(HAVE_ONEDAL) && !defined(HAVE_MLPACK)
+  GTEST_SKIP() << "LINEAR_REG model requires either OneDAL or MLPACK";
+#endif
   loginTestUser();
   queryAndAssertException(
       "CREATE MODEL lin_reg_test_model_2 OF TYPE LINEAR_REG AS SELECT "
@@ -6074,6 +6077,9 @@ TEST_F(GrantRevokeSelectColumnTest, EvaluateModel) {
   if (isDistributedMode()) {
     GTEST_SKIP() << "Models are not supported in distributed mode";
   }
+#if !defined(HAVE_ONEDAL) && !defined(HAVE_MLPACK)
+  GTEST_SKIP() << "LINEAR_REG model requires either OneDAL or MLPACK";
+#endif
   loginAdmin();
   sql("CREATE MODEL lin_reg_test_model_2 OF TYPE LINEAR_REG AS SELECT "
       "predicted, cat_predictor, numeric_predictor FROM test_table_2 WITH "
