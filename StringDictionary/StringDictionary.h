@@ -254,6 +254,12 @@ class StringDictionary {
   void update_leaf(const LeafHostInfo& host_info);
   size_t computeCacheSize() const;
 
+  std::vector<std::string> getStringsForRange(
+      int32_t start_id,
+      int32_t end_id,
+      const StringOps_Namespace::StringOps& string_ops,
+      const std::function<bool(int32_t)>& mask_functor) const;
+
  private:
   struct StringIdxEntry {
     uint64_t off : 48;
