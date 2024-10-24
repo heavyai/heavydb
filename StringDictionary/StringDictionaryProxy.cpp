@@ -26,10 +26,12 @@
 #include "Utils/Regexp.h"
 #include "Utils/StringLike.h"
 
+#include <tbb/concurrent_unordered_set.h>
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
 
 #include <algorithm>
+#include <atomic>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -374,21 +376,6 @@ void order_translation_locks(const shared::StringDictKey& source_dict_key,
   }
 }
 
-StringDictionaryProxy::IdMap
-StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxy(
-    const StringDictionaryProxy* dest_proxy,
-    const StringOps_Namespace::StringOps& string_ops) const {
-  const auto& source_dict_id = getDictKey();
-  const auto& dest_dict_id = dest_proxy->getDictKey();
-
-  std::shared_lock<std::shared_mutex> source_proxy_read_lock(rw_mutex_, std::defer_lock);
-  std::unique_lock<std::shared_mutex> dest_proxy_write_lock(dest_proxy->rw_mutex_,
-                                                            std::defer_lock);
-  order_translation_locks(
-      source_dict_id, dest_dict_id, source_proxy_read_lock, dest_proxy_write_lock);
-  return buildIntersectionTranslationMapToOtherProxyUnlocked(dest_proxy, string_ops);
-}
-
 StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOtherProxy(
     StringDictionaryProxy* dest_proxy,
     const StringOps_Namespace::StringOps& string_ops) const {
@@ -427,37 +414,99 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOt
 
     const bool has_string_ops = string_ops.size();
 
-    // First iterate over transient strings and add to dest map
-    // Todo (todd): Add call to fetch string_views (local) or strings (distributed)
-    // for all non-translated ids to avoid string-by-string fetch
+    // Define the masking functor
+    auto mask_functor = [&id_map](int32_t id) {
+      return id_map[id] == StringDictionary::INVALID_STR_ID;
+    };
 
-    for (int32_t source_string_id = map_domain_start; source_string_id < -1;
-         ++source_string_id) {
-      if (id_map[source_string_id] == StringDictionary::INVALID_STR_ID) {
-        const auto source_string = getStringUnlocked(source_string_id);
-        const auto dest_string_id = dest_proxy->getOrAddTransientUnlocked(
-            has_string_ops ? string_ops(source_string) : source_string);
-        id_map[source_string_id] = dest_string_id;
+    // Process transient strings
+    {
+      auto transient_timer =
+          DEBUG_TIMER("UnionTranslationMapToOtherProxy:TransientStrings");
+      for (int32_t source_string_id = map_domain_start; source_string_id < -1;
+           ++source_string_id) {
+        if (id_map[source_string_id] == StringDictionary::INVALID_STR_ID) {
+          const auto source_string = getStringUnlocked(source_string_id);
+          const auto dest_string_id = dest_proxy->getOrAddTransientUnlocked(
+              has_string_ops ? string_ops(source_string) : source_string);
+          id_map[source_string_id] = dest_string_id;
+        }
       }
     }
-    // Now iterate over stored strings
-    for (int32_t source_string_id = 0; source_string_id < map_domain_end;
-         ++source_string_id) {
-      if (id_map[source_string_id] == StringDictionary::INVALID_STR_ID) {
-        const auto source_string = string_dict_->getString(source_string_id);
-        const auto dest_string_id = dest_proxy->getOrAddTransientUnlocked(
-            has_string_ops ? string_ops(source_string) : source_string);
-        id_map[source_string_id] = dest_string_id;
+
+    // Process stored strings
+    {
+      auto stored_timer = DEBUG_TIMER("UnionTranslationMapToOtherProxy:StoredStrings");
+
+      // Use getStringsForRange to safely retrieve strings with masking
+      std::vector<std::string> processed_strings =
+          string_dict_->getStringsForRange(0, map_domain_end, string_ops, mask_functor);
+
+      tbb::concurrent_unordered_set<std::string> unique_strings;
+
+      tbb::parallel_for(tbb::blocked_range<int32_t>(0, map_domain_end),
+                        [&](const tbb::blocked_range<int32_t>& range) {
+                          for (int32_t source_string_id = range.begin();
+                               source_string_id != range.end();
+                               ++source_string_id) {
+                            const auto& processed_string =
+                                processed_strings[source_string_id];
+                            if (!processed_string.empty()) {
+                              unique_strings.insert(processed_string);
+                            }
+                          }
+                        });
+
+      // Insert unique strings into destination proxy
+      {
+        auto dedup_timer = DEBUG_TIMER("UnionTranslationMapToOtherProxy:DedupStrings");
+        for (const auto& str : unique_strings) {
+          dest_proxy->getOrAddTransientUnlocked(str);
+        }
+      }
+
+      // Map processed strings to destination IDs
+      {
+        auto map_timer = DEBUG_TIMER("UnionTranslationMapToOtherProxy:MapStrings");
+        tbb::parallel_for(
+            tbb::blocked_range<int32_t>(0, map_domain_end),
+            [&](const tbb::blocked_range<int32_t>& range) {
+              for (int32_t source_string_id = range.begin();
+                   source_string_id != range.end();
+                   ++source_string_id) {
+                if (id_map[source_string_id] == StringDictionary::INVALID_STR_ID) {
+                  const auto& processed_string = processed_strings[source_string_id];
+                  if (!processed_string.empty()) {
+                    id_map[source_string_id] =
+                        dest_proxy->lookupTransientStringUnlocked(processed_string);
+                  }
+                }
+              }
+            });
       }
     }
   }
-  // We may have added transients to the destination proxy, use this to update
-  // our id map range (used downstream for ExpressionRange)
 
+  // Update id_map range
   const size_t num_dest_transients = dest_proxy->transientEntryCountUnlocked();
   id_map.setRangeStart(
       num_dest_transients > 0 ? -1 - static_cast<int32_t>(num_dest_transients) : 0);
   return id_map;
+}
+
+StringDictionaryProxy::IdMap
+StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxy(
+    const StringDictionaryProxy* dest_proxy,
+    const StringOps_Namespace::StringOps& string_ops) const {
+  const auto& source_dict_id = getDictKey();
+  const auto& dest_dict_id = dest_proxy->getDictKey();
+
+  std::shared_lock<std::shared_mutex> source_proxy_read_lock(rw_mutex_, std::defer_lock);
+  std::unique_lock<std::shared_mutex> dest_proxy_write_lock(dest_proxy->rw_mutex_,
+                                                            std::defer_lock);
+  order_translation_locks(
+      source_dict_id, dest_dict_id, source_proxy_read_lock, dest_proxy_write_lock);
+  return buildIntersectionTranslationMapToOtherProxyUnlocked(dest_proxy, string_ops);
 }
 
 template <typename T>
