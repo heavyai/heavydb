@@ -446,6 +446,61 @@ int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
   return getOrAddImpl(str);
 }
 
+std::vector<std::string> StringDictionary::getStringsForRange(
+    int32_t start_id,
+    int32_t end_id,
+    const StringOps_Namespace::StringOps& string_ops,
+    const std::function<bool(int32_t)>& mask_functor) const {
+  auto timer = DEBUG_TIMER(__func__);
+  CHECK_LE(start_id, end_id);
+  std::vector<std::string> result(end_id - start_id);
+  if (start_id == end_id) {
+    return result;
+  }
+
+  const bool has_string_ops = string_ops.size() > 0;
+
+  if (isClient()) {
+    // For distributed case, use the existing get_string method
+    tbb::parallel_for(tbb::blocked_range<int32_t>(start_id, end_id),
+                      [&](const tbb::blocked_range<int32_t>& range) {
+                        std::string str;  // Reuse buffer to reduce allocations
+                        for (int32_t id = range.begin(); id != range.end(); ++id) {
+                          if (mask_functor(id)) {
+                            {
+                              std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+                              client_->get_string(str, id);
+                            }
+                            if (has_string_ops) {
+                              str = string_ops(str);
+                            }
+                            result[id - start_id] = std::move(str);
+                          }
+                        }
+                      });
+    return result;
+  }
+
+  // Local dictionary case remains the same
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+  tbb::parallel_for(tbb::blocked_range<int32_t>(start_id, end_id),
+                    [&](const tbb::blocked_range<int32_t>& range) {
+                      for (int32_t id = range.begin(); id != range.end(); ++id) {
+                        if (mask_functor(id)) {
+                          if (id >= 0 && static_cast<size_t>(id) < str_count_) {
+                            std::string str = getStringUnlocked(id);
+                            if (has_string_ops) {
+                              str = string_ops(str);
+                            }
+                            result[id - start_id] = std::move(str);
+                          }
+                        }
+                      }
+                    });
+
+  return result;
+}
+
 namespace {
 
 template <class T>
