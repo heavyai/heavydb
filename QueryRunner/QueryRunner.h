@@ -237,6 +237,9 @@ class QueryRunner {
                                             const ExecutorDeviceType device_type,
                                             const bool hoist_literals = true,
                                             const bool allow_loop_joins = true);
+  virtual bool runSQLThrowingException(const std::string& query_str,
+                                       const std::string& expected_exception_msg,
+                                       const ExecutorDeviceType device_type);
   virtual std::shared_ptr<ExecutionResult> runSelectQuery(
       const std::string& query_str,
       const ExecutorDeviceType device_type,
