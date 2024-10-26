@@ -81,7 +81,6 @@ extern bool g_enable_union;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
 extern bool g_enable_table_functions;
 extern bool g_enable_executor_resource_mgr;
-extern bool g_enable_mode_on_gpu;
 
 extern size_t g_leaf_count;
 extern bool g_cluster;
@@ -4386,7 +4385,6 @@ TEST_F(Select, ModeBasic) {
     LOG(WARNING) << "Skipping ModeBasic tests in distributed mode.";
     return;
   }
-  CHECK(g_enable_mode_on_gpu);
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     auto const x = select_mode<int64_t>("x", dt);
@@ -4485,7 +4483,6 @@ TEST_F(Select, ModeOrderBy) {
     LOG(WARNING) << "Skipping ModeOrderBy tests in distributed mode.";
     return;
   }
-  CHECK(g_enable_mode_on_gpu);
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     char const* query =
@@ -4519,7 +4516,6 @@ class ModeTests
 // the probing length exceeds this value, it results in ErrorCode::PROBING_LENGTH_EXCEEDED
 TEST_P(ModeTests, ProbingLengthExceeded) {
   SKIP_ALL_ON_AGGREGATOR();
-  CHECK(g_enable_mode_on_gpu);
   auto const [dt, nslots] = GetParam();
   // If we set g_allow_cpu_retry = g_allow_query_step_cpu_retry = false then the
   // generate_series() step will fail since it cannot run on GPU. Thus it suffices
@@ -30670,7 +30666,6 @@ int main(int argc, char** argv) {
   g_enable_window_functions = true;
   g_enable_interop = false;
   g_enable_table_functions = true;
-  g_enable_mode_on_gpu = true;
 
   File_Namespace::DiskCacheConfig disk_cache_config{};
   if (vm.count("use-disk-cache")) {
