@@ -105,28 +105,10 @@ auto getValue(const TargetValue& mapd_variant) {
 };
 
 void checkSingleValueErrorCode(std::string const& query, ExecutorDeviceType dt) {
-  std::exception_ptr exception_ptr;
-  try {
-    QR::get()->runSQL(query, dt);
-  } catch (...) {
-    // the exception we catch here is valid throughout the lifetime of this function
-    exception_ptr = std::current_exception();
-  }
-  if (exception_ptr) {
-    try {
-      std::rethrow_exception(exception_ptr);
-    } catch (std::runtime_error const& e) {
-      // we catch a local exception, so we can safely access to its internal status
-      std::string const error_msg(e.what());
-      auto check_error_code = error_msg.find("SINGLE_VALUE_FOUND_MULTIPLE_VALUES");
-      ASSERT_TRUE(check_error_code != std::string::npos) << error_msg;
-      return;
-    } catch (...) {
-      ASSERT_TRUE(false) << "Unexpected exception type";
-    }
-  }
-  ASSERT_TRUE(false) << "The test should return std::runtime_error having error code: "
-                        "SINGLE_VALUE_FOUND_MULTIPLE_VALUES";
+  std::string expected_exception_msg{"SINGLE_VALUE_FOUND_MULTIPLE_VALUES"};
+  ASSERT_TRUE(QR::get()->runSQLThrowingException(query, expected_exception_msg, dt))
+      << "The test should return std::runtime_error having error code: "
+         "SINGLE_VALUE_FOUND_MULTIPLE_VALUES";
 }
 
 void runSingleValueTestValidation(std::string colType, ExecutorDeviceType dt) {
