@@ -1035,6 +1035,71 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
                         defaultExecutionOptionsForRunSQL(allow_loop_joins, just_explain));
 }
 
+// this logic expects to see an exception having std::runtime_error type
+// and it is reasonable to cover heavydb's exception throwing cases
+bool QueryRunner::runSQLThrowingException(const std::string& query_str,
+                                          const std::string& expected_exception_msg,
+                                          const ExecutorDeviceType device_type) {
+  auto co = CompilationOptions::defaults(device_type);
+  co.hoist_literals = true;
+  auto eo = defaultExecutionOptionsForRunSQL(true);
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto query_state = create_query_state(session_info_, query_str);
+  auto stdlog = STDLOG(query_state);
+
+  auto& cat = session_info_->getCatalog();
+  const auto& session_ref = *session_info_;
+
+  std::shared_ptr<ExecutionResult> result;
+  auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
+      [&cat,
+       &query_str,
+       &co,
+       explain_type = this->explain_type_,
+       &eo,
+       &query_state,
+       &session_ref,
+       &result,
+       parent_thread_local_ids = logger::thread_local_ids()](const size_t worker_id) {
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+        auto executor = Executor::getExecutor(worker_id);
+        // TODO The next line should be deleted since it overwrites co, but then
+        // NycTaxiTest.RunSelectsEncodingDictWhereGreater fails due to co not getting
+        // reset to its default values.
+        co = CompilationOptions::defaults(co.device_type);
+        co.explain_type = explain_type;
+        auto calcite_mgr = cat.getCalciteMgr();
+        const auto calciteQueryParsingOption =
+            calcite_mgr->getCalciteQueryParsingOption(true, false, false);
+        const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+            g_enable_calcite_view_optimize, g_enable_watchdog, {}, false);
+        const auto query_ra = query_parsing::process_and_check_access_privileges(
+                                  calcite_mgr.get(),
+                                  query_state->createQueryStateProxy(),
+                                  pg_shim(query_str),
+                                  calciteQueryParsingOption,
+                                  calciteOptimizationOption)
+                                  .plan_result;
+        auto ra_executor = RelAlgExecutor(executor.get(), query_ra, session_ref);
+        result = std::make_shared<ExecutionResult>(
+            ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
+      });
+  CHECK(dispatch_queue_);
+  dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
+  try {
+    auto result_future = query_launch_task->get_future().share();
+    result_future.get();
+  } catch (std::runtime_error const& e) {
+    std::string const error_msg(e.what());
+    auto check_error_msg = error_msg.find(expected_exception_msg);
+    return check_error_msg != std::string::npos;
+  } catch (...) {
+    return false;
+  }
+  return false;
+}
+
 ExtractedQueryPlanDag QueryRunner::extractQueryPlanDag(const std::string& query_str) {
   auto query_dag_info = getQueryInfoForDataRecyclerTest(query_str);
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
