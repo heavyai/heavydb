@@ -88,3 +88,11 @@ void RenderInfo::reset(std::unique_ptr<RenderQueryOptions> in_query_opts,
                        const heavyai::InSituFlags in_insitu_flags) {
   CHECK(false);
 }
+
+void RenderInfo::setRenderQueryStr(std::string const& query_str) {
+  CHECK(false);
+}
+std::string RenderInfo::getRenderQueryStr() const {
+  CHECK(false);
+  return "";
+}
