@@ -28,7 +28,20 @@
  */
 class QueryDispatchQueue {
  public:
-  using Task = std::packaged_task<void(size_t)>;
+  struct Task {
+    std::unique_ptr<std::packaged_task<void(size_t, std::string, std::string)>>
+        execute_rel_alg_task;
+    std::string query_session;
+    std::string submitted_time_str;
+
+    Task(std::unique_ptr<std::packaged_task<void(size_t, std::string, std::string)>>&&
+             task,
+         std::string const& session,
+         std::string const& time_str)
+        : execute_rel_alg_task(std::move(task))
+        , query_session(session)
+        , submitted_time_str(time_str) {}
+  };
 
   QueryDispatchQueue(const size_t parallel_executors_max) {
     workers_.resize(parallel_executors_max);
@@ -55,20 +68,41 @@ class QueryDispatchQueue {
       // contention on the special worker. This protects against deadlocks should the
       // query running (or any pending queries) hold a read lock on something that
       // requires a write lock during update/delete.
-      (*task)(2);
+      (*task->execute_rel_alg_task)(2, task->query_session, task->submitted_time_str);
       return;
     }
     std::unique_lock<decltype(queue_mutex_)> lock(queue_mutex_);
 
     LOG(INFO) << "Dispatching query with " << queue_.size() << " queries in the queue.";
-    queue_.push(task);
+    queue_.push_back(task);
     lock.unlock();
     cv_.notify_all();
   }
 
-  bool hasIdleWorker() {
+  void interrupt(std::string const& query_session) {
     std::lock_guard<decltype(queue_mutex_)> lock(queue_mutex_);
-    return num_running_workers_ < num_workers_;
+    // static constexpr ExecutorId UNITARY_EXECUTOR_ID = 0 from Executor.cpp
+    constexpr int unitary_executor_id = 0;
+    size_t num_erased_tasks = 0;
+    for (auto it = queue_.begin(); it != queue_.end();) {
+      auto task = *it;
+      // remove all pending tasks submitted from the interrupted query session
+      if (task->query_session == query_session) {
+        // when executing this task, the query will be interrupted right after
+        // entering the query execution logic, i.e., DBHandler::execute_rel_alg
+        // or RelAlgExecutor::executeRelAlgQueryNoRetry
+        it = queue_.erase(it);
+        (*task->execute_rel_alg_task)(
+            unitary_executor_id, task->query_session, task->submitted_time_str);
+        num_erased_tasks++;
+      } else {
+        it++;
+      }
+    }
+    if (num_erased_tasks > 0) {
+      LOG(INFO) << "Removing " << num_erased_tasks
+                << " interrupted pending queries from the queue.";
+    }
   }
 
   ~QueryDispatchQueue() {
@@ -94,7 +128,7 @@ class QueryDispatchQueue {
 
       if (!queue_.empty()) {
         auto task = queue_.front();
-        queue_.pop();
+        queue_.pop_front();
         ++num_running_workers_;
 
         LOG(INFO) << "Worker " << worker_idx
@@ -103,8 +137,8 @@ class QueryDispatchQueue {
                   << " queries in the queue.";
         // allow other threads to pick up tasks
         lock.unlock();
-        CHECK(task);
-        (*task)(worker_idx);
+        (*task->execute_rel_alg_task)(
+            worker_idx, task->query_session, task->submitted_time_str);
         // wait for signal
         lock.lock();
         --num_running_workers_;
@@ -118,7 +152,7 @@ class QueryDispatchQueue {
   std::mutex update_delete_mutex_;
 
   bool threads_should_exit_{false};
-  std::queue<std::shared_ptr<Task>> queue_;
+  std::deque<std::shared_ptr<Task>> queue_;
   std::vector<std::thread> workers_;
   int num_running_workers_;  // manipulate this under queue_lock
   int num_workers_;

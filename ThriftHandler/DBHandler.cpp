@@ -803,24 +803,21 @@ void DBHandler::interrupt(const TSessionId& query_session_id_or_json,
                                           jit_debug_ ? "mapdquery" : "",
                                           system_parameters_);
     CHECK(executor);
-
+    auto const query_session = query_request_info.sessionId();
+    auto const interrupt_session = interrupt_request_info.sessionId();
     if (leaf_aggregator_.leafCount() > 0) {
-      leaf_aggregator_.interrupt(query_request_info.sessionId(),
-                                 interrupt_request_info.sessionId());
+      leaf_aggregator_.interrupt(query_session, interrupt_session);
     }
-    auto target_executor_ids =
-        executor->getExecutorIdsRunningQuery(query_request_info.sessionId());
+    auto target_executor_ids = executor->getExecutorIdsRunningQuery(query_session);
     if (target_executor_ids.empty()) {
       heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
           executor->getSessionLock());
-      if (executor->checkIsQuerySessionEnrolled(query_request_info.sessionId(),
-                                                session_read_lock)) {
+      if (executor->checkIsQuerySessionEnrolled(query_session, session_read_lock)) {
         session_read_lock.unlock();
         VLOG(1) << "Received interrupt: "
                 << "User " << session_ptr->get_currentUser().userLoggable()
                 << ", Database " << dbname << std::endl;
-        executor->interrupt(query_request_info.sessionId(),
-                            interrupt_request_info.sessionId());
+        executor->interrupt(query_session, interrupt_session);
       }
     } else {
       for (auto& executor_id : target_executor_ids) {
@@ -829,11 +826,10 @@ void DBHandler::interrupt(const TSessionId& query_session_id_or_json,
                 << session_ptr->get_currentUser().userLoggable() << ", Database "
                 << dbname << std::endl;
         auto target_executor = Executor::getExecutor(executor_id);
-        target_executor->interrupt(query_request_info.sessionId(),
-                                   interrupt_request_info.sessionId());
+        target_executor->interrupt(query_session, interrupt_session);
       }
     }
-
+    dispatch_queue_->interrupt(query_session);
     LOG(INFO) << "User " << session_ptr->get_currentUser().userName
               << " interrupted session with database " << dbname << std::endl;
   }
@@ -1819,28 +1815,34 @@ TRowDescriptor DBHandler::validateRelAlg(const std::string& query_ra,
                                          QueryStateProxy query_state_proxy) {
   TQueryResult query_result;
   ExecutionResult execution_result;
-  auto execute_rel_alg_task = std::make_shared<QueryDispatchQueue::Task>(
-      [this,
-       &execution_result,
-       query_state_proxy,
-       &query_ra,
-       parent_thread_local_ids =
-           logger::thread_local_ids()](const size_t executor_index) {
-        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-        execute_rel_alg(execution_result,
-                        query_state_proxy,
-                        query_ra,
-                        true,
-                        ExecutorDeviceType::CPU,
-                        -1,
-                        -1,
-                        /*just_validate=*/true,
-                        /*find_filter_push_down_candidates=*/false,
-                        ExplainInfo(),
-                        executor_index);
-      });
-  dispatch_query_task(execute_rel_alg_task, /*is_update_delete=*/false);
-  auto result_future = execute_rel_alg_task->get_future().share();
+  auto rel_alg_task =
+      std::make_unique<std::packaged_task<void(size_t, std::string, std::string)>>(
+          [this,
+           &execution_result,
+           query_state_proxy,
+           &query_ra,
+           parent_thread_local_ids = logger::thread_local_ids()](
+              const size_t executor_index,
+              std::string const& query_session,
+              std::string const& submitted_time_str) {
+            logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+            execute_rel_alg(execution_result,
+                            query_state_proxy,
+                            query_ra,
+                            true,
+                            ExecutorDeviceType::CPU,
+                            -1,
+                            -1,
+                            /*just_validate=*/true,
+                            /*find_filter_push_down_candidates=*/false,
+                            ExplainInfo(),
+                            executor_index,
+                            query_session,
+                            submitted_time_str);
+          });
+  auto task = std::make_shared<QueryDispatchQueue::Task>(std::move(rel_alg_task), "", "");
+  dispatch_query_task(task, /*is_update_delete=*/false);
+  auto result_future = task->execute_rel_alg_task->get_future().share();
   result_future.get();
   DBHandler::convertData(query_result, execution_result, query_state_proxy, true, -1, -1);
 
@@ -2803,7 +2805,10 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
                         -1,
                         /*just_validate=*/true,
                         /*find_push_down_candidates=*/false,
-                        ExplainInfo());
+                        ExplainInfo(),
+                        Executor::UNITARY_EXECUTOR_ID,
+                        /*query_session_id=*/"",
+                        /*query_submitted_time_str=*/"");
         TQueryResult result;
         DBHandler::convertData(result, ex_result, query_state_proxy, true, -1, -1);
         num_cols = result.row_set.row_desc.size();
@@ -6377,15 +6382,27 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
     const bool just_validate,
     const bool find_push_down_candidates,
     const ExplainInfo& explain_info,
-    const std::optional<size_t> executor_index) const {
+    const size_t executor_index,
+    const std::string& query_session,
+    const std::string& submitted_time_str) const {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   VLOG(1) << "Table Schema Locks:\n" << lockmgr::TableSchemaLockMgr::instance();
   VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
-  auto executor = Executor::getExecutor(
-      executor_index ? *executor_index : Executor::UNITARY_EXECUTOR_ID,
-      jit_debug_ ? "/tmp" : "",
-      jit_debug_ ? "mapdquery" : "",
-      system_parameters_);
+  auto executor = Executor::getExecutor(executor_index,
+                                        jit_debug_ ? "/tmp" : "",
+                                        jit_debug_ ? "mapdquery" : "",
+                                        system_parameters_);
+  if (g_enable_runtime_query_interrupt) {
+    try {
+      executor->checkPendingQueryStatus(query_session);
+    } catch (QueryExecutionError& e) {
+      executor->clearQuerySessionStatus(query_session, submitted_time_str);
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
+        throw std::runtime_error("Query execution has been interrupted (pending query).");
+      }
+      throw e;
+    }
+  }
   RelAlgExecutor ra_executor(executor.get(),
                              query_ra,
                              *query_state_proxy->getConstSessionInfo(),
@@ -6857,78 +6874,87 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     std::vector<PushedDownFilterInfo> filter_push_down_requests;
     auto submitted_time_str = query_state_proxy->getQuerySubmittedTime();
     auto query_session = session_ptr ? session_ptr->get_session_id() : "";
-    auto execute_rel_alg_task = std::make_shared<QueryDispatchQueue::Task>(
-        [this,
-         &filter_push_down_requests,
-         &_return,
-         query_state_proxy,
-         &explain,
-         &query_ra_calcite_explain,
-         &query_ra,
-         &query_str,
-         &locks,
-         column_format,
-         executor_device_type,
-         first_n,
-         at_most_n,
-         parent_thread_local_ids =
-             logger::thread_local_ids()](const size_t executor_index) {
-          // if we find proper filters we need to "re-execute" the query
-          // with a modified query plan (i.e., which has pushdowned filter)
-          // otherwise this trial just executes the query and keeps corresponding query
-          // resultset in _return object
-          logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-          filter_push_down_requests = execute_rel_alg(
-              _return,
-              query_state_proxy,
-              explain.isCalciteExplain() ? query_ra_calcite_explain : query_ra,
-              column_format,
-              executor_device_type,
-              first_n,
-              at_most_n,
-              /*just_validate=*/false,
-              g_enable_filter_push_down && !g_cluster,
-              explain,
-              executor_index);
-          if (explain.isCalciteExplain()) {
-            if (filter_push_down_requests.empty()) {
-              // we only reach here if filter push down was enabled, but no filter
-              // push down candidate was found
-              _return.updateResultSet(query_ra, ExecutionResult::Explanation);
-            } else {
-              CHECK(!locks.empty());
-              std::vector<TFilterPushDownInfo> filter_push_down_info;
-              for (const auto& req : filter_push_down_requests) {
-                TFilterPushDownInfo filter_push_down_info_for_request;
-                filter_push_down_info_for_request.input_prev = req.input_prev;
-                filter_push_down_info_for_request.input_start = req.input_start;
-                filter_push_down_info_for_request.input_next = req.input_next;
-                filter_push_down_info.push_back(filter_push_down_info_for_request);
+    auto rel_alg_task =
+        std::make_unique<std::packaged_task<void(size_t, std::string, std::string)>>(
+            [this,
+             &filter_push_down_requests,
+             &_return,
+             query_state_proxy,
+             &explain,
+             &query_ra_calcite_explain,
+             &query_ra,
+             &query_str,
+             &locks,
+             column_format,
+             executor_device_type,
+             first_n,
+             at_most_n,
+             parent_thread_local_ids = logger::thread_local_ids()](
+                const size_t executor_index,
+                std::string const& query_session,
+                std::string const& submitted_time_str) {
+              // if we find proper filters we need to "re-execute" the query
+              // with a modified query plan (i.e., which has pushdowned filter)
+              // otherwise this trial just executes the query and keeps corresponding
+              // query resultset in _return object
+              logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+              filter_push_down_requests = execute_rel_alg(
+                  _return,
+                  query_state_proxy,
+                  explain.isCalciteExplain() ? query_ra_calcite_explain : query_ra,
+                  column_format,
+                  executor_device_type,
+                  first_n,
+                  at_most_n,
+                  /*just_validate=*/false,
+                  g_enable_filter_push_down && !g_cluster,
+                  explain,
+                  executor_index,
+                  query_session,
+                  submitted_time_str);
+              if (explain.isCalciteExplain()) {
+                if (filter_push_down_requests.empty()) {
+                  // we only reach here if filter push down was enabled, but no filter
+                  // push down candidate was found
+                  _return.updateResultSet(query_ra, ExecutionResult::Explanation);
+                } else {
+                  CHECK(!locks.empty());
+                  std::vector<TFilterPushDownInfo> filter_push_down_info;
+                  for (const auto& req : filter_push_down_requests) {
+                    TFilterPushDownInfo filter_push_down_info_for_request;
+                    filter_push_down_info_for_request.input_prev = req.input_prev;
+                    filter_push_down_info_for_request.input_start = req.input_start;
+                    filter_push_down_info_for_request.input_next = req.input_next;
+                    filter_push_down_info.push_back(filter_push_down_info_for_request);
+                  }
+                  query_ra = parse_to_ra(query_state_proxy,
+                                         query_str,
+                                         filter_push_down_info,
+                                         false,
+                                         system_parameters_)
+                                 .first.plan_result;
+                  _return.updateResultSet(query_ra, ExecutionResult::Explanation);
+                }
+              } else {
+                if (!filter_push_down_requests.empty()) {
+                  CHECK(!locks.empty());
+                  execute_rel_alg_with_filter_push_down(_return,
+                                                        query_state_proxy,
+                                                        query_ra,
+                                                        column_format,
+                                                        executor_device_type,
+                                                        first_n,
+                                                        at_most_n,
+                                                        false,
+                                                        false,
+                                                        filter_push_down_requests,
+                                                        query_session,
+                                                        submitted_time_str);
+                }
               }
-              query_ra = parse_to_ra(query_state_proxy,
-                                     query_str,
-                                     filter_push_down_info,
-                                     false,
-                                     system_parameters_)
-                             .first.plan_result;
-              _return.updateResultSet(query_ra, ExecutionResult::Explanation);
-            }
-          } else {
-            if (!filter_push_down_requests.empty()) {
-              CHECK(!locks.empty());
-              execute_rel_alg_with_filter_push_down(_return,
-                                                    query_state_proxy,
-                                                    query_ra,
-                                                    column_format,
-                                                    executor_device_type,
-                                                    first_n,
-                                                    at_most_n,
-                                                    false,
-                                                    false,
-                                                    filter_push_down_requests);
-            }
-          }
-        });
+            });
+    auto task = std::make_shared<QueryDispatchQueue::Task>(
+        std::move(rel_alg_task), query_session, submitted_time_str);
     CHECK(dispatch_queue_);
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
     if (g_enable_runtime_query_interrupt && !query_session.empty() &&
@@ -6938,25 +6964,12 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
                                    submitted_time_str,
                                    Executor::UNITARY_EXECUTOR_ID,
                                    QuerySessionStatus::QueryStatus::PENDING_QUEUE);
-      while (!dispatch_queue_->hasIdleWorker()) {
-        try {
-          executor->checkPendingQueryStatus(query_session);
-        } catch (QueryExecutionError& e) {
-          executor->clearQuerySessionStatus(query_session, submitted_time_str);
-          if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
-            throw std::runtime_error(
-                "Query execution has been interrupted (pending query).");
-          }
-          throw e;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      }
     }
     log_cpu_memory_status();
-    dispatch_queue_->submit(execute_rel_alg_task,
+    dispatch_queue_->submit(task,
                             pw.getDMLType() == ParserWrapper::DMLType::Update ||
                                 pw.getDMLType() == ParserWrapper::DMLType::Delete);
-    auto result_future = execute_rel_alg_task->get_future().share();
+    auto result_future = task->execute_rel_alg_task->get_future().share();
     result_future.get();
     return;
   }
@@ -6972,7 +6985,9 @@ void DBHandler::execute_rel_alg_with_filter_push_down(
     const int32_t at_most_n,
     const bool just_explain,
     const bool is_calcite_explain,
-    const std::vector<PushedDownFilterInfo>& filter_push_down_requests) {
+    const std::vector<PushedDownFilterInfo>& filter_push_down_requests,
+    const std::string& query_session,
+    const std::string& submitted_time_str) {
   // collecting the selected filters' info to be sent to Calcite:
   std::vector<TFilterPushDownInfo> filter_push_down_info;
   for (const auto& req : filter_push_down_requests) {
@@ -7003,7 +7018,10 @@ void DBHandler::execute_rel_alg_with_filter_push_down(
                   at_most_n,
                   /*just_validate=*/false,
                   /*find_push_down_candidates=*/false,
-                  explain_info);
+                  explain_info,
+                  Executor::UNITARY_EXECUTOR_ID,
+                  query_session,
+                  submitted_time_str);
 }
 
 void DBHandler::execute_distributed_copy_statement(
@@ -8199,6 +8217,7 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
       target_executor->interrupt(target_session_id, session_info.get_session_id());
     }
   }
+  dispatch_queue_->interrupt(target_session_id);
 }
 
 void DBHandler::alterSystemClear(const std::string& session_id,
