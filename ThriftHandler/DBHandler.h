@@ -808,7 +808,9 @@ class DBHandler : public HeavyIf {
       const bool just_validate,
       const bool find_push_down_candidates,
       const ExplainInfo& explain_info,
-      const std::optional<size_t> executor_index = std::nullopt) const;
+      const size_t executor_index,
+      const std::string& query_session,
+      const std::string& submitted_time_str) const;
 
   void execute_rel_alg_with_filter_push_down(
       ExecutionResult& _return,
@@ -820,7 +822,9 @@ class DBHandler : public HeavyIf {
       const int32_t at_most_n,
       const bool just_explain,
       const bool just_calcite_explain,
-      const std::vector<PushedDownFilterInfo>& filter_push_down_requests);
+      const std::vector<PushedDownFilterInfo>& filter_push_down_requests,
+      const std::string& query_session,
+      const std::string& submitted_time_str);
 
   void executeDdl(TQueryResult& _return,
                   const std::string& query_ra,

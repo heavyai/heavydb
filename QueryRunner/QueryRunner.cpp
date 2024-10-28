@@ -732,62 +732,68 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
   const auto& session_ref = *session_info_;
 
   std::shared_ptr<ExecutionResult> result;
-  auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
-      [&cat,
-       &session_ref,
-       &query_ra,
-       &device_type,
-       &query_state,
-       &result,
-       &running_query_check_freq,
-       &pending_query_check_freq,
-       parent_thread_local_ids = logger::thread_local_ids()](const size_t worker_id) {
-        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-        auto executor = Executor::getExecutor(worker_id);
-        CompilationOptions co = CompilationOptions::defaults(device_type);
+  auto rel_alg_task =
+      std::make_unique<std::packaged_task<void(size_t, std::string, std::string)>>(
+          [&cat,
+           &session_ref,
+           &query_ra,
+           &device_type,
+           &query_state,
+           &result,
+           &running_query_check_freq,
+           &pending_query_check_freq,
+           parent_thread_local_ids = logger::thread_local_ids()](
+              const size_t worker_id,
+              std::string const& query_session,
+              std::string const& submitted_time_str) {
+            logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+            auto executor = Executor::getExecutor(worker_id);
+            CompilationOptions co = CompilationOptions::defaults(device_type);
 
-        ExecutionOptions eo = {g_enable_columnar_output,
-                               false,
-                               true,
-                               false,
-                               true,
-                               false,
-                               false,
-                               false,
-                               false,
-                               10000,
-                               false,
-                               false,
-                               g_gpu_mem_limit_percent,
-                               true,
-                               running_query_check_freq,
-                               pending_query_check_freq,
-                               false};
-        {
-          // async query initiation for interrupt test
-          // incurs data race warning in TSAN since
-          // calcite_mgr is shared across multiple query threads
-          // so here we lock the manager during query parsing
-          std::lock_guard<std::mutex> calcite_lock_guard(calcite_lock);
-          auto calcite_mgr = cat.getCalciteMgr();
-          const auto calciteQueryParsingOption =
-              calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-          const auto calciteOptimizationOption =
-              calcite_mgr->getCalciteOptimizationOption(
-                  false, g_enable_watchdog, {}, false);
-          query_ra = query_parsing::process_and_check_access_privileges(
-                         calcite_mgr.get(),
-                         query_state->createQueryStateProxy(),
-                         pg_shim(query_state->getQueryStr()),
-                         calciteQueryParsingOption,
-                         calciteOptimizationOption)
-                         .plan_result;
-        }
-        auto ra_executor =
-            RelAlgExecutor(executor.get(), query_ra, session_ref, query_state);
-        result = std::make_shared<ExecutionResult>(
-            ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
-      });
+            ExecutionOptions eo = {g_enable_columnar_output,
+                                   false,
+                                   true,
+                                   false,
+                                   true,
+                                   false,
+                                   false,
+                                   false,
+                                   false,
+                                   10000,
+                                   false,
+                                   false,
+                                   g_gpu_mem_limit_percent,
+                                   true,
+                                   running_query_check_freq,
+                                   pending_query_check_freq,
+                                   false};
+            {
+              // async query initiation for interrupt test
+              // incurs data race warning in TSAN since
+              // calcite_mgr is shared across multiple query threads
+              // so here we lock the manager during query parsing
+              std::lock_guard<std::mutex> calcite_lock_guard(calcite_lock);
+              auto calcite_mgr = cat.getCalciteMgr();
+              const auto calciteQueryParsingOption =
+                  calcite_mgr->getCalciteQueryParsingOption(true, false, false);
+              const auto calciteOptimizationOption =
+                  calcite_mgr->getCalciteOptimizationOption(
+                      false, g_enable_watchdog, {}, false);
+              query_ra = query_parsing::process_and_check_access_privileges(
+                             calcite_mgr.get(),
+                             query_state->createQueryStateProxy(),
+                             pg_shim(query_state->getQueryStr()),
+                             calciteQueryParsingOption,
+                             calciteOptimizationOption)
+                             .plan_result;
+            }
+            auto ra_executor =
+                RelAlgExecutor(executor.get(), query_ra, session_ref, query_state);
+            result = std::make_shared<ExecutionResult>(
+                ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
+          });
+  auto task = std::make_shared<QueryDispatchQueue::Task>(
+      std::move(rel_alg_task), session_id, query_state->getQuerySubmittedTime());
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   executor->enrollQuerySession(session_id,
                                query_str,
@@ -795,8 +801,8 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
                                Executor::UNITARY_EXECUTOR_ID,
                                QuerySessionStatus::QueryStatus::PENDING_QUEUE);
   CHECK(dispatch_queue_);
-  dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
-  auto result_future = query_launch_task->get_future().share();
+  dispatch_queue_->submit(task, /*is_update_delete=*/false);
+  auto result_future = task->execute_rel_alg_task->get_future().share();
   result_future.get();
   CHECK(result);
   return result->getRows();
@@ -917,38 +923,45 @@ std::shared_ptr<ResultSet> QueryRunner::getCalcitePlan(const std::string& query_
   auto stdlog = STDLOG(query_state);
 
   std::shared_ptr<ResultSet> result;
-  auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
-      [&cat,
-       &query_str,
-       &enable_watchdog,
-       &is_explain_as_json_str,
-       &is_explain_detailed,
-       &query_state,
-       &result,
-       parent_thread_local_ids = logger::thread_local_ids()](const size_t worker_id) {
-        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-        auto executor = Executor::getExecutor(worker_id);
-        auto calcite_mgr = cat.getCalciteMgr();
-        // Calcite returns its plan as a form of `json_str` by default,
-        // so we set `is_explain` to TRUE if `!is_explain_as_json_str`
-        const auto calciteQueryParsingOption = calcite_mgr->getCalciteQueryParsingOption(
-            true, !is_explain_as_json_str, is_explain_detailed);
-        const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-            g_enable_calcite_view_optimize, enable_watchdog, {}, false);
-        const auto query_ra = query_parsing::process_and_check_access_privileges(
-                                  calcite_mgr.get(),
-                                  query_state->createQueryStateProxy(),
-                                  pg_shim(query_str),
-                                  calciteQueryParsingOption,
-                                  calciteOptimizationOption,
-                                  false)
-                                  .plan_result;
-        result = std::make_shared<ResultSet>(query_ra);
-        return result;
-      });
+  auto rel_alg_task =
+      std::make_unique<std::packaged_task<void(size_t, std::string, std::string)>>(
+          [&cat,
+           &query_str,
+           &enable_watchdog,
+           &is_explain_as_json_str,
+           &is_explain_detailed,
+           &query_state,
+           &result,
+           parent_thread_local_ids = logger::thread_local_ids()](
+              const size_t worker_id,
+              std::string const& query_session,
+              std::string const& submitted_time_str) {
+            logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+            auto executor = Executor::getExecutor(worker_id);
+            auto calcite_mgr = cat.getCalciteMgr();
+            // Calcite returns its plan as a form of `json_str` by default,
+            // so we set `is_explain` to TRUE if `!is_explain_as_json_str`
+            const auto calciteQueryParsingOption =
+                calcite_mgr->getCalciteQueryParsingOption(
+                    true, !is_explain_as_json_str, is_explain_detailed);
+            const auto calciteOptimizationOption =
+                calcite_mgr->getCalciteOptimizationOption(
+                    g_enable_calcite_view_optimize, enable_watchdog, {}, false);
+            const auto query_ra = query_parsing::process_and_check_access_privileges(
+                                      calcite_mgr.get(),
+                                      query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      calciteQueryParsingOption,
+                                      calciteOptimizationOption,
+                                      false)
+                                      .plan_result;
+            result = std::make_shared<ResultSet>(query_ra);
+            return result;
+          });
   CHECK(dispatch_queue_);
-  dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
-  auto result_future = query_launch_task->get_future().share();
+  auto task = std::make_shared<QueryDispatchQueue::Task>(std::move(rel_alg_task), "", "");
+  dispatch_queue_->submit(task, /*is_update_delete=*/false);
+  auto result_future = task->execute_rel_alg_task->get_future().share();
   result_future.get();
   CHECK(result);
   return result;
@@ -975,43 +988,49 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
   const auto& session_ref = *session_info_;
 
   std::shared_ptr<ExecutionResult> result;
-  auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
-      [&cat,
-       &query_str,
-       &co,
-       explain_type = this->explain_type_,
-       &eo,
-       &query_state,
-       &session_ref,
-       &result,
-       parent_thread_local_ids = logger::thread_local_ids()](const size_t worker_id) {
-        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-        auto executor = Executor::getExecutor(worker_id);
-        // TODO The next line should be deleted since it overwrites co, but then
-        // NycTaxiTest.RunSelectsEncodingDictWhereGreater fails due to co not getting
-        // reset to its default values.
-        co = CompilationOptions::defaults(co.device_type);
-        co.explain_type = explain_type;
-        auto calcite_mgr = cat.getCalciteMgr();
-        const auto calciteQueryParsingOption =
-            calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-        const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-            g_enable_calcite_view_optimize, g_enable_watchdog, {}, false);
-        const auto query_ra = query_parsing::process_and_check_access_privileges(
-                                  calcite_mgr.get(),
-                                  query_state->createQueryStateProxy(),
-                                  pg_shim(query_str),
-                                  calciteQueryParsingOption,
-                                  calciteOptimizationOption)
-                                  .plan_result;
-        auto ra_executor = RelAlgExecutor(executor.get(), query_ra, session_ref);
-        result = std::make_shared<ExecutionResult>(
-            ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
-      });
+  auto rel_alg_task =
+      std::make_unique<std::packaged_task<void(size_t, std::string, std::string)>>(
+          [&cat,
+           &query_str,
+           &co,
+           explain_type = this->explain_type_,
+           &eo,
+           &query_state,
+           &session_ref,
+           &result,
+           parent_thread_local_ids = logger::thread_local_ids()](
+              const size_t worker_id,
+              std::string const& query_session,
+              std::string const& submitted_time_str) {
+            logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+            auto executor = Executor::getExecutor(worker_id);
+            // TODO The next line should be deleted since it overwrites co, but then
+            // NycTaxiTest.RunSelectsEncodingDictWhereGreater fails due to co not getting
+            // reset to its default values.
+            co = CompilationOptions::defaults(co.device_type);
+            co.explain_type = explain_type;
+            auto calcite_mgr = cat.getCalciteMgr();
+            const auto calciteQueryParsingOption =
+                calcite_mgr->getCalciteQueryParsingOption(true, false, false);
+            const auto calciteOptimizationOption =
+                calcite_mgr->getCalciteOptimizationOption(
+                    g_enable_calcite_view_optimize, g_enable_watchdog, {}, false);
+            const auto query_ra = query_parsing::process_and_check_access_privileges(
+                                      calcite_mgr.get(),
+                                      query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      calciteQueryParsingOption,
+                                      calciteOptimizationOption)
+                                      .plan_result;
+            auto ra_executor = RelAlgExecutor(executor.get(), query_ra, session_ref);
+            result = std::make_shared<ExecutionResult>(
+                ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
+          });
+  auto task = std::make_shared<QueryDispatchQueue::Task>(std::move(rel_alg_task), "", "");
   CHECK(dispatch_queue_);
-  dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
+  dispatch_queue_->submit(task, /*is_update_delete=*/false);
   try {
-    auto result_future = query_launch_task->get_future().share();
+    auto result_future = task->execute_rel_alg_task->get_future().share();
     result_future.get();
   } catch (...) {
     // capture any exception thrown while running `query_launch_task` here and rethrow it
@@ -1052,43 +1071,49 @@ bool QueryRunner::runSQLThrowingException(const std::string& query_str,
   const auto& session_ref = *session_info_;
 
   std::shared_ptr<ExecutionResult> result;
-  auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
-      [&cat,
-       &query_str,
-       &co,
-       explain_type = this->explain_type_,
-       &eo,
-       &query_state,
-       &session_ref,
-       &result,
-       parent_thread_local_ids = logger::thread_local_ids()](const size_t worker_id) {
-        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-        auto executor = Executor::getExecutor(worker_id);
-        // TODO The next line should be deleted since it overwrites co, but then
-        // NycTaxiTest.RunSelectsEncodingDictWhereGreater fails due to co not getting
-        // reset to its default values.
-        co = CompilationOptions::defaults(co.device_type);
-        co.explain_type = explain_type;
-        auto calcite_mgr = cat.getCalciteMgr();
-        const auto calciteQueryParsingOption =
-            calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-        const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-            g_enable_calcite_view_optimize, g_enable_watchdog, {}, false);
-        const auto query_ra = query_parsing::process_and_check_access_privileges(
-                                  calcite_mgr.get(),
-                                  query_state->createQueryStateProxy(),
-                                  pg_shim(query_str),
-                                  calciteQueryParsingOption,
-                                  calciteOptimizationOption)
-                                  .plan_result;
-        auto ra_executor = RelAlgExecutor(executor.get(), query_ra, session_ref);
-        result = std::make_shared<ExecutionResult>(
-            ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
-      });
+  auto rel_alg_task =
+      std::make_unique<std::packaged_task<void(size_t, std::string, std::string)>>(
+          [&cat,
+           &query_str,
+           &co,
+           explain_type = this->explain_type_,
+           &eo,
+           &query_state,
+           &session_ref,
+           &result,
+           parent_thread_local_ids = logger::thread_local_ids()](
+              const size_t worker_id,
+              std::string const& query_session,
+              std::string const& submitted_time_str) {
+            logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+            auto executor = Executor::getExecutor(worker_id);
+            // TODO The next line should be deleted since it overwrites co, but then
+            // NycTaxiTest.RunSelectsEncodingDictWhereGreater fails due to co not getting
+            // reset to its default values.
+            co = CompilationOptions::defaults(co.device_type);
+            co.explain_type = explain_type;
+            auto calcite_mgr = cat.getCalciteMgr();
+            const auto calciteQueryParsingOption =
+                calcite_mgr->getCalciteQueryParsingOption(true, false, false);
+            const auto calciteOptimizationOption =
+                calcite_mgr->getCalciteOptimizationOption(
+                    g_enable_calcite_view_optimize, g_enable_watchdog, {}, false);
+            const auto query_ra = query_parsing::process_and_check_access_privileges(
+                                      calcite_mgr.get(),
+                                      query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      calciteQueryParsingOption,
+                                      calciteOptimizationOption)
+                                      .plan_result;
+            auto ra_executor = RelAlgExecutor(executor.get(), query_ra, session_ref);
+            result = std::make_shared<ExecutionResult>(
+                ra_executor.executeRelAlgQuery(co, eo, false, false, nullptr));
+          });
   CHECK(dispatch_queue_);
-  dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
+  auto task = std::make_shared<QueryDispatchQueue::Task>(std::move(rel_alg_task), "", "");
+  dispatch_queue_->submit(task, /*is_update_delete=*/false);
   try {
-    auto result_future = query_launch_task->get_future().share();
+    auto result_future = task->execute_rel_alg_task->get_future().share();
     result_future.get();
   } catch (std::runtime_error const& e) {
     std::string const error_msg(e.what());
@@ -1117,34 +1142,40 @@ std::unique_ptr<RelAlgDag> QueryRunner::getRelAlgDag(const std::string& query_st
   const auto& session_ref = *session_info_;
 
   std::unique_ptr<RelAlgDag> rel_alg_dag;
-  auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
-      [&cat,
-       &query_str,
-       &query_state,
-       &rel_alg_dag,
-       &session_ref,
-       parent_thread_local_ids = logger::thread_local_ids()](const size_t worker_id) {
-        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-        auto executor = Executor::getExecutor(worker_id);
-        auto eo = ExecutionOptions::defaults();
-        auto calcite_mgr = cat.getCalciteMgr();
-        const auto calciteQueryParsingOption =
-            calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-        const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-            g_enable_calcite_view_optimize, g_enable_watchdog, {}, false);
-        const auto query_ra = query_parsing::process_and_check_access_privileges(
-                                  calcite_mgr.get(),
-                                  query_state->createQueryStateProxy(),
-                                  pg_shim(query_str),
-                                  calciteQueryParsingOption,
-                                  calciteOptimizationOption)
-                                  .plan_result;
-        auto ra_executor = RelAlgExecutor(executor.get(), query_ra, session_ref);
-        rel_alg_dag = ra_executor.getOwnedRelAlgDag();
-      });
+  auto rel_alg_task =
+      std::make_unique<std::packaged_task<void(size_t, std::string, std::string)>>(
+          [&cat,
+           &query_str,
+           &query_state,
+           &rel_alg_dag,
+           &session_ref,
+           parent_thread_local_ids = logger::thread_local_ids()](
+              const size_t worker_id,
+              std::string const& query_session,
+              std::string const& submitted_time_str) {
+            logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+            auto executor = Executor::getExecutor(worker_id);
+            auto eo = ExecutionOptions::defaults();
+            auto calcite_mgr = cat.getCalciteMgr();
+            const auto calciteQueryParsingOption =
+                calcite_mgr->getCalciteQueryParsingOption(true, false, false);
+            const auto calciteOptimizationOption =
+                calcite_mgr->getCalciteOptimizationOption(
+                    g_enable_calcite_view_optimize, g_enable_watchdog, {}, false);
+            const auto query_ra = query_parsing::process_and_check_access_privileges(
+                                      calcite_mgr.get(),
+                                      query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      calciteQueryParsingOption,
+                                      calciteOptimizationOption)
+                                      .plan_result;
+            auto ra_executor = RelAlgExecutor(executor.get(), query_ra, session_ref);
+            rel_alg_dag = ra_executor.getOwnedRelAlgDag();
+          });
+  auto task = std::make_shared<QueryDispatchQueue::Task>(std::move(rel_alg_task), "", "");
   CHECK(dispatch_queue_);
-  dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
-  auto result_future = query_launch_task->get_future().share();
+  dispatch_queue_->submit(task, /*is_update_delete=*/false);
+  auto result_future = task->execute_rel_alg_task->get_future().share();
   result_future.get();
   CHECK(rel_alg_dag);
   return rel_alg_dag;

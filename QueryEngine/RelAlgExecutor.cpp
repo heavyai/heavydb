@@ -632,7 +632,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
 
   // capture the lock acquistion time
   auto clock_begin = timer_start();
-  if (g_enable_dynamic_watchdog) {
+  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
     executor_->resetInterrupt();
   }
   std::string query_session{""};
@@ -650,6 +650,15 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   auto interruptable = !render_info && !query_session.empty() &&
                        eo.allow_runtime_query_interrupt && !validate_or_explain_query;
   if (interruptable) {
+    try {
+      executor_->checkPendingQueryStatus(query_session);
+    } catch (QueryExecutionError& e) {
+      executor_->clearQuerySessionStatus(query_session, query_submitted_time);
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
+        throw std::runtime_error("Query execution has been interrupted (pending query).");
+      }
+      throw e;
+    }
     // if we reach here, the current query which was waiting an idle executor
     // within the dispatch queue is now scheduled to the specific executor
     // (not UNITARY_EXECUTOR)
@@ -889,7 +898,7 @@ void RelAlgExecutor::prepareLeafExecution(
     const TableGenerations& table_generations) {
   // capture the lock acquistion time
   auto clock_begin = timer_start();
-  if (g_enable_dynamic_watchdog) {
+  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
     executor_->resetInterrupt();
   }
   queue_time_ms_ = timer_stop(clock_begin);

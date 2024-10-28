@@ -62,6 +62,9 @@ class RenderInfo : public heavyai::InSituFlagsOwnerInterface {
 
   const RenderQueryOptions& getRenderQueryOptions() const;
 
+  void setRenderQueryStr(std::string const& query_str);
+  std::string getRenderQueryStr() const;
+
   void reset(std::unique_ptr<RenderQueryOptions> in_query_opts,
              const heavyai::InSituFlags in_insitu_flags);
 
@@ -73,4 +76,5 @@ class RenderInfo : public heavyai::InSituFlagsOwnerInterface {
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_vbo_layout;
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_ssbo_layout;
   RenderQueryOptions render_query_opts_;
+  std::string render_query_str_;
 };
