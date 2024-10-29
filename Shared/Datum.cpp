@@ -120,8 +120,15 @@ int64_t parse_numeric(const std::string_view s, SQLTypeInfo& ti) {
   std::string before_dot;
   std::string after_dot;
   if (dot != std::string::npos) {
-    // make .99 as 0.99, or std::stoll below throws exception 'std::invalid_argument'
-    before_dot = (0 == dot) ? "0" : s.substr(0, dot);
+    if (dot == 0) {
+      // make .99 as 0.99, or std::stoll below throws exception 'std::invalid_argument'
+      before_dot = "0";
+    } else if (dot == 1 && s[0] == '-') {
+      // make -.99 as -0.99, or std::stoll below throws exception 'std::invalid_argument'
+      before_dot = "-0";
+    } else {
+      before_dot = s.substr(0, dot);
+    }
     after_dot = s.substr(dot + 1);
   } else {
     before_dot = s;
