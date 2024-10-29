@@ -1209,7 +1209,7 @@ TEST_P(CacheControllingSelectQueryTest, DefaultLocalParquetServer) {
 // Create table with multiple fragments with file buffers less than size of a
 // fragment Includes both fixed and variable length data
 TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE, txt_arr TEXT[])",
       {{"buffer_size", "25"}, {"fragment_size", "64"}},
       "0_255",
@@ -1258,7 +1258,7 @@ TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
 }
 
 TEST_P(CacheControllingSelectQueryTest, ParquetNullRowgroups) {
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("(a SMALLINT, b SMALLINT)", "null_columns", "parquet");
   sql(query);
 
@@ -1274,7 +1274,7 @@ TEST_P(CacheControllingSelectQueryTest, ParquetNullRowgroups) {
 }
 
 TEST_P(CacheControllingSelectQueryTest, StringDictColumnWithNullValueInFirstRowGroup) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(i INTEGER, t TEXT)", "first_row_group_null_str", "parquet");
   sql(query);
 
@@ -1402,7 +1402,7 @@ INSTANTIATE_TEST_SUITE_P(
     CacheAndDataWrapperControllingSelectQueryTest::getTestName);
 
 TEST_F(SelectQueryTest, ParquetStringsAllNullPlacementPermutations) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "( id INT, txt1 TEXT ENCODING NONE, txt2 TEXT ENCODING DICT (32), txt3 TEXT "
       "ENCODING DICT (16), txt4 TEXT ENCODING DICT (8))",
       "strings_with_all_null_placement_permutations",
@@ -1444,10 +1444,10 @@ TEST_F(SelectQueryTest, ParquetStringsAllNullPlacementPermutations) {
 }
 
 TEST_F(SelectQueryTest, ParquetStringDictionaryEncodedMetadataTest) {
-  const auto& query = getCreateForeignTableQuery("(txt TEXT ENCODING DICT (32) )",
-                                                 {{"fragment_size", "4"}},
-                                                 "strings_repeating",
-                                                 "parquet");
+  const auto query = getCreateForeignTableQuery("(txt TEXT ENCODING DICT (32) )",
+                                                {{"fragment_size", "4"}},
+                                                "strings_repeating",
+                                                "parquet");
   sql(query);
 
   TQueryResult result;
@@ -1456,7 +1456,7 @@ TEST_F(SelectQueryTest, ParquetStringDictionaryEncodedMetadataTest) {
 }
 
 TEST_F(SelectQueryTest, ParquetNumericAndBooleanTypesWithAllNullPlacementPermutations) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "( id INT, bool BOOLEAN, i8 TINYINT, u8 SMALLINT, i16 SMALLINT, "
       "u16 INT, i32 INT, u32 BIGINT, i64 BIGINT, f32 FLOAT, "
       "f64 DOUBLE, fixedpoint DECIMAL(10,5) )",
@@ -1499,7 +1499,7 @@ TEST_F(SelectQueryTest, ParquetNumericAndBooleanTypesWithAllNullPlacementPermuta
 }
 
 TEST_F(SelectQueryTest, ParquetNumericAndBooleanTypes) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "( bool BOOLEAN, i8 TINYINT, u8 SMALLINT, i16 SMALLINT, "
       "u16 INT, i32 INT, u32 BIGINT, i64 BIGINT, f32 FLOAT, "
       "f64 DOUBLE, fixedpoint DECIMAL(10,5) )",
@@ -1521,7 +1521,7 @@ TEST_F(SelectQueryTest, ParquetNumericAndBooleanTypes) {
 }
 
 TEST_F(SelectQueryTest, ParquetFixedEncodedTypes) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "( i8 BIGINT ENCODING FIXED(8), u8 BIGINT ENCODING FIXED(16),"
       " i16 BIGINT ENCODING FIXED(16), "
       "u16 BIGINT ENCODING FIXED (32), i32 BIGINT ENCODING FIXED (32),"
@@ -1546,7 +1546,7 @@ TEST_F(SelectQueryTest, ParquetFixedEncodedTypes) {
 }
 
 TEST_F(SelectQueryTest, ParquetDecimalTypeMappings) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "( decimal_i32 DECIMAL(8,3), decimal_i64 DECIMAL(10,3), decimal_fbla DECIMAL(7,3), "
       "decimal_ba DECIMAL(9,3)  ) ",
       "decimal",
@@ -1567,7 +1567,7 @@ TEST_F(SelectQueryTest, ParquetDecimalTypeMappings) {
 }
 
 TEST_F(SelectQueryTest, ParquetTimestampNoEncodingInSeconds) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(ts_milli TIMESTAMP, ts_micro TIMESTAMP, ts_nano TIMESTAMP)",
       "timestamp",
       "parquet");
@@ -1586,7 +1586,7 @@ TEST_F(SelectQueryTest, ParquetTimestampNoEncodingInSeconds) {
 }
 
 TEST_F(SelectQueryTest, ParquetTimestampNoEncodingAllPrecisions) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(ts_milli TIMESTAMP (3), ts_micro TIMESTAMP (6), ts_nano TIMESTAMP (9))",
       "timestamp",
       "parquet");
@@ -1609,7 +1609,7 @@ TEST_F(SelectQueryTest, ParquetTimestampNoEncodingAllPrecisions) {
 }
 
 TEST_F(SelectQueryTest, ParquetTimeNoEncodingInSeconds) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(time_milli TIME, time_micro TIME, time_nano TIME)", "time", "parquet");
   sql(query);
   TQueryResult result;
@@ -1624,7 +1624,7 @@ TEST_F(SelectQueryTest, ParquetTimeNoEncodingInSeconds) {
 }
 
 TEST_F(SelectQueryTest, ParquetTimeFixedLength32EncodingInSeconds) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(time_milli TIME ENCODING FIXED(32), time_micro TIME, time_nano TIME)",
       "time",
       "parquet");
@@ -1641,7 +1641,7 @@ TEST_F(SelectQueryTest, ParquetTimeFixedLength32EncodingInSeconds) {
 }
 
 TEST_F(SelectQueryTest, ParquetDateNoEncoding) {
-  const auto& query = getCreateForeignTableQuery("(days DATE)", "date", "parquet");
+  const auto query = getCreateForeignTableQuery("(days DATE)", "date", "parquet");
   sql(query);
   TQueryResult result;
   sql(result, default_select);
@@ -1655,7 +1655,7 @@ TEST_F(SelectQueryTest, ParquetDateNoEncoding) {
 }
 
 TEST_F(SelectQueryTest, ParquetDateDays32Encoding) {
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("(days DATE ENCODING DAYS (32) )", "date", "parquet");
   sql(query);
   TQueryResult result;
@@ -1705,7 +1705,7 @@ TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_DifferentNumberOfColumns) {
 }
 
 TEST_F(SelectQueryTest, SchemaMismatch_CSV_Multithreaded) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE, txt_arr TEXT[], txt_3 TEXT)",
       {{"buffer_size", "25"}},
       "0_255",
@@ -1716,8 +1716,9 @@ TEST_F(SelectQueryTest, SchemaMismatch_CSV_Multithreaded) {
                           "columns, has 4): in file '" +
                               getDataFilesPath() + "0_255.csv'");
 }
+
 TEST_F(SelectQueryTest, ParseError) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(i INTEGER)", {{"buffer_size", "25"}}, "1badint", "csv");
   sql(query);
   queryAndAssertException(default_select,
@@ -1725,6 +1726,13 @@ TEST_F(SelectQueryTest, ParseError) {
                           "Unable to parse -a to INTEGER"
                           "\" in row \"-a\" in file \"" +
                               getDataFilesPath() + "1badint.csv\"");
+}
+
+TEST_F(SelectQueryTest, ParseNegativeNumeric) {
+  const auto query =
+      getCreateForeignTableQuery("(d DECIMAL(6,3))", {}, "negative_numerics", "csv");
+  sql(query);
+  sqlAndCompareResult(default_select, {{-123.41}, {-.770}, {-.999}, {-010.11}});
 }
 
 TEST_F(SelectQueryTest, ExistingTableWithFsiDisabled) {
@@ -2618,7 +2626,7 @@ TEST_P(CSVFileTypeTests, SelectCSV) {
 }
 
 TEST_P(CacheControllingSelectQueryTest, Sort) {
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("(t TEXT, i INTEGER[])", "example_1", "csv");
   sql(query);
 
@@ -2654,7 +2662,7 @@ TEST_P(CacheControllingSelectQueryTest, Join) {
 }
 
 TEST_P(CacheControllingSelectQueryTest, CSV_CustomDelimiters) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(b BOOLEAN, i INTEGER, f FLOAT, t TIME, tp TIMESTAMP, d DATE, "
       "txt TEXT, txt_2 TEXT, i_arr INTEGER[], txt_arr TEXT[])",
       {{"delimiter", "|"}, {"array_delimiter", "_"}},
@@ -2706,7 +2714,7 @@ TEST_P(CacheControllingSelectQueryTest, CsvArchiveInvalidFile) {
 }
 
 TEST_P(CacheControllingSelectQueryTest, CSV_CustomMarkers) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(t TEXT, t2 TEXT, i INTEGER[])",
       {{"array_marker", "[]"}, {"escape", "\\"}, {"nulls", "NIL"}, {"quote", "|"}},
       "custom_markers",
@@ -2722,7 +2730,7 @@ TEST_P(CacheControllingSelectQueryTest, CSV_CustomMarkers) {
 }
 
 TEST_P(CacheControllingSelectQueryTest, CSV_NoHeader) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(t TEXT, i INTEGER[])", {{"header", "false"}}, "no_header", "csv");
   sql(query);
 
@@ -2735,7 +2743,7 @@ TEST_P(CacheControllingSelectQueryTest, CSV_NoHeader) {
 }
 
 TEST_P(CacheControllingSelectQueryTest, CSV_QuotedHeader) {
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("(t TEXT, i INTEGER[])", "quoted_headers", "csv");
   sql(query);
 
@@ -2748,7 +2756,7 @@ TEST_P(CacheControllingSelectQueryTest, CSV_QuotedHeader) {
 }
 
 TEST_P(CacheControllingSelectQueryTest, CSV_NonQuotedFields) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(t TEXT, t2 TEXT)", {{"quoted", "false"}}, "non_quoted", "csv");
   sql(query);
 
@@ -2763,7 +2771,7 @@ TEST_P(CacheControllingSelectQueryTest, CSV_NonQuotedFields) {
 }
 
 TEST_P(CacheControllingSelectQueryTest, WithBufferSizeOption) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(t TEXT, i INTEGER[])", {{"buffer_size", "25"}}, "example_1", "csv");
   sql(query);
 
@@ -2776,7 +2784,7 @@ TEST_P(CacheControllingSelectQueryTest, WithBufferSizeOption) {
 }
 
 TEST_P(CacheControllingSelectQueryTest, WithBufferSizeLessThanRowSize) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(t TEXT, i INTEGER[])", {{"buffer_size", "10"}}, "example_1", "csv");
   sql(query);
 
@@ -2792,7 +2800,7 @@ TEST_P(CacheControllingSelectQueryTest, WithMaxBufferResizeLessThanRowSize) {
   SKIP_IF_DISTRIBUTED("Leaf nodes not affected by global variable enabling seconds");
 
   import_export::delimited_parser::set_max_buffer_resize(15);
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(t TEXT, i INTEGER[])", {{"buffer_size", "10"}}, "example_1", "csv");
   sql(query);
 
@@ -2805,7 +2813,7 @@ TEST_P(CacheControllingSelectQueryTest, WithMaxBufferResizeLessThanRowSize) {
 }
 
 TEST_P(CacheControllingSelectQueryTest, ReverseLongitudeAndLatitude) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(p POINT)", {{"lonlat", "false"}}, "reversed_long_lat", "csv");
   sql(query);
 
@@ -2820,7 +2828,7 @@ TEST_P(CacheControllingSelectQueryTest, ReverseLongitudeAndLatitude) {
 }
 
 TEST_F(SelectQueryTest, UnsupportedColumnMapping) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(t TEXT, i BIGINT, f INTEGER)", {}, "example_2", "parquet");
   sql(query);
   queryAndAssertException(default_select,
@@ -2832,7 +2840,7 @@ TEST_F(SelectQueryTest, UnsupportedColumnMapping) {
 }
 
 TEST_F(SelectQueryTest, NoStatistics) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(a BIGINT, b BIGINT, c TEXT, d DOUBLE)", {}, "no_stats", "parquet");
   sql(query);
   queryAndAssertException(
@@ -2843,24 +2851,24 @@ TEST_F(SelectQueryTest, NoStatistics) {
 }
 
 TEST_F(SelectQueryTest, EmptyNoStatistics) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(a BIGINT, b BIGINT, c TEXT, d DOUBLE)", {}, "empty_no_stats", "parquet");
   sql(query);
   sqlAndCompareResult(default_select, {});
 }
 
 TEST_F(SelectQueryTest, EmptyRowGroup) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(a BIGINT, b BIGINT, c TEXT, d DOUBLE)", {}, "empty_rowgroup", "parquet");
   sql(query);
   sqlAndCompareResult(default_select, {{1L, 3L, "5", 7.1}});
 }
 
 TEST_F(SelectQueryTest, RowGroupSizeLargerThanFragmentSize) {
-  const auto& query = getCreateForeignTableQuery("(a BIGINT, b BIGINT, c TEXT, d DOUBLE)",
-                                                 {{"fragment_size", "1"}},
-                                                 "row_group_size_2",
-                                                 "parquet");
+  const auto query = getCreateForeignTableQuery("(a BIGINT, b BIGINT, c TEXT, d DOUBLE)",
+                                                {{"fragment_size", "1"}},
+                                                "row_group_size_2",
+                                                "parquet");
   sql(query);
   queryAndAssertException(
       default_select,
@@ -2871,7 +2879,7 @@ TEST_F(SelectQueryTest, RowGroupSizeLargerThanFragmentSize) {
 }
 
 TEST_F(SelectQueryTest, DecimalIntEncoding) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(decimal_int_32 DECIMAL(9, 5), decimal_int_64 DECIMAL(15, 10))",
       {},
       "decimal_int_encoding",
@@ -2884,7 +2892,7 @@ TEST_F(SelectQueryTest, DecimalIntEncoding) {
 }
 
 TEST_F(SelectQueryTest, ByteArrayDecimalFilterAndSort) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(dc DECIMAL(4, 2))", {{"fragment_size", "3"}}, "byte_array_decimal", "parquet");
   sql(query);
 
@@ -3159,61 +3167,61 @@ INSTANTIATE_TEST_SUITE_P(FsiImportDecimalParamaterizedTest,
 class CsvDelimiterTest : public SelectQueryTest {};
 
 TEST_F(CsvDelimiterTest, CSVLineDelimNewline) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(t TEXT, i BIGINT, f DOUBLE)", {{"line_delimiter", "\\n"}}, "example_2", "csv");
   sql(query);
   queryAndAssertExample2Result();
 }
 
 TEST_F(CsvDelimiterTest, CSVDelimTab) {
-  const auto& query = getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)",
-                                                 {{"delimiter", "\\t"}},
-                                                 "example_2",
-                                                 "csv",
-                                                 0,
-                                                 "" + default_table_name + "",
-                                                 "tsv");
+  const auto query = getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)",
+                                                {{"delimiter", "\\t"}},
+                                                "example_2",
+                                                "csv",
+                                                0,
+                                                "" + default_table_name + "",
+                                                "tsv");
   sql(query);
   queryAndAssertExample2Result();
 }
 
 TEST_F(CsvDelimiterTest, CSVFieldDelim) {
-  const auto& query = getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)",
-                                                 {{"delimiter", "|"}},
-                                                 "example_2_field_delim",
-                                                 "csv");
+  const auto query = getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)",
+                                                {{"delimiter", "|"}},
+                                                "example_2_field_delim",
+                                                "csv");
   sql(query);
   queryAndAssertExample2Result();
 }
 
 TEST_F(CsvDelimiterTest, CSVLineDelim) {
-  const auto& query = getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)",
-                                                 {{"line_delimiter", "*"}},
-                                                 "example_2_line_delim",
-                                                 "csv");
+  const auto query = getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)",
+                                                {{"line_delimiter", "*"}},
+                                                "example_2_line_delim",
+                                                "csv");
   sql(query);
   queryAndAssertExample2Result();
 }
 
 TEST_F(CsvDelimiterTest, CSVQuote) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(t TEXT, i BIGINT, f DOUBLE)", {{"quote", "~"}}, "example_2_quote", "csv");
   sql(query);
   queryAndAssertExample2Result();
 }
 
 TEST_F(CsvDelimiterTest, CSVCarriageReturn) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(t TEXT, i BIGINT, f DOUBLE)", {}, "example_2_crlf", "csv");
   sql(query);
   queryAndAssertExample2Result();
 }
 
 TEST_F(CsvDelimiterTest, CSVQuoteEscape) {
-  const auto& query = getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)",
-                                                 {{"quote", "a"}, {"escape", "$"}},
-                                                 "example_2_quote_escape",
-                                                 "csv");
+  const auto query = getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)",
+                                                {{"quote", "a"}, {"escape", "$"}},
+                                                "example_2_quote_escape",
+                                                "csv");
   // 'a' used as quote, so "a" is a$aa in csv file
   sql(query);
   queryAndAssertExample2Result();
@@ -3541,7 +3549,7 @@ TEST_F(CorruptedRefreshTest, ParquetRecover) {
 
 class RefreshMetadataTypeTest : public SelectQueryTest {};
 TEST_F(RefreshMetadataTypeTest, ScalarTypes) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
       "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
       "txt_2 TEXT ENCODING NONE)",
@@ -3558,7 +3566,7 @@ TEST_F(RefreshMetadataTypeTest, ScalarTypes) {
 }
 
 TEST_F(RefreshMetadataTypeTest, ArrayTypes) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(index int, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
       "FLOAT[], "
       "tm "
@@ -3577,7 +3585,7 @@ TEST_F(RefreshMetadataTypeTest, ArrayTypes) {
 }
 
 TEST_F(RefreshMetadataTypeTest, GeoTypes) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(index int, p POINT, mp MULTIPOINT, l LINESTRING, ml MULTILINESTRING, "
       "poly POLYGON, multipoly MULTIPOLYGON)",
       {},
@@ -5032,7 +5040,7 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
 }
 
 TEST_F(SelectQueryTest, CsvArrayQuotedText) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(index INT, quoted_text TEXT[])", "array_quoted_text", "csv");
   sql(query);
 
@@ -5048,10 +5056,10 @@ TEST_F(SelectQueryTest, CsvArrayQuotedText) {
 }
 
 TEST_F(SelectQueryTest, CsvArrayEmptyText) {
-  const auto& query = getCreateForeignTableQuery("(index INT, txt1 TEXT[], txt2 TEXT[])",
-                                                 {{"header", "false"}},
-                                                 "empty_text_arrays",
-                                                 "csv");
+  const auto query = getCreateForeignTableQuery("(index INT, txt1 TEXT[], txt2 TEXT[])",
+                                                {{"header", "false"}},
+                                                "empty_text_arrays",
+                                                "csv");
   sql(query);
 
   TQueryResult result;
@@ -5086,7 +5094,7 @@ TEST_F(SelectQueryTest, CsvMultipleFilesWithExpectedAndMismatchedColumns) {
 }
 
 TEST_F(SelectQueryTest, CsvTrimSpaces) {
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("(index INT, txt1 TEXT, txt2 TEXT[], b BOOLEAN)",
                                  {{"header", "false"}, {"trim_spaces", "true"}},
                                  "with_spaces",
@@ -5105,7 +5113,7 @@ TEST_F(SelectQueryTest, CsvTrimSpaces) {
 }
 
 TEST_F(SelectQueryTest, CsvNoTrimSpaces) {
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("(index INT, txt1 TEXT, txt2 TEXT[], b BOOLEAN)",
                                  {{"header", "false"}, {"trim_spaces", "false"}},
                                  "with_spaces",
@@ -5124,7 +5132,7 @@ TEST_F(SelectQueryTest, CsvNoTrimSpaces) {
 }
 
 TEST_F(SelectQueryTest, ParquetRequiredColumnScalars) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
       "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
       "txt_2 TEXT ENCODING NONE)",
@@ -5148,7 +5156,7 @@ TEST_F(SelectQueryTest, ParquetRequiredColumnScalars) {
 }
 
 TEST_F(SelectQueryTest, ParquetArrayInt8EmptyWithFixedLengthArray) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(tinyint_arr_empty TINYINT[1])", "int8_empty_array", "parquet");
   sql(query);
 
@@ -5162,7 +5170,7 @@ TEST_F(SelectQueryTest, ParquetArrayInt8EmptyWithFixedLengthArray) {
 }
 
 TEST_F(SelectQueryTest, ParquetArrayDateTimeTypes) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(index INT, time_milli_array TIME[], time_micro_array TIME[],"
       " time_nano_array TIME[], timestamp_milli1_array TIMESTAMP[],"
       " timestamp_micro1_array TIMESTAMP[], timestamp_milli2_array TIMESTAMP(3)[],"
@@ -5216,7 +5224,7 @@ TEST_F(SelectQueryTest, ParquetArrayDateTimeTypes) {
 }
 
 TEST_F(SelectQueryTest, ParquetFixedLengthArrayMalformed) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(bigint_array BIGINT[3])", "array_fixed_len_malformed", "parquet");
   sql(query);
   TQueryResult result;
@@ -5229,7 +5237,7 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayMalformed) {
 }
 
 TEST_F(SelectQueryTest, ParquetFixedLengthArrayDateTimeTypes) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(index INT, time_milli_array TIME[2], time_micro_array TIME[2],"
       " time_nano_array TIME[2], timestamp_milli1_array TIMESTAMP[2],"
       " timestamp_micro1_array TIMESTAMP[2], timestamp_milli2_array TIMESTAMP(3)[2],"
@@ -5285,7 +5293,7 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayDateTimeTypes) {
 }
 
 TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "( index INT, p GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), mp "
       "GEOMETRY(MULTIPOINT,4326) ENCODING COMPRESSED(32), "
       "l GEOMETRY(LINESTRING,4326) ENCODING COMPRESSED(32), "
@@ -5351,7 +5359,7 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
 TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
 
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "( index INT, p POINT, mp MULTIPOINT, l LINESTRING, ml MULTILINESTRING, poly "
       "POLYGON, mpoly "
       "MULTIPOLYGON )",
@@ -5402,7 +5410,7 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
 }
 
 TEST_F(SelectQueryTest, ParquetMalformedGeoPoint) {
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("( p POINT )", "geo_point_malformed", "parquet");
   sql(query);
 
@@ -5414,7 +5422,7 @@ TEST_F(SelectQueryTest, ParquetMalformedGeoPoint) {
 }
 
 TEST_F(SelectQueryTest, ParquetWrongGeoType) {
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("( p LINESTRING )", "geo_point", "parquet");
   sql(query);
 
@@ -5427,7 +5435,7 @@ TEST_F(SelectQueryTest, ParquetWrongGeoType) {
 }
 
 TEST_F(SelectQueryTest, ParquetArrayUnsignedIntegerTypes) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "( index INT, utinyint_array SMALLINT[], usmallint_array INT[],"
       " uint_array BIGINT[] )",
       "array_unsigned_types",
@@ -5460,7 +5468,7 @@ TEST_F(SelectQueryTest, ParquetArrayUnsignedIntegerTypes) {
 }
 
 TEST_F(SelectQueryTest, ParquetFixedLengthArrayUnsignedIntegerTypes) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "( index INT, utinyint_array SMALLINT[2], usmallint_array INT[2],"
       " uint_array BIGINT[2] )",
       "array_fixed_len_unsigned_types",
@@ -5493,7 +5501,7 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayUnsignedIntegerTypes) {
 }
 
 TEST_F(SelectQueryTest, ParquetIncorrectArrayMapping) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "( index INT, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER, bi BIGINT[], f "
       "FLOAT[], tm TIME[], tp TIMESTAMP[], d DATE[], txt TEXT[], fixedpoint "
       "DECIMAL(10,5)[] )",
@@ -5734,7 +5742,7 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, MetadataOnlyCount) {
   int64_t fragment_size = param.second;
   std::stringstream filename_stream;
   filename_stream << "example_row_group_size." << row_group_size;
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("(a BIGINT, b BIGINT, c BIGINT, d DOUBLE)",
                                  {{"fragment_size", std::to_string(fragment_size)}},
                                  filename_stream.str(),
@@ -5752,7 +5760,7 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, MetadataOnlyFilter) {
   int64_t fragment_size = param.second;
   std::stringstream filename_stream;
   filename_stream << "example_row_group_size." << row_group_size;
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("(a BIGINT, b BIGINT, c BIGINT, d DOUBLE)",
                                  {{"fragment_size", std::to_string(fragment_size)}},
                                  filename_stream.str(),
@@ -5812,7 +5820,7 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, Select) {
   int64_t fragment_size = param.second;
   std::stringstream filename_stream;
   filename_stream << "example_row_group_size." << row_group_size;
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("(a BIGINT, b BIGINT, c BIGINT, d DOUBLE)",
                                  {{"fragment_size", std::to_string(fragment_size)}},
                                  filename_stream.str(),
@@ -5836,7 +5844,7 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, Filter) {
   int64_t fragment_size = param.second;
   std::stringstream filename_stream;
   filename_stream << "example_row_group_size." << row_group_size;
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("(a BIGINT, b BIGINT, c BIGINT, d DOUBLE)",
                                  {{"fragment_size", std::to_string(fragment_size)}},
                                  filename_stream.str(),
@@ -5983,7 +5991,7 @@ TEST_F(ForeignStorageCacheQueryTest, CacheWithLimitCachesWholeChunks) {
 
 TEST_F(ForeignStorageCacheQueryTest, ArrayTypes) {
   sqlDropForeignTable();
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "(index int, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
       "FLOAT[], "
       "tm "
@@ -6502,7 +6510,7 @@ class ParquetCoercionTest : public SelectQueryTest {
  protected:
   void createForeignTableWithCoercion(const std::string& coerced_type,
                                       const std::string& base_file_name) {
-    const auto& query = getCreateForeignTableQuery(
+    const auto query = getCreateForeignTableQuery(
         "( coerced " + coerced_type + " )", base_file_name, "parquet");
     sql(query);
   }
@@ -7125,7 +7133,7 @@ TEST_F(ParquetCoercionTest, TimestampNanoToDateFixedLengthEncoded16InformationLo
 }
 
 TEST_F(SelectQueryTest, ParquetNotNullWithoutNullOutOfRange) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "( int8 TINYINT NOT NULL )", "tinyint_without_null_out_of_range", "parquet");
   sql(query);
   queryAndAssertException(
@@ -7142,7 +7150,7 @@ TEST_F(SelectQueryTest, ParquetNotNullWithoutNullOutOfRange) {
 }
 
 TEST_F(SelectQueryTest, ParquetNotNullWithoutNull) {
-  const auto& query = getCreateForeignTableQuery(
+  const auto query = getCreateForeignTableQuery(
       "( int8 TINYINT NOT NULL )", "tinyint_without_null", "parquet");
   sql(query);
   sqlAndCompareResult(default_select, {{i(127)}, {i(-127)}});
@@ -7151,7 +7159,7 @@ TEST_F(SelectQueryTest, ParquetNotNullWithoutNull) {
 TEST_F(SelectQueryTest, ParquetNotNullWithNull) {
   const std::string base_file_name = "tinyint_with_null";
   const std::string file_name = getDataFilesPath() + base_file_name + ".parquet";
-  const auto& query =
+  const auto query =
       getCreateForeignTableQuery("( int8 TINYINT NOT NULL )", base_file_name, "parquet");
   sql(query);
   queryAndAssertException(
