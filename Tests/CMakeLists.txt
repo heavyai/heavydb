@@ -471,7 +471,7 @@ endif()
 
 if(NOT MSVC)
   add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
-  target_link_libraries(OmniSQLCommandTest gtest ${Boost_LIBRARIES} mapd_thrift)
+  target_link_libraries(OmniSQLCommandTest gtest Logger Shared ${Boost_LIBRARIES} mapd_thrift)
   if(ENABLE_KRB5)
     target_link_libraries(OmniSQLCommandTest krb5_gss Shared)
   endif()
