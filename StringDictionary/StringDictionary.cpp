@@ -410,8 +410,6 @@ StringDictionary::StringDictionary(const LeafHostInfo& host,
           new StringDictionaryClient(host, {dict_key.db_id, dict_key.dict_id}, false)) {}
 
 StringDictionary::~StringDictionary() noexcept {
-  free(CANARY_BUFFER);
-  total_canary_size -= canary_buffer_size;
   if (isClient()) {
     return;
   }
@@ -741,6 +739,7 @@ void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
       hash_bucket = computeBucket(
           input_string_hash, input_string, string_id_string_dict_hash_table_);
     }
+    // TODO(Misiu): It's appending the strings one at a time?  This seems slow...
     appendToStorage(input_string);
 
     if (materialize_hashes_) {
@@ -1794,44 +1793,47 @@ constexpr size_t align_up(size_t size, size_t alignment) {
 size_t StringDictionary::addStorageCapacity(
     int fd,
     const size_t min_capacity_requested) noexcept {
-  const size_t canary_buff_size_to_add =
+  CHECK_NE(lseek(fd, 0, SEEK_END), -1);
+
+  // Round capacity-increase request size up to system page size multiple.
+  const size_t request_size =
       std::max(align_up(FOUR_MB, SYSTEM_PAGE_SIZE),
                align_up(min_capacity_requested, SYSTEM_PAGE_SIZE));
-  if (canary_buffer_size < canary_buff_size_to_add) {
-    total_canary_size += canary_buff_size_to_add - canary_buffer_size;
-    CANARY_BUFFER = static_cast<char*>(realloc(CANARY_BUFFER, canary_buff_size_to_add));
-    canary_buffer_size = canary_buff_size_to_add;
-    CHECK(CANARY_BUFFER);
-    memset(CANARY_BUFFER, 0xff, canary_buff_size_to_add);
-  }
 
-  CHECK_NE(lseek(fd, 0, SEEK_END), -1);
-  const auto write_return = write(fd, CANARY_BUFFER, canary_buff_size_to_add);
-  CHECK(write_return > 0 &&
-        (static_cast<size_t>(write_return) == canary_buff_size_to_add));
-  return canary_buff_size_to_add;
+  int write_return = -1;
+  if (request_size > canary_buffer.size) {
+    // If the request is larger than the default canary buffer, then allocate a new
+    // temporary buffer for this request; otherwise use default size.
+    const auto canary = string_dictionary::CanaryBuffer(request_size);
+    write_return = write(fd, canary.buffer, request_size);
+  } else {
+    write_return = write(fd, canary_buffer.buffer, request_size);
+  }
+  CHECK_GT(write_return, 0) << "Write failed with error: " << strerror(errno);
+  CHECK_EQ(static_cast<size_t>(write_return), request_size);
+  return request_size;
 }
 
 void* StringDictionary::addMemoryCapacity(void* addr,
                                           size_t& mem_size,
                                           const size_t min_capacity_requested) noexcept {
-  const size_t canary_buff_size_to_add =
+  // Round capacity-increase request size up to system page size multiple.
+  const size_t request_size =
       std::max(align_up(FOUR_MB, SYSTEM_PAGE_SIZE),
                align_up(min_capacity_requested, SYSTEM_PAGE_SIZE));
-  if (canary_buffer_size < canary_buff_size_to_add) {
-    total_canary_size += canary_buff_size_to_add - canary_buffer_size;
-    CANARY_BUFFER =
-        reinterpret_cast<char*>(realloc(CANARY_BUFFER, canary_buff_size_to_add));
-    canary_buffer_size = canary_buff_size_to_add;
-    CHECK(CANARY_BUFFER);
-    memset(CANARY_BUFFER, 0xff, canary_buff_size_to_add);
-  }
-  void* new_addr = realloc(addr, mem_size + canary_buff_size_to_add);
+  void* new_addr = realloc(addr, mem_size + request_size);
   CHECK(new_addr);
   void* write_addr = reinterpret_cast<void*>(static_cast<char*>(new_addr) + mem_size);
-  CHECK(memcpy(write_addr, CANARY_BUFFER, canary_buff_size_to_add));
-  mem_size += canary_buff_size_to_add;
-  total_temp_size += canary_buff_size_to_add;
+
+  // If the request is larger than the default canary buffer, then allocate a new
+  // temporary buffer for this request; otherwise use default size.
+  if (request_size > canary_buffer.size) {
+    const auto canary = string_dictionary::CanaryBuffer(request_size);
+    CHECK(memcpy(write_addr, canary.buffer, request_size));
+  } else {
+    CHECK(memcpy(write_addr, canary_buffer.buffer, request_size));
+  }
+  mem_size += request_size;
   return new_addr;
 }
 
@@ -2345,7 +2347,7 @@ size_t StringDictionary::computeCacheSize() const {
 }
 
 StringDictionary::StringDictMemoryUsage StringDictionary::getStringDictMemoryUsage() {
-  return {total_mmap_size, total_temp_size, total_canary_size};
+  return {total_mmap_size, total_temp_size, canary_buffer.size};
 }
 
 std::ostream& operator<<(std::ostream& os,

@@ -30,6 +30,8 @@
 #include "Shared/Datum.h"
 #include "Shared/DbObjectKeys.h"
 
+#include "OSDependent/heavyai_fs.h"
+
 extern bool g_enable_stringdict_parallel;
 
 class StringDictionaryClient;
@@ -92,6 +94,27 @@ class LeafHostInfo;
 using string_dict_hash_t = uint32_t;
 
 using StringLookupCallback = std::function<bool(std::string_view, int32_t string_id)>;
+
+namespace string_dictionary {
+// The canary buffer is a block of memory (4MB on most systems by default) which is used
+// to allocate additional space in a dictionary.  When the dictionary needs additional
+// space, the canary buffer is used to write that space to disk, or memory.  The values
+// in the canary buffer (all '1's) are reserved values, so we can separate the
+// allocated, but unused, space from valid entries (necessary when reading a dictionary
+// from disk).
+struct CanaryBuffer {
+  CanaryBuffer(size_t new_size) : size(new_size) {
+    buffer = static_cast<char*>(malloc(size));
+    CHECK(buffer);
+    memset(buffer, 0xff, size);  // All '1's is reserved as canary values.
+  }
+  CanaryBuffer() : CanaryBuffer(1024 * heavyai::get_page_size()) {}
+  ~CanaryBuffer() { free(buffer); }
+
+  size_t size{0};
+  char* buffer{nullptr};
+};
+}  // namespace string_dictionary
 
 class StringDictionary {
  public:
@@ -240,11 +263,10 @@ class StringDictionary {
 
   inline static std::atomic<size_t> total_mmap_size{0};
   inline static std::atomic<size_t> total_temp_size{0};
-  inline static std::atomic<size_t> total_canary_size{0};
 
   static size_t getTotalMmapSize() { return total_mmap_size; }
   static size_t getTotalTempSize() { return total_temp_size; }
-  static size_t getTotalCanarySize() { return total_canary_size; }
+  static size_t getTotalCanarySize() { return canary_buffer.size; }
   static StringDictMemoryUsage getStringDictMemoryUsage();
 
   static constexpr int32_t INVALID_STR_ID = -1;
@@ -390,8 +412,7 @@ class StringDictionary {
   mutable std::unique_ptr<StringDictionaryClient> client_;
   mutable std::unique_ptr<StringDictionaryClient> client_no_timeout_;
 
-  char* CANARY_BUFFER{nullptr};
-  size_t canary_buffer_size = 0;
+  static inline string_dictionary::CanaryBuffer canary_buffer;
 };
 
 int32_t truncate_to_generation(const int32_t id, const size_t generation);
