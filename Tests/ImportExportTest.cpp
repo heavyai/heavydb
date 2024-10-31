@@ -6131,21 +6131,21 @@ TEST_F(RasterImporterTest, GRIB2ValueTest) {
 TEST_F(RasterImporterTest, NonGeoEnumsTest) {
   SKIP_ALL_ON_AGGREGATOR();
   // for non-geo rasters, we reject:
-  //   point/world - no geospatial coordinate system to transform to
+  //   float/double/point/world - no geospatial coordinate system to transform to
   ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kNone, TR::kNone));
   ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kAuto, TR::kNone));
   ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kSmallInt, TR::kNone));
   ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kInt, TR::kNone));
-  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kFloat, TR::kNone));
-  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kDouble, TR::kNone));
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kFloat, TR::kNone), std::runtime_error);
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kDouble, TR::kNone), std::runtime_error);
   EXPECT_THROW(runEnumsTest(kPNG, TY::kPoint, TR::kNone), std::runtime_error);
 
   ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kNone, TR::kAuto));
   ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kAuto, TR::kAuto));
   ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kSmallInt, TR::kAuto));
   ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kInt, TR::kAuto));
-  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kFloat, TR::kAuto));
-  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kDouble, TR::kAuto));
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kFloat, TR::kAuto), std::runtime_error);
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kDouble, TR::kAuto), std::runtime_error);
   EXPECT_THROW(runEnumsTest(kPNG, TY::kPoint, TR::kAuto), std::runtime_error);
 
   ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kNone, TR::kFile));
@@ -6174,8 +6174,8 @@ TEST_F(RasterImporterTest, GeoEnumsTest) {
   ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kAuto, TR::kNone));
   ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kSmallInt, TR::kNone));
   ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kInt, TR::kNone));
-  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kFloat, TR::kNone));
-  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kDouble, TR::kNone));
+  EXPECT_THROW(runEnumsTest(kGeoTIFF, TY::kFloat, TR::kNone), std::runtime_error);
+  EXPECT_THROW(runEnumsTest(kGeoTIFF, TY::kDouble, TR::kNone), std::runtime_error);
   EXPECT_THROW(runEnumsTest(kGeoTIFF, TY::kPoint, TR::kNone), std::runtime_error);
 
   ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kNone, TR::kAuto));
