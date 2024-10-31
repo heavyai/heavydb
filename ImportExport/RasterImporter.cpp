@@ -370,7 +370,6 @@ void populate_default_coordinates(double* lons,
     }
   }
 }
-
 }  // namespace
 
 //
@@ -659,6 +658,7 @@ void RasterImporter::detect(const std::string& file_name,
         "transform points to World Space. Use raster_point_transform='none|file' "
         "instead.");
   }
+
   if (point_type_ == PointType::kSmallInt || point_type_ == PointType::kInt) {
     if (point_transform_ == PointTransform::kWorld) {
       throw std::runtime_error(
@@ -669,7 +669,14 @@ void RasterImporter::detect(const std::string& file_name,
       throw std::runtime_error(
           "Raster Importer: Must do World Transform with POINT Point type");
     }
+  } else if (point_type_ == PointType::kDouble || point_type_ == PointType::kFloat) {
+    if (!(point_transform_ == PointTransform::kWorld ||
+          point_transform_ == PointTransform::kFile)) {
+      throw std::runtime_error(
+          "Raster Importer: Must do World/File Transform with DOUBLE/FLOAT Point type");
+    }
   }
+
   if (point_type_ == PointType::kSmallInt &&
       (bands_width_ > std::numeric_limits<int16_t>::max() ||
        bands_height_ > std::numeric_limits<int16_t>::max())) {
