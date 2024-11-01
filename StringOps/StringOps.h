@@ -242,10 +242,22 @@ struct Hash : public StringOp {
       : StringOp(SqlStringOpKind::HASH,
                  SQLTypeInfo(kBIGINT),
                  var_str_optional_literal,
-                 string_op_info) {}
+                 string_op_info)
+      , seed_{0u} {}
+
+  Hash(const std::optional<std::string>& var_str_optional_literal,
+       const int64_t seed,
+       const StringOpInfo& string_op_info)
+      : StringOp(SqlStringOpKind::HASH,
+                 SQLTypeInfo(kBIGINT),
+                 var_str_optional_literal,
+                 string_op_info)
+      , seed_{seed} {}
 
   NullableStrType operator()(const std::string& str) const override;
   Datum numericEval(const std::string_view str) const override;
+
+  const int64_t seed_;
 };
 
 struct Lower : public StringOp {
