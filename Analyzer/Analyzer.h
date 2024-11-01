@@ -2809,6 +2809,15 @@ class HashStringOper : public StringOper {
                    getExpectedTypeFamilies(),
                    getArgNames()) {}
 
+  HashStringOper(const std::shared_ptr<Analyzer::Expr>& operand,
+                 const std::shared_ptr<Analyzer::Expr>& seed)
+      : StringOper(SqlStringOpKind::HASH,
+                   SQLTypeInfo(kBIGINT),
+                   {operand, seed},
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
   HashStringOper(const std::vector<std::shared_ptr<Analyzer::Expr>>& operands)
       : StringOper(SqlStringOpKind::HASH,
                    SQLTypeInfo(kBIGINT),
@@ -2825,9 +2834,9 @@ class HashStringOper : public StringOper {
   size_t getMinArgs() const override { return 1UL; }
 
   std::vector<OperandTypeFamily> getExpectedTypeFamilies() const override {
-    return {OperandTypeFamily::STRING_FAMILY};
+    return {OperandTypeFamily::STRING_FAMILY, OperandTypeFamily::INT_FAMILY};
   }
-  std::vector<std::string> getArgNames() const override { return {"operand"}; }
+  std::vector<std::string> getArgNames() const override { return {"operand", "seed"}; }
 };
 
 class FunctionOper : public Expr {
