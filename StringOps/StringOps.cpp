@@ -336,13 +336,24 @@ Datum Hash::numericEval(const std::string_view str) const {
   if (str.empty()) {
     return NullDatum(return_ti_);
   } else {
-    uint64_t str_hash = 1;
-    // rely on fact that unsigned overflow is defined and wraps
-    for (size_t i = 0; i < str.size(); ++i) {
-      str_hash = str_hash * 997u + static_cast<unsigned char>(str[i]);
+    // This hash algorithm matches the one used by the front end
+    // Hence the 53-bit limit (as that's the max of JS integers)
+    // Original code from https://stackoverflow.com/a/52171480
+    const uint32_t seed = static_cast<uint32_t>(seed_ & 0xFFFFFFFFu);
+    uint32_t h1 = 0xdeadbeef ^ seed;
+    uint32_t h2 = 0x41c6ce57 ^ seed;
+    for (char ch : str) {
+      h1 = (h1 ^ static_cast<uint32_t>(ch)) * 2654435761u;
+      h2 = (h2 ^ static_cast<uint32_t>(ch)) * 1597334677u;
     }
+    h1 = (h1 ^ (h1 >> 16)) * 2246822507u;
+    h1 = h1 ^ ((h2 ^ (h2 >> 13)) * 3266489909u);
+    h2 = (h2 ^ (h2 >> 16)) * 2246822507u;
+    h2 = h2 ^ ((h1 ^ (h1 >> 13)) * 3266489909u);
+    const uint64_t result53 =
+        (static_cast<uint64_t>(h2 & 0x1FFFFFu) << 32) | static_cast<uint64_t>(h1);
     Datum return_datum;
-    return_datum.bigintval = static_cast<int64_t>(str_hash);
+    return_datum.bigintval = static_cast<int64_t>(result53);
     return return_datum;
   }
 }
@@ -1464,8 +1475,16 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       }
     }
     case SqlStringOpKind::HASH: {
-      CHECK_EQ(num_non_variable_literals, 0UL);
-      return std::make_unique<const Hash>(var_string_optional_literal, string_op_info);
+      CHECK_GE(num_non_variable_literals, 0UL);
+      CHECK_LE(num_non_variable_literals, 1UL);
+      const bool has_seed_literal = string_op_info.intLiteralArgAtIdxExists(1);
+      if (has_seed_literal) {
+        const auto seed_literal = string_op_info.getIntLiteral(1);
+        return std::make_unique<const Hash>(
+            var_string_optional_literal, seed_literal, string_op_info);
+      } else {
+        return std::make_unique<const Hash>(var_string_optional_literal, string_op_info);
+      }
     }
     default:
       UNREACHABLE();

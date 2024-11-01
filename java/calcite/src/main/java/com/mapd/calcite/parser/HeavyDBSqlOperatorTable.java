@@ -2273,7 +2273,11 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
               SqlKind.OTHER_FUNCTION,
               null,
               null,
-              OperandTypes.family(getSignatureFamilies()),
+              OperandTypes.family(getSignatureFamilies(),
+                      (i) -> {
+                        // The seed parameter is optional
+                        return i == 1;
+                      }),
               SqlFunctionCategory.SYSTEM);
     }
 
@@ -2283,6 +2287,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       // Todo(todd): Support any input type for HASH function
       // families.add(SqlTypeFamily.ANY);
       families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.INTEGER);
       return families;
     }
 
