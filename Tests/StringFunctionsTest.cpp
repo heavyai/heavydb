@@ -1422,7 +1422,7 @@ TEST_P(StringFunctionTest, LevenshteinDistance) {
 
 TEST_P(StringFunctionTest, Hash) {
   // Literal hash
-  sqlAndCompareResult("select hash('hi');", {{int64_t(1097802)}});
+  sqlAndCompareResult("select hash('hi');", {{int64_t(4295414792258359)}});
 
   // Literal null
   sqlAndCompareResult("select coalesce(hash(CAST(NULL AS TEXT)), 0);", {{int64_t(0)}});
@@ -1430,25 +1430,25 @@ TEST_P(StringFunctionTest, Hash) {
   // Dictionary-encoded text column
   sqlAndCompareResult(
       "select hash(capital) from string_function_test_countries order by id;",
-      {{int64_t(5703505280371710991)},
-       {int64_t(1060071279222666409)},
-       {int64_t(1057111063818803959)},
-       {int64_t(1047250289947889561)}});
+      {{int64_t(7193978419178118)},
+       {int64_t(3253538298316350)},
+       {int64_t(3858462040420430)},
+       {int64_t(1482203546748096)}});
 
   // None-encoded text column
   sqlAndCompareResult(
       "select hash(capital_none) from string_function_test_countries order by id;",
-      {{int64_t(5703505280371710991)},
-       {int64_t(1060071279222666409)},
-       {int64_t(1057111063818803959)},
-       {int64_t(1047250289947889561)}});
+      {{int64_t(7193978419178118)},
+       {int64_t(3253538298316350)},
+       {int64_t(3858462040420430)},
+       {int64_t(1482203546748096)}});
 
   // Dictionary-encoded text column with nulls
   sqlAndCompareResult(
       "select coalesce(hash(zip_plus_4), 0) from string_function_test_people "
       "order by id;",
-      {{int64_t(6345224789068548647)},
-       {int64_t(-3868673234647279706)},
+      {{int64_t(947993538445999)},
+       {int64_t(1610727568496806)},
        {int64_t(0)},
        {int64_t(0)}});
 
@@ -1457,9 +1457,9 @@ TEST_P(StringFunctionTest, Hash) {
       "select coalesce(hash(short_name), 0) from string_function_test_countries "
       "order by id;",
       {{int64_t(0)},
-       {int64_t(1048231423487679005)},
-       {int64_t(1078829)},
-       {int64_t(-2445200816347761128)}});
+       {int64_t(6773151599679792)},
+       {int64_t(2474607708166985)},
+       {int64_t(8129861200549796)}});
 
   // Hash comparison
   sqlAndCompareResult(
@@ -1471,8 +1471,16 @@ TEST_P(StringFunctionTest, Hash) {
       "select hash(lower(first_name)), any_value(lower(first_name)), count(*) "
       "from string_function_test_people group by  hash(lower(first_name)) order "
       "by count(*) desc;",
-      {{int64_t(1093213190016), "john", int64_t(3)},
-       {int64_t(1105454758), "sue", int64_t(1)}});
+      {{int64_t(1793256961216616), "john", int64_t(3)},
+       {int64_t(7702269906700678), "sue", int64_t(1)}});
+
+  // Repeat dictionary-encoded text column with non-zero seed
+  sqlAndCompareResult(
+      "select hash(capital, 42) from string_function_test_countries order by id;",
+      {{int64_t(4498609078139538)},
+       {int64_t(7318978749498227)},
+       {int64_t(8600455896707874)},
+       {int64_t(3448743714274088)}});
 }
 
 TEST_P(StringFunctionTest, NullLiteralTest) {
