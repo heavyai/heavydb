@@ -60,6 +60,10 @@ struct InvalidRasterFilterBandsOptionException : public ForeignStorageException 
                                 "': " + msg) {}
 };
 
+struct IncompleteWrapperException : public ForeignStorageException {
+  IncompleteWrapperException(std::string msg) : ForeignStorageException(msg) {}
+};
+
 inline void throw_unexpected_number_of_items(const size_t& num_expected,
                                              const size_t& num_loaded,
                                              const std::string& item_type) {

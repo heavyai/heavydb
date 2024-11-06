@@ -134,6 +134,11 @@ class TextFileBufferParser {
   virtual void validateFiles(const FileReader* file_reader,
                              const ForeignTable* foreign_table) const = 0;
 
+  /**
+   * May remove files that violate parsing rules.  Does nothing by default.
+   */
+  virtual void optionallyRemoveBadFiles(MultiFileReader* file_reader) const {}
+
   static std::map<int, DataBlockPtr> convertImportBuffersToDataBlocks(
       const std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>>&
           import_buffers,

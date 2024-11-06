@@ -2060,6 +2060,19 @@ TEST_P(DataWrapperSelectQueryTest, EmptyDirectory) {
   boost::filesystem::remove_all(dir_path);
 }
 
+TEST_P(DataWrapperSelectQueryTest, EmptyDirectoryTxt) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  auto dir_path = boost::filesystem::absolute("empty_dir");
+  auto regex_string = dir_path.string() + "/*.txt";
+  boost::filesystem::create_directory(dir_path);
+  queryAndAssertFileNotFoundException(
+      regex_string,
+      createForeignTableQuery({{"i", "INTEGER"}}, regex_string, GetParam()));
+  boost::filesystem::remove_all(dir_path);
+}
+
 TEST_P(DataWrapperSelectQueryTest, RecursiveDirectory) {
   if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";

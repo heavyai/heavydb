@@ -72,6 +72,17 @@ class RegexFileBufferParser : public TextFileBufferParser {
   inline static bool skip_first_line_{false};
 
   boost::regex line_regex_;
+
+ protected:
   std::optional<boost::regex> line_start_regex_;
 };
+
+inline bool line_starts_with_regex(const char* buffer,
+                                   size_t start,
+                                   size_t end,
+                                   const boost::regex& line_start_regex) {
+  return boost::regex_search(std::string{buffer + start, end - start + 1},
+                             line_start_regex,
+                             boost::regex_constants::match_continuous);
+}
 }  // namespace foreign_storage
