@@ -206,11 +206,15 @@ void CachingForeignStorageMgr::getChunkMetadataVecFromDataWrapper(
   }
   // If the table was disabled then we will have no wrapper to serialize.
   if (is_table_enabled_on_node(chunk_key_prefix)) {
-    auto doc = getDataWrapper(chunk_key_prefix)->getSerializedDataWrapper();
-    disk_cache_->storeDataWrapper(doc, db_id, tb_id);
-
-    // If the wrapper populated buffers we want that action to be checkpointed.
-    disk_cache_->checkpoint(db_id, tb_id);
+    try {
+      auto doc = getDataWrapper(chunk_key_prefix)->getSerializedDataWrapper();
+      disk_cache_->storeDataWrapper(doc, db_id, tb_id);
+      // If the wrapper populated buffers we want that action to be checkpointed.
+      disk_cache_->checkpoint(db_id, tb_id);
+    } catch (const IncompleteWrapperException& e) {
+      LOG(WARNING)
+          << "Wrapper file not loaded because serialized wrapper was incomplete.";
+    }
   }
 }
 

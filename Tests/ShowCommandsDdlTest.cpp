@@ -54,6 +54,13 @@ bool g_custom_odbc_inst{false};  // Are tests being run with a custom odbcinst.i
 namespace bf = boost::filesystem;
 namespace po = boost::program_options;
 
+namespace {
+void create_file(const boost::filesystem::path& path, const std::string& content) {
+  std::ofstream ofs(path, std::ofstream::out);
+  ofs << content;
+}
+}  // namespace
+
 class ShowUserSessionsTest : public DBHandlerTestFixture {
  public:
   void SetUp() override {
@@ -6385,6 +6392,20 @@ class LogsSystemTableTest : public SystemTablesTest,
     return dir_name;
   }
 
+  std::string getTestLogFilePrefix() {
+    std::string file_prefix;
+    if (table_name_ == "server_logs" || table_name_ == "request_logs") {
+      file_prefix = "heavydb.INFO";
+    } else if (table_name_ == "web_server_logs") {
+      file_prefix = "heavy_web_server.test.logs.ALL";
+    } else if (table_name_ == "web_server_access_logs") {
+      file_prefix = "heavy_web_server.test.log.ACCESS";
+    } else {
+      UNREACHABLE() << "Unexpected table name: " << table_name_;
+    }
+    return file_prefix;
+  }
+
   std::vector<std::vector<NullableTargetValue>> getFirstLogFileResultSet() {
     std::vector<std::vector<NullableTargetValue>> result_set;
     // clang-format off
@@ -6583,6 +6604,32 @@ TEST_P(LogsSystemTableTest, MaxLogFiles) {
   sql("REFRESH FOREIGN TABLES " + table_name_ + " WITH (evict = 'true');");
   sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
                       getMultiLogFileResultSet());
+}
+
+TEST_P(LogsSystemTableTest, BadLogFile) {
+  copyToLogDir("first");
+  create_file(log_dir_path_ / getTestLogFilePrefix() / ".bad_log.txt", "12bad log file.");
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getFirstLogFileResultSet());
+}
+
+TEST_P(LogsSystemTableTest, EmptyFile) {
+  create_file(log_dir_path_ / getTestLogFilePrefix() / ".bad_log.txt", "");
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;", {});
+}
+
+TEST_P(LogsSystemTableTest, EmptyFileThenPopulate) {
+  create_file(log_dir_path_ / getTestLogFilePrefix() / ".bad_log.txt", "");
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;", {});
+  copyToLogDir("first");
+  sql("REFRESH FOREIGN TABLES " + table_name_);
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getFirstLogFileResultSet());
+}
+
+TEST_P(LogsSystemTableTest, BadLogNoFiles) {
+  create_file(log_dir_path_ / getTestLogFilePrefix() / ".bad_log.txt", "12bad log file.");
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;", {});
 }
 
 INSTANTIATE_TEST_SUITE_P(AllLogsSystemTables,

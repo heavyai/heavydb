@@ -43,15 +43,6 @@ size_t find_last_end_of_line(const char* buffer,
       std::to_string(buffer_size) + " characters."};
 }
 
-bool line_starts_with_regex(const char* buffer,
-                            size_t start,
-                            size_t end,
-                            const boost::regex& line_start_regex) {
-  return boost::regex_search(std::string{buffer + start, end - start + 1},
-                             line_start_regex,
-                             boost::regex_constants::match_continuous);
-}
-
 std::optional<std::string> get_line_start_regex(const ForeignTable* foreign_table) {
   if (foreign_table) {
     auto it = foreign_table->options.find(RegexFileBufferParser::LINE_START_REGEX_KEY);

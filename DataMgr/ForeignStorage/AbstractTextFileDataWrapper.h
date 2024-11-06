@@ -168,8 +168,10 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   std::map<int, FileRegions> fragment_id_to_file_regions_map_;
 
+ protected:
   std::unique_ptr<FileReader> file_reader_;
 
+ private:
   const int db_id_;
   const ForeignTable* foreign_table_;
 
