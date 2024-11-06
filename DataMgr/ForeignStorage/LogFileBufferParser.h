@@ -23,6 +23,8 @@ class LogFileBufferParser : public RegexFileBufferParser {
  public:
   LogFileBufferParser(const ForeignTable* foreign_table, int32_t db_id);
 
+  void optionallyRemoveBadFiles(MultiFileReader* mfr) const override;
+
  protected:
   bool regexMatchColumns(const std::string& row_str,
                          const boost::regex& line_regex,

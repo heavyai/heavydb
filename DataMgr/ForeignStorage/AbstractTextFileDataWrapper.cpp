@@ -1349,6 +1349,7 @@ void initialize_non_append_mode_scan(
       foreign_storage::AbstractTextFileDataWrapper::LOCAL_FILE_STORAGE_TYPE) {
     file_reader = std::make_unique<LocalMultiFileReader>(
         file_path, copy_params, file_path_options, max_file_count);
+    parser.optionallyRemoveBadFiles(dynamic_cast<MultiFileReader*>(file_reader.get()));
   } else {
     UNREACHABLE();
   }
@@ -1387,6 +1388,7 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
     if (allowFileRollOff(foreign_table_) && multi_file_reader) {
       rolled_off_files = multi_file_reader->checkForRolledOffFiles(file_path_options);
     }
+    parser.optionallyRemoveBadFiles(multi_file_reader);
     parser.validateFiles(file_reader_.get(), foreign_table_);
     if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       file_reader_->checkForMoreRows(append_start_offset_, file_path_options);

@@ -206,4 +206,24 @@ bool LogFileBufferParser::shouldRemoveNonMatches() const {
 bool LogFileBufferParser::shouldTruncateStringValues() const {
   return true;
 }
+
+void LogFileBufferParser::optionallyRemoveBadFiles(MultiFileReader* mfr) const {
+  if (line_start_regex_.has_value()) {
+    CHECK(mfr);
+    auto first_line_by_file_path = mfr->getFirstLineForEachFile();
+    for (const auto& [file_path, line] : first_line_by_file_path) {
+      if (line.empty() ||
+          !line_starts_with_regex(
+              line.c_str(), 0, line.length() - 1, line_start_regex_.value())) {
+        LOG(WARNING) << "First line in file \"" << file_path
+                     << "\" does not match line start regex: "
+                     << line_start_regex_.value();
+        mfr->removeFile(file_path);
+      }
+    }
+    if (mfr->getNumFiles() == 0) {
+      LOG(WARNING) << "No valid log files for parsing";
+    }
+  }
+}
 }  // namespace foreign_storage
