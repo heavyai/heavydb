@@ -370,6 +370,10 @@ class MultiFileReader : public FileReader {
 
   std::string getCurrentFilePath() const override;
 
+  void removeFile(const std::string& path);
+
+  size_t getNumFiles() const;
+
   virtual std::set<std::string> checkForRolledOffFiles(
       const shared::FilePathOptions& file_path_options);
 

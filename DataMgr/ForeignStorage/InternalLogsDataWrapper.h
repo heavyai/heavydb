@@ -30,6 +30,10 @@ class InternalLogsDataWrapper : public RegexParserDataWrapper {
                           const ForeignTable* foreign_table,
                           const UserMapping* user_mapping);
 
+  void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
+
+  std::string getSerializedDataWrapper() const override;
+
  protected:
   const TextFileBufferParser& getFileBufferParser() const override;
   std::optional<size_t> getMaxFileCount() const override;

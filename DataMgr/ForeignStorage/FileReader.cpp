@@ -554,7 +554,7 @@ MultiFileReader::MultiFileReader(const std::string& file_path,
   // Validate files_metadata here, but objects will be recreated by child class
   CHECK(value.HasMember("files_metadata"));
   CHECK(value["files_metadata"].IsArray());
-  CHECK(file_locations_.size() == value["files_metadata"].GetArray().Size());
+  CHECK_EQ(file_locations_.size(), value["files_metadata"].GetArray().Size());
 }
 
 void MultiFileReader::serialize(rapidjson::Value& value,
@@ -775,6 +775,23 @@ size_t MultiFileReader::readRegion(void* buffer, size_t offset, size_t size) {
   }
 
   return bytes_read;
+}
+
+void MultiFileReader::removeFile(const std::string& path) {
+  auto locations_it = file_locations_.begin();
+  for (auto it = files_.begin(); it != files_.end();) {
+    if ((*it)->getCurrentFilePath() == path) {
+      it = files_.erase(it);
+      locations_it = file_locations_.erase(locations_it);
+    } else {
+      ++it;
+      locations_it++;
+    }
+  }
+}
+
+size_t MultiFileReader::getNumFiles() const {
+  return files_.size();
 }
 
 }  // namespace foreign_storage
