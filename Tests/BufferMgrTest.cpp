@@ -216,6 +216,7 @@ class MockBufferMgr : public UnimplementedBufferMgr {
       destination_buffer->reserve(buffer_content_.size());
     }
     destination_buffer->write(buffer_content_.data(), buffer_content_.size());
+    destination_buffer->clearDirtyBits();
   }
 
   AbstractBuffer* putBuffer(const ChunkKey& chunk_key,
@@ -710,7 +711,7 @@ TEST_P(BufferMgrTest, CreateBufferEviction) {
   const auto& segments = buffer_mgr_->getSlabSegments();
   ASSERT_EQ(segments.size(), size_t(1));
   ASSERT_EQ(segments[0].size(), size_t(2));
-  EXPECT_EQ(segments[0].begin()->buffer, buffer);
+  EXPECT_EQ(segments[0].begin()->getBuffer(), buffer);
 
   assertExpectedBufferMgrAttributes(2 * test_buffer_size_, test_max_slab_size, 2);
 }
@@ -1523,9 +1524,9 @@ TEST_P(BufferMgrTest, ReserveBufferFreeSegmentInSubsequentSlab) {
 
   auto segment_it = getSegmentAt(1, 0);
   std::vector<int8_t> old_content{1, 2, 3, 4, 5};
-  ASSERT_NE(segment_it->buffer, nullptr);
-  segment_it->buffer->write(old_content.data(), old_content.size());
-  EXPECT_EQ(segment_it->buffer->size(), old_content.size());
+  ASSERT_NE(segment_it->getBuffer(), nullptr);
+  segment_it->getBuffer()->write(old_content.data(), old_content.size());
+  EXPECT_EQ(segment_it->getBuffer()->size(), old_content.size());
 
   auto returned_it = buffer_mgr_->reserveBuffer(segment_it, slab_2_remaining_size);
 
@@ -1541,16 +1542,16 @@ TEST_P(BufferMgrTest, ReserveBufferFreeSegmentInSubsequentSlab) {
   auto segment_it_2 = getSegmentAt(1, 2);
 
   ASSERT_EQ(segment_it_2, returned_it);
-  ASSERT_NE(segment_it_2->buffer->getMemoryPtr(), nullptr);
+  ASSERT_NE(segment_it_2->getBuffer()->getMemoryPtr(), nullptr);
 
   // Previous buffer content should be transferred to new segment.
-  ASSERT_EQ(segment_it_2->buffer->size(), old_content.size());
-  std::vector<int8_t> new_content(segment_it_2->buffer->size());
-  segment_it_2->buffer->read(new_content.data(), segment_it_2->buffer->size());
+  ASSERT_EQ(segment_it_2->getBuffer()->size(), old_content.size());
+  std::vector<int8_t> new_content(segment_it_2->getBuffer()->size());
+  segment_it_2->getBuffer()->read(new_content.data(), segment_it_2->getBuffer()->size());
   EXPECT_EQ(old_content, new_content);
 
   // Old buffer should be freed.
-  ASSERT_EQ(segment_it->buffer, nullptr);
+  ASSERT_EQ(segment_it->getBuffer(), nullptr);
 
   assertExpectedBufferMgrAttributes(
       max_slab_size_ + slab_2_remaining_size + test_buffer_size_,
@@ -1663,7 +1664,7 @@ TEST_P(BufferMgrTest, ReserveBufferWithBufferEviction) {
   assertExpectedBufferMgrAttributes(2 * test_buffer_size, test_max_slab_size, 2);
 
   auto segment_it = getSegmentAt(0, 0);
-  segment_it->buffer->pin();
+  segment_it->getBuffer()->pin();
   // Force eviction of second segment by reserving the remaining slab size (i.e. slab size
   // - pinned buffer reserved size).
   auto remaining_slab_size = test_max_slab_size - test_buffer_size;
@@ -1702,7 +1703,7 @@ TEST_P(BufferMgrTest,
       10 * test_buffer_size_, 2 * test_max_slab_size, 10, 2);
 
   auto segment_it = getSegmentAt(0, 0);
-  segment_it->buffer->pin();
+  segment_it->getBuffer()->pin();
   buffer_mgr_->reserveBuffer(segment_it, test_buffer_size_ * 3);
 
   // Segments 2, 3, and 4 on slab 1 should be evicted.
@@ -1739,7 +1740,7 @@ TEST_P(BufferMgrTest, ReserveBufferWithBufferEvictionLastSegmentEvicted) {
   assertExpectedBufferMgrAttributes(3 * test_buffer_size, test_max_slab_size, 3);
 
   auto segment_it = getSegmentAt(0, 0);
-  segment_it->buffer->pin();
+  segment_it->getBuffer()->pin();
   buffer_mgr_->reserveBuffer(segment_it, test_buffer_size * 2);
 
   assertSegmentCount(2);
@@ -1887,7 +1888,7 @@ TEST_P(BufferMgrTest, FetchBufferCacheMiss) {
   auto segment_it = getSegmentAt(0, 0);
   assertParentMethodCalledWithParams(
       ParentMgrMethod::kFetchBuffer,
-      {{test_chunk_key_, segment_it->buffer, new_source_content.size()}});
+      {{test_chunk_key_, segment_it->getBuffer(), new_source_content.size()}});
 }
 
 TEST_P(BufferMgrTest, FetchBufferCacheMissForeignStorageException) {
@@ -1904,7 +1905,7 @@ TEST_P(BufferMgrTest, FetchBufferCacheMissForeignStorageException) {
   EXPECT_FALSE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
 
   assertExpectedBufferMgrAttributes(0, max_slab_size_, 0);
-  EXPECT_EQ(getSegmentAt(0, 0)->buffer, nullptr);
+  EXPECT_EQ(getSegmentAt(0, 0)->getBuffer(), nullptr);
 }
 
 TEST_P(BufferMgrTest, GetBufferCacheHit) {
@@ -2006,7 +2007,7 @@ TEST_P(BufferMgrTest, GetBufferCacheMissForeignStorageException) {
   EXPECT_FALSE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
 
   assertExpectedBufferMgrAttributes(0, max_slab_size_, 0);
-  EXPECT_EQ(getSegmentAt(0, 0)->buffer, nullptr);
+  EXPECT_EQ(getSegmentAt(0, 0)->getBuffer(), nullptr);
 }
 
 // For the following test cases, "re-entrant" means that the buffer reservation call is a
@@ -2058,7 +2059,7 @@ TEST_P(BufferMgrTest, DISABLED_GetBufferReentrantReserveTooBigForSlab) {
   auto segment_it = getSegmentAt(0, 0);
   assertParentMethodCalledWithParams(
       ParentMgrMethod::kFetchBuffer,
-      {{test_chunk_key_, segment_it->buffer, new_source_content.size()}});
+      {{test_chunk_key_, segment_it->getBuffer(), new_source_content.size()}});
 }
 
 TEST_P(BufferMgrTest, GetBufferReentrantReserveFreeSegmentInSubsequentSlab) {
@@ -2137,7 +2138,7 @@ TEST_P(BufferMgrTest, GetBufferReentrantReserveNewSlabCreationError) {
   auto segment_it = getSegmentAt(0, 1);
   assertParentMethodCalledWithParams(
       ParentMgrMethod::kFetchBuffer,
-      {{test_chunk_key_, segment_it->buffer, new_source_content.size()}});
+      {{test_chunk_key_, segment_it->getBuffer(), new_source_content.size()}});
 }
 
 TEST_P(BufferMgrTest, GetBufferReentrantReserveWithEviction) {
@@ -2251,7 +2252,7 @@ TEST_P(BufferMgrTest, GetBufferReentrantReserveCannotEvict) {
   auto segment_it = getSegmentAt(0, 1);
   assertParentMethodCalledWithParams(
       ParentMgrMethod::kFetchBuffer,
-      {{test_chunk_key_2_, segment_it->buffer, new_source_content.size()}});
+      {{test_chunk_key_2_, segment_it->getBuffer(), new_source_content.size()}});
 }
 
 INSTANTIATE_TEST_SUITE_P(CpuAndGpuMgrs,

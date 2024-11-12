@@ -33,7 +33,8 @@ using namespace std;
 
 namespace Buffer_Namespace {
 
-std::string BufferMgr::keyToString(const ChunkKey& key) {
+namespace {
+inline std::string key_to_string(const ChunkKey& key) {
   std::ostringstream oss;
 
   oss << " key: ";
@@ -42,6 +43,13 @@ std::string BufferMgr::keyToString(const ChunkKey& key) {
   }
   return oss.str();
 }
+
+inline size_t convert_num_bytes_to_num_pages(size_t num_bytes, size_t page_size) {
+  CHECK_GT(page_size, size_t(0));
+  CHECK_EQ(num_bytes % page_size, size_t(0));
+  return num_bytes / page_size;
+}
+}  // namespace
 
 /// Allocates memSize bytes for the buffer pool and initializes the free memory map.
 BufferMgr::BufferMgr(const int device_id,
@@ -57,6 +65,10 @@ BufferMgr::BufferMgr(const int device_id,
     , max_slab_size_(max_slab_size)
     , default_slab_size_(default_slab_size)
     , page_size_(page_size)
+    , max_buffer_pool_num_pages_(
+          convert_num_bytes_to_num_pages(max_buffer_pool_size_, page_size_))
+    , min_num_pages_per_slab_(convert_num_bytes_to_num_pages(min_slab_size_, page_size_))
+    , max_num_pages_per_slab_(convert_num_bytes_to_num_pages(max_slab_size_, page_size_))
     , num_pages_allocated_(0)
     , allocations_capped_(false)
     , parent_mgr_(parent_mgr)
@@ -75,9 +87,6 @@ BufferMgr::BufferMgr(const int device_id,
   CHECK_EQ(max_slab_size_ % page_size_, size_t(0));
   CHECK_EQ(default_slab_size_ % page_size_, size_t(0));
 
-  max_buffer_pool_num_pages_ = max_buffer_pool_size_ / page_size_;
-  max_num_pages_per_slab_ = max_slab_size_ / page_size_;
-  min_num_pages_per_slab_ = min_slab_size_ / page_size_;
   default_num_pages_per_slab_ = default_slab_size_ / page_size_;
   current_max_num_pages_per_slab_ =
       max_num_pages_per_slab_;  // current_max_num_pages_per_slab_ will drop as
@@ -86,6 +95,7 @@ BufferMgr::BufferMgr(const int device_id,
 
 /// Frees the heap-allocated buffer pool memory
 BufferMgr::~BufferMgr() {
+  std::unique_lock<std::shared_mutex> slab_lock(slab_mutex_);
   clear();
 }
 
@@ -98,26 +108,17 @@ void BufferMgr::reinit() {
 }
 
 void BufferMgr::clear() {
-  std::lock_guard<std::mutex> sized_segs_lock(sized_segs_mutex_);
-  std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
-  std::lock_guard<std::mutex> unsized_segs_lock(unsized_segs_mutex_);
-
-  for (auto& buf : chunk_index_) {
-    delete buf.second->buffer;
-  }
-
-  chunk_index_.clear();
-  slabs_.clear();
-  slab_segments_.clear();
-  unsized_segs_.clear();
-  buffer_epoch_ = 0;
+  clearChunks();
+  clearSlabContainers();
+  clearUnsizedSegments();
+  clearEpoch();
 }
 
 /// Throws a runtime_error if the Chunk already exists
 AbstractBuffer* BufferMgr::createBuffer(const ChunkKey& chunk_key,
                                         const size_t chunk_page_size,
                                         const size_t initial_size) {
-  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);
+  std::lock_guard<std::mutex> chunk_lock(getChunkMutex(chunk_key));
   return createBufferUnlocked(chunk_key, chunk_page_size, initial_size);
 }
 
@@ -129,38 +130,27 @@ AbstractBuffer* BufferMgr::createBufferUnlocked(const ChunkKey& chunk_key,
   if (actual_chunk_page_size == 0) {
     actual_chunk_page_size = page_size_;
   }
+  auto buffer_seg_it = addBufferPlaceholder(chunk_key);
 
-  // chunk_page_size is just for recording dirty pages
-  {
-    std::lock_guard<std::mutex> lock(chunk_index_mutex_);
-    CHECK(chunk_index_.find(chunk_key) == chunk_index_.end());
-    BufferSeg buffer_seg(BufferSeg(-1, 0, USED));
-    buffer_seg.chunk_key = chunk_key;
-    std::lock_guard<std::mutex> unsizedSegsLock(unsized_segs_mutex_);
-    unsized_segs_.push_back(buffer_seg);  // race condition?
-    chunk_index_[chunk_key] =
-        std::prev(unsized_segs_.end(),
-                  1);  // need to do this before allocating Buffer because doing so could
-                       // change the segment used
-  }
   // following should be safe outside the lock b/c first thing Buffer
   // constructor does is pin (and its still in unsized segs at this point
   // so can't be evicted)
   try {
-    allocateBuffer(chunk_index_[chunk_key], actual_chunk_page_size, initial_size);
+    allocateBuffer(buffer_seg_it, actual_chunk_page_size, initial_size);
   } catch (const OutOfMemory&) {
-    auto buffer_it = chunk_index_.find(chunk_key);
-    CHECK(buffer_it != chunk_index_.end());
-    buffer_it->second->buffer =
-        nullptr;  // constructor failed for the buffer object so make sure to mark it null
-                  // so deleteBuffer doesn't try to delete it
+    auto buffer_it = getChunkSegment(chunk_key);
+    CHECK(buffer_it.has_value());
+    buffer_it.value()->setBuffer(
+        nullptr);  // constructor failed for the buffer object so make sure to mark it
+                   // null so deleteBuffer doesn't try to delete it
     deleteBufferUnlocked(chunk_key);
     throw;
   }
-  CHECK(initial_size == 0 || chunk_index_[chunk_key]->buffer->getMemoryPtr());
-  // chunk_index_[chunk_key]->buffer->pin();
-  std::lock_guard<std::mutex> lock(chunk_index_mutex_);
-  return chunk_index_[chunk_key]->buffer;
+  auto buffer_it = getChunkSegment(chunk_key);
+  CHECK(buffer_it.has_value());
+  auto buffer = buffer_it.value()->getBuffer();
+  CHECK(initial_size == 0 || buffer->getMemoryPtr());
+  return buffer;
 }
 
 BufferList::iterator BufferMgr::evict(BufferList::iterator& evict_start,
@@ -174,23 +164,23 @@ BufferList::iterator BufferMgr::evict(BufferList::iterator& evict_start,
   size_t start_page = evict_start->start_page;
   while (num_pages < num_pages_requested) {
     if (evict_it->mem_status == USED) {
-      CHECK(evict_it->buffer->getPinCount() < 1);
+      CHECK(evict_it->getBuffer()->getPinCount() < 1);
     }
     num_pages += evict_it->num_pages;
     if (evict_it->mem_status == USED && evict_it->chunk_key.size() > 0) {
-      chunk_index_.erase(evict_it->chunk_key);
+      eraseChunkSegment(evict_it->chunk_key);
     }
-    if (evict_it->buffer != nullptr) {
+    if (evict_it->getBuffer() != nullptr) {
       // If we don't delete buffers here then we lose reference to them later and cause a
       // memleak.
-      delete evict_it->buffer;
+      delete evict_it->getBuffer();
     }
     evict_it = slab_segments_[slab_num].erase(
         evict_it);  // erase operations returns next iterator - safe if we ever move
                     // to a vector (as opposed to erase(evict_it++)
   }
   BufferSeg data_seg(
-      start_page, num_pages_requested, USED, buffer_epoch_++);  // until we can
+      start_page, num_pages_requested, USED, incrementEpoch());  // until we can
   // data_seg.pinCount++;
   data_seg.slab_num = slab_num;
   auto data_seg_it =
@@ -219,6 +209,9 @@ BufferList::iterator BufferMgr::reserveBuffer(
     // We already have enough pages in existing segment
     return seg_it;
   }
+
+  BufferList::iterator new_seg_it;
+  std::unique_lock<std::shared_mutex> slab_lock(slab_mutex_);
   // First check for free segment after seg_it
   int slab_num = seg_it->slab_num;
   if (slab_num >= 0) {  // not dummy page
@@ -235,28 +228,29 @@ BufferList::iterator BufferMgr::reserveBuffer(
   }
   // If we're here then we couldn't keep buffer in existing slot
   // need to find new segment, copy data over, and then delete old
-  auto new_seg_it = findFreeBuffer(num_bytes);
+  new_seg_it = findFreeBuffer(num_bytes);
 
   // Below should be in copy constructor for BufferSeg?
-  new_seg_it->buffer = seg_it->buffer;
+  new_seg_it->setBuffer(seg_it->getBuffer());
   new_seg_it->chunk_key = seg_it->chunk_key;
-  int8_t* old_mem = new_seg_it->buffer->mem_;
-  new_seg_it->buffer->mem_ =
+  int8_t* old_mem = new_seg_it->getBuffer()->mem_;
+  new_seg_it->getBuffer()->mem_ =
       slabs_[new_seg_it->slab_num] + new_seg_it->start_page * page_size_;
 
   // now need to copy over memory
   // only do this if the old segment is valid (i.e. not new w/ unallocated buffer
-  if (seg_it->start_page >= 0 && seg_it->buffer->mem_ != 0) {
-    new_seg_it->buffer->writeData(old_mem,
-                                  new_seg_it->buffer->size(),
-                                  0,
-                                  new_seg_it->buffer->getType(),
-                                  device_id_);
+  if (seg_it->start_page >= 0 && seg_it->getBuffer()->mem_ != 0) {
+    new_seg_it->getBuffer()->writeData(old_mem,
+                                       new_seg_it->getBuffer()->size(),
+                                       0,
+                                       new_seg_it->getBuffer()->getType(),
+                                       device_id_);
   }
   // Decrement pin count to reverse effect above
   removeSegment(seg_it);
+
   {
-    std::lock_guard<std::mutex> lock(chunk_index_mutex_);
+    std::unique_lock<std::shared_mutex> chunk_index_lock(chunk_index_mutex_);
     chunk_index_[new_seg_it->chunk_key] = new_seg_it;
   }
 
@@ -273,7 +267,7 @@ BufferList::iterator BufferMgr::findFreeBufferInSlab(const size_t slab_num,
       size_t excess_pages = buffer_it->num_pages - num_pages_requested;
       buffer_it->num_pages = num_pages_requested;
       buffer_it->mem_status = USED;
-      buffer_it->last_touched = buffer_epoch_++;
+      buffer_it->last_touched = incrementEpoch();
       buffer_it->slab_num = slab_num;
       if (excess_pages > 0) {
         BufferSeg free_seg(
@@ -390,19 +384,20 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
       // a USED buffer coming after a free buffer as we would have used the FREE buffer,
       // but we won't worry about this for now
 
-      // We can't evict pinned buffers - only normal usedbuffers
-
-      // if (buffer_it->mem_status == FREE || buffer_it->buffer->getPinCount() == 0) {
       size_t page_count = 0;
       size_t score = 0;
       bool solution_found = false;
       auto evict_it = buffer_it;
       for (; evict_it != slab_segments_[slab_num].end(); ++evict_it) {
+        // We can't evict pinned buffers - only normal used buffers.
         // pinCount should never go up - only down because we have
         // global lock on buffer pool and pin count only increments
         // on getChunk
-        if (evict_it->mem_status == USED && evict_it->buffer->getPinCount() > 0) {
-          break;
+        if (evict_it->mem_status == USED) {
+          auto buffer = evict_it->getBuffer();
+          if (buffer->getPinCount() > 0) {
+            break;
+          }
         }
         page_count += evict_it->num_pages;
         if (evict_it->mem_status == USED) {
@@ -456,7 +451,7 @@ std::string BufferMgr::printSlab(size_t slab_num) {
   std::ostringstream tss;
   // size_t lastEnd = 0;
   tss << "Slab St.Page   Pages  Touch" << std::endl;
-  for (auto segment : slab_segments_[slab_num]) {
+  for (const auto& segment : slab_segments_[slab_num]) {
     tss << setfill(' ') << setw(4) << slab_num;
     // tss << " BSN: " << setfill(' ') << setw(2) << segment.slab_num;
     tss << setfill(' ') << setw(8) << segment.start_page;
@@ -469,7 +464,7 @@ std::string BufferMgr::printSlab(size_t slab_num) {
       tss << " FREE"
           << " ";
     } else {
-      tss << " PC: " << setfill(' ') << setw(2) << segment.buffer->getPinCount();
+      tss << " PC: " << setfill(' ') << setw(2) << segment.getBuffer()->getPinCount();
       tss << " USED - Chunk: ";
 
       for (auto&& key_elem : segment.chunk_key) {
@@ -482,6 +477,7 @@ std::string BufferMgr::printSlab(size_t slab_num) {
 }
 
 std::string BufferMgr::printSlabs() {
+  std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   std::ostringstream tss;
   tss << std::endl
       << "Slabs Contents: "
@@ -495,22 +491,37 @@ std::string BufferMgr::printSlabs() {
 }
 
 void BufferMgr::clearSlabs() {
-  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);
+  std::vector<ChunkKey> used_chunk_keys;
+  {
+    std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
+    for (auto& segment_list : slab_segments_) {
+      for (auto& segment : segment_list) {
+        if (segment.mem_status != FREE) {
+          used_chunk_keys.emplace_back(segment.chunk_key);
+        }
+      }
+    }
+  }
+
   bool pinned_exists = false;
-  for (auto& segment_list : slab_segments_) {
-    for (auto& segment : segment_list) {
-      if (segment.mem_status == FREE) {
-        // no need to free
-      } else if (segment.buffer->getPinCount() < 1) {
-        deleteBufferUnlocked(segment.chunk_key, true);
+  for (const auto& chunk_key : used_chunk_keys) {
+    std::lock_guard<std::mutex> chunk_lock(getChunkMutex(chunk_key));
+    auto buffer_it = getChunkSegment(chunk_key);
+    if (buffer_it.has_value()) {
+      auto buffer = buffer_it.value()->getBuffer();
+      CHECK(buffer) << show_chunk(chunk_key);
+      if (buffer->getPinCount() < 1) {
+        deleteBufferUnlocked(chunk_key);
       } else {
         pinned_exists = true;
       }
     }
   }
+
   if (!pinned_exists) {
     // lets actually clear the buffer from memory
     LOG(INFO) << getStringMgrType() << ":" << device_id_ << " clear slab memory";
+    std::unique_lock<std::shared_mutex> slab_lock(slab_mutex_);
     freeAllMem();
     clear();
     reinit();
@@ -521,31 +532,28 @@ void BufferMgr::clearSlabs() {
 
 // return the maximum size this buffer can be in bytes
 size_t BufferMgr::getMaxSize() const {
-  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   return page_size_ * max_buffer_pool_num_pages_;
 }
 
 // return how large the buffer are currently allocated
 size_t BufferMgr::getAllocated() const {
-  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
+  std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   return num_pages_allocated_ * page_size_;
 }
 
 //
 bool BufferMgr::isAllocationCapped() {
-  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
+  std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   return allocations_capped_;
 }
 
 size_t BufferMgr::getPageSize() const {
-  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   return page_size_;
 }
 
 // return the size of the chunks in use in bytes
 size_t BufferMgr::getInUseSize() const {
-  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
-  std::unique_lock<std::mutex> sized_segs_lock(sized_segs_mutex_);
+  std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   size_t in_use = 0;
   for (const auto& segment_list : slab_segments_) {
     for (const auto& segment : segment_list) {
@@ -557,13 +565,13 @@ size_t BufferMgr::getInUseSize() const {
   return in_use;
 }
 
-std::string BufferMgr::printSeg(BufferList::iterator& seg_it) {
+std::string BufferMgr::printSeg(const BufferList::iterator& seg_it) {
   std::ostringstream tss;
   tss << "SN: " << setfill(' ') << setw(2) << seg_it->slab_num;
   tss << " SP: " << setfill(' ') << setw(7) << seg_it->start_page;
   tss << " NP: " << setfill(' ') << setw(7) << seg_it->num_pages;
   tss << " LT: " << setfill(' ') << setw(7) << seg_it->last_touched;
-  tss << " PC: " << setfill(' ') << setw(2) << seg_it->buffer->getPinCount();
+  tss << " PC: " << setfill(' ') << setw(2) << seg_it->getBuffer()->getPinCount();
   if (seg_it->mem_status == FREE) {
     tss << " FREE"
         << " ";
@@ -581,10 +589,11 @@ std::string BufferMgr::printSeg(BufferList::iterator& seg_it) {
 std::string BufferMgr::printMap() {
   std::ostringstream tss;
   int seg_num = 1;
+  std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   tss << std::endl
       << "Map Contents: "
       << " " << getStringMgrType() << ":" << device_id_ << std::endl;
-  std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
+  std::shared_lock<std::shared_mutex> chunk_index_lock(chunk_index_mutex_);
   for (auto seg_it = chunk_index_.begin(); seg_it != chunk_index_.end();
        ++seg_it, ++seg_num) {
     //    tss << "Map Entry " << seg_num << ": ";
@@ -603,6 +612,7 @@ std::string BufferMgr::printMap() {
 void BufferMgr::printSegs() {
   int seg_num = 1;
   int slab_num = 1;
+  std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   LOG(INFO) << std::endl << " " << getStringMgrType() << ":" << device_id_;
   for (auto slab_it = slab_segments_.begin(); slab_it != slab_segments_.end();
        ++slab_it, ++slab_num) {
@@ -620,66 +630,59 @@ void BufferMgr::printSegs() {
 }
 
 bool BufferMgr::isBufferOnDevice(const ChunkKey& key) {
-  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
-  std::lock_guard<std::mutex> chunkIndexLock(chunk_index_mutex_);
-  if (chunk_index_.find(key) == chunk_index_.end()) {
-    return false;
-  } else {
-    return true;
-  }
+  return getChunkSegment(key).has_value();
 }
 
 /// This method throws a runtime_error when deleting a Chunk that does not exist.
 void BufferMgr::deleteBuffer(const ChunkKey& key, const bool) {
-  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);
+  std::lock_guard<std::mutex> chunk_lock(getChunkMutex(key));
   deleteBufferUnlocked(key);
 }
 
 void BufferMgr::deleteBufferUnlocked(const ChunkKey& key, const bool) {
   // Note: purge is unused
-  std::unique_lock<std::mutex> chunk_index_lock(chunk_index_mutex_);
 
   // lookup the buffer for the Chunk in chunk_index_
-  auto buffer_it = chunk_index_.find(key);
-  CHECK(buffer_it != chunk_index_.end());
-  auto seg_it = buffer_it->second;
-  chunk_index_.erase(buffer_it);
-  chunk_index_lock.unlock();
-  std::lock_guard<std::mutex> sized_segs_lock(sized_segs_mutex_);
-  if (seg_it->buffer) {
-    delete seg_it->buffer;  // Delete Buffer for segment
-    seg_it->buffer = 0;
+  auto buffer_it = getChunkSegment(key);
+  CHECK(buffer_it.has_value());
+  auto seg_it = buffer_it.value();
+  eraseChunkSegment(key);
+  {
+    std::unique_lock<std::shared_mutex> slab_lock(slab_mutex_);
+    if (seg_it->getBuffer()) {
+      delete seg_it->getBuffer();  // Delete Buffer for segment
+      seg_it->setBuffer(nullptr);
+    }
+    removeSegment(seg_it);
   }
-  removeSegment(seg_it);
 }
 
 void BufferMgr::deleteBuffersWithPrefix(const ChunkKey& key_prefix, const bool) {
-  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);
   // Note: purge is unused
-  // lookup the buffer for the Chunk in chunk_index_
-  std::lock_guard<std::mutex> sized_segs_lock(
-      sized_segs_mutex_);  // Take this lock early to prevent deadlock with
-                           // reserveBuffer which needs segs_mutex_ and then
-                           // chunk_index_mutex_
-  std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
-  auto prefix_upper_bound = key_prefix;
-  prefix_upper_bound.emplace_back(std::numeric_limits<ChunkKey::value_type>::max());
-  for (auto buffer_it = chunk_index_.lower_bound(key_prefix),
-            end_chunk_it = chunk_index_.upper_bound(prefix_upper_bound);
-       buffer_it != end_chunk_it;) {
-    auto seg_it = buffer_it->second;
-    if (seg_it->buffer) {
-      if (seg_it->buffer->getPinCount() != 0) {
-        // leave the buffer and buffer segment in place, they are in use elsewhere. once
-        // unpinned, the buffer will be inaccessible and evicted
-        buffer_it++;
-        continue;
-      }
-      delete seg_it->buffer;  // Delete Buffer for segment
-      seg_it->buffer = nullptr;
+  std::vector<ChunkKey> chunk_keys_to_delete;
+  {
+    std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
+    std::shared_lock<std::shared_mutex> chunk_index_lock(chunk_index_mutex_);
+    auto prefix_upper_bound = key_prefix;
+    prefix_upper_bound.emplace_back(std::numeric_limits<ChunkKey::value_type>::max());
+    for (auto buffer_it = chunk_index_.lower_bound(key_prefix),
+              end_chunk_it = chunk_index_.upper_bound(prefix_upper_bound);
+         buffer_it != end_chunk_it;) {
+      chunk_keys_to_delete.emplace_back(buffer_it->first);
+      buffer_it++;
     }
-    removeSegment(seg_it);
-    chunk_index_.erase(buffer_it++);
+  }
+
+  for (const auto& chunk_key : chunk_keys_to_delete) {
+    std::lock_guard<std::mutex> chunk_lock(getChunkMutex(chunk_key));
+    auto buffer_it = getChunkSegment(chunk_key);
+    if (buffer_it.has_value()) {
+      auto buffer = buffer_it.value()->getBuffer();
+      CHECK(buffer) << show_chunk(chunk_key);
+      if (buffer->getPinCount() == 0) {
+        deleteBufferUnlocked(chunk_key);
+      }
+    }
   }
 }
 
@@ -688,8 +691,7 @@ void BufferMgr::removeSegment(BufferList::iterator& seg_it) {
   int slab_num = seg_it->slab_num;
   // cout << "Slab num: " << slabNum << endl;
   if (slab_num < 0) {
-    std::lock_guard<std::mutex> unsized_segs_lock(unsized_segs_mutex_);
-    unsized_segs_.erase(seg_it);
+    eraseUnsizedSegment(seg_it);
   } else {
     if (seg_it != slab_segments_[slab_num].begin()) {
       auto prev_it = std::prev(seg_it);
@@ -710,101 +712,118 @@ void BufferMgr::removeSegment(BufferList::iterator& seg_it) {
     }
     seg_it->mem_status = FREE;
     // seg_it->pinCount = 0;
-    seg_it->buffer = 0;
+    seg_it->setBuffer(nullptr);
   }
 }
 
 void BufferMgr::checkpoint() {
-  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);  // granular lock
-  std::lock_guard<std::mutex> chunkIndexLock(chunk_index_mutex_);
-
-  for (auto& chunk_itr : chunk_index_) {
-    // checks that buffer is actual chunk (not just buffer) and is dirty
-    auto& buffer_itr = chunk_itr.second;
-    if (buffer_itr->chunk_key[0] != -1 && buffer_itr->buffer->isDirty()) {
-      parent_mgr_->putBuffer(buffer_itr->chunk_key, buffer_itr->buffer);
-      buffer_itr->buffer->clearDirtyBits();
+  std::vector<ChunkKey> chunk_keys_to_checkpoint;
+  {
+    std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
+    std::shared_lock<std::shared_mutex> chunk_index_lock(chunk_index_mutex_);
+    for (auto& chunk_itr : chunk_index_) {
+      // checks that buffer is actual chunk (not just buffer)
+      auto& buffer_itr = chunk_itr.second;
+      if (buffer_itr->chunk_key[0] != -1) {
+        chunk_keys_to_checkpoint.emplace_back(buffer_itr->chunk_key);
+      }
     }
   }
+  checkpoint(chunk_keys_to_checkpoint);
 }
 
 void BufferMgr::checkpoint(const int db_id, const int tb_id) {
-  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);  // granular lock
-  std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
-
-  ChunkKey key_prefix;
-  key_prefix.push_back(db_id);
-  key_prefix.push_back(tb_id);
-  auto start_chunk_it = chunk_index_.lower_bound(key_prefix);
-  if (start_chunk_it == chunk_index_.end()) {
-    return;
-  }
-
-  auto buffer_it = start_chunk_it;
-  while (buffer_it != chunk_index_.end() &&
-         std::search(buffer_it->first.begin(),
-                     buffer_it->first.begin() + key_prefix.size(),
-                     key_prefix.begin(),
-                     key_prefix.end()) != buffer_it->first.begin() + key_prefix.size()) {
-    if (buffer_it->second->chunk_key[0] != -1 &&
-        buffer_it->second->buffer->isDirty()) {  // checks that buffer is actual chunk
-                                                 // (not just buffer) and is dirty
-
-      parent_mgr_->putBuffer(buffer_it->second->chunk_key, buffer_it->second->buffer);
-      buffer_it->second->buffer->clearDirtyBits();
+  std::vector<ChunkKey> chunk_keys_to_checkpoint;
+  {
+    std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
+    std::shared_lock<std::shared_mutex> chunk_index_lock(chunk_index_mutex_);
+    ChunkKey key_prefix;
+    key_prefix.push_back(db_id);
+    key_prefix.push_back(tb_id);
+    auto start_chunk_it = chunk_index_.lower_bound(key_prefix);
+    if (start_chunk_it == chunk_index_.end()) {
+      return;
     }
-    buffer_it++;
+
+    auto buffer_it = start_chunk_it;
+    while (buffer_it != chunk_index_.end() &&
+           std::search(buffer_it->first.begin(),
+                       buffer_it->first.begin() + key_prefix.size(),
+                       key_prefix.begin(),
+                       key_prefix.end()) !=
+               buffer_it->first.begin() + key_prefix.size()) {
+      if (buffer_it->second->chunk_key[0] != -1) {  // checks that buffer is actual chunk
+                                                    // (not just buffer)
+        chunk_keys_to_checkpoint.emplace_back(buffer_it->first);
+      }
+      buffer_it++;
+    }
+  }
+  checkpoint(chunk_keys_to_checkpoint);
+}
+
+void BufferMgr::checkpoint(const std::vector<ChunkKey>& chunk_keys) {
+  for (const auto& chunk_key : chunk_keys) {
+    std::lock_guard<std::mutex> chunk_lock(getChunkMutex(chunk_key));
+    auto buffer_it = getChunkSegment(chunk_key);
+    if (buffer_it.has_value()) {
+      auto buffer = buffer_it.value()->getBuffer();
+      CHECK(buffer) << show_chunk(chunk_key);
+      if (buffer->isDirty()) {
+        parent_mgr_->putBuffer(chunk_key, buffer);
+        buffer->clearDirtyBits();
+      }
+    }
   }
 }
 
 /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
 /// throws a runtime_error.
 AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes) {
-  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);  // granular lock
-
-  std::unique_lock<std::mutex> sized_segs_lock(sized_segs_mutex_);
-  std::unique_lock<std::mutex> chunk_index_lock(chunk_index_mutex_);
-  auto buffer_it = chunk_index_.find(key);
-  bool found_buffer = buffer_it != chunk_index_.end();
-  chunk_index_lock.unlock();
+  std::lock_guard<std::mutex> chunk_lock(getChunkMutex(key));
+  // Hold a slab read lock in order to ensure that the buffer, if found, cannot be evicted
+  // before it is pinned.
+  std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
+  auto buffer_it = getChunkSegment(key);
+  bool found_buffer = buffer_it.has_value();
   if (found_buffer) {
-    CHECK(buffer_it->second->buffer);
-    buffer_it->second->buffer->pin();
-    sized_segs_lock.unlock();
+    auto buffer = buffer_it.value()->getBuffer();
+    CHECK(buffer);
+    buffer->pin();
+    slab_lock.unlock();
 
-    buffer_it->second->last_touched = buffer_epoch_++;  // race
+    buffer_it.value()->last_touched = incrementEpoch();
 
-    auto buffer_size = buffer_it->second->buffer->size();
+    auto buffer_size = buffer->size();
     if (buffer_size < num_bytes) {
       // need to fetch part of buffer we don't have - up to numBytes
       VLOG(1) << ToString(getMgrType())
               << ": Fetching buffer from parent manager. Reason: increased buffer size. "
                  "Buffer size: "
               << buffer_size << ", num bytes to fetch: " << num_bytes
-              << ", chunk key: " << keyToString(key);
-      parent_mgr_->fetchBuffer(key, buffer_it->second->buffer, num_bytes);
-      buffer_it->second->buffer->clearDirtyBits();
+              << ", chunk key: " << key_to_string(key);
+      parent_mgr_->fetchBuffer(key, buffer, num_bytes);
     }
-    return buffer_it->second->buffer;
+    return buffer;
   } else {  // If wasn't in pool then we need to fetch it
-    sized_segs_lock.unlock();
+    slab_lock.unlock();
+
     // createChunk pins for us
     AbstractBuffer* buffer = createBufferUnlocked(key, page_size_, num_bytes);
     try {
       VLOG(1) << ToString(getMgrType())
               << ": Fetching buffer from parent manager. Reason: cache miss. Num bytes "
                  "to fetch: "
-              << num_bytes << ", chunk key: " << keyToString(key);
+              << num_bytes << ", chunk key: " << key_to_string(key);
       parent_mgr_->fetchBuffer(
           key, buffer, num_bytes);  // this should put buffer in a BufferSegment
-      buffer->clearDirtyBits();
     } catch (const foreign_storage::ForeignStorageException& error) {
       deleteBufferUnlocked(key);  // buffer failed to load, ensure it is cleaned up
-      LOG(WARNING) << "Get chunk - Could not load chunk " << keyToString(key)
+      LOG(WARNING) << "Get chunk - Could not load chunk " << key_to_string(key)
                    << " from foreign storage. Error was " << error.what();
       throw;
     } catch (const std::exception& error) {
-      LOG(FATAL) << "Get chunk - Could not find chunk " << keyToString(key)
+      LOG(FATAL) << "Get chunk - Could not find chunk " << key_to_string(key)
                  << " in buffer pool or parent buffer pools. Error was " << error.what();
     }
     return buffer;
@@ -814,37 +833,38 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
 void BufferMgr::fetchBuffer(const ChunkKey& key,
                             AbstractBuffer* dest_buffer,
                             const size_t num_bytes) {
-  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);  // granular lock
-  std::unique_lock<std::mutex> sized_segs_lock(sized_segs_mutex_);
-  std::unique_lock<std::mutex> chunk_index_lock(chunk_index_mutex_);
+  std::lock_guard<std::mutex> chunk_lock(getChunkMutex(key));
+  // Hold a slab read lock in order to ensure that the buffer, if found, cannot be evicted
+  // before it is pinned.
+  std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
+  auto buffer_it = getChunkSegment(key);
+  bool found_buffer = buffer_it.has_value();
 
-  auto buffer_it = chunk_index_.find(key);
-  bool found_buffer = buffer_it != chunk_index_.end();
-  chunk_index_lock.unlock();
   AbstractBuffer* buffer;
   if (!found_buffer) {
-    sized_segs_lock.unlock();
+    slab_lock.unlock();
     CHECK(parent_mgr_ != 0);
     buffer = createBufferUnlocked(key, page_size_, num_bytes);  // will pin buffer
     try {
       VLOG(1) << ToString(getMgrType())
               << ": Fetching buffer from parent manager. Reason: cache miss. Num bytes "
                  "to fetch: "
-              << num_bytes << ", chunk key: " << keyToString(key);
+              << num_bytes << ", chunk key: " << key_to_string(key);
       parent_mgr_->fetchBuffer(key, buffer, num_bytes);
-      buffer->clearDirtyBits();
     } catch (const foreign_storage::ForeignStorageException& error) {
       deleteBufferUnlocked(key);  // buffer failed to load, ensure it is cleaned up
-      LOG(WARNING) << "Could not fetch parent chunk " << keyToString(key)
+      LOG(WARNING) << "Could not fetch parent chunk " << key_to_string(key)
                    << " from foreign storage. Error was " << error.what();
       throw;
     } catch (std::runtime_error& error) {
-      LOG(FATAL) << "Could not fetch parent buffer " << keyToString(key)
+      LOG(FATAL) << "Could not fetch parent buffer " << key_to_string(key)
                  << " error: " << error.what();
     }
   } else {
-    buffer = buffer_it->second->buffer;
+    buffer = buffer_it.value()->getBuffer();
     buffer->pin();
+    slab_lock.unlock();
+
     auto buffer_size = buffer->size();
     if (num_bytes > buffer_size) {
       try {
@@ -852,23 +872,18 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
                 << ": Fetching buffer from parent manager. Reason: increased buffer "
                    "size. Buffer size: "
                 << buffer_size << ", num bytes to fetch: " << num_bytes
-                << ", chunk key: " << keyToString(key);
+                << ", chunk key: " << key_to_string(key);
         parent_mgr_->fetchBuffer(key, buffer, num_bytes);
-        buffer->clearDirtyBits();
       } catch (const foreign_storage::ForeignStorageException& error) {
-        LOG(WARNING) << "Could not fetch parent chunk " << keyToString(key)
+        LOG(WARNING) << "Could not fetch parent chunk " << key_to_string(key)
                      << " from foreign storage. Error was " << error.what();
         throw;
       } catch (std::runtime_error& error) {
-        LOG(FATAL) << "Could not fetch parent buffer " << keyToString(key)
+        LOG(FATAL) << "Could not fetch parent buffer " << key_to_string(key)
                    << " error: " << error.what();
       }
     }
-    sized_segs_lock.unlock();
   }
-  global_lock.unlock();
-
-  std::shared_lock<std::shared_mutex> global_read_lock(global_mutex_);
   buffer->copyTo(dest_buffer, num_bytes);
   buffer->unPin();
 }
@@ -876,16 +891,21 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
 AbstractBuffer* BufferMgr::putBuffer(const ChunkKey& key,
                                      AbstractBuffer* src_buffer,
                                      const size_t num_bytes) {
-  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);
-  std::unique_lock<std::mutex> chunk_index_lock(chunk_index_mutex_);
-  auto buffer_it = chunk_index_.find(key);
-  bool found_buffer = buffer_it != chunk_index_.end();
-  chunk_index_lock.unlock();
+  std::lock_guard<std::mutex> chunk_lock(getChunkMutex(key));
+  // Hold a slab read lock in order to ensure that the buffer, if found, cannot be evicted
+  // before it is pinned.
+  std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
+  auto buffer_it = getChunkSegment(key);
+  bool found_buffer = buffer_it.has_value();
+
   AbstractBuffer* buffer;
   if (!found_buffer) {
+    slab_lock.unlock();
     buffer = createBufferUnlocked(key, page_size_);
   } else {
-    buffer = buffer_it->second->buffer;
+    buffer = buffer_it.value()->getBuffer();
+    buffer->pin();
+    slab_lock.unlock();
   }
   size_t old_buffer_size = buffer->size();
   size_t new_buffer_size = num_bytes == 0 ? src_buffer->size() : num_bytes;
@@ -920,38 +940,33 @@ int BufferMgr::getBufferId() {
 
 /// client is responsible for deleting memory allocated for b->mem_
 AbstractBuffer* BufferMgr::alloc(const size_t num_bytes) {
-  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);
-  ChunkKey chunk_key = {-1, getBufferId()};
-  return createBufferUnlocked(chunk_key, page_size_, num_bytes);
+  const ChunkKey chunk_key{-1, getBufferId()};
+  return createBuffer(chunk_key, page_size_, num_bytes);
 }
 
 void BufferMgr::free(AbstractBuffer* buffer) {
-  std::unique_lock<std::shared_mutex> global_lock(global_mutex_);  // hack for now
   Buffer* casted_buffer = dynamic_cast<Buffer*>(buffer);
   if (casted_buffer == 0) {
     LOG(FATAL) << "Wrong buffer type - expects base class pointer to Buffer type.";
   }
-  deleteBufferUnlocked(casted_buffer->seg_it_->chunk_key);
+  deleteBuffer(casted_buffer->seg_it_->chunk_key);
 }
 
 size_t BufferMgr::getNumChunks() {
-  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
-  std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
+  std::shared_lock<std::shared_mutex> chunk_index_lock(chunk_index_mutex_);
   return chunk_index_.size();
 }
 
 size_t BufferMgr::size() const {
-  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
+  std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   return num_pages_allocated_;
 }
 
 size_t BufferMgr::getMaxBufferSize() const {
-  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   return max_buffer_pool_size_;
 }
 
 size_t BufferMgr::getMaxSlabSize() const {
-  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
   return max_slab_size_;
 }
 
@@ -961,8 +976,90 @@ void BufferMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metad
 }
 
 const std::vector<BufferList>& BufferMgr::getSlabSegments() {
-  std::shared_lock<std::shared_mutex> global_lock(global_mutex_);
+  std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   return slab_segments_;
+}
+
+uint32_t BufferMgr::incrementEpoch() {
+  std::lock_guard<std::mutex> epoch_lock(buffer_epoch_mutex_);
+  return buffer_epoch_++;
+}
+
+void BufferMgr::clearEpoch() {
+  std::lock_guard<std::mutex> epoch_lock(buffer_epoch_mutex_);
+  buffer_epoch_ = 0;
+}
+
+BufferList::iterator BufferMgr::addBufferPlaceholder(const ChunkKey& chunk_key) {
+  auto buffer_seg_it = addUnsizedSegment(chunk_key);
+
+  std::unique_lock<std::shared_mutex> chunk_index_lock(chunk_index_mutex_);
+  CHECK(chunk_index_.find(chunk_key) == chunk_index_.end());
+  chunk_index_[chunk_key] = buffer_seg_it;
+  return chunk_index_[chunk_key];
+}
+
+BufferList::iterator BufferMgr::addUnsizedSegment(const ChunkKey& chunk_key) {
+  std::lock_guard<std::mutex> unsized_segs_lock(unsized_segs_mutex_);
+  unsized_segs_.emplace_back(-1, 0, USED);
+  unsized_segs_.back().chunk_key = chunk_key;
+  return std::prev(unsized_segs_.end(), 1);
+}
+
+void BufferMgr::eraseUnsizedSegment(const BufferList::iterator& seg_it) {
+  std::lock_guard<std::mutex> unsized_segs_lock(unsized_segs_mutex_);
+  unsized_segs_.erase(seg_it);
+}
+
+void BufferMgr::clearUnsizedSegments() {
+  std::lock_guard<std::mutex> unsized_segs_lock(unsized_segs_mutex_);
+  unsized_segs_.clear();
+}
+
+std::mutex& BufferMgr::getChunkMutex(const ChunkKey& chunk_key) {
+  std::unique_lock<std::shared_mutex> chunk_index_lock(chunk_index_mutex_);
+  return chunk_mutex_map_[chunk_key];
+}
+
+std::optional<BufferList::iterator> BufferMgr::getChunkSegment(
+    const ChunkKey& chunk_key) const {
+  std::shared_lock<std::shared_mutex> chunk_index_lock(chunk_index_mutex_);
+  auto it = chunk_index_.find(chunk_key);
+  if (it != chunk_index_.end()) {
+    return it->second;
+  }
+  return {};
+}
+
+void BufferMgr::eraseChunkSegment(const ChunkKey& chunk_key) {
+  std::unique_lock<std::shared_mutex> chunk_index_lock(chunk_index_mutex_);
+  chunk_index_.erase(chunk_key);
+}
+
+void BufferMgr::clearChunks() {
+  std::unique_lock<std::shared_mutex> chunk_index_lock(chunk_index_mutex_);
+  for (auto& [chunk_key, seg_it] : chunk_index_) {
+    delete seg_it->getBuffer();
+  }
+  chunk_index_.clear();
+  chunk_mutex_map_.clear();
+}
+
+void BufferMgr::clearSlabContainers() {
+  slabs_.clear();
+  slab_segments_.clear();
+}
+
+void BufferMgr::allocateBuffer(BufferList::iterator seg_it,
+                               size_t page_size,
+                               size_t num_bytes) {
+  auto buffer = createBuffer(seg_it, page_size);  // this line is admittedly a bit weird
+                                                  // but the segment iterator passed into
+                                                  // buffer takes the address of the new
+                                                  // Buffer in its buffer member
+  CHECK(buffer);
+  seg_it->setBuffer(buffer);
+  buffer->reserve(num_bytes);
 }
 
 void BufferMgr::removeTableRelatedDS(const int db_id, const int table_id) {
