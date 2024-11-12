@@ -65,8 +65,7 @@ class Buffer : public AbstractBuffer {
   Buffer(BufferMgr* bm,
          BufferList::iterator seg_it,
          const int device_id,
-         const size_t page_size = 512,
-         const size_t num_bytes = 0);
+         const size_t page_size = 512);
 
   /// Destructor
   ~Buffer() override;

@@ -71,9 +71,8 @@ class CpuBufferMgr : public BufferMgr {
  protected:
   void addSlab(const size_t slab_size) override;
   void freeAllMem() override;
-  void allocateBuffer(BufferList::iterator segment_iter,
-                      const size_t page_size,
-                      const size_t initial_size) override;
+  Buffer* createBuffer(BufferList::iterator seg_it, size_t page_size) override;
+
   virtual void initializeMem();
 
   CudaMgr_Namespace::CudaMgr* cuda_mgr_;

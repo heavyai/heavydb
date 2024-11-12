@@ -29,8 +29,7 @@ class GpuCudaBuffer : public Buffer {
                 BufferList::iterator seg_it,
                 const int device_id,
                 CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                const size_t page_size = 512,
-                const size_t num_bytes = 0);
+                const size_t page_size = 512);
   inline Data_Namespace::MemoryLevel getType() const override { return GPU_LEVEL; }
 
  private:
