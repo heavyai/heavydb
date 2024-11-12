@@ -30,6 +30,7 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 
 #include "DataMgr/AbstractBuffer.h"
@@ -108,14 +109,13 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
   /// Destructor
   ~BufferMgr() override;
-
   std::string printSlab(size_t slab_num);
   std::string printSlabs() override;
 
   void clearSlabs();
   std::string printMap();
   void printSegs();
-  std::string printSeg(BufferList::iterator& seg_it);
+  std::string printSeg(const BufferList::iterator& seg_it);
   size_t getInUseSize() const override;
   size_t getMaxSize() const override;
   size_t getAllocated() const override;
@@ -170,6 +170,8 @@ class BufferMgr : public AbstractBufferMgr {  // implements
                                        const ChunkKey& key_prefix) override;
 
  protected:
+  virtual Buffer* createBuffer(BufferList::iterator seg_it, size_t page_size) = 0;
+
   const size_t
       max_buffer_pool_size_;    /// max number of bytes allocated for the buffer pool
   const size_t min_slab_size_;  /// minimum size of the individual memory allocations that
@@ -180,6 +182,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
       default_slab_size_;  /// default size of the individual memory allocations that
                            /// compose the buffer pool (up to maxBufferSize_)
   const size_t page_size_;
+
   std::vector<int8_t*> slabs_;  /// vector of beginning memory addresses for each
                                 /// allocation of the buffer pool
   std::vector<BufferList> slab_segments_;
@@ -193,34 +196,49 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   int getBufferId();
   virtual void addSlab(const size_t slab_size) = 0;
   virtual void freeAllMem() = 0;
-  virtual void allocateBuffer(BufferList::iterator seg_it,
-                              const size_t page_size,
-                              const size_t num_bytes) = 0;
+
+  void allocateBuffer(BufferList::iterator seg_it, size_t page_size, size_t num_bytes);
   void clear();
   void reinit();
-  std::string keyToString(const ChunkKey& key);
   AbstractBuffer* createBufferUnlocked(const ChunkKey& key,
                                        const size_t page_size = 0,
                                        const size_t initial_size = 0);
   void deleteBufferUnlocked(const ChunkKey& key, const bool purge = true);
+  uint32_t incrementEpoch();
+  void clearEpoch();
+  BufferList::iterator addBufferPlaceholder(const ChunkKey& chunk_key);
+  BufferList::iterator addUnsizedSegment(const ChunkKey& chunk_key);
+  void eraseUnsizedSegment(const BufferList::iterator& seg_it);
+  void clearUnsizedSegments();
+  std::mutex& getChunkMutex(const ChunkKey& chunk_key);
+  std::optional<BufferList::iterator> getChunkSegment(const ChunkKey& chunk_key) const;
+  void eraseChunkSegment(const ChunkKey& chunk_key);
+  void clearChunks();
+  void clearSlabContainers();
+  void checkpoint(const std::vector<ChunkKey>& chunk_keys);
 
-  std::mutex chunk_index_mutex_;
-  mutable std::mutex sized_segs_mutex_;
-  std::mutex unsized_segs_mutex_;
-  std::mutex buffer_id_mutex_;
-  mutable std::shared_mutex global_mutex_;
+  mutable std::shared_mutex chunk_index_mutex_;
+  mutable std::shared_mutex slab_mutex_;
+  mutable std::mutex unsized_segs_mutex_;
+  mutable std::mutex buffer_id_mutex_;
+  mutable std::mutex buffer_epoch_mutex_;
 
   std::map<ChunkKey, BufferList::iterator> chunk_index_;
-  size_t max_buffer_pool_num_pages_;  // max number of pages for buffer pool
+  std::map<ChunkKey, std::mutex> chunk_mutex_map_;
+
+  const size_t max_buffer_pool_num_pages_;  // max number of pages for buffer pool
+  const size_t min_num_pages_per_slab_;
+  const size_t max_num_pages_per_slab_;
+
   size_t num_pages_allocated_;
-  size_t min_num_pages_per_slab_;
-  size_t max_num_pages_per_slab_;
   size_t default_num_pages_per_slab_;
   size_t current_max_num_pages_per_slab_;
   bool allocations_capped_;
+
   AbstractBufferMgr* parent_mgr_;
+
   int max_buffer_id_;
-  unsigned int buffer_epoch_;
+  uint32_t buffer_epoch_;
 
   BufferList unsized_segs_;
 
