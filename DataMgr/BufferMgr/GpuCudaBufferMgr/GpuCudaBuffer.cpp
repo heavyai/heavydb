@@ -27,9 +27,8 @@ GpuCudaBuffer::GpuCudaBuffer(BufferMgr* bm,
                              BufferList::iterator seg_it,
                              const int device_id,
                              CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                             const size_t page_size,
-                             const size_t num_bytes)
-    : Buffer(bm, seg_it, device_id, page_size, num_bytes), cuda_mgr_(cuda_mgr) {}
+                             const size_t page_size)
+    : Buffer(bm, seg_it, device_id, page_size), cuda_mgr_(cuda_mgr) {}
 
 void GpuCudaBuffer::readData(int8_t* const dst,
                              const size_t num_bytes,

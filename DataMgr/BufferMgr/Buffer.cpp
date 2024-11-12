@@ -27,8 +27,7 @@ namespace Buffer_Namespace {
 Buffer::Buffer(BufferMgr* bm,
                BufferList::iterator seg_it,
                const int device_id,
-               const size_t page_size,
-               const size_t num_bytes)
+               const size_t page_size)
     : AbstractBuffer(device_id)
     , mem_(nullptr)
     , bm_(bm)
@@ -37,11 +36,6 @@ Buffer::Buffer(BufferMgr* bm,
     , num_pages_(0)
     , pin_count_(0) {
   pin();
-  // so that the pointer value of this Buffer is stored
-  seg_it_->buffer = this;
-  if (num_bytes > 0) {
-    reserve(num_bytes);
-  }
 }
 
 Buffer::~Buffer() {}

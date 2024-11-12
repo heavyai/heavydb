@@ -65,8 +65,7 @@ void GpuCudaBufferMgr::addSlab(const size_t slab_size) {
     throw FailedToCreateSlab(slab_size);
   }
   slab_segments_.resize(slab_segments_.size() + 1);
-  slab_segments_[slab_segments_.size() - 1].push_back(
-      BufferSeg(0, slab_size / page_size_));
+  slab_segments_[slab_segments_.size() - 1].emplace_back(0, slab_size / page_size_);
 }
 
 void GpuCudaBufferMgr::freeAllMem() {
@@ -75,18 +74,8 @@ void GpuCudaBufferMgr::freeAllMem() {
   }
 }
 
-void GpuCudaBufferMgr::allocateBuffer(BufferList::iterator seg_it,
-                                      const size_t page_size,
-                                      const size_t initial_size) {
-  new GpuCudaBuffer(this,
-                    seg_it,
-                    device_id_,
-                    cuda_mgr_,
-                    page_size,
-                    initial_size);  // this line is admittedly a bit weird
-                                    // but the segment iterator passed into
-                                    // buffer takes the address of the new
-                                    // Buffer in its buffer member
+Buffer* GpuCudaBufferMgr::createBuffer(BufferList::iterator seg_it, size_t page_size) {
+  return new GpuCudaBuffer(this, seg_it, device_id_, cuda_mgr_, page_size);
 }
 
 }  // namespace Buffer_Namespace
