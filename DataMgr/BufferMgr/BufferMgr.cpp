@@ -140,9 +140,6 @@ AbstractBuffer* BufferMgr::createBufferUnlocked(const ChunkKey& chunk_key,
   } catch (const OutOfMemory&) {
     auto buffer_it = getChunkSegment(chunk_key);
     CHECK(buffer_it.has_value());
-    buffer_it.value()->setBuffer(
-        nullptr);  // constructor failed for the buffer object so make sure to mark it
-                   // null so deleteBuffer doesn't try to delete it
     deleteBufferUnlocked(chunk_key);
     throw;
   }
