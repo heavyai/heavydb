@@ -8,13 +8,19 @@ RUN tar xvf heavyai-latest-Linux-x86_64.tar.gz --strip-components=1 && \
     rm -rf heavyai-latest-Linux-x86_64.tar.gz
 
 # Build final stage
-FROM docker-internal.mapd.com/cudagl:12.2.0-runtime-ubuntu22.04
+FROM docker-internal.mapd.com/cudagl/ubuntu22.04-cuda12.2.2-x86_64-runtime:20241107
+
 # Avoid display of additional CUDA information on server startup.
 ENTRYPOINT []
 LABEL maintainer "HEAVY.AI Support <support@heavy.ai>"
 
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
 
+# Update packages in the base cudagl container
+# This file may be an empty stub
+RUN USER=root bash ./cudagl_package_updater.sh
+
+# Install additional required packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bsdmainutils \
         libopengl0 \
