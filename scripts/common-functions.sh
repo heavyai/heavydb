@@ -26,6 +26,20 @@ function generate_deps_version_file() {
   for i in $(compgen -A variable | grep _VERSION) ; do echo  $i "${!i}" ; done >> $PREFIX/mapd_deps_version.txt
 }      
 
+function update_container_packages() {
+  if [ "$UPDATE_PACKAGES" == "true" ]; then
+    PACKAGE_UPDATER_SH="$SCRIPTS_DIR/cudagl_package_updater.sh"
+    if [ -f $PACKAGE_UPDATER_SH ]; then
+      echo "Updating container packages"
+      $PACKAGE_UPDATER_SH
+    else
+      echo "--update_packages specified but ${PACKAGE_UPDATER_SH} not found"
+    fi
+  else
+    echo "Skipping container package update"
+  fi
+}
+
 function install_required_ubuntu_packages() {
   # Please keep this list sorted via the sort command.
   DEBIAN_FRONTEND=noninteractive sudo apt install -y \

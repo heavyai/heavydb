@@ -26,6 +26,7 @@ else
 fi
 
 # Parse inputs
+UPDATE_PACKAGES=false
 FLAG=latest
 ENABLE=false
 LIBRARY_TYPE=
@@ -33,6 +34,9 @@ TSAN=false
 
 while (( $# )); do
   case "$1" in
+    --update-packages)
+      UPDATE_PACKAGES=true
+      ;;
     --testing)
       FLAG=testing
       ;;
@@ -80,6 +84,8 @@ if [ "$ID" == "ubuntu" ] ; then
   SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
   source $SCRIPTS_DIR/common-functions.sh
 
+  update_container_packages
+  
   install_required_ubuntu_packages
 
   sudo $PACKAGER install \

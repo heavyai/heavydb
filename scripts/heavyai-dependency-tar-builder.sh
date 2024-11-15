@@ -128,8 +128,8 @@ if [[ $OPERATING_SYSTEM == "centos" ]] ; then
 else
   docker_cmd='echo -e "#!/bin/sh\n\${@}" > /usr/sbin/sudo && chmod +x /usr/sbin/sudo'
 fi
-# Add mapd-deps-prebuilt.sh command
-docker_cmd="${docker_cmd} && ./mapd-deps-'${OPERATING_SYSTEM}'.sh ${LIBRARY_PARAM} ${TSAN_PARAM} --savespace --compress --cache=/dep_cache"
+# Add mapd-deps-OPERATING_SYSTEM.sh command (e.g. mapd-deps-ubuntu.sh)
+docker_cmd="${docker_cmd} && ./mapd-deps-'${OPERATING_SYSTEM}'.sh ${LIBRARY_PARAM} ${TSAN_PARAM} --update-packages --savespace --compress --cache=/dep_cache"
 
 PACKAGE_CACHE=/theHoard/export/dep_cache
 
