@@ -4,8 +4,9 @@ set -e
 set -x
 
 # Parse inputs
-TSAN=false
+UPDATE_PACKAGES=false
 COMPRESS=false
+TSAN=false
 NOCUDA=false
 CACHE=
 LIBRARY_TYPE=
@@ -21,6 +22,9 @@ fi
 
 while (( $# )); do
   case "$1" in
+    --update-packages)
+      UPDATE_PACKAGES=true
+      ;;
     --compress)
       COMPRESS=true
       ;;
@@ -125,6 +129,8 @@ safe_mkdir "$PREFIX"
 DEBIAN_FRONTEND=noninteractive sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub
 
 DEBIAN_FRONTEND=noninteractive sudo apt update
+
+update_container_packages
 
 install_required_ubuntu_packages
 
