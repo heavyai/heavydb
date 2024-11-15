@@ -4044,7 +4044,7 @@ AggregatedResult LocalQueryConnector::query(QueryStateProxy query_state_proxy,
   auto query_submitted_time = query_state_proxy->getQuerySubmittedTime();
   if (allow_interrupt && !validate_only && !query_session.empty()) {
     executor->enrollQuerySession(query_session,
-                                 sql_query_string,
+                                 hide_sensitive_data_from_query(sql_query_string),
                                  query_submitted_time,
                                  Executor::UNITARY_EXECUTOR_ID,
                                  QuerySessionStatus::QueryStatus::PENDING_EXECUTOR);
@@ -4340,7 +4340,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
         // of SELECT query, we remove its query session info, so we need to enroll the
         // session info again
         executor->enrollQuerySession(query_session,
-                                     query_str,
+                                     hide_sensitive_data_from_query(query_str),
                                      start_time,
                                      Executor::UNITARY_EXECUTOR_ID,
                                      QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);
@@ -5924,7 +5924,7 @@ void CopyTableStmt::execute(
       auto query_str = "COPYING " + td->tableName;
       if (g_enable_non_kernel_time_query_interrupt) {
         executor->enrollQuerySession(query_session,
-                                     query_str,
+                                     hide_sensitive_data_from_query(query_str),
                                      start_time,
                                      Executor::UNITARY_EXECUTOR_ID,
                                      QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);

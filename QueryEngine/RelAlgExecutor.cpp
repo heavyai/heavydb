@@ -641,7 +641,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   // gather necessary query's info
   if (query_state_ != nullptr && query_state_->getConstSessionInfo() != nullptr) {
     query_session = query_state_->getConstSessionInfo()->get_session_id();
-    query_str = query_state_->getQueryStr();
+    query_str = hide_sensitive_data_from_query(query_state_->getQueryStr());
     query_submitted_time = query_state_->getQuerySubmittedTime();
   }
 
