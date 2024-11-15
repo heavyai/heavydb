@@ -6637,15 +6637,18 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   if (leaf_handler_) {
     leaf_handler_->flush_queue();
   }
-  auto const query_str = strip(query_state_proxy->getQueryStr());
+
   auto session_ptr = query_state_proxy->getConstSessionInfo();
   // Call to DistributedValidate() below may change cat.
   auto& cat = session_ptr->getCatalog();
   legacylockmgr::ExecutorWriteLock execute_write_lock;
   legacylockmgr::ExecutorReadLock execute_read_lock;
 
-  ParserWrapper pw{query_str};
-  auto [query_substr, post_fix] = ::substring(query_str, g_max_log_length);
+  auto const query_str = strip(query_state_proxy->getQueryStr());
+  auto const query_str_without_sensitive_data =
+      strip(hide_sensitive_data_from_query(query_state_proxy->getQueryStr()));
+  auto [query_substr, post_fix] =
+      ::substring(query_str_without_sensitive_data, g_max_log_length);
   std::ostringstream oss;
   oss << query_substr << post_fix;
   auto const reduced_query_str = oss.str();
@@ -6667,6 +6670,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
         show_cpu_memory_stat_after_finishing_query = true;
       };
 
+  ParserWrapper pw{query_str};
   // test to see if db/catalog is writable before execution of a writable SQL/DDL command
   //   TODO: move to execute() (?)
   //      instead of pre-filtering here based upon incomplete info ?
@@ -6960,7 +6964,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     if (g_enable_runtime_query_interrupt && !query_session.empty() &&
         !explain.isSelectExplain()) {
       executor->enrollQuerySession(query_session,
-                                   query_str,
+                                   query_str_without_sensitive_data,
                                    submitted_time_str,
                                    Executor::UNITARY_EXECUTOR_ID,
                                    QuerySessionStatus::QueryStatus::PENDING_QUEUE);
