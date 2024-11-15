@@ -796,7 +796,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
       std::move(rel_alg_task), session_id, query_state->getQuerySubmittedTime());
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   executor->enrollQuerySession(session_id,
-                               query_str,
+                               hide_sensitive_data_from_query(query_str),
                                query_state->getQuerySubmittedTime(),
                                Executor::UNITARY_EXECUTOR_ID,
                                QuerySessionStatus::QueryStatus::PENDING_QUEUE);
