@@ -1,3 +1,5 @@
+ARG BASE_CUDA_IMAGE=docker-internal.mapd.com/cudagl/ubuntu22.04-cuda12.2.2-x86_64-runtime:20241115
+
 # Copy and extract HEAVY.AI tarball. In own stage so that the temporary tarball
 # isn't included in a layer.
 FROM ubuntu:22.04 AS extract
@@ -7,8 +9,10 @@ COPY heavyai-latest-Linux-x86_64.tar.gz /opt/heavyai/
 RUN tar xvf heavyai-latest-Linux-x86_64.tar.gz --strip-components=1 && \
     rm -rf heavyai-latest-Linux-x86_64.tar.gz
 
+# Bring ARG back into scope
+ARG BASE_CUDA_IMAGE
 # Build final stage
-FROM docker-internal.mapd.com/cudagl/ubuntu22.04-cuda12.2.2-x86_64-runtime:20241107
+FROM ${BASE_CUDA_IMAGE}
 
 # Avoid display of additional CUDA information on server startup.
 ENTRYPOINT []
@@ -39,6 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get remove --purge -y && \
     rm -rf /var/lib/apt/lists/*
 
+# Copy tar file contents from extract stage
 COPY --from=extract /opt/heavyai /opt/heavyai
 
 # UDF support
