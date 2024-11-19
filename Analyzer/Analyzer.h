@@ -2939,6 +2939,21 @@ class FragmentId : public FragmentInfoOper {
 };
 
 /*
+ * @type FragmentIdAndOffset
+ * @brief Returns fragment_id << 32 | offset_in_fragment
+ */
+class FragmentIdAndOffset : public FragmentInfoOper {
+ public:
+  FragmentIdAndOffset(std::shared_ptr<Analyzer::Expr> arg)
+      : FragmentInfoOper(arg, "FRAGMENT_ID_AND_OFFSET"){};
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  bool operator==(const Expr& rhs) const override;
+  std::string toString() const override;
+};
+
+/*
  * @type OrderEntry
  * @brief represents an entry in ORDER BY clause.
  */

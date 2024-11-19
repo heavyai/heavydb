@@ -306,6 +306,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new EncodeText());
     addOperator(new OffsetInFragment());
     addOperator(new FragmentId());
+    addOperator(new FragmentIdAndOffset());
     addOperator(new ApproxCountDistinct());
     addOperator(new ApproxMedian());
     addOperator(new ApproxPercentile());
@@ -3392,6 +3393,25 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public static class FragmentId extends SqlFunction {
     public FragmentId() {
       super("FRAGMENT_ID",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BIGINT);
+    }
+  }
+
+  /* FRAGMENT_ID_AND_OFFSET() */
+  public static class FragmentIdAndOffset extends SqlFunction {
+    public FragmentIdAndOffset() {
+      super("FRAGMENT_ID_AND_OFFSET",
               SqlKind.OTHER_FUNCTION,
               null,
               null,
