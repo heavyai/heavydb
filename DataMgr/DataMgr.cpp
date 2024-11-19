@@ -348,6 +348,7 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
           system_parameters.gpu_buffer_mem_bytes != 0
               ? system_parameters.gpu_buffer_mem_bytes
               : (cudaMgr_->getDeviceProperties(gpu_num)->globalMem) - (reservedGpuMem_);
+      gpu_max_mem_size = (gpu_max_mem_size / page_size) * page_size;
       auto min_gpu_slab_size =
           get_slab_size(system_parameters.min_gpu_slab_size, gpu_max_mem_size, page_size);
       auto max_gpu_slab_size =
