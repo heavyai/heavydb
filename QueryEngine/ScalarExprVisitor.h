@@ -162,6 +162,11 @@ class ScalarExprVisitor {
     if (fragment_id) {
       return visitFragmentId(fragment_id);
     }
+    const auto fragment_id_and_offset =
+        dynamic_cast<const Analyzer::FragmentIdAndOffset*>(expr);
+    if (fragment_id_and_offset) {
+      return visitFragmentIdAndOffset(fragment_id_and_offset);
+    }
     const auto agg = dynamic_cast<const Analyzer::AggExpr*>(expr);
     if (agg) {
       return visitAggExpr(agg);
@@ -408,6 +413,10 @@ class ScalarExprVisitor {
   }
 
   virtual T visitFragmentId(const Analyzer::FragmentId*) const { return defaultResult(); }
+
+  virtual T visitFragmentIdAndOffset(const Analyzer::FragmentIdAndOffset*) const {
+    return defaultResult();
+  }
 
   virtual T visitAggExpr(const Analyzer::AggExpr* agg) const {
     T result = defaultResult();

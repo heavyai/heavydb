@@ -618,8 +618,12 @@ llvm::Value* CodeGenerator::codegenOffsetInFragment(
   // get rte_idx from col var and validate
   auto col_var = offset_in_fragment->getColVar();
   CHECK(col_var);
-  // this does the rest
-  return posArg(col_var.get());
+  return codegenOffsetInFragmentImpl(col_var.get());
+}
+
+llvm::Value* CodeGenerator::codegenOffsetInFragmentImpl(
+    const Analyzer::ColumnVar* col_var) const {
+  return posArg(col_var);
 }
 
 llvm::Value* CodeGenerator::codegenFragmentId(
@@ -628,6 +632,11 @@ llvm::Value* CodeGenerator::codegenFragmentId(
   // get rte_idx from col var and validate
   auto col_var = fragment_id->getColVar();
   CHECK(col_var);
+  return codegenFragmentIdImpl(col_var.get());
+}
+
+llvm::Value* CodeGenerator::codegenFragmentIdImpl(
+    const Analyzer::ColumnVar* col_var) const {
   auto const rte_idx = col_var->get_rte_idx();
   CHECK_GE(rte_idx, 0);
   // get frag_id base ptr and ensure type
@@ -649,6 +658,22 @@ llvm::Value* CodeGenerator::codegenFragmentId(
   // sign-extend to i64 and return
   return cgen_state_->ir_builder_.CreateSExt(value,
                                              get_int_type(64, cgen_state_->context_));
+}
+
+llvm::Value* CodeGenerator::codegenFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset* fragment_id_and_offset) const {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  // get rte_idx from col var and validate
+  auto col_var = fragment_id_and_offset->getColVar();
+  CHECK(col_var);
+  llvm::Value* fragment_id = codegenFragmentIdImpl(col_var.get());
+  llvm::Value* offset_in_fragment = codegenOffsetInFragmentImpl(col_var.get());
+  CHECK(fragment_id->getType()->isIntegerTy(64));
+  CHECK(offset_in_fragment->getType()->isIntegerTy(64));
+  // result = (fragment_id << 32) | offset_in_fragment;
+  llvm::Value* k32 = llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), 32u);
+  return cgen_state_->ir_builder_.CreateOr(
+      cgen_state_->ir_builder_.CreateShl(fragment_id, k32), offset_in_fragment);
 }
 
 // todo (yoonmin) : we have to revisit this logic and its usage

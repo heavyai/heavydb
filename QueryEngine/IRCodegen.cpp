@@ -234,6 +234,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (fragment_id) {
     return {codegenFragmentId(fragment_id)};
   }
+  auto fragment_id_and_offset = dynamic_cast<const Analyzer::FragmentIdAndOffset*>(expr);
+  if (fragment_id_and_offset) {
+    return {codegenFragmentIdAndOffset(fragment_id_and_offset)};
+  }
   if (dynamic_cast<const Analyzer::WindowFunction*>(expr)) {
     throw NativeExecutionError("Window expression not supported in this context");
   }

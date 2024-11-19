@@ -242,6 +242,10 @@ std::shared_ptr<Analyzer::Expr> FragmentId::deep_copy() const {
   return makeExpr<FragmentId>(col_var_->deep_copy());
 }
 
+std::shared_ptr<Analyzer::Expr> FragmentIdAndOffset::deep_copy() const {
+  return makeExpr<FragmentIdAndOffset>(col_var_->deep_copy());
+}
+
 std::shared_ptr<Analyzer::Expr> WindowFrame::deep_copy() const {
   return makeExpr<WindowFrame>(bound_type_,
                                bound_expr_ ? bound_expr_->deep_copy() : nullptr);
@@ -2685,6 +2689,10 @@ bool FragmentId::operator==(const Expr& rhs) const {
   return typeid(rhs) == typeid(FragmentId);
 }
 
+bool FragmentIdAndOffset::operator==(const Expr& rhs) const {
+  return typeid(rhs) == typeid(FragmentIdAndOffset);
+}
+
 bool WindowFrame::operator==(const Expr& rhs) const {
   const WindowFrame& rhs_window_frame = dynamic_cast<const WindowFrame&>(rhs);
   if (bound_type_ == rhs_window_frame.bound_type_) {
@@ -3167,6 +3175,10 @@ std::string OffsetInFragment::toString() const {
 
 std::string FragmentId::toString() const {
   return "(FragmentId) ";
+}
+
+std::string FragmentIdAndOffset::toString() const {
+  return "(FragmentIdAndOffset) ";
 }
 
 std::string WindowFrame::toString() const {

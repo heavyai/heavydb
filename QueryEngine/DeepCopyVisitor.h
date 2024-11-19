@@ -278,4 +278,9 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
   RetType visitFragmentId(const Analyzer::FragmentId* oper) const override {
     return makeExpr<Analyzer::FragmentId>(oper->getColVar());
   }
+
+  RetType visitFragmentIdAndOffset(
+      const Analyzer::FragmentIdAndOffset* oper) const override {
+    return makeExpr<Analyzer::FragmentIdAndOffset>(oper->getColVar());
+  }
 };
