@@ -158,6 +158,9 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateFragmentId(const RexFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateFragmentIdAndOffset(
+      const RexFunctionOperator*) const;
+
   std::shared_ptr<Analyzer::Expr> translateArrayFunction(
       const RexFunctionOperator*) const;
 

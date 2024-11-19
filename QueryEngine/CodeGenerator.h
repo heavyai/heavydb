@@ -77,6 +77,8 @@ class CodeGenerator {
 
   llvm::Value* codegenFragmentId(const Analyzer::FragmentId*) const;
 
+  llvm::Value* codegenFragmentIdAndOffset(const Analyzer::FragmentIdAndOffset*) const;
+
   llvm::Value* toBool(llvm::Value*);
 
   llvm::Value* castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti);
@@ -670,6 +672,9 @@ class CodeGenerator {
                               const CompilationOptions& co,
                               const size_t arg_idx,
                               const bool codegen_nullcheck);
+
+  llvm::Value* codegenOffsetInFragmentImpl(const Analyzer::ColumnVar*) const;
+  llvm::Value* codegenFragmentIdImpl(const Analyzer::ColumnVar*) const;
 
   Executor* executor_;
 

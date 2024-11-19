@@ -26319,6 +26319,32 @@ TEST_F(Select, FragmentId) {
   }
 }
 
+TEST_F(Select, FragmentIdAndOffset) {
+  // Skip test in sharded/distributed situations, as for OffsetInFragment
+  SKIP_IF_SHARDED();
+  SKIP_ALL_ON_AGGREGATOR();
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // With fragment_size of 2, we should have 10 frags
+    // ID should be 0-9 and Offset should be 0-1
+    EXPECT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "SELECT MIN(fragment_id_and_offset(x) / 4294967296) FROM test;", dt)));
+    EXPECT_EQ(9,
+              v<int64_t>(run_simple_agg(
+                  "SELECT MAX(fragment_id_and_offset(x) / 4294967296) FROM test;", dt)));
+    EXPECT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "SELECT MIN(MOD(fragment_id_and_offset(x), 4294967296)) FROM test;", dt)));
+    EXPECT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT MAX(MOD(fragment_id_and_offset(x), 4294967296)) FROM test;", dt)));
+  }
+}
+
 // Additional integer parsing tests in ImportTestInt.ImportBadInt and ImportGoodInt.
 TEST_F(Select, ParseIntegerExceptions) {
   struct TestPair {

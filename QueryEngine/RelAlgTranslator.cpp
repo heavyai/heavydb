@@ -1826,6 +1826,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFragmentId(
   return makeExpr<Analyzer::FragmentId>(operand);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFragmentIdAndOffset(
+    const RexFunctionOperator* rex_function) const {
+  CHECK_EQ(size_t(1), rex_function->size());
+  auto operand = translateScalarRex(rex_function->getOperand(0));
+  return makeExpr<Analyzer::FragmentIdAndOffset>(operand);
+}
+
 Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
     const RexFunctionOperator* rex_function) const {
   if (rex_function->getType().get_subtype() == kNULLT) {
@@ -2155,6 +2162,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == "FRAGMENT_ID"sv) {
     CHECK_EQ(size_t(1), rex_function->size());
     return translateFragmentId(rex_function);
+  }
+  if (rex_function->getName() == "FRAGMENT_ID_AND_OFFSET"sv) {
+    CHECK_EQ(size_t(1), rex_function->size());
+    return translateFragmentIdAndOffset(rex_function);
   }
   if (rex_function->getName() == "ARRAY"sv) {
     // Var args; currently no check.  Possible fix-me -- can array have 0 elements?
