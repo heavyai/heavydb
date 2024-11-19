@@ -64,6 +64,15 @@ class DataMgrTest : public testing::Test {
     g_pmem_size = slab_size_ * num_slabs;
 #endif
     std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
+#ifdef HAVE_CUDA
+    try {
+      cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(system_params_.num_gpus,
+                                                              system_params_.start_gpu);
+    } catch (...) {
+      // Tests should still run on instances without GPUs.
+    }
+#endif
+
     data_mgr_ = std::make_unique<Data_Namespace::DataMgr>(data_mgr_path_,
                                                           sys_params,
                                                           std::move(cuda_mgr),
@@ -87,7 +96,7 @@ class DataMgrTest : public testing::Test {
 
  protected:
   std::string data_mgr_path_{"./data_mgr_test_dir"};
-  bool use_gpus_{false};
+  bool use_gpus_{true};
   size_t reserved_gpu_mem_{0};
   size_t num_reader_threads_{0};
   File_Namespace::DiskCacheConfig disk_cache_config_{};
@@ -117,6 +126,22 @@ TEST_F(DataMgrTest, UseCpuMemPoolSizeForMaxCpuSlabSizeNonMultipleOfPageSize) {
   sys_params.min_cpu_slab_size = page_size;
   sys_params.max_cpu_slab_size = page_size * 2;
   sys_params.cpu_buffer_mem_bytes = (page_size * 3) + 1;
+  resetDataMgr(sys_params);
+}
+
+TEST_F(DataMgrTest, CpuAndGpuMemPoolSizeNotMultipleOfPageSize) {
+  size_t page_size = 11;
+  SystemParameters sys_params;
+  sys_params.buffer_page_size = page_size;
+  sys_params.min_cpu_slab_size = page_size;
+  sys_params.max_cpu_slab_size = page_size * 2;
+  sys_params.default_cpu_slab_size = page_size * 2;
+  sys_params.min_gpu_slab_size = page_size;
+  sys_params.max_gpu_slab_size = page_size * 2;
+  sys_params.default_gpu_slab_size = page_size * 2;
+
+  sys_params.cpu_buffer_mem_bytes = (page_size * 3) + 1;
+  sys_params.gpu_buffer_mem_bytes = (page_size * 3) + 1;
   resetDataMgr(sys_params);
 }
 
