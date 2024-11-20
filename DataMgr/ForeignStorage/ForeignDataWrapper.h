@@ -29,6 +29,32 @@ struct ForeignServer;
 struct ForeignTable;
 struct UserMapping;
 using ChunkToBufferMap = std::map<ChunkKey, AbstractBuffer*>;
+using ChunkToBatchBufferMap = std::map<ChunkKey, std::vector<AbstractBuffer*> >;
+
+/**
+ * A helper function to decay a map of batched buffers to an equivalent map of
+ * singleton buffers.
+ */
+inline ChunkToBufferMap decay_batch_chunk_map(const ChunkToBatchBufferMap& src,
+                                              const size_t batch_index) {
+  ChunkToBufferMap dst;
+  for (const auto& [k, v] : src) {
+    dst[k] = v[batch_index];
+  }
+  return dst;
+}
+
+/**
+ * A helper function to compose a map of batched buffers from an equivalent map of
+ * singleton buffers.
+ */
+inline ChunkToBatchBufferMap compose_batch_chunk_map(const ChunkToBufferMap& src) {
+  ChunkToBatchBufferMap dst;
+  for (const auto& [k, v] : src) {
+    dst[k] = {v};
+  }
+  return dst;
+}
 
 class ForeignDataWrapper {
  public:
@@ -55,10 +81,43 @@ class ForeignDataWrapper {
    * non-null data wrapper is expected to mark deleted rows in buffer and
    * continue processing
    */
-
   virtual void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
                                     const ChunkToBufferMap& optional_buffers,
                                     AbstractBuffer* delete_buffer = nullptr) = 0;
+
+  /**
+   * Mirrors `populateChunkBuffers`, but uses batch buffers instead as an
+   * optimization.
+   *
+   * Populates given chunk batch buffers identified by chunk keys. All provided chunk
+   * buffers are expected to be for the same fragment.
+   *
+   * @param required_buffers - chunk batch buffers that must always be populated
+   * @param optional_buffers - chunk batch buffers that can be optionally populated,
+   * if the data wrapper has to scan through chunk data anyways (typically for
+   * row wise data formats)
+   * @param delete_buffer - chunk batch buffer for fragment's delete column, if
+   * non-null data wrapper is expected to mark deleted rows in buffer and
+   * continue processing
+   */
+  virtual void populateChunkBatchBuffers(
+      const ChunkToBatchBufferMap& required_buffers,
+      const ChunkToBatchBufferMap& optional_buffers,
+      const std::vector<AbstractBuffer*>& delete_buffer = {}) {
+    CHECK_EQ(getOptimalBatchSize(), 1UL)
+        << "default implementation of batch buffer population expects exactly one batch";
+    populateChunkBuffers(decay_batch_chunk_map(required_buffers, 0),
+                         decay_batch_chunk_map(optional_buffers, 0),
+                         delete_buffer.empty() ? nullptr : delete_buffer[0]);
+  }
+
+  /**
+   * Get the size of batches to be used in `BatchBuffer` code paths. This
+   * quantity must be a constant and can not change over the course of the
+   * lifetime of the data wrapper. Typically, this quantity is chosen to ensure
+   * concurrency can be best executed.
+   */
+  virtual size_t getOptimalBatchSize() { return 1; }
 
   /**
    * Serialize internal state of wrapper into file at given path if implemented
@@ -162,5 +221,19 @@ class ForeignDataWrapper {
    * in the future, but has no impact on the intended use-cases of this mode.
    */
   virtual bool isLazyFragmentFetchingEnabled() const { return false; }
+
+  /**
+   * If `true` data wrapper accepts delete buffers that may be prepoulated with
+   * a speculative number of `false` values. This is an minor optimization that
+   * prevents unnecessary allocations and deallocations by reusing the buffer
+   * when it is large enouhg, and requiring a smaller allocation when it needs
+   * to be resized.
+   *
+   * This option is only used when delete buffers are in use.
+   *
+   * TODO: remove this method when it will become the default behaviour for all
+   * data wrappers going forward.
+   */
+  virtual bool acceptsPrepopulatedDeleteBuffer() const { return false; }
 };
 }  // namespace foreign_storage

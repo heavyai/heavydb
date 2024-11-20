@@ -133,6 +133,11 @@ std::vector<std::vector<size_t>> compute_row_indices_of_shards(
   auto row_count = shard_chunk.getBuffer()->getEncoder()->getNumElems();
   auto shard_count = td->nShards;
 
+  // Exit early if there is no data for this shard chunk
+  if (row_count == 0) {
+    return {};
+  }
+
   CHECK(!isStringVectorData(shard_cd));
   CHECK(!isDatumVectorData(shard_cd));
 

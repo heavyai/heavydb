@@ -24,6 +24,7 @@ namespace foreign_storage {
 class ForeignStorageBuffer : public AbstractBuffer {
  public:
   ForeignStorageBuffer();
+  virtual ~ForeignStorageBuffer() = default;
 
   void read(int8_t* const destination,
             const size_t num_bytes,
@@ -51,7 +52,6 @@ class ForeignStorageBuffer : public AbstractBuffer {
   MemoryLevel getType() const override;
 
  private:
-  std::unique_ptr<int8_t[]> buffer_;
-  size_t reserved_byte_count_;
+  std::vector<int8_t> buffer_;
 };
 }  // namespace foreign_storage
