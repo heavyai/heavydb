@@ -39,7 +39,43 @@ extern bool g_enable_legacy_parquet_import;
 #endif
 extern bool g_enable_fsi_regex_import;
 
+size_t g_max_import_fragment_byte_size = 200 * 1024UL * 1024UL;
+size_t g_max_import_num_fragment_buffered = 2;
+size_t g_import_heuristic_varlen_column_byte_size = 256;
+
 namespace {
+
+std::vector<std::pair<foreign_storage::ChunkToBufferMap, AbstractBuffer*>>
+get_collated_batch_buffers(const foreign_storage::ChunkToBatchBufferMap& batch_buffers,
+                           const std::vector<AbstractBuffer*>& delete_buffer,
+                           const size_t batch_size) {
+  std::vector<std::pair<foreign_storage::ChunkToBufferMap, AbstractBuffer*>>
+      collated_buffers;
+  CHECK_EQ(batch_size, delete_buffer.size());
+  collated_buffers.resize(batch_size);
+
+  size_t id = 0;
+  for (auto buf : delete_buffer) {
+    collated_buffers[id++].second = buf;
+  }
+
+  for (const auto& [key, buffers] : batch_buffers) {
+    CHECK_EQ(buffers.size(), batch_size);
+    size_t id = 0;
+    for (auto buf : buffers) {
+      collated_buffers[id++].first.emplace(key, buf);
+    }
+  }
+
+  return collated_buffers;
+}
+
+size_t get_varlen_data_column_byte_size_heuristic_value() {
+  // use a heuristic where varlen types are assumed to be a constant number of
+  // bytes in length
+  return g_import_heuristic_varlen_column_byte_size;
+}
+
 ChunkMetadataVector metadata_scan(foreign_storage::ForeignDataWrapper* data_wrapper,
                                   foreign_storage::ForeignTable* foreign_table) {
   ChunkMetadataVector metadata_vector;
@@ -85,16 +121,88 @@ void validate_copy_params(const import_export::CopyParams& copy_params) {
 }
 
 struct FragmentBuffers {
-  std::map<ChunkKey, std::unique_ptr<foreign_storage::ForeignStorageBuffer>>
+  std::map<ChunkKey, std::vector<std::unique_ptr<foreign_storage::ForeignStorageBuffer>>>
       fragment_buffers_owner;
-  foreign_storage::ChunkToBufferMap fragment_buffers;
-  std::unique_ptr<foreign_storage::ForeignStorageBuffer> delete_buffer;
+  foreign_storage::ChunkToBatchBufferMap fragment_buffers;
+  std::vector<std::unique_ptr<foreign_storage::ForeignStorageBuffer>> delete_buffer_owner;
+  std::vector<AbstractBuffer*> delete_buffer;
 };
 
 std::unique_ptr<FragmentBuffers> create_fragment_buffers(
+    Catalog_Namespace::Catalog& catalog,
+    const TableDescriptor* table,
+    const size_t batch_size) {
+  auto columns = catalog.getAllColumnMetadataForTable(table->tableId, false, false, true);
+
+  std::set<ChunkKey> fragment_keys;
+  for (const auto col_desc : columns) {
+    ChunkKey key{catalog.getDatabaseId(), table->tableId, col_desc->columnId, -1};
+    if (col_desc->columnType.is_varlen_indeed()) {
+      auto data_key = key;
+      data_key.push_back(1);
+      fragment_keys.insert(data_key);
+      auto index_key = key;
+      index_key.push_back(2);
+      fragment_keys.insert(index_key);
+    } else {
+      fragment_keys.insert(key);
+    }
+  }
+
+  // create buffers
+  std::unique_ptr<FragmentBuffers> frag_buffers = std::make_unique<FragmentBuffers>();
+  frag_buffers->delete_buffer_owner.resize(batch_size);
+  for (auto& del_buf : frag_buffers->delete_buffer_owner) {
+    del_buf = std::make_unique<foreign_storage::ForeignStorageBuffer>();
+  }
+  frag_buffers->delete_buffer.reserve(batch_size);
+  for (auto& buffer : frag_buffers->delete_buffer_owner) {
+    frag_buffers->delete_buffer.push_back(buffer.get());
+  }
+
+  for (const auto& key : fragment_keys) {
+    frag_buffers->fragment_buffers_owner[key].resize(batch_size);
+    for (auto& buf : frag_buffers->fragment_buffers_owner.at(key)) {
+      buf = std::make_unique<foreign_storage::ForeignStorageBuffer>();
+    }
+  }
+
+  return frag_buffers;
+}
+
+void reset_buffers_and_move_to_pool_unlocked(
+    std::unique_ptr<FragmentBuffers>& grouped_fragment_buffers,
+    std::list<std::unique_ptr<FragmentBuffers>>& buffer_pool,
+    const bool accepts_prepopulated_delete_buffer) {
+  // reset buffers
+  auto& fragment_buffers = grouped_fragment_buffers->fragment_buffers;
+  auto& delete_buffer = grouped_fragment_buffers->delete_buffer;
+
+  for (auto& [_, batch_buffer] : fragment_buffers) {
+    for (auto buf : batch_buffer) {
+      buf->resetToEmpty();
+    }
+  }
+  grouped_fragment_buffers->fragment_buffers.clear();
+  // keep delete buffer size as is, reset all values to false if optimization enabled
+  for (auto buf : delete_buffer) {
+    if (accepts_prepopulated_delete_buffer) {
+      std::fill(buf->getMemoryPtr(), buf->getMemoryPtr() + buf->size(), false);
+    } else {
+      buf->resetToEmpty();
+    }
+  }
+
+  buffer_pool.emplace_back(std::move(grouped_fragment_buffers));
+}
+
+std::unique_ptr<FragmentBuffers> get_fragment_buffers_for_fragment_id(
     const int32_t fragment_id,
     Catalog_Namespace::Catalog& catalog,
-    const TableDescriptor* table) {
+    const TableDescriptor* table,
+    std::list<std::unique_ptr<FragmentBuffers>>& buffer_pool,
+    const size_t batch_size) {
+  CHECK_GT(buffer_pool.size(), 0UL);
   auto columns = catalog.getAllColumnMetadataForTable(table->tableId, false, false, true);
 
   std::set<ChunkKey> fragment_keys;
@@ -113,14 +221,19 @@ std::unique_ptr<FragmentBuffers> create_fragment_buffers(
     }
   }
 
-  // create buffers
-  std::unique_ptr<FragmentBuffers> frag_buffers = std::make_unique<FragmentBuffers>();
-  frag_buffers->delete_buffer = std::make_unique<foreign_storage::ForeignStorageBuffer>();
+  // get buffers
+  std::unique_ptr<FragmentBuffers> frag_buffers;
+  frag_buffers.reset(buffer_pool.front().release());
+  buffer_pool.pop_front();
   for (const auto& key : fragment_keys) {
-    frag_buffers->fragment_buffers_owner[key] =
-        std::make_unique<foreign_storage::ForeignStorageBuffer>();
-    frag_buffers->fragment_buffers[key] =
-        shared::get_from_map(frag_buffers->fragment_buffers_owner, key).get();
+    auto owner_key = key;
+    owner_key[CHUNK_KEY_FRAGMENT_IDX] = -1;
+    frag_buffers->fragment_buffers[key].reserve(batch_size);
+    auto& buffers = shared::get_from_map(frag_buffers->fragment_buffers_owner, owner_key);
+    for (auto& buf : buffers) {
+      CHECK_EQ(buf->size(), 0UL);
+      frag_buffers->fragment_buffers[key].push_back(buf.get());
+    }
   }
 
   return frag_buffers;
@@ -139,9 +252,13 @@ void load_foreign_data_buffers(
     bool& load_failed,
     bool& data_wrapper_error_occured,
     std::condition_variable& buffers_to_load_condition,
-    std::list<std::unique_ptr<FragmentBuffers>>& buffers_to_load) {
+    std::list<std::unique_ptr<FragmentBuffers>>& buffers_to_load,
+    std::list<std::unique_ptr<FragmentBuffers>>& buffer_pool,
+    const bool accepts_prepopulated_delete_buffer,
+    const size_t batch_size) {
   Fragmenter_Namespace::InsertDataLoader insert_data_loader(*connector);
   while (true) {
+    std::unique_ptr<FragmentBuffers> grouped_fragment_buffers;
     {
       std::unique_lock communication_lock(communication_mutex);
       buffers_to_load_condition.wait(communication_lock, [&]() {
@@ -151,90 +268,103 @@ void load_foreign_data_buffers(
       if ((buffers_to_load.empty() && !continue_loading) || data_wrapper_error_occured) {
         return;
       }
+      CHECK(!buffers_to_load.empty());
+      grouped_fragment_buffers.reset(buffers_to_load.front().release());
+      buffers_to_load.pop_front();
+      buffers_to_load_condition.notify_all();
     }
 
-    CHECK(!buffers_to_load.empty());
-
     try {
-      std::unique_ptr<FragmentBuffers> grouped_fragment_buffers;
-      {
-        std::unique_lock communication_lock(communication_mutex);
-        grouped_fragment_buffers.reset(buffers_to_load.front().release());
-        buffers_to_load.pop_front();
-        buffers_to_load_condition.notify_all();
-      }
-      auto& fragment_buffers = grouped_fragment_buffers->fragment_buffers;
-      auto& delete_buffer = grouped_fragment_buffers->delete_buffer;
+      auto& batched_fragment_buffers = grouped_fragment_buffers->fragment_buffers;
+      auto& batched_delete_buffer = grouped_fragment_buffers->delete_buffer;
 
-      // get chunks for import
-      Fragmenter_Namespace::InsertChunks insert_chunks{
-          table->tableId, catalog.getDatabaseId(), {}, {}};
+      // process all batches returned within the fragment
+      for (auto& [fragment_buffers, delete_buffer] : get_collated_batch_buffers(
+               batched_fragment_buffers, batched_delete_buffer, batch_size)) {
+        // get chunks for import
+        Fragmenter_Namespace::InsertChunks insert_chunks{
+            table->tableId, catalog.getDatabaseId(), {}, {}};
 
-      // create chunks from buffers
-      for (const auto& [key, buffer] : fragment_buffers) {
-        const auto col_id = key[CHUNK_KEY_COLUMN_IDX];
-        const auto table_id = key[CHUNK_KEY_TABLE_IDX];
-        const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
+        // create chunks from buffers
+        for (const auto& [key, buffer] : fragment_buffers) {
+          const auto col_id = key[CHUNK_KEY_COLUMN_IDX];
+          const auto table_id = key[CHUNK_KEY_TABLE_IDX];
+          const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
 
-        if (col_desc->columnType.is_varlen_indeed()) {
-          CHECK(key.size() > CHUNK_KEY_VARLEN_IDX);  // check for varlen key
-          if (key[CHUNK_KEY_VARLEN_IDX] == 1) {      // data key
-            auto index_key = key;
-            index_key[CHUNK_KEY_VARLEN_IDX] = 2;
-            insert_chunks.chunks[col_id] = Chunk_NS::Chunk::getChunk(
-                col_desc,
-                buffer,
-                shared::get_from_map(fragment_buffers, index_key),
-                false);
-          }
-        } else {  // regular non-varlen case with no index buffer
-          insert_chunks.chunks[col_id] =
-              Chunk_NS::Chunk::getChunk(col_desc, buffer, nullptr, false);
-        }
-      }
-
-      // mark which row indices are valid for import
-      auto row_count = fragment_buffers.begin()
-                           ->second->getEncoder()
-                           ->getNumElems();  // assume all chunks have same number of
-                                             // rows, this is validated at a lower level
-      insert_chunks.valid_row_indices.reserve(row_count);
-      for (size_t irow = 0; irow < row_count; ++irow) {
-        if (delete_buffer->size() > 0) {
-          CHECK_LE(irow, delete_buffer->size());
-          if (delete_buffer->getMemoryPtr()[irow]) {
-            continue;
+          if (col_desc->columnType.is_varlen_indeed()) {
+            CHECK(key.size() > CHUNK_KEY_VARLEN_IDX);  // check for varlen key
+            if (key[CHUNK_KEY_VARLEN_IDX] == 1) {      // data key
+              auto index_key = key;
+              index_key[CHUNK_KEY_VARLEN_IDX] = 2;
+              insert_chunks.chunks[col_id] = Chunk_NS::Chunk::getChunk(
+                  col_desc,
+                  buffer,
+                  shared::get_from_map(fragment_buffers, index_key),
+                  false);
+            }
+          } else {  // regular non-varlen case with no index buffer
+            insert_chunks.chunks[col_id] =
+                Chunk_NS::Chunk::getChunk(col_desc, buffer, nullptr, false);
           }
         }
-        insert_chunks.valid_row_indices.emplace_back(irow);
-      }
 
-      // import chunks
-      insert_data_loader.insertChunks(*session_info, insert_chunks);
+        // mark which row indices are valid for import
+        auto row_count = fragment_buffers.begin()
+                             ->second->getEncoder()
+                             ->getNumElems();  // assume all chunks have same number of
+                                               // rows, this is validated at a lower level
+        insert_chunks.valid_row_indices.reserve(row_count);
+        for (size_t irow = 0; irow < row_count; ++irow) {
+          if (delete_buffer->size() > 0) {
+            CHECK_LE(irow, delete_buffer->size());
+            if (delete_buffer->getMemoryPtr()[irow]) {
+              continue;
+            }
+          }
+          insert_chunks.valid_row_indices.emplace_back(irow);
+        }
 
-      CHECK_LE(insert_chunks.valid_row_indices.size(), row_count);
-      import_status.rows_rejected += row_count - insert_chunks.valid_row_indices.size();
-      import_status.rows_completed += insert_chunks.valid_row_indices.size();
-      if (import_status.rows_rejected > copy_params.max_reject) {
-        import_status.load_failed = true;
-        import_status.load_msg =
-            "Load was cancelled due to max reject rows being reached";
+        // import chunks
+        insert_data_loader.insertChunks(*session_info, insert_chunks);
+
+        CHECK_LE(insert_chunks.valid_row_indices.size(), row_count);
+        import_status.rows_rejected += row_count - insert_chunks.valid_row_indices.size();
+        import_status.rows_completed += insert_chunks.valid_row_indices.size();
+        if (import_status.rows_rejected > copy_params.max_reject) {
+          import_status.load_failed = true;
+          import_status.load_msg =
+              "Load was cancelled due to max reject rows being reached";
+          import_export::Importer::set_import_status(
+              get_import_id(copy_params, copy_from_source), import_status);
+          std::unique_lock communication_lock(communication_mutex);
+          load_failed = true;
+          buffers_to_load_condition.notify_all();
+          return;
+        }
+
         import_export::Importer::set_import_status(
             get_import_id(copy_params, copy_from_source), import_status);
-        std::unique_lock communication_lock(communication_mutex);
-        load_failed = true;
-        buffers_to_load_condition.notify_all();
-        return;
       }
-      import_export::Importer::set_import_status(
-          get_import_id(copy_params, copy_from_source), import_status);
+
     } catch (...) {
       {
         std::unique_lock communication_lock(communication_mutex);
         load_failed = true;
+        if (grouped_fragment_buffers.get()) {
+          reset_buffers_and_move_to_pool_unlocked(
+              grouped_fragment_buffers, buffer_pool, accepts_prepopulated_delete_buffer);
+        }
         buffers_to_load_condition.notify_all();
       }
       throw;
+    }
+    {
+      std::unique_lock communication_lock(communication_mutex);
+      if (grouped_fragment_buffers.get()) {
+        reset_buffers_and_move_to_pool_unlocked(
+            grouped_fragment_buffers, buffer_pool, accepts_prepopulated_delete_buffer);
+      }
+      buffers_to_load_condition.notify_all();
     }
   }
 }
@@ -261,6 +391,14 @@ import_export::ImportStatus import_foreign_data(
                                             // population and loading should cease
   std::condition_variable buffers_to_load_condition;
   std::list<std::unique_ptr<FragmentBuffers>> buffers_to_load;
+  std::list<std::unique_ptr<FragmentBuffers>> buffers_pool;
+
+  // create the required amount of buffers once
+  for (size_t i = 0; i < maximum_num_fragments_buffered; ++i) {
+    auto grouped_fragment_buffers =
+        create_fragment_buffers(catalog, table, data_wrapper->getOptimalBatchSize());
+    buffers_pool.emplace_back(std::move(grouped_fragment_buffers));
+  }
 
   // launch separate thread to load processed fragment buffers
   auto load_future = std::async(std::launch::async,
@@ -277,26 +415,34 @@ import_export::ImportStatus import_foreign_data(
                                 std::ref(load_failed),
                                 std::ref(data_wrapper_error_occured),
                                 std::ref(buffers_to_load_condition),
-                                std::ref(buffers_to_load));
+                                std::ref(buffers_to_load),
+                                std::ref(buffers_pool),
+                                data_wrapper->acceptsPrepopulatedDeleteBuffer(),
+                                data_wrapper->getOptimalBatchSize());
 
   for (int32_t fragment_id = 0; fragment_id <= max_fragment_id; ++fragment_id) {
+    std::unique_ptr<FragmentBuffers> grouped_fragment_buffers;
     {
       std::unique_lock communication_lock(communication_mutex);
       buffers_to_load_condition.wait(communication_lock, [&]() {
-        return buffers_to_load.size() < maximum_num_fragments_buffered || load_failed;
+        return (buffers_to_load.size() < maximum_num_fragments_buffered &&
+                buffers_pool.size()) ||
+               load_failed;
       });
       if (load_failed) {
         break;
       }
+      grouped_fragment_buffers = get_fragment_buffers_for_fragment_id(
+          fragment_id, catalog, table, buffers_pool, data_wrapper->getOptimalBatchSize());
     }
-    auto grouped_fragment_buffers = create_fragment_buffers(fragment_id, catalog, table);
+
     auto& fragment_buffers = grouped_fragment_buffers->fragment_buffers;
     auto& delete_buffer = grouped_fragment_buffers->delete_buffer;
 
     // get the buffers, accounting for the possibility of the requested fragment id being
     // out of bounds
     try {
-      data_wrapper->populateChunkBuffers(fragment_buffers, {}, delete_buffer.get());
+      data_wrapper->populateChunkBatchBuffers(fragment_buffers, {}, delete_buffer);
     } catch (const foreign_storage::RequestedFragmentIdOutOfBoundsException& except) {
       break;
     } catch (...) {
@@ -480,13 +626,17 @@ int32_t get_proxy_foreign_table_fragment_size(
   }
 
   // This number is chosen as a reasonable default value to reserve for
-  // intermediate buffering during import, it is about 2GB of memory. Note,
-  // depending on the acutal size of var len values, this heuristic target may
-  // be off. NOTE: `maximum_num_fragments_buffered` scales the allowed buffer
+  // intermediate buffering during import, it is about 200MB of memory.
+  // Depending on the acutal size of var len values, this heuristic target may
+  // be off.
+  // NOTE: `maximum_num_fragments_buffered` scales the allowed buffer
   // size with the assumption that in the worst case all buffers may be
   // buffered at once.
+  // NOTE: The chosen value of 200MB described above is subject to change and
+  // is an important parameter to tune performance and trade off memory use vs
+  // runtime.
   const size_t max_buffer_byte_size =
-      2 * 1024UL * 1024UL * 1024UL / maximum_num_fragments_buffered;
+      g_max_import_fragment_byte_size / maximum_num_fragments_buffered;
 
   auto& catalog = parent_session_info.getCatalog();
 
@@ -498,8 +648,7 @@ int32_t get_proxy_foreign_table_fragment_size(
     auto type = column_descriptor->columnType;
     size_t field_byte_length = 0;
     if (type.is_varlen_indeed()) {
-      // use a heuristic where varlen types are assumed to be 256 bytes in length
-      field_byte_length = 256;
+      field_byte_length = get_varlen_data_column_byte_size_heuristic_value();
     } else {
       field_byte_length = type.get_size();
     }
@@ -533,7 +682,7 @@ ImportStatus ForeignDataImporter::importGeneralNoFinalize(
 
   // maximum number of fragments buffered in memory at any one time, affects
   // `maxFragRows` heuristic below
-  const size_t maximum_num_fragments_buffered = 3;
+  const size_t maximum_num_fragments_buffered = g_max_import_num_fragment_buffered;
   // set fragment size for proxy foreign table during import
   foreign_table->maxFragRows =
       get_proxy_foreign_table_fragment_size(maximum_num_fragments_buffered,

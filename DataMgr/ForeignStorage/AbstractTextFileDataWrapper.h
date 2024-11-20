@@ -26,6 +26,7 @@
 #include "DataMgr/Chunk/Chunk.h"
 #include "DataMgr/ForeignStorage/FileReader.h"
 #include "DataMgr/ForeignStorage/FileRegions.h"
+#include "DataMgr/ForeignStorage/IterativeScanParams.h"
 #include "DataMgr/ForeignStorage/TextFileBufferParser.h"
 
 namespace foreign_storage {
@@ -53,42 +54,6 @@ struct MetadataScanMultiThreadingParams {
   bool disable_cache;
 };
 
-struct IterativeFileScanParameters {
-  std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map;
-  int32_t fragment_id;
-  AbstractBuffer* delete_buffer;
-
-  mutable std::map<int, std::unique_ptr<std::mutex>> column_id_to_chunk_mutex;
-  mutable std::map<int, std::unique_ptr<std::condition_variable>>
-      column_id_to_chunk_conditional_var;
-  mutable std::mutex delete_buffer_mutex;
-
-  IterativeFileScanParameters(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
-                              int32_t fragment_id,
-                              AbstractBuffer* delete_buffer)
-      : column_id_to_chunk_map(column_id_to_chunk_map)
-      , fragment_id(fragment_id)
-      , delete_buffer(delete_buffer) {
-    for (const auto& [key, _] : column_id_to_chunk_map) {
-      column_id_to_chunk_mutex[key] = std::make_unique<std::mutex>();
-      column_id_to_chunk_conditional_var[key] =
-          std::make_unique<std::condition_variable>();
-    }
-  }
-
-  std::mutex& getChunkMutex(const int col_id) const {
-    auto mutex_it = column_id_to_chunk_mutex.find(col_id);
-    CHECK(mutex_it != column_id_to_chunk_mutex.end());
-    return *mutex_it->second;
-  }
-
-  std::condition_variable& getChunkConditionalVariable(const int col_id) const {
-    auto var_it = column_id_to_chunk_conditional_var.find(col_id);
-    CHECK(var_it != column_id_to_chunk_conditional_var.end());
-    return *var_it->second;
-  }
-};
-
 class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
  public:
   AbstractTextFileDataWrapper();
@@ -105,6 +70,11 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
                             const ChunkToBufferMap& optional_buffers,
                             AbstractBuffer* delete_buffer) override;
+
+  void populateChunkBatchBuffers(
+      const ChunkToBatchBufferMap& required_buffers,
+      const ChunkToBatchBufferMap& optional_buffers,
+      const std::vector<AbstractBuffer*>& delete_buffer) override;
 
   std::string getSerializedDataWrapper() const override;
 
@@ -126,6 +96,10 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
     size_t residual_buffer_size;
     size_t residual_buffer_alloc_size;
   };
+
+  size_t getOptimalBatchSize() override;
+
+  bool acceptsPrepopulatedDeleteBuffer() const override { return true; }
 
  protected:
   virtual const TextFileBufferParser& getFileBufferParser() const = 0;
@@ -153,10 +127,30 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
                       int fragment_id,
                       AbstractBuffer* delete_buffer);
 
+  /**
+   * Populates provided chunks with appropriate data by parsing all file
+   * regions containing chunk data. Mirrors `populateChunks` for batch buffers.
+   *
+   * @param column_id_batch_id_to_chunk_map - map of column id & batch id to
+   * chunks to be populated
+   * @param fragment_id - fragment id of given chunks
+   * @param delete_buffer - batch buffer to store deleted row indices
+   */
+  void populateBatchChunks(
+      std::map<std::pair<int, int>, Chunk_NS::Chunk>& column_id_batch_id_to_chunk_map,
+      int fragment_id,
+      const std::vector<AbstractBuffer*>& delete_buffer);
+
   void populateChunkMapForColumns(const std::set<const ColumnDescriptor*>& columns,
                                   const int fragment_id,
                                   const ChunkToBufferMap& buffers,
                                   std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map);
+
+  void populateBatchChunkMapForColumns(
+      const std::set<const ColumnDescriptor*>& columns,
+      const int fragment_id,
+      const ChunkToBatchBufferMap& buffers,
+      std::map<std::pair<int, int>, Chunk_NS::Chunk>& column_id_to_chunk_map);
 
   void updateMetadata(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
                       int fragment_id);
@@ -164,6 +158,8 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   void updateRolledOffChunks(
       const std::set<std::string>& rolled_off_files,
       const std::map<int32_t, const ColumnDescriptor*>& column_by_id);
+
+  void initializeIterativeScanModeIfNecessary();
 
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   std::map<int, FileRegions> fragment_id_to_file_regions_map_;
@@ -193,7 +189,9 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   bool is_file_scan_in_progress_;
 
   // Track the fragment for which the last request currently processed belongs to
-  int iterative_scan_last_fragment_id_;
+  int iterative_scan_last_scanned_fragment_id_;
+  // Track the last fragment that is processed (not necessarily finished yet)
+  std::atomic<int> iterative_scan_last_processed_fragment_id_;
 
   // These parameters may be reused in a iterative file scan
   MetadataScanMultiThreadingParams multi_threading_params_;
@@ -201,5 +199,7 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   size_t thread_count_;
 
   ResidualBuffer residual_buffer_;
+
+  bool is_iterative_scan_mode_initialized_;
 };
 }  // namespace foreign_storage

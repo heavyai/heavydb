@@ -253,6 +253,9 @@ extern bool g_enable_string_functions;
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
 extern bool g_enable_legacy_delimited_import;
+extern size_t g_max_import_fragment_byte_size;
+extern size_t g_max_import_num_fragment_buffered;
+extern size_t g_import_heuristic_varlen_column_byte_size;
 #ifdef ENABLE_IMPORT_PARQUET
 extern bool g_enable_legacy_parquet_import;
 #endif
