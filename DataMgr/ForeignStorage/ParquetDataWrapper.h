@@ -59,6 +59,8 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
                             const ChunkToBufferMap& optional_buffers,
                             AbstractBuffer* delete_buffer) override;
 
+  bool acceptsPrepopulatedDeleteBuffer() const override { return true; }
+
   std::string getSerializedDataWrapper() const override;
 
   void restoreDataWrapperInternals(

@@ -1314,6 +1314,26 @@ void CommandLineOptions::fillDeveloperOptions() {
                      "loaded at runtime. (If not provided, the library will be searched "
                      "for in the system's default library path.)");
 #endif
+
+  desc.add_options()(
+      "max-import-fragment-byte-size",
+      po::value<size_t>(&g_max_import_fragment_byte_size)
+          ->default_value(g_max_import_fragment_byte_size),
+      "Target size (in bytes) for amount of intermediate buffer memory "
+      "use during import. See also import-heuristic-varlen-column-byte-size.");
+  desc.add_options()(
+      "max-import-num-fragments-buffered",
+      po::value<size_t>(&g_max_import_num_fragment_buffered)
+          ->default_value(g_max_import_num_fragment_buffered),
+      "Maximum amount of simultaneously buffered fragments held in memory "
+      "during import. See also import-heuristic-varlen-column-byte-size. ");
+  desc.add_options()(
+      "import-heuristic-varlen-column-byte-size",
+      po::value<size_t>(&g_import_heuristic_varlen_column_byte_size)
+          ->default_value(g_import_heuristic_varlen_column_byte_size),
+      "A constant number of bytes each varlen column is assumed to not exceed. Along "
+      "with max-import-num-fragments-buffered and max-import-fragment-byte-size used to "
+      "compute the number of simultaneously buffered fragments held in memory.");
 }
 
 namespace {
