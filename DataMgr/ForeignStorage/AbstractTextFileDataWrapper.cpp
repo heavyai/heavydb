@@ -40,7 +40,9 @@ AbstractTextFileDataWrapper::AbstractTextFileDataWrapper()
     , disable_cache_(false)
     , is_first_file_scan_call_(true)
     , is_file_scan_in_progress_(false)
-    , iterative_scan_last_fragment_id_(-1) {}
+    , iterative_scan_last_scanned_fragment_id_(-1)
+    , iterative_scan_last_processed_fragment_id_(-1)
+    , is_iterative_scan_mode_initialized_(false) {}
 
 AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     const int db_id,
@@ -52,7 +54,9 @@ AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     , disable_cache_(false)
     , is_first_file_scan_call_(true)
     , is_file_scan_in_progress_(false)
-    , iterative_scan_last_fragment_id_(-1) {}
+    , iterative_scan_last_scanned_fragment_id_(-1)
+    , iterative_scan_last_processed_fragment_id_(-1)
+    , is_iterative_scan_mode_initialized_(false) {}
 
 AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     const int db_id,
@@ -66,7 +70,9 @@ AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     , disable_cache_(disable_cache)
     , is_first_file_scan_call_(true)
     , is_file_scan_in_progress_(false)
-    , iterative_scan_last_fragment_id_(-1) {}
+    , iterative_scan_last_scanned_fragment_id_(-1)
+    , iterative_scan_last_processed_fragment_id_(-1)
+    , is_iterative_scan_mode_initialized_(false) {}
 
 namespace {
 
@@ -80,7 +86,8 @@ void throw_fragment_id_out_of_bounds_error(const TableDescriptor* table,
       std::to_string(max_fragment_id) + "."};
 }
 
-std::set<const ColumnDescriptor*> get_columns(const ChunkToBufferMap& buffers,
+template <typename ChunkToBufferMapType>
+std::set<const ColumnDescriptor*> get_columns(const ChunkToBufferMapType& buffers,
                                               const Catalog_Namespace::Catalog& catalog,
                                               const int32_t table_id,
                                               const int fragment_id) {
@@ -113,6 +120,52 @@ void AbstractTextFileDataWrapper::populateChunkMapForColumns(
                           buffers,
                           column_id_to_chunk_map[column->columnId]);
   }
+}
+
+void AbstractTextFileDataWrapper::populateBatchChunkMapForColumns(
+    const std::set<const ColumnDescriptor*>& columns,
+    const int fragment_id,
+    const ChunkToBatchBufferMap& buffers,
+    std::map<std::pair<int, int>, Chunk_NS::Chunk>& column_id_batch_id_to_chunk_map) {
+  for (const auto& [_, batch_buffer] : buffers) {
+    CHECK_EQ(batch_buffer.size(), getOptimalBatchSize());
+  }
+  for (const auto column : columns) {
+    ChunkKey data_chunk_key = {
+        db_id_, foreign_table_->tableId, column->columnId, fragment_id};
+    for (size_t batch_index = 0; batch_index < getOptimalBatchSize(); ++batch_index) {
+      init_chunk_for_column(
+          data_chunk_key,
+          chunk_metadata_map_,
+          decay_batch_chunk_map(buffers, batch_index),
+          column_id_batch_id_to_chunk_map[{column->columnId, batch_index}]);
+    }
+  }
+}
+
+void AbstractTextFileDataWrapper::populateChunkBatchBuffers(
+    const ChunkToBatchBufferMap& required_buffers,
+    const ChunkToBatchBufferMap& optional_buffers,
+    const std::vector<AbstractBuffer*>& delete_buffer) {
+  auto timer = DEBUG_TIMER(__func__);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
+  CHECK(catalog);
+  CHECK(!required_buffers.empty());
+
+  auto fragment_id = required_buffers.begin()->first[CHUNK_KEY_FRAGMENT_IDX];
+  auto required_columns =
+      get_columns(required_buffers, *catalog, foreign_table_->tableId, fragment_id);
+  std::map<std::pair<int, int>, Chunk_NS::Chunk> column_id_batch_id_to_chunk_map;
+  populateBatchChunkMapForColumns(
+      required_columns, fragment_id, required_buffers, column_id_batch_id_to_chunk_map);
+
+  if (!optional_buffers.empty()) {
+    auto optional_columns =
+        get_columns(optional_buffers, *catalog, foreign_table_->tableId, fragment_id);
+    populateBatchChunkMapForColumns(
+        optional_columns, fragment_id, optional_buffers, column_id_batch_id_to_chunk_map);
+  }
+  populateBatchChunks(column_id_batch_id_to_chunk_map, fragment_id, delete_buffer);
 }
 
 void AbstractTextFileDataWrapper::populateChunkBuffers(
@@ -243,7 +296,7 @@ ParseFileRegionResult parse_file_regions(
     parse_file_request.file_offset = file_regions[i].first_row_file_offset;
     parse_file_request.process_row_count = file_regions[i].row_count;
 
-    result = parser.parseBuffer(parse_file_request, (i == end_index));
+    result = parser.parseBuffer(parse_file_request, i == end_index);
     CHECK_EQ(file_regions[i].row_count, result.row_count);
     for (const auto& rejected_row_index : result.rejected_rows) {
       load_file_region_result.rejected_row_indices.insert(
@@ -336,14 +389,14 @@ bool is_file_scan_finished(const FileReader* file_reader,
 
 }  // namespace
 
-void AbstractTextFileDataWrapper::populateChunks(
-    std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
+void AbstractTextFileDataWrapper::populateBatchChunks(
+    std::map<std::pair<int, int>, Chunk_NS::Chunk>& column_id_to_chunk_map,
     int fragment_id,
-    AbstractBuffer* delete_buffer) {
+    const std::vector<AbstractBuffer*>& delete_buffer) {
   const auto copy_params = getFileBufferParser().validateAndGetCopyParams(foreign_table_);
   CHECK(!column_id_to_chunk_map.empty());
 
-  // check to see if a iterative scan step is required
+  // Check to see if an iterative scan step is required
   auto file_regions_it = fragment_id_to_file_regions_map_.find(fragment_id);
   if (file_regions_it == fragment_id_to_file_regions_map_.end() ||
       is_file_scan_in_progress_) {
@@ -353,12 +406,10 @@ void AbstractTextFileDataWrapper::populateChunks(
       // NOTE: we can only guarantee the current `fragment_id` is fully done
       // iterative scan if either
       //   1) the scan is finished OR
-      //   2) `fragment_id+1` exists in the internal map
-      // this is why `fragment_id+1` is checked for below
-      auto file_regions_it_one_ahead =
-          fragment_id_to_file_regions_map_.find(fragment_id + 1);
+      //   2) `fragment_id+1` is the last fragment to have start being processed
+
       if (is_first_file_scan_call_ ||
-          (file_regions_it_one_ahead == fragment_id_to_file_regions_map_.end())) {
+          iterative_scan_last_processed_fragment_id_ <= fragment_id) {
         ChunkMetadataVector chunk_metadata_vector;
         IterativeFileScanParameters iterative_params{
             column_id_to_chunk_map, fragment_id, delete_buffer};
@@ -366,20 +417,31 @@ void AbstractTextFileDataWrapper::populateChunks(
       }
     }
 
-    file_regions_it = fragment_id_to_file_regions_map_.find(fragment_id);
-    if (file_regions_it == fragment_id_to_file_regions_map_.end()) {
+    if (iterative_scan_last_processed_fragment_id_ < fragment_id) {
       CHECK(is_file_scan_finished(file_reader_.get(), multi_threading_params_));
       is_file_scan_in_progress_ = false;  // conclude the iterative scan is finished
       is_first_file_scan_call_ =
           true;  // any subsequent iterative request can assume they will be the first
       throw_fragment_id_out_of_bounds_error(
-          foreign_table_, fragment_id, fragment_id_to_file_regions_map_.rbegin()->first);
+          foreign_table_, fragment_id, iterative_scan_last_processed_fragment_id_);
     } else {
       // iterative scan is required to have loaded all required chunks thus we
       // can exit early
       return;
     }
   }
+
+  UNREACHABLE()
+      << "populateBatchChunks is only expected to be used in iterative scan mode";
+}
+
+void AbstractTextFileDataWrapper::populateChunks(
+    std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
+    int fragment_id,
+    AbstractBuffer* delete_buffer) {
+  const auto copy_params = getFileBufferParser().validateAndGetCopyParams(foreign_table_);
+  CHECK(!column_id_to_chunk_map.empty());
+  auto file_regions_it = fragment_id_to_file_regions_map_.find(fragment_id);
   CHECK(file_regions_it != fragment_id_to_file_regions_map_.end());
 
   const auto& file_regions = file_regions_it->second;
@@ -647,26 +709,14 @@ void cache_blocks(std::map<ChunkKey, Chunk_NS::Chunk>& cached_chunks,
 }
 
 void append_data_block_to_chunk(
-    const foreign_storage::IterativeFileScanParameters& file_scan_param,
+    foreign_storage::IterativeFileScanParameters& file_scan_param,
     DataBlockPtr data_block,
     size_t row_count,
     const int column_id,
-    const ColumnDescriptor* column,
-    const size_t element_count_required) {
-  auto chunk = shared::get_from_map(file_scan_param.column_id_to_chunk_map, column_id);
-
-  auto& conditional_variable = file_scan_param.getChunkConditionalVariable(column_id);
-  {
-    std::unique_lock<std::mutex> chunk_lock(file_scan_param.getChunkMutex(column_id));
-    conditional_variable.wait(chunk_lock, [element_count_required, &chunk]() {
-      return chunk.getBuffer()->getEncoder()->getNumElems() == element_count_required;
-    });
-
-    chunk.appendData(data_block, row_count, 0);
-  }
-
-  conditional_variable
-      .notify_all();  // notify any threads waiting on the correct element count
+    const int thread_id) {
+  auto& chunk = shared::get_from_map(file_scan_param.column_id_and_batch_id_to_chunk_map,
+                                     std::make_pair(column_id, thread_id));
+  chunk.appendData(data_block, row_count, 0);
 }
 
 /**
@@ -696,20 +746,24 @@ void update_delete_buffer(
     const ParseBufferRequest& request,
     const ParseBufferResult& result,
     const foreign_storage::IterativeFileScanParameters& file_scan_param,
-    const size_t start_position_in_fragment) {
-  if (file_scan_param.delete_buffer) {
-    std::unique_lock delete_buffer_lock(file_scan_param.delete_buffer_mutex);
-    auto& delete_buffer = file_scan_param.delete_buffer;
-    auto chunk_offset = start_position_in_fragment;
-    auto chunk_element_count = chunk_offset + request.processed_row_count;
+    const int thread_id) {
+  if (!file_scan_param.delete_buffers.empty()) {
+    CHECK_GE(thread_id, 0);
+    CHECK_LT(static_cast<size_t>(thread_id), file_scan_param.delete_buffers.size());
+    auto delete_buffer = file_scan_param.delete_buffers[thread_id];
+    auto row_count = request.process_row_count;
+    auto chunk_element_count = delete_buffer->size() + row_count;
 
     // ensure delete buffer is sized appropriately
     resize_delete_buffer(delete_buffer, chunk_element_count);
 
+    CHECK_GE(delete_buffer->size(), row_count);
+
     auto delete_buffer_data = delete_buffer->getMemoryPtr();
     for (const auto rejected_row_index : result.rejected_rows) {
-      CHECK(rejected_row_index + chunk_offset < delete_buffer->size());
-      delete_buffer_data[rejected_row_index + chunk_offset] = true;
+      size_t j = delete_buffer->size() - row_count + rejected_row_index;
+      CHECK_LT(j, delete_buffer->size());
+      delete_buffer_data[j] = true;
     }
   }
 }
@@ -720,16 +774,8 @@ void populate_chunks_using_data_blocks(
     const ParseBufferRequest& request,
     ParseBufferResult& result,
     std::map<int, const ColumnDescriptor*>& column_by_id,
-    std::map<int, FileRegions>& fragment_id_to_file_regions_map,
-    const foreign_storage::IterativeFileScanParameters& file_scan_param,
-    const size_t expected_current_element_count) {
-  std::unique_lock<std::mutex> lock(multi_threading_params.chunk_encoder_buffers_mutex);
-  // File regions should be added in same order as appendData
-  add_file_region(fragment_id_to_file_regions_map,
-                  fragment_id,
-                  request.first_row_index,
-                  result,
-                  request.getFilePath());
+    foreign_storage::IterativeFileScanParameters& file_scan_param,
+    const int thread_id) {
   CHECK_EQ(fragment_id, file_scan_param.fragment_id);
 
   // start string encoding asynchronously
@@ -757,16 +803,9 @@ void populate_chunks_using_data_blocks(
   auto process_subset_of_data_blocks =
       [&](const std::map<int, DataBlockPtr>& data_blocks) {
         for (auto& [column_id, data_block] : data_blocks) {
-          const auto column = column_by_id[column_id];
-          lock.unlock();  // unlock the fragment based lock in order to achieve better
           // performance
-          append_data_block_to_chunk(file_scan_param,
-                                     data_block,
-                                     result.row_count,
-                                     column_id,
-                                     column,
-                                     expected_current_element_count);
-          lock.lock();
+          append_data_block_to_chunk(
+              file_scan_param, data_block, result.row_count, column_id, thread_id);
         }
       };
 
@@ -985,10 +1024,12 @@ void dispatch_scan_request(MetadataScanMultiThreadingParams& multi_threading_par
  * Consumes and processes scan requests from a pending requests queue
  * and populates chunks during an iterative file scan
  */
-void populate_chunks(MetadataScanMultiThreadingParams& multi_threading_params,
-                     std::map<int, FileRegions>& fragment_id_to_file_regions_map,
-                     const TextFileBufferParser& parser,
-                     foreign_storage::IterativeFileScanParameters& file_scan_param) {
+void populate_chunks_for_iterative_scan(
+    MetadataScanMultiThreadingParams& multi_threading_params,
+    const TextFileBufferParser& parser,
+    foreign_storage::IterativeFileScanParameters& file_scan_param,
+    std::atomic<int>& iterative_scan_last_populated_fragment_id,
+    const int thread_id) {
   std::map<int, const ColumnDescriptor*> column_by_id{};
   while (true) {
     auto request_opt = get_next_scan_request(multi_threading_params);
@@ -1025,21 +1066,21 @@ void populate_chunks(MetadataScanMultiThreadingParams& multi_threading_params,
           }
         }
         auto result = parser.parseBuffer(request, true, true, true);
-        size_t start_position_in_fragment = row_index % request.getMaxFragRows();
         populate_chunks_using_data_blocks(multi_threading_params,
                                           fragment_id,
                                           request,
                                           result,
                                           column_by_id,
-                                          fragment_id_to_file_regions_map,
                                           file_scan_param,
-                                          start_position_in_fragment);
+                                          thread_id);
+
+        update_delete_buffer(request, result, file_scan_param, thread_id);
 
         request.processed_row_count += result.row_count;
         request.begin_pos = result.row_offsets.back() - request.file_offset;
 
-        update_delete_buffer(
-            request, result, file_scan_param, start_position_in_fragment);
+        iterative_scan_last_populated_fragment_id =
+            std::max(iterative_scan_last_populated_fragment_id.load(), fragment_id);
       }
 
     } catch (...) {
@@ -1112,7 +1153,7 @@ void dispatch_scan_requests(
     dispatch_all_deferred_requests(multi_threading_params);
   }
 
-  // NOTE: During an interactive scan, it is possible for an entire fragment to
+  // NOTE: During an iterative scan, it is possible for an entire fragment to
   // be parsed into requests, which sit in deferred requests; in order to avoid
   // stalling indefinitely while waiting on an available requests, the check
   // below determines if this is the case or not.
@@ -1125,7 +1166,7 @@ void dispatch_scan_requests(
   // current_fragment_fully_read_during_iterative_scan is false, and therefore
   // only the first clause of the conditional is relevant
   //
-  // * for interactive scans, if
+  // * for iterative scans, if
   // current_fragment_fully_read_during_iterative_scan is true, then the
   // conditional is skipped, unless it is determined there are still available
   // requests to work with, in which case the loop is entered; this is an
@@ -1526,6 +1567,56 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
   }
 }
 
+void AbstractTextFileDataWrapper::initializeIterativeScanModeIfNecessary() {
+  if (is_iterative_scan_mode_initialized_) {
+    return;  // not necessary as already initialized
+  }
+
+  CHECK(is_first_file_scan_call_);
+  const auto copy_params = getFileBufferParser().validateAndGetCopyParams(foreign_table_);
+  const auto file_path = getFullFilePath(foreign_table_);
+  auto& parser = getFileBufferParser();
+  const auto file_path_options = getFilePathOptions(foreign_table_);
+  auto& server_options = foreign_table_->foreign_server->options;
+
+  iterative_scan_last_scanned_fragment_id_ = -1;
+  iterative_scan_last_processed_fragment_id_ = -1;
+  initialize_non_append_mode_scan(
+      chunk_metadata_map_,
+      fragment_id_to_file_regions_map_,
+      server_options,
+      file_reader_,
+      file_path,
+      copy_params,
+      file_path_options,
+      getMaxFileCount(),
+      foreign_table_,
+      user_mapping_,
+      parser,
+      [] { return ""; },
+      num_rows_,
+      append_start_offset_);
+
+  CHECK(file_reader_);
+  CHECK(!file_reader_->isScanFinished());
+
+  // NOTE: `buffer_size_` and `thread_count_` must not change across an iterative
+  // scan
+  buffer_size_ = get_buffer_size(copy_params,
+                                 file_reader_->isRemainingSizeKnown(),
+                                 file_reader_->getRemainingSize());
+  thread_count_ = get_thread_count(copy_params,
+                                   file_reader_->isRemainingSizeKnown(),
+                                   file_reader_->getRemainingSize(),
+                                   buffer_size_);
+  is_iterative_scan_mode_initialized_ = true;
+}
+
+size_t AbstractTextFileDataWrapper::getOptimalBatchSize() {
+  initializeIterativeScanModeIfNecessary();
+  return thread_count_;
+}
+
 void AbstractTextFileDataWrapper::iterativeFileScan(
     ChunkMetadataVector& chunk_metadata_vector,
     IterativeFileScanParameters& file_scan_param) {
@@ -1583,17 +1674,6 @@ void AbstractTextFileDataWrapper::iterativeFileScan(
   }
 
   if (!is_file_scan_finished(file_reader_.get(), multi_threading_params_)) {
-    if (is_first_file_scan_call_) {
-      // NOTE: `buffer_size_` and `thread_count_` must not change across an iterative
-      // scan
-      buffer_size_ = get_buffer_size(copy_params,
-                                     file_reader_->isRemainingSizeKnown(),
-                                     file_reader_->getRemainingSize());
-      thread_count_ = get_thread_count(copy_params,
-                                       file_reader_->isRemainingSizeKnown(),
-                                       file_reader_->getRemainingSize(),
-                                       buffer_size_);
-    }
     multi_threading_params_.continue_processing = true;
 
     std::vector<std::future<void>> futures{};
@@ -1607,27 +1687,30 @@ void AbstractTextFileDataWrapper::iterativeFileScan(
                                                      getFullFilePath(foreign_table_),
                                                      true);
       }
-      futures.emplace_back(std::async(std::launch::async,
-                                      populate_chunks,
-                                      std::ref(multi_threading_params_),
-                                      std::ref(fragment_id_to_file_regions_map_),
-                                      std::ref(parser),
-                                      std::ref(file_scan_param)));
+      futures.emplace_back(
+          std::async(std::launch::async,
+                     populate_chunks_for_iterative_scan,
+                     std::ref(multi_threading_params_),
+                     std::ref(parser),
+                     std::ref(file_scan_param),
+                     std::ref(iterative_scan_last_processed_fragment_id_),
+                     i));
     }
 
-    dispatch_scan_requests_with_exception_handling(foreign_table_,
-                                                   buffer_size_,
-                                                   file_path,
-                                                   (*file_reader_),
-                                                   copy_params,
-                                                   multi_threading_params_,
-                                                   num_rows_,
-                                                   append_start_offset_,
-                                                   getFileBufferParser(),
-                                                   &file_scan_param,
-                                                   residual_buffer_,
-                                                   is_first_file_scan_call_,
-                                                   iterative_scan_last_fragment_id_);
+    dispatch_scan_requests_with_exception_handling(
+        foreign_table_,
+        buffer_size_,
+        file_path,
+        (*file_reader_),
+        copy_params,
+        multi_threading_params_,
+        num_rows_,
+        append_start_offset_,
+        getFileBufferParser(),
+        &file_scan_param,
+        residual_buffer_,
+        is_first_file_scan_call_,
+        iterative_scan_last_scanned_fragment_id_);
 
     for (auto& future : futures) {
       // get() instead of wait() because we need to propagate potential exceptions.

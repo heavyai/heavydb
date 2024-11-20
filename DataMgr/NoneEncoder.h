@@ -61,8 +61,8 @@ class NoneEncoder : public Encoder {
     shared::execute_over_contiguous_indices(
         selected_idx, [&](const size_t start_pos, const size_t end_pos) {
           size_t elem_count = end_pos - start_pos;
-          auto data_ptr = data + sizeof(T) * selected_idx[start_pos];
-          chunk_metadata = appendData(data_ptr, elem_count, SQLTypeInfo{}, false);
+          chunk_metadata =
+              appendEncodedData(nullptr, data, selected_idx[start_pos], elem_count);
         });
 
     return chunk_metadata;
