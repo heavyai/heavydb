@@ -5640,27 +5640,28 @@ TEST_F(Select, IREquivalenceForStringPatternMatchQuery) {
 
 TEST_F(Select, CanReuseCompiledCodeForStringPatternMatchQuery) {
   SKIP_ALL_ON_AGGREGATOR();
-  CodeCacheMetric q1_cache_metric, q2_cache_metric;
+  auto get_query_ir = [](ExecutorDeviceType dt, const std::string& query_str) {
+    const auto query_explain_result =
+        QR::get()->runSelectQuery(query_str,
+                                  dt,
+                                  /*hoist_literals=*/true,
+                                  /*allow_loop_joins=*/false,
+                                  /*just_explain=*/true);
+    const auto explain_result = query_explain_result->getRows();
+    EXPECT_EQ(size_t(1), explain_result->rowCount());
+    const auto crt_row = explain_result->getNextRow(true, true);
+    EXPECT_EQ(size_t(1), crt_row.size());
+    return boost::get<std::string>(v<NullableString>(crt_row[0]));
+  };
+  std::string const q1_str{"SELECT COUNT(1) FROM TEST WHERE shared_dict LIKE '%foo';"};
+  std::string const q2_str{"SELECT COUNT(1) FROM TEST WHERE shared_dict LIKE '%baz';"};
   auto qe_instance = QueryEngine::getInstance();
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    ASSERT_EQ(10,
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(1) FROM TEST WHERE shared_dict LIKE '%foo';", dt)));
-    if (dt == ExecutorDeviceType::CPU) {
-      q1_cache_metric = qe_instance->cpu_code_accessor->getCodeCacheMetric();
-    } else {
-      q1_cache_metric = qe_instance->gpu_code_accessor->getCodeCacheMetric();
-    }
-    ASSERT_EQ(5,
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(1) FROM TEST WHERE shared_dict LIKE '%baz';", dt)));
-    if (dt == ExecutorDeviceType::CPU) {
-      q2_cache_metric = qe_instance->cpu_code_accessor->getCodeCacheMetric();
-    } else {
-      q2_cache_metric = qe_instance->gpu_code_accessor->getCodeCacheMetric();
-    }
-    ASSERT_GT(q2_cache_metric.found_count, q1_cache_metric.found_count);
+    auto const q1_ir = get_query_ir(dt, q1_str);
+    auto const q2_ir = get_query_ir(dt, q2_str);
+    ASSERT_EQ(q1_ir, q2_ir)
+        << "Query IR of two queries didn't match; cannot reuse the compiled code";
   }
 }
 
