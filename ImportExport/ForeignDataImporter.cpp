@@ -702,6 +702,10 @@ ImportStatus ForeignDataImporter::importGeneralNoFinalize(
     ChunkMetadataVector metadata_vector =
         metadata_scan(data_wrapper.get(), foreign_table.get());
     if (metadata_vector.empty()) {  // an empty data source
+                                    // set empty import status in this case
+      import_export::Importer::set_import_status(
+          get_import_id(copy_params, copy_from_source), import_status);
+
       return {};
     }
 

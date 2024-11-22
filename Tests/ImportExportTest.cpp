@@ -2335,6 +2335,16 @@ class ParquetSpecificImportAndSelectTest : public ImportAndSelectTestBase {
   }
 };
 
+TEST_F(ParquetSpecificImportAndSelectTest, SparkCreatedEmptyParquetFile) {
+  auto query = createTableCopyFromAndSelect("i INT, txt TEXT",
+                                            "spark-empty-file.snappy",
+                                            "SELECT * FROM import_test_new ORDER by i;",
+                                            {},
+                                            14);
+  validateImportStatus(0, 0, false, "import_test_new", 1);
+  assertResultSetEqual({}, query);
+}
+
 TEST_F(ParquetSpecificImportAndSelectTest, ZeroMaxDefinitionLevelScalars) {
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
