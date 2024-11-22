@@ -183,8 +183,11 @@ void ParquetDataWrapper::initializeChunkBuffers(
 }
 
 void ParquetDataWrapper::finalizeFragmentMap() {
-  fragment_to_row_group_interval_map_[last_fragment_index_].back().end_index =
-      last_row_group_;
+  auto& entry =
+      shared::get_from_map(fragment_to_row_group_interval_map_, last_fragment_index_);
+  if (!entry.empty()) {
+    entry.back().end_index = last_row_group_;
+  }
 }
 
 void ParquetDataWrapper::addNewFragment(int row_group, const std::string& file_path) {
