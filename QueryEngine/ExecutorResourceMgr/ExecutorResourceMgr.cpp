@@ -480,8 +480,8 @@ RequestId ExecutorResourceMgr::enqueue_request(const RequestInfo& request_info,
                                                const ResourceGrant& max_resource_grant) {
   const std::chrono::steady_clock::time_point enqueue_time =
       std::chrono::steady_clock::now();
-  const RequestId request_id = requests_count_.fetch_add(1, std::memory_order_relaxed);
   std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
+  const RequestId request_id = requests_count_.fetch_add(1, std::memory_order_relaxed);
   executor_stats_.requests++;
   if (timeout_in_ms > 0) {
     executor_stats_.requests_with_timeouts++;
@@ -523,9 +523,9 @@ void ExecutorResourceMgr::mark_request_dequed(const RequestId request_id) {
       std::chrono::steady_clock::now();
   // Below is only to CHECK our request_id against high water mark... should be
   // relatively inexpensive though
+  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   const size_t current_request_count = requests_count_.load(std::memory_order_relaxed);
   CHECK_LT(request_id, current_request_count);
-  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   {
     RequestStats& request_stats = requests_stats_[request_id];
     request_stats.deque_time = deque_time;
@@ -568,9 +568,9 @@ void ExecutorResourceMgr::mark_request_dequed(const RequestId request_id) {
 }
 
 void ExecutorResourceMgr::mark_request_timed_out(const RequestId request_id) {
+  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   const size_t current_request_count = requests_count_.load(std::memory_order_relaxed);
   CHECK_LT(request_id, current_request_count);
-  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   {
     RequestStats& request_stats = requests_stats_[request_id];
     CHECK(!request_stats.finished_queueing);
@@ -601,9 +601,9 @@ void ExecutorResourceMgr::mark_request_timed_out(const RequestId request_id) {
 void ExecutorResourceMgr::handle_resource_stat_error(const RequestId request_id) {
   const std::chrono::steady_clock::time_point execution_finished_time =
       std::chrono::steady_clock::now();
+  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   const size_t current_request_count = requests_count_.load(std::memory_order_relaxed);
   CHECK_LT(request_id, current_request_count);
-  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   RequestStats& request_stats = requests_stats_[request_id];
   request_stats.execution_finished_time = execution_finished_time;
   request_stats.finished_executing = true;
@@ -628,9 +628,9 @@ void ExecutorResourceMgr::mark_request_finished(const RequestId request_id) {
       std::chrono::steady_clock::now();
   // Below is only to CHECK our request_id against high water mark... should be
   // relatively inexpensive though
+  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   const size_t current_request_count = requests_count_.load(std::memory_order_relaxed);
   CHECK_LT(request_id, current_request_count);
-  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   RequestStats& request_stats = requests_stats_[request_id];
   request_stats.execution_finished_time = execution_finished_time;
   request_stats.finished_executing = true;
