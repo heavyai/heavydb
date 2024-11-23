@@ -109,13 +109,11 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
   /// Destructor
   ~BufferMgr() override;
-  std::string printSlab(size_t slab_num);
   std::string printSlabs() override;
 
   void clearSlabs();
   std::string printMap();
   void printSegs();
-  std::string printSeg(const BufferList::iterator& seg_it);
   size_t getInUseSize() const override;
   size_t getMaxSize() const override;
   size_t getAllocated() const override;
@@ -216,9 +214,12 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   void clearChunks();
   void clearSlabContainers();
   void checkpoint(const std::vector<ChunkKey>& chunk_keys);
+  std::string printSlab(size_t slab_num);
+  std::string printSeg(const BufferList::iterator& seg_it);
 
   mutable std::shared_mutex chunk_index_mutex_;
   mutable std::shared_mutex slab_mutex_;
+  mutable std::shared_mutex clear_slabs_global_mutex_;
   mutable std::mutex unsized_segs_mutex_;
   mutable std::mutex buffer_id_mutex_;
   mutable std::mutex buffer_epoch_mutex_;
