@@ -118,6 +118,7 @@ void BufferMgr::clear() {
 AbstractBuffer* BufferMgr::createBuffer(const ChunkKey& chunk_key,
                                         const size_t chunk_page_size,
                                         const size_t initial_size) {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::lock_guard<std::mutex> chunk_lock(getChunkMutex(chunk_key));
   return createBufferUnlocked(chunk_key, chunk_page_size, initial_size);
 }
@@ -474,6 +475,7 @@ std::string BufferMgr::printSlab(size_t slab_num) {
 }
 
 std::string BufferMgr::printSlabs() {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   std::ostringstream tss;
   tss << std::endl
@@ -488,6 +490,12 @@ std::string BufferMgr::printSlabs() {
 }
 
 void BufferMgr::clearSlabs() {
+  LOG(INFO) << "Attempting to acquire clearSlabs global lock for " << getStringMgrType()
+            << " buffer manager on device : " << device_id_;
+  std::unique_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
+  LOG(INFO) << "Acquired clearSlabs global lock for " << getStringMgrType()
+            << " buffer manager on device : " << device_id_;
+
   std::vector<ChunkKey> used_chunk_keys;
   {
     std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
@@ -525,6 +533,8 @@ void BufferMgr::clearSlabs() {
   } else {
     LOG(INFO) << getStringMgrType() << ":" << device_id_ << " keep slab memory (pinned).";
   }
+  LOG(INFO) << "Releasing clearSlabs global lock for " << getStringMgrType()
+            << " buffer manager on device : " << device_id_;
 }
 
 // return the maximum size this buffer can be in bytes
@@ -534,12 +544,14 @@ size_t BufferMgr::getMaxSize() const {
 
 // return how large the buffer are currently allocated
 size_t BufferMgr::getAllocated() const {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   return num_pages_allocated_ * page_size_;
 }
 
 //
 bool BufferMgr::isAllocationCapped() {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   return allocations_capped_;
 }
@@ -550,6 +562,7 @@ size_t BufferMgr::getPageSize() const {
 
 // return the size of the chunks in use in bytes
 size_t BufferMgr::getInUseSize() const {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   size_t in_use = 0;
   for (const auto& segment_list : slab_segments_) {
@@ -584,6 +597,7 @@ std::string BufferMgr::printSeg(const BufferList::iterator& seg_it) {
 }
 
 std::string BufferMgr::printMap() {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::ostringstream tss;
   int seg_num = 1;
   std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
@@ -607,6 +621,7 @@ std::string BufferMgr::printMap() {
 }
 
 void BufferMgr::printSegs() {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   int seg_num = 1;
   int slab_num = 1;
   std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
@@ -627,11 +642,13 @@ void BufferMgr::printSegs() {
 }
 
 bool BufferMgr::isBufferOnDevice(const ChunkKey& key) {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   return getChunkSegment(key).has_value();
 }
 
 /// This method throws a runtime_error when deleting a Chunk that does not exist.
 void BufferMgr::deleteBuffer(const ChunkKey& key, const bool) {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::lock_guard<std::mutex> chunk_lock(getChunkMutex(key));
   deleteBufferUnlocked(key);
 }
@@ -655,6 +672,7 @@ void BufferMgr::deleteBufferUnlocked(const ChunkKey& key, const bool) {
 }
 
 void BufferMgr::deleteBuffersWithPrefix(const ChunkKey& key_prefix, const bool) {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   // Note: purge is unused
   std::vector<ChunkKey> chunk_keys_to_delete;
   {
@@ -714,6 +732,7 @@ void BufferMgr::removeSegment(BufferList::iterator& seg_it) {
 }
 
 void BufferMgr::checkpoint() {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::vector<ChunkKey> chunk_keys_to_checkpoint;
   {
     std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
@@ -730,6 +749,7 @@ void BufferMgr::checkpoint() {
 }
 
 void BufferMgr::checkpoint(const int db_id, const int tb_id) {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::vector<ChunkKey> chunk_keys_to_checkpoint;
   {
     std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
@@ -777,6 +797,7 @@ void BufferMgr::checkpoint(const std::vector<ChunkKey>& chunk_keys) {
 /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
 /// throws a runtime_error.
 AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes) {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::lock_guard<std::mutex> chunk_lock(getChunkMutex(key));
   // Hold a slab read lock in order to ensure that the buffer, if found, cannot be evicted
   // before it is pinned.
@@ -830,6 +851,7 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
 void BufferMgr::fetchBuffer(const ChunkKey& key,
                             AbstractBuffer* dest_buffer,
                             const size_t num_bytes) {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::lock_guard<std::mutex> chunk_lock(getChunkMutex(key));
   // Hold a slab read lock in order to ensure that the buffer, if found, cannot be evicted
   // before it is pinned.
@@ -888,6 +910,7 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
 AbstractBuffer* BufferMgr::putBuffer(const ChunkKey& key,
                                      AbstractBuffer* src_buffer,
                                      const size_t num_bytes) {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::lock_guard<std::mutex> chunk_lock(getChunkMutex(key));
   // Hold a slab read lock in order to ensure that the buffer, if found, cannot be evicted
   // before it is pinned.
@@ -950,11 +973,13 @@ void BufferMgr::free(AbstractBuffer* buffer) {
 }
 
 size_t BufferMgr::getNumChunks() {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::shared_lock<std::shared_mutex> chunk_index_lock(chunk_index_mutex_);
   return chunk_index_.size();
 }
 
 size_t BufferMgr::size() const {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   return num_pages_allocated_;
 }
@@ -973,6 +998,7 @@ void BufferMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metad
 }
 
 const std::vector<BufferList>& BufferMgr::getSlabSegments() {
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   return slab_segments_;
 }

@@ -2396,8 +2396,7 @@ TEST_P(BufferMgrConcurrencyTest, AllPublicMethods) {
     // Delete with no buffer matching table prefix.
     addThreadExecution([this]() { buffer_mgr_->deleteBuffersWithPrefix({1, 2, 1}); });
 
-    // TODO: Re-enable clearSlabs test after resolving issue with intermittent crash
-    // addThreadExecution([this]() { buffer_mgr_->clearSlabs(); });
+    addThreadExecution([this]() { buffer_mgr_->clearSlabs(); });
 
     addThreadExecution([this]() { buffer_mgr_->checkpoint(1, 1); });
 
