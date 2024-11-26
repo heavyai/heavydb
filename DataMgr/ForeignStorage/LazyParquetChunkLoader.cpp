@@ -2060,6 +2060,10 @@ bool LazyParquetChunkLoader::isColumnMappingSupported(
     const parquet::ColumnDescriptor* parquet_column) {
   CHECK(!omnisci_column->columnType.is_array())
       << "isColumnMappingSupported should not be called on arrays";
+  if (parquet_column->logical_type()->is_null()) {
+    // TODO: support null logical type columns
+    return false;
+  }
   if (validate_geospatial_mapping(omnisci_column, parquet_column)) {
     return true;
   }

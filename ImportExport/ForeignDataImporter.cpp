@@ -699,8 +699,19 @@ ImportStatus ForeignDataImporter::importGeneralNoFinalize(
 
   int32_t max_fragment_id = std::numeric_limits<int32_t>::max();
   if (!data_wrapper->isLazyFragmentFetchingEnabled()) {
-    ChunkMetadataVector metadata_vector =
-        metadata_scan(data_wrapper.get(), foreign_table.get());
+    ChunkMetadataVector metadata_vector;
+    try {
+      metadata_vector = metadata_scan(data_wrapper.get(), foreign_table.get());
+    } catch (const std::exception& e) {
+      // it's possible for the metadata scan to error out if the import is not
+      // allowed/illegal and can be detected at this stage, set the status
+      // appropriately
+      import_status.load_failed = true;
+      import_status.load_msg = std::string{e.what()};
+      import_export::Importer::set_import_status(
+          get_import_id(copy_params, copy_from_source), import_status);
+      throw;
+    }
     if (metadata_vector.empty()) {  // an empty data source
                                     // set empty import status in this case
       import_export::Importer::set_import_status(
