@@ -808,24 +808,31 @@ using FragmentSize = int32_t;
 using MaxChunkSize = int32_t;
 
 namespace {
-void validate_import_status(const std::string& import_id,
-                            const TImportStatus& thrift_import_status,
-                            const std::string& copy_from_result,
-                            const size_t rows_completed,
-                            const size_t rows_rejected,
-                            const bool failed_status,
-                            const int32_t expected_epoch,
-                            const int32_t table_id,
-                            const Catalog_Namespace::Catalog* catalog,
-                            const bool is_distributed_mode) {
+void validate_import_status(
+    const std::string& import_id,
+    const TImportStatus& thrift_import_status,
+    const std::string& copy_from_result,
+    const size_t rows_completed,
+    const size_t rows_rejected,
+    const bool failed_status,
+    const int32_t expected_epoch,
+    const int32_t table_id,
+    const Catalog_Namespace::Catalog* catalog,
+    const bool is_distributed_mode,
+    const std::optional<std::string>& error_message = std::nullopt) {
   // Verify the string result set returend by COPY FROM
   std::string expected_copy_from_result =
       "Loaded: " + std::to_string(rows_completed) +
       " recs, Rejected: " + std::to_string(rows_rejected) + " recs";
   if (failed_status) {
-    expected_copy_from_result =
-        "Loader Failed due to : Load was cancelled due to max reject rows being "
-        "reached";
+    if (!error_message.has_value()) {
+      expected_copy_from_result =
+          "Loader Failed due to : Load was cancelled due to max reject rows being "
+          "reached";
+    } else {
+      // if error occured we don't expect any return value
+      expected_copy_from_result = "";
+    }
   }
   ASSERT_EQ(expected_copy_from_result,
             copy_from_result.substr(0, expected_copy_from_result.size()));
@@ -842,8 +849,12 @@ void validate_import_status(const std::string& import_id,
                         // number of rows completed could be indeterministic
     ASSERT_EQ(failed_status, import_status.load_failed)
         << " incorrect load_failed flag in import status";
-    ASSERT_EQ(import_status.load_msg,
-              "Load was cancelled due to max reject rows being reached");
+    if (!error_message.has_value()) {  // assume a default error message
+      ASSERT_EQ(import_status.load_msg,
+                "Load was cancelled due to max reject rows being reached");
+    } else {
+      ASSERT_EQ(import_status.load_msg, error_message.value());
+    }
     return;
   }
   ASSERT_EQ(rows_completed, import_status.rows_completed)
@@ -1144,11 +1155,13 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     return DBHandlerTestFixture::getImportStatus(import_id_);
   }
 
-  void validateImportStatus(const size_t rows_completed,
-                            const size_t rows_rejected,
-                            const bool failed_status,
-                            const std::string& table_name,
-                            const int32_t expected_epoch) {
+  void validateImportStatus(
+      const size_t rows_completed,
+      const size_t rows_rejected,
+      const bool failed_status,
+      const std::string& table_name,
+      const int32_t expected_epoch,
+      const std::optional<std::string>& error_message = std::nullopt) {
     validate_import_status(import_id_,
                            getImportStatus(),
                            copy_from_result_,
@@ -1158,7 +1171,8 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
                            expected_epoch,
                            getTableId(table_name),
                            &getCatalog(),
-                           isDistributedMode());
+                           isDistributedMode(),
+                           error_message);
   }
 
   TQueryResult copyFromAndSelect(const std::string& in_schema,
@@ -2343,6 +2357,25 @@ TEST_F(ParquetSpecificImportAndSelectTest, SparkCreatedEmptyParquetFile) {
                                             14);
   validateImportStatus(0, 0, false, "import_test_new", 1);
   assertResultSetEqual({}, query);
+}
+
+TEST_F(ParquetSpecificImportAndSelectTest, NullLogicalTypeUnsupported) {
+  const std::string expected_error_message =
+      "Conversion from Parquet type \"Null\" to HeavyDB type \"INTEGER\" is not allowed. "
+      "Please use an appropriate column type. Parquet column: i, HeavyDB column: i, "
+      "Parquet file: ../../Tests/FsiDataFiles/null_logical_type.parquet.";
+  executeLambdaAndAssertException(
+      [&] {
+        auto query =
+            createTableCopyFromAndSelect("i INT",
+                                         "null_logical_type",
+                                         "SELECT * FROM import_test_new ORDER by i;",
+                                         {},
+                                         14);
+      },
+      expected_error_message);
+  validateImportStatus(0, 0, true, "import_test_new", 0, expected_error_message);
+  sqlAndCompareResult("SELECT * FROM import_test_new ORDER by i;", {});
 }
 
 TEST_F(ParquetSpecificImportAndSelectTest, ZeroMaxDefinitionLevelScalars) {
