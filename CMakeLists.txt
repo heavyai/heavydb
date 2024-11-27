@@ -1395,9 +1395,12 @@ install(FILES Shared/InlineNullValues.h DESTINATION "Shared/" COMPONENT "include
 install(FILES Logger/Logger.h DESTINATION "Logger/" COMPONENT "include")
 
 # Frontend
+message(STATUS "Webserver URL: \"${MAPD_WEBSERVER_BASE_URL}\"")
+
 option(MAPD_IMMERSE_DOWNLOAD "Download OmniSci Immerse for packaging" OFF)
 set(MAPD_IMMERSE_URL ${MAPD_IMMERSE_URL} CACHE STRING "URL to bundled frontend")
 if(MAPD_IMMERSE_DOWNLOAD)
+  message(STATUS "Immerse URL: \"${MAPD_IMMERSE_URL}\"")
   include(ExternalProject)
   externalproject_add(frontend
     URL ${MAPD_IMMERSE_URL}
