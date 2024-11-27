@@ -1,5 +1,6 @@
 set(HEAVYIQ_BUILD_ID "master" CACHE STRING "HeavyIQ Build ID")
 set(HEAVYIQ_URL "http://builds.mapd.com/heavyiq/heavyiq-${HEAVYIQ_BUILD_ID}/dist.tgz")
+message(STATUS "HeavyIQ URL: \"${HEAVYIQ_URL}\"")
 
 include(ExternalProject)
 externalproject_add(heavyiq
