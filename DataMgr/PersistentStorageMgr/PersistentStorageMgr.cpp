@@ -55,28 +55,33 @@ PersistentStorageMgr::PersistentStorageMgr(
 AbstractBuffer* PersistentStorageMgr::createBuffer(const ChunkKey& chunk_key,
                                                    const size_t page_size,
                                                    const size_t initial_size) {
+  auto table_lock = getTableAccessLock(chunk_key);
   return getStorageMgrForTableKey(chunk_key)->createBuffer(
       chunk_key, page_size, initial_size);
 }
 
 void PersistentStorageMgr::deleteBuffer(const ChunkKey& chunk_key, const bool purge) {
+  auto table_lock = getTableAccessLock(chunk_key);
   getStorageMgrForTableKey(chunk_key)->deleteBuffer(chunk_key, purge);
 }
 
 void PersistentStorageMgr::deleteBuffersWithPrefix(const ChunkKey& chunk_key_prefix,
                                                    const bool purge) {
+  auto table_lock = getTableAccessLock(chunk_key_prefix);
   getStorageMgrForTableKey(chunk_key_prefix)
       ->deleteBuffersWithPrefix(chunk_key_prefix, purge);
 }
 
 AbstractBuffer* PersistentStorageMgr::getBuffer(const ChunkKey& chunk_key,
                                                 const size_t num_bytes) {
+  auto table_lock = getTableAccessLock(chunk_key);
   return getStorageMgrForTableKey(chunk_key)->getBuffer(chunk_key, num_bytes);
 }
 
 void PersistentStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                        AbstractBuffer* destination_buffer,
                                        const size_t num_bytes) {
+  auto table_lock = getTableAccessLock(chunk_key);
   getStorageMgrForTableKey(chunk_key)->fetchBuffer(
       chunk_key, destination_buffer, num_bytes);
 }
@@ -84,6 +89,7 @@ void PersistentStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 AbstractBuffer* PersistentStorageMgr::putBuffer(const ChunkKey& chunk_key,
                                                 AbstractBuffer* source_buffer,
                                                 const size_t num_bytes) {
+  auto table_lock = getTableAccessLock(chunk_key);
   return getStorageMgrForTableKey(chunk_key)->putBuffer(
       chunk_key, source_buffer, num_bytes);
 }
@@ -91,11 +97,13 @@ AbstractBuffer* PersistentStorageMgr::putBuffer(const ChunkKey& chunk_key,
 void PersistentStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
     const ChunkKey& key_prefix) {
+  auto table_lock = getTableAccessLock(key_prefix);
   getStorageMgrForTableKey(key_prefix)
       ->getChunkMetadataVecForKeyPrefix(chunk_metadata, key_prefix);
 }
 
 bool PersistentStorageMgr::isBufferOnDevice(const ChunkKey& chunk_key) {
+  auto table_lock = getTableAccessLock(chunk_key);
   return global_file_mgr_->isBufferOnDevice(chunk_key);
 }
 
@@ -115,7 +123,7 @@ size_t PersistentStorageMgr::getAllocated() const {
   return global_file_mgr_->getAllocated();
 }
 
-bool PersistentStorageMgr::isAllocationCapped() {
+bool PersistentStorageMgr::isAllocationCapped() const {
   return global_file_mgr_->isAllocationCapped();
 }
 
@@ -124,6 +132,7 @@ void PersistentStorageMgr::checkpoint() {
 }
 
 void PersistentStorageMgr::checkpoint(const int db_id, const int tb_id) {
+  auto table_lock = getTableAccessLock({db_id, tb_id});
   global_file_mgr_->checkpoint(db_id, tb_id);
 }
 
@@ -152,7 +161,11 @@ File_Namespace::GlobalFileMgr* PersistentStorageMgr::getGlobalFileMgr() const {
 }
 
 void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
-  getStorageMgrForTableKey({db_id, table_id})->removeTableRelatedDS(db_id, table_id);
+  {
+    auto table_lock = getTableAccessLock({db_id, table_id});
+    getStorageMgrForTableKey({db_id, table_id})->removeTableRelatedDS(db_id, table_id);
+  }
+  deleteTableAccessMutex({db_id, table_id});
 }
 
 void PersistentStorageMgr::removeMutableTableCacheData(const int db_id,
@@ -201,4 +214,25 @@ foreign_storage::ForeignStorageMgr* PersistentStorageMgr::getForeignStorageMgr()
 
 foreign_storage::ForeignStorageCache* PersistentStorageMgr::getDiskCache() const {
   return disk_cache_ ? disk_cache_.get() : nullptr;
+}
+
+std::unique_lock<std::mutex> PersistentStorageMgr::getTableAccessLock(
+    const ChunkKey& table_key) {
+  return std::unique_lock<std::mutex>(getTableAccessMutex(table_key));
+}
+
+std::mutex& PersistentStorageMgr::getTableAccessMutex(const ChunkKey& table_key) {
+  CHECK(has_table_prefix(table_key));
+
+  std::lock_guard<std::mutex> lock(table_access_mutex_map_mutex_);
+  return table_access_mutex_map_[{table_key[CHUNK_KEY_DB_IDX],
+                                  table_key[CHUNK_KEY_TABLE_IDX]}];
+}
+
+void PersistentStorageMgr::deleteTableAccessMutex(const ChunkKey& table_key) {
+  CHECK(has_table_prefix(table_key));
+
+  std::lock_guard<std::mutex> lock(table_access_mutex_map_mutex_);
+  table_access_mutex_map_.erase(
+      {table_key[CHUNK_KEY_DB_IDX], table_key[CHUNK_KEY_TABLE_IDX]});
 }

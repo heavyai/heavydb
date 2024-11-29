@@ -88,6 +88,23 @@ using namespace Data_Namespace;
 
 namespace Buffer_Namespace {
 
+struct MemoryData {
+  size_t slab_num;
+  int32_t start_page;
+  size_t num_pages;
+  uint32_t touch;
+  ChunkKey chunk_key;
+  MemStatus mem_status;
+};
+
+struct MemoryInfo {
+  size_t page_size;
+  size_t max_num_pages;
+  size_t num_page_allocated;
+  bool is_allocation_capped;
+  std::vector<MemoryData> node_memory_data;
+};
+
 /**
  * @class   BufferMgr
  * @brief
@@ -120,7 +137,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   size_t getMaxBufferSize() const;
   size_t getMaxSlabSize() const;
   size_t getPageSize() const;
-  bool isAllocationCapped() override;
+  bool isAllocationCapped() const override;
   const std::vector<BufferList>& getSlabSegments();
 
   /// Creates a chunk with the specified key and page size.
@@ -166,6 +183,8 @@ class BufferMgr : public AbstractBufferMgr {  // implements
                                      const size_t num_bytes);
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata_vec,
                                        const ChunkKey& key_prefix) override;
+
+  MemoryInfo getMemoryInfo() const;
 
  protected:
   virtual Buffer* createBuffer(BufferList::iterator seg_it, size_t page_size) = 0;

@@ -30,17 +30,18 @@ InternalMemoryStatsDataWrapper::InternalMemoryStatsDataWrapper(
 
 namespace {
 void populate_import_buffers_for_memory_summary(
-    const std::map<std::string, std::vector<MemoryInfo>>& memory_info_by_device_type,
+    const std::map<std::string, std::vector<Buffer_Namespace::MemoryInfo>>&
+        memory_info_by_device_type,
     std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& [device_type, memory_info_vector] : memory_info_by_device_type) {
     int32_t device_id{0};
     for (const auto& memory_info : memory_info_vector) {
       size_t used_page_count{0}, free_page_count{0};
-      for (const auto& memory_data : memory_info.nodeMemoryData) {
-        if (memory_data.memStatus == Buffer_Namespace::MemStatus::FREE) {
-          free_page_count += memory_data.numPages;
+      for (const auto& memory_data : memory_info.node_memory_data) {
+        if (memory_data.mem_status == Buffer_Namespace::MemStatus::FREE) {
+          free_page_count += memory_data.num_pages;
         } else {
-          used_page_count += memory_data.numPages;
+          used_page_count += memory_data.num_pages;
         }
       }
       set_node_name(import_buffers);
@@ -51,13 +52,13 @@ void populate_import_buffers_for_memory_summary(
         import_buffers["device_type"]->addDictStringWithTruncation(device_type);
       }
       if (import_buffers.find("max_page_count") != import_buffers.end()) {
-        import_buffers["max_page_count"]->addBigint(memory_info.maxNumPages);
+        import_buffers["max_page_count"]->addBigint(memory_info.max_num_pages);
       }
       if (import_buffers.find("page_size") != import_buffers.end()) {
-        import_buffers["page_size"]->addBigint(memory_info.pageSize);
+        import_buffers["page_size"]->addBigint(memory_info.page_size);
       }
       if (import_buffers.find("allocated_page_count") != import_buffers.end()) {
-        import_buffers["allocated_page_count"]->addBigint(memory_info.numPageAllocated);
+        import_buffers["allocated_page_count"]->addBigint(memory_info.num_page_allocated);
       }
       if (import_buffers.find("used_page_count") != import_buffers.end()) {
         import_buffers["used_page_count"]->addBigint(used_page_count);
@@ -93,12 +94,13 @@ std::string get_column_name(int32_t db_id, int32_t table_id, int32_t column_id) 
 }
 
 void populate_import_buffers_for_memory_details(
-    const std::map<std::string, std::vector<MemoryInfo>>& memory_info_by_device_type,
+    const std::map<std::string, std::vector<Buffer_Namespace::MemoryInfo>>&
+        memory_info_by_device_type,
     std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   for (const auto& [device_type, memory_info_vector] : memory_info_by_device_type) {
     int32_t device_id{0};
     for (const auto& memory_info : memory_info_vector) {
-      for (const auto& memory_data : memory_info.nodeMemoryData) {
+      for (const auto& memory_data : memory_info.node_memory_data) {
         set_node_name(import_buffers);
         const auto& chunk_key = memory_data.chunk_key;
         if (import_buffers.find("database_id") != import_buffers.end()) {
@@ -168,21 +170,21 @@ void populate_import_buffers_for_memory_details(
         }
         if (import_buffers.find("memory_status") != import_buffers.end()) {
           auto memory_status =
-              (memory_data.memStatus == Buffer_Namespace::MemStatus::FREE ? "FREE"
-                                                                          : "USED");
+              (memory_data.mem_status == Buffer_Namespace::MemStatus::FREE ? "FREE"
+                                                                           : "USED");
           import_buffers["memory_status"]->addDictStringWithTruncation(memory_status);
         }
         if (import_buffers.find("page_count") != import_buffers.end()) {
-          import_buffers["page_count"]->addBigint(memory_data.numPages);
+          import_buffers["page_count"]->addBigint(memory_data.num_pages);
         }
         if (import_buffers.find("page_size") != import_buffers.end()) {
-          import_buffers["page_size"]->addBigint(memory_info.pageSize);
+          import_buffers["page_size"]->addBigint(memory_info.page_size);
         }
         if (import_buffers.find("slab_id") != import_buffers.end()) {
-          import_buffers["slab_id"]->addInt(memory_data.slabNum);
+          import_buffers["slab_id"]->addInt(memory_data.slab_num);
         }
         if (import_buffers.find("start_page") != import_buffers.end()) {
-          import_buffers["start_page"]->addBigint(memory_data.startPage);
+          import_buffers["start_page"]->addBigint(memory_data.start_page);
         }
         if (import_buffers.find("last_touch_epoch") != import_buffers.end()) {
           import_buffers["last_touch_epoch"]->addBigint(memory_data.touch);
@@ -198,13 +200,11 @@ void InternalMemoryStatsDataWrapper::initializeObjectsForTable(
     const std::string& table_name) {
   memory_info_by_device_type_.clear();
   row_count_ = 0;
-  const auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
-  // DataMgr::getMemoryInfoUnlocked() is used here because a lock on buffer_access_mutex_
-  // is already acquired in DataMgr::getChunkMetadataVecForKeyPrefix()
-  memory_info_by_device_type_["CPU"] =
-      data_mgr.getMemoryInfoUnlocked(MemoryLevel::CPU_LEVEL);
-  memory_info_by_device_type_["GPU"] =
-      data_mgr.getMemoryInfoUnlocked(MemoryLevel::GPU_LEVEL);
+  auto memory_info_snapshot = Catalog_Namespace::SysCatalog::instance()
+                                  .getDataMgr()
+                                  .getAndResetMemoryInfoSnapshot();
+  memory_info_by_device_type_["CPU"] = {memory_info_snapshot->cpu_memory_info};
+  memory_info_by_device_type_["GPU"] = memory_info_snapshot->gpu_memory_info;
   if (foreign_table_->tableName == Catalog_Namespace::MEMORY_SUMMARY_SYS_TABLE_NAME) {
     for (const auto& [device_type, memory_info_vector] : memory_info_by_device_type_) {
       row_count_ += memory_info_vector.size();
@@ -213,8 +213,8 @@ void InternalMemoryStatsDataWrapper::initializeObjectsForTable(
              Catalog_Namespace::MEMORY_DETAILS_SYS_TABLE_NAME) {
     for (auto& [device_type, memory_info_vector] : memory_info_by_device_type_) {
       for (auto& memory_info : memory_info_vector) {
-        for (auto& memory_data : memory_info.nodeMemoryData) {
-          if (memory_data.memStatus == Buffer_Namespace::MemStatus::FREE) {
+        for (auto& memory_data : memory_info.node_memory_data) {
+          if (memory_data.mem_status == Buffer_Namespace::MemStatus::FREE) {
             memory_data.chunk_key.clear();
           } else {
             if (is_table_chunk(memory_data.chunk_key)) {
@@ -222,7 +222,7 @@ void InternalMemoryStatsDataWrapper::initializeObjectsForTable(
             }
           }
         }
-        row_count_ += memory_info.nodeMemoryData.size();
+        row_count_ += memory_info.node_memory_data.size();
       }
     }
   } else {

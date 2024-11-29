@@ -2020,16 +2020,16 @@ TEST_P(OpportunisticVacuumingMemoryUseParamTest, OneFragmentProcessedAtATime) {
   auto memory_info_vector =
       getCatalog().getDataMgr().getMemoryInfo(MemoryLevel::CPU_LEVEL);
   ASSERT_EQ(memory_info_vector.size(), size_t(1));
-  for (const auto& memory_data : memory_info_vector[0].nodeMemoryData) {
+  for (const auto& memory_data : memory_info_vector[0].node_memory_data) {
     if (g_use_cpu_mem_pool_for_output_buffers) {
-      EXPECT_LE(memory_data.slabNum, size_t(2));
+      EXPECT_LE(memory_data.slab_num, size_t(2));
       // The second and third slabs should be used for query output buffers that are freed
       // at the end of the query.
-      if (memory_data.slabNum == 1 || memory_data.slabNum == 2) {
-        EXPECT_EQ(memory_data.memStatus, Buffer_Namespace::MemStatus::FREE);
+      if (memory_data.slab_num == 1 || memory_data.slab_num == 2) {
+        EXPECT_EQ(memory_data.mem_status, Buffer_Namespace::MemStatus::FREE);
       }
     } else {
-      EXPECT_EQ(memory_data.slabNum, size_t(0));
+      EXPECT_EQ(memory_data.slab_num, size_t(0));
     }
   }
 

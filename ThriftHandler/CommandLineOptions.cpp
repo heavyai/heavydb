@@ -87,6 +87,7 @@ extern size_t g_gpu_code_cache_max_size_in_bytes;
 extern bool g_use_cpu_mem_pool_for_output_buffers;
 extern bool g_use_cpu_mem_pool_size_for_max_cpu_slab_size;
 extern bool g_verbose_lock_logging;
+extern bool g_enable_data_mgr_global_lock;
 
 extern std::string g_heavyiq_url;
 extern size_t g_max_concurrent_llm_transform_call;
@@ -894,6 +895,11 @@ void CommandLineOptions::fillDeveloperOptions() {
       "When this configuration parameter is set to false, output (e.g. result set) "
       "buffer allocations will use heap memory outside the cpu-buffer-mem-bytes based "
       "memory buffer pool.");
+  desc.add_options()("enable-data-mgr-global-lock",
+                     po::value<bool>(&g_enable_data_mgr_global_lock)
+                         ->default_value(g_enable_data_mgr_global_lock)
+                         ->implicit_value(true),
+                     "Enable use of a global lock when accessing or updating table data");
   desc.add_options()("num-executors",
                      po::value<int>(&system_parameters.num_executors)
                          ->default_value(system_parameters.num_executors),
@@ -2221,6 +2227,9 @@ boost::optional<int> CommandLineOptions::parse_command_line(
 
   LOG(INFO) << "Use CPU memory pool for output buffers is set to "
             << g_use_cpu_mem_pool_for_output_buffers;
+
+  LOG(INFO) << "Enable data manager global lock is set to "
+            << g_enable_data_mgr_global_lock;
 
   LOG(INFO) << "Executor Resource Manager: "
             << (g_enable_executor_resource_mgr ? "enabled" : "disabled");
