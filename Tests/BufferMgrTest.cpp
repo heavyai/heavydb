@@ -101,7 +101,7 @@ class UnimplementedBufferMgr : public AbstractBufferMgr {
     return 0;
   }
 
-  bool isAllocationCapped() override {
+  bool isAllocationCapped() const override {
     UNREACHABLE() << "Unimplemented method";
     return false;
   }
@@ -503,7 +503,7 @@ class BufferMgrTest : public testing::TestWithParam<MgrType> {
       ASSERT_EQ(segments[slab_index].size(), segment_scores[slab_index].size());
       auto segment_it = segments[slab_index].begin();
       for (auto segment_score : segment_scores[slab_index]) {
-        segment_it->last_touched = segment_score;
+        segment_it->setLastTouched(segment_score);
         std::advance(segment_it, 1);
       }
     }
@@ -2255,6 +2255,43 @@ TEST_P(BufferMgrTest, GetBufferReentrantReserveCannotEvict) {
       {{test_chunk_key_2_, segment_it->getBuffer(), new_source_content.size()}});
 }
 
+TEST_P(BufferMgrTest, GetMemoryInfo) {
+  buffer_mgr_ = createBufferMgr();
+  // First buffer occupies entire slab.
+  buffer_mgr_->createBuffer(test_chunk_key_, page_size_, max_slab_size_);
+  // Second buffer goes to a new slab.
+  buffer_mgr_->createBuffer(test_chunk_key_2_, page_size_, test_buffer_size_);
+  auto memory_info = buffer_mgr_->getMemoryInfo();
+  EXPECT_EQ(memory_info.page_size, page_size_);
+  EXPECT_EQ(memory_info.max_num_pages, max_buffer_pool_size_ / page_size_);
+  EXPECT_EQ(memory_info.num_page_allocated, (2 * max_slab_size_) / page_size_);
+  EXPECT_FALSE(memory_info.is_allocation_capped);
+  const auto& memory_data_vector = memory_info.node_memory_data;
+  ASSERT_EQ(memory_data_vector.size(), size_t(3));
+  // First buffer.
+  EXPECT_EQ(memory_data_vector[0].slab_num, size_t(0));
+  EXPECT_EQ(memory_data_vector[0].start_page, 0);
+  EXPECT_EQ(memory_data_vector[0].num_pages, max_slab_size_ / page_size_);
+  EXPECT_EQ(memory_data_vector[0].touch, uint32_t(0));
+  EXPECT_EQ(memory_data_vector[0].chunk_key, test_chunk_key_);
+  EXPECT_EQ(memory_data_vector[0].mem_status, Buffer_Namespace::MemStatus::USED);
+  // Second buffer.
+  EXPECT_EQ(memory_data_vector[1].slab_num, size_t(1));
+  EXPECT_EQ(memory_data_vector[1].start_page, 0);
+  EXPECT_EQ(memory_data_vector[1].num_pages, test_buffer_size_ / page_size_);
+  EXPECT_EQ(memory_data_vector[1].touch, uint32_t(1));
+  EXPECT_EQ(memory_data_vector[1].chunk_key, test_chunk_key_2_);
+  EXPECT_EQ(memory_data_vector[1].mem_status, Buffer_Namespace::MemStatus::USED);
+  // Free segment.
+  EXPECT_EQ(memory_data_vector[2].slab_num, size_t(1));
+  EXPECT_EQ(memory_data_vector[2].start_page, int32_t(test_buffer_size_ / page_size_));
+  EXPECT_EQ(memory_data_vector[2].num_pages,
+            (max_slab_size_ - test_buffer_size_) / page_size_);
+  EXPECT_EQ(memory_data_vector[2].touch, uint32_t(0));
+  EXPECT_EQ(memory_data_vector[2].chunk_key, ChunkKey{});
+  EXPECT_EQ(memory_data_vector[2].mem_status, Buffer_Namespace::MemStatus::FREE);
+}
+
 INSTANTIATE_TEST_SUITE_P(CpuAndGpuMgrs,
                          BufferMgrTest,
                          testing::Values(
@@ -2419,6 +2456,7 @@ TEST_P(BufferMgrConcurrencyTest, AllPublicMethods) {
     addThreadExecution([this]() { buffer_mgr_->isBufferOnDevice(test_chunk_key_); });
     addThreadExecution([this]() { buffer_mgr_->isBufferOnDevice(test_chunk_key_2_); });
     addThreadExecution([this]() { buffer_mgr_->isBufferOnDevice(test_chunk_key_3_); });
+    addThreadExecution([this]() { buffer_mgr_->getMemoryInfo(); });
   }
   waitForAllThreads();
 }

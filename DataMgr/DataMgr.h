@@ -58,21 +58,13 @@ class GpuCudaBufferMgr;
 
 namespace Data_Namespace {
 
-struct MemoryData {
-  size_t slabNum;
-  int32_t startPage;
-  size_t numPages;
-  uint32_t touch;
-  std::vector<int32_t> chunk_key;
-  Buffer_Namespace::MemStatus memStatus;
-};
+struct MemoryInfoSnapshot {
+  Buffer_Namespace::MemoryInfo cpu_memory_info;
+  std::vector<Buffer_Namespace::MemoryInfo> gpu_memory_info;
 
-struct MemoryInfo {
-  size_t pageSize;
-  size_t maxNumPages;
-  size_t numPageAllocated;
-  bool isAllocationCapped;
-  std::vector<MemoryData> nodeMemoryData;
+  MemoryInfoSnapshot(const Buffer_Namespace::MemoryInfo& cpu_memory_info,
+                     const std::vector<Buffer_Namespace::MemoryInfo>& gpu_memory_info)
+      : cpu_memory_info(cpu_memory_info), gpu_memory_info(gpu_memory_info) {}
 };
 
 //! Parse /proc/meminfo into key/value pairs.
@@ -156,8 +148,10 @@ class DataMgr {
   bool isBufferOnDevice(const ChunkKey& key,
                         const MemoryLevel memLevel,
                         const int deviceId);
-  std::vector<MemoryInfo> getMemoryInfo(const MemoryLevel memLevel) const;
-  std::vector<MemoryInfo> getMemoryInfoUnlocked(const MemoryLevel memLevel) const;
+  void takeMemoryInfoSnapshot();
+  std::unique_ptr<MemoryInfoSnapshot> getAndResetMemoryInfoSnapshot();
+  std::vector<Buffer_Namespace::MemoryInfo> getMemoryInfo(
+      const MemoryLevel memLevel) const;
   std::string dumpLevel(const MemoryLevel memLevel);
   void clearMemory(const MemoryLevel memLevel);
 
@@ -250,6 +244,7 @@ class DataMgr {
                             size_t default_cpu_slab_size,
                             size_t page_size,
                             const std::vector<size_t>& cpu_tier_sizes);
+  std::unique_lock<std::mutex> getGlobalLockIfEnabled() const;
 
   mutable std::shared_mutex max_num_rows_mutex_;
   std::optional<int64_t> max_num_rows_;  // maximum number of rows as per license
@@ -259,6 +254,7 @@ class DataMgr {
   bool hasGpus_;
   size_t reservedGpuMem_;
   mutable std::mutex buffer_access_mutex_;
+  std::unique_ptr<MemoryInfoSnapshot> memory_info_snapshot_;
 };
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage&);

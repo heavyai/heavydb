@@ -105,7 +105,7 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   size_t getMaxSize() const override;
   size_t getInUseSize() const override;
   size_t getAllocated() const override;
-  bool isAllocationCapped() override;
+  bool isAllocationCapped() const override;
   void checkpoint() override;
   void checkpoint(const int db_id, const int tb_id) override;
   AbstractBuffer* alloc(const size_t num_bytes) override;

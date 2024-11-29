@@ -3107,7 +3107,7 @@ void DBHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
   SET_REQUEST_ID(request_info.requestId());
   auto stdlog = STDLOG(get_session_ptr(request_info.sessionId()));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  std::vector<Data_Namespace::MemoryInfo> internal_memory;
+  std::vector<Buffer_Namespace::MemoryInfo> internal_memory;
   if (!memory_level.compare("gpu")) {
     internal_memory =
         SysCatalog::instance().getDataMgr().getMemoryInfo(MemoryLevel::GPU_LEVEL);
@@ -3118,18 +3118,18 @@ void DBHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
 
   for (auto memInfo : internal_memory) {
     TNodeMemoryInfo nodeInfo;
-    nodeInfo.page_size = memInfo.pageSize;
-    nodeInfo.max_num_pages = memInfo.maxNumPages;
-    nodeInfo.num_pages_allocated = memInfo.numPageAllocated;
-    nodeInfo.is_allocation_capped = memInfo.isAllocationCapped;
-    for (auto gpu : memInfo.nodeMemoryData) {
+    nodeInfo.page_size = memInfo.page_size;
+    nodeInfo.max_num_pages = memInfo.max_num_pages;
+    nodeInfo.num_pages_allocated = memInfo.num_page_allocated;
+    nodeInfo.is_allocation_capped = memInfo.is_allocation_capped;
+    for (auto gpu : memInfo.node_memory_data) {
       TMemoryData md;
-      md.slab = gpu.slabNum;
-      md.start_page = gpu.startPage;
-      md.num_pages = gpu.numPages;
+      md.slab = gpu.slab_num;
+      md.start_page = gpu.start_page;
+      md.num_pages = gpu.num_pages;
       md.touch = gpu.touch;
       md.chunk_key.insert(md.chunk_key.end(), gpu.chunk_key.begin(), gpu.chunk_key.end());
-      md.is_free = gpu.memStatus == Buffer_Namespace::MemStatus::FREE;
+      md.is_free = gpu.mem_status == Buffer_Namespace::MemStatus::FREE;
       nodeInfo.node_memory_data.push_back(md);
     }
     _return.push_back(nodeInfo);
@@ -7043,6 +7043,15 @@ bool check_and_reset_in_memory_system_table(const Catalog& catalog,
       auto table_data_lock =
           lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, td.tableName);
       catalog.removeFragmenterForTable(td.tableId);
+
+      const auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(&td);
+      CHECK(foreign_table);
+      CHECK(foreign_table->foreign_server);
+      if (foreign_table->foreign_server->data_wrapper_type ==
+          foreign_storage::DataWrapperType::INTERNAL_MEMORY_STATS) {
+        Catalog_Namespace::SysCatalog::instance().getDataMgr().takeMemoryInfoSnapshot();
+      }
+
       catalog.getMetadataForTable(td.tableId, true);
       return true;
     } else {

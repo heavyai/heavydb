@@ -3182,7 +3182,7 @@ getCatalogAndTableFromScanNode(const rapidjson::Value& scan_ra) {
   const auto cat =
       Catalog_Namespace::SysCatalog::instance().getCatalog(table_json[0].GetString());
   CHECK(cat);
-  const auto td = cat->getMetadataForTable(table_json[1].GetString());
+  const auto td = cat->getMetadataForTable(table_json[1].GetString(), false);
   CHECK(td);
   return {cat.get(), td};
 }

@@ -40,6 +40,7 @@ class InternalMemoryStatsDataWrapper : public InternalSystemDataWrapper {
       std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers)
       override;
 
-  std::map<std::string, std::vector<MemoryInfo>> memory_info_by_device_type_;
+  std::map<std::string, std::vector<Buffer_Namespace::MemoryInfo>>
+      memory_info_by_device_type_;
 };
 }  // namespace foreign_storage

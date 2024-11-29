@@ -88,7 +88,7 @@ class AbstractBufferMgr {
   virtual size_t getMaxSize() const = 0;
   virtual size_t getInUseSize() const = 0;
   virtual size_t getAllocated() const = 0;
-  virtual bool isAllocationCapped() = 0;
+  virtual bool isAllocationCapped() const = 0;
 
   virtual void checkpoint() = 0;
   virtual void checkpoint(const int db_id, const int tb_id) = 0;

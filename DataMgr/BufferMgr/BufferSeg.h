@@ -35,7 +35,6 @@ struct BufferSeg {
   ChunkKey chunk_key;
   unsigned int pin_count;
   int slab_num;
-  unsigned int last_touched;
 
   BufferSeg()
       : mem_status(FREE), pin_count(0), slab_num(-1), last_touched(0), buffer(nullptr) {}
@@ -90,8 +89,21 @@ struct BufferSeg {
     return buffer;
   }
 
+  void setLastTouched(uint32_t last_touched_param) {
+    std::unique_lock<std::shared_mutex> lock(last_touched_mutex);
+    last_touched = last_touched_param;
+  }
+
+  uint32_t getLastTouched() const {
+    std::shared_lock<std::shared_mutex> lock(last_touched_mutex);
+    return last_touched;
+  }
+
  private:
+  uint32_t last_touched;
   Buffer* buffer;
+
+  mutable std::shared_mutex last_touched_mutex;
   mutable std::shared_mutex buffer_mutex;
 };
 
