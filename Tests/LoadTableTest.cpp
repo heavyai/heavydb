@@ -832,11 +832,11 @@ void assert_memory_signature_for_chunk_key_prefix(
     auto memory_level_info_vec =
         data_mgr->getMemoryInfo(static_cast<Data_Namespace::MemoryLevel>(memory_level));
     for (auto memory_info : memory_level_info_vec) {
-      for (auto memory_data : memory_info.nodeMemoryData) {
+      for (auto memory_data : memory_info.node_memory_data) {
         if (has_table_prefix(memory_data.chunk_key) &&
             in_same_table(table_chunk_key, memory_data.chunk_key)) {
           actual_memory_signature.push_back(
-              {memory_data.memStatus,
+              {memory_data.mem_status,
                static_cast<Data_Namespace::MemoryLevel>(memory_level)});
         }
       }

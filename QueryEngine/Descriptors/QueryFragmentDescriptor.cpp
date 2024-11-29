@@ -25,7 +25,7 @@
 QueryFragmentDescriptor::QueryFragmentDescriptor(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
-    const std::vector<Data_Namespace::MemoryInfo>& gpu_mem_infos,
+    const std::vector<Buffer_Namespace::MemoryInfo>& gpu_mem_infos,
     const double gpu_input_mem_limit_percent,
     std::vector<size_t> allowed_outer_fragment_indices)
     : allowed_outer_fragment_indices_(allowed_outer_fragment_indices)
@@ -42,7 +42,7 @@ QueryFragmentDescriptor::QueryFragmentDescriptor(
   for (size_t device_id = 0; device_id < gpu_mem_infos.size(); device_id++) {
     const auto& gpu_mem_info = gpu_mem_infos[device_id];
     available_gpu_mem_bytes_[device_id] =
-        gpu_mem_info.maxNumPages * gpu_mem_info.pageSize;
+        gpu_mem_info.max_num_pages * gpu_mem_info.page_size;
   }
 }
 

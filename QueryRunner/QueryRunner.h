@@ -208,7 +208,7 @@ class QueryRunner {
   bool gpusPresent() const;
   virtual void clearGpuMemory() const;
   virtual void clearCpuMemory() const;
-  std::vector<MemoryInfo> getMemoryInfo(
+  std::vector<Buffer_Namespace::MemoryInfo> getMemoryInfo(
       const Data_Namespace::MemoryLevel memory_level) const;
   BufferPoolStats getBufferPoolStats(const Data_Namespace::MemoryLevel memory_level,
                                      const bool current_db_only) const;

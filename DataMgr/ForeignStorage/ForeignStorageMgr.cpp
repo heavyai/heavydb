@@ -413,7 +413,7 @@ size_t ForeignStorageMgr::getAllocated() const {
   return 0;  // Added to avoid "no return statement" compiler warning
 }
 
-bool ForeignStorageMgr::isAllocationCapped() {
+bool ForeignStorageMgr::isAllocationCapped() const {
   UNREACHABLE();
   return false;  // Added to avoid "no return statement" compiler warning
 }

@@ -321,7 +321,7 @@ void QueryRunner::clearCpuMemory() const {
   Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL);
 }
 
-std::vector<MemoryInfo> QueryRunner::getMemoryInfo(
+std::vector<Buffer_Namespace::MemoryInfo> QueryRunner::getMemoryInfo(
     const Data_Namespace::MemoryLevel memory_level) const {
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   return session_info_->getCatalog().getDataMgr().getMemoryInfo(memory_level);
@@ -332,7 +332,7 @@ BufferPoolStats QueryRunner::getBufferPoolStats(
     const bool current_db_only) const {
   // Only works single-node for now
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
-  const std::vector<MemoryInfo> memory_infos =
+  const std::vector<Buffer_Namespace::MemoryInfo> memory_infos =
       session_info_->getCatalog().getDataMgr().getMemoryInfo(memory_level);
   if (memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
     CHECK_EQ(memory_infos.size(), static_cast<size_t>(1));
@@ -345,11 +345,12 @@ BufferPoolStats QueryRunner::getBufferPoolStats(
       0};  // can be greater than chunk keys set size due to table replication
   size_t total_num_bytes{0};
   for (auto& pool_memory_info : memory_infos) {
-    const std::vector<MemoryData>& memory_data = pool_memory_info.nodeMemoryData;
+    const std::vector<Buffer_Namespace::MemoryData>& memory_data =
+        pool_memory_info.node_memory_data;
     for (auto& memory_datum : memory_data) {
       total_num_buffers++;
       const auto& chunk_key = memory_datum.chunk_key;
-      if (memory_datum.memStatus == Buffer_Namespace::MemStatus::FREE ||
+      if (memory_datum.mem_status == Buffer_Namespace::MemStatus::FREE ||
           chunk_key.size() < 4) {
         continue;
       }
@@ -358,7 +359,7 @@ BufferPoolStats QueryRunner::getBufferPoolStats(
           continue;
         }
       }
-      total_num_bytes += (memory_datum.numPages * pool_memory_info.pageSize);
+      total_num_bytes += (memory_datum.num_pages * pool_memory_info.page_size);
       table_keys.insert({chunk_key[0], chunk_key[1]});
       column_keys.insert({chunk_key[0], chunk_key[1], chunk_key[2]});
       fragment_keys.insert({chunk_key[0], chunk_key[1], chunk_key[3]});
