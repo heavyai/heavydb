@@ -187,7 +187,7 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     return 0;
   }
 
-  bool isAllocationCapped() override {
+  bool isAllocationCapped() const override {
     CHECK(false);
     return false;
   }

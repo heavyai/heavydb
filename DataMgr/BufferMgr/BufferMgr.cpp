@@ -265,7 +265,7 @@ BufferList::iterator BufferMgr::findFreeBufferInSlab(const size_t slab_num,
       size_t excess_pages = buffer_it->num_pages - num_pages_requested;
       buffer_it->num_pages = num_pages_requested;
       buffer_it->mem_status = USED;
-      buffer_it->last_touched = incrementEpoch();
+      buffer_it->setLastTouched(incrementEpoch());
       buffer_it->slab_num = slab_num;
       if (excess_pages > 0) {
         BufferSeg free_seg(
@@ -406,7 +406,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
           // chunk score was larger than one large chunk so it always would evict a large
           // chunk so under memory pressure a query would evict its own current chunks and
           // cause reloads rather than evict several smaller unused older chunks.
-          score = std::max(score, static_cast<size_t>(evict_it->last_touched));
+          score = std::max(score, static_cast<size_t>(evict_it->getLastTouched()));
         }
         if (page_count >= num_pages_requested) {
           solution_found = true;
@@ -456,7 +456,7 @@ std::string BufferMgr::printSlab(size_t slab_num) {
     tss << setfill(' ') << setw(8) << segment.num_pages;
     // tss << " GAP: " << setfill(' ') << setw(7) << segment.start_page - lastEnd;
     // lastEnd = segment.start_page + segment.num_pages;
-    tss << setfill(' ') << setw(7) << segment.last_touched;
+    tss << setfill(' ') << setw(7) << segment.getLastTouched();
     // tss << " PC: " << setfill(' ') << setw(2) << segment.buffer->getPinCount();
     if (segment.mem_status == FREE) {
       tss << " FREE"
@@ -550,7 +550,7 @@ size_t BufferMgr::getAllocated() const {
 }
 
 //
-bool BufferMgr::isAllocationCapped() {
+bool BufferMgr::isAllocationCapped() const {
   std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
   std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
   return allocations_capped_;
@@ -580,7 +580,7 @@ std::string BufferMgr::printSeg(const BufferList::iterator& seg_it) {
   tss << "SN: " << setfill(' ') << setw(2) << seg_it->slab_num;
   tss << " SP: " << setfill(' ') << setw(7) << seg_it->start_page;
   tss << " NP: " << setfill(' ') << setw(7) << seg_it->num_pages;
-  tss << " LT: " << setfill(' ') << setw(7) << seg_it->last_touched;
+  tss << " LT: " << setfill(' ') << setw(7) << seg_it->getLastTouched();
   tss << " PC: " << setfill(' ') << setw(2) << seg_it->getBuffer()->getPinCount();
   if (seg_it->mem_status == FREE) {
     tss << " FREE"
@@ -810,7 +810,7 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
     buffer->pin();
     slab_lock.unlock();
 
-    buffer_it.value()->last_touched = incrementEpoch();
+    buffer_it.value()->setLastTouched(incrementEpoch());
 
     auto buffer_size = buffer->size();
     if (buffer_size < num_bytes) {
@@ -1087,5 +1087,31 @@ void BufferMgr::allocateBuffer(BufferList::iterator seg_it,
 
 void BufferMgr::removeTableRelatedDS(const int db_id, const int table_id) {
   UNREACHABLE();
+}
+
+MemoryInfo BufferMgr::getMemoryInfo() const {
+  MemoryInfo memory_info;
+  memory_info.page_size = getPageSize();
+  memory_info.max_num_pages = getMaxSize() / memory_info.page_size;
+  memory_info.is_allocation_capped = isAllocationCapped();
+  memory_info.num_page_allocated = getAllocated() / memory_info.page_size;
+
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
+  std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
+  for (size_t slab_num = 0; slab_num < slab_segments_.size(); slab_num++) {
+    for (const auto& segment : slab_segments_[slab_num]) {
+      MemoryData memory_data;
+      memory_data.slab_num = slab_num;
+      memory_data.start_page = segment.start_page;
+      memory_data.num_pages = segment.num_pages;
+      memory_data.touch = segment.getLastTouched();
+      memory_data.mem_status = segment.mem_status;
+      memory_data.chunk_key.insert(memory_data.chunk_key.end(),
+                                   segment.chunk_key.begin(),
+                                   segment.chunk_key.end());
+      memory_info.node_memory_data.push_back(memory_data);
+    }
+  }
+  return memory_info;
 }
 }  // namespace Buffer_Namespace

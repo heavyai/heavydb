@@ -11379,7 +11379,7 @@ TEST_F(Select, SortWithCPUQueryHint) {
     const auto memory_infos =
         qr_instance->getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL);
     for (auto& pool_memory_info : memory_infos) {
-      ASSERT_EQ(pool_memory_info.numPageAllocated, static_cast<size_t>(0));
+      ASSERT_EQ(pool_memory_info.num_page_allocated, static_cast<size_t>(0));
     }
   };
   QR::get()->clearGpuMemory();

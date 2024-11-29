@@ -49,7 +49,7 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   size_t getMaxSize() const override;
   size_t getInUseSize() const override;
   size_t getAllocated() const override;
-  bool isAllocationCapped() override;
+  bool isAllocationCapped() const override;
   void checkpoint() override;
   void checkpoint(const int db_id, const int tb_id) override;
   AbstractBuffer* alloc(const size_t num_bytes) override;
@@ -82,4 +82,14 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   std::unique_ptr<foreign_storage::ForeignStorageCache> disk_cache_;
   File_Namespace::DiskCacheConfig disk_cache_config_;
   std::shared_ptr<ForeignStorageInterface> fsi_;
+
+ private:
+  std::unique_lock<std::mutex> getTableAccessLock(const ChunkKey& table_key);
+  std::mutex& getTableAccessMutex(const ChunkKey& table_key);
+  void deleteTableAccessMutex(const ChunkKey& table_key);
+
+  std::mutex table_access_mutex_map_mutex_;
+
+  using DbAndTableId = std::pair<int32_t, int32_t>;
+  std::map<DbAndTableId, std::mutex> table_access_mutex_map_;
 };

@@ -224,7 +224,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   inline size_t getMaxSize() const override { return 0; }
   inline size_t getInUseSize() const override { return 0; }
   inline size_t getAllocated() const override { return 0; }
-  inline bool isAllocationCapped() override { return false; }
+  inline bool isAllocationCapped() const override { return false; }
 
   inline FileInfo* getFileInfoForFileId(const int32_t fileId) const {
     return files_.at(fileId).get();
