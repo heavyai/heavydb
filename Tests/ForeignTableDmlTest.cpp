@@ -5144,6 +5144,26 @@ TEST_F(SelectQueryTest, CsvNoTrimSpaces) {
   // clang-format on
 }
 
+TEST_F(SelectQueryTest, ParquetSparkCreatedEmptyFile) {
+  const auto query = getCreateForeignTableQuery(
+      "(i INT, txt TEXT)", "spark-empty-file.snappy", "parquet");
+  sql(query);
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY i;", {});
+}
+
+TEST_F(SelectQueryTest, ParquetNullLogicalTypeUnsupported) {
+  const auto query =
+      getCreateForeignTableQuery("(i INT)", "null_logical_type", "parquet");
+  sql(query);
+
+  queryAndAssertPartialException(
+      "SELECT * FROM " + default_table_name + " ORDER BY i;",
+      "Conversion from Parquet type \"Null\" to HeavyDB type \"INTEGER\" is not allowed. "
+      "Please use an appropriate column type. Parquet column: i, HeavyDB column: i, "
+      "Parquet file: ");
+}
+
 TEST_F(SelectQueryTest, ParquetRequiredColumnScalars) {
   const auto query = getCreateForeignTableQuery(
       "(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
