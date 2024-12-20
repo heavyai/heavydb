@@ -868,7 +868,7 @@ void GeoPolygon::getColumns(std::vector<double>& coords,
   CHECK(exterior_ring);
   // All exterior rings are imported CCW
   if (exterior_ring->isClockwise()) {
-    exterior_ring->reverseWindingOrder();
+    exterior_ring->reversePoints();
   }
   const auto num_points_added = process_poly_ring(exterior_ring, coords, &bbox);
   ring_sizes.push_back(num_points_added);
@@ -877,7 +877,7 @@ void GeoPolygon::getColumns(std::vector<double>& coords,
     CHECK(interior_ring);
     // All interior rings are imported CW
     if (!interior_ring->isClockwise()) {
-      interior_ring->reverseWindingOrder();
+      interior_ring->reversePoints();
     }
     const auto num_points_added = process_poly_ring(interior_ring, coords, nullptr);
     ring_sizes.push_back(num_points_added);
@@ -969,7 +969,7 @@ void GeoMultiPolygon::getColumns(std::vector<double>& coords,
     CHECK(exterior_ring);
     // All exterior rings are imported CCW
     if (exterior_ring->isClockwise()) {
-      exterior_ring->reverseWindingOrder();
+      exterior_ring->reversePoints();
     }
     const auto num_points_added = process_poly_ring(exterior_ring, coords, &bbox);
     ring_sizes.push_back(num_points_added);
@@ -979,7 +979,7 @@ void GeoMultiPolygon::getColumns(std::vector<double>& coords,
       CHECK(interior_ring);
       // All interior rings are imported CW
       if (!interior_ring->isClockwise()) {
-        interior_ring->reverseWindingOrder();
+        interior_ring->reversePoints();
       }
       const auto num_points_added = process_poly_ring(interior_ring, coords, nullptr);
       ring_sizes.push_back(num_points_added);
