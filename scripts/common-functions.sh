@@ -459,18 +459,21 @@ function install_thrift() {
     check_artifact_cleanup thrift-$THRIFT_VERSION.tar.gz thrift-$THRIFT_VERSION
 }
 
-# newest as of 11/17/23 except where noted
-PROJ_VERSION=9.3.0
-GDAL_VERSION=3.7.3 # latest is 3.8.0 but that's too new for comfort
-TIFF_VERSION=4.5.1
-GEOTIFF_VERSION=1.7.1
-PDAL_VERSION=2.4.2 # newest is 2.5.5 but would require patch changes
-OPENJPEG_VERSION=2.5.0
-LCMS_VERSION=2.15
-WEBP_VERSION=1.3.2
-ZSTD_VERSION=1.4.8 # not the newest, but the one that comes with Ubuntu 22.04
+SQLITE3_YEAR_DIR=2024
+SQLITE3_VERSION=3460000
+EXPAT_VERSION_DIR=R_2_6_2
+EXPAT_VERSION=2.6.2
+PROJ_VERSION=9.5.1
+GDAL_VERSION=3.10.0
+TIFF_VERSION=4.6.0
+GEOTIFF_VERSION=1.7.3
+PDAL_VERSION=2.4.2 # newest is 2.7.2 but would require patch changes
+OPENJPEG_VERSION=2.5.2
+LCMS_VERSION=2.16
+WEBP_VERSION=1.4.0
 HDF5_VERSION=1.12.1 # newest is 1.14.x but there are API changes
 NETCDF_VERSION=4.8.1 # newest is 4.9.2 but has more deps
+ZSTD_VERSION=1.4.8
 
 function install_gdal_and_pdal() {
     if [ "$LIBRARY_TYPE" == "static" ]; then
@@ -490,11 +493,10 @@ function install_gdal_and_pdal() {
     check_artifact_cleanup v$ZSTD_VERSION.tar.gz zstd-$ZSTD_VERSION
 
     # sqlite3 (for proj, gdal)
-    download_make_install https://sqlite.org/2024/sqlite-autoconf-3450100.tar.gz
+    download_make_install https://sqlite.org/${SQLITE3_YEAR_DIR}/sqlite-autoconf-${SQLITE3_VERSION}.tar.gz
 
     # expat (for gdal)
-    # upgrade to 2.6.2 to resolve gdb issue on Ubuntu 24.04
-    download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_6_2/expat-2.6.2.tar.bz2
+    download_make_install https://github.com/libexpat/libexpat/releases/download/${EXPAT_VERSION_DIR}/expat-${EXPAT_VERSION}.tar.bz2
 
     # kml (for gdal)
     download ${HTTP_DEPS}/libkml-master.zip
