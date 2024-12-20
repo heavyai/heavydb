@@ -185,7 +185,7 @@ function download_make_install() {
     check_artifact_cleanup $artifact_name $build_dir
 }
 
-CMAKE_VERSION=3.25.2
+CMAKE_VERSION=3.26.5
 
 function install_cmake() {
   CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
