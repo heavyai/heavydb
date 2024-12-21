@@ -30,7 +30,11 @@
 #include <clang/Tooling/Tooling.h>
 #include <llvm/Support/Program.h>
 #include <llvm/Support/raw_ostream.h>
+#ifdef HAVE_BOOST_1_86
+#include <boost/process/v1/search_path.hpp>
+#else
 #include <boost/process/search_path.hpp>
+#endif
 #include <cctype>
 #include <iterator>
 #include <locale>

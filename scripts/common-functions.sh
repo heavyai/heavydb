@@ -221,7 +221,7 @@ function install_centos_gcc() {
   check_artifact_cleanup gcc-${GCC_VERSION}.tar.xz gcc-${GCC_VERSION}
 }
 
-BOOST_VERSION=1_84_0
+BOOST_VERSION=1_86_0
 function install_boost() {
   # http://downloads.sourceforge.net/project/boost/boost/${BOOST_VERSION//_/.}/boost_$${BOOST_VERSION}.tar.bz2
   download ${HTTP_DEPS}/boost_${BOOST_VERSION}.tar.bz2
