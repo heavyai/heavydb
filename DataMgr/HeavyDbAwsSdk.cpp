@@ -16,6 +16,8 @@
 
 #include "HeavyDbAwsSdk.h"
 
+#include <list>
+
 #include <arrow/filesystem/s3fs.h>
 #include <arrow/status.h>
 #include <boost/filesystem.hpp>

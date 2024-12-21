@@ -5083,12 +5083,12 @@ void Catalog::replaceDashboard(DashboardDescriptor& vd) {
 
 std::string Catalog::calculateSHA1(const std::string& data) {
   boost::uuids::detail::sha1 sha1;
-  unsigned int digest[5];
+  boost::uuids::detail::sha1::digest_type digest;
   sha1.process_bytes(data.c_str(), data.length());
   sha1.get_digest(digest);
   std::stringstream ss;
   for (size_t i = 0; i < 5; i++) {
-    ss << std::hex << digest[i];
+    ss << std::hex << reinterpret_cast<unsigned int*>(digest)[i];
   }
   return ss.str();
 }
