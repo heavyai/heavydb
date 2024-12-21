@@ -819,12 +819,8 @@ set(ICU_LIBRARIES ${ICUUC_LIBRARY} ${ICUDATA_LIBRARY} ${ICUI18N_LIBRARY})
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams serialization REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 list(APPEND Boost_LIBRARIES ${ICU_LIBRARIES})
-
-if(Boost_VERSION LESS 107500)
-  # BOOST_PP_VARIADICS is incorrectly set to 0 by <boost/preprocessor/config/config.hpp>
-  # when defined(__CUDACC__) prior to 1.75. Set it to 1 here so that
-  # Shared/define_enum_class.h can be used by cuda modules.  This was fixed in Boost 1.75.
-  list(APPEND MAPD_DEFINITIONS "-DBOOST_PP_VARIADICS=1")
+if(Boost_VERSION GREATER_EQUAL 108600)
+  add_definitions("-DHAVE_BOOST_1_86")
 endif()
 
 # Allow explicit include statements to access third party headers directly.

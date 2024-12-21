@@ -29,7 +29,11 @@
 #include <string>
 
 #include <boost/algorithm/string/predicate.hpp>
+#ifdef HAVE_BOOST_1_86
+#include <boost/process/v1/search_path.hpp>
+#else
 #include <boost/process/search_path.hpp>
+#endif
 
 #include "Analyzer/Analyzer.h"
 #include "Catalog/Catalog.h"

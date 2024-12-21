@@ -22,7 +22,11 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/process.hpp>
+#ifdef HAVE_BOOST_1_86
+#include <boost/process/v1/search_path.hpp>
+#else
 #include <boost/process/search_path.hpp>
+#endif
 #include <boost/program_options.hpp>
 #include <boost/variant.hpp>
 #include <boost/variant/get.hpp>
