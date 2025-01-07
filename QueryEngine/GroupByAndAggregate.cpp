@@ -85,7 +85,7 @@ std::ostream& operator<<(std::ostream& out, const CountDistinctImplType& type) {
       out << "UnorderedSet";
       break;
     default:
-      out << "<Unkown Type>";
+      out << "<Unknown Type>";
       break;
   }
   return out;
