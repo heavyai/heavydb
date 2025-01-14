@@ -57,4 +57,4 @@ WORKDIR /opt/heavyai
 
 EXPOSE 6274 6273
 
-CMD /opt/heavyai/startheavy --non-interactive --data /var/lib/heavyai/storage --config /var/lib/heavyai/heavy.conf
+CMD /opt/heavyai/startheavy --non-interactive --data /var/lib/heavyai/storage --config /var/lib/heavyai/heavy.conf --libgeos-path /var/lib/heavyai/libgeos
