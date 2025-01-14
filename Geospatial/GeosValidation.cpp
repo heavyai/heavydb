@@ -82,7 +82,9 @@ bool geos_init() {
   auto const* geos_dso_filename = g_libgeos_so_filename->c_str();
   geos_dso_handle = dlopen(geos_dso_filename, RTLD_NOW | RTLD_LOCAL);
   if (!geos_dso_handle) {
-    LOG(WARNING) << "Failed to dynamically load GEOS. Geometry validation unavailable.";
+    LOG(ERROR) << "Failed to load GEOS library. To use Geometry Validation, ensure that "
+                  "the GEOS library files are separately installed and that their "
+                  "location is set in $LD_LIBRARY_PATH in the server environment.";
     geos_can_validate = false;
     return false;
   }

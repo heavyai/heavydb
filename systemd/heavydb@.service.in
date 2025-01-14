@@ -6,6 +6,7 @@ After=network.target remote-fs.target
 User=@HEAVYAI_USER@
 Group=@HEAVYAI_GROUP@
 WorkingDirectory=@HEAVYAI_PATH@
+Environment="LD_LIBRARY_PATH=@HEAVYAI_BASE@/libgeos"
 ExecStart=@HEAVYAI_PATH@/bin/heavydb --config @HEAVYAI_BASE@/%I/heavy.conf
 KillMode=control-group
 SuccessExitStatus=143
