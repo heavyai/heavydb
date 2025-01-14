@@ -35,12 +35,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         default-jre-headless \
         software-properties-common && \
     add-apt-repository ppa:deadsnakes/ppa && \
-    add-apt-repository ppa:ubuntugis/ppa && \
     apt-get install -y --no-install-recommends \
         python3.10 \
         python3.10-venv \
-        libpython3.10 \
-        libgeos-dev && \
+        libpython3.10 && \
     apt-get remove --purge -y && \
     rm -rf /var/lib/apt/lists/*
 
@@ -58,4 +56,4 @@ WORKDIR /opt/heavyai
 
 EXPOSE 6274 6273
 
-CMD /opt/heavyai/startheavy --non-interactive --data /var/lib/heavyai/storage --config /var/lib/heavyai/heavy.conf
+CMD /opt/heavyai/startheavy --non-interactive --data /var/lib/heavyai/storage --config /var/lib/heavyai/heavy.conf --libgeos-path /var/lib/heavyai/libgeos

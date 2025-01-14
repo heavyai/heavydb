@@ -66,6 +66,9 @@ while (( $# )); do
                 echo "WARN: config file does not exist, ignoring: --config $1" >&2
             fi
             ;;
+        --libgeos-path)
+            shift
+            LIBGEOS_PATH="$1" ;;
         --non-interactive)
             INSERT_SAMPLE_DATA=false ;;
         --disable-open-frontend)
@@ -126,6 +129,22 @@ if [[ -z "$icd_path" ]]; then
   See: ${LBLUE}https://docs.omnisci.com/troubleshooting/vulkan-graphics-api-beta#bare-metal-installs${NORMAL} for some installation and troubleshooting tips."
 else
     export VK_ICD_FILENAMES=$icd_path
+fi
+
+# prepend libgeos DSO path to $LD_LIBRARY_PATH if valid
+if [ ! -z "${LIBGEOS_PATH}" ] ; then
+    if [ -d ${LIBGEOS_PATH} ] ; then
+        echo "Will use libgeos from ${LIBGEOS_PATH}"
+        if [ -z ${LD_LIBRARY_PATH} ] ; then
+            export LD_LIBRARY_PATH=${LIBGEOS_PATH}
+        else
+            export LD_LIBRARY_PATH=${LIBGEOS_PATH}:${LD_LIBRARY_PATH}
+        fi
+    else
+        echo "WARN: libgeos path does not exist or is not a directory, ignoring: --libgeos-path ${LIBGEOS_PATH}" >&2
+    fi
+else
+    echo "WARN: libgeos path not specified. Some SQL 'ST' functions will not be available." >&2
 fi
 
 ./bin/heavydb $MAPD_DATA $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT --calcite-port $MAPD_CALCITE_PORT $CONFIG $VERBOSE ${FORWARDED_ARGS[@]} &

@@ -110,8 +110,18 @@ void load_geos_dynamic_library() {
     geos_dynamic_library =
         llvm::sys::DynamicLibrary::getPermanentLibrary(filename.c_str(), &error_message);
     if (!geos_dynamic_library.isValid()) {
-      LOG(ERROR) << "Failed to load GEOS library '" + filename + "'";
-      std::string exception_message = "Failed to load GEOS library: " + error_message;
+      std::string exception_message(
+          "Failed to load GEOS library. To use ST functions that require GEOS, ensure "
+          "that the GEOS library files are separately installed and that their location "
+          "is set in $LD_LIBRARY_PATH in the server environment.");
+      LOG(ERROR) << exception_message;
+      LOG(ERROR) << "  " << error_message;
+      auto const* llp = getenv("LD_LIBRARY_PATH");
+      if (llp) {
+        LOG(ERROR) << "  LD_LIBRARY_PATH is set to '" << llp << "'";
+      } else {
+        LOG(ERROR) << "  LD_LIBRARY_PATH is unset";
+      }
       throw std::runtime_error(exception_message);
     } else {
       LOG(INFO) << "Loaded GEOS library '" + filename + "'";
