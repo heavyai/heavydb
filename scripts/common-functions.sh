@@ -191,36 +191,6 @@ function install_cmake() {
   CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
 }
 
-# gcc
-GCC_VERSION=11.4.0
-function install_centos_gcc() {
-
-  download ftp://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz
-  extract gcc-${GCC_VERSION}.tar.xz
-  pushd gcc-${GCC_VERSION}
-  export CPPFLAGS="-I$PREFIX/include"
-  ./configure \
-    --prefix=$PREFIX \
-    --disable-multilib \
-    --enable-bootstrap \
-    --enable-shared \
-    --enable-threads=posix \
-    --enable-checking=release \
-    --with-system-zlib \
-    --enable-__cxa_atexit \
-    --disable-libunwind-exceptions \
-    --enable-gnu-unique-object \
-    --enable-languages=c,c++ \
-    --with-tune=generic \
-    --with-gmp=$PREFIX \
-    --with-mpc=$PREFIX \
-    --with-mpfr=$PREFIX #replace '--with-tune=generic' with '--with-tune=power8' for POWER8
-  makej
-  make install
-  popd
-  check_artifact_cleanup gcc-${GCC_VERSION}.tar.xz gcc-${GCC_VERSION}
-}
-
 BOOST_VERSION=1_86_0
 function install_boost() {
   # http://downloads.sourceforge.net/project/boost/boost/${BOOST_VERSION//_/.}/boost_$${BOOST_VERSION}.tar.bz2
