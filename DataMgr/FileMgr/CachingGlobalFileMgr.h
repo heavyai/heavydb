@@ -65,5 +65,7 @@ class CachingGlobalFileMgr : public GlobalFileMgr {
 
   foreign_storage::ForeignStorageCache* disk_cache_;
   std::set<ChunkKey> cached_chunk_keys_;
+
+  mutable heavyai::shared_mutex cached_chunk_keys_mutex_;
 };
 }  // namespace File_Namespace
