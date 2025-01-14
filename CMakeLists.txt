@@ -11,6 +11,12 @@ set(CMAKE_ENABLE_EXPORTS True)
 EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCH)
 message(STATUS "Architecture is ${ARCH}")
 
+# Check for Redhat based OS
+find_file(IS_REDHAT redhat-release PATHS /etc)
+if(IS_REDHAT)
+  message(STATUS "OS is Redhat or derivative")
+endif()
+
 set(ENABLE_CONDA OFF)
 if(DEFINED ENV{CONDA_PREFIX})
   set(ENABLE_CONDA ON)
@@ -186,14 +192,18 @@ if(WIN32)
   add_definitions(-DBOOST_UUID_FORCE_AUTO_LINK)
 endif()
 
-find_file(IS_CENTOS redhat-release PATHS /etc)
-if (IS_CENTOS)
-  # CentOS currently can't link without static libraries, so default to ON.
+set(OS_SPECIFIC_LICENSING_LIBS "")
+if (IS_REDHAT)
+  # RedHat currently can't link without static libraries, so default to ON.
   option(PREFER_STATIC_LIBS "Prefer linking against static libraries" ON)
-  message("Redhat/CentOS system detected, setting PREFER_STATIC_LIBS=ON by default.")
+  message("Redhat system detected, setting PREFER_STATIC_LIBS=ON by default.")
+  # On RHEL/Rocky8, the Go/JWT libraries have a dependency on libresolv and
+  # the final link of some executables fails with missing res_search symbol
+  # unless that library is explicitly included in the link
+  set(OS_SPECIFIC_LICENSING_LIBS "resolv")
 else()
   option(PREFER_STATIC_LIBS "Prefer linking against static libraries" OFF)
-endif (IS_CENTOS)
+endif (IS_REDHAT)
 
 if(PREFER_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
@@ -440,7 +450,12 @@ else()
   endif()
 endif()
 
-list(APPEND CMAKE_MODULE_PATH "${MAPD_DEPS_PATH}/lib/cmake/gdal/packages")
+if(IS_REDHAT)
+  list(APPEND CMAKE_MODULE_PATH "${MAPD_DEPS_PATH}/lib64/cmake/gdal/packages")
+else()
+  list(APPEND CMAKE_MODULE_PATH "${MAPD_DEPS_PATH}/lib/cmake/gdal/packages")
+endif()
+
 find_package(Git)
 find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -449,26 +464,16 @@ find_package(GDALExtra REQUIRED)
 find_package(BLOSC REQUIRED)
 find_package(EXPAT REQUIRED)
 if(PREFER_STATIC_LIBS)
-  find_package(LibKML)
-  if(NOT LibKML_FOUND)
-    # After upgrading to new deps, make LibKML REQUIRED and delete this if() block.
-    set(LIBKML_LIBRARIES "")
-    message(WARNING "LibKML not found. This must be using old deps.")
-  endif()
+  find_package(LibKML REQUIRED)
   list(APPEND GDAL_LIBRARIES ${LIBKML_LIBRARIES})
 endif()
-if (NOT IS_CENTOS)
+if (NOT IS_REDHAT)
   find_package(PROJ REQUIRED)
   find_package(TIFF REQUIRED)
 endif()
-find_library(XML2_LIBRARY xml2)
-if(NOT XML2_LIBRARY)
-  # After upgrading to new deps, make XML2_LIBRARY REQUIRED and delete this if() block.
-  set(XML2_LIBRARY "")
-  message(WARNING "Libxml2 not found. This must be using old deps.")
-endif()
+find_library(XML2_LIBRARY xml2 REQUIRED)
 list(APPEND GDAL_LIBRARIES ${PNG_LIBRARIES} ${GDALExtra_LIBRARIES} ${EXPAT_LIBRARIES})
-if (NOT IS_CENTOS)
+if (NOT IS_REDHAT)
   list (APPEND GDAL_LIBRARIES ${PROJ_LIBRARIES} ${TIFF_LIBRARIES})
 endif()
 list (APPEND GDAL_LIBRARIES ${XML2_LIBRARY})
@@ -803,16 +808,9 @@ else()
 endif()
 
 # International Components for Unicode (ICU) required by boost_locale
-find_library(ICUUC_LIBRARY icuuc)
-find_library(ICUDATA_LIBRARY icudata)
-find_library(ICUI18N_LIBRARY icui18n)
-if(NOT ICUUC_LIBRARY OR NOT ICUDATA_LIBRARY OR NOT ICUI18N_LIBRARY)
-  # After upgrading to new deps, make above 3 ICU libraries REQUIRED and delete this if() block.
-  set(ICUUC_LIBRARY "")
-  set(ICUDATA_LIBRARY "")
-  set(ICUI18N_LIBRARY "")
-  message(WARNING "Not all ICU libraries were found. This must be using old deps.")
-endif()
+find_library(ICUUC_LIBRARY icuuc REQUIRED)
+find_library(ICUDATA_LIBRARY icudata REQUIRED)
+find_library(ICUI18N_LIBRARY icui18n REQUIRED)
 set(ICU_LIBRARIES ${ICUUC_LIBRARY} ${ICUDATA_LIBRARY} ${ICUI18N_LIBRARY})
 
 # Boost
@@ -845,18 +843,8 @@ endif()
 add_subdirectory(ThirdParty/googlebenchmark)
 
 # idn2
-find_library(IDN2_LIBRARY idn2) # Required by curl and gnutls
-if(NOT IDN2_LIBRARY)
-  # After upgrading to new deps, make IDN2_LIBRARY REQUIRED and delete this if() block.
-  set(IDN2_LIBRARY "")
-  message(WARNING "Libidn2 not found. This must be using old deps.")
-endif()
-find_library(UNISTRING_LIBRARY unistring) # Required by idn2
-if(NOT UNISTRING_LIBRARY)
-  # After upgrading to new deps, make UNISTRING_LIBRARY REQUIRED and delete this if() block.
-  set(UNISTRING_LIBRARY "")
-  message(WARNING "Libunistring not found. This must be using old deps.")
-endif()
+find_library(IDN2_LIBRARY idn2 REQUIRED) # Required by curl and gnutls
+find_library(UNISTRING_LIBRARY unistring REQUIRED) # Required by idn2
 set(IDN2_LIBRARIES ${IDN2_LIBRARY} ${UNISTRING_LIBRARY})
 
 # aws-sdk
@@ -866,7 +854,7 @@ option(ENABLE_AWS_S3 "Enable AWS S3 support" ON)
 if(ENABLE_AWS_S3)
   find_package(LibAwsS3)
   if(NOT LibAwsS3_FOUND)
-    # Note for a build with static arrow libs (centos)
+    # Note for a build with static arrow libs (RedHat)
     # aws-sdk-cpp must be included.
     set(ENABLE_AWS_S3 OFF CACHE BOOL "Enable AWS S3 support" FORCE)
   else()
@@ -895,19 +883,8 @@ if(ENABLE_IMPORT_PARQUET)
   endif()
 endif()
 
-find_library(lz4_LIBRARY lz4)
-if(NOT lz4_LIBRARY)
-  # After upgrading to new deps, make lz4_LIBRARY REQUIRED and delete this if() block.
-  set(lz4_LIBRARY "")
-  message(WARNING "liblz4 not found. This must be using old deps.")
-endif()
-
-find_library(bz2_LIBRARY bz2)
-if(NOT bz2_LIBRARY)
-  # After upgrading to new deps, make bz2_LIBRARY REQUIRED and delete this if() block.
-  set(bz2_LIBRARY "")
-  message(WARNING "libbz2 not found. This must be using old deps.")
-endif()
+find_library(lz4_LIBRARY lz4 REQUIRED)
+find_library(bz2_LIBRARY bz2 REQUIRED)
 
 list(APPEND Arrow_LIBRARIES ${lz4_LIBRARY} ${Snappy_LIBRARIES} ${bz2_LIBRARY}) # zstd linked elsewhere for GDAL
 if(ENABLE_AWS_S3)
@@ -949,12 +926,7 @@ find_package(RdKafka REQUIRED)
 include_directories(${RdKafka_INCLUDE_DIRS})
 
 # Message Digest functions used by libarchive
-find_library(MD_LIBRARY md)
-if(NOT MD_LIBRARY)
-  # After upgrading to new deps, make MD_LIBRARY REQUIRED and delete this if() block.
-  set(MD_LIBRARY "")
-  message(WARNING "Libmd not found. This must be using old deps.")
-endif()
+find_library(MD_LIBRARY md REQUIRED)
 
 # libarchive
 find_package(LibArchive REQUIRED)
@@ -1318,11 +1290,11 @@ add_custom_target(get_git_hash ALL
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MapDRelease.h)
 
-target_link_libraries(heavydb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
+target_link_libraries(heavydb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT} ${OS_SPECIFIC_LICENSING_LIBS})
 
 target_link_libraries(initheavy mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
-    ${LOCALE_LINK_FLAG})
+    ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT} ${OS_SPECIFIC_LICENSING_LIBS})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")

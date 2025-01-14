@@ -1,0 +1,32 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+RUN ln -snf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
+RUN echo America/Los_Angeles > /etc/timezone
+
+RUN dnf install -y dnf-utils
+RUN dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+RUN dnf install -y openssh-server\
+                   device-mapper-persistent-data \
+                   lvm2 \
+                   docker-ce \
+    && rm -rf /var/cache/dnf/*
+RUN ssh-keygen -A
+RUN sed -i "s|#PubkeyAuthentication yes|PubkeyAuthentication yes|" /etc/ssh/sshd_config
+RUN useradd -m jenkins-slave
+WORKDIR /home/jenkins-slave
+RUN  echo 'jenkins-slave ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
+USER jenkins-slave
+
+RUN mkdir -p .ssh \
+    && chmod 700 .ssh \
+    && curl https://github.com/mapd-bot.keys >> .ssh/authorized_keys \
+    && chmod 600 .ssh/authorized_keys \
+    && curl https://builds.openlogic.com/downloadJDK/openlogic-openjdk-jre/21.0.4+7/openlogic-openjdk-jre-21.0.4+7-linux-x64.tar.gz --output openlogic-openjdk-jre-21.0.4+7-linux-x64.tar.gz \
+    && sudo mkdir /opt/java  && sudo tar xf openlogic-openjdk-jre-21.0.4+7-linux-x64.tar.gz --directory /opt/java
+
+USER root
+
+EXPOSE 22
+CMD ["sh",  "-c", "rm -f /run/nologin; /usr/sbin/sshd -D"]
