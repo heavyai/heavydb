@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -x
 
 PREFIX=/usr/local/mapd-deps
 
@@ -9,19 +10,19 @@ source /etc/os-release
 if [ "$ID" == "ubuntu" ] ; then
   PACKAGER="apt -y"
   if [ "$VERSION_ID" != "24.04" ] && [ "$VERSION_ID" != "22.04" ]; then
-    echo "Ubuntu 24.04 and 22.04 are the only Debian-based releases supported by this script"
+    echo "Ubuntu 24.04 and 22.04 are the only Debian-based OSs supported by this script"
     echo "If you are still using 20.04 or 23.10 then you need to upgrade!"
     exit 1
   fi
-elif [ "$ID" == "centos" ] ; then
+elif [ "$ID" == "rocky" ] ; then
   MODPATH=/etc/modulefiles
-  PACKAGER="yum -y"
-  if [ "$VERSION_ID" != "7" ] ; then
-    echo "CentOS 7 is the only fedora-based release supported by this script"
+  PACKAGER="dnf -y"
+  if [ "${VERSION_ID:0:1}" != "8" ] ; then
+    echo "Rocky Linux 8.x is the only RedHat-based OS supported by this script"
     exit 1
   fi
 else
-  echo "Only debian- and fedora-based OSs are supported by this script"
+  echo "Only Debian- and RedHat-based OSs are supported by this script"
   exit 1
 fi
 
@@ -72,16 +73,17 @@ fi
 ARCH=$(uname -m)
 
 # Validate architecture
-if [ "$ID" == "centos" ] && [ "$ARCH" != "x86_64" ] ; then
-  echo "ERROR - Only x86 builds supported on CentOS"
+if [ "$ID" == "rocky" ] && [ "$ARCH" != "x86_64" ] ; then
+  echo "ERROR - Only x86 builds supported on RedHat-based systems"
   exit
 fi
+
+SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Distro-specific installations
 if [ "$ID" == "ubuntu" ] ; then
   sudo $PACKAGER update
 
-  SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
   source $SCRIPTS_DIR/common-functions.sh
 
   update_container_packages
@@ -154,33 +156,12 @@ EOF
     echo "Done. Be sure to source the 'mapd-deps.sh' file to pick up the required environment variables:"
     echo "    source $PREFIX/mapd-deps.sh"
   fi
-elif [ "$ID" == "centos" ] ; then
-  sudo yum groupinstall -y "Development Tools"
-  sudo yum install -y \
-    zlib-devel \
-    epel-release \
-    which \
-    libssh \
-    git \
-    java-1.8.0-openjdk-devel \
-    java-1.8.0-openjdk-headless \
-    gperftools \
-    gperftools-devel \
-    gperftools-libs \
-    wget \
-    curl \
-    python3 \
-    libX11-devel \
-    environment-modules \
-    valgrind \
-    patchelf \
-    perl-IPC-Cmd
+elif [ "$ID" == "rocky" ] ; then
+  sudo dnf groupinstall -y "Development Tools"
+  
+  source $SCRIPTS_DIR/common-functions-rockylinux.sh
 
-  # Install packages from EPEL
-  sudo yum install -y \
-    cloc \
-    jq \
-    pxz
+  install_required_rockylinux_packages
 
   if ! type module >/dev/null 2>&1 ; then
     sudo $PACKAGER install environment-modules
@@ -189,7 +170,7 @@ elif [ "$ID" == "centos" ] ; then
 
   sudo mkdir -p $PREFIX
   pushd $PREFIX
-  OS=centos7
+  OS=rockylinux8
   TARBALL_TSAN=""
   if [ "$TSAN" = "true" ]; then
     TARBALL_TSAN="-tsan"

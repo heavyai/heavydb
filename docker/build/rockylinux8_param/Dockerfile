@@ -13,15 +13,9 @@ RUN echo $'#!/bin/bash\n\
     chmod +x /docker-entrypoint.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]
 
-# patch repo files now that CentOS 7 is EOL
-RUN sed -i 's/mirror.centos.org/vault.centos.org/' /etc/yum.repos.d/*.repo
-RUN sed -i 's/^#.*baseurl=http:/baseurl=https:/' /etc/yum.repos.d/*.repo
-RUN sed -i 's/^mirrorlist=http:/#mirrorlist=https:/' /etc/yum.repos.d/*.repo
-RUN echo 'sslverify=false' | tee -a /etc/yum.conf
+RUN dnf groupinstall -y "Development Tools"
 
-RUN yum groupinstall -y "Development Tools"
-
-RUN yum install -y \
+RUN dnf install -y \
         zlib-devel \
         epel-release \
         libssh \
@@ -29,9 +23,6 @@ RUN yum install -y \
         maven \
         java-1.8.0-openjdk-devel \
         java-1.8.0-openjdk-headless \
-        gperftools \
-        gperftools-devel \
-        gperftools-libs \
         wget \
         curl \
         sudo \
@@ -39,13 +30,12 @@ RUN yum install -y \
         mesa-libGL-devel \
         environment-modules \
         which \
-        PyYAML \
         valgrind && \
-    rm -rf /var/cache/yum/*
-RUN yum install -y \
+    rm -rf /var/cache/dnf/*
+RUN dnf install -y \
         cloc \
         jq && \
-    rm -rf /var/cache/yum/*
+    rm -rf /var/cache/dnf/*
 
 RUN mkdir -p /etc/vulkan/icd.d && \
     echo '{ "file_format_version" : "1.0.0", "ICD" : { "library_path" : "libGLX_nvidia.so.0", "api_version" : "1.1.99" } }' > /etc/vulkan/icd.d/nvidia_icd.json
@@ -55,5 +45,7 @@ RUN echo > /etc/ld.so.preload
 # copy the script into the docker context
 # the script needs to already be in '.'
 COPY mapd-deps-prebuilt.sh .
+COPY common-functions-rockylinux.sh .
+
 ARG PREBUILT_CUSTOM_ARG
 RUN USER=root sudo bash ./mapd-deps-prebuilt.sh ${PREBUILT_CUSTOM_ARG}

@@ -2,7 +2,7 @@
 
 # This file was originally copied from common-functions.sh from master on 2024-06-18.
 # Last change commit: 90109bd060ed50b18a28a4d425e17892f1e98571 on 2024-04-30.
-# This is temporary until we drop CentOS support after which this file may be deleted.
+# Was used for CentOS, now used for RockyLinux/RHEL
 
 HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -113,6 +113,31 @@ function download_make_install() {
     check_artifact_cleanup $artifact_name $build_dir
 }
 
+function install_required_rockylinux_packages() {
+  # TODO(scb) python3-devel may no longer be required
+  sudo dnf install -y \
+      ca-certificates \
+      curl \
+      epel-release \
+      git \
+      java-21-openjdk-devel \
+      libssh \
+      perl-IPC-Cmd \
+      perl-Pod-Html \
+      python3 \
+      python3-devel \
+      rsync \
+      wget \
+      which \
+      zlib-devel
+  
+  # Install packages from EPEL
+  sudo dnf install -y \
+      jq \
+      pxz
+}
+
+
 CMAKE_VERSION=3.25.2
 
 function install_cmake() {
@@ -121,7 +146,7 @@ function install_cmake() {
 
 # gcc
 GCC_VERSION=11.4.0
-function install_centos_gcc() {
+function install_gcc() {
 
   download ftp://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz
   extract gcc-${GCC_VERSION}.tar.xz
@@ -166,6 +191,22 @@ function install_openssl() {
   download_make_install ${HTTP_DEPS}/openssl-3.0.10.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 }
 
+ICU_VERSION=60_3
+function install_icu() {
+  download ${HTTP_DEPS}/icu4c-$ICU_VERSION-src.tgz
+  extract icu4c-$ICU_VERSION-src.tgz
+  pushd icu/source
+  chmod +x runConfigureICU configure install-sh
+  mkdir -p build
+  pushd build
+  CXXFLAGS=-std=c++11 ../runConfigureICU --enable-debug Linux/gcc --prefix=$PREFIX --enable-static --disable-shared --disable-dyload
+  makej
+  make install
+  popd
+  popd
+  check_artifact_cleanup icu4c-$ICU_VERSION-src.tgz icu4c-$ICU_VERSION-src
+}
+
 LDAP_VERSION=2.5.16
 function install_openldap2() {
   download https://www.openldap.org/software/download/OpenLDAP/openldap-release/openldap-$LDAP_VERSION.tgz
@@ -174,10 +215,75 @@ function install_openldap2() {
   pushd openldap-$LDAP_VERSION/build
   ../configure --prefix=$PREFIX --disable-shared --enable-static
   make depend
-  make -j ${NPROC}
+  makej
   make install
   popd
   check_artifact_cleanup openldap-$LDAP_VERSION.tar.gz openldap-$LDAP_VERSION
+}
+
+UNISTRING_VERSION=1.0
+function install_unistring() {
+  download ${HTTP_DEPS}/libunistring-$UNISTRING_VERSION.tar.xz
+  extract libunistring-$UNISTRING_VERSION.tar.xz
+  mkdir -p libunistring-$UNISTRING_VERSION/build
+  pushd libunistring-$UNISTRING_VERSION/build
+  ../configure --prefix=$PREFIX --disable-shared --enable-static --docdir=/usr/share/doc/libunistring-$UNISTRING_VERSION
+  makej
+  make install
+  popd
+  check_artifact_cleanup libunistring-$UNISTRING_VERSION.tar.xz libunistring-$UNISTRING_VERSION
+}
+
+XML2_VERSION=2.9.13
+function install_xml2() {
+  download https://download.gnome.org/sources/libxml2/2.9/libxml2-$XML2_VERSION.tar.xz
+  extract libxml2-$XML2_VERSION.tar.xz
+  pushd libxml2-$XML2_VERSION
+  # shared is required for libarchive to build
+  ./configure --prefix=$PREFIX \
+              --enable-static \
+              --enable-shared \
+              --with-history \
+              --with-python=/usr/bin/python3 \
+              --docdir=/usr/share/doc/libxml2-$XML2_VERSION
+  makej
+  make install
+  popd
+  check_artifact_cleanup libxml2-$XML2_VERSION.tar.xz libxml2-$XML2_VERSION
+}
+
+LIBMD_VERSION=1.0.0
+function install_libmd() {
+  download ${HTTP_DEPS}/libmd-$LIBMD_VERSION.tar.gz
+  tar xvf libmd-$LIBMD_VERSION.tar.gz
+  pushd libmd-$LIBMD_VERSION
+  ./autogen
+  ./configure --prefix=$PREFIX --disable-shared --enable-static
+  makej
+  make install
+  popd
+  check_artifact_cleanup libmd-$LIBMD_VERSION.tar.gz libmd-$LIBMD_VERSION
+}
+
+XERCES_C_VERS=3.2.3
+function install_xerces_c() {
+  download ${HTTP_DEPS}/xerces-c-$XERCES_C_VERS.tar.gz
+  extract xerces-c-$XERCES_C_VERS.tar.gz
+  XERCESCROOT=$PWD/xerces-c-$XERCES_C_VERS
+  mkdir -p $XERCESCROOT/build
+  pushd $XERCESCROOT/build
+  cmake \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX \
+    -DBUILD_SHARED_LIBS=off \
+    -DPREFER_STATIC_LIBS=on \
+    -Dnetwork=off \
+    -Dtranscoder=iconv \
+    -Dmessage-loader=inmemory \
+    -DCMAKE_BUILD_TYPE=release \
+    ..
+  makej
+  make install
+  popd
 }
 
 ARROW_VERSION=apache-arrow-9.0.0
@@ -188,6 +294,9 @@ function install_arrow() {
 
   mkdir -p arrow-$ARROW_VERSION/cpp/build
   pushd arrow-$ARROW_VERSION/cpp/build
+  # Use installed liburiparser instead.
+  sed -Ei 's/^\s*vendored\/uriparser\/.*\)/)/' ../src/arrow/CMakeLists.txt
+  sed -Ei  '/^\s*vendored\/uriparser\//d'      ../src/arrow/CMakeLists.txt
   cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=$PREFIX \
@@ -381,20 +490,44 @@ function install_gdal_and_pdal() {
       BUILD_PROJ_GDAL_APPS="ON"
     fi
 
+    # zstd (for tiff and openjpeg)
+    download https://github.com/facebook/zstd/archive/refs/tags/v$ZSTD_VERSION.tar.gz
+    extract v$ZSTD_VERSION.tar.gz
+    mkdir zstd-$ZSTD_VERSION/build/cmake/build
+    ( cd zstd-$ZSTD_VERSION/build/cmake/build
+      cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_SHARED=$BUILD_SHARED_LIBS -DZSTD_BUILD_STATIC=$BUILD_STATIC_LIBS
+      cmake_build_and_install
+    )
+    check_artifact_cleanup v$ZSTD_VERSION.tar.gz zstd-$ZSTD_VERSION
+
     # sqlite3 (for proj, gdal)
     download_make_install https://sqlite.org/2024/sqlite-autoconf-3450100.tar.gz
+
     # expat (for gdal)
-    download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_5_0/expat-2.5.0.tar.bz2
+    # upgrade to 2.6.2 to resolve gdb issue on Ubuntu 24.04
+    download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_6_2/expat-2.6.2.tar.bz2
 
     # kml (for gdal)
     download ${HTTP_DEPS}/libkml-master.zip
     unzip -u libkml-master.zip
-    pushd libkml-master
-    ./autogen.sh || true
-    CXXFLAGS="-std=c++03" ./configure --with-expat-include-dir=$PREFIX/include/ --with-expat-lib-dir=$PREFIX/lib --prefix=$PREFIX --enable-static --disable-java --disable-python --disable-swig
-    makej
-    make install
-    popd
+    ( cd libkml-master
+      # Don't use bundled third_party uriparser.
+      # It results in duplicate symbols when linking some heavydb tests,
+      # and is missing symbols used by arrow because it is an old version.
+      rm -Rf third_party/uriparser-*
+      find . -name Makefile.am -exec sed -i 's/ liburiparser\.la//' {} +
+      find . -name Makefile.am -exec sed -i '/uriparser/d' {} +
+      # Delete trailing backslashes that precede a blank line left from prior command.
+      find . -name Makefile.am -exec sed -iE ':a;N;$!ba;s/\\\n\s*$/\n/m' {} +
+
+      ./autogen.sh
+      CURL_CONFIG=$PREFIX/bin/curl-config \
+      CXXFLAGS="-std=c++03" \
+      LDFLAGS="-L$PREFIX/lib -luriparser" \
+      ./configure --with-expat-include-dir=$PREFIX/include/ --with-expat-lib-dir=$PREFIX/lib --prefix=$PREFIX --enable-static --disable-java --disable-python --disable-swig
+      makej
+      make install
+    )
     check_artifact_cleanup libkml-master.zip libkml-master
 
     # hdf5 (for gdal)
@@ -410,28 +543,58 @@ function install_gdal_and_pdal() {
     popd
     check_artifact_cleanup v${NETCDF_VERSION}.tar.gz netcdf-c-${NETCDF_VERSION}
 
+    # webp (for tiff and openjpeg)
+    download https://github.com/webmproject/libwebp/archive/refs/tags/v$WEBP_VERSION.tar.gz
+    extract v$WEBP_VERSION.tar.gz
+    ( cd libwebp-$WEBP_VERSION
+      ./autogen.sh
+      ./configure --prefix=$PREFIX --disable-libwebpdecoder --disable-libwebpdemux --disable-libwebpmux ${WEBP_BUILD_SELECT}
+      makej
+      make install
+    )
+    check_artifact_cleanup v$WEBP_VERSION.tar.gz libwebp-$WEBP_VERSION
+
     # tiff (for proj, geotiff, gdal)
     download http://download.osgeo.org/libtiff/tiff-${TIFF_VERSION}.tar.gz
     extract tiff-$TIFF_VERSION.tar.gz
-    pushd tiff-$TIFF_VERSION
-    mkdir build2
-    pushd build2
-    cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -Dtiff-tools=OFF -Dtiff-tests=OFF -Dtiff-contrib=OFF -Dtiff-docs=OFF
-    cmake_build_and_install
-    popd
-    popd
+    mkdir tiff-$TIFF_VERSION/build2
+    ( cd tiff-$TIFF_VERSION/build2
+      # Build and install both libtiff.so and libtiff.a.
+      # Static build requires libtiff.a and proj+gdal apps like ogrinfo require libtiff.so.
+      for build_shared_libs in ON OFF; do
+        rm -f CMakeCache.txt
+        cmake .. \
+            -DBUILD_SHARED_LIBS="$BUILD_SHARED_LIBS" \
+            -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE" \
+            -DCMAKE_C_FLAGS="-fPIC" \
+            -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DCMAKE_PREFIX_PATH="$PREFIX" \
+            -Dtiff-contrib=OFF \
+            -Dtiff-docs=OFF \
+            -Dtiff-tests=OFF \
+            -Dtiff-tools=OFF
+        cmake_build_and_install
+      done
+    )
     check_artifact_cleanup tiff-$TIFF_VERSION.tar.gz tiff-$TIFF_VERSION
 
     # proj (for geotiff, gdal)
     download https://download.osgeo.org/proj/proj-${PROJ_VERSION}.tar.gz
     tar xzvf proj-${PROJ_VERSION}.tar.gz
-    pushd proj-${PROJ_VERSION}
-    mkdir build
-    pushd build
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PREFIX} -DENABLE_TIFF=on -DBUILD_TESTING=off -DBUILD_APPS=${BUILD_PROJ_GDAL_APPS} -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
-    cmake_build_and_install
-    popd
-    popd
+    mkdir proj-${PROJ_VERSION}/build
+    ( cd proj-${PROJ_VERSION}/build
+      cmake .. \
+          -DBUILD_APPS=on \
+          -DBUILD_SHARED_LIBS=$BUILD_SHARED_LIBS \
+          -DBUILD_TESTING=off \
+          -DBUILD_APPS=${BUILD_PROJ_GDAL_APPS} \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=$PREFIX \
+          -DCMAKE_PREFIX_PATH=$PREFIX \
+          -DENABLE_TIFF=on
+      cmake_build_and_install
+    )
     check_artifact_cleanup proj-${PROJ_VERSION}.tar.gz proj-${PROJ_VERSION}
 
     # geotiff (for gdal, pdal)
@@ -450,33 +613,6 @@ function install_gdal_and_pdal() {
 
     # little cms (for openjpeg)
     download_make_install https://github.com/mm2/Little-CMS/archive/refs/tags/lcms${LCMS_VERSION}.tar.gz "Little-CMS-lcms${LCMS_VERSION}"
-
-    # webp (for openjpeg)
-    download https://github.com/webmproject/libwebp/archive/refs/tags/v${WEBP_VERSION}.tar.gz
-    extract v${WEBP_VERSION}.tar.gz
-    pushd libwebp-${WEBP_VERSION}
-    ./autogen.sh || true
-    ./configure --prefix=$PREFIX --disable-libwebpdecoder --disable-libwebpdemux --disable-libwebpmux ${WEBP_BUILD_SELECT}
-    makej
-    make install
-    popd
-    check_artifact_cleanup v${WEBP_VERSION}.tar.gz libwebp-${WEBP_VERSION}
-
-    # zstd (for openjpeg)
-    download https://github.com/facebook/zstd/archive/refs/tags/v${ZSTD_VERSION}.tar.gz
-    extract v${ZSTD_VERSION}.tar.gz
-    pushd zstd-${ZSTD_VERSION}
-    pushd build
-    pushd cmake
-    mkdir build
-    pushd build
-    cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_SHARED=${BUILD_SHARED_LIBS} -DZSTD_BUILD_STATIC=${BUILD_STATIC_LIBS}
-    cmake_build_and_install
-    popd
-    popd
-    popd
-    popd
-    check_artifact_cleanup v${ZSTD_VERSION}.tar.gz zstd-${ZSTD_VERSION}
 
     # openjpeg (for gdal JP2/Sentinel2 support)
     download https://github.com/uclouvain/openjpeg/archive/refs/tags/v${OPENJPEG_VERSION}.tar.gz
@@ -505,7 +641,10 @@ function install_gdal_and_pdal() {
     mkdir build
     pushd build
     cmake .. -DCMAKE_BUILD_TYPE=Release \
+             -DCMAKE_C_FLAGS="$CFLAGS" \
+             -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
              -DCMAKE_INSTALL_PREFIX=$PREFIX \
+             -DCMAKE_DISABLE_FIND_PACKAGE_Arrow=on \
              -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
              -DGDAL_USE_GEOS=off \
              -DGDAL_USE_ARROW=off \
@@ -515,6 +654,8 @@ function install_gdal_and_pdal() {
              -DGDAL_USE_ARCHIVE=off \
              -DGDAL_USE_PCRE=off \
              -DGDAL_USE_OPENCL=off \
+             -DGDAL_USE_MYSQL=off \
+             -DGDAL_USE_POSTGRESQL=off \
              -DGDAL_USE_XERCESC=off \
              -DBUILD_APPS=${BUILD_PROJ_GDAL_APPS} \
              -DBUILD_PYTHON_BINDINGS=off
@@ -529,12 +670,38 @@ function install_gdal_and_pdal() {
     pushd PDAL-${PDAL_VERSION}-src
     patch -p1 < $SCRIPTS_DIR/pdal-asan-leak-4be888818861d34145aca262014a00ee39c90b29.patch
     patch -p1 < $SCRIPTS_DIR/pdal-gdal-3.7.2-const-ogrspatialreference.patch
-    if [ "$1" == "static" ] ; then
-      patch -p1 < $SCRIPTS_DIR/pdal-${PDAL_VERSION}-static-linking.patch
+    if [ "$LIBRARY_TYPE" == "static" ] ; then
+      # Build static libraries
+      build_static_libs=$(printf "/%s/c %s%s" \
+          'set(PDAL_LIB_TYPE "SHARED")' \
+          'set(PDAL_LIB_TYPE "STATIC")\n' \
+          'set(CMAKE_FIND_LIBRARY_SUFFIXES .a)')
+      sed -i "$build_static_libs" cmake/libraries.cmake
+      sed -Ei 's/PDAL_ADD_FREE_LIBRARY\((\S+) (SHARED|STATIC)/PDAL_ADD_LIBRARY(\1/' \
+          pdal/util/CMakeLists.txt \
+          vendor/arbiter/CMakeLists.txt \
+          vendor/kazhdan/CMakeLists.txt \
+          vendor/lazperf/CMakeLists.txt
+      export_libs=$(printf '/^ *export( *$/,/^ *FILE *$/ { /^ *FILE *$/i\\\n%s%s%s\n}' \
+          '        ${PDAL_ARBITER_LIB_NAME}\n' \
+          '        ${PDAL_KAZHDAN_LIB_NAME}\n' \
+          '        ${PDAL_LAZPERF_LIB_NAME}')
+      sed -i "$export_libs" CMakeLists.txt
+      # System libunwind.a has R_X86_64_32 code and causes linking problems w/ heavydb.
+      sed -i 's|^include(${PDAL_CMAKE_DIR}/unwind.cmake)|#&|' pdal/util/CMakeLists.txt
+      sed -i 's|^include(${PDAL_CMAKE_DIR}/execinfo.cmake)|#&|' pdal/util/CMakeLists.txt
+      # Don't build libpdal_plugin_kernel_fauxplugin.so or bin/pdal
+      sed -i 's/^/#/' plugins/faux/CMakeLists.txt
+      sed -i '/# Configure build targets/,/# Targets installation/s/^/#/' apps/CMakeLists.txt
     fi
     mkdir build
     pushd build
-    cmake .. -DWITH_TESTS=off -DCMAKE_INSTALL_PREFIX=$PREFIX || true
+    cmake .. -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
+             -DCMAKE_INSTALL_PREFIX=$PREFIX \
+             -DCMAKE_POSITION_INDEPENDENT_CODE=$CMAKE_POSITION_INDEPENDENT_CODE \
+             -DBUILD_PLUGIN_PGPOINTCLOUD=off \
+             -DBUILD_SHARED_LIBS=$BUILD_SHARED_LIBS \
+             -DWITH_TESTS=off
     cmake_build_and_install
     popd
     popd
@@ -724,7 +891,7 @@ function install_rdkafka() {
     check_artifact_cleanup  v$RDKAFKA_VERSION.tar.gz "librdkafka-$RDKAFKA_VERSION"
 }
 
-GO_VERSION=1.22.6
+GO_VERSION=1.23.3
 
 function install_go() {
   # substitute alternative arch tags
@@ -967,7 +1134,7 @@ function install_onedal() {
     sed -i -E s/libtbb.so\(\.[1-9]+\)?/libtbb\.a/g makefile
     sed -i -E s/libtbbmalloc.so\(\.[1-9]+\)?/libtbbmalloc\.a/g makefile
 
-    # do not release shared library targets on CentOS
+    # do not release shared library targets
     sed -i '/foreach t,\$(releasetbb\.LIBS_Y)/d' makefile
     sed -i 's/$(core_y) \\//g' makefile
     sed -i 's/:= $(oneapi_y)/:= /g' makefile
@@ -1058,4 +1225,42 @@ function install_archive(){
   make install
   popd
   check_artifact_cleanup  v${ARCHIVE_VERSION}.tar.gz gflags-$ARCHIVE_VERSION
+}
+
+LZ4_VERSION=1.9.4
+function install_lz4(){
+  download https://github.com/lz4/lz4/archive/refs/tags/v$LZ4_VERSION.tar.gz
+  extract v$LZ4_VERSION.tar.gz
+  ( cd lz4-$LZ4_VERSION/build
+    cmake cmake \
+        -DBUILD_SHARED_LIBS=off \
+        -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE" \
+        -DCMAKE_C_FLAGS="$CFLAGS" \
+        -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=on
+    cmake_build_and_install
+  )
+  check_artifact_cleanup v$LZ4_VERSION.tar.gz lz4-$LZ4_VERSION
+}
+
+URIPARSER_VERSION=0.9.8
+function install_uriparser() {
+  NAME="uriparser-$URIPARSER_VERSION"
+  download https://github.com/uriparser/uriparser/archive/refs/tags/$NAME.tar.gz
+  extract $NAME.tar.gz
+  mkdir uriparser-$NAME/build
+  ( cd uriparser-$NAME/build
+    cmake .. \
+        -DBUILD_SHARED_LIBS=off \
+        -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE" \
+        -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
+        -DCMAKE_C_FLAGS="$CFLAGS" \
+        -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=on \
+        -DURIPARSER_BUILD_DOCS=off \
+        -DURIPARSER_BUILD_TESTS=off
+    makej
+    make install
+  )
+  check_artifact_cleanup $NAME.tar.gz uriparser-$NAME
 }
