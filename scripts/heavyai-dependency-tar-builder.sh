@@ -122,9 +122,8 @@ OPERATING_SYSTEM=$(echo $OPERATING_SYSTEM | sed 's/[0-9,\.]*$//')
 # common-functions.sh script sourced by the 'main' mapd-deps-${OPERATING_SYSTEM}
 # script.
 #
-MIRRORLIST_PATCH="sed -i 's/mirror.centos.org/vault.centos.org/' /etc/yum.repos.d/*.repo && sed -i 's/^#.*baseurl=http:/baseurl=https:/' /etc/yum.repos.d/*.repo && sed -i 's/^mirrorlist=http:/#mirrorlist=https:/' /etc/yum.repos.d/*.repo && echo 'sslverify=false' >> /etc/yum.conf"
-if [[ $OPERATING_SYSTEM == "centos" ]] ; then
-  docker_cmd="${MIRRORLIST_PATCH} && yum install sudo -y"
+if [[ $OPERATING_SYSTEM == "rockylinux" ]] ; then
+  docker_cmd="dnf install sudo -y"
 else
   docker_cmd='echo -e "#!/bin/sh\n\${@}" > /usr/sbin/sudo && chmod +x /usr/sbin/sudo'
 fi

@@ -21,7 +21,7 @@ if(ENABLE_CUDA)
 endif()
 
 find_package(absl REQUIRED)
-#set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+#set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${AwsS3_CURL_SUPPORT} ${OS_SPECIFIC_LICENSING_LIBS})
 # If ENABLE_AWS_S3=off AwsS3_CURL_SUPPORT will be empty
 set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner absl::str_format ${MAPD_LIBRARIES}
   ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${AwsS3_CURL_SUPPORT})
@@ -753,7 +753,7 @@ endif()
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   add_executable(MultiInstanceTest ee/MultiInstanceTest.cpp)
-  target_link_libraries(MultiInstanceTest gtest ${MAPD_LIBRARIES} ${CURL_LIBRARIES})
+  target_link_libraries(MultiInstanceTest gtest ${MAPD_LIBRARIES} ${CURL_LIBRARIES} ${OS_SPECIFIC_LICENSING_LIBS})
   add_dependencies(MultiInstanceTest thrift_gen)
   add_dependencies(MultiInstanceTest heavydb) # test invokes heavydb bin directly
   add_dependencies(MultiInstanceTest mapd_java_components)

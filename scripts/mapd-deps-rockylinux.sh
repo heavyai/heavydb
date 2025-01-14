@@ -7,6 +7,7 @@ set -x
 TSAN=false
 COMPRESS=false
 SAVE_SPACE=false
+UPDATE_PACKAGES=false
 CACHE=
 LIBRARY_TYPE=
 
@@ -21,6 +22,9 @@ fi
 
 while (( $# )); do
   case "$1" in
+    --update-packages)
+      UPDATE_PACKAGES=true
+      ;;
     --compress)
       COMPRESS=true
       ;;
@@ -68,7 +72,7 @@ echo "Building with ${NPROC} cores"
 
 if [[ ! -x  "$(command -v sudo)" ]] ; then
   if [ "$EUID" -eq 0 ] ; then
-    yum install -y sudo  
+    dnf install -y sudo  
   else
     echo "ERROR - sudo not installed and not running as root"
     exit
@@ -90,30 +94,14 @@ export LD_LIBRARY_PATH=$PREFIX/lib64:$PREFIX/lib:$LD_LIBRARY_PATH
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source $SCRIPTS_DIR/common-functions-centos.sh
+source $SCRIPTS_DIR/common-functions-rockylinux.sh
 
-sudo yum groupinstall -y "Development Tools"
-sudo yum install -y \
-    ca-certificates \
-    zlib-devel \
-    epel-release \
-    which \
-    libssh \
-    git \
-    java-1.8.0-openjdk-devel \
-    java-1.8.0-openjdk-headless \
-    gperftools \
-    gperftools-devel \
-    gperftools-libs \
-    wget \
-    curl \
-    python3 \
-    patchelf \
-    perl-IPC-Cmd
-sudo yum install -y \
-    jq \
-    pxz
+sudo dnf groupinstall -y "Development Tools"
+
+install_required_rockylinux_packages
+
 generate_deps_version_file
+
 # mold fast linker
 install_mold_precompiled_x86_64
 
@@ -130,7 +118,7 @@ download_make_install ftp://ftp.gnu.org/gnu/mpc/mpc-1.1.0.tar.gz "" "--with-gmp=
 download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"  
 download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.16.1.tar.xz 
 
-install_centos_gcc
+install_gcc
 
 export CC=$PREFIX/bin/gcc
 export CXX=$PREFIX/bin/g++
@@ -143,18 +131,37 @@ install_openssl
 
 install_openldap2
 
-install_cmake
+# install_idn2
+VERS=2.2.0
+CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libidn2-$VERS.tar.gz "" "--disable-shared --enable-static"
 
-install_boost
+install_unistring
 
 download_make_install ftp://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz
+
+# requires libtool
+install_libmd
+
+# TODO: move xml2 after readline
+install_xml2
+
+install_cmake
+
+# icu and bzip2 (needed for boost)
+install_icu
+
+install_bzip2
+
+install_boost
+# TODO(scb): BOOST_ROOT may no longer be necessary (it was only to build xerces-c *I think*)
+export BOOST_ROOT=$PREFIX/include
 
 # http://zlib.net/zlib-1.2.8.tar.xz
 download_make_install ${HTTP_DEPS}/zlib-1.2.8.tar.xz
 
 install_memkind
 
-install_bzip2
+install_uriparser
 
 # libarchive
 CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared --with-pic"
@@ -167,7 +174,7 @@ download_make_install ftp://ftp.gnu.org/gnu/bison/bison-3.4.2.tar.xz # "" "--bui
 # https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz
 download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 
-CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/gnu/readline/readline-7.0.tar.gz
+CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/gnu/readline/readline-7.0.tar.gz "" "--disable-shared"
 
 install_double_conversion
 
@@ -204,16 +211,15 @@ install_gdal_and_pdal static
 install_gdal_tools
 install_geos
 
-# llvm
 # http://thrysoee.dk/editline/libedit-20230828-3.1.tar.gz
 CPPFLAGS="-I$PREFIX/include/ncurses" download_make_install ${HTTP_DEPS}/libedit-20230828-3.1.tar.gz
 
-# (see common-functions-centos.sh)
+# llvm
 install_llvm 
 
 install_iwyu 
 
-download_make_install https://mirrors.sarata.com/gnu/binutils/binutils-2.32.tar.xz
+download_make_install https://ftp.gnu.org/gnu/binutils/binutils-2.32.tar.xz
 
 # TBB
 install_tbb static
@@ -227,7 +233,7 @@ install_go
 # install AWS core and s3 sdk
 install_awscpp
 
-# Apache Arrow (see common-functions-centos.sh)
+# Apache Arrow
 install_arrow
 
 # abseil
@@ -282,29 +288,23 @@ install_vulkan
 # GLM (GL Mathematics)
 install_glm
 
-# install opensaml and its dependencies
-VERS=3.2.2
-download ${HTTP_DEPS}/xerces-c-$VERS.tar.gz
-extract xerces-c-$VERS.tar.gz
-XERCESCROOT=$PWD/xerces-c-$VERS
-mkdir $XERCESCROOT/build
-pushd $XERCESCROOT/build
-cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_SHARED_LIBS=off -Dnetwork=off -DCMAKE_BUILD_TYPE=release ..
-makej
-make install
-popd
+# LZ4 required by rdkafka
+install_lz4
 
+# OpenSAML
+install_xerces_c
 download_make_install ${HTTP_DEPS}/xml-security-c-2.0.4.tar.gz "" "--without-xalan --enable-static --disable-shared"
 download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz "" "--enable-static --disable-shared"
 CXXFLAGS="-std=c++14" download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz "" "--enable-static --disable-shared"
 
-sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.modulefile.in > mapd-deps-$SUFFIX.modulefile
-sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.sh.in > mapd-deps-$SUFFIX.sh
+sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" ${SCRIPTS_DIR}/mapd-deps.modulefile.in > mapd-deps-$SUFFIX.modulefile
+sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" ${SCRIPTS_DIR}/mapd-deps.sh.in > mapd-deps-$SUFFIX.sh
+
 
 cp mapd-deps-$SUFFIX.sh mapd-deps-$SUFFIX.modulefile $PREFIX
 
 if [ "$COMPRESS" = "true" ] ; then
-    OS=centos7
+    OS=rockylinux8
       TARBALL_TSAN=""
     if [ "$TSAN" = "true" ]; then
       TARBALL_TSAN="-tsan"
@@ -313,3 +313,5 @@ if [ "$COMPRESS" = "true" ] ; then
     tar -cvf ${FILENAME} -C $(dirname $PREFIX) $SUFFIX
     pxz ${FILENAME}
 fi
+
+echo "Finished!!!"
