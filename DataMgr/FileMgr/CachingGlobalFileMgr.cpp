@@ -36,6 +36,7 @@ AbstractBuffer* CachingGlobalFileMgr::createBuffer(const ChunkKey& chunk_key,
                                                    const size_t initial_size) {
   auto buf = GlobalFileMgr::createBuffer(chunk_key, page_size, initial_size);
   if (isChunkPrefixCacheable(chunk_key)) {
+    heavyai::unique_lock<heavyai::shared_mutex> write_lock(cached_chunk_keys_mutex_);
     cached_chunk_keys_.emplace(chunk_key);
   }
   return buf;
@@ -44,6 +45,7 @@ AbstractBuffer* CachingGlobalFileMgr::createBuffer(const ChunkKey& chunk_key,
 void CachingGlobalFileMgr::deleteBuffer(const ChunkKey& chunk_key, const bool purge) {
   if (isChunkPrefixCacheable(chunk_key)) {
     disk_cache_->deleteBufferIfExists(chunk_key);
+    heavyai::unique_lock<heavyai::shared_mutex> write_lock(cached_chunk_keys_mutex_);
     cached_chunk_keys_.erase(chunk_key);
   }
   GlobalFileMgr::deleteBuffer(chunk_key, purge);
@@ -57,6 +59,7 @@ void CachingGlobalFileMgr::deleteBuffersWithPrefix(const ChunkKey& chunk_key_pre
 
     ChunkKey upper_prefix(chunk_key_prefix);
     upper_prefix.push_back(std::numeric_limits<int>::max());
+    heavyai::unique_lock<heavyai::shared_mutex> write_lock(cached_chunk_keys_mutex_);
     auto end_it =
         cached_chunk_keys_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
     for (auto&& chunk_key_it = cached_chunk_keys_.lower_bound(chunk_key_prefix);
@@ -128,12 +131,15 @@ AbstractBuffer* CachingGlobalFileMgr::putBuffer(const ChunkKey& chunk_key,
 
 void CachingGlobalFileMgr::checkpoint() {
   std::set<File_Namespace::TablePair> tables_to_checkpoint;
-  for (auto& key : cached_chunk_keys_) {
-    if (isChunkPrefixCacheable(key) && GlobalFileMgr::getBuffer(key)->isDirty()) {
-      tables_to_checkpoint.emplace(get_table_prefix(key));
-      foreign_storage::ForeignStorageBuffer temp_buf;
-      GlobalFileMgr::fetchBuffer(key, &temp_buf, 0);
-      disk_cache_->putBuffer(key, &temp_buf);
+  {
+    heavyai::shared_lock<heavyai::shared_mutex> read_lock(cached_chunk_keys_mutex_);
+    for (const auto& key : cached_chunk_keys_) {
+      if (isChunkPrefixCacheable(key) && GlobalFileMgr::getBuffer(key)->isDirty()) {
+        tables_to_checkpoint.emplace(get_table_prefix(key));
+        foreign_storage::ForeignStorageBuffer temp_buf;
+        GlobalFileMgr::fetchBuffer(key, &temp_buf, 0);
+        disk_cache_->putBuffer(key, &temp_buf);
+      }
     }
   }
   for (auto [db, tb] : tables_to_checkpoint) {
@@ -148,16 +154,19 @@ void CachingGlobalFileMgr::checkpoint(const int db_id, const int tb_id) {
     ChunkKey chunk_prefix{db_id, tb_id};
     ChunkKey upper_prefix(chunk_prefix);
     upper_prefix.push_back(std::numeric_limits<int>::max());
-    auto end_it =
-        cached_chunk_keys_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
-    for (auto&& chunk_key_it = cached_chunk_keys_.lower_bound(chunk_prefix);
-         chunk_key_it != end_it;
-         ++chunk_key_it) {
-      if (GlobalFileMgr::getBuffer(*chunk_key_it)->isDirty()) {
-        need_checkpoint = true;
-        foreign_storage::ForeignStorageBuffer temp_buf;
-        GlobalFileMgr::fetchBuffer(*chunk_key_it, &temp_buf, 0);
-        disk_cache_->putBuffer(*chunk_key_it, &temp_buf);
+    {
+      heavyai::shared_lock<heavyai::shared_mutex> read_lock(cached_chunk_keys_mutex_);
+      auto end_it =
+          cached_chunk_keys_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
+      for (auto&& chunk_key_it = cached_chunk_keys_.lower_bound(chunk_prefix);
+           chunk_key_it != end_it;
+           ++chunk_key_it) {
+        if (GlobalFileMgr::getBuffer(*chunk_key_it)->isDirty()) {
+          need_checkpoint = true;
+          foreign_storage::ForeignStorageBuffer temp_buf;
+          GlobalFileMgr::fetchBuffer(*chunk_key_it, &temp_buf, 0);
+          disk_cache_->putBuffer(*chunk_key_it, &temp_buf);
+        }
       }
     }
     if (need_checkpoint) {
@@ -173,11 +182,14 @@ void CachingGlobalFileMgr::removeCachedData(const int db_id, const int table_id)
     disk_cache_->clearForTablePrefix(table_key);
     ChunkKey upper_prefix(table_key);
     upper_prefix.push_back(std::numeric_limits<int>::max());
-    auto end_it =
-        cached_chunk_keys_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
-    for (auto&& chunk_key_it = cached_chunk_keys_.lower_bound(table_key);
-         chunk_key_it != end_it;) {
-      chunk_key_it = cached_chunk_keys_.erase(chunk_key_it);
+    {
+      heavyai::unique_lock<heavyai::shared_mutex> write_lock(cached_chunk_keys_mutex_);
+      auto end_it =
+          cached_chunk_keys_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
+      for (auto&& chunk_key_it = cached_chunk_keys_.lower_bound(table_key);
+           chunk_key_it != end_it;) {
+        chunk_key_it = cached_chunk_keys_.erase(chunk_key_it);
+      }
     }
   }
 }
