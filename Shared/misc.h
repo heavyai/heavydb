@@ -19,7 +19,9 @@
 #include "funcannotations.h"
 
 #include <array>
+#if __cplusplus >= 202002L
 #include <bit>
+#endif
 #include <cstdint>
 #include <cstring>
 #include <deque>
