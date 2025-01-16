@@ -90,6 +90,8 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import ai.heavy.thrift.server.TColumnType;
@@ -232,6 +234,35 @@ public final class HeavyDBParser {
     }
   }
 
+  private boolean isColumnDefinedInTable(
+          String colName, String tableName, MetaConnect mc) {
+    try {
+      TTableDetails tableDetails = mc.get_table_details(tableName);
+      return null
+              != tableDetails.row_desc.stream()
+                         .filter(colType
+                                 -> colType.col_name.toLowerCase(Locale.ROOT)
+                                            .equals(colName.toLowerCase(Locale.ROOT)))
+                         .findFirst()
+                         .orElse(null);
+    } catch (Exception e) {
+      final String regex = "Table .* does not exist for DB";
+      Pattern pattern = Pattern.compile(regex);
+      Matcher matcher = pattern.matcher(e.getMessage());
+      if (matcher.find()) {
+        // skip checking the existence of the column
+        return true;
+      }
+      throw new RuntimeException(e);
+    }
+  }
+
+  private String getSqlIdentifierOperandNameAt(SqlNode sqlIdentifier, int index) {
+    assert sqlIdentifier instanceof SqlIdentifier;
+    assert ((SqlIdentifier) sqlIdentifier).names.size() > index;
+    return ((SqlIdentifier) sqlIdentifier).names.get(index);
+  }
+
   private HeavyDBPlanner getPlanner(final boolean allowSubQueryExpansion,
           final boolean isWatchdogEnabled,
           final boolean isDistributedMode) {
@@ -291,43 +322,93 @@ public final class HeavyDBParser {
                     return false;
                   }
                   boolean hasHashJoinableExpression = false;
-                  if (isWatchdogEnabled) {
-                    // when watchdog is enabled, we try to selectively allow decorrelation
-                    // iff IN-expression is between two columns that both are hash
-                    // joinable
-                    Map<String, String> tableAliasMap = new HashMap<>();
-                    if (root instanceof SqlSelect) {
-                      tableAliasFinder(((SqlSelect) root).getFrom(), tableAliasMap);
-                    }
-                    tableAliasFinder(innerSelectCall.getFrom(), tableAliasMap);
-                    if (outerSelectCall.getOperandList().get(0) instanceof SqlIdentifier
-                            && innerSelectCall.getSelectList().get(0)
-                                            instanceof SqlIdentifier) {
-                      SqlIdentifier outerColIdentifier =
-                              (SqlIdentifier) outerSelectCall.getOperandList().get(0);
-                      SqlIdentifier innerColIdentifier =
-                              (SqlIdentifier) innerSelectCall.getSelectList().get(0);
-                      if (tableAliasMap.containsKey(outerColIdentifier.names.get(0))
-                              && tableAliasMap.containsKey(
-                                      innerColIdentifier.names.get(0))) {
-                        String outerTableName =
-                                tableAliasMap.get(outerColIdentifier.names.get(0));
-                        String innerTableName =
-                                tableAliasMap.get(innerColIdentifier.names.get(0));
-                        if (isColumnHashJoinable(ImmutableList.of(outerTableName,
-                                                         outerColIdentifier.names.get(1)),
-                                    mc)
-                                && isColumnHashJoinable(
-                                        ImmutableList.of(innerTableName,
-                                                innerColIdentifier.names.get(1)),
-                                        mc)) {
-                          hasHashJoinableExpression = true;
+                  // when watchdog is enabled, we try to selectively allow decorrelation
+                  // iff IN-expression is between two columns that both are hash
+                  // joinable
+                  Map<String, String> tableAliasMap = new HashMap<>();
+                  if (root instanceof SqlSelect) {
+                    tableAliasFinder(((SqlSelect) root).getFrom(), tableAliasMap);
+                  }
+                  tableAliasFinder(innerSelectCall.getFrom(), tableAliasMap);
+                  if (outerSelectCall.getOperandList().get(0) instanceof SqlIdentifier
+                          && innerSelectCall.getSelectList().get(0)
+                                          instanceof SqlIdentifier) {
+                    SqlIdentifier outerColIdentifier =
+                            (SqlIdentifier) outerSelectCall.getOperandList().get(0);
+                    SqlIdentifier innerColIdentifier =
+                            (SqlIdentifier) innerSelectCall.getSelectList().get(0);
+                    String outerTableName =
+                            getSqlIdentifierOperandNameAt(outerColIdentifier, 0);
+                    String innerTableName =
+                            getSqlIdentifierOperandNameAt(innerColIdentifier, 0);
+                    if (tableAliasMap.containsKey(outerTableName)
+                            && tableAliasMap.containsKey(innerTableName)) {
+                      if (innerSelectCall.getFrom() instanceof SqlBasicCall) {
+                        SqlBasicCall innerFromCall =
+                                (SqlBasicCall) innerSelectCall.getFrom();
+                        if (innerFromCall.getOperandList().get(1)
+                                        instanceof SqlIdentifier) {
+                          String innerFromTableName = getSqlIdentifierOperandNameAt(
+                                  innerFromCall.getOperandList().get(1), 0);
+                          String innerFromColName = getSqlIdentifierOperandNameAt(
+                                  innerSelectCall.getSelectList().get(0), 1);
+                          SqlIdentifier innerFromTableInfo =
+                                  (SqlIdentifier) innerFromCall.getOperandList().get(0);
+                          // a regular table has a name format as: db.table_name
+                          // if not, it is an intermediate one such as CTE, i.e., WITH ...
+                          // and it only contains a table_name
+                          if (null != innerFromTableInfo
+                                  && innerFromTableInfo.names.size() > 1) {
+                            String innerFromTableDbName = innerFromTableInfo.names.get(0);
+                            // todo: remove this after resolving the issue within Calcite
+                            MetaConnect mcForInnerFromTableDB = mc;
+                            if (!mc.getDatabases().get(0).equals(innerFromTableDbName)) {
+                              // inner from table is defined within a db which is not
+                              // equal to the current meta connect instance
+                              HeavyDBUser dbUser2 = new HeavyDBUser(dbUser.getUser(),
+                                      dbUser.getSession(),
+                                      innerFromTableDbName,
+                                      -1,
+                                      ImmutableList.of());
+                              mcForInnerFromTableDB = new MetaConnect(dbPort,
+                                      dataDir,
+                                      dbUser2,
+                                      mc.getParser(),
+                                      sock_transport_properties,
+                                      innerFromTableDbName);
+                            }
+                            if (!isColumnDefinedInTable(innerFromColName,
+                                        tableAliasMap.getOrDefault(
+                                                innerFromTableName, innerFromTableName),
+                                        mcForInnerFromTableDB)) {
+                              System.out.println("Detected an invalid IN clause: table \""
+                                      + innerFromTableName
+                                      + "\" does not have a column named \""
+                                      + innerFromColName + "\"");
+                              throw new CalciteException(
+                                      "Detected an invalid IN clause: table \""
+                                              + innerFromTableName
+                                              + "\" does not have a column named \""
+                                              + innerFromColName + "\"",
+                                      null);
+                            }
+                          }
                         }
                       }
+                      if (isColumnHashJoinable(
+                                  ImmutableList.of(tableAliasMap.get(outerTableName),
+                                          outerColIdentifier.names.get(1)),
+                                  mc)
+                              && isColumnHashJoinable(
+                                      ImmutableList.of(tableAliasMap.get(innerTableName),
+                                              innerColIdentifier.names.get(1)),
+                                      mc)) {
+                        hasHashJoinableExpression = true;
+                      }
                     }
-                    if (!hasHashJoinableExpression) {
-                      return false;
-                    }
+                  }
+                  if (isWatchdogEnabled && !hasHashJoinableExpression) {
+                    return false;
                   }
                 }
               }

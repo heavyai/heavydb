@@ -174,6 +174,10 @@ public class MetaConnect {
     HEAVYDBLOGGER.debug("Opened database successfully");
   }
 
+  public HeavyDBParser getParser() {
+    return this.parser;
+  }
+
   String getCatalogFileName(String catalog) {
     String path = dataDir + "/" + CATALOG_DIR_NAME;
     File directory = new File(path);
