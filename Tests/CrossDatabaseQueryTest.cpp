@@ -376,6 +376,20 @@ TEST_F(CrossDatabaseQueryTest,
       "c2");
 }
 
+TEST_F(CrossDatabaseQueryTest, InClauseHavingInvalidInnerCol) {
+  std::string const expected_err_msg{
+      "Detected an invalid IN clause: table \"db_2_table\" does not have a column named "
+      "\"a\""};
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "db_1");
+  sql("DROP TABLE IF EXISTS tt1;");
+  sql("CREATE TABLE tt1 (a text encoding dict(32));");
+  ScopeGuard drop_ddl = [] { sql("DROP TABLE IF EXISTS tt1;"); };
+  queryAndAssertException(
+      "SELECT MAX(c) AS max_c FROM (SELECT COUNT(*) AS c FROM tt1 WHERE a IN (SELECT a "
+      "FROM db_2.db_2_table WHERE t = 'yes') GROUP BY a) LIMIT 5;",
+      expected_err_msg);
+}
+
 class CrossDatabaseWriteQueryTest : public CrossDatabaseQueryTest {
  public:
   static void SetUpTestSuite() { CrossDatabaseQueryTest::SetUpTestSuite(); }
