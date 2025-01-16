@@ -1684,6 +1684,30 @@ TEST(Select, NotSupportedDecorrelation) {
   }
 }
 
+TEST(Select, InClauseHavingInvalidInnerCol) {
+  auto drop_table = []() {
+    for (std::string tbl : {"qe_1333_1", "qe_1333_2"}) {
+      QR::get()->runDDLStatement("DROP TABLE IF EXISTS " + tbl + ";");
+    }
+  };
+  ScopeGuard drop_tbls = [drop_table] { drop_table(); };
+  drop_table();
+  QR::get()->runDDLStatement("CREATE TABLE qe_1333_1 (a text encoding dict(32));");
+  QR::get()->runDDLStatement("CREATE TABLE qe_1333_2 (s text encoding dict(32));");
+
+  try {
+    QR::get()->runSQL(
+        "SELECT MAX(c) AS max_c FROM (SELECT COUNT(*) AS c FROM qe_1333_1 WHERE a IN "
+        "(SELECT a FROM qe_1333_2 WHERE s = 'yes') GROUP BY a) LIMIT 5;",
+        ExecutorDeviceType::CPU);
+  } catch (std::exception const& e) {
+    std::string const expected_err_msg{
+        "Detected an invalid IN clause: table \"qe_1333_2\" does not have a column named "
+        "\"a\""};
+    EXPECT_TRUE(expected_err_msg.compare(e.what()) == 0);
+  }
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
