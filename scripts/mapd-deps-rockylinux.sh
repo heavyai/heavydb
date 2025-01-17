@@ -297,6 +297,9 @@ download_make_install ${HTTP_DEPS}/xml-security-c-2.0.4.tar.gz "" "--without-xal
 download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz "" "--enable-static --disable-shared"
 CXXFLAGS="-std=c++14" download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz "" "--enable-static --disable-shared"
 
+# H3
+install_h3
+
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" ${SCRIPTS_DIR}/mapd-deps.modulefile.in > mapd-deps-$SUFFIX.modulefile
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" ${SCRIPTS_DIR}/mapd-deps.sh.in > mapd-deps-$SUFFIX.sh
 
