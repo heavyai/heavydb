@@ -1242,3 +1242,29 @@ function safe_symlink() {
     exit 1
   fi
 }
+
+H3_VERSION=4.2.0
+
+function install_h3() {
+  download https://github.com/uber/h3/archive/refs/tags/v${H3_VERSION}.tar.gz
+  extract v${H3_VERSION}.tar.gz
+  pushd h3-${H3_VERSION}
+  mkdir build
+  pushd build
+  cmake \
+    -DCMAKE_INSTALL_PREFIX=${PREFIX} \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=on \
+    -DBUILD_BENCHMARKS=off \
+    -DBUILD_FILTERS=off \
+    -DBUILD_FUZZERS=off \
+    -DBUILD_GENERATORS=off \
+    -DBUILD_TESTING=off \
+    -DENABLE_DOCS=off \
+    -DENABLE_WARNINGS=off \
+    ..
+  cmake_build_and_install  
+  popd
+  popd
+  check_artifact_cleanup v${H3_VERSION}.tar.gz h3-${H3_VERSION}
+}
