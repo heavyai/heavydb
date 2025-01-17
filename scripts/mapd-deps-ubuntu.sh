@@ -289,6 +289,9 @@ download_make_install ${HTTP_DEPS}/xml-security-c-2.0.4.tar.gz "" "$CONFIGURE_OP
 download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz "" "$CONFIGURE_OPTS"
 CXXFLAGS="-std=c++14" download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz "" "$CONFIGURE_OPTS"
 
+# H3
+install_h3
+
 # Generate mapd-deps.sh
 cat > $PREFIX/mapd-deps.sh <<EOF
 HEAVY_PREFIX=$PREFIX
