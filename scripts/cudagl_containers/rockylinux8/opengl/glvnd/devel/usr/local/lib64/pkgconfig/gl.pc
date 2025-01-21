@@ -1,0 +1,12 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${prefix}/lib64
+includedir=${prefix}/include
+
+Name: gl
+Description: glvnd OpenGL library
+Requires.private:  x11 xcb xau xdmcp
+Version: 1.0.0
+Libs: -L${libdir} -lGL
+Libs.private: -lpthread -ldl
+Cflags: -I${includedir}
