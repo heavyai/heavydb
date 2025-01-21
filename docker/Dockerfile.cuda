@@ -1,4 +1,4 @@
-ARG BASE_CUDA_IMAGE=docker-internal.mapd.com/cudagl/ubuntu22.04-cuda12.2.2-x86_64-runtime:20241115
+ARG BASE_CUDA_IMAGE=docker-internal.mapd.com/cudagl/ubuntu22.04-cuda12.2.2-x86_64-runtime:latest
 
 # Copy and extract HEAVY.AI tarball. In own stage so that the temporary tarball
 # isn't included in a layer.

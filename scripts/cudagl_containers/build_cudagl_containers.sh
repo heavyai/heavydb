@@ -19,6 +19,9 @@ OS_VERSION=22.04
 CUDA_VERSION=12.2.2
 ARCH=x86_64
 
+# Tag image with "latest" in addition to version tag
+TAG_LATEST=false
+
 # Push images to docker-internal.mapd.com once complete
 PUSH_IMAGES=false
 
@@ -71,16 +74,23 @@ function update_and_retag_image() {
 
   printf -v DATE_TAG '%(%Y%m%d)T' -1
   ORIGINAL_IMAGE_NAME="${IMAGE_NAME}:${CUDA_VERSION}-${IMAGE_CLASS}-${OS}${OS_VERSION}"
-  NEW_IMAGE_NAME="${IMAGE_NAME}/${OS}${OS_VERSION}-cuda${CUDA_VERSION}-${ARCH}-${IMAGE_CLASS}:${DATE_TAG}"
+  NEW_IMAGE_NAME_BASE="${IMAGE_NAME}/${OS}${OS_VERSION}-cuda${CUDA_VERSION}-${ARCH}-${IMAGE_CLASS}"
+  NEW_IMAGE_NAME_TAGGED="${NEW_IMAGE_NAME_BASE}:${DATE_TAG}"
+  NEW_IMAGE_NAME_LATEST="${NEW_IMAGE_NAME_BASE}:latest"
 
   # Generate package updater script
-  cp ${SCRIPTS_DIR}/gen_cudagl_package_updater.sh ${TEMP_DIR}
-  docker run --rm -t \
-    -v $TEMP_DIR:/scripts \
-    --workdir="/scripts" \
-    -e USER=root \
-    $ORIGINAL_IMAGE_NAME \
-    bash -c "./gen_cudagl_package_updater.sh"
+  if [[ ${OS} = "ubuntu" ]] ; then
+    cp ${SCRIPTS_DIR}/gen_cudagl_package_updater.sh ${TEMP_DIR}
+    docker run --rm -t \
+      -v $TEMP_DIR:/scripts \
+      --workdir="/scripts" \
+      -e USER=root \
+      $ORIGINAL_IMAGE_NAME \
+      bash -c "./gen_cudagl_package_updater.sh"
+  else
+    # Rockylinux Dockerfile performs a yum upgrade so packages will be up to date
+    cp ${SCRIPTS_DIR}/cudagl_package_updater.sh ${TEMP_DIR}
+  fi
 
   # build using Dockerfile which will run generated cudagl_package_updater.sh
   # tag upgraded image using heavyai internal naming scheme
@@ -88,10 +98,14 @@ function update_and_retag_image() {
   pushd ${TEMP_DIR}
   sudo docker build \
     -f Dockerfile \
-    -t ${NEW_IMAGE_NAME} \
+    -t ${NEW_IMAGE_NAME_TAGGED} \
     --build-arg BASE_IMAGE=${ORIGINAL_IMAGE_NAME} \
     .
   popd
+
+  if [ ${TAG_LATEST} = "true" ]; then
+    docker tag ${NEW_IMAGE_NAME_TAGGED} ${NEW_IMAGE_NAME_LATEST}
+  fi
 
   # Remove original image
   docker rmi "${ORIGINAL_IMAGE_NAME}"
@@ -100,7 +114,10 @@ function update_and_retag_image() {
 
   # Push new image to internal registry
   if [ ${PUSH_IMAGES} = "true" ]; then
-    docker push ${NEW_IMAGE_NAME}
+    docker push ${NEW_IMAGE_NAME_TAGGED}
+    if [ ${TAG_LATEST} = "true" ]; then
+      docker push ${NEW_IMAGE_NAME_LATEST}
+    fi
   fi
 
   # Remove local copy of generated image
@@ -108,7 +125,10 @@ function update_and_retag_image() {
     if [ ${PUSH_IMAGES} = "false" ]; then
       echo "WARNING: Removing unpushed local image copy!"
     fi
-    docker rmi ${NEW_IMAGE_NAME}
+    docker rmi ${NEW_IMAGE_NAME_TAGGED}
+    if [ ${TAG_LATEST} = "true" ]; then
+      docker rmi ${NEW_IMAGE_NAME_LATEST}
+    fi
   fi
 }
 
@@ -137,6 +157,9 @@ while (( $# )); do
       ;;
     --keep-repo)
       KEEP_NVIDIA_REPOSITORY=true
+      ;;
+    --tag-latest)
+      TAG_LATEST=true
       ;;
     --push)
       PUSH_IMAGES=true
@@ -176,8 +199,8 @@ if [ ! -f ${NVIDIA_REPOSITORY_PATH}/build.sh ]; then
 fi
 
 # Apply patch to build.sh so it will patch the removal of i386 from the opengl sub-repository
-cp ${SCRIPTS_DIR}/cudagl_remove_i386.patch ${NVIDIA_REPOSITORY_PATH}
-patch -p1 -d ${NVIDIA_REPOSITORY_PATH} < $SCRIPTS_DIR/apply_cudagl_remove_i386_patch.patch
+cp -r ${SCRIPTS_DIR}/${OS}${OS_VERSION}/opengl ${NVIDIA_REPOSITORY_PATH}
+patch -p1 -d ${NVIDIA_REPOSITORY_PATH} < $SCRIPTS_DIR/cudagl_remove_opengl_clone.patch
 
 # Call nvidia script
 pushd "${NVIDIA_REPOSITORY_PATH}"
