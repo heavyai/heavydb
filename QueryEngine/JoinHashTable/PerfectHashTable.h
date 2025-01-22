@@ -16,11 +16,11 @@
 
 #pragma once
 
+#include <DataMgr/BufferMgr/CpuBufferMgr/CpuBufferMgr.h>
 #include <memory>
-#include <vector>
 
+#include "DataMgr/Allocators/CpuMgrArenaAllocator.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
-#include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "QueryEngine/JoinHashTable/HashTable.h"
 
 class PerfectHashTableEntryInfo : public HashTableEntryInfo {
@@ -52,16 +52,27 @@ class PerfectHashTable : public HashTable {
   // CPU + GPU constructor
   PerfectHashTable(const ExecutorDeviceType device_type,
                    PerfectHashTableEntryInfo hash_table_entry_info,
+                   size_t max_slab_size,
                    Data_Namespace::DataMgr* data_mgr = nullptr,
                    const int device_id = -1)
       : hash_table_entry_info_(hash_table_entry_info)
       , data_mgr_(data_mgr)
       , device_id_(device_id) {
     if (device_type == ExecutorDeviceType::CPU) {
-      cpu_hash_table_buff_.reset(
-          new int32_t[hash_table_entry_info.computeTotalNumSlots()]);
-      printInitLog(device_type);
+      size_t const cpu_hash_table_size =
+          sizeof(int32_t) * hash_table_entry_info.computeTotalNumSlots();
+      if (cpu_hash_table_size > max_slab_size) {
+        std::ostringstream oss;
+        oss << "Failed to allocate a join hash table on CPU memory: the size ("
+            << cpu_hash_table_size << " bytes) exceeded the system limit ("
+            << max_slab_size << " bytes)";
+        throw std::runtime_error(oss.str());
+      }
+      allocator_.reset(new CpuMgrArenaAllocator());
+      cpu_hash_table_buff_ =
+          reinterpret_cast<int32_t*>(allocator_->allocate(cpu_hash_table_size));
     }
+    printInitLog(device_type);
   }
 
   ~PerfectHashTable() override {
@@ -80,12 +91,6 @@ class PerfectHashTable : public HashTable {
     auto const buf_size = num_entries * hash_table_entry_info_.getRowIdSizeInBytes();
     gpu_hash_table_buff_ =
         CudaAllocator::allocGpuAbstractBuffer(data_mgr_, buf_size, device_id_);
-    if (cpu_hash_table_buff_) {
-      VLOG(1) << "Allocate " << buf_size
-              << " bytes buffer on GPU to keep the hash table copied from CPU";
-    } else {
-      printInitLog(ExecutorDeviceType::GPU);
-    }
   }
 
   size_t getHashTableBufferSize(const ExecutorDeviceType device_type) const override {
@@ -101,7 +106,7 @@ class PerfectHashTable : public HashTable {
   }
 
   int8_t* getCpuBuffer() override {
-    return reinterpret_cast<int8_t*>(cpu_hash_table_buff_.get());
+    return reinterpret_cast<int8_t*>(cpu_hash_table_buff_);
   }
 
   int8_t* getGpuBuffer() const override {
@@ -148,23 +153,24 @@ class PerfectHashTable : public HashTable {
     std::ostringstream oss;
     oss << "Initialize a " << device_type << " perfect join hash table";
     if (device_type == ExecutorDeviceType::GPU) {
-      oss << " for device " << device_id_;
+      oss << " on device-" << device_id_;
     }
     oss << ", join type " << layout_str
         << ", # hash entries: " << hash_table_entry_info_.getNumHashEntries()
         << ", # entries stored in the payload buffer: "
         << hash_table_entry_info_.getNumKeys()
         << ", hash table size : " << hash_table_entry_info_.computeHashTableSize()
-        << " Bytes";
+        << " bytes";
     VLOG(1) << oss.str();
   }
 
  private:
   Data_Namespace::AbstractBuffer* gpu_hash_table_buff_{nullptr};
-  std::unique_ptr<int32_t[]> cpu_hash_table_buff_{nullptr};
+  int32_t* cpu_hash_table_buff_{nullptr};
   PerfectHashTableEntryInfo hash_table_entry_info_;
   BucketizedHashEntryInfo hash_entry_info_;
   size_t column_num_elems_;
   Data_Namespace::DataMgr* data_mgr_;
   int device_id_;
+  std::unique_ptr<Arena> allocator_{nullptr};
 };

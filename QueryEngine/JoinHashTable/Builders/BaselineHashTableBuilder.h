@@ -293,8 +293,11 @@ class BaselineJoinHashTableBuilder {
     const bool for_semi_join =
         (join_type == JoinType::SEMI || join_type == JoinType::ANTI) &&
         hash_table_layout == HashType::OneToOne;
-    hash_table_ = std::make_unique<BaselineHashTable>(
-        MemoryLevel::CPU_LEVEL, hash_table_entry_info, nullptr, -1);
+    hash_table_ = std::make_unique<BaselineHashTable>(MemoryLevel::CPU_LEVEL,
+                                                      hash_table_entry_info,
+                                                      executor->maxCpuSlabSize(),
+                                                      nullptr,
+                                                      -1);
     setHashLayout(hash_table_layout);
     if (hash_table_entry_info.getNumKeys() == 0) {
       VLOG(1) << "Stop building a hash table: the input table is empty";
@@ -505,8 +508,11 @@ class BaselineJoinHashTableBuilder {
       throw JoinHashTableTooBig(hash_table_size, executor->maxGpuSlabSize());
     }
 
-    hash_table_ = std::make_unique<BaselineHashTable>(
-        MemoryLevel::GPU_LEVEL, hash_table_entry_info, executor->getDataMgr(), device_id);
+    hash_table_ = std::make_unique<BaselineHashTable>(MemoryLevel::GPU_LEVEL,
+                                                      hash_table_entry_info,
+                                                      executor->maxGpuSlabSize(),
+                                                      executor->getDataMgr(),
+                                                      device_id);
 #else
     UNREACHABLE();
 #endif
