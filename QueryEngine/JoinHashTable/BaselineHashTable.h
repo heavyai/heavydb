@@ -18,9 +18,7 @@
 
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
-#include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
-
 #include "QueryEngine/JoinHashTable/HashTable.h"
 
 class BaselineHashTableEntryInfo : public HashTableEntryInfo {
@@ -72,6 +70,7 @@ class BaselineHashTable : public HashTable {
   // CPU + GPU constructor
   BaselineHashTable(MemoryLevel memory_level,
                     BaselineHashTableEntryInfo hash_table_entry_info,
+                    size_t max_slab_size,
                     Data_Namespace::DataMgr* data_mgr = nullptr,
                     const int device_id = -1)
       : memory_level_(memory_level)
@@ -89,25 +88,18 @@ class BaselineHashTable : public HashTable {
 #endif
     } else {
       CHECK(!data_mgr_);  // we do not need `data_mgr` for CPU hash table
-      cpu_hash_table_buff_.reset(new int8_t[hash_table_size]);
+      if (hash_table_size > max_slab_size) {
+        std::ostringstream oss;
+        oss << "Failed to allocate a join hash table on CPU memory: the size ("
+            << hash_table_size << " bytes) exceeded the system limit (" << max_slab_size
+            << " bytes)";
+        throw std::runtime_error(oss.str());
+      }
+      allocator_.reset(new CpuMgrArenaAllocator());
+      cpu_hash_table_buff_ =
+          reinterpret_cast<int32_t*>(allocator_->allocate(hash_table_size));
     }
-    std::string device_str = memory_level_ == MemoryLevel::GPU_LEVEL ? "GPU" : "CPU";
-    std::string layout_str =
-        hash_table_entry_info_.getHashTableLayout() == HashType::OneToOne ? "OneToOne"
-                                                                          : "OneToMany";
-    std::ostringstream oss;
-    oss << "Initialize a " << device_str << " baseline hash table";
-    if (memory_level_ == MemoryLevel::GPU_LEVEL) {
-      CHECK_GE(device_id, 0);
-      oss << " for device " << device_id_;
-    }
-    oss << " with join type " << layout_str << ", hash table size: " << hash_table_size
-        << " Bytes"
-        << ", # hash entries: " << hash_table_entry_info_.getNumHashEntries()
-        << ", # entries stored in the payload buffer: "
-        << hash_table_entry_info_.getNumKeys()
-        << ", rowid size: " << hash_table_entry_info_.getRowIdSizeInBytes() << " Bytes";
-    VLOG(1) << oss.str();
+    printInitLog();
   }
 
   ~BaselineHashTable() override {
@@ -128,7 +120,7 @@ class BaselineHashTable : public HashTable {
   }
 
   int8_t* getCpuBuffer() override {
-    return cpu_hash_table_buff_.get();
+    return reinterpret_cast<int8_t*>(cpu_hash_table_buff_);
   }
 
   HashType getLayout() const override {
@@ -147,12 +139,34 @@ class BaselineHashTable : public HashTable {
     return hash_table_entry_info_;
   }
 
+  void printInitLog() {
+    std::string device_str = memory_level_ == MemoryLevel::GPU_LEVEL ? "GPU" : "CPU";
+    std::string layout_str =
+        hash_table_entry_info_.getHashTableLayout() == HashType::OneToOne ? "OneToOne"
+                                                                          : "OneToMany";
+    std::ostringstream oss;
+    oss << "Initialize a " << device_str << " baseline hash table";
+    if (memory_level_ == MemoryLevel::GPU_LEVEL) {
+      CHECK_GE(device_id_, 0);
+      oss << " on device-" << device_id_;
+    }
+    oss << " with join type " << layout_str
+        << ", hash table size: " << hash_table_entry_info_.computeHashTableSize()
+        << " bytes"
+        << ", # hash entries: " << hash_table_entry_info_.getNumHashEntries()
+        << ", # entries stored in the payload buffer: "
+        << hash_table_entry_info_.getNumKeys()
+        << ", rowid size: " << hash_table_entry_info_.getRowIdSizeInBytes() << " bytes";
+    VLOG(1) << oss.str();
+  }
+
  private:
-  std::unique_ptr<int8_t[]> cpu_hash_table_buff_;
+  int32_t* cpu_hash_table_buff_{nullptr};
   Data_Namespace::AbstractBuffer* gpu_hash_table_buff_{nullptr};
 
   MemoryLevel memory_level_;
   BaselineHashTableEntryInfo hash_table_entry_info_;
   Data_Namespace::DataMgr* data_mgr_;
   const int device_id_;
+  std::unique_ptr<Arena> allocator_{nullptr};
 };

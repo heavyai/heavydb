@@ -43,7 +43,7 @@ class HashTableEntryInfo {
       , rowid_size_in_bytes_(rowid_size_in_bytes)
       , layout_(layout)
       , for_window_framing_(for_window_framing) {}
-
+  virtual ~HashTableEntryInfo() = default;
   virtual size_t computeTotalNumSlots() const = 0;
   virtual size_t computeHashTableSize() const = 0;
 

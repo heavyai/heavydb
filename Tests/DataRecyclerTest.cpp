@@ -2631,6 +2631,7 @@ class HashtableRecyclerTest : public ::testing::Test {
   constexpr static CacheItemType item_type_ = CacheItemType::BBOX_INTERSECT_HT;
   constexpr static DeviceIdentifier device_identifier_ =
       DataRecyclerUtil::CPU_DEVICE_IDENTIFIER;
+  constexpr static size_t max_slab_size = size_t(1) << 32;
 
   // Actual values seen during test run in QE-1250 description.
   BaselineHashTableEntryInfo hash_table_entry_info_{
@@ -2648,7 +2649,7 @@ class HashtableRecyclerTest : public ::testing::Test {
 TEST_F(HashtableRecyclerTest, PutAndGetCacheItem) {
   constexpr QueryPlanHash key = 1234;
   auto hash_table = std::make_shared<BaselineHashTable>(
-      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, max_slab_size, nullptr, -1);
 
   hashtable_recycler_.putItemToCache(key,
                                      hash_table,
@@ -2666,7 +2667,7 @@ TEST_F(HashtableRecyclerTest, PutAndGetCacheItem) {
 TEST_F(HashtableRecyclerTest, PutTwoItemsWithSameKey) {
   constexpr QueryPlanHash key = 1234;
   auto hash_table = std::make_shared<BaselineHashTable>(
-      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, max_slab_size, nullptr, -1);
 
   hashtable_recycler_.putItemToCache(key,
                                      hash_table,
@@ -2677,7 +2678,7 @@ TEST_F(HashtableRecyclerTest, PutTwoItemsWithSameKey) {
                                      meta_info_);
 
   auto hash_table_2 = std::make_shared<BaselineHashTable>(
-      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, max_slab_size, nullptr, -1);
   HashtableCacheMetaInfo meta_info_2{};
   meta_info_2.bbox_intersect_meta_info = BoundingBoxIntersectMetaInfo{2};
   hashtable_recycler_.putItemToCache(key,
@@ -2707,7 +2708,7 @@ TEST_F(HashtableRecyclerTest, PutTenItemsWithSameKey) {
     EXPECT_EQ(
         i, hashtable_recycler_.getCurrentNumCachedItems(item_type_, device_identifier_));
     auto hash_table = std::make_shared<BaselineHashTable>(
-        MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+        MemoryLevel::CPU_LEVEL, hash_table_entry_info_, max_slab_size);
     hash_tables[i] = hash_table.get();
     HashtableCacheMetaInfo meta_info{};
     meta_info.bbox_intersect_meta_info = BoundingBoxIntersectMetaInfo{i};
@@ -2731,7 +2732,7 @@ TEST_F(HashtableRecyclerTest, PutTenItemsWithSameKey) {
     EXPECT_EQ(
         N, hashtable_recycler_.getCurrentNumCachedItems(item_type_, device_identifier_));
     auto hash_table = std::make_shared<BaselineHashTable>(
-        MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+        MemoryLevel::CPU_LEVEL, hash_table_entry_info_, max_slab_size);
     HashtableCacheMetaInfo meta_info{};
     meta_info.bbox_intersect_meta_info = BoundingBoxIntersectMetaInfo{i};
     hashtable_recycler_.putItemToCache(key,
@@ -2748,7 +2749,7 @@ TEST_F(HashtableRecyclerTest, PutTenItemsWithSameKey) {
   // Verify correct items are retrieved.
   for (size_t i = 0; i < N; ++i) {
     auto hash_table = std::make_shared<BaselineHashTable>(
-        MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+        MemoryLevel::CPU_LEVEL, hash_table_entry_info_, max_slab_size);
     HashtableCacheMetaInfo meta_info{};
     meta_info.bbox_intersect_meta_info = BoundingBoxIntersectMetaInfo{i};
     auto retrieved_item = hashtable_recycler_.getItemFromCache(
@@ -2760,7 +2761,7 @@ TEST_F(HashtableRecyclerTest, PutTenItemsWithSameKey) {
 TEST_F(HashtableRecyclerTest, ClearCache) {
   constexpr QueryPlanHash key = 91011;
   auto hash_table = std::make_shared<BaselineHashTable>(
-      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, max_slab_size);
 
   hashtable_recycler_.putItemToCache(key,
                                      hash_table,
@@ -2779,7 +2780,7 @@ TEST_F(HashtableRecyclerTest, ClearCache) {
 TEST_F(HashtableRecyclerTest, MarkCachedItemAsDirty) {
   constexpr QueryPlanHash key = 121314;
   auto hash_table = std::make_shared<BaselineHashTable>(
-      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, max_slab_size);
   std::unordered_set<QueryPlanHash> key_set = {key};
 
   hashtable_recycler_.putItemToCache(
@@ -2794,7 +2795,7 @@ TEST_F(HashtableRecyclerTest, MarkCachedItemAsDirty) {
 TEST_F(HashtableRecyclerTest, GetCachedHashtableWithoutCacheKey) {
   constexpr QueryPlanHash key = 151617;
   auto hash_table = std::make_shared<BaselineHashTable>(
-      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, nullptr, -1);
+      MemoryLevel::CPU_LEVEL, hash_table_entry_info_, max_slab_size);
   std::set<size_t> visited;
 
   hashtable_recycler_.putItemToCache(
