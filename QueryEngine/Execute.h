@@ -434,6 +434,7 @@ class Executor {
            const size_t block_size_x,
            const size_t grid_size_x,
            const size_t max_gpu_slab_size,
+           const size_t max_cpu_slab_size,
            const std::string& debug_dir,
            const std::string& debug_file);
 
@@ -713,6 +714,7 @@ class Executor {
   void setBlockSize(unsigned block_size);
   void resetBlockSize();
   size_t maxGpuSlabSize() const;
+  size_t maxCpuSlabSize() const;
 
   ResultSetPtr executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                const bool is_agg,
@@ -1570,6 +1572,7 @@ class Executor {
 
   unsigned block_size_x_;
   unsigned grid_size_x_;
+  const size_t max_cpu_slab_size_;
   const size_t max_gpu_slab_size_;
   const std::string debug_dir_;
   const std::string debug_file_;

@@ -232,6 +232,13 @@ bool is_empty_table(Fragmenter_Namespace::AbstractFragmenter* fragmenter) {
   // The fragmenter always returns at least one fragment, even when the table is empty.
   return (fragments.size() == 1 && fragments[0].getChunkMetadataMap().empty());
 }
+
+size_t determineMaxCpuSlabSize(DataMgr* data_mgr, size_t default_max_cpu_slab_size) {
+  if (data_mgr) {
+    return data_mgr->getCpuBufferMgr()->getMaxSlabSize();
+  }
+  return default_max_cpu_slab_size;
+}
 }  // namespace
 
 namespace foreign_storage {
@@ -280,6 +287,7 @@ Executor::Executor(const ExecutorId executor_id,
                    Data_Namespace::DataMgr* data_mgr,
                    const size_t block_size_x,
                    const size_t grid_size_x,
+                   const size_t max_cpu_slab_size,
                    const size_t max_gpu_slab_size,
                    const std::string& debug_dir,
                    const std::string& debug_file)
@@ -288,6 +296,7 @@ Executor::Executor(const ExecutorId executor_id,
     , cgen_state_(new CgenState({}, false, this))
     , block_size_x_(block_size_x)
     , grid_size_x_(grid_size_x)
+    , max_cpu_slab_size_(determineMaxCpuSlabSize(data_mgr, max_cpu_slab_size))
     , max_gpu_slab_size_(max_gpu_slab_size)
     , debug_dir_(debug_dir)
     , debug_file_(debug_file)
@@ -528,6 +537,7 @@ std::shared_ptr<Executor> Executor::getExecutor(
                                              &data_mgr,
                                              system_parameters.cuda_block_size,
                                              system_parameters.cuda_grid_size,
+                                             system_parameters.max_cpu_slab_size,
                                              system_parameters.max_gpu_slab_size,
                                              debug_dir,
                                              debug_file);
@@ -4226,6 +4236,10 @@ void Executor::resetBlockSize() {
 
 size_t Executor::maxGpuSlabSize() const {
   return max_gpu_slab_size_;
+}
+
+size_t Executor::maxCpuSlabSize() const {
+  return max_cpu_slab_size_;
 }
 
 int64_t Executor::deviceCycles(int milliseconds) const {
