@@ -12061,11 +12061,10 @@ TEST_F(Select, Joins_FunctionOper) {
     SKIP_NO_GPU();
     {
       const auto query =
-          "with cte as (select geoToH3(cast(s as float), cast(s as float), 10) "
-          "as h3 from table(generate_series(-80, 80, 1)) as t(s)) "
-          "select count(*) as n from table(generate_series(-80, 80, 1)) "
-          "as ft(s), cte where geoToH3(cast(s as float), cast(s as float), 10) "
-          "= cte.h3;";
+          "with cte as (select H3_LonLatToCell(cast(s as double), cast(s as double), 10) "
+          "as h3 from table(generate_series(-80, 80, 1)) as t(s)) select count(*) as n "
+          "from table(generate_series(-80, 80, 1)) as ft(s), cte where "
+          "H3_LonLatToCell(cast(s as double), cast(s as double), 10) = cte.h3;";
 #ifdef HAVE_SYSTEM_TFS
       EXPECT_EQ(80 * 2 + 1, v<int64_t>(run_simple_agg(query, dt)));
 #else
