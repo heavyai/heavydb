@@ -25,5 +25,6 @@ elseif(NOT DEFINED MAPD_DEPS_PATH)
 endif()
 
 
-add_library(Geospatial Compression.cpp Types.cpp GDAL.cpp GeosValidation.cpp GeosVersion.cpp)
-target_link_libraries(Geospatial OSDependent ${GDAL_LIBRARIES} ${CURL_LIBRARIES} ${GDAL_EXTRA_LIBRARIES})
+add_library(Geospatial Compression.cpp Types.cpp GDAL.cpp GeosValidation.cpp GeosVersion.cpp H3Shim.cpp)
+find_library(H3_LIB h3)
+target_link_libraries(Geospatial OSDependent ${GDAL_LIBRARIES} ${CURL_LIBRARIES} ${GDAL_EXTRA_LIBRARIES} ${H3_LIB})

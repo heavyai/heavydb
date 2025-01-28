@@ -2268,6 +2268,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
   ret_ti.set_notnull(arguments_not_null);
 
+  // disallow H3 string functions in distributed mode
+  if (g_cluster) {
+    if (rex_function->getName() == "H3_StringToCell" ||
+        rex_function->getName() == "H3_CellToString_TEXT" ||
+        rex_function->getName() == "H3_CellToString_TEXT_NONE" ||
+        rex_function->getName() == "H3_CellToBoundary_WKT") {
+      throw std::runtime_error(
+          rex_function->getName() +
+          " and other H3 string functions are not supported in distributed mode");
+    }
+  }
+
   return makeExpr<Analyzer::FunctionOper>(ret_ti, rex_function->getName(), arg_expr_list);
 }
 

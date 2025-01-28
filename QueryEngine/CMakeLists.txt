@@ -393,7 +393,7 @@ if(ENABLE_GEOS)
 endif()
 
 add_custom_command(
-  DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsArray.hpp ExtensionFunctionsText.hpp ExtensionFunctionsTesting.hpp ExtensionFunctionsArrayTesting.hpp ExtensionFunctionsTextTesting.hpp
+  DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsArray.hpp ExtensionFunctionsText.hpp ExtensionFunctionsTesting.hpp ExtensionFunctionsArrayTesting.hpp ExtensionFunctionsTextTesting.hpp ExtensionFunctionsH3.hpp
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw
   COMMAND ${llvm_clangpp_cmd}
   ARGS -DNO_BOOST -std=c++${CMAKE_CXX_STANDARD} -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color -Wno-return-type-c-linkage

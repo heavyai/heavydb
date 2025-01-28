@@ -4291,6 +4291,189 @@ TEST_F(TextEncodingNoneProjection, CompareGeoString) {
   }
 }
 
+//
+// H3 tests
+//
+
+class GeoSpatialH3Test : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    run_ddl_statement("DROP TABLE IF EXISTS h3_tests;");
+    run_ddl_statement(
+        "CREATE TABLE h3_tests (lon DOUBLE, lat DOUBLE, p GEOMETRY(POINT, 4326) ENCODING "
+        "NONE, cell BIGINT, text_none TEXT ENCODING NONE, text_dict TEXT ENCODING "
+        "DICT(32));");
+    run_ddl_statement(
+        "INSERT INTO h3_tests VALUES (60.0, 40.0, 'POINT(60.0 40.0)', "
+        "644605580338790528, '8f2195c2c540080', '8f2195c2c540080');");
+  }
+
+  void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS h3_tests;"); }
+
+  static constexpr int64_t kCell = static_cast<int64_t>(644605580338790528LL);
+  static constexpr std::string_view kCellString = "CAST(644605580338790528 AS BIGINT)";
+  static constexpr std::string_view kCellHexString = "8f2195c2c540080";
+  static constexpr int64_t kParent = static_cast<int64_t>(631094781456679423LL);
+  static constexpr std::array<double, 12> kWKTValues = {59.9999887940966801,
+                                                        40.0000005857359184,
+                                                        59.9999930723770873,
+                                                        39.9999959172691604,
+                                                        60.0000004137070206,
+                                                        39.9999963654760862,
+                                                        60.0000034767576835,
+                                                        40.0000014821500258,
+                                                        59.9999991984775178,
+                                                        40.0000061506173239,
+                                                        59.9999918571464477,
+                                                        40.0000057024101636};
+
+  void validateWKT(const std::string& wkt_str) {
+    // WKT will be of the form
+    // POLYGON((x y, x y[, x y]))
+    // drop the first 9 characters and the last 2
+    CHECK_GE(wkt_str.length(), 11u);
+    auto values_str = wkt_str.substr(9, wkt_str.length() - 11);
+    // remove any commas
+    boost::erase_all(values_str, ",");
+    // split by space
+    auto const values = split(values_str, " ");
+    CHECK_EQ(values.size(), 12u);
+    // validate
+    for (int i = 0; i < 12; i++) {
+      ASSERT_NEAR(std::stod(values[i]), kWKTValues[i], 0.00000000001);
+    }
+  }
+};
+
+TEST_F(GeoSpatialH3Test, H3_PointToCell) {
+  // literal
+  // @TODO this doesn't work, reports:
+  // Cannot apply 'H3_PointToCell' to arguments of type 'H3_PointToCell(<INTEGER>,
+  // <INTEGER>)'. Supported form(s): 'H3_PointToCell(<GEO>, <NUMERIC>)'
+  //   ASSERT_EQ(kCell,
+  //             v<int64_t>(run_simple_agg("SELECT H3_PointToCell(ST_Point(60.0, 40.0),
+  //             15);",
+  //                                       ExecutorDeviceType::CPU)));
+  // leave disabled for now
+  // column
+  ASSERT_EQ(kCell,
+            v<int64_t>(run_simple_agg("SELECT H3_PointToCell(p, 15) FROM h3_tests;",
+                                      ExecutorDeviceType::CPU)));
+}
+
+TEST_F(GeoSpatialH3Test, H3_LonLatToCell) {
+  // literals
+  ASSERT_EQ(kCell,
+            v<int64_t>(run_simple_agg("SELECT H3_LonLatToCell(60.0, 40.0, 15);",
+                                      ExecutorDeviceType::CPU)));
+  // columns
+  ASSERT_EQ(
+      kCell,
+      v<int64_t>(run_simple_agg("SELECT H3_LonLatToCell(lon, lat, 15) FROM h3_tests;",
+                                ExecutorDeviceType::CPU)));
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToLonLat) {
+  // literal
+  ASSERT_NEAR(
+      static_cast<double>(60.0),
+      v<double>(run_simple_agg("SELECT H3_CellToLon(" + std::string(kCellString) + ");",
+                               ExecutorDeviceType::CPU)),
+      static_cast<double>(0.0001));
+  ASSERT_NEAR(
+      static_cast<double>(40.0),
+      v<double>(run_simple_agg("SELECT H3_CellToLat(" + std::string(kCellString) + ");",
+                               ExecutorDeviceType::CPU)),
+      static_cast<double>(0.0001));
+  // column
+  ASSERT_NEAR(static_cast<double>(60.0),
+              v<double>(run_simple_agg("SELECT H3_CellToLon(cell) FROM h3_tests;",
+                                       ExecutorDeviceType::CPU)),
+              static_cast<double>(0.0001));
+  ASSERT_NEAR(static_cast<double>(40.0),
+              v<double>(run_simple_agg("SELECT H3_CellToLat(cell) FROM h3_tests;",
+                                       ExecutorDeviceType::CPU)),
+              static_cast<double>(0.0001));
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToString) {
+  SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
+  // literal
+  ASSERT_EQ(kCellHexString,
+            boost::get<std::string>(v<NullableString>(run_simple_agg(
+                "SELECT H3_CellToString_TEXT(" + std::string(kCellString) + ");",
+                ExecutorDeviceType::CPU))));
+  ASSERT_EQ(kCellHexString,
+            boost::get<std::string>(v<NullableString>(run_simple_agg(
+                "SELECT H3_CellToString_TEXT_NONE(" + std::string(kCellString) + ");",
+                ExecutorDeviceType::CPU))));
+  // column
+  ASSERT_EQ(
+      kCellHexString,
+      boost::get<std::string>(v<NullableString>(run_simple_agg(
+          "SELECT H3_CellToString_TEXT(cell) FROM h3_tests;", ExecutorDeviceType::CPU))));
+  ASSERT_EQ(kCellHexString,
+            boost::get<std::string>(v<NullableString>(
+                run_simple_agg("SELECT H3_CellToString_TEXT_NONE(cell) FROM h3_tests;",
+                               ExecutorDeviceType::CPU))));
+}
+
+TEST_F(GeoSpatialH3Test, H3_StringToCell) {
+  SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
+  // literal
+  ASSERT_EQ(kCell,
+            v<int64_t>(run_simple_agg(
+                "SELECT H3_StringToCell('" + std::string(kCellHexString) + "');",
+                ExecutorDeviceType::CPU)));
+  // columns
+  ASSERT_EQ(kCell,
+            v<int64_t>(run_simple_agg("SELECT H3_StringToCell(text_none) FROM h3_tests;",
+                                      ExecutorDeviceType::CPU)));
+  ASSERT_EQ(kCell,
+            v<int64_t>(run_simple_agg("SELECT H3_StringToCell(text_dict) FROM h3_tests;",
+                                      ExecutorDeviceType::CPU)));
+}
+
+TEST_F(GeoSpatialH3Test, H3_IsValidCell) {
+  // literal, true
+  ASSERT_EQ(static_cast<int64_t>(1),
+            v<int64_t>(
+                run_simple_agg("SELECT H3_IsValidCell(" + std::string(kCellString) + ");",
+                               ExecutorDeviceType::CPU)));
+  // literal, false
+  ASSERT_EQ(static_cast<int64_t>(0),
+            v<int64_t>(run_simple_agg("SELECT H3_IsValidCell(CAST(12345 AS BIGINT));",
+                                      ExecutorDeviceType::CPU)));
+  // column, true
+  ASSERT_EQ(static_cast<int64_t>(1),
+            v<int64_t>(run_simple_agg("SELECT H3_IsValidCell(cell) FROM h3_tests;",
+                                      ExecutorDeviceType::CPU)));
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToParent) {
+  // literal
+  ASSERT_EQ(kParent,
+            v<int64_t>(run_simple_agg(
+                "SELECT H3_CellToParent(" + std::string(kCellString) + ", 12);",
+                ExecutorDeviceType::CPU)));
+  // column
+  ASSERT_EQ(kParent,
+            v<int64_t>(run_simple_agg("SELECT H3_CellToParent(cell, 12) FROM h3_tests;",
+                                      ExecutorDeviceType::CPU)));
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToBoundary) {
+  SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
+  // @TODO concerned about precision non-determinism breaking the string comparison
+  // literal
+  ASSERT_NO_THROW(validateWKT(boost::get<std::string>(v<NullableString>(
+      run_simple_agg("SELECT H3_CellToBoundary_WKT(" + std::string(kCellString) + ");",
+                     ExecutorDeviceType::CPU)))));
+  // column
+  ASSERT_NO_THROW(validateWKT(boost::get<std::string>(v<NullableString>(run_simple_agg(
+      "SELECT H3_CellToBoundary_WKT(cell) FROM h3_tests;", ExecutorDeviceType::CPU)))));
+}
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 
