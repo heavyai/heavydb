@@ -64,6 +64,7 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #endif
 
 #include "CudaMgr/CudaMgr.h"
+#include "Geospatial/GeosVersion.h"
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/CodegenHelper.h"
 #include "QueryEngine/DotProductReturnTypes.h"
@@ -94,18 +95,38 @@ extern std::unique_ptr<std::string> g_libgeos_so_filename;
 
 static llvm::sys::DynamicLibrary geos_dynamic_library;
 static std::mutex geos_init_mutex;
+static bool geos_failed_to_load_previously = false;
 
 namespace {
 
 void load_geos_dynamic_library() {
   std::lock_guard<std::mutex> guard(geos_init_mutex);
 
+  if (geos_failed_to_load_previously) {
+    std::string exception_message(
+        "Failed to load GEOS library previously. See earlier error messages.");
+    LOG(ERROR) << exception_message;
+    throw std::runtime_error(exception_message);
+  }
+
   if (!geos_dynamic_library.isValid()) {
+    // validate filename
     if (!g_libgeos_so_filename || g_libgeos_so_filename->empty()) {
       LOG(WARNING) << "Misconfigured GEOS library file name, trying 'libgeos_c.so'";
       g_libgeos_so_filename.reset(new std::string("libgeos_c.so"));
     }
     auto filename = *g_libgeos_so_filename;
+
+    auto log_ld_library_path = []() {
+      auto const* llp = getenv("LD_LIBRARY_PATH");
+      if (llp) {
+        LOG(ERROR) << "  LD_LIBRARY_PATH is set to '" << llp << "'";
+      } else {
+        LOG(ERROR) << "  LD_LIBRARY_PATH is unset";
+      }
+    };
+
+    // get handle to GEOS DSO
     std::string error_message;
     geos_dynamic_library =
         llvm::sys::DynamicLibrary::getPermanentLibrary(filename.c_str(), &error_message);
@@ -116,16 +137,41 @@ void load_geos_dynamic_library() {
           "is set in $LD_LIBRARY_PATH in the server environment.");
       LOG(ERROR) << exception_message;
       LOG(ERROR) << "  " << error_message;
-      auto const* llp = getenv("LD_LIBRARY_PATH");
-      if (llp) {
-        LOG(ERROR) << "  LD_LIBRARY_PATH is set to '" << llp << "'";
-      } else {
-        LOG(ERROR) << "  LD_LIBRARY_PATH is unset";
-      }
+      log_ld_library_path();
       throw std::runtime_error(exception_message);
-    } else {
-      LOG(INFO) << "Loaded GEOS library '" + filename + "'";
     }
+
+    // validate GEOS version
+    // any failure here permanently disables GEOS-backed ST functions
+    // @TODO(se) move version validation to startup
+    using PFN_GEOSversion = const char* (*)();
+    PFN_GEOSversion pfn_GEOSversion =
+        (PFN_GEOSversion)geos_dynamic_library.SearchForAddressOfSymbol("GEOSversion");
+    if (!pfn_GEOSversion) {
+      // report
+      std::string exception_message =
+          "Loaded GEOS library but failed to determine version. Version " +
+          Geospatial::geos_version_required() + " or higher is required.";
+      LOG(ERROR) << exception_message;
+      log_ld_library_path();
+      // don't try again
+      geos_failed_to_load_previously = true;
+      throw std::runtime_error(exception_message);
+    }
+    std::string geos_version = pfn_GEOSversion();
+    if (!Geospatial::geos_validate_version(geos_version)) {
+      // report
+      std::string exception_message =
+          "Invalid GEOS library version found (" + geos_version + "). Version " +
+          Geospatial::geos_version_required() + " or higher is required.";
+      LOG(ERROR) << exception_message;
+      log_ld_library_path();
+      // don't try again
+      geos_failed_to_load_previously = true;
+      throw std::runtime_error(exception_message);
+    }
+    LOG(INFO) << "Loaded GEOS library v" << geos_version
+              << ". GEOS-backed ST functions enabled.";
   }
 }
 
