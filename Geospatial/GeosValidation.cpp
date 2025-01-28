@@ -19,9 +19,12 @@
 #if defined(ENABLE_GEOS) && !defined(_WIN32)
 
 #include <dlfcn.h>
-#include <geos_c.h>
 #include <mutex>
 
+#define GEOS_USE_ONLY_R_API
+#include <geos_c.h>
+
+#include "Geospatial/GeosVersion.h"
 #include "Logger/Logger.h"
 
 #ifndef GEOS_LIBRARY_FILENAME
@@ -34,6 +37,7 @@ std::unique_ptr<std::string> g_libgeos_so_filename(
 
 namespace Geospatial {
 
+using PFN_GEOSversion = const char* (*)();
 using PFN_GEOS_init_r = GEOSContextHandle_t (*)();
 using PFN_GEOS_finish_r = void (*)(GEOSContextHandle_t);
 using PFN_GEOSisValidDetail_r =
@@ -78,6 +82,15 @@ bool geos_init() {
     return false;
   }
 
+  auto log_ld_library_path = []() {
+    auto const* llp = getenv("LD_LIBRARY_PATH");
+    if (llp) {
+      LOG(ERROR) << "  LD_LIBRARY_PATH is set to '" << llp << "'";
+    } else {
+      LOG(ERROR) << "  LD_LIBRARY_PATH is unset";
+    }
+  };
+
   // attempt to load DSO
   auto const* geos_dso_filename = g_libgeos_so_filename->c_str();
   geos_dso_handle = dlopen(geos_dso_filename, RTLD_NOW | RTLD_LOCAL);
@@ -85,11 +98,45 @@ bool geos_init() {
     LOG(ERROR) << "Failed to load GEOS library. To use Geometry Validation, ensure that "
                   "the GEOS library files are separately installed and that their "
                   "location is set in $LD_LIBRARY_PATH in the server environment.";
+    log_ld_library_path();
     geos_can_validate = false;
     return false;
   }
 
-  // fetch all required function pointers
+  // fetch version function pointer and validate version
+  // any failure here permanently disables GEOS validation
+  // @TODO(se) move version validation to startup
+  PFN_GEOSversion pfn_GEOSversion =
+      (PFN_GEOSversion)dlsym(geos_dso_handle, "GEOSversion");
+  if (!pfn_GEOSversion) {
+    // report
+    LOG(ERROR) << "Loaded GEOS library but failed to determine version. Version "
+               << geos_version_required() << "or higher is required.";
+    log_ld_library_path();
+    // unload the DSO
+    dlclose(geos_dso_handle);
+    geos_dso_handle = nullptr;
+    // don't try again
+    geos_can_validate = false;
+    return false;
+  }
+  std::string geos_version = pfn_GEOSversion();
+  if (!geos_validate_version(geos_version)) {
+    // report
+    LOG(ERROR) << "Invalid GEOS library version found (" << geos_version << "). Version "
+               << geos_version_required() << " or higher is required.";
+    log_ld_library_path();
+    // unload the DSO
+    dlclose(geos_dso_handle);
+    geos_dso_handle = nullptr;
+    // don't try again
+    geos_can_validate = false;
+    return false;
+  }
+  LOG(INFO) << "Loaded GEOS library v" << geos_version
+            << ". Geometry validation enabled.";
+
+  // fetch all other required function pointers
   pfn_GEOS_init_r = (PFN_GEOS_init_r)dlsym(geos_dso_handle, "GEOS_init_r");
   pfn_GEOS_finish_r = (PFN_GEOS_finish_r)dlsym(geos_dso_handle, "GEOS_finish_r");
   pfn_GEOSisValidDetail_r =
