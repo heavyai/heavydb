@@ -56,7 +56,7 @@ class PerfectJoinHashTable : public HashJoin {
       const Data_Namespace::MemoryLevel memory_level,
       const JoinType join_type,
       const HashType preferred_hash_type,
-      const int device_count,
+      const std::set<int>& device_ids,
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
@@ -88,8 +88,6 @@ class PerfectJoinHashTable : public HashJoin {
   Data_Namespace::MemoryLevel getMemoryLevel() const noexcept override {
     return memory_level_;
   };
-
-  int getDeviceCount() const noexcept override { return device_count_; };
 
   size_t offsetBufferOff() const noexcept override;
 
@@ -147,7 +145,7 @@ class PerfectJoinHashTable : public HashJoin {
  private:
   // Equijoin API
   bool isOneToOneHashPossible(
-      const std::vector<ColumnsForDevice>& columns_per_device) const;
+      const std::unordered_map<int, ColumnsForDevice>& columns_per_device) const;
 
   ColumnsForDevice fetchColumnsForDevice(
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
@@ -183,7 +181,7 @@ class PerfectJoinHashTable : public HashJoin {
                        const BucketizedHashEntryInfo hash_entry_info,
                        ColumnCacheMap& column_cache,
                        Executor* executor,
-                       const int device_count,
+                       const std::set<int>& device_ids,
                        const RegisteredQueryHint& query_hints,
                        const HashTableBuildDagMap& hashtable_build_dag_map,
                        const TableIdToNodeMap& table_id_to_node_map,
@@ -200,7 +198,7 @@ class PerfectJoinHashTable : public HashJoin {
       , hash_entry_info_(hash_entry_info)
       , executor_(executor)
       , column_cache_(column_cache)
-      , device_count_(device_count)
+      , device_ids_(device_ids)
       , query_hints_(query_hints)
       , needs_dict_translation_(false)
       , hashtable_build_dag_map_(hashtable_build_dag_map)
@@ -208,8 +206,7 @@ class PerfectJoinHashTable : public HashJoin {
       , inner_outer_string_op_infos_(inner_outer_string_op_infos)
       , rowid_size_(rowid_size) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
-    CHECK_GT(device_count_, 0);
-    hash_tables_for_device_.resize(device_count_);
+    CHECK_GT(device_ids_.size(), 0u);
   }
 
   ChunkKey genChunkKey(const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
@@ -242,8 +239,6 @@ class PerfectJoinHashTable : public HashJoin {
   bool isBitwiseEq() const override;
 
   size_t getComponentBufferSize() const noexcept override;
-
-  HashTable* getHashTableForDevice(const size_t device_id) const;
 
   void copyCpuHashTableToGpu(std::shared_ptr<PerfectHashTable>& cpu_hash_table,
                              const PerfectHashTableEntryInfo hash_table_entry_info,
@@ -289,12 +284,12 @@ class PerfectJoinHashTable : public HashJoin {
   mutable BucketizedHashEntryInfo hash_entry_info_;
   Executor* executor_;
   ColumnCacheMap& column_cache_;
-  const int device_count_;
+  const std::set<int> device_ids_;
   RegisteredQueryHint query_hints_;
   mutable bool needs_dict_translation_;
   HashTableBuildDagMap hashtable_build_dag_map_;
   // per-device cache key to cover hash table for sharded table
-  std::vector<QueryPlanHash> hashtable_cache_key_;
+  std::unordered_map<int, QueryPlanHash> hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;
@@ -321,8 +316,9 @@ inline Data_Namespace::MemoryLevel get_effective_memory_level(
 
 std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id,
-    const int device_count);
+    const std::set<int>& device_ids);
 
 const InputTableInfo& get_inner_query_info(
     const shared::TableKey& inner_table_key,
@@ -330,5 +326,5 @@ const InputTableInfo& get_inner_query_info(
 
 size_t get_entries_per_device(const size_t total_entries,
                               const size_t shard_count,
-                              const size_t device_count,
+                              const std::set<int>& device_ids,
                               const Data_Namespace::MemoryLevel memory_level);

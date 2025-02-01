@@ -30,6 +30,7 @@
 
 extern float g_vacuum_min_selectivity;
 extern bool g_use_cpu_mem_pool_for_output_buffers;
+extern bool g_is_test_env;
 
 namespace {
 
@@ -1469,18 +1470,6 @@ class OpportunisticVacuumingTest : public OptimizeTableVacuumTest {
     CHECK(cd);
     return {catalog.getDatabaseId(), table_id.value(), cd->columnId, fragment_id};
   }
-
-  int32_t getGpuDeviceId(const std::string& table_name, int32_t fragment_id) {
-    auto td = getCatalog().getMetadataForTable(table_name, true);
-    CHECK(td);
-    CHECK(td->fragmenter);
-    auto table_info = td->fragmenter->getFragmentsForQuery();
-    CHECK_LT(size_t(fragment_id), table_info.fragments.size());
-    const auto& fragment = table_info.fragments[fragment_id];
-    auto device_level = static_cast<size_t>(MemoryLevel::GPU_LEVEL);
-    CHECK_LT(device_level, fragment.deviceIds.size());
-    return fragment.deviceIds[device_level];
-  }
 };
 
 TEST_F(OpportunisticVacuumingTest, DeletedFragment) {
@@ -1954,28 +1943,46 @@ TEST_F(OpportunisticVacuumingMemoryUseTest, StaleChunkOnGpuDeleted) {
   sql("create table test_table (i int) with (fragment_size = 5);");
   OptimizeTableVacuumTest::insertRange(1, 10);
 
+  auto& data_mgr = getCatalog().getDataMgr();
+  auto* cuda_mgr = data_mgr.getCudaMgr();
+  CHECK(cuda_mgr);
   auto chunk_key_1 = getChunkKey("test_table", "i", 0);
   auto chunk_key_2 = getChunkKey("test_table", "i", 1);
-
-  auto device_id_1 = getGpuDeviceId("test_table", 0);
-  auto device_id_2 = getGpuDeviceId("test_table", 1);
-
-  auto& data_mgr = getCatalog().getDataMgr();
-
+  // device ids are determined by Executor::determineAvailableDevicesToProcessQuery
+  // and we update corresponding fragment info, i.e., deviceIds, based on the decision
+  int first_chunk_device_id = 0;
+  bool is_first_chunk_loaded = false;
+  bool is_second_chunk_loaded = false;
+  int const total_device_count = static_cast<int>(cuda_mgr->getDeviceCount());
   // Query should load chunk into GPU memory.
   sql("select avg(i) from test_table where i < 5;");
-  EXPECT_TRUE(
-      data_mgr.isBufferOnDevice(chunk_key_1, MemoryLevel::GPU_LEVEL, device_id_1));
-  EXPECT_FALSE(
-      data_mgr.isBufferOnDevice(chunk_key_2, MemoryLevel::GPU_LEVEL, device_id_2));
+  for (int i = 0; i < total_device_count; i++) {
+    if (!is_first_chunk_loaded &&
+        data_mgr.isBufferOnDevice(chunk_key_1, MemoryLevel::GPU_LEVEL, i)) {
+      is_first_chunk_loaded = true;
+      first_chunk_device_id = i;
+    }
+    if (!is_second_chunk_loaded &&
+        data_mgr.isBufferOnDevice(chunk_key_2, MemoryLevel::GPU_LEVEL, i)) {
+      is_second_chunk_loaded = true;
+    }
+  }
+  EXPECT_TRUE(is_first_chunk_loaded);
+  EXPECT_FALSE(is_second_chunk_loaded);
 
   sql("delete from test_table where i <= 2 or i >= 9;");
 
   // Chunk should be deleted from GPU memory.
-  EXPECT_FALSE(
-      data_mgr.isBufferOnDevice(chunk_key_1, MemoryLevel::GPU_LEVEL, device_id_1));
-  EXPECT_FALSE(
-      data_mgr.isBufferOnDevice(chunk_key_2, MemoryLevel::GPU_LEVEL, device_id_2));
+  EXPECT_FALSE(data_mgr.isBufferOnDevice(
+      chunk_key_1, MemoryLevel::GPU_LEVEL, first_chunk_device_id));
+  for (int i = 0; i < total_device_count; i++) {
+    if (!is_second_chunk_loaded &&
+        data_mgr.isBufferOnDevice(chunk_key_2, MemoryLevel::GPU_LEVEL, i)) {
+      is_second_chunk_loaded = true;
+      break;
+    }
+  }
+  EXPECT_FALSE(is_second_chunk_loaded);
 
   sqlAndCompareResult("select * from test_table order by i;",
                       {{i(3)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}});
@@ -2070,7 +2077,7 @@ int main(int argc, char** argv) {
   // that metadata is not automatically updated for other
   // tests that do and assert metadata updates.
   g_enable_auto_metadata_update = false;
-
+  g_is_test_env = true;
   int err{0};
   try {
     testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);

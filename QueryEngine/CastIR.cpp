@@ -283,7 +283,7 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
             string_op_infos,
             co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                       : Data_Namespace::CPU_LEVEL,
-            executor()->deviceCount(co.device_type),
+            executor()->getAvailableDevicesToProcessQuery(),
             executor(),
             executor()->getDataMgr(),
             false /* delay_translation */,

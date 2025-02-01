@@ -631,6 +631,14 @@ int main(int argc, char* argv[]) {
       "Enable executor resource manager to track execution resources and "
       "selectively gate concurrency based on resource availability.");
 
+  desc.add_options()(
+      "max-num-gpu-per-query",
+      po::value<int>(&g_max_num_gpu_per_query)->default_value(g_max_num_gpu_per_query),
+      "Sets the maximum number of GPUs that each query can utilize. If this value "
+      "exceeds the total number of GPUs available in the system, it will automatically "
+      "be adjusted to the system's limit. The default value is 0, which indicates that "
+      "the query engine will attempt to use all available GPUs.");
+
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
   desc.add(log_options.get_options());
@@ -657,6 +665,14 @@ int main(int argc, char* argv[]) {
     // and TSAN enabled
     return 0;
 #endif
+  }
+
+  if (vm.count("max-num-gpu-per-query")) {
+    g_max_num_gpu_per_query = vm["max-num-gpu-per-query"].as<int>();
+    if (g_max_num_gpu_per_query > 0) {
+      std::cout << "Set the maximum # GPUs per query: " << g_max_num_gpu_per_query
+                << std::endl;
+    }
   }
 
   int err{0};

@@ -115,9 +115,12 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<std::unique_ptr<char[]>> literals_owner;
 
-  const int device_id = 0;  // TODO(adb): support multi-gpu table functions
+  // TODO(adb): support multi-gpu table functions
+  auto const device_ids = executor->getAvailableDevicesToProcessQuery();
+  const int device_id = *device_ids.begin();
   CudaAllocator* device_allocator{nullptr};
   if (device_type == ExecutorDeviceType::GPU) {
+    VLOG(1) << "Select GPU " << device_id << " to execute table function";
     device_allocator = executor->getCudaAllocator(device_id);
     CHECK(device_allocator);
   }
@@ -333,7 +336,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
             input_str_dict_proxy_ptrs,
             *input_num_rows,
             output_str_dict_proxy_ptrs,
-            /*device_id=*/0,
+            device_id,
             executor);
     }
   }

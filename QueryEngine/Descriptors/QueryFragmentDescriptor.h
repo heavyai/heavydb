@@ -80,7 +80,7 @@ class QueryFragmentDescriptor {
 
   void buildFragmentKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
                               const std::vector<uint64_t>& frag_offsets,
-                              const int device_count,
+                              const std::set<int>& device_ids,
                               const ExecutorDeviceType& device_type,
                               const bool enable_multifrag_kernels,
                               const bool enable_inner_join_fragment_skipping,
@@ -158,21 +158,21 @@ class QueryFragmentDescriptor {
 
   void buildFragmentPerKernelMapForUnion(const RelAlgExecutionUnit& ra_exe_unit,
                                          const std::vector<uint64_t>& frag_offsets,
-                                         const int device_count,
+                                         const std::set<int>& device_ids,
                                          const size_t num_bytes_for_row,
                                          const ExecutorDeviceType& device_type,
                                          Executor* executor);
 
   void buildFragmentPerKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
                                  const std::vector<uint64_t>& frag_offsets,
-                                 const int device_count,
+                                 const std::set<int>& device_ids,
                                  const size_t num_bytes_for_row,
                                  const ExecutorDeviceType& device_type,
                                  Executor* executor);
 
   void buildMultifragKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
                                const std::vector<uint64_t>& frag_offsets,
-                               const int device_count,
+                               const std::set<int>& device_ids,
                                const size_t num_bytes_for_row,
                                const ExecutorDeviceType& device_type,
                                const bool enable_inner_join_fragment_skipping,
@@ -184,7 +184,7 @@ class QueryFragmentDescriptor {
       const InputDescriptor& table_desc,
       const bool is_temporary_table,
       const std::vector<uint64_t>& frag_offsets,
-      const int device_count,
+      const std::set<int>& device_ids,
       const size_t num_bytes_for_row,
       const ChunkMetadataVector& deleted_chunk_metadata_vec,
       const std::optional<size_t> table_desc_offset,

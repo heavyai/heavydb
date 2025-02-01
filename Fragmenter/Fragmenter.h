@@ -168,6 +168,8 @@ class TableInfo {
 
   size_t getFragmentNumTuplesUpperBound() const;
 
+  TableInfo copyTableInfo() const;
+
   std::vector<int> chunkKeyPrefix;
   std::vector<FragmentInfo> fragments;
 

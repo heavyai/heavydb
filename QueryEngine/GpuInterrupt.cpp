@@ -17,25 +17,16 @@
 #include "DynamicWatchdog.h"
 #include "Execute.h"
 
-void Executor::registerActiveModule(void* module, const int device_id) {
+void Executor::unregisterActiveModule(int device_id) const {
 #ifdef HAVE_CUDA
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
-  CHECK_LT(device_id, max_gpu_count);
-  gpu_active_modules_device_mask_ |= (1 << device_id);
-  gpu_active_modules_[device_id] = module;
-  VLOG(1) << "Registered module " << module << " on device " << std::to_string(device_id);
-#endif
-}
-
-void Executor::unregisterActiveModule(const int device_id) {
-#ifdef HAVE_CUDA
-  std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
-  CHECK_LT(device_id, max_gpu_count);
-  if ((gpu_active_modules_device_mask_ & (1 << device_id)) == 0) {
-    return;
-  }
-  gpu_active_modules_device_mask_ ^= (1 << device_id);
-  VLOG(1) << "Unregistered module on device " << device_id;
+  auto it = gpu_active_kernel_module_.find(device_id);
+  CHECK(it != gpu_active_kernel_module_.end())
+      << "Executor-" << executor_id_ << ": Cannot find a gpu kernel module on device-"
+      << device_id;
+  gpu_active_kernel_module_.erase(it);
+  VLOG(1) << "Executor-" << executor_id_
+          << ": Unregistered a gpu kernel module on device-" << device_id;
 #endif
 }
 
@@ -102,9 +93,18 @@ void Executor::interrupt(const std::string& query_session,
     std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
     CUcontext old_cu_context;
     checkCudaErrors(cuCtxGetCurrent(&old_cu_context));
-    for (int device_id = 0; device_id < max_gpu_count; device_id++) {
-      if (gpu_active_modules_device_mask_ & (1 << device_id)) {
-        void* llvm_module = gpu_active_modules_[device_id];
+    auto target_executor = executors_[executor_id_];
+    CHECK(target_executor);
+    auto const& per_device_active_kernel_module =
+        target_executor->getActiveKernelModule();
+    if (!per_device_active_kernel_module.empty()) {
+      for (auto device_id : target_executor->getAvailableDevicesToProcessQuery()) {
+        auto it = per_device_active_kernel_module.find(device_id);
+        CHECK(it != per_device_active_kernel_module.end())
+            << "Executor-" << executor_id_
+            << ": Cannot find an active kernel module registered for device-"
+            << device_id;
+        void* llvm_module = it->second;
         auto cu_module = static_cast<CUmodule>(llvm_module);
         if (!cu_module) {
           continue;
@@ -188,8 +188,8 @@ void Executor::interrupt(const std::string& query_session,
           checkCudaErrors(cuStreamDestroy(cu_stream1));
         }
       }
-      checkCudaErrors(cuCtxSetCurrent(old_cu_context));
     }
+    checkCudaErrors(cuCtxSetCurrent(old_cu_context));
   }
 #endif
   if (g_enable_dynamic_watchdog) {
@@ -209,11 +209,6 @@ void Executor::resetInterrupt() {
   if (g_enable_dynamic_watchdog) {
     dynamic_watchdog_init(static_cast<unsigned>(DW_RESET));
   } else if (allow_interrupt) {
-#ifdef HAVE_CUDA
-    for (int device_id = 0; device_id < max_gpu_count; device_id++) {
-      Executor::unregisterActiveModule(device_id);
-    }
-#endif
     VLOG(1) << "Reset interrupt flag for CPU execution kernel on Executor "
             << executor_id_;
     check_interrupt_init(static_cast<unsigned>(INT_RESET));
@@ -281,33 +276,38 @@ void Executor::initializeDynamicWatchdog(CUmodule module_ptr,
           << ": launchGpuCode: dynamic watchdog init: " << timer_stop(init_start)
           << " ms\n";
 }
+
 void Executor::initializeRuntimeInterrupter(CUmodule module_ptr,
                                             int device_id,
                                             CUstream cuda_stream) const {
   CHECK(module_ptr);
   CHECK(data_mgr_);
-  {
-    std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
-    CUcontext old_cu_context;
-    checkCudaErrors(cuCtxGetCurrent(&old_cu_context));
-    auto cuda_mgr = data_mgr_->getCudaMgr();
-    CHECK(cuda_mgr);
-    cuda_mgr->setContext(device_id);
-    CUdeviceptr runtime_interrupt_flag;
-    size_t runtime_interrupt_flag_size;
-    auto init_runtime_interrupt_start = timer_start();
-    checkCudaErrors(cuModuleGetGlobal(&runtime_interrupt_flag,
-                                      &runtime_interrupt_flag_size,
-                                      module_ptr,
-                                      "runtime_interrupt_flag"));
-    CHECK_EQ(runtime_interrupt_flag_size, sizeof(uint32_t));
-    checkCudaErrors(cuMemsetD32Async(runtime_interrupt_flag, 0, 1, cuda_stream));
-    checkCudaErrors(cuStreamSynchronize(cuda_stream));
-    checkCudaErrors(cuCtxSetCurrent(old_cu_context));
-    VLOG(1) << "Device " << device_id
-            << ": launchGpuCode: runtime query interrupter init: "
-            << timer_stop(init_runtime_interrupt_start) << " ms";
-  }
-  registerActiveModule(module_ptr, device_id);
+
+  std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
+  CUcontext old_cu_context;
+  checkCudaErrors(cuCtxGetCurrent(&old_cu_context));
+  auto cuda_mgr = data_mgr_->getCudaMgr();
+  CHECK(cuda_mgr);
+  cuda_mgr->setContext(device_id);
+  CUdeviceptr runtime_interrupt_flag;
+  size_t runtime_interrupt_flag_size;
+  auto init_runtime_interrupt_start = timer_start();
+  checkCudaErrors(cuModuleGetGlobal(&runtime_interrupt_flag,
+                                    &runtime_interrupt_flag_size,
+                                    module_ptr,
+                                    "runtime_interrupt_flag"));
+  CHECK_EQ(runtime_interrupt_flag_size, sizeof(uint32_t));
+  checkCudaErrors(cuMemsetD32Async(runtime_interrupt_flag, 0, 1, cuda_stream));
+  checkCudaErrors(cuStreamSynchronize(cuda_stream));
+  checkCudaErrors(cuCtxSetCurrent(old_cu_context));
+  VLOG(1) << "Executor-" << executor_id_ << ": Device " << device_id
+          << ": launchGpuCode: runtime query interrupter init: "
+          << timer_stop(init_runtime_interrupt_start) << " ms";
+  auto [it, success] =
+      gpu_active_kernel_module_.emplace(device_id, reinterpret_cast<void*>(module_ptr));
+  CHECK(success) << "Executor-" << executor_id_
+                 << ": Failed to register a gpu kernel module on device-" << device_id;
+  VLOG(1) << "Executor-" << executor_id_ << ": Registered a gpu kernel module on device-"
+          << device_id;
 }
 #endif

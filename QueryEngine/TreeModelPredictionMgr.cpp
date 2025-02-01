@@ -34,9 +34,7 @@ TreeModelPredictionMgr::TreeModelPredictionMgr(
     : memory_level_(memory_level)
     , executor_(executor)
     , data_mgr_(executor->getDataMgr())
-    , device_count_(executor->deviceCount(memory_level == Data_Namespace::GPU_LEVEL
-                                              ? ExecutorDeviceType::GPU
-                                              : ExecutorDeviceType::CPU))
+    , device_ids_(executor->getAvailableDevicesToProcessQuery())
     , num_trees_(decision_trees.size())
     , compute_avg_(compute_avg) {
 #ifdef HAVE_CUDA
@@ -97,7 +95,7 @@ void TreeModelPredictionMgr::createKernelBuffers() {
   auto timer = DEBUG_TIMER(__func__);
 #ifdef HAVE_CUDA
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
-    for (int device_id = 0; device_id < device_count_; ++device_id) {
+    for (auto device_id : device_ids_) {
       decision_tree_table_device_buffers_.emplace_back(
           CudaAllocator::allocGpuAbstractBuffer(
               data_mgr_, decision_tree_table_size_bytes_, device_id));
@@ -124,35 +122,39 @@ void TreeModelPredictionMgr::createKernelBuffers() {
           decision_tree_offsets_size_bytes_,
           device_id,
           "Tree model decision tree offset");
-      kernel_decision_tree_tables_.push_back(decision_tree_table_device_buffer);
-      kernel_decision_tree_offsets_.push_back(decision_tree_offsets_device_buffer);
+      kernel_decision_tree_tables_.emplace(device_id, decision_tree_table_device_buffer);
+      kernel_decision_tree_offsets_.emplace(device_id,
+                                            decision_tree_offsets_device_buffer);
     }
   }
 #else
-  CHECK_EQ(1, device_count_);
+  CHECK_EQ(1u, device_ids_.size());
 #endif
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {
-    kernel_decision_tree_tables_.push_back(host_decision_tree_table_);
-    kernel_decision_tree_offsets_.push_back(host_decision_tree_offsets_);
+    constexpr int cpu_device_id = 0;
+    kernel_decision_tree_tables_.emplace(cpu_device_id, host_decision_tree_table_);
+    kernel_decision_tree_offsets_.emplace(cpu_device_id, host_decision_tree_offsets_);
   }
 }
 
-std::pair<std::vector<std::shared_ptr<const Analyzer::Constant>>,
-          std::vector<const Analyzer::Constant*>>
-generate_kernel_buffer_constants(CgenState* cgen_state_ptr,
-                                 const std::vector<const int8_t*>& kernel_buffers,
-                                 const bool hoist_literals) {
-  std::vector<std::shared_ptr<const Analyzer::Constant>> kernel_buffer_constants_owned;
-  std::vector<const Analyzer::Constant*> kernel_buffer_constants;
-  for (const auto kernel_buffer : kernel_buffers) {
-    const int64_t kernel_buffer_handle = reinterpret_cast<int64_t>(kernel_buffer);
+std::pair<std::unordered_map<int, std::shared_ptr<const Analyzer::Constant>>,
+          std::unordered_map<int, const Analyzer::Constant*>>
+generate_kernel_buffer_constants(
+    CgenState* cgen_state_ptr,
+    const std::unordered_map<int, const int8_t*>& kernel_buffers,
+    const bool hoist_literals) {
+  std::unordered_map<int, std::shared_ptr<const Analyzer::Constant>>
+      kernel_buffer_constants_owned;
+  std::unordered_map<int, const Analyzer::Constant*> kernel_buffer_constants;
+  for (auto const& kv : kernel_buffers) {
+    const int64_t kernel_buffer_handle = reinterpret_cast<int64_t>(kv.second);
     const auto kernel_buffer_handle_literal =
         std::dynamic_pointer_cast<Analyzer::Constant>(
             Parser::IntLiteral::analyzeValue(kernel_buffer_handle));
     CHECK_EQ(kENCODING_NONE,
              kernel_buffer_handle_literal->get_type_info().get_compression());
-    kernel_buffer_constants_owned.push_back(kernel_buffer_handle_literal);
-    kernel_buffer_constants.push_back(kernel_buffer_handle_literal.get());
+    kernel_buffer_constants_owned.emplace(kv.first, kernel_buffer_handle_literal);
+    kernel_buffer_constants.emplace(kv.first, kernel_buffer_handle_literal.get());
   }
   CHECK_GE(kernel_buffer_constants.size(), 1UL);
   CHECK(hoist_literals || kernel_buffer_constants.size() == 1UL);
@@ -163,8 +165,8 @@ generate_kernel_buffer_constants(CgenState* cgen_state_ptr,
 llvm::Value* TreeModelPredictionMgr::codegen(
     const std::vector<llvm::Value*>& regressor_inputs,
     const CompilationOptions& co) const {
-  CHECK(kernel_decision_tree_tables_.size() == kernel_decision_tree_offsets_.size());
-  CHECK(kernel_decision_tree_tables_.size() == static_cast<size_t>(device_count_));
+  CHECK_EQ(kernel_decision_tree_tables_.size(), kernel_decision_tree_offsets_.size());
+  CHECK_EQ(kernel_decision_tree_tables_.size(), device_ids_.size());
   if (!co.hoist_literals && kernel_decision_tree_tables_.size() > 1UL) {
     CHECK(memory_level_ == Data_Namespace::GPU_LEVEL);
     CHECK(co.device_type == ExecutorDeviceType::GPU);
@@ -186,16 +188,16 @@ llvm::Value* TreeModelPredictionMgr::codegen(
   CodeGenerator code_generator(executor_);
 
   const auto decision_tree_table_handle_lvs =
-      co.hoist_literals
-          ? code_generator.codegenHoistedConstants(
-                decision_tree_table_constants, kENCODING_NONE, {})
-          : code_generator.codegen(decision_tree_table_constants[0], false, co);
+      co.hoist_literals ? code_generator.codegenHoistedConstants(
+                              decision_tree_table_constants, kENCODING_NONE, {})
+                        : code_generator.codegen(
+                              decision_tree_table_constants.begin()->second, false, co);
 
   const auto decision_tree_offsets_handle_lvs =
-      co.hoist_literals
-          ? code_generator.codegenHoistedConstants(
-                decision_tree_offsets_constants, kENCODING_NONE, {})
-          : code_generator.codegen(decision_tree_offsets_constants[0], false, co);
+      co.hoist_literals ? code_generator.codegenHoistedConstants(
+                              decision_tree_offsets_constants, kENCODING_NONE, {})
+                        : code_generator.codegen(
+                              decision_tree_table_constants.begin()->second, false, co);
 
   auto& builder = cgen_state_ptr->ir_builder_;
   const int32_t num_regressors = static_cast<int32_t>(regressor_inputs.size());

@@ -237,7 +237,14 @@ void SortBaselineIntegersTestImpl(const bool desc) {
   std::list<Analyzer::OrderEntry> order_entries;
   order_entries.emplace_back(3, desc, false);
   const size_t top_n = 5;
-  rs->sort(order_entries, top_n, ExecutorDeviceType::CPU, nullptr);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  CHECK(executor);
+  const bool need_to_initialize_device_ids_to_use = true;
+  rs->sort(order_entries,
+           top_n,
+           ExecutorDeviceType::CPU,
+           executor.get(),
+           need_to_initialize_device_ids_to_use);
   check_sorted<int64_t>(*rs, desc ? upper_bound : lower_bound, top_n, desc);
 }
 
@@ -278,7 +285,14 @@ TEST(SortBaseline, Floats) {
       std::list<Analyzer::OrderEntry> order_entries;
       order_entries.emplace_back(tle_no, desc, false);
       const size_t top_n = 5;
-      rs->sort(order_entries, top_n, ExecutorDeviceType::CPU, nullptr);
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      CHECK(executor);
+      const bool need_to_initialize_device_ids_to_use = true;
+      rs->sort(order_entries,
+               top_n,
+               ExecutorDeviceType::CPU,
+               executor.get(),
+               need_to_initialize_device_ids_to_use);
       check_sorted<float>(*rs, desc ? upper_bound : 1, top_n, desc);
     }
   }
@@ -307,7 +321,14 @@ TEST(SortBaseline, FloatsNotNull) {
       std::list<Analyzer::OrderEntry> order_entries;
       order_entries.emplace_back(tle_no, desc, false);
       const size_t top_n = 5;
-      rs->sort(order_entries, top_n, ExecutorDeviceType::CPU, nullptr);
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      CHECK(executor);
+      const bool need_to_initialize_device_ids_to_use = true;
+      rs->sort(order_entries,
+               top_n,
+               ExecutorDeviceType::CPU,
+               executor.get(),
+               need_to_initialize_device_ids_to_use);
       check_sorted<float>(*rs, desc ? upper_bound : 1, top_n, desc);
     }
   }

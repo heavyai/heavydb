@@ -781,7 +781,8 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
 void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
                      size_t top_n,
                      ExecutorDeviceType device_type,
-                     const Executor* executor) {
+                     Executor* executor,
+                     bool need_to_initialize_device_ids_to_use) {
   auto timer = DEBUG_TIMER(__func__);
 
   if (!storage_) {
@@ -789,6 +790,12 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
   }
   invalidateCachedRowCount();
   CHECK(!targets_.empty());
+  if (need_to_initialize_device_ids_to_use) {
+    // this function can be called in test suites directly, not as a part of
+    // SELECT query processing
+    // in such case, we mock device id selection logic to continue the process
+    executor->mockDeviceIdSelectionLogicToOnlyUseSingleDevice();
+  }
 #ifdef HAVE_CUDA
   if (canUseFastBaselineSort(order_entries, top_n)) {
     baselineSort(order_entries, top_n, device_type, executor);

@@ -55,7 +55,7 @@ class BaselineJoinHashTable : public HashJoin {
       const Data_Namespace::MemoryLevel memory_level,
       const JoinType join_type,
       const HashType preferred_hash_type,
-      const int device_count,
+      const std::set<int>& device_ids,
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
@@ -88,8 +88,6 @@ class BaselineJoinHashTable : public HashJoin {
   Data_Namespace::MemoryLevel getMemoryLevel() const noexcept override {
     return memory_level_;
   };
-
-  int getDeviceCount() const noexcept override { return device_count_; };
 
   size_t offsetBufferOff() const noexcept override;
 
@@ -148,7 +146,7 @@ class BaselineJoinHashTable : public HashJoin {
       Executor* executor,
       const std::vector<InnerOuter>& inner_outer_pairs,
       const std::vector<InnerOuterStringOpInfos>& col_pairs_string_op_infos,
-      const int device_count,
+      const std::set<int>& device_ids,
       const RegisteredQueryHint& query_hints,
       const HashTableBuildDagMap& hashtable_build_dag_map,
       const TableIdToNodeMap& table_id_to_node_map);
@@ -168,7 +166,7 @@ class BaselineJoinHashTable : public HashJoin {
       DeviceAllocator* dev_buff_owner);
 
   virtual std::pair<size_t, size_t> approximateTupleCount(
-      const std::vector<ColumnsForDevice>&) const;
+      const std::unordered_map<int, ColumnsForDevice>&) const;
 
   virtual size_t getKeyComponentWidth() const;
 
@@ -260,7 +258,7 @@ class BaselineJoinHashTable : public HashJoin {
 
   std::vector<InnerOuter> inner_outer_pairs_;
   std::vector<InnerOuterStringOpInfos> inner_outer_string_op_infos_pairs_;
-  const int device_count_;
+  const std::set<int> device_ids_;
   RegisteredQueryHint query_hints_;
   mutable bool needs_dict_translation_;
   std::optional<HashType>
@@ -268,7 +266,7 @@ class BaselineJoinHashTable : public HashJoin {
 
   HashTableBuildDagMap hashtable_build_dag_map_;
   // per-device cache key to cover hash table for sharded table
-  std::vector<QueryPlanHash> hashtable_cache_key_;
+  std::unordered_map<int, QueryPlanHash> hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;

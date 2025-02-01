@@ -28,9 +28,10 @@ class PerfectJoinHashTableBuilder {
 
   void allocateDeviceMemory(BucketizedHashEntryInfo hash_entry_info,
                             PerfectHashTableEntryInfo hash_table_entry_info,
+                            size_t num_join_col_elems,
                             const size_t shard_count,
                             const int device_id,
-                            const int device_count,
+                            const size_t device_count,
                             const Executor* executor) {
 #ifdef HAVE_CUDA
     if (shard_count) {
@@ -46,6 +47,8 @@ class PerfectJoinHashTableBuilder {
     hash_table_ = std::make_unique<PerfectHashTable>(ExecutorDeviceType::GPU,
                                                      hash_table_entry_info,
                                                      executor->maxGpuSlabSize(),
+                                                     hash_entry_info,
+                                                     num_join_col_elems,
                                                      executor->getDataMgr(),
                                                      device_id);
     if (hash_table_entry_info.getNumKeys() == 0) {
@@ -70,7 +73,7 @@ class PerfectJoinHashTableBuilder {
                           const size_t shard_count,
                           const int32_t hash_join_invalid_val,
                           const int device_id,
-                          const int device_count,
+                          const size_t device_count,
                           const Executor* executor) {
     auto timer = DEBUG_TIMER(__func__);
     if (hash_table_entry_info.getNumKeys() == 0) {
@@ -205,8 +208,11 @@ class PerfectJoinHashTableBuilder {
     CHECK(inner_col);
     const auto& ti = inner_col->get_type_info();
     CHECK(!hash_table_);
-    hash_table_ = std::make_unique<PerfectHashTable>(
-        ExecutorDeviceType::CPU, hash_table_entry_info, executor->maxCpuSlabSize());
+    hash_table_ = std::make_unique<PerfectHashTable>(ExecutorDeviceType::CPU,
+                                                     hash_table_entry_info,
+                                                     executor->maxCpuSlabSize(),
+                                                     hash_entry_info,
+                                                     join_column.num_elems);
     if (hash_table_entry_info.getNumKeys() == 0) {
       VLOG(1) << "Stop building a hash table based on a column: an input table is empty";
       return;
@@ -303,8 +309,11 @@ class PerfectJoinHashTableBuilder {
     CHECK(inner_col);
     const auto& ti = inner_col->get_type_info();
     CHECK(!hash_table_);
-    hash_table_ = std::make_unique<PerfectHashTable>(
-        ExecutorDeviceType::CPU, hash_table_entry_info, executor->maxCpuSlabSize());
+    hash_table_ = std::make_unique<PerfectHashTable>(ExecutorDeviceType::CPU,
+                                                     hash_table_entry_info,
+                                                     executor->maxCpuSlabSize(),
+                                                     hash_entry_info,
+                                                     join_column.num_elems);
     if (hash_table_entry_info.getNumKeys() == 0) {
       VLOG(1) << "Stop building a hash table based on a column: an input table is empty";
       return;

@@ -19,14 +19,14 @@
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "DeviceKernel.h"
 #include "Execute.h"
-#include "GpuInitGroups.h"
 #include "InPlaceSort.h"
-#include "QueryEngine/QueryEngine.h"
-#include "QueryEngine/RowFunctionManager.h"
+#include "QueryEngine.h"
 #include "QueryMemoryInitializer.h"
 #include "RelAlgExecutionUnit.h"
 #include "ResultSet.h"
+#include "RowFunctionManager.h"
 #include "Shared/likely.h"
+#include "Shared/scope.h"
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
 
@@ -272,6 +272,13 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         nvidia_kernel->getModulePtr(), device_id, cuda_stream);
   }
 #endif
+  ScopeGuard unregister_gpu_kernel_module = [&]() {
+#if HAVE_CUDA
+    if (allow_runtime_interrupt && !render_allocator) {
+      executor_->unregisterActiveModule(device_id);
+    }
+#endif
+  };
   auto [kernel_params, kernel_params_log] = prepareKernelParams(col_buffers,
                                                                 literal_buff,
                                                                 fragment_info,

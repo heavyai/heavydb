@@ -795,16 +795,25 @@ std::shared_ptr<ExecutorResourceMgr> generate_executor_resource_mgr(
       allow_cpu_slot_oversubscription_concurrency
           ? ResourceConcurrencyPolicy::ALLOW_CONCURRENT_REQUESTS
           : ResourceConcurrencyPolicy::ALLOW_SINGLE_REQUEST;
+
+  const auto is_gpu_concurrency_allowed =
+      allow_cpu_gpu_kernel_concurrency && g_max_num_gpu_per_query != 0;
+
+  const auto default_concurrency_policy =
+      is_gpu_concurrency_allowed ? ResourceConcurrencyPolicy::ALLOW_CONCURRENT_REQUESTS
+                                 : ResourceConcurrencyPolicy::ALLOW_SINGLE_REQUEST;
+
   const auto gpu_slots_undersubscription_concurrency_policy =
       allow_cpu_gpu_kernel_concurrency
-          ? ResourceConcurrencyPolicy::ALLOW_SINGLE_REQUEST
+          ? default_concurrency_policy
           : ResourceConcurrencyPolicy::ALLOW_SINGLE_REQUEST_GLOBALLY;
+
   const auto gpu_slots_oversubscription_concurrency_policy =
-      !allow_gpu_slot_oversubscription
-          ? ResourceConcurrencyPolicy::DISALLOW_REQUESTS
-          : (allow_cpu_gpu_kernel_concurrency
-                 ? ResourceConcurrencyPolicy::ALLOW_SINGLE_REQUEST
-                 : ResourceConcurrencyPolicy::ALLOW_SINGLE_REQUEST_GLOBALLY);
+      allow_gpu_slot_oversubscription
+          ? (allow_cpu_gpu_kernel_concurrency
+                 ? default_concurrency_policy
+                 : ResourceConcurrencyPolicy::ALLOW_SINGLE_REQUEST_GLOBALLY)
+          : ResourceConcurrencyPolicy::DISALLOW_REQUESTS;
 
   // Whether a single query can oversubscribe CPU memory should be controlled with
   // per_query_max_cpu_result_mem_ratio

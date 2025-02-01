@@ -53,7 +53,7 @@ class CodeGenerator {
 
   // Generates constant values in the literal buffer of a query.
   std::vector<llvm::Value*> codegenHoistedConstants(
-      const std::vector<const Analyzer::Constant*>& constants,
+      const std::unordered_map<int, const Analyzer::Constant*>& constants,
       const EncodingType enc_type,
       const shared::StringDictKey& dict_id);
 
@@ -121,7 +121,8 @@ class CodeGenerator {
       const std::unordered_set<llvm::Function*>& live_funcs,
       const bool is_gpu_smem_used,
       const CompilationOptions& co,
-      const GPUTarget& gpu_target);
+      const GPUTarget& gpu_target,
+      std::chrono::steady_clock::time_point& compile_start_timer);
 
   static void link_udf_module(const std::unique_ptr<llvm::Module>& udf_module,
                               llvm::Module& module,
@@ -702,8 +703,17 @@ class CodeGenerator {
 class ScalarCodeGenerator : public CodeGenerator {
  public:
   // Constructor which takes the runtime module.
-  ScalarCodeGenerator(std::unique_ptr<llvm::Module> llvm_module)
-      : CodeGenerator(nullptr, nullptr), module_(std::move(llvm_module)) {}
+  ScalarCodeGenerator(Executor* executor, std::unique_ptr<llvm::Module> llvm_module)
+      : CodeGenerator(nullptr, nullptr), module_(std::move(llvm_module)) {
+    if (!executor->isDevicesToUseInitialized()) {
+      // The executor tries to generate and compile a native code for any expression
+      // through this instance So, here we make sure the executor has a proper device id
+      // before entering the code compilation step note that the scalar code generator
+      // currently only supports a query execution via a single device todo: relax this if
+      // scalar code generator allows multi-device query execution
+      executor->mockDeviceIdSelectionLogicToOnlyUseSingleDevice();
+    }
+  }
 
   // Function generated for a given analyzer expression. For GPU, a wrapper which meets
   // the kernel signature constraints (returns void, takes all arguments as pointers) is
@@ -725,9 +735,10 @@ class ScalarCodeGenerator : public CodeGenerator {
   // NB: this is separated from the compile method to allow building higher level code
   // generators which can inline the IR for evaluating a single expression (for example
   // loops).
-  std::vector<void*> generateNativeCode(Executor* executor,
-                                        const CompiledExpression& compiled_expression,
-                                        const CompilationOptions& co);
+  std::unordered_map<int, void*> generateNativeCode(
+      Executor* executor,
+      const CompiledExpression& compiled_expression,
+      const CompilationOptions& co);
 
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cuda_mgr_.get(); }
 
@@ -743,10 +754,10 @@ class ScalarCodeGenerator : public CodeGenerator {
   // map to be used during code generation.
   ColumnMap prepare(const Analyzer::Expr*);
 
-  std::vector<void*> generateNativeGPUCode(Executor* executor,
-                                           llvm::Function* func,
-                                           llvm::Function* wrapper_func,
-                                           const CompilationOptions& co);
+  std::unordered_map<int, void*> generateNativeGPUCode(Executor* executor,
+                                                       llvm::Function* func,
+                                                       llvm::Function* wrapper_func,
+                                                       const CompilationOptions& co);
 
   std::unique_ptr<llvm::Module> module_;
   ExecutionEngineWrapper execution_engine_;
