@@ -26,8 +26,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
     if (const auto geo_constant = dynamic_cast<const Analyzer::GeoConstant*>(constant)) {
       return codegenGeoConstant(geo_constant, co);
     } else {
-      std::vector<const Analyzer::Constant*> constants(
-          executor()->deviceCount(co.device_type), constant);
+      std::unordered_map<int, const Analyzer::Constant*> constants;
+      for (auto device_id : executor_->getAvailableDevicesToProcessQuery()) {
+        constants.emplace(device_id, constant);
+      }
       return codegenHoistedConstants(constants, enc_type, dict_id);
     }
   }
@@ -371,35 +373,31 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
 }
 
 std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstants(
-    const std::vector<const Analyzer::Constant*>& constants,
+    const std::unordered_map<int, const Analyzer::Constant*>& constants,
     const EncodingType enc_type,
     const shared::StringDictKey& dict_id) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(!constants.empty());
-  const auto& type_info = constants.front()->get_type_info();
+  const auto& type_info = constants.begin()->second->get_type_info();
   checked_int16_t checked_lit_off{0};
   size_t next_lit_bytes{0};
   int16_t lit_off{-1};
   size_t lit_bytes;
+  int device_id_offset = 0;
   try {
-    // currently, we assume that `constants.size()` indicates the number of devices
-    // which is equivalent to the total number of devices that a system has
-    // so we need to revisit this to support the selection of devices to execute
-    // the query (i.e., use GPU 1 and 4 to execute the query among eight GPUs)
-    // todo (yoonmin) : indicate a set of devices to hoist a literal
-    for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
-      const auto constant = constants[device_id];
-      const auto& crt_type_info = constant->get_type_info();
+    for (auto [device_id, constant_expr] : constants) {
+      const auto& crt_type_info = constant_expr->get_type_info();
       CHECK(type_info == crt_type_info);
       std::tie(checked_lit_off, next_lit_bytes) =
-          cgen_state_->getOrAddLiteral(constant, enc_type, dict_id, device_id);
-      if (device_id) {
+          cgen_state_->getOrAddLiteral(constant_expr, enc_type, dict_id, device_id);
+      if (device_id_offset) {
         CHECK_EQ(lit_off, checked_lit_off);
         CHECK_EQ(lit_bytes, next_lit_bytes);
       } else {
         lit_off = static_cast<int16_t>(checked_lit_off);
         lit_bytes = next_lit_bytes;
       }
+      device_id_offset++;
     }
   } catch (const std::range_error& e) {
     // detect literal buffer overflow when trying to

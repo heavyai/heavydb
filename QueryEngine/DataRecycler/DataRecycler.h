@@ -152,12 +152,12 @@ class DataRecyclerUtil {
   }
 
   static std::unordered_set<size_t> getAlternativeTableKeys(
-      const std::vector<ChunkKey>& chunk_keys,
+      const std::unordered_map<int, ChunkKey>& chunk_keys,
       const shared::TableKey& inner_table_key) {
     std::unordered_set<size_t> alternative_table_keys;
-    if (!chunk_keys.empty() && chunk_keys.front().size() > 2 &&
-        chunk_keys.front()[1] > 0) {
-      auto& chunk_key = chunk_keys.front();
+    if (!chunk_keys.empty() && chunk_keys.begin()->second.size() > 2 &&
+        chunk_keys.begin()->second[1] > 0) {
+      auto const& chunk_key = chunk_keys.begin()->second;
       // the actual chunks fetched per device can be different but they constitute the
       // same table in the same db, so we can exploit this to create an alternative table
       // key

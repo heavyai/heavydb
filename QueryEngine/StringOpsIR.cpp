@@ -523,7 +523,7 @@ std::unique_ptr<StringDictionaryTranslationMgr> translate_dict_strings(
             string_op_infos,
             device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                    : Data_Namespace::CPU_LEVEL,
-            executor->deviceCount(device_type),
+            executor->getAvailableDevicesToProcessQuery(),
             executor,
             executor->getDataMgr(),
             false /* delay_translation */,
@@ -538,7 +538,7 @@ std::unique_ptr<StringDictionaryTranslationMgr> translate_dict_strings(
             string_op_infos,
             device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                    : Data_Namespace::CPU_LEVEL,
-            executor->deviceCount(device_type),
+            executor->getAvailableDevicesToProcessQuery(),
             executor,
             executor->getDataMgr(),
             false /* delay_translation */);
@@ -587,7 +587,7 @@ llvm::Value* CodeGenerator::codegenPseudoStringOper(
           string_op_infos,
           co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                     : Data_Namespace::CPU_LEVEL,
-          executor()->deviceCount(co.device_type),
+          executor()->getAvailableDevicesToProcessQuery(),
           executor(),
           executor()->getDataMgr(),
           false /* delay_translation */,

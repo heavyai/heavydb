@@ -54,7 +54,9 @@ bool g_cluster{false};
 bool g_bigint_count{false};
 bool g_enable_mode_on_gpu{false};
 int g_hll_precision_bits{11};
-size_t g_watchdog_baseline_max_groups{120000000};
+size_t kWatchdogBaselineNumMaxGroups{120000000};
+size_t kMaxBufferSize{1 << 30};
+size_t kMaxNumElemsForBucketizedRange{130000000};
 extern size_t g_approx_quantile_buffer;
 extern size_t g_approx_quantile_centroids;
 extern int64_t g_bitmap_memory_limit;
@@ -125,19 +127,6 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
     }
   }
   return agg_count;
-}
-
-bool expr_is_rowid(const Analyzer::Expr* expr) {
-  const auto col = dynamic_cast<const Analyzer::ColumnVar*>(expr);
-  if (!col) {
-    return false;
-  }
-  const auto cd = get_column_descriptor_maybe(col->getColumnKey());
-  if (!cd || !cd->isVirtualCol) {
-    return false;
-  }
-  CHECK_EQ("rowid", cd->columnName);
-  return true;
 }
 
 bool is_column_range_too_big_for_perfect_hash(const ColRangeInfo& col_range_info,
@@ -313,21 +302,21 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   if (!ra_exe_unit_.groupby_exprs.front()) {
     return col_range_info;
   }
-  static const int64_t MAX_BUFFER_SIZE = 1 << 30;
   const int64_t col_count =
       ra_exe_unit_.groupby_exprs.size() + ra_exe_unit_.target_exprs.size();
-  int64_t max_entry_count = MAX_BUFFER_SIZE / (col_count * sizeof(int64_t));
+  int64_t max_entry_count = kMaxBufferSize / (col_count * sizeof(int64_t));
   if (any<IsCountDistinct, IsMode>(ra_exe_unit_.target_exprs)) {
     max_entry_count = std::min(max_entry_count, baseline_threshold);
   }
+  auto const is_baseline_candidate =
+      is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count);
   const auto& groupby_expr_ti = ra_exe_unit_.groupby_exprs.front()->get_type_info();
   if (groupby_expr_ti.is_string() && !col_range_info.bucket) {
     CHECK(groupby_expr_ti.get_compression() == kENCODING_DICT);
 
     const bool has_filters =
         !ra_exe_unit_.quals.empty() || !ra_exe_unit_.simple_quals.empty();
-    if (has_filters &&
-        is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count)) {
+    if (has_filters && is_baseline_candidate) {
       // if filters are present, we can use the filter to narrow the cardinality of the
       // group by in the case of ranges too big for perfect hash. Otherwise, we are better
       // off attempting perfect hash (since we know the range will be made of
@@ -366,9 +355,7 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
                 col_range_info.has_nulls};
       }
     }
-  } else if ((!expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get())) &&
-             is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count) &&
-             !col_range_info.bucket) {
+  } else if (is_baseline_candidate && !col_range_info.bucket) {
     return {QueryDescriptionType::GroupByBaselineHash,
             col_range_info.min,
             col_range_info.max,
@@ -451,7 +438,7 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
                                                  const size_t shard_count) const {
   size_t device_count{0};
   if (device_type_ == ExecutorDeviceType::GPU) {
-    device_count = executor_->cudaMgr()->getDeviceCount();
+    device_count = executor_->getAvailableDevicesToProcessQuery().size();
     CHECK_GT(device_count, 0u);
   }
 
@@ -964,20 +951,20 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
         col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash)
           ? KeylessInfo{false, -1}
           : get_keyless_info(ra_exe_unit_, query_infos_, is_group_by, executor_);
-
+  auto const watchdog_condition_for_baseline =
+      col_range_info.hash_type_ == QueryDescriptionType::GroupByBaselineHash &&
+      max_groups_buffer_entry_count > kWatchdogBaselineNumMaxGroups;
+  size_t const bucketized_col_range = (col_range_info.max - col_range_info.min) /
+                                      std::max(col_range_info.bucket, int64_t(1));
+  auto const watchdog_condition_for_perfect_hash =
+      col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
+      ra_exe_unit_.groupby_exprs.size() == 1 &&
+      bucketized_col_range > kMaxNumElemsForBucketizedRange;
   if (g_enable_watchdog &&
-      ((col_range_info.hash_type_ == QueryDescriptionType::GroupByBaselineHash &&
-        max_groups_buffer_entry_count > g_watchdog_baseline_max_groups) ||
-       (col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
-        ra_exe_unit_.groupby_exprs.size() == 1 &&
-        (col_range_info.max - col_range_info.min) /
-                std::max(col_range_info.bucket, int64_t(1)) >
-            130000000))) {
+      (watchdog_condition_for_baseline || watchdog_condition_for_perfect_hash)) {
     throw WatchdogException("Query would use too much memory");
   }
-
   size_t const nmode_targets = count<IsMode>(ra_exe_unit_.target_exprs);
-
   const auto count_distinct_descriptors = init_count_distinct_descriptors(
       ra_exe_unit_, query_infos_, col_range_info, device_type_, executor_);
   auto approx_quantile_descriptors = initApproxQuantileDescriptors();

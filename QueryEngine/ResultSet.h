@@ -278,7 +278,8 @@ class ResultSet {
   void sort(const std::list<Analyzer::OrderEntry>& order_entries,
             size_t top_n,
             const ExecutorDeviceType device_type,
-            const Executor* executor);
+            Executor* executor,
+            bool need_to_initialize_device_ids_to_use = false);
 
   void keepFirstN(const size_t n);
 

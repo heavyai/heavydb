@@ -362,9 +362,22 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
 
   auto cached_code = QueryEngine::getInstance()->tf_code_accessor->get_or_wait(key);
   if (cached_code) {
+#ifdef HAVE_CUDA
+    if (co_.device_type == ExecutorDeviceType::GPU) {
+      auto cached_code_for_gpu =
+          std::dynamic_pointer_cast<GpuCompilationContext>(*cached_code);
+      CHECK(cached_code_for_gpu);
+      CHECK(executor_->data_mgr_);
+      CHECK(executor_->data_mgr_->getCudaMgr());
+      cached_code_for_gpu->createGpuDeviceCompilationContextForDevices(
+          executor_->getAvailableDevicesToProcessQuery(),
+          executor_->data_mgr_->getCudaMgr());
+      return cached_code_for_gpu;
+    }
+#endif
     return *cached_code;
   }
-
+  auto compile_start = timer_start();
   auto cgen_state = executor_->getCgenStatePtr();
   CHECK(cgen_state);
   CHECK(cgen_state->module_ == nullptr);
@@ -380,7 +393,7 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
   }
   std::shared_ptr<CompilationContext> code;
   try {
-    code = finalize(emit_only_preflight_fn);
+    code = finalize(emit_only_preflight_fn, compile_start);
   } catch (const std::exception& e) {
     // Erase unsuccesful key and release lock from the get_or_wait(key) call above:
     QueryEngine::getInstance()->tf_code_accessor->erase(key);
@@ -758,7 +771,8 @@ void TableFunctionCompilationContext::generateGpuKernel() {
 }
 
 std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
-    bool emit_only_preflight_fn) {
+    bool emit_only_preflight_fn,
+    std::chrono::steady_clock::time_point& compile_start_timer) {
   auto timer = DEBUG_TIMER(__func__);
   /*
     TODO 1: eliminate need for OverrideFromSrc
@@ -786,7 +800,6 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
 
     CHECK(executor_);
     executor_->initializeNVPTXBackend();
-
     CodeGenerator::GPUTarget gpu_target{
         executor_->nvptx_target_machine_.get(), executor_->cudaMgr(), cgen_state, false};
     code = CodeGenerator::generateNativeGPUCode(executor_,
@@ -795,7 +808,8 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
                                                 {entry_point_func_, kernel_func_},
                                                 /*is_gpu_smem_used=*/false,
                                                 co_,
-                                                gpu_target);
+                                                gpu_target,
+                                                compile_start_timer);
   } else {
     auto ee =
         CodeGenerator::generateNativeCPUCode(entry_point_func_, {entry_point_func_}, co_);

@@ -1413,7 +1413,6 @@ int main(int argc, char** argv) {
   g_enable_dev_table_functions = true;
   QR::init(BASE_PATH);
   int err{0};
-
   try {
     dropTable();
     createTable();

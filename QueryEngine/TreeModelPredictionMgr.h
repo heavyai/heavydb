@@ -56,7 +56,7 @@ class TreeModelPredictionMgr {
   const Data_Namespace::MemoryLevel memory_level_;
   Executor* executor_;
   Data_Namespace::DataMgr* data_mgr_;
-  const int device_count_;
+  const std::set<int> device_ids_;
   const int32_t num_trees_;
   const bool compute_avg_;
   int8_t* host_decision_tree_table_;
@@ -65,6 +65,6 @@ class TreeModelPredictionMgr {
   int64_t decision_tree_offsets_size_bytes_;
   std::vector<Data_Namespace::AbstractBuffer*> decision_tree_table_device_buffers_;
   std::vector<Data_Namespace::AbstractBuffer*> decision_tree_offsets_device_buffers_;
-  std::vector<const int8_t*> kernel_decision_tree_tables_;
-  std::vector<const int8_t*> kernel_decision_tree_offsets_;
+  std::unordered_map<int, const int8_t*> kernel_decision_tree_tables_;
+  std::unordered_map<int, const int8_t*> kernel_decision_tree_offsets_;
 };

@@ -130,6 +130,7 @@ class RelAlgExecutor : private StorageIOFacility {
                                       const std::pair<size_t, size_t> interval,
                                       const CompilationOptions& co,
                                       const ExecutionOptions& eo,
+                                      const bool skip_device_id_selection,
                                       RenderInfo* render_info,
                                       const int64_t queue_time_ms);
 
@@ -236,6 +237,7 @@ class RelAlgExecutor : private StorageIOFacility {
                          const size_t step_idx,
                          const CompilationOptions&,
                          const ExecutionOptions&,
+                         bool skip_device_id_selection,
                          RenderInfo*,
                          const int64_t queue_time_ms);
 

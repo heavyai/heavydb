@@ -289,7 +289,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
     const Data_Namespace::MemoryLevel memory_level,
     const JoinType join_type,
     const HashType preferred_hash_type,
-    const int device_count,
+    const std::set<int>& device_ids,
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
@@ -297,7 +297,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
     const TableIdToNodeMap& table_id_to_node_map) {
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<HashJoin> join_hash_table;
-  CHECK_GT(device_count, 0);
+  CHECK_GT(device_ids.size(), 0u);
   if (!g_enable_bbox_intersect_hashjoin && qual_bin_oper->is_bbox_intersect_oper()) {
     throw std::runtime_error(
         "Bounding box intersection disabled, attempting to fall back to loop join");
@@ -309,7 +309,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                        query_infos,
                                                        memory_level,
                                                        join_type,
-                                                       device_count,
+                                                       device_ids,
                                                        column_cache,
                                                        executor,
                                                        hashtable_build_dag_map,
@@ -328,7 +328,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                          memory_level,
                                                          join_type,
                                                          preferred_hash_type,
-                                                         device_count,
+                                                         device_ids,
                                                          column_cache,
                                                          executor,
                                                          hashtable_build_dag_map,
@@ -342,7 +342,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                           memory_level,
                                                           join_type,
                                                           preferred_hash_type,
-                                                          device_count,
+                                                          device_ids,
                                                           column_cache,
                                                           executor,
                                                           hashtable_build_dag_map,
@@ -362,7 +362,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                            memory_level,
                                                            join_type,
                                                            preferred_hash_type,
-                                                           device_count,
+                                                           device_ids,
                                                            column_cache,
                                                            executor,
                                                            hashtable_build_dag_map,
@@ -373,8 +373,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
   CHECK(join_hash_table);
   if (VLOGGING(2)) {
     if (join_hash_table->getMemoryLevel() == Data_Namespace::MemoryLevel::GPU_LEVEL) {
-      for (int device_id = 0; device_id < join_hash_table->getDeviceCount();
-           ++device_id) {
+      for (auto const device_id : device_ids) {
         if (join_hash_table->getJoinHashBufferSize(ExecutorDeviceType::GPU, device_id) <=
             1000) {
           VLOG(2) << "Built GPU hash table: "
@@ -475,12 +474,12 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
   CHECK(executor);
   std::vector<const void*> sd_inner_proxy_per_key;
   std::vector<void*> sd_outer_proxy_per_key;
-  std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
+  std::unordered_map<int, ChunkKey> cache_key_chunks;  // used for the cache key
   const bool has_string_op_infos = inner_outer_string_op_infos_pairs.size();
   if (has_string_op_infos) {
     CHECK_EQ(inner_outer_pairs.size(), inner_outer_string_op_infos_pairs.size());
   }
-  size_t string_op_info_pairs_idx = 0;
+  int string_op_info_pairs_idx = 0;
   for (const auto& inner_outer_pair : inner_outer_pairs) {
     const auto inner_col = inner_outer_pair.first;
     const auto outer_col = inner_outer_pair.second;
@@ -519,7 +518,7 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
       sd_outer_proxy_per_key.emplace_back();
       cache_key_chunks_for_column.push_back({-1});
     }
-    cache_key_chunks.push_back(cache_key_chunks_for_column);
+    cache_key_chunks.emplace(string_op_info_pairs_idx, cache_key_chunks_for_column);
     string_op_info_pairs_idx++;
   }
   return {sd_inner_proxy_per_key, sd_outer_proxy_per_key, cache_key_chunks};
@@ -669,7 +668,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
     const Catalog_Namespace::Catalog& catalog2,
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
-    const int device_count,
+    const std::set<int>& device_ids,
     ColumnCacheMap& column_cache,
     Executor* executor) {
   auto a1 = getSyntheticColumnVar(table1, column1, 0, catalog1);
@@ -688,7 +687,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
                                           memory_level,
                                           JoinType::INNER,
                                           preferred_hash_type,
-                                          device_count,
+                                          device_ids,
                                           column_cache,
                                           executor,
                                           {},
@@ -702,7 +701,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
-    const int device_count,
+    const std::set<int>& device_ids,
     ColumnCacheMap& column_cache,
     Executor* executor) {
   std::set<const Analyzer::ColumnVar*> cvs =
@@ -716,7 +715,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
                                           memory_level,
                                           JoinType::INNER,
                                           preferred_hash_type,
-                                          device_count,
+                                          device_ids,
                                           column_cache,
                                           executor,
                                           {},
@@ -729,7 +728,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
     std::vector<std::shared_ptr<Analyzer::BinOper>> qual_bin_opers,
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
-    const int device_count,
+    const std::set<int>& device_ids,
     ColumnCacheMap& column_cache,
     Executor* executor) {
   std::set<const Analyzer::ColumnVar*> cvs;
@@ -739,6 +738,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
   }
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
   setupSyntheticCaching(cvs, executor);
+
   RegisteredQueryHint query_hint = RegisteredQueryHint::defaults();
   std::shared_ptr<HashJoin> hash_table;
   std::string error_msg;
@@ -749,7 +749,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
                                                         memory_level,
                                                         JoinType::INNER,
                                                         preferred_hash_type,
-                                                        device_count,
+                                                        device_ids,
                                                         column_cache,
                                                         executor,
                                                         {},

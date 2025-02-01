@@ -28,35 +28,22 @@ extern bool g_use_chunk_metadata_cache;
 
 InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executor) {}
 
-namespace {
-
-Fragmenter_Namespace::TableInfo copy_table_info(
-    const Fragmenter_Namespace::TableInfo& table_info) {
-  Fragmenter_Namespace::TableInfo table_info_copy;
-  table_info_copy.chunkKeyPrefix = table_info.chunkKeyPrefix;
-  table_info_copy.fragments = table_info.fragments;
-  table_info_copy.setPhysicalNumTuples(table_info.getPhysicalNumTuples());
-  return table_info_copy;
-}
-
-}  // namespace
-
 Fragmenter_Namespace::TableInfo build_table_info(
-    const std::vector<const TableDescriptor*>& shard_tables) {
+    const std::vector<const TableDescriptor*>& all_physical_tds) {
   size_t total_number_of_tuples{0};
-  Fragmenter_Namespace::TableInfo table_info_all_shards;
-  for (const TableDescriptor* shard_table : shard_tables) {
-    CHECK(shard_table->fragmenter);
-    const auto& shard_metainfo = shard_table->fragmenter->getFragmentsForQuery();
-    total_number_of_tuples += shard_metainfo.getPhysicalNumTuples();
-    table_info_all_shards.fragments.reserve(table_info_all_shards.fragments.size() +
-                                            shard_metainfo.fragments.size());
-    table_info_all_shards.fragments.insert(table_info_all_shards.fragments.end(),
-                                           shard_metainfo.fragments.begin(),
-                                           shard_metainfo.fragments.end());
+  Fragmenter_Namespace::TableInfo table_info_all_fragments;
+  for (const TableDescriptor* td : all_physical_tds) {
+    CHECK(td->fragmenter);
+    const auto& fragment_metainfo = td->fragmenter->getFragmentsForQuery();
+    total_number_of_tuples += fragment_metainfo.getPhysicalNumTuples();
+    table_info_all_fragments.fragments.reserve(table_info_all_fragments.fragments.size() +
+                                               fragment_metainfo.fragments.size());
+    table_info_all_fragments.fragments.insert(table_info_all_fragments.fragments.end(),
+                                              fragment_metainfo.fragments.begin(),
+                                              fragment_metainfo.fragments.end());
   }
-  table_info_all_shards.setPhysicalNumTuples(total_number_of_tuples);
-  return table_info_all_shards;
+  table_info_all_fragments.setPhysicalNumTuples(total_number_of_tuples);
+  return table_info_all_fragments;
 }
 
 Fragmenter_Namespace::TableInfo InputTableInfoCache::getTableInfo(
@@ -64,17 +51,31 @@ Fragmenter_Namespace::TableInfo InputTableInfoCache::getTableInfo(
   const auto it = cache_.find(table_key);
   if (it != cache_.end()) {
     const auto& table_info = it->second;
-    return copy_table_info(table_info);
+    return table_info.copyTableInfo();
   }
   const auto cat = Catalog_Namespace::SysCatalog::instance().getCatalog(table_key.db_id);
   CHECK(cat);
   const auto td = cat->getMetadataForTable(table_key.table_id);
   CHECK(td);
-  const auto shard_tables = cat->getPhysicalTablesDescriptors(td);
-  auto table_info = build_table_info(shard_tables);
-  auto it_ok = cache_.emplace(table_key, copy_table_info(table_info));
+  const auto td_per_fragment = cat->getPhysicalTablesDescriptors(td);
+  auto table_info = build_table_info(td_per_fragment);
+  auto it_ok = cache_.emplace(table_key, table_info.copyTableInfo());
   CHECK(it_ok.second);
-  return copy_table_info(table_info);
+  return table_info.copyTableInfo();
+}
+
+void InputTableInfoCache::updateTableInfo(
+    const shared::TableKey& table_key,
+    const Fragmenter_Namespace::TableInfo& table_info,
+    const std::set<int>& device_ids_to_use) {
+  cache_.erase(table_key);
+  auto it_ok = cache_.emplace(table_key, table_info.copyTableInfo());
+  CHECK(it_ok.second);
+  for (auto const& frag : it_ok.first->second.fragments) {
+    CHECK(device_ids_to_use.find(frag.deviceIds[MemoryLevel::GPU_LEVEL]) !=
+          device_ids_to_use.end())
+        << "Failed to update a device id of a fragment-" << frag.fragmentId;
+  }
 }
 
 void InputTableInfoCache::clear() {
@@ -89,7 +90,9 @@ bool uses_int_meta(const SQLTypeInfo& col_ti) {
          (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT);
 }
 
-Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultSetPtr& rows) {
+Fragmenter_Namespace::TableInfo synthesize_table_info(int table_id,
+                                                      const ResultSetPtr& rows,
+                                                      Executor* executor) {
   std::vector<Fragmenter_Namespace::FragmentInfo> result;
   if (rows) {
     result.resize(1);
@@ -98,6 +101,15 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultSetPtr& rows) 
     fragment.deviceIds.resize(3);
     fragment.resultSet = rows.get();
     fragment.resultSetMutex.reset(new std::mutex());
+    if (executor->isDevicesToUseInitialized()) {
+      auto const& device_ids = executor->getAvailableDevicesToProcessQuery();
+      // currently, we assume a temporary table is processed by a single GPU
+      CHECK_EQ(device_ids.size(), 1u);
+      constexpr int gpu_mem_level = static_cast<int>(Data_Namespace::GPU_LEVEL);
+      fragment.deviceIds[gpu_mem_level] = *device_ids.begin();
+      VLOG(1) << "Synthesize query resultset fragment's device id to "
+              << fragment.deviceIds[gpu_mem_level] << " (table_id: " << table_id << ")";
+    }
   }
   Fragmenter_Namespace::TableInfo table_info;
   table_info.fragments = result;
@@ -115,7 +127,7 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
     if (cached_index_it != info_cache.end()) {
       CHECK_LT(cached_index_it->second, table_infos.size());
       table_infos.push_back(
-          {table_key, copy_table_info(table_infos[cached_index_it->second].info)});
+          {table_key, table_infos[cached_index_it->second].info.copyTableInfo()});
       continue;
     }
 
@@ -126,7 +138,8 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
       const auto it = temporary_tables->find(table_id);
       LOG_IF(FATAL, it == temporary_tables->end())
           << "Failed to find previous query result for node " << -table_id;
-      table_infos.push_back({{0, table_id}, synthesize_table_info(it->second)});
+      table_infos.push_back(
+          {{0, table_id}, synthesize_table_info(table_id, it->second, executor)});
     } else {
       CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
       table_infos.push_back({table_key, executor->getTableInfo(table_key)});
@@ -604,4 +617,12 @@ size_t Fragmenter_Namespace::TableInfo::getFragmentNumTuplesUpperBound() const {
         std::max(fragment.getNumTuples(), fragment_num_tupples_upper_bound);
   }
   return fragment_num_tupples_upper_bound;
+}
+
+Fragmenter_Namespace::TableInfo Fragmenter_Namespace::TableInfo::copyTableInfo() const {
+  Fragmenter_Namespace::TableInfo table_info_copy;
+  table_info_copy.chunkKeyPrefix = chunkKeyPrefix;
+  table_info_copy.fragments = fragments;
+  table_info_copy.setPhysicalNumTuples(getPhysicalNumTuples());
+  return table_info_copy;
 }

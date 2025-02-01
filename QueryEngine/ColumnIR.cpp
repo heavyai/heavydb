@@ -336,15 +336,15 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
         llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
     auto* partition_count_buf = window_function_context->getCountBuf(co.device_type);
     CHECK(partition_count_buf);
-    auto partition_count_buf_ptr_lv =
-        CodegenUtil::createPtrWithHoistedMemoryAddr(
-            cgen_state_,
-            this,
-            co,
-            cgen_state_->llInt(reinterpret_cast<int64_t>(partition_count_buf)),
-            pi32_type,
-            WindowFunctionContext::NUM_EXECUTION_DEVICES)
-            .front();
+    auto const partition_count_buf_ptr_lvs = CodegenUtil::createPtrWithHoistedMemoryAddr(
+        cgen_state_,
+        this,
+        co,
+        cgen_state_->llInt(reinterpret_cast<int64_t>(partition_count_buf)),
+        pi32_type,
+        executor_->getAvailableDevicesToProcessQuery());
+    CHECK_EQ(partition_count_buf_ptr_lvs.size(), 1u);
+    auto partition_count_buf_ptr_lv = partition_count_buf_ptr_lvs.begin()->second;
 
     // # elems of the given partition
     const auto num_elem_current_partition_ptr =

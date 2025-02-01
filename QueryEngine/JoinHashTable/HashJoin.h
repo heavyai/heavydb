@@ -107,11 +107,11 @@ using InnerOuterStringOpInfos = std::pair<std::vector<StringOps_Namespace::Strin
                                           std::vector<StringOps_Namespace::StringOpInfo>>;
 
 struct ColumnsForDevice {
-  const std::vector<JoinColumn> join_columns;
-  const std::vector<JoinColumnTypeInfo> join_column_types;
-  const std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
+  std::vector<JoinColumn> join_columns;
+  std::vector<JoinColumnTypeInfo> join_column_types;
+  std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<JoinBucketInfo> join_buckets;
-  const std::vector<std::shared_ptr<void>> malloc_owner;
+  std::vector<std::shared_ptr<void>> malloc_owner;
 
   void setBucketInfo(const std::vector<double>& bucket_sizes_for_dimension,
                      const std::vector<InnerOuter> inner_outer_pairs);
@@ -127,7 +127,7 @@ struct HashJoinMatchingSet {
 struct CompositeKeyInfo {
   std::vector<const void*> sd_inner_proxy_per_key;
   std::vector<void*> sd_outer_proxy_per_key;
-  std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
+  std::unordered_map<int, ChunkKey> cache_key_chunks;  // used for the cache key
 };
 
 class DeviceAllocator;
@@ -195,8 +195,6 @@ class HashJoin {
 
   virtual Data_Namespace::MemoryLevel getMemoryLevel() const noexcept = 0;
 
-  virtual int getDeviceCount() const noexcept = 0;
-
   virtual size_t offsetBufferOff() const noexcept = 0;
 
   virtual size_t countBufferOff() const noexcept = 0;
@@ -225,7 +223,7 @@ class HashJoin {
       const Data_Namespace::MemoryLevel memory_level,
       const JoinType join_type,
       const HashType preferred_hash_type,
-      const int device_count,
+      const std::set<int>& device_ids,
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
@@ -242,7 +240,7 @@ class HashJoin {
       const Catalog_Namespace::Catalog& catalog2,
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
-      const int device_count,
+      const std::set<int>& device_ids,
       ColumnCacheMap& column_cache,
       Executor* executor);
 
@@ -251,7 +249,7 @@ class HashJoin {
       const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
-      const int device_count,
+      const std::set<int>& device_ids,
       ColumnCacheMap& column_cache,
       Executor* executor);
 
@@ -259,7 +257,7 @@ class HashJoin {
       std::vector<std::shared_ptr<Analyzer::BinOper>>,
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
-      const int device_count,
+      const std::set<int>& device_ids,
       ColumnCacheMap& column_cache,
       Executor* executor);
 
@@ -293,34 +291,31 @@ class HashJoin {
   normalizeColumnPairs(const Analyzer::BinOper* condition,
                        const TemporaryTables* temporary_tables);
 
-  HashTable* getHashTableForDevice(const size_t device_id) const {
-    CHECK_LT(device_id, hash_tables_for_device_.size());
-    return hash_tables_for_device_[device_id].get();
-  }
-
   size_t getJoinHashBufferSize(const ExecutorDeviceType device_type) {
     CHECK(device_type == ExecutorDeviceType::CPU);
-    return getJoinHashBufferSize(device_type, 0);
+    constexpr int cpu_device_id = 0;
+    return getJoinHashBufferSize(device_type, cpu_device_id);
   }
 
   size_t getJoinHashBufferSize(const ExecutorDeviceType device_type,
                                const int device_id) const {
-    auto hash_table = getHashTableForDevice(device_id);
-    if (!hash_table) {
+    std::shared_lock<std::shared_mutex> read_lock(hash_tables_mutex_);
+    if (hash_tables_for_device_.empty()) {
       return 0;
     }
+    auto hash_table = hash_tables_for_device_.begin()->second.get();
+    CHECK(hash_table);
     return hash_table->getHashTableBufferSize(device_type);
   }
 
   int8_t* getJoinHashBuffer(const ExecutorDeviceType device_type,
                             const int device_id) const {
-    // TODO: just make device_id a size_t
-    CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
-    if (!hash_tables_for_device_[device_id]) {
+    std::shared_lock<std::shared_mutex> read_lock(hash_tables_mutex_);
+    auto it = hash_tables_for_device_.find(device_id);
+    if (it == hash_tables_for_device_.end()) {
       return nullptr;
     }
-    CHECK(hash_tables_for_device_[device_id]);
-    auto hash_table = hash_tables_for_device_[device_id].get();
+    auto hash_table = it->second.get();
 #ifdef HAVE_CUDA
     if (device_type == ExecutorDeviceType::CPU) {
       return hash_table->getCpuBuffer();
@@ -336,9 +331,51 @@ class HashJoin {
   }
 
   void freeHashBufferMemory() {
-    auto empty_hash_tables =
-        decltype(hash_tables_for_device_)(hash_tables_for_device_.size());
+    std::unique_lock<std::shared_mutex> write_lock(hash_tables_mutex_);
+    auto empty_hash_tables = decltype(hash_tables_for_device_)();
     hash_tables_for_device_.swap(empty_hash_tables);
+  }
+
+  std::shared_ptr<HashTable> getHashTableForDevice(int device_id) const {
+    std::shared_lock<std::shared_mutex> read_lock(hash_tables_mutex_);
+    auto it = hash_tables_for_device_.find(device_id);
+    CHECK(it != hash_tables_for_device_.end());
+    auto hash_table = it->second;
+    CHECK(hash_table);
+    return hash_table;
+  }
+
+  void replaceHashTableForDevice(std::shared_ptr<HashTable>&& hash_table, int device_id) {
+    std::unique_lock<std::shared_mutex> write_lock(hash_tables_mutex_);
+    auto it = hash_tables_for_device_.find(device_id);
+    CHECK(it != hash_tables_for_device_.end());
+    hash_tables_for_device_[device_id] = std::move(hash_table);
+  }
+
+  std::shared_ptr<HashTable> getAnyHashTableForDevice() const {
+    std::shared_lock<std::shared_mutex> read_lock(hash_tables_mutex_);
+    if (hash_tables_for_device_.empty()) {
+      return nullptr;
+    }
+    return hash_tables_for_device_.begin()->second;
+  }
+
+  void moveHashTableForDevice(std::shared_ptr<HashTable>&& hash_table, int device_id) {
+    std::unique_lock<std::shared_mutex> write_lock(hash_tables_mutex_);
+    auto [it, success] =
+        hash_tables_for_device_.emplace(device_id, std::move(hash_table));
+    CHECK(success);
+  }
+
+  void putHashTableForDevice(std::shared_ptr<HashTable> hash_table, int device_id) {
+    std::unique_lock<std::shared_mutex> write_lock(hash_tables_mutex_);
+    auto [it, success] = hash_tables_for_device_.emplace(device_id, hash_table);
+    CHECK(success);
+  }
+
+  void clearHashTableForDevice() {
+    std::unique_lock<std::shared_mutex> write_lock(hash_tables_mutex_);
+    hash_tables_for_device_.clear();
   }
 
   static std::vector<int> collectFragmentIds(
@@ -375,7 +412,8 @@ class HashJoin {
 
   virtual size_t getComponentBufferSize() const noexcept = 0;
 
-  std::vector<std::shared_ptr<HashTable>> hash_tables_for_device_;
+  mutable std::shared_mutex hash_tables_mutex_;
+  std::unordered_map<int, std::shared_ptr<HashTable>> hash_tables_for_device_;
 };
 
 std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferEntry& e);

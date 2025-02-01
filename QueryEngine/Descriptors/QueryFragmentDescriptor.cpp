@@ -63,7 +63,7 @@ void QueryFragmentDescriptor::computeAllTablesFragments(
 void QueryFragmentDescriptor::buildFragmentKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
-    const int device_count,
+    const std::set<int>& device_ids,
     const ExecutorDeviceType& device_type,
     const bool enable_multifrag_kernels,
     const bool enable_inner_join_fragment_skipping,
@@ -80,27 +80,19 @@ void QueryFragmentDescriptor::buildFragmentKernelMap(
   const auto num_bytes_for_row = executor->getNumBytesForFetchedRow(lhs_table_keys);
 
   if (ra_exe_unit.union_all) {
-    buildFragmentPerKernelMapForUnion(ra_exe_unit,
-                                      frag_offsets,
-                                      device_count,
-                                      num_bytes_for_row,
-                                      device_type,
-                                      executor);
+    buildFragmentPerKernelMapForUnion(
+        ra_exe_unit, frag_offsets, device_ids, num_bytes_for_row, device_type, executor);
   } else if (enable_multifrag_kernels) {
     buildMultifragKernelMap(ra_exe_unit,
                             frag_offsets,
-                            device_count,
+                            device_ids,
                             num_bytes_for_row,
                             device_type,
                             enable_inner_join_fragment_skipping,
                             executor);
   } else {
-    buildFragmentPerKernelMap(ra_exe_unit,
-                              frag_offsets,
-                              device_count,
-                              num_bytes_for_row,
-                              device_type,
-                              executor);
+    buildFragmentPerKernelMap(
+        ra_exe_unit, frag_offsets, device_ids, num_bytes_for_row, device_type, executor);
   }
 }
 
@@ -110,7 +102,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
     const InputDescriptor& table_desc,
     const bool is_temporary_table,
     const std::vector<uint64_t>& frag_offsets,
-    const int device_count,
+    const std::set<int>& device_ids,
     const size_t num_bytes_for_row,
     const ChunkMetadataVector& deleted_chunk_metadata_vec,
     const std::optional<size_t> table_desc_offset,
@@ -157,17 +149,19 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
       continue;
     }
     rowid_lookup_key_ = std::max(rowid_lookup_key_, skip_frag.second);
-    const int chosen_device_count =
-        device_type == ExecutorDeviceType::CPU ? 1 : device_count;
+    const int chosen_device_count = device_ids.size();
     CHECK_GT(chosen_device_count, 0);
     const auto memory_level = device_type == ExecutorDeviceType::GPU
                                   ? Data_Namespace::GPU_LEVEL
                                   : Data_Namespace::CPU_LEVEL;
-    const int device_id = (device_type == ExecutorDeviceType::CPU || fragment.shard == -1)
-                              ? fragment.deviceIds[static_cast<int>(memory_level)]
-                              : fragment.shard % chosen_device_count;
-
+    // when reaching this, `fragment.deviceIds[GPU_LEVEL]` indicates a set of available
+    // device ids determined by `Executor::determineAvailableDevicesToProcessQuery`
+    const int device_id = fragment.deviceIds[static_cast<int>(memory_level)];
     if (device_type == ExecutorDeviceType::GPU) {
+      CHECK(device_ids.find(device_id) != device_ids.end())
+          << "Cannot find device_id " << device_id
+          << " from pre-determined set of devices (device_ids: {"
+          << ::toString(device_ids) << "})";
       checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
     }
 
@@ -218,7 +212,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
 void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
-    const int device_count,
+    const std::set<int>& device_ids,
     const size_t num_bytes_for_row,
     const ExecutorDeviceType& device_type,
     Executor* executor) {
@@ -257,7 +251,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
                                    table_desc,
                                    is_temporary_table,
                                    frag_offsets,
-                                   device_count,
+                                   device_ids,
                                    num_bytes_for_row,
                                    {},
                                    j,
@@ -282,7 +276,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
 void QueryFragmentDescriptor::buildFragmentPerKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
-    const int device_count,
+    const std::set<int>& device_ids,
     const size_t num_bytes_for_row,
     const ExecutorDeviceType& device_type,
     Executor* executor) {
@@ -338,7 +332,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
                                  outer_table_desc,
                                  is_temporary_table,
                                  frag_offsets,
-                                 device_count,
+                                 device_ids,
                                  num_bytes_for_row,
                                  deleted_chunk_metadata_vec,
                                  std::nullopt,
@@ -349,7 +343,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
 void QueryFragmentDescriptor::buildMultifragKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
-    const int device_count,
+    const std::set<int>& device_ids,
     const size_t num_bytes_for_row,
     const ExecutorDeviceType& device_type,
     const bool enable_inner_join_fragment_skipping,
@@ -391,11 +385,17 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
     if (skip_frag.first) {
       continue;
     }
-    const int device_id =
-        fragment.shard == -1
-            ? fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)]
-            : fragment.shard % device_count;
+    // when reaching this, `fragment.deviceIds[GPU_LEVEL]` indicates a set of available
+    // device ids determined by `Executor::determineAvailableDevicesToProcessQuery`
+    const int chosen_device_count = device_ids.size();
+    CHECK_GT(chosen_device_count, 0);
+    const int device_id = fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)];
     if (device_type == ExecutorDeviceType::GPU) {
+      CHECK(device_ids.find(device_id) != device_ids.end())
+          << "Cannot find device_id " << device_id
+          << " from pre-determined set of devices (fragment_id: " << fragment.fragmentId
+          << ", device_ids for the fragment: " << ::toString(fragment.deviceIds)
+          << ", query_device_ids: " << ::toString(device_ids) << ")";
       checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
     }
     for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {

@@ -76,17 +76,6 @@ inline auto sql(std::string_view sql_stmts) {
   return QR::get()->runMultipleStatements(std::string(sql_stmts), g_device_type);
 }
 
-int deviceCount(const Catalog_Namespace::Catalog* catalog,
-                const ExecutorDeviceType device_type) {
-  if (device_type == ExecutorDeviceType::GPU) {
-    const auto cuda_mgr = catalog->getDataMgr().getCudaMgr();
-    CHECK(cuda_mgr);
-    return cuda_mgr->getDeviceCount();
-  } else {
-    return 1;
-  }
-}
-
 std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
                                        std::string_view column1,
                                        std::string_view table2,
@@ -101,10 +90,17 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
                                                 : Data_Namespace::GPU_LEVEL);
 
-  auto device_count = deviceCount(catalog.get(), g_device_type);
+  // this function can be called via test suites without properly initializing device ids
+  // and corresponding cuda allocator in such case, we initialize device ids and cuda
+  // allocator if necessary
+  if (!executor->isDevicesToUseInitialized()) {
+    executor->mockDeviceIdSelectionLogicToOnlyUseSingleDevice();
+  }
+  if (memory_level == MemoryLevel::GPU_LEVEL) {
+    executor->initializeCudaAllocator();
+  }
 
   ColumnCacheMap column_cache;
-
   return HashJoin::getSyntheticInstance(table1,
                                         column1,
                                         *catalog,
@@ -113,7 +109,7 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
                                         *catalog,
                                         memory_level,
                                         HashType::OneToOne,
-                                        device_count,
+                                        executor->getAvailableDevicesToProcessQuery(),
                                         column_cache,
                                         executor.get());
 }
@@ -129,12 +125,24 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
                                                 : Data_Namespace::GPU_LEVEL);
 
-  auto device_count = deviceCount(catalog.get(), g_device_type);
+  // this function can be called via test suites without properly initializing device ids
+  // and corresponding cuda allocator in such case, we initialize device ids and cuda
+  // allocator if necessary
+  if (!executor->isDevicesToUseInitialized()) {
+    executor->mockDeviceIdSelectionLogicToOnlyUseSingleDevice();
+  }
+  if (memory_level == MemoryLevel::GPU_LEVEL) {
+    executor->initializeCudaAllocator();
+  }
 
   ColumnCacheMap column_cache;
 
-  return HashJoin::getSyntheticInstance(
-      op, memory_level, HashType::OneToOne, device_count, column_cache, executor.get());
+  return HashJoin::getSyntheticInstance(op,
+                                        memory_level,
+                                        HashType::OneToOne,
+                                        executor->getAvailableDevicesToProcessQuery(),
+                                        column_cache,
+                                        executor.get());
 }
 
 std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
@@ -149,14 +157,22 @@ std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
                                                 : Data_Namespace::GPU_LEVEL);
 
-  auto device_count = deviceCount(catalog.get(), g_device_type);
+  // this function can be called via test suites without properly initializing device ids
+  // and corresponding cuda allocator in such case, we initialize device ids and cuda
+  // allocator if necessary
+  if (!executor->isDevicesToUseInitialized()) {
+    executor->mockDeviceIdSelectionLogicToOnlyUseSingleDevice();
+  }
+  if (memory_level == MemoryLevel::GPU_LEVEL) {
+    executor->initializeCudaAllocator();
+  }
 
   ColumnCacheMap column_cache;
 
   return HashJoin::getSyntheticInstance(quals,
                                         memory_level,
                                         HashType::OneToOne,
-                                        device_count,
+                                        executor->getAvailableDevicesToProcessQuery(),
                                         column_cache,
                                         executor.get());
 }
@@ -631,17 +647,15 @@ TEST_F(Build, GeoOneToMany1) {
     auto memory_level =
         (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
                                                   : Data_Namespace::GPU_LEVEL);
-
-    auto device_count = deviceCount(catalog.get(), g_device_type);
-
     ColumnCacheMap column_cache;
 
-    auto hash_table = HashJoin::getSyntheticInstance(op,
-                                                     memory_level,
-                                                     HashType::OneToMany,
-                                                     device_count,
-                                                     column_cache,
-                                                     executor.get());
+    auto hash_table =
+        HashJoin::getSyntheticInstance(op,
+                                       memory_level,
+                                       HashType::OneToMany,
+                                       executor->getAvailableDevicesToProcessQuery(),
+                                       column_cache,
+                                       executor.get());
 
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
 
@@ -699,17 +713,15 @@ TEST_F(Build, GeoOneToMany2) {
     auto memory_level =
         (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
                                                   : Data_Namespace::GPU_LEVEL);
-
-    auto device_count = deviceCount(catalog.get(), g_device_type);
-
     ColumnCacheMap column_cache;
 
-    auto hash_table = HashJoin::getSyntheticInstance(op,
-                                                     memory_level,
-                                                     HashType::OneToMany,
-                                                     device_count,
-                                                     column_cache,
-                                                     executor.get());
+    auto hash_table =
+        HashJoin::getSyntheticInstance(op,
+                                       memory_level,
+                                       HashType::OneToMany,
+                                       executor->getAvailableDevicesToProcessQuery(),
+                                       column_cache,
+                                       executor.get());
 
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
 
