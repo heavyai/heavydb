@@ -35,7 +35,7 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
                                     ColumnCacheMap& column_cache,
                                     Executor* executor,
                                     const std::vector<InnerOuter>& inner_outer_pairs,
-                                    const int device_count,
+                                    const std::set<int>& device_ids,
                                     const RegisteredQueryHint& query_hints,
                                     const HashTableBuildDagMap& hashtable_build_dag_map,
                                     const TableIdToNodeMap& table_id_to_node_map)
@@ -46,12 +46,11 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
       , executor_(executor)
       , column_cache_(column_cache)
       , inner_outer_pairs_(inner_outer_pairs)
-      , device_count_(device_count)
+      , device_ids_(device_ids)
       , query_hints_(query_hints)
       , hashtable_build_dag_map_(hashtable_build_dag_map)
       , table_id_to_node_map_(table_id_to_node_map) {
-    CHECK_GT(device_count_, 0);
-    hash_tables_for_device_.resize(std::max(device_count_, 1));
+    CHECK_GT(device_ids.size(), 0u);
   }
 
   virtual ~BoundingBoxIntersectJoinHashTable() {}
@@ -62,7 +61,7 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
       const JoinType join_type,
-      const int device_count,
+      const std::set<int>& device_ids,
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
@@ -111,7 +110,7 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
 
   virtual void reifyWithLayout(const HashType layout);
 
-  virtual void reifyImpl(std::vector<ColumnsForDevice>& columns_per_device,
+  virtual void reifyImpl(std::unordered_map<int, ColumnsForDevice>& columns_per_device,
                          const Fragmenter_Namespace::TableInfo& query_info,
                          const HashType layout,
                          const size_t shard_count,
@@ -141,7 +140,7 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
   // returns entry_count, emitted_keys_count
   virtual std::pair<size_t, size_t> approximateTupleCount(
       const std::vector<double>& inverse_bucket_sizes_for_dimension,
-      std::vector<ColumnsForDevice>&,
+      std::unordered_map<int, ColumnsForDevice>&,
       const size_t chosen_max_hashtable_size,
       const double chosen_bucket_threshold);
 
@@ -149,13 +148,13 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
   virtual std::pair<size_t, size_t> computeHashTableCounts(
       const size_t shard_count,
       const std::vector<double>& inverse_bucket_sizes_for_dimension,
-      std::vector<ColumnsForDevice>& columns_per_device,
+      std::unordered_map<int, ColumnsForDevice>& columns_per_device,
       const size_t chosen_max_hashtable_size,
       const double chosen_bucket_threshold);
 
-  void setInverseBucketSizeInfo(const std::vector<double>& inverse_bucket_sizes,
-                                std::vector<ColumnsForDevice>& columns_per_device,
-                                const size_t device_count);
+  void setInverseBucketSizeInfo(
+      const std::vector<double>& inverse_bucket_sizes,
+      std::unordered_map<int, ColumnsForDevice>& columns_per_device);
 
   size_t getKeyComponentWidth() const;
 
@@ -165,16 +164,13 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
     if (layout_override_) {
       return *layout_override_;
     }
-    auto hash_table = getHashTableForDevice(0);
-    CHECK(hash_table);
+    auto const hash_table = getAnyHashTableForDevice();
     return hash_table->getLayout();
   }
 
   Data_Namespace::MemoryLevel getMemoryLevel() const noexcept override {
     return memory_level_;
   }
-
-  int getDeviceCount() const noexcept override { return device_count_; };
 
   std::shared_ptr<BaselineHashTable> initHashTableOnCpu(
       const std::vector<JoinColumn>& join_columns,
@@ -191,9 +187,8 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
       const BaselineHashTableEntryInfo hash_table_entry_info,
       const size_t device_id);
 
-  std::shared_ptr<BaselineHashTable> copyCpuHashTableToGpu(
-      std::shared_ptr<BaselineHashTable>& cpu_hash_table,
-      const size_t device_id);
+  void copyCpuHashTableToGpu(std::shared_ptr<BaselineHashTable>& cpu_hash_table,
+                             const size_t device_id);
 #endif  // HAVE_CUDA
 
   HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,
@@ -216,21 +211,19 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
   }
 
   size_t getEntryCount() const {
-    auto hash_table = getHashTableForDevice(0);
+    auto hash_table = getAnyHashTableForDevice();
     CHECK(hash_table);
     return hash_table->getEntryCount();
   }
 
   size_t getEmittedKeysCount() const {
-    auto hash_table = getHashTableForDevice(0);
+    auto hash_table = getAnyHashTableForDevice();
     CHECK(hash_table);
     return hash_table->getEmittedKeysCount();
   }
 
   size_t getComponentBufferSize() const noexcept override {
-    CHECK(!hash_tables_for_device_.empty());
-    auto hash_table = hash_tables_for_device_.front();
-    CHECK(hash_table);
+    auto hash_table = getAnyHashTableForDevice();
     return hash_table->getEntryCount() * sizeof(int32_t);
   }
 
@@ -347,9 +340,10 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
       const size_t max_hashtable_size,
       const double bucket_threshold,
       const std::vector<double>& bucket_sizes,
-      std::vector<std::vector<Fragmenter_Namespace::FragmentInfo>>& fragments_per_device,
-      int device_count) {
-    for (int device_id = 0; device_id < device_count; ++device_id) {
+      std::unordered_map<int, std::vector<Fragmenter_Namespace::FragmentInfo>>&
+          fragments_per_device,
+      const std::set<int>& device_ids) {
+    for (auto const device_id : device_ids) {
       auto hash_val = boost::hash_value(hashtable_cache_key_[device_id]);
       boost::hash_combine(hash_val, max_hashtable_size);
       boost::hash_combine(hash_val, bucket_threshold);
@@ -360,10 +354,6 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
       hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_[device_id],
                                                      table_keys_);
     }
-  }
-
-  QueryPlanHash getCacheKey(int device_id) const {
-    return hashtable_cache_key_[device_id];
   }
 
   const std::vector<InnerOuter>& getInnerOuterPairs() const {
@@ -391,7 +381,7 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
   ColumnCacheMap& column_cache_;
 
   std::vector<InnerOuter> inner_outer_pairs_;
-  const int device_count_;
+  const std::set<int> device_ids_;
   RegisteredQueryHint query_hints_;
 
   std::vector<double> inverse_bucket_sizes_for_dimension_;
@@ -417,7 +407,7 @@ class BoundingBoxIntersectJoinHashTable : public HashJoin {
 
   HashTableBuildDagMap hashtable_build_dag_map_;
   QueryPlanDAG query_plan_dag_;
-  std::vector<QueryPlanHash> hashtable_cache_key_;
+  std::unordered_map<int, QueryPlanHash> hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;

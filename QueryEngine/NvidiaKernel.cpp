@@ -130,11 +130,12 @@ std::string add_line_numbers(const std::string& text) {
 }
 
 CubinResult ptx_to_cubin(const std::string& ptx,
-                         const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
+                         const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                         int const device_id) {
   auto timer = DEBUG_TIMER(__func__);
   CHECK(!ptx.empty());
   CHECK(cuda_mgr && cuda_mgr->getDeviceCount() > 0);
-  cuda_mgr->setContext(0);
+  cuda_mgr->setContext(device_id);
   CubinResult cubin_result{};
   CHECK_EQ(cubin_result.option_values.size(), cubin_result.option_keys.size());
   checkCudaErrors(cuLinkCreate(cubin_result.option_keys.size(),
@@ -208,10 +209,17 @@ GpuDeviceCompilationContext::GpuDeviceCompilationContext(const void* image,
     , cuda_mgr_(static_cast<const CudaMgr_Namespace::CudaMgr*>(cuda_mgr)) {
   LOG_IF(FATAL, cuda_mgr_ == nullptr)
       << "Unable to initialize GPU compilation context without CUDA manager";
+  auto timer = timer_start();
   cuda_mgr_->loadGpuModuleData(
       &module_, image, num_options, options, option_vals, device_id_);
   CHECK(module_);
+  auto const load_module_ms = timer_stop(timer);
+  timer = timer_start();
   checkCudaErrors(cuModuleGetFunction(&kernel_, module_, kernel_name_.c_str()));
+  auto const get_module_ms = timer_stop(timer);
+  VLOG(1) << "GPU device compilation context initialized, device: " << device_id_
+          << ", load module: " << load_module_ms << "ms, init. kernel: " << get_module_ms
+          << "ms";
 }
 #endif  // HAVE_CUDA
 

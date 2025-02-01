@@ -144,7 +144,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   return {scalar_expr_func, nullptr, inputs};
 }
 
-std::vector<void*> ScalarCodeGenerator::generateNativeCode(
+std::unordered_map<int, void*> ScalarCodeGenerator::generateNativeCode(
     Executor* executor,
     const CompiledExpression& compiled_expression,
     const CompilationOptions& co) {
@@ -154,7 +154,9 @@ std::vector<void*> ScalarCodeGenerator::generateNativeCode(
     case ExecutorDeviceType::CPU: {
       execution_engine_ =
           generateNativeCPUCode(compiled_expression.func, {compiled_expression.func}, co);
-      return {execution_engine_->getPointerToFunction(compiled_expression.func)};
+      constexpr int cpu_device_id = 0;
+      return {{cpu_device_id,
+               execution_engine_->getPointerToFunction(compiled_expression.func)}};
     }
     case ExecutorDeviceType::GPU: {
       return generateNativeGPUCode(
@@ -177,7 +179,7 @@ std::vector<llvm::Value*> ScalarCodeGenerator::codegenColumn(
   return {arg};
 }
 
-std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
+std::unordered_map<int, void*> ScalarCodeGenerator::generateNativeGPUCode(
     Executor* executor,
     llvm::Function* func,
     llvm::Function* wrapper_func,
@@ -194,6 +196,7 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
   gpu_target.cuda_mgr = cuda_mgr_.get();
   gpu_target.cgen_state = cgen_state_;
   gpu_target.row_func_not_inlined = false;
+  auto compile_start = timer_start();
   gpu_compilation_context_ =
       CodeGenerator::generateNativeGPUCode(executor,
                                            func,
@@ -201,6 +204,7 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
                                            {func, wrapper_func},
                                            /*is_gpu_smem_used=*/false,
                                            co,
-                                           gpu_target);
+                                           gpu_target,
+                                           compile_start);
   return gpu_compilation_context_->getNativeFunctionPointers();
 }

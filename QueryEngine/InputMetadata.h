@@ -38,9 +38,10 @@ struct InputTableInfo {
 class InputTableInfoCache {
  public:
   InputTableInfoCache(Executor* executor);
-
   Fragmenter_Namespace::TableInfo getTableInfo(const shared::TableKey& table_key);
-
+  void updateTableInfo(const shared::TableKey& table_key,
+                       const Fragmenter_Namespace::TableInfo& table_info,
+                       const std::set<int>& device_ids_to_use);
   void clear();
 
  private:

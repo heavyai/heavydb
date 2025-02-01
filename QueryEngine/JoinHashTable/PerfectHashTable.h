@@ -53,9 +53,13 @@ class PerfectHashTable : public HashTable {
   PerfectHashTable(const ExecutorDeviceType device_type,
                    PerfectHashTableEntryInfo hash_table_entry_info,
                    size_t max_slab_size,
+                   BucketizedHashEntryInfo const& hash_entry_info,
+                   size_t column_num_elems,
                    Data_Namespace::DataMgr* data_mgr = nullptr,
                    const int device_id = -1)
       : hash_table_entry_info_(hash_table_entry_info)
+      , hash_entry_info_(hash_entry_info)
+      , column_num_elems_(column_num_elems)
       , data_mgr_(data_mgr)
       , device_id_(device_id) {
     if (device_type == ExecutorDeviceType::CPU) {
@@ -125,7 +129,7 @@ class PerfectHashTable : public HashTable {
     return hash_table_entry_info_.getRowIdSizeInBytes();
   }
 
-  void setHashEntryInfo(BucketizedHashEntryInfo& hash_entry_info) {
+  void setHashEntryInfo(BucketizedHashEntryInfo const& hash_entry_info) {
     hash_entry_info_ = hash_entry_info;
   }
 

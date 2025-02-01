@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "RelAlgExecutor.h"
+#include "QueryEngine/RelAlgExecutor.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "Fragmenter/InsertDataLoader.h"
@@ -33,6 +33,7 @@
 #include "QueryEngine/QueryPlanDagExtractor.h"
 #include "QueryEngine/RangeTableIndexVisitor.h"
 #include "QueryEngine/RelAlgDag.h"
+#include "QueryEngine/RelAlgOptimizer.h"
 #include "QueryEngine/RelAlgTranslator.h"
 #include "QueryEngine/RelAlgVisitor.h"
 #include "QueryEngine/ResultSetBuilder.h"
@@ -823,575 +824,12 @@ inline void check_sort_node_source_constraint(const RelSort* sort) {
   }
 }
 
-}  // namespace
-
-QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
-    const RaExecutionSequence& seq,
-    const size_t step_idx,
-    const CompilationOptions& co,
-    const ExecutionOptions& eo,
-    RenderInfo* render_info) {
-  INJECT_TIMER(executeRelAlgQueryStep);
-
-  auto exe_desc_ptr = seq.getDescriptor(step_idx);
-  CHECK(exe_desc_ptr);
-  const auto sort = dynamic_cast<const RelSort*>(exe_desc_ptr->getBody());
-
-  size_t shard_count{0};
-  auto merge_type = [&shard_count](const RelAlgNode* body) -> MergeType {
-    return node_is_aggregate(body) && !shard_count ? MergeType::Reduce : MergeType::Union;
-  };
-
-  if (sort) {
-    check_sort_node_source_constraint(sort);
-    auto order_entries = sort->getOrderEntries();
-    const auto source_work_unit = createSortInputWorkUnit(sort, order_entries, eo);
-    shard_count =
-        GroupByAndAggregate::shard_count_for_top_groups(source_work_unit.exe_unit);
-    if (!shard_count) {
-      // No point in sorting on the leaf, only execute the input to the sort node.
-      CHECK_EQ(size_t(1), sort->inputCount());
-      const auto source = sort->getInput(0);
-      if (sort->collationCount() || node_is_aggregate(source)) {
-        auto temp_seq = RaExecutionSequence(std::make_unique<RaExecutionDesc>(source));
-        CHECK_EQ(temp_seq.size(), size_t(1));
-        ExecutionOptions eo_copy = eo;
-        eo_copy.just_validate = eo.just_validate || sort->isEmptyResult();
-        // Use subseq to avoid clearing existing temporary tables
-        return {
-            executeRelAlgSubSeq(temp_seq, std::make_pair(0, 1), co, eo_copy, nullptr, 0),
-            merge_type(source),
-            source->getId(),
-            false};
-      }
-    }
-  }
-  QueryStepExecutionResult query_step_result{ExecutionResult{},
-                                             merge_type(exe_desc_ptr->getBody()),
-                                             exe_desc_ptr->getBody()->getId(),
-                                             false};
-  try {
-    query_step_result.result = executeRelAlgSubSeq(
-        seq, std::make_pair(step_idx, step_idx + 1), co, eo, render_info, queue_time_ms_);
-  } catch (QueryMustRunOnCpu const& e) {
-    CHECK_EQ(co.device_type, ExecutorDeviceType::GPU);
-    auto copied_co = co;
-    copied_co.device_type = ExecutorDeviceType::CPU;
-    LOG(INFO) << "Retry the query via CPU mode";
-    query_step_result.result = executeRelAlgSubSeq(seq,
-                                                   std::make_pair(step_idx, step_idx + 1),
-                                                   copied_co,
-                                                   eo,
-                                                   render_info,
-                                                   queue_time_ms_);
-  }
-  if (post_execution_callback_) {
-    VLOG(1) << "Running post execution callback.";
-    (*post_execution_callback_)();
-  }
-  return query_step_result;
-}
-
-void RelAlgExecutor::prepareLeafExecution(
-    const AggregatedColRange& agg_col_range,
-    const StringDictionaryGenerations& string_dictionary_generations,
-    const TableGenerations& table_generations) {
-  // capture the lock acquistion time
-  auto clock_begin = timer_start();
-  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
-    executor_->resetInterrupt();
-  }
-  queue_time_ms_ = timer_stop(clock_begin);
-  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
-      Executor::getArenaBlockSize(), executor_->executor_id_);
-  executor_->row_set_mem_owner_->setDictionaryGenerations(string_dictionary_generations);
-  executor_->table_generations_ = table_generations;
-  executor_->agg_col_range_cache_ = agg_col_range;
-}
-
-ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
-                                                 const CompilationOptions& co,
-                                                 const ExecutionOptions& eo,
-                                                 RenderInfo* render_info,
-                                                 const int64_t queue_time_ms,
-                                                 const bool with_existing_temp_tables) {
-  INJECT_TIMER(executeRelAlgSeq);
-  auto timer = DEBUG_TIMER(__func__);
-  if (!with_existing_temp_tables) {
-    decltype(temporary_tables_)().swap(temporary_tables_);
-  }
-  decltype(target_exprs_owned_)().swap(target_exprs_owned_);
-  decltype(left_deep_join_info_)().swap(left_deep_join_info_);
-  executor_->temporary_tables_ = &temporary_tables_;
-
-  time(&now_);
-  CHECK(!seq.empty());
-
-  auto get_descriptor_count = [&seq, &eo]() -> size_t {
-    if (eo.just_explain) {
-      if (dynamic_cast<const RelLogicalValues*>(seq.getDescriptor(0)->getBody())) {
-        // run the logical values descriptor to generate the result set, then the next
-        // descriptor to generate the explain
-        CHECK_GE(seq.size(), size_t(2));
-        return 2;
-      } else {
-        return 1;
-      }
-    } else {
-      return seq.size();
-    }
-  };
-
-  const auto exec_desc_count = get_descriptor_count();
-  auto eo_copied = eo;
-  if (seq.hasQueryStepForUnion()) {
-    // we currently do not support resultset recycling when an input query
-    // contains union (all) operation
-    eo_copied.keep_result = false;
-  }
-
-  // we have to register resultset(s) of the skipped query step(s) as temporary table
-  // before executing the remaining query steps
-  // since they may be required during the query processing
-  // i.e., get metadata of the target expression from the skipped query step
-  if (g_allow_query_step_skipping) {
-    for (const auto& kv : seq.getSkippedQueryStepCacheKeys()) {
-      const auto cached_res =
-          executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(kv.second);
-      CHECK(cached_res);
-      addTemporaryTable(kv.first, cached_res);
-    }
-  }
-
-  const auto num_steps = exec_desc_count - 1;
-  for (size_t i = 0; i < exec_desc_count; i++) {
-    auto const node_id = seq.getDescriptor(i)->getBody()->getId();
-    VLOG(1) << "Executing query step " << i << " / " << num_steps
-            << " (node_id: " << node_id << ")";
-    try {
-      executeRelAlgStep(
-          seq, i, co, eo_copied, (i == num_steps) ? render_info : nullptr, queue_time_ms);
-    } catch (const QueryMustRunOnCpu&) {
-      // Do not allow per-step retry if flag is off or in distributed mode
-      // TODO(todd): Determine if and when we can relax this restriction
-      // for distributed
-      CHECK(co.device_type == ExecutorDeviceType::GPU);
-      if (!g_allow_query_step_cpu_retry || g_cluster) {
-        throw;
-      }
-      LOG(INFO) << "Retrying current query step " << i << " / " << num_steps
-                << " on CPU (node_id: " << node_id << ")";
-      const auto co_cpu = CompilationOptions::makeCpuOnly(co);
-      if (render_info && i == num_steps) {
-        // only render on the last step
-        render_info->forceNonInSitu();
-      }
-      executeRelAlgStep(seq,
-                        i,
-                        co_cpu,
-                        eo_copied,
-                        (i == num_steps) ? render_info : nullptr,
-                        queue_time_ms);
-    } catch (const NativeExecutionError&) {
-      if (!g_enable_interop) {
-        throw;
-      }
-      auto eo_extern = eo_copied;
-      eo_extern.executor_type = ::ExecutorType::Extern;
-      auto exec_desc_ptr = seq.getDescriptor(i);
-      const auto body = exec_desc_ptr->getBody();
-      const auto compound = dynamic_cast<const RelCompound*>(body);
-      if (compound && (compound->getGroupByCount() || compound->isAggregate())) {
-        LOG(INFO) << "Also failed to run the query using interoperability";
-        throw;
-      }
-      executeRelAlgStep(
-          seq, i, co, eo_extern, (i == num_steps) ? render_info : nullptr, queue_time_ms);
-    }
-  }
-
-  return seq.getDescriptor(num_steps)->getResult();
-}
-
-ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
-    const RaExecutionSequence& seq,
-    const std::pair<size_t, size_t> interval,
-    const CompilationOptions& co,
-    const ExecutionOptions& eo,
-    RenderInfo* render_info,
-    const int64_t queue_time_ms) {
-  INJECT_TIMER(executeRelAlgSubSeq);
-  executor_->temporary_tables_ = &temporary_tables_;
-  decltype(left_deep_join_info_)().swap(left_deep_join_info_);
-  time(&now_);
-  for (size_t i = interval.first; i < interval.second; i++) {
-    // only render on the last step
-    try {
-      executeRelAlgStep(seq,
-                        i,
-                        co,
-                        eo,
-                        (i == interval.second - 1) ? render_info : nullptr,
-                        queue_time_ms);
-    } catch (const QueryMustRunOnCpu&) {
-      // Do not allow per-step retry if flag is off or in distributed mode
-      // TODO(todd): Determine if and when we can relax this restriction
-      // for distributed
-      CHECK(co.device_type == ExecutorDeviceType::GPU);
-      if (!g_allow_query_step_cpu_retry || g_cluster) {
-        throw;
-      }
-      LOG(INFO) << "Retrying current query step " << i << " on CPU";
-      const auto co_cpu = CompilationOptions::makeCpuOnly(co);
-      if (render_info && i == interval.second - 1) {
-        render_info->forceNonInSitu();
-      }
-      executeRelAlgStep(seq,
-                        i,
-                        co_cpu,
-                        eo,
-                        (i == interval.second - 1) ? render_info : nullptr,
-                        queue_time_ms);
-    }
-  }
-
-  return seq.getDescriptor(interval.second - 1)->getResult();
-}
-
-namespace {
-void handle_query_hint(RegisteredQueryHint const& query_hints,
-                       ExecutionOptions& eo,
-                       CompilationOptions& co) {
-  auto columnar_output_hint_enabled = false;
-  auto rowwise_output_hint_enabled = false;
-  if (query_hints.isHintRegistered(QueryHint::kCpuMode)) {
-    VLOG(1) << "A user forces to run the query on the CPU execution mode";
-    co.device_type = ExecutorDeviceType::CPU;
-  }
-  if (query_hints.isHintRegistered(QueryHint::kKeepResult)) {
-    if (!g_enable_data_recycler) {
-      VLOG(1) << "A user enables keeping query resultset but is skipped since data "
-                 "recycler is disabled";
-    }
-    if (!g_use_query_resultset_cache) {
-      VLOG(1) << "A user enables keeping query resultset but is skipped since query "
-                 "resultset recycler is disabled";
-    } else {
-      VLOG(1) << "A user enables keeping query resultset";
-      eo.keep_result = true;
-    }
-  }
-  if (query_hints.isHintRegistered(QueryHint::kKeepTableFuncResult)) {
-    // we use this hint within the function 'executeTableFunction`
-    if (!g_enable_data_recycler) {
-      VLOG(1) << "A user enables keeping table function's resultset but is skipped "
-                 "since data recycler is disabled";
-    }
-    if (!g_use_query_resultset_cache) {
-      VLOG(1) << "A user enables keeping table function's resultset but is skipped "
-                 "since query resultset recycler is disabled";
-    } else {
-      VLOG(1) << "A user enables keeping table function's resultset";
-      eo.keep_result = true;
-    }
-  }
-  if (query_hints.isHintRegistered(QueryHint::kWatchdog)) {
-    if (!eo.with_watchdog) {
-      VLOG(1) << "A user enables watchdog for this query";
-      eo.with_watchdog = true;
-    }
-  }
-  if (query_hints.isHintRegistered(QueryHint::kWatchdogOff)) {
-    if (eo.with_watchdog) {
-      VLOG(1) << "A user disables watchdog for this query";
-      eo.with_watchdog = false;
-    }
-  }
-  if (query_hints.isHintRegistered(QueryHint::kDynamicWatchdog)) {
-    if (!eo.with_dynamic_watchdog) {
-      VLOG(1) << "A user enables dynamic watchdog for this query";
-      eo.with_watchdog = true;
-    }
-  }
-  if (query_hints.isHintRegistered(QueryHint::kDynamicWatchdogOff)) {
-    if (eo.with_dynamic_watchdog) {
-      VLOG(1) << "A user disables dynamic watchdog for this query";
-      eo.with_watchdog = false;
-    }
-  }
-  if (query_hints.isHintRegistered(QueryHint::kQueryTimeLimit)) {
-    std::ostringstream oss;
-    oss << "A user sets query time limit to " << query_hints.query_time_limit << " ms";
-    eo.dynamic_watchdog_time_limit = query_hints.query_time_limit;
-    if (!eo.with_dynamic_watchdog) {
-      eo.with_dynamic_watchdog = true;
-      oss << " (and system automatically enables dynamic watchdog to activate the "
-             "given \"query_time_limit\" hint)";
-    }
-    VLOG(1) << oss.str();
-  }
-  if (query_hints.isHintRegistered(QueryHint::kAllowLoopJoin)) {
-    VLOG(1) << "A user enables loop join";
-    eo.allow_loop_joins = true;
-  }
-  if (query_hints.isHintRegistered(QueryHint::kDisableLoopJoin)) {
-    VLOG(1) << "A user disables loop join";
-    eo.allow_loop_joins = false;
-  }
-  if (query_hints.isHintRegistered(QueryHint::kMaxJoinHashTableSize)) {
-    eo.max_join_hash_table_size = query_hints.max_join_hash_table_size;
-    VLOG(1) << "A user forces the maximum size of a join hash table as "
-            << eo.max_join_hash_table_size << " bytes";
-  }
-  if (query_hints.isHintRegistered(QueryHint::kOptCudaBlockAndGridSizes)) {
-    if (query_hints.isHintRegistered(QueryHint::kCudaGridSize) ||
-        query_hints.isHintRegistered(QueryHint::kCudaBlockSize)) {
-      VLOG(1) << "Skip query hint \"opt_cuda_grid_and_block_size\" when at least one "
-                 "of the following query hints are given simultaneously: "
-                 "\"cuda_block_size\" and \"cuda_grid_size_multiplier\"";
-    } else {
-      VLOG(1) << "A user enables optimization of cuda block and grid sizes";
-      eo.optimize_cuda_block_and_grid_sizes = true;
-    }
-  }
-  if (query_hints.isHintRegistered(QueryHint::kTableReorderingOff)) {
-    // disable table reordering if `table_reordering_off` is enabled
-    VLOG(1) << "A user disables table reordering listed in the FROM clause";
-    eo.table_reordering = false;
-  }
-  if (query_hints.isHintRegistered(QueryHint::kColumnarOutput)) {
-    VLOG(1) << "A user forces the query to run with columnar output";
-    columnar_output_hint_enabled = true;
-  } else if (query_hints.isHintRegistered(QueryHint::kRowwiseOutput)) {
-    VLOG(1) << "A user forces the query to run with rowwise output";
-    rowwise_output_hint_enabled = true;
-  }
-  auto columnar_output_enabled = eo.output_columnar_hint ? !rowwise_output_hint_enabled
-                                                         : columnar_output_hint_enabled;
-  if (g_cluster && (columnar_output_hint_enabled || rowwise_output_hint_enabled)) {
-    LOG(INFO) << "Currently, we do not support applying query hint to change query "
-                 "output layout in distributed mode.";
-  }
-  eo.output_columnar_hint = columnar_output_enabled;
-}
-}  // namespace
-
-void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
-                                       const size_t step_idx,
-                                       const CompilationOptions& co,
-                                       const ExecutionOptions& eo,
-                                       RenderInfo* render_info,
-                                       const int64_t queue_time_ms) {
-  INJECT_TIMER(executeRelAlgStep);
-  auto timer = DEBUG_TIMER(__func__);
-  auto exec_desc_ptr = seq.getDescriptor(step_idx);
-  CHECK(exec_desc_ptr);
-  auto& exec_desc = *exec_desc_ptr;
-  const auto body = exec_desc.getBody();
-  if (body->isNop()) {
-    handleNop(exec_desc);
-    return;
-  }
-  ExecutionOptions eo_copied = eo;
-  CompilationOptions co_copied = co;
-  eo_copied.with_watchdog =
-      eo.with_watchdog && (step_idx == 0 || dynamic_cast<const RelProject*>(body));
-  eo_copied.outer_fragment_indices =
-      step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>();
-
-  auto target_node = body;
-  auto query_plan_dag_hash = body->getQueryPlanDagHash();
-  if (auto sort_body = dynamic_cast<const RelSort*>(body)) {
-    target_node = sort_body->getInput(0);
-    query_plan_dag_hash = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
-        target_node->getQueryPlanDagHash(), SortInfo::createFromSortNode(sort_body));
-  } else {
-    query_plan_dag_hash = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
-        target_node->getQueryPlanDagHash(), SortInfo());
-  }
-  auto query_hints = getParsedQueryHint(target_node);
-  if (query_hints) {
-    handle_query_hint(*query_hints, eo_copied, co_copied);
-  }
-
-#if HAVE_CUDA
-  if (co_copied.device_type == ExecutorDeviceType::GPU) {
-    executor_->initializeCudaAllocator();
-  }
-  ScopeGuard resetCudaAllocator = [this, &co_copied]() {
-    if (co_copied.device_type == ExecutorDeviceType::GPU) {
-      executor_->clearCudaAllocator();
-    }
-  };
-#endif
-
-  setHasStepForUnion(seq.hasQueryStepForUnion());
-  // let's check whether we have a cached query resultset of the input query
-  // note that the resultset recycling for a top sort node query will be handled
-  // within executeSort(body) function
-  if (canUseResultsetCache(eo) && has_valid_query_plan_dag(body) &&
-      !dynamic_cast<const RelSort*>(body)) {
-    if (auto cached_resultset =
-            executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(
-                query_plan_dag_hash)) {
-      VLOG(1) << "recycle resultset of the root node " << body->getId()
-              << " from resultset cache";
-      body->setOutputMetainfo(cached_resultset->getTargetMetaInfo());
-      if (render_info) {
-        std::vector<std::shared_ptr<Analyzer::Expr>>& cached_target_exprs =
-            executor_->getResultSetRecyclerHolder().getTargetExprs(query_plan_dag_hash);
-        std::vector<Analyzer::Expr*> copied_target_exprs;
-        for (const auto& expr : cached_target_exprs) {
-          copied_target_exprs.push_back(expr.get());
-        }
-        build_render_targets(
-            *render_info, copied_target_exprs, cached_resultset->getTargetMetaInfo());
-      }
-      exec_desc.setResult({cached_resultset, cached_resultset->getTargetMetaInfo()});
-      addTemporaryTable(-body->getId(), exec_desc.getResult().getDataPtr());
-      return;
-    }
-  }
-
-  const auto compound = dynamic_cast<const RelCompound*>(body);
-  if (compound) {
-    if (compound->isDeleteViaSelect()) {
-      executeDelete(compound, co_copied, eo_copied, queue_time_ms);
-    } else if (compound->isUpdateViaSelect()) {
-      executeUpdate(compound, co_copied, eo_copied, queue_time_ms);
-    } else {
-      exec_desc.setResult(
-          executeCompound(compound, co_copied, eo_copied, render_info, queue_time_ms));
-      VLOG(3) << "Returned from executeCompound(), addTemporaryTable("
-              << static_cast<int>(-compound->getId()) << ", ...)"
-              << " exec_desc.getResult().getDataPtr()->rowCount()="
-              << exec_desc.getResult().getDataPtr()->rowCount();
-      if (exec_desc.getResult().isFilterPushDownEnabled()) {
-        return;
-      }
-      addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
-    }
-    return;
-  }
-  const auto project = dynamic_cast<const RelProject*>(body);
-  if (project) {
-    if (project->isDeleteViaSelect()) {
-      executeDelete(project, co_copied, eo_copied, queue_time_ms);
-    } else if (project->isUpdateViaSelect()) {
-      executeUpdate(project, co_copied, eo_copied, queue_time_ms);
-    } else {
-      std::optional<size_t> prev_count;
-      // Disabling the intermediate count optimization in distributed, as the previous
-      // execution descriptor will likely not hold the aggregated result.
-      if (g_skip_intermediate_count && step_idx > 0 && !g_cluster) {
-        // If the previous node produced a reliable count, skip the pre-flight count.
-        RelAlgNode const* const prev_body = project->getInput(0);
-        if (shared::dynamic_castable_to_any<RelCompound, RelLogicalValues>(prev_body)) {
-          if (RaExecutionDesc const* const prev_exec_desc =
-                  prev_body->hasContextData()
-                      ? prev_body->getContextData()
-                      : seq.getDescriptorByBodyId(prev_body->getId(), step_idx - 1)) {
-            const auto& prev_exe_result = prev_exec_desc->getResult();
-            const auto prev_result = prev_exe_result.getRows();
-            if (prev_result) {
-              prev_count = prev_result->rowCount();
-              VLOG(3) << "Setting output row count for projection node to previous node ("
-                      << prev_exec_desc->getBody()->toString(
-                             RelRexToStringConfig::defaults())
-                      << ") to " << *prev_count;
-            }
-          }
-        }
-      }
-      exec_desc.setResult(executeProject(
-          project, co_copied, eo_copied, render_info, queue_time_ms, prev_count));
-      VLOG(3) << "Returned from executeProject(), addTemporaryTable("
-              << static_cast<int>(-project->getId()) << ", ...)"
-              << " exec_desc.getResult().getDataPtr()->rowCount()="
-              << exec_desc.getResult().getDataPtr()->rowCount();
-      if (exec_desc.getResult().isFilterPushDownEnabled()) {
-        return;
-      }
-      addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
-    }
-    return;
-  }
-  const auto aggregate = dynamic_cast<const RelAggregate*>(body);
-  if (aggregate) {
-    exec_desc.setResult(
-        executeAggregate(aggregate, co_copied, eo_copied, render_info, queue_time_ms));
-    addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr());
-    return;
-  }
-  const auto filter = dynamic_cast<const RelFilter*>(body);
-  if (filter) {
-    exec_desc.setResult(
-        executeFilter(filter, co_copied, eo_copied, render_info, queue_time_ms));
-    addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr());
-    return;
-  }
-  const auto sort = dynamic_cast<const RelSort*>(body);
-  if (sort) {
-    exec_desc.setResult(
-        executeSort(sort, co_copied, eo_copied, render_info, queue_time_ms));
-    if (exec_desc.getResult().isFilterPushDownEnabled()) {
-      return;
-    }
-    addTemporaryTable(-sort->getId(), exec_desc.getResult().getDataPtr());
-    return;
-  }
-  const auto logical_values = dynamic_cast<const RelLogicalValues*>(body);
-  if (logical_values) {
-    exec_desc.setResult(executeLogicalValues(logical_values, eo_copied));
-    addTemporaryTable(-logical_values->getId(), exec_desc.getResult().getDataPtr());
-    return;
-  }
-  const auto modify = dynamic_cast<const RelModify*>(body);
-  if (modify) {
-    exec_desc.setResult(executeModify(modify, eo_copied));
-    return;
-  }
-  const auto logical_union = dynamic_cast<const RelLogicalUnion*>(body);
-  if (logical_union) {
-    exec_desc.setResult(executeUnion(
-        logical_union, seq, co_copied, eo_copied, render_info, queue_time_ms));
-    addTemporaryTable(-logical_union->getId(), exec_desc.getResult().getDataPtr());
-    return;
-  }
-  const auto table_func = dynamic_cast<const RelTableFunction*>(body);
-  if (table_func) {
-    exec_desc.setResult(
-        executeTableFunction(table_func, co_copied, eo_copied, queue_time_ms));
-    addTemporaryTable(-table_func->getId(), exec_desc.getResult().getDataPtr());
-    return;
-  }
-  LOG(FATAL) << "Unhandled body type: "
-             << body->toString(RelRexToStringConfig::defaults());
-}
-
-void RelAlgExecutor::handleNop(RaExecutionDesc& ed) {
-  // just set the result of the previous node as the result of no op
-  auto body = ed.getBody();
-  CHECK(dynamic_cast<const RelAggregate*>(body));
-  CHECK_EQ(size_t(1), body->inputCount());
-  const auto input = body->getInput(0);
-  body->setOutputMetainfo(input->getOutputMetainfo());
-  const auto it = temporary_tables_.find(-input->getId());
-  CHECK(it != temporary_tables_.end());
-  // set up temp table as it could be used by the outer query or next step
-  addTemporaryTable(-body->getId(), it->second);
-
-  ed.setResult({it->second, input->getOutputMetainfo()});
-}
-
-namespace {
-
 class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput*>> {
  public:
   RexUsedInputsVisitor() : RexVisitor() {}
 
   const std::vector<std::shared_ptr<RexInput>>& get_inputs_owned() const {
-    return synthesized_physical_inputs_owned;
+    return synthesized_physical_inputs_owned_;
   }
 
   std::unordered_set<const RexInput*> visitInput(
@@ -1411,7 +849,7 @@ class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput
           for (auto i = 0; i < cd->columnType.get_physical_cols(); i++) {
             auto physical_input =
                 new RexInput(scan_ra, SPIMAP_GEO_PHYSICAL_INPUT(col_id, i));
-            synthesized_physical_inputs_owned.emplace_back(physical_input);
+            synthesized_physical_inputs_owned_.emplace_back(physical_input);
             synthesized_physical_inputs.insert(physical_input);
           }
           return synthesized_physical_inputs;
@@ -1431,7 +869,7 @@ class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput
   }
 
  private:
-  mutable std::vector<std::shared_ptr<RexInput>> synthesized_physical_inputs_owned;
+  mutable std::vector<std::shared_ptr<RexInput>> synthesized_physical_inputs_owned_;
 };
 
 const RelAlgNode* get_data_sink(const RelAlgNode* ra_node) {
@@ -1449,6 +887,28 @@ const RelAlgNode* get_data_sink(const RelAlgNode* ra_node) {
   const bool is_join = dynamic_cast<const RelJoin*>(only_src) ||
                        dynamic_cast<const RelLeftDeepInnerJoin*>(only_src);
   return is_join ? only_src : ra_node;
+}
+
+std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(
+    const RelAlgNode* ra_node,
+    const std::vector<size_t>& input_permutation) {
+  const auto data_sink_node = get_data_sink(ra_node);
+  std::unordered_map<const RelAlgNode*, int> input_to_nest_level;
+  for (size_t input_idx = 0; input_idx < data_sink_node->inputCount(); ++input_idx) {
+    const auto input_node_idx =
+        input_permutation.empty() ? input_idx : input_permutation[input_idx];
+    const auto input_ra = data_sink_node->getInput(input_node_idx);
+    // Having a non-zero mapped value (input_idx) results in the query being interpretted
+    // as a JOIN within CodeGenerator::codegenColVar() due to rte_idx being set to the
+    // mapped value (input_idx) which originates here. This would be incorrect for UNION.
+    size_t const idx = dynamic_cast<const RelLogicalUnion*>(ra_node) ? 0 : input_idx;
+    const auto it_ok = input_to_nest_level.emplace(input_ra, idx);
+    CHECK(it_ok.second);
+    LOG_IF(DEBUG1, !input_permutation.empty())
+        << "Assigned input " << input_ra->toString(RelRexToStringConfig::defaults())
+        << " to nest level " << input_idx;
+  }
+  return input_to_nest_level;
 }
 
 std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexInput>>>
@@ -1560,6 +1020,25 @@ get_used_inputs(const RelLogicalUnion* logical_union) {
   return std::make_pair(std::move(used_inputs), std::move(used_inputs_owned));
 }
 
+std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexInput>>>
+get_used_inputs(const RelAlgNode* node) {
+  if (auto compound = dynamic_cast<const RelCompound*>(node)) {
+    return get_used_inputs(compound);
+  } else if (auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
+    return get_used_inputs(aggregate);
+  } else if (auto project = dynamic_cast<const RelProject*>(node)) {
+    return get_used_inputs(project);
+  } else if (auto table_func = dynamic_cast<const RelTableFunction*>(node)) {
+    return get_used_inputs(table_func);
+  } else if (auto filter = dynamic_cast<const RelFilter*>(node)) {
+    return get_used_inputs(filter);
+  } else if (auto logical_union = dynamic_cast<const RelLogicalUnion*>(node)) {
+    return get_used_inputs(logical_union);
+  } else {
+    return {};
+  }
+}
+
 shared::TableKey table_key_from_ra(const RelAlgNode* ra_node) {
   const auto scan_ra = dynamic_cast<const RelScan*>(ra_node);
   shared::TableKey table_key{0, int32_t(-ra_node->getId())};
@@ -1570,28 +1049,6 @@ shared::TableKey table_key_from_ra(const RelAlgNode* ra_node) {
     table_key.table_id = td->tableId;
   }
   return table_key;
-}
-
-std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(
-    const RelAlgNode* ra_node,
-    const std::vector<size_t>& input_permutation) {
-  const auto data_sink_node = get_data_sink(ra_node);
-  std::unordered_map<const RelAlgNode*, int> input_to_nest_level;
-  for (size_t input_idx = 0; input_idx < data_sink_node->inputCount(); ++input_idx) {
-    const auto input_node_idx =
-        input_permutation.empty() ? input_idx : input_permutation[input_idx];
-    const auto input_ra = data_sink_node->getInput(input_node_idx);
-    // Having a non-zero mapped value (input_idx) results in the query being interpretted
-    // as a JOIN within CodeGenerator::codegenColVar() due to rte_idx being set to the
-    // mapped value (input_idx) which originates here. This would be incorrect for UNION.
-    size_t const idx = dynamic_cast<const RelLogicalUnion*>(ra_node) ? 0 : input_idx;
-    const auto it_ok = input_to_nest_level.emplace(input_ra, idx);
-    CHECK(it_ok.second);
-    LOG_IF(DEBUG1, !input_permutation.empty())
-        << "Assigned input " << input_ra->toString(RelRexToStringConfig::defaults())
-        << " to nest level " << input_idx;
-  }
-  return input_to_nest_level;
 }
 
 std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexInput>>>
@@ -1733,6 +1190,676 @@ get_input_desc(const RA* ra_node,
   return std::make_tuple(
       input_desc_pair.first, input_desc_pair.second, used_inputs_owned);
 }
+
+bool is_update_or_delete_or_window_query_step(const RelAlgNode* root) {
+  if (auto project = dynamic_cast<const RelProject*>(root)) {
+    if (project->isDeleteViaSelect() || project->isUpdateViaSelect() ||
+        project->hasWindowFunctionExpr()) {
+      return true;
+    }
+  } else if (auto compound = dynamic_cast<const RelCompound*>(root)) {
+    if (compound->isDeleteViaSelect() || compound->isUpdateViaSelect()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
+QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
+    const RaExecutionSequence& seq,
+    const size_t step_idx,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    RenderInfo* render_info) {
+  INJECT_TIMER(executeRelAlgQueryStep);
+
+  auto exe_desc_ptr = seq.getDescriptor(step_idx);
+  CHECK(exe_desc_ptr);
+  auto body = exe_desc_ptr->getBody();
+  // determine a set of device ids that this query will use
+  std::vector<InputDescriptor> input_descs;
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
+  executor_->clearDevicesToUse();
+  auto co_copied = co;
+  if (is_update_or_delete_or_window_query_step(body)) {
+    co_copied.device_type = ExecutorDeviceType::CPU;
+  }
+  if (!(dynamic_cast<const RelLogicalValues*>(body) ||
+        dynamic_cast<const RelModify*>(body))) {
+    auto body_for_metadata_gen = body;
+    if (dynamic_cast<const RelSort*>(body)) {
+      // RelSort is handled without executing kernel
+      // but we need to process its input node
+      body_for_metadata_gen = body->getInput(0);
+    }
+    CHECK(body_for_metadata_gen);
+    auto input_to_nest_level = get_input_nest_levels(body_for_metadata_gen, {});
+    std::tie(input_descs, input_col_descs, std::ignore) =
+        get_input_desc(body_for_metadata_gen, input_to_nest_level, {});
+    const auto input_table_info = get_table_infos(input_descs, executor_);
+    executor_->determineAvailableDevicesToProcessQuery(
+        body, input_table_info, step_idx, co_copied.device_type);
+  }
+#if HAVE_CUDA
+  if (co_copied.device_type == ExecutorDeviceType::GPU) {
+    executor_->initializeCudaAllocator();
+  }
+  ScopeGuard resetCudaAllocator = [this, &co_copied]() {
+    if (co_copied.device_type == ExecutorDeviceType::GPU) {
+      executor_->clearCudaAllocator();
+    }
+  };
+#endif
+
+  bool const skip_device_id_selection = true;
+  size_t shard_count{0};
+  auto merge_type = [&shard_count](const RelAlgNode* body) -> MergeType {
+    return node_is_aggregate(body) && !shard_count ? MergeType::Reduce : MergeType::Union;
+  };
+  const auto sort = dynamic_cast<const RelSort*>(body);
+  if (sort) {
+    check_sort_node_source_constraint(sort);
+    auto order_entries = sort->getOrderEntries();
+    const auto source_work_unit = createSortInputWorkUnit(sort, order_entries, eo);
+    shard_count =
+        GroupByAndAggregate::shard_count_for_top_groups(source_work_unit.exe_unit);
+    if (!shard_count) {
+      // No point in sorting on the leaf, only execute the input to the sort node.
+      CHECK_EQ(size_t(1), sort->inputCount());
+      const auto source = sort->getInput(0);
+      if (sort->collationCount() || node_is_aggregate(source)) {
+        auto temp_seq = RaExecutionSequence(std::make_unique<RaExecutionDesc>(source));
+        CHECK_EQ(temp_seq.size(), size_t(1));
+        ExecutionOptions eo_copy = eo;
+        eo_copy.just_validate = eo.just_validate || sort->isEmptyResult();
+        // Use subseq to avoid clearing existing temporary tables
+        return {executeRelAlgSubSeq(temp_seq,
+                                    std::make_pair(0, 1),
+                                    co_copied,
+                                    eo_copy,
+                                    skip_device_id_selection,
+                                    nullptr,
+                                    0),
+                merge_type(source),
+                source->getId(),
+                false};
+      }
+    }
+  }
+  QueryStepExecutionResult query_step_result{
+      ExecutionResult{}, merge_type(body), body->getId(), false};
+  try {
+    query_step_result.result = executeRelAlgSubSeq(seq,
+                                                   std::make_pair(step_idx, step_idx + 1),
+                                                   co_copied,
+                                                   eo,
+                                                   skip_device_id_selection,
+                                                   render_info,
+                                                   queue_time_ms_);
+  } catch (QueryMustRunOnCpu const& e) {
+    CHECK_EQ(co_copied.device_type, ExecutorDeviceType::GPU);
+    co_copied.device_type = ExecutorDeviceType::CPU;
+    LOG(INFO) << "Retry the query via CPU mode";
+    bool const skip_device_id_selection_for_cpu_retry = false;
+    query_step_result.result = executeRelAlgSubSeq(seq,
+                                                   std::make_pair(step_idx, step_idx + 1),
+                                                   co_copied,
+                                                   eo,
+                                                   skip_device_id_selection_for_cpu_retry,
+                                                   render_info,
+                                                   queue_time_ms_);
+  }
+  if (post_execution_callback_) {
+    VLOG(1) << "Running post execution callback.";
+    (*post_execution_callback_)();
+  }
+  return query_step_result;
+}
+
+void RelAlgExecutor::prepareLeafExecution(
+    const AggregatedColRange& agg_col_range,
+    const StringDictionaryGenerations& string_dictionary_generations,
+    const TableGenerations& table_generations) {
+  // capture the lock acquistion time
+  auto clock_begin = timer_start();
+  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+    executor_->resetInterrupt();
+  }
+  queue_time_ms_ = timer_stop(clock_begin);
+  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), executor_->executor_id_);
+  executor_->row_set_mem_owner_->setDictionaryGenerations(string_dictionary_generations);
+  executor_->table_generations_ = table_generations;
+  executor_->agg_col_range_cache_ = agg_col_range;
+}
+
+ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
+                                                 const CompilationOptions& co,
+                                                 const ExecutionOptions& eo,
+                                                 RenderInfo* render_info,
+                                                 const int64_t queue_time_ms,
+                                                 const bool with_existing_temp_tables) {
+  INJECT_TIMER(executeRelAlgSeq);
+  auto timer = DEBUG_TIMER(__func__);
+  if (!with_existing_temp_tables) {
+    decltype(temporary_tables_)().swap(temporary_tables_);
+  }
+  decltype(target_exprs_owned_)().swap(target_exprs_owned_);
+  decltype(left_deep_join_info_)().swap(left_deep_join_info_);
+  executor_->temporary_tables_ = &temporary_tables_;
+
+  time(&now_);
+  CHECK(!seq.empty());
+
+  auto get_descriptor_count = [&seq, &eo]() -> size_t {
+    if (eo.just_explain) {
+      if (dynamic_cast<const RelLogicalValues*>(seq.getDescriptor(0)->getBody())) {
+        // run the logical values descriptor to generate the result set, then the next
+        // descriptor to generate the explain
+        CHECK_GE(seq.size(), size_t(2));
+        return 2;
+      } else {
+        return 1;
+      }
+    } else {
+      return seq.size();
+    }
+  };
+
+  const auto exec_desc_count = get_descriptor_count();
+  auto eo_copied = eo;
+  if (seq.hasQueryStepForUnion()) {
+    // we currently do not support resultset recycling when an input query
+    // contains union (all) operation
+    eo_copied.keep_result = false;
+  }
+
+  // we have to register resultset(s) of the skipped query step(s) as temporary table
+  // before executing the remaining query steps
+  // since they may be required during the query processing
+  // i.e., get metadata of the target expression from the skipped query step
+  if (g_allow_query_step_skipping) {
+    for (const auto& kv : seq.getSkippedQueryStepCacheKeys()) {
+      const auto cached_res =
+          executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(kv.second);
+      CHECK(cached_res);
+      addTemporaryTable(kv.first, cached_res);
+    }
+  }
+
+  const auto num_steps = exec_desc_count - 1;
+  const bool skip_device_id_selection = false;
+  for (size_t i = 0; i < exec_desc_count; i++) {
+    auto const node_id = seq.getDescriptor(i)->getBody()->getId();
+    VLOG(1) << "Executing query step " << i << " / " << num_steps
+            << " (node_id: " << node_id << ")";
+    try {
+      executeRelAlgStep(seq,
+                        i,
+                        co,
+                        eo_copied,
+                        skip_device_id_selection,
+                        (i == num_steps) ? render_info : nullptr,
+                        queue_time_ms);
+    } catch (const QueryMustRunOnCpu&) {
+      // Do not allow per-step retry if flag is off or in distributed mode
+      // TODO(todd): Determine if and when we can relax this restriction
+      // for distributed
+      CHECK(co.device_type == ExecutorDeviceType::GPU);
+      if (!g_allow_query_step_cpu_retry || g_cluster) {
+        throw;
+      }
+      LOG(INFO) << "Retrying current query step " << i << " / " << num_steps
+                << " on CPU (node_id: " << node_id << ")";
+      const auto co_cpu = CompilationOptions::makeCpuOnly(co);
+      if (render_info && i == num_steps) {
+        // only render on the last step
+        render_info->forceNonInSitu();
+      }
+      bool const skip_device_id_selection_for_cpu_retry = false;
+      executeRelAlgStep(seq,
+                        i,
+                        co_cpu,
+                        eo_copied,
+                        skip_device_id_selection_for_cpu_retry,
+                        (i == num_steps) ? render_info : nullptr,
+                        queue_time_ms);
+    } catch (const NativeExecutionError&) {
+      if (!g_enable_interop) {
+        throw;
+      }
+      auto eo_extern = eo_copied;
+      eo_extern.executor_type = ::ExecutorType::Extern;
+      auto exec_desc_ptr = seq.getDescriptor(i);
+      const auto body = exec_desc_ptr->getBody();
+      const auto compound = dynamic_cast<const RelCompound*>(body);
+      if (compound && (compound->getGroupByCount() || compound->isAggregate())) {
+        LOG(INFO) << "Also failed to run the query using interoperability";
+        throw;
+      }
+      executeRelAlgStep(seq,
+                        i,
+                        co,
+                        eo_extern,
+                        skip_device_id_selection,
+                        (i == num_steps) ? render_info : nullptr,
+                        queue_time_ms);
+    }
+  }
+
+  return seq.getDescriptor(num_steps)->getResult();
+}
+
+ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
+    const RaExecutionSequence& seq,
+    const std::pair<size_t, size_t> interval,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    const bool skip_device_id_selection,
+    RenderInfo* render_info,
+    const int64_t queue_time_ms) {
+  INJECT_TIMER(executeRelAlgSubSeq);
+  executor_->temporary_tables_ = &temporary_tables_;
+  decltype(left_deep_join_info_)().swap(left_deep_join_info_);
+  time(&now_);
+  for (size_t i = interval.first; i < interval.second; i++) {
+    // only render on the last step
+    try {
+      executeRelAlgStep(seq,
+                        i,
+                        co,
+                        eo,
+                        skip_device_id_selection,
+                        (i == interval.second - 1) ? render_info : nullptr,
+                        queue_time_ms);
+    } catch (const QueryMustRunOnCpu&) {
+      // Do not allow per-step retry if flag is off or in distributed mode
+      // TODO(todd): Determine if and when we can relax this restriction
+      // for distributed
+      CHECK(co.device_type == ExecutorDeviceType::GPU);
+      if (!g_allow_query_step_cpu_retry || g_cluster) {
+        throw;
+      }
+      LOG(INFO) << "Retrying current query step " << i << " on CPU";
+      const auto co_cpu = CompilationOptions::makeCpuOnly(co);
+      if (render_info && i == interval.second - 1) {
+        render_info->forceNonInSitu();
+      }
+      bool const skip_device_id_selection_for_cpu_retry = false;
+      executeRelAlgStep(seq,
+                        i,
+                        co_cpu,
+                        eo,
+                        skip_device_id_selection_for_cpu_retry,
+                        (i == interval.second - 1) ? render_info : nullptr,
+                        queue_time_ms);
+    }
+  }
+
+  return seq.getDescriptor(interval.second - 1)->getResult();
+}
+
+namespace {
+void handle_query_hint(RegisteredQueryHint const& query_hints,
+                       ExecutionOptions& eo,
+                       CompilationOptions& co) {
+  auto columnar_output_hint_enabled = false;
+  auto rowwise_output_hint_enabled = false;
+  if (query_hints.isHintRegistered(QueryHint::kCpuMode)) {
+    VLOG(1) << "A user forces to run the query on the CPU execution mode";
+    co.device_type = ExecutorDeviceType::CPU;
+  }
+  if (query_hints.isHintRegistered(QueryHint::kKeepResult)) {
+    if (!g_enable_data_recycler) {
+      VLOG(1) << "A user enables keeping query resultset but is skipped since data "
+                 "recycler is disabled";
+    }
+    if (!g_use_query_resultset_cache) {
+      VLOG(1) << "A user enables keeping query resultset but is skipped since query "
+                 "resultset recycler is disabled";
+    } else {
+      VLOG(1) << "A user enables keeping query resultset";
+      eo.keep_result = true;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kKeepTableFuncResult)) {
+    // we use this hint within the function 'executeTableFunction`
+    if (!g_enable_data_recycler) {
+      VLOG(1) << "A user enables keeping table function's resultset but is skipped "
+                 "since data recycler is disabled";
+    }
+    if (!g_use_query_resultset_cache) {
+      VLOG(1) << "A user enables keeping table function's resultset but is skipped "
+                 "since query resultset recycler is disabled";
+    } else {
+      VLOG(1) << "A user enables keeping table function's resultset";
+      eo.keep_result = true;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kWatchdog)) {
+    if (!eo.with_watchdog) {
+      VLOG(1) << "A user enables watchdog for this query";
+      eo.with_watchdog = true;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kWatchdogOff)) {
+    if (eo.with_watchdog) {
+      VLOG(1) << "A user disables watchdog for this query";
+      eo.with_watchdog = false;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kDynamicWatchdog)) {
+    if (!eo.with_dynamic_watchdog) {
+      VLOG(1) << "A user enables dynamic watchdog for this query";
+      eo.with_watchdog = true;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kDynamicWatchdogOff)) {
+    if (eo.with_dynamic_watchdog) {
+      VLOG(1) << "A user disables dynamic watchdog for this query";
+      eo.with_watchdog = false;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kQueryTimeLimit)) {
+    std::ostringstream oss;
+    oss << "A user sets query time limit to " << query_hints.query_time_limit << " ms";
+    eo.dynamic_watchdog_time_limit = query_hints.query_time_limit;
+    if (!eo.with_dynamic_watchdog) {
+      eo.with_dynamic_watchdog = true;
+      oss << " (and system automatically enables dynamic watchdog to activate the "
+             "given \"query_time_limit\" hint)";
+    }
+    VLOG(1) << oss.str();
+  }
+  if (query_hints.isHintRegistered(QueryHint::kAllowLoopJoin)) {
+    VLOG(1) << "A user enables loop join";
+    eo.allow_loop_joins = true;
+  }
+  if (query_hints.isHintRegistered(QueryHint::kDisableLoopJoin)) {
+    VLOG(1) << "A user disables loop join";
+    eo.allow_loop_joins = false;
+  }
+  if (query_hints.isHintRegistered(QueryHint::kMaxJoinHashTableSize)) {
+    eo.max_join_hash_table_size = query_hints.max_join_hash_table_size;
+    VLOG(1) << "A user forces the maximum size of a join hash table as "
+            << eo.max_join_hash_table_size << " bytes";
+  }
+  if (query_hints.isHintRegistered(QueryHint::kOptCudaBlockAndGridSizes)) {
+    if (query_hints.isHintRegistered(QueryHint::kCudaGridSize) ||
+        query_hints.isHintRegistered(QueryHint::kCudaBlockSize)) {
+      VLOG(1) << "Skip query hint \"opt_cuda_grid_and_block_size\" when at least one "
+                 "of the following query hints are given simultaneously: "
+                 "\"cuda_block_size\" and \"cuda_grid_size_multiplier\"";
+    } else {
+      VLOG(1) << "A user enables optimization of cuda block and grid sizes";
+      eo.optimize_cuda_block_and_grid_sizes = true;
+    }
+  }
+  if (query_hints.isHintRegistered(QueryHint::kTableReorderingOff)) {
+    // disable table reordering if `table_reordering_off` is enabled
+    VLOG(1) << "A user disables table reordering listed in the FROM clause";
+    eo.table_reordering = false;
+  }
+  if (query_hints.isHintRegistered(QueryHint::kColumnarOutput)) {
+    VLOG(1) << "A user forces the query to run with columnar output";
+    columnar_output_hint_enabled = true;
+  } else if (query_hints.isHintRegistered(QueryHint::kRowwiseOutput)) {
+    VLOG(1) << "A user forces the query to run with rowwise output";
+    rowwise_output_hint_enabled = true;
+  }
+  auto columnar_output_enabled = eo.output_columnar_hint ? !rowwise_output_hint_enabled
+                                                         : columnar_output_hint_enabled;
+  if (g_cluster && (columnar_output_hint_enabled || rowwise_output_hint_enabled)) {
+    LOG(INFO) << "Currently, we do not support applying query hint to change query "
+                 "output layout in distributed mode.";
+  }
+  eo.output_columnar_hint = columnar_output_enabled;
+}
+
+}  // namespace
+
+void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
+                                       const size_t step_idx,
+                                       const CompilationOptions& co,
+                                       const ExecutionOptions& eo,
+                                       bool skip_device_id_selection,
+                                       RenderInfo* render_info,
+                                       const int64_t queue_time_ms) {
+  INJECT_TIMER(executeRelAlgStep);
+  auto timer = DEBUG_TIMER(__func__);
+  auto exec_desc_ptr = seq.getDescriptor(step_idx);
+  CHECK(exec_desc_ptr);
+  auto& exec_desc = *exec_desc_ptr;
+  const auto body = exec_desc.getBody();
+  if (body->isNop()) {
+    handleNop(exec_desc);
+    return;
+  }
+  ExecutionOptions eo_copied = eo;
+  CompilationOptions co_copied = co;
+  eo_copied.with_watchdog =
+      eo.with_watchdog && (step_idx == 0 || dynamic_cast<const RelProject*>(body));
+  eo_copied.outer_fragment_indices =
+      step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>();
+
+  auto target_node = body;
+  auto query_plan_dag_hash = body->getQueryPlanDagHash();
+  if (auto sort_body = dynamic_cast<const RelSort*>(body)) {
+    target_node = sort_body->getInput(0);
+    query_plan_dag_hash = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
+        target_node->getQueryPlanDagHash(), SortInfo::createFromSortNode(sort_body));
+  } else {
+    query_plan_dag_hash = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
+        target_node->getQueryPlanDagHash(), SortInfo());
+  }
+  auto query_hints = getParsedQueryHint(target_node);
+  if (query_hints) {
+    handle_query_hint(*query_hints, eo_copied, co_copied);
+  }
+
+  setHasStepForUnion(seq.hasQueryStepForUnion());
+  // let's check whether we have a cached query resultset of the input query
+  // note that the resultset recycling for a top sort node query will be handled
+  // within executeSort(body) function
+  if (canUseResultsetCache(eo) && has_valid_query_plan_dag(body) &&
+      !dynamic_cast<const RelSort*>(body)) {
+    if (auto cached_resultset =
+            executor_->getResultSetRecyclerHolder().getCachedQueryResultSet(
+                query_plan_dag_hash)) {
+      VLOG(1) << "recycle resultset of the root node " << body->getId()
+              << " from resultset cache";
+      body->setOutputMetainfo(cached_resultset->getTargetMetaInfo());
+      if (render_info) {
+        std::vector<std::shared_ptr<Analyzer::Expr>>& cached_target_exprs =
+            executor_->getResultSetRecyclerHolder().getTargetExprs(query_plan_dag_hash);
+        std::vector<Analyzer::Expr*> copied_target_exprs;
+        for (const auto& expr : cached_target_exprs) {
+          copied_target_exprs.push_back(expr.get());
+        }
+        build_render_targets(
+            *render_info, copied_target_exprs, cached_resultset->getTargetMetaInfo());
+      }
+      exec_desc.setResult({cached_resultset, cached_resultset->getTargetMetaInfo()});
+      addTemporaryTable(-body->getId(), exec_desc.getResult().getDataPtr());
+      return;
+    }
+  }
+
+  // determine a set of device ids that this query will use for single-node env
+  // note that dist-mode determines device_ids before entering this function
+  // i.e., RelAlgExecutor::executeRelAlgQuerySingleStep
+  // in such case, `skip_device_id_selection` is set to true and we skip this process
+  if (is_update_or_delete_or_window_query_step(body)) {
+    co_copied.device_type = ExecutorDeviceType::CPU;
+  }
+  if (!skip_device_id_selection) {
+    std::vector<InputDescriptor> input_descs;
+    std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
+    executor_->clearDevicesToUse();
+    if (!(dynamic_cast<const RelLogicalValues*>(body) ||
+          dynamic_cast<const RelModify*>(body))) {
+      auto body_for_metadata_gen = body;
+      if (dynamic_cast<const RelSort*>(body)) {
+        // RelSort is handled without executing kernel
+        // but we need to process its input node
+        body_for_metadata_gen = body->getInput(0);
+      }
+      CHECK(body_for_metadata_gen);
+      auto input_to_nest_level = get_input_nest_levels(body_for_metadata_gen, {});
+      std::tie(input_descs, input_col_descs, std::ignore) =
+          get_input_desc(body_for_metadata_gen, input_to_nest_level, {});
+      const auto input_table_info = get_table_infos(input_descs, executor_);
+      executor_->determineAvailableDevicesToProcessQuery(
+          body, input_table_info, step_idx, co_copied.device_type);
+    }
+#if HAVE_CUDA
+    if (co_copied.device_type == ExecutorDeviceType::GPU) {
+      executor_->initializeCudaAllocator();
+    }
+#endif
+  }
+#if HAVE_CUDA
+  ScopeGuard resetCudaAllocator = [this, &skip_device_id_selection, &co_copied]() {
+    if (!skip_device_id_selection && co_copied.device_type == ExecutorDeviceType::GPU) {
+      executor_->clearCudaAllocator();
+    }
+  };
+#endif
+
+  const auto compound = dynamic_cast<const RelCompound*>(body);
+  if (compound) {
+    if (compound->isDeleteViaSelect()) {
+      executeDelete(compound, co_copied, eo_copied, queue_time_ms);
+    } else if (compound->isUpdateViaSelect()) {
+      executeUpdate(compound, co_copied, eo_copied, queue_time_ms);
+    } else {
+      exec_desc.setResult(
+          executeCompound(compound, co_copied, eo_copied, render_info, queue_time_ms));
+      VLOG(3) << "Returned from executeCompound(), addTemporaryTable("
+              << static_cast<int>(-compound->getId()) << ", ...)"
+              << " exec_desc.getResult().getDataPtr()->rowCount()="
+              << exec_desc.getResult().getDataPtr()->rowCount();
+      if (exec_desc.getResult().isFilterPushDownEnabled()) {
+        return;
+      }
+      addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
+    }
+    return;
+  }
+  const auto project = dynamic_cast<const RelProject*>(body);
+  if (project) {
+    if (project->isDeleteViaSelect()) {
+      executeDelete(project, co_copied, eo_copied, queue_time_ms);
+    } else if (project->isUpdateViaSelect()) {
+      executeUpdate(project, co_copied, eo_copied, queue_time_ms);
+    } else {
+      std::optional<size_t> prev_count;
+      // Disabling the intermediate count optimization in distributed, as the previous
+      // execution descriptor will likely not hold the aggregated result.
+      if (g_skip_intermediate_count && step_idx > 0 && !g_cluster) {
+        // If the previous node produced a reliable count, skip the pre-flight count.
+        RelAlgNode const* const prev_body = project->getInput(0);
+        if (shared::dynamic_castable_to_any<RelCompound, RelLogicalValues>(prev_body)) {
+          if (RaExecutionDesc const* const prev_exec_desc =
+                  prev_body->hasContextData()
+                      ? prev_body->getContextData()
+                      : seq.getDescriptorByBodyId(prev_body->getId(), step_idx - 1)) {
+            const auto& prev_exe_result = prev_exec_desc->getResult();
+            const auto prev_result = prev_exe_result.getRows();
+            if (prev_result) {
+              prev_count = prev_result->rowCount();
+              VLOG(3) << "Setting output row count for projection node to previous node ("
+                      << prev_exec_desc->getBody()->toString(
+                             RelRexToStringConfig::defaults())
+                      << ") to " << *prev_count;
+            }
+          }
+        }
+      }
+      exec_desc.setResult(executeProject(
+          project, co_copied, eo_copied, render_info, queue_time_ms, prev_count));
+      VLOG(3) << "Returned from executeProject(), addTemporaryTable("
+              << static_cast<int>(-project->getId()) << ", ...)"
+              << " exec_desc.getResult().getDataPtr()->rowCount()="
+              << exec_desc.getResult().getDataPtr()->rowCount();
+      if (exec_desc.getResult().isFilterPushDownEnabled()) {
+        return;
+      }
+      addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
+    }
+    return;
+  }
+  const auto aggregate = dynamic_cast<const RelAggregate*>(body);
+  if (aggregate) {
+    exec_desc.setResult(
+        executeAggregate(aggregate, co_copied, eo_copied, render_info, queue_time_ms));
+    addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  const auto filter = dynamic_cast<const RelFilter*>(body);
+  if (filter) {
+    exec_desc.setResult(
+        executeFilter(filter, co_copied, eo_copied, render_info, queue_time_ms));
+    addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  const auto sort = dynamic_cast<const RelSort*>(body);
+  if (sort) {
+    exec_desc.setResult(
+        executeSort(sort, co_copied, eo_copied, render_info, queue_time_ms));
+    if (exec_desc.getResult().isFilterPushDownEnabled()) {
+      return;
+    }
+    addTemporaryTable(-sort->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  const auto logical_values = dynamic_cast<const RelLogicalValues*>(body);
+  if (logical_values) {
+    exec_desc.setResult(executeLogicalValues(logical_values, eo_copied));
+    addTemporaryTable(-logical_values->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  const auto modify = dynamic_cast<const RelModify*>(body);
+  if (modify) {
+    exec_desc.setResult(executeModify(modify, eo_copied));
+    return;
+  }
+  const auto logical_union = dynamic_cast<const RelLogicalUnion*>(body);
+  if (logical_union) {
+    exec_desc.setResult(executeUnion(
+        logical_union, seq, co_copied, eo_copied, render_info, queue_time_ms));
+    addTemporaryTable(-logical_union->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  const auto table_func = dynamic_cast<const RelTableFunction*>(body);
+  if (table_func) {
+    exec_desc.setResult(
+        executeTableFunction(table_func, co_copied, eo_copied, queue_time_ms));
+    addTemporaryTable(-table_func->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  LOG(FATAL) << "Unhandled body type: "
+             << body->toString(RelRexToStringConfig::defaults());
+}
+
+void RelAlgExecutor::handleNop(RaExecutionDesc& ed) {
+  // just set the result of the previous node as the result of no op
+  auto body = ed.getBody();
+  CHECK(dynamic_cast<const RelAggregate*>(body));
+  CHECK_EQ(size_t(1), body->inputCount());
+  const auto input = body->getInput(0);
+  body->setOutputMetainfo(input->getOutputMetainfo());
+  const auto it = temporary_tables_.find(-input->getId());
+  CHECK(it != temporary_tables_.end());
+  // set up temp table as it could be used by the outer query or next step
+  addTemporaryTable(-body->getId(), it->second);
+
+  ed.setResult({it->second, input->getOutputMetainfo()});
+}
+
+namespace {
 
 size_t get_scalar_sources_size(const RelCompound* compound) {
   return compound->getScalarSourcesSize();
@@ -2181,6 +2308,11 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
             "mode.");
       }
       ColumnCacheMap column_cache;
+      if (co.device_type == ExecutorDeviceType::GPU) {
+        // window function is currently only supported by CPU
+        // todo: relax this after landing window function on GPU
+        executor_->fixupAvailableDevicesToProcessForCpuQuery();
+      }
       co.device_type = ExecutorDeviceType::CPU;
       computeWindow(work_unit, co, eo_in, column_cache, queue_time_ms);
     }
@@ -2525,7 +2657,9 @@ void RelAlgExecutor::computeWindow(const WorkUnit& work_unit,
   query_infos.push_back(query_infos.front());
   auto window_project_node_context = WindowProjectNodeContext::create(executor_);
   // todo (yoonmin) : support execution of window function using multiple GPUs
-  constexpr int device_id = 0;
+  auto const device_ids = executor_->getAvailableDevicesToProcessQuery();
+  CHECK_EQ(device_ids.size(), 1u);
+  const int device_id = *device_ids.begin();
   auto data_mgr = executor_->getDataMgr();
   CHECK(data_mgr);
   if (co.device_type == ExecutorDeviceType::GPU) {
@@ -3798,6 +3932,11 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   if (is_window_execution_unit(work_unit.exe_unit)) {
     if (!g_enable_window_functions) {
       throw std::runtime_error("Window functions support is disabled");
+    }
+    if (co.device_type == ExecutorDeviceType::GPU) {
+      // window function is currently only supported by CPU
+      // todo: relax this after landing window function on GPU
+      executor_->fixupAvailableDevicesToProcessForCpuQuery();
     }
     co.device_type = ExecutorDeviceType::CPU;
     VLOG(1) << "Disable lazy fetch: window function detected";

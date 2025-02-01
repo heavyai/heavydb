@@ -267,6 +267,15 @@ void CommandLineOptions::fillOptions() {
       "requires too much memory for query resultset. Requires "
       "--enable-executor-resource-mgr.");
 
+  desc.add_options()(
+      "max-num-gpu-per-query",
+      po::value<int>(&g_max_num_gpu_per_query)->default_value(g_max_num_gpu_per_query),
+      "Sets the maximum number of GPUs that each query can utilize. If this value "
+      "exceeds the total number of GPUs available in the system, it will automatically "
+      "be adjusted to the system's limit. The default value is 0, which indicates that "
+      "the query engine will attempt to use all available GPUs. And the value should be "
+      "larger or equal to zero.");
+
   desc.add_options()("calcite-max-mem",
                      po::value<size_t>(&system_parameters.calcite_max_mem)
                          ->default_value(system_parameters.calcite_max_mem),
@@ -2224,6 +2233,12 @@ boost::optional<int> CommandLineOptions::parse_command_line(
               << (g_use_chunk_metadata_cache ? "enabled" : "disabled");
   }
   LOG(INFO) << "Number of executors is set to " << system_parameters.num_executors;
+
+  if (g_max_num_gpu_per_query < 0) {
+    LOG(ERROR) << "\'g_max_num_gpu_per_query\' must be larger than zero";
+    return 1;
+  }
+  LOG(INFO) << "Number of maximum GPU per query is set to " << g_max_num_gpu_per_query;
 
   LOG(INFO) << "Use CPU memory pool for output buffers is set to "
             << g_use_cpu_mem_pool_for_output_buffers;

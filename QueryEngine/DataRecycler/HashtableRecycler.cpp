@@ -384,10 +384,10 @@ bool HashtableRecycler::isSafeToCacheHashtable(
 }
 
 bool HashtableRecycler::isInvalidHashTableCacheKey(
-    const std::vector<QueryPlanHash>& cache_keys) {
+    const std::unordered_map<int, QueryPlanHash>& cache_keys) {
   return cache_keys.empty() ||
-         std::any_of(cache_keys.cbegin(), cache_keys.cend(), [](QueryPlanHash key) {
-           return key == EMPTY_HASHED_PLAN_DAG_KEY;
+         std::any_of(cache_keys.cbegin(), cache_keys.cend(), [](auto const& kv) {
+           return kv.second == EMPTY_HASHED_PLAN_DAG_KEY;
          });
 }
 
@@ -397,11 +397,12 @@ HashtableAccessPathInfo HashtableRecycler::getHashtableAccessPathInfo(
     const SQLOps op_type,
     const JoinType join_type,
     const HashTableBuildDagMap& hashtable_build_dag_map,
-    int device_count,
+    const std::set<int>& device_ids,
     int shard_count,
-    const std::vector<std::vector<Fragmenter_Namespace::FragmentInfo>>& frags_for_device,
+    const std::unordered_map<int, std::vector<Fragmenter_Namespace::FragmentInfo>>&
+        frags_for_device,
     Executor* executor) {
-  CHECK_GT(device_count, (int)0);
+  CHECK_GT(device_ids.size(), 0u);
   CHECK_GE(shard_count, (int)0);
   std::vector<const Analyzer::ColumnVar*> inner_cols_vec, outer_cols_vec;
   size_t join_qual_info = EMPTY_HASHED_PLAN_DAG_KEY;
@@ -435,7 +436,7 @@ HashtableAccessPathInfo HashtableRecycler::getHashtableAccessPathInfo(
   }
 
   auto join_cols_info = getJoinColumnInfoHash(inner_cols_vec, outer_cols_vec, executor);
-  HashtableAccessPathInfo access_path_info(device_count);
+  HashtableAccessPathInfo access_path_info(device_ids);
   auto it = hashtable_build_dag_map.find(join_cols_info);
   if (it != hashtable_build_dag_map.end()) {
     size_t hashtable_access_path = EMPTY_HASHED_PLAN_DAG_KEY;
@@ -447,22 +448,23 @@ HashtableAccessPathInfo HashtableRecycler::getHashtableAccessPathInfo(
     boost::hash_combine(hashtable_access_path, shard_count);
 
     if (!shard_count) {
-      const auto frag_list = HashJoin::collectFragmentIds(frags_for_device[0]);
+      const auto frag_list =
+          HashJoin::collectFragmentIds(frags_for_device.begin()->second);
       auto cache_key_for_device = hashtable_access_path;
       // no sharding, so all devices have the same fragments
       boost::hash_combine(cache_key_for_device, frag_list);
-      for (int i = 0; i < device_count; ++i) {
-        access_path_info.hashed_query_plan_dag[i] = cache_key_for_device;
+      for (auto const device_id : device_ids) {
+        access_path_info.hashed_query_plan_dag[device_id] = cache_key_for_device;
       }
     } else {
       // we need to retrieve specific fragments for each device
       // and consider them to make a cache key for it
-      for (int i = 0; i < device_count; ++i) {
+      for (auto device_id : device_ids) {
         const auto frag_list_for_device =
-            HashJoin::collectFragmentIds(frags_for_device[i]);
+            HashJoin::collectFragmentIds(frags_for_device.at(device_id));
         auto cache_key_for_device = hashtable_access_path;
         boost::hash_combine(cache_key_for_device, frag_list_for_device);
-        access_path_info.hashed_query_plan_dag[i] = cache_key_for_device;
+        access_path_info.hashed_query_plan_dag[device_id] = cache_key_for_device;
       }
     }
     access_path_info.table_keys = it->second.inputTableKeys;

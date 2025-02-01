@@ -183,7 +183,7 @@ std::unique_ptr<GpuDeviceCompilationContext> compile_and_link_gpu_code(
   const auto ptx =
       CodeGenerator::generatePTX(cuda_llir, nvptx_target_machine.get(), context);
 
-  CubinResult cubin_result = ptx_to_cubin(ptx, cuda_mgr);
+  CubinResult cubin_result = ptx_to_cubin(ptx, cuda_mgr, gpu_device_idx);
   auto gpu_context =
       std::make_unique<GpuDeviceCompilationContext>(cubin_result.cubin,
                                                     cubin_result.cubin_size,

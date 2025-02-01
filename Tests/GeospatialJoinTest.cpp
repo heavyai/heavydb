@@ -801,7 +801,7 @@ class BoundingBoxIntersectJoinHashTableMock : public BoundingBoxIntersectJoinHas
       const Data_Namespace::MemoryLevel memory_level,
       ColumnCacheMap& column_cache,
       Executor* executor,
-      const int device_count,
+      const std::set<int>& device_ids,
       const RegisteredQueryHint& query_hints,
       const std::vector<BoundingBoxIntersectJoinHashTableMock::ExpectedValues>&
           expected_values) {
@@ -811,7 +811,7 @@ class BoundingBoxIntersectJoinHashTableMock : public BoundingBoxIntersectJoinHas
                                                                 memory_level,
                                                                 column_cache,
                                                                 executor,
-                                                                device_count,
+                                                                device_ids,
                                                                 query_hints,
                                                                 expected_values);
     hash_join->reifyWithLayout(HashType::OneToMany);
@@ -824,7 +824,7 @@ class BoundingBoxIntersectJoinHashTableMock : public BoundingBoxIntersectJoinHas
       const Data_Namespace::MemoryLevel memory_level,
       ColumnCacheMap& column_cache,
       Executor* executor,
-      const int device_count,
+      const std::set<int> device_ids,
       const RegisteredQueryHint& query_hints,
       const std::vector<ExpectedValues>& expected_values)
       : BoundingBoxIntersectJoinHashTable(
@@ -837,14 +837,14 @@ class BoundingBoxIntersectJoinHashTableMock : public BoundingBoxIntersectJoinHas
             HashJoin::normalizeColumnPairs(condition.get(),
                                            executor->getTemporaryTables())
                 .first,
-            device_count,
+            device_ids,
             query_hints,
             {},
             {})
       , expected_values_per_step_(expected_values) {}
 
  protected:
-  void reifyImpl(std::vector<ColumnsForDevice>& columns_per_device,
+  void reifyImpl(std::unordered_map<int, ColumnsForDevice>& columns_per_device,
                  const Fragmenter_Namespace::TableInfo& query_info,
                  const HashType layout,
                  const size_t shard_count,
@@ -863,7 +863,7 @@ class BoundingBoxIntersectJoinHashTableMock : public BoundingBoxIntersectJoinHas
   // returns entry_count, emitted_keys_count
   std::pair<size_t, size_t> approximateTupleCount(
       const std::vector<double>& bucket_sizes_for_dimension,
-      std::vector<ColumnsForDevice>& columns_per_device,
+      std::unordered_map<int, ColumnsForDevice>& columns_per_device,
       const size_t chosen_max_hashtable_size,
       const double chosen_bucket_threshold) final {
     auto [entry_count, emitted_keys_count] =
@@ -879,7 +879,7 @@ class BoundingBoxIntersectJoinHashTableMock : public BoundingBoxIntersectJoinHas
   std::pair<size_t, size_t> computeHashTableCounts(
       const size_t shard_count,
       const std::vector<double>& bucket_sizes_for_dimension,
-      std::vector<ColumnsForDevice>& columns_per_device,
+      std::unordered_map<int, ColumnsForDevice>& columns_per_device,
       const size_t chosen_max_hashtable_size,
       const double chosen_bucket_threshold) final {
     auto [entry_count, emitted_keys_count] =
@@ -979,14 +979,14 @@ TEST_F(BucketSizeTest, TunerEarlyOut) {
       BoundingBoxIntersectJoinHashTableMock::ExpectedValues{1340, 688});  // step 2
   expected_values.emplace_back(BoundingBoxIntersectJoinHashTableMock::ExpectedValues{
       1340, 688});  // increasing keys per bin, stop at step 2
-
+  const std::set<int> device_ids = {0};
   auto hash_table = BoundingBoxIntersectJoinHashTableMock::getInstance(
       condition,
       query_infos,
       Data_Namespace::MemoryLevel::CPU_LEVEL,
       column_cache,
       executor.get(),
-      /*device_count=*/1,
+      device_ids,
       RegisteredQueryHint::defaults(),
       expected_values);
   CHECK(hash_table);
@@ -1012,13 +1012,14 @@ TEST_F(BucketSizeTest, TooBig) {
   RegisteredQueryHint hint;
   hint.bbox_intersect_max_size = 2;
   hint.registerHint(QueryHint::kBBoxIntersectMaxSize);
+  const std::set<int> device_ids = {0};
   EXPECT_ANY_THROW(BoundingBoxIntersectJoinHashTableMock::getInstance(
       condition,
       query_infos,
       Data_Namespace::MemoryLevel::CPU_LEVEL,
       column_cache,
       executor.get(),
-      /*device_count=*/1,
+      device_ids,
       hint,
       expected_values));
 }
@@ -2665,7 +2666,6 @@ int main(int argc, char* argv[]) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-
   QR::reset();
   return err;
 }

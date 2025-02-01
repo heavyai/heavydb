@@ -39,51 +39,60 @@ std::optional<std::string_view> getCalledFunctionName(llvm::CallInst& call_inst)
   return std::nullopt;
 }
 
-// currently, we assume that when this is called for GPUs,
-// the argument `num_devices_to_hoist_literal` indicates the number of devices
-// that the system has equipped with which is reasonable under the current
-// query execution logic, but when supporting a query execution with a specific
-// set of devices, we must need to classify the exact devices to hoist the literal
-// up for correctness
-// todo (yoonmin) : support this to specific set of devices
-std::vector<llvm::Value*> createPtrWithHoistedMemoryAddr(
+std::unordered_map<int, llvm::Value*> createPtrWithHoistedMemoryAddr(
     CgenState* cgen_state,
     CodeGenerator* code_generator,
     CompilationOptions const& co,
     llvm::ConstantInt* ptr_int_val,
     llvm::Type* type,
-    size_t num_devices_to_hoist_literal) {
+    std::set<int> const& target_device_ids) {
   if (!co.hoist_literals) {
-    return {cgen_state->ir_builder_.CreateIntToPtr(ptr_int_val, type)};
+    std::unordered_map<int, llvm::Value*> literal_ptr;
+    for (auto const device_id : target_device_ids) {
+      literal_ptr.emplace(device_id,
+                          cgen_state->ir_builder_.CreateIntToPtr(ptr_int_val, type));
+    }
+    return literal_ptr;
   }
   Datum d;
   d.bigintval = ptr_int_val->getSExtValue();
   auto ptr = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
-  std::vector<Analyzer::Constant const*> literals(num_devices_to_hoist_literal,
-                                                  ptr.get());
-  auto hoisted_literal_lvs =
-      code_generator->codegenHoistedConstants(literals, kENCODING_NONE, {});
-  std::vector<llvm::Value*> hoisted_ptrs;
-  hoisted_ptrs.reserve(num_devices_to_hoist_literal);
-  for (size_t device_id = 0; device_id < num_devices_to_hoist_literal; device_id++) {
-    hoisted_ptrs[device_id] =
-        cgen_state->ir_builder_.CreateIntToPtr(hoisted_literal_lvs[device_id], type);
+  std::unordered_map<int, llvm::Value*> hoisted_literal_ptr;
+  std::unordered_map<int, const Analyzer::Constant*> constant_per_device;
+  for (auto const device_id : target_device_ids) {
+    constant_per_device.emplace(device_id, ptr.get());
   }
-  return hoisted_ptrs;
+  auto hoisted_literal_lvs =
+      code_generator->codegenHoistedConstants(constant_per_device, kENCODING_NONE, {});
+  for (auto const device_id : target_device_ids) {
+    hoisted_literal_ptr.emplace(
+        device_id,
+        cgen_state->ir_builder_.CreateIntToPtr(hoisted_literal_lvs.front(), type));
+  }
+  return hoisted_literal_ptr;
 }
 
 // todo (yoonmin): support String literal
-std::vector<llvm::Value*> hoistLiteral(CodeGenerator* code_generator,
-                                       CompilationOptions const& co,
-                                       Datum d,
-                                       SQLTypeInfo type,
-                                       size_t num_devices_to_hoist_literal) {
+std::unordered_map<int, llvm::Value*> hoistLiteral(
+    CodeGenerator* code_generator,
+    CompilationOptions const& co,
+    Datum d,
+    SQLTypeInfo type,
+    std::set<int> const& target_device_ids) {
   CHECK(co.hoist_literals);
   CHECK(type.is_integer() || type.is_decimal() || type.is_fp() || type.is_boolean());
   auto literal_expr = makeExpr<Analyzer::Constant>(type, false, d);
-  std::vector<Analyzer::Constant const*> literals(num_devices_to_hoist_literal,
-                                                  literal_expr.get());
-  return code_generator->codegenHoistedConstants(literals, kENCODING_NONE, {});
+  std::unordered_map<int, llvm::Value*> hoisted_literal_ptr;
+  std::unordered_map<int, const Analyzer::Constant*> constant_per_device;
+  for (auto const device_id : target_device_ids) {
+    constant_per_device.emplace(device_id, literal_expr.get());
+  }
+  auto hoisted_literal_lvs =
+      code_generator->codegenHoistedConstants(constant_per_device, kENCODING_NONE, {});
+  for (auto const device_id : target_device_ids) {
+    hoisted_literal_ptr.emplace(device_id, hoisted_literal_lvs.front());
+  }
+  return hoisted_literal_ptr;
 }
 
 }  // namespace CodegenUtil
