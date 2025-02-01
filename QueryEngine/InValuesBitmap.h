@@ -63,16 +63,16 @@ class InValuesBitmap {
 
   BitIsSetParams prepareBitIsSetParams(
       Executor* executor,
-      std::vector<std::shared_ptr<const Analyzer::Constant>> const& constant_owned) const;
+      std::unordered_map<int, std::shared_ptr<const Analyzer::Constant>> const&
+          constant_owned) const;
 
  private:
-  std::vector<int8_t*> bitsets_;
+  std::unordered_map<int, int8_t*> bitsets_per_devices_;
   bool rhs_has_null_;
   int64_t min_val_;
   int64_t max_val_;
   const int64_t null_val_;
   const Data_Namespace::MemoryLevel memory_level_;
-  const int device_count_;
   CompilationOptions co_;
 };
 

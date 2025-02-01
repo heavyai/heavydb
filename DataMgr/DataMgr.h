@@ -172,11 +172,12 @@ class DataMgr {
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
   std::shared_ptr<ForeignStorageInterface> getForeignStorageInterface() const;
 
-  // database_id, table_id, column_id, fragment_id
+  // the number of devices system can use per MemoryLevel
+  // we basically assume the # device as one for 1) DISK and 2) CPU
+  // if the system has GPU, we query the # GPUs we can use via CudaMgr
+  // and set the number as the level size of the GPU
+  // Noe that we only set first two level: DISK and CPU for CPU query execution
   std::vector<int> levelSizes_;
-
-  // std::unique_ptr<DeviceAllocator> createGpuAllocator(int device_id);
-  // NOTE(sy): Revisit how DataMgr should handle Cuda streams if Intel ever needs this.
 
   struct SystemMemoryUsage {
     size_t free;         // available CPU RAM memory in bytes

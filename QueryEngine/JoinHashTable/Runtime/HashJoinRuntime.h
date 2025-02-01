@@ -170,7 +170,7 @@ struct ShardInfo {
   size_t shard;
   size_t entry_count_per_shard;
   size_t num_shards;
-  int device_count;
+  size_t device_count;
 };
 
 struct OneToOnePerfectJoinHashTableFillFuncArgs {

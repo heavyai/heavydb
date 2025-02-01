@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <iostream>
+
 #include "CudaMgr/CudaMgr.h"
 #include "QueryEngine/CompilationContext.h"
 
@@ -27,6 +29,30 @@
 #endif  // HAVE_CUDA
 #include <string>
 #include <vector>
+
+#ifdef HAVE_CUDA
+struct CudaErrorLog {
+  CUresult cu_result;
+};
+inline std::ostream& operator<<(std::ostream& os, CudaErrorLog const cuda_error_log) {
+  char const* error_name{nullptr};
+  char const* error_string{nullptr};
+  cuGetErrorName(cuda_error_log.cu_result, &error_name);
+  cuGetErrorString(cuda_error_log.cu_result, &error_string);
+  os << (error_name ? error_name : "Unknown CUDA error") << ' '
+     << static_cast<int>(cuda_error_log.cu_result);
+  if (error_string) {
+    os << " (" << error_string << ')';
+  }
+  return os;
+}
+
+#define checkCudaErrors(ARG)                                                \
+  if (CUresult const err = static_cast<CUresult>(ARG); err != CUDA_SUCCESS) \
+    CHECK_EQ(err, CUDA_SUCCESS) << CudaErrorLog {                           \
+      err                                                                   \
+    }
+#endif  // HAVE_CUDA
 
 struct CubinResult {
   void* cubin;
@@ -56,7 +82,8 @@ void nvidia_jit_warmup();
  * device linker to create executable GPU device code.
  */
 CubinResult ptx_to_cubin(const std::string& ptx,
-                         const CudaMgr_Namespace::CudaMgr* cuda_mgr);
+                         const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                         int const device_id);
 
 class GpuDeviceCompilationContext {
  public:
@@ -73,75 +100,96 @@ class GpuDeviceCompilationContext {
   CUmodule module() { return module_; }
   std::string const& name() const { return kernel_name_; }
   size_t getModuleSize() const { return module_size_; }
+  int getDeviceId() const { return device_id_; }
 
  private:
   CUmodule module_;
   size_t module_size_;
   CUfunction kernel_;
   std::string const kernel_name_;
-#ifdef HAVE_CUDA
   const int device_id_;
+#ifdef HAVE_CUDA
   const CudaMgr_Namespace::CudaMgr* cuda_mgr_;
 #endif  // HAVE_CUDA
 };
 
 class GpuCompilationContext : public CompilationContext {
  public:
-  GpuCompilationContext() {}
+  GpuCompilationContext(CubinResult&& cubin_result, std::string const& function_name)
+      : cubin_result_(std::move(cubin_result)), function_name_(function_name) {}
 
-  void addDeviceCode(std::unique_ptr<GpuDeviceCompilationContext>&& device_context) {
-    contexts_per_device_.push_back(std::move(device_context));
+  ~GpuCompilationContext() {
+#ifdef HAVE_CUDA
+    if (!cu_link_state_destroyed_) {
+      checkCudaErrors(cuLinkDestroy(cubin_result_.link_state));
+    }
+#endif
   }
+#ifdef HAVE_CUDA
+  void createGpuDeviceCompilationContextForDevices(
+      std::set<int> const& device_ids,
+      CudaMgr_Namespace::CudaMgr const* cuda_mgr) {
+    for (auto device_id : device_ids) {
+      auto it = contexts_per_device_.find(device_id);
+      if (it == contexts_per_device_.end()) {
+        auto device_context = std::make_unique<GpuDeviceCompilationContext>(
+            cubin_result_.cubin,
+            cubin_result_.cubin_size,
+            function_name_,
+            device_id,
+            cuda_mgr,
+            cubin_result_.option_keys.size(),
+            cubin_result_.option_keys.data(),
+            cubin_result_.option_values.data());
+        contexts_per_device_.emplace(device_id, std::move(device_context));
+        if (!cu_link_state_destroyed_ &&
+            contexts_per_device_.size() ==
+                static_cast<size_t>(cuda_mgr->getDeviceCount())) {
+          // all GPUs have this module; we do not need to load the module anymore
+          checkCudaErrors(cuLinkDestroy(cubin_result_.link_state));
+          cu_link_state_destroyed_ = true;
+        }
+      }
+    }
+  }
+#endif
 
   std::pair<void*, void*> getNativeCode(const size_t device_id) const {
-    CHECK_LT(device_id, contexts_per_device_.size());
-    auto device_context = contexts_per_device_[device_id].get();
+    auto it = contexts_per_device_.find(device_id);
+    CHECK(it != contexts_per_device_.end())
+        << "Cannot find a compilation context for device " << device_id;
+    auto device_context = it->second.get();
     return std::make_pair<void*, void*>(device_context->kernel(),
                                         device_context->module());
   }
 
-  std::vector<void*> getNativeFunctionPointers() const {
-    std::vector<void*> fn_ptrs;
-    for (auto& device_context : contexts_per_device_) {
-      CHECK(device_context);
-      fn_ptrs.push_back(device_context->kernel());
+  std::unordered_map<int, void*> getNativeFunctionPointers() const {
+    std::unordered_map<int, void*> fn_ptrs;
+    for (auto& kv : contexts_per_device_) {
+      CHECK(kv.second);
+      fn_ptrs.emplace(kv.first, kv.second->kernel());
     }
     return fn_ptrs;
   }
 
   std::string const& name(size_t const device_id) const {
-    CHECK_LT(device_id, contexts_per_device_.size());
-    return contexts_per_device_[device_id]->name();
+    auto it = contexts_per_device_.find(device_id);
+    CHECK(it != contexts_per_device_.end())
+        << "Cannot find a compilation context for device " << device_id;
+    return it->second->name();
   }
 
   size_t getMemSize() const {
-    return contexts_per_device_.begin()->get()->getModuleSize();
+    CHECK_GE(contexts_per_device_.size(), 1u);
+    return contexts_per_device_.begin()->second.get()->getModuleSize();
   }
 
  private:
-  std::vector<std::unique_ptr<GpuDeviceCompilationContext>> contexts_per_device_;
-};
-
+  CubinResult cubin_result_;
+  std::string function_name_;
 #ifdef HAVE_CUDA
-struct CudaErrorLog {
-  CUresult cu_result;
+  bool cu_link_state_destroyed_{false};
+#endif
+  std::unordered_map<int, std::unique_ptr<GpuDeviceCompilationContext>>
+      contexts_per_device_;
 };
-inline std::ostream& operator<<(std::ostream& os, CudaErrorLog const cuda_error_log) {
-  char const* error_name{nullptr};
-  char const* error_string{nullptr};
-  cuGetErrorName(cuda_error_log.cu_result, &error_name);
-  cuGetErrorString(cuda_error_log.cu_result, &error_string);
-  os << (error_name ? error_name : "Unknown CUDA error") << ' '
-     << static_cast<int>(cuda_error_log.cu_result);
-  if (error_string) {
-    os << " (" << error_string << ')';
-  }
-  return os;
-}
-
-#define checkCudaErrors(ARG)                                                \
-  if (CUresult const err = static_cast<CUresult>(ARG); err != CUDA_SUCCESS) \
-    CHECK_EQ(err, CUDA_SUCCESS) << CudaErrorLog {                           \
-      err                                                                   \
-    }
-#endif  // HAVE_CUDA

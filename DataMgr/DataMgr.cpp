@@ -282,6 +282,7 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
   bufferMgrs_[0].push_back(
       new PersistentStorageMgr(dataDir_, userSpecifiedNumReaderThreads, cache_config));
 
+  // DISK memory level
   levelSizes_.push_back(1);
   auto page_size = system_parameters.buffer_page_size;
   CHECK_GT(page_size, size_t(0));
@@ -341,7 +342,7 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                          default_cpu_slab_size,
                          page_size,
                          cpu_tier_sizes);
-
+    // CPU memory level
     levelSizes_.push_back(1);
     auto num_gpus = cudaMgr_->getDeviceCount();
     for (int gpu_num = 0; gpu_num < num_gpus; ++gpu_num) {
@@ -374,6 +375,7 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                                                  page_size,
                                                  bufferMgrs_[1][0]));
     }
+    // GPU memory level
     levelSizes_.push_back(num_gpus);
   } else {
     allocateCpuBufferMgr(0,
@@ -383,6 +385,7 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                          default_cpu_slab_size,
                          page_size,
                          cpu_tier_sizes);
+    // CPU memory level
     levelSizes_.push_back(1);
   }
 }

@@ -29,7 +29,7 @@ class RangeJoinHashTable final : public BoundingBoxIntersectJoinHashTable {
                      ColumnCacheMap& column_cache,
                      Executor* executor,
                      const std::vector<InnerOuter>& inner_outer_pairs,
-                     const int device_count,
+                     const std::set<int>& device_ids,
                      const RegisteredQueryHint& query_hints,
                      const HashTableBuildDagMap& hashtable_build_dag_map,
                      const TableIdToNodeMap& table_id_to_node_map)
@@ -40,7 +40,7 @@ class RangeJoinHashTable final : public BoundingBoxIntersectJoinHashTable {
                                           column_cache,
                                           executor,
                                           inner_outer_pairs,
-                                          device_count,
+                                          device_ids,
                                           query_hints,
                                           hashtable_build_dag_map,
                                           table_id_to_node_map)
@@ -55,7 +55,7 @@ class RangeJoinHashTable final : public BoundingBoxIntersectJoinHashTable {
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
       const JoinType join_type,
-      const int device_count,
+      const std::set<int>& device_ids,
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
@@ -93,13 +93,13 @@ class RangeJoinHashTable final : public BoundingBoxIntersectJoinHashTable {
 
   std::pair<size_t, size_t> approximateTupleCount(
       const std::vector<double>& inverse_bucket_sizes_for_dimension,
-      std::vector<ColumnsForDevice>& columns_per_device,
+      std::unordered_map<int, ColumnsForDevice>& columns_per_device,
       const size_t chosen_max_hashtable_size,
       const double chosen_bucket_threshold) override;
 
   std::pair<size_t, size_t> computeRangeHashTableCounts(
       const size_t shard_count,
-      std::vector<ColumnsForDevice>& columns_per_device);
+      std::unordered_map<int, ColumnsForDevice>& columns_per_device);
 
  public:
   llvm::Value* codegenKey(const CompilationOptions& co, llvm::Value* offset);

@@ -30,7 +30,7 @@
 extern bool g_is_test_env;
 extern bool g_enable_watchdog;
 extern size_t g_big_group_threshold;
-extern size_t g_watchdog_baseline_max_groups;
+extern size_t kMaxNumElemsForBucketizedRange;
 
 using QR = QueryRunner::QueryRunner;
 using namespace TestHelpers;
@@ -128,6 +128,7 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
                                   nullptr,
                                   SortInfo(),
                                   0};
+  executor->mockDeviceIdSelectionLogicToOnlyUseSingleDevice();
 
   ColumnCacheMap column_cache;
   size_t max_groups_buffer_entry_guess = 1;
@@ -226,6 +227,7 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                   nullptr,
                                   SortInfo(),
                                   0};
+  executor->mockDeviceIdSelectionLogicToOnlyUseSingleDevice();
 
   ColumnCacheMap column_cache;
   size_t max_groups_buffer_entry_guess = 1;
@@ -305,6 +307,7 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
                                   nullptr,
                                   SortInfo(),
                                   0};
+  executor->mockDeviceIdSelectionLogicToOnlyUseSingleDevice();
 
   ColumnCacheMap column_cache;
   size_t max_groups_buffer_entry_guess = 1;
@@ -378,8 +381,7 @@ class BigCardinalityThresholdTest : public ::testing::Test {
  protected:
   void SetUp() override {
     g_enable_watchdog = true;
-    initial_g_watchdog_baseline_max_groups = g_watchdog_baseline_max_groups;
-    g_watchdog_baseline_max_groups = g_big_group_threshold + 1;
+    auto const max_num_elem_for_bucketized_range = g_big_group_threshold + 1;
 
     run_ddl_statement("DROP TABLE IF EXISTS big_cardinality;");
     run_ddl_statement("CREATE TABLE big_cardinality (fl text,ar text, dep text);");
@@ -396,7 +398,7 @@ class BigCardinalityThresholdTest : public ::testing::Test {
     CHECK(f.is_open()) << filename.string();
 
     // add enough groups to trigger the watchdog exception if we use a poor estimate
-    for (size_t i = 0; i < g_watchdog_baseline_max_groups; i++) {
+    for (size_t i = 0; i < max_num_elem_for_bucketized_range; i++) {
       f << i << ", " << i + 1 << ", " << i + 2 << std::endl;
     }
     f.close();
@@ -407,7 +409,6 @@ class BigCardinalityThresholdTest : public ::testing::Test {
 
   void TearDown() override {
     g_enable_watchdog = false;
-    g_watchdog_baseline_max_groups = initial_g_watchdog_baseline_max_groups;
     run_ddl_statement("DROP TABLE IF EXISTS big_cardinality;");
   }
 

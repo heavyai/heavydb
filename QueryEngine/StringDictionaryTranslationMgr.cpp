@@ -57,7 +57,7 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     const SQLTypeInfo& output_ti,
     const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
     const Data_Namespace::MemoryLevel memory_level,
-    const int device_count,
+    const std::set<int>& device_ids,
     Executor* executor,
     Data_Namespace::DataMgr* data_mgr,
     const bool delay_translation,
@@ -69,7 +69,7 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     , string_op_infos_(string_op_infos)
     , has_null_string_op_(one_or_more_string_ops_is_null(string_op_infos))
     , memory_level_(memory_level)
-    , device_count_(device_count)
+    , device_ids_(device_ids)
     , executor_(executor)
     , data_mgr_(data_mgr)
     , dest_type_is_string_(true)
@@ -91,7 +91,7 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     const SQLTypeInfo& output_ti,
     const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
     const Data_Namespace::MemoryLevel memory_level,
-    const int device_count,
+    const std::set<int>& device_ids,
     Executor* executor,
     Data_Namespace::DataMgr* data_mgr,
     const bool delay_translation)
@@ -102,7 +102,7 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     , string_op_infos_(string_op_infos)
     , has_null_string_op_(one_or_more_string_ops_is_null(string_op_infos))
     , memory_level_(memory_level)
-    , device_count_(device_count)
+    , device_ids_(device_ids)
     , executor_(executor)
     , data_mgr_(data_mgr)
     , dest_type_is_string_(false)
@@ -123,8 +123,8 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
 
 StringDictionaryTranslationMgr::~StringDictionaryTranslationMgr() {
   CHECK(data_mgr_);
-  for (auto& device_buffer : device_buffers_) {
-    data_mgr_->free(device_buffer);
+  for (auto const& kv : device_buffers_) {
+    data_mgr_->free(kv.second);
   }
 }
 
@@ -152,11 +152,12 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
 #ifdef HAVE_CUDA
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     const size_t translation_map_size_bytes = mapSize();
-    for (int device_id = 0; device_id < device_count_; ++device_id) {
-      device_buffers_.emplace_back(CudaAllocator::allocGpuAbstractBuffer(
-          data_mgr_, translation_map_size_bytes, device_id));
+    for (auto device_id : device_ids_) {
+      device_buffers_.emplace(device_id,
+                              CudaAllocator::allocGpuAbstractBuffer(
+                                  data_mgr_, translation_map_size_bytes, device_id));
       auto device_buffer =
-          reinterpret_cast<int8_t*>(device_buffers_.back()->getMemoryPtr());
+          reinterpret_cast<int8_t*>(device_buffers_[device_id]->getMemoryPtr());
       auto cuda_stream = executor_->getCudaStream(device_id);
       copy_to_nvidia_gpu(data_mgr_,
                          cuda_stream,
@@ -165,7 +166,7 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
                          translation_map_size_bytes,
                          device_id,
                          "Dictionary translation buffer");
-      kernel_translation_maps_.push_back(device_buffer);
+      kernel_translation_maps_.emplace(device_id, device_buffer);
     }
 
     if (source_string_dict_key_.db_id < 0) {
@@ -175,11 +176,13 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
           sizeof(int32_t);
       CHECK_GT(buf_size, 0);
       CHECK(source_sd_to_temp_sd_translation_map_);
-      for (int device_id = 0; device_id < device_count_; ++device_id) {
-        source_sd_to_temp_sd_translation_map_device_buffer_.push_back(
+      for (auto device_id : device_ids_) {
+        source_sd_to_temp_sd_translation_map_device_buffer_.emplace(
+            device_id,
             CudaAllocator::allocGpuAbstractBuffer(data_mgr_, buf_size, device_id));
         auto device_buffer = reinterpret_cast<int8_t*>(
-            source_sd_to_temp_sd_translation_map_device_buffer_.back()->getMemoryPtr());
+            source_sd_to_temp_sd_translation_map_device_buffer_[device_id]
+                ->getMemoryPtr());
         auto cuda_stream = executor_->getCudaStream(device_id);
         copy_to_nvidia_gpu(data_mgr_,
                            cuda_stream,
@@ -192,24 +195,27 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
     }
   }
 #else
-  CHECK_EQ(1, device_count_);
+  CHECK_EQ(1, device_ids_.size());
 #endif  // HAVE_CUDA
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {
-    kernel_translation_maps_.push_back(data());
+    kernel_translation_maps_.emplace(0, data());
   }
 }
 
 namespace {
 template <typename T>
-std::vector<T*> get_raw_pointers(std::vector<std::shared_ptr<T>> const& owned) {
-  std::vector<T*> raw_pointers(owned.size());
-  auto get_raw = [](std::shared_ptr<T> const& shared_ptr) { return shared_ptr.get(); };
-  std::transform(owned.begin(), owned.end(), raw_pointers.begin(), get_raw);
+std::unordered_map<int, T*> get_raw_pointers(
+    std::unordered_map<int, std::shared_ptr<T>> const& owned) {
+  std::unordered_map<int, T*> raw_pointers;
+  for (auto& kv : owned) {
+    raw_pointers.emplace(kv.first, kv.second.get());
+  }
   return raw_pointers;
 }
 
-void check_has_encoding_none(Analyzer::Constant const* const ptr) {
-  CHECK_EQ(kENCODING_NONE, ptr->get_type_info().get_compression()) << ptr->toString();
+void check_has_encoding_none(std::pair<int, Analyzer::Constant const*> const& kv) {
+  CHECK_EQ(kENCODING_NONE, kv.second->get_type_info().get_compression())
+      << kv.second->toString();
 }
 
 std::shared_ptr<Analyzer::Constant const> to_constant(void const* ptr) {
@@ -220,24 +226,20 @@ std::shared_ptr<Analyzer::Constant const> to_constant(void const* ptr) {
 }
 }  // namespace
 
-std::vector<std::shared_ptr<Analyzer::Constant const>>
+std::unordered_map<int, std::shared_ptr<Analyzer::Constant const>>
 StringDictionaryTranslationMgr::getConstants() const {
-  auto& ktm = kernel_translation_maps_;
-  std::vector<std::shared_ptr<Analyzer::Constant const>> constants_owned(ktm.size());
-  std::transform(ktm.begin(), ktm.end(), constants_owned.begin(), to_constant);
+  std::unordered_map<int, std::shared_ptr<Analyzer::Constant const>> constants_owned;
+  for (auto& kv : kernel_translation_maps_) {
+    constants_owned.emplace(kv.first, to_constant(kv.second));
+  }
   return constants_owned;
 }
 
-std::vector<std::shared_ptr<Analyzer::Constant const>>
+std::unordered_map<int, std::shared_ptr<Analyzer::Constant const>>
 StringDictionaryTranslationMgr::getTranslationMappedConstants() const {
-  std::vector<std::shared_ptr<Analyzer::Constant const>> constants_owned;
-  if (memory_level_ == Data_Namespace::GPU_LEVEL) {
-    constants_owned.reserve(source_sd_to_temp_sd_translation_map_device_buffer_.size());
-    for (auto* buf_ptr : source_sd_to_temp_sd_translation_map_device_buffer_) {
-      constants_owned.push_back(to_constant(buf_ptr->getMemoryPtr()));
-    }
-  } else {
-    constants_owned.push_back(to_constant(source_sd_to_temp_sd_translation_map_));
+  std::unordered_map<int, std::shared_ptr<Analyzer::Constant const>> constants_owned;
+  for (auto& kv : source_sd_to_temp_sd_translation_map_device_buffer_) {
+    constants_owned.emplace(kv.first, to_constant(kv.second->getMemoryPtr()));
   }
   return constants_owned;
 }
@@ -246,8 +248,7 @@ llvm::Value* StringDictionaryTranslationMgr::codegen(llvm::Value* input_str_id_l
                                                      const SQLTypeInfo& input_ti,
                                                      const bool add_nullcheck,
                                                      const CompilationOptions& co) const {
-  CHECK(kernel_translation_maps_.size() == static_cast<size_t>(device_count_) ||
-        has_null_string_op_);
+  CHECK(kernel_translation_maps_.size() == device_ids_.size() || has_null_string_op_);
   if (!co.hoist_literals && kernel_translation_maps_.size() > 1UL) {
     // Currently the only way to have multiple kernel translation maps is
     // to be running on GPU, where we would need to have a different pointer
@@ -295,8 +296,10 @@ llvm::Value* StringDictionaryTranslationMgr::codegen(llvm::Value* input_str_id_l
   }
 
   // Shared pointers are used because Parser::IntLiteral::analyzeValue() returns them.
-  std::vector<std::shared_ptr<Analyzer::Constant const>> constants_owned = getConstants();
-  std::vector<Analyzer::Constant const*> constants = get_raw_pointers(constants_owned);
+  std::unordered_map<int, std::shared_ptr<Analyzer::Constant const>> constants_owned =
+      getConstants();
+  std::unordered_map<int, Analyzer::Constant const*> constants =
+      get_raw_pointers(constants_owned);
   std::for_each(constants.begin(), constants.end(), check_has_encoding_none);
   CHECK_GE(constants.size(), 1UL);
   CHECK(co.hoist_literals || constants.size() == 1UL);
@@ -324,9 +327,9 @@ llvm::Value* StringDictionaryTranslationMgr::codegen(llvm::Value* input_str_id_l
   if (dest_type_is_string_) {
     if (source_string_dict_key_.db_id < 0) {
       CHECK(source_sd_to_temp_sd_translation_map_);
-      std::vector<std::shared_ptr<Analyzer::Constant const>> trans_map_constants_owned =
-          getTranslationMappedConstants();
-      std::vector<Analyzer::Constant const*> trans_map_constants =
+      std::unordered_map<int, std::shared_ptr<Analyzer::Constant const>>
+          trans_map_constants_owned = getTranslationMappedConstants();
+      std::unordered_map<int, Analyzer::Constant const*> trans_map_constants =
           get_raw_pointers(trans_map_constants_owned);
       std::for_each(trans_map_constants.begin(),
                     trans_map_constants.end(),

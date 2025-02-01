@@ -976,7 +976,14 @@ std::vector<TargetInfo> generate_random_groups_nullable_target_infos() {
 std::vector<OneRow> get_rows_sorted_by_col(ResultSet& rs, const size_t col_idx) {
   std::list<Analyzer::OrderEntry> order_entries;
   order_entries.emplace_back(1, false, false);
-  rs.sort(order_entries, 0, ExecutorDeviceType::CPU, nullptr);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  CHECK(executor);
+  const bool need_to_initialize_device_ids_to_use = true;
+  rs.sort(order_entries,
+          0,
+          ExecutorDeviceType::CPU,
+          executor.get(),
+          need_to_initialize_device_ids_to_use);
   std::vector<OneRow> result;
 
   while (true) {
@@ -3175,7 +3182,6 @@ int main(int argc, char** argv) {
   sys_params.max_cpu_slab_size = 12500000000;
   auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
   data_mgr.resetBufferMgrs({}, 0, sys_params);
-
   int err{0};
   try {
     err = RUN_ALL_TESTS();

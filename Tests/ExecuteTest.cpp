@@ -98,6 +98,7 @@ size_t g_num_leafs{1};
 bool g_keep_test_data{false};
 bool g_use_temporary_tables{false};
 
+// todo (yoonmin) : needs to revisit
 size_t choose_shard_count() {
   auto session = QR::get()->getSession();
   const auto cuda_mgr = session->getCatalog().getDataMgr().getCudaMgr();
@@ -8928,7 +8929,14 @@ TEST_F(Select, PerDeviceCardinality) {
     SKIP_NO_GPU();
     size_t num_fragments{0};
     if (dt == ExecutorDeviceType::GPU) {
-      num_fragments = QR::get()->getExecutor()->deviceCount(dt);
+      auto data_mgr = QR::get()->getExecutor()->getDataMgr();
+      CHECK(data_mgr);
+      CudaMgr_Namespace::CudaMgr* cuda_mgr = data_mgr->getCudaMgr();
+      CHECK(cuda_mgr);
+      num_fragments = cuda_mgr->getDeviceCount();
+      if (g_max_num_gpu_per_query > 0) {
+        num_fragments = g_max_num_gpu_per_query;
+      }
     } else {
       num_fragments = 2;
     }
@@ -8942,7 +8950,7 @@ TEST_F(Select, PerDeviceCardinality) {
     }
     std::shared_ptr<ResultSet> res =
         run_multiple_agg("SELECT v1 FROM pdc_test WHERE v2 <= 2;", dt);
-    CHECK_EQ(res->entryCount(), num_fragments * 2)
+    ASSERT_EQ(res->entryCount(), num_fragments * 2)
         << "Expected: " << num_fragments * 2 << ", Actual: " << res->entryCount();
   }
   run_ddl_statement("DROP TABLE IF EXISTS pdc_test;");
@@ -8968,7 +8976,7 @@ TEST_F(Select, PerDeviceCardinalityShardedTable) {
       std::string q =
           "SELECT COUNT(1) FROM (SELECT v1 FROM pdc_test WHERE v2 <= 2) WHERE v1 = " +
           std::to_string(i) + ";";
-      EXPECT_EQ(v<int64_t>(run_simple_agg(q, dt)), int64_t(2)) << q;
+      ASSERT_EQ(v<int64_t>(run_simple_agg(q, dt)), int64_t(2)) << q;
     }
   }
   run_ddl_statement("DROP TABLE IF EXISTS pdc_test;");
@@ -8989,7 +8997,7 @@ TEST_F(Select, FilteredCountallWithLimit) {
     SKIP_NO_GPU();
     std::shared_ptr<ResultSet> res =
         run_multiple_agg("SELECT v FROM fcwl_test LIMIT 11", dt);
-    EXPECT_EQ(res->entryCount(), size_t(11));
+    ASSERT_EQ(res->entryCount(), size_t(11));
   }
 }
 
@@ -30655,6 +30663,13 @@ int main(int argc, char** argv) {
                      "Use temporary tables instead of physical storage.");
   desc.add_options()("use-disk-cache",
                      "Use the disk cache for all tables with minimum size settings.");
+  desc.add_options()(
+      "max-num-gpu-per-query",
+      po::value<int>(&g_max_num_gpu_per_query)->default_value(g_max_num_gpu_per_query),
+      "Sets the maximum number of GPUs that each query can utilize. If this value "
+      "exceeds the total number of GPUs available in the system, it will automatically "
+      "be adjusted to the system's limit. The default value is 0, which indicates that "
+      "the query engine will attempt to use all available GPUs.");
 
   desc.add_options()(
       "test-help",
@@ -30686,6 +30701,14 @@ int main(int argc, char** argv) {
 
   if (vm.count("disable-literal-hoisting")) {
     g_hoist_literals = false;
+  }
+
+  if (vm.count("max-num-gpu-per-query")) {
+    g_max_num_gpu_per_query = vm["max-num-gpu-per-query"].as<int>();
+    if (g_max_num_gpu_per_query > 0) {
+      std::cout << "Set the maximum # GPUs per query: " << g_max_num_gpu_per_query
+                << std::endl;
+    }
   }
 
   g_watchdog_none_encoded_string_translation_limit = 1000000UL;  // default

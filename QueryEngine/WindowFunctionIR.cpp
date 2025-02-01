@@ -252,14 +252,15 @@ llvm::Value* Executor::aggregateWindowStatePtr(CodeGenerator* code_generator,
           : llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
   const auto aggregate_state_i64 = cgen_state_->llInt(
       reinterpret_cast<const int64_t>(window_func_context->aggregateState()));
-  return CodegenUtil::createPtrWithHoistedMemoryAddr(
-             cgen_state_.get(),
-             code_generator,
-             co,
-             aggregate_state_i64,
-             aggregate_state_type,
-             WindowFunctionContext::NUM_EXECUTION_DEVICES)
-      .front();
+  auto ptr_lvs =
+      CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                  code_generator,
+                                                  co,
+                                                  aggregate_state_i64,
+                                                  aggregate_state_type,
+                                                  getAvailableDevicesToProcessQuery());
+  CHECK_EQ(ptr_lvs.size(), 1u);
+  return ptr_lvs.begin()->second;
 }
 
 llvm::Value* Executor::codegenWindowFunctionAggregate(CodeGenerator* code_generator,
@@ -276,14 +277,15 @@ llvm::Value* Executor::codegenWindowFunctionAggregate(CodeGenerator* code_genera
         reinterpret_cast<const int64_t>(window_func_context->aggregateStateCount()));
     const auto pi64_type =
         llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
-    aggregate_state_count = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                cgen_state_.get(),
-                                code_generator,
-                                co,
-                                aggregate_state_count_i64,
-                                pi64_type,
-                                WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                .front();
+    auto aggregate_state_count_lvs =
+        CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                    code_generator,
+                                                    co,
+                                                    aggregate_state_count_i64,
+                                                    pi64_type,
+                                                    getAvailableDevicesToProcessQuery());
+    CHECK_EQ(aggregate_state_count_lvs.size(), 1u);
+    aggregate_state_count = aggregate_state_count_lvs.begin()->second;
   }
   codegenWindowFunctionStateInit(code_generator, co, aggregate_state);
   if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
@@ -305,15 +307,15 @@ std::pair<llvm::BasicBlock*, llvm::Value*> Executor::codegenWindowResetStateCont
   auto aggregate_state = aggregateWindowStatePtr(code_generator, co);
   const auto bitset = cgen_state_->llInt(reinterpret_cast<const int64_t>(
       window_func_context->getPartitionStartBitmapBuf(ExecutorDeviceType::CPU)));
-  const auto bitset_lv =
-      CodegenUtil::createPtrWithHoistedMemoryAddr(
-          cgen_state_.get(),
-          code_generator,
-          co,
-          bitset,
-          llvm::PointerType::get(get_int_type(8, cgen_state_->context_), 0),
-          WindowFunctionContext::NUM_EXECUTION_DEVICES)
-          .front();
+  const auto bitset_lvs = CodegenUtil::createPtrWithHoistedMemoryAddr(
+      cgen_state_.get(),
+      code_generator,
+      co,
+      bitset,
+      llvm::PointerType::get(get_int_type(8, cgen_state_->context_), 0),
+      getAvailableDevicesToProcessQuery());
+  CHECK_EQ(bitset_lvs.size(), 1u);
+  auto bitset_lv = bitset_lvs.begin()->second;
   const auto min_val = cgen_state_->llInt(int64_t(0));
   const auto max_val = cgen_state_->llInt(window_func_context->elementCount() - 1);
   const auto null_val = cgen_state_->llInt(inline_int_null_value<int64_t>());
@@ -432,14 +434,15 @@ llvm::Value* Executor::codegenWindowNavigationFunctionOnFrame(
   auto col_buf_type = llvm::PointerType::get(col_buf_ptr_type, 0);
   auto target_col_buf_ptr_lv = cgen_state_->llInt(reinterpret_cast<int64_t>(
       window_func_context->getColumnBufferForWindowFunctionExpressions().front()));
-  auto target_col_buf_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                               cgen_state_.get(),
-                               &code_generator,
-                               co,
-                               target_col_buf_ptr_lv,
-                               col_buf_type,
-                               WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                               .front();
+  const auto target_col_buf_lvs =
+      CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                  &code_generator,
+                                                  co,
+                                                  target_col_buf_ptr_lv,
+                                                  col_buf_type,
+                                                  getAvailableDevicesToProcessQuery());
+  CHECK_EQ(target_col_buf_lvs.size(), 1u);
+  auto target_col_buf_lv = target_col_buf_lvs.begin()->second;
 
   // prepare various buffer ptrs related to the window partition
   auto partition_buf_ptrs = codegenLoadPartitionBuffers(
@@ -810,14 +813,16 @@ llvm::Value* Executor::codegenCurrentPartitionIndex(
                                     window_func_context->elementCount();
     auto hash_slot_idx_buf_lv =
         cgen_state_->llInt(reinterpret_cast<int64_t>(hash_slot_idx_ptr));
-    auto hash_slot_idx_ptr_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                    cgen_state_.get(),
-                                    code_generator,
-                                    co,
-                                    hash_slot_idx_buf_lv,
-                                    pi32_type,
-                                    WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                    .front();
+    const auto hash_slot_idx_ptr_lvs =
+        CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                    code_generator,
+                                                    co,
+                                                    hash_slot_idx_buf_lv,
+                                                    pi32_type,
+                                                    getAvailableDevicesToProcessQuery());
+    CHECK_EQ(hash_slot_idx_ptr_lvs.size(), 1u);
+    auto hash_slot_idx_ptr_lv = hash_slot_idx_ptr_lvs.begin()->second;
+
     auto hash_slot_idx_load_lv = cgen_state_->ir_builder_.CreateGEP(
         hash_slot_idx_ptr_lv->getType()->getPointerElementType(),
         hash_slot_idx_ptr_lv,
@@ -833,14 +838,16 @@ llvm::Value* Executor::codegenCurrentPartitionIndex(
       cgen_state_->llInt(window_func_context->getNumWindowPartition());
   auto partition_num_count_buf_lv = cgen_state_->llInt(
       reinterpret_cast<int64_t>(window_func_context->partitionNumCountBuf()));
-  auto partition_num_count_ptr_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                        cgen_state_.get(),
-                                        code_generator,
-                                        co,
-                                        partition_num_count_buf_lv,
-                                        pi64_type,
-                                        WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                        .front();
+  const auto partition_num_count_ptr_lvs =
+      CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                  code_generator,
+                                                  co,
+                                                  partition_num_count_buf_lv,
+                                                  pi64_type,
+                                                  getAvailableDevicesToProcessQuery());
+  CHECK_EQ(partition_num_count_ptr_lvs.size(), 1u);
+  auto partition_num_count_ptr_lv = partition_num_count_ptr_lvs.begin()->second;
+
   return cgen_state_->emitCall(
       "compute_int64_t_lower_bound",
       {partition_count_lv, row_pos_lv, partition_num_count_ptr_lv});
@@ -912,17 +919,19 @@ std::pair<llvm::Value*, llvm::Value*> Executor::codegenFrameNullRange(
       llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
   const auto null_start_pos_buf = cgen_state_->llInt(
       reinterpret_cast<int64_t>(window_func_context->getNullValueStartPos()));
-  const auto null_start_pos_buf_ptr = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                          cgen_state_.get(),
-                                          code_generator,
-                                          co,
-                                          null_start_pos_buf,
-                                          pi64_type,
-                                          WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                          .front();
+  const auto null_start_pos_buf_ptr_lvs =
+      CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                  code_generator,
+                                                  co,
+                                                  null_start_pos_buf,
+                                                  pi64_type,
+                                                  getAvailableDevicesToProcessQuery());
+  CHECK_EQ(null_start_pos_buf_ptr_lvs.size(), 1u);
+  auto null_start_pos_buf_ptr_lv = null_start_pos_buf_ptr_lvs.begin()->second;
+
   const auto null_start_pos_ptr =
       cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
-                                         null_start_pos_buf_ptr,
+                                         null_start_pos_buf_ptr_lv,
                                          partition_index_lv);
   auto null_start_pos_lv = cgen_state_->ir_builder_.CreateLoad(
       null_start_pos_ptr->getType()->getPointerElementType(),
@@ -930,16 +939,19 @@ std::pair<llvm::Value*, llvm::Value*> Executor::codegenFrameNullRange(
       "null_start_pos");
   const auto null_end_pos_buf = cgen_state_->llInt(
       reinterpret_cast<int64_t>(window_func_context->getNullValueEndPos()));
-  const auto null_end_pos_buf_ptr = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                        cgen_state_.get(),
-                                        code_generator,
-                                        co,
-                                        null_end_pos_buf,
-                                        pi64_type,
-                                        WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                        .front();
-  const auto null_end_pos_ptr = cgen_state_->ir_builder_.CreateGEP(
-      get_int_type(64, cgen_state_->context_), null_end_pos_buf_ptr, partition_index_lv);
+  const auto null_end_pos_buf_ptr_lvs =
+      CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                  code_generator,
+                                                  co,
+                                                  null_end_pos_buf,
+                                                  pi64_type,
+                                                  getAvailableDevicesToProcessQuery());
+  CHECK_EQ(null_end_pos_buf_ptr_lvs.size(), 1u);
+  auto null_end_pos_buf_ptr_lv = null_end_pos_buf_ptr_lvs.begin()->second;
+  const auto null_end_pos_ptr =
+      cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
+                                         null_end_pos_buf_ptr_lv,
+                                         partition_index_lv);
   auto null_end_pos_lv = cgen_state_->ir_builder_.CreateLoad(
       null_end_pos_ptr->getType()->getPointerElementType(),
       null_end_pos_ptr,
@@ -964,14 +976,15 @@ std::pair<std::string, llvm::Value*> Executor::codegenLoadOrderKeyBufPtr(
   auto const order_key_buf_type = llvm::PointerType::get(order_key_type, 0);
   auto const order_key_buf = cgen_state_->llInt(
       reinterpret_cast<int64_t>(window_func_context->getOrderKeyColumnBuffers().front()));
-  auto const order_key_buf_ptr_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                        cgen_state_.get(),
-                                        code_generator,
-                                        co,
-                                        order_key_buf,
-                                        order_key_buf_type,
-                                        WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                        .front();
+  const auto order_key_buf_ptr_lvs =
+      CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                  code_generator,
+                                                  co,
+                                                  order_key_buf,
+                                                  order_key_buf_type,
+                                                  getAvailableDevicesToProcessQuery());
+  CHECK_EQ(order_key_buf_ptr_lvs.size(), 1u);
+  auto order_key_buf_ptr_lv = order_key_buf_ptr_lvs.begin()->second;
   return std::make_pair(order_col_type_name, order_key_buf_ptr_lv);
 }
 
@@ -989,14 +1002,15 @@ WindowFunctionCtx::WindowPartitionBufferLLVMArgs Executor::codegenLoadPartitionB
   // partial sum of # elems of partitions
   auto partition_start_offset_buf_lv = cgen_state_->llInt(
       reinterpret_cast<int64_t>(window_func_context->partitionStartOffset()));
-  auto partition_start_offset_ptr_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                           cgen_state_.get(),
-                                           code_generator,
-                                           co,
-                                           partition_start_offset_buf_lv,
-                                           pi64_type,
-                                           WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                           .front();
+  const auto partition_start_offset_ptr_lvs =
+      CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                  code_generator,
+                                                  co,
+                                                  partition_start_offset_buf_lv,
+                                                  pi64_type,
+                                                  getAvailableDevicesToProcessQuery());
+  CHECK_EQ(partition_start_offset_ptr_lvs.size(), 1u);
+  auto partition_start_offset_ptr_lv = partition_start_offset_ptr_lvs.begin()->second;
 
   // get start offset of the current partition
   auto current_partition_start_offset_ptr_lv =
@@ -1010,14 +1024,16 @@ WindowFunctionCtx::WindowPartitionBufferLLVMArgs Executor::codegenLoadPartitionB
   // row_id buf of the current partition
   const auto partition_rowid_buf_lv = cgen_state_->llInt(
       reinterpret_cast<int64_t>(window_func_context->getPayloadBuf(co.device_type)));
-  const auto partition_rowid_ptr_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                          cgen_state_.get(),
-                                          code_generator,
-                                          co,
-                                          partition_rowid_buf_lv,
-                                          pi32_type,
-                                          WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                          .front();
+  const auto partition_rowid_ptr_lvs =
+      CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                  code_generator,
+                                                  co,
+                                                  partition_rowid_buf_lv,
+                                                  pi32_type,
+                                                  getAvailableDevicesToProcessQuery());
+  CHECK_EQ(partition_rowid_ptr_lvs.size(), 1u);
+  auto partition_rowid_ptr_lv = partition_rowid_ptr_lvs.begin()->second;
+
   bufferPtrs.target_partition_rowid_ptr_lv =
       cgen_state_->ir_builder_.CreateGEP(get_int_type(32, cgen_state_->context_),
                                          partition_rowid_ptr_lv,
@@ -1026,14 +1042,15 @@ WindowFunctionCtx::WindowPartitionBufferLLVMArgs Executor::codegenLoadPartitionB
   // row_id buf of ordered current partition
   const auto sorted_rowid_lv = cgen_state_->llInt(
       reinterpret_cast<int64_t>(window_func_context->sortedPartition()));
-  const auto sorted_rowid_ptr_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                       cgen_state_.get(),
-                                       code_generator,
-                                       co,
-                                       sorted_rowid_lv,
-                                       pi64_type,
-                                       WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                       .front();
+  const auto sorted_rowid_ptr_lvs =
+      CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                  code_generator,
+                                                  co,
+                                                  sorted_rowid_lv,
+                                                  pi64_type,
+                                                  getAvailableDevicesToProcessQuery());
+  CHECK_EQ(sorted_rowid_ptr_lvs.size(), 1u);
+  auto sorted_rowid_ptr_lv = sorted_rowid_ptr_lvs.begin()->second;
   bufferPtrs.target_partition_sorted_rowid_ptr_lv =
       cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
                                          sorted_rowid_ptr_lv,
@@ -1042,14 +1059,15 @@ WindowFunctionCtx::WindowPartitionBufferLLVMArgs Executor::codegenLoadPartitionB
   // # elems per partition
   const auto partition_count_buf = cgen_state_->llInt(
       reinterpret_cast<int64_t>(window_func_context->getCountBuf(co.device_type)));
-  auto partition_count_buf_ptr_lv = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                        cgen_state_.get(),
-                                        code_generator,
-                                        co,
-                                        partition_count_buf,
-                                        pi32_type,
-                                        WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                        .front();
+  const auto partition_count_buf_ptr_lvs =
+      CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                  code_generator,
+                                                  co,
+                                                  partition_count_buf,
+                                                  pi32_type,
+                                                  getAvailableDevicesToProcessQuery());
+  CHECK_EQ(partition_count_buf_ptr_lvs.size(), 1u);
+  auto partition_count_buf_ptr_lv = partition_count_buf_ptr_lvs.begin()->second;
 
   // # elems of the given partition
   const auto num_elem_current_partition_ptr =
@@ -1292,30 +1310,37 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     aggregation_tree_getter_func_name += "_aggregation_tree";
 
     // get the aggregate tree of the current partition from a window context
-    auto aggregation_trees_ptr = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                     cgen_state_.get(),
-                                     &code_generator,
-                                     co,
-                                     aggregation_trees_lv,
-                                     ppi64_type,
-                                     WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                     .front();
-    auto target_aggregation_tree_lv = cgen_state_->emitCall(
-        aggregation_tree_getter_func_name, {aggregation_trees_ptr, partition_index_lv});
+    const auto aggregation_trees_ptr_lvs =
+        CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                    &code_generator,
+                                                    co,
+                                                    aggregation_trees_lv,
+                                                    ppi64_type,
+                                                    getAvailableDevicesToProcessQuery());
+    CHECK_EQ(aggregation_trees_ptr_lvs.size(), 1u);
+    auto aggregation_trees_ptr_lv = aggregation_trees_ptr_lvs.begin()->second;
+
+    auto target_aggregation_tree_lv =
+        cgen_state_->emitCall(aggregation_tree_getter_func_name,
+                              {aggregation_trees_ptr_lv, partition_index_lv});
 
     // a depth of segment tree
     const auto tree_depth_buf = cgen_state_->llInt(
         reinterpret_cast<int64_t>(window_func_context->getAggregateTreeDepth()));
-    const auto tree_depth_buf_ptr = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                        cgen_state_.get(),
-                                        &code_generator,
-                                        co,
-                                        tree_depth_buf,
-                                        pi64_type,
-                                        WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                        .front();
-    const auto current_partition_tree_depth_buf_ptr = cgen_state_->ir_builder_.CreateGEP(
-        get_int_type(64, cgen_state_->context_), tree_depth_buf_ptr, partition_index_lv);
+    const auto tree_depth_buf_ptr_lvs =
+        CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                    &code_generator,
+                                                    co,
+                                                    tree_depth_buf,
+                                                    pi64_type,
+                                                    getAvailableDevicesToProcessQuery());
+    CHECK_EQ(tree_depth_buf_ptr_lvs.size(), 1u);
+    auto tree_depth_buf_ptr_lv = tree_depth_buf_ptr_lvs.begin()->second;
+
+    const auto current_partition_tree_depth_buf_ptr =
+        cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
+                                           tree_depth_buf_ptr_lv,
+                                           partition_index_lv);
     const auto current_partition_tree_depth_lv = cgen_state_->ir_builder_.CreateLoad(
         current_partition_tree_depth_buf_ptr->getType()->getPointerElementType(),
         current_partition_tree_depth_buf_ptr);
@@ -1482,14 +1507,16 @@ void Executor::codegenWindowAvgEpilogue(CodeGenerator* code_generator,
       window_func_ti.get_type() == kFLOAT ? pi32_type : pi64_type;
   const auto aggregate_state_count_i64 = cgen_state_->llInt(
       reinterpret_cast<const int64_t>(window_func_context->aggregateStateCount()));
-  auto aggregate_state_count = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                   cgen_state_.get(),
-                                   code_generator,
-                                   co,
-                                   aggregate_state_count_i64,
-                                   aggregate_state_type,
-                                   WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                   .front();
+  const auto aggregate_state_count_lvs =
+      CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                  code_generator,
+                                                  co,
+                                                  aggregate_state_count_i64,
+                                                  aggregate_state_type,
+                                                  getAvailableDevicesToProcessQuery());
+  CHECK_EQ(aggregate_state_count_lvs.size(), 1u);
+  auto aggregate_state_count_lv = aggregate_state_count_lvs.begin()->second;
+
   std::string agg_count_func_name = "agg_count";
   switch (window_func_ti.get_type()) {
     case kFLOAT: {
@@ -1506,7 +1533,7 @@ void Executor::codegenWindowAvgEpilogue(CodeGenerator* code_generator,
   }
   agg_count_func_name += "_skip_val";
   cgen_state_->emitCall(agg_count_func_name,
-                        {aggregate_state_count, crt_val, window_func_null_val});
+                        {aggregate_state_count_lv, crt_val, window_func_null_val});
 }
 
 llvm::Value* Executor::codegenAggregateWindowState(CodeGenerator* code_generator,
@@ -1526,35 +1553,39 @@ llvm::Value* Executor::codegenAggregateWindowState(CodeGenerator* code_generator
   if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
     const auto aggregate_state_count_i64 = cgen_state_->llInt(
         reinterpret_cast<const int64_t>(window_func_context->aggregateStateCount()));
-    auto aggregate_state_count = CodegenUtil::createPtrWithHoistedMemoryAddr(
-                                     cgen_state_.get(),
-                                     code_generator,
-                                     co,
-                                     aggregate_state_count_i64,
-                                     aggregate_state_type,
-                                     WindowFunctionContext::NUM_EXECUTION_DEVICES)
-                                     .front();
+    const auto aggregate_state_count_lvs =
+        CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                    code_generator,
+                                                    co,
+                                                    aggregate_state_count_i64,
+                                                    aggregate_state_type,
+                                                    getAvailableDevicesToProcessQuery());
+    CHECK_EQ(aggregate_state_count_lvs.size(), 1u);
+    auto aggregate_state_count_lv = aggregate_state_count_lvs.begin()->second;
+
     const auto double_null_lv = cgen_state_->inlineFpNull(SQLTypeInfo(kDOUBLE));
     switch (window_func_ti.get_type()) {
       case kFLOAT: {
         return cgen_state_->emitCall(
-            "load_avg_float", {aggregate_state, aggregate_state_count, double_null_lv});
+            "load_avg_float",
+            {aggregate_state, aggregate_state_count_lv, double_null_lv});
       }
       case kDOUBLE: {
         return cgen_state_->emitCall(
-            "load_avg_double", {aggregate_state, aggregate_state_count, double_null_lv});
+            "load_avg_double",
+            {aggregate_state, aggregate_state_count_lv, double_null_lv});
       }
       case kDECIMAL: {
         return cgen_state_->emitCall(
             "load_avg_decimal",
             {aggregate_state,
-             aggregate_state_count,
+             aggregate_state_count_lv,
              double_null_lv,
              cgen_state_->llInt<int32_t>(window_func_ti.get_scale())});
       }
       default: {
         return cgen_state_->emitCall(
-            "load_avg_int", {aggregate_state, aggregate_state_count, double_null_lv});
+            "load_avg_int", {aggregate_state, aggregate_state_count_lv, double_null_lv});
       }
     }
   }

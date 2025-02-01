@@ -23,6 +23,7 @@
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #endif  // HAVE_CUDA
+#include <RexVisitor.h>
 #include <chrono>
 #include <ctime>
 #include <future>
@@ -45,22 +46,17 @@
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
-#include "QueryEngine/DynamicWatchdog.h"
-#include "QueryEngine/EquiJoinCondition.h"
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/ExecutorResourceMgr/ExecutorResourceMgr.h"
 #include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
-#include "QueryEngine/GpuMemUtils.h"
-#include "QueryEngine/InPlaceSort.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
-#include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
-#include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/QueryRewrite.h"
 #include "QueryEngine/QueryTemplateGenerator.h"
+#include "QueryEngine/RelAlgDag.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/SpeculativeTopN.h"
@@ -71,11 +67,9 @@
 #include "QueryEngine/Visitors/TransientStringLiteralsVisitor.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/TypedDataAccessors.h"
-#include "Shared/checked_alloc.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
-#include "Shared/shard_key.h"
 #include "Shared/threading.h"
 
 bool g_enable_watchdog{false};
@@ -203,6 +197,9 @@ extern bool g_cache_string_hash;
 extern bool g_allow_memory_status_log;
 
 int const Executor::max_gpu_count;
+int g_max_num_gpu_per_query{0};
+int Executor::last_selected_device_id_{0};
+std::mutex Executor::last_selected_device_id_mutex_;
 
 std::map<Executor::ExtModuleKinds, std::string> Executor::extension_module_sources;
 
@@ -1120,18 +1117,321 @@ std::vector<int8_t> Executor::serializeLiterals(
   return std::move(serializer.getSerializedVector());
 }
 
-int Executor::deviceCount(const ExecutorDeviceType device_type) const {
-  if (device_type == ExecutorDeviceType::GPU) {
-    return cudaMgr()->getDeviceCount();
-  } else {
-    return 1;
+namespace {
+
+#if HAVE_CUDA
+//  modify input table fragments based on device ids we determine if necessary
+void update_input_fragment_device_ids(std::set<int> const& device_ids_to_use,
+                                      std::vector<InputTableInfo> const& input_table_info,
+                                      InputTableInfoCache& input_table_info_cache,
+                                      int const executor_id) {
+  std::vector<int> const device_ids_vec(device_ids_to_use.begin(),
+                                        device_ids_to_use.end());
+  std::unordered_map<int, int> updated_device_id_map;
+  for (InputTableInfo const& table_info : input_table_info) {
+    auto const& table_key = table_info.table_key;
+    if (table_key.table_id > 0) {
+      Fragmenter_Namespace::TableInfo copied_table_info = table_info.info.copyTableInfo();
+      // this logic honors the order of values of existing fragment.deviceIds
+      // to follow the previous device id selection logic as much as we can
+      // note that the order means assigning the selected device ids by considering the
+      // value of the fragment.deviceIds; the smallest fragment.deviceIds will have
+      // device_ids_vec[0] we do not explore the device id update without honoring
+      // existing fragment.deviceIds at the time of the initial implementation of this
+      // function
+      for (Fragmenter_Namespace::FragmentInfo& fragment : copied_table_info.fragments) {
+        auto const previous_device_id = fragment.deviceIds[MemoryLevel::GPU_LEVEL];
+        auto const logical_device_id =
+            updated_device_id_map.size() % device_ids_vec.size();
+        CHECK_LT(logical_device_id, static_cast<int>(device_ids_vec.size()));
+        auto const updated_device_id = device_ids_vec[logical_device_id];
+        // our query execution logic on sharded tables should consider shard id as a
+        // criteria to determine device id that process fragments having the same shard id
+        // otherwise, we can use the predefined fragment.deviceIds for the decision
+        auto const it =
+            updated_device_id_map
+                .emplace(fragment.shard >= 0 ? fragment.shard : previous_device_id,
+                         updated_device_id)
+                .first;
+        fragment.deviceIds[MemoryLevel::GPU_LEVEL] = it->second;
+        VLOG(2) << "Executor " << executor_id
+                << " updates chosen device_id for fragment (db/table/frag_id/shard_id: "
+                << table_key.db_id << "/" << table_key.table_id << "/"
+                << fragment.fragmentId << "/" << fragment.shard
+                << "): " << previous_device_id << " -> "
+                << fragment.deviceIds[MemoryLevel::GPU_LEVEL];
+      }
+      input_table_info_cache.updateTableInfo(
+          table_key, copied_table_info, device_ids_to_use);
+    }
   }
 }
 
-int Executor::deviceCountForMemoryLevel(
-    const Data_Namespace::MemoryLevel memory_level) const {
-  return memory_level == GPU_LEVEL ? deviceCount(ExecutorDeviceType::GPU)
-                                   : deviceCount(ExecutorDeviceType::CPU);
+using RexInputSet = std::unordered_set<RexInput>;
+
+class RexInputCollector : public RexVisitor<RexInputSet> {
+ public:
+  RexInputSet visitInput(const RexInput* input) const override {
+    return RexInputSet{*input};
+  }
+
+ protected:
+  RexInputSet aggregateResult(const RexInputSet& aggregate,
+                              const RexInputSet& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
+class ShardedJoinDetector final : public RelRexDagVisitor {
+ public:
+  using RelRexDagVisitor::visit;
+  ShardedJoinDetector(std::unordered_set<size_t>& visited_nodes)
+      : visited_nodes_(visited_nodes) {}
+
+  static std::pair<bool, int> hasShardedJoin(RelAlgNode const* rel_alg_node,
+                                             std::unordered_set<size_t>& visited_nodes) {
+    ShardedJoinDetector detector(visited_nodes);
+    detector.visit(rel_alg_node);
+    return std::make_pair(detector.has_sharded_join_, detector.num_shards_);
+  }
+
+ private:
+  void visit(RelLeftDeepInnerJoin const* join_node) override {
+    if (auto it = visited_nodes_.find(join_node->toHash()); it != visited_nodes_.end()) {
+      return;
+    }
+    RexInputCollector rex_input_collector;
+    auto const rex_inputs = rex_input_collector.visit(join_node->getInnerCondition());
+    std::unordered_set<int> num_shards;
+    std::unordered_set<size_t> num_sharded_tables;
+    for (auto const& rex_input : rex_inputs) {
+      if (RelScan const* rel_scan =
+              dynamic_cast<RelScan const*>(rex_input.getSourceNode())) {
+        num_shards.insert(rel_scan->getTableDescriptor()->nShards);
+        num_sharded_tables.insert(rex_input.getSourceNode()->toHash());
+      }
+    }
+    // sharded join should have two input tables having same # shards
+    // at the later stage, we can confirm the availability of sharded join using info we
+    // return here specifically, we are only able to execute the sharded join if and only
+    // if num_shards_ == # GPUs (i.e., cuda_mgr->getTotalDeviceCount())
+    if (num_sharded_tables.size() == static_cast<size_t>(2) &&
+        num_shards.size() == static_cast<size_t>(1)) {
+      num_shards_ = *num_shards.begin();
+      has_sharded_join_ = num_shards_ > 0;
+    }
+    visited_nodes_.insert(join_node->toHash());
+  }
+  std::unordered_set<size_t>& visited_nodes_;
+  bool has_sharded_join_{false};
+  int num_shards_{-1};
+};
+
+int determine_num_devices_to_use(RelAlgNode const* body,
+                                 std::unordered_set<size_t>& visited_rel_nodes,
+                                 std::vector<InputTableInfo> const& input_table_info,
+                                 int const total_device_count,
+                                 int const min_num_frags,
+                                 bool const force_to_single_device) {
+  int num_devices_for_the_query = total_device_count;
+  if (force_to_single_device) {
+    // force to use a single available device since the query has no physical input
+    // table or has single-fragmented input, i.e., RelSort.
+    VLOG(1) << "Force to use a single device to execute the query";
+    num_devices_for_the_query = 1;
+  } else {
+    // `g_max_num_gpu_per_query` == 0 means using our default behavior: use as much GPU as
+    // possible up to total # GPUs the system has (let's say `G`)
+    // note that `min_num_frags` can be larger than `G`, but `num_devices_for_the_query`
+    // can be set up to G since `g_max_num_gpu_per_query` <= `G`
+    num_devices_for_the_query = g_max_num_gpu_per_query == 0
+                                    ? std::min(min_num_frags, total_device_count)
+                                    : std::min(g_max_num_gpu_per_query, min_num_frags);
+    auto needs_synthesize_metadata = [&input_table_info]() {
+      for (InputTableInfo const& table_info : input_table_info) {
+        if (table_info.table_key.table_id < 0) {
+          return true;
+        }
+      }
+      return false;
+    };
+    // if at least one table in a join qual needs a synthesized metadata logic, i.e.,
+    // resultset, we cannot exploit the sharded join
+    if (!needs_synthesize_metadata()) {
+      auto [has_sharded_join, num_shards] =
+          ShardedJoinDetector::hasShardedJoin(body, visited_rel_nodes);
+      if (has_sharded_join && num_shards != num_devices_for_the_query) {
+        VLOG(1)
+            << "Detect a join operation between two sharded tables, forcing the number "
+               "of GPU per query as equal to the # shards: "
+            << num_shards;
+        num_devices_for_the_query = num_shards;
+      }
+    }
+  }
+  return num_devices_for_the_query;
+}
+#endif
+
+std::pair<bool, ExecutorDeviceType> fixup_device_type_for_device_ids_selection(
+    const RelAlgNode* query_step_root_node,
+    ExecutorDeviceType device_type) {
+  ExecutorDeviceType chosen_device_type = device_type;
+  bool force_to_single_device = false;
+  if (dynamic_cast<const RelTableFunction*>(query_step_root_node)) {
+    force_to_single_device = true;
+  } else if (auto project = dynamic_cast<const RelProject*>(query_step_root_node)) {
+    if (project->isDeleteViaSelect() || project->isUpdateViaSelect() ||
+        project->hasWindowFunctionExpr()) {
+      chosen_device_type = ExecutorDeviceType::CPU;
+    }
+  } else if (auto compound = dynamic_cast<const RelCompound*>(query_step_root_node)) {
+    if (compound->isDeleteViaSelect() || compound->isUpdateViaSelect()) {
+      chosen_device_type = ExecutorDeviceType::CPU;
+    }
+  }
+  return std::make_pair(force_to_single_device, chosen_device_type);
+}
+
+int determine_min_num_frags(std::vector<InputTableInfo> const& input_table_info) {
+  int min_num_frags = std::numeric_limits<int32_t>::max();
+  for (InputTableInfo const& table_info : input_table_info) {
+    if (table_info.table_key.table_id > 0) {
+      const auto td = Catalog_Namespace::get_metadata_for_table(table_info.table_key);
+      CHECK(td);
+      if (td->nShards > 0) {
+        min_num_frags = std::min(min_num_frags, td->nShards);
+        continue;
+      }
+    }
+    min_num_frags =
+        std::min(min_num_frags, static_cast<int>(table_info.info.fragments.size()));
+  }
+  return min_num_frags != std::numeric_limits<int32_t>::max() ? min_num_frags : 0;
+}
+
+void log_chosen_device_ids_to_use(std::set<int> const& device_ids_to_use,
+                                  ExecutorDeviceType chosen_device_type,
+                                  int const executor_id) {
+  std::ostringstream oss;
+  oss << "Executor " << executor_id << " will use ";
+  if (chosen_device_type == ExecutorDeviceType::GPU) {
+    oss << "device id(s): { ";
+    for (auto device_id : device_ids_to_use) {
+      oss << device_id;
+      oss << " ";
+    }
+    oss << "}";
+  } else {
+    oss << device_ids_to_use.size() << " CPU threads";
+  }
+  VLOG(1) << oss.str();
+}
+
+}  // namespace
+
+void Executor::determineAvailableDevicesToProcessQuery(
+    const RelAlgNode* query_step_root_node,
+    std::vector<InputTableInfo> const& input_table_info,
+    size_t const query_step_idx,
+    ExecutorDeviceType device_type) {
+  std::lock_guard<std::mutex> lock(last_selected_device_id_mutex_);
+  // check whether we removed any previous device ids if it has
+  CHECK(device_ids_to_use_.empty());
+  if (query_step_idx == 0) {
+    // clear the status for the previous query
+    visited_rel_nodes_.clear();
+  }
+  auto [force_to_single_device, chosen_device_type] =
+      fixup_device_type_for_device_ids_selection(query_step_root_node, device_type);
+
+  // determine device ids to use per device type
+  int min_num_frags = determine_min_num_frags(input_table_info);
+  auto add_device_id_for_cpu_query = [&] {
+    constexpr int cpu_device_id = 0;
+    device_ids_to_use_.insert(cpu_device_id);
+  };
+  if (min_num_frags == 0) {
+    VLOG(1) << "Detecting an empty fragment case: force to use a single device";
+    force_to_single_device = true;
+    min_num_frags = 1;
+  }
+  if (chosen_device_type == ExecutorDeviceType::GPU) {
+#if HAVE_CUDA
+    CHECK(cudaMgr());
+    // determine the minimum # GPUs we can use
+    int const total_device_count = cudaMgr()->getDeviceCount();
+    CHECK_GE(g_max_num_gpu_per_query, 0);
+    CHECK_LE(g_max_num_gpu_per_query, total_device_count);
+    int const num_devices_for_the_query =
+        determine_num_devices_to_use(query_step_root_node,
+                                     visited_rel_nodes_,
+                                     input_table_info,
+                                     total_device_count,
+                                     min_num_frags,
+                                     force_to_single_device);
+    // for now, we use a simple round-robin approach to determine
+    // a set of device_ids but we can add more sophisticated algorithm
+    // to determine them dynamically
+    if (!g_max_num_gpu_per_query) {
+      // apply the old device selection logic; always choose device id starting from 0
+      // repeated queries will have the same device ids
+      for (int i = 0; i < num_devices_for_the_query; i++) {
+        device_ids_to_use_.insert(i);
+      }
+    } else {
+      for (int i = 0; i < num_devices_for_the_query; i++) {
+        last_selected_device_id_++;
+        if (last_selected_device_id_ == total_device_count) {
+          last_selected_device_id_ = 0;
+        }
+        device_ids_to_use_.insert(last_selected_device_id_);
+      }
+    }
+
+    update_input_fragment_device_ids(
+        device_ids_to_use_, input_table_info, input_table_info_cache_, executor_id_);
+#else
+    // this case the query is CPU mode query
+    add_device_id_for_cpu_query();
+#endif
+  } else {
+    add_device_id_for_cpu_query();
+  }
+  log_chosen_device_ids_to_use(device_ids_to_use_, chosen_device_type, executor_id_);
+}
+
+void Executor::fixupAvailableDevicesToProcessForCpuQuery() {
+  std::lock_guard<std::mutex> lock(last_selected_device_id_mutex_);
+  device_ids_to_use_.clear();
+  int constexpr cpu_device_id = 0;
+  device_ids_to_use_.insert(cpu_device_id);
+}
+
+void Executor::clearDevicesToUse() {
+  std::lock_guard<std::mutex> lock(last_selected_device_id_mutex_);
+  device_ids_to_use_.clear();
+}
+
+bool Executor::isDevicesToUseInitialized() const {
+  std::lock_guard<std::mutex> lock(last_selected_device_id_mutex_);
+  return !device_ids_to_use_.empty();
+}
+
+std::set<int> const& Executor::getAvailableDevicesToProcessQuery() const {
+  std::lock_guard<std::mutex> lock(last_selected_device_id_mutex_);
+  CHECK_GT(device_ids_to_use_.size(), 0u);
+  return device_ids_to_use_;
+}
+
+// this function is designed to support various testing logic
+// that does not get through a typical SQL execution code path
+// i.e., CodeGenerationTest, ...
+void Executor::mockDeviceIdSelectionLogicToOnlyUseSingleDevice() {
+  std::lock_guard<std::mutex> lock(last_selected_device_id_mutex_);
+  device_ids_to_use_.insert(0);
 }
 
 // TODO(alex): remove or split
@@ -1513,27 +1813,6 @@ ResultSetPtr Executor::reduceSpeculativeTopN(
   return m.asRows(ra_exe_unit, row_set_mem_owner, query_mem_desc, this, top_n, desc);
 }
 
-std::unordered_set<int> get_available_gpus(const Data_Namespace::DataMgr* data_mgr) {
-  CHECK(data_mgr);
-  std::unordered_set<int> available_gpus;
-  if (data_mgr->gpusPresent()) {
-    CHECK(data_mgr->getCudaMgr());
-    const int gpu_count = data_mgr->getCudaMgr()->getDeviceCount();
-    CHECK_GT(gpu_count, 0);
-    for (int gpu_id = 0; gpu_id < gpu_count; ++gpu_id) {
-      available_gpus.insert(gpu_id);
-    }
-  }
-  return available_gpus;
-}
-
-size_t get_context_count(const ExecutorDeviceType device_type,
-                         const size_t cpu_count,
-                         const size_t gpu_count) {
-  return device_type == ExecutorDeviceType::GPU ? gpu_count
-                                                : static_cast<size_t>(cpu_count);
-}
-
 namespace {
 
 // Compute a very conservative entry count for the output buffer entry count using no
@@ -1605,7 +1884,7 @@ inline size_t getDeviceBasedWatchdogScanLimit(
 void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
                            const std::vector<InputTableInfo>& table_infos,
                            const ExecutorDeviceType device_type,
-                           const int device_count) {
+                           const size_t device_count) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       return;
@@ -2003,13 +2282,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         throw CompilationRetryNewScanLimit(*max_rows_per_device);
       }
     }
-
     if (!eo.just_validate) {
       auto const available_cpus = static_cast<size_t>(cpu_threads());
-      auto available_gpus = get_available_gpus(data_mgr_);
-
-      const auto context_count =
-          get_context_count(co.device_type, available_cpus, available_gpus.size());
       try {
         auto kernels = createKernels(shared_context,
                                      ra_exe_unit,
@@ -2018,11 +2292,9 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      eo,
                                      is_agg,
                                      allow_single_frag_table_opt,
-                                     context_count,
                                      *query_comp_desc_owned,
                                      *query_mem_desc_owned,
-                                     render_info,
-                                     available_gpus);
+                                     render_info);
         if (!kernels.empty()) {
           row_set_mem_owner_->setKernelMemoryAllocator(kernels.size());
         }
@@ -2037,7 +2309,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
           launchKernelsLocked(
               shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
         }
-
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_.load() &&
             e.hasErrorCode(ErrorCode::OUT_OF_TIME)) {
@@ -2692,7 +2963,10 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
   for (auto& result : result_per_device) {
     const auto result_set = result.first;
     CHECK(result_set);
-    result_set->sort(ra_exe_unit.sort_info.order_entries, top_n, device_type, this);
+    result_set->sort(ra_exe_unit.sort_info.order_entries,
+                     top_n,
+                     device_type,
+                     const_cast<Executor*>(this));
     size_t new_entry_cnt = top_query_mem_desc.getEntryCount() + result_set->rowCount();
     top_query_mem_desc.setEntryCount(new_entry_cnt);
   }
@@ -2762,11 +3036,9 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
     const ExecutionOptions& eo,
     const bool is_agg,
     const bool allow_single_frag_table_opt,
-    const size_t context_count,
     const QueryCompilationDescriptor& query_comp_desc,
     const QueryMemoryDescriptor& query_mem_desc,
-    RenderInfo* render_info,
-    std::unordered_set<int>& available_gpus) {
+    RenderInfo* render_info) {
   std::vector<std::unique_ptr<ExecutionKernel>> execution_kernels;
 
   QueryFragmentDescriptor fragment_descriptor(
@@ -2785,18 +3057,18 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
       has_lazy_fetched_columns(getColLazyFetchInfo(ra_exe_unit.target_exprs));
   const bool use_multifrag_kernel = (device_type == ExecutorDeviceType::GPU) &&
                                     eo.allow_multifrag && (!uses_lazy_fetch || is_agg);
-  const auto device_count = deviceCount(device_type);
-  CHECK_GT(device_count, 0);
+  CHECK_GT(device_ids_to_use_.size(), 0);
 
   fragment_descriptor.buildFragmentKernelMap(ra_exe_unit,
                                              shared_context.getFragOffsets(),
-                                             device_count,
+                                             device_ids_to_use_,
                                              device_type,
                                              use_multifrag_kernel,
                                              g_inner_join_fragment_skipping,
                                              this);
   if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
-    checkWorkUnitWatchdog(ra_exe_unit, table_infos, device_type, device_count);
+    checkWorkUnitWatchdog(
+        ra_exe_unit, table_infos, device_type, device_ids_to_use_.size());
   }
 
   if (use_multifrag_kernel) {
@@ -4174,7 +4446,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                      memory_level,
                                      join_type,
                                      preferred_hash_type,
-                                     deviceCountForMemoryLevel(memory_level),
+                                     getAvailableDevicesToProcessQuery(),
                                      column_cache,
                                      this,
                                      hashtable_build_dag_map,
@@ -5354,29 +5626,32 @@ void Executor::set_concurrent_resource_grant_policy(
 
 void Executor::initializeCudaAllocator() {
   heavyai::unique_lock<heavyai::shared_mutex> write_lock(executors_cache_mutex_);
-  auto const device_count = deviceCount(ExecutorDeviceType::GPU);
-  for (int i = 0; i < device_count; i++) {
-    cuda_streams_.push_back(getQueryEngineCudaStreamForDevice(i));
-    cuda_allocators_.emplace_back(
-        std::make_shared<CudaAllocator>(data_mgr_, i, cuda_streams_.back()));
+  for (auto const device_id : device_ids_to_use_) {
+    cuda_streams_.emplace(device_id, getQueryEngineCudaStreamForDevice(device_id));
+    cuda_allocators_.emplace(
+        device_id,
+        std::make_shared<CudaAllocator>(data_mgr_, device_id, cuda_streams_[device_id]));
   }
 }
 
 CudaAllocator* Executor::getCudaAllocator(int device_id) const {
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(executors_cache_mutex_);
-  CHECK_LT(device_id, static_cast<int>(cuda_allocators_.size()));
+  CHECK(cuda_allocators_.find(device_id) != cuda_allocators_.end())
+      << "Cannot find cuda allocator for device " << device_id;
   return cuda_allocators_[device_id].get();
 }
 
 std::shared_ptr<CudaAllocator> Executor::getCudaAllocatorShared(int device_id) const {
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(executors_cache_mutex_);
-  CHECK_LT(device_id, static_cast<int>(cuda_allocators_.size()));
+  CHECK(cuda_allocators_.find(device_id) != cuda_allocators_.end())
+      << "Cannot find cuda allocator for device " << device_id;
   return cuda_allocators_[device_id];
 }
 
 CUstream Executor::getCudaStream(int device_id) const {
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(executors_cache_mutex_);
-  CHECK_LT(device_id, static_cast<int>(cuda_streams_.size()));
+  CHECK(cuda_streams_.find(device_id) != cuda_streams_.end())
+      << "Cannot find cuda stream for device " << device_id;
   return cuda_streams_[device_id];
 }
 
@@ -5386,6 +5661,10 @@ void Executor::clearCudaAllocator() {
   // todo(yoonmin): destroy cuda stream once supporting per-query cuda stream
   heavyai::unique_lock<heavyai::shared_mutex> write_lock(executors_cache_mutex_);
   cuda_allocators_.clear();
+}
+
+std::unordered_map<int, void*> const& Executor::getActiveKernelModule() {
+  return gpu_active_kernel_module_;
 }
 
 std::map<int, std::shared_ptr<Executor>> Executor::executors_;
@@ -5399,11 +5678,7 @@ heavyai::shared_mutex Executor::executor_session_mutex_;
 
 heavyai::shared_mutex Executor::execute_mutex_;
 heavyai::shared_mutex Executor::executors_cache_mutex_;
-
 std::mutex Executor::gpu_active_modules_mutex_;
-uint32_t Executor::gpu_active_modules_device_mask_{0x0};
-void* Executor::gpu_active_modules_[max_gpu_count];
-
 std::mutex Executor::register_runtime_extension_functions_mutex_;
 std::mutex Executor::kernel_mutex_;
 

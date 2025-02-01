@@ -683,8 +683,7 @@ class Executor {
   std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
       const std::vector<Analyzer::Expr*>& target_exprs) const;
 
-  static void registerActiveModule(void* module, const int device_id);
-  static void unregisterActiveModule(const int device_id);
+  void unregisterActiveModule(int device_id) const;
   void interrupt(const QuerySessionId& query_session = "",
                  const QuerySessionId& interrupt_session = "");
   void resetInterrupt();
@@ -742,7 +741,21 @@ class Executor {
 
   bool buildTemporaryStringDictionaryIfNecessary(const Analyzer::Expr* expr);
 
-  int deviceCount(const ExecutorDeviceType) const;
+  void clearDevicesToUse();
+
+  void fixupAvailableDevicesToProcessForCpuQuery();
+
+  bool isDevicesToUseInitialized() const;
+
+  void determineAvailableDevicesToProcessQuery(
+      const RelAlgNode* query_step_root_node,
+      std::vector<InputTableInfo> const& input_table_info,
+      size_t const query_step_idx,
+      ExecutorDeviceType device_type);
+
+  std::set<int> const& getAvailableDevicesToProcessQuery() const;
+
+  void mockDeviceIdSelectionLogicToOnlyUseSingleDevice();
 
   void logSystemCPUMemoryStatus(std::string const& tag, size_t const thread_idx) const;
 
@@ -750,8 +763,6 @@ class Executor {
 
  private:
   void clearMetaInfoCache();
-
-  int deviceCountForMemoryLevel(const Data_Namespace::MemoryLevel memory_level) const;
 
   // Generate code for a window function target.
   llvm::Value* codegenWindowFunction(const size_t target_index,
@@ -965,11 +976,9 @@ class Executor {
       const ExecutionOptions& eo,
       const bool is_agg,
       const bool allow_single_frag_table_opt,
-      const size_t context_count,
       const QueryCompilationDescriptor& query_comp_desc,
       const QueryMemoryDescriptor& query_mem_desc,
-      RenderInfo* render_info,
-      std::unordered_set<int>& available_gpus);
+      RenderInfo* render_info);
 
   /**
    * Launches execution kernels created by `createKernels` asynchronously using a thread
@@ -1558,11 +1567,12 @@ class Executor {
 
   static const int max_gpu_count{16};
   static const size_t auto_num_threads{size_t(0)};
-  std::mutex gpu_exec_mutex_[max_gpu_count];
 
+  std::mutex gpu_exec_mutex_[max_gpu_count];
   static std::mutex gpu_active_modules_mutex_;
-  static uint32_t gpu_active_modules_device_mask_;
-  static void* gpu_active_modules_[max_gpu_count];
+  mutable std::unordered_map<int, void*> gpu_active_kernel_module_;
+  std::unordered_map<int, void*> const& getActiveKernelModule();
+
   // indicates whether this executor has been interrupted
   std::atomic<bool> interrupted_{false};
 
@@ -1578,8 +1588,15 @@ class Executor {
   const std::string debug_file_;
 
   Data_Namespace::DataMgr* data_mgr_;
-  std::vector<std::shared_ptr<CudaAllocator>> cuda_allocators_;
-  std::vector<CUstream> cuda_streams_;
+  mutable std::unordered_map<int, std::shared_ptr<CudaAllocator>> cuda_allocators_;
+  mutable std::unordered_map<int, CUstream> cuda_streams_;
+  std::set<int> device_ids_to_use_;
+  // keep the visited node while traversing a query plan
+  // throughout the entire (multi-step) query lifetime
+  // when trying to detect a sharded join
+  std::unordered_set<size_t> visited_rel_nodes_;
+  static int last_selected_device_id_;
+  static std::mutex last_selected_device_id_mutex_;
   const TemporaryTables* temporary_tables_;
   TableIdToNodeMap table_id_to_node_map_;
 
@@ -1712,12 +1729,6 @@ inline bool is_constructed_point(const Analyzer::Expr* expr) {
 
 size_t get_loop_join_size(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit);
-
-std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat);
-
-size_t get_context_count(const ExecutorDeviceType device_type,
-                         const size_t cpu_count,
-                         const size_t gpu_count);
 
 extern "C" RUNTIME_EXPORT void register_buffer_with_executor_rsm(int64_t exec,
                                                                  int8_t* buffer);

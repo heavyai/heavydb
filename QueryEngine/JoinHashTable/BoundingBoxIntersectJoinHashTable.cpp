@@ -42,7 +42,7 @@ BoundingBoxIntersectJoinHashTable::getInstance(
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
     const JoinType join_type,
-    const int device_count,
+    const std::set<int>& device_ids,
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
@@ -68,7 +68,7 @@ BoundingBoxIntersectJoinHashTable::getInstance(
                                            query_infos,
                                            memory_level,
                                            join_type,
-                                           device_count,
+                                           device_ids,
                                            column_cache,
                                            executor,
                                            hashtable_build_dag_map,
@@ -127,7 +127,7 @@ BoundingBoxIntersectJoinHashTable::getInstance(
                                                           column_cache,
                                                           executor,
                                                           inner_outer_pairs,
-                                                          device_count,
+                                                          device_ids,
                                                           copied_query_hints,
                                                           hashtable_build_dag_map,
                                                           table_id_to_node_map);
@@ -209,7 +209,9 @@ std::vector<double> compute_bucket_sizes(
 #ifdef HAVE_CUDA
   else {
     // Note that we compute the bucket sizes using only a single GPU
-    const int device_id = 0;
+    auto const& device_ids = executor->getAvailableDevicesToProcessQuery();
+    CHECK_GT(device_ids.size(), size_t(0));
+    const int device_id = *device_ids.begin();
     auto device_allocator = executor->getCudaAllocator(device_id);
     CHECK(device_allocator);
     auto cuda_stream = executor->getCudaStream(device_id);
@@ -407,7 +409,7 @@ class BucketSizeTuner {
                   const double step,
                   const double min_threshold,
                   const Data_Namespace::MemoryLevel effective_memory_level,
-                  const std::vector<ColumnsForDevice>& columns_per_device,
+                  const std::unordered_map<int, ColumnsForDevice>& columns_per_device,
                   const std::vector<InnerOuter>& inner_outer_pairs,
                   const size_t table_tuple_count,
                   const Executor* executor)
@@ -479,8 +481,8 @@ class BucketSizeTuner {
     }
     return compute_bucket_sizes(bucket_thresholds_,
                                 effective_memory_level_,
-                                columns_per_device_.front().join_columns[0],
-                                columns_per_device_.front().join_column_types[0],
+                                columns_per_device_.begin()->second.join_columns[0],
+                                columns_per_device_.begin()->second.join_column_types[0],
                                 inner_outer_pairs_,
                                 executor_);
   }
@@ -537,7 +539,7 @@ class BucketSizeTuner {
   const double step_;
   const double min_threshold_;
   const Data_Namespace::MemoryLevel effective_memory_level_;
-  const std::vector<ColumnsForDevice>& columns_per_device_;
+  const std::unordered_map<int, ColumnsForDevice>& columns_per_device_;
   const std::vector<InnerOuter>& inner_outer_pairs_;
   const size_t table_tuple_count_;
   const Executor* executor_;
@@ -631,18 +633,22 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
     }
   }
 
-  std::vector<ColumnsForDevice> columns_per_device;
-  std::vector<std::vector<Fragmenter_Namespace::FragmentInfo>> fragments_per_device;
+  std::unordered_map<int, ColumnsForDevice> columns_per_device;
+  std::unordered_map<int, std::vector<Fragmenter_Namespace::FragmentInfo>>
+      fragments_per_device;
   const auto shard_count = shardCount();
   size_t total_num_tuples = 0;
-  for (int device_id = 0; device_id < device_count_; ++device_id) {
-    fragments_per_device.emplace_back(
+  auto const effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
+  for (auto device_id : device_ids_) {
+    fragments_per_device.emplace(
+        device_id,
         shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
+            ? only_shards_for_device(
+                  query_info.fragments, effective_memory_level, device_id, device_ids_)
             : query_info.fragments);
     const size_t crt_num_tuples =
-        std::accumulate(fragments_per_device.back().begin(),
-                        fragments_per_device.back().end(),
+        std::accumulate(fragments_per_device[device_id].begin(),
+                        fragments_per_device[device_id].end(),
                         size_t(0),
                         [](const auto& sum, const auto& fragment) {
                           return sum + fragment.getNumTuples();
@@ -653,9 +659,9 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
       device_allocator = executor_->getCudaAllocator(device_id);
       CHECK(device_allocator);
     }
-    const auto columns_for_device =
-        fetchColumnsForDevice(fragments_per_device.back(), device_id, device_allocator);
-    columns_per_device.push_back(columns_for_device);
+    const auto columns_for_device = fetchColumnsForDevice(
+        fragments_per_device[device_id], device_id, device_allocator);
+    columns_per_device.emplace(device_id, columns_for_device);
   }
 
   // try to extract cache key for hash table and its relevant info
@@ -665,7 +671,7 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
                                                     condition_->get_optype(),
                                                     join_type_,
                                                     hashtable_build_dag_map_,
-                                                    device_count_,
+                                                    device_ids_,
                                                     shard_count,
                                                     fragments_per_device,
                                                     executor_);
@@ -690,7 +696,7 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
     BucketSizeTuner tuner(/*initial_threshold=*/*bbox_intersect_threshold_override,
                           /*step=*/1.0,
                           /*min_threshold=*/0.0,
-                          getEffectiveMemoryLevel(inner_outer_pairs_),
+                          effective_memory_level,
                           columns_per_device,
                           inner_outer_pairs_,
                           total_num_tuples,
@@ -703,7 +709,7 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
                                columns_per_device,
                                bbox_intersect_max_table_size_bytes,
                                *bbox_intersect_threshold_override);
-    setInverseBucketSizeInfo(inverse_bucket_sizes, columns_per_device, device_count_);
+    setInverseBucketSizeInfo(inverse_bucket_sizes, columns_per_device);
     // reifyImpl will check the hash table cache for an appropriate hash table w/ those
     // bucket sizes (or within tolerances) if a hash table exists use it, otherwise build
     // one
@@ -711,7 +717,7 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
                      *bbox_intersect_threshold_override,
                      inverse_bucket_sizes,
                      fragments_per_device,
-                     device_count_);
+                     device_ids_);
     reifyImpl(columns_per_device,
               query_info,
               layout,
@@ -727,11 +733,11 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
                      bbox_intersect_bucket_threshold,
                      {},
                      fragments_per_device,
-                     device_count_);
+                     device_ids_);
     std::vector<size_t> per_device_chunk_key;
     if (HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_) &&
         get_inner_table_key().table_id > 0) {
-      for (int device_id = 0; device_id < device_count_; ++device_id) {
+      for (auto device_id : device_ids_) {
         auto chunk_key_hash = boost::hash_value(composite_key_info_.cache_key_chunks);
         boost::hash_combine(
             chunk_key_hash,
@@ -739,7 +745,7 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
         per_device_chunk_key.push_back(chunk_key_hash);
         AlternativeCacheKeyForBoundingBoxIntersection cache_key{
             inner_outer_pairs_,
-            columns_per_device.front().join_columns.front().num_elems,
+            columns_per_device.begin()->second.join_columns.front().num_elems,
             chunk_key_hash,
             condition_->get_optype(),
             bbox_intersect_max_table_size_bytes,
@@ -752,7 +758,7 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
     }
 
     auto cached_bucket_threshold = auto_tuner_cache_->getItemFromCache(
-        hashtable_cache_key_.front(),
+        hashtable_cache_key_.begin()->second,
         CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM,
         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     if (cached_bucket_threshold) {
@@ -765,17 +771,17 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
                        bbox_intersect_bucket_threshold,
                        inverse_bucket_sizes,
                        fragments_per_device,
-                       device_count_);
+                       device_ids_);
 
       if (auto hash_table =
-              hash_table_cache_->getItemFromCache(hashtable_cache_key_[device_count_],
+              hash_table_cache_->getItemFromCache(hashtable_cache_key_.begin()->second,
                                                   CacheItemType::BBOX_INTERSECT_HT,
                                                   DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
                                                   std::nullopt)) {
         // if we already have a built hash table, we can skip the scans required for
         // computing bucket size and tuple count
         // reset as the hash table sizes can vary a bit
-        setInverseBucketSizeInfo(inverse_bucket_sizes, columns_per_device, device_count_);
+        setInverseBucketSizeInfo(inverse_bucket_sizes, columns_per_device);
         CHECK(hash_table);
 
         VLOG(1) << "Using cached hash table bucket size";
@@ -795,7 +801,7 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
         BucketSizeTuner tuner(/*initial_threshold=*/bbox_intersect_bucket_threshold,
                               /*step=*/1.0,
                               /*min_threshold=*/0.0,
-                              getEffectiveMemoryLevel(inner_outer_pairs_),
+                              effective_memory_level,
                               columns_per_device,
                               inner_outer_pairs_,
                               total_num_tuples,
@@ -809,13 +815,13 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
                                    columns_per_device,
                                    bbox_intersect_max_table_size_bytes,
                                    bbox_intersect_bucket_threshold);
-        setInverseBucketSizeInfo(inverse_bucket_sizes, columns_per_device, device_count_);
+        setInverseBucketSizeInfo(inverse_bucket_sizes, columns_per_device);
 
         generateCacheKey(bbox_intersect_max_table_size_bytes,
                          bbox_intersect_bucket_threshold,
                          inverse_bucket_sizes,
                          fragments_per_device,
-                         device_count_);
+                         device_ids_);
 
         reifyImpl(columns_per_device,
                   query_info,
@@ -833,7 +839,7 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
           /*initial_threshold=*/bbox_intersect_bucket_threshold,
           /*step=*/2.0,
           /*min_threshold=*/1e-7,
-          getEffectiveMemoryLevel(inner_outer_pairs_),
+          effective_memory_level,
           columns_per_device,
           inner_outer_pairs_,
           total_num_tuples,
@@ -863,8 +869,7 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
         VLOG(1) << "Tuner output: " << tuner << " with properties " << crt_props;
 
         const auto should_continue = tuning_state(crt_props, tuner.getMinBucketSize());
-        setInverseBucketSizeInfo(
-            tuning_state.crt_props.bucket_sizes, columns_per_device, device_count_);
+        setInverseBucketSizeInfo(tuning_state.crt_props.bucket_sizes, columns_per_device);
         if (!should_continue) {
           break;
         }
@@ -899,8 +904,8 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
                        tuning_state.chosen_bbox_intersect_threshold,
                        {},
                        fragments_per_device,
-                       device_count_);
-      const auto candidate_auto_tuner_cache_key = hashtable_cache_key_.front();
+                       device_ids_);
+      const auto candidate_auto_tuner_cache_key = hashtable_cache_key_.begin()->second;
       if (skip_hashtable_caching) {
         VLOG(1) << "Skip to add tuned parameters to auto tuner";
       } else {
@@ -984,7 +989,7 @@ ColumnsForDevice BoundingBoxIntersectJoinHashTable::fetchColumnsForDevice(
 std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::computeHashTableCounts(
     const size_t shard_count,
     const std::vector<double>& inverse_bucket_sizes_for_dimension,
-    std::vector<ColumnsForDevice>& columns_per_device,
+    std::unordered_map<int, ColumnsForDevice>& columns_per_device,
     const size_t chosen_max_hashtable_size,
     const double chosen_bucket_threshold) {
   CHECK(!inverse_bucket_sizes_for_dimension.empty());
@@ -996,13 +1001,13 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::computeHashTableCou
   const auto entry_count = 2 * std::max(tuple_count, size_t(1));
 
   return std::make_pair(
-      get_entries_per_device(entry_count, shard_count, device_count_, memory_level_),
+      get_entries_per_device(entry_count, shard_count, device_ids_, memory_level_),
       emitted_keys_count);
 }
 
 std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCount(
     const std::vector<double>& inverse_bucket_sizes_for_dimension,
-    std::vector<ColumnsForDevice>& columns_per_device,
+    std::unordered_map<int, ColumnsForDevice>& columns_per_device,
     const size_t chosen_max_hashtable_size,
     const double chosen_bucket_threshold) {
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
@@ -1018,28 +1023,29 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCou
       1};
   const auto padded_size_bytes = count_distinct_desc.bitmapPaddedSizeBytes();
 
-  CHECK(!columns_per_device.empty() && !columns_per_device.front().join_columns.empty());
-  if (columns_per_device.front().join_columns.front().num_elems == 0) {
+  CHECK(!columns_per_device.empty() &&
+        !columns_per_device.begin()->second.join_columns.empty());
+  if (columns_per_device.begin()->second.join_columns.front().num_elems == 0) {
     return std::make_pair(0, 0);
   }
 
   // TODO: state management in here should be revisited, but this should be safe enough
   // for now
   // re-compute bucket counts per device based on global bucket size
-  for (size_t device_id = 0; device_id < columns_per_device.size(); ++device_id) {
-    auto& columns_for_device = columns_per_device[device_id];
+  for (auto& kv : columns_per_device) {
+    auto& columns_for_device = kv.second;
     columns_for_device.setBucketInfo(inverse_bucket_sizes_for_dimension,
                                      inner_outer_pairs_);
   }
 
   // Number of keys must match dimension of buckets
-  CHECK_EQ(columns_per_device.front().join_columns.size(),
-           columns_per_device.front().join_buckets.size());
+  CHECK_EQ(columns_per_device.begin()->second.join_columns.size(),
+           columns_per_device.begin()->second.join_buckets.size());
   if (effective_memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
     // Note that this path assumes each device has the same hash table (for GPU hash
     // join w/ hash table built on CPU)
     const auto cached_count_info =
-        getApproximateTupleCountFromCache(hashtable_cache_key_.front(),
+        getApproximateTupleCountFromCache(hashtable_cache_key_.begin()->second,
                                           CacheItemType::BBOX_INTERSECT_HT,
                                           DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     if (cached_count_info) {
@@ -1053,16 +1059,16 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCou
 
     std::vector<int32_t> num_keys_for_row;
     // TODO(adb): support multi-column bounding box intersection
-    num_keys_for_row.resize(columns_per_device.front().join_columns[0].num_elems);
+    num_keys_for_row.resize(columns_per_device.begin()->second.join_columns[0].num_elems);
 
     approximate_distinct_tuples_bbox_intersect(
         hll_result,
         num_keys_for_row,
         count_distinct_desc.bitmap_sz_bits,
         padded_size_bytes,
-        columns_per_device.front().join_columns,
-        columns_per_device.front().join_column_types,
-        columns_per_device.front().join_buckets,
+        columns_per_device.begin()->second.join_columns,
+        columns_per_device.begin()->second.join_column_types,
+        columns_per_device.begin()->second.join_buckets,
         thread_count);
     for (int i = 1; i < thread_count; ++i) {
       hll_unify(hll_result,
@@ -1074,13 +1080,16 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCou
         static_cast<size_t>(num_keys_for_row.size() > 0 ? num_keys_for_row.back() : 0));
   }
 #ifdef HAVE_CUDA
-  std::vector<std::vector<uint8_t>> host_hll_buffers(device_count_);
-  for (auto& host_hll_buffer : host_hll_buffers) {
+  std::unordered_map<int, std::vector<uint8_t>> host_hll_buffers;
+  std::unordered_map<int, size_t> emitted_keys_count_device_threads;
+  for (auto device_id : device_ids_) {
+    std::vector<uint8_t> host_hll_buffer;
     host_hll_buffer.resize(count_distinct_desc.bitmapPaddedSizeBytes());
+    host_hll_buffers.emplace(device_id, std::move(host_hll_buffer));
+    emitted_keys_count_device_threads.emplace(device_id, 0u);
   }
-  std::vector<size_t> emitted_keys_count_device_threads(device_count_, 0);
   std::vector<std::future<void>> approximate_distinct_device_threads;
-  for (int device_id = 0; device_id < device_count_; ++device_id) {
+  for (auto device_id : device_ids_) {
     approximate_distinct_device_threads.emplace_back(std::async(
         std::launch::async,
         [this,
@@ -1112,7 +1121,8 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCou
               inverse_bucket_sizes_for_dimension.size() * sizeof(double),
               "Boundingbox join hashtable inverse bucket sizes");
           const size_t row_counts_buffer_sz =
-              columns_per_device.front().join_columns[0].num_elems * sizeof(int32_t);
+              columns_per_device.begin()->second.join_columns[0].num_elems *
+              sizeof(int32_t);
           auto row_counts_buffer = device_allocator->alloc(row_counts_buffer_sz);
           device_allocator->zeroDeviceMem(row_counts_buffer, row_counts_buffer_sz);
           const auto key_handler = BoundingBoxIntersectKeyHandler(
@@ -1133,7 +1143,7 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCou
           device_allocator->copyFromDevice(
               &host_emitted_keys_count,
               row_counts_buffer +
-                  (columns_per_device.front().join_columns[0].num_elems - 1) *
+                  (columns_per_device.begin()->second.join_columns[0].num_elems - 1) *
                       sizeof(int32_t),
               sizeof(int32_t),
               "Boundingbox join hashtable emitted keys count");
@@ -1150,18 +1160,19 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCou
     child.get();
   }
   CHECK_EQ(Data_Namespace::MemoryLevel::GPU_LEVEL, effective_memory_level);
-  auto& result_hll_buffer = host_hll_buffers.front();
-  auto hll_result = reinterpret_cast<int32_t*>(&result_hll_buffer[0]);
-  for (int device_id = 1; device_id < device_count_; ++device_id) {
-    auto& host_hll_buffer = host_hll_buffers[device_id];
+  auto it = host_hll_buffers.begin();
+  auto hll_result = reinterpret_cast<int32_t*>(&(it->second));
+  it++;
+  for (; it != host_hll_buffers.end(); it++) {
+    auto& host_hll_buffer = it->second;
     hll_unify(hll_result,
               reinterpret_cast<int32_t*>(&host_hll_buffer[0]),
               size_t(1) << count_distinct_desc.bitmap_sz_bits);
   }
-  const size_t emitted_keys_count =
-      std::accumulate(emitted_keys_count_device_threads.begin(),
-                      emitted_keys_count_device_threads.end(),
-                      0);
+  size_t emitted_keys_count = 0;
+  for (auto const& kv : emitted_keys_count_device_threads) {
+    emitted_keys_count += kv.second;
+  }
   return std::make_pair(hll_size(hll_result, count_distinct_desc.bitmap_sz_bits),
                         emitted_keys_count);
 #else
@@ -1172,15 +1183,14 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCou
 
 void BoundingBoxIntersectJoinHashTable::setInverseBucketSizeInfo(
     const std::vector<double>& inverse_bucket_sizes,
-    std::vector<ColumnsForDevice>& columns_per_device,
-    const size_t device_count) {
+    std::unordered_map<int, ColumnsForDevice>& columns_per_device) {
   // set global bucket size
   inverse_bucket_sizes_for_dimension_ = inverse_bucket_sizes;
 
   // re-compute bucket counts per device based on global bucket size
-  CHECK_EQ(columns_per_device.size(), static_cast<size_t>(device_count));
-  for (size_t device_id = 0; device_id < device_count; ++device_id) {
-    auto& columns_for_device = columns_per_device[device_id];
+  CHECK_EQ(columns_per_device.size(), device_ids_.size());
+  for (auto& kv : columns_per_device) {
+    auto& columns_for_device = kv.second;
     columns_for_device.setBucketInfo(inverse_bucket_sizes_for_dimension_,
                                      inner_outer_pairs_);
   }
@@ -1197,7 +1207,7 @@ size_t BoundingBoxIntersectJoinHashTable::getKeyComponentCount() const {
 
 void BoundingBoxIntersectJoinHashTable::reify(const HashType preferred_layout) {
   auto timer = DEBUG_TIMER(__func__);
-  CHECK_LT(0, device_count_);
+  CHECK_LT(0u, device_ids_.size());
   composite_key_info_ = HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
 
   CHECK(condition_->is_bbox_intersect_oper());
@@ -1224,7 +1234,7 @@ void BoundingBoxIntersectJoinHashTable::reify(const HashType preferred_layout) {
 }
 
 void BoundingBoxIntersectJoinHashTable::reifyImpl(
-    std::vector<ColumnsForDevice>& columns_per_device,
+    std::unordered_map<int, ColumnsForDevice>& columns_per_device,
     const Fragmenter_Namespace::TableInfo& query_info,
     const HashType layout,
     const size_t shard_count,
@@ -1239,12 +1249,7 @@ void BoundingBoxIntersectJoinHashTable::reifyImpl(
   setBoundingBoxIntersectionMetaInfo(chosen_bbox_intersect_bucket_threshold_,
                                      chosen_bbox_intersect_max_table_size_bytes_,
                                      inverse_bucket_sizes_for_dimension_);
-
-  for (int device_id = 0; device_id < device_count_; ++device_id) {
-    const auto fragments =
-        shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-            : query_info.fragments;
+  for (auto device_id : device_ids_) {
     init_threads.push_back(std::async(std::launch::async,
                                       &BoundingBoxIntersectJoinHashTable::reifyForDevice,
                                       this,
@@ -1295,15 +1300,12 @@ void BoundingBoxIntersectJoinHashTable::reifyForDevice(
 
 #ifdef HAVE_CUDA
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
-      auto gpu_hash_table = copyCpuHashTableToGpu(hash_table, device_id);
-      CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
-      hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
+      copyCpuHashTableToGpu(hash_table, device_id);
     } else {
 #else
     CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
 #endif
-      CHECK_EQ(hash_tables_for_device_.size(), size_t(1));
-      hash_tables_for_device_[0] = hash_table;
+      moveHashTableForDevice(std::move(hash_table), device_id);
 #ifdef HAVE_CUDA
     }
 #endif
@@ -1314,8 +1316,7 @@ void BoundingBoxIntersectJoinHashTable::reifyForDevice(
                                          columns_for_device.join_buckets,
                                          hash_table_entry_info,
                                          device_id);
-    CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
-    hash_tables_for_device_[device_id] = std::move(hash_table);
+    moveHashTableForDevice(std::move(hash_table), device_id);
 #else
     UNREACHABLE();
 #endif
@@ -1336,7 +1337,7 @@ std::shared_ptr<BaselineHashTable> BoundingBoxIntersectJoinHashTable::initHashTa
   std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
   auto const hash_table_layout = hash_table_entry_info.getHashTableLayout();
   if (auto generic_hash_table =
-          initHashTableOnCpuFromCache(hashtable_cache_key_.front(),
+          initHashTableOnCpuFromCache(hashtable_cache_key_.begin()->second,
                                       CacheItemType::BBOX_INTERSECT_HT,
                                       DataRecyclerUtil::CPU_DEVICE_IDENTIFIER)) {
     if (auto hash_table =
@@ -1389,7 +1390,7 @@ std::shared_ptr<BaselineHashTable> BoundingBoxIntersectJoinHashTable::initHashTa
   } else {
     auto hashtable_build_time =
         std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
-    putHashTableOnCpuToCache(hashtable_cache_key_.front(),
+    putHashTableOnCpuToCache(hashtable_cache_key_.begin()->second,
                              CacheItemType::BBOX_INTERSECT_HT,
                              hash_table,
                              DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
@@ -1443,8 +1444,7 @@ std::shared_ptr<BaselineHashTable> BoundingBoxIntersectJoinHashTable::initHashTa
   return builder.getHashTable();
 }
 
-std::shared_ptr<BaselineHashTable>
-BoundingBoxIntersectJoinHashTable::copyCpuHashTableToGpu(
+void BoundingBoxIntersectJoinHashTable::copyCpuHashTableToGpu(
     std::shared_ptr<BaselineHashTable>& cpu_hash_table,
     const size_t device_id) {
   CHECK_EQ(memory_level_, Data_Namespace::MemoryLevel::GPU_LEVEL);
@@ -1467,7 +1467,7 @@ BoundingBoxIntersectJoinHashTable::copyCpuHashTableToGpu(
       cpu_hash_table->getCpuBuffer(),
       cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
       "Boundingbox join hashtable");
-  return gpu_hash_table;
+  moveHashTableForDevice(std::move(gpu_hash_table), device_id);
 }
 
 #endif  // HAVE_CUDA
@@ -1596,7 +1596,7 @@ std::vector<llvm::Value*> BoundingBoxIntersectJoinHashTable::codegenManyKey(
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto key_component_width = getKeyComponentWidth();
   CHECK(key_component_width == 4 || key_component_width == 8);
-  auto hash_table = getHashTableForDevice(size_t(0));
+  auto hash_table = getAnyHashTableForDevice();
   CHECK(hash_table);
   CHECK(getHashType() == HashType::ManyToMany);
 
@@ -1759,9 +1759,7 @@ std::string BoundingBoxIntersectJoinHashTable::toString(
   if (!buffer) {
     return "EMPTY";
   }
-  CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
-  auto hash_table = hash_tables_for_device_[device_id];
-  CHECK(hash_table);
+  auto hash_table = getHashTableForDevice(device_id);
   auto buffer_size = hash_table->getHashTableBufferSize(device_type);
 #ifdef HAVE_CUDA
   std::unique_ptr<int8_t[]> buffer_copy;

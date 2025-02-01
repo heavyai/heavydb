@@ -598,6 +598,7 @@ ReductionCode ResultSetReductionJIT::codegen() const {
     return reduction_code;
   }
   auto executor = Executor::getExecutor(executor_id_);
+  CHECK(executor);
   CodeCacheKey key{cacheKey()};
   std::lock_guard<std::mutex> compilation_lock(executor->compilation_mutex_);
   const auto compilation_context =
@@ -1324,8 +1325,10 @@ std::string ResultSetReductionJIT::cacheKey() const {
       std::back_inserter(targets_strings),
       [](const TargetInfo& target_info) { return target_info_key(target_info); });
   const auto targets_key = boost::algorithm::join(targets_strings, ", ");
-  return query_mem_desc_.reductionKey() + "\n" + target_init_vals_key + "\n" +
-         targets_key;
+  std::ostringstream oss;
+  oss << query_mem_desc_.reductionKey() << "|" << target_init_vals_key << "|"
+      << targets_key;
+  return oss.str();
 }
 
 ReductionCode GpuReductionHelperJIT::codegen() const {

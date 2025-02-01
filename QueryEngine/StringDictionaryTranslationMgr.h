@@ -54,7 +54,7 @@ class StringDictionaryTranslationMgr {
       const SQLTypeInfo& output_ti,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
       const Data_Namespace::MemoryLevel memory_level,
-      const int device_count,
+      const std::set<int>& device_ids,
       Executor* executor,
       Data_Namespace::DataMgr* data_mgr,
       const bool delay_translation,
@@ -65,7 +65,7 @@ class StringDictionaryTranslationMgr {
       const SQLTypeInfo& output_ti,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
       const Data_Namespace::MemoryLevel memory_level,
-      const int device_count,
+      const std::set<int>& device_ids,
       Executor* executor,
       Data_Namespace::DataMgr* data_mgr,
       const bool delay_translation);
@@ -84,9 +84,9 @@ class StringDictionaryTranslationMgr {
   size_t mapSize() const;
 
  private:
-  std::vector<std::shared_ptr<Analyzer::Constant const>> getConstants() const;
-  std::vector<std::shared_ptr<Analyzer::Constant const>> getTranslationMappedConstants()
-      const;
+  std::unordered_map<int, std::shared_ptr<Analyzer::Constant const>> getConstants() const;
+  std::unordered_map<int, std::shared_ptr<Analyzer::Constant const>>
+  getTranslationMappedConstants() const;
 
   const shared::StringDictKey source_string_dict_key_;
   const shared::StringDictKey dest_string_dict_key_;
@@ -95,16 +95,16 @@ class StringDictionaryTranslationMgr {
   const std::vector<StringOps_Namespace::StringOpInfo> string_op_infos_;
   const bool has_null_string_op_;
   const Data_Namespace::MemoryLevel memory_level_;
-  const int device_count_;
+  const std::set<int> device_ids_;
   Executor* executor_;
   Data_Namespace::DataMgr* data_mgr_;
   const bool dest_type_is_string_;
   const StringDictionaryProxy::IdMap* host_translation_map_{nullptr};
   const StringDictionaryProxy::TranslationMap<Datum>* host_numeric_translation_map_{
       nullptr};
-  std::vector<const int8_t*> kernel_translation_maps_;
-  std::vector<Data_Namespace::AbstractBuffer*> device_buffers_;
+  std::unordered_map<int, const int8_t*> kernel_translation_maps_;
+  std::unordered_map<int, Data_Namespace::AbstractBuffer*> device_buffers_;
   int32_t const* source_sd_to_temp_sd_translation_map_;
-  std::vector<Data_Namespace::AbstractBuffer*>
+  std::unordered_map<int, Data_Namespace::AbstractBuffer*>
       source_sd_to_temp_sd_translation_map_device_buffer_;
 };

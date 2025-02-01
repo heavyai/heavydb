@@ -132,6 +132,7 @@ extern bool g_enable_system_tables;
 bool g_allow_system_dashboard_update{false};
 bool g_uniform_request_ids_per_thrift_call{true};
 extern bool g_allow_memory_status_log;
+extern int g_max_num_gpu_per_query;
 
 using Catalog_Namespace::Catalog;
 using Catalog_Namespace::SysCatalog;
@@ -436,6 +437,11 @@ void DBHandler::initialize(const bool is_new_db) {
       } else {
         system_parameters_.num_gpus =
             std::min(system_parameters_.num_gpus, cuda_mgr->getDeviceCount());
+      }
+      if (g_max_num_gpu_per_query > system_parameters_.num_gpus) {
+        LOG(INFO) << "detect an invalid \'g_max_num_gpu_per_query\' which is larger than "
+                     "the # GPUs in the system, falling back to the default value (= 0)";
+        g_max_num_gpu_per_query = 0;
       }
       if (g_allow_memory_status_log) {
         cuda_mgr->enableMemoryActivityLog();

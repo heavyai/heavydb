@@ -45,6 +45,7 @@ extern bool g_enable_table_functions;
 extern bool g_enable_ml_functions;
 extern bool g_enable_dev_table_functions;
 extern size_t g_logs_system_tables_max_files_count;
+extern int g_max_num_gpu_per_query;
 
 std::string test_binary_file_path;
 std::string test_source_path;
@@ -4308,16 +4309,29 @@ class SystemTablesTest : public DBHandlerTestFixture {
     return pages_count;
   }
 
-  int32_t getGpuDeviceId(const std::string& table_name) {
-    auto td = getCatalog().getMetadataForTable(table_name, true);
-    CHECK(td);
-    CHECK(td->fragmenter);
-    auto table_info = td->fragmenter->getFragmentsForQuery();
-    CHECK_EQ(table_info.fragments.size(), static_cast<size_t>(1));
-    const auto& fragment = table_info.fragments[0];
-    auto device_level = static_cast<size_t>(MemoryLevel::GPU_LEVEL);
-    CHECK_GT(fragment.deviceIds.size(), device_level);
-    return fragment.deviceIds[device_level];
+  int32_t getGpuDeviceId(const ChunkKey& chunk_key) {
+    auto& data_mgr = getCatalog().getDataMgr();
+    auto* cuda_mgr = data_mgr.getCudaMgr();
+    CHECK(cuda_mgr);
+    int const total_device_count = static_cast<int>(cuda_mgr->getDeviceCount());
+    for (int i = 0; i < total_device_count; i++) {
+      if (data_mgr.isBufferOnDevice(chunk_key, MemoryLevel::GPU_LEVEL, i)) {
+        return i;
+      }
+    }
+    UNREACHABLE();
+    return 0;
+  }
+
+  ChunkKey getChunkKey(const std::string& table_name,
+                       const std::string& column_name,
+                       int32_t fragment_id) {
+    const auto& catalog = getCatalog();
+    auto table_id = catalog.getTableId(table_name);
+    CHECK(table_id.has_value());
+    auto cd = catalog.getMetadataForColumn(table_id.value(), column_name);
+    CHECK(cd);
+    return {catalog.getDatabaseId(), table_id.value(), cd->columnId, fragment_id};
   }
 
   std::map<std::string, int32_t> dashboard_id_by_name_;
@@ -5690,10 +5704,9 @@ TEST_F(SystemTablesTest, MemorySummarySystemTableGpu) {
   }
 
   initTestTableAndClearMemory();
-
   sql("ALTER SYSTEM CLEAR GPU MEMORY;");
   sql("SELECT AVG(i) FROM test_table_1;");
-  auto device_id = getGpuDeviceId("test_table_1");
+  auto device_id = getGpuDeviceId(getChunkKey("test_table_1", "i", 0));
 
   loginInformationSchema();
   // clang-format off
@@ -5760,13 +5773,16 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
     GTEST_SKIP() << "Test results cannot be accurately predicted in distributed mode";
   }
   initTestTableAndClearMemory();
-
+  ScopeGuard reset = [orig = g_max_num_gpu_per_query]() {
+    g_max_num_gpu_per_query = orig;
+  };
+  g_max_num_gpu_per_query = 1;
   auto db_id = getDbId(shared::kDefaultDbName);
   auto table_id = getTableId("test_table_1");
 
   sql("ALTER SYSTEM CLEAR GPU MEMORY;");
   sql("SELECT AVG(i) FROM test_table_1;");
-  auto device_id = getGpuDeviceId("test_table_1");
+  auto device_id = getGpuDeviceId(getChunkKey("test_table_1", "i", 0));
 
   loginInformationSchema();
   // clang-format off

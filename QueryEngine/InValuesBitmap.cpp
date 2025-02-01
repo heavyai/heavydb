@@ -37,11 +37,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
                                const Data_Namespace::MemoryLevel memory_level,
                                Executor* executor,
                                CompilationOptions const& co)
-    : rhs_has_null_(false)
-    , null_val_(null_val)
-    , memory_level_(memory_level)
-    , device_count_(executor->deviceCountForMemoryLevel(memory_level_))
-    , co_(co) {
+    : rhs_has_null_(false), null_val_(null_val), memory_level_(memory_level), co_(co) {
 #ifdef HAVE_CUDA
   CHECK(memory_level_ == Data_Namespace::CPU_LEVEL ||
         memory_level == Data_Namespace::GPU_LEVEL);
@@ -85,67 +81,85 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
     agg_count_distinct_bitmap(
         reinterpret_cast<int64_t*>(&cpu_bitset), value, min_val_, 0);
   }
+  constexpr int cpu_device_id = 0;
 #ifdef HAVE_CUDA
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
-    for (int device_id = 0; device_id < device_count_; ++device_id) {
+    for (auto const device_id : executor->getAvailableDevicesToProcessQuery()) {
       auto device_allocator = executor->getCudaAllocator(device_id);
       CHECK(device_allocator);
       auto gpu_bitset = device_allocator->alloc(bitmap_sz_bytes);
       device_allocator->copyToDevice(
           gpu_bitset, cpu_bitset, bitmap_sz_bytes, "In-value bitset");
-      bitsets_.push_back(gpu_bitset);
+      bitsets_per_devices_.emplace(device_id, gpu_bitset);
     }
     free(cpu_bitset);
   } else {
-    bitsets_.push_back(cpu_bitset);
+    bitsets_per_devices_.emplace(cpu_device_id, cpu_bitset);
   }
 #else
-  CHECK_EQ(1, device_count_);
-  bitsets_.push_back(cpu_bitset);
+  CHECK_EQ(1u, executor->getAvailableDevicesToProcessQuery().size());
+  bitsets_per_devices_.emplace(cpu_device_id, cpu_bitset);
 #endif  // HAVE_CUDA
 }
 
 InValuesBitmap::~InValuesBitmap() {
-  if (bitsets_.empty()) {
+  if (bitsets_per_devices_.empty()) {
     return;
   }
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {
-    CHECK_EQ(size_t(1), bitsets_.size());
-    free(bitsets_.front());
+    CHECK_EQ(size_t(1), bitsets_per_devices_.size());
+    free(bitsets_per_devices_.begin()->second);
   }
 }
 
 InValuesBitmap::BitIsSetParams InValuesBitmap::prepareBitIsSetParams(
     Executor* executor,
-    std::vector<std::shared_ptr<const Analyzer::Constant>> const& constant_owned) const {
+    std::unordered_map<int, std::shared_ptr<const Analyzer::Constant>> const&
+        constant_owned) const {
   BitIsSetParams params;
   auto pi8_ty =
       llvm::PointerType::get(get_int_type(8, executor->cgen_state_->context_), 0);
   CodeGenerator code_generator(executor);
   params.null_val_lv =
-      CodegenUtil::hoistLiteral(
-          &code_generator, co_, make_datum<int64_t>(null_val_), kBIGINT, device_count_)
-          .front();
-  if (bitsets_.empty()) {
-    auto const zero_lvs = CodegenUtil::hoistLiteral(
-        &code_generator, co_, make_datum<int64_t>(0), kBIGINT, device_count_);
-    params.min_val_lv = zero_lvs.front();
-    params.max_val_lv = zero_lvs.front();
-    params.bitmap_ptr_lv =
-        executor->cgen_state_->ir_builder_.CreateIntToPtr(zero_lvs.front(), pi8_ty);
+      CodegenUtil::hoistLiteral(&code_generator,
+                                co_,
+                                make_datum<int64_t>(null_val_),
+                                kBIGINT,
+                                executor->getAvailableDevicesToProcessQuery())
+          .begin()
+          ->second;
+  if (bitsets_per_devices_.empty()) {
+    auto const zero_lvs =
+        CodegenUtil::hoistLiteral(&code_generator,
+                                  co_,
+                                  make_datum<int64_t>(0),
+                                  kBIGINT,
+                                  executor->getAvailableDevicesToProcessQuery());
+    params.min_val_lv = zero_lvs.begin()->second;
+    params.max_val_lv = zero_lvs.begin()->second;
+    params.bitmap_ptr_lv = executor->cgen_state_->ir_builder_.CreateIntToPtr(
+        zero_lvs.begin()->second, pi8_ty);
   } else {
     params.min_val_lv =
-        CodegenUtil::hoistLiteral(
-            &code_generator, co_, make_datum<int64_t>(min_val_), kBIGINT, device_count_)
-            .front();
+        CodegenUtil::hoistLiteral(&code_generator,
+                                  co_,
+                                  make_datum<int64_t>(min_val_),
+                                  kBIGINT,
+                                  executor->getAvailableDevicesToProcessQuery())
+            .begin()
+            ->second;
     params.max_val_lv =
-        CodegenUtil::hoistLiteral(
-            &code_generator, co_, make_datum<int64_t>(max_val_), kBIGINT, device_count_)
-            .front();
-    auto to_raw_ptr = [](const auto& ptr) { return ptr.get(); };
-    auto begin = boost::make_transform_iterator(constant_owned.begin(), to_raw_ptr);
-    auto end = boost::make_transform_iterator(constant_owned.end(), to_raw_ptr);
-    std::vector<const Analyzer::Constant*> bitmap_constants(begin, end);
+        CodegenUtil::hoistLiteral(&code_generator,
+                                  co_,
+                                  make_datum<int64_t>(max_val_),
+                                  kBIGINT,
+                                  executor->getAvailableDevicesToProcessQuery())
+            .begin()
+            ->second;
+    std::unordered_map<int, const Analyzer::Constant*> bitmap_constants;
+    for (auto& kv : constant_owned) {
+      bitmap_constants.emplace(kv.first, kv.second.get());
+    }
     const auto bitset_handle_lvs =
         code_generator.codegenHoistedConstants(bitmap_constants, kENCODING_NONE, {});
     CHECK_EQ(size_t(1), bitset_handle_lvs.size());
@@ -158,14 +172,14 @@ InValuesBitmap::BitIsSetParams InValuesBitmap::prepareBitIsSetParams(
 llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) const {
   auto cgen_state = executor->getCgenStatePtr();
   AUTOMATIC_IR_METADATA(cgen_state);
-  std::vector<std::shared_ptr<const Analyzer::Constant>> constants_owned;
-  for (const auto bitset : bitsets_) {
-    const int64_t bitset_handle = reinterpret_cast<int64_t>(bitset);
+  std::unordered_map<int, std::shared_ptr<const Analyzer::Constant>> constants_owned;
+  for (const auto kv : bitsets_per_devices_) {
+    const int64_t bitset_handle = reinterpret_cast<int64_t>(kv.second);
     const auto bitset_handle_literal = std::dynamic_pointer_cast<Analyzer::Constant>(
         Parser::IntLiteral::analyzeValue(bitset_handle));
     CHECK(bitset_handle_literal);
     CHECK_EQ(kENCODING_NONE, bitset_handle_literal->get_type_info().get_compression());
-    constants_owned.push_back(bitset_handle_literal);
+    constants_owned.emplace(kv.first, bitset_handle_literal);
   }
   const auto needle_i64 = cgen_state->castToTypeIn(needle, 64);
   const auto null_bool_val =
@@ -181,7 +195,7 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) co
 }
 
 bool InValuesBitmap::isEmpty() const {
-  return bitsets_.empty();
+  return bitsets_per_devices_.empty();
 }
 
 bool InValuesBitmap::hasNull() const {

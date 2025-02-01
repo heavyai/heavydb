@@ -1314,7 +1314,8 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     const std::unordered_set<llvm::Function*>& live_funcs,
     const bool is_gpu_smem_used,
     const CompilationOptions& co,
-    const GPUTarget& gpu_target) {
+    const GPUTarget& gpu_target,
+    std::chrono::steady_clock::time_point& compile_start_timer) {
 #ifdef HAVE_CUDA
   auto timer = DEBUG_TIMER(__func__);
   auto llvm_module = func->getParent();
@@ -1484,24 +1485,14 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     throw QueryMustRunOnCpu();
   }
   LOG(PTX) << "PTX for the GPU:\n" << ptx << "\nEnd of PTX";
-
-  CubinResult cubin_result = ptx_to_cubin(ptx, gpu_target.cuda_mgr);
-  auto func_name = wrapper_func->getName().str();
-  auto gpu_compilation_context = std::make_shared<GpuCompilationContext>();
-  for (int device_id = 0; device_id < gpu_target.cuda_mgr->getDeviceCount();
-       ++device_id) {
-    gpu_compilation_context->addDeviceCode(
-        std::make_unique<GpuDeviceCompilationContext>(cubin_result.cubin,
-                                                      cubin_result.cubin_size,
-                                                      func_name,
-                                                      device_id,
-                                                      gpu_target.cuda_mgr,
-                                                      cubin_result.option_keys.size(),
-                                                      cubin_result.option_keys.data(),
-                                                      cubin_result.option_values.data()));
-  }
-
-  checkCudaErrors(cuLinkDestroy(cubin_result.link_state));
+  CubinResult cubin_result = ptx_to_cubin(
+      ptx, gpu_target.cuda_mgr, *executor->getAvailableDevicesToProcessQuery().begin());
+  VLOG(1) << "GPU code compilation finished: " << timer_stop(compile_start_timer)
+          << " ms";
+  auto gpu_compilation_context = std::make_shared<GpuCompilationContext>(
+      std::move(cubin_result), wrapper_func->getName().str());
+  gpu_compilation_context->createGpuDeviceCompilationContextForDevices(
+      executor->getAvailableDevicesToProcessQuery(), gpu_target.cuda_mgr);
   return gpu_compilation_context;
 #else
   return {};
@@ -1530,9 +1521,11 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
   }
   auto cached_code = QueryEngine::getInstance()->gpu_code_accessor->get_value(key);
   if (cached_code) {
+    cached_code->createGpuDeviceCompilationContextForDevices(
+        getAvailableDevicesToProcessQuery(), cuda_mgr);
     return cached_code;
   }
-
+  auto compile_start = timer_start();
   bool row_func_not_inlined = false;
   if (no_inline) {
     for (auto it = llvm::inst_begin(cgen_state_->row_func_),
@@ -1564,7 +1557,8 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
                                                                live_funcs,
                                                                is_gpu_smem_used,
                                                                co,
-                                                               gpu_target);
+                                                               gpu_target,
+                                                               compile_start);
   } catch (CudaMgr_Namespace::CudaErrorException& cuda_error) {
     if (cuda_error.getStatus() == CUDA_ERROR_OUT_OF_MEMORY) {
       // Thrown if memory not able to be allocated on gpu
@@ -1579,7 +1573,8 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
                                                                  live_funcs,
                                                                  is_gpu_smem_used,
                                                                  co,
-                                                                 gpu_target);
+                                                                 gpu_target,
+                                                                 compile_start);
     } else {
       throw;
     }
@@ -3027,8 +3022,9 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
     // processing in this case, we punt the query to cpu to avoid server crash
     for (const auto expr : ra_exe_unit.target_exprs) {
       if (auto gby_expr = dynamic_cast<Analyzer::AggExpr*>(expr)) {
-        bool has_multiple_gpus = cuda_mgr ? cuda_mgr->getDeviceCount() > 1 : false;
-        if (gby_expr->get_aggtype() == SQLAgg::kSAMPLE && has_multiple_gpus &&
+        // device_ids_to_use_ can only have more than one id on multi-gpu environment
+        bool const needs_multiple_gpu = device_ids_to_use_.size() > 1;
+        if (gby_expr->get_aggtype() == SQLAgg::kSAMPLE && needs_multiple_gpu &&
             !g_leaf_count) {
           std::set<const Analyzer::ColumnVar*,
                    bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>
