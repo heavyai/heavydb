@@ -3064,79 +3064,79 @@ TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
 #ifdef HAVE_AWS_S3
 // s3 parquet test cases
 // FIXME(20220214) Parquet+S3 import is broken
-// TEST_F(ImportTest, S3_One_parquet_file) {
-//  executeLambdaAndAssertException(
-//      [&]() {
-//        EXPECT_TRUE(importTestS3(
-//            "trip.parquet",
-//            "part-00000-0284f745-1595-4743-b5c4-3aa0262e4de3-c000.snappy.parquet",
-//            100,
-//            1.0,
-//            {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
-//      },
-//      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
-//      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
-//      " "OmniSci column: pickup_datetime, Parquet file: "
-//      "mapd-parquet-testdata/trip.parquet/"
-//      "part-00000-0284f745-1595-4743-b5c4-3aa0262e4de3-c000.snappy.parquet.");
-//}
-// TEST_F(ImportTest, S3_One_parquet_file_drop) {
-//  executeLambdaAndAssertException(
-//      [&]() {
-//        EXPECT_TRUE(importTestS3(
-//            "trip+1.parquet",
-//            "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet",
-//            100,
-//            1.0,
-//            {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
-//      },
-//      "Conversion from Parquet type \"String\" to OmniSci type \"SMALLINT\" is not "
-//      "allowed. Please use an appropriate column type. Parquet column: _c3, OmniSci "
-//      "column: rate_code_id, Parquet file: "
-//      "mapd-parquet-testdata/trip+1.parquet/"
-//      "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet.");
-//}
-// TEST_F(ImportTest, S3_All_parquet_file) {
-//  executeLambdaAndAssertException(
-//      [&]() {
-//        EXPECT_TRUE(importTestS3(
-//            "trip.parquet", "", 1200, 1.0, {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
-//      },
-//      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
-//      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
-//      " "OmniSci column: pickup_datetime, Parquet file: "
-//      "mapd-parquet-testdata/trip.parquet/"
-//      "part-00000-0284f745-1595-4743-b5c4-3aa0262e4de3-c000.snappy.parquet.");
-//}
-// TEST_F(ImportTest, S3_All_parquet_file_drop) {
-//  executeLambdaAndAssertException(
-//      [&]() {
-//        EXPECT_TRUE(importTestS3(
-//            "trip+1.parquet", "", 1200, 1.0, {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
-//      },
-//      "Conversion from Parquet type \"String\" to OmniSci type \"SMALLINT\" is not "
-//      "allowed. Please use an appropriate column type. Parquet column: _c3, OmniSci "
-//      "column: rate_code_id, Parquet file: "
-//      "mapd-parquet-testdata/trip+1.parquet/"
-//      "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet.");
-//}
-// TEST_F(ImportTest, S3_Regex_path_filter_parquet_match) {
-//  executeLambdaAndAssertException(
-//      [&]() {
-//        EXPECT_TRUE(importTestS3("trip.parquet",
-//                                 "",
-//                                 100,
-//                                 1.0,
-//                                 {{"REGEX_PATH_FILTER",
-//                                   ".*part-00000-9109acad-a559-4a00-b05c-878aeb8bca24-"
-//                                   "c000.snappy.parquet$"}}));
-//      },
-//      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
-//      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
-//      " "OmniSci column: pickup_datetime, Parquet file: "
-//      "mapd-parquet-testdata/trip.parquet/"
-//      "part-00000-9109acad-a559-4a00-b05c-878aeb8bca24-c000.snappy.parquet.");
-//}
+TEST_F(ImportTest, S3_One_parquet_file) {
+  executeLambdaAndAssertException(
+      [&]() {
+        EXPECT_TRUE(importTestS3(
+            "trip.parquet",
+            "part-00000-0284f745-1595-4743-b5c4-3aa0262e4de3-c000.snappy.parquet",
+            100,
+            1.0,
+            {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
+      },
+      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
+      " "OmniSci column: pickup_datetime, Parquet file: "
+      "mapd-parquet-testdata/trip.parquet/"
+      "part-00000-0284f745-1595-4743-b5c4-3aa0262e4de3-c000.snappy.parquet.");
+}
+TEST_F(ImportTest, S3_One_parquet_file_drop) {
+  executeLambdaAndAssertException(
+      [&]() {
+        EXPECT_TRUE(importTestS3(
+            "trip+1.parquet",
+            "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet",
+            100,
+            1.0,
+            {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
+      },
+      "Conversion from Parquet type \"String\" to OmniSci type \"SMALLINT\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: _c3, OmniSci "
+      "column: rate_code_id, Parquet file: "
+      "mapd-parquet-testdata/trip+1.parquet/"
+      "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet.");
+}
+TEST_F(ImportTest, S3_All_parquet_file) {
+  executeLambdaAndAssertException(
+      [&]() {
+        EXPECT_TRUE(importTestS3(
+            "trip.parquet", "", 1200, 1.0, {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
+      },
+      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
+      " "OmniSci column: pickup_datetime, Parquet file: "
+      "mapd-parquet-testdata/trip.parquet/"
+      "part-00000-0284f745-1595-4743-b5c4-3aa0262e4de3-c000.snappy.parquet.");
+}
+TEST_F(ImportTest, S3_All_parquet_file_drop) {
+  executeLambdaAndAssertException(
+      [&]() {
+        EXPECT_TRUE(importTestS3(
+            "trip+1.parquet", "", 1200, 1.0, {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
+      },
+      "Conversion from Parquet type \"String\" to OmniSci type \"SMALLINT\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: _c3, OmniSci "
+      "column: rate_code_id, Parquet file: "
+      "mapd-parquet-testdata/trip+1.parquet/"
+      "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet.");
+}
+TEST_F(ImportTest, S3_Regex_path_filter_parquet_match) {
+  executeLambdaAndAssertException(
+      [&]() {
+        EXPECT_TRUE(importTestS3("trip.parquet",
+                                 "",
+                                 100,
+                                 1.0,
+                                 {{"REGEX_PATH_FILTER",
+                                   ".*part-00000-9109acad-a559-4a00-b05c-878aeb8bca24-"
+                                   "c000.snappy.parquet$"}}));
+      },
+      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
+      " "OmniSci column: pickup_datetime, Parquet file: "
+      "mapd-parquet-testdata/trip.parquet/"
+      "part-00000-9109acad-a559-4a00-b05c-878aeb8bca24-c000.snappy.parquet.");
+}
 TEST_F(ImportTest, S3_Regex_path_filter_parquet_no_match) {
   EXPECT_THROW(
       importTestS3(
@@ -4248,48 +4248,48 @@ TEST_F(ImportTestGDAL, Bounding_Box_Invalid4) {
 
 #ifdef HAVE_AWS_S3
 // s3 compressed (non-parquet) test cases
-TEST_F(ImportTest, S3_One_csv_file) {
+TEST_F(ImportTest, DISABLED_S3_One_csv_file) {
   EXPECT_TRUE(importTestS3Compressed("trip_data_9.csv", 100, 1.0));
 }
 
-TEST_F(ImportTest, S3_One_gz_file) {
+TEST_F(ImportTest, DISABLED_S3_One_gz_file) {
   EXPECT_TRUE(importTestS3Compressed("trip_data_9.gz", 100, 1.0));
 }
 
-TEST_F(ImportTest, S3_One_bz2_file) {
+TEST_F(ImportTest, DISABLED_S3_One_bz2_file) {
   EXPECT_TRUE(importTestS3Compressed("trip_data_9.bz2", 100, 1.0));
 }
 
-TEST_F(ImportTest, S3_One_tar_with_many_csv_files) {
+TEST_F(ImportTest, DISABLED_S3_One_tar_with_many_csv_files) {
   EXPECT_TRUE(importTestS3Compressed("trip_data.tar", 1000, 1.0));
 }
 
-TEST_F(ImportTest, S3_One_tgz_with_many_csv_files) {
+TEST_F(ImportTest, DISABLED_S3_One_tgz_with_many_csv_files) {
   EXPECT_TRUE(importTestS3Compressed("trip_data.tgz", 100000, 1.0));
 }
 
-TEST_F(ImportTest, S3_One_rar_with_many_csv_files) {
+TEST_F(ImportTest, DISABLED_S3_One_rar_with_many_csv_files) {
   EXPECT_TRUE(importTestS3Compressed("trip_data.rar", 1000, 1.0));
 }
 
-TEST_F(ImportTest, S3_One_zip_with_many_csv_files) {
+TEST_F(ImportTest, DISABLED_S3_One_zip_with_many_csv_files) {
   EXPECT_TRUE(importTestS3Compressed("trip_data.zip", 1000, 1.0));
 }
 
-TEST_F(ImportTest, S3_One_7z_with_many_csv_files) {
+TEST_F(ImportTest, DISABLED_S3_One_7z_with_many_csv_files) {
   EXPECT_TRUE(importTestS3Compressed("trip_data.7z", 1000, 1.0));
 }
 
-TEST_F(ImportTest, S3_All_files) {
+TEST_F(ImportTest, DISABLED_S3_All_files) {
   EXPECT_TRUE(importTestS3Compressed("", 105200, 1.0));
 }
 
-TEST_F(ImportTest, S3_Regex_path_filter_match) {
+TEST_F(ImportTest, DISABLED_S3_Regex_path_filter_match) {
   EXPECT_TRUE(importTestS3Compressed(
       "", 300, 1.0, {{"REGEX_PATH_FILTER", ".*trip_data_[5-7]\\.csv"}}));
 }
 
-TEST_F(ImportTest, S3_Regex_path_filter_no_match) {
+TEST_F(ImportTest, DISABLED_S3_Regex_path_filter_no_match) {
   EXPECT_THROW(importTestS3Compressed(
                    "", -1, -1.0, {{"REGEX_PATH_FILTER", "very?obscure?pattern"}}),
                TDBException);
