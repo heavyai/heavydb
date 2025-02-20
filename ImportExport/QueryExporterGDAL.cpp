@@ -115,7 +115,7 @@ OGRFieldType sql_type_info_to_ogr_field_type(const std::string& name,
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      return OFTString;
+      return OFTDate;
     case kBIGINT:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
