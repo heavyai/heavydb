@@ -79,14 +79,16 @@ static constexpr std::array<const char*, 3> compression_prefix = {"",
 
 static constexpr std::array<const char*, 3> compression_suffix = {"", ".gz", ".zip"};
 
+static constexpr std::array<const char*, 3> compression_names = {"", "GZip", "Zip"};
+
 // this table is by file type then by compression type
 // @TODO(se) implement more compression options
 static constexpr std::array<std::array<bool, 3>, 5> compression_implemented = {
-    {{true, false, false},    // CSV: none
-     {true, true, false},     // GeoJSON: on-the-fly GZip only
-     {true, true, false},     // GeoJSONL: on-the-fly GZip only
-     {true, false, false},    // Shapefile: none
-     {true, false, false}}};  // FlatGeobuf: none
+    {{true, false, false},    // CSV: not handled by this class
+     {true, true, false},     // GeoJSON: GZip only
+     {true, true, false},     // GeoJSONL: GZip only
+     {true, false, true},     // Shapefile: Zip only
+     {true, false, false}}};  // FlatGeobuf: none (already binary and compressed)
 
 static std::array<std::unordered_set<std::string>, 5> file_type_valid_extensions = {
     {{".csv", ".tsv"}, {".geojson", ".json"}, {".geojson", ".json"}, {".shp"}, {".fgb"}}};
@@ -246,12 +248,16 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
     if (file_compression != FileCompression::kNone) {
       auto impl = compression_implemented[SCI(file_type_)][SCI(file_compression)];
       if (!impl) {
-        // @TODO(se) implement more compression options
-        throw std::runtime_error(
-            "Selected file compression option not yet supported for file type '" +
-            std::string(file_type_names[SCI(file_type_)]) + "'");
+        throw std::runtime_error("File compression option '" +
+                                 std::string(compression_names[SCI(file_compression)]) +
+                                 "' not supported for file type '" +
+                                 std::string(file_type_names[SCI(file_type_)]) + "'");
       }
-      gdal_file_path.insert(0, compression_prefix[SCI(file_compression)]);
+      if (file_type_ != FileType::kShapefile) {
+        // Shapefile compression done by driver if filename ends in .zip
+        // For all others, add VSI prefix for post-driver compression
+        gdal_file_path.insert(0, compression_prefix[SCI(file_compression)]);
+      }
       gdal_file_path.append(compression_suffix[SCI(file_compression)]);
       user_file_path.append(compression_suffix[SCI(file_compression)]);
     }
