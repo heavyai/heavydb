@@ -5538,6 +5538,27 @@ TEST_F(ExportTest, Shapefile) {
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
+TEST_F(ExportTest, Shapefile_Zip) {
+  SKIP_ALL_ON_AGGREGATOR();
+  doCreateAndImport();
+  auto run_test = [&](const std::string& geo_type) {
+    std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
+    std::string shp_zip_file = "query_export_test_shapefile_" + geo_type + ".shp.zip";
+    ASSERT_NO_THROW(
+        doExport(shp_file, "Shapefile", "Zip", geo_type, NO_ARRAYS, DEFAULT_SRID));
+    std::string layer_name = "query_export_test_shapefile_" + geo_type;
+    // disable this step of the test for MULTIPOLYGON until we have moved to
+    // the new deps for 8.0, as GDAL 3.7.3 writes files slightly differently
+    // @TODO(se) remove this after the transition to new deps is complete
+    if (geo_type != "multipolygon") {
+      ASSERT_NO_THROW(doCompareWithOGRInfo(shp_zip_file, layer_name, COMPARE_EXPLICIT));
+    }
+    doImportAgainAndCompare(shp_zip_file, "Shapefile", geo_type, NO_ARRAYS);
+    removeExportedFile(shp_zip_file);
+  };
+  RUN_TEST_ON_ALL_GEO_TYPES();
+}
+
 TEST_F(ExportTest, Shapefile_Overwrite) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
@@ -5594,18 +5615,6 @@ TEST_F(ExportTest, Shapefile_GZip_Unimplemented) {
     std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
     EXPECT_THROW(
         doExport(shp_file, "Shapefile", "GZip", geo_type, NO_ARRAYS, DEFAULT_SRID),
-        TDBException);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, Shapefile_Zip_Unimplemented) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
-    EXPECT_THROW(
-        doExport(shp_file, "Shapefile", "Zip", geo_type, NO_ARRAYS, DEFAULT_SRID),
         TDBException);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
