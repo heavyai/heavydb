@@ -5523,12 +5523,7 @@ TEST_F(ExportTest, Shapefile) {
     ASSERT_NO_THROW(
         doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
     std::string layer_name = "query_export_test_shapefile_" + geo_type;
-    // disable this step of the test for MULTIPOLYGON until we have moved to
-    // the new deps for 8.0, as GDAL 3.7.3 writes files slightly differently
-    // @TODO(se) remove this after the transition to new deps is complete
-    if (geo_type != "multipolygon") {
-      ASSERT_NO_THROW(doCompareWithOGRInfo(shp_file, layer_name, COMPARE_EXPLICIT));
-    }
+    ASSERT_NO_THROW(doCompareWithOGRInfo(shp_file, layer_name, COMPARE_EXPLICIT));
     doImportAgainAndCompare(shp_file, "Shapefile", geo_type, NO_ARRAYS);
     removeExportedFile(shp_file);
     removeExportedFile(shx_file);
@@ -5547,12 +5542,7 @@ TEST_F(ExportTest, Shapefile_Zip) {
     ASSERT_NO_THROW(
         doExport(shp_file, "Shapefile", "Zip", geo_type, NO_ARRAYS, DEFAULT_SRID));
     std::string layer_name = "query_export_test_shapefile_" + geo_type;
-    // disable this step of the test for MULTIPOLYGON until we have moved to
-    // the new deps for 8.0, as GDAL 3.7.3 writes files slightly differently
-    // @TODO(se) remove this after the transition to new deps is complete
-    if (geo_type != "multipolygon") {
-      ASSERT_NO_THROW(doCompareWithOGRInfo(shp_zip_file, layer_name, COMPARE_EXPLICIT));
-    }
+    ASSERT_NO_THROW(doCompareWithOGRInfo(shp_zip_file, layer_name, COMPARE_EXPLICIT));
     doImportAgainAndCompare(shp_zip_file, "Shapefile", geo_type, NO_ARRAYS);
     removeExportedFile(shp_zip_file);
   };
