@@ -219,10 +219,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   void addVarlenBuffer(void* varlen_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    if (std::find(varlen_buffers_.begin(), varlen_buffers_.end(), varlen_buffer) ==
-        varlen_buffers_.end()) {
-      varlen_buffers_.push_back(varlen_buffer);
-    }
+    varlen_buffers_.emplace(varlen_buffer);
   }
 
   /**
@@ -555,7 +552,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   std::vector<CountDistinctBitmapBuffer> count_distinct_bitmaps_;
   std::vector<CountDistinctSet*> count_distinct_sets_;
   std::vector<int64_t*> non_owned_group_by_buffers_;
-  std::vector<void*> varlen_buffers_;
+  std::unordered_set<void*> varlen_buffers_;
   std::list<std::string> strings_;
   std::list<std::vector<int64_t>> arrays_;
   std::unordered_map<shared::StringDictKey, std::shared_ptr<StringDictionaryProxy>>
