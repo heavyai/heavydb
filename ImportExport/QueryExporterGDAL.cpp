@@ -114,10 +114,19 @@ OGRFieldType sql_type_info_to_ogr_field_type(const std::string& name,
     case kCHAR:
     case kVARCHAR:
     case kTEXT:
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
       return OFTString;
+    case kTIME:
+      if (file_type == QueryExporter::FileType::kFlatGeobuf) {
+        return OFTTime;
+      }
+      return OFTString;
+    case kTIMESTAMP:
+      if (file_type == QueryExporter::FileType::kFlatGeobuf) {
+        return OFTDateTime;
+      }
+      return OFTString;
+    case kDATE:
+      return OFTDate;
     case kBIGINT:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
@@ -428,9 +437,11 @@ void insert_scalar_column(const ScalarTargetValue* scalar_tv,
         break;
       case kTIME:
       case kTIMESTAMP:
-      case kDATE:
         is_null = (int_val == NULL_BIGINT);
         is_int64 = true;
+        break;
+      case kDATE:
+        is_null = (int_val == NULL_BIGINT);
         break;
       default:
         is_null = false;
@@ -438,7 +449,8 @@ void insert_scalar_column(const ScalarTargetValue* scalar_tv,
     if (is_null) {
       ogr_feature->SetFieldNull(field_index);
     } else if (ti.is_time()) {
-      CHECK_EQ(field_type, OFTString);
+      CHECK(field_type == OFTString || field_type == OFTDate || field_type == OFTTime ||
+            field_type == OFTDateTime);
       auto str = shared::convert_temporal_to_iso_format(ti, int_val);
       ogr_feature->SetField(field_index, str.c_str());
     } else if (is_int64) {
