@@ -85,8 +85,8 @@ static constexpr std::array<const char*, 3> compression_names = {"", "GZip", "Zi
 // @TODO(se) implement more compression options
 static constexpr std::array<std::array<bool, 3>, 5> compression_implemented = {
     {{true, false, false},    // CSV: not handled by this class
-     {true, true, false},     // GeoJSON: GZip only
-     {true, true, false},     // GeoJSONL: GZip only
+     {true, true, true},      // GeoJSON: GZip or Zip
+     {true, true, true},      // GeoJSONL: GZip or Zip
      {true, false, true},     // Shapefile: Zip only
      {true, false, false}}};  // FlatGeobuf: none (already binary and compressed)
 
@@ -164,9 +164,9 @@ OGRFieldType sql_type_info_to_ogr_field_type(const std::string& name,
     default:
       break;
   }
-  throw std::runtime_error("Column '" + name + "' has unsupported type '" +
-                           type_info.get_type_name() + "' for file type '" +
-                           file_type_names[SCI(file_type)] + "'");
+  throw std::runtime_error("QueryExporterGDAL: Column '" + name +
+                           "' has unsupported type '" + type_info.get_type_name() +
+                           "' for file type '" + file_type_names[SCI(file_type)] + "'");
 }
 
 }  // namespace
@@ -231,15 +231,15 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
       num_columns++;
     }
     if (num_geo_columns != 1) {
-      throw std::runtime_error("File type '" +
+      throw std::runtime_error("QueryExporterGDAL: File type '" +
                                std::string(file_type_names[SCI(file_type_)]) +
                                "' requires exactly one geo column in query results");
     }
 
     // validate SRID
     if (geo_column_srid <= 0) {
-      throw std::runtime_error("Geo column '" + geo_column_name + "' has invalid SRID (" +
-                               std::to_string(geo_column_srid) +
+      throw std::runtime_error("QueryExporterGDAL: Geo column '" + geo_column_name +
+                               "' has invalid SRID (" + std::to_string(geo_column_srid) +
                                "). Use ST_SetSRID() in query to override.");
     }
 
@@ -247,8 +247,8 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
     auto const& driver_name = driver_names[SCI(file_type_)];
     auto gdal_driver = GetGDALDriverManager()->GetDriverByName(driver_name);
     if (gdal_driver == nullptr) {
-      throw std::runtime_error("Failed to find Driver '" + std::string(driver_name) +
-                               "'");
+      throw std::runtime_error("QueryExporterGDAL: Failed to find Driver '" +
+                               std::string(driver_name) + "'");
     }
 
     // compression?
@@ -257,18 +257,43 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
     if (file_compression != FileCompression::kNone) {
       auto impl = compression_implemented[SCI(file_type_)][SCI(file_compression)];
       if (!impl) {
-        throw std::runtime_error("File compression option '" +
+        throw std::runtime_error("QueryExporterGDAL: File compression option '" +
                                  std::string(compression_names[SCI(file_compression)]) +
                                  "' not supported for file type '" +
                                  std::string(file_type_names[SCI(file_type_)]) + "'");
       }
-      if (file_type_ != FileType::kShapefile) {
-        // Shapefile compression done by driver if filename ends in .zip
-        // For all others, add VSI prefix for post-driver compression
-        gdal_file_path.insert(0, compression_prefix[SCI(file_compression)]);
+      switch (file_type_) {
+        case FileType::kShapefile: {
+          // Shapefile compression done by driver if filename ends in .zip
+          gdal_file_path.append(compression_suffix[SCI(file_compression)]);
+          user_file_path.append(compression_suffix[SCI(file_compression)]);
+        } break;
+        case FileType::kGeoJSON:
+        case FileType::kGeoJSONL: {
+          if (file_compression == FileCompression::kGZip) {
+            // for GZip, we just add the .gz suffix
+            gdal_file_path.append(compression_suffix[SCI(file_compression)]);
+            user_file_path.append(compression_suffix[SCI(file_compression)]);
+          } else if (file_compression == FileCompression::kZip) {
+            // for Zip, we need to rebuild the paths to be of the form
+            // /path/to/file.ext.zip/file.ext
+            auto const gdal_path = boost::filesystem::path(gdal_file_path);
+            auto const user_path = boost::filesystem::path(user_file_path);
+            auto const zip_gdal_path = gdal_path.parent_path() /
+                                       (gdal_path.filename().string() + ".zip") /
+                                       gdal_path.filename();
+            auto const zip_user_path = user_path.parent_path() /
+                                       (user_path.filename().string() + ".zip") /
+                                       user_path.filename();
+            gdal_file_path = zip_gdal_path.string();
+            user_file_path = zip_user_path.string();
+          }
+          // finally add VSI prefix for post-driver compression
+          gdal_file_path.insert(0, compression_prefix[SCI(file_compression)]);
+        } break;
+        default:
+          UNREACHABLE();
       }
-      gdal_file_path.append(compression_suffix[SCI(file_compression)]);
-      user_file_path.append(compression_suffix[SCI(file_compression)]);
     }
 
     // delete any existing file(s) (with and without compression suffix)
@@ -288,14 +313,16 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
     gdal_dataset_ =
         gdal_driver->Create(gdal_file_path.c_str(), 0, 0, 0, GDT_Unknown, NULL);
     if (gdal_dataset_ == nullptr) {
-      throw std::runtime_error("Failed to create File '" + file_path + "'");
+      throw std::runtime_error("QueryExporterGDAL: Failed to create File '" + file_path +
+                               "'");
     }
 
     // create spatial reference
     OGRSpatialReference ogr_spatial_reference;
     if (ogr_spatial_reference.importFromEPSG(geo_column_srid)) {
-      throw std::runtime_error("Failed to create Spatial Reference for SRID " +
-                               std::to_string(geo_column_srid) + "");
+      throw std::runtime_error(
+          "QueryExporterGDAL: Failed to create Spatial Reference for SRID " +
+          std::to_string(geo_column_srid) + "");
     }
 #if GDAL_VERSION_MAJOR >= 3
     ogr_spatial_reference.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
@@ -305,7 +332,8 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
     ogr_layer_ = gdal_dataset_->CreateLayer(
         layer_name.c_str(), &ogr_spatial_reference, ogr_geometry_type, NULL);
     if (ogr_layer_ == nullptr) {
-      throw std::runtime_error("Failed to create Layer '" + layer_name + "'");
+      throw std::runtime_error("QueryExporterGDAL: Failed to create Layer '" +
+                               layer_name + "'");
     }
 
     // create fields
@@ -321,7 +349,8 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
             column_name.c_str(),
             sql_type_info_to_ogr_field_type(column_name, type_info, file_type_));
         if (ogr_layer_->CreateField(&field_defn) != OGRERR_NONE) {
-          throw std::runtime_error("Failed to create Field '" + column_name + "'");
+          throw std::runtime_error("QueryExporterGDAL: Failed to create Field '" +
+                                   column_name + "'");
         }
         field_indices_[column_index] = field_index;
         field_index++;
@@ -637,8 +666,8 @@ void insert_array_column(const ArrayTargetValue* array_tv,
     switch (array_null_handling) {
       case QueryExporter::ArrayNullHandling::kAbortWithWarning:
         throw std::runtime_error(
-            "Found individual nulls in Array Column '" + column_name + "' of type '" +
-            ti.get_type_name() +
+            "QueryExporterGDAL: Found individual nulls in Array Column '" + column_name +
+            "' of type '" + ti.get_type_name() +
             "'. Use 'array_null_handling' Export Option to specify behaviour.");
       case QueryExporter::ArrayNullHandling::kNullEntireField:
         ogr_feature->SetFieldNull(field_index);
@@ -732,7 +761,7 @@ void QueryExporterGDAL::exportResults(
 
         // add feature to layer
         if (ogr_layer_->CreateFeature(ogr_feature) != OGRERR_NONE) {
-          throw std::runtime_error("Failed to create Feature");
+          throw std::runtime_error("QueryExporterGDAL: Failed to create Feature");
         }
       }
     }
