@@ -16,6 +16,7 @@
 
 #include "ImportExport/QueryExporterCSV.h"
 
+#include <boost/process.hpp>
 #include <boost/variant/get.hpp>
 
 #include "QueryEngine/ResultSet.h"
@@ -23,7 +24,8 @@
 
 namespace import_export {
 
-QueryExporterCSV::QueryExporterCSV() : QueryExporter(FileType::kCSV) {}
+QueryExporterCSV::QueryExporterCSV()
+    : QueryExporter(FileType::kCSV), file_compression_{FileCompression::kNone} {}
 
 QueryExporterCSV::~QueryExporterCSV() {}
 
@@ -35,17 +37,25 @@ void QueryExporterCSV::beginExport(const std::string& file_path,
                                    const ArrayNullHandling array_null_handling) {
   validateFileExtensions(file_path, "CSV", {".csv", ".tsv"});
 
-  // compression?
-  auto actual_file_path{file_path};
-  if (file_compression != FileCompression::kNone) {
-    // @TODO(se) implement post-export compression
-    throw std::runtime_error("Compression not yet supported for this file type");
+  // check that the compression tool is available if requested
+  static constexpr std::array<std::string_view, 3> compression_tools = {
+      "", "gzip", "zip"};
+  auto const compression_tool{compression_tools[static_cast<int>(file_compression)]};
+  if (file_compression != FileCompression::kNone &&
+      boost::process::search_path(compression_tool).string().empty()) {
+    throw std::runtime_error("QueryExporterCSV: " + std::string(compression_tool) +
+                             " executable not found, cannot export compressed file");
   }
 
+  // capture parameters
+  file_path_ = file_path;
+  file_compression_ = file_compression;
+
   // open file
-  outfile_.open(actual_file_path);
+  outfile_.open(file_path);
   if (!outfile_) {
-    throw std::runtime_error("Failed to create file '" + actual_file_path + "'");
+    throw std::runtime_error("QueryExporterCSV: Failed to create file '" + file_path +
+                             "'");
   }
 
   // write header?
@@ -266,6 +276,64 @@ void QueryExporterCSV::exportResults(const std::vector<AggregatedResult>& query_
 void QueryExporterCSV::endExport() {
   // just close the file
   outfile_.close();
+
+  auto file_is_good = [](const std::string& f, const bool check_size) -> bool {
+    if (!boost::filesystem::exists(f) || !boost::filesystem::is_regular_file(f)) {
+      return false;
+    }
+    if (check_size && boost::filesystem::file_size(f) == 0u) {
+      return false;
+    }
+    return true;
+  };
+
+  // check we exported something file
+  // uncompressed file is allowed to be empty as long as it exists
+  if (!file_is_good(file_path_, false)) {
+    throw std::runtime_error("QueryExporterCSV: Failed to export file '" + file_path_ +
+                             "'");
+  }
+
+  // compress file?
+  if (file_compression_ == FileCompression::kZip) {
+    // compress with zip, don't store path, retains original file
+    auto const zip_file_path = file_path_ + ".zip";
+    auto const local_zip_file_path =
+        boost::filesystem::path(zip_file_path).filename().string();
+    auto const start_dir = boost::filesystem::canonical(
+        boost::filesystem::path(file_path_).parent_path().string());
+    auto const local_csv_file_name =
+        boost::filesystem::path(file_path_).filename().string();
+    boost::process::system("zip " + local_zip_file_path + " " + local_csv_file_name,
+                           boost::process::start_dir(start_dir),
+                           boost::process::std_out > boost::process::null,
+                           boost::process::std_err > boost::process::null);
+    // check compressed file exists and is non-zero length
+    if (!file_is_good(zip_file_path, true)) {
+      throw std::runtime_error(
+          "QueryExporterCSV: Failed to Zip compress exported file '" + file_path_ + "'");
+    }
+    // delete original file
+    LOG_IF(ERROR, !boost::filesystem::remove(file_path_))
+        << "Failed to delete temporary exported file '" << file_path_ << "'";
+  } else if (file_compression_ == FileCompression::kGZip) {
+    // compress with gzip, removes original file
+    auto const gzip_file_path = file_path_ + ".gz";
+    boost::process::system("gzip " + file_path_,
+                           boost::process::std_out > boost::process::null,
+                           boost::process::std_err > boost::process::null);
+    // check compressed file exists and is non-zero length
+    if (!file_is_good(gzip_file_path, true)) {
+      throw std::runtime_error(
+          "QueryExporterCSV: Failed to GZip compress exported file '" + file_path_ + "'");
+    }
+    // check original file was removed
+    if (boost::filesystem::exists(file_path_)) {
+      LOG(WARNING) << "Failed to remove temporary export file '" << file_path_ << "'";
+      LOG_IF(ERROR, !boost::filesystem::remove(file_path_))
+          << "Failed to delete temporary exported file '" << file_path_ << "'";
+    }
+  }
 }
 
 }  // namespace import_export

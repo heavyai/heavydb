@@ -30,7 +30,8 @@ RUN dnf install -y \
         mesa-libGL-devel \
         environment-modules \
         which \
-        valgrind && \
+        valgrind \
+        zip unzip && \
     rm -rf /var/cache/dnf/*
 RUN dnf install -y \
         cloc \
