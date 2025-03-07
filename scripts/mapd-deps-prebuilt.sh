@@ -98,7 +98,7 @@ if [ "$ID" == "ubuntu" ] ; then
   sudo update-alternatives \
     --install /usr/bin/gcc gcc /usr/bin/gcc-11 1100 \
     --slave /usr/bin/g++ g++ /usr/bin/g++-11
-  sudo update-alternatives --auto gcc
+  sudo update-alternatives --set gcc /usr/bin/gcc-11
 
   sudo mkdir -p $PREFIX
   pushd $PREFIX
