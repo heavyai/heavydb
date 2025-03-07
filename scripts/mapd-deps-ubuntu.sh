@@ -139,9 +139,10 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
   g++-11
 
 # Set up gcc-11 as default gcc
-DEBIAN_FRONTEND=noninteractive sudo update-alternatives \
+sudo update-alternatives \
   --install /usr/bin/gcc gcc /usr/bin/gcc-11 1100 \
   --slave /usr/bin/g++ g++ /usr/bin/g++-11
+sudo update-alternatives --set gcc /usr/bin/gcc-11
 
 generate_deps_version_file
 
