@@ -4903,6 +4903,8 @@ class ExportTest : public ImportTestGDAL {
     "col_ts9";
   // clang-format on
 
+  enum class Compression { kNone, kGZip, kZip };
+
   void doCreateAndImport() {
     ASSERT_NO_THROW(sql(std::string("CREATE TABLE query_export_test (") +
                         NON_GEO_COLUMN_NAMES_AND_TYPES + ", " +
@@ -5007,24 +5009,13 @@ class ExportTest : public ImportTestGDAL {
     ASSERT_NO_THROW(sql("drop table query_export_test_reimport;"));
   }
 
-  void doCompareBinary(const std::string& file, const bool gzipped) {
+  void doCompareText(const std::string& file, const Compression compression) {
     if (!g_regenerate_export_test_reference_files) {
       auto actual_exported_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
                                   getDbHandlerAndSessionId().second + "/" + file;
       auto actual_reference_file = "../../Tests/Export/QueryExport/datafiles/" + file;
-      auto exported_file_contents = readBinaryFile(actual_exported_file, gzipped);
-      auto reference_file_contents = readBinaryFile(actual_reference_file, gzipped);
-      ASSERT_EQ(exported_file_contents, reference_file_contents);
-    }
-  }
-
-  void doCompareText(const std::string& file, const bool gzipped) {
-    if (!g_regenerate_export_test_reference_files) {
-      auto actual_exported_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
-                                  getDbHandlerAndSessionId().second + "/" + file;
-      auto actual_reference_file = "../../Tests/Export/QueryExport/datafiles/" + file;
-      auto exported_lines = readTextFile(actual_exported_file, gzipped);
-      auto reference_lines = readTextFile(actual_reference_file, gzipped);
+      auto exported_lines = readTextFile(actual_exported_file, compression);
+      auto reference_lines = readTextFile(actual_reference_file, compression);
       // sort lines to account for query output order non-determinism
       std::sort(exported_lines.begin(), exported_lines.end());
       std::sort(reference_lines.begin(), reference_lines.end());
@@ -5082,7 +5073,7 @@ class ExportTest : public ImportTestGDAL {
     // this may or may not throw
     sql("COPY (SELECT * FROM query_export_test) TO '" + exp_file +
         "' WITH (file_type='GeoJSON'" + other_options + ");");
-    ASSERT_NO_THROW(doCompareText(file, PLAIN_TEXT));
+    ASSERT_NO_THROW(doCompareText(file, Compression::kNone));
     ASSERT_NO_THROW(removeExportedFile(file));
   }
 
@@ -5106,7 +5097,7 @@ class ExportTest : public ImportTestGDAL {
     }
     copy_stmt += ");";
     ASSERT_NO_THROW(sql(copy_stmt));
-    ASSERT_NO_THROW(doCompareText(file, PLAIN_TEXT));
+    ASSERT_NO_THROW(doCompareText(file, Compression::kNone));
     ASSERT_NO_THROW(removeExportedFile(file));
     ASSERT_NO_THROW(sql("DROP TABLE query_export_test;"));
   }
@@ -5115,8 +5106,6 @@ class ExportTest : public ImportTestGDAL {
   constexpr static bool NO_ARRAYS = false;
   constexpr static bool INVALID_SRID = true;
   constexpr static bool DEFAULT_SRID = false;
-  constexpr static bool GZIPPED = true;
-  constexpr static bool PLAIN_TEXT = false;
   constexpr static bool COMPARE_IGNORING_COMMA_DIFF = true;
   constexpr static bool COMPARE_EXPLICIT = false;
 
@@ -5128,10 +5117,11 @@ class ExportTest : public ImportTestGDAL {
  private:
   std::vector<std::string> readTextFile(
       const std::string& file,
-      const bool gzipped,
+      const Compression compression,
       const std::vector<std::string>& skip_lines_containing_any_of = {}) {
     std::vector<std::string> lines;
-    if (gzipped) {
+    if (compression == Compression::kGZip) {
+      // gzip compressed
       std::ifstream in_stream(file, std::ios_base::in | std::ios_base::binary);
       boost::iostreams::filtering_streambuf<boost::iostreams::input> in_buf;
       in_buf.push(boost::iostreams::gzip_decompressor());
@@ -5145,7 +5135,37 @@ class ExportTest : public ImportTestGDAL {
       }
       in_stream.close();
     } else {
-      std::ifstream in_stream(file, std::ios_base::in);
+      // zip compressed, or uncompressed
+      boost::filesystem::path path_to_read(file);
+      boost::filesystem::path path_to_remove;
+      // delete any active temp path on exit
+      ScopeGuard remove_temp_path = [&] {
+        if (compression == Compression::kZip &&
+            boost::filesystem::exists(path_to_remove)) {
+          boost::filesystem::remove_all(path_to_remove);
+        }
+      };
+      if (compression == Compression::kZip) {
+        // generate name of temp dir of the form /tmp/xxxx-xxxx-xxxx-xxxx
+        auto const temp_path =
+            boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+        // absolute path to zipped file
+        auto const abs_file =
+            boost::filesystem::canonical(boost::filesystem::path(file)).string();
+        // absolute path to assumed unzipped file (remove .zip suffix)
+        path_to_read = temp_path / boost::filesystem::path(file).stem();
+        // absolute path to what to remove
+        path_to_remove = temp_path;
+        // create the temp dir
+        boost::filesystem::create_directories(temp_path);
+        // do the unzip
+        boost::process::system("unzip " + abs_file,
+                               boost::process::start_dir(temp_path),
+                               boost::process::std_out > boost::process::null,
+                               boost::process::std_err > boost::process::null);
+      }
+      // read the file (original uncompressed, or the unzipped file in the temp dir)
+      std::ifstream in_stream(path_to_read, std::ios_base::in);
       std::string line;
       while (std::getline(in_stream, line)) {
         if (!lineContainsAnyOf(line, skip_lines_containing_any_of)) {
@@ -5157,24 +5177,6 @@ class ExportTest : public ImportTestGDAL {
     return lines;
   }
 
-  std::string readBinaryFile(const std::string& file, const bool gzipped) {
-    std::stringstream buffer;
-    if (gzipped) {
-      std::ifstream in_stream(file, std::ios_base::in | std::ios_base::binary);
-      boost::iostreams::filtering_streambuf<boost::iostreams::input> in_buf;
-      in_buf.push(boost::iostreams::gzip_decompressor());
-      in_buf.push(in_stream);
-      std::istream in_stream_gunzip(&in_buf);
-      buffer << in_stream_gunzip.rdbuf();
-      in_stream.close();
-    } else {
-      std::ifstream in_stream(file, std::ios_base::in);
-      buffer << in_stream.rdbuf();
-      in_stream.close();
-    }
-    return buffer.str();
-  }
-
   std::vector<std::string> readFileWithOGRInfo(const std::string& file,
                                                const std::string& layer_name) {
     std::string temp_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
@@ -5183,8 +5185,8 @@ class ExportTest : public ImportTestGDAL {
     boost::process::system(boost::process::search_path("ogrinfo"),
                            args,
                            boost::process::std_out > temp_file);
-    auto lines =
-        readTextFile(temp_file, false, {"DBF_DATE_LAST_UPDATE", "INFO: Open of"});
+    auto lines = readTextFile(
+        temp_file, Compression::kNone, {"DBF_DATE_LAST_UPDATE", "INFO: Open of"});
     boost::filesystem::remove(temp_file);
     return lines;
   }
@@ -5238,7 +5240,7 @@ TEST_F(ExportTest, Default) {
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
     ASSERT_NO_THROW(doExport(exp_file, "", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
+    ASSERT_NO_THROW(doCompareText(exp_file, Compression::kNone));
     doImportAgainAndCompare(exp_file, "", geo_type, WITH_ARRAYS);
     removeExportedFile(exp_file);
   };
@@ -5269,7 +5271,7 @@ TEST_F(ExportTest, CSV) {
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
     ASSERT_NO_THROW(doExport(exp_file, "CSV", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
+    ASSERT_NO_THROW(doCompareText(exp_file, Compression::kNone));
     doImportAgainAndCompare(exp_file, "CSV", geo_type, WITH_ARRAYS);
     removeExportedFile(exp_file);
   };
@@ -5297,24 +5299,32 @@ TEST_F(ExportTest, CSV_InvalidName) {
                TDBException);
 }
 
-TEST_F(ExportTest, CSV_Zip_Unimplemented) {
+TEST_F(ExportTest, DISABLED_CSV_Zip) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
-    EXPECT_THROW(doExport(exp_file, "CSV", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-                 TDBException);
+    std::string req_file = "query_export_test_csv_" + geo_type + ".csv";
+    std::string exp_file = req_file + ".zip";
+    ASSERT_NO_THROW(
+        doExport(req_file, "CSV", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID));
+    ASSERT_NO_THROW(doCompareText(exp_file, Compression::kZip));
+    doImportAgainAndCompare(exp_file, "CSV", geo_type, WITH_ARRAYS);
+    removeExportedFile(exp_file);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
-TEST_F(ExportTest, CSV_GZip_Unimplemented) {
+TEST_F(ExportTest, CSV_GZip) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
-    EXPECT_THROW(doExport(exp_file, "CSV", "GZip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-                 TDBException);
+    std::string req_file = "query_export_test_csv_" + geo_type + ".csv";
+    std::string exp_file = req_file + ".gz";
+    ASSERT_NO_THROW(
+        doExport(req_file, "CSV", "GZip", geo_type, WITH_ARRAYS, DEFAULT_SRID));
+    ASSERT_NO_THROW(doCompareText(exp_file, Compression::kGZip));
+    doImportAgainAndCompare(exp_file, "CSV", geo_type, WITH_ARRAYS);
+    removeExportedFile(exp_file);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -5331,7 +5341,7 @@ TEST_F(ExportTest, GeoJSON) {
     std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
     ASSERT_NO_THROW(
         doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
+    ASSERT_NO_THROW(doCompareText(exp_file, Compression::kNone));
     doImportAgainAndCompare(exp_file, "GeoJSON", geo_type, WITH_ARRAYS);
     removeExportedFile(exp_file);
   };
@@ -5380,21 +5390,24 @@ TEST_F(ExportTest, GeoJSON_GZip) {
     std::string exp_file = req_file + ".gz";
     ASSERT_NO_THROW(
         doExport(req_file, "GeoJSON", "GZip", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, GZIPPED));
+    ASSERT_NO_THROW(doCompareText(exp_file, Compression::kGZip));
     doImportAgainAndCompare(exp_file, "GeoJSON", geo_type, WITH_ARRAYS);
     removeExportedFile(exp_file);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
-TEST_F(ExportTest, GeoJSON_Zip_Unimplemented) {
+TEST_F(ExportTest, DISABLED_GeoJSON_Zip) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
-    EXPECT_THROW(
-        doExport(exp_file, "GeoJSON", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-        TDBException);
+    std::string req_file = "query_export_test_geojson_" + geo_type + ".geojson";
+    std::string exp_file = req_file + ".zip";
+    ASSERT_NO_THROW(
+        doExport(req_file, "GeoJSON", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID));
+    ASSERT_NO_THROW(doCompareText(exp_file, Compression::kZip));
+    doImportAgainAndCompare(exp_file, "GeoJSON", geo_type, WITH_ARRAYS);
+    removeExportedFile(exp_file);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -5418,7 +5431,7 @@ TEST_F(ExportTest, GeoJSONL_GeoJSON) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
     ASSERT_NO_THROW(
         doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
+    ASSERT_NO_THROW(doCompareText(exp_file, Compression::kNone));
     doImportAgainAndCompare(exp_file, "GeoJSONL", geo_type, WITH_ARRAYS);
     removeExportedFile(exp_file);
   };
@@ -5432,7 +5445,7 @@ TEST_F(ExportTest, GeoJSONL_Json) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".json";
     ASSERT_NO_THROW(
         doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
+    ASSERT_NO_THROW(doCompareText(exp_file, Compression::kNone));
     doImportAgainAndCompare(exp_file, "GeoJSONL", geo_type, WITH_ARRAYS);
     removeExportedFile(exp_file);
   };
@@ -5481,21 +5494,24 @@ TEST_F(ExportTest, GeoJSONL_GZip) {
     std::string exp_file = req_file + ".gz";
     ASSERT_NO_THROW(
         doExport(req_file, "GeoJSONL", "GZip", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, GZIPPED));
+    ASSERT_NO_THROW(doCompareText(exp_file, Compression::kGZip));
     doImportAgainAndCompare(exp_file, "GeoJSONL", geo_type, WITH_ARRAYS);
     removeExportedFile(exp_file);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
-TEST_F(ExportTest, GeoJSONL_Zip_Unimplemented) {
+TEST_F(ExportTest, DISABLED_GeoJSONL_Zip) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
-    EXPECT_THROW(
-        doExport(exp_file, "GeoJSONL", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-        TDBException);
+    std::string req_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
+    std::string exp_file = req_file + ".zip";
+    ASSERT_NO_THROW(
+        doExport(req_file, "GeoJSONL", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID));
+    ASSERT_NO_THROW(doCompareText(exp_file, Compression::kZip));
+    doImportAgainAndCompare(exp_file, "GeoJSONL", geo_type, WITH_ARRAYS);
+    removeExportedFile(exp_file);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }

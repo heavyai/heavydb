@@ -39,6 +39,8 @@ class QueryExporterCSV : public QueryExporter {
  private:
   std::ofstream outfile_;
   CopyParams copy_params_;
+  std::string file_path_;
+  FileCompression file_compression_;
 };
 
 }  // namespace import_export

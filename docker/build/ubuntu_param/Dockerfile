@@ -18,7 +18,7 @@ ENTRYPOINT ["/docker-entrypoint.sh"]
 ARG TZDATA_INSTALL="DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y tzdata" 
 
 RUN apt-get update && \
-    apt-get install -y  sudo curl
+    apt-get install -y sudo curl zip unzip
 RUN /bin/bash -c "${TZDATA_INSTALL}"
 RUN rm -rf /var/lib/apt/lists/*
 

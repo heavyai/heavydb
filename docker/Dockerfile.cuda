@@ -33,7 +33,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         clang-14 \
         liblz4-tool \
         default-jre-headless \
-        software-properties-common && \
+        software-properties-common \
+        zip && \
     add-apt-repository ppa:deadsnakes/ppa && \
     apt-get install -y --no-install-recommends \
         python3.10 \
