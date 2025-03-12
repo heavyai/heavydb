@@ -118,13 +118,6 @@ if [ "$ID" == "ubuntu" ] ; then
   sudo rm -f ${FILENAME}
   popd
 
-  # move validation layer JSON files from /etc to /share if needed (and remove then-empty vulkan subdir)
-  # @TODO(simon) remove this once the bundle has been repackaged for both x86 and ARM
-  if [ -d $PREFIX/etc/vulkan/explicit_layer.d ]; then
-    sudo mv $PREFIX/etc/vulkan/explicit_layer.d -t $PREFIX/share/vulkan
-    sudo rmdir $PREFIX/etc/vulkan
-  fi
-
   cat << EOF | sudo tee $PREFIX/mapd-deps.sh
 HEAVY_PREFIX=$PREFIX
 

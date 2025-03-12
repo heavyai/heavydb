@@ -995,15 +995,7 @@ function install_vulkan() {
   # Custom tarball which excludes the spir-v toolchain
   wget --continue ${HTTP_DEPS}/vulkansdk-linux-${ARCH}-no-spirv-$VULKAN_VERSION.tar.gz
   tar xvf vulkansdk-linux-${ARCH}-no-spirv-$VULKAN_VERSION.tar.gz
-  rsync -av $VULKAN_VERSION/${ARCH}/* $PREFIX
-  
-  # move validation layer JSON files from /etc to /share if needed (and remove then-empty vulkan subdir)
-  # @TODO(simon) remove this once the bundle has been repackaged for both x86 and ARM
-  if [ -d $PREFIX/etc/vulkan/explicit_layer.d ]; then
-    mv $PREFIX/etc/vulkan/explicit_layer.d -t $PREFIX/share/vulkan
-    rmdir $PREFIX/etc/vulkan
-  fi
-  
+  rsync -av $VULKAN_VERSION/${ARCH}/* $PREFIX  
   popd # vulkan
 }
 
