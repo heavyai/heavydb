@@ -1184,7 +1184,7 @@ TEST(ExecutorResourceMgr, AdjustNumCPUSlotForCPUGroupbyQuery) {
 
   for (size_t i = 0; i < 50; ++i) {
     chunk_request_info.chunks_with_byte_sizes[i] = {{3, 220, 1, static_cast<int>(i)},
-                                                    (i == 49) ? 12 : 16};
+                                                    (i == 49) ? 12ull : 16ull};
   }
 
   RequestInfo resource_request_info{
