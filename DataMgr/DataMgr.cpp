@@ -436,16 +436,21 @@ void DataMgr::createTopLevelMetadata()
   }
 }
 
-void DataMgr::takeMemoryInfoSnapshot() {
-  auto cpu_memory_info = getMemoryInfo(MemoryLevel::CPU_LEVEL);
+void DataMgr::takeMemoryInfoSnapshot(const std::string& key) {
+  const auto cpu_memory_info = getMemoryInfo(MemoryLevel::CPU_LEVEL);
   CHECK_EQ(cpu_memory_info.size(), size_t(1));
-  memory_info_snapshot_ = std::make_unique<MemoryInfoSnapshot>(
-      cpu_memory_info[0], getMemoryInfo(MemoryLevel::GPU_LEVEL));
+
+  const auto gpu_memory_info = getMemoryInfo(MemoryLevel::GPU_LEVEL);
+
+  std::unique_lock write_lock(memory_info_snapshots_mutex_);
+  memory_info_snapshots_[key] = std::make_unique<MemoryInfoSnapshot>(
+      std::move(cpu_memory_info[0]), std::move(gpu_memory_info));
 }
 
-std::unique_ptr<MemoryInfoSnapshot> DataMgr::getAndResetMemoryInfoSnapshot() {
-  CHECK(memory_info_snapshot_);
-  return std::move(memory_info_snapshot_);
+std::unique_ptr<MemoryInfoSnapshot> DataMgr::getAndResetMemoryInfoSnapshot(
+    const std::string& key) {
+  std::shared_lock read_lock(memory_info_snapshots_mutex_);
+  return std::move(shared::get_from_map(memory_info_snapshots_, key));
 }
 
 std::vector<Buffer_Namespace::MemoryInfo> DataMgr::getMemoryInfo(
