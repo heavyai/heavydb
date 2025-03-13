@@ -30,6 +30,7 @@ public class SystemTableConcurrencyTest {
   public static void main(String[] args) throws Exception {
     SystemTableConcurrencyTest test = new SystemTableConcurrencyTest();
     test.testConcurrency();
+    test.testMemorySystemTablesConcurrency();
   }
 
   public void testConcurrency() throws Exception {
@@ -183,6 +184,45 @@ public class SystemTableConcurrencyTest {
         logger.error("Exception: " + e.getMessage(), e);
         throw e;
       }
+    }
+  }
+
+  public void testMemorySystemTablesConcurrency() throws Exception {
+    logger.info("Starting Memory System Tables Concurrency Test");
+
+    Thread[] threads = new Thread[2];
+    final int memorySummaryThreadId = 0, memoryDetailsThreadId = 1;
+    threads[memorySummaryThreadId] = new Thread(
+            () -> { runSystemTableQueries("memory_summary", memorySummaryThreadId); });
+
+    threads[memoryDetailsThreadId] = new Thread(
+            () -> { runSystemTableQueries("memory_details", memoryDetailsThreadId); });
+
+    for (Thread thread : threads) {
+      thread.start();
+    }
+
+    for (Thread thread : threads) {
+      thread.join();
+    }
+
+    logger.info("Completed Memory System Tables Concurrency Test");
+  }
+
+  private void runSystemTableQueries(final String tableName, final int threadId) {
+    try {
+      logger.info("Starting thread[" + threadId + "]");
+      HeavyDBTestClient user = HeavyDBTestClient.getClient(
+              "localhost", 6274, "information_schema", "admin", "HyperInteractive");
+
+      final int repeatQueryCount = 50;
+      for (int i = 0; i < repeatQueryCount; i++) {
+        runSqlAsUser(String.format("SELECT * FROM %s;", tableName), user, threadId);
+      }
+      logger.info("Finished thread[" + threadId + "]");
+    } catch (Exception e) {
+      logger.error("Thread[" + threadId + "] Caught Exception: " + e.getMessage(), e);
+      throw new RuntimeException(e);
     }
   }
 
