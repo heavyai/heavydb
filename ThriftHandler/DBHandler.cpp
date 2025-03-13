@@ -7059,7 +7059,8 @@ bool check_and_reset_in_memory_system_table(const Catalog& catalog,
       CHECK(foreign_table->foreign_server);
       if (foreign_table->foreign_server->data_wrapper_type ==
           foreign_storage::DataWrapperType::INTERNAL_MEMORY_STATS) {
-        Catalog_Namespace::SysCatalog::instance().getDataMgr().takeMemoryInfoSnapshot();
+        Catalog_Namespace::SysCatalog::instance().getDataMgr().takeMemoryInfoSnapshot(
+            foreign_table->tableName);
       }
 
       catalog.getMetadataForTable(td.tableId, true);
