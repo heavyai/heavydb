@@ -148,8 +148,9 @@ class DataMgr {
   bool isBufferOnDevice(const ChunkKey& key,
                         const MemoryLevel memLevel,
                         const int deviceId);
-  void takeMemoryInfoSnapshot();
-  std::unique_ptr<MemoryInfoSnapshot> getAndResetMemoryInfoSnapshot();
+  void takeMemoryInfoSnapshot(const std::string& key);
+  std::unique_ptr<MemoryInfoSnapshot> getAndResetMemoryInfoSnapshot(
+      const std::string& key);
   std::vector<Buffer_Namespace::MemoryInfo> getMemoryInfo(
       const MemoryLevel memLevel) const;
   std::string dumpLevel(const MemoryLevel memLevel);
@@ -255,7 +256,8 @@ class DataMgr {
   bool hasGpus_;
   size_t reservedGpuMem_;
   mutable std::mutex buffer_access_mutex_;
-  std::unique_ptr<MemoryInfoSnapshot> memory_info_snapshot_;
+  std::map<std::string, std::unique_ptr<MemoryInfoSnapshot>> memory_info_snapshots_;
+  mutable std::shared_mutex memory_info_snapshots_mutex_;
 };
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage&);

@@ -202,7 +202,7 @@ void InternalMemoryStatsDataWrapper::initializeObjectsForTable(
   row_count_ = 0;
   auto memory_info_snapshot = Catalog_Namespace::SysCatalog::instance()
                                   .getDataMgr()
-                                  .getAndResetMemoryInfoSnapshot();
+                                  .getAndResetMemoryInfoSnapshot(table_name);
   memory_info_by_device_type_["CPU"] = {memory_info_snapshot->cpu_memory_info};
   memory_info_by_device_type_["GPU"] = memory_info_snapshot->gpu_memory_info;
   if (foreign_table_->tableName == Catalog_Namespace::MEMORY_SUMMARY_SYS_TABLE_NAME) {
