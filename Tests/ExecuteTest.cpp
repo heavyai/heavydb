@@ -25,6 +25,7 @@
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/ExpressionRange.h"
 #include "../QueryEngine/QueryEngine.h"
+#include "../QueryEngine/RelAlgDag.h"  // RelAlgDagBuilder::buildDag
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/DateConverters.h"
@@ -1481,7 +1482,294 @@ TEST(KeyForString, KeyForString) {
   }
 }
 
+class RelAlgDagOptimizationTest : public TestHelpers::TbbPrivateServerKiller {
+ protected:
+  void SetUp() override {
+    run_ddl_statement("DROP TABLE IF EXISTS table_1;");
+    run_ddl_statement("DROP TABLE IF EXISTS table_2;");
+    run_ddl_statement("CREATE TABLE table_1 (t1 TEXT);");
+    run_ddl_statement("CREATE TABLE table_2 (t2 TEXT);");
+  }
+
+  void TearDown() override {
+    run_ddl_statement("DROP TABLE IF EXISTS table_1;");
+    run_ddl_statement("DROP TABLE IF EXISTS table_2;");
+  }
+};
 class Select : public TestHelpers::TbbPrivateServerKiller {};
+
+TEST_F(RelAlgDagOptimizationTest, FoldFiltersRepeatedFilters) {
+  // The RA used in this test case may arise due to what appears to be a
+  // concurrency issue within Calcite processing, where filters repeat,
+  // especially if row level security is enabled. This test is implemented to
+  // ensure that we handle such cases gracefully in the backend.
+
+  std::string simplified_query_ra =
+      R"(
+    {
+      "rels": [
+        {
+          "id": "0",
+          "relOp": "LogicalTableScan",
+          "fieldNames": ["t1"],
+          "table": ["heavyai", "table_1"],
+          "inputs": []
+        },
+        {
+          "id": "1",
+          "relOp": "LogicalFilter",
+          "condition": {
+            "op": "=",
+            "operands": [
+              {"input": 0},
+              {
+                "literal": "abc",
+                "type": "CHAR",
+                "target_type": "VARCHAR",
+                "scale": -2147483648,
+                "precision": 50,
+                "type_scale": -2147483648,
+                "type_precision": 50
+              }
+            ],
+            "type": {
+              "type": "BOOLEAN",
+              "nullable": true
+            }
+          }
+        },
+        {
+          "id": "2",
+          "relOp": "LogicalFilter",
+          "condition": {
+            "op": "=",
+            "operands": [
+              {"input": 0},
+              {
+                "literal": "abc",
+                "type": "CHAR",
+                "target_type": "VARCHAR",
+                "scale": -2147483648,
+                "precision": 50,
+                "type_scale": -2147483648,
+                "type_precision": 50
+              }
+            ],
+            "type": {
+              "type": "BOOLEAN",
+              "nullable": true
+            }
+          }
+        },
+        {
+          "id": "3",
+          "relOp": "LogicalTableScan",
+          "fieldNames": ["t2"],
+          "table": ["heavyai", "table_2"],
+          "inputs": []
+        },
+        {
+          "id": "4",
+          "relOp": "LogicalFilter",
+          "condition": {
+            "op": "=",
+            "operands": [
+              {"input": 0},
+              {
+                "literal": "abc",
+                "type": "CHAR",
+                "target_type": "VARCHAR",
+                "scale": -2147483648,
+                "precision": 50,
+                "type_scale": -2147483648,
+                "type_precision": 50
+              }
+            ],
+            "type": {
+              "type": "BOOLEAN",
+              "nullable": true
+            }
+          }
+        },
+        {
+          "id": "5",
+          "relOp": "LogicalFilter",
+          "condition": {
+            "op": "=",
+            "operands": [
+              {"input": 0},
+              {
+                "literal": "abc",
+                "type": "CHAR",
+                "target_type": "VARCHAR",
+                "scale": -2147483648,
+                "precision": 50,
+                "type_scale": -2147483648,
+                "type_precision": 50
+              }
+            ],
+            "type": {
+              "type": "BOOLEAN",
+              "nullable": true
+            }
+          }
+        },
+        {
+          "id": "6",
+          "relOp": "LogicalJoin",
+          "condition": {
+            "op": "=",
+            "operands": [
+              {"input": 0},
+              {"input": 1}
+            ],
+            "type": {
+              "type": "BOOLEAN",
+              "nullable": true
+            }
+          },
+          "joinType": "inner",
+          "inputs": ["2", "5"]
+        },
+        {
+          "id": "7",
+          "relOp": "LogicalFilter",
+          "condition": {
+            "op": "IS NOT NULL",
+            "operands": [{"input": 0}],
+            "type": {
+              "type": "BOOLEAN",
+              "nullable": false
+            }
+          }
+        },
+        {
+          "id": "8",
+          "relOp": "LogicalProject",
+          "fields": ["txt"],
+          "exprs": [{"input": 0}]
+        }
+      ]
+    }
+    )";
+
+  auto query_dag_without_opt = RelAlgDagBuilder::buildDag(simplified_query_ra, false);
+  EXPECT_EQ(query_dag_without_opt->getNodes().size(), 9UL);
+
+  auto query_dag_with_opt = RelAlgDagBuilder::buildDag(simplified_query_ra, true);
+  EXPECT_EQ(query_dag_with_opt->getNodes().size(), 8UL);
+}
+
+TEST_F(RelAlgDagOptimizationTest, FoldFilters) {
+  std::string simplified_query_ra =
+      R"(
+    {
+      "rels": [
+        {
+          "id": "0",
+          "relOp": "LogicalTableScan",
+          "fieldNames": ["t1"],
+          "table": ["heavyai", "table_1"],
+          "inputs": []
+        },
+        {
+          "id": "1",
+          "relOp": "LogicalFilter",
+          "condition": {
+            "op": "=",
+            "operands": [
+              {"input": 0},
+              {
+                "literal": "abc",
+                "type": "CHAR",
+                "target_type": "VARCHAR",
+                "scale": -2147483648,
+                "precision": 50,
+                "type_scale": -2147483648,
+                "type_precision": 50
+              }
+            ],
+            "type": {
+              "type": "BOOLEAN",
+              "nullable": true
+            }
+          }
+        },
+        {
+          "id": "2",
+          "relOp": "LogicalTableScan",
+          "fieldNames": ["t2"],
+          "table": ["heavyai", "table_2"],
+          "inputs": []
+        },
+        {
+          "id": "3",
+          "relOp": "LogicalFilter",
+          "condition": {
+            "op": "=",
+            "operands": [
+              {"input": 0},
+              {
+                "literal": "abc",
+                "type": "CHAR",
+                "target_type": "VARCHAR",
+                "scale": -2147483648,
+                "precision": 50,
+                "type_scale": -2147483648,
+                "type_precision": 50
+              }
+            ],
+            "type": {
+              "type": "BOOLEAN",
+              "nullable": true
+            }
+          }
+        },
+        {
+          "id": "4",
+          "relOp": "LogicalJoin",
+          "condition": {
+            "op": "=",
+            "operands": [
+              {"input": 0},
+              {"input": 1}
+            ],
+            "type": {
+              "type": "BOOLEAN",
+              "nullable": true
+            }
+          },
+          "joinType": "inner",
+          "inputs": ["1", "3"]
+        },
+        {
+          "id": "5",
+          "relOp": "LogicalFilter",
+          "condition": {
+            "op": "IS NOT NULL",
+            "operands": [{"input": 0}],
+            "type": {
+              "type": "BOOLEAN",
+              "nullable": false
+            }
+          }
+        },
+        {
+          "id": "6",
+          "relOp": "LogicalProject",
+          "fields": ["txt"],
+          "exprs": [{"input": 0}]
+        }
+      ]
+    }
+    )";
+
+  auto query_dag_without_opt = RelAlgDagBuilder::buildDag(simplified_query_ra, false);
+  EXPECT_EQ(query_dag_without_opt->getNodes().size(), 7UL);
+
+  auto query_dag_with_opt = RelAlgDagBuilder::buildDag(simplified_query_ra, true);
+  EXPECT_EQ(query_dag_with_opt->getNodes().size(), 8UL);
+}
 
 TEST_F(Select, NullWithAndOr) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
