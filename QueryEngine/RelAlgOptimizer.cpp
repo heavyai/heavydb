@@ -16,6 +16,7 @@
 
 #include "RelAlgOptimizer.h"
 #include "Logger/Logger.h"
+#include "RelAlgDag.h"
 #include "RexVisitor.h"
 #include "Visitors/RexSubQueryIdCollector.h"
 
@@ -1455,20 +1456,46 @@ class RexInputRedirector : public RexDeepCopyVisitor {
   const RelAlgNode* new_src_;
 };
 
+class RelRexRebindInputsVisitor : public RelAlgDagNode::Visitor {
+ public:
+  RelRexRebindInputsVisitor(const RelAlgNode* old_node, const RelAlgNode* new_node)
+      : old_node_(old_node), new_node_(new_node) {}
+
+  bool visit(RexInput const* n, std::string s) {
+    if (n->getSourceNode() == old_node_) {
+      n->setSourceNode(new_node_);
+    }
+    return true;
+  }
+
+ private:
+  const RelAlgNode* old_node_;
+  const RelAlgNode* new_node_;
+};
+
 void replace_all_usages(
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes,
     std::shared_ptr<const RelAlgNode> old_def_node,
     std::shared_ptr<const RelAlgNode> new_def_node,
     std::unordered_map<const RelAlgNode*, std::shared_ptr<RelAlgNode>>& deconst_mapping,
     std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>&
         du_web) {
   auto usrs_it = du_web.find(old_def_node.get());
-  RexInputRedirector redirector(new_def_node.get(), old_def_node.get());
-  CHECK(usrs_it != du_web.end());
-  for (auto usr : usrs_it->second) {
-    auto usr_it = deconst_mapping.find(usr);
-    CHECK(usr_it != deconst_mapping.end());
-    usr_it->second->replaceInput(old_def_node, new_def_node);
+  RelRexRebindInputsVisitor redirector(old_def_node.get(), new_def_node.get());
+  // Rebind all RexInputs
+  for (auto node : nodes) {
+    if (node) {
+      node->accept(redirector, std::to_string(node->getId()));
+    }
   }
+  // Replace all references amongst nodes to the replaced node with the new node (changing
+  // the DAG structure)
+  for (auto node : nodes) {
+    if (node) {
+      node->RelAlgNode::replaceInput(old_def_node, new_def_node);
+    }
+  }
+  CHECK(usrs_it != du_web.end());
   auto new_usrs_it = du_web.find(new_def_node.get());
   CHECK(new_usrs_it != du_web.end());
   new_usrs_it->second.insert(usrs_it->second.begin(), usrs_it->second.end());
@@ -1523,7 +1550,7 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
         auto new_condition = std::unique_ptr<const RexScalar>(
             new RexOperator(kAND, operands, SQLTypeInfo(kBOOLEAN, notnull)));
         folded_filter->setCondition(new_condition);
-        replace_all_usages(filter, folded_filter, deconst_mapping, web);
+        replace_all_usages(nodes, filter, folded_filter, deconst_mapping, web);
         deconst_mapping.erase(filter.get());
         web.erase(filter.get());
         web[filter->getInput(0)].erase(filter.get());
