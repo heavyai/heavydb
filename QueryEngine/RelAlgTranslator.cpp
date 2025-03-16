@@ -1015,9 +1015,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
           col_type.getStringDictKey(), val_set.getRowSetMemOwner(), true);
       CHECK(sd);
       const auto needle_null_val = inline_int_null_val(arg_type);
-      const auto catalog =
-          Catalog_Namespace::SysCatalog::instance().getCatalog(source_dict_key.db_id);
-      CHECK(catalog);
       fetcher_threads.push_back(std::async(
           std::launch::async,
           [&val_set,
@@ -1026,9 +1023,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
            dd,
            &source_dict_key,
            &dest_dict_key,
-           needle_null_val,
-           catalog](std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
+           needle_null_val](
+              std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
             if (g_cluster) {
+              const auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(
+                  source_dict_key.db_id);
+              CHECK(catalog) << "db_id: " << source_dict_key.db_id;
               CHECK_GE(dd->getGeneration(), 0);
               fill_dictionary_encoded_in_vals(
                   in_vals,
