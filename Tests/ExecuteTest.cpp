@@ -2524,6 +2524,34 @@ TEST_F(Select, InValuesDictEncodedStringColFromSubquery) {
   }
 }
 
+TEST_F(Select, InValuesDictEncodedStringColFromSubqueryWithCast) {
+  ScopeGuard watchdog_cleanup = [original = g_enable_watchdog]() {
+    g_enable_watchdog = original;
+  };
+  g_enable_watchdog = true;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    try {
+      c("SELECT COUNT(*) FROM test WHERE num_text IN (SELECT CAST(y AS TEXT) FROM "
+        "test_one_row);",
+        dt);
+    } catch (const std::runtime_error& e) {
+      if (g_aggregator) {
+        // Cast to dictionary encoded text is not supported in distributed mode.
+        const std::string error_message{e.what()};
+        EXPECT_TRUE(error_message.find("Cast to dictionary-encoded string type not "
+                                       "supported for distributed queries") !=
+                    std::string::npos)
+            << error_message;
+      } else {
+        throw;
+      }
+    }
+  }
+}
+
 TEST_F(Select, FilterAndMultipleAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
