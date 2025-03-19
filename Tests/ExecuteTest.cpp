@@ -1496,7 +1496,6 @@ class RelAlgDagOptimizationTest : public TestHelpers::TbbPrivateServerKiller {
     run_ddl_statement("DROP TABLE IF EXISTS table_2;");
   }
 };
-class Select : public TestHelpers::TbbPrivateServerKiller {};
 
 TEST_F(RelAlgDagOptimizationTest, FoldFiltersRepeatedFilters) {
   // The RA used in this test case may arise due to what appears to be a
@@ -1770,6 +1769,23 @@ TEST_F(RelAlgDagOptimizationTest, FoldFilters) {
   auto query_dag_with_opt = RelAlgDagBuilder::buildDag(simplified_query_ra, true);
   EXPECT_EQ(query_dag_with_opt->getNodes().size(), 8UL);
 }
+
+class Select : public TestHelpers::TbbPrivateServerKiller {
+ protected:
+  void runAndAssertException(const std::string& query_str,
+                             const std::string& expected_error,
+                             const ExecutorDeviceType device_type) {
+    try {
+      QR::get()->runSQL(query_str, device_type, g_hoist_literals, true);
+      FAIL() << "An exception should have been thrown for this query: " << query_str;
+    } catch (const std::runtime_error& e) {
+      const std::string error_message{e.what()};
+      EXPECT_TRUE(error_message.find(expected_error) != std::string::npos)
+          << "Could not find expected error: " << expected_error
+          << " in error message: " << error_message;
+    }
+  }
+};
 
 TEST_F(Select, NullWithAndOr) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -4664,6 +4680,53 @@ TEST_F(Select, ApproxPercentileSubqueries) {
         "SELECT MAX(am) FROM (SELECT x, APPROX_PERCENTILE(w,0.5) AS am FROM test GROUP "
         "BY x);";
     EXPECT_EQ(-7.0, v<double>(run_simple_agg(query, dt)));
+  }
+}
+
+TEST_F(Select, ApproxPercentileNonConstantPercentile) {
+  std::string expected_error_message;
+  if (g_aggregator) {
+    expected_error_message =
+        "APPROX_PERCENTILE/MEDIAN is not supported in distributed mode at this time.";
+  } else {
+    expected_error_message =
+        "The second argument of the APPROX_PERCENTILE function must be a constant.";
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    runAndAssertException(
+        "SELECT APPROX_PERCENTILE(y, u) FROM test;", expected_error_message, dt);
+  }
+}
+
+TEST_F(Select, ApproxPercentileNegativePercentile) {
+  std::string expected_error_message;
+  if (g_aggregator) {
+    expected_error_message =
+        "APPROX_PERCENTILE/MEDIAN is not supported in distributed mode at this time.";
+  } else {
+    expected_error_message =
+        "The second argument of the APPROX_PERCENTILE function must be a floating point "
+        "value between 0 and 1.";
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    runAndAssertException(
+        "SELECT APPROX_PERCENTILE(y, -0.1) FROM test;", expected_error_message, dt);
+  }
+}
+
+TEST_F(Select, ApproxPercentileGreaterThanOnePercentile) {
+  std::string expected_error_message;
+  if (g_aggregator) {
+    expected_error_message =
+        "APPROX_PERCENTILE/MEDIAN is not supported in distributed mode at this time.";
+  } else {
+    expected_error_message =
+        "The second argument of the APPROX_PERCENTILE function must be a floating point "
+        "value between 0 and 1.";
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    runAndAssertException(
+        "SELECT APPROX_PERCENTILE(y, 1.1) FROM test;", expected_error_message, dt);
   }
 }
 

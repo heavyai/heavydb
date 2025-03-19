@@ -314,10 +314,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
         }
         // If second parameter is not given then APPROX_MEDIAN is assumed.
         if (rex->size() == 2) {
-          arg1 = std::dynamic_pointer_cast<Analyzer::Constant>(
-              std::dynamic_pointer_cast<Analyzer::Constant>(
-                  scalar_sources[rex->getOperand(1)])
-                  ->add_cast(SQLTypeInfo(kDOUBLE)));
+          const auto quantile_constant = std::dynamic_pointer_cast<Analyzer::Constant>(
+              scalar_sources[rex->getOperand(1)]);
+          if (!quantile_constant) {
+            throw std::runtime_error(
+                "The second argument of the APPROX_PERCENTILE function must be a "
+                "constant.");
+          }
+          quantile_constant->add_cast(SQLTypeInfo(kDOUBLE));
+          auto quantile_value = quantile_constant->get_constval().doubleval;
+          if (quantile_value < 0 || quantile_value > 1) {
+            throw std::runtime_error(
+                "The second argument of the APPROX_PERCENTILE function must be a "
+                "floating point value between 0 and 1.");
+          }
+          arg1 = quantile_constant;
         } else {
 #ifdef _WIN32
           Datum median;
