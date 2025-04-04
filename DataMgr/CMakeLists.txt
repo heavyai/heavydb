@@ -39,7 +39,6 @@ set(datamgr_source_files
     BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp
     BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp
     BufferMgr/CpuBufferMgr/CpuBuffer.cpp
-    BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.cpp
     BufferMgr/BufferMgr.cpp
     BufferMgr/Buffer.cpp
     PersistentStorageMgr/PersistentStorageMgr.cpp
@@ -67,11 +66,6 @@ endif()
 
 if(ENABLE_AWS_S3)
   list(APPEND datamgr_source_files ForeignStorage/S3FilePathUtil.cpp)
-endif()
-
-if (ENABLE_MEMKIND)
-  list(APPEND datamgr_source_files Allocators/PMemAllocator.cpp)
-  set(memkind_LIBRARIES ${MEMKIND_LIB_PATH})
 endif()
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
@@ -124,9 +118,6 @@ target_link_libraries(DataMgr CudaMgr Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS}
 # and therefore have no special meaning when produced by a generator expression."
 if(ENABLE_FSI_ODBC)
   target_link_libraries(DataMgr ${iODBC_LIBRARIES})
-endif()
-if(ENABLE_MEMKIND)
-  target_link_libraries(DataMgr ${memkind_LIBR})
 endif()
 
 option(ENABLE_CRASH_CORRUPTION_TEST "Enable crash using SIGUSR2 during page deletion to faster and affirmative test/repro db corruption" OFF)

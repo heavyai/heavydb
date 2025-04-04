@@ -278,11 +278,6 @@ extern bool g_read_only;
 extern bool g_enable_automatic_ir_metadata;
 extern size_t g_enable_parallel_linearization;
 extern size_t g_max_log_length;
-#ifdef ENABLE_MEMKIND
-extern bool g_enable_tiered_cpu_mem;
-extern size_t g_pmem_size;
-extern std::string g_pmem_path;
-#endif
 extern bool g_enable_data_recycler;
 extern bool g_enable_column_level_security;
 extern bool g_use_hashtable_cache;
