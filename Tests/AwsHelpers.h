@@ -29,6 +29,11 @@
 
 #include "Catalog/ForeignServer.h"
 
+#ifdef HEAVYAI_S3_HAS_S3CLIENT_CONFIGURATION
+#include <aws/s3/S3ClientConfiguration.h>
+#include <aws/s3/S3EndpointProvider.h>
+#endif
+
 bool is_valid_aws_key(std::pair<std::string, std::string> key) {
   return (key.first.size() > 0) && (key.second.size() > 0);
 }
@@ -129,13 +134,23 @@ void restore_env_vars(const std::map<std::string, std::string>& env_vars,
   }
 }
 
-Aws::S3::S3Client create_s3_client(const std::string& aws_region) {
+Aws::S3::S3Client create_s3_client_for_region(const std::string& aws_region) {
+  const auto [access_key, secret_key] = get_aws_keys_from_env();
+#ifdef HEAVYAI_S3_HAS_S3CLIENT_CONFIGURATION
+  Aws::S3::S3ClientConfiguration s3_client_config;
+  s3_client_config.region = aws_region;
+  auto endpoint_provider = foreign_storage::get_endpoint_provider(s3_client_config);
+  Aws::S3::S3Client s3_client(Aws::Auth::AWSCredentials(access_key, secret_key),
+                              std::move(endpoint_provider),
+                              s3_client_config);
+#else
   Aws::Client::ClientConfiguration client_config;
   client_config.region = aws_region;
-
-  const auto [access_key, secret_key] = get_aws_keys_from_env();
   Aws::S3::S3Client s3_client(Aws::Auth::AWSCredentials(access_key, secret_key),
-                              client_config);
+                              client_config,
+                              Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+                              true);
+#endif
   return s3_client;
 }
 }  // namespace
@@ -210,7 +225,7 @@ void upload_file_to_s3(const std::string& s3_bucket_name,
   }
   request.SetBody(file_data);
 
-  auto s3_client = create_s3_client(aws_region);
+  auto s3_client = create_s3_client_for_region(aws_region);
   auto outcome = s3_client.PutObject(request);
   if (!outcome.IsSuccess()) {
     throw std::runtime_error{
@@ -224,7 +239,7 @@ void upload_file_to_s3(const std::string& s3_bucket_name,
 void delete_object_keys_with_prefix(const std::string& s3_bucket_name,
                                     const std::string& s3_object_keys_prefix,
                                     const std::string& aws_region) {
-  auto s3_client = create_s3_client(aws_region);
+  auto s3_client = create_s3_client_for_region(aws_region);
 
   Aws::S3::Model::ListObjectsRequest list_objects_request;
   list_objects_request.WithBucket(s3_bucket_name);

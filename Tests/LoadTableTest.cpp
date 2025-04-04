@@ -1116,7 +1116,6 @@ class ThriftDetectServerPrivilegeTest : public DBHandlerTestFixture {
 
   static void SetUpTestSuite() {
     DBHandlerTestFixture::SetUpTestSuite();
-    heavydb_aws_sdk::init_sdk();
     g_allow_s3_server_privileges = true;
     aws_environment_ = unset_aws_env();
     create_stub_aws_profile(AWS_DUMMY_CREDENTIALS_DIR);
@@ -1124,7 +1123,6 @@ class ThriftDetectServerPrivilegeTest : public DBHandlerTestFixture {
 
   static void TearDownTestSuite() {
     DBHandlerTestFixture::TearDownTestSuite();
-    heavydb_aws_sdk::shutdown_sdk();
     g_allow_s3_server_privileges = false;
     restore_aws_env(aws_environment_);
     boost::filesystem::remove_all(AWS_DUMMY_CREDENTIALS_DIR);
@@ -1605,6 +1603,11 @@ TEST_F(ThriftDetectGeoFileTest, EncodedTextColumnUsesTransientDictionary) {
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+
+#ifdef HAVE_AWS_S3
+  heavydb_aws_sdk::init_sdk();
+#endif
+
   int err{0};
   try {
     testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
@@ -1612,5 +1615,10 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+
+#ifdef HAVE_AWS_S3
+  heavydb_aws_sdk::shutdown_sdk();
+#endif
+
   return err;
 }

@@ -699,14 +699,12 @@ class FsiImportTest {
  public:
   static void setupS3() {
 #ifdef HAVE_AWS_S3
-    heavydb_aws_sdk::init_sdk();
     g_allow_s3_server_privileges = true;
 #endif
   }
 
   static void teardownS3() {
 #ifdef HAVE_AWS_S3
-    heavydb_aws_sdk::shutdown_sdk();
     g_allow_s3_server_privileges = false;
 #endif
   }
@@ -2726,16 +2724,6 @@ const char* create_table_example_2 = R"(
 
 class ImportTest : public ImportExportTestBase {
  protected:
-#ifdef HAVE_AWS_S3
-  static void SetUpTestSuite() {
-    heavydb_aws_sdk::init_sdk();
-  }
-
-  static void TearDownTestSuite() {
-    heavydb_aws_sdk::shutdown_sdk();
-  }
-#endif
-
   void SetUp() override {
     ImportExportTestBase::SetUp();
     sql("drop table if exists trips;");
@@ -4471,7 +4459,6 @@ class ImportServerPrivilegeTest : public ImportExportTestBase {
   inline static std::optional<std::string> aws_region_ = std::nullopt;
 
   static void SetUpTestSuite() {
-    heavydb_aws_sdk::init_sdk();
     g_allow_s3_server_privileges = true;
     aws_environment_ = unset_aws_env();
     create_stub_aws_profile(AWS_DUMMY_CREDENTIALS_DIR);
@@ -4482,7 +4469,6 @@ class ImportServerPrivilegeTest : public ImportExportTestBase {
     if (aws_region_.has_value()) {
       setAwsRegion(aws_region_.value());
     }
-    heavydb_aws_sdk::shutdown_sdk();
     g_allow_s3_server_privileges = false;
     restore_aws_env(aws_environment_);
     boost::filesystem::remove_all(AWS_DUMMY_CREDENTIALS_DIR);
@@ -4625,16 +4611,6 @@ class SortedImportTest
     : public ImportExportTestBase,
       public testing::WithParamInterface<std::tuple<std::string, std::string>> {
  public:
-#ifdef HAVE_AWS_S3
-  static void SetUpTestSuite() {
-    heavydb_aws_sdk::init_sdk();
-  }
-
-  static void TearDownTestSuite() {
-    heavydb_aws_sdk::shutdown_sdk();
-  }
-#endif
-
   void SetUp() override {
     ImportExportTestBase::SetUp();
     locality_ = get<0>(GetParam());
@@ -7279,6 +7255,10 @@ int main(int argc, char** argv) {
 
   g_enable_legacy_raster_import = true;
 
+#ifdef HAVE_AWS_S3
+  heavydb_aws_sdk::init_sdk();
+#endif
+
   int err{0};
   try {
     testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
@@ -7286,6 +7266,11 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+
+#ifdef HAVE_AWS_S3
+  heavydb_aws_sdk::shutdown_sdk();
+#endif
+
   g_enable_fsi = false;
   g_enable_s3_fsi = false;
   return err;
