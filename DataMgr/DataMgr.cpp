@@ -22,7 +22,6 @@
 
 #include "DataMgr/DataMgr.h"
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
-#include "BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
@@ -49,12 +48,6 @@
 #include <string_view>
 
 extern bool g_enable_fsi;
-
-#ifdef ENABLE_MEMKIND
-bool g_enable_tiered_cpu_mem{false};
-std::string g_pmem_path{};
-size_t g_pmem_size{0};
-#endif
 
 bool g_use_cpu_mem_pool_size_for_max_cpu_slab_size{false};
 bool g_enable_data_mgr_global_lock{false};
@@ -221,24 +214,7 @@ void DataMgr::allocateCpuBufferMgr(int32_t device_id,
                                    size_t min_cpu_slab_size,
                                    size_t max_cpu_slab_size,
                                    size_t default_cpu_slab_size,
-                                   size_t page_size,
-                                   const CpuTierSizeVector& cpu_tier_sizes) {
-#ifdef ENABLE_MEMKIND
-  if (g_enable_tiered_cpu_mem) {
-    bufferMgrs_[1].push_back(
-        new Buffer_Namespace::TieredCpuBufferMgr(0,
-                                                 total_cpu_size,
-                                                 cudaMgr_.get(),
-                                                 min_cpu_slab_size,
-                                                 max_cpu_slab_size,
-                                                 default_cpu_slab_size,
-                                                 page_size,
-                                                 cpu_tier_sizes,
-                                                 bufferMgrs_[0][0]));
-    return;
-  }
-#endif
-
+                                   size_t page_size) {
   bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
                                                               total_cpu_size,
                                                               cudaMgr_.get(),
@@ -315,21 +291,7 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
 
   size_t total_cpu_size = 0;
 
-#ifdef ENABLE_MEMKIND
-  CpuTierSizeVector cpu_tier_sizes(numCpuTiers, 0);
-  cpu_tier_sizes[CpuTier::DRAM] = cpuBufferSize;
-  if (g_enable_tiered_cpu_mem) {
-    cpu_tier_sizes[CpuTier::PMEM] = g_pmem_size;
-    LOG(INFO) << "Max memory pool size for PMEM is " << (float)g_pmem_size / (1024 * 1024)
-              << "MB";
-  }
-  for (auto cpu_tier_size : cpu_tier_sizes) {
-    total_cpu_size += cpu_tier_size;
-  }
-#else
-  CpuTierSizeVector cpu_tier_sizes{};
   total_cpu_size = cpu_buffer_size;
-#endif
 
   if (hasGpus_ || cudaMgr_) {
     LOG(INFO) << "Reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
@@ -340,8 +302,7 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                          min_cpu_slab_size,
                          max_cpu_slab_size,
                          default_cpu_slab_size,
-                         page_size,
-                         cpu_tier_sizes);
+                         page_size);
     // CPU memory level
     levelSizes_.push_back(1);
     auto num_gpus = cudaMgr_->getDeviceCount();
@@ -383,8 +344,7 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                          min_cpu_slab_size,
                          max_cpu_slab_size,
                          default_cpu_slab_size,
-                         page_size,
-                         cpu_tier_sizes);
+                         page_size);
     // CPU memory level
     levelSizes_.push_back(1);
   }

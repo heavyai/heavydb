@@ -244,8 +244,7 @@ class DataMgr {
                             size_t min_cpu_slab_size,
                             size_t max_cpu_slab_size,
                             size_t default_cpu_slab_size,
-                            size_t page_size,
-                            const std::vector<size_t>& cpu_tier_sizes);
+                            size_t page_size);
   std::unique_lock<std::mutex> getGlobalLockIfEnabled() const;
 
   mutable std::shared_mutex max_num_rows_mutex_;
