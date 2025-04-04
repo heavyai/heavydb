@@ -17,6 +17,7 @@
 #include "S3Archive.h"
 
 #include <aws/core/Aws.h>
+#include <aws/core/VersionConfig.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/s3/model/GetObjectRequest.h>
@@ -32,6 +33,35 @@
 #include "Logger/Logger.h"
 
 bool g_allow_s3_server_privileges{false};
+bool g_allow_s3_imds_check{false};
+
+#ifdef AWS_SDK_VERSION_MAJOR  // AWS_SDK_VERSION_MAJOR was first defined in 1.9.6
+namespace boost {
+namespace log {
+// ClientConfiguration::followRedirects was converted
+// from bool to class enum FollowRedirectsPolicy in 1.8.0.
+formatting_ostream& operator<<(formatting_ostream& os,
+                               Aws::Client::FollowRedirectsPolicy frp) {
+  switch (frp) {
+    case Aws::Client::FollowRedirectsPolicy::DEFAULT:
+      return os << "DEFAULT";
+    case Aws::Client::FollowRedirectsPolicy::ALWAYS:
+      return os << "ALWAYS";
+    case Aws::Client::FollowRedirectsPolicy::NEVER:
+      return os << "NEVER";
+    default:
+      return os << "UNKNOWN_VALUE(" << static_cast<int>(frp) << ')';
+  }
+}
+// ClientConfiguration::enableEndpointDiscovery was converted
+// from bool to Aws::Crt::Optional<bool> in 1.9.0.
+formatting_ostream& operator<<(formatting_ostream& os,
+                               Aws::Crt::Optional<bool> opt_bool) {
+  return os << (opt_bool ? *opt_bool ? "true" : "false" : "nullopt");
+}
+}  // namespace log
+}  // namespace boost
+#endif  // AWS_SDK_VERSION_MAJOR
 
 namespace {
 void get_s3_parameter_from_env_if_unset_or_empty(std::string& param,
@@ -76,8 +106,7 @@ void log_client_config(const Aws::Client::ClientConfiguration& client_config,
           << "enableHostPrefixInjection: " << client_config.enableHostPrefixInjection
           << "enableEndpointDiscovery: " << client_config.enableEndpointDiscovery;
 }
-
-};  // namespace
+}  // namespace
 
 void S3Archive::init_for_read() {
   boost::filesystem::create_directories(s3_temp_dir);

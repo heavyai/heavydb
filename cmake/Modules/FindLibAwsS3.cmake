@@ -141,10 +141,10 @@ get_filename_component(Aws_LIBRARY_DIR ${LibAwsCI_LIBRARY} DIRECTORY)
 include(${Aws_LIBRARY_DIR}/cmake/AWSSDK/AWSSDKConfigVersion.cmake)
 message(STATUS "AWSSDK version ${PACKAGE_VERSION}")
 #
-# Extra  libraries needed for linking version 1.9.335
+# Extra libraries needed for linking versions > 1.7
 #
 
-if("${PACKAGE_VERSION}" VERSION_EQUAL "1.9.335")
+if(NOT "${PACKAGE_VERSION}" VERSION_EQUAL "1.7.301")
   find_library(libAwsCrt_LIBRARY
     NAMES aws-crt-cpp
     HINTS ENV LD_LIBRARY_PATH

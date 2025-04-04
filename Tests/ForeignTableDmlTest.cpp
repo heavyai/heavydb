@@ -8044,6 +8044,10 @@ int main(int argc, char** argv) {
   po::variables_map vm = DBHandlerTestFixture::initTestArgs(argc, argv, desc);
   g_run_odbc = (vm.count("run-odbc-tests"));
 
+#ifdef HAVE_AWS_S3
+  heavydb_aws_sdk::init_sdk();
+#endif
+
   int err{0};
   try {
     testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
@@ -8051,6 +8055,10 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+
+#ifdef HAVE_AWS_S3
+  heavydb_aws_sdk::shutdown_sdk();
+#endif
 
   g_enable_fsi = false;
   return err;

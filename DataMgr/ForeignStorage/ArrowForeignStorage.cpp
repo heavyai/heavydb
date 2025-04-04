@@ -951,7 +951,7 @@ static std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo typ
       return utf8();
     case kDECIMAL:
     case kNUMERIC:
-      return decimal(type.get_precision(), type.get_scale());
+      return decimal128(type.get_precision(), type.get_scale());
     case kTIME:
       return time32(TimeUnit::SECOND);
     case kDATE:

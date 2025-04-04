@@ -1138,7 +1138,7 @@ std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& sql_type,
       return arrow::utf8();
     case kDECIMAL:
     case kNUMERIC:
-      return arrow::decimal(sql_type.get_precision(), sql_type.get_scale());
+      return arrow::decimal128(sql_type.get_precision(), sql_type.get_scale());
     case kTIME:
       return time32(arrow::TimeUnit::SECOND);
     case kDATE: {
