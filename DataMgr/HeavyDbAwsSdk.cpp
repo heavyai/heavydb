@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "HeavyDbAwsSdk.h"
+#include "DataMgr/HeavyDbAwsSdk.h"
 
 #include <list>
 
@@ -27,10 +27,13 @@
 #endif
 
 #include "Logger/Logger.h"
+#include "OSDependent/heavyai_env.h"
 
 #ifdef ARROW_HAS_PRIVATE_AWS_SDK
 static Aws::SDKOptions awsapi_options;
 #endif
+
+extern bool g_allow_s3_imds_check;
 
 void heavydb_aws_sdk::init_sdk() {
   auto ssl_config = heavydb_aws_sdk::get_ssl_config();
@@ -46,6 +49,15 @@ void heavydb_aws_sdk::init_sdk() {
   // Directly initialize the AWS SDK, if Arrow uses a private version of the SDK
   Aws::InitAPI(awsapi_options);
 #endif
+  // workaround for S3 client init delay in SDK 1.8+
+  // default behavior is to waste seconds trying to infer
+  // a default region from the current EC2 domain which
+  // won't exist unless running on an EC2 instance
+  // the check will be disabled by default unless overridden
+  // with the allow-s3-imds-check config option
+  // see https://github.com/aws/aws-sdk-cpp/issues/1410
+  // and https://github.com/aws/aws-sdk-cpp/discussions/3322
+  heavyai::setenv("AWS_EC2_METADATA_DISABLED", g_allow_s3_imds_check ? "false" : "true");
 }
 
 void heavydb_aws_sdk::shutdown_sdk() {

@@ -726,10 +726,6 @@ TEST_F(DumpAndRestoreMetadataTest, CommentWithControlCharacters) {
 #ifdef HAVE_AWS_S3
 class S3RestoreTest : public DumpAndRestoreTest {
  protected:
-  static void SetUpTestSuite() { heavydb_aws_sdk::init_sdk(); }
-
-  static void TearDownTestSuite() { heavydb_aws_sdk::shutdown_sdk(); }
-
   void SetUp() override {
     g_allow_s3_server_privileges = false;
     run_ddl_statement("DROP TABLE IF EXISTS test_table;");
@@ -890,12 +886,21 @@ int main(int argc, char** argv) {
 
   QR::init(BASE_PATH);
 
+#ifdef HAVE_AWS_S3
+  heavydb_aws_sdk::init_sdk();
+#endif
+
   int err{0};
   try {
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+
+#ifdef HAVE_AWS_S3
+  heavydb_aws_sdk::shutdown_sdk();
+#endif
+
   QR::reset();
   return err;
 }
