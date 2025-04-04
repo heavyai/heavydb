@@ -1,0 +1,23 @@
+--- ./Modules/FindCURL.cmake
++++ ./Modules/FindCURL.cmake
+@@ -82,8 +82,18 @@
+ if(PKG_CONFIG_FOUND)
+   pkg_check_modules(PC_CURL QUIET libcurl)
+   if(PC_CURL_FOUND)
+-    pkg_get_variable(CURL_SUPPORTED_PROTOCOLS libcurl supported_protocols)
+-    pkg_get_variable(CURL_SUPPORTED_FEATURES libcurl supported_features)
++    # work around what must be a bug in this find script
++    # fetch the variable for the package
++    # the expectation is that the list contains multiple items (HTTP, HTTPS etc.)
++    # but for curl it just contains a single space-separated string with those items
++    # so we have to fetch the first element of each list as a string
++    # and then tokenize those strings back to the actual desired lists
++    pkg_get_variable(CURL_SUPPORTED_PROTOCOLS_LIST libcurl supported_protocols)
++    pkg_get_variable(CURL_SUPPORTED_FEATURES_LIST libcurl supported_features)
++    list(GET CURL_SUPPORTED_PROTOCOLS_LIST 0 CURL_SUPPORTED_PROTOCOLS_STRING)
++    list(GET CURL_SUPPORTED_FEATURES_LIST 0 CURL_SUPPORTED_FEATURES_STRING)
++    string(REPLACE " " ";" CURL_SUPPORTED_PROTOCOLS "${CURL_SUPPORTED_PROTOCOLS_STRING}")
++    string(REPLACE " " ";" CURL_SUPPORTED_FEATURES "${CURL_SUPPORTED_FEATURES_STRING}")
+   endif()
+ endif()
+ 

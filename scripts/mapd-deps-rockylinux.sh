@@ -9,7 +9,6 @@ COMPRESS=false
 SAVE_SPACE=false
 UPDATE_PACKAGES=false
 CACHE=
-LIBRARY_TYPE=
 
 # Establish number of cores to compile with
 # Default to 8, Limit to 24
@@ -38,10 +37,10 @@ while (( $# )); do
       CACHE="${1#*=}"
       ;;
     --static)
-      LIBRARY_TYPE=static
       ;;
     --shared)
-      LIBRARY_TYPE=shared
+      echo "ERROR - Only --static mode supported for Rocky"
+      exit
       ;;
     --nproc=*)
       NPROC="${1#*=}"
@@ -53,14 +52,13 @@ while (( $# )); do
   shift
 done
 
-# Validate LIBRARY_TYPE
-if [ "$LIBRARY_TYPE" == "" ] ; then
-  echo "ERROR - Library type must be specified (--static or --shared)"
-  exit
-fi
-
 # Establish architecture
 ARCH=$(uname -m)
+
+if [ "$ARCH" != "x86_64" ] ; then
+  echo "ERROR - Rocky only supported on x86_64"
+  exit
+fi
 
 if [[ -n $CACHE && ( ! -d $CACHE  ||  ! -w $CACHE )  ]]; then
   # To prevent possible mistakes CACHE must be a writable directory
@@ -159,8 +157,6 @@ export BOOST_ROOT=$PREFIX/include
 # http://zlib.net/zlib-1.2.8.tar.xz
 download_make_install ${HTTP_DEPS}/zlib-1.2.8.tar.xz
 
-install_memkind
-
 install_uriparser
 
 # libarchive
@@ -183,15 +179,18 @@ install_archive
 VERS=0.3.5
 CXXFLAGS="-fPIC -std=c++11" download_make_install https://github.com/google/glog/archive/v$VERS.tar.gz glog-$VERS "--enable-shared=no" # --build=powerpc64le-unknown-linux-gnu"
 
-VERS=7.75.0
+VERS=8.9.1
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
-download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
+download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps --with-openssl"
+
+# cpr
+install_cpr
 
 # thrift
 install_thrift
 
 # librdkafka
-install_rdkafka static
+install_rdkafka
 
 # backend rendering
 VERS=1.6.21
@@ -206,8 +205,11 @@ CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VE
 # c-blosc
 install_blosc
 
+# zstd required by GDAL and Arrow
+install_zstd
+
 # Geo Support
-install_gdal_and_pdal static
+install_gdal_and_pdal
 install_gdal_tools
 install_geos
 
@@ -219,10 +221,8 @@ install_llvm
 
 install_iwyu 
 
-download_make_install https://ftp.gnu.org/gnu/binutils/binutils-2.32.tar.xz
-
 # TBB
-install_tbb static
+install_tbb
 
 # OneDAL
 install_onedal
@@ -232,6 +232,9 @@ install_go
 
 # install AWS core and s3 sdk
 install_awscpp
+
+# LZ4 required by rdkafka and Arrow
+install_lz4
 
 # Apache Arrow
 install_arrow
@@ -288,9 +291,6 @@ install_vulkan
 # GLM (GL Mathematics)
 install_glm
 
-# LZ4 required by rdkafka
-install_lz4
-
 # OpenSAML
 install_xerces_c
 download_make_install ${HTTP_DEPS}/xml-security-c-2.0.4.tar.gz "" "--without-xalan --enable-static --disable-shared"
@@ -312,7 +312,7 @@ if [ "$COMPRESS" = "true" ] ; then
     if [ "$TSAN" = "true" ]; then
       TARBALL_TSAN="-tsan"
     fi
-    FILENAME=mapd-deps-${OS}${TARBALL_TSAN}-${LIBRARY_TYPE}-${ARCH}-${SUFFIX}.tar
+    FILENAME=mapd-deps-${OS}${TARBALL_TSAN}-static-${ARCH}-${SUFFIX}.tar
     tar -cvf ${FILENAME} -C $(dirname $PREFIX) $SUFFIX
     pxz ${FILENAME}
 fi
