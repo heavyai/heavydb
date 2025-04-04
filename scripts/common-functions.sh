@@ -403,7 +403,7 @@ function install_llvm() {
     fi
 }
 
-THRIFT_VERSION=0.15.0
+THRIFT_VERSION=0.20.0
 
 function install_thrift() {
     # http://dlcdn.apache.org/thrift/$THRIFT_VERSION/thrift-$THRIFT_VERSION.tar.gz
