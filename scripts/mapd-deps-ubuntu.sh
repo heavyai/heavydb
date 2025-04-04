@@ -91,14 +91,12 @@ PREFIX=/usr/local/mapd-deps
 CMAKE_BUILD_TYPE=Release
 
 if [ "$LIBRARY_TYPE" == "static" ]; then
-  ARROW_BOOST_USE_SHARED=off
   BUILD_SHARED_LIBS=off
   CFLAGS=-fPIC
   CMAKE_POSITION_INDEPENDENT_CODE=on
   CONFIGURE_OPTS="--enable-static --disable-shared"
   CXXFLAGS=-fPIC
 else
-  ARROW_BOOST_USE_SHARED=on
   BUILD_SHARED_LIBS=on
   CFLAGS=""
   CMAKE_POSITION_INDEPENDENT_CODE=off
@@ -176,12 +174,15 @@ CFLAGS="$CFLAGS" download_make_install ${HTTP_DEPS}/libarchive-$VERS.tar.gz "" "
 
 install_uriparser
 
-VERS=7.75.0
+VERS=8.9.1
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
-download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
+download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps --with-openssl"
 
 # c-blosc
 install_blosc
+
+# zstd required by GDAL and Arrow
+install_zstd
 
 # Geo Support
 install_gdal_and_pdal
@@ -213,6 +214,9 @@ install_tbb
 if [ "$ARCH" == "x86_64" ] ; then
   install_onedal
 fi
+
+# LZ4 required by rdkafka and Arrow
+install_lz4
 
 # Apache Arrow
 install_arrow
@@ -274,9 +278,6 @@ install_vulkan
 
 # GLM (GL Mathematics)
 install_glm
-
-# LZ4 required by rdkafka
-install_lz4
 
 # Rendering sandbox support
 if [ "$LIBRARY_TYPE" != "static" ]; then
