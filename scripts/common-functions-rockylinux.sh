@@ -7,17 +7,6 @@
 HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-if [ "$TSAN" = "true" ]; then
-  ARROW_TSAN="-DARROW_JEMALLOC=OFF -DARROW_USE_TSAN=ON"
-elif [ "$TSAN" = "false" ]; then
-  ARROW_TSAN="-DARROW_JEMALLOC=BUNDLED"
-fi
-
-ARROW_USE_CUDA="-DARROW_CUDA=ON"
-if [ "$NOCUDA" = "true" ]; then
-  ARROW_USE_CUDA="-DARROW_CUDA=OFF"
-fi
-
 function generate_deps_version_file() {
   # SUFFIX, BRANCH_NAME, GIT_COMMIT and BUILD_CONTAINER_NAME are set as environment variables not as parameters and
   # are generally set 'on' the calling docker container.
@@ -138,10 +127,21 @@ function install_required_rockylinux_packages() {
 }
 
 
-CMAKE_VERSION=3.25.2
+CMAKE_VERSION=3.26.5
 
 function install_cmake() {
-  CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
+  download ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
+  extract cmake-${CMAKE_VERSION}.tar.gz
+  pushd cmake-${CMAKE_VERSION}
+  # patch the FindCURL.cmake script to work around the apparent
+  # long-standing bug that breaks find_package(CURL PROPERTIES HTTP HTTPS)
+  # in the libcpr build that follows
+  patch -p0 < ${SCRIPTS_DIR}/cmake_find_curl_fix.patch
+  CXXFLAGS="-pthread" CFLAGS="-pthread" ./configure --prefix=${PREFIX}
+  makej
+  make install
+  popd
+  check_artifact_cleanup cmake-${CMAKE_VERSION}.tar.gz cmake-${CMAKE_VERSION}
 }
 
 # gcc
@@ -286,9 +286,22 @@ function install_xerces_c() {
   popd
 }
 
-ARROW_VERSION=apache-arrow-9.0.0
+ARROW_VERSION=apache-arrow-18.1.0
 
 function install_arrow() {
+  if [ "$TSAN" = "true" ]; then
+    ARROW_TSAN="-DARROW_USE_TSAN=ON"
+    ARROW_JEMALLOC="-DARROW_JEMALLOC=OFF"
+  elif [ "$TSAN" = "false" ]; then
+    ARROW_TSAN="-DARROW_USE_TSAN=OFF"
+    ARROW_JEMALLOC="-DARROW_JEMALLOC=ON"
+  fi
+
+  ARROW_USE_CUDA="-DARROW_CUDA=ON"
+  if [ "$NOCUDA" = "true" ]; then
+    ARROW_USE_CUDA="-DARROW_CUDA=OFF"
+  fi
+
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
   extract $ARROW_VERSION.tar.gz
 
@@ -297,27 +310,35 @@ function install_arrow() {
   # Use installed liburiparser instead.
   sed -Ei 's/^\s*vendored\/uriparser\/.*\)/)/' ../src/arrow/CMakeLists.txt
   sed -Ei  '/^\s*vendored\/uriparser\//d'      ../src/arrow/CMakeLists.txt
+  # Arrow 16+ requires the latest liblz4 (1.10.0) and libzstd (1.5.6) or it won't
+  # find them. Also, a little known factoid (only shown in some older versions of
+  # the documentation) is that although ARROW_DEPENDENCY_USE_SHARED=ON will
+  # correctly default all sub-dependencies to shared, setting it to OFF will
+  # *not* reliably default them all to static! Here, ZSTD, LZ4, and BZ2 must be
+  # individually forced to static using their respective ARROW_*_USE_SHARED=OFF.
   cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DARROW_BUILD_SHARED=ON \
+    -DARROW_BUILD_SHARED=OFF \
     -DARROW_BUILD_STATIC=ON \
-    -DARROW_BUILD_TESTS=OFF \
-    -DARROW_BUILD_BENCHMARKS=OFF \
+    -DARROW_DEPENDENCY_USE_SHARED=OFF \
     -DARROW_CSV=ON \
     -DARROW_JSON=ON \
-    -DARROW_WITH_BROTLI=BUNDLED \
-    -DARROW_WITH_ZLIB=BUNDLED \
-    -DARROW_WITH_LZ4=BUNDLED \
-    -DARROW_WITH_SNAPPY=BUNDLED \
-    -DARROW_WITH_ZSTD=BUNDLED \
+    -DARROW_WITH_BROTLI=ON \
+    -DARROW_WITH_SNAPPY=ON \
+    -DARROW_WITH_ZLIB=ON \
+    -DARROW_WITH_ZSTD=ON \
+    -DARROW_WITH_LZ4=ON \
+    -DARROW_WITH_BZ2=ON \
+    -DARROW_ZSTD_USE_SHARED=OFF \
+    -DARROW_LZ4_USE_SHARED=OFF \
+    -DARROW_BZ2_USE_SHARED=OFF \
     -DARROW_USE_GLOG=OFF \
-    -DARROW_BOOST_USE_SHARED=${ARROW_BOOST_USE_SHARED:="OFF"} \
     -DARROW_PARQUET=ON \
     -DARROW_FILESYSTEM=ON \
     -DARROW_S3=ON \
-    -DTHRIFT_HOME=${THRIFT_HOME:-$PREFIX} \
     ${ARROW_USE_CUDA} \
+    ${ARROW_JEMALLOC} \
     ${ARROW_TSAN} \
     ..
   makej
@@ -344,23 +365,15 @@ function install_snappy() {
   check_artifact_cleanup $SNAPPY_VERSION.tar.gz snappy-$SNAPPY_VERSION
 }
 
-AWSCPP_VERSION=1.7.301
-#AWSCPP_VERSION=1.9.335
+# latest as of 2/28/25
+AWSCPP_VERSION=1.11.517
 
 function install_awscpp() {
-    # default c++ standard support
-    CPP_STANDARD=14
-    # check c++17 support
-    GNU_VERSION1=$(g++ --version|head -n1|awk '{print $4}'|cut -d'.' -f1)
-    if [ "$GNU_VERSION1" = "7" ]; then
-    CPP_STANDARD=17
-    fi
     rm -rf aws-sdk-cpp-${AWSCPP_VERSION}
     download https://github.com/aws/aws-sdk-cpp/archive/${AWSCPP_VERSION}.tar.gz
     tar xvfz ${AWSCPP_VERSION}.tar.gz
     pushd aws-sdk-cpp-${AWSCPP_VERSION}
-    # ./prefetch_crt_dependency.sh
-    sed -i 's/CMAKE_ARGS/CMAKE_ARGS -DBUILD_TESTING=off -DCMAKE_C_FLAGS="-Wno-error"/g' third-party/cmake/BuildAwsCCommon.cmake
+    ./prefetch_crt_dependency.sh
     sed -i 's/-Werror//g' cmake/compiler_settings.cmake
     mkdir build
     cd build
@@ -372,10 +385,12 @@ function install_awscpp() {
         -DBUILD_ONLY="s3;transfer;config;sts;cognito-identity;identity-management" \
         -DBUILD_SHARED_LIBS=0 \
         -DCUSTOM_MEMORY_MANAGEMENT=0 \
-        -DCPP_STANDARD=$CPP_STANDARD \
+        -DCPP_STANDARD=17 \
         -DENABLE_TESTING=off \
         ..
-    cmake_build_and_install
+    cmake --build . --parallel ${NPROC}
+    sed -i 's/PARENT_SCOPE//g' AWSSDK/AWSSDKConfigVersion.cmake
+    cmake --install .
     popd
     check_artifact_cleanup ${AWSCPP_VERSION}.tar.gz aws-sdk-cpp-${AWSCPP_VERSION}
 }
@@ -431,7 +446,7 @@ function install_llvm() {
     fi
 }
 
-THRIFT_VERSION=0.15.0
+THRIFT_VERSION=0.20.0
 
 function install_thrift() {
     # http://dlcdn.apache.org/thrift/$THRIFT_VERSION/thrift-$THRIFT_VERSION.tar.gz
@@ -464,48 +479,29 @@ function install_thrift() {
     check_artifact_cleanup thrift-$THRIFT_VERSION.tar.gz thrift-$THRIFT_VERSION
 }
 
-# newest as of 11/17/23 except where noted
-PROJ_VERSION=9.3.0
-GDAL_VERSION=3.7.3 # latest is 3.8.0 but that's too new for comfort
-TIFF_VERSION=4.5.1
-GEOTIFF_VERSION=1.7.1
-PDAL_VERSION=2.4.2 # newest is 2.5.5 but would require patch changes
-OPENJPEG_VERSION=2.5.0
-LCMS_VERSION=2.15
-WEBP_VERSION=1.3.2
-ZSTD_VERSION=1.4.8 # not the newest, but the one that comes with Ubuntu 22.04
+SQLITE3_YEAR_DIR=2024
+SQLITE3_VERSION=3460000
+EXPAT_VERSION_DIR=R_2_6_2
+EXPAT_VERSION=2.6.2
+PROJ_VERSION=9.5.1
+GDAL_VERSION=3.10.2
+TIFF_VERSION=4.7.0
+GEOTIFF_VERSION=1.7.4
+PDAL_VERSION=2.4.2 # newest is 2.7.2 but would require patch changes
+OPENJPEG_VERSION=2.5.2
+LCMS_VERSION=2.16
+WEBP_VERSION=1.4.0
 HDF5_VERSION=1.12.1 # newest is 1.14.x but there are API changes
 NETCDF_VERSION=4.8.1 # newest is 4.9.2 but has more deps
+ZSTD_VERSION=1.4.8 # not the newest, but the one that comes with Ubuntu 22.04
 
 function install_gdal_and_pdal() {
-    if [ "$1" == "static" ]; then
-      BUILD_STATIC_LIBS="ON"
-      BUILD_SHARED_LIBS="OFF"
-      WEBP_BUILD_SELECT="--enable-shared=OFF"
-      BUILD_PROJ_GDAL_APPS="OFF"
-    else
-      BUILD_STATIC_LIBS="OFF"
-      BUILD_SHARED_LIBS="ON"
-      WEBP_BUILD_SELECT="--enable-static=OFF"
-      BUILD_PROJ_GDAL_APPS="ON"
-    fi
-
-    # zstd (for tiff and openjpeg)
-    download https://github.com/facebook/zstd/archive/refs/tags/v$ZSTD_VERSION.tar.gz
-    extract v$ZSTD_VERSION.tar.gz
-    mkdir zstd-$ZSTD_VERSION/build/cmake/build
-    ( cd zstd-$ZSTD_VERSION/build/cmake/build
-      cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_SHARED=$BUILD_SHARED_LIBS -DZSTD_BUILD_STATIC=$BUILD_STATIC_LIBS
-      cmake_build_and_install
-    )
-    check_artifact_cleanup v$ZSTD_VERSION.tar.gz zstd-$ZSTD_VERSION
-
     # sqlite3 (for proj, gdal)
-    download_make_install https://sqlite.org/2024/sqlite-autoconf-3450100.tar.gz
+    download_make_install https://sqlite.org/${SQLITE3_YEAR_DIR}/sqlite-autoconf-${SQLITE3_VERSION}.tar.gz
 
     # expat (for gdal)
     # upgrade to 2.6.2 to resolve gdb issue on Ubuntu 24.04
-    download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_6_2/expat-2.6.2.tar.bz2
+    download_make_install https://github.com/libexpat/libexpat/releases/download/${EXPAT_VERSION_DIR}/expat-${EXPAT_VERSION}.tar.bz2
 
     # kml (for gdal)
     download ${HTTP_DEPS}/libkml-master.zip
@@ -548,7 +544,7 @@ function install_gdal_and_pdal() {
     extract v$WEBP_VERSION.tar.gz
     ( cd libwebp-$WEBP_VERSION
       ./autogen.sh
-      ./configure --prefix=$PREFIX --disable-libwebpdecoder --disable-libwebpdemux --disable-libwebpmux ${WEBP_BUILD_SELECT}
+      ./configure --prefix=$PREFIX --disable-libwebpdecoder --disable-libwebpdemux --disable-libwebpmux --enable-shared=OFF
       makej
       make install
     )
@@ -564,8 +560,8 @@ function install_gdal_and_pdal() {
       for build_shared_libs in ON OFF; do
         rm -f CMakeCache.txt
         cmake .. \
-            -DBUILD_SHARED_LIBS="$BUILD_SHARED_LIBS" \
-            -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE" \
+            -DBUILD_SHARED_LIBS=off \
+            -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_FLAGS="-fPIC" \
             -DCMAKE_INSTALL_PREFIX="$PREFIX" \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
@@ -586,9 +582,9 @@ function install_gdal_and_pdal() {
     ( cd proj-${PROJ_VERSION}/build
       cmake .. \
           -DBUILD_APPS=on \
-          -DBUILD_SHARED_LIBS=$BUILD_SHARED_LIBS \
+          -DBUILD_SHARED_LIBS=off \
           -DBUILD_TESTING=off \
-          -DBUILD_APPS=${BUILD_PROJ_GDAL_APPS} \
+          -DBUILD_APPS=off \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_INSTALL_PREFIX=$PREFIX \
           -DCMAKE_PREFIX_PATH=$PREFIX \
@@ -605,7 +601,7 @@ function install_gdal_and_pdal() {
     sed -i 's/CHECK_FUNCTION_EXISTS(TIFFMergeFieldInfo HAVE_TIFFMERGEFIELDINFO)/SET(HAVE_TIFFMERGEFIELDINFO TRUE)/g' CMakeLists.txt
     mkdir build
     pushd build
-    cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DWITH_UTILITIES=off
+    cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_SHARED_LIBS=off -DWITH_UTILITIES=off
     cmake_build_and_install
     popd
     popd
@@ -620,7 +616,7 @@ function install_gdal_and_pdal() {
     pushd openjpeg-${OPENJPEG_VERSION}
     mkdir build
     pushd build
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PREFIX} -DBUILD_CODEC=off -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DBUILD_STATIC_LIBS=${BUILD_STATIC_LIBS}
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PREFIX} -DBUILD_CODEC=off -DBUILD_SHARED_LIBS=off -DBUILD_STATIC_LIBS=on
     makej
     make install
     popd
@@ -636,8 +632,6 @@ function install_gdal_and_pdal() {
     download https://github.com/OSGeo/gdal/releases/download/v${GDAL_VERSION}/gdal-${GDAL_VERSION}.tar.gz
     tar xzvf gdal-${GDAL_VERSION}.tar.gz
     pushd gdal-${GDAL_VERSION}
-    # patch flatbuffers namespace, per https://github.com/OSGeo/gdal/pull/9313
-    echo "target_compile_definitions(ogr_FlatGeobuf PRIVATE -Dflatbuffers=gdal_flatbuffers)" >> ogr/ogrsf_frmts/flatgeobuf/CMakeLists.txt
     mkdir build
     pushd build
     cmake .. -DCMAKE_BUILD_TYPE=Release \
@@ -645,7 +639,7 @@ function install_gdal_and_pdal() {
              -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
              -DCMAKE_INSTALL_PREFIX=$PREFIX \
              -DCMAKE_DISABLE_FIND_PACKAGE_Arrow=on \
-             -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
+             -DBUILD_SHARED_LIBS=off \
              -DGDAL_USE_GEOS=off \
              -DGDAL_USE_ARROW=off \
              -DGDAL_USE_PARQUET=off \
@@ -657,7 +651,7 @@ function install_gdal_and_pdal() {
              -DGDAL_USE_MYSQL=off \
              -DGDAL_USE_POSTGRESQL=off \
              -DGDAL_USE_XERCESC=off \
-             -DBUILD_APPS=${BUILD_PROJ_GDAL_APPS} \
+             -DBUILD_APPS=off \
              -DBUILD_PYTHON_BINDINGS=off
     cmake_build_and_install
     popd
@@ -670,37 +664,36 @@ function install_gdal_and_pdal() {
     pushd PDAL-${PDAL_VERSION}-src
     patch -p1 < $SCRIPTS_DIR/pdal-asan-leak-4be888818861d34145aca262014a00ee39c90b29.patch
     patch -p1 < $SCRIPTS_DIR/pdal-gdal-3.7.2-const-ogrspatialreference.patch
-    if [ "$LIBRARY_TYPE" == "static" ] ; then
-      # Build static libraries
-      build_static_libs=$(printf "/%s/c %s%s" \
-          'set(PDAL_LIB_TYPE "SHARED")' \
-          'set(PDAL_LIB_TYPE "STATIC")\n' \
-          'set(CMAKE_FIND_LIBRARY_SUFFIXES .a)')
-      sed -i "$build_static_libs" cmake/libraries.cmake
-      sed -Ei 's/PDAL_ADD_FREE_LIBRARY\((\S+) (SHARED|STATIC)/PDAL_ADD_LIBRARY(\1/' \
-          pdal/util/CMakeLists.txt \
-          vendor/arbiter/CMakeLists.txt \
-          vendor/kazhdan/CMakeLists.txt \
-          vendor/lazperf/CMakeLists.txt
-      export_libs=$(printf '/^ *export( *$/,/^ *FILE *$/ { /^ *FILE *$/i\\\n%s%s%s\n}' \
-          '        ${PDAL_ARBITER_LIB_NAME}\n' \
-          '        ${PDAL_KAZHDAN_LIB_NAME}\n' \
-          '        ${PDAL_LAZPERF_LIB_NAME}')
-      sed -i "$export_libs" CMakeLists.txt
-      # System libunwind.a has R_X86_64_32 code and causes linking problems w/ heavydb.
-      sed -i 's|^include(${PDAL_CMAKE_DIR}/unwind.cmake)|#&|' pdal/util/CMakeLists.txt
-      sed -i 's|^include(${PDAL_CMAKE_DIR}/execinfo.cmake)|#&|' pdal/util/CMakeLists.txt
-      # Don't build libpdal_plugin_kernel_fauxplugin.so or bin/pdal
-      sed -i 's/^/#/' plugins/faux/CMakeLists.txt
-      sed -i '/# Configure build targets/,/# Targets installation/s/^/#/' apps/CMakeLists.txt
-    fi
+    # Build static libraries
+    build_static_libs=$(printf "/%s/c %s%s" \
+        'set(PDAL_LIB_TYPE "SHARED")' \
+        'set(PDAL_LIB_TYPE "STATIC")\n' \
+        'set(CMAKE_FIND_LIBRARY_SUFFIXES .a)')
+    sed -i "$build_static_libs" cmake/libraries.cmake
+    sed -Ei 's/PDAL_ADD_FREE_LIBRARY\((\S+) (SHARED|STATIC)/PDAL_ADD_LIBRARY(\1/' \
+        pdal/util/CMakeLists.txt \
+        vendor/arbiter/CMakeLists.txt \
+        vendor/kazhdan/CMakeLists.txt \
+        vendor/lazperf/CMakeLists.txt
+    export_libs=$(printf '/^ *export( *$/,/^ *FILE *$/ { /^ *FILE *$/i\\\n%s%s%s\n}' \
+        '        ${PDAL_ARBITER_LIB_NAME}\n' \
+        '        ${PDAL_KAZHDAN_LIB_NAME}\n' \
+        '        ${PDAL_LAZPERF_LIB_NAME}')
+    sed -i "$export_libs" CMakeLists.txt
+    # System libunwind.a has R_X86_64_32 code and causes linking problems w/ heavydb.
+    sed -i 's|^include(${PDAL_CMAKE_DIR}/unwind.cmake)|#&|' pdal/util/CMakeLists.txt
+    sed -i 's|^include(${PDAL_CMAKE_DIR}/execinfo.cmake)|#&|' pdal/util/CMakeLists.txt
+    # Don't build libpdal_plugin_kernel_fauxplugin.so or bin/pdal
+    sed -i 's/^/#/' plugins/faux/CMakeLists.txt
+    sed -i '/# Configure build targets/,/# Targets installation/s/^/#/' apps/CMakeLists.txt
+    # build
     mkdir build
     pushd build
     cmake .. -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
              -DCMAKE_INSTALL_PREFIX=$PREFIX \
              -DCMAKE_POSITION_INDEPENDENT_CODE=$CMAKE_POSITION_INDEPENDENT_CODE \
              -DBUILD_PLUGIN_PGPOINTCLOUD=off \
-             -DBUILD_SHARED_LIBS=$BUILD_SHARED_LIBS \
+             -DBUILD_SHARED_LIBS=off \
              -DWITH_TESTS=off
     cmake_build_and_install
     popd
@@ -744,46 +737,6 @@ function install_gdal_tools() {
     popd
     check_artifact_cleanup proj-${PROJ_VERSION}.tar.gz proj-${PROJ_VERSION}
 
-    # webp (for openjpeg)
-    download https://github.com/webmproject/libwebp/archive/refs/tags/v${WEBP_VERSION}.tar.gz
-    extract v${WEBP_VERSION}.tar.gz
-    pushd libwebp-${WEBP_VERSION}
-    ./autogen.sh || true
-    ./configure --prefix=$PREFIX --disable-libwebpdecoder --disable-libwebpdemux --disable-libwebpmux --enable-static=off
-    makej
-    make install
-    popd
-    check_artifact_cleanup v${WEBP_VERSION}.tar.gz libwebp-${WEBP_VERSION}
-
-    # zstd (for openjpeg)
-    download https://github.com/facebook/zstd/archive/refs/tags/v${ZSTD_VERSION}.tar.gz
-    extract v${ZSTD_VERSION}.tar.gz
-    pushd zstd-${ZSTD_VERSION}
-    pushd build
-    pushd cmake
-    mkdir build
-    pushd build
-    cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_SHARED=on -DZSTD_BUILD_STATIC=off
-    cmake_build_and_install
-    popd
-    popd
-    popd
-    popd
-    check_artifact_cleanup v${ZSTD_VERSION}.tar.gz zstd-${ZSTD_VERSION}
-
-    # openjpeg (for gdal JP2/Sentinel2 support)
-    download https://github.com/uclouvain/openjpeg/archive/refs/tags/v${OPENJPEG_VERSION}.tar.gz
-    tar xzvf v${OPENJPEG_VERSION}.tar.gz
-    pushd openjpeg-${OPENJPEG_VERSION}
-    mkdir build
-    pushd build
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PREFIX} -DBUILD_CODEC=off -DBUILD_SHARED_LIBS=on -DBUILD_STATIC_LIBS=off
-    makej
-    make install
-    popd
-    popd
-    check_artifact_cleanup v${OPENJPEG_VERSION}.tar.gz openjpeg-${OPENJPEG_VERSION}
-
     # gdal
     # this time build shared
     # use external tiff, but internal geotiff
@@ -792,8 +745,6 @@ function install_gdal_tools() {
     download https://github.com/OSGeo/gdal/releases/download/v${GDAL_VERSION}/gdal-${GDAL_VERSION}.tar.gz
     tar xzvf gdal-${GDAL_VERSION}.tar.gz
     pushd gdal-${GDAL_VERSION}
-    # patch flatbuffers namespace, per https://github.com/OSGeo/gdal/pull/9313
-    echo "target_compile_definitions(ogr_FlatGeobuf PRIVATE -Dflatbuffers=gdal_flatbuffers)" >> ogr/ogrsf_frmts/flatgeobuf/CMakeLists.txt
     mkdir build
     pushd build
     cmake .. -DCMAKE_BUILD_TYPE=Release \
@@ -808,11 +759,11 @@ function install_gdal_tools() {
              -DGDAL_USE_PCRE=off \
              -DGDAL_USE_OPENCL=off \
              -DGDAL_USE_XERCESC=off \
+             -DGDAL_ENABLE_DRIVER_WEBP=off \
+             -DGDAL_ENABLE_DRIVER_JP2OPENJPEG=off \
              -DBUILD_APPS=on \
              -DBUILD_PYTHON_BINDINGS=off \
-             -DWEBP_LIBRARY=${PREFIX}/lib/libwebp.so \
              -DTIFF_LIBRARY_RELEASE=${PREFIX}/lib64/libtiff.so \
-             -DOPENJPEG_LIBRARY=${PREFIX}/lib/libopenjp2.so \
              -DPROJ_LIBRARY_RELEASE=${PREFIX}/lib64/libproj.so
     cmake_build_and_install
     popd
@@ -866,11 +817,7 @@ function install_iwyu() {
 
 RDKAFKA_VERSION=1.1.0
 function install_rdkafka() {
-    if [ "$1" == "static" ]; then
-      STATIC="ON"
-    else
-      STATIC="OFF"
-    fi
+    STATIC="ON"
     download https://github.com/edenhill/librdkafka/archive/v$RDKAFKA_VERSION.tar.gz
     extract v$RDKAFKA_VERSION.tar.gz
     BDIR="librdkafka-$RDKAFKA_VERSION/build"
@@ -897,7 +844,6 @@ function install_go() {
   # substitute alternative arch tags
   GO_ARCH=${ARCH}
   GO_ARCH=${GO_ARCH//x86_64/amd64}
-  GO_ARCH=${GO_ARCH//aarch64/arm64}
   # https://dl.google.com/go/go${GO_VERSION}.linux-${ARCH}.tar.gz
   download ${HTTP_DEPS}/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
   extract go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
@@ -949,57 +895,19 @@ function install_tbb() {
     TBB_CXXFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
     TBB_TSAN="-DTBB_SANITIZE=thread"
   fi
-  if [ "$1" == "static" ]; then
-    cmake -E env CFLAGS="$TBB_CFLAGS" CXXFLAGS="$TBB_CXXFLAGS" \
-    cmake \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=$PREFIX \
-      -DTBB_TEST=off \
-      -DBUILD_SHARED_LIBS=off \
-      ${TBB_TSAN} \
-      ..
-  else
-    cmake -E env CFLAGS="$TBB_CFLAGS" CXXFLAGS="$TBB_CXXFLAGS" \
-    cmake \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=$PREFIX \
-      -DTBB_TEST=off \
-      -DBUILD_SHARED_LIBS=on \
-      ${TBB_TSAN} \
-      ..
-  fi
+  cmake -E env CFLAGS="$TBB_CFLAGS" CXXFLAGS="$TBB_CXXFLAGS" \
+  cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX \
+    -DTBB_TEST=off \
+    -DBUILD_SHARED_LIBS=off \
+    ${TBB_TSAN} \
+    ..
   makej
   make install
   popd
   popd
   check_artifact_cleanup v${TBB_VERSION}.tar.gz oneTBB-${TBB_VERSION}
-}
-
-LIBNUMA_VERSION=2.0.14
-MEMKIND_VERSION=1.11.0
-
-function install_memkind() {
-  download_make_install https://github.com/numactl/numactl/releases/download/v${LIBNUMA_VERSION}/numactl-${LIBNUMA_VERSION}.tar.gz
-
-  download https://github.com/memkind/memkind/archive/refs/tags/v${MEMKIND_VERSION}.tar.gz
-  extract v${MEMKIND_VERSION}.tar.gz
-  pushd memkind-${MEMKIND_VERSION}
-  ./autogen.sh
-  if [[ $(cat /etc/os-release) = *"fedora"* ]]; then
-    memkind_dir=${PREFIX}/lib64
-  else
-    memkind_dir=${PREFIX}/lib
-  fi
-  ./configure --prefix=${PREFIX} --libdir=${memkind_dir}
-  makej
-  make_install
-
-  (find ${memkind_dir}/libmemkind.so \
-    && patchelf --force-rpath --set-rpath '$ORIGIN/../lib' ${memkind_dir}/libmemkind.so) \
-    || echo "${memkind_dir}/libmemkind.so was not found"
-
-  popd
-  check_artifact_cleanup v${MEMKIND_VERSION}.tar.gz memkind-${MEMKIND_VERSION}
 }
 
 ABSEIL_VERSION=20230802.1
@@ -1227,7 +1135,7 @@ function install_archive(){
   check_artifact_cleanup  v${ARCHIVE_VERSION}.tar.gz gflags-$ARCHIVE_VERSION
 }
 
-LZ4_VERSION=1.9.4
+LZ4_VERSION=1.10.0 # required by Arrow 16
 function install_lz4(){
   download https://github.com/lz4/lz4/archive/refs/tags/v$LZ4_VERSION.tar.gz
   extract v$LZ4_VERSION.tar.gz
@@ -1241,6 +1149,18 @@ function install_lz4(){
     cmake_build_and_install
   )
   check_artifact_cleanup v$LZ4_VERSION.tar.gz lz4-$LZ4_VERSION
+}
+
+ZSTD_VERSION=1.5.6 # required by Arrow 16, also used by GDAL
+function install_zstd() {
+  download https://github.com/facebook/zstd/archive/refs/tags/v$ZSTD_VERSION.tar.gz
+  extract v$ZSTD_VERSION.tar.gz
+  mkdir zstd-$ZSTD_VERSION/build/cmake/build
+  ( cd zstd-$ZSTD_VERSION/build/cmake/build
+    cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_SHARED=OFF -DZSTD_BUILD_STATIC=ON
+    cmake_build_and_install
+  )
+  check_artifact_cleanup v$ZSTD_VERSION.tar.gz zstd-$ZSTD_VERSION
 }
 
 URIPARSER_VERSION=0.9.8
@@ -1289,4 +1209,25 @@ function install_h3() {
   popd
   popd
   check_artifact_cleanup v${H3_VERSION}.tar.gz h3-${H3_VERSION}
+}
+
+CPR_VERSION=1.11.2
+
+function install_cpr() {
+  download ${HTTP_DEPS}/cpr-${CPR_VERSION}.tar.gz
+  extract cpr-${CPR_VERSION}.tar.gz
+  pushd cpr-${CPR_VERSION}
+  mkdir build
+  pushd build
+  cmake \
+    -DCMAKE_INSTALL_PREFIX=${PREFIX} \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=on \
+    -DCPR_USE_SYSTEM_CURL=on \
+    -DBUILD_SHARED_LIBS=off \
+    ..
+  cmake_build_and_install  
+  popd
+  popd
+  check_artifact_cleanup cpr-${CPR_VERSION}.tar.gz cpr-${CPR_VERSION}
 }
