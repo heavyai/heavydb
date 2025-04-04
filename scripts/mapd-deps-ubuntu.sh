@@ -167,8 +167,6 @@ install_ninja
 install_boost
 export BOOST_ROOT=$PREFIX/include
 
-install_memkind
-
 VERS=3.3.2
 CFLAGS="$CFLAGS" download_make_install ${HTTP_DEPS}/libarchive-$VERS.tar.gz "" "$CONFIGURE_OPTS --without-nettle"
 

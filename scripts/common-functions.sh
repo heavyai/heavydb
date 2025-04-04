@@ -68,7 +68,6 @@ function install_required_ubuntu_packages() {
       liblzma-dev \
       libmd-dev \
       libncurses5-dev \
-      libnuma-dev \
       libpng-dev \
       libsnappy-dev \
       libtool \
@@ -932,33 +931,6 @@ function install_tbb() {
   popd
   popd
   check_artifact_cleanup v${TBB_VERSION}.tar.gz oneTBB-${TBB_VERSION}
-}
-
-LIBNUMA_VERSION=2.0.14
-MEMKIND_VERSION=1.11.0
-
-function install_memkind() {
-  download_make_install https://github.com/numactl/numactl/releases/download/v${LIBNUMA_VERSION}/numactl-${LIBNUMA_VERSION}.tar.gz
-
-  download https://github.com/memkind/memkind/archive/refs/tags/v${MEMKIND_VERSION}.tar.gz
-  extract v${MEMKIND_VERSION}.tar.gz
-  pushd memkind-${MEMKIND_VERSION}
-  ./autogen.sh
-  if [[ $(cat /etc/os-release) = *"fedora"* ]]; then
-    memkind_dir=${PREFIX}/lib64
-  else
-    memkind_dir=${PREFIX}/lib
-  fi
-  ./configure --prefix=${PREFIX} --libdir=${memkind_dir}
-  makej
-  make_install
-
-  (find ${memkind_dir}/libmemkind.so \
-    && patchelf --force-rpath --set-rpath '$ORIGIN/../lib' ${memkind_dir}/libmemkind.so) \
-    || echo "${memkind_dir}/libmemkind.so was not found"
-
-  popd
-  check_artifact_cleanup v${MEMKIND_VERSION}.tar.gz memkind-${MEMKIND_VERSION}
 }
 
 ABSEIL_VERSION=20230802.1
