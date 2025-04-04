@@ -11,7 +11,7 @@
 #                     file that uses this interface
 
 find_path(CPR_INCLUDE_DIR
-          NAMES cpr.h)
+          NAMES cpr/cpr.h)
 
 find_library(CPR_LIBRARY
              NAMES cpr

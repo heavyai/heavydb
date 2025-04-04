@@ -1275,3 +1275,24 @@ function install_h3() {
   popd
   check_artifact_cleanup v${H3_VERSION}.tar.gz h3-${H3_VERSION}
 }
+
+CPR_VERSION=1.11.2
+
+function install_cpr() {
+  download ${HTTP_DEPS}/cpr-${CPR_VERSION}.tar.gz
+  extract cpr-${CPR_VERSION}.tar.gz
+  pushd cpr-${CPR_VERSION}
+  mkdir build
+  pushd build
+  cmake \
+    -DCMAKE_INSTALL_PREFIX=${PREFIX} \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=on \
+    -DCPR_USE_SYSTEM_CURL=on \
+    -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
+    ..
+  cmake_build_and_install  
+  popd
+  popd
+  check_artifact_cleanup cpr-${CPR_VERSION}.tar.gz cpr-${CPR_VERSION}
+}

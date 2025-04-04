@@ -1071,15 +1071,15 @@ add_subdirectory(Calcite)
 get_target_property(CalciteThrift_BINARY_DIR calciteserver_thrift BINARY_DIR)
 include_directories(${CalciteThrift_BINARY_DIR})
 
-# The variable USE_SYSTEM_CURL is used by the third party product 'cpr'
-set(USE_SYSTEM_CURL ON CACHE BOOL "Use the system curl for faster builds")
-find_package(cpr QUIET)
-if(cpr_FOUND)
-  message(STATUS "Found CPR")
+find_package(CPR)
+if (CPR_FOUND)
+  message(STATUS "Using cpr from deps")
 else()
-  message(STATUS "Using ThirdParty/cpr")
+  # build old cpr_1.2 in ThirdParty sub-project
+  message(STATUS "Using ThirdParty/cpr_1.2")
+  set(USE_SYSTEM_CURL ON CACHE BOOL "Use the system curl for faster builds")
   set(BUILD_CPR_TESTS OFF CACHE BOOL "Don't build cpr tests")
-  add_subdirectory(ThirdParty/cpr/cpr)
+  add_subdirectory(ThirdParty/cpr_1.2/cpr)
 endif()
 
 if(ENABLE_RUNTIME_LIBS)
@@ -1178,6 +1178,10 @@ list(APPEND MAPD_LIBRARIES ${TBB_LIBS})
 
 if(ENABLE_CANONICAL_RAFT)
   list(APPEND MAPD_LIBRARIES raft_canonical)
+endif()
+
+if(CPR_FOUND)
+  list(APPEND MAPD_LIBRARIES ${CPR_LIBRARY})
 endif()
 
 option(ENABLE_TESTS "Build unit tests" ON)

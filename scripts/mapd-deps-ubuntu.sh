@@ -178,6 +178,9 @@ VERS=8.9.1
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
 download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps --with-openssl"
 
+# cpr
+install_cpr
+
 # c-blosc
 install_blosc
 
