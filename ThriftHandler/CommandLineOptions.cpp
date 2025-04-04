@@ -95,9 +95,6 @@ extern int32_t g_llm_transform_call_timeout_ms;
 extern int64_t g_llm_transform_max_num_unique_value;
 
 extern bool g_enable_gpu_dynamic_smem;
-#ifdef ENABLE_MEMKIND
-extern std::string g_pmem_path;
-#endif
 
 namespace Catalog_Namespace {
 extern bool g_log_user_id;
@@ -809,16 +806,6 @@ void CommandLineOptions::fillOptions() {
       po::value<size_t>(&g_logs_system_tables_max_files_count)
           ->default_value(g_logs_system_tables_max_files_count),
       "Maximum number of log files that will be processed by each logs system table.");
-#ifdef ENABLE_MEMKIND
-  desc.add_options()("enable-tiered-cpu-mem",
-                     po::value<bool>(&g_enable_tiered_cpu_mem)
-                         ->default_value(g_enable_tiered_cpu_mem)
-                         ->implicit_value(true),
-                     "Enable additional tiers of CPU memory (PMEM, etc...)");
-  desc.add_options()("pmem-size", po::value<size_t>(&g_pmem_size)->default_value(0));
-  desc.add_options()("pmem-path", po::value<std::string>(&g_pmem_path));
-#endif
-
   desc.add_options()(
       "importer-additional-proj-data-path",
       po::value<std::string>(&Geospatial::g_importer_additional_proj_data_path)
@@ -1794,21 +1781,6 @@ void CommandLineOptions::validate() {
   }
   LOG(INFO) << "Maximum number of logs system table files set to "
             << g_logs_system_tables_max_files_count;
-
-#ifdef ENABLE_MEMKIND
-  if (g_enable_tiered_cpu_mem) {
-    if (g_pmem_path == "") {
-      throw std::runtime_error{"pmem-path must be set to use tiered cpu memory"};
-    }
-    if (g_pmem_size == 0) {
-      throw std::runtime_error{"pmem-size must be set to use tiered cpu memory"};
-    }
-    if (!std::filesystem::exists(g_pmem_path.c_str())) {
-      throw std::runtime_error{"path to PMem directory (" + g_pmem_path +
-                               ") does not exist."};
-    }
-  }
-#endif
 
   if (g_ndv_groups_estimator_multiplier < 1.0 ||
       g_ndv_groups_estimator_multiplier > 2.0) {

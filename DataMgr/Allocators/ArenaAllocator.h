@@ -44,7 +44,7 @@ class SysAllocator {
 
 class Arena {
  public:
-  enum class MemoryType { DRAM, PMEM };
+  enum class MemoryType { DRAM };
   virtual ~Arena() {}
   virtual void* allocate(size_t size) = 0;
   virtual void* allocateAndZero(const size_t size) = 0;

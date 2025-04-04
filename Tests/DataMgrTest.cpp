@@ -27,16 +27,9 @@
 #include "Catalog/ColumnDescriptor.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
-#include "DataMgr/BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "DataMgr/DataMgr.h"
 #include "TestHelpers.h"
-
-#ifdef ENABLE_MEMKIND
-extern bool g_enable_tiered_cpu_mem;
-extern size_t g_pmem_size;
-extern std::string g_pmem_path;
-#endif
 
 extern bool g_use_cpu_mem_pool_size_for_max_cpu_slab_size;
 
@@ -60,9 +53,6 @@ class DataMgrTest : public testing::Test {
 
   void resetDataMgr(const SystemParameters& sys_params) {
     boost::filesystem::remove_all(data_mgr_path_);
-#ifdef ENABLE_MEMKIND
-    g_pmem_size = slab_size_ * num_slabs;
-#endif
     std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
 #ifdef HAVE_CUDA
     try {
@@ -145,129 +135,9 @@ TEST_F(DataMgrTest, CpuAndGpuMemPoolSizeNotMultipleOfPageSize) {
   resetDataMgr(sys_params);
 }
 
-#ifdef ENABLE_MEMKIND
-// Tests for the TieredCpuBufferMgr class.
-// These tests set the DataMgr to use small slabs (one page) to force situations like
-// exceeding an allocator's capacity and requiring eviction of slabs from the BufferMgr.
-class TieredCpuBufferMgrTest : public DataMgrTest {
- public:
-  void SetUp() override {
-    if (g_pmem_path == "") {
-      GTEST_SKIP() << "No PMEM path specified.";
-    }
-    g_enable_tiered_cpu_mem = true;
-    g_pmem_size = slab_size_;
-    DataMgrTest::SetUp();
-  }
-
-  void TearDown() override {
-    DataMgrTest::TearDown();
-    g_enable_tiered_cpu_mem = false;
-    g_pmem_size = 0;
-  }
-
-  void resetDataMgr(size_t num_slabs = 1) override {
-    DataMgrTest::resetDataMgr(num_slabs);
-    tiered_buffer_mgr_ =
-        dynamic_cast<Buffer_Namespace::TieredCpuBufferMgr*>(data_mgr_->getCpuBufferMgr());
-  }
-
-  uint32_t getAllocatorTierForChunk(const Chunk_NS::Chunk* chunk) {
-    auto memory_type =
-        tiered_buffer_mgr_
-            ->getAllocatorForSlab(
-                dynamic_cast<Buffer_Namespace::Buffer*>(chunk->getBuffer())->getSlabNum())
-            ->getMemoryType();
-    if (memory_type == Arena::MemoryType::DRAM) {
-      return 0;
-    } else if (memory_type == Arena::MemoryType::PMEM) {
-      return 1;
-    } else {
-      UNREACHABLE() << "Unknown memory type";
-    }
-    return 0;
-  }
-
- protected:
-  Buffer_Namespace::TieredCpuBufferMgr* tiered_buffer_mgr_;
-};
-
-TEST_F(TieredCpuBufferMgrTest, AllocateInOrder) {
-  // Two buffers will each allocate a new slab, so they should use new allocators for
-  // each.
-  for (auto i = 0U; i < 2; ++i) {
-    auto chunk = writeChunkForKey({1, 1, 1, static_cast<int32_t>(i)});
-    ASSERT_EQ(getAllocatorTierForChunk(chunk.get()), i);
-  }
-}
-
-TEST_F(TieredCpuBufferMgrTest, MultipleSlabsPerAllocator) {
-  resetDataMgr(3);
-  // Each allocator can hold 3 slabs, so first three slabs should be allocator #1 and next
-  // three allocator #2.
-  for (auto i = 0U; i < 6; ++i) {
-    auto chunk = writeChunkForKey({1, 1, 1, static_cast<int32_t>(i)});
-    ASSERT_EQ(getAllocatorTierForChunk(chunk.get()), i / 3);
-  }
-}
-
-TEST_F(TieredCpuBufferMgrTest, ReuseInOrder) {
-  // First two buffers will allocate new slabs, so they should use new allocators for
-  // each.
-  for (auto i = 0U; i < 2; ++i) {
-    auto chunk = writeChunkForKey({1, 1, 1, static_cast<int32_t>(i)});
-    ASSERT_EQ(getAllocatorTierForChunk(chunk.get()), i % 2);
-  }
-  // After the first two we run out of space, so we will start reusing slabs.
-  for (auto i = 2U; i < 6; ++i) {
-    auto chunk = writeChunkForKey({1, 1, 1, static_cast<int32_t>(i)});
-    ASSERT_EQ(getAllocatorTierForChunk(chunk.get()), i % 2);
-  }
-}
-
-// Tests that we will prioritize the allocator order when evicting/reusing slabs.
-TEST_F(TieredCpuBufferMgrTest, ReuseWithPinnedGaps) {
-  resetDataMgr(2);
-  auto chunk1 = writeChunkForKey({1, 1, 1, 1});  // pinned
-  writeChunkForKey({1, 1, 1, 2});                // unpinned
-  auto chunk2 = writeChunkForKey({1, 1, 1, 3});  // pinned
-  writeChunkForKey({1, 1, 1, 4});                // unpinned
-
-  // Each tier now has one pinned and one unpinned chunk so if we allocate two more chunks
-  // they should go to separate tiers.
-  auto chunk3 = writeChunkForKey({1, 1, 1, 5});
-  auto chunk4 = writeChunkForKey({1, 1, 1, 6});
-
-  ASSERT_EQ(getAllocatorTierForChunk(chunk3.get()), 0U);
-  ASSERT_EQ(getAllocatorTierForChunk(chunk4.get()), 1U);
-}
-
-#endif
-
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-
-#ifdef ENABLE_MEMKIND
-  // We only need option processing if we are specifying a pmem path.
-  namespace po = boost::program_options;
-  po::options_description desc("Options");
-
-  // these two are here to allow passing correctly google testing parameters
-  desc.add_options()("gtest_list_tests", "list all tests");
-  desc.add_options()("gtest_filter", "filters tests, use --help for details");
-
-  desc.add_options()(
-      "pmem-path", po::value<std::string>(&g_pmem_path), "a path to app-direct pmem");
-
-  po::variables_map vm;
-  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
-  po::notify(vm);
-
-  if (vm.count("pmem-path")) {
-    g_pmem_path = boost::any_cast<std::string>(vm["pmem-path"].value());
-  }
-#endif
 
   int err{0};
   try {
