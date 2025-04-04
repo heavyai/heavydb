@@ -222,7 +222,7 @@ function install_openldap2() {
   check_artifact_cleanup openldap-$LDAP_VERSION.tar.gz openldap-$LDAP_VERSION
 }
 
-ARROW_VERSION=apache-arrow-9.0.0
+ARROW_VERSION=apache-arrow-18.1.0
 
 function install_arrow() {
   if [ "$TSAN" = "true" ]; then
@@ -230,18 +230,24 @@ function install_arrow() {
     ARROW_JEMALLOC="-DARROW_JEMALLOC=OFF"
   elif [ "$TSAN" = "false" ]; then
     ARROW_TSAN="-DARROW_USE_TSAN=OFF"
+    ARROW_JEMALLOC="-DARROW_JEMALLOC=ON"
     if [ "$ARCH" == "aarch64" ]; then
-      # Arrow includes jemalloc
-      # force build with 64K system page size to support GH200
-      ARROW_JEMALLOC="-DARROW_JEMALLOC=ON -DARROW_JEMALLOC_LG_PAGE=16"
-    else
-      ARROW_JEMALLOC="-DARROW_JEMALLOC=BUNDLED"
+      # build bundled jemalloc with 64K system page size to support GH200
+      ARROW_JEMALLOC="${ARROW_JEMALLOC} -DARROW_JEMALLOC_LG_PAGE=16"
     fi
   fi
 
   ARROW_USE_CUDA="-DARROW_CUDA=ON"
   if [ "$NOCUDA" = "true" ]; then
     ARROW_USE_CUDA="-DARROW_CUDA=OFF"
+  fi
+
+  if [ "$LIBRARY_TYPE" == "static" ]; then
+    ARROW_BUILD_STATIC=on
+    ARROW_BUILD_SHARED=off
+  else
+    ARROW_BUILD_STATIC=off
+    ARROW_BUILD_SHARED=on
   fi
 
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
@@ -252,25 +258,33 @@ function install_arrow() {
   # Use installed liburiparser instead.
   sed -Ei 's/^\s*vendored\/uriparser\/.*\)/)/' ../src/arrow/CMakeLists.txt
   sed -Ei  '/^\s*vendored\/uriparser\//d'      ../src/arrow/CMakeLists.txt
+  # Arrow 16+ requires the latest liblz4 (1.10.0) and libzstd (1.5.6) or it won't
+  # find them. Also, a little known factoid (only shown in some older versions of
+  # the documentation) is that although ARROW_DEPENDENCY_USE_SHARED=ON will
+  # correctly default all sub-dependencies to shared, setting it to OFF will
+  # *not* reliably default them all to static! Here, ZSTD, LZ4, and BZ2 must be
+  # individually forced to static using their respective ARROW_*_USE_SHARED=OFF.
   cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DARROW_BUILD_SHARED=ON \
-    -DARROW_BUILD_STATIC=ON \
-    -DARROW_BUILD_TESTS=OFF \
-    -DARROW_BUILD_BENCHMARKS=OFF \
+    -DARROW_BUILD_SHARED=${ARROW_BUILD_SHARED} \
+    -DARROW_BUILD_STATIC=${ARROW_BUILD_STATIC} \
+    -DARROW_DEPENDENCY_USE_SHARED=${ARROW_BUILD_SHARED} \
     -DARROW_CSV=ON \
     -DARROW_JSON=ON \
-    -DARROW_WITH_BROTLI=BUNDLED \
-    -DARROW_WITH_ZLIB=BUNDLED \
-    -DARROW_WITH_SNAPPY=BUNDLED \
-    -DARROW_WITH_ZSTD=BUNDLED \
+    -DARROW_WITH_BROTLI=ON \
+    -DARROW_WITH_SNAPPY=ON \
+    -DARROW_WITH_ZLIB=ON \
+    -DARROW_WITH_ZSTD=ON \
+    -DARROW_WITH_LZ4=ON \
+    -DARROW_WITH_BZ2=ON \
+    -DARROW_ZSTD_USE_SHARED=${ARROW_BUILD_SHARED} \
+    -DARROW_LZ4_USE_SHARED=${ARROW_BUILD_SHARED} \
+    -DARROW_BZ2_USE_SHARED=${ARROW_BUILD_SHARED} \
     -DARROW_USE_GLOG=OFF \
-    -DARROW_BOOST_USE_SHARED=${ARROW_BOOST_USE_SHARED} \
     -DARROW_PARQUET=ON \
     -DARROW_FILESYSTEM=ON \
     -DARROW_S3=ON \
-    -DTHRIFT_HOME=${THRIFT_HOME:-$PREFIX} \
     ${ARROW_USE_CUDA} \
     ${ARROW_JEMALLOC} \
     ${ARROW_TSAN} \
@@ -299,40 +313,34 @@ function install_snappy() {
   check_artifact_cleanup $SNAPPY_VERSION.tar.gz snappy-$SNAPPY_VERSION
 }
 
-AWSCPP_VERSION=1.7.301
-#AWSCPP_VERSION=1.9.335
+# latest as of 2/28/25
+AWSCPP_VERSION=1.11.517
 
 function install_awscpp() {
-    # default c++ standard support
-    CPP_STANDARD=14
-    # check c++17 support
-    GNU_VERSION1=$(g++ --version|head -n1|awk '{print $4}'|cut -d'.' -f1)
-    if [ "$GNU_VERSION1" = "7" ]; then
-    CPP_STANDARD=17
-    fi
-    rm -rf aws-sdk-cpp-${AWSCPP_VERSION}
-    download https://github.com/aws/aws-sdk-cpp/archive/${AWSCPP_VERSION}.tar.gz
-    tar xvfz ${AWSCPP_VERSION}.tar.gz
-    pushd aws-sdk-cpp-${AWSCPP_VERSION}
-    # ./prefetch_crt_dependency.sh
-    sed -i 's/CMAKE_ARGS/CMAKE_ARGS -DBUILD_TESTING=off -DCMAKE_C_FLAGS="-Wno-error"/g' third-party/cmake/BuildAwsCCommon.cmake
-    sed -i 's/-Werror//g' cmake/compiler_settings.cmake
-    mkdir build
-    cd build
-    cmake \
-        -GNinja \
-        -DAUTORUN_UNIT_TESTS=off \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=$PREFIX \
-        -DBUILD_ONLY="s3;transfer;config;sts;cognito-identity;identity-management" \
-        -DBUILD_SHARED_LIBS=0 \
-        -DCUSTOM_MEMORY_MANAGEMENT=0 \
-        -DCPP_STANDARD=$CPP_STANDARD \
-        -DENABLE_TESTING=off \
-        ..
-    cmake_build_and_install
-    popd
-    check_artifact_cleanup ${AWSCPP_VERSION}.tar.gz aws-sdk-cpp-${AWSCPP_VERSION}
+  rm -rf aws-sdk-cpp-${AWSCPP_VERSION}
+  download https://github.com/aws/aws-sdk-cpp/archive/${AWSCPP_VERSION}.tar.gz
+  tar xvfz ${AWSCPP_VERSION}.tar.gz
+  pushd aws-sdk-cpp-${AWSCPP_VERSION}
+  ./prefetch_crt_dependency.sh
+  sed -i 's/-Werror//g' cmake/compiler_settings.cmake
+  mkdir build
+  cd build
+  cmake \
+      -GNinja \
+      -DAUTORUN_UNIT_TESTS=off \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=$PREFIX \
+      -DBUILD_ONLY="s3;transfer;config;sts;cognito-identity;identity-management" \
+      -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
+      -DCUSTOM_MEMORY_MANAGEMENT=0 \
+      -DCPP_STANDARD=17 \
+      -DENABLE_TESTING=off \
+      ..
+  cmake --build . --parallel ${NPROC}
+  sed -i 's/PARENT_SCOPE//g' AWSSDK/AWSSDKConfigVersion.cmake
+  cmake --install .
+  popd
+  check_artifact_cleanup ${AWSCPP_VERSION}.tar.gz aws-sdk-cpp-${AWSCPP_VERSION}
 }
 
 LLVM_VERSION=14.0.6
@@ -451,16 +459,6 @@ function install_gdal_and_pdal() {
     else
       BUILD_STATIC_LIBS=off
     fi
-
-    # zstd (for tiff and openjpeg)
-    download https://github.com/facebook/zstd/archive/refs/tags/v$ZSTD_VERSION.tar.gz
-    extract v$ZSTD_VERSION.tar.gz
-    mkdir zstd-$ZSTD_VERSION/build/cmake/build
-    ( cd zstd-$ZSTD_VERSION/build/cmake/build
-      cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_SHARED=$BUILD_SHARED_LIBS -DZSTD_BUILD_STATIC=$BUILD_STATIC_LIBS
-      cmake_build_and_install
-    )
-    check_artifact_cleanup v$ZSTD_VERSION.tar.gz zstd-$ZSTD_VERSION
 
     # sqlite3 (for proj, gdal)
     download_make_install https://sqlite.org/${SQLITE3_YEAR_DIR}/sqlite-autoconf-${SQLITE3_VERSION}.tar.gz
@@ -1136,7 +1134,7 @@ function install_archive(){
   check_artifact_cleanup  v${ARCHIVE_VERSION}.tar.gz gflags-$ARCHIVE_VERSION
 }
 
-LZ4_VERSION=1.9.4
+LZ4_VERSION=1.10.0 # required by Arrow 16
 function install_lz4(){
   download https://github.com/lz4/lz4/archive/refs/tags/v$LZ4_VERSION.tar.gz
   extract v$LZ4_VERSION.tar.gz
@@ -1150,6 +1148,23 @@ function install_lz4(){
     cmake_build_and_install
   )
   check_artifact_cleanup v$LZ4_VERSION.tar.gz lz4-$LZ4_VERSION
+}
+
+ZSTD_VERSION=1.5.6 # required by Arrow 16, also used by GDAL
+function install_zstd() {
+  if [ "$LIBRARY_TYPE" == "static" ]; then
+    BUILD_STATIC_LIBS=on
+  else
+    BUILD_STATIC_LIBS=off
+  fi
+  download https://github.com/facebook/zstd/archive/refs/tags/v$ZSTD_VERSION.tar.gz
+  extract v$ZSTD_VERSION.tar.gz
+  mkdir zstd-$ZSTD_VERSION/build/cmake/build
+  ( cd zstd-$ZSTD_VERSION/build/cmake/build
+    cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_SHARED=$BUILD_SHARED_LIBS -DZSTD_BUILD_STATIC=$BUILD_STATIC_LIBS
+    cmake_build_and_install
+  )
+  check_artifact_cleanup v$ZSTD_VERSION.tar.gz zstd-$ZSTD_VERSION
 }
 
 URIPARSER_VERSION=0.9.8
