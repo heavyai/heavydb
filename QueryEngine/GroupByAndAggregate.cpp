@@ -1997,7 +1997,11 @@ void GroupByAndAggregate::codegenApproxQuantile(
     calc = llvm::BasicBlock::Create(cs->context_, "calc_approx_quantile");
     skip = llvm::BasicBlock::Create(cs->context_, "skip_approx_quantile");
     irb.CreateCondBr(skip_cond, skip, calc);
+#if LLVM_VERSION_MAJOR >= 16
+    cs->current_func_->insert(cs->current_func_->end(), calc);
+#else
     cs->current_func_->getBasicBlockList().push_back(calc);
+#endif
     irb.SetInsertPoint(calc);
   }
   if (!arg_ti.is_fp()) {
@@ -2008,7 +2012,11 @@ void GroupByAndAggregate::codegenApproxQuantile(
       "agg_approx_quantile", llvm::Type::getVoidTy(cs->context_), agg_args);
   if (nullable) {
     irb.CreateBr(skip);
+#if LLVM_VERSION_MAJOR >= 16
+    cs->current_func_->insert(cs->current_func_->end(), skip);
+#else
     cs->current_func_->getBasicBlockList().push_back(skip);
+#endif
     irb.SetInsertPoint(skip);
   }
 }
@@ -2039,7 +2047,11 @@ void GroupByAndAggregate::codegenMode(const size_t target_idx,
     calc_bb = llvm::BasicBlock::Create(cs->context_, "calc_mode");
     skip_bb = llvm::BasicBlock::Create(cs->context_, "skip_mode");
     irb.CreateCondBr(skip_cond, skip_bb, calc_bb);
+#if LLVM_VERSION_MAJOR >= 16
+    cs->current_func_->insert(cs->current_func_->end(), calc_bb);
+#else
     cs->current_func_->getBasicBlockList().push_back(calc_bb);
+#endif
     irb.SetInsertPoint(calc_bb);
   }
   if (is_fp) {
@@ -2065,7 +2077,11 @@ void GroupByAndAggregate::codegenMode(const size_t target_idx,
   }
   if (nullable) {
     irb.CreateBr(skip_bb);
+#if LLVM_VERSION_MAJOR >= 16
+    cs->current_func_->insert(cs->current_func_->end(), skip_bb);
+#else
     cs->current_func_->getBasicBlockList().push_back(skip_bb);
+#endif
     irb.SetInsertPoint(skip_bb);
     if (error_code_lv) {
       llvm::PHINode* error_code_phi =

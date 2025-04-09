@@ -51,9 +51,8 @@ class PointConstructor : public Codegen {
       auto prev_insert_block = builder.GetInsertBlock();
       auto crt_insert_block = nullcheck_codegen->null_check->cond_true_;
       CHECK(crt_insert_block);
-      auto& instruction_list = crt_insert_block->getInstList();
-      CHECK_EQ(instruction_list.size(), size_t(1));
-      builder.SetInsertPoint(crt_insert_block, instruction_list.begin());
+      CHECK_EQ(crt_insert_block->size(), size_t(1));
+      builder.SetInsertPoint(crt_insert_block, crt_insert_block->begin());
 
       auto x_coord_ptr = builder.CreateGEP(
           pt_local_storage_lv_->getType()->getScalarType()->getPointerElementType(),

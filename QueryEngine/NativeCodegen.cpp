@@ -44,6 +44,9 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetSelect.h>
+#if LLVM_VERSION_MAJOR >= 16
+#include <llvm/Support/Threading.h>
+#endif
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/IPO.h>
@@ -59,7 +62,9 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
-#if LLVM_VERSION_MAJOR >= 11
+#if LLVM_VERSION_MAJOR >= 17
+#include <llvm/TargetParser/Host.h>
+#elif LLVM_VERSION_MAJOR >= 11
 #include <llvm/Support/Host.h>
 #endif
 
@@ -1088,8 +1093,12 @@ std::map<std::string, std::string> get_device_parameters(bool cpu_only) {
 
   result.insert(std::make_pair("cpu_name", llvm::sys::getHostCPUName()));
   result.insert(std::make_pair("cpu_triple", llvm::sys::getProcessTriple()));
-  result.insert(
-      std::make_pair("cpu_cores", std::to_string(llvm::sys::getHostNumPhysicalCores())));
+#if LLVM_VERSION_MAJOR >= 16
+  auto const cpu_cores = llvm::get_physical_cores();
+#else
+  auto const cpu_cores = llvm::sys::getHostNumPhysicalCores();
+#endif
+  result.insert(std::make_pair("cpu_cores", std::to_string(cpu_cores)));
   result.insert(std::make_pair("cpu_threads", std::to_string(cpu_threads())));
 
   // https://en.cppreference.com/w/cpp/language/types
@@ -2600,9 +2609,14 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
   // copy the row_func function body over
   // see
   // https://stackoverflow.com/questions/12864106/move-function-body-avoiding-full-cloning/18751365
+#if LLVM_VERSION_MAJOR >= 16
+  row_func_with_hoisted_literals->splice(row_func_with_hoisted_literals->begin(),
+                                         cgen_state_->row_func_);
+#else
   row_func_with_hoisted_literals->getBasicBlockList().splice(
       row_func_with_hoisted_literals->begin(),
       cgen_state_->row_func_->getBasicBlockList());
+#endif
 
   // also replace row_func arguments with the arguments from row_func_hoisted_literals
   for (llvm::Function::arg_iterator I = cgen_state_->row_func_->arg_begin(),
@@ -2646,10 +2660,14 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
     // copy the filter_func function body over
     // see
     // https://stackoverflow.com/questions/12864106/move-function-body-avoiding-full-cloning/18751365
+#if LLVM_VERSION_MAJOR >= 16
+    filter_func_with_hoisted_literals->splice(filter_func_with_hoisted_literals->begin(),
+                                              cgen_state_->filter_func_);
+#else
     filter_func_with_hoisted_literals->getBasicBlockList().splice(
         filter_func_with_hoisted_literals->begin(),
         cgen_state_->filter_func_->getBasicBlockList());
-
+#endif
     // also replace filter_func arguments with the arguments from
     // filter_func_hoisted_literals
     for (llvm::Function::arg_iterator I = cgen_state_->filter_func_->arg_begin(),
