@@ -1178,8 +1178,12 @@ void Executor::redeclareFilterFunction() {
   // copy the filter_func function body over
   // see
   // https://stackoverflow.com/questions/12864106/move-function-body-avoiding-full-cloning/18751365
+#if LLVM_VERSION_MAJOR >= 16
+  filter_func2->splice(filter_func2->begin(), cgen_state_->filter_func_);
+#else
   filter_func2->getBasicBlockList().splice(
       filter_func2->begin(), cgen_state_->filter_func_->getBasicBlockList());
+#endif
 
   if (cgen_state_->current_func_ == cgen_state_->filter_func_) {
     cgen_state_->current_func_ = filter_func2;
