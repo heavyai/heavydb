@@ -1161,7 +1161,7 @@ std::pair<size_t, size_t> BoundingBoxIntersectJoinHashTable::approximateTupleCou
   }
   CHECK_EQ(Data_Namespace::MemoryLevel::GPU_LEVEL, effective_memory_level);
   auto it = host_hll_buffers.begin();
-  auto hll_result = reinterpret_cast<int32_t*>(&(it->second));
+  auto hll_result = reinterpret_cast<int32_t*>(it->second.data());
   it++;
   for (; it != host_hll_buffers.end(); it++) {
     auto& host_hll_buffer = it->second;
