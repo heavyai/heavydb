@@ -2958,7 +2958,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   }
 
 #ifndef NDEBUG
-  static std::uint64_t counter = 0;
+  static std::atomic<uint64_t> counter = 0;
   ++counter;
   VLOG(1) << "CODEGEN #" << counter << ":";
   LOG(IR) << "CODEGEN #" << counter << ":";
