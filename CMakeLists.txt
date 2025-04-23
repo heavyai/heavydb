@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.25)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -301,56 +301,50 @@ if(ENABLE_CUDA)
     endif()
   endif()
   if (ENABLE_ONLY_ONE_ARCH AND NOT "${NVIDIA_COMPUTE_CAPABILITY}" STREQUAL "")
-    if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.18.0")
-      set(CMAKE_CUDA_ARCHITECTURES ${NVIDIA_COMPUTE_CAPABILITY}-virtual)
-      list(APPEND MAPD_CUDA_OPTIONS -Wno-deprecated-gpu-targets)
-      message(STATUS "CUDA_ARCHITECTURES: ${CMAKE_CUDA_ARCHITECTURES}")
-    else()
-      set (CUDA_COMPILATION_ARCH
-        -gencode=arch=compute_${NVIDIA_COMPUTE_CAPABILITY},code=compute_${NVIDIA_COMPUTE_CAPABILITY}
-        -Wno-deprecated-gpu-targets
-      )
-      message(STATUS "CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
-      add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_COMPILATION_ARCH}>")
-    endif()
+    # set one arch for regular CUDA compiles
+    set(CMAKE_CUDA_ARCHITECTURES ${NVIDIA_COMPUTE_CAPABILITY}-virtual)
+    list(APPEND MAPD_CUDA_OPTIONS -Wno-deprecated-gpu-targets)
+    # set one arch for custom_command CUDA compiles
+    set (CUSTOM_COMMAND_CUDA_ARCHITECTURES
+      -gencode=arch=compute_${NVIDIA_COMPUTE_CAPABILITY},code=compute_${NVIDIA_COMPUTE_CAPABILITY}
+      -Wno-deprecated-gpu-targets
+    )
+    # clean up compute capability build
     add_custom_target(clean_nvidia_compute_capability
       COMMAND ${CMAKE_BUILD_TOOL} clean
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/NvidiaComputeCapability
     )
     add_dependencies(clean-all clean_nvidia_compute_capability)
   else()
-    if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.18.0")
-      message(STATUS "CMake 3.18+, Setting CUDA_ARCHITECTURES.")
-      set(CMAKE_CUDA_ARCHITECTURES
-          50-virtual
-          60-virtual
-          70-virtual
-          75-virtual
-          80-virtual
-          86-virtual
-          89-virtual
-          90-virtual)
-      list(APPEND MAPD_CUDA_OPTIONS -Wno-deprecated-gpu-targets)
-      message(STATUS "CUDA_ARCHITECTURES: ${CMAKE_CUDA_ARCHITECTURES}")
-    else()
-      message(STATUS "CMake 3.17 or under, setting CUDA architecture flags manually.")
-      set(CUDA_COMPILATION_ARCH
-        -gencode=arch=compute_50,code=compute_50;
-        -gencode=arch=compute_60,code=compute_60;
-        -gencode=arch=compute_70,code=compute_70;
-        -gencode=arch=compute_75,code=compute_75;
-        -gencode=arch=compute_80,code=compute_80;
-        -gencode=arch=compute_86,code=compute_86;
-        -gencode=arch=compute_89,code=compute_89;
-        -gencode=arch=compute_90,code=compute_90;
-        -Wno-deprecated-gpu-targets)
-      message(STATUS "CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
-      list(APPEND MAPD_CUDA_OPTIONS ${CUDA_COMPILATION_ARCH})
-    endif()
+    # set all supported archs for regular CUDA compiles
+    set(CMAKE_CUDA_ARCHITECTURES
+        50-virtual
+        60-virtual
+        70-virtual
+        75-virtual
+        80-virtual
+        86-virtual
+        89-virtual
+        90-virtual)
+    list(APPEND MAPD_CUDA_OPTIONS -Wno-deprecated-gpu-targets)
+    # set all supported archs for custom_command CUDA compiles
+    set(CUSTOM_COMMAND_CUDA_ARCHITECTURES
+      -gencode=arch=compute_50,code=compute_50;
+      -gencode=arch=compute_60,code=compute_60;
+      -gencode=arch=compute_70,code=compute_70;
+      -gencode=arch=compute_75,code=compute_75;
+      -gencode=arch=compute_80,code=compute_80;
+      -gencode=arch=compute_86,code=compute_86;
+      -gencode=arch=compute_89,code=compute_89;
+      -gencode=arch=compute_90,code=compute_90;
+      -Wno-deprecated-gpu-targets)
     if(ENABLE_ONLY_ONE_ARCH)
       message(STATUS "ENABLE_ONLY_ONE_ARCH ignored because NvidiaComputeCapability.txt not found or not readable")
     endif()
   endif()
+  # report architectures to use
+  message(STATUS "Building for CUDA Architectures: ${CMAKE_CUDA_ARCHITECTURES}")
+  # use multi-threaded nvcc?
   if("${CMAKE_CUDA_COMPILER_ID}" STREQUAL "NVIDIA")
     include(ProcessorCount)
     ProcessorCount(N)

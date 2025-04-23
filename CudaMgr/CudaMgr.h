@@ -36,14 +36,15 @@
 namespace CudaMgr_Namespace {
 
 enum class NvidiaDeviceArch {
-  Kepler,   // compute major = 3
-  Maxwell,  // compute major = 5
-  Pascal,   // compute major = 6
-  Volta,    // compute major = 7, compute minor = 0
-  Turing,   // compute major = 7, compute minor = 5
-  Ampere,   // compute major = 8, compute minor = 0
-  Ada,      // compute major = 8, compute minor = 9
-  Hopper    // compute major = 9
+  Kepler,    // compute major = 3
+  Maxwell,   // compute major = 5
+  Pascal,    // compute major = 6
+  Volta,     // compute major = 7, compute minor = 0
+  Turing,    // compute major = 7, compute minor = 5
+  Ampere,    // compute major = 8, compute minor = 0
+  Ada,       // compute major = 8, compute minor = 9
+  Hopper,    // compute major = 9
+  Blackwell  // compute major = 10 or 12
 };
 
 #ifdef HAVE_CUDA
@@ -187,52 +188,53 @@ class CudaMgr {
         return "sm_75";
       case NvidiaDeviceArch::Ampere:
         return "sm_80";
-      // For Ada and Hopper architectures, use the latest compute capability that is
-      // supported by the current LLVM version (LLVM 14). Update returned value when LLVM
-      // is updated.
+      // For Ada, Hopper, and Blackwell architectures, use the latest compute capability
+      // that is supported by the current LLVM version (LLVM 14). Update returned value
+      // when LLVM is updated.
       case NvidiaDeviceArch::Ada:
       case NvidiaDeviceArch::Hopper:
+      case NvidiaDeviceArch::Blackwell:
         return "sm_86";
-      default:
-        LOG(WARNING) << "Unrecognized Nvidia device architecture, falling back to "
-                        "Kepler-compatibility.";
-        return "sm_35";
     }
     UNREACHABLE();
     return "";
   }
 
   NvidiaDeviceArch getDeviceArch() const {
-    if (device_properties_.size() > 0) {
-      const auto& device_properties = device_properties_.front();
-      switch (device_properties.computeMajor) {
-        case 3:
-          return NvidiaDeviceArch::Kepler;
-        case 5:
-          return NvidiaDeviceArch::Maxwell;
-        case 6:
-          return NvidiaDeviceArch::Pascal;
-        case 7:
-          if (device_properties.computeMinor < 5) {
-            return NvidiaDeviceArch::Volta;
-          } else {
-            return NvidiaDeviceArch::Turing;
-          }
-        case 8:
-          if (device_properties.computeMinor < 9) {
-            return NvidiaDeviceArch::Ampere;
-          } else {
-            return NvidiaDeviceArch::Ada;
-          }
-        case 9:
-          return NvidiaDeviceArch::Hopper;
-        default:
-          return NvidiaDeviceArch::Kepler;
-      }
-    } else {
-      // always fallback to Kepler if an architecture cannot be detected
+    CHECK_GT(device_properties_.size(), 0u)
+        << "Failed to fetch CUDA device properties. Server cannot start.";
+    auto const compute_major = device_properties_.front().computeMajor;
+    auto const compute_minor = device_properties_.front().computeMinor;
+    if (compute_major == 3) {
       return NvidiaDeviceArch::Kepler;
+    } else if (compute_major == 5) {
+      return NvidiaDeviceArch::Maxwell;
+    } else if (compute_major == 6) {
+      return NvidiaDeviceArch::Pascal;
+    } else if (compute_major == 7) {
+      if (compute_minor < 5) {
+        return NvidiaDeviceArch::Volta;
+      } else {
+        return NvidiaDeviceArch::Turing;
+      }
+    } else if (compute_major == 8) {
+      if (compute_minor < 9) {
+        return NvidiaDeviceArch::Ampere;
+      } else {
+        return NvidiaDeviceArch::Ada;
+      }
+    } else if (compute_major == 9) {
+      return NvidiaDeviceArch::Hopper;
+    } else if (compute_major == 10 || compute_major == 12) {
+      return NvidiaDeviceArch::Blackwell;
+    } else if (compute_major > 12) {
+      LOG(WARNING) << "Unrecognized CUDA device (compute version " << compute_major << "."
+                   << compute_minor << "), treating as Blackwell";
+      return NvidiaDeviceArch::Blackwell;
     }
+    LOG(FATAL) << "Unsupported CUDA device (compute version " << compute_major << "."
+               << compute_minor << ")";
+    return NvidiaDeviceArch::Kepler;
   }
 
   void setContext(const int device_num) const;

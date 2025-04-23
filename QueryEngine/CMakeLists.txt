@@ -476,7 +476,7 @@ add_custom_command(
   ${MAPD_DEFINITIONS}
   -fatbin
   -rdc=true
-  ${CUDA_COMPILATION_ARCH}
+  ${CUSTOM_COMMAND_CUDA_ARCHITECTURES}
   -std=c++${CMAKE_CXX_STANDARD}
   ${NVCC_BUILD_TYPE_ARGS}
   ${NVCC_THREADS}
@@ -502,7 +502,7 @@ add_custom_command(
   ${compDef}
   --lib
   -rdc=true
-  ${CUDA_COMPILATION_ARCH}
+  ${CUSTOM_COMMAND_CUDA_ARCHITECTURES}
   -std=c++${CMAKE_CXX_STANDARD}
   ${NVCC_BUILD_TYPE_ARGS}
   ${NVCC_THREADS}
@@ -542,6 +542,12 @@ if(ENABLE_CUDA)
   # -> ...
   # -> #include <boost/fusion/container/vector/vector.hpp>
   target_compile_options(QueryEngine PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:--diag-suppress=20012>)
+  # similarly, new in CUDA SDK 12.8
+  # warning #20014-D: calling a __host__ function from a __host__ __device__ function is not allowed
+  # (stack of mostly boost::fusion headers omitted)
+  # instantiation of "robin_hood::detail::Table<...>" at line 126 of
+  #   /home/simon.eves/work/master/heavydb-internal/QueryEngine/Aggregate/AggModeHashTableGpu.cu
+  target_compile_options(QueryEngine PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:--diag-suppress=20014>)
 
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a DESTINATION QueryEngine COMPONENT "QE")
 endif()

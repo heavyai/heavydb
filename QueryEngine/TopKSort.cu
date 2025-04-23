@@ -27,6 +27,7 @@
 #include <thrust/functional.h>
 #include <thrust/partition.h>
 #include <thrust/sort.h>
+#include <thrust/version.h>
 
 #include <cuda.h>
 
@@ -91,12 +92,20 @@ ForwardIterator partition_by_null(ForwardIterator first,
                ? thrust::partition(
                      first,
                      last,
+#if THRUST_VERSION >= 200700
+                     thrust::not_fn(is_null_order_entry<int32_t>(
+#else
                      thrust::not1(is_null_order_entry<int32_t>(
+#endif
                          rows_ptr + layout.col_off, layout.row_bytes, null_val)))
                : thrust::partition(
                      first,
                      last,
+#if THRUST_VERSION >= 200700
+                     thrust::not_fn(is_null_order_entry<int64_t>(
+#else
                      thrust::not1(is_null_order_entry<int64_t>(
+#endif
                          rows_ptr + layout.col_off, layout.row_bytes, null_val)));
   }
 }
