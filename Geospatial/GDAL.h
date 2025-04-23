@@ -38,7 +38,6 @@ namespace Geospatial {
 class GDAL {
  public:
   static void init();
-  static bool supportsNetworkFileAccess();
   static bool supportsDriver(const std::string& driver_name);
   static void setAuthorizationTokens(const shared::S3Config& creds);
 
@@ -74,7 +73,6 @@ class GDAL {
 
  private:
   static bool initialized_;
-  static std::mutex init_mutex_;
 };
 
 }  // namespace Geospatial

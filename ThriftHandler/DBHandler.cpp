@@ -4349,22 +4349,11 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
 
 namespace {
 void add_vsi_network_prefix(std::string& path) {
-  // do we support network file access?
-  bool gdal_network = Geospatial::GDAL::supportsNetworkFileAccess();
-
   // modify head of filename based on source location
   if (boost::istarts_with(path, "http://") || boost::istarts_with(path, "https://")) {
-    if (!gdal_network) {
-      THROW_DB_EXCEPTION(
-          "HTTP geo file import not supported! Update to GDAL 2.2 or later!");
-    }
     // invoke GDAL CURL virtual file reader
     path = "/vsicurl/" + path;
   } else if (boost::istarts_with(path, "s3://")) {
-    if (!gdal_network) {
-      THROW_DB_EXCEPTION(
-          "S3 geo file import not supported! Update to GDAL 2.2 or later!");
-    }
     // invoke GDAL S3 virtual file reader
     boost::replace_first(path, "s3://", "/vsis3/");
   }

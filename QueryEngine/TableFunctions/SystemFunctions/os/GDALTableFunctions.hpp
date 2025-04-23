@@ -81,9 +81,6 @@ int32_t tf_raster_contour_impl(TableFunctionManager& mgr,
          << affine_transform[4] << "/" << affine_transform[5];
   std::string mem_str = mem_ss.str();
 
-  // lazy init GDAL
-  Geospatial::GDAL::init();
-
   // things to clean up
   char** options = nullptr;
   GDALDatasetH raster_ds = nullptr;

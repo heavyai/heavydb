@@ -5907,9 +5907,6 @@ class RasterImporterTest : public DBHandlerTestFixture {
                 const std::string& import_dimensions,
                 const import_export::RasterImporter::PointType point_type,
                 const import_export::RasterImporter::PointTransform point_transform) {
-    // init GDAL
-    Geospatial::GDAL::init();
-
     // get absolute filename
     auto abs_file_name = get_raster_dir() + file_name;
 
@@ -7344,6 +7341,8 @@ int main(int argc, char** argv) {
 #ifdef HAVE_AWS_S3
   heavydb_aws_sdk::init_sdk();
 #endif
+
+  Geospatial::GDAL::init();
 
   int err{0};
   try {
