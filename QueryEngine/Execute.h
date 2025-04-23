@@ -180,11 +180,7 @@ inline llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& nam
 }
 
 inline llvm::Value* get_arg_by_index(llvm::Function* func, unsigned const index) {
-#if 10 <= LLVM_VERSION_MAJOR
   return index < func->arg_size() ? func->getArg(index) : nullptr;
-#else
-  return index < func->arg_size() ? func->arg_begin() + index : nullptr;
-#endif
 }
 
 // Returns func->arg_size() if name is not found.
